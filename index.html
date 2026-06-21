@@ -57,6 +57,22 @@
   .coffer .meta{font-size:11px; color:var(--muted); margin-top:3px}
   .coffer .cell.lead .v{color:var(--gold)}
 
+  /* status banner + diagnostics log */
+  .banner{display:none; margin:14px 0 0; border-radius:10px; border:1px solid var(--line2); padding:11px 14px; cursor:pointer; user-select:none}
+  .banner.show{display:block}
+  .banner.warn{background:rgba(224,162,60,.10); border-color:var(--amber)}
+  .banner.error{background:rgba(212,105,75,.12); border-color:var(--loss)}
+  .banner .bhead{display:flex; align-items:center; gap:9px; font-size:13px; color:var(--parch)}
+  .banner .dot{width:8px; height:8px; border-radius:50%; flex:none}
+  .banner.warn .dot{background:var(--amber)} .banner.error .dot{background:var(--loss)}
+  .banner .btxt{flex:1} .banner .btxt b{font-weight:600; color:var(--gold)}
+  .banner .bmore{font-size:11px; color:var(--muted); white-space:nowrap}
+  .banner .blog{display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--line2); font-family:'IBM Plex Mono',monospace; font-size:11px; line-height:1.8; color:var(--parch2); max-height:180px; overflow:auto}
+  .banner.open .blog{display:block}
+  .banner .blog .le{white-space:nowrap}
+  .banner .blog .lt{color:var(--muted)} .banner .blog .lw{color:var(--amber)} .banner .blog .ler{color:var(--loss)} .banner .blog .li{color:var(--parch2)}
+  .banner .blog .empty2{color:var(--muted)}
+
   nav.tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); margin-top:14px; flex-wrap:wrap}
   nav.tabs button{background:none; border:none; color:var(--parch2); padding:12px 15px; cursor:pointer; font-size:13px; font-weight:600; letter-spacing:.04em; border-bottom:2px solid transparent; position:relative; top:1px}
   nav.tabs button .badge{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); margin-left:6px}
@@ -191,6 +207,11 @@
     <div class="cell lead"><div class="k">Coffer · realised</div><div class="v num" id="cofferRealised">0</div><div class="meta" id="cofferRealisedMeta">closed flips, after tax</div></div>
     <div class="cell"><div class="k">Open positions</div><div class="v num" id="cofferOpen">0</div><div class="meta" id="cofferOpenMeta">liquidation value</div></div>
     <div class="cell"><div class="k">Capital deployed</div><div class="v num" id="cofferDeployed">0</div><div class="meta" id="cofferDeployedMeta">vs bankroll</div></div>
+  </div>
+
+  <div class="banner" id="statusBanner">
+    <div class="bhead"><span class="dot"></span><span class="btxt" id="bannerText"></span><span class="bmore" id="bannerMore">diagnostics ›</span></div>
+    <div class="blog" id="bannerLog"></div>
   </div>
 
   <nav class="tabs">
@@ -351,8 +372,12 @@ const ROI_TARGET=0.05, VOL_COMFORT=1000, FRESH_S=900, STALE_S=21600;
 const STRAT={conservative:{damp:0.85}, balanced:{damp:0.6}, aggressive:{damp:0.35}};
 const MARKET_TTL=180;          // s · reuse stored /latest+/1h snapshot if newer (cold-start throttle)
 const ARCHIVE_MIN_GAP=55*60;   // s · skip watchlist archiving if done within the hour (/1h gains a point hourly)
+const GUIDE_TTL=6*3600;        // s · official guide updates ~daily; cache the parsed map this long
+const GUIDE_DUMP='https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json';
+const GUIDE_MODULE='https://oldschool.runescape.wiki/w/Module:GEPricesByIDs/data.json?action=raw';
 
 let MAP=null, LATEST=null, VOL=null, ITEMS=[], byId={}, byName={};
+let GUIDE={}, guideSource=null, guideTs=0;
 let watchlist=[], trades=[], bankroll=300_000_000, slots=6, strategy='balanced';
 let sortKey='score', sortDir=-1;
 let pg={start:100_000_000, cash:100_000_000, positions:[], history:[]};
@@ -414,6 +439,42 @@ function parseGp(str){
 const sgn=n=>n>0?'gain':(n<0?'loss':'');
 function grade(ri){ return ri<0.25?'A':ri<0.5?'B':ri<0.75?'C':'D'; }
 
+/* ---- diagnostics: log ring + health model + status banner ---- */
+const LOG_MAX=50;
+let LOG=[];                  // {t, level, scope, msg}
+const HEALTH={};            // scope -> {level, msg}
+const SEV={ok:0, info:1, warn:2, error:3};
+function logEvent(level, scope, msg){
+  LOG.push({t:now(), level, scope, msg});
+  if(LOG.length>LOG_MAX) LOG=LOG.slice(-LOG_MAX);
+  sSet('logring', LOG);
+  renderBanner();
+}
+function setHealth(scope, level, msg){
+  const prev=HEALTH[scope]; HEALTH[scope]={level, msg};
+  if((!prev || prev.level!==level) && level!=='ok') logEvent(level, scope, msg);
+  else renderBanner();
+}
+function worstHealth(){
+  let worst=null;
+  for(const k in HEALTH){ const h=HEALTH[k]; if(h.level==='ok') continue; if(!worst||SEV[h.level]>SEV[worst.level]) worst=h; }
+  return worst;
+}
+function renderBanner(){
+  const el=document.getElementById('statusBanner'); if(!el) return;
+  const w=worstHealth();
+  el.classList.remove('show','warn','error');
+  if(!w){ el.classList.remove('open'); }
+  else { el.classList.add('show', w.level==='error'?'error':'warn'); document.getElementById('bannerText').innerHTML=w.msg; }
+  const lg=document.getElementById('bannerLog'); if(!lg) return;
+  if(!LOG.length){ lg.innerHTML='<span class="empty2">No events logged.</span>'; return; }
+  lg.innerHTML=LOG.slice().reverse().map(e=>{
+    const cl=e.level==='error'?'ler':(e.level==='warn'?'lw':'li');
+    const tm=new Date(e.t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return '<div class="le"><span class="lt">'+tm+'</span> <span class="'+cl+'">'+e.level.toUpperCase()+'</span> ['+e.scope+'] '+e.msg+'</div>';
+  }).join('');
+}
+
 /* svg charts */
 function svgLine(values,opt){
   opt=opt||{}; const W=480,H=150,padL=8,padR=8,padT=12,padB=20;
@@ -468,6 +529,51 @@ async function loadMarket(force){
   return {fresh:true, ts};
 }
 
+/* official GE guide price (lagging) — primary: weirdgloop bulk dump (price+last+volume);
+   fallback: wiki GEPricesByIDs module (price only). Reports to the status banner. */
+async function loadGuide(force){
+  if(!force){
+    const gTs=await sGet('snap_guide_ts');
+    if(gTs && (now()-gTs)<GUIDE_TTL){
+      const g=await sGet('snap_guide'), src=await sGet('snap_guide_src');
+      if(g){ GUIDE=g; guideSource=src||'cache'; guideTs=gTs;
+        if(src==='module') setHealth('guide','warn','Guide prices via <b>fallback</b> — guide-momentum &amp; volume gating unavailable.');
+        else setHealth('guide','ok','');
+        return; }
+    }
+  }
+  // primary: bulk dump (id -> {price,last,volume,...})
+  try{
+    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
+    const raw=await fetch(GUIDE_DUMP,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); });
+    clearTimeout(to);
+    const g={}; let n=0;
+    for(const k in raw){ if(k[0]==='%') continue; const o=raw[k]; if(!o||typeof o!=='object') continue;
+      const id=(+o.id)||(+k); if(!id) continue;
+      g[id]={price:o.price??null, last:o.last??null, volume:o.volume??null}; n++; }
+    if(!n) throw new Error('empty dump');
+    GUIDE=g; guideSource='dump'; guideTs=now();
+    await sSet('snap_guide',g); await sSet('snap_guide_ts',guideTs); await sSet('snap_guide_src','dump');
+    setHealth('guide','ok','');
+    return;
+  }catch(e){ logEvent('warn','guide','dump fetch failed: '+(((e&&e.message)||e))+' — trying wiki fallback'); }
+  // fallback: wiki module (id -> price)
+  try{
+    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
+    const raw=await fetch(GUIDE_MODULE,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); });
+    clearTimeout(to);
+    const g={}; let n=0;
+    for(const k in raw){ const id=+k, p=raw[k]; if(!id||typeof p!=='number') continue; g[id]={price:p, last:null, volume:null}; n++; }
+    if(!n) throw new Error('empty module');
+    GUIDE=g; guideSource='module'; guideTs=now();
+    await sSet('snap_guide',g); await sSet('snap_guide_ts',guideTs); await sSet('snap_guide_src','module');
+    setHealth('guide','warn','Guide prices via <b>fallback</b> — guide-momentum &amp; volume gating unavailable.');
+    return;
+  }catch(e){ logEvent('error','guide','module fallback failed: '+(((e&&e.message)||e))); }
+  // both failed → keep any prior GUIDE, degrade (flipping is unaffected)
+  setHealth('guide','warn','Trend data unavailable — guide-price source unreachable. Flipping unaffected.');
+}
+
 async function loadAll(forceMap, forceMarket){
   const btn=document.getElementById('refreshBtn'); btn.disabled=true; btn.textContent='Loading…';
   document.getElementById('stamp').textContent='fetching…';
@@ -482,7 +588,9 @@ async function loadAll(forceMap, forceMarket){
     renderAll();
     computeSignals();
     archiveWatchlist().then(computeSignals);
-  }catch(e){ document.getElementById('stamp').textContent='fetch failed'; showFinderError(); }
+    setHealth('market','ok','');
+    loadGuide(forceMarket).catch(e=>logEvent('error','guide','unexpected: '+(((e&&e.message)||e))));
+  }catch(e){ document.getElementById('stamp').textContent='fetch failed'; setHealth('market','error','Live prices unavailable — tap Refresh to retry.'); showFinderError(); }
   finally{ btn.disabled=false; btn.textContent='Refresh prices'; }
 }
 
@@ -982,6 +1090,7 @@ function switchTab(name){
 }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 document.getElementById('refreshBtn').onclick=()=>loadAll(false,true);
+document.getElementById('statusBanner').onclick=()=>document.getElementById('statusBanner').classList.toggle('open');
 document.getElementById('search').oninput=renderFinder;
 document.getElementById('priceTier').onchange=renderFinder;
 document.getElementById('sortSel').onchange=e=>{ sortKey=e.target.value; sortDir=-1; renderFinder(); };
@@ -1061,6 +1170,8 @@ document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; i
 
 /* init */
 (async function init(){
+  const lg=await sGet('logring'); if(Array.isArray(lg)) LOG=lg;
+  if(!hasStore && !idb) setHealth('storage','warn','This browser is blocking persistent storage — your ledger and history won\u2019t survive a reload. Export before closing.');
   const wl=await sGet('watchlist'); if(Array.isArray(wl)) watchlist=wl;
   const tr=await sGet('trades'); if(Array.isArray(tr)) trades=tr;
   const bk=await sGet('bankroll'); if(typeof bk==='number') bankroll=bk;
