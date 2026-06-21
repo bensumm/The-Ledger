@@ -1,0 +1,16 @@
+{
+  "name": "The Coffer — GE flip ledger",
+  "short_name": "The Coffer",
+  "description": "OSRS Grand Exchange flipping cockpit: finder, trends, signals, ledger.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#14100a",
+  "theme_color": "#e6b54a",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}
