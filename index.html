@@ -84,6 +84,12 @@
   .banner .blog .le{white-space:nowrap}
   .banner .blog .lt{color:var(--muted)} .banner .blog .lw{color:var(--amber)} .banner .blog .ler{color:var(--loss)} .banner .blog .li{color:var(--parch2)}
   .banner .blog .empty2{color:var(--muted)}
+  .ver{color:var(--gold); font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.08em; opacity:.85}
+  .loglist{font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.95; color:var(--parch2); max-height:62vh; overflow:auto}
+  .loglist .le{white-space:nowrap}
+  .loglist .lt{color:var(--muted)} .loglist .lw{color:var(--amber)} .loglist .ler{color:var(--loss)} .loglist .li{color:var(--parch2)}
+  .loglist .empty2{color:var(--muted)}
+  .mini .lw{color:var(--amber)} .mini .ler{color:var(--loss)} .mini .li{color:var(--parch2)}
 
   nav.tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); margin-top:14px; flex-wrap:wrap}
   nav.tabs button{background:none; border:none; color:var(--parch2); padding:12px 15px; cursor:pointer; font-size:13px; font-weight:600; letter-spacing:.04em; border-bottom:2px solid transparent; position:relative; top:1px}
@@ -206,7 +212,7 @@
 <body>
 <header>
   <div class="wrap bar">
-    <div class="brand"><div class="mark">THE COFFER</div><div class="sub">Grand Exchange flip ledger</div></div>
+    <div class="brand"><div class="mark">THE COFFER</div><div class="sub">Grand Exchange flip ledger <span class="ver" id="appVer"></span></div></div>
     <div class="spacer"></div>
     <div class="bankfield"><label>Bankroll</label><input id="bankInput" class="num" value="300m" inputmode="text" /></div>
     <div class="backup"><button id="exportBtn" class="ghostbtn sm">Export</button><button id="importBtn" class="ghostbtn sm">Import</button><input type="file" id="importFile" accept="application/json,.json" style="display:none" /></div>
@@ -237,6 +243,7 @@
     <button data-tab="signals">Signals <span class="badge" id="sigBadge">0</span></button>
     <button data-tab="ledger">Ledger <span class="badge" id="ledgerBadge">0</span></button>
     <button data-tab="play">Playground</button>
+    <button data-tab="logs">Logs</button>
   </nav>
 
   <!-- FINDER -->
@@ -374,6 +381,14 @@
     <div class="chartcard"><div id="pgCurve"></div><div class="ccap" id="pgCurveCap">A point is logged each time you refresh prices — the curve fills in as you keep using it.</div></div>
   </section>
 
+  <section class="panel hidden" id="panel-logs">
+    <div class="controls" style="justify-content:space-between; align-items:flex-start">
+      <span class="mini" style="max-width:560px">Diagnostics — newest first, persists across launches (last 50 events). <span class="li">info</span> · <span class="lw">warn</span> · <span class="ler">error</span>, from market, guide and storage. Successful loads are logged too, so you can confirm a build and a data source are live.</span>
+      <button id="clearLog" class="ghostbtn sm">Clear log &amp; banners</button>
+    </div>
+    <div class="tablewrap" style="padding:14px 16px"><div id="logsBody" class="loglist"></div></div>
+  </section>
+
   <footer>
     Prices: OSRS Wiki real-time API. Catalog cached locally 7 days; only live prices pulled each launch — <span id="universeNote"></span>.
     Margins are <strong>after the 2% GE sell tax</strong> (floored per item, capped at 5m, none under 50gp).
@@ -383,6 +398,7 @@
 
 <script>
 const API='https://prices.runescape.wiki/api/v1/osrs';
+const APP_VERSION='0.9.0';
 const BOND_ID=13190;
 const MIN_PRICE=1000, MIN_VOL=30;
 const ROI_TARGET=0.05, VOL_COMFORT=1000, FRESH_S=900, STALE_S=21600;
@@ -489,19 +505,30 @@ function worstHealth(){
   for(const k in HEALTH){ const h=HEALTH[k]; if(h.level==='ok') continue; if(!worst||SEV[h.level]>SEV[worst.level]) worst=h; }
   return worst;
 }
+function logRowsHtml(withDate){
+  if(!LOG.length) return '<span class="empty2">No events logged.</span>';
+  return LOG.slice().reverse().map(e=>{
+    const cl=e.level==='error'?'ler':(e.level==='warn'?'lw':'li');
+    const d=new Date(e.t*1000);
+    const tm=(withDate?(pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '):'')+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return '<div class="le"><span class="lt">'+tm+'</span> <span class="'+cl+'">'+e.level.toUpperCase()+'</span> ['+e.scope+'] '+e.msg+'</div>';
+  }).join('');
+}
+function renderLogViews(){
+  const lg=document.getElementById('bannerLog'); if(lg) lg.innerHTML=logRowsHtml(false);
+  const tb=document.getElementById('logsBody'); if(tb) tb.innerHTML=logRowsHtml(true);
+}
 function renderBanner(){
   const el=document.getElementById('statusBanner'); if(!el) return;
   const w=worstHealth();
   el.classList.remove('show','warn','error');
   if(!w){ el.classList.remove('open'); }
   else { el.classList.add('show', w.level==='error'?'error':'warn'); document.getElementById('bannerText').innerHTML=w.msg; }
-  const lg=document.getElementById('bannerLog'); if(!lg) return;
-  if(!LOG.length){ lg.innerHTML='<span class="empty2">No events logged.</span>'; return; }
-  lg.innerHTML=LOG.slice().reverse().map(e=>{
-    const cl=e.level==='error'?'ler':(e.level==='warn'?'lw':'li');
-    const tm=new Date(e.t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    return '<div class="le"><span class="lt">'+tm+'</span> <span class="'+cl+'">'+e.level.toUpperCase()+'</span> ['+e.scope+'] '+e.msg+'</div>';
-  }).join('');
+  renderLogViews();
+}
+async function clearLog(){
+  LOG=[]; for(const k in HEALTH) delete HEALTH[k];
+  await sSet('logring',LOG); renderBanner();
 }
 
 /* svg charts */
@@ -628,6 +655,7 @@ async function loadAll(forceMap, forceMarket){
     computeSignals();
     archiveWatchlist().then(computeSignals);
     setHealth('market','ok','');
+    logEvent('info','market',(m.fresh?'live prices loaded':'served cached snapshot')+' · '+ITEMS.length+' items'+(ITEMS.filter(i=>i.liquid).length?' ('+ITEMS.filter(i=>i.liquid).length+' liquid)':''));
     loadGuide(forceMarket).catch(e=>logEvent('error','guide','unexpected: '+(((e&&e.message)||e))));
   }catch(e){ document.getElementById('stamp').textContent='fetch failed'; setHealth('market','error','Live prices unavailable — tap Refresh to retry.'); showFinderError(); }
   finally{ btn.disabled=false; btn.textContent='Refresh prices'; }
@@ -964,6 +992,7 @@ async function runTrends(){
       let mtxt='';
       try{
         const gs=await fetchGuideSeries(it.id);
+        logEvent('info','guide','guide history ok for '+it.name+' ('+gs.length+' pts) — weirdgloop reachable');
         if(gs.length>2){ const last=gs[gs.length-1].price, tNow=gs[gs.length-1].t;
           const pAt=d=>{ const cut=tNow-d*86400; let best=null; gs.forEach(p=>{ if(p.t<=cut) best=p; }); return best?best.price:null; };
           const p7=pAt(7), p30=pAt(30), m7=p7?((last-p7)/p7*100):null, m30=p30?((last-p30)/p30*100):null;
@@ -1152,12 +1181,13 @@ function recompute(){ computeScores(); renderAll(); }
 /* tabs + events */
 function switchTab(name){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  ['finder','trends','watch','signals','ledger','play'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  ['finder','trends','watch','signals','ledger','play','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
 }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 document.getElementById('refreshBtn').onclick=()=>loadAll(false,true);
 document.getElementById('statusBanner').onclick=()=>document.getElementById('statusBanner').classList.toggle('open');
 document.getElementById('cofferToggle').onclick=async()=>{ cofferCollapsed=!cofferCollapsed; await sSet('cofferCollapsed',cofferCollapsed); applyCoffer(); };
+document.getElementById('clearLog').onclick=clearLog;
 document.getElementById('search').oninput=renderFinder;
 document.getElementById('priceTier').onchange=renderFinder;
 document.getElementById('sortSel').onchange=e=>{ sortKey=e.target.value; sortDir=-1; renderFinder(); };
@@ -1248,6 +1278,8 @@ document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; i
   const st=await sGet('strategy'); if(st&&STRAT[st]) strategy=st;
   const pgs=await sGet('playground'); if(pgs&&typeof pgs.cash==='number') pg=pgs;
   const cc=await sGet('cofferCollapsed'); if(typeof cc==='boolean') cofferCollapsed=cc; applyCoffer();
+  const av=document.getElementById('appVer'); if(av) av.textContent='v'+APP_VERSION;
+  logEvent('info','app','The Coffer v'+APP_VERSION+' loaded');
   bankI.value=fmt(bankroll); slotsI.value=slots; document.getElementById('stratSel').value=strategy;
   document.getElementById('pgStart').value=fmt(pg.start);
   renderCoffer(); renderPlay();
