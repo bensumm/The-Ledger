@@ -57,6 +57,18 @@
   .coffer .meta{font-size:11px; color:var(--muted); margin-top:3px}
   .coffer .cell.lead .v{color:var(--gold)}
 
+  .cofferbar{display:flex; align-items:center; gap:8px; background:none; border:none; color:var(--muted); font-family:'Cinzel',serif; letter-spacing:.14em; font-size:12px; text-transform:uppercase; cursor:pointer; padding:16px 2px 4px}
+  .cofferbar:hover{color:var(--parch2)}
+  .cbchev{display:inline-block; transition:transform .15s; color:var(--gold)}
+  #cofferWrap.collapsed .cbchev{transform:rotate(-90deg)}
+  #cofferWrap .coffer{margin-top:4px}
+  #cofferWrap.collapsed .coffer{display:none}
+  .coffercompact{display:none}
+  #cofferWrap.collapsed .coffercompact{display:flex; gap:22px; flex-wrap:wrap; align-items:baseline; padding:13px 16px; border:1px solid var(--line); border-radius:10px; background:linear-gradient(180deg,var(--oak3),var(--oak2)); box-shadow:var(--shadow)}
+  .coffercompact .ci{display:flex; gap:8px; align-items:baseline}
+  .coffercompact .ck{font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+  .coffercompact .cv{font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600}
+
   /* status banner + diagnostics log */
   .banner{display:none; margin:14px 0 0; border-radius:10px; border:1px solid var(--line2); padding:11px 14px; cursor:pointer; user-select:none}
   .banner.show{display:block}
@@ -203,10 +215,14 @@
 </header>
 
 <div class="wrap">
-  <div class="coffer">
-    <div class="cell lead"><div class="k">Coffer · realised</div><div class="v num" id="cofferRealised">0</div><div class="meta" id="cofferRealisedMeta">closed flips, after tax</div></div>
-    <div class="cell"><div class="k">Open positions</div><div class="v num" id="cofferOpen">0</div><div class="meta" id="cofferOpenMeta">liquidation value</div></div>
-    <div class="cell"><div class="k">Capital deployed</div><div class="v num" id="cofferDeployed">0</div><div class="meta" id="cofferDeployedMeta">vs bankroll</div></div>
+  <div id="cofferWrap">
+    <button class="cofferbar" id="cofferToggle"><span class="cbchev" id="cofferChev">▾</span> The Coffer</button>
+    <div class="coffer">
+      <div class="cell lead"><div class="k">Coffer · realised</div><div class="v num" id="cofferRealised">0</div><div class="meta" id="cofferRealisedMeta">closed flips, after tax</div></div>
+      <div class="cell"><div class="k">Open positions</div><div class="v num" id="cofferOpen">0</div><div class="meta" id="cofferOpenMeta">liquidation value</div></div>
+      <div class="cell"><div class="k">Capital deployed</div><div class="v num" id="cofferDeployed">0</div><div class="meta" id="cofferDeployedMeta">vs bankroll</div></div>
+    </div>
+    <div class="coffercompact" id="cofferCompact"></div>
   </div>
 
   <div class="banner" id="statusBanner">
@@ -274,6 +290,7 @@
     <div id="trResult" class="hidden">
       <div class="suggest" id="trSuggest"></div>
       <div class="insight" id="trInsight"></div>
+      <div class="insight" id="trGuide" style="display:none"></div>
       <div class="chartgrid">
         <div class="chartcard"><div class="ctitle">Average price by hour <span class="csub">(your local time)</span></div><div id="trPrice"></div><div class="ccap" id="trPriceCap"></div></div>
         <div class="chartcard"><div class="ctitle">Trade volume by hour</div><div id="trVol"></div><div class="ccap">Heavier bars = faster fills at that hour.</div></div>
@@ -375,18 +392,26 @@ const ARCHIVE_MIN_GAP=55*60;   // s · skip watchlist archiving if done within t
 const GUIDE_TTL=6*3600;        // s · official guide updates ~daily; cache the parsed map this long
 const GUIDE_DUMP='https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json';
 const GUIDE_MODULE='https://oldschool.runescape.wiki/w/Module:GEPricesByIDs/data.json?action=raw';
+const GUIDE_HIST='https://api.weirdgloop.org/exchange/history/osrs/last90d?id=';
 
 let MAP=null, LATEST=null, VOL=null, ITEMS=[], byId={}, byName={};
-let GUIDE={}, guideSource=null, guideTs=0;
+let GUIDE={}, guideSource=null, guideTs=0, guideHasMomentum=false;
 let watchlist=[], trades=[], bankroll=300_000_000, slots=6, strategy='balanced';
+let cofferCollapsed=false;
+function applyCoffer(){ const w=document.getElementById('cofferWrap'); if(w) w.classList.toggle('collapsed',cofferCollapsed); }
 let sortKey='score', sortDir=-1;
 let pg={start:100_000_000, cash:100_000_000, positions:[], history:[]};
 const tsCache={};
 let signalCache={};
 
-/* persistence: artifact window.storage → IndexedDB (hosted/PWA) → in-memory */
+/* persistence
+   - artifact window.storage when present (Claude sandbox)
+   - else: small/irreplaceable state → localStorage (synchronous, reliable)
+           bulky/regenerable data (hourly archives, market snapshots) → IndexedDB
+   - in-memory fallback when a tier is unavailable (e.g. Private Browsing) */
 const mem={};
 const hasStore=(typeof window!=='undefined' && window.storage && typeof window.storage.get==='function');
+const ls=(()=>{ try{ const k='__coffer_probe__'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return localStorage; }catch(e){ return null; } })();
 const idb=(()=>{
   if(typeof indexedDB==='undefined') return null;
   let dbp=null;
@@ -396,19 +421,23 @@ const idb=(()=>{
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   }));
   const req=(mode,fn)=>db().then(d=>new Promise((res,rej)=>{
-    const rq=fn(d.transaction('kv',mode).objectStore('kv'));
-    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+    const tx=d.transaction('kv',mode); const rq=fn(tx.objectStore('kv')); let result;
+    rq.onsuccess=()=>{ result=rq.result; }; rq.onerror=()=>rej(rq.error);
+    tx.oncomplete=()=>res(result); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);  // resolve on commit, not just request success
   }));
   return { get:k=>req('readonly',s=>s.get(k)), set:(k,v)=>req('readwrite',s=>s.put(v,k)), keys:()=>req('readonly',s=>s.getAllKeys()) };
 })();
+const isBulk=k=>k.indexOf('tsa:')===0 || k==='snap_latest' || k==='snap_vol';
 async function sGet(k){
   if(hasStore){ try{ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
-  else if(idb){ try{ const v=await idb.get(k); return v===undefined?null:v; }catch(e){} }
+  if(isBulk(k)){ if(idb){ try{ const v=await idb.get(k); if(v!==undefined) return v; }catch(e){} } }
+  else if(ls){ try{ const v=ls.getItem(k); return v==null?null:JSON.parse(v); }catch(e){} }
   return k in mem?mem[k]:null;
 }
 async function sSet(k,v){
   if(hasStore){ try{ await window.storage.set(k,JSON.stringify(v)); return; }catch(e){} }
-  else if(idb){ try{ await idb.set(k,v); return; }catch(e){} }
+  else if(isBulk(k)){ if(idb){ try{ await idb.set(k,v); return; }catch(e){} } }
+  else if(ls){ try{ ls.setItem(k,JSON.stringify(v)); return; }catch(e){} }
   mem[k]=v;
 }
 
@@ -529,20 +558,20 @@ async function loadMarket(force){
   return {fresh:true, ts};
 }
 
-/* official GE guide price (lagging) — primary: weirdgloop bulk dump (price+last+volume);
-   fallback: wiki GEPricesByIDs module (price only). Reports to the status banner. */
+/* official GE guide price (lagging reference for divergence/trend).
+   universe price: wiki GEPricesByIDs module (works in-browser); the chisel bulk dump
+   (price+last+volume) is tried first but is CORS-blocked in most browsers, so the module
+   is a legitimate primary, not a degradation. per-item momentum/volume comes from
+   api.weirdgloop.org on demand (see fetchGuideSeries). */
 async function loadGuide(force){
   if(!force){
     const gTs=await sGet('snap_guide_ts');
     if(gTs && (now()-gTs)<GUIDE_TTL){
       const g=await sGet('snap_guide'), src=await sGet('snap_guide_src');
-      if(g){ GUIDE=g; guideSource=src||'cache'; guideTs=gTs;
-        if(src==='module') setHealth('guide','warn','Guide prices via <b>fallback</b> — guide-momentum &amp; volume gating unavailable.');
-        else setHealth('guide','ok','');
-        return; }
+      if(g){ GUIDE=g; guideSource=src||'cache'; guideTs=gTs; guideHasMomentum=(src==='dump'); setHealth('guide','ok',''); return; }
     }
   }
-  // primary: bulk dump (id -> {price,last,volume,...})
+  // opportunistic: bulk dump (richest: price+last+volume) — usually CORS-blocked in a browser
   try{
     const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
     const raw=await fetch(GUIDE_DUMP,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); });
@@ -552,12 +581,12 @@ async function loadGuide(force){
       const id=(+o.id)||(+k); if(!id) continue;
       g[id]={price:o.price??null, last:o.last??null, volume:o.volume??null}; n++; }
     if(!n) throw new Error('empty dump');
-    GUIDE=g; guideSource='dump'; guideTs=now();
+    GUIDE=g; guideSource='dump'; guideTs=now(); guideHasMomentum=true;
     await sSet('snap_guide',g); await sSet('snap_guide_ts',guideTs); await sSet('snap_guide_src','dump');
-    setHealth('guide','ok','');
+    setHealth('guide','ok',''); logEvent('info','guide','guide via bulk dump ('+n+' items, incl. volume & prior price)');
     return;
-  }catch(e){ logEvent('warn','guide','dump fetch failed: '+(((e&&e.message)||e))+' — trying wiki fallback'); }
-  // fallback: wiki module (id -> price)
+  }catch(e){ logEvent('info','guide','bulk dump unavailable ('+(((e&&e.message)||e))+') — using wiki guide module'); }
+  // primary in-browser: wiki module (id -> price, whole market)
   try{
     const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
     const raw=await fetch(GUIDE_MODULE,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); });
@@ -565,13 +594,22 @@ async function loadGuide(force){
     const g={}; let n=0;
     for(const k in raw){ const id=+k, p=raw[k]; if(!id||typeof p!=='number') continue; g[id]={price:p, last:null, volume:null}; n++; }
     if(!n) throw new Error('empty module');
-    GUIDE=g; guideSource='module'; guideTs=now();
+    GUIDE=g; guideSource='module'; guideTs=now(); guideHasMomentum=false;
     await sSet('snap_guide',g); await sSet('snap_guide_ts',guideTs); await sSet('snap_guide_src','module');
-    setHealth('guide','warn','Guide prices via <b>fallback</b> — guide-momentum &amp; volume gating unavailable.');
+    setHealth('guide','ok',''); logEvent('info','guide','guide via wiki module ('+n+' items, price; momentum fetched per-item)');
     return;
-  }catch(e){ logEvent('error','guide','module fallback failed: '+(((e&&e.message)||e))); }
-  // both failed → keep any prior GUIDE, degrade (flipping is unaffected)
-  setHealth('guide','warn','Trend data unavailable — guide-price source unreachable. Flipping unaffected.');
+  }catch(e){ logEvent('error','guide','guide module failed: '+(((e&&e.message)||e))); }
+  setHealth('guide','warn','Guide prices unavailable — divergence/trend analysis off. Flipping unaffected.');
+}
+/* per-item official guide series (price+volume) for momentum — api.weirdgloop.org */
+async function fetchGuideSeries(id){
+  const key='g'+id; if(tsCache[key]) return tsCache[key];
+  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
+  const r=await fetch(GUIDE_HIST+id,{signal:ctrl.signal}); clearTimeout(to);
+  const j=await r.json(); const arr=(j&&(j[id]||j[String(id)]))||[];
+  const out=arr.map(p=>{ const ts=p.timestamp; const sec=typeof ts==='number'?(ts>2e10?Math.floor(ts/1000):ts):Math.floor(Date.parse(ts)/1000);
+    return {t:sec, price:+p.price, volume:+p.volume||0}; }).filter(p=>p.price&&p.t).sort((a,b)=>a.t-b.t);
+  tsCache[key]=out; return out;
 }
 
 async function loadAll(forceMap, forceMarket){
@@ -584,7 +622,8 @@ async function loadAll(forceMap, forceMarket){
     const t=new Date(m.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     document.getElementById('stamp').innerHTML='updated <span class="num">'+t+'</span>'+(m.fresh?'':' <span class="mini">(cached)</span>')+' · <span class="num">'+ITEMS.length+'</span> tracked <a id="rebuildLink">rebuild list</a>';
     document.getElementById('rebuildLink').onclick=()=>loadAll(true,true);
-    document.getElementById('universeNote').textContent=ITEMS.length+' of ~4,000 items pass the flip screen (buy limit, ≥1k value, ≥30/hr volume)';
+    const liq=ITEMS.filter(i=>i.liquid).length;
+    document.getElementById('universeNote').textContent=ITEMS.length+' tradeable items tracked · '+liq+' liquid enough to rank by default; search reveals the rest (3rd age, staples, thin items)';
     renderAll();
     computeSignals();
     archiveWatchlist().then(computeSignals);
@@ -600,8 +639,8 @@ function buildItems(){
   for(const m of MAP){
     if(!m.limit) continue;
     const l=LATEST[m.id]; if(!l||!l.low||!l.high) continue; if(l.high<MIN_PRICE) continue;
-    const v=VOL[m.id]||{}; const vol=(v.highPriceVolume||0)+(v.lowPriceVolume||0); if(vol<MIN_VOL) continue;
-    const it={id:m.id,name:m.name,members:m.members,limit:m.limit,low:l.low,high:l.high,lowTime:l.lowTime||0,highTime:l.highTime||0,volume:vol};
+    const v=VOL[m.id]||{}; const vol=(v.highPriceVolume||0)+(v.lowPriceVolume||0);
+    const it={id:m.id,name:m.name,members:m.members,limit:m.limit,low:l.low,high:l.high,lowTime:l.lowTime||0,highTime:l.highTime||0,volume:vol,liquid:vol>=MIN_VOL};
     it.margin=netMargin(it.low,it.high); it.roi=it.margin/it.low*100;
     ITEMS.push(it); byId[it.id]=it; byName[it.name.toLowerCase()]=it;
     const o=document.createElement('option'); o.value=m.name; frag.appendChild(o);
@@ -632,11 +671,13 @@ function currentFinderRows(){
   const tier=document.getElementById('priceTier').value;
   const budget=document.getElementById('budgetToggle').checked;
   const membersOnly=document.getElementById('memberToggle').checked;
-  const perSlot=bankroll/Math.max(slots,1);
+  const perSlot=bankroll/Math.max(slots,1); const searching=!!q;
   let rows=ITEMS.filter(it=>{
-    if(it.margin<=0) return false;
-    if(membersOnly && !it.members) return false;
     if(q && !it.name.toLowerCase().includes(q)) return false;
+    if(membersOnly && !it.members) return false;
+    if(searching) return true;                 // explicit search reveals every match, ignoring browse gates
+    if(it.margin<=0) return false;
+    if(!it.liquid) return false;                // browse view stays curated to liquid items
     const p=it.high;
     if(tier==='staple'&&!(p<100000)) return false;
     if(tier==='mid'&&!(p>=100000&&p<10_000_000)) return false;
@@ -912,6 +953,27 @@ async function runTrends(){
     r+=' <span class="ccap">Hour shape from <b>'+P.archDays+'d</b> of hourly data; weekday & level from 3-month 6h data. Confidence: <b>'+P.conf+'</b>'+(P.conf==='low'?' — star this item to bank more history.':'.')+' Tendencies, not guarantees.</span>';
     document.getElementById('trSuggest').innerHTML=grid+'<div class="sreason">'+r+'</div>';
     document.getElementById('trInsight').innerHTML='Deepest liquidity around <span class="hl">'+fmtHour(a.volPeak)+'</span> — the easiest window to fill larger orders quickly.';
+    // official guide divergence + momentum
+    const gEl=document.getElementById('trGuide');
+    const gp=(GUIDE[it.id]&&GUIDE[it.id].price)||null;
+    if(gp){
+      const mid=(it.low+it.high)/2, div=(mid-gp)/gp*100;
+      const state = (it.low<=gp&&gp<=it.high) ? '<b class="gold">straddles the guide</b> — live spread brackets the official price, mean-reverting and healthy'
+        : (it.high<gp ? '<b class="loss">below guide</b> — even the live sell sits under the official price: a downtrend the lagging guide hasn\u2019t caught up to'
+        : '<b class="gain">above guide</b> — live buy sits over the official price: an uptrend');
+      let mtxt='';
+      try{
+        const gs=await fetchGuideSeries(it.id);
+        if(gs.length>2){ const last=gs[gs.length-1].price, tNow=gs[gs.length-1].t;
+          const pAt=d=>{ const cut=tNow-d*86400; let best=null; gs.forEach(p=>{ if(p.t<=cut) best=p; }); return best?best.price:null; };
+          const p7=pAt(7), p30=pAt(30), m7=p7?((last-p7)/p7*100):null, m30=p30?((last-p30)/p30*100):null;
+          const parts=[]; if(m7!=null) parts.push((m7>=0?'+':'')+m7.toFixed(1)+'% / 7d'); if(m30!=null) parts.push((m30>=0?'+':'')+m30.toFixed(1)+'% / 30d');
+          if(parts.length) mtxt=' Guide momentum: <b>'+parts.join('</b>, <b>')+'</b>.'+((m7!=null&&m7<0&&it.high<gp)?' Both divergence and guide momentum point down — treat as a falling knife, not a dip.':'');
+        }
+      }catch(e){ mtxt=' <i>(guide history unavailable — likely CORS on api.weirdgloop.org; point-in-time only.)</i>'; logEvent('info','guide','history fetch failed for '+it.id); }
+      gEl.style.display='';
+      gEl.innerHTML='<b>vs official guide.</b> Guide <span class="hl">'+fmt(gp)+'</span> · live mid <span class="hl">'+fmt(mid)+'</span> (<b class="'+(div>=0?'gain':'loss')+'">'+(div>=0?'+':'')+div.toFixed(1)+'%</b>). Spread '+state+'.'+mtxt;
+    } else { gEl.style.display='none'; }
     // walk-forward backtest
     const bt=backtestPlan(pts.length>1?pts:s1h);
     const btEl=document.getElementById('trBt');
@@ -1029,6 +1091,10 @@ function renderCoffer(){
   document.getElementById('cofferDeployed').textContent=fmt(deployed);
   const pct=bankroll?Math.round(deployed/bankroll*100):0;
   document.getElementById('cofferDeployedMeta').textContent=pct+'% of '+fmt(bankroll)+' across '+slots+' slots';
+  document.getElementById('cofferCompact').innerHTML=
+    '<div class="ci"><span class="ck">Coffer</span><span class="cv '+sgn(realisedTotal)+'">'+fmt(realisedTotal)+'</span></div>'+
+    '<div class="ci"><span class="ck">Open</span><span class="cv gold">'+fmt(openVal)+'</span></div>'+
+    '<div class="ci"><span class="ck">Deployed</span><span class="cv">'+fmt(deployed)+'</span></div>';
 }
 
 /* playground */
@@ -1091,6 +1157,7 @@ function switchTab(name){
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 document.getElementById('refreshBtn').onclick=()=>loadAll(false,true);
 document.getElementById('statusBanner').onclick=()=>document.getElementById('statusBanner').classList.toggle('open');
+document.getElementById('cofferToggle').onclick=async()=>{ cofferCollapsed=!cofferCollapsed; await sSet('cofferCollapsed',cofferCollapsed); applyCoffer(); };
 document.getElementById('search').oninput=renderFinder;
 document.getElementById('priceTier').onchange=renderFinder;
 document.getElementById('sortSel').onchange=e=>{ sortKey=e.target.value; sortDir=-1; renderFinder(); };
@@ -1171,13 +1238,16 @@ document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; i
 /* init */
 (async function init(){
   const lg=await sGet('logring'); if(Array.isArray(lg)) LOG=lg;
-  if(!hasStore && !idb) setHealth('storage','warn','This browser is blocking persistent storage — your ledger and history won\u2019t survive a reload. Export before closing.');
+  if(!hasStore && !ls) setHealth('storage','error','This browser is blocking storage (Private Browsing?) — your ledger and watchlist won\u2019t be saved. Export before closing.');
+  else if(!hasStore && !idb) setHealth('storage','warn','Price history can\u2019t be cached on this device — flipping works, but Trends/Signals won\u2019t accumulate.');
+  logEvent('info','storage','state\u2192'+(hasStore?'artifact':(ls?'localStorage':'memory'))+', archives\u2192'+(hasStore?'artifact':(idb?'IndexedDB':'memory')));
   const wl=await sGet('watchlist'); if(Array.isArray(wl)) watchlist=wl;
   const tr=await sGet('trades'); if(Array.isArray(tr)) trades=tr;
   const bk=await sGet('bankroll'); if(typeof bk==='number') bankroll=bk;
   const sl=await sGet('slots'); if(typeof sl==='number') slots=sl;
   const st=await sGet('strategy'); if(st&&STRAT[st]) strategy=st;
   const pgs=await sGet('playground'); if(pgs&&typeof pgs.cash==='number') pg=pgs;
+  const cc=await sGet('cofferCollapsed'); if(typeof cc==='boolean') cofferCollapsed=cc; applyCoffer();
   bankI.value=fmt(bankroll); slotsI.value=slots; document.getElementById('stratSel').value=strategy;
   document.getElementById('pgStart').value=fmt(pg.start);
   renderCoffer(); renderPlay();
