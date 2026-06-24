@@ -29,6 +29,7 @@
     color:var(--parch); font-family:'Inter',system-ui,sans-serif; font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased; padding-bottom:48px}
   .num{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
   .gain{color:var(--gain)} .loss{color:var(--loss)} .gold{color:var(--gold)}
+  .amber{color:var(--amber)}
   .wrap{max-width:1220px; margin:0 auto; padding:0 18px}
 
   header{border-bottom:1px solid var(--line); background:linear-gradient(180deg,#1a130b,#140f08)}
@@ -130,6 +131,7 @@
   .linkname{font-weight:500; color:var(--parch); cursor:pointer; border-bottom:1px dotted var(--line2)}
   .linkname:hover{color:var(--gold)}
   .stale{color:var(--loss); font-size:10px; margin-left:6px; letter-spacing:.05em}
+  .tbadge{display:inline-block; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13px; margin-left:5px; cursor:help}
   .star{cursor:pointer; color:var(--muted); font-size:16px; line-height:1; background:none; border:none; padding:2px 4px}
   .star.on{color:var(--gold)}
   .mini{font-size:11px; color:var(--muted)}
@@ -242,7 +244,6 @@
     <button data-tab="watch">Watchlist <span class="badge" id="watchBadge">0</span></button>
     <button data-tab="signals">Signals <span class="badge" id="sigBadge">0</span></button>
     <button data-tab="ledger">Ledger <span class="badge" id="ledgerBadge">0</span></button>
-    <button data-tab="play">Playground</button>
     <button data-tab="logs">Logs</button>
   </nav>
 
@@ -322,10 +323,10 @@
 
   <!-- SIGNALS -->
   <section class="panel hidden" id="panel-signals">
-    <div class="mini" style="margin-bottom:12px; color:var(--parch2)">Live buy signals for your starred items — fires when the current instabuy sits at or below the seasonal model's buy target. Targets come from each item's banked hourly archive, so they sharpen as history grows.</div>
+    <div class="mini" style="margin-bottom:12px; color:var(--parch2)">Live buy signals for your starred items — fires when the current instabuy sits at or below the seasonal model's buy target, <b>unless</b> the item is in a confirmed downtrend (live well under the official guide with falling momentum), in which case the BUY is suppressed to "hold off". Targets come from each item's banked hourly archive.</div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th class="left">Item</th><th>Live buy</th><th>Target ≤</th><th>Gap</th><th>Cheapest window</th><th>Signal</th></tr></thead>
+        <thead><tr><th class="left">Item</th><th>Live buy</th><th>Target ≤</th><th>Gap</th><th>Cheapest window</th><th>Trend</th><th>Signal</th></tr></thead>
         <tbody id="sigBody"></tbody>
       </table>
     </div>
@@ -354,33 +355,6 @@
     <div id="closedEmpty" class="empty hidden" style="border:1px solid var(--line);border-radius:12px"></div>
   </section>
 
-  <!-- PLAYGROUND -->
-  <section class="panel hidden" id="panel-play">
-    <div class="coffer">
-      <div class="cell lead"><div class="k">Equity</div><div class="v num" id="pgEquity">0</div><div class="meta" id="pgEquityMeta">cash + positions</div></div>
-      <div class="cell"><div class="k">Net P&amp;L</div><div class="v num" id="pgPnl">0</div><div class="meta" id="pgPnlMeta">vs start</div></div>
-      <div class="cell"><div class="k">Cash free</div><div class="v num" id="pgCash">0</div><div class="meta" id="pgCashMeta">available to deploy</div></div>
-    </div>
-    <div class="controls" style="margin-top:16px">
-      <div class="slotsmini">Test capital <input id="pgStart" class="num" value="100m" inputmode="text" style="width:90px" /></div>
-      <button id="pgReset" class="ghostbtn">Reset playground</button>
-      <span class="mini">Simulated only — buys at instabuy, sells at instasell − tax.</span>
-    </div>
-    <div class="ledgerform" style="grid-template-columns:2fr 1fr auto">
-      <div class="fld wide"><label>Item</label><input id="pgItem" list="itemList" placeholder="e.g. Zulrah's scales" /></div>
-      <div class="fld"><label>Quantity</label><div class="qtywrap"><input id="pgQty" placeholder="1" /><button id="pgMax" class="maxbtn">Max</button></div></div>
-      <button id="pgBuy" class="go">Buy at market</button>
-    </div>
-    <div class="sectlabel">Holdings</div>
-    <div class="tablewrap"><table>
-      <thead><tr><th class="left">Item</th><th>Qty</th><th>Bought @</th><th>Now</th><th>Unrealised</th><th></th></tr></thead>
-      <tbody id="pgBody"></tbody>
-    </table></div>
-    <div id="pgEmpty" class="empty hidden" style="border:1px solid var(--line);border-radius:12px"></div>
-    <div class="sectlabel">Equity over time</div>
-    <div class="chartcard"><div id="pgCurve"></div><div class="ccap" id="pgCurveCap">A point is logged each time you refresh prices — the curve fills in as you keep using it.</div></div>
-  </section>
-
   <section class="panel hidden" id="panel-logs">
     <div class="controls" style="justify-content:space-between; align-items:flex-start">
       <span class="mini" style="max-width:560px">Diagnostics — newest first, persists across launches (last 50 events). <span class="li">info</span> · <span class="lw">warn</span> · <span class="ler">error</span>, from market, guide and storage. Successful loads are logged too, so you can confirm a build and a data source are live.</span>
@@ -392,13 +366,19 @@
   <footer>
     Prices: OSRS Wiki real-time API. Catalog cached locally 7 days; only live prices pulled each launch — <span id="universeNote"></span>.
     Margins are <strong>after the 2% GE sell tax</strong> (floored per item, capped at 5m, none under 50gp).
-    <strong>Score</strong> = budget-aware profit/hr × risk dampener. <strong>Trends</strong> bucket ~2 weeks of hourly data by hour and weekday — tendencies, not guarantees. <strong>Playground</strong> is paper trading; nothing leaves the app. Watchlist, ledger and playground save to this device only.
+    <strong>Score</strong> = budget-aware profit/hr × a risk dampener that now includes a guide-divergence <strong>trend</strong> term. <strong>Trends</strong> and <strong>Signals</strong> read the official GE guide to flag downtrends — tendencies, not guarantees. Watchlist and ledger save to this device only.
   </footer>
 </div>
 
 <script>
 const API='https://prices.runescape.wiki/api/v1/osrs';
-const APP_VERSION='0.9.0';
+const APP_VERSION='0.10.0';
+// risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
+const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
+const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
+const DIV_FULL=0.08;         // divergence (8%) that maps trend intensity → 1.0
+const Z_BAND=1.0;            // |z| under this = within normal noise (no edge)
+const UP_RISK=0.30;          // uptrend contributes less to risk than a downtrend (reversion only)
 const BOND_ID=13190;
 const MIN_PRICE=1000, MIN_VOL=30;
 const ROI_TARGET=0.05, VOL_COMFORT=1000, FRESH_S=900, STALE_S=21600;
@@ -416,7 +396,6 @@ let watchlist=[], trades=[], bankroll=300_000_000, slots=6, strategy='balanced';
 let cofferCollapsed=false;
 function applyCoffer(){ const w=document.getElementById('cofferWrap'); if(w) w.classList.toggle('collapsed',cofferCollapsed); }
 let sortKey='score', sortDir=-1;
-let pg={start:100_000_000, cash:100_000_000, positions:[], history:[]};
 const tsCache={};
 let signalCache={};
 
@@ -645,7 +624,7 @@ async function loadAll(forceMap, forceMarket){
   try{
     await getMapping(forceMap);
     const m=await loadMarket(forceMarket);
-    buildItems(); computeScores(); pgSnapshot();
+    buildItems(); computeScores();
     const t=new Date(m.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     document.getElementById('stamp').innerHTML='updated <span class="num">'+t+'</span>'+(m.fresh?'':' <span class="mini">(cached)</span>')+' · <span class="num">'+ITEMS.length+'</span> tracked <a id="rebuildLink">rebuild list</a>';
     document.getElementById('rebuildLink').onclick=()=>loadAll(true,true);
@@ -656,7 +635,7 @@ async function loadAll(forceMap, forceMarket){
     archiveWatchlist().then(computeSignals);
     setHealth('market','ok','');
     logEvent('info','market',(m.fresh?'live prices loaded':'served cached snapshot')+' · '+ITEMS.length+' items'+(ITEMS.filter(i=>i.liquid).length?' ('+ITEMS.filter(i=>i.liquid).length+' liquid)':''));
-    loadGuide(forceMarket).catch(e=>logEvent('error','guide','unexpected: '+(((e&&e.message)||e))));
+    loadGuide(forceMarket).then(()=>{ if(ITEMS.length){ computeScores(); renderAll(); } }).catch(e=>logEvent('error','guide','unexpected: '+(((e&&e.message)||e))));
   }catch(e){ document.getElementById('stamp').textContent='fetch failed'; setHealth('market','error','Live prices unavailable — tap Refresh to retry.'); showFinderError(); }
   finally{ btn.disabled=false; btn.textContent='Refresh prices'; }
 }
@@ -676,11 +655,24 @@ function buildItems(){
   dl.appendChild(frag);
 }
 
+/* universe-wide coarse trend: live spread vs the lagging official guide (the straddle test).
+   high<guide ⇒ even the sell is under official ⇒ downtrend the guide hasn't caught up to.
+   Refined (z-score/momentum) versions live in refineTrend, used where we have history. */
+function coarseTrend(it){
+  const g=GUIDE[it.id]; if(!g||!g.price){ return {state:'none', intensity:0, divPct:null, guide:null}; }
+  const guide=g.price, mid=(it.low+it.high)/2, divPct=(mid-guide)/guide*100;
+  if(it.volume<MIN_VOL) return {state:'thin', intensity:0, divPct, guide};   // low-vol guide prices are noise
+  if(it.high<guide){ return {state:'down', intensity:clamp((guide-it.high)/guide/DIV_FULL,0,1), divPct, guide}; }
+  if(it.low>guide){ return {state:'up', intensity:clamp((it.low-guide)/guide/DIV_FULL,0,1), divPct, guide}; }
+  return {state:'straddle', intensity:0, divPct, guide};
+}
 function computeScores(){
   const perSlot=bankroll/Math.max(slots,1), damp=STRAT[strategy].damp, t=now();
   for(const it of ITEMS){
+    it.trend=coarseTrend(it);
     if(it.margin<=0){ it.fill=0; it.turn=null; it.pph=0; it.riskIndex=1; it.score=0; continue; }
-    const fill=Math.max(0, Math.min(it.limit, Math.floor(perSlot/it.low))); it.fill=fill;
+    const partCap=Math.max(1, Math.floor(MAXPART*it.volume));               // can't realistically grab more than this per fill
+    const fill=Math.max(0, Math.min(it.limit, Math.floor(perSlot/it.low), partCap)); it.fill=fill;
     if(fill<1){ it.turn=null; it.pph=0; it.riskIndex=1; it.score=0; continue; }
     const cycle=it.margin*fill;
     it.turn=clamp(2*fill/Math.max(it.volume,1),0.1,8); it.pph=cycle/it.turn;
@@ -688,10 +680,37 @@ function computeScores(){
     const liqRisk=clamp(1-it.volume/VOL_COMFORT,0,1);
     const age=t-Math.min(it.highTime||t,it.lowTime||t);
     const staleRisk=clamp((age-FRESH_S)/(STALE_S-FRESH_S),0,1);
-    it.riskIndex=0.45*marginRisk+0.35*liqRisk+0.20*staleRisk;
+    const trendRisk = it.trend.state==='down' ? it.trend.intensity : (it.trend.state==='up' ? UP_RISK*it.trend.intensity : 0);
+    it.riskIndex=W_MARGIN*marginRisk + W_LIQ*liqRisk + W_STALE*staleRisk + W_TREND*trendRisk;
     it.score=it.pph*(1-damp*it.riskIndex);
   }
 }
+/* refined per-item trend from a price series (archive mids or weirdgloop guide series) — z-scores + momentum */
+function refineTrend(it, series){
+  const g=GUIDE[it.id], guide=(g&&g.price)||null;
+  const px=(series||[]).map(p=>p.price).filter(v=>v>0);
+  const mid=(it.low+it.high)/2;
+  if(px.length<8 || !guide){ return {ok:false, guide, mid, divPct: guide?((mid-guide)/guide*100):null}; }
+  const n=px.length, ma=px.reduce((a,b)=>a+b,0)/n;
+  const sd=Math.sqrt(px.reduce((a,b)=>a+(b-ma)*(b-ma),0)/n) || 1;
+  const zGuide=(mid-guide)/sd, zMean=(mid-ma)/sd;
+  // momentum: 7d & 30d rate-of-change off the series end
+  const tEnd=series[series.length-1].t;
+  const pAt=d=>{ const cut=tEnd-d*86400; let b=null; series.forEach(p=>{ if(p.t<=cut) b=p; }); return b?b.price:null; };
+  const p7=pAt(7), p30=pAt(30);
+  const m7=p7?((px[n-1]-p7)/p7*100):null, m30=p30?((px[n-1]-p30)/p30*100):null;
+  const mom = m7!=null?m7:(m30!=null?m30:0);
+  let state;
+  if(it.low<=guide && guide<=it.high && Math.abs(zGuide)<Z_BAND) state='healthy';
+  else if(zGuide<=-Z_BAND) state=(mom<0)?'down-confirmed':'reversion';
+  else if(zGuide>=Z_BAND) state='up';
+  else state='healthy';
+  return {ok:true, guide, mid, ma, sd, zGuide, zMean, m7, m30, mom, state,
+    divPct:(mid-guide)/guide*100, days: series.length>1?Math.round((series[series.length-1].t-series[0].t)/86400):0 };
+}
+const TREND_BADGE={ down:{g:'↓',c:'loss',t:'below guide — downtrend'}, up:{g:'↑',c:'gain',t:'above guide — uptrend'},
+  straddle:{g:'✓',c:'gold',t:'straddles guide — healthy'}, thin:{g:'~',c:'mini',t:'thin volume — signal unreliable'},
+  none:{g:'',c:'',t:''} };
 
 /* finder */
 function currentFinderRows(){
@@ -736,7 +755,9 @@ function renderFinder(){
     const watched=watchlist.includes(it.id);
     const stale=(it.highTime<staleT||it.lowTime<staleT)?'<span class="stale">stale</span>':'';
     const rel=Math.round(it.score/maxScore*100), g=grade(it.riskIndex);
-    return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
+    const tb=TREND_BADGE[(it.trend&&it.trend.state)||'none']||TREND_BADGE.none;
+    const badge=tb.g?' <span class="tbadge '+tb.c+'" title="'+tb.t+(it.trend&&it.trend.divPct!=null?' · '+(it.trend.divPct>=0?'+':'')+it.trend.divPct.toFixed(1)+'% vs guide':'')+'">'+tb.g+'</span>':'';
+    return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+badge+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
       '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(it.high)+'</td>'+
       '<td class="num gain">'+fmt(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
@@ -917,7 +938,13 @@ function planSignal(points){
 }
 async function computeSignals(){
   const cache={};
-  for(const id of watchlist){ try{ const pts=archToPoints(await archGet(id)); const s=planSignal(pts); if(s) cache[id]=s; }catch(e){} }
+  for(const id of watchlist){ try{
+    const pts=archToPoints(await archGet(id)); const s=planSignal(pts); if(!s) continue;
+    const it=byId[id];
+    if(it){ const series=pts.map(p=>({t:p.timestamp, price:(p.avgHighPrice&&p.avgLowPrice)?(p.avgHighPrice+p.avgLowPrice)/2:(p.avgHighPrice||p.avgLowPrice)})).filter(p=>p.price);
+      s.trend=refineTrend(it, series); }
+    cache[id]=s;
+  }catch(e){} }
   signalCache=cache; renderSignals();
 }
 async function runTrends(){
@@ -981,27 +1008,33 @@ async function runTrends(){
     r+=' <span class="ccap">Hour shape from <b>'+P.archDays+'d</b> of hourly data; weekday & level from 3-month 6h data. Confidence: <b>'+P.conf+'</b>'+(P.conf==='low'?' — star this item to bank more history.':'.')+' Tendencies, not guarantees.</span>';
     document.getElementById('trSuggest').innerHTML=grid+'<div class="sreason">'+r+'</div>';
     document.getElementById('trInsight').innerHTML='Deepest liquidity around <span class="hl">'+fmtHour(a.volPeak)+'</span> — the easiest window to fill larger orders quickly.';
-    // official guide divergence + momentum
+    // official guide divergence + momentum (refined: z-scores vs guide and vs own mean)
     const gEl=document.getElementById('trGuide');
     const gp=(GUIDE[it.id]&&GUIDE[it.id].price)||null;
     if(gp){
-      const mid=(it.low+it.high)/2, div=(mid-gp)/gp*100;
-      const state = (it.low<=gp&&gp<=it.high) ? '<b class="gold">straddles the guide</b> — live spread brackets the official price, mean-reverting and healthy'
-        : (it.high<gp ? '<b class="loss">below guide</b> — even the live sell sits under the official price: a downtrend the lagging guide hasn\u2019t caught up to'
-        : '<b class="gain">above guide</b> — live buy sits over the official price: an uptrend');
-      let mtxt='';
-      try{
-        const gs=await fetchGuideSeries(it.id);
-        logEvent('info','guide','guide history ok for '+it.name+' ('+gs.length+' pts) — weirdgloop reachable');
-        if(gs.length>2){ const last=gs[gs.length-1].price, tNow=gs[gs.length-1].t;
-          const pAt=d=>{ const cut=tNow-d*86400; let best=null; gs.forEach(p=>{ if(p.t<=cut) best=p; }); return best?best.price:null; };
-          const p7=pAt(7), p30=pAt(30), m7=p7?((last-p7)/p7*100):null, m30=p30?((last-p30)/p30*100):null;
-          const parts=[]; if(m7!=null) parts.push((m7>=0?'+':'')+m7.toFixed(1)+'% / 7d'); if(m30!=null) parts.push((m30>=0?'+':'')+m30.toFixed(1)+'% / 30d');
-          if(parts.length) mtxt=' Guide momentum: <b>'+parts.join('</b>, <b>')+'</b>.'+((m7!=null&&m7<0&&it.high<gp)?' Both divergence and guide momentum point down — treat as a falling knife, not a dip.':'');
-        }
-      }catch(e){ mtxt=' <i>(guide history unavailable — likely CORS on api.weirdgloop.org; point-in-time only.)</i>'; logEvent('info','guide','history fetch failed for '+it.id); }
-      gEl.style.display='';
-      gEl.innerHTML='<b>vs official guide.</b> Guide <span class="hl">'+fmt(gp)+'</span> · live mid <span class="hl">'+fmt(mid)+'</span> (<b class="'+(div>=0?'gain':'loss')+'">'+(div>=0?'+':'')+div.toFixed(1)+'%</b>). Spread '+state+'.'+mtxt;
+      const mid=(it.low+it.high)/2;
+      let gs=null;
+      try{ gs=await fetchGuideSeries(it.id); logEvent('info','guide','guide history ok for '+it.name+' ('+gs.length+' pts) — weirdgloop reachable'); }
+      catch(e){ logEvent('info','guide','history fetch failed for '+it.id); }
+      const R=refineTrend(it, gs||[]);
+      const STATE_TXT={
+        'healthy':'<b class="gold">healthy</b> — live spread brackets the guide, mean-reverting',
+        'down-confirmed':'<b class="loss">confirmed downtrend</b> — live sits '+(R.ok?Math.abs(R.zGuide).toFixed(1):'')+'σ under the guide <i>and</i> guide momentum is negative: a falling knife, not a dip',
+        'reversion':'<b class="amber">dislocated low</b> — live is well under the guide but momentum has stopped falling: a possible reversion buy, not a confirmed trend',
+        'up':'<b class="gain">uptrend</b> — live trades above the official price' };
+      let body2;
+      if(R.ok){
+        const mlist=[]; if(R.m7!=null) mlist.push((R.m7>=0?'+':'')+R.m7.toFixed(1)+'%/7d'); if(R.m30!=null) mlist.push((R.m30>=0?'+':'')+R.m30.toFixed(1)+'%/30d');
+        body2='<b>vs official guide.</b> Guide <span class="hl">'+fmt(gp)+'</span> · live mid <span class="hl">'+fmt(mid)+'</span> ('+(R.divPct>=0?'+':'')+R.divPct.toFixed(1)+'%). '+
+          'Dislocation <b class="'+(R.zGuide<0?'loss':'gain')+'">'+(R.zGuide>=0?'+':'')+R.zGuide.toFixed(2)+'σ</b> vs guide, <b>'+(R.zMean>=0?'+':'')+R.zMean.toFixed(2)+'σ</b> vs its own '+R.days+'d mean. '+
+          (mlist.length?'Guide momentum '+mlist.join(', ')+'. ':'')+
+          'State: '+(STATE_TXT[R.state]||R.state)+'. <span class="ccap">z-score = how many standard deviations the live price sits from the reference; |z|&lt;'+Z_BAND.toFixed(1)+' is normal noise. Tendency, not a fill guarantee.</span>';
+      } else {
+        const div=(mid-gp)/gp*100;
+        const coarse=(it.low<=gp&&gp<=it.high)?'straddles the guide (healthy)':(it.high<gp?'below guide (downtrend)':'above guide (uptrend)');
+        body2='<b>vs official guide.</b> Guide <span class="hl">'+fmt(gp)+'</span> · live mid <span class="hl">'+fmt(mid)+'</span> (<b class="'+(div>=0?'gain':'loss')+'">'+(div>=0?'+':'')+div.toFixed(1)+'%</b>). Spread '+coarse+'. <span class="ccap">Not enough guide history for a z-score'+(gs?'':' — weirdgloop unreachable')+'; showing point-in-time divergence only.</span>';
+      }
+      gEl.style.display=''; gEl.innerHTML=body2;
     } else { gEl.style.display='none'; }
     // walk-forward backtest
     const bt=backtestPlan(pts.length>1?pts:s1h);
@@ -1027,8 +1060,10 @@ async function runTrends(){
 async function toggleWatch(id){ const i=watchlist.indexOf(id); if(i>=0){ watchlist.splice(i,1); delete signalCache[id]; } else watchlist.push(id); await sSet('watchlist',watchlist); renderAll(); computeSignals(); }
 function renderSignals(){
   const rows=watchlist.filter(id=>signalCache[id]&&byId[id]).map(id=>{
-    const it=byId[id], s=signalCache[id], gap=(s.buyTarget-it.low)/s.buyTarget*100, buy=gap>=0 && s.conf!=='low';
-    return {it,s,gap,buy};
+    const it=byId[id], s=signalCache[id], gap=(s.buyTarget-it.low)/s.buyTarget*100;
+    const down = s.trend && s.trend.ok && s.trend.state==='down-confirmed';
+    const buy = gap>=0 && s.conf!=='low' && !down;
+    return {it,s,gap,buy,down};
   }).sort((a,b)=>b.gap-a.gap);
   const firing=rows.filter(r=>r.buy).length;
   document.getElementById('sigBadge').textContent=firing;
@@ -1040,12 +1075,20 @@ function renderSignals(){
   }
   empty.classList.add('hidden');
   const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
-  body.innerHTML=rows.map(({it,s,gap,buy})=>{
-    const state = buy ? '<span class="grade rA">BUY</span>' : (s.conf==='low' ? '<span class="grade rC" title="needs more banked history">low data</span>' : '<span class="grade rB">wait</span>');
+  body.innerHTML=rows.map(({it,s,gap,buy,down})=>{
+    const tr=s.trend;
+    const trendCell = (!tr||!tr.ok) ? '<span class="mini">—</span>'
+      : (tr.state==='down-confirmed' ? '<span class="grade rD" title="'+tr.zGuide.toFixed(1)+'σ under guide, momentum down">↓ falling</span>'
+      : tr.state==='reversion' ? '<span class="grade rC" title="dislocated low, momentum flattening">~ dip?</span>'
+      : tr.state==='up' ? '<span class="grade rB" title="above guide">↑ up</span>'
+      : '<span class="grade rA" title="straddles guide">✓</span>');
+    const state = down ? '<span class="grade rD" title="confirmed downtrend — buy suppressed">hold off</span>'
+      : buy ? '<span class="grade rA">BUY</span>'
+      : (s.conf==='low' ? '<span class="grade rC" title="needs more banked history">low data</span>' : '<span class="grade rB">wait</span>');
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span></td>'+
       '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(s.buyTarget)+'</td>'+
       '<td class="num '+(gap>=0?'gain':'loss')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%</td>'+
-      '<td class="num mini">'+winStr(s.buyWin)+'</td><td>'+state+'</td></tr>';
+      '<td class="num mini">'+winStr(s.buyWin)+'</td><td>'+trendCell+'</td><td>'+state+'</td></tr>';
   }).join('');
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
 }
@@ -1126,62 +1169,13 @@ function renderCoffer(){
     '<div class="ci"><span class="ck">Deployed</span><span class="cv">'+fmt(deployed)+'</span></div>';
 }
 
-/* playground */
-function pgPosVal(p){ const it=byId[p.itemId]; if(it&&it.high) return (it.high-tax(it.high))*p.qty; return p.buy*p.qty; }
-function pgEquityVal(){ let v=pg.cash; pg.positions.forEach(p=>v+=pgPosVal(p)); return v; }
-function pgSnapshot(force){
-  const eq=pgEquityVal(); const last=pg.history[pg.history.length-1];
-  if(force || !last || (now()-last.t)>3000){ pg.history.push({t:now(),eq}); if(pg.history.length>600) pg.history=pg.history.slice(-600); sSet('playground',pg); }
-}
-async function pgBuyAction(){
-  const name=document.getElementById('pgItem').value.trim(); const it=byName[name.toLowerCase()];
-  let qty=parseGp(document.getElementById('pgQty').value)||1;
-  if(!it){ alert('Pick a tracked item from the list.'); return; }
-  const cost=qty*it.low;
-  if(cost>pg.cash){ alert('Not enough test cash — costs '+fmt(cost)+', you have '+fmt(pg.cash)+'.'); return; }
-  pg.cash-=cost; pg.positions.push({pid:'p'+Date.now()+Math.random().toString(36).slice(2,5), itemId:it.id, name:it.name, qty, buy:it.low, opened:now()});
-  document.getElementById('pgItem').value=''; document.getElementById('pgQty').value='';
-  pgSnapshot(true); await sSet('playground',pg); renderPlay();
-}
-async function pgSell(pid){ const i=pg.positions.findIndex(p=>p.pid===pid); if(i<0) return; const p=pg.positions[i]; pg.cash+=pgPosVal(p); pg.positions.splice(i,1); pgSnapshot(true); await sSet('playground',pg); renderPlay(); }
-async function pgDiscard(pid){ const i=pg.positions.findIndex(p=>p.pid===pid); if(i<0) return; pg.cash+=pg.positions[i].buy*pg.positions[i].qty; pg.positions.splice(i,1); pgSnapshot(true); await sSet('playground',pg); renderPlay(); }
-async function pgResetAction(){ const v=parseGp(document.getElementById('pgStart').value); const start=isNaN(v)?100_000_000:v;
-  if(!confirm('Reset playground to '+fmt(start)+' test capital? This clears simulated holdings and the equity curve.')) return;
-  pg={start, cash:start, positions:[], history:[{t:now(),eq:start}]}; await sSet('playground',pg); renderPlay(); }
-function renderPlay(){
-  const eq=pgEquityVal(), pnl=eq-pg.start, ret=pg.start?pnl/pg.start*100:0;
-  document.getElementById('pgEquity').textContent=fmt(eq);
-  document.getElementById('pgEquityMeta').textContent=fmt(pg.cash)+' cash · '+pg.positions.length+' holding'+(pg.positions.length===1?'':'s');
-  const pe=document.getElementById('pgPnl'); pe.textContent=(pnl>=0?'+':'')+fmt(pnl); pe.className='v num '+sgn(pnl);
-  document.getElementById('pgPnlMeta').textContent=(ret>=0?'+':'')+ret.toFixed(1)+'% on '+fmt(pg.start)+' start';
-  document.getElementById('pgCash').textContent=fmt(pg.cash);
-  document.getElementById('pgCashMeta').textContent=Math.round((pg.cash/Math.max(eq,1))*100)+'% of equity in cash';
-  const body=document.getElementById('pgBody'), empty=document.getElementById('pgEmpty');
-  if(!pg.positions.length){ body.innerHTML=''; empty.classList.remove('hidden');
-    empty.innerHTML='<div class="empty"><div class="big">No simulated holdings</div><div class="sm">Buy something at market above to test an idea risk-free. Sells return cash at the live instasell minus tax.</div></div>';
-  }else{ empty.classList.add('hidden');
-    body.innerHTML=pg.positions.map(p=>{ const it=byId[p.itemId], cur=it&&it.high?(it.high-tax(it.high)):null; const un=cur!==null?(cur-p.buy)*p.qty:null;
-      return '<tr><td class="left"><span class="itemname">'+p.name+'</span></td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">'+fmt(p.buy)+'</td>'+
-        '<td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?(un>=0?'+':'')+fmt(un):'—')+'</td>'+
-        '<td><button class="act" data-sell="'+p.pid+'">Sell</button> <button class="act danger" data-disc="'+p.pid+'">Discard</button></td></tr>'; }).join('');
-    body.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>pgSell(b.dataset.sell));
-    body.querySelectorAll('[data-disc]').forEach(b=>b.onclick=()=>pgDiscard(b.dataset.disc));
-  }
-  const curve=document.getElementById('pgCurve');
-  if(pg.history.length<2){ curve.innerHTML='<div class="mini">Refresh prices over time (or make a few trades) to build your equity curve.</div>'; }
-  else{ curve.innerHTML=svgLine(pg.history.map(h=>h.eq),{eq:true, baseline:pg.start, markExtremes:false}); }
-  const first=pg.history[0], last=pg.history[pg.history.length-1];
-  if(first&&last&&pg.history.length>=2){ const d1=new Date(first.t*1000), d2=new Date(last.t*1000);
-    document.getElementById('pgCurveCap').textContent='Dashed line = '+fmt(pg.start)+' starting capital · '+d1.toLocaleDateString()+' → '+d2.toLocaleDateString(); }
-}
-
-function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); renderPlay(); }
+function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); }
 function recompute(){ computeScores(); renderAll(); }
 
 /* tabs + events */
 function switchTab(name){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  ['finder','trends','watch','signals','ledger','play','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  ['finder','trends','watch','signals','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
 }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 document.getElementById('refreshBtn').onclick=()=>loadAll(false,true);
@@ -1201,9 +1195,6 @@ document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclic
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;
-document.getElementById('pgBuy').onclick=pgBuyAction;
-document.getElementById('pgReset').onclick=pgResetAction;
-document.getElementById('pgMax').onclick=()=>{ const it=byName[document.getElementById('pgItem').value.trim().toLowerCase()]; if(it&&it.low) document.getElementById('pgQty').value=Math.floor(pg.cash/it.low); };
 const bankI=document.getElementById('bankInput');
 bankI.onchange=async()=>{ const v=parseGp(bankI.value); if(!isNaN(v)){ bankroll=v; bankI.value=fmt(v); await sSet('bankroll',v); recompute(); } };
 const slotsI=document.getElementById('slotsInput');
@@ -1219,7 +1210,7 @@ async function listArchiveIds(){
 async function buildBackup(){
   const archives={}; for(const k of await listArchiveIds()){ const v=await sGet(k); if(v) archives[k.slice(4)]=v; }
   return { app:'the-coffer', version:1, exportedAt:new Date().toISOString(),
-    data:{ watchlist, trades, bankroll, slots, strategy, playground:pg, archives } };
+    data:{ watchlist, trades, bankroll, slots, strategy, archives } };
 }
 async function doExport(){
   try{
@@ -1238,12 +1229,10 @@ async function applyBackup(obj){
   if(typeof d.bankroll==='number'){ bankroll=d.bankroll; await sSet('bankroll',bankroll); }
   if(typeof d.slots==='number'){ slots=d.slots; await sSet('slots',slots); }
   if(d.strategy&&STRAT[d.strategy]){ strategy=d.strategy; await sSet('strategy',strategy); }
-  if(d.playground&&typeof d.playground.cash==='number'){ pg=d.playground; await sSet('playground',pg); }
   if(d.archives&&typeof d.archives==='object'){ for(const id in d.archives){ await sSet('tsa:'+id,d.archives[id]); } }
   document.getElementById('bankInput').value=fmt(bankroll);
   document.getElementById('slotsInput').value=slots;
   document.getElementById('stratSel').value=strategy;
-  document.getElementById('pgStart').value=fmt(pg.start);
   for(const k in tsCache) delete tsCache[k];
 }
 function doImport(file){
@@ -1253,7 +1242,7 @@ function doImport(file){
       const obj=JSON.parse(reader.result);
       if(!obj||obj.app!=='the-coffer'){ if(!confirm('This doesn’t look like a Coffer backup. Import anyway?')) return; }
       const n=(obj.data&&obj.data.archives)?Object.keys(obj.data.archives).length:0;
-      if(!confirm('Import this backup? It overwrites the watchlist, ledger, playground, settings and '+n+' hourly archive'+(n===1?'':'s')+' on this device.')) return;
+      if(!confirm('Import this backup? It overwrites the watchlist, ledger, settings and '+n+' hourly archive'+(n===1?'':'s')+' on this device.')) return;
       await applyBackup(obj);
       if(ITEMS.length) recompute(); else renderAll();
       flashStamp('backup imported');
@@ -1276,13 +1265,11 @@ document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; i
   const bk=await sGet('bankroll'); if(typeof bk==='number') bankroll=bk;
   const sl=await sGet('slots'); if(typeof sl==='number') slots=sl;
   const st=await sGet('strategy'); if(st&&STRAT[st]) strategy=st;
-  const pgs=await sGet('playground'); if(pgs&&typeof pgs.cash==='number') pg=pgs;
   const cc=await sGet('cofferCollapsed'); if(typeof cc==='boolean') cofferCollapsed=cc; applyCoffer();
   const av=document.getElementById('appVer'); if(av) av.textContent='v'+APP_VERSION;
   logEvent('info','app','The Coffer v'+APP_VERSION+' loaded');
   bankI.value=fmt(bankroll); slotsI.value=slots; document.getElementById('stratSel').value=strategy;
-  document.getElementById('pgStart').value=fmt(pg.start);
-  renderCoffer(); renderPlay();
+  renderCoffer();
   await loadAll();
 })();
 </script>
