@@ -187,6 +187,14 @@
   .vbar{fill:var(--line2)} .vbar.peak{fill:var(--gold)}
 
   .suggest{background:linear-gradient(180deg,#2c2110,#201808); border:1px solid var(--gold); border-radius:12px; padding:16px 18px; margin-bottom:16px; box-shadow:var(--shadow)}
+  .trhead{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .trhead-name{font-family:'Cinzel',serif; font-size:18px; color:var(--gold); letter-spacing:.04em}
+  .qtag{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber); border:1px solid var(--line2); border-radius:20px; padding:4px 10px}
+  .trhead-acts{margin-left:auto; display:flex; gap:8px}
+  .tgl{background:var(--oak2); color:var(--parch2); border:1px solid var(--line2); border-radius:7px; padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer}
+  .tgl:hover{border-color:var(--gold); color:var(--parch)}
+  .tgl.on{background:var(--gold); color:var(--goldink); border-color:var(--gold)}
+  .matchhead{font-size:13px; color:var(--parch2); margin-bottom:12px; line-height:1.5}
   .suggest .stitle{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); margin-bottom:12px}
   .sgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
   .sbox{background:rgba(0,0,0,.25); border:1px solid var(--line2); border-radius:9px; padding:12px}
@@ -295,16 +303,18 @@
       <button id="trLoad" class="primarybtn">Analyse</button>
       <span id="trStatus" class="mini"></span>
     </div>
+    <div id="trMatches" class="hidden"></div>
     <div id="trResult" class="hidden">
+      <div id="trHead"></div>
       <div class="suggest" id="trSuggest"></div>
       <div class="insight" id="trInsight"></div>
       <div class="insight" id="trGuide" style="display:none"></div>
-      <div class="chartgrid">
+      <div class="chartgrid" id="trCharts">
         <div class="chartcard"><div class="ctitle">Average price by hour <span class="csub">(your local time)</span></div><div id="trPrice"></div><div class="ccap" id="trPriceCap"></div></div>
         <div class="chartcard"><div class="ctitle">Trade volume by hour</div><div id="trVol"></div><div class="ccap">Heavier bars = faster fills at that hour.</div></div>
       </div>
       <div class="chartcard" id="trHistWrap"><div class="ctitle">3-month price history <span class="csub">(6h steps)</span></div><div id="trHist"></div><div class="ccap" id="trHistCap"></div></div>
-      <div class="chartcard"><div class="ctitle">Weekday vs weekend</div><div class="wkrow" id="trWk"></div></div>
+      <div class="chartcard" id="trWkWrap"><div class="ctitle">Weekday vs weekend</div><div class="wkrow" id="trWk"></div></div>
       <div class="chartcard" id="trBtWrap"><div class="ctitle">Walk-forward backtest <span class="csub">does the timing model beat flipping the spread?</span></div><div id="trBt"></div></div>
     </div>
     <div id="trEmpty" class="empty"><div class="big">Read the daily rhythm</div><div class="sm">Pick an item and analyse to get suggested buy times and prices. Hourly data starts at ~15 days (the API’s cap) and grows past a month as you keep it starred and refresh over the coming weeks. You can also click any item name in the Finder.</div></div>
@@ -372,7 +382,7 @@
 
 <script>
 const API='https://prices.runescape.wiki/api/v1/osrs';
-const APP_VERSION='0.10.0';
+const APP_VERSION='0.11.0';
 // risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
 const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
 const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
@@ -392,7 +402,8 @@ const GUIDE_HIST='https://api.weirdgloop.org/exchange/history/osrs/last90d?id=';
 
 let MAP=null, LATEST=null, VOL=null, ITEMS=[], byId={}, byName={};
 let GUIDE={}, guideSource=null, guideTs=0, guideHasMomentum=false;
-let watchlist=[], trades=[], bankroll=300_000_000, slots=6, strategy='balanced';
+let watchlist=[], trades=[], pinned=[], bankroll=300_000_000, slots=6, strategy='balanced';
+let catById={}, catByName={};   // full-catalog indices (every mapped item, no flip floor)
 let cofferCollapsed=false;
 function applyCoffer(){ const w=document.getElementById('cofferWrap'); if(w) w.classList.toggle('collapsed',cofferCollapsed); }
 let sortKey='score', sortDir=-1;
@@ -640,9 +651,43 @@ async function loadAll(forceMap, forceMarket){
   finally{ btn.disabled=false; btn.textContent='Refresh prices'; }
 }
 
+/* full-catalog reach: resolve & quote ANY mapped item, not just the flip universe */
+function buildCatalogIndex(){
+  catById={}; catByName={};
+  for(const m of MAP){ catById[m.id]=m; catByName[m.name.toLowerCase()]=m; }
+}
+function rawItem(m){
+  if(!m) return null;
+  const l=LATEST[m.id]; if(!l||!l.low||!l.high) return null;          // unquotable without a live price
+  const v=VOL[m.id]||{}; const vol=(v.highPriceVolume||0)+(v.lowPriceVolume||0);
+  const it={id:m.id,name:m.name,members:m.members,limit:m.limit||null,low:l.low,high:l.high,
+    lowTime:l.lowTime||0,highTime:l.highTime||0,volume:vol,liquid:vol>=MIN_VOL,offscreen:true};
+  it.margin=netMargin(it.low,it.high); it.roi=it.low?it.margin/it.low*100:null;
+  return it;
+}
+function resolveItem(name){
+  const k=(name||'').trim().toLowerCase(); if(!k) return null;
+  if(byName[k]) return byName[k];                  // curated flip item (full metrics)
+  const m=catByName[k]; return m?rawItem(m):null;  // exact catalog match (off-screen quote)
+}
+function resolveId(id){ return byId[id] || (catById[id]?rawItem(catById[id]):null); }
+function searchCatalog(query,limit){
+  const q=(query||'').trim().toLowerCase(); if(q.length<2) return [];
+  const out=[];
+  for(const m of MAP){ if(m.name.toLowerCase().indexOf(q)<0) continue; const it=byId[m.id]||rawItem(m); if(it) out.push(it); }
+  out.sort((a,b)=>b.volume-a.volume);
+  return out.slice(0,limit||40);
+}
+function rebuildDatalist(){
+  const dl=document.getElementById('itemList'); if(!dl) return;
+  const seen=new Set(), frag=document.createDocumentFragment();
+  for(const it of ITEMS){ if(seen.has(it.name)) continue; seen.add(it.name); const o=document.createElement('option'); o.value=it.name; frag.appendChild(o); }
+  for(const id of pinned){ const m=catById[id]; if(!m||seen.has(m.name)) continue; seen.add(m.name); const o=document.createElement('option'); o.value=m.name; frag.appendChild(o); }
+  dl.innerHTML=''; dl.appendChild(frag);
+}
 function buildItems(){
   ITEMS=[]; byId={}; byName={};
-  const dl=document.getElementById('itemList'); dl.innerHTML=''; const frag=document.createDocumentFragment();
+  buildCatalogIndex();
   for(const m of MAP){
     if(!m.limit) continue;
     const l=LATEST[m.id]; if(!l||!l.low||!l.high) continue; if(l.high<MIN_PRICE) continue;
@@ -650,9 +695,8 @@ function buildItems(){
     const it={id:m.id,name:m.name,members:m.members,limit:m.limit,low:l.low,high:l.high,lowTime:l.lowTime||0,highTime:l.highTime||0,volume:vol,liquid:vol>=MIN_VOL};
     it.margin=netMargin(it.low,it.high); it.roi=it.margin/it.low*100;
     ITEMS.push(it); byId[it.id]=it; byName[it.name.toLowerCase()]=it;
-    const o=document.createElement('option'); o.value=m.name; frag.appendChild(o);
   }
-  dl.appendChild(frag);
+  rebuildDatalist();
 }
 
 /* universe-wide coarse trend: live spread vs the lagging official guide (the straddle test).
@@ -777,7 +821,7 @@ function showFinderError(){
 
 /* trends + growing hourly archive */
 const ARCH_MAX_DAYS=60;
-function openTrends(id){ const it=byId[id]; if(!it) return; switchTab('trends'); document.getElementById('trItem').value=it.name; runTrends(); }
+function openTrends(id){ const it=resolveId(id); if(!it) return; switchTab('trends'); document.getElementById('trItem').value=it.name; runTrends(); }
 async function fetchTimeseries(id,step){
   const key=id+':'+step; if(tsCache[key]) return tsCache[key];
   const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
@@ -877,6 +921,10 @@ function buildPlan(points, s6h, it){
   o.buyTarget=Math.round(bl*o.buyWin.avg); o.sellTarget=Math.round(bh*o.sellWin.avg);
   o.swingGross=(o.sellTarget-tax(o.sellTarget))-o.buyTarget; o.swingRoi=o.buyTarget?o.swingGross/o.buyTarget*100:0;
   o.nowGross=(it.high-tax(it.high))-it.low; o.nowRoi=it.low?o.nowGross/it.low*100:0;
+  o.nowSpread=it.high-it.low; o.nowTax=tax(it.high);                 // raw live spread vs the tax it must clear
+  o.baselineNet=(o.baseHigh-tax(o.baseHigh))-o.baseLow;              // typical/median round-trip, after tax
+  o.baselineRoi=o.baseLow?o.baselineNet/o.baseLow*100:0;
+  o.nowProfitable=o.nowGross>0; o.swingProfitable=o.swingGross>0;
   // best same-hour flip (modeled spread by hour, volume-gated)
   let fh=-1,fg=-Infinity; for(let h=0;h<24;h++){ if(hfLow.counts[h]<2||hfHigh.counts[h]<2) continue;
     const lo=bl*(hfLow.factor[h]??1), hi=bh*(hfHigh.factor[h]??1), g=(hi-tax(hi))-lo; if(g>fg){fg=g;fh=h;} }
@@ -947,11 +995,49 @@ async function computeSignals(){
   }catch(e){} }
   signalCache=cache; renderSignals();
 }
+function renderMatches(query){
+  const status=document.getElementById('trStatus'), box=document.getElementById('trMatches');
+  document.getElementById('trResult').classList.add('hidden');
+  document.getElementById('trEmpty').classList.add('hidden');
+  const q=(query||'').trim();
+  if(q.length<2){ status.textContent='Type at least two letters to search.'; box.classList.add('hidden'); return; }
+  const rows=searchCatalog(q,40);
+  if(!rows.length){ status.textContent='No items match “'+q+'”.'; box.classList.add('hidden'); return; }
+  status.textContent='';
+  let html='<div class="matchhead"><b>'+rows.length+(rows.length===40?'+':'')+'</b> items match “'+q+'” — tap one to quote it. <span class="mini">Off-screen items aren’t on the flip screen; the quote still shows buy/sell, even when it isn’t a profitable flip.</span></div>';
+  html+='<div class="tablewrap"><table><thead><tr><th class="left">Item</th><th>Buy</th><th>Sell</th><th>Margin</th><th>Vol/hr</th><th></th></tr></thead><tbody>';
+  html+=rows.map(it=>{ const off=!!it.offscreen;
+    return '<tr><td class="left"><span class="linkname" data-open="'+it.id+'">'+it.name+'</span>'+(off?' <span class="mini">off-screen</span>':'')+'</td>'+
+      '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(it.high)+'</td>'+
+      '<td class="num '+sgn(it.margin)+'">'+fmt(it.margin)+'</td>'+
+      '<td class="num mini">'+fmt(it.volume)+'</td>'+
+      '<td><button class="act" data-open="'+it.id+'">Quote</button></td></tr>'; }).join('');
+  html+='</tbody></table></div>';
+  box.innerHTML=html; box.classList.remove('hidden');
+  box.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{ const it=resolveId(+b.dataset.open); if(it){ document.getElementById('trItem').value=it.name; runTrends(); } });
+}
+async function togglePin(id){
+  const i=pinned.indexOf(id); if(i>=0) pinned.splice(i,1); else pinned.push(id);
+  await sSet('pinned',pinned); rebuildDatalist();
+}
+function renderTrendHead(it){
+  const watched=watchlist.includes(it.id), isPinned=pinned.includes(it.id), off=!!it.offscreen;
+  let h='<div class="trhead"><span class="trhead-name">'+it.name+'</span>';
+  if(off) h+='<span class="qtag">quote only · off the flip screen</span>';
+  h+='<span class="trhead-acts">';
+  h+='<button class="tgl '+(watched?'on':'')+'" data-watch="'+it.id+'">'+(watched?'★ Watching':'☆ Watch')+'</button>';
+  if(off) h+='<button class="tgl '+(isPinned?'on':'')+'" data-pin="'+it.id+'">'+(isPinned?'📌 Pinned':'📌 Pin to search')+'</button>';
+  h+='</span></div>';
+  const el=document.getElementById('trHead'); el.innerHTML=h;
+  const wb=el.querySelector('[data-watch]'); if(wb) wb.onclick=async()=>{ await toggleWatch(it.id); renderTrendHead(it); };
+  const pb=el.querySelector('[data-pin]'); if(pb) pb.onclick=async()=>{ await togglePin(it.id); renderTrendHead(it); };
+}
 async function runTrends(){
   const name=document.getElementById('trItem').value.trim();
-  const it=byName[name.toLowerCase()];
   const status=document.getElementById('trStatus');
-  if(!it){ status.textContent='Pick a tracked item from the list.'; return; }
+  const it=resolveItem(name);
+  if(!it){ renderMatches(name); return; }   // no exact match -> whole-catalog substring search
+  document.getElementById('trMatches').classList.add('hidden');
   status.textContent='loading history…';
   document.getElementById('trResult').classList.add('hidden');
   try{
@@ -964,6 +1050,9 @@ async function runTrends(){
     status.textContent='';
     document.getElementById('trEmpty').classList.add('hidden');
     document.getElementById('trResult').classList.remove('hidden');
+    renderTrendHead(it);
+    const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: price card only
+    ['trInsight','trCharts','trWkWrap'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
     const hourLabels=Array.from({length:24},(_,i)=>pad2(i));
     document.getElementById('trPrice').innerHTML=svgLine(a.hourPriceF,{labels:hourLabels,ticks:[0,6,12,18,23]});
     document.getElementById('trPriceCap').innerHTML='Green = cheapest hour to buy · red = priciest to sell.';
@@ -972,7 +1061,7 @@ async function runTrends(){
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
     const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
     // 3-month history (6h) with the modeled buy target as the reference line
-    if(b && b.trend.length>2){
+    if(showAnalysis && b && b.trend.length>2){
       document.getElementById('trHistWrap').classList.remove('hidden');
       document.getElementById('trHist').innerHTML=svgLine(b.trend,{baseline:P.buyTarget, markExtremes:false});
       document.getElementById('trHistCap').innerHTML='~'+b.days+' days at 6h steps · dashed line = modeled buy target ('+fmt(P.buyTarget)+').';
@@ -983,31 +1072,50 @@ async function runTrends(){
     document.getElementById('trWk').innerHTML=
       '<div class="wkbox"><div class="lbl">Weekday</div><div class="b">'+fmt(wdP)+'</div><div class="s">avg price · '+fmt(wdV)+'/period volume</div></div>'+
       '<div class="wkbox"><div class="lbl">Weekend</div><div class="b">'+fmt(weP)+'</div><div class="s">avg price · '+fmt(weV)+'/period volume'+(pdiff!=null?' · '+(pdiff>=0?'+':'')+pdiff.toFixed(1)+'%':'')+'</div></div>';
-    // ---- reconciled plan card ----
-    let grid='<div class="stitle">Suggested plan <span class="csub">level × hour × weekday model</span></div><div class="sgrid">';
+    // ---- plan card: gate on after-tax-positive, headline the actionable live spread ----
+    const liveCard=(note)=>{
+      const prof=P.nowProfitable, title=prof?'Suggested plan':'No profitable spread right now';
+      let g='<div class="stitle">'+title+' <span class="csub">'+note+'</span></div><div class="sgrid">';
+      g+='<div class="sbox"><div class="sk">Buy ≈</div><div class="sv">'+fmt(it.low)+'</div><div class="ss">at/above the instasell</div></div>'+
+         '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmt(it.high)+'</div><div class="ss">at/below the instabuy</div></div>'+
+         '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmt(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% after tax · need ~'+fmt(P.nowTax)+', have ~'+fmt(P.nowSpread):'spread ~'+fmt(P.nowSpread)+' < ~'+fmt(P.nowTax)+' tax')+'</div></div>'+
+         '<div class="sbox"><div class="sk">Typical spread</div><div class="sv '+sgn(P.baselineNet)+'">'+(P.baselineNet>=0?'+':'')+fmt(P.baselineNet)+'</div><div class="ss">'+(P.baselineNet>0?'median clears tax — tends to hold':'median misses tax — transient')+'</div></div>';
+      return g+'</div>';
+    };
+    const liveReason=(lead)=>{
+      let s;
+      if(P.nowProfitable){
+        s=lead+' Right now you can buy near <b>'+fmt(it.low)+'</b> and sell near <b>'+fmt(it.high)+'</b>, netting <b class="gain">'+fmt(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmt(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmt(P.nowSpread)+' now.';
+        s+=(P.baselineNet<=0)?' The <b>typical</b> spread ('+fmt(P.baseLow)+'→'+fmt(P.baseHigh)+') doesn’t clear tax, so treat this as a <b>transient</b> opening — take it now rather than counting on it.':' The typical spread also clears tax (~'+fmt(P.baselineNet)+' net), so this one tends to hold.';
+      }else{
+        s=lead+' Right now the live spread (~'+fmt(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmt(P.nowTax)+'), so there’s <b class="loss">no profitable flip</b> at the moment — wait for the buy/sell gap to widen past ~'+fmt(P.nowTax)+'.';
+      }
+      return s;
+    };
+    let grid, r;
     if(P.flat){
-      grid+='<div class="sbox"><div class="sk">Buy ≈</div><div class="sv">'+fmt(P.baseLow)+'</div><div class="ss">no timing edge — price-led</div></div>'+
-            '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmt(P.baseHigh)+'</div><div class="ss">no timing edge</div></div>';
-    }else{
+      grid=liveCard('live spread · no timing edge');
+      r=liveReason('<span class="hl">'+it.name+'</span> has <b>no reliable intraday pattern</b> ('+P.lowEdge.swingPct.toFixed(1)+'% swing, inside the noise), so this is a price flip, not a timed one.');
+    }else if(P.swingProfitable){
+      grid='<div class="stitle">Suggested plan <span class="csub">level × hour × weekday model</span></div><div class="sgrid">';
       grid+='<div class="sbox"><div class="sk">Buy ≤</div><div class="sv">'+fmt(P.buyTarget)+'</div><div class="ss">'+winStr(P.buyWin)+' · '+((1-P.buyWin.avg)*100).toFixed(1)+'% under baseline</div></div>'+
-            '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmt(P.sellTarget)+'</div><div class="ss">'+winStr(P.sellWin)+' · '+((P.sellWin.avg-1)*100).toFixed(1)+'% over baseline</div></div>';
-    }
-    grid+='<div class="sbox"><div class="sk">Swing round-trip</div><div class="sv '+sgn(P.swingGross)+'">'+(P.swingGross>=0?'+':'')+fmt(P.swingGross)+'</div><div class="ss">'+P.swingRoi.toFixed(1)+'% ROI · vs '+fmt(P.nowGross)+' on the live spread</div></div>'+
-          '<div class="sbox"><div class="sk">Timing edge</div><div class="sv">'+(P.flat?'flat':P.lowEdge.z.toFixed(1)+'σ')+'</div><div class="ss">'+(P.flat?'within daily noise':'cheapest hour below the hourly mean')+'</div></div></div>';
-    // ---- reasoning summary ----
-    let r;
-    if(P.flat){
-      r='<span class="hl">'+it.name+'</span> shows <b>no reliable intraday pattern</b> ('+P.lowEdge.swingPct.toFixed(1)+'% swing, inside the noise), so timing barely helps — trade on price. The recent 10-day baseline is about <b>'+fmt(P.baseLow)+'</b> to buy and <b>'+fmt(P.baseHigh)+'</b> to sell; the live spread nets <b>'+fmt(P.nowGross)+'</b> after tax ('+P.nowRoi.toFixed(1)+'% ROI).';
-    }else{
-      r='Buy near <b>'+fmt(P.buyTarget)+'</b> in the <span class="hl">'+winStr(P.buyWin)+'</span> window — the day\u2019s cheapest stretch, ~<b>'+((1-P.buyWin.avg)*100).toFixed(1)+'%</b> under the recent baseline of '+fmt(P.baseLow)+'.';
+            '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmt(P.sellTarget)+'</div><div class="ss">'+winStr(P.sellWin)+' · '+((P.sellWin.avg-1)*100).toFixed(1)+'% over baseline</div></div>'+
+            '<div class="sbox"><div class="sk">Swing round-trip</div><div class="sv '+sgn(P.swingGross)+'">'+(P.swingGross>=0?'+':'')+fmt(P.swingGross)+'</div><div class="ss">'+P.swingRoi.toFixed(1)+'% ROI · vs '+fmt(P.nowGross)+' on the live spread</div></div>'+
+            '<div class="sbox"><div class="sk">Timing edge</div><div class="sv">'+P.lowEdge.z.toFixed(1)+'σ</div><div class="ss">cheapest hour below the hourly mean</div></div></div>';
+      r='Buy near <b>'+fmt(P.buyTarget)+'</b> in the <span class="hl">'+winStr(P.buyWin)+'</span> window — the day’s cheapest stretch, ~<b>'+((1-P.buyWin.avg)*100).toFixed(1)+'%</b> under the recent baseline of '+fmt(P.baseLow)+'.';
       if(P.weBuyDiscPct!=null && Math.abs(P.weBuyDiscPct)>=0.4) r+=' '+(P.weBuyDiscPct>0?'Weekends run ~<b>'+P.weBuyDiscPct.toFixed(1)+'%</b> cheaper still.':'Weekdays sit ~<b>'+Math.abs(P.weBuyDiscPct).toFixed(1)+'%</b> below weekends.');
-      r+=' Sell near <b>'+fmt(P.sellTarget)+'</b> into the <span class="hl">'+winStr(P.sellWin)+'</span> peak. That trough\u2192peak swing nets <b class="'+sgn(P.swingGross)+'">'+fmt(P.swingGross)+'</b> after tax (<b>'+P.swingRoi.toFixed(1)+'%</b>), versus <b>'+fmt(P.nowGross)+'</b> flipping the spread right now.';
+      r+=' Sell near <b>'+fmt(P.sellTarget)+'</b> into the <span class="hl">'+winStr(P.sellWin)+'</span> peak. That trough→peak swing nets <b class="'+sgn(P.swingGross)+'">'+fmt(P.swingGross)+'</b> after tax (<b>'+P.swingRoi.toFixed(1)+'%</b>), versus <b>'+fmt(P.nowGross)+'</b> flipping the spread right now.';
       if(P.flipHour>=0) r+=' Best <i>same-hour</i> flip sits around <span class="hl">'+fmtHour(P.flipHour)+'</span> (~'+fmt(P.flipGross)+' after tax).';
+    }else{
+      grid=liveCard('timing swing doesn’t clear tax · live spread');
+      r=liveReason('<span class="hl">'+it.name+'</span> has an intraday pattern, but the modeled trough→peak swing <b>doesn’t clear tax</b> after the 2% cut, so timing adds no profit here.');
     }
     if(P.trendPct!=null && Math.abs(P.trendPct)>=2) r+=' Price has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b> over ~3 months, so targets ride the recent level, not a stale long-run low.';
     r+=' <span class="ccap">Hour shape from <b>'+P.archDays+'d</b> of hourly data; weekday & level from 3-month 6h data. Confidence: <b>'+P.conf+'</b>'+(P.conf==='low'?' — star this item to bank more history.':'.')+' Tendencies, not guarantees.</span>';
     document.getElementById('trSuggest').innerHTML=grid+'<div class="sreason">'+r+'</div>';
     document.getElementById('trInsight').innerHTML='Deepest liquidity around <span class="hl">'+fmtHour(a.volPeak)+'</span> — the easiest window to fill larger orders quickly.';
+    if(!showAnalysis){ document.getElementById('trGuide').style.display='none'; }
+    else{
     // official guide divergence + momentum (refined: z-scores vs guide and vs own mean)
     const gEl=document.getElementById('trGuide');
     const gp=(GUIDE[it.id]&&GUIDE[it.id].price)||null;
@@ -1036,7 +1144,11 @@ async function runTrends(){
       }
       gEl.style.display=''; gEl.innerHTML=body2;
     } else { gEl.style.display='none'; }
+    }
     // walk-forward backtest
+    if(!showAnalysis){ document.getElementById('trBtWrap').classList.add('hidden'); }
+    else{
+    document.getElementById('trBtWrap').classList.remove('hidden');
     const bt=backtestPlan(pts.length>1?pts:s1h);
     const btEl=document.getElementById('trBt');
     if(bt.insufficient){
@@ -1052,6 +1164,7 @@ async function runTrends(){
         '<div class="sbox"><div class="sk">Beat rate</div><div class="sv">'+bt.beatRate.toFixed(0)+'%</div><div class="ss">of '+bt.n+' held-out days · '+bt.winRate.toFixed(0)+'% profitable</div></div>'+
         '</div>'+
         '<div class="sreason"><b class="'+verdictCls+'">'+verdict+'</b> <span class="ccap">Expanding walk-forward: factors fit only on days before each test day, scored on '+bt.n+' held-out days. Per-unit, pre-fill-risk, on aggregate hourly averages.</span></div>';
+    }
     }
   }catch(e){ status.textContent='Couldn’t load history — try again.'; }
 }
@@ -1098,17 +1211,18 @@ function renderWatch(){
   if(!watchlist.length){ body.innerHTML=''; empty.classList.remove('hidden');
     empty.innerHTML='<div class="big">Nothing watched yet</div><div class="sm">Star items in the Finder to park them here and track their margins each refresh.</div>'; return; }
   empty.classList.add('hidden');
-  body.innerHTML=watchlist.map(id=>{ const it=byId[id]; if(!it) return ''; const g=grade(it.riskIndex??1);
-    return '<tr><td class="left"><span class="linkname" data-trend="'+id+'">'+it.name+'</span></td>'+
+  body.innerHTML=watchlist.map(id=>{ const it=resolveId(id); if(!it) return ''; const off=!!it.offscreen;
+    const gradeCell=off?'<span class="mini">—</span>':'<span class="grade r'+grade(it.riskIndex??1)+'">'+grade(it.riskIndex??1)+'</span>';
+    return '<tr><td class="left"><span class="linkname" data-trend="'+id+'">'+it.name+'</span>'+(off?' <span class="mini">quote</span>':'')+'</td>'+
       '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(it.high)+'</td>'+
       '<td class="num '+sgn(it.margin)+'">'+fmt(it.margin)+'</td><td class="num">'+(it.roi!=null?it.roi.toFixed(1)+'%':'—')+'</td>'+
-      '<td class="num mini">'+fmtTurn(it.turn)+'</td><td class="num gold">'+fmt(it.pph)+'</td>'+
-      '<td><span class="grade r'+g+'">'+g+'</span></td>'+
+      '<td class="num mini">'+(off?'—':fmtTurn(it.turn))+'</td><td class="num gold">'+(off?'—':fmt(it.pph))+'</td>'+
+      '<td>'+gradeCell+'</td>'+
       '<td><button class="act" data-buy="'+id+'">Log buy</button> <button class="act danger" data-rm="'+id+'">Remove</button></td></tr>';
   }).join('');
   body.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>toggleWatch(+b.dataset.rm));
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
-  body.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{ const it=byId[+b.dataset.buy]; switchTab('ledger');
+  body.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{ const it=resolveId(+b.dataset.buy); if(!it) return; switchTab('ledger');
     document.getElementById('tItem').value=it.name; document.getElementById('tBuy').value=it.low||''; document.getElementById('tQty').focus(); });
 }
 
@@ -1117,7 +1231,7 @@ async function addTrade(){
   const name=document.getElementById('tItem').value.trim();
   const qty=parseGp(document.getElementById('tQty').value)||1, buy=parseGp(document.getElementById('tBuy').value);
   if(!name||isNaN(buy)){ alert('Enter an item and a buy price.'); return; }
-  const it=byName[name.toLowerCase()];
+  const it=resolveItem(name);
   trades.push({tid:'t'+Date.now()+Math.random().toString(36).slice(2,6), itemId:it?it.id:null, name:it?it.name:name, qty, buy, sell:null, opened:now(), closed:null});
   await sSet('trades',trades);
   document.getElementById('tItem').value=''; document.getElementById('tQty').value=''; document.getElementById('tBuy').value=''; renderAll();
@@ -1134,7 +1248,7 @@ function renderLedger(){
   if(!open.length){ ob.innerHTML=''; oe.classList.remove('hidden');
     oe.innerHTML='<div class="empty"><div class="big">No open positions</div><div class="sm">Log a buy above to track a flip. Shorthand works — 1.79b, 450k.</div></div>';
   }else{ oe.classList.add('hidden');
-    ob.innerHTML=open.map(t=>{ const it=t.itemId?byId[t.itemId]:null, cur=it&&it.high?it.high:null; const un=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
+    ob.innerHTML=open.map(t=>{ const it=t.itemId?resolveId(t.itemId):null, cur=it&&it.high?it.high:null; const un=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
       return '<tr><td class="left"><span class="itemname">'+t.name+'</span></td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td>'+
         '<td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td>'+
         '<td><button class="act" data-close="'+t.tid+'">Mark sold</button> <button class="act danger" data-del="'+t.tid+'">Delete</button></td></tr>'; }).join('');
@@ -1155,7 +1269,7 @@ function renderLedger(){
 function renderCoffer(){
   const closed=trades.filter(t=>t.sell!==null), open=trades.filter(t=>t.sell===null);
   const realisedTotal=closed.reduce((s,t)=>s+realised(t),0); let openVal=0, deployed=0;
-  for(const t of open){ deployed+=t.buy*t.qty; const it=t.itemId?byId[t.itemId]:null; if(it&&it.high) openVal+=(it.high-tax(it.high))*t.qty; }
+  for(const t of open){ deployed+=t.buy*t.qty; const it=t.itemId?resolveId(t.itemId):null; if(it&&it.high) openVal+=(it.high-tax(it.high))*t.qty; }
   const cr=document.getElementById('cofferRealised'); cr.textContent=fmt(realisedTotal); cr.className='v num '+sgn(realisedTotal);
   document.getElementById('cofferRealisedMeta').textContent=closed.length+' closed flip'+(closed.length===1?'':'s')+', after tax';
   document.getElementById('cofferOpen').textContent=fmt(openVal);
@@ -1210,7 +1324,7 @@ async function listArchiveIds(){
 async function buildBackup(){
   const archives={}; for(const k of await listArchiveIds()){ const v=await sGet(k); if(v) archives[k.slice(4)]=v; }
   return { app:'the-coffer', version:1, exportedAt:new Date().toISOString(),
-    data:{ watchlist, trades, bankroll, slots, strategy, archives } };
+    data:{ watchlist, trades, pinned, bankroll, slots, strategy, archives } };
 }
 async function doExport(){
   try{
@@ -1225,6 +1339,7 @@ async function doExport(){
 async function applyBackup(obj){
   const d=obj&&obj.data; if(!d) throw new Error('bad');
   if(Array.isArray(d.watchlist)){ watchlist=d.watchlist; await sSet('watchlist',watchlist); }
+  if(Array.isArray(d.pinned)){ pinned=d.pinned; await sSet('pinned',pinned); }
   if(Array.isArray(d.trades)){ trades=d.trades; await sSet('trades',trades); }
   if(typeof d.bankroll==='number'){ bankroll=d.bankroll; await sSet('bankroll',bankroll); }
   if(typeof d.slots==='number'){ slots=d.slots; await sSet('slots',slots); }
@@ -1234,6 +1349,7 @@ async function applyBackup(obj){
   document.getElementById('slotsInput').value=slots;
   document.getElementById('stratSel').value=strategy;
   for(const k in tsCache) delete tsCache[k];
+  rebuildDatalist();
 }
 function doImport(file){
   const reader=new FileReader();
@@ -1262,6 +1378,7 @@ document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; i
   logEvent('info','storage','state\u2192'+(hasStore?'artifact':(ls?'localStorage':'memory'))+', archives\u2192'+(hasStore?'artifact':(idb?'IndexedDB':'memory')));
   const wl=await sGet('watchlist'); if(Array.isArray(wl)) watchlist=wl;
   const tr=await sGet('trades'); if(Array.isArray(tr)) trades=tr;
+  const pn=await sGet('pinned'); if(Array.isArray(pn)) pinned=pn;
   const bk=await sGet('bankroll'); if(typeof bk==='number') bankroll=bk;
   const sl=await sGet('slots'); if(typeof sl==='number') slots=sl;
   const st=await sGet('strategy'); if(st&&STRAT[st]) strategy=st;
