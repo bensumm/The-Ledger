@@ -337,10 +337,10 @@
 
   <!-- SIGNALS -->
   <section class="panel hidden" id="panel-signals">
-    <div class="mini" style="margin-bottom:12px; color:var(--parch2)">Live buy signals for your starred items — fires when the current instabuy sits at or below the seasonal model's buy target, <b>unless</b> the item is in a confirmed downtrend (live well under the official guide with falling momentum), in which case the BUY is suppressed to "hold off". Targets come from each item's banked hourly archive.</div>
+    <div class="mini" style="margin-bottom:12px; color:var(--parch2)">Live buy signals for your starred items. <b>BUY</b> fires when there's a positive after-tax spread <b>right now</b> during the item's historically-cheap hour window. Falling / volatile items aren't hidden — they still fire, but the Trend column flags the risk (↓ falling, ~ dip?, ⚡) so you can judge it yourself.</div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th class="left">Item</th><th>Live buy</th><th>Target ≤</th><th>Gap</th><th>Cheapest window</th><th>Trend</th><th>Signal</th></tr></thead>
+        <thead><tr><th class="left">Item</th><th>Buy</th><th>Sell</th><th>Margin</th><th>Cheapest window</th><th>Trend</th><th>Signal</th></tr></thead>
         <tbody id="sigBody"></tbody>
       </table>
     </div>
@@ -386,7 +386,7 @@
 
 <script>
 const API='https://prices.runescape.wiki/api/v1/osrs';
-const APP_VERSION='0.12.0';
+const APP_VERSION='0.13.0';
 // risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
 const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
 const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
@@ -921,27 +921,15 @@ function buildPlan(points, s6h, it){
   const o={ archDays: points.length>1?Math.max(1,Math.round((points[points.length-1].timestamp-points[0].timestamp)/86400)):0 };
   let bl=recentBaseline(points,'low',10); if(bl==null) bl=median(points.map(p=>p.avgLowPrice).filter(Boolean)); if(bl==null) bl=it.low;
   let bh=recentBaseline(points,'high',10); if(bh==null) bh=median(points.map(p=>p.avgHighPrice).filter(Boolean)); if(bh==null) bh=it.high;
-  o.baseLow=bl; o.baseHigh=bh;                                       // 10-day level — durability ("Typical spread") only
-  // recent price level (last LEVEL_DAYS) — targets ride this so they track current prices, not a stale 10-day centre; fall back to the live quote
-  let rl=recentBaseline(points,'low',LEVEL_DAYS); if(rl==null) rl=it.low;
-  let rh=recentBaseline(points,'high',LEVEL_DAYS); if(rh==null) rh=it.high;
-  o.recentLow=rl; o.recentHigh=rh;
+  o.baseLow=bl; o.baseHigh=bh;
   const hfLow=hourFactors(points,'low'), hfHigh=hourFactors(points,'high');
   o.lowEdge=factorStats(hfLow.factor); o.highEdge=factorStats(hfHigh.factor);
   o.medCount=median(hfLow.counts.filter(c=>c>0))||0;
   const lowF=hfLow.factor.map(v=>v==null?1:v), highF=hfHigh.factor.map(v=>v==null?1:v);
-  o.buyWin=bestWindow(lowF,3,'min'); o.sellWin=bestWindow(highF,3,'max');
-  o.buyTarget=Math.round(rl*o.buyWin.avg); o.sellTarget=Math.round(rh*o.sellWin.avg);
-  o.swingGross=(o.sellTarget-tax(o.sellTarget))-o.buyTarget; o.swingRoi=o.buyTarget?o.swingGross/o.buyTarget*100:0;
+  o.buyWin=bestWindow(lowF,3,'min'); o.sellWin=bestWindow(highF,3,'max');   // cheapest / richest hour windows — timing hint only
   o.nowGross=(it.high-tax(it.high))-it.low; o.nowRoi=it.low?o.nowGross/it.low*100:0;
-  o.nowSpread=it.high-it.low; o.nowTax=tax(it.high);                 // raw live spread vs the tax it must clear
-  o.baselineNet=(o.baseHigh-tax(o.baseHigh))-o.baseLow;              // typical/median round-trip, after tax
-  o.baselineRoi=o.baseLow?o.baselineNet/o.baseLow*100:0;
-  o.nowProfitable=o.nowGross>0; o.swingProfitable=o.swingGross>0;
-  // best same-hour flip (modeled spread by hour, volume-gated)
-  let fh=-1,fg=-Infinity; for(let h=0;h<24;h++){ if(hfLow.counts[h]<2||hfHigh.counts[h]<2) continue;
-    const lo=rl*(hfLow.factor[h]??1), hi=rh*(hfHigh.factor[h]??1), g=(hi-tax(hi))-lo; if(g>fg){fg=g;fh=h;} }
-  o.flipHour=fh; o.flipGross=fg;
+  o.nowSpread=it.high-it.low; o.nowTax=tax(it.high);                 // the plan IS the live spread vs the tax it must clear
+  o.nowProfitable=o.nowGross>0;
   // weekday effect (buy side) from 6h layer
   if(s6h&&s6h.length>6){ const wf=weekdayFactors(s6h,'low').factor;
     const we=[0,6].map(d=>wf[d]).filter(v=>v!=null), wd=[1,2,3,4,5].map(d=>wf[d]).filter(v=>v!=null);
@@ -991,11 +979,10 @@ function backtestPlan(points){
 function planSignal(points){
   if(points.length<24) return null;
   const days=points.length>1?Math.max(1,Math.round((points[points.length-1].timestamp-points[0].timestamp)/86400)):0;
-  let bl=recentBaseline(points,'low',LEVEL_DAYS); if(bl==null) bl=median(points.map(p=>p.avgLowPrice).filter(Boolean)); if(bl==null) return null;
   const hf=hourFactors(points,'low'), medCount=median(hf.counts.filter(c=>c>0))||0;
   const wb=bestWindow(hf.factor.map(v=>v==null?1:v),3,'min');
   const conf=(days>=10&&medCount>=5)?'good':(days>=4&&medCount>=2)?'moderate':'low';
-  return { buyTarget:Math.round(bl*wb.avg), buyWin:wb, conf, archDays:days };
+  return { buyWin:wb, conf, archDays:days };   // hour timing + confidence only; the flip decision is live-spread native
 }
 async function computeSignals(){
   const cache={};
@@ -1073,11 +1060,11 @@ async function runTrends(){
     // seasonal plan (the reconciled buy/sell model)
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
     const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
-    // 3-month history (6h) with the modeled buy target as the reference line
+    // 3-month history (6h) with the live buy price as the reference line
     if(showAnalysis && b && b.trend.length>2){
       document.getElementById('trHistWrap').classList.remove('hidden');
-      document.getElementById('trHist').innerHTML=svgLine(b.trend,{baseline:P.buyTarget, markExtremes:false});
-      document.getElementById('trHistCap').innerHTML='~'+b.days+' days at 6h steps · dashed line = modeled buy target ('+fmt(P.buyTarget)+').';
+      document.getElementById('trHist').innerHTML=svgLine(b.trend,{baseline:it.low, markExtremes:false});
+      document.getElementById('trHistCap').innerHTML='~'+b.days+' days at 6h steps · dashed line = live buy ('+fmtP(it.low)+').';
     } else { document.getElementById('trHistWrap').classList.add('hidden'); }
     // weekday/weekend descriptive boxes
     const weP=b?b.wePrice:a.wePrice, wdP=b?b.wdPrice:a.wdPrice, weV=b?b.weVol:a.weVol, wdV=b?b.wdVol:a.wdVol;
@@ -1085,46 +1072,31 @@ async function runTrends(){
     document.getElementById('trWk').innerHTML=
       '<div class="wkbox"><div class="lbl">Weekday</div><div class="b">'+fmt(wdP)+'</div><div class="s">avg price · '+fmt(wdV)+'/period volume</div></div>'+
       '<div class="wkbox"><div class="lbl">Weekend</div><div class="b">'+fmt(weP)+'</div><div class="s">avg price · '+fmt(weV)+'/period volume'+(pdiff!=null?' · '+(pdiff>=0?'+':'')+pdiff.toFixed(1)+'%':'')+'</div></div>';
-    // ---- plan card: gate on after-tax-positive, headline the actionable live spread ----
-    const liveCard=(note)=>{
-      const prof=P.nowProfitable, title=prof?'Suggested plan':'No profitable spread right now';
-      let g='<div class="stitle">'+title+' <span class="csub">'+note+'</span></div><div class="sgrid">';
-      g+='<div class="sbox"><div class="sk">Buy ≈</div><div class="sv">'+fmtP(it.low)+'</div><div class="ss">at/above the instasell</div></div>'+
-         '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmtP(it.high)+'</div><div class="ss">at/below the instabuy</div></div>'+
-         '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmtP(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% after tax · need ~'+fmtP(P.nowTax)+', have ~'+fmtP(P.nowSpread):'spread ~'+fmtP(P.nowSpread)+' < ~'+fmtP(P.nowTax)+' tax')+'</div></div>'+
-         '<div class="sbox"><div class="sk">Typical spread</div><div class="sv '+sgn(P.baselineNet)+'">'+(P.baselineNet>=0?'+':'')+fmtP(P.baselineNet)+'</div><div class="ss">'+(P.baselineNet>0?'median clears tax — tends to hold':'median misses tax — transient')+'</div></div>';
-      return g+'</div>';
-    };
-    const liveReason=(lead)=>{
-      let s;
-      if(P.nowProfitable){
-        s=lead+' Right now you can buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' now.';
-        s+=(P.baselineNet<=0)?' The <b>typical</b> spread ('+fmtP(P.baseLow)+'→'+fmtP(P.baseHigh)+') doesn’t clear tax, so treat this as a <b>transient</b> opening — take it now rather than counting on it.':' The typical spread also clears tax (~'+fmtP(P.baselineNet)+' net), so this one tends to hold.';
-      }else{
-        s=lead+' Right now the live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so there’s <b class="loss">no profitable flip</b> at the moment — wait for the buy/sell gap to widen past ~'+fmtP(P.nowTax)+'.';
-      }
-      return s;
-    };
-    let grid, r;
-    if(P.flat){
-      grid=liveCard('live spread · no timing edge');
-      r=liveReason('<span class="hl">'+it.name+'</span> has <b>no reliable intraday pattern</b> ('+P.lowEdge.swingPct.toFixed(1)+'% swing, inside the noise), so this is a price flip, not a timed one.');
-    }else if(P.swingProfitable){
-      grid='<div class="stitle">Suggested plan <span class="csub">level × hour × weekday model</span></div><div class="sgrid">';
-      grid+='<div class="sbox"><div class="sk">Buy ≤</div><div class="sv">'+fmtP(P.buyTarget)+'</div><div class="ss">'+winStr(P.buyWin)+' · '+((1-P.buyWin.avg)*100).toFixed(1)+'% under baseline</div></div>'+
-            '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmtP(P.sellTarget)+'</div><div class="ss">'+winStr(P.sellWin)+' · '+((P.sellWin.avg-1)*100).toFixed(1)+'% over baseline</div></div>'+
-            '<div class="sbox"><div class="sk">Swing round-trip</div><div class="sv '+sgn(P.swingGross)+'">'+(P.swingGross>=0?'+':'')+fmtP(P.swingGross)+'</div><div class="ss">'+P.swingRoi.toFixed(1)+'% ROI · vs '+fmtP(P.nowGross)+' on the live spread</div></div>'+
-            '<div class="sbox"><div class="sk">Timing edge</div><div class="sv">'+P.lowEdge.z.toFixed(1)+'σ</div><div class="ss">cheapest hour below the hourly mean</div></div></div>';
-      r='Buy near <b>'+fmtP(P.buyTarget)+'</b> in the <span class="hl">'+winStr(P.buyWin)+'</span> window — the day’s cheapest stretch, ~<b>'+((1-P.buyWin.avg)*100).toFixed(1)+'%</b> under the recent 2-day level of '+fmtP(P.recentLow)+'.';
-      if(P.weBuyDiscPct!=null && Math.abs(P.weBuyDiscPct)>=0.4) r+=' '+(P.weBuyDiscPct>0?'Weekends run ~<b>'+P.weBuyDiscPct.toFixed(1)+'%</b> cheaper still.':'Weekdays sit ~<b>'+Math.abs(P.weBuyDiscPct).toFixed(1)+'%</b> below weekends.');
-      r+=' Sell near <b>'+fmtP(P.sellTarget)+'</b> into the <span class="hl">'+winStr(P.sellWin)+'</span> peak. That trough→peak swing nets <b class="'+sgn(P.swingGross)+'">'+fmtP(P.swingGross)+'</b> after tax (<b>'+P.swingRoi.toFixed(1)+'%</b>), versus <b>'+fmtP(P.nowGross)+'</b> flipping the spread right now.';
-      if(P.flipHour>=0) r+=' Best <i>same-hour</i> flip sits around <span class="hl">'+fmtHour(P.flipHour)+'</span> (~'+fmtP(P.flipGross)+' after tax).';
-    }else{
-      grid=liveCard('timing swing doesn’t clear tax · live spread');
-      r=liveReason('<span class="hl">'+it.name+'</span> has an intraday pattern, but the modeled trough→peak swing <b>doesn’t clear tax</b> after the 2% cut, so timing adds no profit here.');
+    // ---- plan card: the live spread IS the plan (median targets removed); trend box + timing hint ----
+    const prof=P.nowProfitable;
+    const gs=guideState(it);
+    let tState='—', tCls='', tSub='no guide reference', volatile=false;
+    if(gs.state==='down'){ tState='Falling ▼'; tCls='loss'; tSub=Math.abs(gs.divPct).toFixed(1)+'% below guide'; volatile=(gs.intensity>=0.35)||(Math.abs(gs.divPct)>=6); }
+    else if(gs.state==='up'){ tState='Rising ▲'; tCls='gold'; tSub='+'+gs.divPct.toFixed(1)+'% above guide'; volatile=(gs.intensity>=0.35)||(Math.abs(gs.divPct)>=6); }
+    else if(gs.state==='straddle'){ tState='Stable'; tCls='gain'; tSub='at guide ('+(gs.divPct>=0?'+':'')+gs.divPct.toFixed(1)+'%)'; }
+    else if(gs.state==='thin'){ tState='Thin'; tSub='low volume — guide is noisy'; }
+    let grid='<div class="stitle">'+(prof?'Suggested plan':'No profitable spread right now')+' <span class="csub">live market · after 2% tax</span></div><div class="sgrid">';
+    grid+='<div class="sbox"><div class="sk">Buy ≈</div><div class="sv">'+fmtP(it.low)+'</div><div class="ss">at/above the instasell</div></div>'+
+          '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmtP(it.high)+'</div><div class="ss">at/below the instabuy</div></div>'+
+          '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmtP(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% · need ~'+fmtP(P.nowTax)+', have ~'+fmtP(P.nowSpread):'spread ~'+fmtP(P.nowSpread)+' < ~'+fmtP(P.nowTax)+' tax')+'</div></div>'+
+          '<div class="sbox"><div class="sk">Trend</div><div class="sv '+tCls+'">'+tState+(volatile?' <span class="loss" title="price moving fast">⚡</span>':'')+'</div><div class="ss">'+tSub+'</div></div>';
+    grid+='</div>';
+    let r='';
+    if(volatile) r+='<b class="loss">⚡ Volatile</b> — this item is '+(gs.state==='up'?'rising':'falling')+' fast ('+(gs.divPct>=0?'+':'')+gs.divPct.toFixed(1)+'% vs guide), so the spread can move against you between buying and selling. Size down and don’t chase. ';
+    if(prof) r+='Buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' right now.';
+    else r+='The live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so there’s <b class="loss">no profitable flip</b> right now — wait for the buy/sell gap to widen past ~'+fmtP(P.nowTax)+'.';
+    if(!P.flat){
+      r+=' <b>Timing hint:</b> historically cheapest to buy around <span class="hl">'+winStr(P.buyWin)+'</span> and richest to sell around <span class="hl">'+winStr(P.sellWin)+'</span>';
+      if(P.weBuyDiscPct!=null && P.weBuyDiscPct>0.4) r+=', and weekends run ~<b>'+P.weBuyDiscPct.toFixed(1)+'%</b> cheaper';
+      r+=' — a scheduling edge, not a price target.';
     }
-    if(P.trendPct!=null && Math.abs(P.trendPct)>=2) r+=' Price has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b> over ~3 months, so targets ride the recent level, not a stale long-run low.';
-    r+=' <span class="ccap">Hour shape from <b>'+P.archDays+'d</b> of hourly data; weekday & level from 3-month 6h data. Confidence: <b>'+P.conf+'</b>'+(P.conf==='low'?' — star this item to bank more history.':'.')+' Tendencies, not guarantees.</span>';
+    if(P.trendPct!=null && Math.abs(P.trendPct)>=2) r+=' Over ~3 months it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
+    r+=' <span class="ccap">Buy/sell are live prices; timing shape from <b>'+P.archDays+'d</b> of hourly data (confidence <b>'+P.conf+'</b>); trend from guide divergence. Not guarantees.</span>';
     document.getElementById('trSuggest').innerHTML=grid+'<div class="sreason">'+r+'</div>';
     document.getElementById('trInsight').innerHTML='Deepest liquidity around <span class="hl">'+fmtHour(a.volPeak)+'</span> — the easiest window to fill larger orders quickly.';
     if(!showAnalysis){ document.getElementById('trGuide').style.display='none'; }
@@ -1185,12 +1157,15 @@ async function runTrends(){
 /* watchlist */
 async function toggleWatch(id){ const i=watchlist.indexOf(id); if(i>=0){ watchlist.splice(i,1); delete signalCache[id]; } else watchlist.push(id); await sSet('watchlist',watchlist); renderAll(); computeSignals(); }
 function renderSignals(){
+  const hr=new Date().getHours();
+  const inCheap=w=>{ if(!w) return false; for(let k=0;k<3;k++) if((w.start+k)%24===hr) return true; return false; };
   const rows=watchlist.filter(id=>signalCache[id]&&byId[id]).map(id=>{
-    const it=byId[id], s=signalCache[id], gap=(s.buyTarget-it.low)/s.buyTarget*100;
-    const down = s.trend && s.trend.ok && s.trend.state==='down-confirmed';
-    const buy = gap>=0 && s.conf!=='low' && !down;
-    return {it,s,gap,buy,down};
-  }).sort((a,b)=>b.gap-a.gap);
+    const it=byId[id], s=signalCache[id];
+    const gross=(it.high-tax(it.high))-it.low, roi=it.low?gross/it.low*100:0, profitable=gross>0;
+    const cheapNow=inCheap(s.buyWin);
+    const buy = profitable && cheapNow && s.conf!=='low';   // cheap-hour window + live margin; falling knives NOT excluded (flagged in Trend)
+    return {it,s,gross,roi,profitable,cheapNow,buy};
+  }).sort((a,b)=>b.gross-a.gross);
   const firing=rows.filter(r=>r.buy).length;
   document.getElementById('sigBadge').textContent=firing;
   const body=document.getElementById('sigBody'), empty=document.getElementById('sigEmpty');
@@ -1201,20 +1176,20 @@ function renderSignals(){
   }
   empty.classList.add('hidden');
   const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
-  body.innerHTML=rows.map(({it,s,gap,buy,down})=>{
-    const tr=s.trend;
+  body.innerHTML=rows.map(({it,s,gross,roi,profitable,cheapNow,buy})=>{
+    const tr=s.trend, volatile = tr && tr.ok && (tr.state==='down-confirmed'||tr.state==='reversion');
     const trendCell = (!tr||!tr.ok) ? '<span class="mini">—</span>'
       : (tr.state==='down-confirmed' ? '<span class="grade rD" title="'+tr.zGuide.toFixed(1)+'σ under guide, momentum down">↓ falling</span>'
       : tr.state==='reversion' ? '<span class="grade rC" title="dislocated low, momentum flattening">~ dip?</span>'
       : tr.state==='up' ? '<span class="grade rB" title="above guide">↑ up</span>'
-      : '<span class="grade rA" title="straddles guide">✓</span>');
-    const state = down ? '<span class="grade rD" title="confirmed downtrend — buy suppressed">hold off</span>'
-      : buy ? '<span class="grade rA">BUY</span>'
-      : (s.conf==='low' ? '<span class="grade rC" title="needs more banked history">low data</span>' : '<span class="grade rB">wait</span>');
+      : '<span class="grade rA" title="straddles guide">✓ stable</span>');
+    const state = buy ? '<span class="grade rA" title="'+(volatile?'cheap hour + live margin, but volatile — size down':'cheap hour + live margin')+'">BUY'+(volatile?' ⚡':'')+'</span>'
+      : profitable ? '<span class="grade rB" title="live margin available, outside the cheap-hour window">flip'+(volatile?' ⚡':'')+'</span>'
+      : (s.conf==='low' ? '<span class="grade rC" title="needs more banked history">low data</span>' : '<span class="grade rB" title="spread doesn’t clear tax right now">no spread</span>');
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span></td>'+
-      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmt(s.buyTarget)+'</td>'+
-      '<td class="num '+(gap>=0?'gain':'loss')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%</td>'+
-      '<td class="num mini">'+winStr(s.buyWin)+'</td><td>'+trendCell+'</td><td>'+state+'</td></tr>';
+      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
+      '<td class="num '+sgn(gross)+'">'+(gross>=0?'+':'')+fmtP(gross)+'</td>'+
+      '<td class="num mini">'+(s.buyWin?winStr(s.buyWin):'—')+(cheapNow?' <span class="gain">• now</span>':'')+'</td><td>'+trendCell+'</td><td>'+state+'</td></tr>';
   }).join('');
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
 }
