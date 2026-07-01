@@ -33,20 +33,22 @@
   .wrap{max-width:1220px; margin:0 auto; padding:0 18px}
 
   header{border-bottom:1px solid var(--line); background:linear-gradient(180deg,#1a130b,#140f08)}
-  .bar{display:flex; align-items:center; gap:18px; padding:16px 0; flex-wrap:wrap}
-  .brand{display:flex; flex-direction:column; line-height:1}
+  .bar{display:flex; align-items:center; gap:10px; padding:14px 0; flex-wrap:wrap}
+  .brand{display:flex; flex-direction:column; line-height:1; margin-right:6px}
   .brand .mark{font-family:'Cinzel',serif; font-weight:700; letter-spacing:.14em; font-size:22px; color:var(--gold)}
   .brand .sub{font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); margin-top:6px}
   .bar .spacer{flex:1}
-  .bankfield{display:flex; flex-direction:column; gap:4px}
-  .bankfield label{font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted)}
-  .bankfield input{width:140px; background:var(--oak2); border:1px solid var(--line2); color:var(--parch);
-    border-radius:7px; padding:8px 10px; font-family:'IBM Plex Mono',monospace; font-size:14px}
-  .bankfield input:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 2px rgba(230,181,74,.18)}
-  .refresh{display:flex; flex-direction:column; align-items:flex-end; gap:5px}
-  .refresh button{background:var(--gold); color:var(--goldink); border:none; border-radius:7px; padding:9px 16px; font-weight:600; font-size:13px; cursor:pointer; letter-spacing:.02em}
-  .refresh button:hover{background:var(--gold2)}
-  .refresh button:disabled{opacity:.5; cursor:default}
+  .bankfield{display:inline-flex; align-items:center; gap:9px; height:40px; padding:0 12px; background:var(--oak2); border:1px solid var(--line2); border-radius:8px}
+  .bankfield>span{font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); white-space:nowrap}
+  .bankfield input{width:96px; height:38px; background:transparent; border:none; color:var(--parch); font-family:'IBM Plex Mono',monospace; font-size:14px; padding:0}
+  .bankfield input:focus{outline:none}
+  .bankfield:focus-within{border-color:var(--gold); box-shadow:0 0 0 2px rgba(230,181,74,.18)}
+  .hbtn{height:40px; display:inline-flex; align-items:center; padding:0 15px; border-radius:8px; border:1px solid var(--line2); background:var(--oak2); color:var(--parch2); font-weight:600; font-size:13px; letter-spacing:.02em; cursor:pointer}
+  .hbtn:hover{border-color:var(--gold); color:var(--parch)}
+  .hbtn.primary{background:var(--gold); color:var(--goldink); border-color:var(--gold)}
+  .hbtn.primary:hover{background:var(--gold2)}
+  .hbtn:disabled{opacity:.5; cursor:default}
+  .substamp{padding:0 0 9px; text-align:right; min-height:14px}
   .stamp{font-size:11px; color:var(--muted)} .stamp .num{color:var(--parch2)}
   .stamp a{color:var(--muted); text-decoration:underline; cursor:pointer; margin-left:8px}
 
@@ -215,7 +217,7 @@
     .ledgerform{grid-template-columns:1fr 1fr}
     .ledgerform .fld.wide{grid-column:1 / -1}
     .ledgerform button.go{grid-column:1 / -1}
-    .bankfield input{width:120px}
+    .bankfield input{width:84px}
   }
 </style>
 </head>
@@ -224,10 +226,13 @@
   <div class="wrap bar">
     <div class="brand"><div class="mark">THE COFFER</div><div class="sub">Grand Exchange flip ledger <span class="ver" id="appVer"></span></div></div>
     <div class="spacer"></div>
-    <div class="bankfield"><label>Bankroll</label><input id="bankInput" class="num" value="300m" inputmode="text" /></div>
-    <div class="backup"><button id="exportBtn" class="ghostbtn sm">Export</button><button id="importBtn" class="ghostbtn sm">Import</button><input type="file" id="importFile" accept="application/json,.json" style="display:none" /></div>
-    <div class="refresh"><button id="refreshBtn">Refresh prices</button><div class="stamp" id="stamp">loading…</div></div>
+    <label class="bankfield"><span>Bankroll</span><input id="bankInput" class="num" value="300m" inputmode="text" /></label>
+    <button id="exportBtn" class="hbtn">Export</button>
+    <button id="importBtn" class="hbtn">Import</button>
+    <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
+    <button id="refreshBtn" class="hbtn primary">Refresh prices</button>
   </div>
+  <div class="wrap substamp"><span class="stamp" id="stamp">loading…</span></div>
 </header>
 
 <div class="wrap">
@@ -280,7 +285,6 @@
       </select>
       <div class="slotsmini">Slots <input id="slotsInput" class="num" value="6" inputmode="numeric" /></div>
       <label class="chip on" id="budgetChip"><input type="checkbox" id="budgetToggle" checked />Affordable</label>
-      <label class="chip" id="memberChip"><input type="checkbox" id="memberToggle" />Members only</label>
     </div>
     <div class="tablewrap">
       <table id="finderTable">
@@ -382,7 +386,7 @@
 
 <script>
 const API='https://prices.runescape.wiki/api/v1/osrs';
-const APP_VERSION='0.11.0';
+const APP_VERSION='0.12.0';
 // risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
 const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
 const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
@@ -393,6 +397,7 @@ const BOND_ID=13190;
 const MIN_PRICE=1000, MIN_VOL=30;
 const ROI_TARGET=0.05, VOL_COMFORT=1000, FRESH_S=900, STALE_S=21600;
 const STRAT={conservative:{damp:0.85}, balanced:{damp:0.6}, aggressive:{damp:0.35}};
+const LEVEL_DAYS=2;            // d · buy/sell price level rides only the last ~2 days (recent), while shape/trend use long history
 const MARKET_TTL=180;          // s · reuse stored /latest+/1h snapshot if newer (cold-start throttle)
 const ARCHIVE_MIN_GAP=55*60;   // s · skip watchlist archiving if done within the hour (/1h gains a point hourly)
 const GUIDE_TTL=6*3600;        // s · official guide updates ~daily; cache the parsed map this long
@@ -461,6 +466,12 @@ function fmt(n){
   if(a>=1e6) return s+(a/1e6).toFixed(2).replace(/\.00$/,'')+'m';
   if(a>=1e3) return s+(a/1e3).toFixed(1).replace(/\.0$/,'')+'k';
   return s+Math.round(a).toLocaleString();
+}
+function fmtP(n){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  const a=Math.abs(n);
+  if(a<100000) return (n<0?'-':'')+Math.round(a).toLocaleString();   // full gp resolution under 100k
+  return fmt(n);
 }
 function fmtTurn(h){ if(h===null||h===undefined) return '—'; return h<1?'~'+Math.round(h*60)+'m':'~'+h.toFixed(1)+'h'; }
 const fmtHour=h=>pad2(h)+':00';
@@ -761,11 +772,9 @@ function currentFinderRows(){
   const q=document.getElementById('search').value.trim().toLowerCase();
   const tier=document.getElementById('priceTier').value;
   const budget=document.getElementById('budgetToggle').checked;
-  const membersOnly=document.getElementById('memberToggle').checked;
   const perSlot=bankroll/Math.max(slots,1); const searching=!!q;
   let rows=ITEMS.filter(it=>{
     if(q && !it.name.toLowerCase().includes(q)) return false;
-    if(membersOnly && !it.members) return false;
     if(searching) return true;                 // explicit search reveals every match, ignoring browse gates
     if(it.margin<=0) return false;
     if(!it.liquid) return false;                // browse view stays curated to liquid items
@@ -802,8 +811,8 @@ function renderFinder(){
     const tb=TREND_BADGE[(it.trend&&it.trend.state)||'none']||TREND_BADGE.none;
     const badge=tb.g?' <span class="tbadge '+tb.c+'" title="'+tb.t+(it.trend&&it.trend.divPct!=null?' · '+(it.trend.divPct>=0?'+':'')+it.trend.divPct.toFixed(1)+'% vs guide':'')+'">'+tb.g+'</span>':'';
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+badge+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
-      '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(it.high)+'</td>'+
-      '<td class="num gain">'+fmt(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
+      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
+      '<td class="num gain">'+fmtP(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
       '<td class="num gold">'+fmt(it.pph)+'</td><td><span class="grade r'+g+'">'+g+'</span></td>'+
       '<td><span class="scorebar"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
@@ -912,13 +921,17 @@ function buildPlan(points, s6h, it){
   const o={ archDays: points.length>1?Math.max(1,Math.round((points[points.length-1].timestamp-points[0].timestamp)/86400)):0 };
   let bl=recentBaseline(points,'low',10); if(bl==null) bl=median(points.map(p=>p.avgLowPrice).filter(Boolean)); if(bl==null) bl=it.low;
   let bh=recentBaseline(points,'high',10); if(bh==null) bh=median(points.map(p=>p.avgHighPrice).filter(Boolean)); if(bh==null) bh=it.high;
-  o.baseLow=bl; o.baseHigh=bh;
+  o.baseLow=bl; o.baseHigh=bh;                                       // 10-day level — durability ("Typical spread") only
+  // recent price level (last LEVEL_DAYS) — targets ride this so they track current prices, not a stale 10-day centre; fall back to the live quote
+  let rl=recentBaseline(points,'low',LEVEL_DAYS); if(rl==null) rl=it.low;
+  let rh=recentBaseline(points,'high',LEVEL_DAYS); if(rh==null) rh=it.high;
+  o.recentLow=rl; o.recentHigh=rh;
   const hfLow=hourFactors(points,'low'), hfHigh=hourFactors(points,'high');
   o.lowEdge=factorStats(hfLow.factor); o.highEdge=factorStats(hfHigh.factor);
   o.medCount=median(hfLow.counts.filter(c=>c>0))||0;
   const lowF=hfLow.factor.map(v=>v==null?1:v), highF=hfHigh.factor.map(v=>v==null?1:v);
   o.buyWin=bestWindow(lowF,3,'min'); o.sellWin=bestWindow(highF,3,'max');
-  o.buyTarget=Math.round(bl*o.buyWin.avg); o.sellTarget=Math.round(bh*o.sellWin.avg);
+  o.buyTarget=Math.round(rl*o.buyWin.avg); o.sellTarget=Math.round(rh*o.sellWin.avg);
   o.swingGross=(o.sellTarget-tax(o.sellTarget))-o.buyTarget; o.swingRoi=o.buyTarget?o.swingGross/o.buyTarget*100:0;
   o.nowGross=(it.high-tax(it.high))-it.low; o.nowRoi=it.low?o.nowGross/it.low*100:0;
   o.nowSpread=it.high-it.low; o.nowTax=tax(it.high);                 // raw live spread vs the tax it must clear
@@ -927,7 +940,7 @@ function buildPlan(points, s6h, it){
   o.nowProfitable=o.nowGross>0; o.swingProfitable=o.swingGross>0;
   // best same-hour flip (modeled spread by hour, volume-gated)
   let fh=-1,fg=-Infinity; for(let h=0;h<24;h++){ if(hfLow.counts[h]<2||hfHigh.counts[h]<2) continue;
-    const lo=bl*(hfLow.factor[h]??1), hi=bh*(hfHigh.factor[h]??1), g=(hi-tax(hi))-lo; if(g>fg){fg=g;fh=h;} }
+    const lo=rl*(hfLow.factor[h]??1), hi=rh*(hfHigh.factor[h]??1), g=(hi-tax(hi))-lo; if(g>fg){fg=g;fh=h;} }
   o.flipHour=fh; o.flipGross=fg;
   // weekday effect (buy side) from 6h layer
   if(s6h&&s6h.length>6){ const wf=weekdayFactors(s6h,'low').factor;
@@ -978,7 +991,7 @@ function backtestPlan(points){
 function planSignal(points){
   if(points.length<24) return null;
   const days=points.length>1?Math.max(1,Math.round((points[points.length-1].timestamp-points[0].timestamp)/86400)):0;
-  let bl=recentBaseline(points,'low',10); if(bl==null) bl=median(points.map(p=>p.avgLowPrice).filter(Boolean)); if(bl==null) return null;
+  let bl=recentBaseline(points,'low',LEVEL_DAYS); if(bl==null) bl=median(points.map(p=>p.avgLowPrice).filter(Boolean)); if(bl==null) return null;
   const hf=hourFactors(points,'low'), medCount=median(hf.counts.filter(c=>c>0))||0;
   const wb=bestWindow(hf.factor.map(v=>v==null?1:v),3,'min');
   const conf=(days>=10&&medCount>=5)?'good':(days>=4&&medCount>=2)?'moderate':'low';
@@ -1008,8 +1021,8 @@ function renderMatches(query){
   html+='<div class="tablewrap"><table><thead><tr><th class="left">Item</th><th>Buy</th><th>Sell</th><th>Margin</th><th>Vol/hr</th><th></th></tr></thead><tbody>';
   html+=rows.map(it=>{ const off=!!it.offscreen;
     return '<tr><td class="left"><span class="linkname" data-open="'+it.id+'">'+it.name+'</span>'+(off?' <span class="mini">off-screen</span>':'')+'</td>'+
-      '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(it.high)+'</td>'+
-      '<td class="num '+sgn(it.margin)+'">'+fmt(it.margin)+'</td>'+
+      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
+      '<td class="num '+sgn(it.margin)+'">'+fmtP(it.margin)+'</td>'+
       '<td class="num mini">'+fmt(it.volume)+'</td>'+
       '<td><button class="act" data-open="'+it.id+'">Quote</button></td></tr>'; }).join('');
   html+='</tbody></table></div>';
@@ -1076,19 +1089,19 @@ async function runTrends(){
     const liveCard=(note)=>{
       const prof=P.nowProfitable, title=prof?'Suggested plan':'No profitable spread right now';
       let g='<div class="stitle">'+title+' <span class="csub">'+note+'</span></div><div class="sgrid">';
-      g+='<div class="sbox"><div class="sk">Buy ≈</div><div class="sv">'+fmt(it.low)+'</div><div class="ss">at/above the instasell</div></div>'+
-         '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmt(it.high)+'</div><div class="ss">at/below the instabuy</div></div>'+
-         '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmt(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% after tax · need ~'+fmt(P.nowTax)+', have ~'+fmt(P.nowSpread):'spread ~'+fmt(P.nowSpread)+' < ~'+fmt(P.nowTax)+' tax')+'</div></div>'+
-         '<div class="sbox"><div class="sk">Typical spread</div><div class="sv '+sgn(P.baselineNet)+'">'+(P.baselineNet>=0?'+':'')+fmt(P.baselineNet)+'</div><div class="ss">'+(P.baselineNet>0?'median clears tax — tends to hold':'median misses tax — transient')+'</div></div>';
+      g+='<div class="sbox"><div class="sk">Buy ≈</div><div class="sv">'+fmtP(it.low)+'</div><div class="ss">at/above the instasell</div></div>'+
+         '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmtP(it.high)+'</div><div class="ss">at/below the instabuy</div></div>'+
+         '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmtP(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% after tax · need ~'+fmtP(P.nowTax)+', have ~'+fmtP(P.nowSpread):'spread ~'+fmtP(P.nowSpread)+' < ~'+fmtP(P.nowTax)+' tax')+'</div></div>'+
+         '<div class="sbox"><div class="sk">Typical spread</div><div class="sv '+sgn(P.baselineNet)+'">'+(P.baselineNet>=0?'+':'')+fmtP(P.baselineNet)+'</div><div class="ss">'+(P.baselineNet>0?'median clears tax — tends to hold':'median misses tax — transient')+'</div></div>';
       return g+'</div>';
     };
     const liveReason=(lead)=>{
       let s;
       if(P.nowProfitable){
-        s=lead+' Right now you can buy near <b>'+fmt(it.low)+'</b> and sell near <b>'+fmt(it.high)+'</b>, netting <b class="gain">'+fmt(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmt(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmt(P.nowSpread)+' now.';
-        s+=(P.baselineNet<=0)?' The <b>typical</b> spread ('+fmt(P.baseLow)+'→'+fmt(P.baseHigh)+') doesn’t clear tax, so treat this as a <b>transient</b> opening — take it now rather than counting on it.':' The typical spread also clears tax (~'+fmt(P.baselineNet)+' net), so this one tends to hold.';
+        s=lead+' Right now you can buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' now.';
+        s+=(P.baselineNet<=0)?' The <b>typical</b> spread ('+fmtP(P.baseLow)+'→'+fmtP(P.baseHigh)+') doesn’t clear tax, so treat this as a <b>transient</b> opening — take it now rather than counting on it.':' The typical spread also clears tax (~'+fmtP(P.baselineNet)+' net), so this one tends to hold.';
       }else{
-        s=lead+' Right now the live spread (~'+fmt(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmt(P.nowTax)+'), so there’s <b class="loss">no profitable flip</b> at the moment — wait for the buy/sell gap to widen past ~'+fmt(P.nowTax)+'.';
+        s=lead+' Right now the live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so there’s <b class="loss">no profitable flip</b> at the moment — wait for the buy/sell gap to widen past ~'+fmtP(P.nowTax)+'.';
       }
       return s;
     };
@@ -1098,14 +1111,14 @@ async function runTrends(){
       r=liveReason('<span class="hl">'+it.name+'</span> has <b>no reliable intraday pattern</b> ('+P.lowEdge.swingPct.toFixed(1)+'% swing, inside the noise), so this is a price flip, not a timed one.');
     }else if(P.swingProfitable){
       grid='<div class="stitle">Suggested plan <span class="csub">level × hour × weekday model</span></div><div class="sgrid">';
-      grid+='<div class="sbox"><div class="sk">Buy ≤</div><div class="sv">'+fmt(P.buyTarget)+'</div><div class="ss">'+winStr(P.buyWin)+' · '+((1-P.buyWin.avg)*100).toFixed(1)+'% under baseline</div></div>'+
-            '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmt(P.sellTarget)+'</div><div class="ss">'+winStr(P.sellWin)+' · '+((P.sellWin.avg-1)*100).toFixed(1)+'% over baseline</div></div>'+
-            '<div class="sbox"><div class="sk">Swing round-trip</div><div class="sv '+sgn(P.swingGross)+'">'+(P.swingGross>=0?'+':'')+fmt(P.swingGross)+'</div><div class="ss">'+P.swingRoi.toFixed(1)+'% ROI · vs '+fmt(P.nowGross)+' on the live spread</div></div>'+
+      grid+='<div class="sbox"><div class="sk">Buy ≤</div><div class="sv">'+fmtP(P.buyTarget)+'</div><div class="ss">'+winStr(P.buyWin)+' · '+((1-P.buyWin.avg)*100).toFixed(1)+'% under baseline</div></div>'+
+            '<div class="sbox"><div class="sk">Sell ≈</div><div class="sv">'+fmtP(P.sellTarget)+'</div><div class="ss">'+winStr(P.sellWin)+' · '+((P.sellWin.avg-1)*100).toFixed(1)+'% over baseline</div></div>'+
+            '<div class="sbox"><div class="sk">Swing round-trip</div><div class="sv '+sgn(P.swingGross)+'">'+(P.swingGross>=0?'+':'')+fmtP(P.swingGross)+'</div><div class="ss">'+P.swingRoi.toFixed(1)+'% ROI · vs '+fmtP(P.nowGross)+' on the live spread</div></div>'+
             '<div class="sbox"><div class="sk">Timing edge</div><div class="sv">'+P.lowEdge.z.toFixed(1)+'σ</div><div class="ss">cheapest hour below the hourly mean</div></div></div>';
-      r='Buy near <b>'+fmt(P.buyTarget)+'</b> in the <span class="hl">'+winStr(P.buyWin)+'</span> window — the day’s cheapest stretch, ~<b>'+((1-P.buyWin.avg)*100).toFixed(1)+'%</b> under the recent baseline of '+fmt(P.baseLow)+'.';
+      r='Buy near <b>'+fmtP(P.buyTarget)+'</b> in the <span class="hl">'+winStr(P.buyWin)+'</span> window — the day’s cheapest stretch, ~<b>'+((1-P.buyWin.avg)*100).toFixed(1)+'%</b> under the recent 2-day level of '+fmtP(P.recentLow)+'.';
       if(P.weBuyDiscPct!=null && Math.abs(P.weBuyDiscPct)>=0.4) r+=' '+(P.weBuyDiscPct>0?'Weekends run ~<b>'+P.weBuyDiscPct.toFixed(1)+'%</b> cheaper still.':'Weekdays sit ~<b>'+Math.abs(P.weBuyDiscPct).toFixed(1)+'%</b> below weekends.');
-      r+=' Sell near <b>'+fmt(P.sellTarget)+'</b> into the <span class="hl">'+winStr(P.sellWin)+'</span> peak. That trough→peak swing nets <b class="'+sgn(P.swingGross)+'">'+fmt(P.swingGross)+'</b> after tax (<b>'+P.swingRoi.toFixed(1)+'%</b>), versus <b>'+fmt(P.nowGross)+'</b> flipping the spread right now.';
-      if(P.flipHour>=0) r+=' Best <i>same-hour</i> flip sits around <span class="hl">'+fmtHour(P.flipHour)+'</span> (~'+fmt(P.flipGross)+' after tax).';
+      r+=' Sell near <b>'+fmtP(P.sellTarget)+'</b> into the <span class="hl">'+winStr(P.sellWin)+'</span> peak. That trough→peak swing nets <b class="'+sgn(P.swingGross)+'">'+fmtP(P.swingGross)+'</b> after tax (<b>'+P.swingRoi.toFixed(1)+'%</b>), versus <b>'+fmtP(P.nowGross)+'</b> flipping the spread right now.';
+      if(P.flipHour>=0) r+=' Best <i>same-hour</i> flip sits around <span class="hl">'+fmtHour(P.flipHour)+'</span> (~'+fmtP(P.flipGross)+' after tax).';
     }else{
       grid=liveCard('timing swing doesn’t clear tax · live spread');
       r=liveReason('<span class="hl">'+it.name+'</span> has an intraday pattern, but the modeled trough→peak swing <b>doesn’t clear tax</b> after the 2% cut, so timing adds no profit here.');
@@ -1199,7 +1212,7 @@ function renderSignals(){
       : buy ? '<span class="grade rA">BUY</span>'
       : (s.conf==='low' ? '<span class="grade rC" title="needs more banked history">low data</span>' : '<span class="grade rB">wait</span>');
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span></td>'+
-      '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(s.buyTarget)+'</td>'+
+      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmt(s.buyTarget)+'</td>'+
       '<td class="num '+(gap>=0?'gain':'loss')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%</td>'+
       '<td class="num mini">'+winStr(s.buyWin)+'</td><td>'+trendCell+'</td><td>'+state+'</td></tr>';
   }).join('');
@@ -1214,8 +1227,8 @@ function renderWatch(){
   body.innerHTML=watchlist.map(id=>{ const it=resolveId(id); if(!it) return ''; const off=!!it.offscreen;
     const gradeCell=off?'<span class="mini">—</span>':'<span class="grade r'+grade(it.riskIndex??1)+'">'+grade(it.riskIndex??1)+'</span>';
     return '<tr><td class="left"><span class="linkname" data-trend="'+id+'">'+it.name+'</span>'+(off?' <span class="mini">quote</span>':'')+'</td>'+
-      '<td class="num">'+fmt(it.low)+'</td><td class="num">'+fmt(it.high)+'</td>'+
-      '<td class="num '+sgn(it.margin)+'">'+fmt(it.margin)+'</td><td class="num">'+(it.roi!=null?it.roi.toFixed(1)+'%':'—')+'</td>'+
+      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
+      '<td class="num '+sgn(it.margin)+'">'+fmtP(it.margin)+'</td><td class="num">'+(it.roi!=null?it.roi.toFixed(1)+'%':'—')+'</td>'+
       '<td class="num mini">'+(off?'—':fmtTurn(it.turn))+'</td><td class="num gold">'+(off?'—':fmt(it.pph))+'</td>'+
       '<td>'+gradeCell+'</td>'+
       '<td><button class="act" data-buy="'+id+'">Log buy</button> <button class="act danger" data-rm="'+id+'">Remove</button></td></tr>';
@@ -1301,7 +1314,6 @@ document.getElementById('priceTier').onchange=renderFinder;
 document.getElementById('sortSel').onchange=e=>{ sortKey=e.target.value; sortDir=-1; renderFinder(); };
 document.getElementById('stratSel').onchange=async e=>{ strategy=e.target.value; await sSet('strategy',strategy); recompute(); };
 document.getElementById('budgetToggle').onchange=e=>{ document.getElementById('budgetChip').classList.toggle('on',e.target.checked); renderFinder(); };
-document.getElementById('memberToggle').onchange=e=>{ document.getElementById('memberChip').classList.toggle('on',e.target.checked); renderFinder(); };
 document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclick=()=>{
   const k=th.dataset.k; if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=(k==='name')?1:-1; }
   const sel=document.getElementById('sortSel'); if(['score','pph','margin','roi','volume'].includes(k)) sel.value=k; renderFinder();
