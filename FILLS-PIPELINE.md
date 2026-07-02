@@ -83,8 +83,11 @@ Claude is **not** in the runtime loop. The pipeline is plugin → file → git �
 6. `node sync-fills.mjs --dry` → sanity-check counts → run for real → verify
    `https://<pages-site>/fills.json` serves the file.
 7. Register a Task Scheduler job: every 15–30 min, working dir = repo,
-   `node sync-fills.mjs`. Also trigger "at log on". Git auth must be non-interactive
-   (credential manager or PAT).
+   `node sync-fills.mjs --auto` (the `--auto` flag matters — it makes the job amend
+   its own previous commit + force-push instead of piling up a new commit every run;
+   manual/Claude-driven syncs should omit the flag so they stay as distinct
+   checkpoints). Also trigger "at log on". Git auth is via SSH (already working,
+   confirmed with `ssh -T git@github.com`), so no PAT/credential-manager setup needed.
 
 ## 5. fills.json schema (v1 — the stable contract)
 
@@ -175,9 +178,23 @@ Not yet built — planned as the next tool feature, roughly in order:
 
 ## 9. Definition of done (pipeline phase)
 
-- [ ] Plugin installed, JSON mode, logging real trades
-- [ ] `--probe` output verified; adapter matches real fields (edit §5/§8 notes if the
-      real schema differed materially)
-- [ ] Scheduled task running; fills.json updating in the repo and served by Pages
-- [ ] Sell-tax gross-vs-net question answered empirically and recorded here
+- [x] Plugin installed, JSON mode, logging real trades
+- [x] `--probe` output verified; adapter matches real fields — real field names were
+      `item`/`offer`/`max`/`qty`/`worth` mapping to `itemId`/`price`/`qty`(total
+      offer)/`filled`(cumulative)/`spent`, all different from the original guesses;
+      see the ADAPTER comment in `sync-fills.mjs`. Also: the plugin never emits a
+      distinct cancelled state (goes straight to `EMPTY`), handled by a
+      sequence-aware pass (`buildEvents()`) instead of per-line parsing.
+- [x] Scheduled task running; fills.json updating in the repo and served by Pages —
+      Task Scheduler job `CofferFillsSync`, every 20 min, runs
+      `wscript.exe run-fills-sync.vbs` (hidden wrapper around `run-fills-sync.cmd`,
+      which cd's into the repo and runs `node sync-fills.mjs --auto`). The `--auto`
+      flag makes it amend its own previous commit + force-push instead of piling up
+      commits (see the git section of `sync-fills.mjs`). An "at logon" trigger was
+      attempted but is blocked (`Access is denied`) in this environment even at
+      limited run-level — not pursued further since the 20-min interval already
+      catches up after sleep/logon within 20 minutes.
+- [ ] Sell-tax gross-vs-net question answered empirically and recorded here — only a
+      buy has been tested so far; need a real sell to check whether `worth` is gross
+      or post-tax.
 - [ ] Then: tool-side fetch+merge (§6.1) as the first index.html change
