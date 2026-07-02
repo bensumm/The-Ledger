@@ -2,7 +2,7 @@ import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, 
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
 import { renderFinder, addTrade, renderCoffer, recompute } from './ui.js';
-import { runTrends } from './trends.js';
+import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
 
 /* tabs + events */
@@ -27,6 +27,7 @@ document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclic
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;
+document.getElementById('reviewPos').onclick=reviewPositions;
 export const bankI=document.getElementById('bankInput');
 bankI.onchange=async()=>{ const v=parseGp(bankI.value); if(!isNaN(v)){ STATE.bankroll=v; bankI.value=fmt(v); await sSet('bankroll',v); recompute(); } };
 export const slotsI=document.getElementById('slotsInput');

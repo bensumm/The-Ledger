@@ -151,7 +151,8 @@
       <div class="fld"><label>Buy price (each)</label><input id="tBuy" placeholder="1.79b" /></div>
       <button id="addTrade" class="go">Open position</button>
     </div>
-    <div class="sectlabel">Open positions</div>
+    <div class="sectlabel">Open positions <button id="reviewPos" class="ghostbtn sm" style="margin-left:8px">Review pricing</button></div>
+    <div id="posReview" class="hidden" style="margin-bottom:14px"></div>
     <div class="tablewrap"><table>
       <thead><tr><th class="left">Item</th><th>Qty</th><th>Bought @</th><th>Sell now</th><th>Unrealised</th><th></th></tr></thead>
       <tbody id="openBody"></tbody>

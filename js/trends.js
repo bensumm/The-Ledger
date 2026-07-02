@@ -245,6 +245,72 @@ export function renderTrendHead(it){
   const wb=el.querySelector('[data-watch]'); if(wb) wb.onclick=async()=>{ await toggleWatch(it.id); renderTrendHead(it); };
   const pb=el.querySelector('[data-pin]'); if(pb) pb.onclick=async()=>{ await togglePin(it.id); renderTrendHead(it); };
 }
+/* --- position review: for each OPEN position, live guidance (HOLD / ADJUST / CUT + list-at price) ---
+   The pivot is the break-even sell price (ceil(buy/0.98) — the sell that nets cost after
+   2% tax) crossed with the trend. Reuses the same building blocks as the Trends plan:
+   patientTargets (recent 2h range edges), regimeDrift (3d vs 2wk level shift) and
+   refineTrend (guide divergence + 7d/30d momentum). Guidance, not guarantees. */
+export function classifyPositionTrend(s6h, R){
+  const regime=regimeDrift(s6h);
+  const m7=(R&&R.ok)?R.m7:null, m30=(R&&R.ok)?R.m30:null;
+  const falling=(R&&R.ok&&R.state==='down-confirmed') || (regime.ok&&regime.driftPct<=-5) || (m30!=null&&m30<=-15);
+  const rising =(R&&R.ok&&R.state==='up') || (regime.ok&&regime.driftPct>=5);
+  return {falling, rising, regime, m7, m30};
+}
+export function renderPositionCard(t, it, s5m, s6h, gser){
+  const buy=t.buy, qty=t.qty;
+  const sellNow=it.high, netNow=sellNow-tax(sellNow), profNow=(netNow-buy)*qty;
+  const breakeven=Math.ceil(buy/0.98);                 // sell price that nets >= cost after 2% tax
+  const canBE=netNow>=buy;
+  const PT=patientTargets(s5m, it);
+  const patientSell=PT.ok?PT.patientSell:sellNow, hiMax=PT.ok?PT.hiMax:sellNow;
+  const R=refineTrend(it, gser||[]);
+  const tr=classifyPositionTrend(s6h, R);
+  const patientUpside=patientSell>sellNow*1.01;        // is a meaningfully higher target still reachable?
+  let verdict, cls, listAt, why;
+  if(canBE){
+    if(tr.falling && patientUpside){ verdict='HOLD — cut if slow'; cls='gold'; listAt=patientSell; why='In profit and the recent 2h range still reaches '+fmtP(patientSell)+', so list there to capture more — but it’s falling fast, so drop to the instabuy ('+fmtP(sellNow)+') if it hasn’t filled this session. Don’t hold out for a recovery.'; }
+    else if(tr.falling){ verdict='ADJUST — sell now'; cls='amber'; listAt=sellNow; why='In profit but falling fast with no room above the current bid — lock it in at the instabuy before the range steps down.'; }
+    else { verdict='HOLD'; cls='gain'; listAt=patientSell; why='In profit and steady — list at the patient target to capture more; fills near the top of the recent 2h range.'; }
+  } else {
+    if(tr.falling){ verdict='CUT'; cls='loss'; listAt=sellNow; why='Underwater and falling — take the small loss now rather than risk a bigger one.'; }
+    else { verdict='HOLD'; cls='gold'; listAt=breakeven; why='Underwater but flat — list at break-even and wait for the normal wobble up; no reason to realise a loss yet.'; }
+  }
+  const netAt=listAt-tax(listAt), profAt=(netAt-buy)*qty;
+  const fill=listAt<=sellNow?'fills ~instantly':(listAt<=hiMax?'within the recent 2h range — fills with patience':'above the recent 2h high — may sit');
+  const trWord=tr.falling?'Falling':(tr.rising?'Rising':'Flat'), trCls=tr.falling?'loss':(tr.rising?'gold':'gain');
+  const mom=[]; if(tr.m7!=null)mom.push((tr.m7>=0?'+':'')+tr.m7.toFixed(0)+'%/7d'); if(tr.m30!=null)mom.push((tr.m30>=0?'+':'')+tr.m30.toFixed(0)+'%/30d'); if(tr.regime.ok)mom.push('regime '+(tr.regime.driftPct>=0?'+':'')+tr.regime.driftPct.toFixed(0)+'%');
+  return '<div class="suggest" style="margin-top:10px">'+
+    '<div class="stitle">'+t.name+' <span class="csub">×'+qty.toLocaleString()+' @ '+fmtP(buy)+'</span><span class="'+cls+'" style="float:right;font-weight:700">'+verdict+'</span></div>'+
+    '<div class="sgrid">'+
+      '<div class="sbox"><div class="sk">Break-even</div><div class="sv">'+fmtP(breakeven)+'</div><div class="ss">nets your cost</div></div>'+
+      '<div class="sbox"><div class="sk">Sell now</div><div class="sv">'+fmtP(sellNow)+'</div><div class="ss '+sgn(profNow)+'">'+(profNow>=0?'+':'')+fmt(profNow)+'</div></div>'+
+      '<div class="sbox"><div class="sk">Trend</div><div class="sv '+trCls+'">'+trWord+'</div><div class="ss mini">'+(mom.join(' · ')||'—')+'</div></div>'+
+      '<div class="sbox"><div class="sk">List at</div><div class="sv '+cls+'">'+fmtP(listAt)+'</div><div class="ss '+sgn(profAt)+'">'+(profAt>=0?'+':'')+fmt(profAt)+'</div></div>'+
+    '</div>'+
+    '<div class="sreason">'+why+' <b>'+fill+'</b> at '+fmtP(listAt)+'.</div></div>';
+}
+export async function reviewPositions(){
+  const btn=document.getElementById('reviewPos'), box=document.getElementById('posReview');
+  if(!box) return;
+  const open=STATE.trades.filter(t=>t.sell===null && t.itemId);
+  const noId=STATE.trades.filter(t=>t.sell===null && !t.itemId).length;
+  box.classList.remove('hidden');
+  if(!open.length){ box.innerHTML='<div class="mini">No open positions with a known item to review'+(noId?' ('+noId+' manual entr'+(noId===1?'y has':'ies have')+' no linked item).':'.')+'</div>'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Reviewing…'; }
+  box.innerHTML='<div class="mini">Pulling live prices, recent 2h range, and guide momentum for '+open.length+' position'+(open.length===1?'':'s')+'…</div>';
+  const cards=[];
+  for(const t of open){
+    try{
+      const it=resolveId(t.itemId); if(!it||!it.high){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">No live quote available.</div></div>'); continue; }
+      const [s5m,s6h]=await Promise.all([fetchTimeseries(t.itemId,'5m'), fetchTimeseries(t.itemId,'6h')]);
+      let gser=[]; try{ gser=await fetchGuideSeries(t.itemId); }catch(e){}
+      cards.push(renderPositionCard(t, it, s5m, s6h, gser));
+    }catch(e){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">Couldn’t load live data — try again.</div></div>'); }
+  }
+  box.innerHTML='<div class="stitle" style="margin-top:6px">Position review <span class="csub">live · after 2% tax · break-even = sell that nets cost · guidance, not guarantees</span></div>'+cards.join('');
+  if(btn){ btn.disabled=false; btn.textContent='Review pricing'; }
+}
 export async function runTrends(){
   const name=document.getElementById('trItem').value.trim();
   const status=document.getElementById('trStatus');

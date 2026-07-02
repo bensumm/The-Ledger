@@ -70,13 +70,19 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   the Ledger/Coffer (tagged `src:'fills'`, idempotent rebuild, tombstoned via
   `STATE.fillsHidden`, unmatched sells shown but excluded from realised). Pipeline
   emits `positions.json` — see `pipeline/FILLS-PIPELINE.md` §5.1.
+- **Position review workflow** (0.19.0): "Review pricing" button on the Ledger →
+  `reviewPositions()` in `js/trends.js` fetches live 5m/6h/guide-history per open
+  position and renders a **HOLD / ADJUST / CUT** verdict + concrete "list at X" price.
+  Pivot = break-even (`ceil(buy/0.98)`) × trend (falling/flat/rising from regimeDrift +
+  refineTrend momentum). Key nuance baked in: in-profit + falling + a reachable higher
+  patient target → "HOLD — cut if slow" (list high, drop to instabuy if unfilled),
+  *not* an immediate market-sell — the rigid matrix's weak spot, found in testing.
 
 ## Open followups (not yet built)
 - **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
   trigger a fresh pipeline sync) on demand, rather than only on price refresh. Ben
-  explicitly wants this next. `syncFills()` already does the fetch+merge; this is
-  mostly a button + wiring (client can't run the Node pipeline itself — a same-origin
-  re-fetch of `positions.json` is the app-side scope).
+  wants this. `syncFills()` already does the fetch+merge; mostly a button + wiring
+  (client can't run the Node pipeline itself — a same-origin re-fetch is the app scope).
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
   and eventually the fills pipeline's realized-vs-suggested calibration).
