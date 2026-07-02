@@ -1,0 +1,117 @@
+import { now, pad2 } from './format.js';
+
+export const API='https://prices.runescape.wiki/api/v1/osrs';
+export const APP_VERSION='0.14.0';
+// risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
+export const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
+export const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
+export const DIV_FULL=0.08;         // divergence (8%) that maps trend intensity → 1.0
+export const Z_BAND=1.0;            // |z| under this = within normal noise (no edge)
+export const UP_RISK=0.30;          // uptrend contributes less to risk than a downtrend (reversion only)
+export const BOND_ID=13190;
+export const MIN_PRICE=1000, MIN_VOL=30;
+export const ROI_TARGET=0.05, VOL_COMFORT=1000, FRESH_S=900, STALE_S=21600;
+export const STRAT={conservative:{damp:0.85}, balanced:{damp:0.6}, aggressive:{damp:0.35}};
+export const MARKET_TTL=180;          // s · reuse stored /latest+/1h snapshot if newer (cold-start throttle)
+export const ARCHIVE_MIN_GAP=55*60;   // s · skip watchlist archiving if done within the hour (/1h gains a point hourly)
+export const GUIDE_TTL=6*3600;        // s · official guide updates ~daily; cache the parsed map this long
+export const GUIDE_DUMP='https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json';
+export const GUIDE_MODULE='https://oldschool.runescape.wiki/w/Module:GEPricesByIDs/data.json?action=raw';
+export const GUIDE_HIST='https://api.weirdgloop.org/exchange/history/osrs/last90d?id=';
+
+export const STATE = {
+  MAP: null, LATEST: null, VOL: null, ITEMS: [], byId: {}, byName: {},
+  GUIDE: {}, guideSource: null, guideTs: 0, guideHasMomentum: false,
+  watchlist: [], trades: [], pinned: [], bankroll: 300_000_000, slots: 6, strategy: 'balanced',
+  catById: {}, catByName: {},   // full-catalog indices (every mapped item, no flip floor)
+  cofferCollapsed: false,
+  sortKey: 'score', sortDir: -1,
+  signalCache: {},
+  LOG: []                      // {t, level, scope, msg}
+};
+export function applyCoffer(){ const w=document.getElementById('cofferWrap'); if(w) w.classList.toggle('collapsed',STATE.cofferCollapsed); }
+export const tsCache={};
+
+/* persistence
+   - artifact window.storage when present (Claude sandbox)
+   - else: small/irreplaceable state → localStorage (synchronous, reliable)
+           bulky/regenerable data (hourly archives, market snapshots) → IndexedDB
+   - in-memory fallback when a tier is unavailable (e.g. Private Browsing) */
+export const mem={};
+export const hasStore=(typeof window!=='undefined' && window.storage && typeof window.storage.get==='function');
+export const ls=(()=>{ try{ const k='__coffer_probe__'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return localStorage; }catch(e){ return null; } })();
+export const idb=(()=>{
+  if(typeof indexedDB==='undefined') return null;
+  let dbp=null;
+  const db=()=>dbp||(dbp=new Promise((res,rej)=>{
+    const r=indexedDB.open('coffer',1);
+    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  }));
+  const req=(mode,fn)=>db().then(d=>new Promise((res,rej)=>{
+    const tx=d.transaction('kv',mode); const rq=fn(tx.objectStore('kv')); let result;
+    rq.onsuccess=()=>{ result=rq.result; }; rq.onerror=()=>rej(rq.error);
+    tx.oncomplete=()=>res(result); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);  // resolve on commit, not just request success
+  }));
+  return { get:k=>req('readonly',s=>s.get(k)), set:(k,v)=>req('readwrite',s=>s.put(v,k)), keys:()=>req('readonly',s=>s.getAllKeys()) };
+})();
+export const isBulk=k=>k.indexOf('tsa:')===0 || k==='snap_latest' || k==='snap_vol';
+export async function sGet(k){
+  if(hasStore){ try{ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
+  if(isBulk(k)){ if(idb){ try{ const v=await idb.get(k); if(v!==undefined) return v; }catch(e){} } }
+  else if(ls){ try{ const v=ls.getItem(k); return v==null?null:JSON.parse(v); }catch(e){} }
+  return k in mem?mem[k]:null;
+}
+export async function sSet(k,v){
+  if(hasStore){ try{ await window.storage.set(k,JSON.stringify(v)); return; }catch(e){} }
+  else if(isBulk(k)){ if(idb){ try{ await idb.set(k,v); return; }catch(e){} } }
+  else if(ls){ try{ ls.setItem(k,JSON.stringify(v)); return; }catch(e){} }
+  mem[k]=v;
+}
+
+/* ---- diagnostics: log ring + health model + status banner ---- */
+export const LOG_MAX=50;
+export const HEALTH={};            // scope -> {level, msg}
+export const SEV={ok:0, info:1, warn:2, error:3};
+export function logEvent(level, scope, msg){
+  STATE.LOG.push({t:now(), level, scope, msg});
+  if(STATE.LOG.length>LOG_MAX) STATE.LOG=STATE.LOG.slice(-LOG_MAX);
+  sSet('logring', STATE.LOG);
+  renderBanner();
+}
+export function setHealth(scope, level, msg){
+  const prev=HEALTH[scope]; HEALTH[scope]={level, msg};
+  if((!prev || prev.level!==level) && level!=='ok') logEvent(level, scope, msg);
+  else renderBanner();
+}
+export function worstHealth(){
+  let worst=null;
+  for(const k in HEALTH){ const h=HEALTH[k]; if(h.level==='ok') continue; if(!worst||SEV[h.level]>SEV[worst.level]) worst=h; }
+  return worst;
+}
+export function logRowsHtml(withDate){
+  if(!STATE.LOG.length) return '<span class="empty2">No events logged.</span>';
+  return STATE.LOG.slice().reverse().map(e=>{
+    const cl=e.level==='error'?'ler':(e.level==='warn'?'lw':'li');
+    const d=new Date(e.t*1000);
+    const tm=(withDate?(pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '):'')+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return '<div class="le"><span class="lt">'+tm+'</span> <span class="'+cl+'">'+e.level.toUpperCase()+'</span> ['+e.scope+'] '+e.msg+'</div>';
+  }).join('');
+}
+export function renderLogViews(){
+  const lg=document.getElementById('bannerLog'); if(lg) lg.innerHTML=logRowsHtml(false);
+  const tb=document.getElementById('logsBody'); if(tb) tb.innerHTML=logRowsHtml(true);
+}
+export function renderBanner(){
+  const el=document.getElementById('statusBanner'); if(!el) return;
+  const w=worstHealth();
+  el.classList.remove('show','warn','error');
+  if(!w){ el.classList.remove('open'); }
+  else { el.classList.add('show', w.level==='error'?'error':'warn'); document.getElementById('bannerText').innerHTML=w.msg; }
+  renderLogViews();
+}
+export async function clearLog(){
+  STATE.LOG=[]; for(const k in HEALTH) delete HEALTH[k];
+  await sSet('logring',STATE.LOG); renderBanner();
+}
+

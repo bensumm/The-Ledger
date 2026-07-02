@@ -5,10 +5,21 @@ Expect repeated sessions here, not one-offs — check git log and this file for
 context before assuming something is new.
 
 ## What this is
-- **The Coffer**: single-file OSRS Grand Exchange flipping tool. Everything lives in
-  `index.html` (vanilla JS, no build step, no framework), deployed via GitHub Pages
-  at bensumm.github.io/The-Ledger/. See `README.md` for the file inventory and deploy
-  mechanics.
+- **The Coffer**: OSRS Grand Exchange flipping tool. `index.html` is markup only;
+  `styles.css` holds all styles; logic is split into ES modules under `js/`
+  (`state.js` = shared mutable state as one exported `STATE` object + constants +
+  persistence + diagnostics; `format.js` = formatting/tax helpers; `charts.js` =
+  inline SVG rendering; `market.js` = price/guide fetch + scoring; `trends.js` =
+  archive + seasonal analysis; `ui.js` = Finder/Watchlist/Signals/Ledger/Coffer
+  rendering; `backup.js` = export/import; `main.js` = entry point, event wiring +
+  init). No build step, no framework, no bundler — deployed to GitHub Pages at
+  bensumm.github.io/The-Ledger/ exactly as these files sit on disk. See `README.md`
+  for the full file inventory and deploy mechanics.
+- Split out of one 1375-line `index.html` file in 2026-07 once development moved
+  from mobile-only Claude sessions to Claude Code on a PC — the single-file
+  constraint was about zero-build Pages deploys, not mobile editing, so the split
+  keeps zero-build while making the code far more reviewable/diffable. Local testing
+  needs `serve.cmd` now (ES modules don't load over `file://`); see README.
 - **Fill-data pipeline**: closes the loop between the tool's trade suggestions and
   real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Lives
   in `pipeline/` (kept separate from the deployed app root): full design doc
@@ -26,17 +37,22 @@ already configured locally as `bensumm` / `benlsummers@gmail.com` — that's exp
 metadata, not a leak; the concern is content, not commit authorship.
 
 ## Process rules (carried over from prior sessions — keep following these)
-1. `index.html` in the repo is canonical. Confirm the current version before editing;
-   don't work from a stale copy (a rollback incident happened this way once).
-2. Validate every edit to `index.html`: extract the `<script>` body, `node --check`
-   it, verify brace/paren/bracket balance. Prefer exact-string-match patches that
-   fail loudly over fuzzy ones.
+1. The repo's `index.html` + `styles.css` + `js/*.js` are canonical. Confirm the
+   current version before editing; don't work from a stale copy (a rollback incident
+   happened this way once, back when it was one file — same principle now applies
+   across the split files together).
+2. Validate every JS edit: `node --check` the touched file(s) (each `js/*.js` is
+   valid ESM on its own now, no more single-blob extraction needed). That only
+   catches syntax — also actually run the app (`serve.cmd` + a real browser, or the
+   Playwright/chromium approach used in the 2026-07 restructuring session) before
+   calling a change done, since cross-module import/export mismatches and DOM
+   logic bugs don't show up in a syntax check. Prefer exact-string-match patches
+   that fail loudly over fuzzy ones.
 3. Ben wants prose explanations of what changed and why, alongside code — not just
    a diff.
 4. Be honest about statistical limits in any calibration/analytics work. Never
    oversell signal quality from small samples.
-5. Bump `APP_VERSION` and the `BUILD` date constant in `index.html` on every shipped
-   change.
+5. Bump `APP_VERSION` (in `js/state.js`) on every shipped change.
 6. Before running `git commit`/`git push` (including via `sync-fills.mjs`), it's fine
    to just do it once the change has been described to Ben — but for the *pipeline
    script's own* automated commits (via Task Scheduler), no confirmation loop is
@@ -44,6 +60,23 @@ metadata, not a leak; the concern is content, not commit authorship.
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed; don't suggest
    installing anything else for git operations.
+
+## The `STATE` object (js/state.js) — read before editing shared state
+Almost all app-wide mutable state (`ITEMS`, `watchlist`, `trades`, `bankroll`,
+`sortKey`, `LOG`, etc.) lives as properties on one exported object,
+`export const STATE = {...}` in `js/state.js`, accessed everywhere as
+`STATE.xxx` — not as bare imported `let` bindings. This is a hard ES module
+constraint, not a style choice: a module can `export let x` and other modules can
+*read* `x`, but only the declaring module can *reassign* `x` — any other module
+trying `x = newValue` on an imported binding is a SyntaxError. Since `market.js`,
+`ui.js`, `trends.js`, `main.js`, and `backup.js` all reassign things like `ITEMS`,
+`watchlist`, `bankroll` (not just mutate them in place), those had to become
+properties of one shared object instead (`STATE.ITEMS = ...` is a property
+mutation on an object all modules hold the same reference to — always legal).
+When adding new shared mutable state, put it on `STATE`, not as a new bare
+`export let`. Constants that are never reassigned (`API`, `APP_VERSION`, weight
+constants, etc.) stay as plain `export const` — no need to route those through
+`STATE`.
 
 ## Environment notes (Windows machine)
 - RuneLite config lives under `~/.runelite/profiles2/*.properties`. Changes made
