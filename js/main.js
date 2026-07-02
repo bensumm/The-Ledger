@@ -41,6 +41,7 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   const wl=await sGet('watchlist'); if(Array.isArray(wl)) STATE.watchlist=wl;
   const tr=await sGet('trades'); if(Array.isArray(tr)) STATE.trades=tr;
   const pn=await sGet('pinned'); if(Array.isArray(pn)) STATE.pinned=pn;
+  const fh=await sGet('fillsHidden'); if(Array.isArray(fh)) STATE.fillsHidden=fh;
   const bk=await sGet('bankroll'); if(typeof bk==='number') STATE.bankroll=bk;
   const sl=await sGet('slots'); if(typeof sl==='number') STATE.slots=sl;
   const st=await sGet('strategy'); if(st&&STRAT[st]) STATE.strategy=st;

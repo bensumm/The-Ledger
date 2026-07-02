@@ -187,6 +187,7 @@
   .trhead{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
   .trhead-name{font-family:'Cinzel',serif; font-size:18px; color:var(--gold); letter-spacing:.04em}
   .qtag{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber); border:1px solid var(--line2); border-radius:20px; padding:4px 10px}
+  .srctag{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line2); border-radius:10px; padding:1px 6px; vertical-align:middle; cursor:help}
   .trhead-acts{margin-left:auto; display:flex; gap:8px}
   .tgl{background:var(--oak2); color:var(--parch2); border:1px solid var(--line2); border-radius:7px; padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer}
   .tgl:hover{border-color:var(--gold); color:var(--parch)}

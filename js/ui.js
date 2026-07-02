@@ -1,5 +1,5 @@
-import { API, STATE, sSet } from './state.js';
-import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn } from './format.js';
+import { API, STATE, sSet, logEvent } from './state.js';
+import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
 import { loadAll, resolveItem, resolveId, computeScores, TREND_BADGE } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
@@ -140,27 +140,76 @@ export async function addTrade(){
 export async function closeTrade(tid){ const t=STATE.trades.find(x=>x.tid===tid); if(!t) return;
   const it=t.itemId?STATE.byId[t.itemId]:null, def=it&&it.high?it.high:''; const v=prompt('Sell price (each):',def); if(v===null) return;
   const sell=parseGp(v); if(isNaN(sell)){ alert('Invalid price.'); return; } t.sell=sell; t.closed=now(); await sSet('trades',STATE.trades); renderAll(); }
-export async function delTrade(tid){ STATE.trades=STATE.trades.filter(x=>x.tid!==tid); await sSet('trades',STATE.trades); renderAll(); }
+export async function delTrade(tid){
+  const t=STATE.trades.find(x=>x.tid===tid);
+  if(t && t.src==='fills'){ // fills entries are regenerated each sync — tombstone the key so it stays hidden
+    if(!STATE.fillsHidden.includes(tid)){ STATE.fillsHidden.push(tid); await sSet('fillsHidden',STATE.fillsHidden); }
+  }
+  STATE.trades=STATE.trades.filter(x=>x.tid!==tid); await sSet('trades',STATE.trades); renderAll();
+}
+/* auto-populate the Ledger from positions.json (pipeline-reconstructed real fills).
+   Idempotent: drop all src:'fills' entries and rebuild from the file every sync, so
+   reloads never duplicate and open→closed transitions resolve cleanly. Manual trades
+   (no src) are never touched; a fills entry the user deletes is tombstoned in
+   STATE.fillsHidden so it won't reappear. On fetch failure we keep whatever was last
+   persisted rather than wiping the real-trade view. */
+export async function syncFills(){
+  let pos;
+  try{
+    const r=await fetch('positions.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    pos=await r.json();
+  }catch(e){ logEvent('info','fills','positions.json unavailable ('+((e&&e.message)||e)+') — keeping last-synced ledger'); return; }
+  if(!pos || pos.app!=='the-coffer-positions'){ return; }
+  const hidden=new Set(STATE.fillsHidden||[]);
+  const nameOf=id=>(STATE.byId[id]&&STATE.byId[id].name)||(STATE.catById[id]&&STATE.catById[id].name)||('Item #'+id);
+  STATE.trades=STATE.trades.filter(t=>t.src!=='fills');
+  const add=[];
+  for(const t of (pos.closed||[])){ const key='f:c:'+t.itemId+':'+t.buyTs+':'+t.sellTs; if(hidden.has(key)) continue;
+    add.push({tid:key, src:'fills', itemId:t.itemId, name:nameOf(t.itemId), qty:t.qty, buy:t.buyEach, sell:t.sellEach, opened:t.buyTs, closed:t.sellTs}); }
+  for(const o of (pos.open||[])){ const key='f:o:'+o.itemId+':'+o.buyEach; if(hidden.has(key)) continue;
+    add.push({tid:key, src:'fills', itemId:o.itemId, name:nameOf(o.itemId), qty:o.qty, buy:o.buyEach, sell:null, opened:o.buyTs, closed:null}); }
+  STATE.trades.push(...add);
+  STATE.fillsUnmatched=Array.isArray(pos.unmatched)?pos.unmatched:[];
+  STATE.fillsTs=pos.generatedAt?Math.floor(Date.parse(pos.generatedAt)/1000):0;
+  await sSet('trades',STATE.trades);
+  logEvent('info','fills',(pos.closed||[]).length+' closed, '+(pos.open||[]).length+' open, '+STATE.fillsUnmatched.length+' unmatched from positions.json');
+  renderLedger(); renderCoffer();
+}
 export function realised(t){ return ((t.sell-tax(t.sell))-t.buy)*t.qty; }
+export function renderFillsMeta(){
+  const el=document.getElementById('fillsMeta'); if(!el) return;
+  const fills=STATE.trades.filter(t=>t.src==='fills'), un=STATE.fillsUnmatched||[];
+  if(!fills.length && !un.length && !STATE.fillsTs){ el.classList.add('hidden'); el.innerHTML=''; return; }
+  el.classList.remove('hidden');
+  const oc=fills.filter(t=>t.sell===null).length, cc=fills.length-oc;
+  let when=''; if(STATE.fillsTs){ const d=new Date(STATE.fillsTs*1000); when=' · synced '+pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+  let h='<b>Auto-synced from your RuneLite fills</b> ('+cc+' closed, '+oc+' open)'+when+'. These carry a <span class="srctag">fills</span> tag and refresh on price refresh; delete one to hide it.';
+  if(un.length){ const names=un.map(u=>((STATE.byId[u.itemId]&&STATE.byId[u.itemId].name)||(STATE.catById[u.itemId]&&STATE.catById[u.itemId].name)||('#'+u.itemId))+' ×'+u.qty.toLocaleString()).join(', ');
+    h+=' <span class="loss">'+un.length+' sell'+(un.length===1?'':'s')+' had no logged buy</span> (bought before logging started, so no cost basis — excluded from realised): '+names+'.'; }
+  el.innerHTML=h;
+}
 export function renderLedger(){
   const open=STATE.trades.filter(t=>t.sell===null), closed=STATE.trades.filter(t=>t.sell!==null);
   document.getElementById('ledgerBadge').textContent=open.length;
+  renderFillsMeta();
+  const ftag='<span class="srctag" title="auto-synced from RuneLite fills">fills</span>';
   const ob=document.getElementById('openBody'), oe=document.getElementById('openEmpty');
   if(!open.length){ ob.innerHTML=''; oe.classList.remove('hidden');
     oe.innerHTML='<div class="empty"><div class="big">No open positions</div><div class="sm">Log a buy above to track a flip. Shorthand works — 1.79b, 450k.</div></div>';
   }else{ oe.classList.add('hidden');
-    ob.innerHTML=open.map(t=>{ const it=t.itemId?resolveId(t.itemId):null, cur=it&&it.high?it.high:null; const un=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
-      return '<tr><td class="left"><span class="itemname">'+t.name+'</span></td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td>'+
+    ob.innerHTML=open.map(t=>{ const it=t.itemId?resolveId(t.itemId):null, cur=it&&it.high?it.high:null; const un=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null; const isF=t.src==='fills';
+      return '<tr><td class="left"><span class="itemname">'+t.name+'</span>'+(isF?' '+ftag:'')+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td>'+
         '<td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td>'+
-        '<td><button class="act" data-close="'+t.tid+'">Mark sold</button> <button class="act danger" data-del="'+t.tid+'">Delete</button></td></tr>'; }).join('');
+        '<td>'+(isF?'':'<button class="act" data-close="'+t.tid+'">Mark sold</button> ')+'<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button></td></tr>'; }).join('');
   }
   const cb=document.getElementById('closedBody'), ce=document.getElementById('closedEmpty');
   if(!closed.length){ cb.innerHTML=''; ce.classList.remove('hidden');
     ce.innerHTML='<div class="empty"><div class="big">No closed flips</div><div class="sm">Sold positions land here with realised profit after tax.</div></div>';
   }else{ ce.classList.add('hidden');
-    cb.innerHTML=closed.slice().reverse().map(t=>{ const r=realised(t), tx=tax(t.sell)*t.qty;
-      return '<tr><td class="left"><span class="itemname">'+t.name+'</span></td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td>'+
-        '<td class="num mini loss">'+fmt(tx)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td><button class="act danger" data-del="'+t.tid+'">Delete</button></td></tr>'; }).join('');
+    cb.innerHTML=closed.slice().reverse().map(t=>{ const r=realised(t), tx=tax(t.sell)*t.qty; const isF=t.src==='fills';
+      return '<tr><td class="left"><span class="itemname">'+t.name+'</span>'+(isF?' '+ftag:'')+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td>'+
+        '<td class="num mini loss">'+fmt(tx)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td><button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button></td></tr>'; }).join('');
   }
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeTrade(b.dataset.close));
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delTrade(b.dataset.del));

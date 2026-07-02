@@ -1,7 +1,7 @@
 import { now, pad2 } from './format.js';
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.17.0';
+export const APP_VERSION='0.18.0';
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality
 // multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
 // (These become Settings-tab editable next pass.)
@@ -29,6 +29,7 @@ export const STATE = {
   MAP: null, LATEST: null, VOL: null, ITEMS: [], byId: {}, byName: {},
   GUIDE: {}, guideSource: null, guideTs: 0, guideHasMomentum: false,
   watchlist: [], trades: [], pinned: [], bankroll: 300_000_000, slots: 6, strategy: 'balanced',
+  fillsHidden: [], fillsUnmatched: [], fillsTs: 0,   // auto-populated ledger from positions.json (RuneLite fills)
   catById: {}, catByName: {},   // full-catalog indices (every mapped item, no flip floor)
   cofferCollapsed: false,
   sortKey: 'score', sortDir: -1,

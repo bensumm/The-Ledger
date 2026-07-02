@@ -1,6 +1,6 @@
 import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, tsCache, sGet, sSet, logEvent, setHealth } from './state.js';
 import { netMargin, clamp, now } from './format.js';
-import { showFinderError, renderAll } from './ui.js';
+import { showFinderError, renderAll, syncFills } from './ui.js';
 import { archiveWatchlist, computeSignals } from './trends.js';
 
 /* catalog */
@@ -94,6 +94,7 @@ export async function loadAll(forceMap, forceMarket){
     document.getElementById('universeNote').textContent=STATE.ITEMS.length+' tradeable items tracked · '+liq+' liquid enough to rank by default; search reveals the rest (3rd age, staples, thin items)';
     renderAll();
     computeSignals();
+    syncFills();   // auto-populate Ledger/Coffer from positions.json (mapping is built now, so names resolve)
     archiveWatchlist().then(computeSignals);
     setHealth('market','ok','');
     logEvent('info','market',(m.fresh?'live prices loaded':'served cached snapshot')+' · '+STATE.ITEMS.length+' items'+(STATE.ITEMS.filter(i=>i.liquid).length?' ('+STATE.ITEMS.filter(i=>i.liquid).length+' liquid)':''));
