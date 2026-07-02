@@ -67,7 +67,7 @@
         <option value="cap">Above tax cap (&gt; 250m)</option>
       </select>
       <select id="sortSel">
-        <option value="score" selected>Sort: Score</option>
+        <option value="score" selected>Sort: Rating</option>
         <option value="pph">Sort: Profit / hr</option>
         <option value="margin">Sort: Margin</option>
         <option value="roi">Sort: ROI %</option>
@@ -87,7 +87,7 @@
           <th class="left" data-k="name">Item</th><th data-k="low">Buy</th><th data-k="high">Sell</th>
           <th data-k="margin">Margin</th><th data-k="roi">ROI</th><th data-k="fill">Fill</th>
           <th data-k="turn">Turn</th><th data-k="pph">Profit/hr</th><th data-k="riskIndex">Risk</th>
-          <th data-k="score">Score</th><th>☆</th>
+          <th data-k="score">Rating</th><th>☆</th>
         </tr></thead>
         <tbody id="finderBody"></tbody>
       </table>
@@ -175,7 +175,7 @@
   <footer>
     Prices: OSRS Wiki real-time API. Catalog cached locally 7 days; only live prices pulled each launch — <span id="universeNote"></span>.
     Margins are <strong>after the 2% GE sell tax</strong> (floored per item, capped at 5m, none under 50gp).
-    <strong>Score</strong> = budget-aware profit/hr × a risk dampener that now includes a guide-divergence <strong>trend</strong> term. <strong>Trends</strong> and <strong>Signals</strong> read the official GE guide to flag downtrends — tendencies, not guarantees. Watchlist and ledger save to this device only.
+    <strong>Rating</strong> = budget-aware profit/hr × a quality dampener blending <strong>ROI</strong>, <strong>liquidity</strong>, <strong>stability</strong> (live price vs guide), and <strong>turnaround</strong> — hover the Risk grade for the breakdown. <strong>Trends</strong> and <strong>Signals</strong> read the official GE guide to flag downtrends — tendencies, not guarantees. Watchlist and ledger save to this device only.
   </footer>
 </div>
 

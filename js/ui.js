@@ -45,14 +45,16 @@ export function renderFinder(){
     const watched=STATE.watchlist.includes(it.id);
     const stale=(it.highTime<staleT||it.lowTime<staleT)?'<span class="stale">stale</span>':'';
     const rel=Math.round(it.score/maxScore*100), g=grade(it.riskIndex);
+    const rt=it.rate;
+    const gTitle=rt?('Rating factors — ROI '+Math.round(rt.roiS*100)+'% · Liquidity '+Math.round(rt.volS*100)+'% · Stability '+Math.round(rt.stabS*100)+'% · Turnaround '+Math.round(rt.turnS*100)+'% (stability = live price vs guide; full regime check is on Trends)'):'insufficient data';
     const tb=TREND_BADGE[(it.trend&&it.trend.state)||'none']||TREND_BADGE.none;
     const badge=tb.g?' <span class="tbadge '+tb.c+'" title="'+tb.t+(it.trend&&it.trend.divPct!=null?' · '+(it.trend.divPct>=0?'+':'')+it.trend.divPct.toFixed(1)+'% vs guide':'')+'">'+tb.g+'</span>':'';
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+badge+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
       '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
       '<td class="num gain">'+fmtP(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
-      '<td class="num gold">'+fmt(it.pph)+'</td><td><span class="grade r'+g+'">'+g+'</span></td>'+
-      '<td><span class="scorebar"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
+      '<td class="num gold">'+fmt(it.pph)+'</td><td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>'+
+      '<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
       '<td><button class="star '+(watched?'on':'')+'" data-id="'+it.id+'">'+(watched?'★':'☆')+'</button></td></tr>';
   }).join('');
   body.querySelectorAll('.star').forEach(b=>b.onclick=()=>toggleWatch(+b.dataset.id));

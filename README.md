@@ -13,9 +13,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 
 ## What it does
 
-- **Finder** — ranks flippable items by a budget-aware score (profit/hr × a risk
-  dampener that factors margin, liquidity, price staleness, and guide-divergence
-  trend). Sortable by score, profit/hr, margin, ROI, or volume.
+- **Finder** — ranks flippable items by a budget-aware **rating** (profit/hr × a
+  quality dampener blending ROI, liquidity, stability, and turnaround; hover the Risk
+  grade for the per-factor breakdown). Stability here is a cheap live-price-vs-guide
+  proxy — the full regime-drift check lives on the Trends page. Sortable by rating,
+  profit/hr, margin, ROI, or volume.
 - **Trends** — deep per-item analysis. A live "Suggested plan" (instant buy/sell +
   **patient pricing** that sizes a wider-margin offer off the recent 2h range),
   a **regime-shift guard** that warns when a recent price-level jump makes the

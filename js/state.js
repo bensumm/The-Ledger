@@ -1,16 +1,22 @@
 import { now, pad2 } from './format.js';
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.16.0';
-// risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
-export const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
+export const APP_VERSION='0.17.0';
+// Finder rating model — four transparent 0..1 sub-scores blended into a quality
+// multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
+// (These become Settings-tab editable next pass.)
+export const RATE_W={roi:0.30, vol:0.25, stab:0.25, turn:0.20};
+export const RATE_ROI_MAX=6;        // % after-tax ROI that maxes the ROI factor
+export const RATE_VOL_MAX=20000;    // hourly volume that maxes the liquidity factor (log-scaled)
+export const RATE_TURN_FAST=0.25;   // h · turnaround at/under this = full marks
+export const RATE_TURN_SLOW=6;      // h · turnaround at/over this = zero
 export const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
 export const DIV_FULL=0.08;         // divergence (8%) that maps trend intensity → 1.0
 export const Z_BAND=1.0;            // |z| under this = within normal noise (no edge)
 export const UP_RISK=0.30;          // uptrend contributes less to risk than a downtrend (reversion only)
 export const BOND_ID=13190;
 export const MIN_PRICE=1000, MIN_VOL=30;
-export const ROI_TARGET=0.05, VOL_COMFORT=1000, FRESH_S=900, STALE_S=21600;
+export const FRESH_S=900, STALE_S=21600;
 export const STRAT={conservative:{damp:0.85}, balanced:{damp:0.6}, aggressive:{damp:0.35}};
 export const MARKET_TTL=180;          // s · reuse stored /latest+/1h snapshot if newer (cold-start throttle)
 export const ARCHIVE_MIN_GAP=55*60;   // s · skip watchlist archiving if done within the hour (/1h gains a point hourly)

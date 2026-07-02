@@ -1,4 +1,4 @@
-import { API, W_MARGIN, W_LIQ, W_STALE, W_TREND, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, ROI_TARGET, VOL_COMFORT, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, tsCache, sGet, sSet, logEvent, setHealth } from './state.js';
+import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, tsCache, sGet, sSet, logEvent, setHealth } from './state.js';
 import { netMargin, clamp, now } from './format.js';
 import { showFinderError, renderAll } from './ui.js';
 import { archiveWatchlist, computeSignals } from './trends.js';
@@ -161,22 +161,43 @@ export function coarseTrend(it){
   if(it.low>guide){ return {state:'up', intensity:clamp((it.low-guide)/guide/DIV_FULL,0,1), divPct, guide}; }
   return {state:'straddle', intensity:0, divPct, guide};
 }
+/* Finder rating: four transparent 0..1 sub-scores (ROI, liquidity, stability,
+   turnaround) → a composite quality. Sort magnitude still comes from profit/hr;
+   quality is the dampener. NOTE on stability: the true regime-drift check needs a
+   per-item price SERIES (see trends.js regimeDrift), which the Finder can't afford
+   across the whole universe without a network call each — so here the stability
+   proxy is live-price-vs-guide divergence, a cheap always-available stand-in for
+   "has this dislocated from its lagging official price recently". */
+export function ratingParts(it, staleRisk){
+  const roiS=clamp((it.roi||0)/RATE_ROI_MAX,0,1);
+  const volS=clamp(Math.log10((it.volume||0)+1)/Math.log10(RATE_VOL_MAX+1),0,1);
+  const turnS=it.turn==null?0:clamp((RATE_TURN_SLOW-it.turn)/(RATE_TURN_SLOW-RATE_TURN_FAST),0,1);
+  const tr=it.trend||{state:'none',intensity:0,divPct:null};
+  let instab;
+  if(tr.state==='down') instab=tr.intensity;                                 // downtrend: full weight (buy then it keeps falling)
+  else if(tr.state==='up') instab=UP_RISK*2*tr.intensity;                    // uptrend: 0.6× — rising can still reverse under a flip
+  else if(tr.state==='thin') instab=0.5;                                     // thin volume → guide is noise, treat as uncertain
+  else if(tr.state==='none') instab=0.35;                                    // no guide reference → mild uncertainty
+  else instab=clamp(Math.abs(tr.divPct||0)/(DIV_FULL*100),0,1)*0.5;          // straddle: small, scales with divergence
+  instab=clamp(Math.max(instab,0.5*staleRisk),0,1);                          // stale live prices also erode trust
+  const stabS=1-instab;
+  const quality=RATE_W.roi*roiS + RATE_W.vol*volS + RATE_W.stab*stabS + RATE_W.turn*turnS;
+  return {roiS,volS,stabS,turnS,quality};
+}
 export function computeScores(){
   const perSlot=STATE.bankroll/Math.max(STATE.slots,1), damp=STRAT[STATE.strategy].damp, t=now();
   for(const it of STATE.ITEMS){
     it.trend=coarseTrend(it);
-    if(it.margin<=0){ it.fill=0; it.turn=null; it.pph=0; it.riskIndex=1; it.score=0; continue; }
+    if(it.margin<=0){ it.fill=0; it.turn=null; it.pph=0; it.rate=null; it.riskIndex=1; it.score=0; continue; }
     const partCap=Math.max(1, Math.floor(MAXPART*it.volume));               // can't realistically grab more than this per fill
     const fill=Math.max(0, Math.min(it.limit, Math.floor(perSlot/it.low), partCap)); it.fill=fill;
-    if(fill<1){ it.turn=null; it.pph=0; it.riskIndex=1; it.score=0; continue; }
+    if(fill<1){ it.turn=null; it.pph=0; it.rate=null; it.riskIndex=1; it.score=0; continue; }
     const cycle=it.margin*fill;
     it.turn=clamp(2*fill/Math.max(it.volume,1),0.1,8); it.pph=cycle/it.turn;
-    const marginRisk=clamp(1-(it.roi/100)/ROI_TARGET,0,1);
-    const liqRisk=clamp(1-it.volume/VOL_COMFORT,0,1);
     const age=t-Math.min(it.highTime||t,it.lowTime||t);
     const staleRisk=clamp((age-FRESH_S)/(STALE_S-FRESH_S),0,1);
-    const trendRisk = it.trend.state==='down' ? it.trend.intensity : (it.trend.state==='up' ? UP_RISK*it.trend.intensity : 0);
-    it.riskIndex=W_MARGIN*marginRisk + W_LIQ*liqRisk + W_STALE*staleRisk + W_TREND*trendRisk;
+    it.rate=ratingParts(it, staleRisk);
+    it.riskIndex=1-it.rate.quality;                                          // Risk grade now reflects the full quality model
     it.score=it.pph*(1-damp*it.riskIndex);
   }
 }
