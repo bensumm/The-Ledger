@@ -115,6 +115,24 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
   and eventually the fills pipeline's realized-vs-suggested calibration).
+- **Ledger redesign — grouped, watchlist-filtered, period P&L** (designed 2026-07-02,
+  not yet built): three changes to the Ledger tab (`renderLedger` in `js/ui.js`):
+  1. **Watchlist filter** — show only trades whose `itemId` is on `STATE.watchlist`
+     (`STATE.watchlist.includes(t.itemId)`), as a toggle defaulting ON. Rationale: with
+     fills auto-populating, random loot-sells / supply-buys pollute the Ledger; only
+     watched (flip-target) items are worth tracking. Non-watched fills stay in
+     `positions.json` / `STATE.trades` (not deleted) — just hidden by the filter.
+  2. **Per-item grouping + drill-in** — collapse multiple trades of the same `itemId`
+     into one summary row (item, total qty, avg buy, avg sell, flip count, total realised
+     after tax), expandable to the per-transaction history. Applies to both the open
+     table (group open lots → total qty at avg cost) and the closed table.
+  3. **Period P&L (day/week/month)** — bucket realised profit by period, **attributed by
+     SELL/close date (`sellTs`)**. This deliberately sidesteps the day/week/month
+     border-straddle: a flip bought in one period and sold in another belongs *wholly* to
+     the period it was realised in (realised P/L is booked at the sale) — no proration, no
+     ambiguity. Unmatched sells bucket by their `sellTs` too. Local-time boundaries;
+     week = Mon–Sun. Surface a period selector + the period total (extends the Coffer's
+     realised tile).
 
 ## Repo is public — no PII
 This repo is public on GitHub. Never commit account names, RSNs, real names, emails,
