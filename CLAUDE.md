@@ -58,12 +58,25 @@ Key lesson driving this: hourly seasonality is usually noise or a regime artifac
 `conf`/`medCount` only measure history coverage, not price-level stability, so the
 regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
 
+## Done (recent, for context — don't rebuild)
+- **Finder rating rework** (0.17.0): `computeScores()` in `js/market.js` now blends
+  four transparent 0..1 sub-scores via `ratingParts()` — ROI, liquidity (log-scaled
+  vol), stability, turnaround — into a `quality` dampener; `score = pph*(1-damp*(1-
+  quality))` keeps profit/hr as the magnitude anchor. Risk grade + Rating bar carry a
+  per-factor tooltip. Finder stability is a cheap live-price-vs-guide proxy (the real
+  `regimeDrift` still needs a per-item series → stays on Trends).
+- **Ledger auto-populate from fills** (0.18.0): `syncFills()` in `js/ui.js` fetches
+  `positions.json` on load/refresh and merges pipeline-reconstructed real trades into
+  the Ledger/Coffer (tagged `src:'fills'`, idempotent rebuild, tombstoned via
+  `STATE.fillsHidden`, unmatched sells shown but excluded from realised). Pipeline
+  emits `positions.json` — see `pipeline/FILLS-PIPELINE.md` §5.1.
+
 ## Open followups (not yet built)
-- **Finder rating rework**: replace/upgrade the Finder score to a clearer rating that
-  explicitly weighs volume, ROI, **stability** (the `regimeDrift` concept isn't in
-  the Finder score yet), and estimated turnaround; sort by it. (`computeScores()` in
-  `js/market.js` already caps fill at 15% hourly volume and does margin/liq/stale/
-  trend risk — extend from there.)
+- **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
+  trigger a fresh pipeline sync) on demand, rather than only on price refresh. Ben
+  explicitly wants this next. `syncFills()` already does the fetch+merge; this is
+  mostly a button + wiring (client can't run the Node pipeline itself — a same-origin
+  re-fetch of `positions.json` is the app-side scope).
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
   and eventually the fills pipeline's realized-vs-suggested calibration).
