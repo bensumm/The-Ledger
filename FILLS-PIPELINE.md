@@ -121,11 +121,19 @@ Design decisions, deliberate — don't undo casually:
 - **Idempotent sync**: every run re-reads all logs and dedupes by content-hash id. No
   incremental watermark state to corrupt. Personal volume is small; this is fine.
 - Retention: 180 days / 20k events (config constants).
-- **`spent` tax status is UNVERIFIED.** Determine empirically whether sell events
-  report gross or post-tax gp (compare a real sell's `spent` against price×qty and
-  price×qty−tax). Record the answer in this doc; The Coffer must normalize when
-  computing realized margins. (In-client, RuneLite's offer API reports gross spent
-  historically, but VERIFY.)
+- **`spent` is GROSS, confirmed empirically** (2026-07-01): sold 33 dragon arrowtips
+  (item 11237), offer listed at 3900/ea but filled at avg 3945/ea (GE matched a
+  better buyer than the listed price — sell offers are a floor, not the execution
+  price). Logged `worth: 130185` = exactly `33 × 3945`, no tax subtracted. Real
+  after-tax proceeds would be `130185 − floor(3945×0.02)×33 = 127611`. **The Coffer
+  must apply its own `tax()` function to `spent`/`worth` when computing realized
+  margins from fills.json** — same as it already does for live quotes. No change
+  needed in `sync-fills.mjs`; leaving `spent` raw/gross is correct and consistent
+  with how buy-side `spent` already behaves (buys have no tax to begin with).
+- Corollary: **quoted/offer price ≠ execution price**, even for filled orders — GE
+  matches favorably when possible. Any slippage calibration (§6.5) should compare
+  realized avg price (`spent/filled`) against the quote, not assume they're equal
+  just because an order fully filled.
 - Offer **duration is derivable** (same slot+item chain of events) but only trustworthy
   for offers completing while the client was open — offline fills all "arrive" at next
   login. Flag/segment rather than trust blindly.
@@ -194,7 +202,7 @@ Not yet built — planned as the next tool feature, roughly in order:
       attempted but is blocked (`Access is denied`) in this environment even at
       limited run-level — not pursued further since the 20-min interval already
       catches up after sleep/logon within 20 minutes.
-- [ ] Sell-tax gross-vs-net question answered empirically and recorded here — only a
-      buy has been tested so far; need a real sell to check whether `worth` is gross
-      or post-tax.
+- [x] Sell-tax gross-vs-net question answered empirically and recorded here (§5) —
+      `spent`/`worth` is gross, not post-tax. Also surfaced that execution price can
+      differ from the quoted offer price even on a full fill.
 - [ ] Then: tool-side fetch+merge (§6.1) as the first index.html change
