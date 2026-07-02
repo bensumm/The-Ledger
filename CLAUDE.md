@@ -88,6 +88,14 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   falling branches → always list at the instabuy (in profit → SELL to clear; underwater →
   CUT), never above it. `patientTargets` is trend-aware (see Trends tab §1) and the plan
   card's pricing copy branches on `PT.falling`.
+- **Live position monitor + deterioration-watch routine** (2026-07-02): `pipeline/monitor.mjs`
+  (read-only — live offers/fills from the exchange log + held positions with break-even from
+  `positions.json`, *not* a log re-sum) drives a polling routine documented in
+  `pipeline/MONITORING.md`: HOLD / WATCH / CUT per held position, break-even = `ceil(buy/0.98)`,
+  with an **evidence-gated 24h-cycle guard** (daily cycles are usually noise → default to
+  cutting a genuinely falling position; only a *proven* backtested hour-of-day pattern defers
+  a cut). Session/agent-run for now; the durable app-native home is the Refresh-positions +
+  Ledger break-even/regime followups below.
 
 ## Flipping strategy lessons (2026-07-02 session — codified)
 - **Screening: the 24h-drift signal is a pre-filter only.** Current-instasell-vs-24h-avg
