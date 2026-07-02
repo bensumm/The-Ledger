@@ -89,6 +89,24 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   CUT), never above it. `patientTargets` is trend-aware (see Trends tab §1) and the plan
   card's pricing copy branches on `PT.falling`.
 
+## Flipping strategy lessons (2026-07-02 session — codified)
+- **Screening: the 24h-drift signal is a pre-filter only.** Current-instasell-vs-24h-avg
+  repeatedly read "flat/slightly soft" on items a multi-day check (`regimeDrift`: recent-3d
+  median vs prior ~2wk, ≥8% flags) showed as active fallers/movers — Lightbearer, Sunfire
+  cuirass, anguish, primordial, Archers ring, Blood moon (6× in one session). Always run
+  the multi-day regime check before recommending any screened item.
+- **Real liquidity = a two-sided daily market, not the `/volumes` count.** `/volumes` is
+  bursty/weekly and overstates tradability. The 50–100/day band looked juicy (5–22%
+  "margins") but was ghost-spreads: `0/0` two-sided trades in 24h (cosmetics, ornament
+  kits), uncrossable. Gate on `lowPriceVolume>0 && highPriceVolume>0` in the 24h endpoint;
+  ~100/day is the practical floor.
+- **Tax dominates thin flips.** The 2% tax eats most of a tight spread — need meaningfully
+  >~0.5% after-tax to bother. Stable/tight ≠ profitable.
+- **Pricing: for a liquid item with a stable *regime* but a wide intraday band, the band
+  IS the edge.** Ladder buys at band lows / sell at band tops (34–74k/unit on crystal
+  teleport seeds vs ~24k for a mid-spread flip; seeds were ~88% of session profit). Never
+  list below break-even (`ceil(buy/0.98)`); don't chase a softening item's buy.
+
 ## Open followups (not yet built)
 - **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
   trigger a fresh pipeline sync) on demand, rather than only on price refresh. Ben
@@ -157,10 +175,11 @@ constants, etc.) stay as plain `export const` — no need to route those through
   verified mapping (`item`→itemId, `offer`→price, `max`→qty, `qty`→filled,
   `worth`→spent). Don't re-guess field names; that mapping was verified against real
   log output.
-- No distinct "cancelled" state exists in the log — a cancelled offer just goes
-  straight to `EMPTY`. `pipeline/sync-fills.mjs`'s `buildEvents()` does a
-  sequence-aware pass to infer cancellation; don't revert to pure line-by-line
-  parsing.
+- The log **does** emit explicit `CANCELLED_BUY`/`CANCELLED_SELL` states (confirmed live
+  2026-07-02) — `normalizeStateStr` in `sync-fills.mjs` maps any `CANCEL*` to `'cancelled'`.
+  `buildEvents()` *also* keeps a sequence-aware fallback (last non-complete event before an
+  `EMPTY` or a slot item-change → cancelled) for cancels that drop straight to `EMPTY`
+  without a cancel line. Keep both paths; don't revert to pure line-by-line parsing.
 - Task Scheduler job `CofferFillsSync` runs `wscript.exe
   pipeline\run-fills-sync.vbs` every 20 min (hidden window). If any pipeline file
   moves again, that task's registered path needs re-creating too — it's not

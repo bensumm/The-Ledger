@@ -55,12 +55,14 @@ const AUTO_TRAILER = 'Auto-Fills-Sync: true'; // marks a commit as safe to amend
  *   qty -> filled (cumulative filled so far), worth -> spent (cumulative).
  * date+time are separate local-time strings, combined below.
  *
- * The plugin never emits a distinct "cancelled" state — a cancelled
- * offer just goes straight to state:"EMPTY" without ever reaching
- * BOUGHT/SOLD. Detecting cancellation requires looking at the sequence
- * of events per slot, not a single line in isolation — see
- * buildEvents() below, which does that pass. parseJsonLine() here only
- * normalizes one line; it returns `{ empty: true }` markers for
+ * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states
+ * (confirmed against a live log 2026-07-02) — normalizeStateStr() maps
+ * any CANCEL* to 'cancelled'. It can ALSO drop an offer straight to
+ * state:"EMPTY" without a cancel line, so buildEvents() below keeps a
+ * sequence-aware fallback: any slot event that never reached 'complete'
+ * before the slot goes EMPTY (or a different item appears in the slot) is
+ * retroactively marked 'cancelled'. Keep both paths. parseJsonLine() here
+ * only normalizes one line; it returns `{ empty: true }` markers for
  * EMPTY/unrecognized lines so the sequencer can see slot-clear events.
  *
  * Normalized trade event: { ts, type:'buy'|'sell',
@@ -79,7 +81,7 @@ function pick(o, ...names) {
 
 function normalizeStateStr(s) {
   s = String(s || '').toUpperCase();
-  if (s.includes('CANCEL')) return 'cancelled'; // not observed in practice, kept as a safety net
+  if (s.includes('CANCEL')) return 'cancelled'; // explicit CANCELLED_BUY/SELL states (confirmed live 2026-07-02)
   if (s.includes('BOUGHT') || s.includes('SOLD') || s === 'COMPLETE' || s.includes('COMPLETED')) return 'complete';
   if (s.includes('BUYING') || s.includes('SELLING')) return 'partial'; // in-progress update; may be refined to 'placed' below
   return null;

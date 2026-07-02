@@ -227,9 +227,10 @@ Not yet built — planned as the next tool feature, roughly in order:
 - [x] `--probe` output verified; adapter matches real fields — real field names were
       `item`/`offer`/`max`/`qty`/`worth` mapping to `itemId`/`price`/`qty`(total
       offer)/`filled`(cumulative)/`spent`, all different from the original guesses;
-      see the ADAPTER comment in `sync-fills.mjs`. Also: the plugin never emits a
-      distinct cancelled state (goes straight to `EMPTY`), handled by a
-      sequence-aware pass (`buildEvents()`) instead of per-line parsing.
+      see the ADAPTER comment in `sync-fills.mjs`. Also: the plugin emits explicit
+      `CANCELLED_BUY`/`CANCELLED_SELL` states (confirmed live 2026-07-02), mapped by
+      `normalizeStateStr`; `buildEvents()` also keeps a sequence-aware fallback for
+      cancels that drop straight to `EMPTY` without a cancel line.
 - [x] Scheduled task running; fills.json updating in the repo and served by Pages —
       Task Scheduler job `CofferFillsSync`, every 20 min, runs
       `wscript.exe pipeline\run-fills-sync.vbs` (hidden wrapper around
