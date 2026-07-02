@@ -1,5 +1,5 @@
 import { API, Z_BAND, ARCHIVE_MIN_GAP, STATE, tsCache, sGet, sSet, logEvent } from './state.js';
-import { tax, fmt, fmtP, now, pad2, fmtHour, sgn } from './format.js';
+import { tax, netMargin, fmt, fmtP, now, pad2, fmtHour, sgn } from './format.js';
 import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch, renderSignals } from './ui.js';
@@ -111,7 +111,49 @@ export function buildPlan(points, s6h, it){
     o.trendPct=(older&&recent)?(recent-older)/older*100:null; }
   o.flat=o.lowEdge.flat && o.highEdge.flat;
   o.conf = (o.archDays>=10 && o.medCount>=5) ? 'good' : (o.archDays>=4 && o.medCount>=2) ? 'moderate' : 'low';
+  o.regime = regimeDrift(points);
   return o;
+}
+/* --- regime-shift guard: has the price LEVEL moved recently? ---------------
+   conf/medCount only measure how much history we have, not whether that history
+   is one stable regime. If the median has jumped in the last few days (a game
+   update, a rebalance, speculative repricing), the hour-of-day factors above blend
+   two different price levels and the "cheapest/richest hour" hints become noise —
+   this is exactly the trap where a one-off jump masquerades as a daily cycle.
+   Compares the last 3 days' median mid-price against the prior ~2 weeks'. */
+export function regimeDrift(points){
+  if(!points || points.length<2) return {ok:false};
+  const mid=p=>(p.avgLowPrice&&p.avgHighPrice)?(p.avgLowPrice+p.avgHighPrice)/2:(p.avgLowPrice||p.avgHighPrice);
+  const tEnd=points[points.length-1].timestamp;
+  const recentCut=tEnd-3*86400, priorCut=tEnd-17*86400;
+  const recent=[], prior=[];
+  points.forEach(p=>{ const m=mid(p); if(!m) return;
+    if(p.timestamp>=recentCut) recent.push(m);
+    else if(p.timestamp>=priorCut) prior.push(m); });
+  if(recent.length<8 || prior.length<8) return {ok:false};   // not enough on either side to compare
+  const recentMed=median(recent), priorMed=median(prior);
+  if(!recentMed || !priorMed) return {ok:false};
+  return {ok:true, driftPct:(recentMed-priorMed)/priorMed*100, recentMed, priorMed};
+}
+/* --- patient-offer sizing: instant spread vs. waiting for the range edges -----
+   The live low/high is the instant-fill spread. If you'll wait, you can often buy
+   nearer the low end of the recent range and sell nearer the high end, clearing a
+   bigger margin at the cost of fill certainty. Uses ~2h of 5m data; the 20th/80th
+   percentiles keep the targets inside where it has actually traded (not the single
+   noisiest print), and clamps so a patient target never sits worse than the live
+   quote. Returns ok:false when there isn't enough recent data to size it. */
+export function patientTargets(series, it){
+  if(!series || !series.length || !it || !it.low || !it.high) return {ok:false};
+  const recent=series.slice(-24);   // ~2h at 5m steps
+  const los=recent.map(p=>p.avgLowPrice).filter(Boolean).sort((a,b)=>a-b);
+  const his=recent.map(p=>p.avgHighPrice).filter(Boolean).sort((a,b)=>a-b);
+  if(los.length<4 || his.length<4) return {ok:false};
+  const pctl=(s,p)=>s[Math.min(s.length-1,Math.max(0,Math.round((s.length-1)*p)))];
+  const patientBuy=Math.min(it.low, pctl(los,0.2));    // never suggest paying MORE than the instant buy
+  const patientSell=Math.max(it.high, pctl(his,0.8));  // never suggest asking LESS than the instant sell
+  return {ok:true, patientBuy, patientSell,
+    patientMargin:netMargin(patientBuy,patientSell), fastMargin:netMargin(it.low,it.high),
+    loMin:los[0], hiMax:his[his.length-1]};
 }
 /* --- walk-forward backtest: fit factors only on days BEFORE each test day (no look-ahead) --- */
 export function dayGroups(points){
@@ -212,7 +254,7 @@ export async function runTrends(){
   status.textContent='loading history…';
   document.getElementById('trResult').classList.add('hidden');
   try{
-    const [s1h,s6h]=await Promise.all([fetchTimeseries(it.id,'1h'), fetchTimeseries(it.id,'6h')]);
+    const [s1h,s6h,s5m]=await Promise.all([fetchTimeseries(it.id,'1h'), fetchTimeseries(it.id,'6h'), fetchTimeseries(it.id,'5m')]);
     const arch=await archMerge(it.id,s1h);
     const pts=archToPoints(arch);
     const a=analyseHourly(pts.length>1?pts:s1h);
@@ -257,10 +299,20 @@ export async function runTrends(){
           '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmtP(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% · need ~'+fmtP(P.nowTax)+', have ~'+fmtP(P.nowSpread):'spread ~'+fmtP(P.nowSpread)+' < ~'+fmtP(P.nowTax)+' tax')+'</div></div>'+
           '<div class="sbox"><div class="sk">Trend</div><div class="sv '+tCls+'">'+tState+(volatile?' <span class="loss" title="price moving fast">⚡</span>':'')+'</div><div class="ss">'+tSub+'</div></div>';
     grid+='</div>';
+    const PT=patientTargets(s5m, it);
     let r='';
+    // regime-shift guard comes first — it governs whether the timing hints below can be trusted at all
+    if(P.regime && P.regime.ok && Math.abs(P.regime.driftPct)>=8){
+      r+='<b class="loss">⚠ Price regime shift</b> — the median has moved <b>'+(P.regime.driftPct>=0?'+':'')+P.regime.driftPct.toFixed(0)+'%</b> in the last 3 days vs the prior two weeks ('+fmtP(P.regime.priorMed)+' → '+fmtP(P.regime.recentMed)+'). The hour-of-day timing below blends two price levels, so treat those hints as unreliable — this may be a one-off move (an update or repricing), not a repeating cycle. ';
+    }
     if(volatile) r+='<b class="loss">⚡ Volatile</b> — this item is '+(gs.state==='up'?'rising':'falling')+' fast ('+(gs.divPct>=0?'+':'')+gs.divPct.toFixed(1)+'% vs guide), so the spread can move against you between buying and selling. Size down and don’t chase. ';
     if(prof) r+='Buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' right now.';
-    else r+='The live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so there’s <b class="loss">no profitable flip</b> right now — wait for the buy/sell gap to widen past ~'+fmtP(P.nowTax)+'.';
+    else r+='The live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so instant-flipping <b class="loss">doesn’t profit</b> right now.';
+    // patient pricing: shown whenever waiting for the range edges beats the instant spread (incl. turning an unprofitable instant spread positive)
+    if(PT.ok && PT.patientMargin>0 && PT.patientMargin>PT.fastMargin){
+      const more = PT.fastMargin>0 ? '<b>'+((PT.patientMargin/PT.fastMargin-1)*100).toFixed(0)+'% more</b> than the instant spread' : '<b>a profit where the instant spread has none</b>';
+      r+=' <b class="gold">Patient pricing:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b> (buy) and as high as <b>'+fmtP(PT.hiMax)+'</b> (sell). Buying near <b>'+fmtP(PT.patientBuy)+'</b> and selling near <b>'+fmtP(PT.patientSell)+'</b> would net <b class="gain">'+fmtP(PT.patientMargin)+'</b>/ea after tax — '+more+' — though fills near the range edges aren’t guaranteed and can take a while.';
+    }
     if(!P.flat){
       r+=' <b>Timing hint:</b> historically cheapest to buy around <span class="hl">'+winStr(P.buyWin)+'</span> and richest to sell around <span class="hl">'+winStr(P.sellWin)+'</span>';
       if(P.weBuyDiscPct!=null && P.weBuyDiscPct>0.4) r+=', and weekends run ~<b>'+P.weBuyDiscPct.toFixed(1)+'%</b> cheaper';
