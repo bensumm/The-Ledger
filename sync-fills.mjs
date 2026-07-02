@@ -231,25 +231,30 @@ function main() {
     .sort((a, b) => a.ts - b.ts);
   if (merged.length > MAX_EVENTS) merged = merged.slice(-MAX_EVENTS);
 
+  // Compare against prior *content* (events only), not the full JSON blob —
+  // generatedAt always differs run-to-run, so comparing the whole blob would
+  // make every run look "changed" and commit even with zero new trade
+  // events. Both `merged` and `prior` are independently cutoff-filtered and
+  // sorted the same way, so a real diff here means genuinely new/aged-out
+  // events, not just a fresh timestamp.
+  const eventsChanged = JSON.stringify(merged) !== JSON.stringify(prior);
+  console.log(`${files.length} log file(s), ${rawLines} lines, ${parsed} parsed, ${merged.length} events after merge${eventsChanged ? '' : ' (no change)'}`);
+  if (DRY) {
+    for (const e of merged) {
+      console.log(`  ${new Date(e.ts * 1000).toISOString()} slot${e.slot} ${e.type} ${e.state} item=${e.itemId} price=${e.price} filled=${e.filled}/${e.qty} spent=${e.spent}`);
+    }
+    if (eventsChanged) console.log('[dry] would write + push');
+    return;
+  }
+  if (!eventsChanged) return;
+
   const out = {
     app: 'the-coffer-fills',
     version: 1,
     generatedAt: new Date().toISOString(),
     events: merged
   };
-  const json = JSON.stringify(out);
-  const changed = !existsSync(fillsPath) || readFileSync(fillsPath, 'utf8') !== json;
-  console.log(`${files.length} log file(s), ${rawLines} lines, ${parsed} parsed, ${merged.length} events after merge${changed ? '' : ' (no change)'}`);
-  if (DRY) {
-    for (const e of merged) {
-      console.log(`  ${new Date(e.ts * 1000).toISOString()} slot${e.slot} ${e.type} ${e.state} item=${e.itemId} price=${e.price} filled=${e.filled}/${e.qty} spent=${e.spent}`);
-    }
-    if (changed) console.log('[dry] would write + push');
-    return;
-  }
-  if (!changed) return;
-
-  writeFileSync(fillsPath, json);
+  writeFileSync(fillsPath, JSON.stringify(out));
 
   // commit + push
   //
