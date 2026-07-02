@@ -142,16 +142,21 @@ export function regimeDrift(points){
    percentiles keep the targets inside where it has actually traded (not the single
    noisiest print), and clamps so a patient target never sits worse than the live
    quote. Returns ok:false when there isn't enough recent data to size it. */
-export function patientTargets(series, it){
+export function patientTargets(series, it, falling){
   if(!series || !series.length || !it || !it.low || !it.high) return {ok:false};
   const recent=series.slice(-24);   // ~2h at 5m steps
   const los=recent.map(p=>p.avgLowPrice).filter(Boolean).sort((a,b)=>a-b);
   const his=recent.map(p=>p.avgHighPrice).filter(Boolean).sort((a,b)=>a-b);
   if(los.length<4 || his.length<4) return {ok:false};
   const pctl=(s,p)=>s[Math.min(s.length-1,Math.max(0,Math.round((s.length-1)*p)))];
-  const patientBuy=Math.min(it.low, pctl(los,0.2));    // never suggest paying MORE than the instant buy
-  const patientSell=Math.max(it.high, pctl(his,0.8));  // never suggest asking LESS than the instant sell
-  return {ok:true, patientBuy, patientSell,
+  // Falling items: don't sit above a dropping market. Bid MORE aggressively low (the price is
+  // coming to you) and price the sell to clear at/below the instabuy, not at a stale recent high.
+  // Steady/rising: the original patient logic — wait at the wider range edges for a fatter margin.
+  const patientBuy = falling ? Math.min(it.low, pctl(los,0.1))    // more aggressive low bid
+                             : Math.min(it.low, pctl(los,0.2));   // never pay MORE than the instant buy
+  const patientSell = falling ? Math.min(it.high, pctl(his,0.5))  // clear at/below the instabuy
+                              : Math.max(it.high, pctl(his,0.8)); // never ask LESS than the instant sell
+  return {ok:true, falling:!!falling, patientBuy, patientSell,
     patientMargin:netMargin(patientBuy,patientSell), fastMargin:netMargin(it.low,it.high),
     loMin:los[0], hiMax:his[his.length-1]};
 }
@@ -266,15 +271,18 @@ export function renderPositionCard(t, it, s5m, s6h, gser){
   const patientSell=PT.ok?PT.patientSell:sellNow, hiMax=PT.ok?PT.hiMax:sellNow;
   const R=refineTrend(it, gser||[]);
   const tr=classifyPositionTrend(s6h, R);
-  const patientUpside=patientSell>sellNow*1.01;        // is a meaningfully higher target still reachable?
   let verdict, cls, listAt, why;
-  if(canBE){
-    if(tr.falling && patientUpside){ verdict='HOLD — cut if slow'; cls='gold'; listAt=patientSell; why='In profit and the recent 2h range still reaches '+fmtP(patientSell)+', so list there to capture more — but it’s falling fast, so drop to the instabuy ('+fmtP(sellNow)+') if it hasn’t filled this session. Don’t hold out for a recovery.'; }
-    else if(tr.falling){ verdict='ADJUST — sell now'; cls='amber'; listAt=sellNow; why='In profit but falling fast with no room above the current bid — lock it in at the instabuy before the range steps down.'; }
-    else { verdict='HOLD'; cls='gain'; listAt=patientSell; why='In profit and steady — list at the patient target to capture more; fills near the top of the recent 2h range.'; }
+  if(tr.falling){
+    // Falling: price to clear at the instabuy regardless of profit. Never list above a dropping
+    // market — the recent highs are stale, and every hour spent above the bid the range steps
+    // down toward you anyway. In profit → take it; underwater → take the small loss now.
+    listAt=sellNow;
+    if(canBE){ verdict='SELL — price to clear'; cls='amber'; why='In profit but falling — don’t list above a dropping market. Price at the instabuy ('+fmtP(sellNow)+') to sell into current demand; if a big stack isn’t clearing, step down with the market rather than waiting above it. Don’t hold out for a recovery.'; }
+    else { verdict='CUT'; cls='loss'; why='Underwater and falling — take the small loss now at the instabuy rather than risk a bigger one; don’t list above the market hoping for a bounce.'; }
+  } else if(canBE){
+    verdict='HOLD'; cls='gain'; listAt=patientSell; why='In profit and steady — list at the patient target to capture more; fills near the top of the recent 2h range.';
   } else {
-    if(tr.falling){ verdict='CUT'; cls='loss'; listAt=sellNow; why='Underwater and falling — take the small loss now rather than risk a bigger one.'; }
-    else { verdict='HOLD'; cls='gold'; listAt=breakeven; why='Underwater but flat — list at break-even and wait for the normal wobble up; no reason to realise a loss yet.'; }
+    verdict='HOLD'; cls='gold'; listAt=breakeven; why='Underwater but flat — list at break-even and wait for the normal wobble up; no reason to realise a loss yet.';
   }
   const netAt=listAt-tax(listAt), profAt=(netAt-buy)*qty;
   const fill=listAt<=sellNow?'fills ~instantly':(listAt<=hiMax?'within the recent 2h range — fills with patience':'above the recent 2h high — may sit');
@@ -358,7 +366,9 @@ export async function runTrends(){
           '<div class="sbox"><div class="sk">Profit now</div><div class="sv '+sgn(P.nowGross)+'">'+(prof?'+'+fmtP(P.nowGross):'none')+'</div><div class="ss">'+(prof?P.nowRoi.toFixed(1)+'% · need ~'+fmtP(P.nowTax)+', have ~'+fmtP(P.nowSpread):'spread ~'+fmtP(P.nowSpread)+' < ~'+fmtP(P.nowTax)+' tax')+'</div></div>'+
           '<div class="sbox"><div class="sk">Trend</div><div class="sv '+tCls+'">'+tState+(volatile?' <span class="loss" title="price moving fast">⚡</span>':'')+'</div><div class="ss">'+tSub+'</div></div>';
     grid+='</div>';
-    const PT=patientTargets(s5m, it);
+    // falling = point-in-time below guide OR a multi-day regime step down; drives buy-low/sell-quick pricing
+    const fallingNow = gs.state==='down' || (P.regime && P.regime.ok && P.regime.driftPct<=-5);
+    const PT=patientTargets(s5m, it, fallingNow);
     let r='';
     // regime-shift guard comes first — it governs whether the timing hints below can be trusted at all
     if(P.regime && P.regime.ok && Math.abs(P.regime.driftPct)>=8){
@@ -367,8 +377,11 @@ export async function runTrends(){
     if(volatile) r+='<b class="loss">⚡ Volatile</b> — this item is '+(gs.state==='up'?'rising':'falling')+' fast ('+(gs.divPct>=0?'+':'')+gs.divPct.toFixed(1)+'% vs guide), so the spread can move against you between buying and selling. Size down and don’t chase. ';
     if(prof) r+='Buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' right now.';
     else r+='The live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so instant-flipping <b class="loss">doesn’t profit</b> right now.';
-    // patient pricing: shown whenever waiting for the range edges beats the instant spread (incl. turning an unprofitable instant spread positive)
-    if(PT.ok && PT.patientMargin>0 && PT.patientMargin>PT.fastMargin){
+    // pricing guidance: falling → buy-low/sell-quick; steady/rising → patient wider-margin edges
+    if(PT.ok && PT.falling){
+      r+=' <b class="gold">Falling — price to clear:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b>. With the trend down, bid aggressively low near <b>'+fmtP(PT.patientBuy)+'</b> (let the price come to you) and price any sell to clear at/below the instabuy, near <b>'+fmtP(PT.patientSell)+'</b> — don’t list above a dropping market waiting for a recovery.';
+    } else if(PT.ok && PT.patientMargin>0 && PT.patientMargin>PT.fastMargin){
+      // patient pricing: shown whenever waiting for the range edges beats the instant spread (incl. turning an unprofitable instant spread positive)
       const more = PT.fastMargin>0 ? '<b>'+((PT.patientMargin/PT.fastMargin-1)*100).toFixed(0)+'% more</b> than the instant spread' : '<b>a profit where the instant spread has none</b>';
       r+=' <b class="gold">Patient pricing:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b> (buy) and as high as <b>'+fmtP(PT.hiMax)+'</b> (sell). Buying near <b>'+fmtP(PT.patientBuy)+'</b> and selling near <b>'+fmtP(PT.patientSell)+'</b> would net <b class="gain">'+fmtP(PT.patientMargin)+'</b>/ea after tax — '+more+' — though fills near the range edges aren’t guaranteed and can take a while.';
     }

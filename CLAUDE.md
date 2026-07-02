@@ -42,8 +42,12 @@ The per-item Trends view is organized in decision-priority tiers (rendered in
 `js/trends.js` `runTrends`), deliberately — don't scatter new info back into a flat
 list:
 1. **Suggested plan card** (`#trSuggest`) — instant buy/sell, profit-now, trend box,
-   and warnings. Includes **patient pricing** (`patientTargets()`: sizes a
-   wider-margin offer off the recent ~2h 5m range, 20th/80th percentiles) and a
+   and warnings. Includes **trend-aware pricing** (`patientTargets(series, it,
+   falling)`): steady/rising items get a wider-margin patient offer off the recent
+   ~2h 5m range (20th/80th percentiles); **falling** items instead get buy-low/
+   sell-quick targets — a more aggressive low bid (10th pctl) and a sell priced to
+   *clear* at/below the instabuy (min(instabuy, 50th pctl)), never above a dropping
+   market (0.20.0). The plan card branches its copy on `PT.falling`. And a
    **regime-shift warning** (`regimeDrift()`: last-3d median vs prior ~2wk; fires at
    ≥8%). No σ jargon here — kept plain.
 2. **"Why this trend?"** (`#trWhy`, collapsible) — plain-language guide-divergence
@@ -74,9 +78,16 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   `reviewPositions()` in `js/trends.js` fetches live 5m/6h/guide-history per open
   position and renders a **HOLD / ADJUST / CUT** verdict + concrete "list at X" price.
   Pivot = break-even (`ceil(buy/0.98)`) × trend (falling/flat/rising from regimeDrift +
-  refineTrend momentum). Key nuance baked in: in-profit + falling + a reachable higher
-  patient target → "HOLD — cut if slow" (list high, drop to instabuy if unfilled),
-  *not* an immediate market-sell — the rigid matrix's weak spot, found in testing.
+  refineTrend momentum).
+- **Falling items → price to clear** (0.20.0): Ben's rule — for a falling item the
+  suggested prices must reflect the fall: buy low aggressively, price to sell quickly.
+  This **superseded** the 0.19.0 "HOLD — cut if slow / list high above market" nuance,
+  which misfired: in a decline the recent highs are *always* above the current price, so
+  the old `patientUpside` guard was ~always true and told you to list above a dropping
+  market (the Dragon nails case, found live). Now `renderPositionCard` collapses the
+  falling branches → always list at the instabuy (in profit → SELL to clear; underwater →
+  CUT), never above it. `patientTargets` is trend-aware (see Trends tab §1) and the plan
+  card's pricing copy branches on `PT.falling`.
 
 ## Open followups (not yet built)
 - **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
