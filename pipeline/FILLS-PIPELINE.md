@@ -144,6 +144,37 @@ Design decisions, deliberate — don't undo casually:
   for offers completing while the client was open — offline fills all "arrive" at next
   login. Flag/segment rather than trust blindly.
 
+### 5.1 positions.json (derived — v1)
+
+`sync-fills.mjs` emits a second artifact next to `fills.json`, at the repo root:
+the reconstructed trade/position view the app auto-populates its Ledger from. It's
+regenerated from the full merged event history every run (idempotent), written +
+committed + pushed under the *same* change-gate as `fills.json` (`git add fills.json
+positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**.
+
+```json
+{
+  "app": "the-coffer-positions", "version": 1,
+  "generatedAt": "2026-07-02T08:16:01.586Z",
+  "closed":   [{ "itemId":31406, "qty":61, "buyEach":13540, "sellEach":14250, "tax":17385, "realised":25925, "buyTs":..., "sellTs":... }],
+  "open":     [{ "itemId":31406, "qty":1528, "buyEach":13540, "buyTs":... }],
+  "unmatched":[{ "itemId":11237, "qty":33, "sellEach":3945, "tax":..., "sellTs":... }]
+}
+```
+
+Reconstruction (in `sync-fills.mjs`), deliberate — don't undo casually:
+- **`collapseOffers()`** reduces the per-transition stream to one row per *offer*
+  (contiguous `slot+item+type` run), taking the final cumulative `filled`/`spent`.
+  Executed price-each = `spent/filled` (gross), never the listed `price` (see §5).
+- **`matchTrades()`** FIFO-matches buy fills against sell fills per item → `closed`
+  (with 2% tax applied to the sell exec price, `realised` = after-tax profit) and
+  `open` (unsold inventory at real avg cost; same item+price lots merged).
+- **`unmatched`** = sells with no logged buy lot (the log started mid-stream, so the
+  buy predates it). Cost basis is unknowable ⇒ **no realized profit is invented** for
+  these; the app shows them as informational only, never in the Coffer total.
+- Cost basis is **FIFO**; itemId→name resolution is left to the app (it has the
+  mapping), so `positions.json` stays name-free and stable across catalog changes.
+
 ## 6. The Coffer side (mobile-session work, or Claude Code once comfortable)
 
 Not yet built — planned as the next tool feature, roughly in order:

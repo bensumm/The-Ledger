@@ -33,7 +33,8 @@ import { createHash } from 'node:crypto';
 /* ======================= CONFIG — edit these ======================= */
 const LOG_DIR   = join(homedir(), '.runelite', 'exchange-logger'); // plugin output
 const REPO_DIR  = 'C:\\dev\\The-Ledger';                            // your git clone
-const FILLS_REL = 'fills.json';                                    // output, repo-relative
+const FILLS_REL = 'fills.json';                                    // raw event stream, repo-relative
+const POSITIONS_REL = 'positions.json';                            // reconstructed trades/positions (app auto-populates Ledger from this)
 const MAX_AGE_DAYS = 180;   // drop events older than this
 const MAX_EVENTS   = 20000; // hard cap on stored events
 const GIT_PUSH  = true;     // set false to stage commits without pushing
@@ -165,6 +166,74 @@ function buildEvents(rawLinesParsed) {
 }
 /* ------------------------- end adapter ---------------------------- */
 
+/* =================== position/trade reconstruction ==================
+ * fills.json is a per-transition stream. To drive the app's Ledger we
+ * reduce it twice:
+ *   collapseOffers() — one row per OFFER (a contiguous slot+item+type run),
+ *     carrying the final cumulative filled/spent. `spent` is GROSS (pre-tax,
+ *     verified in FILLS-PIPELINE.md §5), so executed price-each = spent/filled.
+ *   matchTrades() — FIFO-match buy fills against sell fills per item →
+ *     closed trades (real prices, 2% tax, realized P/L after tax) + open lots
+ *     (unsold inventory at real avg cost).
+ * A sell with no matching buy lot means the buy predates logging (the log
+ * started mid-stream) — we can't know its cost basis, so it goes to
+ * `unmatched` (informational only), never a fabricated profit.
+ * ================================================================== */
+const GE_TAX = each => Math.min(Math.floor(each * 0.02), 5_000_000); // 2% floored/item, capped 5m
+
+function collapseOffers(events) {
+  const cur = new Map(); // slot -> in-progress offer
+  const offers = [];
+  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+    let o = cur.get(e.slot);
+    if (o && (o.done || o.itemId !== e.itemId || o.type !== e.type)) { offers.push(o); o = null; cur.delete(e.slot); }
+    if (!o) { o = { slot: e.slot, itemId: e.itemId, type: e.type, price: e.price, qty: e.qty, tsOpen: e.ts, tsClose: e.ts, filled: 0, spent: 0, state: e.state, done: false }; cur.set(e.slot, o); }
+    o.tsClose = e.ts; o.state = e.state;
+    o.filled = Math.max(o.filled, e.filled || 0); o.spent = Math.max(o.spent, e.spent || 0); // cumulative -> final
+    if (e.price) o.price = e.price; if (e.qty) o.qty = e.qty;
+    if (e.state === 'complete' || e.state === 'cancelled') o.done = true;
+  }
+  for (const o of cur.values()) offers.push(o);
+  return offers.sort((a, b) => a.tsOpen - b.tsOpen);
+}
+
+function matchTrades(offers) {
+  const filled = offers.filter(o => o.filled > 0).sort((a, b) => a.tsOpen - b.tsOpen);
+  const lots = new Map(); // itemId -> [{qty, each, ts}] FIFO queue of open buy lots
+  const closed = [], unmatched = [];
+  for (const o of filled) {
+    const each = o.spent / o.filled; // actual executed gross price per item
+    if (o.type === 'buy') {
+      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen });
+    } else { // sell — consume buy lots FIFO
+      let remain = o.filled; const q = lots.get(o.itemId) || [];
+      while (remain > 0 && q.length) {
+        const lot = q[0], take = Math.min(remain, lot.qty), taxEach = GE_TAX(each);
+        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: Math.round(each),
+          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), buyTs: lot.ts, sellTs: o.tsOpen });
+        lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
+      }
+      if (remain > 0) unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
+    }
+  }
+  // remaining buy lots = open inventory; merge same item+price lots into one position (keep earliest buyTs)
+  const openMap = new Map();
+  for (const [itemId, q] of lots) for (const lot of q) {
+    if (lot.qty <= 0) continue;
+    const each = Math.round(lot.each), k = itemId + ':' + each, m = openMap.get(k);
+    if (m) { m.qty += lot.qty; m.buyTs = Math.min(m.buyTs, lot.ts); }
+    else openMap.set(k, { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
+  }
+  const open = [...openMap.values()].sort((a, b) => a.buyTs - b.buyTs);
+  return { closed, open, unmatched };
+}
+
+function reconstruct(events) {
+  const { closed, open, unmatched } = matchTrades(collapseOffers(events));
+  return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched };
+}
+function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched }); } // ignore generatedAt
+
 function eventId(e) {
   return createHash('sha1')
     .update([e.ts, e.slot, e.itemId, e.type, e.state, e.filled, e.spent].join('|'))
@@ -238,23 +307,35 @@ function main() {
   // sorted the same way, so a real diff here means genuinely new/aged-out
   // events, not just a fresh timestamp.
   const eventsChanged = JSON.stringify(merged) !== JSON.stringify(prior);
+
+  // reconstruct trades/positions from the full merged history
+  const positionsPath = join(REPO_DIR, POSITIONS_REL);
+  const pos = reconstruct(merged);
+  let priorPosSig = null;
+  if (existsSync(positionsPath)) { try { priorPosSig = positionsSig(JSON.parse(readFileSync(positionsPath, 'utf8'))); } catch { /* rebuild */ } }
+  const positionsChanged = positionsSig(pos) !== priorPosSig;
+  const changed = eventsChanged || positionsChanged;
+  const realisedTotal = pos.closed.reduce((s, t) => s + t.realised, 0);
+
   console.log(`${files.length} log file(s), ${rawLines} lines, ${parsed} parsed, ${merged.length} events after merge${eventsChanged ? '' : ' (no change)'}`);
+  console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s)${positionsChanged ? '' : ' (no change)'}`);
   if (DRY) {
     for (const e of merged) {
       console.log(`  ${new Date(e.ts * 1000).toISOString()} slot${e.slot} ${e.type} ${e.state} item=${e.itemId} price=${e.price} filled=${e.filled}/${e.qty} spent=${e.spent}`);
     }
-    if (eventsChanged) console.log('[dry] would write + push');
+    console.log('--- reconstructed ---');
+    for (const t of pos.closed) console.log(`  CLOSED item=${t.itemId} qty=${t.qty} buy=${t.buyEach} sell=${t.sellEach} tax=${t.tax} realised=${t.realised >= 0 ? '+' : ''}${t.realised}`);
+    for (const o of pos.open) console.log(`  OPEN   item=${o.itemId} qty=${o.qty} @ ${o.buyEach}`);
+    for (const u of pos.unmatched) console.log(`  UNMATCHED SELL item=${u.itemId} qty=${u.qty} @ ${u.sellEach} (no logged buy — pre-log inventory)`);
+    if (changed) console.log('[dry] would write + push');
     return;
   }
-  if (!eventsChanged) return;
+  if (!changed) return;
 
-  const out = {
-    app: 'the-coffer-fills',
-    version: 1,
-    generatedAt: new Date().toISOString(),
-    events: merged
-  };
-  writeFileSync(fillsPath, JSON.stringify(out));
+  if (eventsChanged) writeFileSync(fillsPath, JSON.stringify({
+    app: 'the-coffer-fills', version: 1, generatedAt: new Date().toISOString(), events: merged
+  }));
+  if (positionsChanged) writeFileSync(positionsPath, JSON.stringify(pos));
 
   // commit + push
   //
@@ -267,8 +348,8 @@ function main() {
   // (no --auto) never amend — every manual run is its own checkpoint.
   const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
   try {
-    git(`add ${FILLS_REL}`);
-    const status = git('status --porcelain ' + FILLS_REL);
+    git(`add ${FILLS_REL} ${POSITIONS_REL}`);
+    const status = git(`status --porcelain ${FILLS_REL} ${POSITIONS_REL}`);
     if (!status) { console.log('Nothing to commit.'); return; }
 
     const nowIso = new Date().toISOString().slice(0, 16) + 'Z';

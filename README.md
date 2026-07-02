@@ -44,7 +44,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (Finder/Watchlist/Signals/Ledger/Coffer rendering), `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
-- `fills.json` — real-trade data synced from RuneLite, fetched same-origin by the app
+- `fills.json` — raw real-trade event stream synced from RuneLite, fetched same-origin
+- `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
+  trades + open positions); the app auto-populates its Ledger/Coffer from it
 - `pipeline/` — RuneLite fill-data pipeline (sync script, wrapper scripts, design
   doc); not served by Pages, not part of the app. See `pipeline/FILLS-PIPELINE.md`.
 

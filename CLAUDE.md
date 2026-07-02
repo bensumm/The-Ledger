@@ -28,9 +28,14 @@ push to `main`).
   in `pipeline/` (kept separate from the deployed app root): full design doc
   `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/sync-fills.mjs` (runs on Ben's
   Windows machine via a Task Scheduler job `CofferFillsSync`, reads
-  `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` at the repo
-  root — `fills.json` itself stays at root since the app fetches it same-origin).
-  Read `pipeline/FILLS-PIPELINE.md` top to bottom before touching either.
+  `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` **and**
+  `positions.json` at the repo root — both stay at root since the app fetches them
+  same-origin). `positions.json` is the derived view (`collapseOffers` +
+  FIFO `matchTrades`): `closed` trades w/ after-tax realised P/L, `open` inventory at
+  real avg cost, and `unmatched` sells (pre-log inventory, no fabricated profit). The
+  app auto-populates its Ledger/Coffer from it. Read `pipeline/FILLS-PIPELINE.md` §5.1
+  before touching the reconstruction. Read the whole doc top to bottom before touching
+  either script path.
 
 ## Trends tab structure (as of 0.16.0)
 The per-item Trends view is organized in decision-priority tiers (rendered in
