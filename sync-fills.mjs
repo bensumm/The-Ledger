@@ -7,7 +7,14 @@
  * repo that GitHub Pages serves. The Coffer fetches fills.json same-origin.
  *
  * Usage:
- *   node sync-fills.mjs            normal run (parse -> merge -> push)
+ *   node sync-fills.mjs            manual run: parse -> merge -> new commit -> push
+ *   node sync-fills.mjs --auto     scheduled run: same, but amends the previous
+ *                                  commit (force-push) if it was itself an --auto
+ *                                  commit, so Task Scheduler doesn't pile up a new
+ *                                  commit every 15-30 min forever. Use this from
+ *                                  Task Scheduler; use the no-flag form for one-off
+ *                                  manual/Claude-driven syncs, which stay as their
+ *                                  own distinct checkpoint commits.
  *   node sync-fills.mjs --probe    print first raw lines of each log file
  *                                  (use this ONCE to verify field mapping)
  *   node sync-fills.mjs --dry      parse + merge + report, no git push
@@ -17,7 +24,7 @@
  * Personal trade volume is small; simplicity beats incremental cleverness.
  */
 
-import { readFileSync, readdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -33,7 +40,8 @@ const GIT_PUSH  = true;     // set false to stage commits without pushing
 /* =================================================================== */
 
 const args = new Set(process.argv.slice(2));
-const PROBE = args.has('--probe'), DRY = args.has('--dry');
+const PROBE = args.has('--probe'), DRY = args.has('--dry'), AUTO = args.has('--auto');
+const AUTO_TRAILER = 'Auto-Fills-Sync: true'; // marks a commit as safe to amend-over on the next --auto run
 
 /* ---------------------------------------------------------------------
  * ADAPTER — verified against a real log (2026-07-01, one buy + one
@@ -244,14 +252,51 @@ function main() {
   writeFileSync(fillsPath, json);
 
   // commit + push
+  //
+  // --auto (Task Scheduler) runs collapse into a single rolling commit via
+  // --amend + --force-with-lease, instead of piling up a new commit every
+  // 15-30 min forever. This is only safe because we check the marker below:
+  // we only amend when HEAD is itself a prior auto-sync commit (identified
+  // by the AUTO_TRAILER footer), so a manual/Claude-driven commit always
+  // starts a fresh chain rather than getting silently absorbed. Manual runs
+  // (no --auto) never amend — every manual run is its own checkpoint.
   const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
   try {
     git(`add ${FILLS_REL}`);
     const status = git('status --porcelain ' + FILLS_REL);
     if (!status) { console.log('Nothing to commit.'); return; }
-    git(`commit -m "fills: sync ${new Date().toISOString().slice(0, 16)}Z (${merged.length} events)"`);
-    if (GIT_PUSH) { git('push'); console.log('Pushed.'); }
-    else console.log('Committed (push disabled).');
+
+    const nowIso = new Date().toISOString().slice(0, 16) + 'Z';
+    let amend = false, sinceIso = nowIso;
+    if (AUTO) {
+      let headMsg = '';
+      try { headMsg = git('log -1 --pretty=%B'); } catch { /* no commits yet */ }
+      const sinceMatch = headMsg.match(/Auto-Fills-Sync-Since:\s*(\S+)/);
+      if (headMsg.includes(AUTO_TRAILER) && sinceMatch) {
+        amend = true;
+        sinceIso = sinceMatch[1];
+      }
+    }
+
+    const summary = AUTO
+      ? `fills: auto-sync ${amend ? `${sinceIso}–${nowIso}` : nowIso} (${merged.length} events)`
+      : `fills: sync ${nowIso} (${merged.length} events)`;
+    const message = AUTO ? `${summary}\n\n${AUTO_TRAILER}\nAuto-Fills-Sync-Since: ${sinceIso}` : summary;
+
+    const tmpMsgFile = join(REPO_DIR, '.fills-commit-msg.tmp');
+    writeFileSync(tmpMsgFile, message);
+    try {
+      git(`commit ${amend ? '--amend' : ''} -F "${tmpMsgFile}"`);
+    } finally {
+      unlinkSync(tmpMsgFile);
+    }
+
+    if (GIT_PUSH) {
+      git(amend ? 'push --force-with-lease' : 'push');
+      console.log(amend ? 'Amended + force-pushed.' : 'Pushed.');
+    } else {
+      console.log(`Committed${amend ? ' (amended)' : ''} (push disabled).`);
+    }
   } catch (err) {
     console.error('Git step failed:', err.message);
     console.error('fills.json was written locally; resolve git manually or re-run.');
