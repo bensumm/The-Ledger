@@ -4,6 +4,12 @@
 > Claude Code instance on Ben's Windows machine. Read it top to bottom before touching
 > anything. The goal: close the feedback loop between The Coffer's trade suggestions
 > and real GE trades captured by RuneLite.
+>
+> **2026-07-01 update**: this file and the pipeline scripts now live in `pipeline/`
+> (moved out of the repo root to separate pipeline tooling from what GitHub Pages
+> deploys). `sync-fills.mjs` commands below assume you've `cd`'d into `pipeline/`
+> first. `fills.json` itself is unaffected — it still lives at the repo root, since
+> the app fetches it same-origin.
 
 ## 1. Project context (what The Coffer is)
 
@@ -195,8 +201,9 @@ Not yet built — planned as the next tool feature, roughly in order:
       sequence-aware pass (`buildEvents()`) instead of per-line parsing.
 - [x] Scheduled task running; fills.json updating in the repo and served by Pages —
       Task Scheduler job `CofferFillsSync`, every 20 min, runs
-      `wscript.exe run-fills-sync.vbs` (hidden wrapper around `run-fills-sync.cmd`,
-      which cd's into the repo and runs `node sync-fills.mjs --auto`). The `--auto`
+      `wscript.exe pipeline\run-fills-sync.vbs` (hidden wrapper around
+      `pipeline\run-fills-sync.cmd`, which cd's into `pipeline/` and runs
+      `node sync-fills.mjs --auto`). The `--auto`
       flag makes it amend its own previous commit + force-push instead of piling up
       commits (see the git section of `sync-fills.mjs`). An "at logon" trigger was
       attempted but is blocked (`Access is denied`) in this environment even at

@@ -10,10 +10,13 @@ context before assuming something is new.
   at bensumm.github.io/The-Ledger/. See `README.md` for the file inventory and deploy
   mechanics.
 - **Fill-data pipeline**: closes the loop between the tool's trade suggestions and
-  real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Full
-  design doc: `FILLS-PIPELINE.md`. Sync script: `sync-fills.mjs` (runs on Ben's
-  Windows machine, reads `.runelite/exchange-logger/*`, writes/commits/pushes
-  `fills.json`). Read `FILLS-PIPELINE.md` top to bottom before touching either.
+  real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Lives
+  in `pipeline/` (kept separate from the deployed app root): full design doc
+  `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/sync-fills.mjs` (runs on Ben's
+  Windows machine via a Task Scheduler job `CofferFillsSync`, reads
+  `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` at the repo
+  root — `fills.json` itself stays at root since the app fetches it same-origin).
+  Read `pipeline/FILLS-PIPELINE.md` top to bottom before touching either.
 
 ## Repo is public — no PII
 This repo is public on GitHub. Never commit account names, RSNs, real names, emails,
@@ -37,7 +40,7 @@ metadata, not a leak; the concern is content, not commit authorship.
 6. Before running `git commit`/`git push` (including via `sync-fills.mjs`), it's fine
    to just do it once the change has been described to Ben — but for the *pipeline
    script's own* automated commits (via Task Scheduler), no confirmation loop is
-   possible or expected; that's by design (§4.7 of FILLS-PIPELINE.md).
+   possible or expected; that's by design (§4.7 of `pipeline/FILLS-PIPELINE.md`).
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed; don't suggest
    installing anything else for git operations.
@@ -48,9 +51,16 @@ metadata, not a leak; the concern is content, not commit authorship.
   still reads the old value, ask Ben to restart the client before re-checking.
 - Exchange Logger plugin log: `~/.runelite/exchange-logger/exchange.log`, JSON mode.
   Real field names differ from the plugin's own naming conventions in the schema —
-  see the ADAPTER comment block at the top of `sync-fills.mjs` for the verified
-  mapping (`item`→itemId, `offer`→price, `max`→qty, `qty`→filled, `worth`→spent).
-  Don't re-guess field names; that mapping was verified against real log output.
+  see the ADAPTER comment block at the top of `pipeline/sync-fills.mjs` for the
+  verified mapping (`item`→itemId, `offer`→price, `max`→qty, `qty`→filled,
+  `worth`→spent). Don't re-guess field names; that mapping was verified against real
+  log output.
 - No distinct "cancelled" state exists in the log — a cancelled offer just goes
-  straight to `EMPTY`. `sync-fills.mjs`'s `buildEvents()` does a sequence-aware pass
-  to infer cancellation; don't revert to pure line-by-line parsing.
+  straight to `EMPTY`. `pipeline/sync-fills.mjs`'s `buildEvents()` does a
+  sequence-aware pass to infer cancellation; don't revert to pure line-by-line
+  parsing.
+- Task Scheduler job `CofferFillsSync` runs `wscript.exe
+  pipeline\run-fills-sync.vbs` every 20 min (hidden window). If any pipeline file
+  moves again, that task's registered path needs re-creating too — it's not
+  automatically kept in sync with the repo (`schtasks /Delete` + `/Create`, see
+  `pipeline/FILLS-PIPELINE.md` §4.7).

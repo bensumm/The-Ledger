@@ -10,6 +10,9 @@ Standalone OSRS Grand Exchange flipping tool, installable to the iOS home screen
 - `icon-180.png` — iOS home-screen icon (`apple-touch-icon`)
 - `icon-192.png`, `icon-512.png` — standard PWA icons
 - `icon-maskable-512.png` — maskable icon (safe-zone padded)
+- `fills.json` — real-trade data synced from RuneLite, fetched same-origin by the app
+- `pipeline/` — RuneLite fill-data pipeline tooling (not served by Pages, not part of
+  the app itself); see `pipeline/FILLS-PIPELINE.md`
 
 ## Deploy with GitHub Pages (all doable from iOS)
 1. Create a repo and add every file above to the **root**.
