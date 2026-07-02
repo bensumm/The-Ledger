@@ -145,6 +145,15 @@
   <!-- LEDGER -->
   <section class="panel hidden" id="panel-ledger">
     <div class="mini hidden" id="fillsMeta" style="margin-bottom:12px; color:var(--parch2)"></div>
+    <div class="ledgerctl">
+      <label class="lchk"><input type="checkbox" id="ledgerWatchOnly" checked /> Watchlist only</label>
+      <div class="lperiod" id="ledgerPeriod"><span class="lpk">P&amp;L by</span>
+        <button type="button" data-period="all" class="on">All</button>
+        <button type="button" data-period="day">Day</button>
+        <button type="button" data-period="week">Week</button>
+        <button type="button" data-period="month">Month</button>
+      </div>
+    </div>
     <div class="ledgerform">
       <div class="fld wide"><label>Item</label><input id="tItem" list="itemList" placeholder="e.g. Twisted bow" /><datalist id="itemList"></datalist></div>
       <div class="fld"><label>Quantity</label><input id="tQty" placeholder="1" /></div>
@@ -154,13 +163,14 @@
     <div class="sectlabel">Open positions <button id="reviewPos" class="ghostbtn sm" style="margin-left:8px">Review pricing</button></div>
     <div id="posReview" class="hidden" style="margin-bottom:14px"></div>
     <div class="tablewrap"><table>
-      <thead><tr><th class="left">Item</th><th>Qty</th><th>Bought @</th><th>Sell now</th><th>Unrealised</th><th></th></tr></thead>
+      <thead><tr><th class="left">Item</th><th>Qty</th><th>Avg buy</th><th>Sell now</th><th>Unrealised</th><th></th></tr></thead>
       <tbody id="openBody"></tbody>
     </table></div>
     <div id="openEmpty" class="empty hidden" style="border:1px solid var(--line);border-radius:12px"></div>
     <div class="sectlabel">Closed flips</div>
+    <div id="periodStrip" class="periodstrip hidden"></div>
     <div class="tablewrap"><table>
-      <thead><tr><th class="left">Item</th><th>Qty</th><th>Bought @</th><th>Sold @</th><th>Tax</th><th>Realised</th><th></th></tr></thead>
+      <thead><tr><th class="left">Item</th><th>Qty</th><th>Avg buy</th><th>Avg sold</th><th>Tax</th><th>Realised</th><th></th></tr></thead>
       <tbody id="closedBody"></tbody>
     </table></div>
     <div id="closedEmpty" class="empty hidden" style="border:1px solid var(--line);border-radius:12px"></div>

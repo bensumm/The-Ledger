@@ -189,28 +189,90 @@ export function renderFillsMeta(){
     h+=' <span class="loss">'+un.length+' sell'+(un.length===1?'':'s')+' had no logged buy</span> (bought before logging started, so no cost basis — excluded from realised): '+names+'.'; }
   el.innerHTML=h;
 }
+/* Ledger view controls: watchlist-only filter, per-item grouping w/ drill-in, period P&L */
+export function periodKey(ts, period){
+  const d=new Date(ts*1000);
+  if(period==='month') return {key:d.getFullYear()+'-'+pad2(d.getMonth()+1), label:d.toLocaleString([], {month:'short'})+' '+d.getFullYear()};
+  if(period==='week'){ const m=new Date(d); m.setHours(0,0,0,0); m.setDate(m.getDate()-((m.getDay()+6)%7)); // back to Monday
+    return {key:'w'+m.getFullYear()+'-'+pad2(m.getMonth()+1)+'-'+pad2(m.getDate()), label:'wk '+pad2(m.getMonth()+1)+'/'+pad2(m.getDate())}; }
+  return {key:d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()), label:pad2(d.getMonth()+1)+'/'+pad2(d.getDate())}; // day
+}
+function ledgerKeep(t){ return !STATE.ledgerWatchOnly || STATE.watchlist.includes(t.itemId); }
+function groupTrades(trades){
+  const m=new Map();
+  for(const t of trades){ const k=t.itemId!=null?('i'+t.itemId):('n'+t.name);
+    if(!m.has(k)) m.set(k,{key:k, itemId:t.itemId, name:t.name, rows:[]}); m.get(k).rows.push(t); }
+  return [...m.values()];
+}
+function openActions(t){ const isF=t.src==='fills'; return (isF?'':'<button class="act" data-close="'+t.tid+'">Mark sold</button> ')+'<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button>'; }
+function closedActions(t){ const isF=t.src==='fills'; return '<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button>'; }
+export async function setLedgerWatchOnly(v){ STATE.ledgerWatchOnly=v; await sSet('ledgerWatchOnly',v); renderLedger(); }
+export async function setLedgerPeriod(p){ STATE.ledgerPeriod=p; await sSet('ledgerPeriod',p); renderLedger(); }
+export function toggleLedgerGroup(key){ STATE.ledgerExpanded[key]=!STATE.ledgerExpanded[key]; renderLedger(); }
+
 export function renderLedger(){
-  const open=STATE.trades.filter(t=>t.sell===null), closed=STATE.trades.filter(t=>t.sell!==null);
+  const openAll=STATE.trades.filter(t=>t.sell===null), closedAll=STATE.trades.filter(t=>t.sell!==null);
+  const open=openAll.filter(ledgerKeep), closed=closedAll.filter(ledgerKeep);
   document.getElementById('ledgerBadge').textContent=open.length;
   renderFillsMeta();
+  const wc=document.getElementById('ledgerWatchOnly'); if(wc) wc.checked=STATE.ledgerWatchOnly;
+  document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.classList.toggle('on',b.dataset.period===STATE.ledgerPeriod));
   const ftag='<span class="srctag" title="auto-synced from RuneLite fills">fills</span>';
+  const caret=k=>'<span class="caret">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</span>';
+  const cnt=n=>' <span class="cnt">×'+n+'</span>';
+
+  // ---- OPEN (grouped by item; drill-in when >1 lot) ----
   const ob=document.getElementById('openBody'), oe=document.getElementById('openEmpty');
   if(!open.length){ ob.innerHTML=''; oe.classList.remove('hidden');
-    oe.innerHTML='<div class="empty"><div class="big">No open positions</div><div class="sm">Log a buy above to track a flip. Shorthand works — 1.79b, 450k.</div></div>';
+    oe.innerHTML='<div class="empty"><div class="big">No open positions'+(STATE.ledgerWatchOnly?' on your watchlist':'')+'</div><div class="sm">'+(STATE.ledgerWatchOnly&&openAll.length?'Turn off “Watchlist only” to see '+openAll.length+' hidden.':'Log a buy above to track a flip. Shorthand works — 1.79b, 450k.')+'</div></div>';
   }else{ oe.classList.add('hidden');
-    ob.innerHTML=open.map(t=>{ const it=t.itemId?resolveId(t.itemId):null, cur=it&&it.high?it.high:null; const un=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null; const isF=t.src==='fills';
-      return '<tr><td class="left"><span class="itemname">'+t.name+'</span>'+(isF?' '+ftag:'')+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td>'+
-        '<td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td>'+
-        '<td>'+(isF?'':'<button class="act" data-close="'+t.tid+'">Mark sold</button> ')+'<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button></td></tr>'; }).join('');
+    ob.innerHTML=groupTrades(open).map(g=>{
+      const it=g.itemId?resolveId(g.itemId):null, cur=it&&it.high?it.high:null;
+      const totQty=g.rows.reduce((s,t)=>s+t.qty,0), avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
+      const un=cur!==null?g.rows.reduce((s,t)=>s+((cur-tax(cur))-t.buy)*t.qty,0):null, multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
+      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):(g.rows[0].src==='fills'?' '+ftag:''))+'</td>'+
+        '<td class="num">'+totQty.toLocaleString()+'</td><td class="num">'+fmt(avgBuy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td>'+
+        '<td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td><td>'+(multi?'':openActions(g.rows[0]))+'</td></tr>';
+      let det=''; if(multi&&exp) det=g.rows.map(t=>{ const u=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
+        return '<tr class="detail"><td class="left sub">'+(t.src==='fills'?ftag+' ':'')+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(u!==null?sgn(u):'')+'">'+(u!==null?fmt(u):'—')+'</td><td>'+openActions(t)+'</td></tr>'; }).join('');
+      return head+det;
+    }).join('');
   }
+
+  // ---- period P&L strip (closed flips bucketed by SELL date — sidesteps border-straddle) ----
+  const strip=document.getElementById('periodStrip');
+  if(strip){
+    if(STATE.ledgerPeriod==='all' || !closed.length){ strip.classList.add('hidden'); strip.innerHTML=''; }
+    else{ const buckets=new Map();
+      for(const t of closed){ const {key,label}=periodKey(t.closed||t.opened||now(), STATE.ledgerPeriod);
+        if(!buckets.has(key)) buckets.set(key,{label,total:0,count:0}); const b=buckets.get(key); b.total+=realised(t); b.count++; }
+      const arr=[...buckets.entries()].sort((a,b)=>a[0]<b[0]?1:-1).slice(0,8).map(e=>e[1]);
+      strip.classList.remove('hidden');
+      strip.innerHTML='<div class="pstitle">Realised by '+STATE.ledgerPeriod+' <span class="mini">· attributed by sell date</span></div><div class="pscells">'+
+        arr.map(b=>'<div class="pcell"><div class="pl">'+b.label+'</div><div class="pv num '+sgn(b.total)+'">'+fmt(b.total)+'</div><div class="pc">'+b.count+' flip'+(b.count===1?'':'s')+'</div></div>').join('')+'</div>';
+    }
+  }
+
+  // ---- CLOSED (grouped by item; drill-in when >1 flip) ----
   const cb=document.getElementById('closedBody'), ce=document.getElementById('closedEmpty');
   if(!closed.length){ cb.innerHTML=''; ce.classList.remove('hidden');
-    ce.innerHTML='<div class="empty"><div class="big">No closed flips</div><div class="sm">Sold positions land here with realised profit after tax.</div></div>';
+    ce.innerHTML='<div class="empty"><div class="big">No closed flips'+(STATE.ledgerWatchOnly?' on your watchlist':'')+'</div><div class="sm">'+(STATE.ledgerWatchOnly&&closedAll.length?'Turn off “Watchlist only” to see '+closedAll.length+' hidden.':'Sold positions land here with realised profit after tax.')+'</div></div>';
   }else{ ce.classList.add('hidden');
-    cb.innerHTML=closed.slice().reverse().map(t=>{ const r=realised(t), tx=tax(t.sell)*t.qty; const isF=t.src==='fills';
-      return '<tr><td class="left"><span class="itemname">'+t.name+'</span>'+(isF?' '+ftag:'')+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td>'+
-        '<td class="num mini loss">'+fmt(tx)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td><button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button></td></tr>'; }).join('');
+    const groups=groupTrades(closed).map(g=>{ const totQty=g.rows.reduce((s,t)=>s+t.qty,0);
+      g.totQty=totQty; g.avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty); g.avgSell=Math.round(g.rows.reduce((s,t)=>s+t.sell*t.qty,0)/totQty);
+      g.totTax=g.rows.reduce((s,t)=>s+tax(t.sell)*t.qty,0); g.totReal=g.rows.reduce((s,t)=>s+realised(t),0); g.last=Math.max(...g.rows.map(t=>t.closed||0)); return g;
+    }).sort((a,b)=>b.last-a.last);
+    cb.innerHTML=groups.map(g=>{ const multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
+      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):'')+(g.rows.some(t=>t.src==='fills')?' '+ftag:'')+'</td>'+
+        '<td class="num">'+g.totQty.toLocaleString()+'</td><td class="num">'+fmt(g.avgBuy)+'</td><td class="num">'+fmt(g.avgSell)+'</td>'+
+        '<td class="num mini loss">'+fmt(g.totTax)+'</td><td class="num '+sgn(g.totReal)+'">'+fmt(g.totReal)+'</td><td>'+(multi?'':closedActions(g.rows[0]))+'</td></tr>';
+      let det=''; if(multi&&exp) det=g.rows.slice().sort((a,b)=>(b.closed||0)-(a.closed||0)).map(t=>{ const r=realised(t), d=new Date((t.closed||0)*1000);
+        const when=t.closed?pad2(d.getMonth()+1)+'/'+pad2(d.getDate()):'—';
+        return '<tr class="detail"><td class="left sub">'+when+' · '+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'→'+fmt(t.sell)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td><td class="num mini loss">'+fmt(tax(t.sell)*t.qty)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td>'+closedActions(t)+'</td></tr>'; }).join('');
+      return head+det;
+    }).join('');
   }
+  document.querySelectorAll('#openBody [data-grp],#closedBody [data-grp]').forEach(el=>el.onclick=e=>{ if(e.target.closest('button')) return; toggleLedgerGroup(el.dataset.grp); });
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeTrade(b.dataset.close));
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delTrade(b.dataset.del));
 }

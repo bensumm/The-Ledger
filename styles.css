@@ -216,3 +216,26 @@
     .bankfield input{width:84px}
   }
 
+/* Ledger: controls + per-item grouping + period P&L (0.21.0) */
+.ledgerctl{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.lchk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--parch2);cursor:pointer}
+.lchk input{cursor:pointer}
+.lperiod{display:inline-flex;align-items:center;gap:4px}
+.lperiod .lpk{font-size:12px;color:var(--parch2);margin-right:4px}
+.lperiod button{background:transparent;border:1px solid var(--line);color:var(--parch2);border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer}
+.lperiod button.on{background:var(--gold);border-color:var(--gold);color:#1a1408;font-weight:700}
+tr.grp.clk{cursor:pointer}
+tr.grp.clk:hover{background:rgba(255,255,255,0.03)}
+.caret{display:inline-block;width:14px;color:var(--parch2);font-size:11px}
+.cnt{color:var(--parch2);font-size:12px;font-weight:600}
+tr.detail{background:rgba(0,0,0,0.15)}
+tr.detail td{color:var(--parch2);font-size:12px;border-top:none}
+td.left.sub{padding-left:22px}
+.periodstrip{margin:8px 0 12px}
+.pstitle{font-size:12px;color:var(--parch2);margin-bottom:6px}
+.pscells{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.pcell{flex:0 0 auto;min-width:92px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;text-align:right}
+.pcell .pl{font-size:11px;color:var(--parch2)}
+.pcell .pv{font-size:14px;font-weight:700}
+.pcell .pc{font-size:10px;color:var(--parch2)}
+

@@ -1,7 +1,7 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
-import { renderFinder, addTrade, renderCoffer, recompute } from './ui.js';
+import { renderFinder, addTrade, renderCoffer, recompute, setLedgerWatchOnly, setLedgerPeriod } from './ui.js';
 import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
 
@@ -28,6 +28,8 @@ document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;
 document.getElementById('reviewPos').onclick=reviewPositions;
+const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
+document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));
 export const bankI=document.getElementById('bankInput');
 bankI.onchange=async()=>{ const v=parseGp(bankI.value); if(!isNaN(v)){ STATE.bankroll=v; bankI.value=fmt(v); await sSet('bankroll',v); recompute(); } };
 export const slotsI=document.getElementById('slotsInput');
@@ -43,6 +45,8 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   const tr=await sGet('trades'); if(Array.isArray(tr)) STATE.trades=tr;
   const pn=await sGet('pinned'); if(Array.isArray(pn)) STATE.pinned=pn;
   const fh=await sGet('fillsHidden'); if(Array.isArray(fh)) STATE.fillsHidden=fh;
+  const lwo=await sGet('ledgerWatchOnly'); if(typeof lwo==='boolean') STATE.ledgerWatchOnly=lwo;
+  const lpd=await sGet('ledgerPeriod'); if(typeof lpd==='string') STATE.ledgerPeriod=lpd;
   const bk=await sGet('bankroll'); if(typeof bk==='number') STATE.bankroll=bk;
   const sl=await sGet('slots'); if(typeof sl==='number') STATE.slots=sl;
   const st=await sGet('strategy'); if(st&&STRAT[st]) STATE.strategy=st;
