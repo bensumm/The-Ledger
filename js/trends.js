@@ -264,28 +264,21 @@ export async function runTrends(){
     document.getElementById('trEmpty').classList.add('hidden');
     document.getElementById('trResult').classList.remove('hidden');
     renderTrendHead(it);
-    const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: price card only
-    ['trInsight','trCharts','trWkWrap'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
+    const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: plan card only
+    ['trWhy','trHistWrap','trTiming'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
     const hourLabels=Array.from({length:24},(_,i)=>pad2(i));
-    document.getElementById('trPrice').innerHTML=svgLine(a.hourPriceF,{labels:hourLabels,ticks:[0,6,12,18,23]});
-    document.getElementById('trPriceCap').innerHTML='Green = cheapest hour to buy · red = priciest to sell.';
-    document.getElementById('trVol').innerHTML=svgBars(a.hourVol,{labels:hourLabels,ticks:[0,6,12,18,23]});
     // seasonal plan (the reconciled buy/sell model)
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
     const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
-    // 3-month history (6h) with the live buy price as the reference line
+    // price history (6h) with the live buy price as the reference line — promoted context, right under the plan
     if(showAnalysis && b && b.trend.length>2){
       document.getElementById('trHistWrap').classList.remove('hidden');
       document.getElementById('trHist').innerHTML=svgLine(b.trend,{baseline:it.low, markExtremes:false});
-      document.getElementById('trHistCap').innerHTML='~'+b.days+' days at 6h steps · dashed line = live buy ('+fmtP(it.low)+').';
+      let hc='~'+b.days+' days at 6h steps · dashed line = live buy ('+fmtP(it.low)+').';
+      if(P.trendPct!=null && Math.abs(P.trendPct)>=2) hc+=' Over this window it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
+      document.getElementById('trHistCap').innerHTML=hc;
     } else { document.getElementById('trHistWrap').classList.add('hidden'); }
-    // weekday/weekend descriptive boxes
-    const weP=b?b.wePrice:a.wePrice, wdP=b?b.wdPrice:a.wdPrice, weV=b?b.weVol:a.weVol, wdV=b?b.wdVol:a.wdVol;
-    const pdiff=(weP!=null&&wdP)?(weP-wdP)/wdP*100:null;
-    document.getElementById('trWk').innerHTML=
-      '<div class="wkbox"><div class="lbl">Weekday</div><div class="b">'+fmt(wdP)+'</div><div class="s">avg price · '+fmt(wdV)+'/period volume</div></div>'+
-      '<div class="wkbox"><div class="lbl">Weekend</div><div class="b">'+fmt(weP)+'</div><div class="s">avg price · '+fmt(weV)+'/period volume'+(pdiff!=null?' · '+(pdiff>=0?'+':'')+pdiff.toFixed(1)+'%':'')+'</div></div>';
-    // ---- plan card: the live spread IS the plan (median targets removed); trend box + timing hint ----
+    // ---- plan card: the live spread IS the plan (median targets removed); trend box + warnings ----
     const prof=P.nowProfitable;
     const gs=coarseTrend(it);
     let tState='—', tCls='', tSub='no guide reference', volatile=false;
@@ -313,66 +306,79 @@ export async function runTrends(){
       const more = PT.fastMargin>0 ? '<b>'+((PT.patientMargin/PT.fastMargin-1)*100).toFixed(0)+'% more</b> than the instant spread' : '<b>a profit where the instant spread has none</b>';
       r+=' <b class="gold">Patient pricing:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b> (buy) and as high as <b>'+fmtP(PT.hiMax)+'</b> (sell). Buying near <b>'+fmtP(PT.patientBuy)+'</b> and selling near <b>'+fmtP(PT.patientSell)+'</b> would net <b class="gain">'+fmtP(PT.patientMargin)+'</b>/ea after tax — '+more+' — though fills near the range edges aren’t guaranteed and can take a while.';
     }
-    if(!P.flat){
-      r+=' <b>Timing hint:</b> historically cheapest to buy around <span class="hl">'+winStr(P.buyWin)+'</span> and richest to sell around <span class="hl">'+winStr(P.sellWin)+'</span>';
-      if(P.weBuyDiscPct!=null && P.weBuyDiscPct>0.4) r+=', and weekends run ~<b>'+P.weBuyDiscPct.toFixed(1)+'%</b> cheaper';
-      r+=' — a scheduling edge, not a price target.';
-    }
-    if(P.trendPct!=null && Math.abs(P.trendPct)>=2) r+=' Over ~3 months it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
-    r+=' <span class="ccap">Buy/sell are live prices; timing shape from <b>'+P.archDays+'d</b> of hourly data (confidence <b>'+P.conf+'</b>); trend from guide divergence. Not guarantees.</span>';
+    r+=' <span class="ccap">Buy/sell are live prices; trend from guide divergence. Timing detail below. Not guarantees.</span>';
     document.getElementById('trSuggest').innerHTML=grid+'<div class="sreason">'+r+'</div>';
-    document.getElementById('trInsight').innerHTML='Deepest liquidity around <span class="hl">'+fmtHour(a.volPeak)+'</span> — the easiest window to fill larger orders quickly.';
-    if(!showAnalysis){ document.getElementById('trGuide').style.display='none'; }
-    else{
-    // official guide divergence + momentum (refined: z-scores vs guide and vs own mean)
-    const gEl=document.getElementById('trGuide');
-    const gp=(STATE.GUIDE[it.id]&&STATE.GUIDE[it.id].price)||null;
-    if(gp){
-      const mid=(it.low+it.high)/2;
-      let gs=null;
-      try{ gs=await fetchGuideSeries(it.id); logEvent('info','guide','guide history ok for '+it.name+' ('+gs.length+' pts) — weirdgloop reachable'); }
-      catch(e){ logEvent('info','guide','history fetch failed for '+it.id); }
-      const R=refineTrend(it, gs||[]);
-      const STATE_TXT={
-        'healthy':'<b class="gold">healthy</b> — live spread brackets the guide, mean-reverting',
-        'down-confirmed':'<b class="loss">confirmed downtrend</b> — live sits '+(R.ok?Math.abs(R.zGuide).toFixed(1):'')+'σ under the guide <i>and</i> guide momentum is negative: a falling knife, not a dip',
-        'reversion':'<b class="amber">dislocated low</b> — live is well under the guide but momentum has stopped falling: a possible reversion buy, not a confirmed trend',
-        'up':'<b class="gain">uptrend</b> — live trades above the official price' };
-      let body2;
-      if(R.ok){
-        const mlist=[]; if(R.m7!=null) mlist.push((R.m7>=0?'+':'')+R.m7.toFixed(1)+'%/7d'); if(R.m30!=null) mlist.push((R.m30>=0?'+':'')+R.m30.toFixed(1)+'%/30d');
-        body2='<b>vs official guide.</b> Guide <span class="hl">'+fmt(gp)+'</span> · live mid <span class="hl">'+fmt(mid)+'</span> ('+(R.divPct>=0?'+':'')+R.divPct.toFixed(1)+'%). '+
-          'Dislocation <b class="'+(R.zGuide<0?'loss':'gain')+'">'+(R.zGuide>=0?'+':'')+R.zGuide.toFixed(2)+'σ</b> vs guide, <b>'+(R.zMean>=0?'+':'')+R.zMean.toFixed(2)+'σ</b> vs its own '+R.days+'d mean. '+
-          (mlist.length?'Guide momentum '+mlist.join(', ')+'. ':'')+
-          'State: '+(STATE_TXT[R.state]||R.state)+'. <span class="ccap">z-score = how many standard deviations the live price sits from the reference; |z|&lt;'+Z_BAND.toFixed(1)+' is normal noise. Tendency, not a fill guarantee.</span>';
+
+    // ---- "Why this trend?" expander (Tier 2): plain-language guide divergence, σ only in the detail ----
+    if(showAnalysis){
+      const gEl=document.getElementById('trWhyBody'), gSum=document.getElementById('trWhySum');
+      const gp=(STATE.GUIDE[it.id]&&STATE.GUIDE[it.id].price)||null;
+      if(gp){
+        const mid=(it.low+it.high)/2;
+        let gser=null;
+        try{ gser=await fetchGuideSeries(it.id); logEvent('info','guide','guide history ok for '+it.name+' ('+gser.length+' pts) — weirdgloop reachable'); }
+        catch(e){ logEvent('info','guide','history fetch failed for '+it.id); }
+        const R=refineTrend(it, gser||[]);
+        let sum, body2;
+        if(R.ok){
+          const zAbs=Math.abs(R.zGuide), zWord=zAbs<1?'within its normal range':(zAbs<2?'notably':'far');
+          const mlist=[]; if(R.m7!=null) mlist.push((R.m7>=0?'+':'')+R.m7.toFixed(1)+'%/7d'); if(R.m30!=null) mlist.push((R.m30>=0?'+':'')+R.m30.toFixed(1)+'%/30d');
+          const SUM={healthy:'Healthy — sits around guide', 'down-confirmed':'Falling — below guide, momentum down', reversion:'Possible bounce — below guide, momentum flattening', up:'Rising — above guide'};
+          const PLAIN={
+            healthy:'The live spread brackets the official guide price — no strong pull either way; it tends to drift back toward guide.',
+            'down-confirmed':'The live price is <b class="loss">'+zWord+'</b> below the official guide <i>and</i> guide momentum is negative — a falling knife, not a dip.',
+            reversion:'The live price is <b class="amber">'+zWord+'</b> below guide, but momentum has stopped falling — a possible bounce, not a confirmed trend.',
+            up:'The live price is trading <b class="gain">'+zWord+'</b> above the official guide.'};
+          sum=SUM[R.state]||R.state;
+          body2=(PLAIN[R.state]||('State: '+R.state+'.'))+' Guide <span class="hl">'+fmt(gp)+'</span> vs live mid <span class="hl">'+fmt(mid)+'</span> ('+(R.divPct>=0?'+':'')+R.divPct.toFixed(1)+'%). '+
+            (mlist.length?'Guide momentum '+mlist.join(', ')+'. ':'')+
+            '<span class="ccap">Distance from guide: <b>'+(R.zGuide>=0?'+':'')+R.zGuide.toFixed(1)+'σ</b> — σ counts how many times its normal price wobble the price has strayed; under ~1 is noise, over ~2 is extreme.</span>';
+        } else {
+          const div=(mid-gp)/gp*100, around=(it.low<=gp&&gp<=it.high);
+          sum=around?'Around guide':(it.high<gp?'Below guide':'Above guide');
+          body2='Live mid <span class="hl">'+fmt(mid)+'</span> vs guide <span class="hl">'+fmt(gp)+'</span> (<b class="'+(div>=0?'gain':'loss')+'">'+(div>=0?'+':'')+div.toFixed(1)+'%</b>) — '+(around?'straddles the guide (healthy)':(it.high<gp?'below guide (downtrend)':'above guide (uptrend)'))+'. <span class="ccap">Not enough guide history for a confidence measure'+(gser?'':' — weirdgloop unreachable')+'; point-in-time only.</span>';
+        }
+        gSum.textContent='— '+sum;
+        gEl.innerHTML=body2;
+        document.getElementById('trWhy').classList.remove('hidden');
+      } else { document.getElementById('trWhy').classList.add('hidden'); }
+    }
+
+    // ---- Timing & seasonality (Tier 3): gated on the walk-forward backtest; hourly charts only show when the timing edge is proven ----
+    if(showAnalysis){
+      const tEl=document.getElementById('trTimingBody'), tSum=document.getElementById('trTimingSum'), chartsEl=document.getElementById('trCharts');
+      const bt=backtestPlan(pts.length>1?pts:s1h);
+      const regimeShift=P.regime && P.regime.ok && Math.abs(P.regime.driftPct)>=8;
+      const good=!bt.insufficient && bt.edge>0.3 && bt.beatRate>=60;
+      const showCharts=good && !regimeShift;
+      let sum, body2='';
+      if(regimeShift){
+        sum='— unreliable right now';
+        body2='<div class="mini">Skipping the hour-of-day timing: the price level shifted <b>'+(P.regime.driftPct>=0?'+':'')+P.regime.driftPct.toFixed(0)+'%</b> in the last few days, so recent history blends two regimes and any “cheap hour” pattern is unreliable. Re-check once the price settles.</div>';
+      } else if(bt.insufficient){
+        sum='— not enough history yet';
+        body2='<div class="mini">Not enough out-of-sample history yet ('+bt.days+' day'+(bt.days===1?'':'s')+' banked). Keep this item starred and re-check in a week or two.</div>';
       } else {
-        const div=(mid-gp)/gp*100;
-        const coarse=(it.low<=gp&&gp<=it.high)?'straddles the guide (healthy)':(it.high<gp?'below guide (downtrend)':'above guide (uptrend)');
-        body2='<b>vs official guide.</b> Guide <span class="hl">'+fmt(gp)+'</span> · live mid <span class="hl">'+fmt(mid)+'</span> (<b class="'+(div>=0?'gain':'loss')+'">'+(div>=0?'+':'')+div.toFixed(1)+'%</b>). Spread '+coarse+'. <span class="ccap">Not enough guide history for a z-score'+(gs?'':' — weirdgloop unreachable')+'; showing point-in-time divergence only.</span>';
+        const bad=bt.edge<=0 || bt.beatRate<50;
+        sum=good?'— real edge ✓':(bad?'— no proven edge':'— marginal');
+        const verdict=good?'<b class="gain">This item has a real timing edge.</b> Buying in its historically-cheap window and selling in its rich window beat naive spread-flipping on days the model hadn’t seen.':(bad?'<b class="loss">No proven timing edge.</b> On held-out days, timing didn’t beat just flipping the current spread — trade the spread, ignore hour-of-day.':'<b class="gold">Marginal timing edge</b> — small and inconsistent; don’t lean on it.');
+        body2='<div class="sreason" style="margin-top:0">'+verdict+'</div>'+
+          '<div class="sgrid" style="margin-top:12px">'+
+          '<div class="sbox"><div class="sk">Model swing ROI</div><div class="sv '+sgn(bt.stratRoi)+'">'+bt.stratRoi.toFixed(2)+'%</div><div class="ss">avg / cycle, out of sample</div></div>'+
+          '<div class="sbox"><div class="sk">Spread-flip ROI</div><div class="sv">'+bt.spreadRoi.toFixed(2)+'%</div><div class="ss">naive benchmark</div></div>'+
+          '<div class="sbox"><div class="sk">Beat rate</div><div class="sv">'+bt.beatRate.toFixed(0)+'%</div><div class="ss">of '+bt.n+' held-out days · '+bt.winRate.toFixed(0)+'% profitable</div></div>'+
+          '</div>';
+        if(showCharts) body2+='<div class="sreason" style="margin-top:12px">Cheapest to buy around <span class="hl">'+winStr(P.buyWin)+'</span>, richest to sell around <span class="hl">'+winStr(P.sellWin)+'</span> — a scheduling edge, not a price target.</div>';
       }
-      gEl.style.display=''; gEl.innerHTML=body2;
-    } else { gEl.style.display='none'; }
-    }
-    // walk-forward backtest
-    if(!showAnalysis){ document.getElementById('trBtWrap').classList.add('hidden'); }
-    else{
-    document.getElementById('trBtWrap').classList.remove('hidden');
-    const bt=backtestPlan(pts.length>1?pts:s1h);
-    const btEl=document.getElementById('trBt');
-    if(bt.insufficient){
-      btEl.innerHTML='<div class="mini">Not enough out-of-sample history yet ('+bt.days+' day'+(bt.days===1?'':'s')+' banked). The model needs several held-out days to prove the timing edge — keep this item starred and re-check in a week or two.</div>';
-    }else{
-      const good=bt.edge>0.3 && bt.beatRate>=60, bad=bt.edge<=0 || bt.beatRate<50;
-      const verdictCls=good?'gain':(bad?'loss':'gold');
-      const verdict=good?'The timing model beat naive spread-flipping out of sample.':(bad?'No reliable edge — on held-out days the model didn’t beat flipping the spread. Trade the spread here.':'Marginal — the edge is small and inconsistent; treat with caution.');
-      btEl.innerHTML=
-        '<div class="sgrid">'+
-        '<div class="sbox"><div class="sk">Model swing ROI</div><div class="sv '+sgn(bt.stratRoi)+'">'+bt.stratRoi.toFixed(2)+'%</div><div class="ss">avg / cycle, out of sample</div></div>'+
-        '<div class="sbox"><div class="sk">Spread-flip ROI</div><div class="sv">'+bt.spreadRoi.toFixed(2)+'%</div><div class="ss">naive benchmark</div></div>'+
-        '<div class="sbox"><div class="sk">Beat rate</div><div class="sv">'+bt.beatRate.toFixed(0)+'%</div><div class="ss">of '+bt.n+' held-out days · '+bt.winRate.toFixed(0)+'% profitable</div></div>'+
-        '</div>'+
-        '<div class="sreason"><b class="'+verdictCls+'">'+verdict+'</b> <span class="ccap">Expanding walk-forward: factors fit only on days before each test day, scored on '+bt.n+' held-out days. Per-unit, pre-fill-risk, on aggregate hourly averages.</span></div>';
-    }
+      tSum.textContent=sum; tEl.innerHTML=body2;
+      if(showCharts){
+        const pv=a.hourPrice.filter(v=>v!=null), pmin=Math.min(...pv), pmax=Math.max(...pv), vmax=Math.max(...a.hourVol);
+        document.getElementById('trPrice').innerHTML=svgLine(a.hourPriceF,{labels:hourLabels,ticks:[0,6,12,18,23]});
+        document.getElementById('trPriceCap').innerHTML='Range ~'+fmtP(pmin)+'–'+fmtP(pmax)+' · green = cheapest hour, red = priciest.';
+        document.getElementById('trVol').innerHTML=svgBars(a.hourVol,{labels:hourLabels,ticks:[0,6,12,18,23]});
+        document.getElementById('trVolCap').innerHTML='Peak ~'+fmt(vmax)+'/hr around <span class="hl">'+fmtHour(a.volPeak)+'</span> — deepest liquidity (fastest fills).';
+        chartsEl.classList.remove('hidden');
+      } else { chartsEl.classList.add('hidden'); }
     }
   }catch(e){ status.textContent='Couldn’t load history — try again.'; }
 }

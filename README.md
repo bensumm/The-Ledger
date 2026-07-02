@@ -1,49 +1,78 @@
-Vibe coded tool for OSRS market analysis
+# The Coffer — OSRS Grand Exchange flipping tool
 
-# The Coffer — PWA bundle
+**Live: https://bensumm.github.io/The-Ledger/**
 
-Standalone OSRS Grand Exchange flipping tool, installable to the iOS home screen. Vanilla JS, no build step, no framework — just plain static files.
+A self-contained web app for finding and managing OSRS Grand Exchange flips. Vanilla
+JS, no build step, no framework, no bundler — plain static files served by GitHub
+Pages. Installable as a PWA (works on desktop and iOS home screen), but primary
+development is now on desktop.
+
+Every price/margin in the app is **after the 2% GE sell tax** (floored per item,
+capped at 5m, none under 50gp). Price convention follows flipper usage: **Buy** =
+the instasell price (where you place buy offers), **Sell** = the instabuy price.
+
+## What it does
+
+- **Finder** — ranks flippable items by a budget-aware score (profit/hr × a risk
+  dampener that factors margin, liquidity, price staleness, and guide-divergence
+  trend). Sortable by score, profit/hr, margin, ROI, or volume.
+- **Trends** — deep per-item analysis. A live "Suggested plan" (instant buy/sell +
+  **patient pricing** that sizes a wider-margin offer off the recent 2h range),
+  a **regime-shift guard** that warns when a recent price-level jump makes the
+  hourly-timing stats unreliable, a plain-language guide-divergence readout
+  ("Why this trend?"), 3-month price history, and a collapsible **timing &
+  seasonality** section gated on a walk-forward backtest (hourly charts only appear
+  when the timing edge is actually proven out-of-sample).
+- **Watchlist / Signals** — star items to track; live buy signals fire when a
+  watched item has an after-tax spread during its historically-cheap window.
+- **Ledger** — manual position tracking with after-tax realized/unrealized P/L,
+  summarized in the "Coffer" header tiles.
+- **Fill-data pipeline** — see `pipeline/` (below): captures real GE trades from
+  RuneLite to `fills.json` so the tool can eventually calibrate its predictions
+  against actual fills.
 
 ## Files
+
 - `index.html` — the app shell (markup only)
 - `styles.css` — all styles
-- `js/` — the app logic, split into ES modules (`state.js` holds shared mutable
-  state as a single `STATE` object + constants/persistence/diagnostics;
-  `format.js` formatting/tax helpers; `charts.js` inline SVG chart rendering;
-  `market.js` price/guide fetching + scoring engine; `trends.js` archive +
-  seasonal analysis; `ui.js` Finder/Watchlist/Signals/Ledger/Coffer rendering;
-  `backup.js` export/import; `main.js` is the entry point — event wiring + init,
-  loaded from `index.html` as `<script type="module">`). No bundler: deployed to
-  Pages exactly as these files sit on disk.
-- `manifest.json` — PWA manifest
-- `icon-180.png` — iOS home-screen icon (`apple-touch-icon`)
-- `icon-192.png`, `icon-512.png` — standard PWA icons
-- `icon-maskable-512.png` — maskable icon (safe-zone padded)
+- `js/` — app logic as ES modules: `state.js` (shared mutable state as one `STATE`
+  object + constants + persistence + diagnostics), `format.js` (formatting/tax),
+  `charts.js` (inline SVG), `market.js` (price/guide fetch + scoring), `trends.js`
+  (archive + seasonal analysis + regime/patient/backtest), `ui.js`
+  (Finder/Watchlist/Signals/Ledger/Coffer rendering), `backup.js` (export/import),
+  `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
+- `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — real-trade data synced from RuneLite, fetched same-origin by the app
-- `pipeline/` — RuneLite fill-data pipeline tooling (not served by Pages, not part of
-  the app itself); see `pipeline/FILLS-PIPELINE.md`
+- `pipeline/` — RuneLite fill-data pipeline (sync script, wrapper scripts, design
+  doc); not served by Pages, not part of the app. See `pipeline/FILLS-PIPELINE.md`.
 
 ## Local development
+
 ES module scripts can't load over `file://` (browsers block it for CORS reasons),
-so double-clicking `index.html` no longer works for local testing. Run `serve.cmd`
-(tries Python's built-in `http.server`, falls back to `npx serve`) and open
-`http://localhost:8000/` instead. GitHub Pages deploys are unaffected either way —
-Pages always serves over real HTTP.
+so double-clicking `index.html` won't work. Run **`serve.cmd`** (tries the `py`
+launcher's `http.server`, falls back to `python3`, then `npx serve`) and open
+`http://localhost:8000/`. GitHub Pages is unaffected — it always serves over HTTP.
 
-## Deploy with GitHub Pages (all doable from iOS)
-1. Create a repo and add every file above to the **root**.
-2. **Settings → Pages → Build and deployment → Deploy from a branch → `main` / `/ (root)` → Save.**
-3. Wait ~1 minute, then open `https://<user>.github.io/<repo>/`.
-4. In Safari: **Share → Add to Home Screen.** Launch from the icon for full-screen, standalone mode.
+Data sources are the OSRS Wiki real-time prices API, the in-game GE guide price
+(wiki module + weirdgloop history), all fetched client-side.
 
-Every `git push` auto-deploys; the next launch serves the new file. There is **no service worker**, so there is no cache to invalidate — updates are immediate.
+## Deploy
+
+`git push` to `main` auto-deploys via GitHub Pages (Settings → Pages → deploy from
+`main` / root). There is **no service worker**, so there's no cache to invalidate —
+the next launch serves the new files. Deploy typically lands within ~1 minute.
 
 ## Persistence
-When hosted, the app stores everything in **IndexedDB**: ledger, watchlist, settings, the growing hourly archives, and the cached price snapshots. (It still uses the artifact `window.storage` if run inside Claude, and falls back to in-memory only if neither is available.)
 
-iOS can still evict site storage under device-storage pressure even for installed PWAs. Use the in-app **Export** button periodically as a backstop. Migrating from the artifact build? Export there, Import here — the formats match.
+State lives in **IndexedDB** (ledger, watchlist, settings, the growing hourly price
+archives, cached snapshots), with a `localStorage`/in-memory fallback. Use the in-app
+**Export** button periodically as a backstop — browsers can evict site storage under
+pressure, even for installed PWAs. Export/Import round-trips the full state as JSON.
 
 ## Notes for future work
-- No-MacBook friendly: edit and deploy entirely from the GitHub iOS app or a client like Working Copy.
-- A service worker (network-first for the HTML) would add an offline shell, but the app needs the live wiki API to be useful, so it was intentionally omitted for v1.
-- `apple-mobile-web-app-status-bar-style` is set to `black`. For an edge-to-edge look, switch to `black-translucent`, add `viewport-fit=cover` to the viewport meta, and pad the header with `env(safe-area-inset-top)`.
+
+- A service worker (network-first for the HTML) would add an offline shell, but the
+  app needs the live wiki API to be useful, so it was intentionally omitted.
+- For an edge-to-edge iOS look: switch `apple-mobile-web-app-status-bar-style` to
+  `black-translucent`, add `viewport-fit=cover` to the viewport meta, pad the header
+  with `env(safe-area-inset-top)`.

@@ -4,6 +4,9 @@ This repo is the primary, ongoing place where this tool gets built and iterated 
 Expect repeated sessions here, not one-offs — check git log and this file for
 context before assuming something is new.
 
+**Live app: https://bensumm.github.io/The-Ledger/** (bookmarkable; auto-deploys on
+push to `main`).
+
 ## What this is
 - **The Coffer**: OSRS Grand Exchange flipping tool. `index.html` is markup only;
   `styles.css` holds all styles; logic is split into ES modules under `js/`
@@ -28,6 +31,37 @@ context before assuming something is new.
   `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` at the repo
   root — `fills.json` itself stays at root since the app fetches it same-origin).
   Read `pipeline/FILLS-PIPELINE.md` top to bottom before touching either.
+
+## Trends tab structure (as of 0.16.0)
+The per-item Trends view is organized in decision-priority tiers (rendered in
+`js/trends.js` `runTrends`), deliberately — don't scatter new info back into a flat
+list:
+1. **Suggested plan card** (`#trSuggest`) — instant buy/sell, profit-now, trend box,
+   and warnings. Includes **patient pricing** (`patientTargets()`: sizes a
+   wider-margin offer off the recent ~2h 5m range, 20th/80th percentiles) and a
+   **regime-shift warning** (`regimeDrift()`: last-3d median vs prior ~2wk; fires at
+   ≥8%). No σ jargon here — kept plain.
+2. **"Why this trend?"** (`#trWhy`, collapsible) — plain-language guide-divergence
+   readout; the σ number lives only in this expander's fine print.
+3. **Price history** (`#trHistWrap`) — 3-month chart, promoted as immediate context.
+4. **Timing & seasonality** (`#trTiming`, collapsible) — gated on the walk-forward
+   backtest: the hourly price/volume charts (`#trCharts`) only render when the timing
+   edge is actually proven out-of-sample (`good && !regimeShift`); otherwise the
+   section states "no proven edge"/"unreliable" and hides the charts. Weekday/weekend
+   boxes were removed (effect was ~noise).
+Key lesson driving this: hourly seasonality is usually noise or a regime artifact;
+`conf`/`medCount` only measure history coverage, not price-level stability, so the
+regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
+
+## Open followups (not yet built)
+- **Finder rating rework**: replace/upgrade the Finder score to a clearer rating that
+  explicitly weighs volume, ROI, **stability** (the `regimeDrift` concept isn't in
+  the Finder score yet), and estimated turnaround; sort by it. (`computeScores()` in
+  `js/market.js` already caps fill at 15% hourly volume and does margin/liq/stale/
+  trend risk — extend from there.)
+- **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
+  state + item info on demand and recommend a price tweak (ties into patient pricing
+  and eventually the fills pipeline's realized-vs-suggested calibration).
 
 ## Repo is public — no PII
 This repo is public on GitHub. Never commit account names, RSNs, real names, emails,

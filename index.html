@@ -106,15 +106,15 @@
     <div id="trResult" class="hidden">
       <div id="trHead"></div>
       <div class="suggest" id="trSuggest"></div>
-      <div class="insight" id="trInsight"></div>
-      <div class="insight" id="trGuide" style="display:none"></div>
-      <div class="chartgrid" id="trCharts">
-        <div class="chartcard"><div class="ctitle">Average price by hour <span class="csub">(your local time)</span></div><div id="trPrice"></div><div class="ccap" id="trPriceCap"></div></div>
-        <div class="chartcard"><div class="ctitle">Trade volume by hour</div><div id="trVol"></div><div class="ccap">Heavier bars = faster fills at that hour.</div></div>
-      </div>
-      <div class="chartcard" id="trHistWrap"><div class="ctitle">3-month price history <span class="csub">(6h steps)</span></div><div id="trHist"></div><div class="ccap" id="trHistCap"></div></div>
-      <div class="chartcard" id="trWkWrap"><div class="ctitle">Weekday vs weekend</div><div class="wkrow" id="trWk"></div></div>
-      <div class="chartcard" id="trBtWrap"><div class="ctitle">Walk-forward backtest <span class="csub">does the timing model beat flipping the spread?</span></div><div id="trBt"></div></div>
+      <details class="disc hidden" id="trWhy"><summary>Why this trend? <span class="discsum" id="trWhySum"></span></summary><div class="discbody" id="trWhyBody"></div></details>
+      <div class="chartcard" id="trHistWrap"><div class="ctitle">Price history <span class="csub">(3 months, 6h steps)</span></div><div id="trHist"></div><div class="ccap" id="trHistCap"></div></div>
+      <details class="disc hidden" id="trTiming"><summary>Timing &amp; seasonality <span class="discsum" id="trTimingSum"></span></summary>
+        <div class="discbody" id="trTimingBody"></div>
+        <div class="chartgrid hidden" id="trCharts">
+          <div class="chartcard"><div class="ctitle">Average price by hour <span class="csub">(your local time)</span></div><div id="trPrice"></div><div class="ccap" id="trPriceCap"></div></div>
+          <div class="chartcard"><div class="ctitle">Trade volume by hour</div><div id="trVol"></div><div class="ccap" id="trVolCap"></div></div>
+        </div>
+      </details>
     </div>
     <div id="trEmpty" class="empty"><div class="big">Read the daily rhythm</div><div class="sm">Pick an item and analyse to get suggested buy times and prices. Hourly data starts at ~15 days (the API’s cap) and grows past a month as you keep it starred and refresh over the coming weeks. You can also click any item name in the Finder.</div></div>
   </section>

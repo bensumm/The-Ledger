@@ -84,7 +84,7 @@
   nav.tabs button:hover{color:var(--parch)}
 
   .panel{padding:18px 0}
-  .hidden{display:none}
+  .hidden{display:none !important}   /* utility: must beat later element rules like .chartgrid{display:grid} */
 
   .controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
   .controls input[type=text], .controls select{background:var(--oak2); border:1px solid var(--line2); color:var(--parch); border-radius:7px; padding:8px 11px; font-size:13px; font-family:inherit}
@@ -170,6 +170,18 @@
   .baseln{stroke:var(--line2); stroke-width:1; stroke-dasharray:3 3}
   .dotmin{fill:var(--gain)} .dotmax{fill:var(--loss)}
   .vbar{fill:var(--line2)} .vbar.peak{fill:var(--gold)}
+
+  /* collapsible disclosures (Why this trend? · Timing & seasonality) */
+  details.disc{background:var(--oak2); border:1px solid var(--line); border-radius:12px; margin-bottom:16px}
+  details.disc>summary{list-style:none; cursor:pointer; padding:14px 16px; font-size:12px; font-weight:600; color:var(--parch); letter-spacing:.02em; display:flex; align-items:center; gap:8px}
+  details.disc>summary::-webkit-details-marker{display:none}
+  details.disc>summary::before{content:"▸"; color:var(--gold); transition:transform .15s}
+  details.disc[open]>summary::before{transform:rotate(90deg)}
+  details.disc>summary .discsum{color:var(--muted); font-weight:400}
+  details.disc>summary:hover{color:var(--gold)}
+  details.disc .discbody{padding:0 16px 16px; font-size:13.5px; line-height:1.6; color:var(--parch2)}
+  details.disc .discbody b{color:var(--parch)} details.disc .discbody .hl{color:var(--gold); font-weight:600}
+  details.disc .chartgrid{padding:0 16px 16px; margin-bottom:0}
 
   .suggest{background:linear-gradient(180deg,#2c2110,#201808); border:1px solid var(--gold); border-radius:12px; padding:16px 18px; margin-bottom:16px; box-shadow:var(--shadow)}
   .trhead{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}

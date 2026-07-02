@@ -1,7 +1,7 @@
 import { now, pad2 } from './format.js';
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.15.0';
+export const APP_VERSION='0.16.0';
 // risk weights (sum to 1) + trend thresholds — these become Settings-tab editable next pass
 export const W_MARGIN=0.30, W_LIQ=0.25, W_STALE=0.15, W_TREND=0.30;
 export const MAXPART=0.15;          // market-impact guardrail: capture ≤15% of hourly volume per fill
