@@ -27,6 +27,10 @@ document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclic
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;
+const tType=document.getElementById('tType');
+if(tType) tType.onchange=()=>{ const sell=tType.value==='sell';
+  document.querySelectorAll('.ledgerform .sellonly').forEach(e=>e.classList.toggle('hidden',!sell));
+  document.getElementById('addTrade').textContent=sell?'Record flip':'Open position'; };
 document.getElementById('reviewPos').onclick=reviewPositions;
 const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
 document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));

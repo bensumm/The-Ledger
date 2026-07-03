@@ -130,13 +130,27 @@ export function renderWatch(){
 
 /* ledger */
 export async function addTrade(){
+  const type=(document.getElementById('tType')||{}).value||'buy';
   const name=document.getElementById('tItem').value.trim();
   const qty=parseGp(document.getElementById('tQty').value)||1, buy=parseGp(document.getElementById('tBuy').value);
-  if(!name||isNaN(buy)){ alert('Enter an item and a buy price.'); return; }
+  if(!name){ alert('Enter an item.'); return; }
   const it=resolveItem(name);
-  STATE.trades.push({tid:'t'+Date.now()+Math.random().toString(36).slice(2,6), itemId:it?it.id:null, name:it?it.name:name, qty, buy, sell:null, opened:now(), closed:null});
+  const base={tid:'t'+Date.now()+Math.random().toString(36).slice(2,6), itemId:it?it.id:null, name:it?it.name:name, qty};
+  if(type==='sell'){
+    let sell=parseGp(document.getElementById('tSell').value);
+    if(isNaN(buy)||isNaN(sell)){ alert('For a completed flip, enter both the buy and sell price.'); return; }
+    // pre/post-tax: the Ledger stores pre-tax sell so realised() nets the 2% GE tax itself.
+    // If you entered the net (post-tax) gp you actually received, convert back up. (2% tax
+    // holds below the ~250m cap, which covers everything you flip.)
+    if(((document.getElementById('tTax')||{}).value||'pre')==='post') sell=Math.round(sell/0.98);
+    STATE.trades.push({...base, buy, sell, opened:now(), closed:now()});
+  } else {
+    if(isNaN(buy)){ alert('Enter a buy price.'); return; }
+    STATE.trades.push({...base, buy, sell:null, opened:now(), closed:null});
+  }
   await sSet('trades',STATE.trades);
-  document.getElementById('tItem').value=''; document.getElementById('tQty').value=''; document.getElementById('tBuy').value=''; renderAll();
+  ['tItem','tQty','tBuy','tSell'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  renderAll();
 }
 export async function closeTrade(tid){ const t=STATE.trades.find(x=>x.tid===tid); if(!t) return;
   const it=t.itemId?STATE.byId[t.itemId]:null, def=it&&it.high?it.high:''; const v=prompt('Sell price (each):',def); if(v===null) return;
