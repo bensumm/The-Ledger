@@ -115,7 +115,26 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   teleport seeds vs ~24k for a mid-spread flip; seeds were ~88% of session profit). Never
   list below break-even (`ceil(buy/0.98)`); don't chase a softening item's buy.
 
+## Market analysis workflow — standard output format
+Every market read presented to Ben (screen, per-item quote, position review) is ONE table:
+`Item | Guide | Mid | Buy@ Quick/Opt | Sell@ Quick/Opt | Net/u Quick/Opt (ROI) | Vol/d | Regime`
+- Quick = transact now (buy at live instasell, sell at live instabuy). Optimistic = patient
+  2h-band edges (last 24×5m points: min avgLow / max avgHigh). Same basis ⇒ optBuy ≤ quickBuy
+  ≤ quickSell ≤ optSell **always** — if that ordering breaks, bases got mixed (this bug
+  shipped in an analysis 2026-07-03: 24h percentiles mixed with live quotes).
+- Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
+- Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
+- Net/u after 2% tax. Regime = multi-day regimeDrift check (flat/rising/falling label).
+- Group Tier A (stable regime) / Tier B (recently repriced/volatile — size small).
+  **Falling-regime items are excluded from screens entirely — don't show or mention them.**
+  Exception: items Ben holds or asks about → always show, with price-to-clear guidance.
+- Once PLAN.md chunk 3 lands: generate via `pipeline/quote.mjs` / `pipeline/screen.mjs`;
+  never hand-write ad-hoc fetch scripts.
+
 ## Open followups (not yet built)
+- **Active implementation plan: `PLAN.md`** (2026-07-03) — manual-fill single-sourcing
+  (log-only + tombstones + WITHDRAWN), standard quote tables in Finder/Trends, quote/screen
+  analysis scripts, tech-debt pass. The items below are separate / longer-horizon.
 - **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
   trigger a fresh pipeline sync) on demand, rather than only on price refresh. Ben
   wants this. `syncFills()` already does the fetch+merge; mostly a button + wiring
@@ -206,6 +225,12 @@ constants, etc.) stay as plain `export const` — no need to route those through
   `buildEvents()` *also* keeps a sequence-aware fallback (last non-complete event before an
   `EMPTY` or a slot item-change → cancelled) for cancels that drop straight to `EMPTY`
   without a cancel line. Keep both paths; don't revert to pure line-by-line parsing.
+- **Manual fills injected into `coffer-manual.log` MUST carry the timestamp of when the
+  trade actually happened** (`--time` on add-manual-fill.mjs) — a "now" timestamp on a
+  backdated trade breaks FIFO matching (phantom-5-bludgeons incident, 2026-07-03). Also:
+  `fills.json` is an append-only merged archive — fixing/removing a source log line does NOT
+  purge an already-merged event; until PLAN.md's tombstone support lands, that needs a one-off
+  removal of the event (by its `id`) from `fills.json`, then a re-sync.
 - Task Scheduler job `CofferFillsSync` runs `wscript.exe
   pipeline\run-fills-sync.vbs` every 20 min (hidden window). If any pipeline file
   moves again, that task's registered path needs re-creating too — it's not
