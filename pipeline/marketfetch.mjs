@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(HERE, '.cache');
+const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window archive (gitignored via .cache/)
 const MAP_CACHE = path.join(HERE, 'mapping.cache.json'); // shared with add-manual-fill.mjs (name<->id)
 
 export const API = 'https://prices.runescape.wiki/api/v1/osrs';
@@ -131,4 +132,80 @@ export async function loadAllLatest() {
   if (cached) return cached;
   const j = await jget(API + '/latest'); const d = j.data || {};
   writeCache('latest.json', d); return d;
+}
+
+/* --- loadBands(hours): whole-market intraday band data for EVERY item, zero per-item
+   timeseries calls (chunk 9.1). The wiki /5m endpoint is a bulk whole-market snapshot and
+   accepts ?timestamp=<unix, divisible by 300> to fetch a past 5m window. We walk the last
+   `hours` of 5m windows, reading each from a local per-day archive under .cache/bands/ when
+   present else fetching it once and appending it. First cold 2h run ≈ 24 bulk calls (~70ms
+   apart); every later run only backfills the windows minted since. Files >7 days old are pruned.
+
+   Window alignment (verified live 2026-07-03 against id 560): `latest = floor(now/300)*300 - 300`
+   is the last COMPLETE 5m window and equals the last point of /timeseries?timestep=5m; the 24
+   windows [latest, latest-300, …] are byte-identical to that series' slice(-24). So the edges
+   below == computeQuote's bandLo/bandHi over the same item — that is the mandatory sanity gate.
+
+   Returns { [id]: { bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: #windows with
+   two-sided trades } } for every item seen in the windows. --- */
+function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0, 10); } // UTC day
+export async function loadBands(hours = 2) {
+  ensureCacheDir();
+  try { fs.mkdirSync(BANDS_DIR, { recursive: true }); } catch {}
+  const step = 300;
+  const now = Math.floor(Date.now() / 1000);
+  const latest = Math.floor(now / step) * step - step;       // last complete 5m window
+  const nWin = Math.max(1, Math.ceil(hours * 3600 / step));
+  const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
+
+  // load existing per-day archive, pruning files whose day is entirely >7 days old
+  const cutoff = now - 7 * 86400;
+  const archive = new Map();                                  // windowUnix -> {id:{...}}
+  let files = []; try { files = fs.readdirSync(BANDS_DIR); } catch {}
+  for (const f of files) {
+    if (!f.endsWith('.json')) continue;
+    const dayStart = Date.parse(f.slice(0, 10) + 'T00:00:00Z') / 1000;
+    if (Number.isFinite(dayStart) && dayStart + 86400 < cutoff) {
+      try { fs.unlinkSync(path.join(BANDS_DIR, f)); } catch {}
+      continue;
+    }
+    try {
+      const obj = JSON.parse(fs.readFileSync(path.join(BANDS_DIR, f), 'utf8'));
+      for (const w in obj) archive.set(+w, obj[w]);
+    } catch {}
+  }
+
+  // backfill only the missing windows (bulk fetch each once, append to its day file)
+  const touched = new Map();                                  // dayKey -> {window:data}
+  for (const w of windows) {
+    if (archive.has(w)) continue;
+    let data = null;
+    try { data = (await jget(API + '/5m?timestamp=' + w)).data || {}; } catch { data = null; }
+    await sleep(70);
+    if (!data) continue;
+    archive.set(w, data);
+    const dk = dayKey(w);
+    if (!touched.has(dk)) {
+      let cur = {}; try { cur = JSON.parse(fs.readFileSync(path.join(BANDS_DIR, dk + '.json'), 'utf8')); } catch {}
+      touched.set(dk, cur);
+    }
+    touched.get(dk)[w] = data;
+  }
+  for (const [dk, obj] of touched) {
+    try { fs.writeFileSync(path.join(BANDS_DIR, dk + '.json'), JSON.stringify(obj)); } catch {}
+  }
+
+  // aggregate per item across the requested windows (matches computeQuote min/max over ts.slice(-24))
+  const bands = {};
+  for (const w of windows) {
+    const snap = archive.get(w); if (!snap) continue;
+    for (const id in snap) {
+      const e = snap[id]; if (!e) continue;
+      let b = bands[id]; if (!b) b = bands[id] = { bandLo: null, bandHi: null, active5m: 0 };
+      if (e.avgLowPrice)  b.bandLo = b.bandLo == null ? e.avgLowPrice : Math.min(b.bandLo, e.avgLowPrice);
+      if (e.avgHighPrice) b.bandHi = b.bandHi == null ? e.avgHighPrice : Math.max(b.bandHi, e.avgHighPrice);
+      if ((e.lowPriceVolume || 0) > 0 && (e.highPriceVolume || 0) > 0) b.active5m++;
+    }
+  }
+  return bands;
 }
