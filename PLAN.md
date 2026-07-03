@@ -280,15 +280,27 @@ this session accidentally dropped them; the scripts/app must never. Since `pipel
 `screen.mjs` build their own `mdTable`, add the `Mom` cell there too (they don't currently use
 `quoteMarkdown`) — verify the column renders WITH the price columns in both scripts.
 
-### 6.3 Finder rating factors momentum in (`js/market.js`)
-`computeScores()`/`ratingParts()` — a `breakdown` item is penalized (actively pulling back);
-`breakup` is neutral-to-slightly-positive. **Data limitation to resolve honestly:** the Finder bulk
-table does NOT fetch a per-item 2h 5m series (only live + a guide proxy — see the Trends-tab note in
-CLAUDE.md). Real `mom` needs the per-item series. Options, pick and JUSTIFY: (a) apply the mom
-penalty only in the on-demand quote expander (where the series is fetched) and leave the bulk rating
-on its cheap proxy; (b) a bounded top-N 5m fetch for only the currently-sorted-visible rows; (c) a
-cheap proxy for mom from data already in bulk (`/5m` or `/latest` vs `/24h` mid). Do NOT bulk-hammer
-`/timeseries` across all items (rate limits). Be explicit about what the rating can and can't see.
+### 6.3 Finder: momentum in the rating AND as a discovery signal (`js/market.js`, `js/ui.js`)
+**Decision (2026-07-03, with Ben):** expander-only is INSUFFICIENT — if momentum only shows after
+you click, a low-base-rated breakout stays buried and never gets inspected (Ben's discovery worry).
+Momentum must touch the whole list. But it's transient (2h), so it must NOT dominate/churn the sort.
+Implement all three of:
+1. **Cheap bulk `mom` proxy for every row** — derived from data already pulled in bulk (live
+   `/latest` vs the 24h mid, or a single bulk `/5m` snapshot — pick the more recent that's still ONE
+   bulk call, NOT per-item `/timeseries`). This is `momProxy ∈ {clean, breakdown, breakup}`,
+   explicitly labeled as an approximation.
+2. **Visible + sortable `Mom` column in the Finder list** — so a `↑`/`↓` is eyeball-catchable on any
+   row regardless of its rating, and the user can sort "what's moving" on demand. This is the primary
+   answer to "will I miss prospects" — discovery by visibility, not by score manipulation.
+3. **Light nudge into the rating** — `computeScores()`/`ratingParts()`: `breakdown` dings, `breakup`
+   lifts, but as a bounded MODIFIER that cannot dominate the profit/hr × quality core or destabilize
+   the ranking.
+**Honest limits (state in code + UI):** the bulk proxy lags the true 2h-band read (slower 24h-mid
+reference) and can mislabel a same-day run-up that's now pulling back. So the Finder proxy is a
+DISCOVERY HINT only — the precise 2h-band `mom` (6.1, from the real series) is computed on expand /
+in `screen.mjs` / in position review, and ONLY the precise one feeds the cut-trigger (6.4). Never
+bulk-hammer `/timeseries`. Distinguish `momProxy` (list) from `mom` (precise) in the row model so the
+two are never confused.
 
 ### 6.4 Cut-trigger wiring (position review + `--positions`)
 A HELD big-ticket position flashing `breakdown` escalates the verdict toward **CUT** even when the
