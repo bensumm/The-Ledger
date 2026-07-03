@@ -26,6 +26,9 @@ Executor: **Opus 4.8** in Claude Code, one chunk per session. Read `CLAUDE.md` f
   error banner, docs truth pass — `0febcbe` (0.29.0)
 - ✅ **Chunk 6** — `Mom` last-2h momentum column (pre-clamp, dig-in views only) + shared
   `momVerdict()` cut-trigger with `BIG_TICKET_GP` — `c0a1c58` (0.30.0)
+- ✅ **Chunk 7** — `pipeline/watch.mjs`: adaptive item-type-aware monitor (6 classes → cadence +
+  playbook, `momVerdict` alerts, adverse-selection gating, honest sell-side framing) + `/loop`
+  routine in `MONITORING.md` — `319e254`
 
 ---
 
@@ -57,57 +60,6 @@ auto-sync possible (client only knows the bank while the bank UI is open). Do NO
 
 **Blocking on Ben:** paste one real Data Export into `pipeline/bank.csv`. Nothing to build until the
 parser can be pinned to actual columns.
-
----
-
-## Chunk 7 — Adaptive monitor/polling loop (item-type-aware) — FUTURE
-
-Requested 2026-07-03 after a live scalping discussion (aggressive low-bid on a big-ticket volatile
-item). Lower priority — a future improvement. Builds on `pipeline/monitor.mjs` + `MONITORING.md` +
-the `/loop` skill. **Depends on chunk 6** (`mom` + cut-trigger) and **chunk 3** (`quotecore`/
-`quote.mjs`); sequence after both.
-
-### The goal
-Today `monitor.mjs` runs one flat routine for all held positions. Ben wants a loop that **adapts to
-the item type** and drives an active, human-executed session on a tight (1–3 min) cadence: live
-price-recommendation adjustments, drop alerts, and per-item risk reads.
-
-### 7.1 Item-type classification → different rules & cadence
-Classify each watched/held item by regime + liquidity + spread + ticket size (reuse chunk-3 screen
-logic): e.g. **thin big-ticket volatile** (tight cadence, hair-trigger cut), **liquid ranging
-wide-spread** (scalp/market-make candidate), **stable liquid** (loose cadence). Class selects poll
-frequency, alert thresholds, and which playbook applies.
-
-### 7.2 Live price-recommendation adjustment
-On each poll, re-quote (`quotecore`) and surface updated buy-at / list-at prices (break-even-floored)
-so the user can adjust resting offers. **Hard lesson to encode: you cannot "stay ahead of a drop" by
-chasing your ask down — that is just selling cheaper.** Sell-side re-pricing is controlled
-loss-taking in a downtrend and only becomes *profit* in a ranging regime. Frame it honestly
-(clear-vs-hold), never as out-running the market.
-
-### 7.3 Drop alerts
-Alert when a held/target item flips to `mom === 'breakdown'` (chunk 6), 2h drift turns negative, or
-instabuy prints below the held break-even. Escalation matches the cut-trigger (6.4): breakdown on a
-held big-ticket → CUT alert before the lagging multi-day regime confirms.
-
-### 7.4 Per-item risk assessment
-Compact risk read per item: spread width, two-sided liquidity, regime, ticket size / capital
-exposure, and an **adverse-selection warning** for aggressive low bids (a low buy fills precisely
-when the market is dropping → often no exit margin at fill). Gate the market-making/scalp playbook to
-**ranging wide-spread items only** — never for a trending-down item.
-
-### Guardrails
-- **Human-executed decision support only. NEVER auto-place/cancel GE offers** — automating GE
-  interaction is botting and bannable. The loop pings *when* to act; the human clicks.
-- Read-only against live data (same posture as `monitor.mjs`).
-- Encode the exit discipline in memory `opportunity-cost-can-beat-patient-hold`: set the exit at
-  entry, don't leave stranded asks, cut on breakdown rather than hoping.
-
-### Acceptance
-Point the loop at a ranging item and a trending-down item; verify different cadence + correct
-playbook (scalp vs cut), a breakdown/CUT alert on the down item, and that it never suggests
-out-running a drop. Doc the routine in `pipeline/MONITORING.md`. No `APP_VERSION` bump unless app
-code changes.
 
 ---
 
