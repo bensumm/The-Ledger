@@ -2,13 +2,13 @@
 /**
  * screen.mjs — opportunity screen. ONE command, finished Tier A / Tier B table.
  *
- *   node pipeline/screen.mjs [--floor 50] [--min-roi 1.5] [--max-price 45m] [--top 40]
+ *   node pipeline/screen.mjs [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *
  * Pipeline:
  *   1. bulk /mapping + /24h + /latest (all cached ~10 min under pipeline/.cache/).
  *   2. two-sided liquidity gate: highPriceVolume>0 && lowPriceVolume>0, limiting side ≥ floor
  *      (the ghost-spread lesson — a one-sided /volumes count is not a tradable market).
- *   3. price ≤ max-price, coarse after-tax ROI ≥ min-roi (24h avg basis — a cheap pre-filter).
+ *   3. min-price ≤ price ≤ max-price, coarse after-tax ROI ≥ min-roi (24h avg basis — cheap pre-filter).
  *   4. rank by liquidity VALUE (limiting-side vol × mid) and keep the top-N ONLY.
  *   5. fetch 5m + 6h series for those survivors ONLY (rate limits) → computeQuote → band+regime.
  *   6. FALLING-regime items are silently excluded (CLAUDE.md screen rule). Output grouped
@@ -26,6 +26,7 @@ for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a
 const parseGp = s => { const t = String(s).trim().toLowerCase().replace(/,/g, ''); const m = t.match(/^(\d+(?:\.\d+)?)\s*([kmb])?$/); if (!m) return NaN; const mult = m[2] === 'b' ? 1e9 : m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1; return Math.round(parseFloat(m[1]) * mult); };
 const FLOOR = A.floor != null ? +A.floor : 50;
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
+const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
 const TOP = A.top != null ? +A.top : 40;
 
@@ -47,7 +48,7 @@ async function main() {
     const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
-    if (mid > MAX_PRICE) continue;
+    if (mid < MIN_PRICE || mid > MAX_PRICE) continue;
     const coarseNet = (avgHigh - tax(avgHigh)) - avgLow;   // after-tax, 24h avg basis
     const coarseRoi = coarseNet / avgLow * 100;
     if (coarseRoi < MIN_ROI) continue;
@@ -70,7 +71,7 @@ async function main() {
     (row.regime && row.regime.ok && !row.rising ? tierA : tierB).push(cells);
   }
 
-  console.log(`# Opportunity screen — floor ${FLOOR}/d, min ROI ${MIN_ROI}%, ≤ ${MAX_PRICE.toLocaleString()} gp, top ${TOP} by liquidity`);
+  console.log(`# Opportunity screen — floor ${FLOOR}/d, min ROI ${MIN_ROI}%, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} by liquidity`);
   console.log(`(${survivors.length} survivors quoted from ${cand.length} that passed the two-sided gate; falling-regime items excluded)\n`);
   console.log('## Tier A — stable regime');
   console.log(tierA.length ? mdTable(QUOTE_HEADERS, tierA) : '_none_');
