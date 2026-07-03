@@ -239,4 +239,8 @@ td.left.sub{padding-left:22px}
 .pcell .pv{font-size:14px;font-weight:700}
 .pcell .pc{font-size:10px;color:var(--parch2)}
 .trhead-vol{font-size:12px;color:var(--parch2);margin-left:10px}
+.segtoggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.segtoggle button{background:transparent;border:none;color:var(--parch2);padding:6px 14px;font-size:13px;cursor:pointer}
+.segtoggle button+button{border-left:1px solid var(--line)}
+.segtoggle button.on{background:var(--gold);color:#1a1408;font-weight:700}
 

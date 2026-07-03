@@ -156,12 +156,22 @@
       </div>
     </div>
     <div class="ledgerform">
-      <div class="fld"><label>Type</label><select id="tType"><option value="buy" selected>Buy (open)</option><option value="sell">Sell (closed)</option></select></div>
+      <div class="fld"><label>Log</label>
+        <div class="segtoggle" id="tType" data-mode="buy">
+          <button type="button" data-mode="buy" class="on">Buy</button>
+          <button type="button" data-mode="sell">Sell</button>
+        </div>
+      </div>
       <div class="fld wide"><label>Item</label><input id="tItem" list="itemList" placeholder="e.g. Twisted bow" /><datalist id="itemList"></datalist></div>
       <div class="fld"><label>Quantity</label><input id="tQty" placeholder="1" /></div>
-      <div class="fld"><label>Buy price (each)</label><input id="tBuy" placeholder="1.79b" /></div>
+      <div class="fld buyonly"><label>Buy price (each)</label><input id="tBuy" placeholder="1.79b" /></div>
       <div class="fld sellonly hidden"><label>Sell price (each)</label><input id="tSell" placeholder="1.85b" /></div>
-      <div class="fld sellonly hidden"><label>Sell price is</label><select id="tTax"><option value="pre" selected>Pre-tax</option><option value="post">Post-tax (net)</option></select></div>
+      <div class="fld sellonly hidden"><label>Sell price is</label>
+        <div class="segtoggle" id="tTax" data-mode="pre">
+          <button type="button" data-mode="pre" class="on">Pre-tax</button>
+          <button type="button" data-mode="post">Net</button>
+        </div>
+      </div>
       <button id="addTrade" class="go">Open position</button>
     </div>
     <div class="sectlabel">Open positions <button id="reviewPos" class="ghostbtn sm" style="margin-left:8px">Review pricing</button></div>

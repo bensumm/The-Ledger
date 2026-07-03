@@ -129,24 +129,42 @@ export function renderWatch(){
 }
 
 /* ledger */
+const newTid=()=>'t'+Date.now()+Math.random().toString(36).slice(2,6);
 export async function addTrade(){
-  const type=(document.getElementById('tType')||{}).value||'buy';
+  const tt=document.getElementById('tType'), mode=tt?tt.dataset.mode:'buy';
   const name=document.getElementById('tItem').value.trim();
-  const qty=parseGp(document.getElementById('tQty').value)||1, buy=parseGp(document.getElementById('tBuy').value);
+  const qty=parseGp(document.getElementById('tQty').value)||1;
   if(!name){ alert('Enter an item.'); return; }
   const it=resolveItem(name);
-  const base={tid:'t'+Date.now()+Math.random().toString(36).slice(2,6), itemId:it?it.id:null, name:it?it.name:name, qty};
-  if(type==='sell'){
+  if(mode==='sell'){
     let sell=parseGp(document.getElementById('tSell').value);
-    if(isNaN(buy)||isNaN(sell)){ alert('For a completed flip, enter both the buy and sell price.'); return; }
-    // pre/post-tax: the Ledger stores pre-tax sell so realised() nets the 2% GE tax itself.
-    // If you entered the net (post-tax) gp you actually received, convert back up. (2% tax
-    // holds below the ~250m cap, which covers everything you flip.)
-    if(((document.getElementById('tTax')||{}).value||'pre')==='post') sell=Math.round(sell/0.98);
-    STATE.trades.push({...base, buy, sell, opened:now(), closed:now()});
+    if(isNaN(sell)){ alert('Enter a sell price.'); return; }
+    const tx=document.getElementById('tTax');
+    if(tx && tx.dataset.mode==='post') sell=Math.round(sell/0.98); // net gp received → store pre-tax so realised() nets the 2% itself
+    // A sale just CLOSES matching open position(s) FIFO — no need to re-enter the buy (it's on the open lot).
+    const match=t=>t.sell===null && (it? t.itemId===it.id : t.name===name);
+    const open=STATE.trades.filter(match).sort((a,b)=>(a.opened||0)-(b.opened||0));
+    if(!open.length){ alert('No open ‘'+name+'’ position to sell — switch to Buy and log the purchase first (a sale needs a cost basis).'); return; }
+    let remain=qty; const remove=new Set();
+    for(const t of open){ if(remain<=0) break;
+      const take=Math.min(remain, t.qty);
+      STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:take, buy:t.buy, sell, opened:t.opened, closed:now()});
+      remain-=take;
+      if(take>=t.qty){                                    // whole lot sold → drop the open lot
+        if(t.src==='fills' && !STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); // tombstone so a sync won't resurrect it
+        remove.add(t.tid);
+      } else if(t.src==='fills'){                          // partial sale of a fills lot: tombstone it, keep the remainder as a manual open
+        if(!STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); remove.add(t.tid);
+        STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:t.qty-take, buy:t.buy, sell:null, opened:t.opened, closed:null});
+      } else { t.qty-=take; }                              // partial sale of a manual lot: just reduce it
+    }
+    STATE.trades=STATE.trades.filter(t=>!remove.has(t.tid));
+    await sSet('fillsHidden',STATE.fillsHidden);
+    if(remain>0) alert('Logged the sale. You only had '+(qty-remain)+' open, so '+remain+' with no recorded buy were skipped (no cost basis).');
   } else {
+    const buy=parseGp(document.getElementById('tBuy').value);
     if(isNaN(buy)){ alert('Enter a buy price.'); return; }
-    STATE.trades.push({...base, buy, sell:null, opened:now(), closed:null});
+    STATE.trades.push({tid:newTid(), itemId:it?it.id:null, name:it?it.name:name, qty, buy, sell:null, opened:now(), closed:null});
   }
   await sSet('trades',STATE.trades);
   ['tItem','tQty','tBuy','tSell'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });

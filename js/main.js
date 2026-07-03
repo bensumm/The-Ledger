@@ -27,10 +27,14 @@ document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclic
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;
-const tType=document.getElementById('tType');
-if(tType) tType.onchange=()=>{ const sell=tType.value==='sell';
+function wireSeg(id,cb){ const el=document.getElementById(id); if(!el) return;
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ el.dataset.mode=b.dataset.mode;
+    el.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); if(cb) cb(b.dataset.mode); }); }
+wireSeg('tType',mode=>{ const sell=mode==='sell';
   document.querySelectorAll('.ledgerform .sellonly').forEach(e=>e.classList.toggle('hidden',!sell));
-  document.getElementById('addTrade').textContent=sell?'Record flip':'Open position'; };
+  document.querySelectorAll('.ledgerform .buyonly').forEach(e=>e.classList.toggle('hidden',sell));
+  document.getElementById('addTrade').textContent=sell?'Log sale':'Open position'; });
+wireSeg('tTax');
 document.getElementById('reviewPos').onclick=reviewPositions;
 const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
 document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));
