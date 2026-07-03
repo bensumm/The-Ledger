@@ -5,6 +5,13 @@ real time, and get HOLD / WATCH / CUT guidance as positions move. This is the ro
 agent (or a person) follows when running a polling loop over live trades. It caught a DFS
 band-bottom deterioration and a seed over-cap during the 2026-07-02 session.
 
+> **Two tools, two jobs.** `monitor.mjs` (below) is the **log-state snapshot** — your
+> resting offers, recent fills/cancels, held count — parsed from the exchange log, no market
+> fetch. `watch.mjs` ([Adaptive routine](#adaptive-item-type-aware-routine-pipelinewatchmjs))
+> is the **market side** — it re-quotes each held/target item live, classifies it by item
+> TYPE, and drives an active human session with per-item cadence, drop/CUT alerts, and risk
+> reads. Run `monitor.mjs` to see what's listed; run `watch.mjs` to decide what to do.
+
 The **durable, session-independent** home for this logic is the app itself — the
 Refresh-positions button + a break-even/regime check on the Ledger (see CLAUDE.md
 "Open followups"). Until that exists, this doc + `monitor.mjs` are how the workflow runs.
@@ -71,3 +78,111 @@ Print-only — it never writes trade data. Each run emits:
 Cron-style loop (session-only) at ~5 min is comfortable; GE offers fill over minutes to
 hours. Tighten to ~2 min during active flipping, widen when idle. Nothing here writes — it's
 safe to poll as often as you like; the only cost is API calls in step 3–4.
+
+---
+
+## Adaptive item-type-aware routine (`pipeline/watch.mjs`)
+
+`monitor.mjs`'s routine runs one flat cadence and one set of rules for every position. But a
+thin big-ticket volatile item and a liquid ranging scalp candidate demand **different**
+attention and **different** playbooks. `watch.mjs` classifies each held/target item by TYPE
+and adapts cadence + playbook + alert thresholds to it. It's the driver for an active,
+human-executed flipping session on a tight 1–3 min loop.
+
+```
+node pipeline/watch.mjs                        # every held position (positions.json)
+node pipeline/watch.mjs "Crystal seed" 23959   # also watch these targets (buy-side)
+node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held, watch only these
+```
+
+**Read-only, human-executed decision support — the hard guardrail.** This tool NEVER places
+or cancels a GE offer, not even stubbed. Automating GE interaction is botting and bannable.
+It tells you *when* to act; **you** click. It reads `positions.json` + live prices and writes
+nothing.
+
+**All quote/tax/regime/momentum math is `js/quotecore.js`** (`computeQuote`, `regimeDrift`/
+`regimeLabel`, `breakEven`, `momVerdict`, `BIG_TICKET_GP`) — the same module the app and the
+`quote.mjs`/`screen.mjs` scripts use, so a verdict here can't drift from the app's.
+
+**Held basis = `positions.json` open lots**, *not* `monitor.mjs`'s in-memory `reconstruct.mjs`
+path. That's deliberate: `reconstruct.mjs` is an older copy blind to `WITHDRAWN`/`BANKED`
+(PLAN.md "Discovered"), so its held count can be wrong when manual lines exist.
+`positions.json` (from `sync-fills.mjs`) *is* WITHDRAWN/BANKED-aware. The trade-off is the
+~20m sync lag — `watch.mjs` prints the file's age and flags it stale past 25m, so a very
+recent trade's lag is visible. Cost basis is static once bought, so lag rarely changes a call.
+
+### Item-type classes → cadence + playbook
+
+Boundaries are **tunable named constants** at the top of `watch.mjs`, not magic numbers:
+
+- `LIQUID_FLOOR_PER_DAY = 100` — two-sided daily volume (the limiting side, `min(hi,lo)` from
+  `computeQuote`) below which a book is **thin**. 100/d is the practical floor codified in
+  CLAUDE.md; below it, exits are unreliable ghost-spreads.
+- `BIG_TICKET_UNIT_GP = 1_000_000` — per-**unit** price at/above which one unit is large
+  capital, so a drop is expensive per fill (bludgeon/lightbearer/seed territory). Distinct
+  from chunk-6 `BIG_TICKET_GP` (a whole-**lot** qty×cost threshold, which `momVerdict` still
+  owns) — this one only steers cadence/class.
+- `WIDE_SPREAD_PCT = 3` — `(instabuy−instasell)/instasell` at/above which the intraday band
+  is wide enough to *be* the edge. Tax is 2% on the sell and CLAUDE.md wants meaningfully
+  >~0.5% after tax, so ~3% gross is the smallest band worth laddering.
+
+Classification is priority-ordered so a hazard class always wins and the scalp class is only
+reachable on a liquid, flat-regime, wide-band item — the market-make playbook can **never**
+attach to a trending item:
+
+| Class | Trigger | Cadence | Playbook |
+|---|---|---|---|
+| `FALLING` | regime falling **or** `mom==='breakdown'` | **1m** | cut/clear discipline; targets → SKIP (don't buy a drop) |
+| `THIN_BIG_TICKET_VOLATILE` | thin (`vol<floor`) & unit ≥ 1m | **1m** | hair-trigger cut; strong adverse-selection warning |
+| `LIQUID_RANGING_WIDE` | liquid & flat regime & spread ≥ 3% | **2m** | **SCALP** — ladder band low→top; the only class that gets market-making |
+| `STABLE_LIQUID` | liquid & confirmed regime, narrow band | **3m** | ordinary patient flip; glance |
+| `THIN_OTHER` | thin, not big-ticket | **2m** | caution; small size; adverse-selection warning |
+| `UNKNOWN` | liquid but regime unconfirmed / vol unknown | **2m** | caution until regime confirms |
+
+The loop runs at **one** interval; `watch.mjs` recommends the **tightest** cadence across
+everything you're monitoring (so the most urgent item is polled often enough) and prints the
+ready-to-paste `/loop` command:
+
+```
+/loop 1m node pipeline/watch.mjs "Crystal seed"
+```
+
+`/loop <interval> <command>` (the `/loop` skill) re-runs on that fixed interval; report only
+what changed vs the prior tick. 1–3 min matches GE fill dynamics — offers fill over minutes to
+hours, so a sub-minute loop just burns API calls.
+
+### What each tick surfaces
+
+1. **DROP / CUT ALERTS** (held only — you can't be underwater on what you don't hold).
+   Escalation reuses the chunk-6 shared cut-trigger `momVerdict()`: a **2h breakdown on a held
+   lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
+   lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its
+   multi-day regime is FALLING.
+2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below
+   `ceil(cost/0.98)`.
+3. **Per-item RISK read**: spread width, two-sided liquidity (limiting side), regime, unit
+   ticket / capital exposure, and an **adverse-selection** warning for any aggressive low bid
+   (`optBuy < quickBuy`) outside a ranging book — a fill at that low bid usually means the
+   market dropped to meet it, so you often have no exit margin. The scalp/market-make note is
+   **gated to `LIQUID_RANGING_WIDE` only**.
+
+### Honest sell-side framing (read this before repricing a sell)
+
+**You cannot "stay ahead of a drop" by chasing your ask down — that is just selling cheaper.**
+`watch.mjs` never frames a sell-side move as out-running the market. A downward reprice is one
+of exactly two things, and the tool says which:
+
+- **Downtrend (FALLING / breakdown)** → repricing down is **controlled loss-taking**: you're
+  choosing to stop the bleed and free the capital, not beating the market. `CUT`/`LIST-TO-CLEAR`
+  at the instabuy.
+- **Ranging (flat regime, wide band)** → listing at the band top **realizes the band**; that's
+  the only regime where patience earns a premium. If it flips to breakdown, `momVerdict`
+  switches the same lot to clear-vs-hold — don't defend the ask down.
+
+### Exit discipline (memory `opportunity-cost-can-beat-patient-hold`)
+
+Set the exit **at entry** (the SCALP-BUY line prints the paired sell target), don't leave a
+**stranded ask** if the band shifts, and **cut on breakdown rather than hoping** — a lagging
+multi-day regime floor can't protect a same-day softening call. On a thin/softening book, the
+flat patient premium/unit rarely beats freeing the locked capital; clear at the instabuy and
+redeploy.
