@@ -122,10 +122,14 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   confirms (this is the signal whose absence cost us on the bludgeon exit). `quickSell > optSell`
   (live instabuy above the 2h top) = **↑ breaking up / fresh 2h high**. Clean in-band = ranging.
   The price columns clamp opt to never cross quick (correct *pricing*), so this tell is surfaced as
-  the **`Mom` column** (clean / ↓ / ↑), computed from the *pre-clamp* live-vs-band comparison — and
-  the **Finder rating factors it in** (breaking-down penalizes). Verified live 2026-07-03
-  (Twinflame/Brimstone ↓, Zombie axe ↑, Tome of fire/Twisted buckler clean; flags matched the
-  independent 2h-drift read exactly).
+  the **`Mom` column** (clean / ↓ / ↑), computed from the *pre-clamp* live-vs-band comparison. `Mom`
+  is a **dig-in / position-management** signal — it appears in the per-item views that fetch the real
+  2h series (Trends card, Finder expander, position review) and the `quote.mjs`/`screen.mjs` scripts,
+  and it drives the position cut-trigger (a held breakdown escalates toward CUT before the regime
+  confirms; big-ticket in-profit-but-breaking-down positions clear rather than hold). It is
+  deliberately NOT wired into the bulk Finder-list rating (approximate there / churns the sort).
+  Verified live 2026-07-03 (Twinflame/Brimstone ↓, Zombie axe ↑, Tome of fire/Twisted buckler clean;
+  flags matched the independent 2h-drift read exactly).
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
 - Net/u after 2% tax. Regime = multi-day regimeDrift check (flat/rising/falling label).

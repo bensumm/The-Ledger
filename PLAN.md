@@ -244,11 +244,16 @@ keep-pile changes slowly, so manual refresh is acceptable.
 `pipeline/bank.csv`. Nothing to build until that sample lands (parser must be pinned to actual
 columns). Until then this stays BLOCKED.
 
-## Chunk 6 — Last-2h momentum tell: `Mom` column + rating input (HIGH PRIORITY)
+## Chunk 6 — Last-2h momentum tell: `Mom` column (dig-in views) + cut-trigger (HIGH PRIORITY)
 
-Requested 2026-07-03 after a live high-value board read. Touches `js/quotecore.js`, `js/market.js`,
-`js/ui.js`, `js/trends.js`, `js/quote.js`, `pipeline/quote.mjs`/`screen.mjs`. Bump `APP_VERSION`
-(app behavior changes) — likely 0.30.0.
+Requested 2026-07-03 after a live high-value board read. **Scope confirmed with Ben 2026-07-03:**
+momentum appears ONLY where the real 2h series is already fetched — Trends card, Finder expander,
+position review, and the `quote.mjs`/`screen.mjs` scripts. **The large Finder LIST is explicitly
+OUT** — no bulk proxy, no list column, no rating nudge (not beneficial there, and it would need
+approximate data / churn the sort). This keeps EVERYTHING momentum-related on the precise 2h series —
+no approximation anywhere. Touches `js/quotecore.js`, `js/ui.js`, `js/trends.js`, `js/quote.js`,
+`pipeline/quote.mjs`/`screen.mjs` (NOT `js/market.js` — the Finder rating is untouched). Bump
+`APP_VERSION` (app behavior changes) — likely 0.30.0.
 
 ### The insight (and why chunk 2 currently HIDES it)
 On ONE consistent basis (live `/latest` + 2h 5m-band), `optBuy ≤ quickBuy ≤ quickSell ≤ optSell`
@@ -272,41 +277,47 @@ is prevented separately by a consistency assertion/test (live + band from the sa
 the clamp. Update the ordering test: assert displayed prices still clamp AND that a seeded
 below-floor live quote sets `mom==='breakdown'` without breaking the price ordering.
 
-### 6.2 `Mom` column in every standard table
+### 6.2 `Mom` column in the dig-in tables (NOT the Finder list)
 Add `Mom` to `QUOTE_HEADERS`, `quoteCells`, `quoteMarkdown` (quotecore) and the app HTML renderer
-(`quote.js` `quoteTableHtml`, Trends `#trSuggest`, position-review cards, Finder expander). Render
-`clean` / `↓` / `↑`. **The Buy@/Sell@ Quick/Opt price columns MUST stay** — a hand-written board
-this session accidentally dropped them; the scripts/app must never. Since `pipeline/quote.mjs` and
-`screen.mjs` build their own `mdTable`, add the `Mom` cell there too (they don't currently use
-`quoteMarkdown`) — verify the column renders WITH the price columns in both scripts.
+(`quote.js` `quoteTableHtml`). It then renders in the four dig-in surfaces that already fetch the 2h
+series: **Trends `#trSuggest` card, Finder EXPANDER (the per-row on-demand quote, not the bulk list),
+position-review cards, and `pipeline/quote.mjs` + `screen.mjs`**. Render `clean` / `↓` / `↑`. **The
+Buy@/Sell@ Quick/Opt price columns MUST stay** — a hand-written board this session accidentally
+dropped them; the scripts/app must never. Since `pipeline/quote.mjs` and `screen.mjs` build their own
+`mdTable`, add the `Mom` cell there too (they don't currently use `quoteMarkdown`) — verify the column
+renders WITH the price columns in both scripts.
 
-### 6.3 Finder: momentum in the rating AND as a discovery signal (`js/market.js`, `js/ui.js`)
-**Decision (2026-07-03, with Ben):** expander-only is INSUFFICIENT — if momentum only shows after
-you click, a low-base-rated breakout stays buried and never gets inspected (Ben's discovery worry).
-Momentum must touch the whole list. But it's transient (2h), so it must NOT dominate/churn the sort.
-Implement all three of:
-1. **Cheap bulk `mom` proxy for every row** — derived from data already pulled in bulk (live
-   `/latest` vs the 24h mid, or a single bulk `/5m` snapshot — pick the more recent that's still ONE
-   bulk call, NOT per-item `/timeseries`). This is `momProxy ∈ {clean, breakdown, breakup}`,
-   explicitly labeled as an approximation.
-2. **Visible + sortable `Mom` column in the Finder list** — so a `↑`/`↓` is eyeball-catchable on any
-   row regardless of its rating, and the user can sort "what's moving" on demand. This is the primary
-   answer to "will I miss prospects" — discovery by visibility, not by score manipulation.
-3. **Light nudge into the rating** — `computeScores()`/`ratingParts()`: `breakdown` dings, `breakup`
-   lifts, but as a bounded MODIFIER that cannot dominate the profit/hr × quality core or destabilize
-   the ranking.
-**Honest limits (state in code + UI):** the bulk proxy lags the true 2h-band read (slower 24h-mid
-reference) and can mislabel a same-day run-up that's now pulling back. So the Finder proxy is a
-DISCOVERY HINT only — the precise 2h-band `mom` (6.1, from the real series) is computed on expand /
-in `screen.mjs` / in position review, and ONLY the precise one feeds the cut-trigger (6.4). Never
-bulk-hammer `/timeseries`. Distinguish `momProxy` (list) from `mom` (precise) in the row model so the
-two are never confused.
+### 6.3 Finder LIST — OUT OF SCOPE (explicit)
+The bulk Finder list gets NO momentum: no `momProxy`, no list column, no rating change. `js/market.js`
+`computeScores()`/`ratingParts()` is untouched. Rationale (Ben, 2026-07-03): momentum on the large
+list isn't beneficial enough to justify approximate bulk data or a churning sort; momentum is a
+dig-in / position-management signal, and the Finder *expander* (6.2) already gives it to you the
+moment you inspect a specific item. Do NOT add it here.
 
-### 6.4 Cut-trigger wiring (position review + `--positions`)
-A HELD big-ticket position flashing `breakdown` escalates the verdict toward **CUT** even when the
-multi-day regime hasn't flipped yet — the tell fires *before* the lagging regime confirms (the
-bludgeon-exit lesson; ties to the `opportunity-cost-can-beat-patient-hold` memory). Wire `mom` into
-the HOLD/list-at/CUT verdict logic in `reviewPositions` and `quote.mjs --positions`.
+### 6.4 Cut-trigger — the verdict matrix (position review + `quote.mjs --positions`)
+A HELD position's precise 2h `mom` modifies the existing HOLD/list-at/CUT verdict. The 2h breakdown
+LEADS the multi-day regime, so an underwater position gets cut EARLIER than the regime-only logic
+would (the bludgeon-exit lesson; ties to `opportunity-cost-can-beat-patient-hold`). Not a blunt
+"breakdown = CUT" — weight it by profit position and regime:
+
+| 2h `mom` | Position | Multi-day regime | Verdict effect |
+| --- | --- | --- | --- |
+| ↓ breakdown | underwater (live sell < break-even) | any | **CUT now** — free the capital |
+| ↓ breakdown | in profit | flat / falling | **LIST-TO-CLEAR** at instabuy — bank it, don't hold for the patient premium |
+| ↓ breakdown | in profit | rising | **size-conditional** (see below) |
+| ↑ breakup | any | any | **HOLD / list at the 2h top** — patient on the sell, aim higher; don't sell into strength |
+| clean | — | — | existing verdict unchanged |
+
+**The size-conditional cell (breakdown + in-profit + rising)** — a 2h breakdown against a rising
+regime could be the first tick of a real drop, so risk-appetite decides and RISK SCALES WITH SIZE:
+- **Big-ticket** position value (`qty × avgCost`) ≥ `BIG_TICKET_GP` → **LIST-TO-CLEAR** (get out; the
+  downside of being wrong is large). This is Ben's rule: for larger items, safer to just get out.
+- **Below** the threshold → **HOLD, flagged** "2h pullback vs an uptrend — watch, may reabsorb"
+  (a lone 2h dip on a small position against a real uptrend is usually noise).
+`BIG_TICKET_GP` is a named, tunable constant — default **10,000,000 gp** of *total lot value* (i.e.
+capital at risk in that lot, not per-unit). Both `reviewPositions` and `quote.mjs --positions` use
+the same constant + logic; surface the threshold in the verdict text so it's legible ("big-ticket ≥
+10m → clearing").
 
 ### 6.5 Docs
 CLAUDE.md "Market analysis workflow" wording + `Mom` column already updated (2026-07-03 doc commit).
