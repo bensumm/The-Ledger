@@ -198,9 +198,25 @@ Not yet built — planned as the next tool feature, roughly in order:
 
 ## 7. Known gaps / edge cases (discussed and accepted)
 
-- Trades placed outside RuneLite (mobile client) are invisible to the plugin. Ben says
-  he trades desktop-only. Fallback: screenshot of in-game GE history → any Claude
-  session can transcribe to schema-conformant JSON for manual merge.
+- Trades placed outside RuneLite (mobile client) are invisible to the plugin. Ben does in
+  fact trade on mobile sometimes, so the log is *incomplete*, not wrong. **Fix at the
+  source, not the derived view:** inject the missing fills into a sibling file
+  `coffer-manual.log` in `LOG_DIR` (NOT RuneLite's live `exchange.log`). `readLogFiles()`
+  already ingests every `*.log` there and dedup is content-hashed, so injected lines flow
+  through the real reconstruction into fills.json/positions.json and survive every re-sync.
+  Two writers, same file/format:
+  - **CLI:** `node pipeline/add-manual-fill.mjs --item "…" --type buy|sell --qty N --price gp
+    [--net] [--time iso] [--dry]` (see its header). `--net` inverts the 2% tax (capped 5m)
+    so an after-tax sell price becomes the gross listing the log stores.
+  - **App (0.26.0):** the Ledger's "Link fills log…" button grants the page write access to
+    `coffer-manual.log` via the File System Access API (Edge/Chrome); once linked, manual
+    buys/sells append there directly (`js/fillslog.js` `fillsLogLine` = same schema, slot 8).
+    The app stages an optimistic `pending` row (`STATE.fillsPending`) that `syncFills()`
+    drops once a positions.json with `generatedAt >= created` arrives (same machine → no
+    clock skew), i.e. once the sync has absorbed the injected line.
+  Editing an already-injected line (log rewrite) is not built yet — correct the value in the
+  app *before* it syncs, or edit `coffer-manual.log` by hand. Old screenshot-transcribe path
+  still works as a fallback.
 - Offer chains (cancel→relist) need heuristic grouping (same item, opposite side
   absent, relist within minutes) — downstream logic, not pipeline.
 - Selection bias: only taken trades are observed; §6.6 partially compensates.

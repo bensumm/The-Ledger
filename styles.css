@@ -242,3 +242,11 @@ td.left.sub{padding-left:22px}
 .segtoggle button+button{border-left:1px solid var(--line)}
 .segtoggle button.on{background:var(--gold);color:#1a1408;font-weight:700}
 
+/* fills-log link control + optimistic pending rows */
+.fillslink{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.fillslink .ghostbtn.linked{border-color:var(--gold);color:var(--gold)}
+.fillslink .mini{color:var(--parch2)}
+.srctag.pend{color:var(--gold);border-color:var(--gold)}
+tr.detail.pend td{opacity:.85}
+tr.detail.pend td.pend{color:var(--gold);font-style:italic}
+

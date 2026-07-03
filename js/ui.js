@@ -3,6 +3,7 @@ import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from
 import { loadAll, resolveItem, resolveId, computeScores, TREND_BADGE } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
+import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName } from './fillslog.js';
 
 /* finder */
 export function currentFinderRows(){
@@ -130,43 +131,74 @@ export function renderWatch(){
 
 /* ledger */
 const newTid=()=>'t'+Date.now()+Math.random().toString(36).slice(2,6);
+function fillsMsg(m){ const el=document.getElementById('fillsLogStatus'); if(el){ el.textContent=m; el.classList.remove('hidden'); } }
+// Write a manual entry straight into coffer-manual.log and stage an optimistic row until
+// the next sync folds it into positions.json (see fillslog.js). Returns true if written.
+async function writeToFillsLog(kind, it, qty, priceEach){
+  const ok=await appendFillsLog([ fillsLogLine({type:kind, itemId:it.id, qty, priceEach}) ]);
+  if(!ok) return false;
+  STATE.fillsPending.push({ id:'p'+Date.now()+Math.random().toString(36).slice(2,5), kind, itemId:it.id, name:it.name, qty, each:priceEach, created:now() });
+  await sSet('fillsPending', STATE.fillsPending);
+  return true;
+}
 export async function addTrade(){
   const tt=document.getElementById('tType'), mode=tt?tt.dataset.mode:'buy';
   const name=document.getElementById('tItem').value.trim();
   const qty=parseGp(document.getElementById('tQty').value)||1;
   if(!name){ alert('Enter an item.'); return; }
   const it=resolveItem(name);
+  const linked=await isLinked();
   if(mode==='sell'){
     let sell=parseGp(document.getElementById('tSell').value);
     if(isNaN(sell)){ alert('Enter a sell price.'); return; }
     const tx=document.getElementById('tTax');
-    if(tx && tx.dataset.mode==='post') sell=Math.round(sell/0.98); // net gp received → store pre-tax so realised() nets the 2% itself
-    // A sale just CLOSES matching open position(s) FIFO — no need to re-enter the buy (it's on the open lot).
-    const match=t=>t.sell===null && (it? t.itemId===it.id : t.name===name);
-    const open=STATE.trades.filter(match).sort((a,b)=>(a.opened||0)-(b.opened||0));
-    if(!open.length){ alert('No open ‘'+name+'’ position to sell — switch to Buy and log the purchase first (a sale needs a cost basis).'); return; }
-    let remain=qty; const remove=new Set();
-    for(const t of open){ if(remain<=0) break;
-      const take=Math.min(remain, t.qty);
-      STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:take, buy:t.buy, sell, opened:t.opened, closed:now()});
-      remain-=take;
-      if(take>=t.qty){                                    // whole lot sold → drop the open lot
-        if(t.src==='fills' && !STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); // tombstone so a sync won't resurrect it
-        remove.add(t.tid);
-      } else if(t.src==='fills'){                          // partial sale of a fills lot: tombstone it, keep the remainder as a manual open
-        if(!STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); remove.add(t.tid);
-        STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:t.qty-take, buy:t.buy, sell:null, opened:t.opened, closed:null});
-      } else { t.qty-=take; }                              // partial sale of a manual lot: just reduce it
+    if(tx && tx.dataset.mode==='post') sell=Math.round(sell/0.98); // net gp received → store pre-tax so realised()/the pipeline nets the 2% itself
+    // LINKED: write the sale to the fills log; the pipeline FIFO-matches it against real buys.
+    if(linked && it){
+      const wrote=await writeToFillsLog('sell', it, qty, sell);
+      if(wrote){ fillsMsg('Sold '+qty+' × '+it.name+' → written to fills log. Appears in the ledger after the next sync (run pipeline/sync-fills.mjs to see it now).'); }
+      else { alert('Couldn’t write to the fills log (permission?). Logged locally instead.'); return await sellLocal(it, name, qty, sell); }
+    } else {
+      return await sellLocal(it, name, qty, sell);
     }
-    STATE.trades=STATE.trades.filter(t=>!remove.has(t.tid));
-    await sSet('fillsHidden',STATE.fillsHidden);
-    if(remain>0) alert('Logged the sale. You only had '+(qty-remain)+' open, so '+remain+' with no recorded buy were skipped (no cost basis).');
   } else {
     const buy=parseGp(document.getElementById('tBuy').value);
     if(isNaN(buy)){ alert('Enter a buy price.'); return; }
-    STATE.trades.push({tid:newTid(), itemId:it?it.id:null, name:it?it.name:name, qty, buy, sell:null, opened:now(), closed:null});
+    if(linked && it){
+      const wrote=await writeToFillsLog('buy', it, qty, buy);
+      if(wrote){ fillsMsg('Bought '+qty+' × '+it.name+' → written to fills log. Appears in the ledger after the next sync (run pipeline/sync-fills.mjs to see it now).'); }
+      else { alert('Couldn’t write to the fills log (permission?). Logged locally instead.');
+        STATE.trades.push({tid:newTid(), itemId:it.id, name:it.name, qty, buy, sell:null, opened:now(), closed:null}); await sSet('trades',STATE.trades); }
+    } else {
+      STATE.trades.push({tid:newTid(), itemId:it?it.id:null, name:it?it.name:name, qty, buy, sell:null, opened:now(), closed:null});
+      await sSet('trades',STATE.trades);
+    }
   }
+  ['tItem','tQty','tBuy','tSell'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  renderAll();
+}
+// Browser-only sale: FIFO-close matching open lots locally (used when the fills log isn't linked).
+async function sellLocal(it, name, qty, sell){
+  const match=t=>t.sell===null && (it? t.itemId===it.id : t.name===name);
+  const open=STATE.trades.filter(match).sort((a,b)=>(a.opened||0)-(b.opened||0));
+  if(!open.length){ alert('No open ‘'+name+'’ position to sell — switch to Buy and log the purchase first (a sale needs a cost basis).'); return; }
+  let remain=qty; const remove=new Set();
+  for(const t of open){ if(remain<=0) break;
+    const take=Math.min(remain, t.qty);
+    STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:take, buy:t.buy, sell, opened:t.opened, closed:now()});
+    remain-=take;
+    if(take>=t.qty){                                    // whole lot sold → drop the open lot
+      if(t.src==='fills' && !STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); // tombstone so a sync won't resurrect it
+      remove.add(t.tid);
+    } else if(t.src==='fills'){                          // partial sale of a fills lot: tombstone it, keep the remainder as a manual open
+      if(!STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); remove.add(t.tid);
+      STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:t.qty-take, buy:t.buy, sell:null, opened:t.opened, closed:null});
+    } else { t.qty-=take; }                              // partial sale of a manual lot: just reduce it
+  }
+  STATE.trades=STATE.trades.filter(t=>!remove.has(t.tid));
+  await sSet('fillsHidden',STATE.fillsHidden);
   await sSet('trades',STATE.trades);
+  if(remain>0) alert('Logged the sale. You only had '+(qty-remain)+' open, so '+remain+' with no recorded buy were skipped (no cost basis).');
   ['tItem','tQty','tBuy','tSell'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderAll();
 }
@@ -205,6 +237,14 @@ export async function syncFills(){
   STATE.trades.push(...add);
   STATE.fillsUnmatched=Array.isArray(pos.unmatched)?pos.unmatched:[];
   STATE.fillsTs=pos.generatedAt?Math.floor(Date.parse(pos.generatedAt)/1000):0;
+  // Drop optimistic pending rows this sync has now absorbed. generatedAt comes from the same
+  // machine that ran the sync (no clock skew): a sync generated at/after a pending row's write
+  // read coffer-manual.log after we appended it, so that row is now real in positions.json.
+  if(STATE.fillsPending && STATE.fillsPending.length){
+    const before=STATE.fillsPending.length;
+    STATE.fillsPending=STATE.fillsPending.filter(p=>p.created>STATE.fillsTs);
+    if(STATE.fillsPending.length!==before) await sSet('fillsPending',STATE.fillsPending);
+  }
   await sSet('trades',STATE.trades);
   logEvent('info','fills',(pos.closed||[]).length+' closed, '+(pos.open||[]).length+' open, '+STATE.fillsUnmatched.length+' unmatched from positions.json');
   renderLedger(); renderCoffer();
@@ -253,6 +293,21 @@ export async function editTrade(tid){
   t.qty=qty; t.buy=buy; if(t.sell!==null) t.sell=sell;
   await sSet('trades',STATE.trades); renderAll();
 }
+export async function toggleFillsLogLink(){
+  if(await isLinked()){ if(confirm('Unlink the fills log? Manual entries go back to browser-only until you re-link.')){ await unlinkFillsLog(); await renderFillsLogLink(); } return; }
+  if(await linkFillsLog()) await renderFillsLogLink();
+}
+export async function renderFillsLogLink(){
+  const btn=document.getElementById('fillsLogLink'), st=document.getElementById('fillsLogStatus'); if(!btn) return;
+  if(!fsApiSupported()){ btn.classList.add('hidden');
+    if(st){ st.classList.remove('hidden'); st.textContent='This browser can’t write files directly (needs Edge/Chrome). To persist a manual entry, use pipeline/add-manual-fill.mjs from the terminal.'; }
+    return; }
+  const nm=await linkedName();
+  if(nm){ btn.textContent='Unlink fills log'; btn.classList.add('linked');
+    if(st){ st.classList.remove('hidden'); st.textContent='Manual entries write to '+nm+' → the pipeline folds them into the ledger on the next sync.'; }
+  }else{ btn.textContent='Link fills log…'; btn.classList.remove('linked');
+    if(st){ st.classList.remove('hidden'); st.textContent='Manual entries are browser-only. Link coffer-manual.log to persist them through your fills pipeline.'; } }
+}
 export async function setLedgerWatchOnly(v){ STATE.ledgerWatchOnly=v; await sSet('ledgerWatchOnly',v); renderLedger(); }
 export async function setLedgerPeriod(p){ STATE.ledgerPeriod=p; await sSet('ledgerPeriod',p); renderLedger(); }
 export function toggleLedgerGroup(key){ STATE.ledgerExpanded[key]=!STATE.ledgerExpanded[key]; renderLedger(); }
@@ -267,13 +322,19 @@ export function renderLedger(){
   const ftag='<span class="srctag" title="auto-synced from RuneLite fills">fills</span>';
   const caret=k=>'<span class="caret">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</span>';
   const cnt=n=>' <span class="cnt">×'+n+'</span>';
+  // optimistic rows for entries just written to the fills log (dropped by syncFills once absorbed)
+  const pend=(STATE.fillsPending||[]).filter(p=>!STATE.ledgerWatchOnly || STATE.watchlist.includes(p.itemId));
+  const pendBuys=pend.filter(p=>p.kind==='buy'), pendSells=pend.filter(p=>p.kind==='sell');
+  const ptag='<span class="srctag pend" title="written to your fills log — shows here until the next sync folds it in">pending</span>';
+  const pendOpenRows=pendBuys.map(p=>'<tr class="detail pend"><td class="left sub">'+ptag+' '+p.qty.toLocaleString()+' × '+p.name+' @ '+fmt(p.each)+'</td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">'+fmt(p.each)+'</td><td class="num">—</td><td class="num">—</td><td></td></tr>').join('');
+  const pendClosedRows=pendSells.map(p=>'<tr class="detail pend"><td class="left sub">'+ptag+' sold '+p.qty.toLocaleString()+' × '+p.name+' @ '+fmt(p.each)+'</td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">—</td><td class="num">'+fmt(p.each)+'</td><td class="num">—</td><td class="num pend">pending</td><td></td></tr>').join('');
 
   // ---- OPEN (grouped by item; drill-in when >1 lot) ----
   const ob=document.getElementById('openBody'), oe=document.getElementById('openEmpty');
-  if(!open.length){ ob.innerHTML=''; oe.classList.remove('hidden');
+  if(!open.length && !pendBuys.length){ ob.innerHTML=''; oe.classList.remove('hidden');
     oe.innerHTML='<div class="empty"><div class="big">No open positions'+(STATE.ledgerWatchOnly?' on your watchlist':'')+'</div><div class="sm">'+(STATE.ledgerWatchOnly&&openAll.length?'Turn off “Watchlist only” to see '+openAll.length+' hidden.':'Log a buy above to track a flip. Shorthand works — 1.79b, 450k.')+'</div></div>';
   }else{ oe.classList.add('hidden');
-    ob.innerHTML=groupTrades(open).map(g=>{
+    ob.innerHTML=(open.length?groupTrades(open).map(g=>{
       const it=g.itemId?resolveId(g.itemId):null, cur=it&&it.high?it.high:null;
       const totQty=g.rows.reduce((s,t)=>s+t.qty,0), avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
       const un=cur!==null?g.rows.reduce((s,t)=>s+((cur-tax(cur))-t.buy)*t.qty,0):null, multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
@@ -283,7 +344,7 @@ export function renderLedger(){
       let det=''; if(multi&&exp) det=g.rows.map(t=>{ const u=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
         return '<tr class="detail"><td class="left sub">'+(t.src==='fills'?ftag+' ':'')+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(u!==null?sgn(u):'')+'">'+(u!==null?fmt(u):'—')+'</td><td>'+openActions(t)+'</td></tr>'; }).join('');
       return head+det;
-    }).join('');
+    }).join(''):'')+pendOpenRows;
   }
 
   // ---- period P&L strip (closed flips bucketed by SELL date — sidesteps border-straddle) ----
@@ -302,8 +363,9 @@ export function renderLedger(){
 
   // ---- CLOSED (grouped by item; drill-in when >1 flip) ----
   const cb=document.getElementById('closedBody'), ce=document.getElementById('closedEmpty');
-  if(!closed.length){ cb.innerHTML=''; ce.classList.remove('hidden');
+  if(!closed.length && !pendSells.length){ cb.innerHTML=''; ce.classList.remove('hidden');
     ce.innerHTML='<div class="empty"><div class="big">No closed flips'+(STATE.ledgerWatchOnly?' on your watchlist':'')+'</div><div class="sm">'+(STATE.ledgerWatchOnly&&closedAll.length?'Turn off “Watchlist only” to see '+closedAll.length+' hidden.':'Sold positions land here with realised profit after tax.')+'</div></div>';
+  }else if(!closed.length){ ce.classList.add('hidden'); cb.innerHTML=pendClosedRows;
   }else{ ce.classList.add('hidden');
     const groups=groupTrades(closed).map(g=>{ const totQty=g.rows.reduce((s,t)=>s+t.qty,0);
       g.totQty=totQty; g.avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty); g.avgSell=Math.round(g.rows.reduce((s,t)=>s+t.sell*t.qty,0)/totQty);
@@ -317,7 +379,7 @@ export function renderLedger(){
         const when=t.closed?pad2(d.getMonth()+1)+'/'+pad2(d.getDate()):'—';
         return '<tr class="detail"><td class="left sub">'+when+' · '+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'→'+fmt(t.sell)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td><td class="num mini loss">'+fmt(tax(t.sell)*t.qty)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td>'+closedActions(t)+'</td></tr>'; }).join('');
       return head+det;
-    }).join('');
+    }).join('')+pendClosedRows;
   }
   document.querySelectorAll('#openBody [data-grp],#closedBody [data-grp]').forEach(el=>el.onclick=e=>{ if(e.target.closest('button')) return; toggleLedgerGroup(el.dataset.grp); });
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeTrade(b.dataset.close));
