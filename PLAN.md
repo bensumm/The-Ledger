@@ -88,6 +88,47 @@ Commit: `pipeline: unify reconstruction onto reconstruct.mjs (fix monitor WITHDR
 
 ---
 
+## Chunk 10 — Refactor / debt pass (post-chunk-9) — LOW RISK, HYGIENE
+
+A chunk-4-style sweep now that chunks 1–4 + 6–9 have shipped. Behavior-preserving except where a
+fix IS the point; every item independently verifiable.
+
+### 10.1 Close the two open Discovered items
+- `monitor.mjs` `NaNm ago` freshness line: filter rows lacking a valid `date`/`time` before the
+  `Math.max` (manual REMOVE lines poison it). Verify by running `monitor.mjs` once — the line must
+  print a real age.
+- Stale pointer comments from the chunk-8 move: `js/fillslog.js` (~line 77, "SAME ALGORITHM as
+  eventId() in pipeline/sync-fills.mjs") and `watch.mjs` (~lines 29-30, calls `reconstruct.mjs`
+  "an older copy blind to WITHDRAWN/BANKED") — both should point at `reconstruct.mjs` as the
+  canonical home. Comment-only edits.
+
+### 10.2 Pipeline-script dedup sweep
+The `.mjs` scripts have re-grown parallel copies of small helpers. Grep first, then consolidate
+into `marketfetch.mjs` (fetch-adjacent) or a tiny new `pipeline/cli.mjs` (arg/format helpers) —
+same one-module-N-consumers principle as chunk 8. Expected candidates (verify, don't assume):
+`--arg` parser loops, `parseGp`, `mdTable`/`stdCells` wrappers (vs the unreferenced
+`quoteMarkdown` in `quotecore.js` — either adopt it or note why the script-side wrapper stays).
+Rule: consolidate only true duplicates; don't force-share things that merely look similar.
+Output-preserving gate: capture each script's output on fixed args before/after (live data moves —
+compare structure/columns, and use cached `.cache/` inputs within one TTL window for a tighter diff).
+
+### 10.3 Docs truth pass
+- CLAUDE.md "Market analysis workflow": `screen.mjs` now defaults to `--mode band` and has
+  `--mode spread|rising|churn`, `--band-hours`, `--min-active`, `Exp gp/d` column — the command
+  map + flag examples must match reality. Same check for `MONITORING.md` and README if they name
+  script flags.
+- PLAN.md hygiene: chunk 8 shipped (commit `181a07c`) but its full section was never collapsed —
+  move it to a one-line Completed pointer matching the others.
+- Spec-style rule applies: no live data pasted into docs.
+
+### 10.4 Acceptance
+`node --check` every touched file; run `quote.mjs` (one item + `--positions`), `screen.mjs` (each
+mode once), `monitor.mjs`, `watch.mjs` once each — all still produce their tables/reports; no
+`APP_VERSION` bump unless an app-served `js/*.js` file changes behavior (comment-only edits don't).
+Commit: `refactor: debt pass — monitor NaN fix, stale pointers, pipeline helper dedup, docs truth`.
+
+---
+
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
   realized-vs-suggested calibration.
