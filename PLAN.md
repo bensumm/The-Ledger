@@ -165,14 +165,27 @@ table grouped **Tier A** (stable regime) / **Tier B** (recently repriced/volatil
 small). Falling items silently excluded. Cache mapping + 24h response (short TTL, e.g. 10 min)
 in `pipeline/.cache/` (gitignore it).
 
-### 3.3 CLAUDE.md
-Add/confirm the "Market analysis workflow" section: always use these two scripts for market
-reads; never hand-write fetch scripts; the standard table is the only presentation format.
+### 3.3 `pipeline/quote.mjs --positions` (check market vs GE positions — the common ask)
+"Check current market against my open positions" is a recurring request, so it gets a
+first-class mode rather than an ad-hoc loop. `--positions` (no item args) reads the OPEN lots
+from repo-root `positions.json`, groups by itemId at weighted-avg cost, quotes each held item
+live, and prints the **standard table with two extra held-position columns**: `Held@ (avg
+cost)` and `Break-even` (`ceil(avgCost/0.98)`), plus a per-row verdict (HOLD / list-at-X /
+CUT) reusing the trend logic. Falling held items are ALWAYS shown here (the held/asked
+exception), with price-to-clear guidance. Imports `js/quotecore.js`; same fetch/cache path as
+3.1. This is the canonical answer to "how are my positions doing vs the market."
+
+### 3.4 CLAUDE.md workflow wiring
+Update the "Market analysis workflow" section so the gating is removed once these ship and the
+three canonical asks map to exact commands: per-item read → `quote.mjs <item>`; opportunity
+screen → `screen.mjs`; **positions-vs-market → `quote.mjs --positions`**. State plainly: never
+hand-write `node -e` fetch scripts for a market read; these scripts ARE the workflow.
 
 ### Acceptance
-Run both live; verify ordering invariant, tier grouping, no falling items in output.
-No APP_VERSION bump needed if `js/` untouched beyond quotecore (already shipped in chunk 2).
-Commit: `analysis: quote.mjs + screen.mjs standard-table scripts`.
+Run all three modes live; verify ordering invariant, tier grouping, no falling items in the
+screen (but held fallers DO show under `--positions`), break-even column correct against a
+known lot. No APP_VERSION bump needed if `js/` untouched beyond quotecore (shipped in chunk 2).
+Commit: `analysis: quote.mjs (+--positions) + screen.mjs standard-table scripts`.
 
 ---
 
