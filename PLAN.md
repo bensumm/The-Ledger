@@ -244,6 +244,69 @@ keep-pile changes slowly, so manual refresh is acceptable.
 `pipeline/bank.csv`. Nothing to build until that sample lands (parser must be pinned to actual
 columns). Until then this stays BLOCKED.
 
+## Chunk 6 — Last-2h momentum tell: `Mom` column + rating input (HIGH PRIORITY)
+
+Requested 2026-07-03 after a live high-value board read. Touches `js/quotecore.js`, `js/market.js`,
+`js/ui.js`, `js/trends.js`, `js/quote.js`, `pipeline/quote.mjs`/`screen.mjs`. Bump `APP_VERSION`
+(app behavior changes) — likely 0.30.0.
+
+### The insight (and why chunk 2 currently HIDES it)
+On ONE consistent basis (live `/latest` + 2h 5m-band), `optBuy ≤ quickBuy ≤ quickSell ≤ optSell`
+holds *normally*. A break is one of two things: **inconsistent bases → bug** (the 2026-07-03
+percentile-mixing incident) OR **consistent bases → a real-time momentum tell** — live has moved
+outside its own 2h band. `quickBuy < optBuy` (live instasell below 2h floor) = **↓ breaking down**;
+`quickSell > optSell` (live instabuy above 2h top) = **↑ breaking up**; else **clean/ranging**.
+Verified live: Twinflame/Brimstone ↓, Zombie axe ↑, Tome/Buckler clean — matched the independent
+2h-drift read exactly. **Problem:** chunk 2's `computeQuote` CLAMPS (`optBuy = min(quickBuy,
+bandLo)`, `optSell = max(quickSell, bandHi)`) — correct for *pricing* (never suggest buying above
+the live market) but it ANNIHILATES the signal (the break can never appear). Fix is NOT to
+un-clamp; compute the flag from the **pre-clamp** raw comparison and keep the clamp for displayed
+prices.
+
+### 6.1 `js/quotecore.js` — add the momentum flag to the row model
+Compute `rawBandLo`/`rawBandHi` (unclamped 2h edges) and derive `mom ∈ {clean, breakdown,
+breakup}`: `breakdown` if `quickBuy < rawBandLo`, `breakup` if `quickSell > rawBandHi`, else
+`clean`. KEEP the existing price clamp (pricing correctness) — `mom` is derived *before* it. Expose
+`mom` (and optionally a magnitude = fraction outside the band) on the row model. The base-mixing BUG
+is prevented separately by a consistency assertion/test (live + band from the same fetch), NOT by
+the clamp. Update the ordering test: assert displayed prices still clamp AND that a seeded
+below-floor live quote sets `mom==='breakdown'` without breaking the price ordering.
+
+### 6.2 `Mom` column in every standard table
+Add `Mom` to `QUOTE_HEADERS`, `quoteCells`, `quoteMarkdown` (quotecore) and the app HTML renderer
+(`quote.js` `quoteTableHtml`, Trends `#trSuggest`, position-review cards, Finder expander). Render
+`clean` / `↓` / `↑`. **The Buy@/Sell@ Quick/Opt price columns MUST stay** — a hand-written board
+this session accidentally dropped them; the scripts/app must never. Since `pipeline/quote.mjs` and
+`screen.mjs` build their own `mdTable`, add the `Mom` cell there too (they don't currently use
+`quoteMarkdown`) — verify the column renders WITH the price columns in both scripts.
+
+### 6.3 Finder rating factors momentum in (`js/market.js`)
+`computeScores()`/`ratingParts()` — a `breakdown` item is penalized (actively pulling back);
+`breakup` is neutral-to-slightly-positive. **Data limitation to resolve honestly:** the Finder bulk
+table does NOT fetch a per-item 2h 5m series (only live + a guide proxy — see the Trends-tab note in
+CLAUDE.md). Real `mom` needs the per-item series. Options, pick and JUSTIFY: (a) apply the mom
+penalty only in the on-demand quote expander (where the series is fetched) and leave the bulk rating
+on its cheap proxy; (b) a bounded top-N 5m fetch for only the currently-sorted-visible rows; (c) a
+cheap proxy for mom from data already in bulk (`/5m` or `/latest` vs `/24h` mid). Do NOT bulk-hammer
+`/timeseries` across all items (rate limits). Be explicit about what the rating can and can't see.
+
+### 6.4 Cut-trigger wiring (position review + `--positions`)
+A HELD big-ticket position flashing `breakdown` escalates the verdict toward **CUT** even when the
+multi-day regime hasn't flipped yet — the tell fires *before* the lagging regime confirms (the
+bludgeon-exit lesson; ties to the `opportunity-cost-can-beat-patient-hold` memory). Wire `mom` into
+the HOLD/list-at/CUT verdict logic in `reviewPositions` and `quote.mjs --positions`.
+
+### 6.5 Docs
+CLAUDE.md "Market analysis workflow" wording + `Mom` column already updated (2026-07-03 doc commit).
+Keep the memory `analysis-output-table-format` in sync. Note in the chunk-2 "Done" entry that the
+clamp alone was incomplete — it needed the pre-clamp flag to preserve the signal.
+
+### Acceptance
+`mom` matches an independent 2h-drift read on a live board; price ordering still clamps; `Mom`
+column renders in app tables AND both scripts WITH the price columns intact; Finder rating shifts on
+a breakdown item; a held breakdown position escalates toward CUT. Playwright + live script runs.
+Commit: `momentum: Mom column + rating input + cut-trigger (0.30.0)`.
+
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
   realized-vs-suggested calibration.
