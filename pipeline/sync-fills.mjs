@@ -42,6 +42,7 @@ import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { tax as GE_TAX } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) — no private copy
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
@@ -213,7 +214,7 @@ function buildEvents(rawLinesParsed) {
  * started mid-stream) — we can't know its cost basis, so it goes to
  * `unmatched` (informational only), never a fabricated profit.
  * ================================================================== */
-const GE_TAX = each => Math.min(Math.floor(each * 0.02), 5_000_000); // 2% floored/item, capped 5m
+// GE_TAX is imported from js/quotecore.js (format.js `tax`) — see the import at the top.
 
 function collapseOffers(events) {
   const cur = new Map(); // slot -> in-progress offer
@@ -375,7 +376,7 @@ function main() {
   const changed = eventsChanged || positionsChanged;
   const realisedTotal = pos.closed.reduce((s, t) => s + t.realised, 0);
 
-  console.log(`${files.length} log file(s), ${rawLines} lines, ${parsed} parsed, ${merged.length} events after merge${eventsChanged ? '' : ' (no change)'}`);
+  console.log(`${files.length} log file(s), ${rawLines} lines (${parsedLines} valid trade line(s)), ${parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
   console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s)${positionsChanged ? '' : ' (no change)'}`);
   if (DRY) {
     for (const e of merged) {

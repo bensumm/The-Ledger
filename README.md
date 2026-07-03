@@ -38,17 +38,28 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `index.html` — the app shell (markup only)
 - `styles.css` — all styles
 - `js/` — app logic as ES modules: `state.js` (shared mutable state as one `STATE`
-  object + constants + persistence + diagnostics), `format.js` (formatting/tax),
-  `charts.js` (inline SVG), `market.js` (price/guide fetch + scoring), `trends.js`
-  (archive + seasonal analysis + regime/patient/backtest), `ui.js`
+  object + constants + persistence + diagnostics), `format.js` (formatting/tax —
+  the canonical `tax()`/`breakEven()` helpers), `charts.js` (inline SVG), `market.js`
+  (price/guide fetch + scoring), `trends.js` (archive + seasonal analysis +
+  regime/patient/backtest), `quotecore.js` (DOM-free quote model + canonical
+  market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
+  with the node analysis scripts), `quote.js` (browser orchestrator that fetches one
+  item's series and renders the standard quote table), `fillslog.js` (File System
+  Access API writer for `coffer-manual.log` + tombstones), `ui.js`
   (Finder/Watchlist/Signals/Ledger/Coffer rendering), `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite, fetched same-origin
 - `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
   trades + open positions); the app auto-populates its Ledger/Coffer from it
-- `pipeline/` — RuneLite fill-data pipeline (sync script, wrapper scripts, design
-  doc); not served by Pages, not part of the app. See `pipeline/FILLS-PIPELINE.md`.
+- `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by
+  Pages, not part of the app. `sync-fills.mjs` (parse log → `fills.json`/`positions.json`),
+  `reconstruct.mjs` (shared FIFO reconstruction), `add-manual-fill.mjs` (inject/tombstone
+  manual fills), `monitor.mjs` (live read-only position monitor), `marketfetch.mjs`
+  (node-side price/guide fetch layer), `quote.mjs` (per-item / `--positions` market table),
+  `screen.mjs` (opportunity screen). The `quote.mjs`/`screen.mjs` scripts import
+  `js/quotecore.js` + `js/format.js` so their tables match the app exactly. See
+  `pipeline/FILLS-PIPELINE.md`.
 
 ## Local development
 

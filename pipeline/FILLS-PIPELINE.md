@@ -241,6 +241,10 @@ Not yet built — planned as the next tool feature, roughly in order:
     absorbed the injected line. Since 0.27.0 the log is the ONLY manual path — unlinked, the
     form shows guidance and creates nothing (the old browser-local `STATE.trades` path was
     removed; PLAN.md chunk 1).
+    - **When linking, pick the EXISTING `coffer-manual.log`** — don't "create new" in the
+      picker. Doing so once produced a second `coffer-manual.log.txt`; `sync-fills.mjs` ingests
+      `.txt` too so nothing broke, but app-writes and CLI-writes then split across two files.
+      One canonical file keeps `add-manual-fill.mjs` (CLI) and the app writing to the same place.
   Editing/deleting an injected line (0.27.0): pending rows have Edit/Delete (exact-string
   line rewrite through the stored file handle), and "Edit manual entries…" rewrites any
   already-synced manual line; both always append a REMOVE tombstone for the old event id

@@ -63,22 +63,14 @@ Key lesson driving this: hourly seasonality is usually noise or a regime artifac
 regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
 
 ## Done (recent, for context — don't rebuild)
-- **Finder rating rework** (0.17.0): `computeScores()` in `js/market.js` now blends
-  four transparent 0..1 sub-scores via `ratingParts()` — ROI, liquidity (log-scaled
-  vol), stability, turnaround — into a `quality` dampener; `score = pph*(1-damp*(1-
-  quality))` keeps profit/hr as the magnitude anchor. Risk grade + Rating bar carry a
-  per-factor tooltip. Finder stability is a cheap live-price-vs-guide proxy (the real
-  `regimeDrift` still needs a per-item series → stays on Trends).
+- **Finder rating rework** (0.17.0): `computeScores()` in `js/market.js` blends four 0..1
+  sub-scores (ROI, liquidity, stability, turnaround) into a `quality` dampener on profit/hr;
+  per-factor tooltip on the Risk grade + Rating bar.
 - **Ledger auto-populate from fills** (0.18.0): `syncFills()` in `js/ui.js` fetches
-  `positions.json` on load/refresh and merges pipeline-reconstructed real trades into
-  the Ledger/Coffer (tagged `src:'fills'`, idempotent rebuild, tombstoned via
-  `STATE.fillsHidden`, unmatched sells shown but excluded from realised). Pipeline
-  emits `positions.json` — see `pipeline/FILLS-PIPELINE.md` §5.1.
-- **Position review workflow** (0.19.0): "Review pricing" button on the Ledger →
-  `reviewPositions()` in `js/trends.js` fetches live 5m/6h/guide-history per open
-  position and renders a **HOLD / ADJUST / CUT** verdict + concrete "list at X" price.
-  Pivot = break-even (`ceil(buy/0.98)`) × trend (falling/flat/rising from regimeDrift +
-  refineTrend momentum).
+  `positions.json` and merges pipeline-reconstructed real trades into the Ledger/Coffer
+  (`src:'fills'`, idempotent rebuild, tombstoned via `STATE.fillsHidden`).
+- **Position review workflow** (0.19.0): "Review pricing" on the Ledger → `reviewPositions()`
+  in `js/trends.js` renders a HOLD / ADJUST / CUT verdict + "list at X" price per open lot.
 - **Falling items → price to clear** (0.20.0): Ben's rule — for a falling item the
   suggested prices must reflect the fall: buy low aggressively, price to sell quickly.
   This **superseded** the 0.19.0 "HOLD — cut if slow / list high above market" nuance,
@@ -117,11 +109,23 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
 
 ## Market analysis workflow — standard output format
 Every market read presented to Ben (screen, per-item quote, position review) is ONE table:
-`Item | Guide | Mid | Buy@ Quick/Opt | Sell@ Quick/Opt | Net/u Quick/Opt (ROI) | Vol/d | Regime`
+`Item | Guide | Mid | Buy@ Quick/Opt | Sell@ Quick/Opt | Net/u Quick/Opt (ROI) | Vol/d | Mom | Regime`
 - Quick = transact now (buy at live instasell, sell at live instabuy). Optimistic = patient
-  2h-band edges (last 24×5m points: min avgLow / max avgHigh). Same basis ⇒ optBuy ≤ quickBuy
-  ≤ quickSell ≤ optSell **always** — if that ordering breaks, bases got mixed (this bug
-  shipped in an analysis 2026-07-03: 24h percentiles mixed with live quotes).
+  2h-band edges (last 24×5m points: min avgLow / max avgHigh).
+- **Ordering + the `Mom` (last-2h momentum) column.** On ONE consistent basis, optBuy ≤ quickBuy
+  ≤ quickSell ≤ optSell holds *normally*. A break means one of two things — check the bases FIRST:
+  (1) **inconsistent bases → bug** (24h percentiles mixed with live quotes — the 2026-07-03
+  incident); fix the script. (2) **consistent bases (live `/latest` + 2h 5m-band) → a real-time
+  momentum tell**, not an error: the live price moved *outside* its own 2h band. `quickBuy < optBuy`
+  (live instasell below the 2h floor) = **↓ breaking down / active pullback** — don't buy in, and a
+  held big-ticket flashing this is a CUT trigger that fires *before* the lagging multi-day regime
+  confirms (this is the signal whose absence cost us on the bludgeon exit). `quickSell > optSell`
+  (live instabuy above the 2h top) = **↑ breaking up / fresh 2h high**. Clean in-band = ranging.
+  The price columns clamp opt to never cross quick (correct *pricing*), so this tell is surfaced as
+  the **`Mom` column** (clean / ↓ / ↑), computed from the *pre-clamp* live-vs-band comparison — and
+  the **Finder rating factors it in** (breaking-down penalizes). Verified live 2026-07-03
+  (Twinflame/Brimstone ↓, Zombie axe ↑, Tome of fire/Twisted buckler clean; flags matched the
+  independent 2h-drift read exactly).
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
 - Net/u after 2% tax. Regime = multi-day regimeDrift check (flat/rising/falling label).

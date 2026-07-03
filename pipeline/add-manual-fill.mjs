@@ -49,6 +49,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tax as GE_TAX } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) — no private copy
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
@@ -56,7 +57,6 @@ const OUT = path.join(LOG_DIR, 'coffer-manual.log'); // sibling file; ingested b
 const MAP_CACHE = path.join(HERE, 'mapping.cache.json');
 const MAP_URL = 'https://prices.runescape.wiki/api/v1/osrs/mapping';
 const MANUAL_SLOT = 8; // real GE slots are 0-7; 8 keeps synthetic events clear of live-slot cancel inference
-const GE_TAX = each => Math.min(Math.floor(each * 0.02), 5_000_000);
 
 // --- args ---
 const A = {};
@@ -122,14 +122,18 @@ const pad = n => String(n).padStart(2, '0');
 const date = `${when.getFullYear()}-${pad(when.getMonth()+1)}-${pad(when.getDate())}`;
 const time = `${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}`;
 
-// resolve item id + name
+// resolve item id + name.
+// mapping.cache.json is shared with marketfetch.mjs, which writes the richer {id:{name,limit}}
+// shape; flatten to {id:name} on read so --item resolution keeps working regardless of which
+// script last wrote the cache (chunk 4.5 — a rich cache used to break name lookups here).
+const flattenNames = obj => { const m = {}; for (const k in obj) { const v = obj[k]; m[k] = (v && typeof v === 'object') ? v.name : v; } return m; };
 async function loadNames() {
-  try { if (Date.now() - fs.statSync(MAP_CACHE).mtimeMs < 24*3600*1000) return JSON.parse(fs.readFileSync(MAP_CACHE,'utf8')); } catch {}
+  try { if (Date.now() - fs.statSync(MAP_CACHE).mtimeMs < 24*3600*1000) return flattenNames(JSON.parse(fs.readFileSync(MAP_CACHE,'utf8'))); } catch {}
   try {
     const arr = await (await fetch(MAP_URL, { headers: { 'user-agent': 'the-coffer-manual/1.0' } })).json();
     const m = {}; for (const it of arr) m[it.id] = it.name;
     fs.writeFileSync(MAP_CACHE, JSON.stringify(m)); return m;
-  } catch { try { return JSON.parse(fs.readFileSync(MAP_CACHE,'utf8')); } catch { return {}; } }
+  } catch { try { return flattenNames(JSON.parse(fs.readFileSync(MAP_CACHE,'utf8'))); } catch { return {}; } }
 }
 let itemId, itemName;
 if (A.id) { itemId = parseInt(A.id, 10); if (!Number.isFinite(itemId)) die('--id must be a number');

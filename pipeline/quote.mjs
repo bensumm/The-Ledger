@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, quoteCells, QUOTE_HEADERS } from '../js/quotecore.js';
+import { computeQuote, quoteCells, QUOTE_HEADERS, breakEven } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
 
@@ -113,10 +113,10 @@ async function runPositions() {
   for (const [itemId, g] of byItem) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const avgCost = g.cost / g.qty;
-    const breakEven = Math.ceil(avgCost / 0.98);
+    const be = breakEven(avgCost);
     const inp = await fetchInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(breakEven), verdict(row, breakEven)]);
+    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be)]);
     lines.push(regimeLine(name, row));
   }
   console.log(`# Open positions vs market (${byItem.size} items, ${open.length} lots)\n`);

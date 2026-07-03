@@ -14,6 +14,10 @@
 
 import { tax, netMargin, fmtP, fmt } from './format.js';
 export { tax, netMargin } from './format.js';   // re-export so node consumers (chunk 4.1) get the ONE tax impl
+// Break-even list price: the sell price that just clears the 2% GE tax on a lot bought at `buy`.
+// The ONE definition shared by the app, the pipeline monitor, and the analysis scripts (chunk 4.1)
+// so tax/break-even math can never drift between them.
+export const breakEven = buy => Math.ceil(buy/0.98);
 
 function med(arr){ if(!arr||!arr.length) return null; const s=arr.slice().sort((a,b)=>a-b), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
 const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;

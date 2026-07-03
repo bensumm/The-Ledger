@@ -9,6 +9,7 @@
  * Pipeline: readLog -> parseJsonLine per line -> buildEvents -> reconstruct.
  */
 import { createHash } from 'node:crypto';
+import { tax } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
 
 /* ---------------------------------------------------------------------
  * ADAPTER — Exchange Logger (JSON mode) writes one line per slot-state
@@ -132,7 +133,7 @@ export function buildEvents(rawLinesParsed) {
   return events;
 }
 
-export const GE_TAX = each => Math.min(Math.floor(each * 0.02), 5_000_000); // 2% floored/item, capped 5m
+export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the shared impl (chunk 4.1)
 
 export function collapseOffers(events) {
   const cur = new Map(); // slot -> in-progress offer

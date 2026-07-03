@@ -1,4 +1,4 @@
-import { API, STATE, sSet, logEvent } from './state.js';
+import { API, STATE, sSet, logEvent, setHealth } from './state.js';
 import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
 import { loadAll, resolveItem, resolveId, computeScores, TREND_BADGE } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
@@ -297,7 +297,13 @@ export async function syncFills(){
     const r=await fetch('positions.json?t='+Date.now(),{cache:'no-store'});
     if(!r.ok) throw new Error('http '+r.status);
     pos=await r.json();
-  }catch(e){ logEvent('info','fills','positions.json unavailable ('+((e&&e.message)||e)+') — keeping last-synced ledger'); return; }
+  }catch(e){
+    // Surface a fetch failure in the status banner rather than swallowing it (chunk 4.4): a
+    // silently-dead positions.json feed was the failure mode to design against. warn (not error)
+    // — the ledger keeps its last-synced state, so flipping is unaffected.
+    setHealth('fills','warn','Couldn’t refresh real fills (positions.json unreachable: '+((e&&e.message)||e)+') — showing the last-synced ledger.');
+    return;
+  }
   if(!pos || pos.app!=='the-coffer-positions'){ return; }
   const hidden=new Set(STATE.fillsHidden||[]);
   const nameOf=id=>(STATE.byId[id]&&STATE.byId[id].name)||(STATE.catById[id]&&STATE.catById[id].name)||('Item #'+id);
@@ -319,6 +325,7 @@ export async function syncFills(){
     if(STATE.fillsPending.length!==before) await sSet('fillsPending',STATE.fillsPending);
   }
   await sSet('trades',STATE.trades);
+  setHealth('fills','ok','');   // a good fetch clears any prior "couldn’t refresh" warning banner
   logEvent('info','fills',(pos.closed||[]).length+' closed, '+(pos.open||[]).length+' open, '+STATE.fillsUnmatched.length+' unmatched from positions.json');
   renderLedger(); renderCoffer();
 }
@@ -391,8 +398,11 @@ export function renderLedger(){
   const wtag='<span class="srctag" title="taken from inventory for personal use — no sale; excluded from realised">withdrawn</span>';
   const caret=k=>'<span class="caret">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</span>';
   const cnt=n=>' <span class="cnt">×'+n+'</span>';
-  // optimistic rows for entries just written to the fills log (dropped by syncFills once absorbed)
-  const pend=(STATE.fillsPending||[]).filter(p=>!STATE.ledgerWatchOnly || STATE.watchlist.includes(p.itemId));
+  // optimistic rows for entries just written to the fills log (dropped by syncFills once absorbed).
+  // ALWAYS rendered regardless of the "Watchlist only" filter (chunk 4.5): a pending row is the
+  // user's just-taken action — hiding a fresh non-watchlisted entry made the write look like a
+  // no-op (the Feather / Dragon-scim test-add bug, 2026-07-03).
+  const pend=(STATE.fillsPending||[]);
   const pendBuys=pend.filter(p=>p.kind==='buy'||p.kind==='banked'), pendSells=pend.filter(p=>p.kind==='sell'||p.kind==='withdraw');
   const ptag='<span class="srctag pend" title="written to your fills log — shows here until the next sync folds it in">pending</span>';
   const pactions=p=>'<button class="act" data-pedit="'+p.id+'">Edit</button> <button class="act danger" data-pdel="'+p.id+'">Delete</button>';
