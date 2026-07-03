@@ -3,6 +3,7 @@ import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from
 import { loadAll, resolveItem, resolveId, computeScores, TREND_BADGE } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
+import { fetchQuote, quoteTableHtml } from './quote.js';
 import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName,
          tombstoneLine, manualLineEvent, eventIdFor, readFillsLog, rewriteFillsLog } from './fillslog.js';
 
@@ -58,10 +59,24 @@ export function renderFinder(){
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
       '<td class="num gold">'+fmt(it.pph)+'</td><td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>'+
       '<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
-      '<td><button class="star '+(watched?'on':'')+'" data-id="'+it.id+'">'+(watched?'★':'☆')+'</button></td></tr>';
+      '<td><button class="act qbtn" data-quote="'+it.id+'" title="on-demand standard market table (Quick/Optimistic, regime)">quote</button> <button class="star '+(watched?'on':'')+'" data-id="'+it.id+'">'+(watched?'★':'☆')+'</button></td></tr>';
   }).join('');
   body.querySelectorAll('.star').forEach(b=>b.onclick=()=>toggleWatch(+b.dataset.id));
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
+  body.querySelectorAll('.qbtn').forEach(b=>b.onclick=()=>toggleFinderQuote(b));
+}
+/* per-row on-demand quote expander — fetches ONE item's series and renders the standard table.
+   No bulk fetching (rate limits), no always-on columns; the row is inserted only on click. */
+function toggleFinderQuote(btn){
+  const tr=btn.closest('tr'), id=+btn.dataset.quote, next=tr.nextElementSibling;
+  if(next && next.classList.contains('qrow')){ next.remove(); btn.classList.remove('on'); return; }
+  const qr=document.createElement('tr'); qr.className='qrow';
+  qr.innerHTML='<td colspan="11"><div class="mini">Fetching live quote…</div></td>';
+  tr.after(qr); btn.classList.add('on');
+  const cell=qr.firstElementChild;
+  fetchQuote(id,{asked:true})
+    .then(row=>{ const it=resolveId(id); cell.innerHTML=quoteTableHtml((it&&it.name)||('#'+id), row); })
+    .catch(()=>{ cell.innerHTML='<div class="mini">Couldn’t load quote — try again.</div>'; });
 }
 export function showFinderError(){
   document.getElementById('finderBody').innerHTML='';

@@ -4,6 +4,8 @@ import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch, renderSignals } from './ui.js';
 import { switchTab } from './main.js';
+import { regimeDrift } from './quotecore.js';   // shared impl (moved out of trends.js so quotes reuse it)
+import { fetchQuote, quoteTableHtml } from './quote.js';
 
 /* trends + growing hourly archive */
 export const ARCH_MAX_DAYS=60;
@@ -114,27 +116,8 @@ export function buildPlan(points, s6h, it){
   o.regime = regimeDrift(points);
   return o;
 }
-/* --- regime-shift guard: has the price LEVEL moved recently? ---------------
-   conf/medCount only measure how much history we have, not whether that history
-   is one stable regime. If the median has jumped in the last few days (a game
-   update, a rebalance, speculative repricing), the hour-of-day factors above blend
-   two different price levels and the "cheapest/richest hour" hints become noise —
-   this is exactly the trap where a one-off jump masquerades as a daily cycle.
-   Compares the last 3 days' median mid-price against the prior ~2 weeks'. */
-export function regimeDrift(points){
-  if(!points || points.length<2) return {ok:false};
-  const mid=p=>(p.avgLowPrice&&p.avgHighPrice)?(p.avgLowPrice+p.avgHighPrice)/2:(p.avgLowPrice||p.avgHighPrice);
-  const tEnd=points[points.length-1].timestamp;
-  const recentCut=tEnd-3*86400, priorCut=tEnd-17*86400;
-  const recent=[], prior=[];
-  points.forEach(p=>{ const m=mid(p); if(!m) return;
-    if(p.timestamp>=recentCut) recent.push(m);
-    else if(p.timestamp>=priorCut) prior.push(m); });
-  if(recent.length<8 || prior.length<8) return {ok:false};   // not enough on either side to compare
-  const recentMed=median(recent), priorMed=median(prior);
-  if(!recentMed || !priorMed) return {ok:false};
-  return {ok:true, driftPct:(recentMed-priorMed)/priorMed*100, recentMed, priorMed};
-}
+/* regimeDrift moved to js/quotecore.js (imported above) so the Trends plan card, position
+   review, and the standard quote model all share ONE regime-shift impl. */
 /* --- patient-offer sizing: instant spread vs. waiting for the range edges -----
    The live low/high is the instant-fill spread. If you'll wait, you can often buy
    nearer the low end of the recent range and sell nearer the high end, clearing a
@@ -263,7 +246,7 @@ export function classifyPositionTrend(s6h, R){
   const rising =(R&&R.ok&&R.state==='up') || (regime.ok&&regime.driftPct>=5);
   return {falling, rising, regime, m7, m30};
 }
-export function renderPositionCard(t, it, s5m, s6h, gser){
+export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   const buy=t.buy, qty=t.qty;
   const sellNow=it.high, netNow=sellNow-tax(sellNow), profNow=(netNow-buy)*qty;
   const breakeven=Math.ceil(buy/0.98);                 // sell price that nets >= cost after 2% tax
@@ -289,7 +272,9 @@ export function renderPositionCard(t, it, s5m, s6h, gser){
   const fill=listAt<=sellNow?'fills ~instantly':(listAt<=hiMax?'within the recent 2h range — fills with patience':'above the recent 2h high — may sit');
   const trWord=tr.falling?'Falling':(tr.rising?'Rising':'Flat'), trCls=tr.falling?'loss':(tr.rising?'gold':'gain');
   const mom=[]; if(tr.m7!=null)mom.push((tr.m7>=0?'+':'')+tr.m7.toFixed(0)+'%/7d'); if(tr.m30!=null)mom.push((tr.m30>=0?'+':'')+tr.m30.toFixed(0)+'%/30d'); if(tr.regime.ok)mom.push('regime '+(tr.regime.driftPct>=0?'+':'')+tr.regime.driftPct.toFixed(0)+'%');
+  const tableHtml=qrow?quoteTableHtml(t.name, qrow):'';   // same standard columns as Finder/Trends, for consistency
   return '<div class="suggest" style="margin-top:10px">'+
+    tableHtml+
     '<div class="stitle">'+t.name+' <span class="csub">×'+qty.toLocaleString()+' @ '+fmtP(buy)+'</span><span class="'+cls+'" style="float:right;font-weight:700">'+verdict+'</span></div>'+
     '<div class="sgrid">'+
       '<div class="sbox"><div class="sk">Break-even</div><div class="sv">'+fmtP(breakeven)+'</div><div class="ss">nets your cost</div></div>'+
@@ -314,7 +299,8 @@ export async function reviewPositions(){
       const it=resolveId(t.itemId); if(!it||!it.high){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">No live quote available.</div></div>'); continue; }
       const [s5m,s6h]=await Promise.all([fetchTimeseries(t.itemId,'5m'), fetchTimeseries(t.itemId,'6h')]);
       let gser=[]; try{ gser=await fetchGuideSeries(t.itemId); }catch(e){}
-      cards.push(renderPositionCard(t, it, s5m, s6h, gser));
+      let qrow=null; try{ qrow=await fetchQuote(t.itemId,{held:true}); }catch(e){}   // held → always shown even if falling
+      cards.push(renderPositionCard(t, it, s5m, s6h, gser, qrow));
     }catch(e){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">Couldn’t load live data — try again.</div></div>'); }
   }
   box.innerHTML='<div class="stitle" style="margin-top:6px">Position review <span class="csub">live · after 2% tax · break-even = sell that nets cost · guidance, not guarantees</span></div>'+cards.join('');
@@ -387,7 +373,11 @@ export async function runTrends(){
       r+=' <b class="gold">Patient pricing:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b> (buy) and as high as <b>'+fmtP(PT.hiMax)+'</b> (sell). Buying near <b>'+fmtP(PT.patientBuy)+'</b> and selling near <b>'+fmtP(PT.patientSell)+'</b> would net <b class="gain">'+fmtP(PT.patientMargin)+'</b>/ea after tax — '+more+' — though fills near the range edges aren’t guaranteed and can take a while.';
     }
     r+=' <span class="ccap">Buy/sell are live prices; trend from guide divergence. Timing detail below. Not guarantees.</span>';
-    document.getElementById('trSuggest').innerHTML=grid+'<div class="sreason">'+r+'</div>';
+    // standard market table above the plan copy (asked-for item → always shown even if falling,
+    // with price-to-clear framing handled inside computeQuote)
+    let quoteHtml='';
+    try{ const qrow=await fetchQuote(it.id,{asked:true}); quoteHtml=quoteTableHtml(it.name, qrow); }catch(e){ logEvent('info','market','quote table skipped for '+it.name+' ('+(((e&&e.message)||e))+')'); }
+    document.getElementById('trSuggest').innerHTML=quoteHtml+grid+'<div class="sreason">'+r+'</div>';
 
     // ---- "Why this trend?" expander (Tier 2): plain-language guide divergence, σ only in the detail ----
     if(showAnalysis){

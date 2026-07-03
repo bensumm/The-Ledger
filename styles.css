@@ -227,6 +227,15 @@ tr.grp.clk:hover{background:rgba(255,255,255,0.03)}
 .caret{display:inline-block;width:14px;color:var(--parch2);font-size:11px}
 .cnt{color:var(--parch2);font-size:12px;font-weight:600}
 tr.detail{background:rgba(0,0,0,0.15)}
+
+/* standard market table (quotecore/quote.js) — Finder expander, Trends plan card, position review (0.28.0) */
+.qtwrap{margin-bottom:12px}
+.qtbl{min-width:560px}
+.qtbl thead th{cursor:default}
+tr.qrow>td{padding:12px 13px; background:rgba(0,0,0,0.18)}
+tr.qrow .qtwrap{margin-bottom:0}
+.qflag{font-size:10px; letter-spacing:.08em; text-transform:uppercase; margin-left:6px; cursor:help}
+.suggest .qtbl thead th{background:rgba(0,0,0,.25)}
 tr.detail td{color:var(--parch2);font-size:12px;border-top:none}
 td.left.sub{padding-left:22px}
 .periodstrip{margin:8px 0 12px}
