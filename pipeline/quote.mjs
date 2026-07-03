@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, quoteCells, QUOTE_HEADERS, breakEven } from '../js/quotecore.js';
+import { computeQuote, quoteCells, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
 
@@ -37,7 +37,7 @@ function mdTable(headers, rows) {
   const sep = '| ' + headers.map(() => '---').join(' | ') + ' |';
   return [head, sep, ...rows.map(r => '| ' + r.join(' | ') + ' |')].join('\n');
 }
-const stdCells = (name, row) => { const c = quoteCells(name, row); return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.regime]; };
+const stdCells = (name, row) => { const c = quoteCells(name, row); return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.mom, c.regime]; };
 function regimeLine(name, row) {
   const r = row.regime;
   const drift = (r && r.ok) ? `${r.driftPct >= 0 ? '+' : ''}${r.driftPct.toFixed(1)}% (3d vs prior ~2wk median)` : 'insufficient history';
@@ -77,10 +77,22 @@ async function runItems() {
   console.log(lines.join('\n'));
 }
 
-/* verdict reuses the quotecore regime/trend flags on the row (no separate trend math). */
-function verdict(row, breakEven) {
+/* verdict reuses the quotecore regime/trend flags on the row (no separate trend math).
+   The precise 2h `mom` cut-trigger (chunk 6) runs FIRST via the SHARED momVerdict() — identical
+   matrix to the app's reviewPositions — so a held breakdown escalates toward CUT / clear before
+   the regime-only branches. lotValue = qty × avgCost (capital at risk). mom clean → fall through. */
+function verdict(row, breakEven, lotValue) {
   const instabuy = row.quickSell;         // what you'd clear at right now
   if (instabuy == null) return 'NO QUOTE';
+  const mv = momVerdict(row, breakEven, lotValue);
+  if (mv) {
+    const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
+    const tag = mv.action === 'CUT'         ? ' (2h breakdown & underwater — free capital)'
+              : mv.action === 'CLEAR'       ? (row.rising ? ` (2h breakdown vs uptrend; big-ticket ≥ ${BIG_TICKET_GP/1e6}m → clearing)` : ' (2h breakdown — bank it, don’t hold for the premium)')
+              : mv.action === 'HOLD_WATCH'  ? ` (2h pullback vs uptrend on a sub-${BIG_TICKET_GP/1e6}m lot — may reabsorb)`
+              : ' (2h breakup — patient on the sell, don’t sell into strength)';
+    return `${mv.verdict}${at}${tag}`;
+  }
   if (row.falling) {
     return instabuy >= breakEven
       ? `SELL @ ${fmtP(instabuy)} (falling — clear in profit)`
@@ -116,7 +128,7 @@ async function runPositions() {
     const be = breakEven(avgCost);
     const inp = await fetchInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be)]);
+    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be, g.cost)]);
     lines.push(regimeLine(name, row));
   }
   console.log(`# Open positions vs market (${byItem.size} items, ${open.length} lots)\n`);

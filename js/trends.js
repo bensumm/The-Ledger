@@ -4,7 +4,7 @@ import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch, renderSignals } from './ui.js';
 import { switchTab } from './main.js';
-import { regimeDrift } from './quotecore.js';   // shared impl (moved out of trends.js so quotes reuse it)
+import { regimeDrift, momVerdict } from './quotecore.js';   // shared impls (regime + cut-trigger) so quotes/positions reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 
 /* trends + growing hourly archive */
@@ -256,7 +256,16 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   const R=refineTrend(it, gser||[]);
   const tr=classifyPositionTrend(s6h, R);
   let verdict, cls, listAt, why;
-  if(tr.falling){
+  // Cut-trigger overlay (chunk 6): the held position's precise 2h `mom` (from the standard quote
+  // row, same fetch) LEADS the multi-day regime, so a breakdown escalates toward CUT / clear before
+  // the regime-only branches below would. Shared momVerdict() keeps this identical to
+  // quote.mjs --positions. mom==='clean' → mv is null → the existing regime logic runs unchanged.
+  const lotValue=buy*qty;   // capital at risk in this lot (qty × avgCost)
+  const mv=qrow?momVerdict(qrow, breakeven, lotValue):null;
+  if(mv){
+    verdict=mv.verdict; cls=mv.cls; why=mv.why;
+    listAt = mv.listAt!=null ? mv.listAt : (canBE?patientSell:breakeven);   // HOLD_WATCH: no reprice → patient/BE
+  } else if(tr.falling){
     // Falling: price to clear at the instabuy regardless of profit. Never list above a dropping
     // market — the recent highs are stale, and every hour spent above the bid the range steps
     // down toward you anyway. In profit → take it; underwater → take the small loss now.

@@ -30,7 +30,7 @@ const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
 const TOP = A.top != null ? +A.top : 40;
 
 const mdTable = (headers, rows) => ['| ' + headers.join(' | ') + ' |', '| ' + headers.map(() => '---').join(' | ') + ' |', ...rows.map(r => '| ' + r.join(' | ') + ' |')].join('\n');
-const stdCells = (name, row) => { const c = quoteCells(name, row); return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.regime]; };
+const stdCells = (name, row) => { const c = quoteCells(name, row); return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.mom, c.regime]; };
 
 async function main() {
   const map = await loadMapping();

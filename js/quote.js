@@ -11,7 +11,7 @@ import { computeQuote, quoteCells } from './quotecore.js';
 
 /* User-Agent is a forbidden header in browsers (silently dropped) — the node scripts set it
    for real; kept here only so the two fetch layers read the same. */
-const UA='TheCoffer/0.28 (bensumm; github.com/bensumm/The-Ledger)';
+const UA='TheCoffer/0.30 (bensumm; github.com/bensumm/The-Ledger)';
 async function jget(url){
   const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),15000);
   try{ const r=await fetch(url,{signal:ctrl.signal, headers:{'User-Agent':UA}}); if(!r.ok) throw new Error('http '+r.status); return await r.json(); }
@@ -42,8 +42,13 @@ export function quoteTableHtml(name, row){
              : row.rising  ? ' <span class="qflag gold" title="multi-day regime rising">rising</span>' : '';
   const inv  = row.ordered ? '' : ' <span class="qflag loss" title="live low/high inverted in the feed — quote basis unreliable">⚠ basis</span>';
   const netCls=sgn(row.optNet);
+  // Mom = last-2h momentum tell (pre-clamp live-vs-band): ↓ breaking down, ↑ breaking up, clean = ranging.
+  const momCls=row.mom==='breakdown'?'loss':row.mom==='breakup'?'gold':'mini';
+  const momTitle=row.mom==='breakdown'?'live instasell below its own 2h floor — breaking down / active pullback'
+               :row.mom==='breakup'?'live instabuy above its own 2h top — breaking up / fresh 2h high'
+               :'live prices inside the 2h band — ranging';
   return '<div class="tablewrap qtwrap"><table class="qtbl"><thead><tr>'+
-    '<th class="left">Item</th><th>Guide</th><th>Mid</th><th>Buy@ Q / Opt</th><th>Sell@ Q / Opt</th><th>Net/u Q / Opt (ROI)</th><th>Vol/d</th><th>Regime</th>'+
+    '<th class="left">Item</th><th>Guide</th><th>Mid</th><th>Buy@ Q / Opt</th><th>Sell@ Q / Opt</th><th>Net/u Q / Opt (ROI)</th><th>Vol/d</th><th title="last-2h momentum: live vs its own 2h band">Mom</th><th>Regime</th>'+
     '</tr></thead><tbody><tr>'+
     '<td class="left">'+c.item+flag+inv+'</td>'+
     '<td class="num">'+c.guide+'</td>'+
@@ -52,6 +57,7 @@ export function quoteTableHtml(name, row){
     '<td class="num">'+c.sell+'</td>'+
     '<td class="num '+netCls+'">'+c.net+'</td>'+
     '<td class="num mini">'+c.vol+'</td>'+
+    '<td class="num '+momCls+'" title="'+momTitle+'">'+c.mom+'</td>'+
     '<td class="num">'+c.regime+'</td>'+
     '</tr></tbody></table></div>';
 }

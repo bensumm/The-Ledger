@@ -88,6 +88,20 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   cutting a genuinely falling position; only a *proven* backtested hour-of-day pattern defers
   a cut). Session/agent-run for now; the durable app-native home is the Refresh-positions +
   Ledger break-even/regime followups below.
+- **Last-2h momentum tell — `Mom` column + cut-trigger** (0.30.0): the chunk-2 standard quote
+  table (0.28.0) CLAMPS the optimistic prices against the live quote (`optBuy=min(quickBuy,
+  bandLo)`, `optSell=max(quickSell,bandHi)`) — correct for *pricing*, but that clamp alone was
+  **incomplete**: it ANNIHILATED the momentum signal (a live-outside-its-own-2h-band break can
+  never appear once clamped). Fix: `computeQuote` now derives `mom ∈ {clean,breakdown,breakup}`
+  from the **pre-clamp** raw band comparison (`quickBuy<rawBandLo` ↓ / `quickSell>rawBandHi` ↑)
+  and exposes it; the price clamp is unchanged. `Mom` (clean / ↓ / ↑) renders in the dig-in views
+  only (Trends card, Finder **expander**, position review, `quote.mjs`/`screen.mjs`) — NOT the
+  Finder bulk list (deliberate; `market.js` untouched). Held-position cut-trigger: shared
+  `momVerdict()` in `js/quotecore.js` (used by both `reviewPositions` and `quote.mjs
+  --positions`) — ↓+underwater → CUT; ↓+in-profit+flat/falling → LIST-TO-CLEAR; ↓+in-profit+
+  rising → size-conditional on `BIG_TICKET_GP` (10m total lot value: ≥ → clear, < → HOLD-watch);
+  ↑ → HOLD/list at 2h top. The base-mixing bug is guarded separately by `quoteOrdered()`, not the
+  clamp.
 
 ## Flipping strategy lessons (2026-07-02 session — codified)
 - **Screening: the 24h-drift signal is a pre-filter only.** Current-instasell-vs-24h-avg
