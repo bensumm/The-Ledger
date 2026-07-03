@@ -128,20 +128,20 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
 - Group Tier A (stable regime) / Tier B (recently repriced/volatile — size small).
   **Falling-regime items are excluded from screens entirely — don't show or mention them.**
   Exception: items Ben holds or asks about → always show, with price-to-clear guidance.
-**How to generate these tables — the three canonical asks map to exact commands.** Once the
-`pipeline/*.mjs` scripts exist, ALWAYS use them; never hand-write `node -e` fetch scripts for a
-market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the scripts exist
-specifically to kill that cost):
+**How to generate these tables — the three canonical asks map to exact commands. These scripts
+exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e` fetch for a market
+read (each ad-hoc script also burns ~1–2k tokens to author + parse — the scripts exist
+specifically to kill that cost). All three import `js/quotecore.js`, so the numbers are
+byte-identical to the app's tables:
 - **Per-item read** ("how's item X?") → `node pipeline/quote.mjs "<item or id>" [...more]`
-- **Opportunity screen** ("find me flips") → `node pipeline/screen.mjs`
+  (one combined table + a regime line per item; multiple items in one call).
+- **Opportunity screen** ("find me flips") → `node pipeline/screen.mjs [--floor 50] [--min-roi
+  1.5] [--max-price 45m] [--top 40]` (two-sided liquidity gate, grouped Tier A / Tier B,
+  falling items silently excluded).
 - **Positions vs market** ("how are my positions doing / check the market against what I
   hold") → `node pipeline/quote.mjs --positions` (reads `positions.json` open lots, quotes each
-  held item, adds Held@/Break-even columns + HOLD/list-at/CUT verdict). This is the recurring
-  one — reach for it, don't rebuild it by hand.
-
-Check `ls pipeline/*.mjs` first: if `quote.mjs`/`screen.mjs` are NOT yet present (chunk 3 of
-PLAN.md not landed), only THEN fall back to a hand-written fetch — and produce the exact table
-above. When they are present, they are the workflow.
+  held item, adds Held@/Break-even columns + HOLD/list-at/CUT verdict; held fallers ARE shown
+  here with price-to-clear). This is the recurring one — reach for it, don't rebuild it by hand.
 
 ## Open followups (not yet built)
 - **Active implementation plan: `PLAN.md`** (2026-07-03) — manual-fill single-sourcing

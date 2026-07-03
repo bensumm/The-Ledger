@@ -1,3 +1,4 @@
 .fills-commit-msg.tmp
 pipeline/mapping.cache.json
 pipeline/held-override.json
+pipeline/.cache/
