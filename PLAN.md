@@ -72,6 +72,24 @@ distinctly in the closed table. CLI: `--type withdraw` (no `--price` needed; pri
 third option in the ledger form's type toggle. Motivating case: Ben pulled 1 bludgeon to use
 on 2026-07-03 — the ledger currently has no honest way to record that.
 
+### 1.6 BANKED event (pre-existing inventory enters the flip flow)
+Case discovered 2026-07-03: Ben lists an item he already owned (bank/drop — never bought via
+a logged GE offer). Without a buy record, FIFO wrongly matches its eventual sale against some
+OTHER open bought lot, corrupting both P/L attribution and open counts. New manual line
+`state:"BANKED"` (slot 8): qty enters open inventory at a declared basis. Convention: basis =
+market instasell at the time it was committed to flipping (so realised P/L measures the
+flipping decision), with `banked:true` carried onto the lot/closed trade so it's
+distinguishable from cash-out-of-pocket. Basis 0 allowed (windfall accounting). CLI:
+`--type banked --price <basis>`. App: fourth option in the ledger form type toggle.
+Timestamp = when it was listed/committed, same FIFO-correctness rule as 1.2.
+
+### 1.7 Purge legacy browser-local manual trades
+Chunk 1 removes the *path*, but existing local manual entries persist in `STATE.trades`
+(IndexedDB). On upgrade: one-time migration that surfaces surviving non-`src:'fills'` trades
+with a "these are local-only, pre-0.27 manual entries — re-inject via the log or delete"
+banner + per-row actions. (Real instance: 3 manually-added bludgeon sells from the 0.24–0.25
+iteration still live in Ben's browser and double-display against pipeline rows.)
+
 ### Acceptance
 `node --check` all touched; Playwright: linked add → pending row appears, unlinked add →
 guidance + no state change; pipeline fixture test — create a temp dir with a small fake
