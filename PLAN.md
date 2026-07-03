@@ -101,8 +101,19 @@ Commit: `pipeline: unify reconstruction onto reconstruct.mjs (fix monitor WITHDR
 
 ## Discovered
 **Open:**
-- **med** — reconstruction drift (`monitor.mjs` mis-counts `WITHDRAWN`/`BANKED`) → promoted to
-  **Chunk 8** with a concrete unification plan.
+- **low** — `monitor.mjs` freshness line prints `NaNm ago`: `lastLog = Math.max(...rows.map(ep))`
+  (raw-row path, lines ~47-49, separate from the reconstruct chain) includes manual REMOVE lines
+  that carry no `date`/`time` → `ep()` = NaN poisons the max. Filter rows lacking a valid ts before
+  the max. Surfaced while running monitor after chunk 8; not caused by it.
+- **low** — stale pointer comments now that the reconstruction chain moved to `reconstruct.mjs`
+  (chunk 8): `js/fillslog.js` line ~77 still says "SAME ALGORITHM as eventId() in pipeline/
+  sync-fills.mjs", and `watch.mjs` lines ~29-30 call `reconstruct.mjs` "an older copy blind to
+  WITHDRAWN/BANKED" — both are now the canonical home. Doc-only; left untouched to keep the chunk-8
+  diff to the three code files.
+
+**Resolved (chunk 8):**
+- **med** — reconstruction drift (`monitor.mjs` mis-counted `WITHDRAWN`/`BANKED`) — unified onto the
+  single `reconstruct.mjs` chain; `sync-fills.mjs --dry` output verified byte-identical before/after.
 - **low** — pre-0.27 `STATE.fillsPending` rows lack the stored `line` field, so Edit/Delete degrades
   to "fix by hand"; self-heals on next sync. Not worth migration code.
 - **low** — `quoteMarkdown` in `quotecore.js` is unreferenced (scripts build their own `mdTable`);

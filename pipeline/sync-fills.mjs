@@ -41,8 +41,10 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkS
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { createHash } from 'node:crypto';
-import { tax as GE_TAX } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) — no private copy
+// The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
+// event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
+// identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
+import { parseJsonLine, buildEvents, reconstruct, eventId } from './reconstruct.mjs';
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
@@ -63,234 +65,21 @@ const PROBE = args.has('--probe'), DRY = args.has('--dry'), AUTO = args.has('--a
 const AUTO_TRAILER = 'Auto-Fills-Sync: true'; // marks a commit as safe to amend-over on the next --auto run
 
 /* ---------------------------------------------------------------------
- * ADAPTER — verified against a real log (2026-07-01, one buy + one
- * cancel). Exchange Logger (JSON mode) writes one line per slot-state
- * change, shaped like:
- *   {"date":"2026-07-01","time":"20:02:55","state":"BUYING","slot":3,
- *    "item":12695,"qty":0,"worth":0,"max":10,"offer":12600}
- * Field names are NOT what the schema calls them:
- *   item -> itemId, offer -> price, max -> qty (total offer size),
- *   qty -> filled (cumulative filled so far), worth -> spent (cumulative).
- * date+time are separate local-time strings, combined below.
- *
- * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states
- * (confirmed against a live log 2026-07-02) — normalizeStateStr() maps
- * any CANCEL* to 'cancelled'. It can ALSO drop an offer straight to
- * state:"EMPTY" without a cancel line, so buildEvents() below keeps a
- * sequence-aware fallback: any slot event that never reached 'complete'
- * before the slot goes EMPTY (or a different item appears in the slot) is
- * retroactively marked 'cancelled'. Keep both paths. parseJsonLine() here
- * only normalizes one line; it returns `{ empty: true }` markers for
- * EMPTY/unrecognized lines so the sequencer can see slot-clear events.
- *
- * Normalized trade event: { ts, type:'buy'|'sell',
- *   state:'placed'|'partial'|'complete'|'cancelled', itemId, slot,
- *   price, qty, filled, spent }
+ * ADAPTER + reconstruction now live in reconstruct.mjs (chunk 8) — the ONE
+ * shared copy this pipeline AND monitor.mjs both reconstruct positions from,
+ * so there is no longer a stale parallel copy that mis-handles WITHDRAWN/BANKED.
+ * Imported at the top of this file:
+ *   parseJsonLine — one line -> normalized event (incl. the REMOVE tombstone
+ *     marker + the WITHDRAW/BANK -> 'withdraw'/'banked' type mapping),
+ *   buildEvents   — sequence raw parses -> events (incl. the sequence-aware
+ *     cancel-inference fallback for offers that drop straight to EMPTY),
+ *   reconstruct   — collapseOffers + FIFO matchTrades (incl. the banked/withdraw
+ *     branches + banked-aware open-lot keying),
+ *   eventId       — the sha1 content-hash id (contract shared with js/fillslog.js).
+ * See reconstruct.mjs's ADAPTER block for the verified field mapping. Only
+ * runner-specific glue (log reading, tombstone merge, dedup, commit/push) is here.
  * ------------------------------------------------------------------- */
-function pick(o, ...names) {
-  for (const n of names) {
-    if (o[n] !== undefined && o[n] !== null) return o[n];
-    // case-insensitive fallback
-    const k = Object.keys(o).find(k => k.toLowerCase() === n.toLowerCase());
-    if (k !== undefined && o[k] !== null) return o[k];
-  }
-  return undefined;
-}
-
-function normalizeStateStr(s) {
-  s = String(s || '').toUpperCase();
-  if (s.includes('CANCEL')) return 'cancelled'; // explicit CANCELLED_BUY/SELL states (confirmed live 2026-07-02)
-  // WITHDRAWN (inventory taken for personal use) and BANKED (pre-owned stock entering the
-  // flip flow) are one-shot synthetic manual events — treat as terminal 'complete' so
-  // collapseOffers marks them done and the cancel-inference sequencer leaves them alone.
-  if (s.includes('WITHDRAW') || s.includes('BANK')) return 'complete';
-  if (s.includes('BOUGHT') || s.includes('SOLD') || s === 'COMPLETE' || s.includes('COMPLETED')) return 'complete';
-  if (s.includes('BUYING') || s.includes('SELLING')) return 'partial'; // in-progress update; may be refined to 'placed' below
-  return null;
-}
-
-function parseTs(o) {
-  const dateStr = pick(o, 'date');
-  const timeStr = pick(o, 'time');
-  if (dateStr && timeStr) {
-    const t = Math.floor(Date.parse(`${dateStr}T${timeStr}`) / 1000);
-    if (Number.isFinite(t)) return t;
-  }
-  let raw = pick(o, 'time', 'timestamp', 'date', 'dateTime');
-  if (typeof raw === 'string') return Math.floor(Date.parse(raw) / 1000);
-  if (typeof raw === 'number') return raw > 1e12 ? Math.floor(raw / 1000) : raw;
-  return NaN;
-}
-
-// Parses one JSON log line. Returns null for garbage/non-JSON lines,
-// { empty: true, ts, slot } for EMPTY/unrecognized slot states (needed
-// by the sequencer to detect cancellations), or a full trade-event
-// candidate { empty: false, ts, slot, type, state, itemId, price, qty,
-// filled, spent } otherwise.
-function parseJsonLine(line) {
-  line = line.trim();
-  if (!line || line[0] !== '{') return null; // JSON mode expected; skip non-JSON (e.g. legacy TEXT lines)
-  let o;
-  try { o = JSON.parse(line); } catch { return null; }
-
-  // Tombstone directive (see PLAN.md chunk 1.4): a REMOVE line targets an event id and, on
-  // merge, deletes the matching event from fills.json even if already persisted. Returned as
-  // a marker so main() can collect it; it carries no ts/slot of its own.
-  if (String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase() === 'REMOVE') {
-    return { remove: String(pick(o, 'target', 'id', 'event') ?? '') };
-  }
-
-  const ts = parseTs(o);
-  if (!Number.isFinite(ts)) return null;
-  const slot = Number(pick(o, 'slot'));
-
-  const rawState = String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase();
-  const rawType = rawState;
-  // 'withdraw'/'banked' are manual-only sides (WITHDRAWN removes inventory with no sale;
-  // BANKED enters pre-owned inventory at a declared basis) — see matchTrades().
-  const type = rawType.includes('WITHDRAW') ? 'withdraw'
-             : rawType.includes('BANK') ? 'banked'
-             : rawType.includes('BUY') || rawType.includes('BOUGHT') ? 'buy'
-             : rawType.includes('SELL') || rawType.includes('SOLD') ? 'sell' : null;
-
-  const itemId = Number(pick(o, 'itemId', 'item_id', 'id', 'item'));
-
-  if (rawState === 'EMPTY' || !type || !Number.isFinite(itemId) || itemId === 0) {
-    return { empty: true, ts, slot };
-  }
-
-  const filled = Number(pick(o, 'qty', 'quantitySold', 'qtySold', 'filled', 'sold')) || 0;
-  let state = normalizeStateStr(rawState);
-  if (state === 'partial' && filled === 0) state = 'placed'; // just placed, nothing filled yet
-
-  return {
-    empty: false,
-    ts,
-    slot,
-    type,
-    state,
-    itemId,
-    price:  Number(pick(o, 'offer', 'price', 'offerPrice', 'pricePerItem')) || 0, // offer price each
-    qty:    Number(pick(o, 'max', 'quantity', 'totalQuantity', 'amount')) || 0,   // total offer size
-    filled,                                                                       // cumulative filled
-    spent:  Number(pick(o, 'worth', 'spent', 'totalSpent', 'total_price', 'value')) || 0 // cumulative gp
-  };
-}
-
-// Sequences raw per-line parses into final trade events, resolving
-// cancellations: if a slot's last trade event never reached 'complete'
-// before the slot goes EMPTY (or a different item appears in the same
-// slot), that last event is retroactively marked 'cancelled'.
-function buildEvents(rawLinesParsed) {
-  const sorted = [...rawLinesParsed].sort((a, b) => a.ts - b.ts);
-  const lastBySlot = new Map(); // slot -> last trade event object (mutated in place)
-  const events = [];
-  for (const r of sorted) {
-    const prev = lastBySlot.get(r.slot);
-    const slotChangedItem = prev && !r.empty && r.itemId !== prev.itemId;
-    if ((r.empty || slotChangedItem) && prev && prev.state !== 'complete' && prev.state !== 'cancelled') {
-      prev.state = 'cancelled';
-    }
-    if (r.empty || slotChangedItem) lastBySlot.delete(r.slot);
-    if (r.empty) continue;
-    events.push(r);
-    lastBySlot.set(r.slot, r);
-  }
-  for (const e of events) delete e.empty;
-  return events;
-}
-/* ------------------------- end adapter ---------------------------- */
-
-/* =================== position/trade reconstruction ==================
- * fills.json is a per-transition stream. To drive the app's Ledger we
- * reduce it twice:
- *   collapseOffers() — one row per OFFER (a contiguous slot+item+type run),
- *     carrying the final cumulative filled/spent. `spent` is GROSS (pre-tax,
- *     verified in FILLS-PIPELINE.md §5), so executed price-each = spent/filled.
- *   matchTrades() — FIFO-match buy fills against sell fills per item →
- *     closed trades (real prices, 2% tax, realized P/L after tax) + open lots
- *     (unsold inventory at real avg cost).
- * A sell with no matching buy lot means the buy predates logging (the log
- * started mid-stream) — we can't know its cost basis, so it goes to
- * `unmatched` (informational only), never a fabricated profit.
- * ================================================================== */
-// GE_TAX is imported from js/quotecore.js (format.js `tax`) — see the import at the top.
-
-function collapseOffers(events) {
-  const cur = new Map(); // slot -> in-progress offer
-  const offers = [];
-  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
-    let o = cur.get(e.slot);
-    if (o && (o.done || o.itemId !== e.itemId || o.type !== e.type)) { offers.push(o); o = null; cur.delete(e.slot); }
-    if (!o) { o = { slot: e.slot, itemId: e.itemId, type: e.type, price: e.price, qty: e.qty, tsOpen: e.ts, tsClose: e.ts, filled: 0, spent: 0, state: e.state, done: false }; cur.set(e.slot, o); }
-    o.tsClose = e.ts; o.state = e.state;
-    o.filled = Math.max(o.filled, e.filled || 0); o.spent = Math.max(o.spent, e.spent || 0); // cumulative -> final
-    if (e.price) o.price = e.price; if (e.qty) o.qty = e.qty;
-    if (e.state === 'complete' || e.state === 'cancelled') o.done = true;
-  }
-  for (const o of cur.values()) offers.push(o);
-  return offers.sort((a, b) => a.tsOpen - b.tsOpen);
-}
-
-function matchTrades(offers) {
-  const filled = offers.filter(o => o.filled > 0).sort((a, b) => a.tsOpen - b.tsOpen);
-  const lots = new Map(); // itemId -> [{qty, each, ts}] FIFO queue of open buy lots
-  const closed = [], unmatched = [];
-  for (const o of filled) {
-    const each = o.spent / o.filled; // actual executed gross price per item
-    if (o.type === 'buy' || o.type === 'banked') {
-      // BANKED = pre-owned stock committed to flipping at a declared basis (each). It enters
-      // the FIFO queue exactly like a bought lot but carries banked:true so its eventual
-      // realised P/L (and any leftover open position) stays distinguishable from cash buys.
-      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen, banked: o.type === 'banked' });
-    } else if (o.type === 'withdraw') {
-      // WITHDRAWN = inventory taken for personal use: consume open lots FIFO into closed rows
-      // flagged withdrawn:true with realised 0 (no sale, no proceeds). If nothing is open to
-      // withdraw against, there's nothing to record — drop it silently (unlike a sell, a
-      // withdrawal with no cost basis carries no information worth surfacing).
-      let remain = o.filled; const q = lots.get(o.itemId) || [];
-      while (remain > 0 && q.length) {
-        const lot = q[0], take = Math.min(remain, lot.qty);
-        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: 0,
-          tax: 0, realised: 0, withdrawn: true, banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
-        lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
-      }
-    } else { // sell — consume buy lots FIFO
-      let remain = o.filled; const q = lots.get(o.itemId) || [];
-      while (remain > 0 && q.length) {
-        const lot = q[0], take = Math.min(remain, lot.qty), taxEach = GE_TAX(each);
-        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: Math.round(each),
-          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
-        lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
-      }
-      if (remain > 0) unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
-    }
-  }
-  // remaining lots = open inventory; merge same item+price+origin lots into one position
-  // (keep earliest buyTs). Banked and cash lots at the same price stay separate so the tag
-  // survives.
-  const openMap = new Map();
-  for (const [itemId, q] of lots) for (const lot of q) {
-    if (lot.qty <= 0) continue;
-    const each = Math.round(lot.each), k = itemId + ':' + each + ':' + (lot.banked ? 'b' : ''), m = openMap.get(k);
-    if (m) { m.qty += lot.qty; m.buyTs = Math.min(m.buyTs, lot.ts); }
-    else openMap.set(k, lot.banked ? { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts, banked: true } : { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
-  }
-  const open = [...openMap.values()].sort((a, b) => a.buyTs - b.buyTs);
-  return { closed, open, unmatched };
-}
-
-function reconstruct(events) {
-  const { closed, open, unmatched } = matchTrades(collapseOffers(events));
-  return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched };
-}
 function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched }); } // ignore generatedAt
-
-function eventId(e) {
-  return createHash('sha1')
-    .update([e.ts, e.slot, e.itemId, e.type, e.state, e.filled, e.spent].join('|'))
-    .digest('hex').slice(0, 16);
-}
 
 function readLogFiles() {
   if (!existsSync(LOG_DIR)) {

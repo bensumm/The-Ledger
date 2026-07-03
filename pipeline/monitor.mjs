@@ -81,7 +81,9 @@ for (const r of terminal) {
 // FIFO (reconstruct.mjs). Real-time and correct — no positions.json lag, and collapseOffers
 // dedups re-logged/duplicate BOUGHT lines so the held count never phantoms. ---
 console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = ceil(cost/0.98)) ===');
-const events = buildEvents(logLines.map(parseJsonLine).filter(Boolean));
+// parseJsonLine emits { remove } markers for REMOVE tombstone lines (the shared chunk-8 chain);
+// the monitor doesn't apply tombstones, so drop those markers before sequencing.
+const events = buildEvents(logLines.map(parseJsonLine).filter(r => r && r.remove === undefined));
 const pos = reconstruct(events);
 let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) }));
 // Manual overrides. The Exchange Logger drops some SOLD events during fast same-second

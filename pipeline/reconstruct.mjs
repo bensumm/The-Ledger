@@ -48,6 +48,10 @@ export function pick(o, ...names) {
 export function normalizeStateStr(s) {
   s = String(s || '').toUpperCase();
   if (s.includes('CANCEL')) return 'cancelled'; // explicit CANCELLED_BUY/SELL states (confirmed live 2026-07-02)
+  // WITHDRAWN (inventory taken for personal use) and BANKED (pre-owned stock entering the
+  // flip flow) are one-shot synthetic manual events — treat as terminal 'complete' so
+  // collapseOffers marks them done and the cancel-inference sequencer leaves them alone.
+  if (s.includes('WITHDRAW') || s.includes('BANK')) return 'complete';
   if (s.includes('BOUGHT') || s.includes('SOLD') || s === 'COMPLETE' || s.includes('COMPLETED')) return 'complete';
   if (s.includes('BUYING') || s.includes('SELLING')) return 'partial'; // in-progress update; may be refined to 'placed' below
   return null;
@@ -77,13 +81,25 @@ export function parseJsonLine(line) {
   let o;
   try { o = JSON.parse(line); } catch { return null; }
 
+  // Tombstone directive (see PLAN.md chunk 1.4): a REMOVE line targets an event id and, on
+  // merge, deletes the matching event from fills.json even if already persisted. Returned as
+  // a marker so the runner (sync-fills.mjs main()) can collect it; it carries no ts/slot of
+  // its own. Non-runner consumers (monitor.mjs) filter these markers out before buildEvents.
+  if (String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase() === 'REMOVE') {
+    return { remove: String(pick(o, 'target', 'id', 'event') ?? '') };
+  }
+
   const ts = parseTs(o);
   if (!Number.isFinite(ts)) return null;
   const slot = Number(pick(o, 'slot'));
 
   const rawState = String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase();
   const rawType = rawState;
-  const type = rawType.includes('BUY') || rawType.includes('BOUGHT') ? 'buy'
+  // 'withdraw'/'banked' are manual-only sides (WITHDRAWN removes inventory with no sale;
+  // BANKED enters pre-owned inventory at a declared basis) — see matchTrades().
+  const type = rawType.includes('WITHDRAW') ? 'withdraw'
+             : rawType.includes('BANK') ? 'banked'
+             : rawType.includes('BUY') || rawType.includes('BOUGHT') ? 'buy'
              : rawType.includes('SELL') || rawType.includes('SOLD') ? 'sell' : null;
 
   const itemId = Number(pick(o, 'itemId', 'item_id', 'id', 'item'));
@@ -157,26 +173,43 @@ export function matchTrades(offers) {
   const closed = [], unmatched = [];
   for (const o of filled) {
     const each = o.spent / o.filled; // actual executed gross price per item
-    if (o.type === 'buy') {
-      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen });
+    if (o.type === 'buy' || o.type === 'banked') {
+      // BANKED = pre-owned stock committed to flipping at a declared basis (each). It enters
+      // the FIFO queue exactly like a bought lot but carries banked:true so its eventual
+      // realised P/L (and any leftover open position) stays distinguishable from cash buys.
+      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen, banked: o.type === 'banked' });
+    } else if (o.type === 'withdraw') {
+      // WITHDRAWN = inventory taken for personal use: consume open lots FIFO into closed rows
+      // flagged withdrawn:true with realised 0 (no sale, no proceeds). If nothing is open to
+      // withdraw against, there's nothing to record — drop it silently (unlike a sell, a
+      // withdrawal with no cost basis carries no information worth surfacing).
+      let remain = o.filled; const q = lots.get(o.itemId) || [];
+      while (remain > 0 && q.length) {
+        const lot = q[0], take = Math.min(remain, lot.qty);
+        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: 0,
+          tax: 0, realised: 0, withdrawn: true, banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
+        lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
+      }
     } else { // sell — consume buy lots FIFO
       let remain = o.filled; const q = lots.get(o.itemId) || [];
       while (remain > 0 && q.length) {
         const lot = q[0], take = Math.min(remain, lot.qty), taxEach = GE_TAX(each);
         closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: Math.round(each),
-          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), buyTs: lot.ts, sellTs: o.tsOpen });
+          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
         lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
       }
       if (remain > 0) unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
     }
   }
-  // remaining buy lots = open inventory; merge same item+price lots into one position (keep earliest buyTs)
+  // remaining lots = open inventory; merge same item+price+origin lots into one position
+  // (keep earliest buyTs). Banked and cash lots at the same price stay separate so the tag
+  // survives.
   const openMap = new Map();
   for (const [itemId, q] of lots) for (const lot of q) {
     if (lot.qty <= 0) continue;
-    const each = Math.round(lot.each), k = itemId + ':' + each, m = openMap.get(k);
+    const each = Math.round(lot.each), k = itemId + ':' + each + ':' + (lot.banked ? 'b' : ''), m = openMap.get(k);
     if (m) { m.qty += lot.qty; m.buyTs = Math.min(m.buyTs, lot.ts); }
-    else openMap.set(k, { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
+    else openMap.set(k, lot.banked ? { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts, banked: true } : { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
   }
   const open = [...openMap.values()].sort((a, b) => a.buyTs - b.buyTs);
   return { closed, open, unmatched };
