@@ -63,16 +63,46 @@ parser can be pinned to actual columns.
 
 ---
 
+## Chunk 8 — Unify the reconstruction chain (kill the monitor drift) — MEDIUM
+
+**The debt (verified 2026-07-03).** There are TWO full parallel copies of the log→positions
+reconstruction: `pipeline/sync-fills.mjs` defines its own `parseJsonLine`/`buildEvents`/
+`collapseOffers`/`matchTrades` that **handle `WITHDRAWN`/`BANKED`** (canonical — this is what writes
+the correct `positions.json`), while `pipeline/reconstruct.mjs` is an **older, stale copy** whose
+`matchTrades`/`parseJsonLine` know only `buy`/`sell`. `pipeline/monitor.mjs` imports the stale
+`reconstruct.mjs` → its in-memory held-position count **mis-handles any `WITHDRAWN`/`BANKED` line**
+(and those exist now — the bludgeon BANKED/withdraw). `watch.mjs` and `quote.mjs --positions`
+sidestep it by reading `positions.json`; `monitor.mjs` is the one live wrong consumer.
+
+**Fix — one module, two consumers.** Make `reconstruct.mjs` the single source of truth:
+1. Port `sync-fills.mjs`'s canonical chain (`parseJsonLine` incl. the `WITHDRAW`/`BANK` type
+   mapping, `buildEvents` incl. the cancel-inference fallback, `collapseOffers`, `matchTrades` incl.
+   the `banked`/`withdraw` branches + banked-aware open-lot keying) into `reconstruct.mjs`, replacing
+   its stale versions. Move `eventId` too if it has also diverged (keep the id-hash contract shared
+   with the app's `js/fillslog.js` — see chunk 1).
+2. Delete `sync-fills.mjs`'s private copies; import them from `reconstruct.mjs`. `monitor.mjs`
+   already imports from `reconstruct.mjs`, so it gets the correct behavior for free.
+3. First **grep every importer of `reconstruct.mjs`** and confirm the full blast radius (expected:
+   `sync-fills.mjs` + `monitor.mjs` only).
+
+**Safety gate (non-negotiable — `sync-fills.mjs` is the auto-committed critical path).** The refactor
+must be **output-preserving**: run `sync-fills.mjs --dry` against the real log dir before AND after,
+diff the emitted `positions.json` — it must be **byte-identical** (same logic, just relocated). Then a
+fixture test (scratchpad, `--log-dir` override, `--dry` only) with `WITHDRAWN` + `BANKED` + a normal
+sell proves `monitor.mjs`'s reconstruction now matches `sync-fills.mjs`'s. Do NOT run the real sync;
+do NOT touch `positions.json`/`fills.json`/the real log. Node-only, no `APP_VERSION` bump.
+Commit: `pipeline: unify reconstruction onto reconstruct.mjs (fix monitor WITHDRAWN/BANKED drift)`.
+
+---
+
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
   realized-vs-suggested calibration.
 
 ## Discovered
 **Open:**
-- **med** — reconstruction logic has DRIFTED: `sync-fills.mjs` handles `WITHDRAWN`/`BANKED`, but
-  `pipeline/reconstruct.mjs` (behind `monitor.mjs`) is an older copy without them → `monitor.mjs`
-  mis-counts held positions if manual lines exist. Fix: unify onto one shared reconstruction module
-  (larger refactor — candidate for its own chunk).
+- **med** — reconstruction drift (`monitor.mjs` mis-counts `WITHDRAWN`/`BANKED`) → promoted to
+  **Chunk 8** with a concrete unification plan.
 - **low** — pre-0.27 `STATE.fillsPending` rows lack the stored `line` field, so Edit/Delete degrades
   to "fix by hand"; self-heals on next sync. Not worth migration code.
 - **low** — `quoteMarkdown` in `quotecore.js` is unreferenced (scripts build their own `mdTable`);
