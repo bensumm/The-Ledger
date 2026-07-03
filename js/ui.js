@@ -16,10 +16,11 @@ export function currentFinderRows(){
     if(it.margin<=0) return false;
     if(!it.liquid) return false;                // browse view stays curated to liquid items
     const p=it.high;
-    if(tier==='staple'&&!(p<100000)) return false;
-    if(tier==='mid'&&!(p>=100000&&p<10_000_000)) return false;
-    if(tier==='high'&&!(p>=10_000_000&&p<250_000_000)) return false;
-    if(tier==='cap'&&!(p>=250_000_000)) return false;
+    if(tier==='b1'&&!(p<1_000_000)) return false;
+    if(tier==='b5'&&!(p>=1_000_000&&p<5_000_000)) return false;
+    if(tier==='b25'&&!(p>=5_000_000&&p<25_000_000)) return false;
+    if(tier==='b75'&&!(p>=25_000_000&&p<75_000_000)) return false;
+    if(tier==='bhi'&&!(p>=75_000_000)) return false;
     if(budget && it.low>perSlot) return false;
     return true;
   });

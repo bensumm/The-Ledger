@@ -2,29 +2,24 @@
 /**
  * monitor.mjs — live GE position monitor (read-only companion to sync-fills.mjs).
  *
- * Parses the RuneLite Exchange Logger for (a) offers open RIGHT NOW and (b) recent
- * fills/cancels, and reads positions.json (pipeline-reconstructed FIFO) for HELD
- * positions with cost basis + break-even. Print-only — it never writes trade data.
+ * Parses the RuneLite Exchange Logger for (a) offers open RIGHT NOW, (b) recent
+ * fills/cancels, and (c) HELD positions with cost basis + break-even — reconstructed
+ * IN-MEMORY from the live log via the shared pipeline FIFO (reconstruct.mjs), so the
+ * held count is real-time and correct (no positions.json ~20m lag, and no naive-log-sum
+ * double-count of re-logged BOUGHT lines). Print-only — it never writes trade data.
  * It's the data source for the deterioration-watch polling routine documented in
  * pipeline/MONITORING.md (HOLD / WATCH / CUT with the evidence-gated 24h-cycle guard).
  *
  * Usage:  node pipeline/monitor.mjs
- *
- * Why held positions come from positions.json, not the log: a naive re-sum of terminal
- * log events double-counts re-logged/duplicate BOUGHT lines (found live 2026-07-02: an
- * 11:01 buy was re-logged identically at 11:15 → +5 phantom). The pipeline's
- * collapseOffers + matchTrades already handle dedup / cancels / partial fills / pre-log
- * inventory, so we trust its output and accept its ~20m freshness (cost basis is static).
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseJsonLine, buildEvents, reconstruct } from './reconstruct.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.join(HERE, '..');
-const LOG = path.join(os.homedir(), '.runelite', 'exchange-logger', 'exchange.log');
-const POS = path.join(REPO, 'positions.json');
+const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 const MAP_CACHE = path.join(HERE, 'mapping.cache.json'); // gitignored; refreshed every 24h
 const MAP_URL = 'https://prices.runescape.wiki/api/v1/osrs/mapping';
 
@@ -40,8 +35,12 @@ async function loadNames() {
 const name = await loadNames();
 const nm = id => name[id] || ('#'+id);
 
+// read every log file in mtime order (captures rotated logs), same discovery as the pipeline
+const logFiles = fs.readdirSync(LOG_DIR).filter(f => /\.(log|txt|json)$/i.test(f))
+  .map(f => path.join(LOG_DIR, f)).sort((a,b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
+const logLines = logFiles.flatMap(f => fs.readFileSync(f,'utf8').split('\n')).filter(Boolean);
 const rows = [];
-for (const raw of fs.readFileSync(LOG,'utf8').split('\n').filter(Boolean)) { try { rows.push(JSON.parse(raw)); } catch {} }
+for (const raw of logLines) { try { rows.push(JSON.parse(raw)); } catch {} }
 const ep = l => Date.parse(l.date+'T'+l.time);            // local wall-clock -> epoch
 const lastLog = Math.max(...rows.map(ep));                 // newest event time in the log
 const now = Date.now();                                    // real wall clock — detects a stalled log
@@ -74,22 +73,17 @@ for (const r of terminal) {
   console.log(`${r.time} ${r.state} ${nm(r.item)} (#${r.item})  qty ${r.qty} @ ~${gp(px)}  (${ago(r)})`);
 }
 
-// --- held positions from positions.json (pipeline FIFO; see header note) ---
-console.log('\n=== HELD POSITIONS (positions.json · pipeline FIFO · break-even = ceil(cost/0.98)) ===');
-let held = [], pos = null;
-try { pos = JSON.parse(fs.readFileSync(POS, 'utf8')); } catch {}
-if (!pos || !Array.isArray(pos.open)) {
-  console.log('(positions.json unavailable — run sync-fills.mjs)');
-} else {
-  const genMin = pos.generatedAt ? Math.round((now - Date.parse(pos.generatedAt))/60000) : null;
-  console.log('(positions.json ' + (genMin!=null ? genMin+'m old' : 'age ?') + ' — pipeline syncs ~every 20m; very recent trades may lag)');
-  held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:Math.ceil(o.buyEach/0.98) }));
-  if (!held.length) console.log('(no open positions)');
-  for (const h of held) {
-    const sell = active.find(a => a.item===h.item && a.state==='SELLING');
-    const listed = sell ? `listed ${sell.qty}/${sell.max} @ ${gp(sell.offer)}` : 'NOT LISTED';
-    console.log(`${nm(h.item)} (#${h.item})  qty ${h.qty} @ cost ${gp(h.cost)}  · break-even ${gp(h.be)}  · ${listed}`);
-  }
+// --- held positions: reconstructed IN-MEMORY from the live log via the shared pipeline
+// FIFO (reconstruct.mjs). Real-time and correct — no positions.json lag, and collapseOffers
+// dedups re-logged/duplicate BOUGHT lines so the held count never phantoms. ---
+console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = ceil(cost/0.98)) ===');
+const pos = reconstruct(buildEvents(logLines.map(parseJsonLine).filter(Boolean)));
+const held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:Math.ceil(o.buyEach/0.98) }));
+if (!held.length) console.log('(no open positions)');
+for (const h of held) {
+  const sell = active.find(a => a.item===h.item && a.state==='SELLING');
+  const listed = sell ? `listed ${sell.qty}/${sell.max} @ ${gp(sell.offer)}` : 'NOT LISTED';
+  console.log(`${nm(h.item)} (#${h.item})  qty ${h.qty} @ cost ${gp(h.cost)}  · break-even ${gp(h.be)}  · ${listed}`);
 }
 
 console.log('\nactive_item_ids:', active.map(r=>r.item).join(',') || '(none)');

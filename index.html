@@ -60,11 +60,12 @@
     <div class="controls">
       <input type="text" id="search" placeholder="Search item…" />
       <select id="priceTier">
-        <option value="all">Any price</option>
-        <option value="staple">Staples (&lt; 100k)</option>
-        <option value="mid">Mid (100k – 10m)</option>
-        <option value="high" selected>High value (10m – 250m)</option>
-        <option value="cap">Above tax cap (&gt; 250m)</option>
+        <option value="all" selected>Any price</option>
+        <option value="b1">&lt; 1m</option>
+        <option value="b5">1m – 5m</option>
+        <option value="b25">5m – 25m</option>
+        <option value="b75">25m – 75m</option>
+        <option value="bhi">75m+</option>
       </select>
       <select id="sortSel">
         <option value="score" selected>Sort: Rating</option>

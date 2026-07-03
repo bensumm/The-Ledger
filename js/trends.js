@@ -241,6 +241,7 @@ export async function togglePin(id){
 export function renderTrendHead(it){
   const watched=STATE.watchlist.includes(it.id), isPinned=STATE.pinned.includes(it.id), off=!!it.offscreen;
   let h='<div class="trhead"><span class="trhead-name">'+it.name+'</span>';
+  if(it.volume!=null) h+='<span class="trhead-vol" title="units traded in the last hour (both sides) — the liquidity behind these prices">'+fmt(it.volume)+'/hr traded · ~'+fmt(it.volume*24)+'/day</span>';
   if(off) h+='<span class="qtag">quote only · off the flip screen</span>';
   h+='<span class="trhead-acts">';
   h+='<button class="tgl '+(watched?'on':'')+'" data-watch="'+it.id+'">'+(watched?'★ Watching':'☆ Watch')+'</button>';
