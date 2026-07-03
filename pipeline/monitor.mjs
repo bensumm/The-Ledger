@@ -77,8 +77,24 @@ for (const r of terminal) {
 // FIFO (reconstruct.mjs). Real-time and correct — no positions.json lag, and collapseOffers
 // dedups re-logged/duplicate BOUGHT lines so the held count never phantoms. ---
 console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = ceil(cost/0.98)) ===');
-const pos = reconstruct(buildEvents(logLines.map(parseJsonLine).filter(Boolean)));
-const held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:Math.ceil(o.buyEach/0.98) }));
+const events = buildEvents(logLines.map(parseJsonLine).filter(Boolean));
+const pos = reconstruct(events);
+let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:Math.ceil(o.buyEach/0.98) }));
+// Manual overrides. The Exchange Logger drops some SOLD events during fast same-second
+// flipping, so the log can hold more buys than sells → the reconstruction over-counts held
+// (confirmed: seeds logged 57 bought / 52 sold, but real held was 0). No FIFO fixes missing
+// input, so held-override.json lets you reconcile to ground truth:
+//   { "<itemId>": "<ISO-or-unix since>" }  — "I hold 0 of this as of <since>; count only
+//   its log fills AFTER that time." Set it when you know a position is phantom; new trades
+//   after <since> still track normally.
+let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE,'held-override.json'),'utf8')); } catch {}
+for (const [idStr, since] of Object.entries(ov)) {
+  const id = +idStr, sinceTs = typeof since==='number' ? since : Math.floor(Date.parse(since)/1000);
+  held = held.filter(h => h.item !== id);
+  for (const o of reconstruct(events.filter(e => e.itemId===id && e.ts >= sinceTs)).open)
+    held.push({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:Math.ceil(o.buyEach/0.98) });
+}
+if (Object.keys(ov).length) console.log('(held-override active — reconciling: ' + Object.keys(ov).map(id=>nm(+id)).join(', ') + ')');
 if (!held.length) console.log('(no open positions)');
 for (const h of held) {
   const sell = active.find(a => a.item===h.item && a.state==='SELLING');
