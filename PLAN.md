@@ -32,34 +32,24 @@ Executor: **Opus 4.8** in Claude Code, one chunk per session. Read `CLAUDE.md` f
 
 ---
 
-## Chunk 5 — Bank-visibility tooling (`pipeline/bank.mjs`) — BLOCKED on a real sample
+## Chunk 5 — Bank-visibility tooling — DEFERRED (2026-07-03, Ben's call after a cost/benefit look)
 
-`positions.json` "open" is **GE-log-derived inventory only — not the bank**. Ben holds a large bank
-the pipeline is structurally blind to (Exchange Logger only sees GE offers). Goal: full bank truth so
-(a) net worth tallies correctly and (b) a flip-target sitting idle in the bank gets flagged to GE.
+Examined and deferred. Bank data is a **manual, always-stale snapshot**: the Data Export plugin
+dumps to *clipboard* only while the bank UI is open, and RuneLite writes no bank file → **no
+auto-sync possible**. That staleness guts the headline feature — auto-reconciling a stale bank
+against the live `positions.json` throws false discrepancies and risks corrupting a currently-correct
+file. The cheap wins (net-worth tally, `bank ∩ watchlist` flip-screen) are real but modest, and
+`positions.json` (GE flow) is already correct; the bank is a slow-changing keep-pile.
 
-**Capture mechanism (verified):** RuneLite writes no bank file to disk. The **"Data Export" plugin**
-(plugin hub) dumps bank contents to clipboard as CSV (item, qty, GE price). Rejected: Bank Tags =
-IDs only, no qty; CsvExport = player/skills, not bank. It's a **manual point-in-time snapshot** — no
-auto-sync possible (client only knows the bank while the bank UI is open). Do NOT Task-Scheduler it.
+Reconciliation edge cases are already handled without it: a sell of bank stock lands as a flagged
+`unmatched` sell (NOT a floating position — the log is append-only so it just persists), and bank
+stock committed to flipping gets an honest basis via a `BANKED` entry (chunk 1). The real
+"forgotten position" risk (an open lot disposed of OFF the GE) is the `WITHDRAWN` mechanism's job.
 
-**Work item:**
-1. Parse a pasted Data Export CSV (`pipeline/bank.csv`) → `bank.json` (itemId → qty). Tolerant
-   parser; exact columns pinned from a real sample.
-2. Value bank at live prices (reuse `js/quotecore.js` + the market fetch layer). Net-worth tally.
-3. Flip-target screen — `bank.json` ∩ `STATE.watchlist` → items worth GE-ing, in the standard table.
-4. Reconcile GE-open vs bank — generalize `pipeline/held-override.json` (currently a one-item
-   hand-patch) into proper bank-truth reconciliation; supersedes held-override.json.
-
-**Guardrails:**
-- **Do NOT inject bank items into the fill log / `fills.json`.** Bank truth is a *separate input*,
-  never fabricated into the append-only trade log — real trades vs. real holdings are different
-  sources. It reconciles against `positions.json`; it does not write trade events.
-- Bank data is item+qty only → no PII. Document in `pipeline/FILLS-PIPELINE.md`.
-- Depends on `js/quotecore.js` (chunk 2).
-
-**Blocking on Ben:** paste one real Data Export into `pipeline/bank.csv`. Nothing to build until the
-parser can be pinned to actual columns.
+**If revisited:** the higher-value design is **one baseline export + GE-log replay = a rolling bank
+estimate** (re-export periodically to re-baseline; the drift vs a fresh export IS the forgotten-
+position detector) — not a static dump. Guardrail if ever built: bank truth is a *separate input*,
+never injected into `fills.json`; advisory-only against `positions.json`, never an auto-mutation.
 
 ---
 
