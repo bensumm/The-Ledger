@@ -193,6 +193,44 @@ Commit per logical group. Bump `APP_VERSION` only if app behavior changes.
 
 ---
 
+## Chunk 5 — Bank-visibility tooling (`pipeline/bank.mjs`) — BLOCKED on a real sample
+
+Surfaced 2026-07-03 by a live position check: `positions.json` "open" is **GE-log-derived
+inventory only — not the bank**. Ben holds ~3b in bank the pipeline is structurally blind to
+(Exchange Logger only ever sees GE offers). He wants full bank truth so (a) net worth tallies
+correctly and (b) any flip-target item sitting idle in the bank gets flagged to throw on the GE.
+
+**Capture mechanism (verified):** RuneLite writes no bank file to disk. The **"Data Export"
+plugin** (plugin hub) dumps bank contents to clipboard as CSV (item, qty, GE price). Rejected
+alternatives: Bank Tags export = item IDs only, no quantities; CsvExport = player/skills, not
+bank. It is a **manual point-in-time snapshot** — no auto-sync is possible (the client only
+knows bank contents while the bank UI is open). Do NOT Task-Scheduler it like the fills sync; a
+keep-pile changes slowly, so manual refresh is acceptable.
+
+**Work item — `pipeline/bank.mjs`:**
+1. Parse a pasted Data Export CSV (`pipeline/bank.csv`) → `bank.json` (itemId → qty), the
+   ground truth for holdings. Tolerant parser; exact columns pinned from a real sample.
+2. Value bank at live prices (reuse chunk-2 `js/quotecore.js` + market fetch layer; guide via
+   the app's guide feed). Emit a net-worth tally.
+3. Flip-target screen — intersect `bank.json` ∩ `STATE.watchlist` → items worth GE-ing,
+   rendered in the **standard market table** (CLAUDE.md "Market analysis workflow" format).
+4. Reconcile GE-open vs bank — generalize `pipeline/held-override.json` (currently hand-patches
+   one item, crystal seed 23959) into proper bank-truth reconciliation, so `positions.json`
+   stops claiming inventory that's actually banked or already sold. Supersedes held-override.json.
+
+**Guardrails:**
+- **Do NOT inject bank items into the fill log / `fills.json`.** Bank truth is a *separate
+  input*, never fabricated into the append-only trade log — real trades vs. real holdings are
+  different sources (this is the same principle behind declining the "edit the log to remove a
+  position" request). It reconciles against `positions.json`; it does not write trade events.
+- Bank data is item+qty only → no PII, safe for the public repo.
+- Document in `pipeline/FILLS-PIPELINE.md`; note it supersedes `held-override.json`.
+- Depends on chunk 2's `js/quotecore.js` (shared quote/valuation math) — sequence after it.
+
+**Blocking on Ben:** install Data Export, open bank, paste one real export into
+`pipeline/bank.csv`. Nothing to build until that sample lands (parser must be pinned to actual
+columns). Until then this stays BLOCKED.
+
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
   realized-vs-suggested calibration.
