@@ -85,6 +85,67 @@ Commit: `pipeline: unify reconstruction onto reconstruct.mjs (fix monitor WITHDR
 
 ---
 
+## Chunk 9 — Niche opportunity screens (kill the 24h-avg-ROI blind spot) — HIGH VALUE
+
+**The debt (found live 2026-07-03 screening session).** `screen.mjs` step 3 pre-filters on
+after-tax ROI of the **24h-average spread**. Stable liquid commodities have razor-thin 24h-avg
+spreads, so the screen structurally excludes the exact niche that produced ~88% of session profit
+(the crystal-teleport-seed lesson: for a liquid, regime-stable item with a wide *intraday* band,
+**the band IS the edge**). Net effect: screens surface almost only mid-reprice "Rising" Tier B
+items and hide the stable-liquid band plays Ben actually wants. Fixing it requires band data for
+ALL items *before* the top-N cut — which per-item `/timeseries` can't provide (rate limits). The
+unlock is that the wiki API's `/5m` and `/1h` endpoints are **bulk whole-market snapshots** and
+accept `?timestamp=` for past windows.
+
+### 9.1 `loadBands(hours)` in `marketfetch.mjs` — whole-market band data, archived
+- For each 5m window in the last `hours` (default 2): read from a local archive under
+  `pipeline/.cache/bands/` (append-per-day files, gitignored, prune >7 days) else fetch
+  `API/5m?timestamp=<unix rounded to 300s>` once and store it. First cold 2h run ≈ 24 bulk calls
+  (~70ms apart, same throttle as today); every later run only backfills missing windows.
+- Returns per-item `{bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: windows with
+  two-sided trades}` for EVERY item — zero per-item timeseries calls.
+- **Sanity gate:** for ~5 items spanning liquidity tiers, assert `loadBands(2)` edges match
+  `fetchTs(id,'5m')` last-24 edges (same upstream data, different route). If the `?timestamp=`
+  param misbehaves, verify against the wiki API docs before proceeding — do not silently fall
+  back to per-item fetches.
+
+### 9.2 `screen.mjs --mode <niche>` — one gate stack, per-niche pre-filter + ranking
+Shared gates stay for every mode (two-sided vol ≥ `--floor`, `--min-price`/`--max-price`,
+falling-regime silently excluded, top-N regime confirm + `computeQuote` + Tier A/B standard
+table). The mode only decides the **edge definition + ranking** in step 3:
+- **`band` (NEW DEFAULT)** — the seed niche. Edge = after-tax net of bandLo→bandHi from
+  `loadBands(--band-hours, default 2)`; gate `bandNet/bandLo ≥ --min-roi`; require the band to be
+  *traded* (≥ N active 5m windows on both sides, not one spike). Playbook line in output: ladder
+  buys at band low / sell at band top, never below break-even.
+- **`spread`** — today's behavior, renamed (24h-avg spread ROI). The bludgeon-style wide-spread
+  mid-liquidity flips. Keep as-is; it works for what it finds.
+- **`rising`** — formalizes what the current screen surfaces by accident: rising regime +
+  `mom !== 'breakdown'`, entry priced at the band low. Always Tier B, output header says "size
+  small, frothy".
+- **`churn`** — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted,
+  ranked purely by expected gp/day (9.3). Surfaces the high-frequency small-margin niche the ROI
+  gate also kills today.
+- Keep `--mode dip` OUT of scope for now (flat-regime + mom↓ wick-bids) — note it in the header
+  comment as designed-not-built; it inverts the "don't buy a breakdown" rule and needs live
+  validation first.
+
+### 9.3 Realistic gp/day ranking (cross-cutting)
+Raw ROI over-ranks illiquid margins. Expected units/day = `min(limit × 6, 10% × volDay)`
+(null limit → vol share only); `expGpDay = units × optNet` (band net for `band` mode). Rank every
+mode by it and append an **`Exp gp/d` trailing column in screen.mjs output only** — the canonical
+9-column table (`QUOTE_HEADERS`, app views, quote.mjs) is untouched; this is a screen-side
+appendix column, same pattern as the existing `stdCells` wrapper.
+
+### 9.4 Acceptance
+`node --check` touched files; run all four modes live; the proof gate is that `--mode band`
+surfaces at least one stable-liquid wide-band item class that `--mode spread` misses at the same
+floor/price window (the seed-class shape) with zero fallers shown; existing flags all still
+respected; `quote.mjs` unaffected. Node-only — no `APP_VERSION` bump unless `quotecore.js` is
+touched (it shouldn't be). Commit: `screen: niche modes (band/spread/rising/churn) + bulk 5m band
+archive + gp/day ranking`.
+
+---
+
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
   realized-vs-suggested calibration.
