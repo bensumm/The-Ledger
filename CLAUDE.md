@@ -106,9 +106,8 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
 ## Flipping strategy lessons (2026-07-02 session — codified)
 - **Screening: the 24h-drift signal is a pre-filter only.** Current-instasell-vs-24h-avg
   repeatedly read "flat/slightly soft" on items a multi-day check (`regimeDrift`: recent-3d
-  median vs prior ~2wk, ≥8% flags) showed as active fallers/movers — Lightbearer, Sunfire
-  cuirass, anguish, primordial, Archers ring, Blood moon (6× in one session). Always run
-  the multi-day regime check before recommending any screened item.
+  median vs prior ~2wk, ≥8% flags) showed as active fallers/movers (~6 items in one session).
+  Always run the multi-day regime check before recommending any screened item.
 - **Real liquidity = a two-sided daily market, not the `/volumes` count.** `/volumes` is
   bursty/weekly and overstates tradability. The 50–100/day band looked juicy (5–22%
   "margins") but was ghost-spreads: `0/0` two-sided trades in 24h (cosmetics, ornament
@@ -142,8 +141,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   and it drives the position cut-trigger (a held breakdown escalates toward CUT before the regime
   confirms; big-ticket in-profit-but-breaking-down positions clear rather than hold). It is
   deliberately NOT wired into the bulk Finder-list rating (approximate there / churns the sort).
-  Verified live 2026-07-03 (Twinflame/Brimstone ↓, Zombie axe ↑, Tome of fire/Twisted buckler clean;
-  flags matched the independent 2h-drift read exactly).
+  Verified live 2026-07-03 — flags matched an independent 2h-drift read.
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
 - Net/u after 2% tax. Regime = multi-day regimeDrift check (flat/rising/falling label).
