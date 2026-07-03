@@ -237,3 +237,6 @@ columns). Until then this stays BLOCKED.
 
 ## Discovered
 (appended during execution — severity + one-line description)
+- **low** — `sync-fills.mjs` counts `parsedLines` but never reports it (only `events.length` prints); dead counter — fold into the summary line or drop (chunk 4.2).
+- **low** — guide dump fetch (`chisel.weirdgloop.org`) fails CORS on a localhost dev server every run; app falls back to the wiki module but it's a guaranteed console error during local testing — consider logging-once/suppressing.
+- **low** — `STATE.fillsPending` rows persisted before 0.27 lack the stored `line` field, so their Edit/Delete degrades to a "fix by hand" message; self-heals once the next sync absorbs them.

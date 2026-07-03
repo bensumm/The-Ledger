@@ -18,6 +18,19 @@
  *   node sync-fills.mjs --probe    print first raw lines of each log file
  *                                  (use this ONCE to verify field mapping)
  *   node sync-fills.mjs --dry      parse + merge + report, no git push
+ *   --log-dir <dir> / --repo-dir <dir>   override the source log dir / output
+ *                                  repo dir — for isolated fixture tests only
+ *                                  (never point a test at the real dirs).
+ *
+ * Manual-line vocabulary (coffer-manual.log, slot 8 — see PLAN.md chunk 1):
+ *   BOUGHT / SOLD                  normal manual fills (add-manual-fill.mjs / the app)
+ *   WITHDRAWN                      inventory taken for personal use — consumes open lots
+ *                                  FIFO into closed rows with realised 0
+ *   BANKED                         pre-owned inventory entering the flip flow at a
+ *                                  declared basis (worth/qty); tagged banked:true
+ *   {"state":"REMOVE","target":"<eventId>"}   tombstone: deletes that event id from the
+ *                                  merged set, including events already persisted in
+ *                                  fills.json (source-level corrections propagate).
  *
  * Design: idempotent. Every run re-reads all log files, normalizes, and
  * dedupes by a content-derived event id. No watermark state to corrupt.
@@ -31,8 +44,12 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 
 /* ======================= CONFIG — edit these ======================= */
-const LOG_DIR   = join(homedir(), '.runelite', 'exchange-logger'); // plugin output
-const REPO_DIR  = 'C:\\dev\\The-Ledger';                            // your git clone
+// --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
+// Acceptance block in PLAN.md chunk 1): point them at a temp dir so a test run
+// never reads/writes Ben's real log or the live fills.json/positions.json.
+function argVal(name){ const i = process.argv.indexOf(name); return (i >= 0 && i + 1 < process.argv.length) ? process.argv[i + 1] : undefined; }
+const LOG_DIR   = argVal('--log-dir') || join(homedir(), '.runelite', 'exchange-logger'); // plugin output
+const REPO_DIR  = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';    // your git clone
 const FILLS_REL = 'fills.json';                                    // raw event stream, repo-relative
 const POSITIONS_REL = 'positions.json';                            // reconstructed trades/positions (app auto-populates Ledger from this)
 const MAX_AGE_DAYS = 180;   // drop events older than this
@@ -82,6 +99,10 @@ function pick(o, ...names) {
 function normalizeStateStr(s) {
   s = String(s || '').toUpperCase();
   if (s.includes('CANCEL')) return 'cancelled'; // explicit CANCELLED_BUY/SELL states (confirmed live 2026-07-02)
+  // WITHDRAWN (inventory taken for personal use) and BANKED (pre-owned stock entering the
+  // flip flow) are one-shot synthetic manual events — treat as terminal 'complete' so
+  // collapseOffers marks them done and the cancel-inference sequencer leaves them alone.
+  if (s.includes('WITHDRAW') || s.includes('BANK')) return 'complete';
   if (s.includes('BOUGHT') || s.includes('SOLD') || s === 'COMPLETE' || s.includes('COMPLETED')) return 'complete';
   if (s.includes('BUYING') || s.includes('SELLING')) return 'partial'; // in-progress update; may be refined to 'placed' below
   return null;
@@ -111,13 +132,24 @@ function parseJsonLine(line) {
   let o;
   try { o = JSON.parse(line); } catch { return null; }
 
+  // Tombstone directive (see PLAN.md chunk 1.4): a REMOVE line targets an event id and, on
+  // merge, deletes the matching event from fills.json even if already persisted. Returned as
+  // a marker so main() can collect it; it carries no ts/slot of its own.
+  if (String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase() === 'REMOVE') {
+    return { remove: String(pick(o, 'target', 'id', 'event') ?? '') };
+  }
+
   const ts = parseTs(o);
   if (!Number.isFinite(ts)) return null;
   const slot = Number(pick(o, 'slot'));
 
   const rawState = String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase();
   const rawType = rawState;
-  const type = rawType.includes('BUY') || rawType.includes('BOUGHT') ? 'buy'
+  // 'withdraw'/'banked' are manual-only sides (WITHDRAWN removes inventory with no sale;
+  // BANKED enters pre-owned inventory at a declared basis) — see matchTrades().
+  const type = rawType.includes('WITHDRAW') ? 'withdraw'
+             : rawType.includes('BANK') ? 'banked'
+             : rawType.includes('BUY') || rawType.includes('BOUGHT') ? 'buy'
              : rawType.includes('SELL') || rawType.includes('SOLD') ? 'sell' : null;
 
   const itemId = Number(pick(o, 'itemId', 'item_id', 'id', 'item'));
@@ -205,26 +237,43 @@ function matchTrades(offers) {
   const closed = [], unmatched = [];
   for (const o of filled) {
     const each = o.spent / o.filled; // actual executed gross price per item
-    if (o.type === 'buy') {
-      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen });
+    if (o.type === 'buy' || o.type === 'banked') {
+      // BANKED = pre-owned stock committed to flipping at a declared basis (each). It enters
+      // the FIFO queue exactly like a bought lot but carries banked:true so its eventual
+      // realised P/L (and any leftover open position) stays distinguishable from cash buys.
+      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen, banked: o.type === 'banked' });
+    } else if (o.type === 'withdraw') {
+      // WITHDRAWN = inventory taken for personal use: consume open lots FIFO into closed rows
+      // flagged withdrawn:true with realised 0 (no sale, no proceeds). If nothing is open to
+      // withdraw against, there's nothing to record — drop it silently (unlike a sell, a
+      // withdrawal with no cost basis carries no information worth surfacing).
+      let remain = o.filled; const q = lots.get(o.itemId) || [];
+      while (remain > 0 && q.length) {
+        const lot = q[0], take = Math.min(remain, lot.qty);
+        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: 0,
+          tax: 0, realised: 0, withdrawn: true, banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
+        lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
+      }
     } else { // sell — consume buy lots FIFO
       let remain = o.filled; const q = lots.get(o.itemId) || [];
       while (remain > 0 && q.length) {
         const lot = q[0], take = Math.min(remain, lot.qty), taxEach = GE_TAX(each);
         closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(lot.each), sellEach: Math.round(each),
-          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), buyTs: lot.ts, sellTs: o.tsOpen });
+          tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
         lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
       }
       if (remain > 0) unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
     }
   }
-  // remaining buy lots = open inventory; merge same item+price lots into one position (keep earliest buyTs)
+  // remaining lots = open inventory; merge same item+price+origin lots into one position
+  // (keep earliest buyTs). Banked and cash lots at the same price stay separate so the tag
+  // survives.
   const openMap = new Map();
   for (const [itemId, q] of lots) for (const lot of q) {
     if (lot.qty <= 0) continue;
-    const each = Math.round(lot.each), k = itemId + ':' + each, m = openMap.get(k);
+    const each = Math.round(lot.each), k = itemId + ':' + each + ':' + (lot.banked ? 'b' : ''), m = openMap.get(k);
     if (m) { m.qty += lot.qty; m.buyTs = Math.min(m.buyTs, lot.ts); }
-    else openMap.set(k, { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
+    else openMap.set(k, lot.banked ? { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts, banked: true } : { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
   }
   const open = [...openMap.values()].sort((a, b) => a.buyTs - b.buyTs);
   return { closed, open, unmatched };
@@ -274,11 +323,13 @@ function main() {
   // parse everything
   let rawLines = 0, parsedLines = 0;
   const rawParsed = [];
+  const removeTargets = new Set(); // event ids tombstoned by REMOVE lines (chunk 1.4)
   for (const f of files) {
     for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
       if (!line.trim()) continue;
       rawLines++;
       const r = parseJsonLine(line);
+      if (r && r.remove !== undefined) { if (r.remove) removeTargets.add(r.remove); continue; }
       if (r) { rawParsed.push(r); parsedLines++; }
     }
   }
@@ -297,10 +348,15 @@ function main() {
   for (const e of [...prior, ...events]) byIdMap.set(e.id, e);
 
   const cutoff = Math.floor(Date.now() / 1000) - MAX_AGE_DAYS * 86400;
+  // Apply tombstones: a REMOVE line deletes its target event id from the merged set even if
+  // that event was already persisted in fills.json (byIdMap seeded it from `prior`). Because
+  // the REMOVE line itself lives on in coffer-manual.log, this stays idempotent across syncs —
+  // a re-parsed source event is filtered out again every run.
   let merged = [...byIdMap.values()]
-    .filter(e => e.ts >= cutoff)
+    .filter(e => e.ts >= cutoff && !removeTargets.has(e.id))
     .sort((a, b) => a.ts - b.ts);
   if (merged.length > MAX_EVENTS) merged = merged.slice(-MAX_EVENTS);
+  if (removeTargets.size) console.log(`${removeTargets.size} tombstone target(s); ${[...byIdMap.values()].filter(e => removeTargets.has(e.id)).length} event(s) removed`);
 
   // Compare against prior *content* (events only), not the full JSON blob —
   // generatedAt always differs run-to-run, so comparing the whole blob would
@@ -326,8 +382,10 @@ function main() {
       console.log(`  ${new Date(e.ts * 1000).toISOString()} slot${e.slot} ${e.type} ${e.state} item=${e.itemId} price=${e.price} filled=${e.filled}/${e.qty} spent=${e.spent}`);
     }
     console.log('--- reconstructed ---');
-    for (const t of pos.closed) console.log(`  CLOSED item=${t.itemId} qty=${t.qty} buy=${t.buyEach} sell=${t.sellEach} tax=${t.tax} realised=${t.realised >= 0 ? '+' : ''}${t.realised}`);
-    for (const o of pos.open) console.log(`  OPEN   item=${o.itemId} qty=${o.qty} @ ${o.buyEach}`);
+    for (const t of pos.closed) console.log(t.withdrawn
+      ? `  WITHDRAWN item=${t.itemId} qty=${t.qty} basis=${t.buyEach} (used, realised 0)`
+      : `  CLOSED item=${t.itemId} qty=${t.qty} buy=${t.buyEach} sell=${t.sellEach} tax=${t.tax} realised=${t.realised >= 0 ? '+' : ''}${t.realised}${t.banked ? ' [banked basis]' : ''}`);
+    for (const o of pos.open) console.log(`  OPEN   item=${o.itemId} qty=${o.qty} @ ${o.buyEach}${o.banked ? ' [banked]' : ''}`);
     for (const u of pos.unmatched) console.log(`  UNMATCHED SELL item=${u.itemId} qty=${u.qty} @ ${u.sellEach} (no logged buy — pre-log inventory)`);
     if (changed) console.log('[dry] would write + push');
     return;

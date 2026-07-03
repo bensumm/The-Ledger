@@ -175,6 +175,30 @@ Reconstruction (in `sync-fills.mjs`), deliberate — don't undo casually:
 - Cost basis is **FIFO**; itemId→name resolution is left to the app (it has the
   mapping), so `positions.json` stays name-free and stable across catalog changes.
 
+Manual-line vocabulary (0.27.0, PLAN.md chunk 1) — extra states valid ONLY in
+`coffer-manual.log` (slot 8), written by `add-manual-fill.mjs` or the app's linked
+file handle (`js/fillslog.js`):
+- **`WITHDRAWN`** — inventory taken for personal use. `matchTrades()` consumes open
+  lots FIFO into closed rows flagged `withdrawn:true` with `realised: 0` (no sale,
+  no tax); the app renders "withdrawn (used)" and excludes them from every profit
+  sum. CLI: `--type withdraw` (no `--price`).
+- **`BANKED`** — pre-owned inventory (bank/drop) entering the flip flow at a declared
+  basis (`worth/qty`; convention: market instasell at the time it was committed to
+  flipping; 0 allowed for windfalls). Enters the FIFO queue like a buy but carries
+  `banked:true` onto the open lot and any closed trade it feeds, so flip-decision P/L
+  stays distinguishable from cash-out-of-pocket. CLI: `--type banked --price <basis>`.
+- **`{"state":"REMOVE","target":"<eventId>"}`** — tombstone. During merge the target
+  event id is deleted from the merged set **including events already persisted in
+  `fills.json`** (that file is an append-only archive, so deleting a source line alone
+  never purges a merged event — the tombstone is the correction mechanism). Idempotent:
+  the REMOVE line stays in the log, so a re-parsed source event is re-filtered every
+  sync. Event id = `sha1(ts|slot|itemId|type|state|filled|spent)`, first 16 hex —
+  `eventId()` in `sync-fills.mjs` and `eventIdFor()` in `js/fillslog.js` MUST stay in
+  sync. CLI: `add-manual-fill.mjs --remove <eventId>`; the app appends tombstones
+  automatically whenever it edits/deletes a manual line.
+- Test isolation: `sync-fills.mjs --log-dir <dir> --repo-dir <dir>` points a fixture
+  run at temp dirs (use `--dry`, or a fixture repo dir — never the real ones).
+
 ## 6. The Coffer side (mobile-session work, or Claude Code once comfortable)
 
 Not yet built — planned as the next tool feature, roughly in order:
@@ -208,15 +232,20 @@ Not yet built — planned as the next tool feature, roughly in order:
   - **CLI:** `node pipeline/add-manual-fill.mjs --item "…" --type buy|sell --qty N --price gp
     [--net] [--time iso] [--dry]` (see its header). `--net` inverts the 2% tax (capped 5m)
     so an after-tax sell price becomes the gross listing the log stores.
-  - **App (0.26.0):** the Ledger's "Link fills log…" button grants the page write access to
-    `coffer-manual.log` via the File System Access API (Edge/Chrome); once linked, manual
-    buys/sells append there directly (`js/fillslog.js` `fillsLogLine` = same schema, slot 8).
-    The app stages an optimistic `pending` row (`STATE.fillsPending`) that `syncFills()`
-    drops once a positions.json with `generatedAt >= created` arrives (same machine → no
-    clock skew), i.e. once the sync has absorbed the injected line.
-  Editing an already-injected line (log rewrite) is not built yet — correct the value in the
-  app *before* it syncs, or edit `coffer-manual.log` by hand. Old screenshot-transcribe path
-  still works as a fallback.
+  - **App (0.26.0; log-only since 0.27.0):** the Ledger's "Link fills log…" button grants the
+    page write access to `coffer-manual.log` via the File System Access API (Edge/Chrome);
+    once linked, manual buys/sells/withdrawals/banked entries append there directly
+    (`js/fillslog.js` `fillsLogLine` = same schema, slot 8). The app stages an optimistic
+    `pending` row (`STATE.fillsPending`) that `syncFills()` drops once a positions.json with
+    `generatedAt >= created` arrives (same machine → no clock skew), i.e. once the sync has
+    absorbed the injected line. Since 0.27.0 the log is the ONLY manual path — unlinked, the
+    form shows guidance and creates nothing (the old browser-local `STATE.trades` path was
+    removed; PLAN.md chunk 1).
+  Editing/deleting an injected line (0.27.0): pending rows have Edit/Delete (exact-string
+  line rewrite through the stored file handle), and "Edit manual entries…" rewrites any
+  already-synced manual line; both always append a REMOVE tombstone for the old event id
+  (§5.1) so the correction propagates into fills.json on the next sync. Old
+  screenshot-transcribe path still works as a fallback.
 - Offer chains (cancel→relist) need heuristic grouping (same item, opposite side
   absent, relist within minutes) — downstream logic, not pipeline.
 - Selection bias: only taken trades are observed; §6.6 partially compensates.

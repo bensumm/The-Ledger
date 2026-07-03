@@ -3,7 +3,8 @@ import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from
 import { loadAll, resolveItem, resolveId, computeScores, TREND_BADGE } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
-import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName } from './fillslog.js';
+import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName,
+         tombstoneLine, manualLineEvent, eventIdFor, readFillsLog, rewriteFillsLog } from './fillslog.js';
 
 /* finder */
 export function currentFinderRows(){
@@ -129,15 +130,20 @@ export function renderWatch(){
     document.getElementById('tItem').value=it.name; document.getElementById('tBuy').value=it.low||''; document.getElementById('tQty').focus(); });
 }
 
-/* ledger */
-const newTid=()=>'t'+Date.now()+Math.random().toString(36).slice(2,6);
+/* ledger — manual entries are LOG-ONLY (PLAN.md chunk 1): every manual buy/sell/withdraw/
+   banked writes a line to coffer-manual.log through the linked file handle, shows as an
+   optimistic pending row, and becomes real when the pipeline sync folds it into
+   positions.json. There is no browser-local trade path any more — unlinked = guidance
+   message, nothing created. */
 function fillsMsg(m){ const el=document.getElementById('fillsLogStatus'); if(el){ el.textContent=m; el.classList.remove('hidden'); } }
 // Write a manual entry straight into coffer-manual.log and stage an optimistic row until
-// the next sync folds it into positions.json (see fillslog.js). Returns true if written.
-async function writeToFillsLog(kind, it, qty, priceEach){
-  const ok=await appendFillsLog([ fillsLogLine({type:kind, itemId:it.id, qty, priceEach}) ]);
+// the next sync folds it into positions.json (see fillslog.js). The exact serialized line
+// is kept on the pending row so Edit/Delete can rewrite it by exact-string match later.
+async function writeToFillsLog(kind, it, qty, priceEach, ts){
+  const line=fillsLogLine({type:kind, itemId:it.id, qty, priceEach, ts});
+  const ok=await appendFillsLog([line]);
   if(!ok) return false;
-  STATE.fillsPending.push({ id:'p'+Date.now()+Math.random().toString(36).slice(2,5), kind, itemId:it.id, name:it.name, qty, each:priceEach, created:now() });
+  STATE.fillsPending.push({ id:'p'+Date.now()+Math.random().toString(36).slice(2,5), kind, itemId:it.id, name:it.name, qty, each:priceEach, ts:ts||now(), created:now(), line });
   await sSet('fillsPending', STATE.fillsPending);
   return true;
 }
@@ -147,64 +153,116 @@ export async function addTrade(){
   const qty=parseGp(document.getElementById('tQty').value)||1;
   if(!name){ alert('Enter an item.'); return; }
   const it=resolveItem(name);
-  const linked=await isLinked();
+  if(!it){ alert('Item not recognised — pick the exact name from the list (manual entries need the item id for the log).'); return; }
+  if(!(await isLinked())){
+    fillsMsg('Nothing was logged — manual entries persist only through the fills log. Click “Link fills log…” (Edge/Chrome) to grant access to coffer-manual.log, or use pipeline/add-manual-fill.mjs from the terminal.');
+    return;
+  }
+  // Optional real trade time (chunk 1.2). Backdated trades MUST carry the time the trade
+  // actually happened — FIFO matching is timestamp-ordered (the phantom-bludgeons lesson).
+  let ts; const whenEl=document.getElementById('tWhen');
+  if(whenEl && whenEl.value){
+    ts=Math.floor(new Date(whenEl.value).getTime()/1000);
+    if(!Number.isFinite(ts)){ alert('Invalid “when” — use the picker, or leave it blank for “now”.'); return; }
+  }
+  let each=0;
   if(mode==='sell'){
     let sell=parseGp(document.getElementById('tSell').value);
-    if(isNaN(sell)){ alert('Enter a sell price.'); return; }
+    if(isNaN(sell)||sell<=0){ alert('Enter a sell price.'); return; }
     const tx=document.getElementById('tTax');
-    if(tx && tx.dataset.mode==='post') sell=Math.round(sell/0.98); // net gp received → store pre-tax so realised()/the pipeline nets the 2% itself
-    // LINKED: write the sale to the fills log; the pipeline FIFO-matches it against real buys.
-    if(linked && it){
-      const wrote=await writeToFillsLog('sell', it, qty, sell);
-      if(wrote){ fillsMsg('Sold '+qty+' × '+it.name+' → written to fills log. Appears in the ledger after the next sync (run pipeline/sync-fills.mjs to see it now).'); }
-      else { alert('Couldn’t write to the fills log (permission?). Logged locally instead.'); return await sellLocal(it, name, qty, sell); }
-    } else {
-      return await sellLocal(it, name, qty, sell);
-    }
-  } else {
+    if(tx && tx.dataset.mode==='post') sell=Math.round(sell/0.98); // net gp received → store pre-tax so the pipeline nets the 2% itself
+    each=sell;
+  } else if(mode==='buy'||mode==='banked'){
     const buy=parseGp(document.getElementById('tBuy').value);
-    if(isNaN(buy)){ alert('Enter a buy price.'); return; }
-    if(linked && it){
-      const wrote=await writeToFillsLog('buy', it, qty, buy);
-      if(wrote){ fillsMsg('Bought '+qty+' × '+it.name+' → written to fills log. Appears in the ledger after the next sync (run pipeline/sync-fills.mjs to see it now).'); }
-      else { alert('Couldn’t write to the fills log (permission?). Logged locally instead.');
-        STATE.trades.push({tid:newTid(), itemId:it.id, name:it.name, qty, buy, sell:null, opened:now(), closed:null}); await sSet('trades',STATE.trades); }
-    } else {
-      STATE.trades.push({tid:newTid(), itemId:it?it.id:null, name:it?it.name:name, qty, buy, sell:null, opened:now(), closed:null});
-      await sSet('trades',STATE.trades);
-    }
-  }
-  ['tItem','tQty','tBuy','tSell'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    if(isNaN(buy)||buy<0||(buy===0&&mode!=='banked')){ alert(mode==='banked'?'Enter the basis each (0 is allowed for windfalls).':'Enter a buy price.'); return; }
+    each=buy;
+  } // withdraw: no price — the cost basis comes from the consumed open lot
+  const wrote=await writeToFillsLog(mode, it, qty, each, ts);
+  if(!wrote){ fillsMsg('Couldn’t write to the fills log (permission denied?) — nothing was logged. Re-link the log or use pipeline/add-manual-fill.mjs.'); return; }
+  const verb=mode==='buy'?'Bought':mode==='sell'?'Sold':mode==='withdraw'?'Withdrew':'Banked';
+  fillsMsg(verb+' '+qty+' × '+it.name+' → written to '+(await linkedName())+'. Shows as pending until the next pipeline sync absorbs it.');
+  ['tItem','tQty','tBuy','tSell','tWhen'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderAll();
 }
-// Browser-only sale: FIFO-close matching open lots locally (used when the fills log isn't linked).
-async function sellLocal(it, name, qty, sell){
-  const match=t=>t.sell===null && (it? t.itemId===it.id : t.name===name);
-  const open=STATE.trades.filter(match).sort((a,b)=>(a.opened||0)-(b.opened||0));
-  if(!open.length){ alert('No open ‘'+name+'’ position to sell — switch to Buy and log the purchase first (a sale needs a cost basis).'); return; }
-  let remain=qty; const remove=new Set();
-  for(const t of open){ if(remain<=0) break;
-    const take=Math.min(remain, t.qty);
-    STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:take, buy:t.buy, sell, opened:t.opened, closed:now()});
-    remain-=take;
-    if(take>=t.qty){                                    // whole lot sold → drop the open lot
-      if(t.src==='fills' && !STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); // tombstone so a sync won't resurrect it
-      remove.add(t.tid);
-    } else if(t.src==='fills'){                          // partial sale of a fills lot: tombstone it, keep the remainder as a manual open
-      if(!STATE.fillsHidden.includes(t.tid)) STATE.fillsHidden.push(t.tid); remove.add(t.tid);
-      STATE.trades.push({tid:newTid(), itemId:t.itemId, name:t.name, qty:t.qty-take, buy:t.buy, sell:null, opened:t.opened, closed:null});
-    } else { t.qty-=take; }                              // partial sale of a manual lot: just reduce it
+/* Prompt-driven qty/price/when editor shared by pending-row Edit and the synced-line editor.
+   Returns {qty,each,ts}, the string 'delete' (qty 0), or null (cancelled/invalid). */
+function promptFillEdit(kind, curQty, curEach, defWhen){
+  const q=prompt('Quantity (0 = delete this entry):', curQty); if(q===null) return null;
+  const qty=parseGp(q); if(isNaN(qty)||qty<0){ alert('Invalid quantity.'); return null; }
+  if(qty===0) return 'delete';
+  let each=0;
+  if(kind!=='withdraw'){
+    const v=prompt(kind==='banked'?'Basis (each, gp — 0 allowed for windfalls):':'Price (each, pre-tax gp):', curEach); if(v===null) return null;
+    each=parseGp(v); if(isNaN(each)||each<0||(each===0&&kind!=='banked')){ alert('Invalid price.'); return null; }
   }
-  STATE.trades=STATE.trades.filter(t=>!remove.has(t.tid));
-  await sSet('fillsHidden',STATE.fillsHidden);
-  await sSet('trades',STATE.trades);
-  if(remain>0) alert('Logged the sale. You only had '+(qty-remain)+' open, so '+remain+' with no recorded buy were skipped (no cost basis).');
-  ['tItem','tQty','tBuy','tSell'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const w=prompt('When (YYYY-MM-DDTHH:MM) — the REAL trade time; FIFO matching depends on it:', defWhen); if(w===null) return null;
+  const ts=Math.floor(new Date(w).getTime()/1000); if(!Number.isFinite(ts)){ alert('Invalid date/time.'); return null; }
+  return {qty, each, ts};
+}
+/* Edit/delete a PENDING manual row (chunk 1.3): rewrite its exact line in coffer-manual.log
+   through the stored file handle. A tombstone for the OLD event id is written alongside —
+   a no-op if no sync has absorbed the line yet, and exactly the fix needed if one has
+   (fills.json is append-only; removing a source line alone would not purge a merged event). */
+async function editPending(pid){
+  const p=STATE.fillsPending.find(x=>x.id===pid); if(!p) return;
+  if(!p.line){ alert('This pending row predates 0.27 and has no stored source line — edit coffer-manual.log by hand or wait for the next sync.'); return; }
+  const old=JSON.parse(p.line);
+  const r=promptFillEdit(p.kind, p.qty, p.each, old.date+'T'+old.time.slice(0,5));
+  if(r===null) return;
+  if(r==='delete') return delPending(pid);
+  const newLine=fillsLogLine({type:p.kind, itemId:p.itemId, qty:r.qty, priceEach:r.each, ts:r.ts});
+  const oldId=await eventIdFor(manualLineEvent(old));
+  const res=await rewriteFillsLog(p.line, [newLine, tombstoneLine(oldId)]);
+  if(!res.ok){ alert('Edit failed: '+res.reason); return; }
+  p.qty=r.qty; p.each=r.each; p.ts=r.ts; p.line=newLine; p.created=now();
+  await sSet('fillsPending', STATE.fillsPending);
+  fillsMsg('Log line rewritten (old event tombstoned).');
   renderAll();
 }
-export async function closeTrade(tid){ const t=STATE.trades.find(x=>x.tid===tid); if(!t) return;
-  const it=t.itemId?STATE.byId[t.itemId]:null, def=it&&it.high?it.high:''; const v=prompt('Sell price (each):',def); if(v===null) return;
-  const sell=parseGp(v); if(isNaN(sell)){ alert('Invalid price.'); return; } t.sell=sell; t.closed=now(); await sSet('trades',STATE.trades); renderAll(); }
+async function delPending(pid){
+  const p=STATE.fillsPending.find(x=>x.id===pid); if(!p) return;
+  if(p.line){
+    const oldId=await eventIdFor(manualLineEvent(JSON.parse(p.line)));
+    const res=await rewriteFillsLog(p.line, [tombstoneLine(oldId)]);
+    if(!res.ok){ alert('Delete failed: '+res.reason); return; }
+  } else if(!confirm('No stored source line (pre-0.27 pending row) — remove the pending row only? Any log line it wrote stays.')) return;
+  STATE.fillsPending=STATE.fillsPending.filter(x=>x.id!==pid);
+  await sSet('fillsPending', STATE.fillsPending);
+  fillsMsg('Entry removed from the log (tombstoned in case a sync already absorbed it).');
+  renderAll();
+}
+/* Edit/delete ALREADY-SYNCED manual lines (chunk 1.3, second half): list every live manual
+   entry in the linked coffer-manual.log, pick one, rewrite/remove it. The old event id is
+   always tombstoned so the correction propagates into fills.json on the next sync. */
+export async function editManualLog(){
+  if(!(await isLinked())){ fillsMsg('Link the fills log first — manual entries live in coffer-manual.log. (Or use pipeline/add-manual-fill.mjs --remove <eventId> from the terminal.)'); return; }
+  const text=await readFillsLog();
+  if(text===null){ fillsMsg('Couldn’t read the linked log (permission denied?).'); return; }
+  const removes=new Set(), entries=[];
+  for(const l of text.split(/\r?\n/)){
+    const s=l.trim(); if(!s||s[0]!=='{') continue;
+    let o; try{ o=JSON.parse(s); }catch{ continue; }
+    if(String(o.state||'').toUpperCase()==='REMOVE'){ removes.add(o.target); continue; }
+    entries.push({line:s, o});
+  }
+  const live=[];
+  for(const e of entries){ e.evt=manualLineEvent(e.o); e.id=await eventIdFor(e.evt); if(!removes.has(e.id)) live.push(e); }
+  if(!live.length){ fillsMsg('No live manual entries in '+(await linkedName())+'.'); return; }
+  const nameOf=id=>(STATE.byId[id]&&STATE.byId[id].name)||(STATE.catById[id]&&STATE.catById[id].name)||('#'+id);
+  const list=live.map((e,i)=>(i+1)+') '+e.o.date+' '+e.o.time+'  '+e.o.state+'  '+Number(e.o.qty).toLocaleString()+' × '+nameOf(e.o.item)+' @ '+fmt(e.o.offer||0)).join('\n');
+  const pick=prompt('Manual log entries (already-synced ones need a pipeline re-sync to apply changes):\n\n'+list+'\n\nEnter a number to edit (qty 0 deletes):');
+  if(pick===null) return;
+  const n=parseInt(pick,10);
+  if(!(n>=1&&n<=live.length)){ alert('No such entry.'); return; }
+  const e=live[n-1];
+  const r=promptFillEdit(e.evt.type, Number(e.o.qty), Number(e.o.offer)||0, e.o.date+'T'+e.o.time.slice(0,5));
+  if(r===null) return;
+  const repl = r==='delete' ? [tombstoneLine(e.id)]
+    : [fillsLogLine({type:e.evt.type, itemId:e.evt.itemId, qty:r.qty, priceEach:r.each, ts:r.ts}), tombstoneLine(e.id)];
+  const res=await rewriteFillsLog(e.line, repl);
+  if(!res.ok){ alert('Rewrite failed: '+res.reason); return; }
+  fillsMsg((r==='delete'?'Entry removed':'Entry rewritten')+' + old event tombstoned. Re-sync to apply: the scheduled sync runs within ~20 min (or run pipeline/sync-fills.mjs), then refresh prices here.');
+}
 export async function delTrade(tid){
   const t=STATE.trades.find(x=>x.tid===tid);
   if(t && t.src==='fills'){ // fills entries are regenerated each sync — tombstone the key so it stays hidden
@@ -230,10 +288,10 @@ export async function syncFills(){
   const nameOf=id=>(STATE.byId[id]&&STATE.byId[id].name)||(STATE.catById[id]&&STATE.catById[id].name)||('Item #'+id);
   STATE.trades=STATE.trades.filter(t=>t.src!=='fills');
   const add=[];
-  for(const t of (pos.closed||[])){ const key='f:c:'+t.itemId+':'+t.buyTs+':'+t.sellTs; if(hidden.has(key)) continue;
-    add.push({tid:key, src:'fills', itemId:t.itemId, name:nameOf(t.itemId), qty:t.qty, buy:t.buyEach, sell:t.sellEach, opened:t.buyTs, closed:t.sellTs}); }
-  for(const o of (pos.open||[])){ const key='f:o:'+o.itemId+':'+o.buyEach; if(hidden.has(key)) continue;
-    add.push({tid:key, src:'fills', itemId:o.itemId, name:nameOf(o.itemId), qty:o.qty, buy:o.buyEach, sell:null, opened:o.buyTs, closed:null}); }
+  for(const t of (pos.closed||[])){ const key='f:c:'+t.itemId+':'+t.buyTs+':'+t.sellTs+(t.withdrawn?':w':''); if(hidden.has(key)) continue;
+    add.push({tid:key, src:'fills', itemId:t.itemId, name:nameOf(t.itemId), qty:t.qty, buy:t.buyEach, sell:t.sellEach, opened:t.buyTs, closed:t.sellTs, withdrawn:!!t.withdrawn, banked:!!t.banked}); }
+  for(const o of (pos.open||[])){ const key='f:o:'+o.itemId+':'+o.buyEach+(o.banked?':b':''); if(hidden.has(key)) continue;
+    add.push({tid:key, src:'fills', itemId:o.itemId, name:nameOf(o.itemId), qty:o.qty, buy:o.buyEach, sell:null, opened:o.buyTs, closed:null, banked:!!o.banked}); }
   STATE.trades.push(...add);
   STATE.fillsUnmatched=Array.isArray(pos.unmatched)?pos.unmatched:[];
   STATE.fillsTs=pos.generatedAt?Math.floor(Date.parse(pos.generatedAt)/1000):0;
@@ -249,7 +307,9 @@ export async function syncFills(){
   logEvent('info','fills',(pos.closed||[]).length+' closed, '+(pos.open||[]).length+' open, '+STATE.fillsUnmatched.length+' unmatched from positions.json');
   renderLedger(); renderCoffer();
 }
-export function realised(t){ return ((t.sell-tax(t.sell))-t.buy)*t.qty; }
+// After-tax realised P/L. Withdrawn rows (inventory taken for personal use) are realised 0
+// by definition — no sale happened; they must never count toward profit sums (chunk 1.5).
+export function realised(t){ if(t.withdrawn) return 0; return ((t.sell-tax(t.sell))-t.buy)*t.qty; }
 export function renderFillsMeta(){
   const el=document.getElementById('fillsMeta'); if(!el) return;
   const fills=STATE.trades.filter(t=>t.src==='fills'), un=STATE.fillsUnmatched||[];
@@ -277,22 +337,12 @@ function groupTrades(trades){
     if(!m.has(k)) m.set(k,{key:k, itemId:t.itemId, name:t.name, rows:[]}); m.get(k).rows.push(t); }
   return [...m.values()];
 }
-function openActions(t){ const isF=t.src==='fills'; return (isF?'':'<button class="act" data-close="'+t.tid+'">Mark sold</button> <button class="act" data-edit="'+t.tid+'">Edit</button> ')+'<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button>'; }
-function closedActions(t){ const isF=t.src==='fills'; return (isF?'':'<button class="act" data-edit="'+t.tid+'">Edit</button> ')+'<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button>'; }
-/* Edit a MANUAL entry in place (fills are regenerated by the pipeline, so editing them wouldn't stick — hence non-fills only).
-   Prompts each editable field pre-filled with its current value; blank/cancel on any leaves it unchanged. Sell price is pre-tax. */
-export async function editTrade(tid){
-  const t=STATE.trades.find(x=>x.tid===tid); if(!t || t.src==='fills') return;
-  const q=prompt('Quantity:', t.qty); if(q===null) return;
-  const qty=parseGp(q); if(isNaN(qty)||qty<=0){ alert('Invalid quantity.'); return; }
-  const b=prompt('Buy price (each):', t.buy); if(b===null) return;
-  const buy=parseGp(b); if(isNaN(buy)){ alert('Invalid buy price.'); return; }
-  let sell=t.sell;
-  if(t.sell!==null){ const s=prompt('Sell price (each, pre-tax):', t.sell); if(s===null) return;
-    sell=parseGp(s); if(isNaN(sell)){ alert('Invalid sell price.'); return; } }
-  t.qty=qty; t.buy=buy; if(t.sell!==null) t.sell=sell;
-  await sSet('trades',STATE.trades); renderAll();
-}
+/* Row actions: every ledger row is now fills-derived (Hide = tombstone in fillsHidden) or a
+   legacy pre-0.27 local entry (Delete — see the migration banner). Editing happens at the
+   SOURCE: pending rows and manual log lines rewrite coffer-manual.log (chunk 1.3), never
+   the derived view. The old Mark sold / prompt-Edit local path is gone (chunk 1.1). */
+function rowActions(t){ const isF=t.src==='fills';
+  return '<button class="act danger" data-del="'+t.tid+'">'+(isF?'Hide':'Delete')+'</button>'; }
 export async function toggleFillsLogLink(){
   if(await isLinked()){ if(confirm('Unlink the fills log? Manual entries go back to browser-only until you re-link.')){ await unlinkFillsLog(); await renderFillsLogLink(); } return; }
   if(await linkFillsLog()) await renderFillsLogLink();
@@ -306,7 +356,7 @@ export async function renderFillsLogLink(){
   if(nm){ btn.textContent='Unlink fills log'; btn.classList.add('linked');
     if(st){ st.classList.remove('hidden'); st.textContent='Manual entries write to '+nm+' → the pipeline folds them into the ledger on the next sync.'; }
   }else{ btn.textContent='Link fills log…'; btn.classList.remove('linked');
-    if(st){ st.classList.remove('hidden'); st.textContent='Manual entries are browser-only. Link coffer-manual.log to persist them through your fills pipeline.'; } }
+    if(st){ st.classList.remove('hidden'); st.textContent='Manual entries need the fills log (single source of truth). Link coffer-manual.log to enable the form, or use pipeline/add-manual-fill.mjs from the terminal.'; } }
 }
 export async function setLedgerWatchOnly(v){ STATE.ledgerWatchOnly=v; await sSet('ledgerWatchOnly',v); renderLedger(); }
 export async function setLedgerPeriod(p){ STATE.ledgerPeriod=p; await sSet('ledgerPeriod',p); renderLedger(); }
@@ -319,15 +369,20 @@ export function renderLedger(){
   renderFillsMeta();
   const wc=document.getElementById('ledgerWatchOnly'); if(wc) wc.checked=STATE.ledgerWatchOnly;
   document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.classList.toggle('on',b.dataset.period===STATE.ledgerPeriod));
+  renderLegacyBanner();
   const ftag='<span class="srctag" title="auto-synced from RuneLite fills">fills</span>';
+  const ltag='<span class="srctag" title="local-only pre-0.27 manual entry — the browser-local path was removed; re-inject via the log or delete (see the banner above)">local</span>';
+  const btag='<span class="srctag" title="pre-owned inventory that entered the flip flow at a declared basis (not cash out of pocket)">banked</span>';
+  const wtag='<span class="srctag" title="taken from inventory for personal use — no sale; excluded from realised">withdrawn</span>';
   const caret=k=>'<span class="caret">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</span>';
   const cnt=n=>' <span class="cnt">×'+n+'</span>';
   // optimistic rows for entries just written to the fills log (dropped by syncFills once absorbed)
   const pend=(STATE.fillsPending||[]).filter(p=>!STATE.ledgerWatchOnly || STATE.watchlist.includes(p.itemId));
-  const pendBuys=pend.filter(p=>p.kind==='buy'), pendSells=pend.filter(p=>p.kind==='sell');
+  const pendBuys=pend.filter(p=>p.kind==='buy'||p.kind==='banked'), pendSells=pend.filter(p=>p.kind==='sell'||p.kind==='withdraw');
   const ptag='<span class="srctag pend" title="written to your fills log — shows here until the next sync folds it in">pending</span>';
-  const pendOpenRows=pendBuys.map(p=>'<tr class="detail pend"><td class="left sub">'+ptag+' '+p.qty.toLocaleString()+' × '+p.name+' @ '+fmt(p.each)+'</td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">'+fmt(p.each)+'</td><td class="num">—</td><td class="num">—</td><td></td></tr>').join('');
-  const pendClosedRows=pendSells.map(p=>'<tr class="detail pend"><td class="left sub">'+ptag+' sold '+p.qty.toLocaleString()+' × '+p.name+' @ '+fmt(p.each)+'</td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">—</td><td class="num">'+fmt(p.each)+'</td><td class="num">—</td><td class="num pend">pending</td><td></td></tr>').join('');
+  const pactions=p=>'<button class="act" data-pedit="'+p.id+'">Edit</button> <button class="act danger" data-pdel="'+p.id+'">Delete</button>';
+  const pendOpenRows=pendBuys.map(p=>'<tr class="detail pend"><td class="left sub">'+ptag+' '+(p.kind==='banked'?'banked ':'')+p.qty.toLocaleString()+' × '+p.name+' @ '+fmt(p.each)+'</td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">'+fmt(p.each)+'</td><td class="num">—</td><td class="num">—</td><td>'+pactions(p)+'</td></tr>').join('');
+  const pendClosedRows=pendSells.map(p=>'<tr class="detail pend"><td class="left sub">'+ptag+' '+(p.kind==='withdraw'?('withdrew '+p.qty.toLocaleString()+' × '+p.name+' (used)'):('sold '+p.qty.toLocaleString()+' × '+p.name+' @ '+fmt(p.each)))+'</td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">—</td><td class="num">'+(p.kind==='withdraw'?'—':fmt(p.each))+'</td><td class="num">—</td><td class="num pend">pending</td><td>'+pactions(p)+'</td></tr>').join('');
 
   // ---- OPEN (grouped by item; drill-in when >1 lot) ----
   const ob=document.getElementById('openBody'), oe=document.getElementById('openEmpty');
@@ -338,11 +393,12 @@ export function renderLedger(){
       const it=g.itemId?resolveId(g.itemId):null, cur=it&&it.high?it.high:null;
       const totQty=g.rows.reduce((s,t)=>s+t.qty,0), avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
       const un=cur!==null?g.rows.reduce((s,t)=>s+((cur-tax(cur))-t.buy)*t.qty,0):null, multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
-      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):(g.rows[0].src==='fills'?' '+ftag:''))+'</td>'+
+      const rowTag=t=>(t.src==='fills'?' '+ftag:' '+ltag)+(t.banked?' '+btag:'');
+      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):rowTag(g.rows[0]))+'</td>'+
         '<td class="num">'+totQty.toLocaleString()+'</td><td class="num">'+fmt(avgBuy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td>'+
-        '<td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td><td>'+(multi?'':openActions(g.rows[0]))+'</td></tr>';
+        '<td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td><td>'+(multi?'':rowActions(g.rows[0]))+'</td></tr>';
       let det=''; if(multi&&exp) det=g.rows.map(t=>{ const u=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
-        return '<tr class="detail"><td class="left sub">'+(t.src==='fills'?ftag+' ':'')+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(u!==null?sgn(u):'')+'">'+(u!==null?fmt(u):'—')+'</td><td>'+openActions(t)+'</td></tr>'; }).join('');
+        return '<tr class="detail"><td class="left sub">'+rowTag(t)+' '+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(u!==null?sgn(u):'')+'">'+(u!==null?fmt(u):'—')+'</td><td>'+rowActions(t)+'</td></tr>'; }).join('');
       return head+det;
     }).join(''):'')+pendOpenRows;
   }
@@ -352,7 +408,8 @@ export function renderLedger(){
   if(strip){
     if(STATE.ledgerPeriod==='all' || !closed.length){ strip.classList.add('hidden'); strip.innerHTML=''; }
     else{ const buckets=new Map();
-      for(const t of closed){ const {key,label}=periodKey(t.closed||t.opened||now(), STATE.ledgerPeriod);
+      for(const t of closed){ if(t.withdrawn) continue; // withdrawals are not flips — no realised P/L to attribute
+        const {key,label}=periodKey(t.closed||t.opened||now(), STATE.ledgerPeriod);
         if(!buckets.has(key)) buckets.set(key,{label,total:0,count:0}); const b=buckets.get(key); b.total+=realised(t); b.count++; }
       const arr=[...buckets.entries()].sort((a,b)=>a[0]<b[0]?1:-1).slice(0,8).map(e=>e[1]);
       strip.classList.remove('hidden');
@@ -367,29 +424,50 @@ export function renderLedger(){
     ce.innerHTML='<div class="empty"><div class="big">No closed flips'+(STATE.ledgerWatchOnly?' on your watchlist':'')+'</div><div class="sm">'+(STATE.ledgerWatchOnly&&closedAll.length?'Turn off “Watchlist only” to see '+closedAll.length+' hidden.':'Sold positions land here with realised profit after tax.')+'</div></div>';
   }else if(!closed.length){ ce.classList.add('hidden'); cb.innerHTML=pendClosedRows;
   }else{ ce.classList.add('hidden');
+    // withdrawn rows carry sell=0 and no tax — average/aggregate the SOLD rows only, so a
+    // withdrawal never drags the group's avg sell or tax figures (realised() is already 0)
     const groups=groupTrades(closed).map(g=>{ const totQty=g.rows.reduce((s,t)=>s+t.qty,0);
-      g.totQty=totQty; g.avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty); g.avgSell=Math.round(g.rows.reduce((s,t)=>s+t.sell*t.qty,0)/totQty);
-      g.totTax=g.rows.reduce((s,t)=>s+tax(t.sell)*t.qty,0); g.totReal=g.rows.reduce((s,t)=>s+realised(t),0); g.last=Math.max(...g.rows.map(t=>t.closed||0)); return g;
+      const sold=g.rows.filter(t=>!t.withdrawn), soldQty=sold.reduce((s,t)=>s+t.qty,0);
+      g.totQty=totQty; g.avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
+      g.avgSell=soldQty?Math.round(sold.reduce((s,t)=>s+t.sell*t.qty,0)/soldQty):null;
+      g.totTax=sold.reduce((s,t)=>s+tax(t.sell)*t.qty,0); g.totReal=g.rows.reduce((s,t)=>s+realised(t),0); g.last=Math.max(...g.rows.map(t=>t.closed||0)); return g;
     }).sort((a,b)=>b.last-a.last);
     cb.innerHTML=groups.map(g=>{ const multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
-      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):'')+(g.rows.some(t=>t.src==='fills')?' '+ftag:'')+'</td>'+
-        '<td class="num">'+g.totQty.toLocaleString()+'</td><td class="num">'+fmt(g.avgBuy)+'</td><td class="num">'+fmt(g.avgSell)+'</td>'+
-        '<td class="num mini loss">'+fmt(g.totTax)+'</td><td class="num '+sgn(g.totReal)+'">'+fmt(g.totReal)+'</td><td>'+(multi?'':closedActions(g.rows[0]))+'</td></tr>';
+      const gtags=(g.rows.some(t=>t.src==='fills')?' '+ftag:'')+(g.rows.some(t=>t.src!=='fills')?' '+ltag:'')+(g.rows.some(t=>t.banked)?' '+btag:'')+(g.rows.some(t=>t.withdrawn)?' '+wtag:'');
+      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):'')+gtags+'</td>'+
+        '<td class="num">'+g.totQty.toLocaleString()+'</td><td class="num">'+fmt(g.avgBuy)+'</td><td class="num">'+(g.avgSell!==null?fmt(g.avgSell):'<span class="mini">withdrawn</span>')+'</td>'+
+        '<td class="num mini loss">'+fmt(g.totTax)+'</td><td class="num '+sgn(g.totReal)+'">'+fmt(g.totReal)+'</td><td>'+(multi?'':rowActions(g.rows[0]))+'</td></tr>';
       let det=''; if(multi&&exp) det=g.rows.slice().sort((a,b)=>(b.closed||0)-(a.closed||0)).map(t=>{ const r=realised(t), d=new Date((t.closed||0)*1000);
         const when=t.closed?pad2(d.getMonth()+1)+'/'+pad2(d.getDate()):'—';
-        return '<tr class="detail"><td class="left sub">'+when+' · '+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'→'+fmt(t.sell)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td><td class="num mini loss">'+fmt(tax(t.sell)*t.qty)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td>'+closedActions(t)+'</td></tr>'; }).join('');
+        if(t.withdrawn) return '<tr class="detail"><td class="left sub">'+when+' · '+t.qty.toLocaleString()+' withdrawn (used) '+wtag+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num mini">withdrawn (used)</td><td class="num">—</td><td class="num">—</td><td>'+rowActions(t)+'</td></tr>';
+        return '<tr class="detail"><td class="left sub">'+when+' · '+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'→'+fmt(t.sell)+(t.banked?' '+btag:'')+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+fmt(t.sell)+'</td><td class="num mini loss">'+fmt(tax(t.sell)*t.qty)+'</td><td class="num '+sgn(r)+'">'+fmt(r)+'</td><td>'+rowActions(t)+'</td></tr>'; }).join('');
       return head+det;
     }).join('')+pendClosedRows;
   }
   document.querySelectorAll('#openBody [data-grp],#closedBody [data-grp]').forEach(el=>el.onclick=e=>{ if(e.target.closest('button')) return; toggleLedgerGroup(el.dataset.grp); });
-  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeTrade(b.dataset.close));
-  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editTrade(b.dataset.edit));
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delTrade(b.dataset.del));
+  document.querySelectorAll('[data-pedit]').forEach(b=>b.onclick=()=>editPending(b.dataset.pedit));
+  document.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>delPending(b.dataset.pdel));
+}
+
+/* One-time migration surface (chunk 1.7): the browser-local manual path is gone, but trades
+   it created before 0.27 still live in STATE.trades (no src tag). Surface them with delete
+   actions until Ben re-injects them via the log (with the REAL trade time) or deletes them —
+   the banner disappears on its own once none remain. */
+function renderLegacyBanner(){
+  const el=document.getElementById('legacyBanner'); if(!el) return;
+  const legacy=STATE.trades.filter(t=>t.src!=='fills');
+  if(!legacy.length){ el.classList.add('hidden'); el.innerHTML=''; return; }
+  el.classList.remove('hidden');
+  const rows=legacy.map(t=>{ const d=new Date(((t.closed||t.opened||0))*1000);
+    return '<div class="lgrow">'+(t.sell===null?'open':'closed')+' · '+t.qty.toLocaleString()+' × '+t.name+' @ '+fmt(t.buy)+(t.sell!==null?' → '+fmt(t.sell):'')+' <span class="mini">('+pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+')</span> <button class="act danger" data-lgdel="'+t.tid+'">Delete</button></div>'; }).join('');
+  el.innerHTML='<b>'+legacy.length+' local-only manual '+(legacy.length===1?'entry':'entries')+' from before v0.27.</b> The browser-local entry path was removed — these never reached the fills pipeline and can double-display against pipeline rows. To keep one, re-inject it through the log (link the fills log and use the form with the <b>real trade time</b>, or pipeline/add-manual-fill.mjs), then delete it here.'+rows;
+  el.querySelectorAll('[data-lgdel]').forEach(b=>b.onclick=()=>delTrade(b.dataset.lgdel));
 }
 
 /* coffer */
 export function renderCoffer(){
-  const closed=STATE.trades.filter(t=>t.sell!==null), open=STATE.trades.filter(t=>t.sell===null);
+  const closed=STATE.trades.filter(t=>t.sell!==null && !t.withdrawn), open=STATE.trades.filter(t=>t.sell===null);
   const realisedTotal=closed.reduce((s,t)=>s+realised(t),0); let openVal=0, deployed=0;
   for(const t of open){ deployed+=t.buy*t.qty; const it=t.itemId?resolveId(t.itemId):null; if(it&&it.high) openVal+=(it.high-tax(it.high))*t.qty; }
   const cr=document.getElementById('cofferRealised'); cr.textContent=fmt(realisedTotal); cr.className='v num '+sgn(realisedTotal);

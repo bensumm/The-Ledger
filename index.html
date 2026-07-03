@@ -155,8 +155,10 @@
         <button type="button" data-period="month">Month</button>
       </div>
     </div>
+    <div class="mini hidden" id="legacyBanner" style="margin-bottom:12px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--parch2)"></div>
     <div class="fillslink">
       <button id="fillsLogLink" class="ghostbtn sm" type="button">Link fills log…</button>
+      <button id="manualLogEdit" class="ghostbtn sm" type="button">Edit manual entries…</button>
       <span id="fillsLogStatus" class="mini hidden"></span>
     </div>
     <div class="ledgerform">
@@ -164,11 +166,13 @@
         <div class="segtoggle" id="tType" data-mode="buy">
           <button type="button" data-mode="buy" class="on">Buy</button>
           <button type="button" data-mode="sell">Sell</button>
+          <button type="button" data-mode="withdraw">Withdraw</button>
+          <button type="button" data-mode="banked">Banked</button>
         </div>
       </div>
       <div class="fld wide"><label>Item</label><input id="tItem" list="itemList" placeholder="e.g. Twisted bow" /><datalist id="itemList"></datalist></div>
       <div class="fld"><label>Quantity</label><input id="tQty" placeholder="1" /></div>
-      <div class="fld buyonly"><label>Buy price (each)</label><input id="tBuy" placeholder="1.79b" /></div>
+      <div class="fld buyonly"><label id="tBuyLabel">Buy price (each)</label><input id="tBuy" placeholder="1.79b" /></div>
       <div class="fld sellonly hidden"><label>Sell price (each)</label><input id="tSell" placeholder="1.85b" /></div>
       <div class="fld sellonly hidden"><label>Sell price is</label>
         <div class="segtoggle" id="tTax" data-mode="pre">
@@ -176,8 +180,10 @@
           <button type="button" data-mode="post">Net</button>
         </div>
       </div>
+      <div class="fld"><label>When (optional)</label><input id="tWhen" type="datetime-local" /></div>
       <button id="addTrade" class="go">Open position</button>
     </div>
+    <div class="mini" style="margin:-6px 0 12px; color:var(--parch2)">Leave “When” blank for “now”. Backdated trades <b>must</b> carry the real trade time — FIFO matching depends on it. Entries write to your linked fills log (the single source of truth); nothing is stored browser-only.</div>
     <div class="sectlabel">Open positions <button id="reviewPos" class="ghostbtn sm" style="margin-left:8px">Review pricing</button></div>
     <div id="posReview" class="hidden" style="margin-bottom:14px"></div>
     <div class="tablewrap"><table>

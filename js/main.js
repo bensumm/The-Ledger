@@ -1,7 +1,7 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
-import { renderFinder, addTrade, renderCoffer, recompute, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink } from './ui.js';
+import { renderFinder, addTrade, renderCoffer, recompute, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog } from './ui.js';
 import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
 
@@ -30,13 +30,17 @@ document.getElementById('addTrade').onclick=addTrade;
 function wireSeg(id,cb){ const el=document.getElementById(id); if(!el) return;
   el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ el.dataset.mode=b.dataset.mode;
     el.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); if(cb) cb(b.dataset.mode); }); }
-wireSeg('tType',mode=>{ const sell=mode==='sell';
+wireSeg('tType',mode=>{ // buy | sell | withdraw (no price) | banked (basis instead of buy price)
+  const sell=mode==='sell', priced=(mode==='buy'||mode==='banked');
   document.querySelectorAll('.ledgerform .sellonly').forEach(e=>e.classList.toggle('hidden',!sell));
-  document.querySelectorAll('.ledgerform .buyonly').forEach(e=>e.classList.toggle('hidden',sell));
-  document.getElementById('addTrade').textContent=sell?'Log sale':'Open position'; });
+  document.querySelectorAll('.ledgerform .buyonly').forEach(e=>e.classList.toggle('hidden',!priced));
+  const bl=document.getElementById('tBuyLabel'); if(bl) bl.textContent=mode==='banked'?'Basis (each)':'Buy price (each)';
+  document.getElementById('addTrade').textContent=
+    mode==='sell'?'Log sale':mode==='withdraw'?'Log withdrawal':mode==='banked'?'Add banked stock':'Open position'; });
 wireSeg('tTax');
 document.getElementById('reviewPos').onclick=reviewPositions;
 const fll=document.getElementById('fillsLogLink'); if(fll) fll.onclick=toggleFillsLogLink;
+const mle=document.getElementById('manualLogEdit'); if(mle) mle.onclick=editManualLog;
 const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
 document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));
 export const bankI=document.getElementById('bankInput');

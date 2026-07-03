@@ -1,7 +1,7 @@
 import { now, pad2 } from './format.js';
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.26.0';
+export const APP_VERSION='0.27.0';
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality
 // multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
 // (These become Settings-tab editable next pass.)
