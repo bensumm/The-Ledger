@@ -179,7 +179,14 @@ export function quoteCells(name, row){
   };
 }
 /* markdown table for the chunk-3 pipeline scripts (built now so both sides share quoteCells).
-   rows: [{name, row}] */
+   rows: [{name, row}]
+   NOTE (chunk 10.2): still UNADOPTED by quote.mjs/screen.mjs — deliberately. Both consumers
+   APPEND columns to the standard 9 (quote.mjs --positions → Held@/Break-even/Verdict;
+   screen.mjs → Exp gp/d), and this helper hard-codes QUOTE_HEADERS + the fixed 9-cell order,
+   so it can't express an extended table. The scripts instead share the generic
+   pipeline/cli.mjs mdTable(headers, rows) + stdCells(name, row) split (stdCells === this
+   function's `order(quoteCells(...))`). Kept as the documented fixed-column shared-API form
+   for a future consumer that wants exactly the standard table. */
 export function quoteMarkdown(rows){
   const c=quoteCells, order=x=>[x.item,x.guide,x.mid,x.buy,x.sell,x.net,x.vol,x.mom,x.regime];
   const head='| '+QUOTE_HEADERS.join(' | ')+' |';

@@ -26,11 +26,12 @@
  *   - No reimplemented quote/tax/regime/momentum math — ALL of it is js/quotecore.js.
  *
  * Held basis = repo-root positions.json OPEN lots (the pipeline's WITHDRAWN/BANKED-aware
- * FIFO from sync-fills.mjs). Deliberately NOT the in-memory reconstruct.mjs path that
- * monitor.mjs uses — reconstruct.mjs is an older copy blind to WITHDRAWN/BANKED, so its held
- * count can be wrong when manual lines exist (PLAN.md Discovered). positions.json is the
- * trusted held source; its only cost is the ~20m sync lag, which this tool prints so a very
- * recent trade's lag is visible. Cost basis is static once bought, so lag rarely changes a call.
+ * FIFO from reconstruct.mjs, written by sync-fills.mjs). Deliberately NOT re-derived in-memory
+ * from the log like monitor.mjs does — both now share the SAME canonical WITHDRAWN/BANKED-aware
+ * chain in reconstruct.mjs (chunk 8), so either is correct; positions.json is chosen because
+ * it's the already-persisted pipeline output (no log re-parse needed). Its only cost is the
+ * ~20m sync lag, which this tool prints so a very recent trade's lag is visible. Cost basis is
+ * static once bought, so lag rarely changes a call.
  *
  * Usage:
  *   node pipeline/watch.mjs                       # monitor every held position (positions.json)

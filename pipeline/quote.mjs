@@ -20,9 +20,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, quoteCells, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
+import { mdTable, stdCells } from './cli.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -31,13 +32,6 @@ const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
 const tokens = args.filter(a => !a.startsWith('--'));
 
-// pipe rows through the markdown table builder (local so we can add extra columns for --positions)
-function mdTable(headers, rows) {
-  const head = '| ' + headers.join(' | ') + ' |';
-  const sep = '| ' + headers.map(() => '---').join(' | ') + ' |';
-  return [head, sep, ...rows.map(r => '| ' + r.join(' | ') + ' |')].join('\n');
-}
-const stdCells = (name, row) => { const c = quoteCells(name, row); return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.mom, c.regime]; };
 function regimeLine(name, row) {
   const r = row.regime;
   const drift = (r && r.ok) ? `${r.driftPct >= 0 ? '+' : ''}${r.driftPct.toFixed(1)}% (3d vs prior ~2wk median)` : 'insufficient history';

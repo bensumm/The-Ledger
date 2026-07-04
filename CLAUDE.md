@@ -155,9 +155,16 @@ specifically to kill that cost). All three import `js/quotecore.js`, so the numb
 byte-identical to the app's tables:
 - **Per-item read** ("how's item X?") → `node pipeline/quote.mjs "<item or id>" [...more]`
   (one combined table + a regime line per item; multiple items in one call).
-- **Opportunity screen** ("find me flips") → `node pipeline/screen.mjs [--floor 50] [--min-roi
-  1.5] [--max-price 45m] [--top 40]` (two-sided liquidity gate, grouped Tier A / Tier B,
-  falling items silently excluded).
+- **Opportunity screen** ("find me flips") → `node pipeline/screen.mjs [--mode
+  band|spread|rising|churn] [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m]
+  [--band-hours 2] [--min-active 6] [--top 40]` (two-sided liquidity gate, grouped Tier A /
+  Tier B, falling items silently excluded). One shared gate stack; `--mode` (default `band`)
+  only swaps the step-3 edge: **band** = wide traded intraday band low→top (the crystal-seed
+  niche; gated on `--min-active` traded 5m windows over `--band-hours`), **spread** = the
+  original 24h-avg-spread flip, **rising** = rising-regime + not-breaking-down entry (always
+  Tier B), **churn** = high-volume buy-limit-cycle commodities (tiny ROI, ranked by gp/day).
+  Every mode ranks by realistic expected gp/day and appends a trailing `Exp gp/d` column
+  (screen-only appendix; the canonical 9-column table is untouched).
 - **Positions vs market** ("how are my positions doing / check the market against what I
   hold") → `node pipeline/quote.mjs --positions` (reads `positions.json` open lots, quotes each
   held item, adds Held@/Break-even columns + HOLD/list-at/CUT verdict; held fallers ARE shown

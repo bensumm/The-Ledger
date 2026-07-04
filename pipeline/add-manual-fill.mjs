@@ -50,6 +50,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tax as GE_TAX } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) — no private copy
+import { parseArgs, parseGp } from './cli.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
@@ -58,23 +59,9 @@ const MAP_CACHE = path.join(HERE, 'mapping.cache.json');
 const MAP_URL = 'https://prices.runescape.wiki/api/v1/osrs/mapping';
 const MANUAL_SLOT = 8; // real GE slots are 0-7; 8 keeps synthetic events clear of live-slot cancel inference
 
-// --- args ---
-const A = {};
-for (let i = 2; i < process.argv.length; i++) {
-  const a = process.argv[i];
-  if (a.startsWith('--')) { const k = a.slice(2); const v = process.argv[i+1]; if (v === undefined || v.startsWith('--')) A[k] = true; else { A[k] = v; i++; } }
-}
+// --- args (parseArgs/parseGp shared via cli.mjs, chunk 10.2) ---
+const A = parseArgs(process.argv.slice(2));
 const die = m => { console.error('error: ' + m + '\n\nrun with no args mangled; see header for usage.'); process.exit(1); };
-
-// parse "18.05m" / "3439800" / "450k" -> integer gp
-function parseGp(s) {
-  if (typeof s === 'number') return Math.round(s);
-  const t = String(s).trim().toLowerCase().replace(/,/g, '');
-  const m = t.match(/^(-?\d+(?:\.\d+)?)\s*([kmb])?$/);
-  if (!m) return NaN;
-  const mult = m[2] === 'b' ? 1e9 : m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1;
-  return Math.round(parseFloat(m[1]) * mult);
-}
 
 // --remove: append a tombstone line and exit (no item/qty/price needed).
 if (A.remove) {

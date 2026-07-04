@@ -38,14 +38,13 @@
  *
  * ALL quote/tax/regime math is js/quotecore.js (imported). This file only fetches + gates + ranks.
  */
-import { computeQuote, quoteCells, QUOTE_HEADERS } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, fetchTs, sleep } from './marketfetch.mjs';
+import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
 
 // --- args ---
-const A = {};
-for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { const k = a.slice(2); const v = process.argv[i + 1]; if (v === undefined || v.startsWith('--')) A[k] = true; else { A[k] = v; i++; } } }
-const parseGp = s => { const t = String(s).trim().toLowerCase().replace(/,/g, ''); const m = t.match(/^(\d+(?:\.\d+)?)\s*([kmb])?$/); if (!m) return NaN; const mult = m[2] === 'b' ? 1e9 : m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1; return Math.round(parseFloat(m[1]) * mult); };
+const A = parseArgs(process.argv.slice(2));
 const MODES = ['band', 'spread', 'rising', 'churn'];
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (!MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')} (or omit for band).`); process.exit(1); }
@@ -59,8 +58,6 @@ const MIN_ACTIVE = A['min-active'] != null ? +A['min-active'] : 6;
 
 const usesBands = MODE === 'band' || MODE === 'rising' || MODE === 'churn';
 
-const mdTable = (headers, rows) => ['| ' + headers.join(' | ') + ' |', '| ' + headers.map(() => '---').join(' | ') + ' |', ...rows.map(r => '| ' + r.join(' | ') + ' |')].join('\n');
-const stdCells = (name, row) => { const c = quoteCells(name, row); return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.mom, c.regime]; };
 // realistic expected units/day (chunk 9.3): buy-limit refreshes ~every 4h → 6 limits/day, capped
 // at a 10% share of the limiting-side daily volume. Null limit → volume share only.
 const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); return limit != null ? Math.min(limit * 6, vShare) : vShare; };

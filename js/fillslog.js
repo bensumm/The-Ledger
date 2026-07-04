@@ -74,7 +74,7 @@ export function manualLineEvent(o){
             : (st.includes('BUY')||st.includes('BOUGHT'))?'buy':'sell';
   return {ts, slot:Number(o.slot), itemId:Number(o.item), type, state:'complete', filled:Number(o.qty)||0, spent:Number(o.worth)||0};
 }
-// Event id = sha1 content hash, SAME ALGORITHM as eventId() in pipeline/sync-fills.mjs
+// Event id = sha1 content hash, SAME ALGORITHM as eventId() in pipeline/reconstruct.mjs
 // ([ts,slot,itemId,type,state,filled,spent].join('|'), first 16 hex chars). If either side
 // changes, tombstones written by the app stop matching pipeline events — keep them in sync.
 export async function eventIdFor(evt){

@@ -56,7 +56,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Pages, not part of the app. `sync-fills.mjs` (parse log → `fills.json`/`positions.json`),
   `reconstruct.mjs` (shared FIFO reconstruction), `add-manual-fill.mjs` (inject/tombstone
   manual fills), `monitor.mjs` (live read-only position monitor), `marketfetch.mjs`
-  (node-side price/guide fetch layer), `quote.mjs` (per-item / `--positions` market table),
+  (node-side price/guide fetch layer), `cli.mjs` (shared arg/format/table helpers for the
+  node scripts), `quote.mjs` (per-item / `--positions` market table),
   `screen.mjs` (opportunity screen). The `quote.mjs`/`screen.mjs` scripts import
   `js/quotecore.js` + `js/format.js` so their tables match the app exactly. See
   `pipeline/FILLS-PIPELINE.md`.

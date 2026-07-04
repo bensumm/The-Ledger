@@ -46,8 +46,11 @@ const logLines = logFiles.flatMap(f => fs.readFileSync(f,'utf8').split('\n')).fi
 const rows = [];
 for (const raw of logLines) { try { rows.push(JSON.parse(raw)); } catch {} }
 const ep = l => Date.parse(l.date+'T'+l.time);            // local wall-clock -> epoch
-const lastLog = Math.max(...rows.map(ep));                 // newest event time in the log
 const now = Date.now();                                    // real wall clock — detects a stalled log
+// manual REMOVE tombstone lines carry no date/time → ep() is NaN; drop them before the max
+// (an unfiltered NaN poisons Math.max and prints "NaNm ago"). Falls back to now if none valid.
+const validEps = rows.map(ep).filter(Number.isFinite);
+const lastLog = validEps.length ? Math.max(...validEps) : now; // newest event time in the log
 const staleMin = Math.round((now - lastLog)/60000);
 
 // latest line per slot = that slot's current state

@@ -104,11 +104,12 @@ nothing.
 `regimeLabel`, `breakEven`, `momVerdict`, `BIG_TICKET_GP`) — the same module the app and the
 `quote.mjs`/`screen.mjs` scripts use, so a verdict here can't drift from the app's.
 
-**Held basis = `positions.json` open lots**, *not* `monitor.mjs`'s in-memory `reconstruct.mjs`
-path. That's deliberate: `reconstruct.mjs` is an older copy blind to `WITHDRAWN`/`BANKED`
-(PLAN.md "Discovered"), so its held count can be wrong when manual lines exist.
-`positions.json` (from `sync-fills.mjs`) *is* WITHDRAWN/BANKED-aware. The trade-off is the
-~20m sync lag — `watch.mjs` prints the file's age and flags it stale past 25m, so a very
+**Held basis = `positions.json` open lots**, *not* re-derived in-memory from the log the way
+`monitor.mjs` does. Both are now correct — since chunk 8 they share the SAME canonical
+WITHDRAWN/BANKED-aware `reconstruct.mjs` chain, so the held count agrees either way.
+`positions.json` (written by `sync-fills.mjs` via `reconstruct.mjs`) is chosen for `watch.mjs`
+because it's the already-persisted pipeline output — no log re-parse needed. The only trade-off
+is the ~20m sync lag — `watch.mjs` prints the file's age and flags it stale past 25m, so a very
 recent trade's lag is visible. Cost basis is static once bought, so lag rarely changes a call.
 
 ### Item-type classes → cadence + playbook
