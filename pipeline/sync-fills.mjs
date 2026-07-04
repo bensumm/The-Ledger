@@ -198,8 +198,15 @@ function main() {
   // (no --auto) never amend — every manual run is its own checkpoint.
   const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
   try {
-    git(`add ${FILLS_REL} ${POSITIONS_REL}`);
-    const status = git(`status --porcelain ${FILLS_REL} ${POSITIONS_REL}`);
+    // Commit set: fills + positions always; screen.json (PLAN-2 C1 published scan) only when it
+    // exists on disk — same add-only-these-files discipline, never a blanket `git add -A`. When
+    // present but unchanged it simply contributes nothing to the porcelain status below.
+    const SCREEN_REL = 'screen.json';
+    const commitFiles = [FILLS_REL, POSITIONS_REL];
+    if (existsSync(join(REPO_DIR, SCREEN_REL))) commitFiles.push(SCREEN_REL);
+    const fileArgs = commitFiles.join(' ');
+    git(`add ${fileArgs}`);
+    const status = git(`status --porcelain ${fileArgs}`);
     if (!status) { console.log('Nothing to commit.'); return; }
 
     const nowIso = new Date().toISOString().slice(0, 16) + 'Z';

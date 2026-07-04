@@ -48,6 +48,7 @@
 
   <nav class="tabs">
     <button data-tab="finder" class="active">Finder</button>
+    <button data-tab="scan">Scan</button>
     <button data-tab="trends">Trends</button>
     <button data-tab="watch">Watchlist <span class="badge" id="watchBadge">0</span></button>
     <button data-tab="signals">Signals <span class="badge" id="sigBadge">0</span></button>
@@ -94,6 +95,18 @@
       </table>
     </div>
     <div id="finderEmpty" class="empty hidden"></div>
+  </section>
+
+  <!-- SCAN (Finder v2 — the screen.mjs opportunity scan, in the app) -->
+  <section class="panel hidden" id="panel-scan">
+    <div class="scanintro mini">The same opportunity scan a Claude session runs (<code>screen.mjs</code>) — identical gates and numbers, one table per <b>niche</b> (Band / Spread / Rising / Churn), each ranked by a letter <b>Grade</b> so the best flips sort to the top. Falling items are excluded. This is a <b>published snapshot</b>, not a live quote; click any item for its live Trends.</div>
+    <div class="scanhead">
+      <div class="scanmeta" id="scanMeta"></div>
+      <button id="scanRefresh" class="ghostbtn sm" type="button">Refresh scan</button>
+    </div>
+    <div id="scanStale" class="scanstale hidden"></div>
+    <div id="scanTables"></div>
+    <div id="scanEmpty" class="empty hidden"></div>
   </section>
 
   <!-- TRENDS -->

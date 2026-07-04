@@ -508,6 +508,80 @@ export function renderCoffer(){
     '<div class="ci"><span class="ck">Deployed</span><span class="cv">'+fmt(deployed)+'</span></div>';
 }
 
+/* PLAN-2 C2 — Finder v2 ("Scan"): render the published screen.json opportunity scan as-is.
+   The cells are byte-identical to screen.mjs's markdown table (both go through quotecore's
+   stdCells), so there is NO client-side re-scoring here — we render exactly what the scan said.
+   The file is self-describing (its own `headers` travel with the rows), so a stale published
+   file can never mismatch app-side header code. Item names deep-link to the live Trends view.
+   Fetched once per session (like syncFills) unless the user hits "Refresh scan". */
+let scanLoaded=false;
+const fmtAge=ms=>{ const s=Math.max(0,Math.round(ms/1000));
+  if(s<90) return s+'s';
+  const m=Math.round(s/60); if(m<90) return m+'m';
+  const h=Math.round(m/60); if(h<48) return h+'h';
+  return Math.round(h/24)+'d'; };
+function scanTableHtml(headers, rows){
+  if(!rows||!rows.length) return '<div class="scannone">— none —</div>';
+  const head='<thead><tr>'+headers.map((h,i)=>'<th'+(i===0?' class="left"':'')+'>'+h+'</th>').join('')+'</tr></thead>';
+  const body='<tbody>'+rows.map(r=>{ const cells=r.cells||[];
+    return '<tr>'+cells.map((c,i)=> i===0
+      ? '<td class="left"><span class="linkname" data-trend="'+r.id+'">'+c+'</span></td>'
+      : '<td>'+c+'</td>').join('')+'</tr>'; }).join('')+'</tbody>';
+  return '<div class="tablewrap"><table class="scantable">'+head+body+'</table></div>';
+}
+// per-niche display metadata — one table per niche, each already sorted by Grade (screen.mjs sorts
+// by the risk-adjusted score, and Grade is column 2). Rendered in this canonical order when present.
+const NICHE_META={
+  band:{label:'Band', hint:'wide traded intraday range — ladder the low, sell the top'},
+  spread:{label:'Spread', hint:'24h-average spread flips'},
+  rising:{label:'Rising', hint:'frothy momentum — size small'},
+  churn:{label:'Churn', hint:'high-volume commodities — volume does the work'}
+};
+const NICHE_ORDER=['band','spread','rising','churn'];
+export async function renderScan(force){
+  const tablesEl=document.getElementById('scanTables'), emptyEl=document.getElementById('scanEmpty');
+  const metaEl=document.getElementById('scanMeta'), staleEl=document.getElementById('scanStale');
+  if(!tablesEl) return;
+  if(scanLoaded && !force) return;   // already rendered this session; Refresh forces a re-fetch
+  const showEmpty=(big,sm)=>{ scanLoaded=false; tablesEl.innerHTML=''; if(metaEl) metaEl.textContent='';
+    if(staleEl) staleEl.classList.add('hidden'); emptyEl.classList.remove('hidden');
+    emptyEl.innerHTML='<div class="big">'+big+'</div><div class="sm">'+sm+'</div>'; };
+  let scan;
+  try{
+    const r=await fetch('screen.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    scan=await r.json();
+  }catch(e){
+    showEmpty('No published scan yet','Run <code>node pipeline/screen.mjs --publish</code> — the pipeline commits <code>screen.json</code> alongside fills, and this panel mirrors it.');
+    return;
+  }
+  if(!scan || scan.app!=='the-coffer-screen'){ showEmpty('Scan unavailable','<code>screen.json</code> is present but not a Coffer scan file.'); return; }
+  scanLoaded=true;
+  emptyEl.classList.add('hidden');
+  // params line — say WHAT scan this is (mode + gates), so an old snapshot is self-explaining
+  const p=scan.params||{}, mode=(scan.mode||'band');
+  const priceWin=(p.minPrice?fmt(p.minPrice):'0')+'–'+(p.maxPrice?fmt(p.maxPrice):'∞');
+  if(metaEl) metaEl.innerHTML='<b>'+mode.toUpperCase()+'</b> scan · floor '+(p.floor??'—')+'/d · min ROI '+(p.minRoi??'—')+'% · '+priceWin+' gp · top '+(p.top??'—')+
+    (['band','rising','churn'].includes(mode)?(' · band '+(p.bandHours??'—')+'h ≥'+(p.minActive??'—')+' windows'):'');
+  // staleness — always surface the age (an hours-old scan is CONTEXT, not a live quote)
+  const genMs=Date.parse(scan.generatedAt), ageMs=isNaN(genMs)?null:(Date.now()-genMs);
+  if(staleEl){
+    staleEl.classList.remove('hidden');
+    const stale=ageMs==null || ageMs>6*3600*1000;   // >6h → flag harder
+    staleEl.className='scanstale'+(stale?' warn':'');
+    staleEl.innerHTML=ageMs==null
+      ? 'Scan timestamp unknown — treat as context, not a live quote.'
+      : 'Scan generated <b>'+fmtAge(ageMs)+' ago</b> — a snapshot for context, not a live quote. Open an item’s Trends for the current market.';
+  }
+  const headers=scan.headers||[], niches=scan.niches||{};
+  const present=NICHE_ORDER.filter(n=>Array.isArray(niches[n]));
+  tablesEl.innerHTML = present.length
+    ? present.map(n=>{ const m=NICHE_META[n]||{label:n,hint:''};
+        return '<div class="scantier">'+m.label+(m.hint?' <span class="scanhint">— '+m.hint+'</span>':'')+'</div>'+scanTableHtml(headers, niches[n]); }).join('')
+    : '<div class="scannone">— no niches in this scan —</div>';
+  tablesEl.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
+}
+
 export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); }
 export function recompute(){ computeScores(); renderAll(); }
 
