@@ -8,21 +8,31 @@ import { regimeDrift, momVerdict, momCell } from './quotecore.js';   // shared i
 import { fetchQuote, quoteTableHtml } from './quote.js';
 
 /*
- * TRENDS TAB STRUCTURE (as of 0.16.0) — read before editing runTrends.
+ * TRENDS TAB STRUCTURE (as of 0.35.0) — read before editing runTrends.
  * The per-item Trends view is organized in decision-priority tiers, deliberately —
  * don't scatter new info back into a flat list:
  *  1. Suggested plan card (#trSuggest) — instant buy/sell, profit-now, trend box, and
- *     warnings. Includes trend-aware pricing (patientTargets(series, it, falling)):
+ *     warnings. Since 0.35.0 (T2) the blurb renders as small labeled sections, only when
+ *     they apply: "⚠ Warnings" (always FIRST), "Flip now", and "Patient pricing" or
+ *     "Price to clear" (the PT.falling branch — the header IS the signal), with the .ccap
+ *     fine print as a trailing footer. Includes trend-aware pricing
+ *     (patientTargets(series, it, falling)):
  *     steady/rising items get a wider-margin patient offer off the recent ~2h 5m range
  *     (20th/80th percentiles); falling items instead get buy-low/sell-quick targets — a
  *     more aggressive low bid (10th pctl) and a sell priced to *clear* at/below the
  *     instabuy (min(instabuy, 50th pctl)), never above a dropping market (0.20.0). The
  *     plan card branches its copy on PT.falling. And a regime-shift warning
  *     (regimeDrift(): last-3d median vs prior ~2wk; fires at >=8%). No sigma jargon here.
- *  2. "Why this trend?" (#trWhy, collapsible) — plain-language guide-divergence readout;
+ *  2. "Recent movement (last 2h)" (#trRecent, added 0.35.0/T2) — sits between the plan
+ *     card and "Why this trend?": a small 2h chart off the already-fetched 5m series with
+ *     the patientTargets band edges + live quick buy/sell overlaid (an outside-the-band
+ *     break is visible), plus a one-line readout (band lo→hi, live percentile,
+ *     traded-window count with a thin flag, T1 momentum arrow). No new requests; respects
+ *     showAnalysis; renders only when the series has points.
+ *  3. "Why this trend?" (#trWhy, collapsible) — plain-language guide-divergence readout;
  *     the sigma number lives only in this expander's fine print.
- *  3. Price history (#trHistWrap) — 3-month chart, promoted as immediate context.
- *  4. Timing & seasonality (#trTiming, collapsible) — gated on the walk-forward backtest:
+ *  4. Price history (#trHistWrap) — 3-month chart, promoted as immediate context.
+ *  5. Timing & seasonality (#trTiming, collapsible) — gated on the walk-forward backtest:
  *     the hourly price/volume charts (#trCharts) only render when the timing edge is
  *     actually proven out-of-sample (good && !regimeShift); otherwise the section states
  *     "no proven edge"/"unreliable" and hides the charts. Weekday/weekend boxes were
