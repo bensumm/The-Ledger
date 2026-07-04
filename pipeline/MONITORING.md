@@ -154,7 +154,7 @@ attach to a trending item:
 
 | Class | Trigger | Cadence | Playbook |
 |---|---|---|---|
-| `FALLING` | regime falling **or** `mom==='breakdown'` | **1m** | cut/clear discipline; targets → SKIP (don't buy a drop) |
+| `FALLING` | regime falling **or** (`mom==='breakdown'` **and** the quote is reliable — PLAN-3 Gate 0) | **1m** | cut/clear discipline; targets → SKIP (don't buy a drop) |
 | `THIN_BIG_TICKET_VOLATILE` | thin (`vol<floor`) & unit ≥ 1m | **1m** | hair-trigger cut; strong adverse-selection warning |
 | `LIQUID_RANGING_WIDE` | liquid & flat regime & spread ≥ 3% | **2m** | **SCALP** — ladder band low→top; the only class that gets market-making |
 | `STABLE_LIQUID` | liquid & confirmed regime, narrow band | **3m** | ordinary patient flip; glance |

@@ -83,11 +83,13 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
 - **Live position monitor + deterioration-watch routine** (2026-07-02): `pipeline/monitor.mjs`
   (read-only — live offers/fills from the exchange log + held positions with break-even from
   `positions.json`, *not* a log re-sum) drives a polling routine documented in
-  `pipeline/MONITORING.md`: HOLD / WATCH / CUT per held position, break-even = `ceil(buy/0.98)`,
+  `pipeline/MONITORING.md`: a verdict per held position, break-even = `ceil(buy/0.98)`,
   with an **evidence-gated 24h-cycle guard** (daily cycles are usually noise → default to
   cutting a genuinely falling position; only a *proven* backtested hour-of-day pattern defers
-  a cut). Session/agent-run for now; the durable app-native home is the Refresh-positions +
-  Ledger break-even/regime followups below.
+  a cut). The underwater verdict became the **PLAN-3 gate tree** (0.33.0 — `MONITORING.md`
+  step 4; the 24h-cycle guard is unchanged, now framed as input-vs-decision). Session/agent-run
+  for now; the durable app-native home is the Refresh-positions + Ledger break-even/regime
+  followups below.
 - **Last-2h momentum tell — `Mom` column + cut-trigger** (0.30.0): the chunk-2 standard quote
   table (0.28.0) CLAMPS the optimistic prices against the live quote (`optBuy=min(quickBuy,
   bandLo)`, `optSell=max(quickSell,bandHi)`) — correct for *pricing*, but that clamp alone was
@@ -101,7 +103,9 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   --positions`) — ↓+underwater → CUT; ↓+in-profit+flat/falling → LIST-TO-CLEAR; ↓+in-profit+
   rising → size-conditional on `BIG_TICKET_GP` (10m total lot value: ≥ → clear, < → HOLD-watch);
   ↑ → HOLD/list at 2h top. The base-mixing bug is guarded separately by `quoteOrdered()`, not the
-  clamp.
+  clamp. **(0.33.0: this ↓/↑ matrix is now the Gate-2 leaf of the PLAN-3 underwater gate tree —
+  `momVerdict` additionally returns NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT-CANDIDATE ahead of
+  it; see the 0.33.0 entry below.)**
 - **Underwater-at-tick triage — the five-way read + gated decision tree** (0.33.0, `PLAN-3.md`):
   `momVerdict()` in `js/quotecore.js` is now the whole underwater gate tree, not just the Mom
   cut-trigger. `computeQuote` exposes `reliable`/`reliableReason`/`quoteAgeMin` (Gate 0 — a
