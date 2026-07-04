@@ -268,6 +268,17 @@ metadata, not a leak; the concern is content, not commit authorship.
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed; don't suggest
    installing anything else for git operations.
+8. **A documentation pass is part of every change — not optional, and not append-only.**
+   Before calling a change done, update the docs the change touches: this `CLAUDE.md`
+   (a "Done" pointer, plus any workflow/section it affects), and any affected doc
+   (`pipeline/MONITORING.md`, `pipeline/FILLS-PIPELINE.md`, `README.md`). Crucially, this is
+   a *reconciliation* pass, not just new prose: **grep the docs for statements the change now
+   supersedes or contradicts and fix them in place** (e.g. a superseded matrix/table, a stale
+   "verdict set", a now-inaccurate trigger condition). Adding a new section while leaving an
+   old one that says the opposite is the failure mode to avoid — the 0.30.0→0.33.0
+   `momVerdict` reconciliation is the anchor. If a plain-language ask should map to a specific
+   script/flow, make that mapping explicit in the relevant CLAUDE.md section so a future agent
+   runs the right thing immediately.
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 Almost all app-wide mutable state (`ITEMS`, `watchlist`, `trades`, `bankroll`,
