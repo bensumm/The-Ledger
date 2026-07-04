@@ -32,11 +32,13 @@ const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
 const tokens = args.filter(a => !a.startsWith('--'));
 
-function regimeLine(name, row) {
+function regimeLine(name, row, limit) {
   const r = row.regime;
   const drift = (r && r.ok) ? `${r.driftPct >= 0 ? '+' : ''}${r.driftPct.toFixed(1)}% (3d vs prior ~2wk median)` : 'insufficient history';
+  // buy limit per ~4h window — already fetched (loadMapping); /overnight sizing reads it here
+  const lim = limit != null ? ` · buy limit ${limit.toLocaleString()}/4h` : '';
   const inv = row.ordered ? '' : '  ⚠ feed inversion — quote basis unreliable';
-  return `- ${name}: regime ${row.regimeLabel} ${drift}${inv}`;
+  return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${inv}`;
 }
 
 async function fetchInputs(id) {
@@ -63,7 +65,7 @@ async function runItems() {
     const inp = await fetchInputs(id);
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
-    lines.push(regimeLine(name, row));
+    lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
   }
   if (!rows.length) process.exit(1);
   console.log(mdTable(QUOTE_HEADERS, rows));
@@ -128,7 +130,7 @@ async function runPositions() {
     const inp = await fetchInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
     rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be, g.cost, inp.ts5m)]);
-    lines.push(regimeLine(name, row));
+    lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
   }
   console.log(`# Open positions vs market (${byItem.size} items, ${open.length} lots)\n`);
   console.log(mdTable(headers, rows));
