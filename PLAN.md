@@ -71,9 +71,9 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | DISPATCHED (wave 1, 2026-07-04) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | DISPATCHED (wave 1, 2026-07-04) |
 | O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | DISPATCHED (wave 1, 2026-07-04) |
-| K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | DISPATCHED (wave 1, 2026-07-04) |
-| K2 | Memory dedupe pass | Claude memory dir | DISPATCHED (wave 1, 2026-07-04) |
-| K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | DISPATCHED (wave 1, 2026-07-04) |
+| K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | ✅ `283e12a` |
+| K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit; 5 memories → skill pointers, `execute-plans-off-main` updated) |
+| K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | ✅ `ec02495` |
 | S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | OPEN |
 | S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | OPEN |
 | S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | OPEN |
@@ -491,6 +491,8 @@ documented sample thresholds clear (process rule 4).
 **Open:**
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
+- Mixed line-ending handling (recurring `LF will be replaced by CRLF` warnings on Windows
+  commits) — a `.gitattributes` normalization pass would quiet it (lane K, 2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
