@@ -61,6 +61,7 @@ import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
 import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
+import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,6 +84,8 @@ const STATS = !!A.stats;
 // file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
 // for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
 const PUBLISH = A.publish === true;
+// snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
+const SCREEN_PARAMS = { floor: FLOOR, minRoi: MIN_ROI, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE };
 
 const RUN_MODES = MODE === 'all' ? MODES : [MODE];
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
@@ -199,10 +202,15 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null });
     const std = stdCells(name, row);                        // [item, guide, mid, buy, sell, net, vol, mom, regime]
-    rows.push({ id: s.id, cells: [std[0], r.grade, ...std.slice(1), fmtP(r.score)], score: r.score });
+    rows.push({ id: s.id, row, grade: r.grade, cells: [std[0], r.grade, ...std.slice(1), fmtP(r.score)], score: r.score });
     dist[r.grade] = (dist[r.grade] || 0) + 1;
   }
   rows.sort((a, b) => b.score - a.score);                   // display sorted by risk-adjusted grade/score
+
+  // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
+  // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
+  logSuggestions('screen', { mode, params: SCREEN_PARAMS },
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade })));
 
   console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; fallers excluded)`);
   console.log(PLAYBOOK[mode]);

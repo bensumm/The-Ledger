@@ -24,6 +24,7 @@ import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP } fro
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
 import { mdTable, stdCells } from './cli.mjs';
+import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -60,13 +61,16 @@ async function runItems() {
     if (!hit) { console.error(`! no item named "${t}" — check spelling or pass a numeric id`); continue; }
     resolved.push(hit);
   }
-  const rows = [], lines = [];
+  const rows = [], lines = [], sugg = [];
   for (const { id, name } of resolved) {
     const inp = await fetchInputs(id);
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null }));  // per-item read has no verdict
   }
+  // O1 suggestions ledger: log every emitted read at emit time, unconditionally (analytics only).
+  logSuggestions('quote', { mode: null, params: { positions: false } }, sugg);
   if (!rows.length) process.exit(1);
   console.log(mdTable(QUOTE_HEADERS, rows));
   console.log('');
@@ -122,16 +126,20 @@ async function runPositions() {
   const map = await loadMapping();
   const guide = await loadGuide();
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
-  const rows = [], lines = [];
+  const rows = [], lines = [], sugg = [];
   for (const [itemId, g] of byItem) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const avgCost = g.cost / g.qty;
     const be = breakEven(avgCost);
     const inp = await fetchInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be, g.cost, inp.ts5m)]);
+    const v = verdict(row, be, g.cost, inp.ts5m);
+    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
+    sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v }));  // the emitted per-position verdict string
   }
+  // O1 suggestions ledger: log the position verdicts at emit time, unconditionally.
+  logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
   console.log(`# Open positions vs market (${byItem.size} items, ${open.length} lots)\n`);
   console.log(mdTable(headers, rows));
   console.log('');

@@ -18,6 +18,7 @@ const CACHE_DIR = path.join(HERE, '.cache');
 const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window archive (gitignored via .cache/)
 const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
 const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
+const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (outcomes.mjs; tiny)
 const MAP_CACHE = path.join(HERE, 'mapping.cache.json'); // shared with add-manual-fill.mjs (name<->id)
 
 export const API = 'https://prices.runescape.wiki/api/v1/osrs';
@@ -164,7 +165,9 @@ export async function loadAllLatest() {
    accepts ?timestamp=<unix, divisible by 300> to fetch a past 5m window. We walk the last
    `hours` of 5m windows, reading each from a local per-day archive under .cache/bands/ when
    present else fetching it once and appending it. First cold 2h run ≈ 24 bulk calls (~70ms
-   apart); every later run only backfills the windows minted since. Files >7 days old are pruned.
+   apart); every later run only backfills the windows minted since. Files older than the retention
+   window (BANDS_RETENTION_DAYS, raised 7d→90d for O1 — outcome analysis reads historical bands at
+   trade-placement time) are pruned.
 
    Window alignment (verified live 2026-07-03 against id 560): `latest = floor(now/300)*300 - 300`
    is the last COMPLETE 5m window and equals the last point of /timeseries?timestep=5m; the 24
@@ -174,6 +177,10 @@ export async function loadAllLatest() {
    Returns { [id]: { bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: #windows with
    two-sided trades } } for every item seen in the windows. --- */
 function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0, 10); } // UTC day
+// Band archive retention. Raised 7d→90d for O1: pipeline/outcomes.mjs reconstructs the trailing-2h
+// band at each historical trade PLACEMENT, so recent (weeks-old) windows must survive to be joinable.
+// Local + gitignored (.cache/) — band data is NEVER committed. 90d is the enrichable outcome window.
+export const BANDS_RETENTION_DAYS = 90;
 export async function loadBands(hours = 2) {
   ensureCacheDir();
   try { fs.mkdirSync(BANDS_DIR, { recursive: true }); } catch {}
@@ -183,8 +190,8 @@ export async function loadBands(hours = 2) {
   const nWin = Math.max(1, Math.ceil(hours * 3600 / step));
   const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
 
-  // load existing per-day archive, pruning files whose day is entirely >7 days old
-  const cutoff = now - 7 * 86400;
+  // load existing per-day archive, pruning files whose day is entirely older than retention
+  const cutoff = now - BANDS_RETENTION_DAYS * 86400;
   const archive = new Map();                                  // windowUnix -> {id:{...}}
   let files = []; try { files = fs.readdirSync(BANDS_DIR); } catch {}
   for (const f of files) {
@@ -309,4 +316,73 @@ export async function loadDaily(days = 17, stepHours = 6) {
   }
   // coverageWindows (distinct requested windows present) lets the caller detect a cold archive
   return { series, coverageWindows };
+}
+
+/* --- loadHistBands(reqs, hours): the trailing `hours` 5m band for a SET of (item, endUnix)
+   requests, sourced from the historical whole-market /5m?timestamp bulk endpoint (the ONLY way to
+   read a PAST 5m window — per-item /timeseries?5m only reaches ~30h back). Powers outcomes.mjs's
+   "band percentile at trade placement" enrichment: same basis as computeQuote's bandLo/bandHi
+   (min avgLowPrice / max avgHighPrice over the last `hours`), evaluated AS OF each placement time.
+
+   Efficiency + disk discipline: each distinct 5m window is fetched ONCE (whole-market), and while
+   we have that snapshot we extract EVERY requested item from it, persisting only the REDUCED
+   per-item datum {lo,hi,lv,hv} under .cache/outcomes-bands/<id>.json (a few KB/item — NOT the
+   ~1.5MB whole snapshots loadBands keeps). RAM stays flat (one snapshot at a time). A window with
+   no entry for an item is cached as null (item didn't trade) so it is never re-fetched for that item.
+
+   reqs: [{ id, endUnix }]. Returns an array aligned to reqs:
+     { bandLo, bandHi, active5m, tradedWin, loVol, hiVol, nWin, covered }
+   covered = how many of the nWin windows were resolvable (present in the archive or fetched);
+   covered < nWin ⇒ the /5m history for that window is gone (see FILLS-PIPELINE.md retention note). --- */
+export async function loadHistBands(reqs, hours = 2) {
+  ensureCacheDir();
+  try { fs.mkdirSync(OB_DIR, { recursive: true }); } catch {}
+  const step = 300;
+  const nWin = Math.max(1, Math.ceil(hours * 3600 / step));
+  const align = t => Math.floor(t / step) * step;
+  const ids = new Set(reqs.map(r => r.id));
+
+  // load reduced per-item caches
+  const store = new Map();                                   // id -> { window: {lo,hi,lv,hv}|null }
+  for (const id of ids) { let s = {}; try { s = JSON.parse(fs.readFileSync(path.join(OB_DIR, id + '.json'), 'utf8')); } catch {} store.set(id, s); }
+
+  // per-req trailing window list; collect the windows still missing for ANY requested item
+  const reqWindows = reqs.map(r => { const latest = align(r.endUnix); const ws = []; for (let i = 0; i < nWin; i++) ws.push(latest - i * step); return ws; });
+  const missing = new Set();
+  reqs.forEach((r, idx) => { const s = store.get(r.id); for (const w of reqWindows[idx]) if (s[w] === undefined) missing.add(w); });
+
+  // fetch each missing window once; extract EVERY item-of-interest present, cache reduced
+  const dirty = new Set();
+  const windows = [...missing].sort((a, b) => b - a);
+  for (const w of windows) {
+    let data = null;
+    try { data = (await jget(API + '/5m?timestamp=' + w)).data || {}; } catch { data = null; }
+    await sleep(70);
+    for (const id of ids) {
+      const s = store.get(id);
+      if (s[w] !== undefined) continue;
+      const e = data ? (data[id] || data[String(id)]) : null;
+      // data===null (fetch failed) → leave undefined so a later run can retry; else cache datum|null
+      if (data === null) continue;
+      s[w] = e ? { lo: e.avgLowPrice ?? null, hi: e.avgHighPrice ?? null, lv: e.lowPriceVolume || 0, hv: e.highPriceVolume || 0 } : null;
+      dirty.add(id);
+    }
+  }
+  for (const id of dirty) { try { fs.writeFileSync(path.join(OB_DIR, id + '.json'), JSON.stringify(store.get(id))); } catch {} }
+
+  // aggregate the band per request (same min-low / max-high basis as computeQuote's 2h band)
+  return reqs.map((r, idx) => {
+    const s = store.get(r.id);
+    let bandLo = null, bandHi = null, active5m = 0, tradedWin = 0, loVol = 0, hiVol = 0, covered = 0;
+    for (const w of reqWindows[idx]) {
+      const d = s[w]; if (d === undefined) continue; covered++;
+      if (!d) continue;
+      if (d.lo) bandLo = bandLo == null ? d.lo : Math.min(bandLo, d.lo);
+      if (d.hi) bandHi = bandHi == null ? d.hi : Math.max(bandHi, d.hi);
+      loVol += d.lv; hiVol += d.hv;
+      if (d.lv > 0 && d.hv > 0) active5m++;
+      if (d.lv > 0 || d.hv > 0) tradedWin++;
+    }
+    return { bandLo, bandHi, active5m, tradedWin, loVol, hiVol, nWin, covered };
+  });
 }

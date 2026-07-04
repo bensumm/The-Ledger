@@ -326,3 +326,62 @@ detail is authoritative there; the operational rules below are the single home.
   every 20 min (hidden window). If any pipeline file moves again, that task's registered
   path needs re-creating too — it's not automatically kept in sync with the repo
   (`schtasks /Delete` + `/Create`, see §4.7).
+## 11. Outcomes dataset (O1 — the algorithm-feedback foundation)
+
+The pipeline captured *what filled*; O1 adds *what the tool said* and *the market context at
+placement*, so every offer's full story is recoverable and F1 (algorithm feedback) becomes a
+query rather than a re-derivation. Three pieces:
+
+### 10.1 `suggestions.jsonl` — the suggestions ledger (TRACKED, append-only)
+Repo-root, committed. `quote.mjs` (per-item **and** `--positions`), `screen.mjs` (each rated
+niche row), and `watch.mjs` (each held/target read) append every emitted recommendation **at
+emit time, unconditionally**, via the shared `pipeline/suggestlog.mjs`. One JSON object per line:
+```
+{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict }
+```
+`ts` = unix seconds. `class` = the item-type/liquidity label **as computed then** (the logic
+evolves; recomputing later would rewrite history, so it is snapshotted — coarse `liqClass()` for
+quote/screen, `watch.mjs`'s richer `classify()` taxonomy for watch). `verdict` = the emitted
+action string where the script produces one (position verdict / grade / watch action), else null.
+No PII — ids/prices/timestamps only (the repo is public). `sync-fills.mjs`'s commit set now
+includes it when present (same add-only-these-files discipline as `screen.json`). NB: `watch.mjs`
+is still read-only w.r.t. the market/positions — this analytics append is the sole exception, and
+its header guardrail says so.
+
+### 10.2 Historical market-context retention (`/5m?timestamp=`)
+Outcome analysis reconstructs the **trailing-2h band at each historical trade placement** (same
+basis as `patientTargets` / `computeQuote`'s `bandLo`/`bandHi`), which requires reading *past* 5m
+windows. The wiki `/5m?timestamp=<unix÷300>` bulk endpoint serves them, and a **live spot-check
+(2026-07-04)** confirmed full data returns at **1 week, 1 month, 6 months, and 2 years** back
+(HTTP 200, ~1.6–1.9k items/window, per-item avgLow/High/volume intact) — so the source retains 5m
+history for **at least 2 years**; band enrichment is never blocked by the endpoint for any fill in
+that window. As insurance against re-fetching, the local `.cache/bands/` prune was raised **7d →
+90d** (`BANDS_RETENTION_DAYS` in `marketfetch.mjs`) — local + gitignored; **band data is never
+committed**.
+
+### 10.3 `pipeline/outcomes.mjs` — the join (DERIVED, gitignored)
+`node pipeline/outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
+gitignored `outcomes.json` (rebuildable any time; `outcomes.json` + `.cache/outcomes-bands/` are in
+`.gitignore`). A **campaign** = one intent to trade: a same-item/same-side chain of offers
+`placed → … → terminal`, with cancel-replace successions (re-place within `REPRICE_GAP`, 20 min)
+stitched into one campaign carrying a reprice list. Per campaign: placement ts/price, reprice
+count/steps, time-to-first-fill, time-to-complete (or terminal state + filled fraction), **band
+percentile at placement**, 2h spread + limiting-side volume, realized net after tax where it
+closes a FIFO lot, and the nearest **prior** suggestion for the item (≤ `SUGGEST_WINDOW`, 6h;
+missing = null, never dropped). Manual/mobile fills (slot 8) are flagged `manual:true`. **FIFO
+realized P/L reuses `reconstruct.mjs` `matchTrades` — never re-implemented** (closed lots joined
+back to sell campaigns by `sellTs`); `collapseOffers` gives the offer boundaries; first-fill
+timing is stamped from the raw events. Band enrichment batches one `loadHistBands()` fetch for all
+placements (each distinct 5m window fetched once, reduced per-item datum cached ~KB/item).
+
+**First read = schema validation, not conclusions** (process rule 4). `--report` prints fill-time
+distributions by **band-percentile bucket × liquidity class, n per cell**, and **refuses** a
+per-cell median below `--min-n` (default `MIN_N_REPORT = 8`). The **F1 gate thresholds** it
+documents (the numbers that open F1): a per-cell fill-time/probability curve is trustworthy only at
+**n ≥ 30** per `(side × percentile × class × regime)` cell — regime bucketed **first**, the known
+confound — with **≥ 5** such cells populated (`MIN_N_F1` / `MIN_CELLS_F1`). These are defensible
+conventions, not derived values. On the current dataset (103 campaigns, ~2.5 days, 83% fill rate,
+realized +2.8m over 39 closed sell campaigns) the join is validated and behaves correctly — buy
+placements cluster at the 0–20 band percentile, sells at 80–100, exactly the patient-pricing
+signature — but only **1** cell clears n≥30, so **F1 stays gated**: the schema/pipeline are sound,
+the sample simply must accrue calendar time (why O1 starts now).

@@ -22,7 +22,10 @@
  * GUARDRAILS (hard):
  *   - HUMAN-EXECUTED DECISION SUPPORT ONLY. This tool NEVER places or cancels a GE offer —
  *     automating GE interaction is botting and bannable. It tells you WHEN to act; you click.
- *   - READ-ONLY. It reads positions.json + live prices and writes nothing.
+ *   - READ-ONLY w.r.t. the MARKET and POSITIONS: it never places/cancels a GE offer and never
+ *     writes fills.json / positions.json / any market file. It DOES append each read to the
+ *     analytics suggestions.jsonl ledger (O1) — that's a passive record of what was recommended,
+ *     not a market action.
  *   - No reimplemented quote/tax/regime/momentum math — ALL of it is js/quotecore.js.
  *
  * Held basis = repo-root positions.json OPEN lots (the pipeline's WITHDRAWN/BANKED-aware
@@ -44,6 +47,7 @@ import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
+import { logSuggestions, suggestionEntry } from './suggestlog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -285,6 +289,23 @@ async function main() {
 
   const all = [...held, ...targets];
   const loopMin = Math.min(...all.map(it => it.meta.cadence));
+
+  // O1 suggestions ledger: log every held/target read at emit time, unconditionally. `class` is
+  // watch's richer classify() taxonomy label; verdict is the concise action token for the read.
+  const heldVerdict = it => {
+    const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m);
+    if (mv) return mv.verdict;
+    if (it.row.falling) return 'FALLING';
+    if (it.row.quickSell != null && it.be != null && it.row.quickSell < it.be) return 'UNDERWATER';
+    return it.row.quickSell != null ? 'HOLD' : 'NO-QUOTE';
+  };
+  const targetVerdict = it => it.cls === 'FALLING' ? 'SKIP'
+    : it.row.quickBuy == null ? 'NO-QUOTE'
+    : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
+  logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
+    ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it) })),
+    ...targets.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: targetVerdict(it) })),
+  ]);
 
   // header + provenance
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);

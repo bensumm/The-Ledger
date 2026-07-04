@@ -1,0 +1,276 @@
+#!/usr/bin/env node
+/**
+ * outcomes.mjs â€” THE JOIN (PLAN O1 step 3/4). Derived + rebuildable â†’ GITIGNORED (never commit
+ * outcomes.json or the .cache/outcomes-bands/ data). Rebuilds the full "story of every offer" from
+ * fills.json + suggestions.jsonl + historical market context, so the algorithm-feedback loop (F1)
+ * becomes a query rather than a re-derivation.
+ *
+ *   node pipeline/outcomes.mjs            rebuild + write outcomes.json, print a summary
+ *   node pipeline/outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile Ã— liquidity
+ *                                          class, n PER CELL, refusing to summarize below --min-n
+ *   node pipeline/outcomes.mjs --no-bands  skip the historical band-percentile fetch (fast, offline)
+ *   node pipeline/outcomes.mjs --json      dump the campaigns array to stdout (no file write)
+ *   flags: --min-n <N> (report cell floor, default 8) Â· --band-hours <H> (band basis, default 2)
+ *
+ * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers,
+ * `placed â†’ â€¦ â†’ terminal`, with cancel-replace successions (a cancel then a re-place within
+ * REPRICE_GAP) STITCHED into ONE campaign carrying a reprice list. Per campaign we record:
+ *   placement ts/price Â· reprice count/steps Â· time-to-first-fill Â· time-to-complete (or the
+ *   terminal state + filled fraction) Â· band percentile at placement (trailing-2h 5m band, the
+ *   SAME basis as patientTargets) Â· 2h spread + limiting-side volume Â· realized net after tax
+ *   where it closes a FIFO lot Â· the nearest PRIOR suggestion for the item.
+ *
+ * FIFO realized P/L reuses reconstruct.mjs matchTrades (NEVER re-implemented here); collapseOffers
+ * gives the canonical offer boundaries. First-read purpose is SCHEMA VALIDATION, not conclusions:
+ * the --report is honest about n and refuses per-cell summaries below the floor (process rule 4).
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { collapseOffers, matchTrades } from './reconstruct.mjs';
+import { loadMapping, loadAll24h, loadHistBands } from './marketfetch.mjs';
+import { parseArgs } from './cli.mjs';
+import { fmtP, fmt, fmtTurn } from '../js/format.js';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(HERE, '..');
+const FILLS = path.join(ROOT, 'fills.json');
+const SUGGESTIONS = path.join(ROOT, 'suggestions.jsonl');
+const OUT = path.join(ROOT, 'outcomes.json');
+
+// --- tunable named constants (NOT magic numbers) ---------------------------------------------
+const REPRICE_GAP = 20 * 60;        // s: a re-place within this of a cancel = same campaign (a reprice)
+const SUGGEST_WINDOW = 6 * 3600;    // s: a suggestion older than this before placement is too stale to join
+const MANUAL_SLOT = 8;              // coffer-manual.log slot (mobile / manual fills)
+// --- --report cell floors (the numbers that GATE F1 â€” see FILLS-PIPELINE.md Â§10) --------------
+const MIN_N_REPORT = 8;             // below this, a per-cell median/rate is noise â†’ suppressed in --report
+const MIN_N_F1 = 30;               // below this per (percentile Ã— class Ã— regime) cell, F1 must NOT trust a curve
+const MIN_CELLS_F1 = 5;            // and at least this many cells must clear MIN_N_F1 before F1 opens
+
+const A = parseArgs(process.argv.slice(2));
+const REPORT = !!A.report, NO_BANDS = !!A['no-bands'], JSON_OUT = !!A.json;
+const MIN_N = A['min-n'] != null ? +A['min-n'] : MIN_N_REPORT;
+const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
+
+const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+// -------------------------------------------------------------------------------------------
+// First-fill timing: collapseOffers loses intermediate event timing, so scan the raw events to
+// stamp each offer's tsFirstFill (first event in its slot+item+type window with filled>0). Offers
+// are contiguous non-overlapping per slot, so the (slot,item,type,tsâˆˆ[open,close]) match is unique.
+function stampFirstFill(events, offers) {
+  const evs = [...events].sort((a, b) => a.ts - b.ts);
+  for (const o of offers) {
+    o.tsFirstFill = null;
+    for (const e of evs) {
+      if (e.slot === o.slot && e.itemId === o.itemId && e.type === o.type &&
+          e.ts >= o.tsOpen && e.ts <= o.tsClose && (e.filled || 0) > 0) { o.tsFirstFill = e.ts; break; }
+    }
+  }
+}
+
+// Group offers into campaigns (cancel-replace stitching). A completed offer, or a gap > REPRICE_GAP,
+// ends the current campaign for that item+side; anything else is a reprice appended to it.
+function groupCampaigns(offers) {
+  const current = new Map();   // item:type -> in-progress campaign
+  const camps = [];
+  for (const o of [...offers].sort((a, b) => a.tsOpen - b.tsOpen)) {
+    if (o.type === 'withdraw' || o.type === 'banked') continue;   // not a market flip intent
+    const key = o.itemId + ':' + o.type;
+    let c = current.get(key);
+    if (c) {
+      const prev = c.offers[c.offers.length - 1];
+      if (prev.state === 'complete' || (o.tsOpen - prev.tsClose) > REPRICE_GAP) { camps.push(c); c = null; }
+    }
+    if (!c) { c = { itemId: o.itemId, type: o.type, offers: [] }; current.set(key, c); }
+    c.offers.push(o);
+  }
+  for (const c of current.values()) camps.push(c);
+  return camps.sort((a, b) => a.offers[0].tsOpen - b.offers[0].tsOpen);
+}
+
+// The nearest PRIOR suggestion for an item within SUGGEST_WINDOW of placement (null, never dropped).
+function joinSuggestion(sugByItem, itemId, placementTs) {
+  const list = sugByItem.get(itemId); if (!list) return null;
+  let best = null;
+  for (const s of list) {
+    if (s.ts > placementTs) break;                       // list is ascending; past placement â†’ stop
+    if (placementTs - s.ts <= SUGGEST_WINDOW) best = s;  // keep the latest within the window
+  }
+  if (!best) return null;
+  return { ts: best.ts, script: best.script, mode: best.mode ?? null, verdict: best.verdict ?? null,
+    quickBuy: best.quickBuy ?? null, optBuy: best.optBuy ?? null, quickSell: best.quickSell ?? null,
+    optSell: best.optSell ?? null, mom: best.mom ?? null, regime: best.regime ?? null, class: best.class ?? null,
+    lagMin: Math.round((placementTs - best.ts) / 60) };
+}
+
+const pctBucket = p => p == null ? 'unknown'
+  : p < 20 ? '0-20' : p < 40 ? '20-40' : p < 60 ? '40-60' : p < 80 ? '60-80' : '80-100';
+function liqClassOf(volDay) {
+  if (volDay == null) return 'unknown';
+  if (volDay < 100) return 'thin';
+  if (volDay < 1000) return 'mid';
+  return 'liquid';
+}
+
+async function build() {
+  if (!fs.existsSync(FILLS)) { console.error('fills.json not found at ' + FILLS); process.exit(1); }
+  const events = (JSON.parse(fs.readFileSync(FILLS, 'utf8')).events || []);
+  if (!events.length) { console.error('fills.json has no events.'); process.exit(1); }
+
+  // reuse the canonical reconstruction: offers + FIFO closed lots (for realized P/L join by sellTs)
+  const offers = collapseOffers(events);
+  stampFirstFill(events, offers);
+  const { closed } = matchTrades(collapseOffers(events));   // FIFO â€” never re-implemented here
+  const realisedBySellTs = new Map();                        // sell offer tsOpen -> realised net after tax
+  for (const t of closed) { if (t.withdrawn) continue; realisedBySellTs.set(t.sellTs, (realisedBySellTs.get(t.sellTs) || 0) + t.realised); }
+
+  const campaigns = groupCampaigns(offers);
+
+  // suggestions ledger, ascending per item, for the nearest-prior join
+  const sugByItem = new Map();
+  if (fs.existsSync(SUGGESTIONS)) {
+    for (const line of fs.readFileSync(SUGGESTIONS, 'utf8').split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      let s; try { s = JSON.parse(line); } catch { continue; }
+      if (s.itemId == null || s.ts == null) continue;
+      (sugByItem.get(s.itemId) || sugByItem.set(s.itemId, []).get(s.itemId)).push(s);
+    }
+    for (const list of sugByItem.values()) list.sort((a, b) => a.ts - b.ts);
+  }
+
+  // current 24h volume â†’ liquidity class per item (honest caveat: CURRENT day, not at-placement â€”
+  // an at-placement daily figure isn't in the historical endpoints; the 2h limiting volume below IS
+  // at-placement and is recorded per campaign as the finer measure).
+  const map = await loadMapping();
+  let v24 = {};
+  try { v24 = await loadAll24h(); } catch (e) { console.warn('(24h volume unavailable â€” liquidity class = unknown: ' + ((e && e.message) || e) + ')'); }
+  const volDayOf = id => { const d = v24[id] || v24[String(id)]; return d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : null; };
+
+  // historical band at each placement (unless --no-bands). ONE batched fetch for all campaigns.
+  let bands = null;
+  if (!NO_BANDS) {
+    const reqs = campaigns.map(c => ({ id: c.itemId, endUnix: c.offers[0].tsOpen }));
+    process.stderr.write(`(fetching historical 2h bands for ${reqs.length} placements â€” this can take a moment; --no-bands to skip)\n`);
+    try { bands = await loadHistBands(reqs, BAND_HOURS); }
+    catch (e) { console.warn('(historical band fetch failed â€” band percentile = null: ' + ((e && e.message) || e) + ')'); bands = null; }
+  }
+
+  const out = campaigns.map((c, idx) => {
+    const first = c.offers[0], last = c.offers[c.offers.length - 1];
+    const placementTs = first.tsOpen, placementPrice = first.price;
+    const reprices = c.offers.slice(1).map(o => ({ ts: o.tsOpen, price: o.price }));
+    const filledUnits = c.offers.reduce((s, o) => s + (o.filled || 0), 0);
+    const targetQty = last.qty || c.offers.reduce((m, o) => Math.max(m, o.qty || 0), 0);
+    const filledFraction = targetQty > 0 ? Math.min(1, filledUnits / targetQty) : null;
+    const firstFillTs = c.offers.map(o => o.tsFirstFill).filter(t => t != null).sort((a, b) => a - b)[0] ?? null;
+    const completeOffer = c.offers.find(o => o.state === 'complete');
+    const tsComplete = completeOffer ? completeOffer.tsClose : null;
+    const terminalState = last.state;
+    const manual = c.offers.some(o => o.slot === MANUAL_SLOT);
+
+    // band percentile at placement (where the placement price sat in the trailing-2h band)
+    const b = bands ? bands[idx] : null;
+    let bandLo = null, bandHi = null, bandPct = null, spread2h = null, limitVol2h = null, bandCovered = null;
+    if (b) {
+      bandLo = b.bandLo; bandHi = b.bandHi; bandCovered = b.covered;
+      spread2h = (bandLo != null && bandHi != null) ? bandHi - bandLo : null;
+      limitVol2h = Math.min(b.loVol, b.hiVol);
+      if (bandLo != null && bandHi != null && bandHi > bandLo && placementPrice != null)
+        bandPct = Math.max(0, Math.min(100, (placementPrice - bandLo) / (bandHi - bandLo) * 100));
+    }
+
+    // realized net after tax: sum FIFO closed lots whose sellTs is one of this (sell) campaign's offers
+    let realised = null;
+    if (c.type === 'sell') {
+      realised = 0; let matched = false;
+      for (const o of c.offers) if (realisedBySellTs.has(o.tsOpen)) { realised += realisedBySellTs.get(o.tsOpen); matched = true; }
+      if (!matched) realised = null;   // an unmatched sell (pre-log inventory) â€” no fabricated profit
+    }
+
+    const volDay = volDayOf(c.itemId);
+    return {
+      itemId: c.itemId, name: map.byId[c.itemId]?.name || ('#' + c.itemId), side: c.type, manual,
+      placementTs, placementPrice, targetQty, filledUnits, filledFraction, terminalState,
+      timeToFirstFill: firstFillTs != null ? firstFillTs - placementTs : null,
+      timeToComplete: tsComplete != null ? tsComplete - placementTs : null,
+      everFilled: filledUnits > 0,
+      repriceCount: reprices.length, reprices,
+      bandLo, bandHi, bandPct, bandCovered, spread2h, limitVol2h,
+      volDayCurrent: volDay, liqClass: liqClassOf(volDay),
+      realised,
+      suggestion: joinSuggestion(sugByItem, c.itemId, placementTs),
+    };
+  });
+
+  return { app: 'the-coffer-outcomes', version: 1, generatedAt: new Date().toISOString(),
+    params: { bandHours: BAND_HOURS, repriceGapMin: REPRICE_GAP / 60, suggestWindowMin: SUGGEST_WINDOW / 60, noBands: NO_BANDS },
+    campaigns: out };
+}
+
+// --- summary + --report --------------------------------------------------------------------
+function summarize(o) {
+  const c = o.campaigns;
+  const filled = c.filter(x => x.everFilled), cancelled = c.filter(x => !x.everFilled);
+  const ttf = filled.map(x => x.timeToFirstFill).filter(t => t != null);
+  const sj = c.filter(x => x.suggestion).length;
+  console.log(`# Outcomes â€” ${c.length} campaigns (rebuilt from fills.json)`);
+  console.log(`  generatedAt ${o.generatedAt}`);
+  console.log(`  sides: ${c.filter(x => x.side === 'buy').length} buy Â· ${c.filter(x => x.side === 'sell').length} sell   Â·   manual/mobile: ${c.filter(x => x.manual).length}`);
+  console.log(`  filled: ${filled.length} (${c.length ? Math.round(filled.length / c.length * 100) : 0}%)  Â·  never filled: ${cancelled.length}  Â·  repriced at least once: ${c.filter(x => x.repriceCount > 0).length}`);
+  console.log(`  time-to-first-fill: median ${ttf.length ? fmtTurn(median(ttf) / 3600) : 'â€”'} over n=${ttf.length}`);
+  console.log(`  band percentile present: ${c.filter(x => x.bandPct != null).length}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  Â·  suggestion joined: ${sj}/${c.length}`);
+  const realisedC = c.filter(x => x.realised != null);
+  console.log(`  realized (closed sell campaigns): n=${realisedC.length}, net ${realisedC.length ? (realisedC.reduce((s, x) => s + x.realised, 0) >= 0 ? '+' : '') + fmt(realisedC.reduce((s, x) => s + x.realised, 0)) : 'â€”'}`);
+}
+
+// fill-time distribution: band-percentile bucket (rows) Ã— liquidity class (cols), per side, with n
+// per cell and MIN_N suppression. Cells: "median-ttf (n)" or "n<MIN_N" when too sparse.
+function report(o) {
+  const PCTS = ['0-20', '20-40', '40-60', '60-80', '80-100', 'unknown'];
+  const CLASSES = ['thin', 'mid', 'liquid', 'unknown'];
+  console.log(`\n# --report â€” fill-time distributions (median time-to-first-fill Â· n per cell; cells with n<${MIN_N} suppressed)`);
+  console.log(`Bucketing: band percentile at placement (rows) Ã— current liquidity class (cols). Only FILLED campaigns count toward time; a low cell n is the expected first-read result (the dataset must accrue calendar time â€” that is why O1 starts now).`);
+
+  for (const side of ['buy', 'sell']) {
+    const rows = o.campaigns.filter(x => x.side === side && x.everFilled && x.timeToFirstFill != null);
+    console.log(`\n## ${side.toUpperCase()} campaigns â€” n=${rows.length} filled with a fill-time`);
+    // build cell map
+    const cell = {};
+    for (const r of rows) { const k = pctBucket(r.bandPct) + '|' + r.liqClass; (cell[k] = cell[k] || []).push(r.timeToFirstFill); }
+    // header
+    const head = ['pct\\class', ...CLASSES];
+    const lines = [head, head.map(() => '---')];
+    for (const p of PCTS) {
+      const line = [p];
+      for (const cl of CLASSES) {
+        const arr = cell[p + '|' + cl] || [];
+        line.push(arr.length === 0 ? 'Â·' : arr.length < MIN_N ? `n=${arr.length}<${MIN_N}` : `${fmtTurn(median(arr) / 3600)} (n=${arr.length})`);
+      }
+      lines.push(line);
+    }
+    console.log(lines.map(l => '| ' + l.join(' | ') + ' |').join('\n'));
+    // fill-RATE by the same cells needs cancelled campaigns too (a cell's fill probability)
+    const allSide = o.campaigns.filter(x => x.side === side);
+    const clearedCells = PCTS.flatMap(p => CLASSES.map(cl => (cell[p + '|' + cl] || []).length)).filter(n => n >= MIN_N_F1).length;
+    console.log(`side totals: ${allSide.length} campaigns, ${rows.length} with a fill-time; cells clearing the F1 floor (nâ‰¥${MIN_N_F1}): ${clearedCells}`);
+  }
+
+  // F1 gate verdict â€” the documented thresholds this chunk delivers
+  const filledTimes = o.campaigns.filter(x => x.everFilled && x.timeToFirstFill != null);
+  const cellCounts = {};
+  for (const r of filledTimes) { const k = r.side + '|' + pctBucket(r.bandPct) + '|' + r.liqClass + '|' + (r.suggestion ? r.suggestion.regime : 'noreg'); cellCounts[k] = (cellCounts[k] || 0) + 1; }
+  const f1Cells = Object.values(cellCounts).filter(n => n >= MIN_N_F1).length;
+  console.log(`\n# F1 gate (documented thresholds)`);
+  console.log(`  A per-cell fill-time/probability curve is trustworthy only at nâ‰¥${MIN_N_F1} per (side Ã— percentile Ã— class Ã— regime) cell, with â‰¥${MIN_CELLS_F1} such cells populated (bucket by regime FIRST â€” the known confound).`);
+  console.log(`  Right now: ${f1Cells} cell(s) clear nâ‰¥${MIN_N_F1}. F1 ${f1Cells >= MIN_CELLS_F1 ? 'MAY open.' : `stays GATED (need â‰¥${MIN_CELLS_F1}). The pipeline + schema are validated; the sample is not yet large enough â€” let it accrue.`}`);
+}
+
+const o = await build();
+if (JSON_OUT) { console.log(JSON.stringify(o.campaigns, null, 2)); }
+else {
+  fs.writeFileSync(OUT, JSON.stringify(o, null, 2) + '\n');
+  summarize(o);
+  if (REPORT) report(o);
+  console.log(`\n(wrote ${path.relative(ROOT, OUT)} â€” derived + gitignored; rebuild any time)`);
+}

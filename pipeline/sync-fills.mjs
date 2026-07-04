@@ -226,12 +226,15 @@ function main() {
   // starts a fresh chain rather than getting silently absorbed. Manual runs
   // (no --auto) never amend — every manual run is its own checkpoint.
   try {
-    // Commit set: fills + positions always; screen.json (PLAN-2 C1 published scan) only when it
-    // exists on disk — same add-only-these-files discipline, never a blanket `git add -A`. When
-    // present but unchanged it simply contributes nothing to the porcelain status below.
+    // Commit set: fills + positions always; screen.json (PLAN-2 C1 published scan) and
+    // suggestions.jsonl (O1 append-only suggestions ledger) only when they exist on disk — same
+    // add-only-these-files discipline, never a blanket `git add -A`. When present but unchanged
+    // they simply contribute nothing to the porcelain status below.
     const SCREEN_REL = 'screen.json';
+    const SUGGEST_REL = 'suggestions.jsonl';
     const commitFiles = [FILLS_REL, POSITIONS_REL];
     if (existsSync(join(REPO_DIR, SCREEN_REL))) commitFiles.push(SCREEN_REL);
+    if (existsSync(join(REPO_DIR, SUGGEST_REL))) commitFiles.push(SUGGEST_REL);
     const fileArgs = commitFiles.join(' ');
     git(`add ${fileArgs}`);
     const status = git(`status --porcelain ${fileArgs}`);
