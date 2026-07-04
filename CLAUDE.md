@@ -263,8 +263,8 @@ metadata, not a leak; the concern is content, not commit authorship.
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed for git operations;
    don't suggest installing anything else for those. The GitHub CLI (`gh`) IS
-   installed (2026-07-04) but is scoped to API reads/deploy checks, not git — see
-   "GitHub CLI (`gh`) and GitHub Actions" below.
+   installed (2026-07-04) but is the API layer, not a git transport — see the
+   "GitHub CLI (`gh`), Actions CI, and shipping" section and the `/ship` skill.
 8. **A documentation pass is part of every change — not optional, and not append-only.**
    Before calling a change done, update the docs the change touches: this `CLAUDE.md`
    (a "Done" pointer, plus any workflow/section it affects), and any affected doc
@@ -277,30 +277,21 @@ metadata, not a leak; the concern is content, not commit authorship.
    script/flow, make that mapping explicit in the relevant CLAUDE.md section so a future agent
    runs the right thing immediately.
 
-## GitHub CLI (`gh`) and GitHub Actions — usage rules
-`gh` is installed (2026-07-04, via winget) and authed to the `bensumm` GitHub
-account. Its role here is deliberately narrow:
-- **Read/verify only by default.** Deploy status (`gh run list` / `gh run watch`),
-  run logs, `gh api` reads. Never open PRs, create releases, or push via `gh`
-  unless Ben explicitly asks — work ships directly to `main` with git-over-SSH,
-  unchanged.
-- **Deploy verification is part of every push to `main` that touches the deployed
-  app** (Ben, 2026-07-04): after pushing, watch the `pages-build-deployment` run
-  (`gh run watch $(gh run list --workflow pages-build-deployment -L 1 --json
-  databaseId -q '.[0].databaseId')` or just `gh run list -L 1` until it reads
-  `completed success`) and confirm success before calling the change done. This
-  extends rule 2's "actually run it" to the deploy itself. Pipeline auto-commits
-  (`CofferFillsSync`) are exempt — no agent is present for those.
-- **Never run `gh auth setup-git`.** git auth stays SSH; `gh`'s token is for the
-  API only. If git ever starts prompting for credentials, suspect this and check
-  `git config --get-all credential.helper`.
-- **No GitHub Actions workflows without an explicit ask.** The repo has no
-  `.github/workflows/` on purpose — the only "Action" is GitHub's automatic Pages
-  build (`pages-build-deployment`, no workflow file). Two structural reasons this
-  stays true: (1) the fills pipeline reads `~/.runelite/exchange-logger/*` on
-  Ben's machine — a cloud runner can't see it, so Task Scheduler is the correct
-  home for any scheduled job; (2) the repo is public, so workflows would run with
-  public logs. Don't propose "move X to CI".
+## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
+- **Every push to `main` follows the `/ship` skill** (rebase-push, then verify via
+  `gh run list` that the `checks` run — and, for app-touching changes, the
+  `pages-build-deployment` run — is green). A push isn't done until its runs are.
+- `gh` (installed + authed 2026-07-04) is the API layer only; git operations stay
+  on git-over-SSH. **Never run `gh auth setup-git`** (details in `/ship` §5).
+- **CI: `.github/workflows/checks.yml`** — cheap always-on checks (JS syntax
+  sweep, quotecore fixtures, `fills.json`/`positions.json` parse); it is the only
+  guard on the pipeline's unattended auto-commits. Agents may add/improve
+  workflows within the constraints in `/ship` §4 (public logs, no `~/.runelite`,
+  seconds-fast, no secrets).
+- **Direction of travel: PR flow for everything + merge queue** = PLAN.md chunk
+  G1 (sequenced before M1/N1; sync-cadence investigation first — Ben expects the
+  20-min sync to demote to on-demand or disappear). Direct-to-main stays the
+  operative workflow until G1 lands — don't half-adopt PRs.
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 Almost all app-wide mutable state (`ITEMS`, `watchlist`, `trades`, `bankroll`,

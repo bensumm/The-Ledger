@@ -51,9 +51,9 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 
 | Wave | Parallel lanes (one subagent each) |
 | --- | --- |
-| **1** | **T1→T2** (tables + Trends, one agent — shared styling) ∥ **O1** (outcomes dataset — pipeline-only, and the data compounds with calendar time, so it starts now) ∥ **K1→K2** (self-improving skills + memory dedupe — skills/memory files only) |
+| **1** | **T1→T2** (tables + Trends, one agent — shared styling) ∥ **O1** (outcomes dataset — pipeline-only, and the data compounds with calendar time, so it starts now) ∥ **K1→K2→K3** (self-improving skills + memory dedupe + CLAUDE.md slimming round 2 — K3 also touches js file headers/docs, still conflict-free with the other lanes) |
 | **2** | **S1→S2→S3** (screening economics → overnight posture → watchlist section, one agent — all `screen.mjs`-centric) ∥ **Q1** (Gate-0 reliability fix — quotecore + fixtures) ∥ **E1** (local-time audit) |
-| **3** | **L1** (action logging — solo first, it instruments the final shapes) → **M1** (mobile parity) → **N1** (push notifications). M1 and N1 have disjoint file sets and *may* run in parallel if desired; both are large. |
+| **3** | **L1** (action logging — solo first, it instruments the final shapes) → **G1** (PR flow + merge queue — investigation then flip; deliberately BEFORE the two big chunks: M1's sync design depends on the cadence decision, and M1/N1 then land through the new PR flow) → **M1** (mobile parity) → **N1** (push notifications). M1 and N1 have disjoint file sets and *may* run in parallel if desired; both are large. G1's *investigation* may start any time; the workflow flip lands only between waves, never mid-wave. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -65,12 +65,14 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | OPEN |
 | K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | OPEN |
 | K2 | Memory dedupe pass | Claude memory dir | OPEN |
+| K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | OPEN |
 | S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | OPEN |
 | S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | OPEN |
 | S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | OPEN |
 | Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | OPEN |
 | E1 | Local-time audit | `js/ui.js` (+sweep) | OPEN |
 | L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | OPEN |
+| G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | OPEN |
 | M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | OPEN |
 | N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | OPEN |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
@@ -199,6 +201,25 @@ owning skill or delete. Also update `execute-plans-off-main` to reflect this fil
 dispatch model (single PLAN.md, subagent waves, worktrees only for parallel lanes). Same
 drift rule as the CLAUDE.md slimming: one canonical home per fact.
 
+### K3 — CLAUDE.md slimming round 2: reference material out (new — Ben, 2026-07-04)
+
+The `/ship` extraction (gh/CI/shipping mechanics → skill, CLAUDE.md keeps a 4-bullet
+pointer) is the template. Remaining extraction candidates, in value order — each gets a
+one-to-three-line pointer left behind, never a silent deletion (rule 8 reconciliation):
+1. **"Done (recent)" entries** (~90 lines, the single biggest block) → the 0.30.0/0.33.0
+   style deep entries move to `CHANGELOG.md` (or rely on commit messages + `git show`);
+   CLAUDE.md keeps one line each for only the entries a future agent must not rebuild.
+2. **The `STATE` object section** → header comment in `js/state.js` itself (the one place
+   every editor of shared state is already looking); pointer stays in process rules.
+3. **Trends tab structure** → header comment in `js/trends.js` (same logic — it's guidance
+   for editing that file), pointer from CLAUDE.md.
+4. **Environment notes** (RuneLite paths, field mappings, cancel semantics, manual-fill
+   timestamp rule) → already mostly duplicated in `pipeline/FILLS-PIPELINE.md`; make that
+   doc the single home, leave pointers.
+Not skills — none of these are workflow-shaped; they're reference docs that belong next
+to the code they describe. Skills stay for workflows (`/scan` `/positions` `/overnight`
+`/morning` `/ship`).
+
 ---
 
 ## Wave 2
@@ -304,6 +325,40 @@ deep-link clicks. One line each, includes the object of the action, no PII. `LOG
 *changes*, never renders — nothing in a render path calls `logEvent` unconditionally
 (re-check T1's code too). Smoke: each instrumented action logs exactly once; nothing fires
 on a passive re-render.
+
+### G1 — PR flow + merge queue migration (new — Ben, 2026-07-04; investigation-first, lands before M1/N1)
+
+Goal: all work lands via branch → PR → `checks` → merge queue → `main`, so concurrent
+agent work serializes at the queue instead of conflicting on `main`. Foundations already
+shipped 2026-07-04: `gh` installed+authed, `.github/workflows/checks.yml` (has the
+`merge_group` trigger), `/ship` skill holds the current direct-to-main procedure + the
+migration's direction-of-travel section.
+
+0. **Sync-cadence investigation (blocks the rest).** The 20-min `CofferFillsSync` push is
+   the only unattended direct writer to `main`, and Ben's read is the manual/on-demand
+   update flow covers ~99% of his use — the schedule may drop to on-demand or be
+   eliminated. Inventory what actually depends on the cadence: (a) deployed-app
+   Ledger/Coffer freshness (`positions.json` fetched same-origin — matters mostly away
+   from the PC; ties to M1's staleness banner + Refresh-positions button); (b) `/morning`
+   `/overnight` `/positions` reconstruction freshness (these run on the PC and can invoke
+   the sync locally on demand); (c) any remote reader of `fills.json`. Deliverable: a
+   written decision in `pipeline/FILLS-PIPELINE.md` — eliminate the schedule / long
+   cadence (e.g. daily) / on-demand only — chosen with Ben.
+1. **Apply the cadence decision**: demote or delete the Task Scheduler job (§4.7 of
+   FILLS-PIPELINE.md); wire on-demand sync into the session skills that need fresh data.
+2. **Only if a scheduled direct writer survives step 1**: give it a bypass identity — a
+   write deploy key added as a ruleset bypass actor, `GIT_SSH_COMMAND` in the sync's git
+   calls. (If the schedule dies, no bypass is needed and the ruleset can be clean.)
+3. **Protect `main`**: ruleset requiring a PR + the `checks` run green; enable merge
+   queue (`checks.yml` already runs on `merge_group`).
+4. **Flip the workflow docs in one pass** (rule 8 reconciliation): `/ship` §2/§6 rewritten
+   for branch→PR→queue, CLAUDE.md process rules + gh section, PLAN.md Executor rules
+   ("land directly on main" → PR flow), memory `execute-plans-off-main`.
+
+Interacts with M1: M1's multi-writer rebase path and its stretch in-cloud reconstruction
+Action assume a scheduled PC writer exists; if the schedule is eliminated, mobile
+freshness leans on the Refresh button + (possibly) the in-cloud rebuild instead. That's
+why G1 lands first.
 
 ### M1 — Mobile parity: GitHub-as-backend writes (ex PLAN-2 chunks B2–B5)
 
