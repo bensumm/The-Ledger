@@ -44,6 +44,14 @@ single-file discipline: this doc is both the plan and the scoreboard.
   (git merges them); same-function overlaps are not — sequence those.
 - After each wave the coordinator: runs the test file + a browser smoke pass if the app
   changed, updates the Status table here, pushes.
+- **Wave-start consistency scan (Wave 2 onward — Ben, 2026-07-04):** when kicking off each
+  wave after the first, the coordinator also spawns a **Sonnet** subagent to sweep the
+  repo's docs (`CLAUDE.md`, `PLAN.md`, `README.md`, `pipeline/*.md`,
+  `.claude/skills/*/SKILL.md`) for drift the prior wave left behind — statements a shipped
+  chunk superseded, stale column sets/verdict lists, chunk specs contradicted by what
+  actually landed. Findings are wrapped into followup notes appended to that wave's chunk
+  briefs (doc fixes ride with the owning chunk's reconciliation pass); findings that
+  belong to no active chunk go to the Discovered list.
 
 ## Order of operations
 
@@ -60,12 +68,12 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
-| T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | OPEN |
-| T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | OPEN |
-| O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | OPEN |
-| K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | OPEN |
-| K2 | Memory dedupe pass | Claude memory dir | OPEN |
-| K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | OPEN |
+| T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | DISPATCHED (wave 1, 2026-07-04) |
+| T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | DISPATCHED (wave 1, 2026-07-04) |
+| O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | DISPATCHED (wave 1, 2026-07-04) |
+| K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | DISPATCHED (wave 1, 2026-07-04) |
+| K2 | Memory dedupe pass | Claude memory dir | DISPATCHED (wave 1, 2026-07-04) |
+| K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | DISPATCHED (wave 1, 2026-07-04) |
 | S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | OPEN |
 | S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | OPEN |
 | S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | OPEN |
