@@ -10,6 +10,28 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Screening economics + posture + watchlist-always-scanned (0.37.0, PLAN chunks S1/S2/S3)
+S1: the liquidity gate gains a **gp-flow alternative path** — an item passes on `limitVol ≥
+--floor` (50/d, unchanged) OR `limitVol × mid ≥ --gp-floor` (250m default), so an Avernic-class
+big ticket (single-digit units/day, hundreds of millions of real two-sided gp flow) finally
+surfaces, marked `thin: true` with a grade cap at A- and a "size in units, expect slow fills"
+tooltip. Thin qualifiers are held OUT of the main ranking in a bounded `--thin-reserve` (6/niche,
+ranked by real gp-flow) because their thinly-traded wide bands inflate `expGpDay`. ROI gate gets
+an absolute-gp alternative for thin items (`--min-net-gp`, 100k/u); the band-activity gate
+relaxes to 1 traded window for them. The **500k gp/day attention floor** moved from a `/scan`
+post-filter to the structural `--min-gpd` flag, applied pre-rating (thin + held/asked exempt) —
+it visibly tightens every niche (churn ~2 rated, spread ~4). S1.3 (dropping the spread niche)
+deferred pending a few days of `--mode all` publishes. S2: `--posture overnight|active|auto`
+(auto = local clock, 22:00–06:00 named constants); overnight = flat/rising confident-band only,
+patient band-edge pricing, net-edge-weighted ranking, plus an `overnightStaleRisk` exclusion
+built on the shipped `diurnalRead` basis (yesterday's overnight window printing below the
+current bid); 4 posture fixtures in `quotecore.test.mjs`; published `screen.json` records the
+posture in `params` and the app Scan banner shows it. S3: tracked repo-root **`watchlist.json`**;
+the app unions it into `STATE.watchlist` (in-memory; write-back is M1); every screen appends a
+gate-exempt **Watchlist** section with exclusion reasons as notes — falling watchlist items ARE
+shown with the falling warning (extends the held/asked exception). Version note: the S-lane
+authored this as 0.36.0 in parallel with Q1; renumbered to 0.37.0 at merge.
+
 ### Gate-0 feed-inversion reliability fix (0.36.0, PLAN chunk Q1)
 A feed-inverted row — a crossed live feed, where the instasell (`latest.low`) prints *above*
 the instabuy (`latest.high`) — used to reach `momVerdict()` with `reliable:true`/`ordered:false`

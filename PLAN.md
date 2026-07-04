@@ -74,9 +74,9 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | ✅ `283e12a` |
 | K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit; 5 memories → skill pointers, `execute-plans-off-main` updated) |
 | K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | ✅ `ec02495` |
-| S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | DISPATCHED (wave 2, 2026-07-04) |
-| S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | DISPATCHED (wave 2, 2026-07-04) |
-| S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | DISPATCHED (wave 2, 2026-07-04) |
+| S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | ✅ `5ad72a9` (S1.3 spread-drop DEFERRED — needs a few days of `--mode all` publishes under the floor before removing) |
+| S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | ✅ `12e8a86` (22:00–06:00 local; 4 posture fixtures, 14 total) |
+| S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | ✅ `3a38018` (0.37.0 at merge — S-lane authored as 0.36.0 in parallel with Q1) |
 | Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | ✅ `23deba0` (0.36.0 — inversion → `reliable:false` at the source; interim `/positions` override removed) |
 | E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only: no UTC leaks found; `periodKey` midnight/week fixtures pass; convention rule added to CLAUDE.md — no code change, no APP_VERSION bump) |
 | L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | OPEN |
@@ -501,6 +501,13 @@ documented sample thresholds clear (process rule 4).
 - `js/backup.js:23` stamps the backup filename with the UTC date (`toISOString().slice(0,10)`)
   — a late-evening local backup gets tomorrow's date in the name. File-artifact only, not a
   displayed time; switch to a local slug if it ever annoys (lane E, 2026-07-04).
+- gp-flow ∩ `--max-price` default (45m): big tickets above 45m (Twisted bow, Elder maul…) are
+  still excluded by the default price window — the gp-flow path only helps inside it. Not a
+  bug; raise `--max-price` (or its default) if Ben wants them surfaced by default (lane S,
+  2026-07-04).
+- The 500k `--min-gpd` floor nearly empties the churn niche (~2 rated) — expected given churn's
+  thin per-unit margins, but if churn should stay useful it may need a niche-specific floor
+  exemption (lane S, 2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
