@@ -78,7 +78,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | DISPATCHED (wave 2, 2026-07-04) |
 | S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | DISPATCHED (wave 2, 2026-07-04) |
 | Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | DISPATCHED (wave 2, 2026-07-04) |
-| E1 | Local-time audit | `js/ui.js` (+sweep) | DISPATCHED (wave 2, 2026-07-04) |
+| E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only: no UTC leaks found; `periodKey` midnight/week fixtures pass; convention rule added to CLAUDE.md — no code change, no APP_VERSION bump) |
 | L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | OPEN |
 | G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | OPEN |
 | M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | OPEN |
@@ -498,6 +498,9 @@ documented sample thresholds clear (process rule 4).
   moments — observed live on Toxic blowpipe: `mid` vs `thin`). Honest as-computed-then
   data, but unify the volume source if a single canonical label is ever needed (lane O,
   2026-07-04).
+- `js/backup.js:23` stamps the backup filename with the UTC date (`toISOString().slice(0,10)`)
+  — a late-evening local backup gets tomorrow's date in the name. File-artifact only, not a
+  displayed time; switch to a local slug if it ever annoys (lane E, 2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
