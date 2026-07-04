@@ -70,7 +70,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | --- | --- | --- | --- |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | DISPATCHED (wave 1, 2026-07-04) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | DISPATCHED (wave 1, 2026-07-04) |
-| O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | DISPATCHED (wave 1, 2026-07-04) |
+| O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate documented: n≥30 per side×pctl×class×regime cell, ≥5 cells — currently 1, stays GATED) |
 | K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | ✅ `283e12a` |
 | K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit; 5 memories → skill pointers, `execute-plans-off-main` updated) |
 | K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | ✅ `ec02495` |
@@ -493,6 +493,11 @@ documented sample thresholds clear (process rule 4).
   a possible future convenience).
 - Mixed line-ending handling (recurring `LF will be replaced by CRLF` warnings on Windows
   commits) — a `.gitattributes` normalization pass would quiet it (lane K, 2026-07-04).
+- `quote.mjs` and `screen.mjs` can log a different liquidity `class` for the same item in
+  `suggestions.jsonl` (volume read from `fetch24hOne` vs bulk `loadAll24h` at different
+  moments — observed live on Toxic blowpipe: `mid` vs `thin`). Honest as-computed-then
+  data, but unify the volume source if a single canonical label is ever needed (lane O,
+  2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
