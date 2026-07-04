@@ -4,7 +4,12 @@
  *
  *   node pipeline/screen.mjs [--mode band|spread|rising|churn|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
- *     [--band-hours 2] [--min-active 6] [--stats]
+ *     [--band-hours 2] [--min-active 6] [--stats] [--publish]
+ *
+ *   --publish ALSO writes repo-root screen.json: a self-describing per-niche graded snapshot
+ *   { app, generatedAt, mode, params, headers, niches:{band,spread,rising,churn} } that the app's
+ *   Scan tab renders. Each row is { id (for the Item→Trends deep link), cells } byte-identical to
+ *   the printed table. sync-fills.mjs commits screen.json alongside fills/positions when present.
  *
  * The screen has ONE shared gate stack for every mode; --mode only swaps the step-3 EDGE
  * DEFINITION + ranking. Shared gates: two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0,
@@ -56,6 +61,9 @@ import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
 import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
@@ -70,6 +78,11 @@ const TOP = A.top != null ? +A.top : 40;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 const MIN_ACTIVE = A['min-active'] != null ? +A['min-active'] : 6;
 const STATS = !!A.stats;
+// --publish: also write repo-root screen.json so the app's Scan tab renders the SAME per-niche
+// graded scan a Claude session produces (byte-parity via the shared stdCells / rating path). The
+// file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
+// for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
+const PUBLISH = A.publish === true;
 
 const RUN_MODES = MODE === 'all' ? MODES : [MODE];
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
@@ -186,7 +199,7 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null });
     const std = stdCells(name, row);                        // [item, guide, mid, buy, sell, net, vol, mom, regime]
-    rows.push({ cells: [std[0], r.grade, ...std.slice(1), fmtP(r.score)], score: r.score });
+    rows.push({ id: s.id, cells: [std[0], r.grade, ...std.slice(1), fmtP(r.score)], score: r.score });
     dist[r.grade] = (dist[r.grade] || 0) + 1;
   }
   rows.sort((a, b) => b.score - a.score);                   // display sorted by risk-adjusted grade/score
@@ -202,6 +215,8 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');
+  // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link)
+  return rows.map(r => ({ id: r.id, cells: r.cells }));
 }
 
 async function main() {
@@ -235,7 +250,25 @@ async function main() {
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
-  for (const m of RUN_MODES) renderMode(m, gated[m], qcache, map);
+  const niches = {};
+  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map);
+
+  // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the
+  // rows so a stale published file can never mismatch app-side header code; cells are byte-identical
+  // to the tables above (same stdCells / rating path) so the app renders exactly what the scan said.
+  if (PUBLISH) {
+    const outPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'screen.json');
+    const payload = {
+      app: 'the-coffer-screen',
+      generatedAt: new Date().toISOString(),
+      mode: MODE,
+      params: { floor: FLOOR, minRoi: MIN_ROI, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE },
+      headers: HEADERS,
+      niches,
+    };
+    writeFileSync(outPath, JSON.stringify(payload, null, 2) + '\n');
+    console.log(`(published → screen.json: ${RUN_MODES.map(m => `${m} ${niches[m].length}`).join(', ')})`);
+  }
 }
 
 await main();
