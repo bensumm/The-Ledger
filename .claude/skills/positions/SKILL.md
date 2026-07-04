@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.2
+version: 1.3
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -59,19 +59,18 @@ verdict; you translate it into the action line:
 | HOLD | Stay listed at the 2h top / patient edge. |
 | CUT-CANDIDATE | Underwater through a liquid window — persistence, not the clock. List to clear before a bigger loss. |
 
-**Reliability override (interim, pending the quotecore Gate-0 fix):** any row whose regime
-line carries the "⚠ feed inversion — quote basis unreliable" footnote is treated as
-**NO-READ-equivalent regardless of its printed verdict** (live 2026-07-04 datapoint: a
-footnoted item still printed CUT-CANDIDATE). No price action off an unreliable basis. This
-*extends* MONITORING.md Gate 0 — it doesn't contradict it — until the `js/quotecore.js`
-investigation (PLAN.md chunk Q1) gates the verdict path itself.
+A feed-inverted row (regime line carries the "⚠ feed inversion — quote basis unreliable"
+footnote) now prints **NO-READ** on its own — Gate 0 in `momVerdict()` folds inversion into
+the reliability signal (Q1, quotecore 0.36.0). No interim override needed; just read the
+verdict the script emits.
 
 ## 4. Render the action plan
 
 Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
-`item · held@ · break-even · verdict · exact action price`. Preserve the standard 9-column
-table exactly as the script printed it (that table is app-code canon — see CLAUDE.md
-"standard output format").
+`item · held@ · break-even · verdict · exact action price`. Preserve the standard 10-column
+`--positions` table exactly as the script printed it —
+`Item | Guide | Quick | Optimistic | Vol/d | Momentum | Regime | Held@ | Break-even | Verdict`
+(that table is app-code canon — see CLAUDE.md "standard output format").
 
 Hard rules — cite, never recompute differently:
 - Never list below break-even `ceil(buy/0.98)`.

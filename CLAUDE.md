@@ -47,6 +47,10 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Gate-0 feed-inversion fix** (0.36.0, Q1) — a crossed feed (instasell>instabuy) is now
+  `reliable:false`/`reliableReason:'feed-inversion'` in `computeQuote`, so `momVerdict()` Gate 0
+  prints **NO-READ** instead of a decisive verdict off a non-price. `/positions`' interim
+  override is gone. Don't re-add per-consumer inversion checks — the reliability signal is shared.
 - **Finder rating rework** (0.17.0) — `computeScores()` in `js/market.js`: four 0..1
   sub-scores → a `quality` dampener on profit/hr.
 - **Ledger auto-populate from fills** (0.18.0) — `syncFills()` in `js/ui.js` merges
@@ -165,8 +169,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   there as waves of chunks the coordinator session hands to Opus subagents: T1/T2 (table v2 +
   Trends sections/last-2h view), O1 (outcomes dataset), K1/K2 (self-improving skills +
   memory dedupe), S1–S3 (gp-flow gate + 500k floor + spread verdict, overnight posture,
-  watchlist-always-scanned), Q1 (Gate-0 reliability gap — interim: `/positions` treats
-  feed-inversion-footnoted rows as NO-READ-equivalent), E1 (local-time audit), L1 (action
+  watchlist-always-scanned), E1 (local-time audit), L1 (action
   logging), M1 (mobile parity — includes the Refresh-positions button), N1 (push
   notifications); F1 gated on O1. Sequential chunks land directly on main; parallel lanes
   use worktree subagents merged by the coordinator. The historical plan docs

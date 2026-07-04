@@ -66,10 +66,11 @@ Print-only — it never writes trade data. Each run emits:
    hand-run it). Each gate defers **only on positive evidence**; ambiguity always falls
    through to the cut discipline, so a genuine breakdown still cuts exactly as before.
    - **GATE 0 — is this reading even a price?** A **stale** (`/latest` aged past a
-     print-interval-scaled threshold), **one-sided**, or **too-sparse** quote → **NO-READ**:
-     no price action off it; keep any ask ≥ break-even and re-check at the next liquid window.
-     A *missing* instabuy is NO-READ, **never** CUT (you cannot price a cut off a price that
-     doesn't exist).
+     print-interval-scaled threshold), **inverted** (a crossed feed — live instasell above the
+     live instabuy, so `quoteOrdered()` fails; Q1), **one-sided**, or **too-sparse** quote →
+     **NO-READ**: no price action off it; keep any ask ≥ break-even and re-check at the next
+     liquid window. A *missing* instabuy is NO-READ, **never** CUT (you cannot price a cut off
+     a price that doesn't exist).
    - **GATE 1 — is it the clock?** Underwater at a **quiet** window (2h activity well below
      the item's typical) that the **same clock window dipped into and recovered from ~24h
      ago** → **DIURNAL-WATCH**: hold ≥ break-even, do **not** cut into the trough. Spent

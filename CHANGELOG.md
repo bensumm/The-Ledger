@@ -10,6 +10,22 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Gate-0 feed-inversion reliability fix (0.36.0, PLAN chunk Q1)
+A feed-inverted row — a crossed live feed, where the instasell (`latest.low`) prints *above*
+the instabuy (`latest.high`) — used to reach `momVerdict()` with `reliable:true`/`ordered:false`
+(the band was dense/fresh/two-sided, so nothing in the reliability chain caught it) and print a
+decisive verdict off a non-price. Live case (2026-07-04): a row footnoted "⚠ feed inversion —
+quote basis unreliable" still printed **CUT-CANDIDATE**. Fix folds inversion into the SINGLE
+reliability source: `computeQuote` now sets `reliableReason='feed-inversion'` (→ `reliable:false`)
+when `quickBuy>quickSell`, so every consumer that checks `row.reliable` (momVerdict's Gate 0,
+`watch.mjs`'s `mom==='breakdown' && reliable`, `quote.mjs`'s classify) treats it as unreliable —
+not just one path. `momVerdict()`'s Gate 0 also re-checks `row.ordered===false` at the decision
+point as belt-and-suspenders. Result: an inverted feed prints **NO-READ** (Gate 0), never a
+decisive verdict. New acceptance fixture in `pipeline/quotecore.test.mjs`; the 8 pre-existing
+verdicts (incl. the bludgeon-cut regression guard) stay byte-identical. The `/positions` skill's
+interim NO-READ-equivalent override is removed (the script now emits NO-READ itself), and the
+CLAUDE.md Q1 followup + MONITORING.md Gate 0 reason list are reconciled.
+
 ### Self-improving skills (2026-07-04, PLAN-5 K1, no `APP_VERSION` bump)
 Each workflow skill (`/positions` `/scan` `/overnight` `/morning`) gained a closing
 **"Encode learnings"** section: capture what a run taught, but only AFTER the actionable

@@ -97,10 +97,11 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   const his=recent.map(p=>p.avgHighPrice).filter(Boolean);
   const bandLo=los.length?Math.min(...los):null;
   const bandHi=his.length?Math.max(...his):null;
-  // --- GATE 0: quote reliability (PLAN-3, interpretation E) -------------------------------
+  // --- GATE 0: quote reliability (PLAN-3, interpretation E; feed-inversion added in Q1) ----
   // Is this reading even a price? A quote is UNRELIABLE if it is stale (a /latest print aged
-  // past a print-interval-scaled threshold), one-sided (only one side of the 2h band ever
-  // printed), or too sparse (fewer than MIN_BAND_WINDOWS populated 5m windows). Everything
+  // past a print-interval-scaled threshold), inverted (a crossed feed: live instasell above
+  // the live instabuy — quoteOrdered() would fail), one-sided (only one side of the 2h band
+  // ever printed), or too sparse (fewer than MIN_BAND_WINDOWS populated 5m windows). Everything
   // here comes from the SAME fetches the tick already makes — no new endpoints. lowTime/highTime
   // are unix SECONDS from /latest; `now` is ms (defaults Date.now()) so tests can pin it.
   const nowMs=(now!=null)?now:Date.now();
@@ -112,8 +113,14 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   const stale=(buyAgeMin!=null && buyAgeMin>staleThreshMin) || (sellAgeMin!=null && sellAgeMin>staleThreshMin);
   const bandTwoSided=los.length>0 && his.length>0;
   const bandPop=recent.filter(p=>p.avgLowPrice||p.avgHighPrice).length;
+  // Q1: a crossed/inverted feed (live instasell above the live instabuy) is not a real
+  // two-sided price — quoteOrdered() below would fail on it. Gate it here at the SINGLE
+  // reliability source so `reliable` is correct for EVERY consumer (momVerdict's Gate 0,
+  // watch.mjs's `mom==='breakdown' && reliable`, quote.mjs's classify), not just one path.
+  const inverted=quickBuy!=null && quickSell!=null && quickBuy>quickSell;
   let reliableReason;
   if(quickSell==null)        reliableReason='no-quote';       // no live instabuy → cannot price a sell/cut
+  else if(inverted)          reliableReason='feed-inversion'; // crossed feed (instasell>instabuy) → basis unreliable
   else if(stale)             reliableReason='stale-quote';
   else if(!bandTwoSided)     reliableReason='one-sided-band';
   else if(bandPop<MIN_BAND_WINDOWS) reliableReason='sparse-band';
@@ -242,14 +249,14 @@ export function moveShape(ts5m){
 
    Gate order (each gate defers ONLY on positive evidence; ambiguity falls through to the cut
    discipline, so the real bludgeon-style breakdown still cuts exactly as before):
-     GATE 0  unreliable/missing quote        → NO_READ   (a missing instabuy must NEVER → CUT)
+     GATE 0  unreliable/missing/inverted quote → NO_READ (a missing/crossed feed must NEVER → CUT)
      GATE 1  underwater + quiet diurnal trough that dipped+recovered yesterday → DIURNAL_WATCH
      GATE 2  mom breakup                      → HOLD_STRONG
              mom breakdown, small-lot shock   → SHOCK_WATCH (one more cycle)
              mom breakdown otherwise          → CUT / HOLD_WATCH / CLEAR (unchanged matrix)
      D-esc.  mom clean but underwater through a liquid window → CUT-CANDIDATE
      else    null → caller keeps its existing regime-based verdict
-   Params: row (a computeQuote row — needs .mom/.quickSell/.rawBandHi/.optSell/.rising/.reliable),
+   Params: row (a computeQuote row — needs .mom/.quickSell/.rawBandHi/.optSell/.rising/.reliable/.ordered),
    breakEvenPrice = ceil(avgCost/0.98), lotValue = qty×avgCost (vs BIG_TICKET_GP). ts5m/now are
    optional — pass the full 5m series (and now, ms) to activate Gates 1/2-shape/D; without them
    the tree degrades to Gate 0 + the original breakdown matrix. Returns null or
@@ -259,9 +266,14 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now){
   const instabuy=row.quickSell;   // clear-now price (live instabuy)
   // GATE 0 — is this reading even a price? An unreliable quote yields NO price action, and a
   // MISSING instabuy must never produce CUT (the old bug: null instabuy → most aggressive verdict).
-  if(instabuy==null || row.reliable===false){
+  // `reliable===false` is the primary signal (computeQuote folds in stale/one-sided/sparse AND
+  // the Q1 feed-inversion case); `ordered===false` is a belt-and-suspenders re-check of the
+  // ordering invariant at the decision point, so a crossed feed can never print a decisive
+  // verdict regardless of how the row was constructed (Q1 — the footnoted-CUT-CANDIDATE bug).
+  if(instabuy==null || row.reliable===false || row.ordered===false){
+    const reason=(row.reliableReason && row.reliableReason!=='ok')?row.reliableReason:(instabuy==null?'no-quote':'feed-inversion');
     return {action:'NO_READ', verdict:'NO-READ', listAt:null, cls:'mini', gate:0,
-      why:'quote not reliable ('+(row.reliableReason||'no-quote')+') — '+(instabuy==null?'no live instabuy to price against':'the feed is stale, one-sided, or too sparse to trust')+'. No price action off this read; keep any resting ask ≥ break-even'+(breakEvenPrice!=null?' ('+fmtP(breakEvenPrice)+')':'')+' and re-check at the next liquid window.'};
+      why:'quote not reliable ('+reason+') — '+(instabuy==null?'no live instabuy to price against':'the feed is stale, inverted, one-sided, or too sparse to trust')+'. No price action off this read; keep any resting ask ≥ break-even'+(breakEvenPrice!=null?' ('+fmtP(breakEvenPrice)+')':'')+' and re-check at the next liquid window.'};
   }
   const underwater = breakEvenPrice!=null && instabuy<breakEvenPrice;
   // GATE 1 — is it the clock? Only when underwater: a quiet trough the same window dipped into

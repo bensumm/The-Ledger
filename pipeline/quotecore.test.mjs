@@ -14,6 +14,7 @@
  *   - shock shape            → SHOCK-WATCH (Gate 2 shock branch)
  *   - clean underwater thru a liquid window → CUT-CANDIDATE (D-escalation)
  *   - missing instabuy       → NO-READ (never CUT)
+ *   - feed inversion (Q1)    → NO-READ (crossed feed: reliable:false/ordered:false, never a verdict)
  *   - quoteOrdered invariant untouched by the new fields
  */
 import assert from 'node:assert/strict';
@@ -169,6 +170,27 @@ ok('missing instabuy → NO-READ (never CUT)', () => {
   assert.equal(row.reliableReason, 'no-quote');
   const mv = momVerdict(row, breakEven(1200), 5000, ts5m, NOW_MS);
   assert.equal(mv.action, 'NO_READ');
+});
+
+// --- 7b. Feed inversion (crossed live feed) → NO-READ, never a decisive verdict (Q1) ------
+// Live instasell (low) above the live instabuy (high) — a crossed feed, not a real price.
+// Pre-Q1 this row was `reliable:true` (dense, fresh, two-sided band) but `ordered:false`, so
+// momVerdict printed a decisive verdict off it (live 2026-07-04: CUT-CANDIDATE under the
+// "⚠ feed inversion" footnote). Post-Q1 it must gate to NO-READ.
+ok('feed inversion (instasell > instabuy) → NO-READ (never a decisive verdict)', () => {
+  const ts5m = mk5m(() => ({ low: 990, high: 1010, vol: 500 }));   // healthy dense two-sided band
+  const latest = { low: 1020, high: 1000, lowTime: FRESH, highTime: FRESH }; // CROSSED: instasell 1020 > instabuy 1000
+  const row = rowOf(latest, ts5m);
+  assert.equal(row.ordered, false, 'a crossed feed fails the ordering invariant');
+  assert.equal(row.reliable, false, 'inversion is folded into the single reliability signal');
+  assert.equal(row.reliableReason, 'feed-inversion');
+  const be = breakEven(1100);                     // 1123 > instabuy 1000 → underwater (would have cut pre-Q1)
+  const mv = momVerdict(row, be, 5000, ts5m, NOW_MS);
+  assert.equal(mv.action, 'NO_READ');
+  assert.equal(mv.verdict, 'NO-READ');
+  assert.equal(mv.gate, 0);
+  assert.notEqual(mv.action, 'CUT');
+  assert.ok(mv.why.includes('feed-inversion'));
 });
 
 // --- 8. quoteOrdered invariant untouched, clean reliable row returns null verdict ----------
