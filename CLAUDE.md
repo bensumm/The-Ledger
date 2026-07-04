@@ -102,6 +102,21 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   rising → size-conditional on `BIG_TICKET_GP` (10m total lot value: ≥ → clear, < → HOLD-watch);
   ↑ → HOLD/list at 2h top. The base-mixing bug is guarded separately by `quoteOrdered()`, not the
   clamp.
+- **Underwater-at-tick triage — the five-way read + gated decision tree** (0.33.0, `PLAN-3.md`):
+  `momVerdict()` in `js/quotecore.js` is now the whole underwater gate tree, not just the Mom
+  cut-trigger. `computeQuote` exposes `reliable`/`reliableReason`/`quoteAgeMin` (Gate 0 — a
+  stale/one-sided/sparse quote is unreliable; the old `instabuy==null → CUT` bug is fixed to
+  **NO-READ**). New pure, fixture-tested helpers: `diurnalRead` (Gate 1 — quiet-hour trough that
+  dipped+recovered ~24h ago → **DIURNAL-WATCH**, spent statelessly once the window turns liquid),
+  `moveShape` (Gate 2 — small-lot volume-spike **shock** that stabilized → **SHOCK-WATCH**, vs a
+  **bleed** → cut), `underwaterHours` (D-escalation — underwater *through a liquid window* →
+  **CUT-CANDIDATE**, ending the flat-regime WATCH-forever case). Every gate defers only on
+  positive evidence, so the bludgeon-style real breakdown cuts byte-identically (regression-
+  guarded). Wired into all three consumers (`watch.mjs`, `quote.mjs --positions`, `reviewPositions`)
+  + the `classify()` breakdown route reliability-gated. Acceptance fixtures:
+  `pipeline/quotecore.test.mjs` (`node pipeline/quotecore.test.mjs`). Docs: `MONITORING.md` step 4
+  is the tree; the 24h-cycle guard is unchanged but reframed as **input** (Gate 0/1: is this a
+  price?) vs **decision** (the guard: is there a proven daily rhythm?).
 
 ## Flipping strategy lessons (2026-07-02 session — codified)
 - **Screening: the 24h-drift signal is a pre-filter only.** Current-instasell-vs-24h-avg
@@ -152,7 +167,19 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
 exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e` fetch for a market
 read (each ad-hoc script also burns ~1–2k tokens to author + parse — the scripts exist
 specifically to kill that cost). All three import `js/quotecore.js`, so the numbers are
-byte-identical to the app's tables:
+byte-identical to the app's tables.
+
+**Plain-language → command (match Ben's ask to ONE of these and run it immediately — don't
+deliberate):**
+
+| When Ben says something like… | Run |
+| --- | --- |
+| "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?" | `node pipeline/screen.mjs [--mode band\|spread\|rising\|churn]` |
+| "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | `node pipeline/quote.mjs --positions` |
+| "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/watch.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
+
+The per-item details:
 - **Per-item read** ("how's item X?") → `node pipeline/quote.mjs "<item or id>" [...more]`
   (one combined table + a regime line per item; multiple items in one call).
 - **Opportunity screen** ("find me flips") → `node pipeline/screen.mjs [--mode
@@ -167,8 +194,14 @@ byte-identical to the app's tables:
   (screen-only appendix; the canonical 9-column table is untouched).
 - **Positions vs market** ("how are my positions doing / check the market against what I
   hold") → `node pipeline/quote.mjs --positions` (reads `positions.json` open lots, quotes each
-  held item, adds Held@/Break-even columns + HOLD/list-at/CUT verdict; held fallers ARE shown
-  here with price-to-clear). This is the recurring one — reach for it, don't rebuild it by hand.
+  held item, adds Held@/Break-even columns + a verdict; held fallers ARE shown here with
+  price-to-clear). This is the recurring one — reach for it, don't rebuild it by hand. The
+  underwater verdict is the **PLAN-3 gate-tree** output of the shared `momVerdict()` (see
+  `MONITORING.md` step 4): **NO-READ** (unreliable/stale/one-sided quote — no action),
+  **DIURNAL-WATCH** (quiet-hour trough that recovered yesterday — hold), **SHOCK-WATCH**
+  (one-off volume shock, not a bleed — one more cycle), the existing **CUT / LIST-TO-CLEAR /
+  HOLD** matrix, and **CUT-CANDIDATE** (underwater through a liquid window — persistence, not
+  the clock). Each gate defers only on positive evidence, so a real breakdown still cuts.
 
 ## Open followups (not yet built)
 - **Active implementation plan: `PLAN.md`** (2026-07-03) — manual-fill single-sourcing

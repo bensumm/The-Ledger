@@ -256,15 +256,23 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   const R=refineTrend(it, gser||[]);
   const tr=classifyPositionTrend(s6h, R);
   let verdict, cls, listAt, why;
-  // Cut-trigger overlay (chunk 6): the held position's precise 2h `mom` (from the standard quote
-  // row, same fetch) LEADS the multi-day regime, so a breakdown escalates toward CUT / clear before
-  // the regime-only branches below would. Shared momVerdict() keeps this identical to
-  // quote.mjs --positions. mom==='clean' → mv is null → the existing regime logic runs unchanged.
+  // Underwater decision tree (PLAN-3, was the chunk-6 cut-trigger): the held position's precise
+  // 2h read (from the standard quote row, same fetch) LEADS the multi-day regime. Shared
+  // momVerdict() keeps this identical to quote.mjs --positions / watch.mjs. It returns a verdict
+  // for an unreliable quote (NO-READ), a diurnal trough (DIURNAL-WATCH), a one-off shock
+  // (SHOCK-WATCH), a breakup/breakdown, or a clean-but-persistently-underwater lot (CUT-CANDIDATE);
+  // it returns null ONLY when the quote is clean, reliable and NOT escalating → the regime-only
+  // branches below run unchanged.
   const lotValue=buy*qty;   // capital at risk in this lot (qty × avgCost)
-  const mv=qrow?momVerdict(qrow, breakeven, lotValue):null;
+  // Pass the 5m series so the PLAN-3 gate tree can run its diurnal / shape / underwater-persistence
+  // reads (Gates 1/2-shape/D). NO-READ, DIURNAL-WATCH and SHOCK-WATCH arrive here as ordinary mv
+  // verdicts and render through the shared branch below.
+  const mv=qrow?momVerdict(qrow, breakeven, lotValue, s5m):null;
   if(mv){
     verdict=mv.verdict; cls=mv.cls; why=mv.why;
-    listAt = mv.listAt!=null ? mv.listAt : (canBE?patientSell:breakeven);   // HOLD_WATCH: no reprice → patient/BE
+    // NO-READ / HOLD_WATCH carry no reprice (listAt null): NO-READ keeps the ask at break-even
+    // (no price action off an unreliable quote); HOLD_WATCH keeps the patient/BE ask.
+    listAt = mv.listAt!=null ? mv.listAt : (mv.action==='NO_READ' ? breakeven : (canBE?patientSell:breakeven));
   } else if(tr.falling){
     // Falling: price to clear at the instabuy regardless of profit. Never list above a dropping
     // market — the recent highs are stale, and every hour spent above the bid the range steps

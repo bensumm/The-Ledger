@@ -53,21 +53,42 @@ Print-only — it never writes trade data. Each run emits:
    Ignore `EMPTY` slot housekeeping (`item:0`).
 3. For each **active offer**, fetch live `/latest?id=<item>` and assess fill likelihood
    (bid vs instasell) and restate its sell target.
-4. **Deterioration watch** — for each **held position**, fetch live instabuy vs break-even:
-   - `instabuy >= break-even` → fine; hold / list at target.
-   - `instabuy < break-even` (underwater) → pull the 6h **regime drift** (recent-3-day vs
-     prior-~2-week median):
-     - **regime flat** (drift > −5%): **WATCH** — band oscillation; hold at/above
-       break-even, do **not** cut.
-     - **regime falling** (drift ≤ −5%): **CUT-CANDIDATE** — recommend getting out (list to
-       clear at the instabuy; take the small loss before a bigger one — the 0.20.0
-       falling-item rule).
-       - **24h-cycle guard (gates the cut):** only *defer* the cut if there is a **proven,
-         backtested hour-of-day recovery pattern** predicting a bounce ~this time tomorrow.
-         Daily/hourly cycles are usually noise (codified lesson) — **default to treating the
-         deterioration as real** and recommending the cut unless the pattern is
-         statistically proven. The guard exists to avoid cutting the rare item with a real
-         daily rhythm, not to rationalize holding losers.
+4. **Deterioration watch — the underwater triage gate tree (PLAN-3).** For each **held
+   position** where live instabuy < break-even, the verdict comes from the shared
+   `momVerdict()` gate tree in `js/quotecore.js` (identical in `watch.mjs`,
+   `quote.mjs --positions`, and the app's position review — the tooling emits it, you don't
+   hand-run it). Each gate defers **only on positive evidence**; ambiguity always falls
+   through to the cut discipline, so a genuine breakdown still cuts exactly as before.
+   - **GATE 0 — is this reading even a price?** A **stale** (`/latest` aged past a
+     print-interval-scaled threshold), **one-sided**, or **too-sparse** quote → **NO-READ**:
+     no price action off it; keep any ask ≥ break-even and re-check at the next liquid window.
+     A *missing* instabuy is NO-READ, **never** CUT (you cannot price a cut off a price that
+     doesn't exist).
+   - **GATE 1 — is it the clock?** Underwater at a **quiet** window (2h activity well below
+     the item's typical) that the **same clock window dipped into and recovered from ~24h
+     ago** → **DIURNAL-WATCH**: hold ≥ break-even, do **not** cut into the trough. Spent
+     statelessly — once *this* window is liquid (not quiet) and still underwater, the check no
+     longer fires and it falls through to Gate 2.
+   - **GATE 2 — what kind of down-move?** A `mom==='breakdown'` that is a **one-off shock**
+     (a ≤3-window volume-spike gap that then stabilized) on a small lot with an intact regime
+     → **SHOCK-WATCH** (one more cycle); a **bleed**, a big-ticket lot, or an ambiguous shape
+     → the existing **CUT / LIST-TO-CLEAR** matrix.
+   - **D-escalation — persistence.** Clean `mom` but the band has printed below break-even
+     **through a liquid (busy-hour) window** → **CUT-CANDIDATE**: a genuine daily trough
+     recovers when the book fills, so this is persistence, not the clock. This is what stops a
+     flat-regime underwater lot sitting on WATCH forever.
+   - **regime falling** (drift ≤ −5%) with no live break still lands **CUT-CANDIDATE** (list
+     to clear at the instabuy — take the small loss before a bigger one; the 0.20.0
+     falling-item rule).
+   - **24h-cycle guard (unchanged) — input vs. decision.** The guard still governs its own
+     question: *"the price is genuinely lower; is there a **proven, backtested hour-of-day
+     recovery pattern** that justifies holding?"* — default **cut** unless proven. Daily/hourly
+     cycles are usually noise; the guard exists to avoid cutting the rare item with a real
+     daily rhythm, not to rationalize holding losers. Gates 0–1 govern a **different**
+     question — *"is this reading a price at all?"* — and reject the **input**; they never
+     defer a **decision** made on a good input. The seed incident was the second question
+     misfiled as the first: a liquidity artifact adjudicated under the price-cycle standard of
+     evidence, and (correctly, under that standard) lost.
 5. **Flag** if an item's total held qty exceeds its exposure cap, or if held inventory is
    **UNLISTED** (bought but not in a sell offer).
 6. Keep each report tight — one line if nothing changed. Only re-run a full multi-day trend

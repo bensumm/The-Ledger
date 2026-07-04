@@ -75,18 +75,23 @@ async function runItems() {
    The precise 2h `mom` cut-trigger (chunk 6) runs FIRST via the SHARED momVerdict() — identical
    matrix to the app's reviewPositions — so a held breakdown escalates toward CUT / clear before
    the regime-only branches. lotValue = qty × avgCost (capital at risk). mom clean → fall through. */
-function verdict(row, breakEven, lotValue) {
+function verdict(row, breakEven, lotValue, ts5m) {
   const instabuy = row.quickSell;         // what you'd clear at right now
-  if (instabuy == null) return 'NO QUOTE';
-  const mv = momVerdict(row, breakEven, lotValue);
+  const mv = momVerdict(row, breakEven, lotValue, ts5m);
   if (mv) {
     const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
-    const tag = mv.action === 'CUT'         ? ' (2h breakdown & underwater — free capital)'
-              : mv.action === 'CLEAR'       ? (row.rising ? ` (2h breakdown vs uptrend; big-ticket ≥ ${BIG_TICKET_GP/1e6}m → clearing)` : ' (2h breakdown — bank it, don’t hold for the premium)')
-              : mv.action === 'HOLD_WATCH'  ? ` (2h pullback vs uptrend on a sub-${BIG_TICKET_GP/1e6}m lot — may reabsorb)`
+    // PLAN-3 gate-tree tags (each names the gate/evidence in one line).
+    const tag = mv.action === 'NO_READ'       ? ` (unreliable: ${row.reliableReason} — no action, keep ask ≥ break-even)`
+              : mv.action === 'DIURNAL_WATCH' ? ' (quiet-hour trough; dipped+recovered yesterday — hold ≥ break-even, re-check at a liquid hour)'
+              : mv.action === 'SHOCK_WATCH'   ? ' (one-off shock not a bleed — hold one more cycle; cut on a fresh low)'
+              : mv.gate === 'D'               ? ' (underwater through a liquid window — persistence, not the clock)'
+              : mv.action === 'CUT'           ? ' (2h breakdown & underwater — free capital)'
+              : mv.action === 'CLEAR'         ? (row.rising ? ` (2h breakdown vs uptrend; big-ticket ≥ ${BIG_TICKET_GP/1e6}m → clearing)` : ' (2h breakdown — bank it, don’t hold for the premium)')
+              : mv.action === 'HOLD_WATCH'    ? ` (2h pullback vs uptrend on a sub-${BIG_TICKET_GP/1e6}m lot — may reabsorb)`
               : ' (2h breakup — patient on the sell, don’t sell into strength)';
     return `${mv.verdict}${at}${tag}`;
   }
+  if (instabuy == null) return 'NO QUOTE';
   if (row.falling) {
     return instabuy >= breakEven
       ? `SELL @ ${fmtP(instabuy)} (falling — clear in profit)`
@@ -122,7 +127,7 @@ async function runPositions() {
     const be = breakEven(avgCost);
     const inp = await fetchInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be, g.cost)]);
+    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), verdict(row, be, g.cost, inp.ts5m)]);
     lines.push(regimeLine(name, row));
   }
   console.log(`# Open positions vs market (${byItem.size} items, ${open.length} lots)\n`);
