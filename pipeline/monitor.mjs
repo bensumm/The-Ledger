@@ -13,14 +13,13 @@
  * Usage:  node pipeline/monitor.mjs
  */
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseJsonLine, buildEvents, reconstruct } from './reconstruct.mjs';
+import { readExchangeLog, activeOffers } from './offers.mjs'; // shared log discovery + open-offer semantics
 import { breakEven } from '../js/quotecore.js'; // shared break-even = ceil(cost/0.98) (chunk 4.1)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 const MAP_CACHE = path.join(HERE, 'mapping.cache.json'); // gitignored; refreshed every 24h
 const MAP_URL = 'https://prices.runescape.wiki/api/v1/osrs/mapping';
 
@@ -39,26 +38,11 @@ async function loadNames() {
 const name = await loadNames();
 const nm = id => name[id] || ('#'+id);
 
-// read every log file in mtime order (captures rotated logs), same discovery as the pipeline
-const logFiles = fs.readdirSync(LOG_DIR).filter(f => /\.(log|txt|json)$/i.test(f))
-  .map(f => path.join(LOG_DIR, f)).sort((a,b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
-const logLines = logFiles.flatMap(f => fs.readFileSync(f,'utf8').split('\n')).filter(Boolean);
-const rows = [];
-for (const raw of logLines) { try { rows.push(JSON.parse(raw)); } catch {} }
+// shared log discovery + open-offer semantics (offers.mjs — one owner, also used by watch.mjs)
+const { logLines, rows, staleMin } = readExchangeLog();
 const ep = l => Date.parse(l.date+'T'+l.time);            // local wall-clock -> epoch
 const now = Date.now();                                    // real wall clock — detects a stalled log
-// manual REMOVE tombstone lines carry no date/time → ep() is NaN; drop them before the max
-// (an unfiltered NaN poisons Math.max and prints "NaNm ago"). Falls back to now if none valid.
-const validEps = rows.map(ep).filter(Number.isFinite);
-const lastLog = validEps.length ? Math.max(...validEps) : now; // newest event time in the log
-const staleMin = Math.round((now - lastLog)/60000);
-
-// latest line per slot = that slot's current state
-const bySlot = new Map();
-for (const r of rows) bySlot.set(r.slot, r);
-const ACTIVE = s => s === 'BUYING' || s === 'SELLING';
-const active = [];
-for (const [, r] of bySlot) if (ACTIVE(r.state)) active.push(r);
+const active = activeOffers(rows);
 
 const WIN_MIN = 30;
 const terminal = rows.filter(r => /BOUGHT|SOLD|CANCELLED/.test(r.state) && (now-ep(r)) <= WIN_MIN*60000);

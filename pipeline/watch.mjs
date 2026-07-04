@@ -14,10 +14,10 @@
  *     with an adverse-selection warning, and the scalp/market-make playbook gated to
  *     ranging-wide-spread items ONLY.
  *
- * Why a sibling and not an edit to monitor.mjs: monitor.mjs owns log parsing and has NO
- * market fetch; watch.mjs owns market fetch + quotecore classification and takes its held
- * basis from positions.json. Fusing them would bloat one tool and duplicate the fetch layer.
- * Run monitor.mjs to see your resting offers / fills; run watch.mjs to decide what to do.
+ * Why a sibling and not an edit to monitor.mjs: monitor.mjs is the raw log-state snapshot
+ * (no market fetch); watch.mjs owns market fetch + quotecore classification. Log discovery
+ * and open-offer semantics are SHARED via offers.mjs (one owner, both import it).
+ * Run monitor.mjs for the raw log state; run watch.mjs to decide what to do.
  *
  * GUARDRAILS (hard):
  *   - HUMAN-EXECUTED DECISION SUPPORT ONLY. This tool NEVER places or cancels a GE offer —
@@ -28,18 +28,22 @@
  *     not a market action.
  *   - No reimplemented quote/tax/regime/momentum math — ALL of it is js/quotecore.js.
  *
- * Held basis = repo-root positions.json OPEN lots (the pipeline's WITHDRAWN/BANKED-aware
- * FIFO from reconstruct.mjs, written by sync-fills.mjs). Deliberately NOT re-derived in-memory
- * from the log like monitor.mjs does — both now share the SAME canonical WITHDRAWN/BANKED-aware
- * chain in reconstruct.mjs (chunk 8), so either is correct; positions.json is chosen because
- * it's the already-persisted pipeline output (no log re-parse needed). Its only cost is the
- * ~20m sync lag, which this tool prints so a very recent trade's lag is visible. Cost basis is
- * static once bought, so lag rarely changes a call.
+ * POSITION = any committed capital (Ben's definition, 2026-07-04): held inventory PLUS
+ * every active GE offer — a resting BUY is capital committed to buying, a resting SELL is
+ * held inventory being sold. The default run therefore watches BOTH:
+ *   - held basis = repo-root positions.json OPEN lots (the pipeline's WITHDRAWN/BANKED-aware
+ *     FIFO from reconstruct.mjs, written by sync-fills.mjs — the booked view, ~20m sync lag,
+ *     printed so a very recent trade's lag is visible);
+ *   - active offers = the live exchange log via offers.mjs (~0 lag): asks annotate their held
+ *     row (listed n/m @ X, or NOT LISTED as an exit-discipline nudge); bids get their own
+ *     section + verdicts (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID — the last also alerts:
+ *     a bid filling into a breakdown/falling market is adverse selection, cancel it).
+ *   Noise guard: offers under NOISE_OFFER_GP total value are collapsed to one ignored line.
  *
  * Usage:
- *   node pipeline/watch.mjs                       # monitor every held position (positions.json)
+ *   node pipeline/watch.mjs                       # every position: held lots + active offers
  *   node pipeline/watch.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
- *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held, watch only these
+ *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -47,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
+import { readExchangeLog, activeOffers } from './offers.mjs';
 import { logSuggestions, suggestionEntry } from './suggestlog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +75,10 @@ const POSITIONS = path.join(HERE, '..', 'positions.json');
 const LIQUID_FLOOR_PER_DAY = 100;
 const BIG_TICKET_UNIT_GP   = 1_000_000;
 const WIDE_SPREAD_PCT      = 3;
+// Offers below this TOTAL value (max × price) are noise, not positions — collapsed to one
+// ignored line so a stray 2k-gp supply order never earns a verdict (the /positions skill's
+// incidental-inventory rule, applied to offers).
+const NOISE_OFFER_GP       = 100_000;
 
 // Attention cadence (minutes) the /loop should re-check an item at. The loop runs at ONE
 // interval; we recommend the TIGHTEST cadence across everything monitored so the most urgent
@@ -197,6 +206,30 @@ function targetAction(row, cls, be) {
   return `BUY @ ${fmtP(row.quickBuy)} now / ${fmtP(row.optBuy)} patient${asel}. Set the exit ≥ break-even ${fmtP(be)} at entry.`;
 }
 
+// --- ACTION line for an ACTIVE BID (resting buy offer). The hazard case is a fill you no
+// longer want: a bid filling into a breakdown/falling market IS adverse selection — the market
+// dropped to meet you. Everything else is placement feedback (behind the band / inside / crossing).
+function bidAction(row, off) {
+  const filled = `${off.qty}/${fmt(off.max)} filled`;
+  if (row.falling || (row.mom === 'breakdown' && row.reliable))
+    return `CANCEL-BID — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill at ${fmtP(off.offer)} means the market dropped to meet you. Cancel unless you are deliberately pricing the fall.`;
+  if (row.quickBuy == null) return `NO QUOTE — can't judge the bid; leave it and re-check at a liquid window.`;
+  if (off.offer >= row.quickBuy)
+    return `CROSSING (${filled}) — bid ${fmtP(off.offer)} ≥ live instasell ${fmtP(row.quickBuy)}; expect fills about now. Have the exit priced before they land.`;
+  if (row.optBuy != null && off.offer < row.optBuy)
+    return `BID-BEHIND (${filled}) — bid ${fmtP(off.offer)} is below the 2h band low ${fmtP(row.optBuy)}${row.mom === 'breakup' ? ', and mom ↑ is moving the market further away' : ''}; unlikely to fill soon. Nudge up only while the exit still clears break-even; never chase past the edge.`;
+  return `BID-OK (${filled}) — resting inside the band (${fmtP(row.optBuy)} band low · ${fmtP(row.quickBuy)} live)${row.mom === 'breakup' ? '; note mom ↑ — fills get less likely as it runs' : ''}. Patience is the plan.`;
+}
+
+// A bid is an ALERT only in the adverse-selection case (breakdown/falling) — the one state
+// where a RESTING order needs action. Placement feedback never alerts.
+function bidAlert(it) {
+  const { row, name, bid } = it;
+  if (row.falling || (row.mom === 'breakdown' && row.reliable))
+    return { level: 'CANCEL-BID', msg: `CANCEL-BID ${name} @ ${fmtP(bid.offer)} — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill here is adverse selection. Cancel unless you want the falling price.` };
+  return null;
+}
+
 async function buildItem({ id, name, qty, avgCost }, map, guide) {
   const inp = await fetchInputs(id);
   const held = qty != null;
@@ -268,6 +301,20 @@ async function main() {
     }
   }
 
+  // active offers from the live exchange log (the other half of the position set).
+  // Degrades gracefully: no log dir (other machine) → note it and watch held lots only.
+  let asks = [], bids = [], noise = [], offersInfo = null;
+  if (!TARGETS_ONLY) {
+    try {
+      const { rows, staleMin } = readExchangeLog();
+      offersInfo = { staleMin };
+      for (const o of activeOffers(rows)) {
+        if (o.max * o.offer < NOISE_OFFER_GP) { noise.push(o); continue; }
+        (o.state === 'BUYING' ? bids : asks).push(o);
+      }
+    } catch (e) { offersInfo = { err: (e && e.message) || String(e) }; }
+  }
+
   // target items from CLI (buy-side watch)
   const targetSpecs = [];
   for (const t of tokens) {
@@ -277,8 +324,17 @@ async function main() {
     targetSpecs.push({ id: hit.id, name: hit.name });
   }
 
-  if (!heldSpecs.length && !targetSpecs.length) {
-    console.log('Nothing to watch — no open positions in positions.json and no target items passed.');
+  // bid items get a market read of their own (skip ones already held/targeted — those rows cover it)
+  const bidSpecs = [];
+  for (const b of bids) {
+    if (heldSpecs.some(h => h.id === b.item) || targetSpecs.some(t => t.id === b.item)) continue;
+    if (bidSpecs.some(s => s.id === b.item)) { bidSpecs.find(s => s.id === b.item).offers.push(b); continue; }
+    bidSpecs.push({ id: b.item, name: map.byId[b.item]?.name || ('#' + b.item), offers: [b] });
+  }
+
+  if (!heldSpecs.length && !targetSpecs.length && !bidSpecs.length && !asks.length) {
+    console.log('Nothing to watch — no open positions, no active GE offers, and no target items passed.');
+    if (noise.length) console.log(`(noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total)`);
     return;
   }
 
@@ -286,8 +342,14 @@ async function main() {
   for (const s of heldSpecs) held.push(await buildItem(s, map, guide));
   const targets = [];
   for (const s of targetSpecs) targets.push(await buildItem(s, map, guide));
+  const bidItems = [];
+  for (const s of bidSpecs) {
+    const it = await buildItem({ id: s.id, name: s.name }, map, guide);
+    it.bid = s.offers[0]; it.bids = s.offers; // primary + all (multi-slot same-item bids)
+    bidItems.push(it);
+  }
 
-  const all = [...held, ...targets];
+  const all = [...held, ...targets, ...bidItems];
   const loopMin = Math.min(...all.map(it => it.meta.cadence));
 
   // O1 suggestions ledger: log every held/target read at emit time, unconditionally. `class` is
@@ -302,24 +364,33 @@ async function main() {
   const targetVerdict = it => it.cls === 'FALLING' ? 'SKIP'
     : it.row.quickBuy == null ? 'NO-QUOTE'
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
+  const bidVerdict = it => (it.row.falling || (it.row.mom === 'breakdown' && it.row.reliable)) ? 'CANCEL-BID'
+    : it.row.quickBuy == null ? 'NO-QUOTE'
+    : it.bid.offer >= it.row.quickBuy ? 'CROSSING'
+    : (it.row.optBuy != null && it.bid.offer < it.row.optBuy) ? 'BID-BEHIND' : 'BID-OK';
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it) })),
     ...targets.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: targetVerdict(it) })),
+    ...bidItems.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: bidVerdict(it) })),
   ]);
 
   // header + provenance
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
   console.log(`# Adaptive watch — ${stamp}  ·  READ-ONLY decision support (you place every offer)`);
-  if (!TARGETS_ONLY)
+  if (!TARGETS_ONLY) {
     console.log(posAge != null
       ? `held basis: positions.json (WITHDRAWN/BANKED-aware) · ${posAge}m old${posAge > 25 ? ' ⚠ stale — a very recent trade may not show yet' : ''}`
       : `held basis: positions.json unavailable`);
+    console.log(offersInfo && !offersInfo.err
+      ? `offer basis: live exchange log · newest line ${offersInfo.staleMin}m ago${noise.length ? ` · noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total` : ''}`
+      : `offer basis: exchange log unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`);
+  }
   console.log(`recommended loop: /loop ${loopMin}m node pipeline/watch.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
 
-  // === DROP ALERTS (held only — you can't be underwater on something you don't hold) ===
+  // === DROP ALERTS (held breakdowns + adverse-selection bids) ===
   console.log('\n=== DROP / CUT ALERTS ===');
-  const alerts = held.map(heldAlert).filter(Boolean);
-  if (!alerts.length) console.log('(none live — no held item is breaking down, underwater, or in a falling regime)');
+  const alerts = [...held.map(heldAlert), ...bidItems.map(bidAlert)].filter(Boolean);
+  if (!alerts.length) console.log('(none live — no held item breaking down/underwater/falling, no bid resting under a breakdown)');
   for (const a of alerts) console.log(`  ⚠ ${a.msg}`);
 
   // === HELD POSITIONS ===
@@ -327,10 +398,37 @@ async function main() {
     console.log('\n=== HELD POSITIONS ===');
     for (const it of held) {
       const { row, cls, meta, be, qty, avgCost, lotValue, ts5m, name } = it;
-      console.log(`\n${name} ×${qty}  [${meta.label} · re-check ${meta.cadence}m]  HELD @ ${fmtP(Math.round(avgCost))} (break-even ${fmtP(be)})`);
+      // pair with the live ask (exit-discipline visibility: an unlisted hold is a stranded lot)
+      const ask = asks.find(a => a.item === it.id);
+      const listed = ask ? `listed ${ask.qty}/${fmt(ask.max)} @ ${fmtP(ask.offer)}`
+        : (offersInfo && !offersInfo.err ? 'NOT LISTED' : null);
+      console.log(`\n${name} ×${qty}  [${meta.label} · re-check ${meta.cadence}m]  HELD @ ${fmtP(Math.round(avgCost))} (break-even ${fmtP(be)})${listed ? ' · ' + listed : ''}`);
       console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
       console.log(`  risk   ${riskRead(row, cls, lotValue)}`);
       console.log(`  action ${heldAction(row, be, lotValue, ts5m)}`);
+    }
+  }
+
+  // asks with no booked lot yet (fresh buy still inside the ~20m sync window) — honest gap, no fake basis
+  const orphanAsks = asks.filter(a => !held.some(h => h.id === a.item));
+  if (orphanAsks.length) {
+    if (!held.length) console.log('\n=== HELD POSITIONS ===');
+    for (const a of orphanAsks) {
+      console.log(`\n${map.byId[a.item]?.name || ('#' + a.item)}  ask ${a.qty}/${fmt(a.max)} @ ${fmtP(a.offer)} — not booked in positions.json yet (sync lag); break-even unknown here. Run sync-fills.mjs to book it.`);
+    }
+  }
+
+  // === ACTIVE BIDS (resting buy offers — capital committed to buying) ===
+  if (bidItems.length) {
+    console.log('\n=== ACTIVE BIDS (resting buy offers) ===');
+    for (const it of bidItems) {
+      const { row, cls, meta, name } = it;
+      for (const off of it.bids) {
+        console.log(`\n${name}  bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}  [${meta.label} · re-check ${meta.cadence}m]  (committed ${fmtP(off.max * off.offer)})`);
+        console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
+        console.log(`  risk   ${riskRead(row, cls, off.max * off.offer)}`);
+        console.log(`  action ${bidAction(row, off)}`);
+      }
     }
   }
 

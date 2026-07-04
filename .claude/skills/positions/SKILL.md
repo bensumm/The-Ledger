@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.1
+version: 1.2
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -23,7 +23,13 @@ to re-derive them.
 Freshness: `positions.json` re-syncs every ~20 min (Task Scheduler `CofferFillsSync`).
 Check the file's mtime; if it's older than ~25 min, say so before interpreting — a very
 recent trade may not be reflected. (`node pipeline/monitor.mjs` shows live log truth if a
-just-made trade matters.)
+just-made trade matters. `node pipeline/sync-fills.mjs` is safe to run manually to force a
+sync when freshness matters.)
+
+**Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
+`--positions` prints no open lots, the review isn't done: run `node pipeline/watch.mjs` —
+its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
+and report the offer set as the position set.
 
 ## 2. Separate flip targets from incidental inventory
 

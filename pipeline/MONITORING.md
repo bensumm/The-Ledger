@@ -5,12 +5,18 @@ real time, and get HOLD / WATCH / CUT guidance as positions move. This is the ro
 agent (or a person) follows when running a polling loop over live trades. It caught a DFS
 band-bottom deterioration and a seed over-cap during the 2026-07-02 session.
 
+> **What "position" means (Ben's definition, 2026-07-04): any committed capital — held
+> inventory PLUS every active GE offer.** A resting BUY is capital committed to buying; a
+> resting SELL is held inventory being sold. `positions.json` only knows *booked fills*, so
+> tooling that reads only it misses the offer half — the shared reader is `offers.mjs`.
+>
 > **Two tools, two jobs.** `monitor.mjs` (below) is the **log-state snapshot** — your
 > resting offers, recent fills/cancels, held count — parsed from the exchange log, no market
 > fetch. `watch.mjs` ([Adaptive routine](#adaptive-item-type-aware-routine-pipelinewatchmjs))
-> is the **market side** — it re-quotes each held/target item live, classifies it by item
-> TYPE, and drives an active human session with per-item cadence, drop/CUT alerts, and risk
-> reads. Run `monitor.mjs` to see what's listed; run `watch.mjs` to decide what to do.
+> is the **market side** — it re-quotes every position (held lots AND active offers) plus any
+> target items, classifies each by item TYPE, and drives an active human session with per-item
+> cadence, drop/CUT alerts, and risk reads. Run `monitor.mjs` for the raw log state; run
+> `watch.mjs` to decide what to do.
 
 The **durable, session-independent** home for this logic is the app itself — the
 Refresh-positions button + a break-even/regime check on the Ledger (see CLAUDE.md
@@ -111,10 +117,26 @@ and adapts cadence + playbook + alert thresholds to it. It's the driver for an a
 human-executed flipping session on a tight 1–3 min loop.
 
 ```
-node pipeline/watch.mjs                        # every held position (positions.json)
+node pipeline/watch.mjs                        # every position: held lots + active GE offers
 node pipeline/watch.mjs "Crystal seed" 23959   # also watch these targets (buy-side)
-node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held, watch only these
+node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
 ```
+
+**Active offers are first-class positions** (see the definition at the top of this doc).
+The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
+`positions.json`:
+- **Asks** annotate their held row — `listed n/m @ X`, or `NOT LISTED` (an unlisted hold is
+  a stranded lot — exit discipline). An ask whose buy isn't booked yet (inside the ~20m sync
+  window) prints with an honest "break-even unknown, run sync-fills.mjs" note, never a
+  fabricated basis.
+- **Bids** get their own section + verdict vocabulary: `BID-OK` (resting inside the band),
+  `BID-BEHIND` (market moved away — unlikely to fill; nudge only while the edge holds),
+  `CROSSING` (at/above live instasell — fills imminent, have the exit priced), and
+  **`CANCEL-BID`** (item falling or in a *reliable* 2h breakdown — a fill would be adverse
+  selection: the market dropped to meet you). Only `CANCEL-BID` joins the alerts section;
+  placement feedback never alerts.
+- **Noise guard:** offers under `NOISE_OFFER_GP` (100k) total value are collapsed to one
+  ignored line — a stray supply order never earns a verdict.
 
 **Read-only, human-executed decision support — the hard guardrail.** This tool NEVER places
 or cancels a GE offer, not even stubbed. Automating GE interaction is botting and bannable.
