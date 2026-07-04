@@ -1,10 +1,10 @@
 import { API, Z_BAND, ARCHIVE_MIN_GAP, STATE, tsCache, sGet, sSet, logEvent } from './state.js';
-import { tax, netMargin, fmt, fmtP, now, pad2, fmtHour, sgn } from './format.js';
+import { tax, netMargin, fmt, fmtP, now, pad2, fmtHour, sgn, clamp } from './format.js';
 import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch, renderSignals } from './ui.js';
 import { switchTab } from './main.js';
-import { regimeDrift, momVerdict } from './quotecore.js';   // shared impls (regime + cut-trigger) so quotes/positions reuse them
+import { regimeDrift, momVerdict, momCell } from './quotecore.js';   // shared impls (regime + cut-trigger + T2 momentum token) so quotes/positions/Trends reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 
 /*
@@ -350,6 +350,38 @@ export async function reviewPositions(){
   box.innerHTML='<div class="stitle" style="margin-top:6px">Position review <span class="csub">live · after 2% tax · break-even = sell that nets cost · guidance, not guarantees</span></div>'+cards.join('');
   if(btn){ btn.disabled=false; btn.textContent='Review pricing'; }
 }
+/* T2: the "Recent movement (last 2h)" chart+readout. Uses the ALREADY-fetched 5m series and the
+   standard quote row (qrow) — no new requests. Plots the 2h mids with the band edges (min avgLow /
+   max avgHigh, same basis as patientTargets) and the live quick buy/sell overlaid as reference
+   lines, so a live-price break outside its own 2h band is visible. Readout: band lo→hi, where the
+   live mid sits in that range (percentile), how many 5m windows actually traded (thin 2h activity
+   says so), and the T2 Momentum arrow/color. Renders only with showAnalysis and a real series. */
+function renderRecent(it, s5m, qrow, showAnalysis){
+  const el=document.getElementById('trRecent'); if(!el) return;
+  const chart=document.getElementById('trRecentChart'), cap=document.getElementById('trRecentCap');
+  const recent=(s5m||[]).slice(-24).filter(p=>p && (p.avgLowPrice||p.avgHighPrice));
+  if(!showAnalysis || !qrow || recent.length<2){ el.classList.add('hidden'); return; }
+  const mids=recent.map(p=>(p.avgLowPrice&&p.avgHighPrice)?(p.avgLowPrice+p.avgHighPrice)/2:(p.avgLowPrice||p.avgHighPrice));
+  const lo=qrow.rawBandLo, hi=qrow.rawBandHi;                 // 2h band edges (min avgLow / max avgHigh)
+  const refs=[];
+  if(hi!=null) refs.push({v:hi, cls:'refband', label:'2h hi'});
+  if(lo!=null) refs.push({v:lo, cls:'refband', label:'2h lo'});
+  if(qrow.quickSell!=null) refs.push({v:qrow.quickSell, cls:'reflive', label:'sell'});
+  if(qrow.quickBuy!=null)  refs.push({v:qrow.quickBuy,  cls:'reflive', label:'buy'});
+  chart.innerHTML=svgLine(mids,{refs, markExtremes:false});
+  const liveMid=qrow.mid!=null?qrow.mid:mids[mids.length-1];
+  const pctl=(lo!=null && hi!=null && hi>lo)?clamp(Math.round((liveMid-lo)/(hi-lo)*100),0,100):null;
+  const traded=recent.filter(p=>p.avgLowPrice&&p.avgHighPrice).length;
+  const m=momCell(qrow.mom, qrow.momPct);
+  const momWord=qrow.mom==='breakdown'?'breaking down':qrow.mom==='breakup'?'breaking up':'ranging in-band';
+  let s='';
+  if(lo!=null && hi!=null) s+='Band <b>'+fmtP(lo)+' → '+fmtP(hi)+'</b>';
+  if(pctl!=null) s+=' · live sits ~<b>'+pctl+'%</b> up the range';
+  s+=' · <b>'+traded+'</b>/'+recent.length+' 5m windows traded'+(traded<8?' <span class="loss">(thin — reads are noisy)</span>':'');
+  s+=' · Momentum <span class="'+m.cls+'">'+m.sym+'</span> '+momWord+'.';
+  cap.innerHTML=s;
+  el.classList.remove('hidden');
+}
 export async function runTrends(){
   const name=document.getElementById('trItem').value.trim();
   const status=document.getElementById('trStatus');
@@ -370,7 +402,7 @@ export async function runTrends(){
     document.getElementById('trResult').classList.remove('hidden');
     renderTrendHead(it);
     const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: plan card only
-    ['trWhy','trHistWrap','trTiming'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
+    ['trWhy','trHistWrap','trTiming','trRecent'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
     const hourLabels=Array.from({length:24},(_,i)=>pad2(i));
     // seasonal plan (the reconciled buy/sell model)
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
@@ -400,28 +432,40 @@ export async function runTrends(){
     // falling = point-in-time below guide OR a multi-day regime step down; drives buy-low/sell-quick pricing
     const fallingNow = gs.state==='down' || (P.regime && P.regime.ok && P.regime.driftPct<=-5);
     const PT=patientTargets(s5m, it, fallingNow);
-    let r='';
-    // regime-shift guard comes first — it governs whether the timing hints below can be trusted at all
+    // ---- T2: sectioned plan blurb — small labeled blocks, each rendered only when it applies.
+    // ⚠ Warnings stays FIRST; then Flip now; then Patient pricing / Price to clear (the header IS
+    // the signal). The .ccap fine print stays as the trailing footer. Layout only — copy is intact. ----
+    const sec=[];
+    let warn='';
+    // regime-shift guard first — it governs whether the timing hints below can be trusted at all
     if(P.regime && P.regime.ok && Math.abs(P.regime.driftPct)>=8){
-      r+='<b class="loss">⚠ Price regime shift</b> — the median has moved <b>'+(P.regime.driftPct>=0?'+':'')+P.regime.driftPct.toFixed(0)+'%</b> in the last 3 days vs the prior two weeks ('+fmtP(P.regime.priorMed)+' → '+fmtP(P.regime.recentMed)+'). The hour-of-day timing below blends two price levels, so treat those hints as unreliable — this may be a one-off move (an update or repricing), not a repeating cycle. ';
+      warn+='<div class="rsec-i"><b class="loss">Price regime shift</b> — the median has moved <b>'+(P.regime.driftPct>=0?'+':'')+P.regime.driftPct.toFixed(0)+'%</b> in the last 3 days vs the prior two weeks ('+fmtP(P.regime.priorMed)+' → '+fmtP(P.regime.recentMed)+'). The hour-of-day timing below blends two price levels, so treat those hints as unreliable — this may be a one-off move (an update or repricing), not a repeating cycle.</div>';
     }
-    if(volatile) r+='<b class="loss">⚡ Volatile</b> — this item is '+(gs.state==='up'?'rising':'falling')+' fast ('+(gs.divPct>=0?'+':'')+gs.divPct.toFixed(1)+'% vs guide), so the spread can move against you between buying and selling. Size down and don’t chase. ';
-    if(prof) r+='Buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' right now.';
-    else r+='The live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so instant-flipping <b class="loss">doesn’t profit</b> right now.';
-    // pricing guidance: falling → buy-low/sell-quick; steady/rising → patient wider-margin edges
+    if(volatile) warn+='<div class="rsec-i"><b class="loss">Volatile</b> — this item is '+(gs.state==='up'?'rising':'falling')+' fast ('+(gs.divPct>=0?'+':'')+gs.divPct.toFixed(1)+'% vs guide), so the spread can move against you between buying and selling. Size down and don’t chase.</div>';
+    if(warn) sec.push({t:'⚠ Warnings', c:'warn', b:warn});
+    // Flip now — the instant-spread math
+    const flip = prof
+      ? 'Buy near <b>'+fmtP(it.low)+'</b> and sell near <b>'+fmtP(it.high)+'</b>, netting <b class="gain">'+fmtP(P.nowGross)+'</b> after tax (<b>'+P.nowRoi.toFixed(1)+'%</b>). You need ~<b>'+fmtP(P.nowTax)+'</b> of spread to clear the 2% tax; there’s ~'+fmtP(P.nowSpread)+' right now.'
+      : 'The live spread (~'+fmtP(P.nowSpread)+') <b>doesn’t clear the 2% tax</b> (~'+fmtP(P.nowTax)+'), so instant-flipping <b class="loss">doesn’t profit</b> right now.';
+    sec.push({t:'Flip now', b:flip});
+    // pricing guidance: falling → buy-low/sell-quick (Price to clear); steady/rising → patient wider-margin edges
     if(PT.ok && PT.falling){
-      r+=' <b class="gold">Falling — price to clear:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b>. With the trend down, bid aggressively low near <b>'+fmtP(PT.patientBuy)+'</b> (let the price come to you) and price any sell to clear at/below the instabuy, near <b>'+fmtP(PT.patientSell)+'</b> — don’t list above a dropping market waiting for a recovery.';
+      sec.push({t:'Price to clear', c:'gold', b:'Over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b>. With the trend down, bid aggressively low near <b>'+fmtP(PT.patientBuy)+'</b> (let the price come to you) and price any sell to clear at/below the instabuy, near <b>'+fmtP(PT.patientSell)+'</b> — don’t list above a dropping market waiting for a recovery.'});
     } else if(PT.ok && PT.patientMargin>0 && PT.patientMargin>PT.fastMargin){
       // patient pricing: shown whenever waiting for the range edges beats the instant spread (incl. turning an unprofitable instant spread positive)
       const more = PT.fastMargin>0 ? '<b>'+((PT.patientMargin/PT.fastMargin-1)*100).toFixed(0)+'% more</b> than the instant spread' : '<b>a profit where the instant spread has none</b>';
-      r+=' <b class="gold">Patient pricing:</b> over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b> (buy) and as high as <b>'+fmtP(PT.hiMax)+'</b> (sell). Buying near <b>'+fmtP(PT.patientBuy)+'</b> and selling near <b>'+fmtP(PT.patientSell)+'</b> would net <b class="gain">'+fmtP(PT.patientMargin)+'</b>/ea after tax — '+more+' — though fills near the range edges aren’t guaranteed and can take a while.';
+      sec.push({t:'Patient pricing', c:'gold', b:'Over the last ~2h it traded as low as <b>'+fmtP(PT.loMin)+'</b> (buy) and as high as <b>'+fmtP(PT.hiMax)+'</b> (sell). Buying near <b>'+fmtP(PT.patientBuy)+'</b> and selling near <b>'+fmtP(PT.patientSell)+'</b> would net <b class="gain">'+fmtP(PT.patientMargin)+'</b>/ea after tax — '+more+' — though fills near the range edges aren’t guaranteed and can take a while.'});
     }
-    r+=' <span class="ccap">Buy/sell are live prices; trend from guide divergence. Timing detail below. Not guarantees.</span>';
+    const secHtml=sec.map(s=>'<div class="rsec'+(s.c?' '+s.c:'')+'"><div class="rsec-h">'+s.t+'</div><div class="rsec-b">'+s.b+'</div></div>').join('');
+    const foot='<div class="sreason rfoot"><span class="ccap">Buy/sell are live prices; trend from guide divergence. Timing detail below. Not guarantees.</span></div>';
     // standard market table above the plan copy (asked-for item → always shown even if falling,
     // with price-to-clear framing handled inside computeQuote)
-    let quoteHtml='';
-    try{ const qrow=await fetchQuote(it.id,{asked:true}); quoteHtml=quoteTableHtml(it.name, qrow); }catch(e){ logEvent('info','market','quote table skipped for '+it.name+' ('+(((e&&e.message)||e))+')'); }
-    document.getElementById('trSuggest').innerHTML=quoteHtml+grid+'<div class="sreason">'+r+'</div>';
+    let quoteHtml='', qrowT=null;
+    try{ qrowT=await fetchQuote(it.id,{asked:true}); quoteHtml=quoteTableHtml(it.name, qrowT); }catch(e){ logEvent('info','market','quote table skipped for '+it.name+' ('+(((e&&e.message)||e))+')'); }
+    document.getElementById('trSuggest').innerHTML=quoteHtml+grid+secHtml+foot;
+    // ---- T2: "Recent movement (last 2h)" block — the 5m series is already fetched; a small chart
+    // with the 2h band edges + live buy/sell overlaid so an outside-the-band break is VISIBLE. ----
+    renderRecent(it, s5m, qrowT, showAnalysis);
 
     // ---- "Why this trend?" expander (Tier 2): plain-language guide divergence, σ only in the detail ----
     if(showAnalysis){
@@ -487,10 +531,11 @@ export async function runTrends(){
       tSum.textContent=sum; tEl.innerHTML=body2;
       if(showCharts){
         const pv=a.hourPrice.filter(v=>v!=null), pmin=Math.min(...pv), pmax=Math.max(...pv), vmax=Math.max(...a.hourVol);
-        document.getElementById('trPrice').innerHTML=svgLine(a.hourPriceF,{labels:hourLabels,ticks:[0,6,12,18,23]});
-        document.getElementById('trPriceCap').innerHTML='Range ~'+fmtP(pmin)+'–'+fmtP(pmax)+' · green = cheapest hour, red = priciest.';
-        document.getElementById('trVol').innerHTML=svgBars(a.hourVol,{labels:hourLabels,ticks:[0,6,12,18,23]});
-        document.getElementById('trVolCap').innerHTML='Peak ~'+fmt(vmax)+'/hr around <span class="hl">'+fmtHour(a.volPeak)+'</span> — deepest liquidity (fastest fills).';
+        const nowHr=new Date().getHours();   // T2.3: a "now" vertical marker (local hour) on both hourly charts
+        document.getElementById('trPrice').innerHTML=svgLine(a.hourPriceF,{labels:hourLabels,ticks:[0,6,12,18,23],nowIdx:nowHr});
+        document.getElementById('trPriceCap').innerHTML='Range ~'+fmtP(pmin)+'–'+fmtP(pmax)+' · green = cheapest hour, red = priciest · dashed line = now ('+fmtHour(nowHr)+').';
+        document.getElementById('trVol').innerHTML=svgBars(a.hourVol,{labels:hourLabels,ticks:[0,6,12,18,23],nowIdx:nowHr});
+        document.getElementById('trVolCap').innerHTML='Peak ~'+fmt(vmax)+'/hr around <span class="hl">'+fmtHour(a.volPeak)+'</span> — deepest liquidity (fastest fills) · dashed line = now.';
         chartsEl.classList.remove('hidden');
       } else { chartsEl.classList.add('hidden'); }
     }

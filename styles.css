@@ -199,6 +199,12 @@
   .baseln{stroke:var(--line2); stroke-width:1; stroke-dasharray:3 3}
   .dotmin{fill:var(--gain)} .dotmax{fill:var(--loss)}
   .vbar{fill:var(--line2)} .vbar.peak{fill:var(--gold)}
+  /* T2 recent-movement chart: 2h band edges (muted dashed) + live buy/sell (gold), and the "now"
+     vertical marker on the hourly charts. */
+  .refband{stroke:var(--line2); stroke-width:1; stroke-dasharray:4 3}
+  .reflive{stroke:var(--gold); stroke-width:1; stroke-dasharray:2 2; opacity:.75}
+  .reflbl{fill:var(--muted); font-size:8px}
+  .nowmark{stroke:var(--parch2); stroke-width:1; stroke-dasharray:2 3; opacity:.7}
 
   /* collapsible disclosures (Why this trend? · Timing & seasonality) */
   details.disc{background:var(--oak2); border:1px solid var(--line); border-radius:12px; margin-bottom:16px}
@@ -231,6 +237,14 @@
   .cgain{color:var(--gain)} .closs{color:var(--loss)}
   .sreason{margin-top:14px; padding-top:13px; border-top:1px solid var(--line2); font-size:13.5px; line-height:1.7; color:var(--parch2)}
   .sreason b{color:var(--parch)} .sreason .hl{color:var(--gold); font-weight:600} .sreason i{color:var(--parch2)}
+  /* T2 sectioned plan blurb — small labeled blocks at the .stitle scale; plain blocks, not collapsibles */
+  .rsec{margin-top:13px}
+  .rsec-h{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin-bottom:5px; font-weight:600}
+  .rsec.warn{border-left:2px solid var(--loss); padding-left:11px}
+  .rsec.warn .rsec-h{color:var(--loss)}
+  .rsec-b{font-size:13.5px; line-height:1.7; color:var(--parch2)}
+  .rsec-b b{color:var(--parch)}
+  .rsec-i{margin-bottom:6px} .rsec-i:last-child{margin-bottom:0}
   @media(max-width:720px){ .sgrid{grid-template-columns:1fr 1fr} }
   footer{margin-top:30px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; line-height:1.7}
   footer strong{color:var(--parch2)}
