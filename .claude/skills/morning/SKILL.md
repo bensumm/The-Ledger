@@ -21,7 +21,7 @@ exchange log. Skills never bump `APP_VERSION`.
 
 **Honest gap — no fabricated intent.** Skills are stateless: there is no record of what
 bids were placed last night. Reconstruct intent from the currently-open offers plus Ben's
-recollection; never fabricate what "was supposed to" fill. (If PLAN-4 chunk F
+recollection; never fabricate what "was supposed to" fill. (If PLAN.md chunk L1
 action-logging lands, that log becomes the memory source — a future input, not available
 yet.)
 

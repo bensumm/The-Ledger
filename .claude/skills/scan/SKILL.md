@@ -28,7 +28,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **500k gp/day attention floor** (standing rule, memory `gpd-floor-500k`): drop every row
   with expected/score gp/day < 500k as a **post-gate filter** — below the floor a row isn't
   worth Ben's time regardless of grade. Held/asked items exempt, as always. The structural
-  home is a future `--min-gpd` flag on `screen.mjs` (PLAN-4 chunk B2); until that ships the
+  home is a future `--min-gpd` flag on `screen.mjs` (PLAN.md chunk S1); until that ships the
   filter lives here — switch to passing the flag once it exists.
 - **24h-drift is a pre-filter only.** A current-vs-24h-avg read of "flat/slightly soft"
   repeatedly masks multi-day fallers. The screen's displayed Regime column is the real

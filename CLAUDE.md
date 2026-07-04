@@ -106,7 +106,7 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   clamp. **(0.33.0: this ↓/↑ matrix is now the Gate-2 leaf of the PLAN-3 underwater gate tree —
   `momVerdict` additionally returns NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT-CANDIDATE ahead of
   it; see the 0.33.0 entry below.)**
-- **Underwater-at-tick triage — the five-way read + gated decision tree** (0.33.0, `PLAN-3.md`):
+- **Underwater-at-tick triage — the five-way read + gated decision tree** (0.33.0, PLAN-3):
   `momVerdict()` in `js/quotecore.js` is now the whole underwater gate tree, not just the Mom
   cut-trigger. `computeQuote` exposes `reliable`/`reliableReason`/`quoteAgeMin` (Gate 0 — a
   stale/one-sided/sparse quote is unreliable; the old `instabuy==null → CUT` bug is fixed to
@@ -121,7 +121,7 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   `pipeline/quotecore.test.mjs` (`node pipeline/quotecore.test.mjs`). Docs: `MONITORING.md` step 4
   is the tree; the 24h-cycle guard is unchanged but reframed as **input** (Gate 0/1: is this a
   price?) vs **decision** (the guard: is there a proven daily rhythm?).
-- **Project skills + CLAUDE.md slimming** (2026-07-04, `PLAN-5.md`, no `APP_VERSION` bump):
+- **Project skills + CLAUDE.md slimming** (2026-07-04, PLAN-5, no `APP_VERSION` bump):
   four committed skills — `/positions` (gate-tree verdict interpretation, incidental-inventory
   filter, feed-inversion reliability override, action plan + interactive tail), `/scan`
   (judgment pass over `screen.mjs` incl. the 500k gp/d floor), `/overnight` (two-phase
@@ -206,36 +206,24 @@ Script facts the skills rely on (current behavior, not doctrine):
   `--mode` swaps only the step-3 edge (band / spread / rising / churn, or `all`).
 
 ## Open followups (not yet built)
-- **Active implementation plan: `PLAN-4.md`** (2026-07-04) — table readability v2
-  (structured cells, Quick/Optimistic columns, Momentum arrows, sticky header/first column),
-  screening economics (gp-flow gate for big tickets, 500k gp/day attention floor, spread-niche
-  verdict), Trends sectioning + last-2h view, overnight-vs-active posture, local-time audit,
-  action-logging pass. Work lands **directly on main** (no worktrees/PRs — Ben, 2026-07-04).
-  Earlier plans: `PLAN.md` chunks 1–10 complete (the doc is KEPT — its Executor rules are
-  referenced by every later plan); `PLAN-2.md` chunks A/B/D still open (see its Status
-  section); `PLAN-3.md` fully built (0.33.0); `PLAN-5.md` built (project skills — chunk 6
-  memory pass deferred, see below).
-- **Gate-0 reliability gap in quotecore**: a row whose regime line carries the "⚠ feed
-  inversion" footnote can still print a decisive verdict (live 2026-07-04: a footnoted item
-  printed CUT-CANDIDATE instead of NO-READ). Investigate whether `reliable`/`ordered`
-  actually gates `momVerdict()`'s output path in `js/quotecore.js`; extend
-  `pipeline/quotecore.test.mjs`. Interim mitigation: `/positions` treats footnoted rows as
-  NO-READ-equivalent.
-- **Memory-file dedupe (PLAN-5 chunk 6, deferred)**: user memories now owned by the skills
-  (`gpd-floor-500k`, two-sided-liquidity, band-is-the-edge, opportunity-cost-beats-patient-
-  hold) should become pointers to the owning skill or be deleted — a later pass enumerates
-  the memory dir; don't let the copies drift.
-- **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
-  trigger a fresh pipeline sync) on demand, rather than only on price refresh. Ben
-  wants this. `syncFills()` already does the fetch+merge; mostly a button + wiring
-  (client can't run the Node pipeline itself — a same-origin re-fetch is the app scope).
+- **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — ALL open work lives
+  there as waves of chunks the coordinator session hands to Opus subagents: T1/T2 (table v2 +
+  Trends sections/last-2h view), O1 (outcomes dataset), K1/K2 (self-improving skills +
+  memory dedupe), S1–S3 (gp-flow gate + 500k floor + spread verdict, overnight posture,
+  watchlist-always-scanned), Q1 (Gate-0 reliability gap — interim: `/positions` treats
+  feed-inversion-footnoted rows as NO-READ-equivalent), E1 (local-time audit), L1 (action
+  logging), M1 (mobile parity — includes the Refresh-positions button), N1 (push
+  notifications); F1 gated on O1. Sequential chunks land directly on main; parallel lanes
+  use worktree subagents merged by the coordinator. The historical plan docs
+  (`PLAN-2/3/4/5.md`) are **deleted** — full text via `git show 39e5d23:PLAN-4.md` (etc.).
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
-  and eventually the fills pipeline's realized-vs-suggested calibration).
+  and eventually the fills pipeline's realized-vs-suggested calibration; tracked in
+  PLAN.md's unscheduled notes).
 - ~~**Ledger redesign — grouped, watchlist-filtered, period P&L**~~ — **BUILT** (watchlist
   filter, per-item grouping + drill-in, period P&L bucketed by SELL date — `renderLedger` /
-  `periodKey` in `js/ui.js`). The local-timezone day-boundary verification lives in PLAN-4
-  chunk E.
+  `periodKey` in `js/ui.js`). The local-timezone day-boundary verification lives in PLAN.md
+  chunk E1.
 
 ## Repo is public — no PII
 This repo is public on GitHub. Never commit account names, RSNs, real names, emails,
@@ -346,8 +334,8 @@ constants, etc.) stay as plain `export const` — no need to route those through
   trade actually happened** (`--time` on add-manual-fill.mjs) — a "now" timestamp on a
   backdated trade breaks FIFO matching (phantom-5-bludgeons incident, 2026-07-03). Also:
   `fills.json` is an append-only merged archive — fixing/removing a source log line does NOT
-  purge an already-merged event; until PLAN.md's tombstone support lands, that needs a one-off
-  removal of the event (by its `id`) from `fills.json`, then a re-sync.
+  by itself purge an already-merged event; append a `REMOVE` tombstone line (the chunk-1
+  vocabulary, confirmed working) to `coffer-manual.log`, then re-sync.
 - Task Scheduler job `CofferFillsSync` runs `wscript.exe
   pipeline\run-fills-sync.vbs` every 20 min (hidden window). If any pipeline file
   moves again, that task's registered path needs re-creating too — it's not

@@ -58,7 +58,7 @@ line carries the "⚠ feed inversion — quote basis unreliable" footnote is tre
 **NO-READ-equivalent regardless of its printed verdict** (live 2026-07-04 datapoint: a
 footnoted item still printed CUT-CANDIDATE). No price action off an unreliable basis. This
 *extends* MONITORING.md Gate 0 — it doesn't contradict it — until the `js/quotecore.js`
-investigation (PLAN-5 "Out of scope") gates the verdict path itself.
+investigation (PLAN.md chunk Q1) gates the verdict path itself.
 
 ## 4. Render the action plan
 

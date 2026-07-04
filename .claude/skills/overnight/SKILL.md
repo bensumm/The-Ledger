@@ -64,5 +64,5 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    stay listed at what break-even-floored price, and the prioritized bid table with exact
    prices, expected units, and capital per line.
 
-Note: when `screen.mjs --posture overnight` ships (PLAN-4 chunk D), prefer it and thin
+Note: when `screen.mjs --posture overnight` ships (PLAN.md chunk S2), prefer it and thin
 this filter prose accordingly.
