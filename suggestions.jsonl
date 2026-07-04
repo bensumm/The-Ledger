@@ -541,3 +541,5 @@
 {"ts":1783202880,"script":"quote","mode":null,"params":{"positions":false},"itemId":13263,"quickBuy":16928775,"optBuy":16928775,"quickSell":17170927,"optSell":18024491,"mom":"breakdown","regime":"rising","class":"mid","verdict":null}
 {"ts":1783203038,"script":"watch","mode":null,"params":{"targetsOnly":false},"itemId":566,"quickBuy":379,"optBuy":376,"quickSell":385,"optSell":391,"mom":"clean","regime":"flat","class":"STABLE_LIQUID","verdict":"CUT-CANDIDATE"}
 {"ts":1783203038,"script":"watch","mode":null,"params":{"targetsOnly":false},"itemId":13263,"quickBuy":16928775,"optBuy":16928775,"quickSell":17200000,"optSell":18020006,"mom":"breakdown","regime":"rising","class":"FALLING","verdict":"SKIP"}
+{"ts":1783203640,"script":"watch","mode":null,"params":{"targetsOnly":false},"itemId":566,"quickBuy":385,"optBuy":376,"quickSell":390,"optSell":391,"mom":"clean","regime":"flat","class":"STABLE_LIQUID","verdict":"HOLD"}
+{"ts":1783203640,"script":"watch","mode":null,"params":{"targetsOnly":false},"itemId":13263,"quickBuy":16847743,"optBuy":16688148,"quickSell":17168928,"optSell":17993541,"mom":"clean","regime":"rising","class":"STABLE_LIQUID","verdict":"BUY"}
