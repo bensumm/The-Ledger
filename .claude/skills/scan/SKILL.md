@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.1
+version: 1.2
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -25,11 +25,10 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
 
 This is the tribal layer the script can't do — apply ALL of these:
 
-- **500k gp/day attention floor** (standing rule, memory `gpd-floor-500k`): drop every row
-  with expected/score gp/day < 500k as a **post-gate filter** — below the floor a row isn't
-  worth Ben's time regardless of grade. Held/asked items exempt, as always. The structural
-  home is a future `--min-gpd` flag on `screen.mjs` (PLAN.md chunk S1); until that ships the
-  filter lives here — switch to passing the flag once it exists.
+- **500k gp/day attention floor** (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
+  SCRIPT — `screen.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
+  longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
+  <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
 - **24h-drift is a pre-filter only.** A current-vs-24h-avg read of "flat/slightly soft"
   repeatedly masks multi-day fallers. The screen's displayed Regime column is the real
   multi-day `regimeDrift` check — trust it, and never recommend off a 24h impression alone.
@@ -50,7 +49,10 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **Fresh-repricer flag.** A large multi-day regime move = the item was recently repriced
   → overnight-retrace risk. Size small; skip for unattended holds.
 - **Big-ticket caution.** High per-unit capital → each fill is expensive; require real
-  gp-flow (units × net), not a unit count.
+  gp-flow (units × net), not a unit count. The script now SURFACES these via the gp-flow gate,
+  flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
+  (S1). Treat a `thin` row honestly: the edge is real but you can only place a few units/day, fills
+  are slow, and its wide band can be a thin-trading artifact — size in units, never chase.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
 

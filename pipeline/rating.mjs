@@ -77,11 +77,25 @@ export function gradeFor(score) {
   return 'D';
 }
 
+/* Thin (gp-flow-only) items — the S1 honesty cap. An item that qualified for the screen via the
+   gp-flow path (huge two-sided flow, single-digit unit count) can post a big realistic gp/day and
+   would otherwise grade top-tier — but you can only ever move a couple of units a day, so an S/A+
+   letter would OVERSELL it. Cap the letter at a mid-scale ceiling regardless of score; the Vol/d
+   column + the grade tooltip carry the "~N trades/day — size in units, expect slow fills" caveat.
+   (The exit-ease PENALTY itself is already delivered by liqFactor, which reads the low volDay; this
+   cap is the separate can-never-be-a-headline-flip ceiling.) */
+export const THIN_GRADE_CAP = 'A-';
+export function capGrade(grade, cap) {
+  const order = GRADE_CUTOFFS.map(([g]) => g);
+  const gi = order.indexOf(grade), ci = order.indexOf(cap);
+  return (gi >= 0 && ci >= 0 && gi < ci) ? cap : grade;   // gi<ci ⇒ grade is BETTER than the cap → clamp down
+}
+
 /* rateItem — combine everything into { score, grade, riskMult, factors }.
    row      : a computeQuote row (regime, rising, mom, volDay, mid)
    expGpDay : the screen's realistic expected gp/day for this item (the reward magnitude)
    activeWin / nWin : traded-window count and total windows for the band (null for spread mode) */
-export function rateItem({ row, expGpDay, activeWin = null, nWin = null }) {
+export function rateItem({ row, expGpDay, activeWin = null, nWin = null, thin = false }) {
   const factors = {
     regime: regimeFactor(row),
     mom: momFactor(row),
@@ -91,5 +105,6 @@ export function rateItem({ row, expGpDay, activeWin = null, nWin = null }) {
   };
   const riskMult = factors.regime * factors.mom * factors.liq * factors.capital * factors.confidence;
   const score = Math.round((expGpDay || 0) * riskMult);
-  return { score, grade: gradeFor(score), riskMult, factors };
+  const grade = thin ? capGrade(gradeFor(score), THIN_GRADE_CAP) : gradeFor(score);
+  return { score, grade, riskMult, factors, thin: !!thin };
 }

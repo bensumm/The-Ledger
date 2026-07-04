@@ -118,6 +118,17 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   2h-drift read.
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
+- **Liquidity gate (S1):** the two-sided requirement (`hpv>0 && lpv>0`) is the *non-negotiable*
+  ghost-spread lesson — but the raw UNIT floor (`--floor 50/d`) was the wrong UNIVERSAL measure. An
+  item now clears liquidity on `limitVol ≥ --floor` **OR** gp-flow `limitVol×mid ≥ --gp-floor`
+  (default 250m). The gp-flow-only path admits big tickets (single-digit units/day, hundreds of
+  millions of real daily flow — the Avernic-defender-hilt class); those are flagged `thin`, capped at
+  grade **A-** (`rating.mjs`, `THIN_GRADE_CAP` — you can only move a few units/day) with a "thin:
+  ~N/day — size in units, expect slow fills" tooltip, and bounded to a small fetch RESERVE
+  (`--thin-reserve`, default 6/niche) so noisy thin bands never crowd out liquid flips.
+- **500k attention floor (S1):** `--min-gpd` (default 500_000) drops any row whose realistic
+  `expGpDay` is below the floor *pre-rating* — the structural home of Ben's "never surface sub-500k"
+  rule (was a `/scan` post-filter). Thin gp-flow qualifiers and held/asked items are exempt.
 - Net/u (inside the Quick/Optimistic cells) is after 2% tax. Regime = multi-day regimeDrift check
   (flat/rising/falling label).
 - Break-even = `ceil(buy/0.98)` — never list a held item below it.
@@ -151,8 +162,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
   NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE.
   Interpretation of those verdicts lives in `/positions`.
-- `screen.mjs` shares one gate stack (two-sided liquidity, price window, falling-exclusion);
-  `--mode` swaps only the step-3 edge (band / spread / rising / churn, or `all`).
+- `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
+  `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge (band /
+  spread / rising / churn, or `all`). Thin gp-flow big tickets ride a bounded `--thin-reserve`.
 - `watch.mjs` watches every **position**, where a position = *any committed capital*: held
   inventory PLUS every active GE offer (Ben's definition, 2026-07-04; shared log reader
   `pipeline/offers.mjs`). Asks annotate their held row (`listed n/m @ X` / `NOT LISTED`);

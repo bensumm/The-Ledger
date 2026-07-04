@@ -79,13 +79,40 @@ const TOP = A.top != null ? +A.top : 40;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 const MIN_ACTIVE = A['min-active'] != null ? +A['min-active'] : 6;
 const STATS = !!A.stats;
+// --- S1 screening economics (gp-flow gate + 500k attention floor) ------------------------------
+// GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
+// lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
+// measure — it hides an Avernic-class big ticket (single-digit units/day yet hundreds of millions of
+// gp of real two-sided daily flow, a genuine ~six-figure-net/u edge). An item clears liquidity on
+// EITHER limitVol ≥ FLOOR OR limitVol×mid ≥ GP_FLOOR. 250m is picked to admit that profile with margin.
+const GP_FLOOR = A['gp-floor'] != null ? parseGp(A['gp-floor']) : 250_000_000;
+// MIN_NET_GP: the absolute-gp ROI alternative for thin items — a thin big ticket rarely clears the
+// percentage --min-roi bar (its spread is a small % of a huge price) but a six-figure net/u is still
+// worth one offer, so a thin item passes on modeRoi ≥ MIN_ROI OR modeNet ≥ MIN_NET_GP.
+const MIN_NET_GP = A['min-net-gp'] != null ? parseGp(A['min-net-gp']) : 100_000;
+// MIN_ACTIVE_THIN: the traded-window count a thin item's band must show. 6/2h is impossible at ~12/d
+// (≈1 traded window/2h), so gp-flow qualifiers get a relaxed floor of 1 window (still must have traded,
+// not a pure phantom band). Non-thin items keep the full --min-active gate.
+const MIN_ACTIVE_THIN = 1;
+// MIN_GPD: the 500k/day ATTENTION floor (was a /scan post-filter; now the structural --min-gpd flag,
+// applied PRE-RATING so grades never advertise sub-floor rows). Realistic expGpDay basis. THIN gp-flow
+// qualifiers are EXEMPT — the floor exists to drop sub-attention LIQUID churn, and a thin item is
+// surfaced precisely because a unit-count/gp-day measure mismeasures it (a 360k-net/u big ticket is
+// worth an offer even at a couple units a day). Held/asked items are exempt too (they don't occur in a
+// screen; the S3 watchlist pass bypasses gates entirely).
+const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
+// THIN_RESERVE: fetch-pool slots guaranteed to the best thin gp-flow qualifiers. They carry a tiny
+// expGpDay (a couple units/day) so the velocity-weighted pool rank buries them below the top-N and
+// they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
+// of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
+const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
 // --publish: also write repo-root screen.json so the app's Scan tab renders the SAME per-niche
 // graded scan a Claude session produces (byte-parity via the shared stdCells / rating path). The
 // file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
 // for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
 const PUBLISH = A.publish === true;
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
-const SCREEN_PARAMS = { floor: FLOOR, minRoi: MIN_ROI, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE };
+const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE };
 
 const RUN_MODES = MODE === 'all' ? MODES : [MODE];
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
@@ -124,36 +151,45 @@ function gateCandidates(mode, { v24, map, bands }) {
   for (const idStr in v24) {
     const id = +idStr; const d = v24[idStr]; if (!d) continue;
     const hpv = d.highPriceVolume || 0, lpv = d.lowPriceVolume || 0;
-    if (hpv <= 0 || lpv <= 0) continue;                 // two-sided liquidity gate (shared)
+    if (hpv <= 0 || lpv <= 0) continue;                 // two-sided liquidity gate (shared, NON-NEGOTIABLE)
     const limitVol = Math.min(hpv, lpv);
-    if (limitVol < FLOOR) continue;                     // limiting-side floor (shared)
     const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
     if (mid < MIN_PRICE || mid > MAX_PRICE) continue;   // price window (shared)
+    // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
+    // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
+    const thin = limitVol < FLOOR;
+    if (thin && limitVol * mid < GP_FLOOR) continue;    // fails BOTH the unit floor and the gp-flow floor
     const limit = map.byId[id]?.limit ?? null;
 
     // --- step 3: mode swaps ONLY the edge definition + gate here ---
-    let modeNet, activeWin = null;
+    let modeNet, modeRoi, activeWin = null;
     if (mode === 'spread') {
       modeNet = (avgHigh - tax(avgHigh)) - avgLow;      // 24h-avg spread, after tax
-      if ((modeNet / avgLow * 100) < MIN_ROI) continue;
+      modeRoi = modeNet / avgLow * 100;
+      if (modeRoi < MIN_ROI && !(thin && modeNet >= MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
     } else {
       // band / rising / churn all price the edge off the traded intraday band
       const b = bands[id]; if (!b || b.bandLo == null || b.bandHi == null) continue;
-      if (b.active5m < MIN_ACTIVE) continue;            // band must be TRADED, not one spike
+      const minActive = thin ? MIN_ACTIVE_THIN : MIN_ACTIVE;   // 6/2h is impossible at ~12/d — relax for thin
+      if (b.active5m < minActive) continue;             // band must be TRADED, not one spike
       activeWin = b.active5m;
       modeNet = (b.bandHi - tax(b.bandHi)) - b.bandLo;  // band low → band top, after tax
+      modeRoi = modeNet / b.bandLo * 100;
       if (mode === 'churn') {
         if (!(limitVol >= 2000 && limit != null && limit > 0)) continue;  // buy-limit-cycle commodity
         // tiny ROI accepted for churn — no --min-roi gate; volume does the work
       } else {
-        if ((modeNet / b.bandLo * 100) < MIN_ROI) continue;   // band + rising need a real edge
+        if (modeRoi < MIN_ROI && !(thin && modeNet >= MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
       }
     }
     if (modeNet <= 0) continue;
     const expGpDay = Math.round(expUnits(limit, limitVol) * modeNet);
-    cand.push({ id, limitVol, mid, limit, expGpDay, activeWin });
+    // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
+    // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note).
+    if (!thin && expGpDay < MIN_GPD) continue;
+    cand.push({ id, limitVol, mid, limit, expGpDay, activeWin, thin });
   }
   return cand;
 }
@@ -163,13 +199,22 @@ function gateCandidates(mode, { v24, map, bands }) {
 // rising mode pushing likely-rising items to the front so its fetch budget isn't wasted on flats.
 function rankAndSlice(mode, cand, dailySeries) {
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
+  // Thin gp-flow qualifiers are held OUT of the main ranking and given a bounded RESERVE instead.
+  // Two reasons: (1) their intraday band is priced off a thinly-traded 2h window, so bandNet is noisy
+  // and often inflated (the band-top-artifact lesson) → a raw-expGpDay rank lets them CROWD OUT genuine
+  // liquid flips; (2) the design intent is "surface the big ticket honestly, don't let it take over".
+  // So the main pool is non-thin only; thin items get up to THIN_RESERVE slots, ranked by real gp-flow
+  // (limitVol×mid, not the noisy bandNet). Net effect: the non-thin survivor set is materially unchanged
+  // (gp-flow ADDS ≤ THIN_RESERVE rows/niche, doesn't reshuffle).
+  const nonThin = cand.filter(c => !c.thin);
   if (mode === 'rising') {
     // fetch rising-likely items first: proxy drift desc (unknowns last), expGpDay as tiebreak
-    cand.sort((a, b) => ((b.proxyDrift ?? -1e12) - (a.proxyDrift ?? -1e12)) || (b.expGpDay - a.expGpDay));
+    nonThin.sort((a, b) => ((b.proxyDrift ?? -1e12) - (a.proxyDrift ?? -1e12)) || (b.expGpDay - a.expGpDay));
   } else {
-    cand.sort((a, b) => (b.expGpDay * softFactor(b.proxyDrift)) - (a.expGpDay * softFactor(a.proxyDrift)));
+    nonThin.sort((a, b) => (b.expGpDay * softFactor(b.proxyDrift)) - (a.expGpDay * softFactor(a.proxyDrift)));
   }
-  return cand.slice(0, TOP);
+  const reserved = cand.filter(c => c.thin).sort((a, b) => (b.limitVol * b.mid) - (a.limitVol * a.mid)).slice(0, THIN_RESERVE);
+  return [...reserved, ...nonThin].slice(0, TOP);
 }
 
 const PLAYBOOK = {
@@ -200,12 +245,17 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
       if (row.mom === 'breakdown') { disc.breakdown++; continue; }
     }
     const name = map.byId[s.id]?.name || ('#' + s.id);
-    const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null });
+    const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // insert Grade after Item, append Score gp/d — both structured {t} so the app publish path is
-    // uniform (Grade rendered as a pill app-side by header name; Score right-aligned num).
-    // `row`/`grade` kept on the pushed object — the O1 suggestions ledger reads them below.
-    const cells = [std[0], { t: r.grade }, ...std.slice(1), { t: fmtP(r.score), c: 'num' }];
+    // uniform (Grade rendered as a pill app-side by header name; Score right-aligned num). A thin
+    // (gp-flow-only) row carries a `title` on the Grade cell — the honesty tooltip (rendered app-side;
+    // cellText ignores it so stdout stays clean). `row`/`grade` kept on the pushed object — the O1
+    // suggestions ledger reads them below.
+    const gradeCell = s.thin
+      ? { t: r.grade, title: `thin: ~${s.limitVol}/day two-sided — size in units, expect slow fills` }
+      : { t: r.grade };
+    const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }];
     rows.push({ id: s.id, row, grade: r.grade, cells, score: r.score });
     dist[r.grade] = (dist[r.grade] || 0) + 1;
   }
@@ -258,7 +308,7 @@ async function main() {
     qcache.set(id, computeQuote({ latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
   }
 
-  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, floor ${FLOOR}/d, min ROI ${MIN_ROI}%, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
+  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
@@ -275,7 +325,7 @@ async function main() {
       schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)
       generatedAt: new Date().toISOString(),
       mode: MODE,
-      params: { floor: FLOOR, minRoi: MIN_ROI, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE },
+      params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE },
       headers: HEADERS,
       niches,
     };
