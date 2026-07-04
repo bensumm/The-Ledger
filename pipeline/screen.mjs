@@ -4,12 +4,22 @@
  *
  *   node pipeline/screen.mjs [--mode band|spread|rising|churn|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
- *     [--band-hours 2] [--min-active 6]
+ *     [--band-hours 2] [--min-active 6] [--stats]
  *
  * The screen has ONE shared gate stack for every mode; --mode only swaps the step-3 EDGE
  * DEFINITION + ranking. Shared gates: two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0,
  * limiting side ≥ --floor — the ghost-spread lesson), --min-price/--max-price on mid, top-N per-item
  * regime confirm via computeQuote, falling-regime items SILENTLY excluded (CLAUDE.md screen rule).
+ *
+ * Fetch-pool ordering (the pre-filter rework): the expensive step is the per-item timeseries fetch,
+ * so WHICH gated items make the top-N fetch pool matters. loadDaily() builds a BULK multi-day
+ * mid-price archive (whole-market /1h @6h spacing, cached on disk) → a regime PROXY (proxyDrift, same
+ * 3d-vs-~2wk shape as computeQuote's regimeDrift) that is NEVER displayed and only ORDERS the pool:
+ * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and rising mode
+ * pre-ranks by the proxy so its budget isn't spent on flats (rising fill went ~25% → ~100%). The real
+ * regime + falling-exclusion + rising-confirm still run post-fetch on the real computeQuote. Per-item
+ * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API. --stats prints
+ * a per-niche footer: gated / fetched / survivors / yield / discard reasons.
  *
  * Output (chunk 0 rework): ONE table PER niche (no more Tier A / Tier B split), each sorted by a
  * letter GRADE. The grade is a desirability heuristic — "which of these do I actually put offers in
@@ -43,7 +53,7 @@
  */
 import { computeQuote, QUOTE_HEADERS } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, fetchTs, sleep } from './marketfetch.mjs';
+import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
 import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
 
@@ -59,14 +69,38 @@ const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
 const TOP = A.top != null ? +A.top : 40;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 const MIN_ACTIVE = A['min-active'] != null ? +A['min-active'] : 6;
+const STATS = !!A.stats;
 
 const RUN_MODES = MODE === 'all' ? MODES : [MODE];
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
+const DAILY_DAYS = 17, DAILY_STEP_H = 6;                         // regime-proxy archive lookback / spacing
+const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
+const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
 
 // realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
 // of the limiting-side daily volume. Null limit → volume share only.
 const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); return limit != null ? Math.min(limit * 6, vShare) : vShare; };
+
+// --- regime proxy off loadDaily's bulk {ts,mid} series: SAME 3d-vs-prior-~2wk shape as quotecore's
+// regimeDrift, but computed from the whole-market archive and NEVER displayed — it only ORDERS the
+// fetch pool so we spend the expensive per-item fetches on likely survivors. The real regime (and the
+// falling-exclusion + rising-confirm) is still the post-fetch computeQuote. ---
+const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+function proxyDrift(points) {
+  if (!points || points.length < 2) return null;
+  const tEnd = points[points.length - 1].ts;
+  const recentCut = tEnd - 3 * 86400, priorCut = tEnd - 17 * 86400;
+  const recent = [], prior = [];
+  for (const p of points) { if (p.mid == null) continue; if (p.ts >= recentCut) recent.push(p.mid); else if (p.ts >= priorCut) prior.push(p.mid); }
+  if (recent.length < 4 || prior.length < 6) return null;       // too little archive → unknown (fall back to raw rank)
+  const rm = median(recent), pm = median(prior);
+  if (!rm || !pm) return null;
+  return (rm - pm) / pm * 100;
+}
+// PLACEHOLDER fetch-pool ordering weight — deprioritize probable fallers (they'd be discarded
+// post-fetch anyway). Chunk-C study sets these numbers; null (unknown regime) = mild trust.
+const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : drift <= -5 ? 0.5 : 1;
 
 // --- gate stack + mode-specific step-3 edge, ranked by realistic gp/day (picks the fetch pool) ---
 function gateCandidates(mode, { v24, map, bands }) {
@@ -105,8 +139,21 @@ function gateCandidates(mode, { v24, map, bands }) {
     const expGpDay = Math.round(expUnits(limit, limitVol) * modeNet);
     cand.push({ id, limitVol, mid, limit, expGpDay, activeWin });
   }
-  cand.sort((a, b) => b.expGpDay - a.expGpDay);         // realistic gp/day ranking picks the fetch pool
   return cand;
+}
+
+// Rank the gated pool and take the top-N to fetch. The proxy (from the bulk daily archive) orders
+// WHICH items we spend the expensive per-item fetch on — deprioritizing probable fallers, and for
+// rising mode pushing likely-rising items to the front so its fetch budget isn't wasted on flats.
+function rankAndSlice(mode, cand, dailySeries) {
+  for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
+  if (mode === 'rising') {
+    // fetch rising-likely items first: proxy drift desc (unknowns last), expGpDay as tiebreak
+    cand.sort((a, b) => ((b.proxyDrift ?? -1e12) - (a.proxyDrift ?? -1e12)) || (b.expGpDay - a.expGpDay));
+  } else {
+    cand.sort((a, b) => (b.expGpDay * softFactor(b.proxyDrift)) - (a.expGpDay * softFactor(a.proxyDrift)));
+  }
+  return cand.slice(0, TOP);
 }
 
 const PLAYBOOK = {
@@ -127,11 +174,15 @@ function gradeDist(dist) {
 function renderMode(mode, { cand, survivors }, qcache, map) {
   const rows = [];
   const dist = {};
+  const disc = { falling: 0, notRising: 0, breakdown: 0 };  // post-fetch discard reasons (--stats)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
-    if (row.falling) continue;                              // screen rule: never surface fallers
-    if (mode === 'rising' && !(row.rising && row.mom !== 'breakdown')) continue;  // rising-mode confirm
+    if (row.falling) { disc.falling++; continue; }           // screen rule: never surface fallers
+    if (mode === 'rising') {                                  // rising-mode confirm
+      if (!row.rising) { disc.notRising++; continue; }
+      if (row.mom === 'breakdown') { disc.breakdown++; continue; }
+    }
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null });
     const std = stdCells(name, row);                        // [item, guide, mid, buy, sell, net, vol, mom, regime]
@@ -144,36 +195,46 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
   console.log(PLAYBOOK[mode]);
   console.log(mode !== 'spread' ? `(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)` : '(basis: 24h-average spread)');
   console.log(rows.length ? mdTable(HEADERS, rows.map(r => r.cells)) : '_none_');
-  console.log(`Grades: ${gradeDist(dist)}\n`);
+  console.log(`Grades: ${gradeDist(dist)}`);
+  if (STATS) {
+    const fetched = survivors.length, kept = rows.length;
+    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '');
+    console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
+  }
+  console.log('');
 }
 
 async function main() {
+  pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   const map = await loadMapping();
   const [v24, latest, guide] = [await loadAll24h(), await loadAllLatest(), await loadGuide()];
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
+  const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
   const ctx = { v24, map, bands };
 
-  // gate every mode we'll run, pick each mode's top-N fetch pool
+  // gate every mode, then proxy-rank its gated pool and take the top-N fetch pool
   const gated = {};
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx);
-    gated[m] = { cand, survivors: cand.slice(0, TOP) };
+    gated[m] = { cand, survivors: rankAndSlice(m, cand, daily) };
   }
 
-  // fetch each unique survivor's series ONCE (shared across modes in --mode all), quote it
+  // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it
   const ids = new Set();
   for (const m of RUN_MODES) for (const s of gated[m].survivors) ids.add(s.id);
   const qcache = new Map();
   for (const id of ids) {
-    const ts5m = await fetchTs(id, '5m'); await sleep(70);
-    const ts6h = await fetchTs(id, '6h'); await sleep(70);
+    const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
+    const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
     const lt = latest[id] || latest[String(id)] || null;
     const limit = map.byId[id]?.limit ?? null;
     qcache.set(id, computeQuote({ latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
   }
 
   console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, floor ${FLOOR}/d, min ROI ${MIN_ROI}%, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
-  console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)\n`);
+  console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
+  if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
+  console.log('');
   for (const m of RUN_MODES) renderMode(m, gated[m], qcache, map);
 }
 

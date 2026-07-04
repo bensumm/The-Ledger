@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(HERE, '.cache');
 const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window archive (gitignored via .cache/)
+const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
+const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
 const MAP_CACHE = path.join(HERE, 'mapping.cache.json'); // shared with add-manual-fill.mjs (name<->id)
 
 export const API = 'https://prices.runescape.wiki/api/v1/osrs';
@@ -120,6 +122,29 @@ export async function fetchLatest(id) { const j = await jget(API + '/latest?id='
 export async function fetchTs(id, step) { return (await jget(API + '/timeseries?id=' + id + '&timestep=' + step)).data || []; }
 export async function fetch24hOne(id) { const j = await jget(API + '/24h?id=' + id); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
 
+/* --- fetchTsCached(id, step, ttlMs): fetchTs with a short-TTL per-item disk cache under
+   .cache/ts/. Used ONLY by the screen (a discovery read where a few-minutes-stale series is
+   fine and re-running the screen shouldn't re-hammer the API — the "avoid needless re-fetches"
+   rule). quote.mjs --positions deliberately keeps the UNcached fetchTs (position management wants
+   live). Files are overwritten per (id,step); prune old ones with pruneCache('ts', …). --- */
+export async function fetchTsCached(id, step, ttlMs) {
+  ensureCacheDir(); try { fs.mkdirSync(TS_DIR, { recursive: true }); } catch {}
+  const p = path.join(TS_DIR, id + '-' + step + '.json');
+  try { const o = JSON.parse(fs.readFileSync(p, 'utf8')); if (o && Date.now() - o.ts < ttlMs) return o.data; } catch {}
+  const data = await fetchTs(id, step);
+  try { fs.writeFileSync(p, JSON.stringify({ ts: Date.now(), data })); } catch {}
+  return data;
+}
+/* delete files in a .cache subdir older than maxAgeMs (bounds the ts cache growth) */
+export function pruneCache(subdir, maxAgeMs) {
+  const dir = path.join(CACHE_DIR, subdir);
+  let files = []; try { files = fs.readdirSync(dir); } catch { return; }
+  const now = Date.now();
+  for (const f of files) {
+    try { if (now - fs.statSync(path.join(dir, f)).mtimeMs > maxAgeMs) fs.unlinkSync(path.join(dir, f)); } catch {}
+  }
+}
+
 /* --- bulk inputs (screen.mjs). 10-min cache; these are the whole-market snapshots. --- */
 export async function loadAll24h() {
   const cached = readCache('all24h.json', 10 * 60 * 1000);
@@ -208,4 +233,80 @@ export async function loadBands(hours = 2) {
     }
   }
   return bands;
+}
+
+/* --- loadDaily(days, stepHours): a BULK multi-day mid-price series for EVERY item, zero per-item
+   timeseries calls — the regime-proxy source (Fable's structural fix). The wiki /1h endpoint is a
+   bulk whole-market snapshot that ALSO accepts ?timestamp=<unix divisible by 3600> for a past 1h
+   window (verified live 2026-07-04 against id 560: a 6h-sampled /1h mid series tracks the real
+   per-item /timeseries?timestep=6h mids within ~0.5%, well inside the noise a 3d-vs-14d MEDIAN
+   proxy tolerates). We sample one window every `stepHours` over the last `days`, reducing each
+   whole-market snapshot to {id: mid} (regime only needs the level), archived per-UTC-day under
+   .cache/daily/ exactly like loadBands. Cold ~= days*24/stepHours bulk calls (17d@6h ≈ 68, ~70ms
+   apart); later runs only backfill windows minted since. Past windows are immutable → cached
+   forever until pruned (files older than days+2 dropped).
+
+   Returns { [id]: [{ ts, mid }] } ascending by ts — the input shape a regime-drift proxy consumes.
+   This is a PROXY for picking the fetch pool; the DISPLAYED regime is still the real per-item
+   computeQuote/regimeDrift, and the falling-exclusion + rising-confirm remain post-fetch. --- */
+const mid1h = e => (e && e.avgLowPrice && e.avgHighPrice) ? (e.avgLowPrice + e.avgHighPrice) / 2 : (e && (e.avgLowPrice || e.avgHighPrice)) || null;
+export async function loadDaily(days = 17, stepHours = 6) {
+  ensureCacheDir();
+  try { fs.mkdirSync(DAILY_DIR, { recursive: true }); } catch {}
+  const HOUR = 3600, step = stepHours * HOUR;
+  const now = Math.floor(Date.now() / 1000);
+  const lastHour = Math.floor(now / HOUR) * HOUR - HOUR;      // last complete 1h window
+  const latest = Math.floor(lastHour / step) * step;         // align to the step grid (stable windows across runs)
+  const nWin = Math.max(1, Math.ceil(days * 24 / stepHours));
+  const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
+
+  // load per-day archive, pruning files entirely older than days+2
+  const cutoff = now - (days + 2) * 86400;
+  const archive = new Map();                                  // windowUnix -> {id: mid}
+  let files = []; try { files = fs.readdirSync(DAILY_DIR); } catch {}
+  for (const f of files) {
+    if (!f.endsWith('.json')) continue;
+    const dayStart = Date.parse(f.slice(0, 10) + 'T00:00:00Z') / 1000;
+    if (Number.isFinite(dayStart) && dayStart + 86400 < cutoff) {
+      try { fs.unlinkSync(path.join(DAILY_DIR, f)); } catch {}
+      continue;
+    }
+    try {
+      const obj = JSON.parse(fs.readFileSync(path.join(DAILY_DIR, f), 'utf8'));
+      for (const w in obj) archive.set(+w, obj[w]);
+    } catch {}
+  }
+
+  // backfill only missing windows (bulk /1h each once, reduced to {id: mid}, appended to its day file)
+  const touched = new Map();                                  // dayKey -> {window: {id:mid}}
+  for (const w of windows) {
+    if (archive.has(w)) continue;
+    let data = null;
+    try { data = (await jget(API + '/1h?timestamp=' + w)).data || {}; } catch { data = null; }
+    await sleep(70);
+    if (!data) continue;
+    const red = {}; for (const id in data) { const m = mid1h(data[id]); if (m != null) red[id] = m; }
+    archive.set(w, red);
+    const dk = dayKey(w);
+    if (!touched.has(dk)) {
+      let cur = {}; try { cur = JSON.parse(fs.readFileSync(path.join(DAILY_DIR, dk + '.json'), 'utf8')); } catch {}
+      touched.set(dk, cur);
+    }
+    touched.get(dk)[w] = red;
+  }
+  for (const [dk, obj] of touched) {
+    try { fs.writeFileSync(path.join(DAILY_DIR, dk + '.json'), JSON.stringify(obj)); } catch {}
+  }
+
+  // assemble per-item ascending {ts, mid} series
+  const series = {};
+  const asc = [...windows].sort((a, b) => a - b);
+  let coverageWindows = 0;
+  for (const w of asc) {
+    const snap = archive.get(w); if (!snap) continue;
+    coverageWindows++;
+    for (const id in snap) (series[id] || (series[id] = [])).push({ ts: w, mid: snap[id] });
+  }
+  // coverageWindows (distinct requested windows present) lets the caller detect a cold archive
+  return { series, coverageWindows };
 }
