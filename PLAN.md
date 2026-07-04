@@ -60,6 +60,30 @@ never injected into `fills.json`; advisory-only against `positions.json`, never 
 
 ---
 
+## Future enhancements (ideas, not yet scheduled)
+- **Screen pre-filter heuristic from a pattern study.** The niche screens currently do a *blind*
+  fetch-and-check: rank the whole gated market by a cheap proxy, take top-N, then fetch per-item
+  series and confirm regime/momentum/rising. This wastes fetch budget on items that fail the
+  per-item check (esp. `rising` — ~30 of 40 top-by-gp/day quotes get discarded). Study: for each
+  mode, fetch+quote a larger sample (100–200 items) and look for a pattern in the *cheap* 24h/band
+  fields (avg-vs-guide, band position, active5m, vol shape) that predicts which items survive the
+  expensive per-item confirm. If a clean predictor exists, use it as a pre-rank filter so the top-N
+  fetch pool is already biased toward survivors — replaces blind fetch-and-check with a learned
+  heuristic. Start by dumping the cheap features + survive/discard label for a sample and eyeballing
+  the separation before committing to any formula.
+
+- **Ledger date grouping in local timezone, not GMT.** The period P&L / date bucketing must use
+  Ben's local timezone for day/week/month boundaries, not UTC — a trade realised at 1am local should
+  bucket to the local day, not slip into the previous/next UTC day. (The Ledger-redesign note in
+  CLAUDE.md already says "local-time boundaries"; this reinforces it as a hard requirement.)
+- **Overlay the per-item price + volume-per-day charts (item details).** Currently the price
+  fluctuation and volume charts render separately in the item-detail view. Try overlaying them on
+  one set of axes (price line + volume, e.g. volume as bars behind the price line). May or may not
+  read well — evaluate visually and keep separate if the overlay is cluttered.
+- **"Current time" vertical marker on both item-detail charts.** Add a vertical bar at "now" on the
+  price and volume charts so you can see at a glance where the current moment sits within the daily
+  cycle (are we early/late in a typical intraday swing).
+
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
   realized-vs-suggested calibration.
