@@ -139,7 +139,8 @@ Boundaries are **tunable named constants** at the top of `watch.mjs`, not magic 
 
 - `LIQUID_FLOOR_PER_DAY = 100` — two-sided daily volume (the limiting side, `min(hi,lo)` from
   `computeQuote`) below which a book is **thin**. 100/d is the practical floor codified in
-  CLAUDE.md; below it, exits are unreliable ghost-spreads.
+  the `/scan` skill (`.claude/skills/scan/SKILL.md`); below it, exits are unreliable
+  ghost-spreads.
 - `BIG_TICKET_UNIT_GP = 1_000_000` — per-**unit** price at/above which one unit is large
   capital, so a drop is expensive per fill (bludgeon/lightbearer/seed territory). Distinct
   from chunk-6 `BIG_TICKET_GP` (a whole-**lot** qty×cost threshold, which `momVerdict` still

@@ -121,23 +121,25 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   `pipeline/quotecore.test.mjs` (`node pipeline/quotecore.test.mjs`). Docs: `MONITORING.md` step 4
   is the tree; the 24h-cycle guard is unchanged but reframed as **input** (Gate 0/1: is this a
   price?) vs **decision** (the guard: is there a proven daily rhythm?).
+- **Project skills + CLAUDE.md slimming** (2026-07-04, `PLAN-5.md`, no `APP_VERSION` bump):
+  four committed skills — `/positions` (gate-tree verdict interpretation, incidental-inventory
+  filter, feed-inversion reliability override, action plan + interactive tail), `/scan`
+  (judgment pass over `screen.mjs` incl. the 500k gp/d floor), `/overnight` (two-phase
+  composer: `/positions` → pause for capital → `/scan` + 8h accumulation sizing
+  `min(limit×2, 8/24×0.10×volDay)`), `/morning` (overnight reconstruction, re-verdict stale
+  bids) — at `.claude/skills/*/SKILL.md`. `quote.mjs` regime lines now print the buy limit
+  (chunk 3a). Per-workflow doctrine *moved* out of this file into the skills (see "Market
+  judgment layer" below). **Skill-versioning convention:** skills-only changes bump the
+  SKILL.md `version:` frontmatter and get a one-line pointer here — they NEVER bump
+  `APP_VERSION` (that marks the deployed app, which skills never touch).
 
-## Flipping strategy lessons (2026-07-02 session — codified)
-- **Screening: the 24h-drift signal is a pre-filter only.** Current-instasell-vs-24h-avg
-  repeatedly read "flat/slightly soft" on items a multi-day check (`regimeDrift`: recent-3d
-  median vs prior ~2wk, ≥8% flags) showed as active fallers/movers (~6 items in one session).
-  Always run the multi-day regime check before recommending any screened item.
-- **Real liquidity = a two-sided daily market, not the `/volumes` count.** `/volumes` is
-  bursty/weekly and overstates tradability. The 50–100/day band looked juicy (5–22%
-  "margins") but was ghost-spreads: `0/0` two-sided trades in 24h (cosmetics, ornament
-  kits), uncrossable. Gate on `lowPriceVolume>0 && highPriceVolume>0` in the 24h endpoint;
-  ~100/day is the practical floor.
-- **Tax dominates thin flips.** The 2% tax eats most of a tight spread — need meaningfully
-  >~0.5% after-tax to bother. Stable/tight ≠ profitable.
-- **Pricing: for a liquid item with a stable *regime* but a wide intraday band, the band
-  IS the edge.** Ladder buys at band lows / sell at band tops (34–74k/unit on crystal
-  teleport seeds vs ~24k for a mid-spread flip; seeds were ~88% of session profit). Never
-  list below break-even (`ceil(buy/0.98)`); don't chase a softening item's buy.
+## Market judgment layer — lives in the project skills (moved by PLAN-5)
+The screen/positions judgment layer (500k gp/d floor, 24h-drift-is-a-pre-filter-only,
+two-sided liquidity / ghost-spread discipline, tax-dominates-thin-flips, band-is-the-edge
+pricing, band-top artifacts, fresh-repricer flag, overnight/morning posture) lives in the
+committed project skills `/scan`, `/positions`, `/overnight`, `/morning`
+(`.claude/skills/*/SKILL.md`) — *moved* there, not copied, so it loads only when the
+workflow runs. The ask→command table below still routes bare asks.
 
 ## Market analysis workflow — standard output format
 Every market read presented to Ben (screen, per-item quote, position review) is ONE table:
@@ -164,14 +166,16 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
 - Net/u after 2% tax. Regime = multi-day regimeDrift check (flat/rising/falling label).
-- Group Tier A (stable regime) / Tier B (recently repriced/volatile — size small).
-  **Falling-regime items are excluded from screens entirely — don't show or mention them.**
+- Break-even = `ceil(buy/0.98)` — never list a held item below it.
+- **Falling-regime items are excluded from screens entirely — don't show or mention them.**
   Exception: items Ben holds or asks about → always show, with price-to-clear guidance.
-**How to generate these tables — the three canonical asks map to exact commands. These scripts
-exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e` fetch for a market
-read (each ad-hoc script also burns ~1–2k tokens to author + parse — the scripts exist
-specifically to kill that cost). All three import `js/quotecore.js`, so the numbers are
-byte-identical to the app's tables.
+- Screens: `screen.mjs` prints one table per niche, adding a Grade + `Score gp/d` column to
+  the canonical layout (grade cutoffs in `rating.mjs` are placeholders pending validation).
+**How to generate these tables — each canonical ask maps to a skill or an exact command.
+These scripts exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e`
+fetch for a market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the
+scripts exist specifically to kill that cost). All the scripts import `js/quotecore.js`, so
+the numbers are byte-identical to the app's tables.
 
 **Plain-language → command (match Ben's ask to ONE of these and run it immediately — don't
 deliberate):**
@@ -179,33 +183,22 @@ deliberate):**
 | When Ben says something like… | Run |
 | --- | --- |
 | "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?" | `node pipeline/screen.mjs [--mode band\|spread\|rising\|churn]` |
-| "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | `node pipeline/quote.mjs --positions` |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|spread\|rising\|churn\|all]` + the judgment pass |
+| "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote.mjs --positions` + verdict interpretation → action plan |
+| "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
+| "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
 | "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/watch.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
 
-The per-item details:
-- **Per-item read** ("how's item X?") → `node pipeline/quote.mjs "<item or id>" [...more]`
-  (one combined table + a regime line per item; multiple items in one call).
-- **Opportunity screen** ("find me flips") → `node pipeline/screen.mjs [--mode
-  band|spread|rising|churn] [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m]
-  [--band-hours 2] [--min-active 6] [--top 40]` (two-sided liquidity gate, grouped Tier A /
-  Tier B, falling items silently excluded). One shared gate stack; `--mode` (default `band`)
-  only swaps the step-3 edge: **band** = wide traded intraday band low→top (the crystal-seed
-  niche; gated on `--min-active` traded 5m windows over `--band-hours`), **spread** = the
-  original 24h-avg-spread flip, **rising** = rising-regime + not-breaking-down entry (always
-  Tier B), **churn** = high-volume buy-limit-cycle commodities (tiny ROI, ranked by gp/day).
-  Every mode ranks by realistic expected gp/day and appends a trailing `Exp gp/d` column
-  (screen-only appendix; the canonical 9-column table is untouched).
-- **Positions vs market** ("how are my positions doing / check the market against what I
-  hold") → `node pipeline/quote.mjs --positions` (reads `positions.json` open lots, quotes each
-  held item, adds Held@/Break-even columns + a verdict; held fallers ARE shown here with
-  price-to-clear). This is the recurring one — reach for it, don't rebuild it by hand. The
-  underwater verdict is the **PLAN-3 gate-tree** output of the shared `momVerdict()` (see
-  `MONITORING.md` step 4): **NO-READ** (unreliable/stale/one-sided quote — no action),
-  **DIURNAL-WATCH** (quiet-hour trough that recovered yesterday — hold), **SHOCK-WATCH**
-  (one-off volume shock, not a bleed — one more cycle), the existing **CUT / LIST-TO-CLEAR /
-  HOLD** matrix, and **CUT-CANDIDATE** (underwater through a liquid window — persistence, not
-  the clock). Each gate defers only on positive evidence, so a real breakdown still cuts.
+Script facts the skills rely on (current behavior, not doctrine):
+- `quote.mjs` takes multiple items in one call; prints one combined table + a regime line
+  per item that includes the **buy limit** (`· buy limit N/4h`) and a `⚠ feed inversion`
+  footnote when the quote basis is unreliable.
+- `quote.mjs --positions` adds Held@/Break-even/Verdict columns; the verdict vocabulary is
+  the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
+  NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE.
+  Interpretation of those verdicts lives in `/positions`.
+- `screen.mjs` shares one gate stack (two-sided liquidity, price window, falling-exclusion);
+  `--mode` swaps only the step-3 edge (band / spread / rising / churn, or `all`).
 
 ## Open followups (not yet built)
 - **Active implementation plan: `PLAN-4.md`** (2026-07-04) — table readability v2
@@ -215,7 +208,18 @@ The per-item details:
   action-logging pass. Work lands **directly on main** (no worktrees/PRs — Ben, 2026-07-04).
   Earlier plans: `PLAN.md` chunks 1–10 complete (the doc is KEPT — its Executor rules are
   referenced by every later plan); `PLAN-2.md` chunks A/B/D still open (see its Status
-  section); `PLAN-3.md` fully built (0.33.0).
+  section); `PLAN-3.md` fully built (0.33.0); `PLAN-5.md` built (project skills — chunk 6
+  memory pass deferred, see below).
+- **Gate-0 reliability gap in quotecore**: a row whose regime line carries the "⚠ feed
+  inversion" footnote can still print a decisive verdict (live 2026-07-04: a footnoted item
+  printed CUT-CANDIDATE instead of NO-READ). Investigate whether `reliable`/`ordered`
+  actually gates `momVerdict()`'s output path in `js/quotecore.js`; extend
+  `pipeline/quotecore.test.mjs`. Interim mitigation: `/positions` treats footnoted rows as
+  NO-READ-equivalent.
+- **Memory-file dedupe (PLAN-5 chunk 6, deferred)**: user memories now owned by the skills
+  (`gpd-floor-500k`, two-sided-liquidity, band-is-the-edge, opportunity-cost-beats-patient-
+  hold) should become pointers to the owning skill or be deleted — a later pass enumerates
+  the memory dir; don't let the copies drift.
 - **Refresh-positions button**: a UI control to re-pull `positions.json` (and ideally
   trigger a fresh pipeline sync) on demand, rather than only on price refresh. Ben
   wants this. `syncFills()` already does the fetch+merge; mostly a button + wiring
@@ -251,7 +255,10 @@ metadata, not a leak; the concern is content, not commit authorship.
    a diff.
 4. Be honest about statistical limits in any calibration/analytics work. Never
    oversell signal quality from small samples.
-5. Bump `APP_VERSION` (in `js/state.js`) on every shipped change.
+5. Bump `APP_VERSION` (in `js/state.js`) on every shipped change **to the deployed app**.
+   Skills-only changes bump the SKILL.md `version:` frontmatter instead (never
+   `APP_VERSION`); pipeline-only stdout tweaks may ship without a bump, noted in the
+   commit message.
 6. Before running `git commit`/`git push` (including via `sync-fills.mjs`), it's fine
    to just do it once the change has been described to Ben — but for the *pipeline
    script's own* automated commits (via Task Scheduler), no confirmation loop is

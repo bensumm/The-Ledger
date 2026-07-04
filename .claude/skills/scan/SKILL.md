@@ -48,7 +48,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
   ROI looks too good.
 - **Fresh-repricer flag.** A large multi-day regime move = the item was recently repriced
-  → overnight-retrace risk. Tier-B treatment: size small, skip for unattended holds.
+  → overnight-retrace risk. Size small; skip for unattended holds.
 - **Big-ticket caution.** High per-unit capital → each fill is expensive; require real
   gp-flow (units × net), not a unit count.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
