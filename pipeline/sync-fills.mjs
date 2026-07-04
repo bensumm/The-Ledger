@@ -92,6 +92,31 @@ function readLogFiles() {
     .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
 }
 
+// ONE git runner (cwd = the clone). Hoisted to module scope so the pre-commit clobber-guard and
+// the commit/push block share it.
+const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
+
+// Clobber-guard (2026-07-04 incident). This checkout's rolling --auto commit is amended +
+// force-pushed each cycle. A worktree/manual `git push origin HEAD:main` advances origin/main
+// WITHOUT moving this checkout's local `main` ref, so the next --auto cycle would amend a STALE
+// auto-commit and force-push it — DROPPING those upstream commits (this is exactly how the
+// rating-rework push got wiped). Fix: before touching git, fast-forward local main to origin/main.
+// ff-only is non-destructive — it refuses rather than discard any uncommitted work; if it can't ff
+// (genuine divergence or a dirty tree), we leave HEAD alone and the amend-guard below downgrades to
+// a plain commit whose push is safely REJECTED rather than clobbering. Best-effort: any failure
+// (offline, no remote) is logged and ignored so the sync itself never breaks on this.
+function syncMainToRemote() {
+  try {
+    git('fetch origin');
+    const head = git('rev-parse HEAD'), remote = git('rev-parse origin/main');
+    if (head === remote) return;                       // already at the remote tip
+    let behind = false;
+    try { git(`merge-base --is-ancestor ${head} ${remote}`); behind = true; } catch { behind = false; }
+    if (behind) { git('merge --ff-only origin/main'); console.log('Clobber-guard: fast-forwarded local main to origin/main before sync.'); }
+    else console.warn('Clobber-guard: local main has DIVERGED from origin/main — not amending; a plain push will be rejected rather than clobber. Reconcile manually.');
+  } catch (e) { console.warn('Clobber-guard: main-sync skipped (' + e.message + ').'); }
+}
+
 function main() {
   const files = readLogFiles();
   if (!files.length) { console.log('No log files found in ' + LOG_DIR); return; }
@@ -109,6 +134,10 @@ function main() {
     console.log('Note: cancellation is resolved across lines by buildEvents(), not visible per-line here — a cancelled offer\'s last line will show state:"partial"/"placed" here even though it ends up "cancelled" in fills.json.');
     return;
   }
+
+  // Clobber-guard: get local main onto origin/main BEFORE reading fills.json (so we also merge onto
+  // the freshest committed events) and before any amend/push. Skipped on --dry (no git side effects).
+  if (!DRY) syncMainToRemote();
 
   // parse everything
   let rawLines = 0, parsedLines = 0;
@@ -196,7 +225,6 @@ function main() {
   // by the AUTO_TRAILER footer), so a manual/Claude-driven commit always
   // starts a fresh chain rather than getting silently absorbed. Manual runs
   // (no --auto) never amend — every manual run is its own checkpoint.
-  const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
   try {
     // Commit set: fills + positions always; screen.json (PLAN-2 C1 published scan) only when it
     // exists on disk — same add-only-these-files discipline, never a blanket `git add -A`. When
@@ -215,7 +243,14 @@ function main() {
       let headMsg = '';
       try { headMsg = git('log -1 --pretty=%B'); } catch { /* no commits yet */ }
       const sinceMatch = headMsg.match(/Auto-Fills-Sync-Since:\s*(\S+)/);
-      if (headMsg.includes(AUTO_TRAILER) && sinceMatch) {
+      // Amend ONLY when HEAD is a prior auto-sync commit AND is exactly the remote tip. The
+      // remote-tip check is the clobber-guard's teeth: if the ff above didn't land HEAD on
+      // origin/main (divergence / dirty tree / offline), we must NOT amend-and-force-push, or we'd
+      // drop whatever advanced origin/main. In that case we fall through to a plain commit whose
+      // push is safely rejected instead.
+      let atRemoteTip = false;
+      try { atRemoteTip = git('rev-parse HEAD') === git('rev-parse origin/main'); } catch { atRemoteTip = false; }
+      if (headMsg.includes(AUTO_TRAILER) && sinceMatch && atRemoteTip) {
         amend = true;
         sinceIso = sinceMatch[1];
       }
