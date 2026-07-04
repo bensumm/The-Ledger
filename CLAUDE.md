@@ -137,6 +137,13 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   quiet hours, and the accumulation formula is an upper bound that assumes fills at your
   price. The skill now requires a fill-realism read (price between band floor and instasell
   for must-fill bids; count recent 5m windows at/below the bid) and "up to" framing.
+- **Self-improving skills** (2026-07-04, PLAN-5 K1, no `APP_VERSION` bump): each workflow
+  skill (`/positions` `/scan` `/overnight` `/morning`) closes with an **"Encode learnings"**
+  section — AFTER the market work (offers placed first, Ben's explicit rule), ask "anything
+  worth encoding?", route each fact to ONE canonical home (judgment → owning SKILL.md +
+  `version:` bump / table-app contracts → CLAUDE.md / user prefs → memory / monitoring
+  doctrine → `MONITORING.md`), spawn a background subagent to edit+commit. Honesty guard
+  (process rule 4): market claims still need evidence — one session is one sample.
 
 ## Market judgment layer — lives in the project skills (moved by PLAN-5)
 The screen/positions judgment layer (500k gp/d floor, 24h-drift-is-a-pre-filter-only,

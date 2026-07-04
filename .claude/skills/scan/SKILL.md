@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.0
+version: 1.1
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -65,3 +65,22 @@ This is the tribal layer the script can't do — apply ALL of these:
 The judgment-filtered shortlist, one-line rationale per pick (why this edge is real), plus
 a note of how many candidates the 500k floor eliminated. If a high-grade row was skipped,
 point at it and give the reason — that's the layer this skill exists for.
+
+## 5. Encode learnings (self-improvement — after the market work, never during)
+
+Each run may teach something (a judgment filter that misfired, a threshold that misled, a
+band-artifact that fooled the grade). Capture it — but the shortlist comes first, always.
+
+- **Timing:** only AFTER the shortlist is delivered and Ben's offers are placed/adjusted
+  (or he says he's done). Never interleave doc edits with live market work — offers first,
+  encoding after (Ben's explicit rule).
+- **Prompt:** at that point ask one short question — "anything from this run worth
+  encoding?" — and propose the candidates this run surfaced (a judgment call that
+  worked/failed, a threshold that misled, a screen that hid/hyped a real edge, a gap).
+- **Routing — one canonical home per fact, move never copy:** judgment-layer lessons → this
+  SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user preferences →
+  Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
+- **Execution:** spawn a **background subagent** to make the edits + commit so this
+  conversation keeps flowing; report the diff summary when it lands.
+- **Honesty guard (process rule 4):** process learnings encode freely; a *market* claim (a
+  new threshold, a pattern) needs the usual evidence standard — one session is one sample.

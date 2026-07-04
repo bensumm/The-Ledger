@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.2
+version: 1.3
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -68,3 +68,24 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
 
 Note: when `screen.mjs --posture overnight` ships (PLAN.md chunk S2), prefer it and thin
 this filter prose accordingly.
+
+## Encode learnings (self-improvement — after the offers are placed, never during)
+
+The overnight run often teaches the most (a fill-realism read that was wrong, an
+accumulation estimate that overshot, a filter that let a fresh repricer through). Capture
+it — but the bid table and placed offers come first, always.
+
+- **Timing:** only AFTER Phase 2's plan is delivered and Ben has placed the overnight bids
+  (or says he's done). Never interleave doc edits with the setup — offers first, encoding
+  after (Ben's explicit rule).
+- **Prompt:** at that point ask one short question — "anything from this run worth
+  encoding?" — and propose the candidates this run surfaced (a sizing/fill-realism call
+  that worked/failed, a threshold that misled, a filter gap).
+- **Routing — one canonical home per fact, move never copy:** overnight-posture judgment →
+  this SKILL.md (bump its `version:`); a positions/scan judgment lesson → that child's
+  SKILL.md; table/app contracts → CLAUDE.md; user preferences → Claude memory; monitoring
+  doctrine → `pipeline/MONITORING.md`.
+- **Execution:** spawn a **background subagent** to make the edits + commit so this
+  conversation keeps flowing; report the diff summary when it lands.
+- **Honesty guard (process rule 4):** process learnings encode freely; a *market* claim (a
+  fill-rate, a nightly pattern) needs the usual evidence standard — one night is one sample.
