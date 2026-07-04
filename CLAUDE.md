@@ -252,6 +252,19 @@ before adding shared mutable state: put new mutable state on `STATE`, not a new 
 `export let`; never-reassigned constants stay `export const`. (Moved out of CLAUDE.md by
 chunk K3; this pointer stays with the process rules above.)
 
+## Time display convention — displayed times are LOCAL
+Every timestamp the app *renders* (Ledger day/week/month buckets via `periodKey`, "synced"
+stamps, fills-log entries, the Logs view, Trends hour-of-day/`getHours()` markers, quote
+freshness) is derived with the local-time `Date` getters (`getHours`/`getMonth`/`getDate`/
+`getDay`, `toLocaleTimeString`) — never `getUTC*`/`toISOString`. `UTC`/`ISO` is **storage and
+wire format only**: epoch-second `ts` fields, backup metadata (`exportedAt`), the backup
+filename slug. The manual-log `date`/`time` strings are written in local wall-clock time by
+both `fillsLogLine` (`js/fillslog.js`) and `pipeline/add-manual-fill.mjs`, so rendering them
+raw (e.g. the synced-line list in `editManualLog`, `js/ui.js`) is already local. Verified by
+the E1 audit (2026-07-04) with a near-midnight `periodKey` fixture — a local 23:55 dip buckets
+to that day, not the UTC-rolled next day. When adding a rendered timestamp, use the local
+getters; only reach for UTC when writing something that leaves the app.
+
 ## Environment notes (Windows machine)
 The Windows-machine environment notes (RuneLite `profiles2` flush-on-restart, the Exchange
 Logger field mapping, cancel semantics, the manual-fill `--time` timestamp rule + `REMOVE`
