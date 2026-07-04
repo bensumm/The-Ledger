@@ -132,6 +132,11 @@ regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
   judgment layer" below). **Skill-versioning convention:** skills-only changes bump the
   SKILL.md `version:` frontmatter and get a one-line pointer here — they NEVER bump
   `APP_VERSION` (that marks the deployed app, which skills never touch).
+- **`/overnight` v1.1 — fill-realism check** (2026-07-04): the first real overnight run
+  filled 0/50,000 units — band-floor bids are extreme prints nobody crosses down to during
+  quiet hours, and the accumulation formula is an upper bound that assumes fills at your
+  price. The skill now requires a fill-realism read (price between band floor and instasell
+  for must-fill bids; count recent 5m windows at/below the bid) and "up to" framing.
 
 ## Market judgment layer — lives in the project skills (moved by PLAN-5)
 The screen/positions judgment layer (500k gp/d floor, 24h-drift-is-a-pre-filter-only,
@@ -264,8 +269,10 @@ metadata, not a leak; the concern is content, not commit authorship.
    script's own* automated commits (via Task Scheduler), no confirmation loop is
    possible or expected; that's by design (§4.7 of `pipeline/FILLS-PIPELINE.md`).
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
-   auth to GitHub is already working and is the only tool needed; don't suggest
-   installing anything else for git operations.
+   auth to GitHub is already working and is the only tool needed for git operations;
+   don't suggest installing anything else for those. The GitHub CLI (`gh`) IS
+   installed (2026-07-04) but is scoped to API reads/deploy checks, not git — see
+   "GitHub CLI (`gh`) and GitHub Actions" below.
 8. **A documentation pass is part of every change — not optional, and not append-only.**
    Before calling a change done, update the docs the change touches: this `CLAUDE.md`
    (a "Done" pointer, plus any workflow/section it affects), and any affected doc
@@ -277,6 +284,31 @@ metadata, not a leak; the concern is content, not commit authorship.
    `momVerdict` reconciliation is the anchor. If a plain-language ask should map to a specific
    script/flow, make that mapping explicit in the relevant CLAUDE.md section so a future agent
    runs the right thing immediately.
+
+## GitHub CLI (`gh`) and GitHub Actions — usage rules
+`gh` is installed (2026-07-04, via winget) and authed to the `bensumm` GitHub
+account. Its role here is deliberately narrow:
+- **Read/verify only by default.** Deploy status (`gh run list` / `gh run watch`),
+  run logs, `gh api` reads. Never open PRs, create releases, or push via `gh`
+  unless Ben explicitly asks — work ships directly to `main` with git-over-SSH,
+  unchanged.
+- **Deploy verification is part of every push to `main` that touches the deployed
+  app** (Ben, 2026-07-04): after pushing, watch the `pages-build-deployment` run
+  (`gh run watch $(gh run list --workflow pages-build-deployment -L 1 --json
+  databaseId -q '.[0].databaseId')` or just `gh run list -L 1` until it reads
+  `completed success`) and confirm success before calling the change done. This
+  extends rule 2's "actually run it" to the deploy itself. Pipeline auto-commits
+  (`CofferFillsSync`) are exempt — no agent is present for those.
+- **Never run `gh auth setup-git`.** git auth stays SSH; `gh`'s token is for the
+  API only. If git ever starts prompting for credentials, suspect this and check
+  `git config --get-all credential.helper`.
+- **No GitHub Actions workflows without an explicit ask.** The repo has no
+  `.github/workflows/` on purpose — the only "Action" is GitHub's automatic Pages
+  build (`pages-build-deployment`, no workflow file). Two structural reasons this
+  stays true: (1) the fills pipeline reads `~/.runelite/exchange-logger/*` on
+  Ben's machine — a cloud runner can't see it, so Task Scheduler is the correct
+  home for any scheduled job; (2) the repo is public, so workflows would run with
+  public logs. Don't propose "move X to CI".
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 Almost all app-wide mutable state (`ITEMS`, `watchlist`, `trades`, `bankroll`,

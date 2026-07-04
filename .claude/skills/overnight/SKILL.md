@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.0
+version: 1.1
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -34,6 +34,15 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      unattended and not be stale/underwater by morning — lean on the diurnal reasoning
      (PLAN-3 `diurnalRead`: quiet-hour behavior), but honesty rule (process rule 4): one
      prior night is one sample; prefer existing edges, don't manufacture predictions.
+   - **Fill-realism check (v1.1 — the 2026-07-04 zero-fill night).** The optimistic buy
+     is the 2h-band FLOOR: an extreme print, not a typical price, and overnight is
+     exactly when nobody crosses down to it (both rune bids placed at the evening band
+     floor went 0/25,000 in ~7.5h; by morning the floor had drifted above the bids). For
+     bids that MUST fill unattended, price **between the band floor and the live
+     instasell** — closer to instasell = likelier fill, at the cost of margin — and
+     check the 5m series for how many recent windows actually traded at/below the
+     proposed bid; if only a handful, say so and flag the line as low-fill-odds. The
+     evening band is an evening artifact — expect it to move overnight.
 5. **Accumulation-and-capital table (required output).** Ben's exact ask: "how many can I
    accumulate in 8h and how much capital does that require." For each recommended bid:
    - **Bid price** (the optimistic buy) **and the assumed sell price** (the optimistic
@@ -43,7 +52,10 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      limit refreshes ~every 4h → 2 windows overnight, capped at a 10% share of
      limiting-side daily volume (the SAME convention as `screen.mjs`'s `expUnits =
      min(limit×6, 0.10×volDay)` scaled to 8h; keep the constants aligned with that
-     formula). Buy limits print on `quote.mjs`'s per-item regime line.
+     formula). Buy limits print on `quote.mjs`'s per-item regime line. This figure is an
+     **UPPER BOUND that assumes fills happen at your price** — it prorates daily volume
+     flat across the quiet hours and prices in no fill probability. Present it as "up
+     to", paired with the fill-realism read above.
    - **Capital required** = expected units × bid price.
    - **Net/u and total if fully cycled** at the stated sell price, after 2% tax.
    - **Prioritize top-down** (best risk-adjusted edge first) with a **running capital
