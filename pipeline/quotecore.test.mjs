@@ -19,6 +19,7 @@
  */
 import assert from 'node:assert/strict';
 import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, BIG_TICKET_GP } from '../js/quotecore.js';
+import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../js/quotecore.js';   // S2 posture helpers
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
 const NOW_MS  = NOW_SEC * 1000;
@@ -205,4 +206,43 @@ ok('quoteOrdered invariant holds + reliable clean not-underwater → null verdic
   assert.equal(momVerdict(row, be, 5000, ts5m, NOW_MS), null);
 });
 
-console.log(`\nAll ${pass} PLAN-3 acceptance checks passed.`);
+// ============================================================================================
+// S2 POSTURE FIXTURES (overnight vs active) — appended block, independent of the momVerdict tree
+// above. Exercises the new pure helpers isOvernightNow / overnightStaleRisk only.
+// ============================================================================================
+console.log('\nS2 posture acceptance:');
+
+// --- 9. isOvernightNow honors the local overnight window ----------------------------------
+ok('isOvernightNow: inside window true, daytime false, boundaries correct', () => {
+  const atHour = h => new Date(2026, 0, 15, h, 0, 0).getTime();   // local wall-clock h:00
+  assert.equal(isOvernightNow(atHour(23)), true);                 // deep overnight
+  assert.equal(isOvernightNow(atHour(2)), true);                  // small hours
+  assert.equal(isOvernightNow(atHour(12)), false);               // midday
+  assert.equal(isOvernightNow(atHour(OVERNIGHT_START_HOUR)), true);      // 22:00 inclusive
+  assert.equal(isOvernightNow(atHour(OVERNIGHT_END_HOUR)), false);       // 06:00 exclusive
+  assert.equal(isOvernightNow(atHour(OVERNIGHT_END_HOUR - 1)), true);    // 05:00 still overnight
+});
+
+// --- 10. overnightStaleRisk flags a bid the last overnight window printed below ------------
+// yesterday's forward-8h overnight span is the [now-24h, now-16h] slice (ha ∈ [16,24)).
+function nightSeries(yesterdayOvernightLow) {
+  return mk5m((ha) => {
+    const low = (ha >= 16 && ha < 24) ? yesterdayOvernightLow : 1000;   // set only the yesterday-overnight window
+    return { low, high: low + 20, vol: 500 };
+  });
+}
+ok('overnightStaleRisk: yesterday overnight dipped below the bid → true', () => {
+  const ts5m = nightSeries(900);                    // 900 ≤ 1000×(1-0.03)=970 → risk
+  assert.equal(overnightStaleRisk(ts5m, 1000, NOW_MS), true);
+});
+ok('overnightStaleRisk: yesterday overnight held above the bid → false', () => {
+  const ts5m = nightSeries(1000);                   // never below the bid overnight
+  assert.equal(overnightStaleRisk(ts5m, 1000, NOW_MS), false);
+});
+ok('overnightStaleRisk: positive-evidence discipline (null bid / short series → false)', () => {
+  assert.equal(overnightStaleRisk(nightSeries(900), null, NOW_MS), false);   // no bid to test
+  const shortSeries = mk5m(() => ({ low: 900, high: 920, vol: 500 }), 1);    // <24 points
+  assert.equal(overnightStaleRisk(shortSeries, 1000, NOW_MS), false);
+});
+
+console.log(`\nAll ${pass} acceptance checks passed.`);

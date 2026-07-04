@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.3
+version: 1.4
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -22,18 +22,19 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
 
 ## Phase 2 — scan, filter, size against stated capital
 
-3. **Invoke `/scan`** (Skill tool) → candidate flips (the 500k gp/day floor is already
-   applied by the child).
-4. **Apply the overnight filter — "stable preferred but not required" (Ben, 2026-07-04):**
-   - **Hard-exclude only:** fresh repricers (large multi-day regime move → overnight
-     retrace risk) and falling regimes.
-   - **Do NOT hard-exclude big-ticket or mildly-rising items** — optimistic buys on big
-     tickets ARE a good overnight option. Instead **size them** (units × capital at risk,
-     often 1–2 fills) and **flag the retrace risk explicitly on the line**.
-   - Prefer clean Momentum (no `↓`). An optimistic bid must plausibly fill in ~8h
-     unattended and not be stale/underwater by morning — lean on the diurnal reasoning
-     (PLAN-3 `diurnalRead`: quiet-hour behavior), but honesty rule (process rule 4): one
-     prior night is one sample; prefer existing edges, don't manufacture predictions.
+3. **Run the overnight-posture screen** — `node pipeline/screen.mjs --posture overnight --publish`
+   (S2), or invoke `/scan` and pass `--posture overnight`. The posture already does the
+   structural filtering for you: it keeps only flat/rising regimes with a confident (reliable)
+   band, drops the thin gp-flow fast-lane and any 2h breakdown, ranks by net edge over velocity,
+   and EXCLUDES items whose yesterday-overnight window printed materially below the current
+   optimistic bid (`overnightStaleRisk` — the built-in stale/underwater-by-morning test). The
+   500k gp/day floor is applied too. So you no longer hand-apply those exclusions.
+4. **What the posture does NOT decide — your remaining judgment layer:**
+   - **Big-ticket / mildly-rising items survive the posture** (they're flat/rising, non-thin) —
+     that's intended: an optimistic big-ticket buy is a good overnight option. **Size them**
+     (units × capital at risk, often 1–2 fills) and **flag retrace risk on the line**.
+   - Honesty rule (process rule 4): the posture's stale-by-morning test is one prior night =
+     one sample. It PICKS among existing edges; it does not predict. Don't oversell it.
    - **Fill-realism check (v1.1; measured, not guessed, since v1.2).** The optimistic buy
      is the 2h-band FLOOR: an extreme print, not a typical price, and overnight is
      exactly when nobody crosses down to it (2026-07-04: both rune bids placed at the
@@ -66,8 +67,8 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    stay listed at what break-even-floored price, and the prioritized bid table with exact
    prices, expected units, and capital per line.
 
-Note: when `screen.mjs --posture overnight` ships (PLAN.md chunk S2), prefer it and thin
-this filter prose accordingly.
+Note: `screen.mjs --posture overnight` shipped (S2) — this skill now relies on it for the
+structural overnight filtering (above); keep only the sizing + fill-realism layers here.
 
 ## Encode learnings (self-improvement — after the offers are placed, never during)
 

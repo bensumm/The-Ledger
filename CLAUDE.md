@@ -165,6 +165,13 @@ Script facts the skills rely on (current behavior, not doctrine):
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge (band /
   spread / rising / churn, or `all`). Thin gp-flow big tickets ride a bounded `--thin-reserve`.
+- `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**
+  keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
+  velocity, and drops items whose *yesterday overnight window* printed below the current bid
+  (`overnightStaleRisk`); **auto** picks by the local clock (~22:00–06:00); **active** (default) =
+  current behavior. Posture is recorded in `screen.json` so the Scan banner names it. `/overnight`
+  runs `--posture overnight`. `quote.mjs --positions` prints an informational late-night morning-
+  staleness line (verdict logic unchanged).
 - `watch.mjs` watches every **position**, where a position = *any committed capital*: held
   inventory PLUS every active GE offer (Ben's definition, 2026-07-04; shared log reader
   `pipeline/offers.mjs`). Asks annotate their held row (`listed n/m @ X` / `NOT LISTED`);

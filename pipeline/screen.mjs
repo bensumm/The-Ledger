@@ -56,7 +56,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, overnightStaleRisk } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
@@ -106,13 +106,25 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
+// --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
+//   active   (default) — current behavior.
+//   overnight          — only flat/rising regimes with a confident (reliable) band, no thin fast-lane,
+//                        no breakdown momentum; ranked by NET EDGE (net/u) over velocity; excludes items
+//                        whose yesterday-overnight window printed materially below the current optimistic
+//                        bid (overnightStaleRisk — the "stale/underwater by morning" test).
+//   auto               — pick by the LOCAL clock (isOvernightNow, ~22:00–06:00).
+// Honest limit: one prior night is one sample — posture PICKS which existing edges to prefer; real
+// overnight fill-time curves are O1/F1's job, not this filter.
+const POSTURE_ARG = A.posture != null && A.posture !== true ? String(A.posture).toLowerCase() : 'active';
+if (!['overnight', 'active', 'auto'].includes(POSTURE_ARG)) { console.error(`! unknown --posture "${A.posture}". Use overnight, active, or auto.`); process.exit(1); }
+const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'active') : POSTURE_ARG;
 // --publish: also write repo-root screen.json so the app's Scan tab renders the SAME per-niche
 // graded scan a Claude session produces (byte-parity via the shared stdCells / rating path). The
 // file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
 // for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
 const PUBLISH = A.publish === true;
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
-const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE };
+const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
 
 const RUN_MODES = MODE === 'all' ? MODES : [MODE];
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
@@ -232,10 +244,10 @@ function gradeDist(dist) {
 }
 
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer
-function renderMode(mode, { cand, survivors }, qcache, map) {
+function renderMode(mode, { cand, survivors }, qcache, map, series5m) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0 };  // post-fetch discard reasons (--stats)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -243,6 +255,14 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
     if (mode === 'rising') {                                  // rising-mode confirm
       if (!row.rising) { disc.notRising++; continue; }
       if (row.mom === 'breakdown') { disc.breakdown++; continue; }
+    }
+    if (POSTURE === 'overnight') {
+      // overnight posture: only a confident, patient, non-thin edge that won't be stale by morning.
+      if (s.thin) { disc.posture++; continue; }                                      // no thin fast-lane
+      if (!(row.regimeLabel === 'flat' || row.rising)) { disc.posture++; continue; } // confident flat/rising only (drops unknown)
+      if (!row.reliable) { disc.posture++; continue; }                              // needs a trustworthy band
+      if (row.mom === 'breakdown') { disc.posture++; continue; }                    // no active pullback overnight
+      if (overnightStaleRisk(series5m && series5m.get(s.id), row.optBuy)) { disc.posture++; continue; }  // stale/underwater by morning
     }
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
@@ -259,7 +279,10 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
     rows.push({ id: s.id, row, grade: r.grade, cells, score: r.score });
     dist[r.grade] = (dist[r.grade] || 0) + 1;
   }
-  rows.sort((a, b) => b.score - a.score);                   // display sorted by risk-adjusted grade/score
+  // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
+  // unit (patient band-edge net/u) over velocity — you want the fattest unattended margin, not churn.
+  if (POSTURE === 'overnight') rows.sort((a, b) => (b.row.optNet || 0) - (a.row.optNet || 0) || b.score - a.score);
+  else rows.sort((a, b) => b.score - a.score);
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
@@ -273,7 +296,7 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
   console.log(`Grades: ${gradeDist(dist)}`);
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '');
+    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '');
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');
@@ -299,21 +322,22 @@ async function main() {
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it
   const ids = new Set();
   for (const m of RUN_MODES) for (const s of gated[m].survivors) ids.add(s.id);
-  const qcache = new Map();
+  const qcache = new Map(), series5m = new Map();
   for (const id of ids) {
     const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
     const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
     const lt = latest[id] || latest[String(id)] || null;
     const limit = map.byId[id]?.limit ?? null;
     qcache.set(id, computeQuote({ latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
+    series5m.set(id, ts5m);   // kept raw for the overnight-posture staleness read (overnightStaleRisk)
   }
 
-  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
+  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
   const niches = {};
-  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map);
+  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m);
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the
   // rows so a stale published file can never mismatch app-side header code; cells are byte-identical
@@ -325,7 +349,8 @@ async function main() {
       schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)
       generatedAt: new Date().toISOString(),
       mode: MODE,
-      params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE },
+      posture: POSTURE,                // S2: the Scan banner reads this to say which posture it shows
+      params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE },
       headers: HEADERS,
       niches,
     };

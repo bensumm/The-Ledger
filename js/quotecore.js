@@ -390,3 +390,36 @@ export function quoteMarkdown(rows){
   const body=(rows||[]).map(({name,row})=>'| '+quoteCells(name,row).map(cellText).join(' | ')+' |');
   return [head,sep,...body].join('\n');
 }
+
+/* ============================================================================================
+   S2 — POSTURE HELPERS (overnight vs active screening). A SEPARATE, appended block: these are new,
+   independently-named pure helpers and do NOT touch momVerdict / the PLAN-3 gate tree. They reuse
+   the same 5m-series + DIURNAL_DIP_MARGIN machinery as diurnalRead. Fixture-tested in
+   pipeline/quotecore.test.mjs under the "S2 posture fixtures" header.
+   ============================================================================================ */
+// The overnight window is LOCAL wall-clock: an evening bid must survive unattended to morning.
+export const OVERNIGHT_START_HOUR = 22;   // local hour, inclusive
+export const OVERNIGHT_END_HOUR   = 6;    // local hour, exclusive
+export const OVERNIGHT_SPAN_H     = 8;    // the forward window an overnight bid rests through
+// Is `now` (ms, default Date.now()) inside the local overnight window? Wraps midnight. `--posture auto`
+// on screen.mjs uses this; all displayed clocks are LOCAL (CLAUDE.md local-time rule).
+export function isOvernightNow(now){
+  const h=new Date(now!=null?now:Date.now()).getHours();
+  return h>=OVERNIGHT_START_HOUR || h<OVERNIGHT_END_HOUR;
+}
+// Overnight staleness risk for a BUY bid placed now: did YESTERDAY's equivalent forward-8h overnight
+// span (the [now-24h, now-16h] slice) print a low materially (≥ marginPct) BELOW `bid`? If so, a fill
+// at `bid` tonight risks being underwater / above-market by morning (the price drifted below the bid
+// last night, likely again) — the "stale/underwater by morning" test S2's overnight posture excludes on.
+// Positive-evidence discipline: null bid, <24 pts, or no yesterday-window data → false (never exclude
+// on ABSENCE of proof; one prior night is one sample anyway). now = ms (default Date.now()).
+export function overnightStaleRisk(ts5m, bid, now, marginPct=DIURNAL_DIP_MARGIN){
+  if(bid==null) return false;
+  const s=(ts5m||[]).filter(p=>p && p.timestamp!=null && p.avgLowPrice).slice().sort((a,b)=>a.timestamp-b.timestamp);
+  if(s.length<24) return false;
+  const nowSec=((now!=null)?now:Date.now())/1000, H=3600;
+  const win=s.filter(p=>p.timestamp>nowSec-24*H && p.timestamp<=nowSec-(24-OVERNIGHT_SPAN_H)*H);
+  const lows=win.map(p=>p.avgLowPrice).filter(Boolean);
+  if(!lows.length) return false;
+  return Math.min(...lows) <= bid*(1-marginPct);
+}
