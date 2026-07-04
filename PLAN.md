@@ -79,8 +79,8 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | ✅ `3a38018` (0.37.0 at merge — S-lane authored as 0.36.0 in parallel with Q1) |
 | Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | ✅ `23deba0` (0.36.0 — inversion → `reliable:false` at the source; interim `/positions` override removed) |
 | E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only: no UTC leaks found; `periodKey` midnight/week fixtures pass; convention rule added to CLAUDE.md — no code change, no APP_VERSION bump) |
-| L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | OPEN |
-| G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | OPEN |
+| L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | DISPATCHED (wave 3, 2026-07-04) |
+| G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | INVESTIGATING (step 0 read-only, wave 3, 2026-07-04 — decision goes to Ben) |
 | M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | OPEN |
 | N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | OPEN |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
@@ -508,6 +508,10 @@ documented sample thresholds clear (process rule 4).
 - The 500k `--min-gpd` floor nearly empties the churn niche (~2 rated) — expected given churn's
   thin per-unit margins, but if churn should stay useful it may need a niche-specific floor
   exemption (lane S, 2026-07-04).
+- README.md's pipeline file inventory is incomplete: missing `watch.mjs`, `rating.mjs`,
+  `nightlows.mjs`, `offers.mjs`, `outcomes.mjs`, `suggestlog.mjs`, `quotecore.test.mjs` and the
+  tracked root files `watchlist.json`/`suggestions.jsonl`/`screen.json` (wave-3 scan,
+  2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
