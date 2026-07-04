@@ -7,6 +7,33 @@ import { switchTab } from './main.js';
 import { regimeDrift, momVerdict } from './quotecore.js';   // shared impls (regime + cut-trigger) so quotes/positions reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 
+/*
+ * TRENDS TAB STRUCTURE (as of 0.16.0) — read before editing runTrends.
+ * The per-item Trends view is organized in decision-priority tiers, deliberately —
+ * don't scatter new info back into a flat list:
+ *  1. Suggested plan card (#trSuggest) — instant buy/sell, profit-now, trend box, and
+ *     warnings. Includes trend-aware pricing (patientTargets(series, it, falling)):
+ *     steady/rising items get a wider-margin patient offer off the recent ~2h 5m range
+ *     (20th/80th percentiles); falling items instead get buy-low/sell-quick targets — a
+ *     more aggressive low bid (10th pctl) and a sell priced to *clear* at/below the
+ *     instabuy (min(instabuy, 50th pctl)), never above a dropping market (0.20.0). The
+ *     plan card branches its copy on PT.falling. And a regime-shift warning
+ *     (regimeDrift(): last-3d median vs prior ~2wk; fires at >=8%). No sigma jargon here.
+ *  2. "Why this trend?" (#trWhy, collapsible) — plain-language guide-divergence readout;
+ *     the sigma number lives only in this expander's fine print.
+ *  3. Price history (#trHistWrap) — 3-month chart, promoted as immediate context.
+ *  4. Timing & seasonality (#trTiming, collapsible) — gated on the walk-forward backtest:
+ *     the hourly price/volume charts (#trCharts) only render when the timing edge is
+ *     actually proven out-of-sample (good && !regimeShift); otherwise the section states
+ *     "no proven edge"/"unreliable" and hides the charts. Weekday/weekend boxes were
+ *     removed (effect was ~noise).
+ * Key lesson: hourly seasonality is usually noise or a regime artifact; conf/medCount only
+ * measure history coverage, not price-level stability, so the regime guard + backtest gate
+ * exist to stop one-off jumps masquerading as cycles.
+ * (Moved here from CLAUDE.md by PLAN.md chunk K3 — this file is where every editor of the
+ * Trends view already looks; CLAUDE.md keeps a one-line pointer.)
+ */
+
 /* trends + growing hourly archive */
 export const ARCH_MAX_DAYS=60;
 export function openTrends(id){ const it=resolveId(id); if(!it) return; switchTab('trends'); document.getElementById('trItem').value=it.name; runTrends(); }

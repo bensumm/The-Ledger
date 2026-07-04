@@ -37,113 +37,42 @@ push to `main`).
   before touching the reconstruction. Read the whole doc top to bottom before touching
   either script path.
 
-## Trends tab structure (as of 0.16.0)
-The per-item Trends view is organized in decision-priority tiers (rendered in
-`js/trends.js` `runTrends`), deliberately — don't scatter new info back into a flat
-list:
-1. **Suggested plan card** (`#trSuggest`) — instant buy/sell, profit-now, trend box,
-   and warnings. Includes **trend-aware pricing** (`patientTargets(series, it,
-   falling)`): steady/rising items get a wider-margin patient offer off the recent
-   ~2h 5m range (20th/80th percentiles); **falling** items instead get buy-low/
-   sell-quick targets — a more aggressive low bid (10th pctl) and a sell priced to
-   *clear* at/below the instabuy (min(instabuy, 50th pctl)), never above a dropping
-   market (0.20.0). The plan card branches its copy on `PT.falling`. And a
-   **regime-shift warning** (`regimeDrift()`: last-3d median vs prior ~2wk; fires at
-   ≥8%). No σ jargon here — kept plain.
-2. **"Why this trend?"** (`#trWhy`, collapsible) — plain-language guide-divergence
-   readout; the σ number lives only in this expander's fine print.
-3. **Price history** (`#trHistWrap`) — 3-month chart, promoted as immediate context.
-4. **Timing & seasonality** (`#trTiming`, collapsible) — gated on the walk-forward
-   backtest: the hourly price/volume charts (`#trCharts`) only render when the timing
-   edge is actually proven out-of-sample (`good && !regimeShift`); otherwise the
-   section states "no proven edge"/"unreliable" and hides the charts. Weekday/weekend
-   boxes were removed (effect was ~noise).
-Key lesson driving this: hourly seasonality is usually noise or a regime artifact;
-`conf`/`medCount` only measure history coverage, not price-level stability, so the
-regime guard + backtest gate exist to stop one-off jumps masquerading as cycles.
+## Trends tab structure
+The per-item Trends view's decision-priority tier structure (plan card → "Why this trend?"
+→ price history → timing/seasonality, and the regime-guard/backtest-gate lesson) is a
+**header comment at the top of `js/trends.js`** — read it before editing `runTrends`, since
+that's where every editor of the view already is. (Moved out of CLAUDE.md by chunk K3.)
 
 ## Done (recent, for context — don't rebuild)
-- **Finder rating rework** (0.17.0): `computeScores()` in `js/market.js` blends four 0..1
-  sub-scores (ROI, liquidity, stability, turnaround) into a `quality` dampener on profit/hr;
-  per-factor tooltip on the Risk grade + Rating bar.
-- **Ledger auto-populate from fills** (0.18.0): `syncFills()` in `js/ui.js` fetches
-  `positions.json` and merges pipeline-reconstructed real trades into the Ledger/Coffer
-  (`src:'fills'`, idempotent rebuild, tombstoned via `STATE.fillsHidden`).
-- **Position review workflow** (0.19.0): "Review pricing" on the Ledger → `reviewPositions()`
-  in `js/trends.js` renders a HOLD / ADJUST / CUT verdict + "list at X" price per open lot.
-- **Falling items → price to clear** (0.20.0): Ben's rule — for a falling item the
-  suggested prices must reflect the fall: buy low aggressively, price to sell quickly.
-  This **superseded** the 0.19.0 "HOLD — cut if slow / list high above market" nuance,
-  which misfired: in a decline the recent highs are *always* above the current price, so
-  the old `patientUpside` guard was ~always true and told you to list above a dropping
-  market (the Dragon nails case, found live). Now `renderPositionCard` collapses the
-  falling branches → always list at the instabuy (in profit → SELL to clear; underwater →
-  CUT), never above it. `patientTargets` is trend-aware (see Trends tab §1) and the plan
-  card's pricing copy branches on `PT.falling`.
-- **Live position monitor + deterioration-watch routine** (2026-07-02): `pipeline/monitor.mjs`
-  (read-only — live offers/fills from the exchange log + held positions with break-even from
-  `positions.json`, *not* a log re-sum) drives a polling routine documented in
-  `pipeline/MONITORING.md`: a verdict per held position, break-even = `ceil(buy/0.98)`,
-  with an **evidence-gated 24h-cycle guard** (daily cycles are usually noise → default to
-  cutting a genuinely falling position; only a *proven* backtested hour-of-day pattern defers
-  a cut). The underwater verdict became the **PLAN-3 gate tree** (0.33.0 — `MONITORING.md`
-  step 4; the 24h-cycle guard is unchanged, now framed as input-vs-decision). Session/agent-run
-  for now; the durable app-native home is the Refresh-positions + Ledger break-even/regime
-  followups below.
-- **Last-2h momentum tell — `Mom` column + cut-trigger** (0.30.0): the chunk-2 standard quote
-  table (0.28.0) CLAMPS the optimistic prices against the live quote (`optBuy=min(quickBuy,
-  bandLo)`, `optSell=max(quickSell,bandHi)`) — correct for *pricing*, but that clamp alone was
-  **incomplete**: it ANNIHILATED the momentum signal (a live-outside-its-own-2h-band break can
-  never appear once clamped). Fix: `computeQuote` now derives `mom ∈ {clean,breakdown,breakup}`
-  from the **pre-clamp** raw band comparison (`quickBuy<rawBandLo` ↓ / `quickSell>rawBandHi` ↑)
-  and exposes it; the price clamp is unchanged. `Mom` (clean / ↓ / ↑) renders in the dig-in views
-  only (Trends card, Finder **expander**, position review, `quote.mjs`/`screen.mjs`) — NOT the
-  Finder bulk list (deliberate; `market.js` untouched). Held-position cut-trigger: shared
-  `momVerdict()` in `js/quotecore.js` (used by both `reviewPositions` and `quote.mjs
-  --positions`) — ↓+underwater → CUT; ↓+in-profit+flat/falling → LIST-TO-CLEAR; ↓+in-profit+
-  rising → size-conditional on `BIG_TICKET_GP` (10m total lot value: ≥ → clear, < → HOLD-watch);
-  ↑ → HOLD/list at 2h top. The base-mixing bug is guarded separately by `quoteOrdered()`, not the
-  clamp. **(0.33.0: this ↓/↑ matrix is now the Gate-2 leaf of the PLAN-3 underwater gate tree —
-  `momVerdict` additionally returns NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT-CANDIDATE ahead of
-  it; see the 0.33.0 entry below.)**
-- **Underwater-at-tick triage — the five-way read + gated decision tree** (0.33.0, PLAN-3):
-  `momVerdict()` in `js/quotecore.js` is now the whole underwater gate tree, not just the Mom
-  cut-trigger. `computeQuote` exposes `reliable`/`reliableReason`/`quoteAgeMin` (Gate 0 — a
-  stale/one-sided/sparse quote is unreliable; the old `instabuy==null → CUT` bug is fixed to
-  **NO-READ**). New pure, fixture-tested helpers: `diurnalRead` (Gate 1 — quiet-hour trough that
-  dipped+recovered ~24h ago → **DIURNAL-WATCH**, spent statelessly once the window turns liquid),
-  `moveShape` (Gate 2 — small-lot volume-spike **shock** that stabilized → **SHOCK-WATCH**, vs a
-  **bleed** → cut), `underwaterHours` (D-escalation — underwater *through a liquid window* →
-  **CUT-CANDIDATE**, ending the flat-regime WATCH-forever case). Every gate defers only on
-  positive evidence, so the bludgeon-style real breakdown cuts byte-identically (regression-
-  guarded). Wired into all three consumers (`watch.mjs`, `quote.mjs --positions`, `reviewPositions`)
-  + the `classify()` breakdown route reliability-gated. Acceptance fixtures:
-  `pipeline/quotecore.test.mjs` (`node pipeline/quotecore.test.mjs`). Docs: `MONITORING.md` step 4
-  is the tree; the 24h-cycle guard is unchanged but reframed as **input** (Gate 0/1: is this a
-  price?) vs **decision** (the guard: is there a proven daily rhythm?).
-- **Project skills + CLAUDE.md slimming** (2026-07-04, PLAN-5, no `APP_VERSION` bump):
-  four committed skills — `/positions` (gate-tree verdict interpretation, incidental-inventory
-  filter, feed-inversion reliability override, action plan + interactive tail), `/scan`
-  (judgment pass over `screen.mjs` incl. the 500k gp/d floor), `/overnight` (two-phase
-  composer: `/positions` → pause for capital → `/scan` + 8h accumulation sizing
-  `min(limit×2, 8/24×0.10×volDay)`), `/morning` (overnight reconstruction, re-verdict stale
-  bids) — at `.claude/skills/*/SKILL.md`. `quote.mjs` regime lines now print the buy limit
-  (chunk 3a). Per-workflow doctrine *moved* out of this file into the skills (see "Market
-  judgment layer" below). **Skill-versioning convention:** skills-only changes bump the
-  SKILL.md `version:` frontmatter and get a one-line pointer here — they NEVER bump
-  `APP_VERSION` (that marks the deployed app, which skills never touch).
-- **`/overnight` v1.1 — fill-realism check** (2026-07-04): the first real overnight run
-  filled 0/50,000 units — band-floor bids are extreme prints nobody crosses down to during
-  quiet hours, and the accumulation formula is an upper bound that assumes fills at your
-  price. The skill now requires a fill-realism read (price between band floor and instasell
-  for must-fill bids; count recent 5m windows at/below the bid) and "up to" framing.
-- **Self-improving skills** (2026-07-04, PLAN-5 K1, no `APP_VERSION` bump): each workflow
-  skill (`/positions` `/scan` `/overnight` `/morning`) closes with an **"Encode learnings"**
-  section — AFTER the market work (offers placed first, Ben's explicit rule), ask "anything
-  worth encoding?", route each fact to ONE canonical home (judgment → owning SKILL.md +
-  `version:` bump / table-app contracts → CLAUDE.md / user prefs → memory / monitoring
-  doctrine → `MONITORING.md`), spawn a background subagent to edit+commit. Honesty guard
-  (process rule 4): market claims still need evidence — one session is one sample.
+Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
+is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
+full story.
+- **Finder rating rework** (0.17.0) — `computeScores()` in `js/market.js`: four 0..1
+  sub-scores → a `quality` dampener on profit/hr.
+- **Ledger auto-populate from fills** (0.18.0) — `syncFills()` in `js/ui.js` merges
+  `positions.json` (`src:'fills'`, idempotent, tombstoned via `STATE.fillsHidden`).
+- **Position review workflow** (0.19.0) — `reviewPositions()` in `js/trends.js`:
+  HOLD/ADJUST/CUT + "list at X" per open lot.
+- **Falling items → price to clear** (0.20.0) — SUPERSEDED 0.19.0's "list high above
+  market" (the ~always-true `patientUpside` guard misfired in a decline). `renderPositionCard`
+  now always lists a faller at the instabuy (in profit → SELL; underwater → CUT), never
+  above it. Don't reintroduce the upside guard.
+- **Last-2h momentum — `Mom` column + cut-trigger** (0.30.0) — `computeQuote` derives
+  `mom` from the **pre-clamp** band comparison; shared `momVerdict()` in `js/quotecore.js`
+  drives the held-position cut-trigger. Deliberately NOT wired into the bulk Finder list.
+- **Underwater-at-tick triage — the gate tree** (0.33.0, PLAN-3) — `momVerdict()` is the
+  whole tree; Gate-0 `reliable` + `diurnalRead`/`moveShape`/`underwaterHours`; verdicts
+  NO-READ/DIURNAL-WATCH/SHOCK-WATCH/CUT/LIST-TO-CLEAR/HOLD/CUT-CANDIDATE. Fixtures:
+  `pipeline/quotecore.test.mjs`. `MONITORING.md` step 4 is the tree. Every gate defers only
+  on positive evidence (real breakdown cuts byte-identically — regression-guarded).
+- **Project skills + skill-versioning convention** (PLAN-5) — `/positions` `/scan`
+  `/overnight` `/morning` at `.claude/skills/*/SKILL.md`; per-workflow doctrine *moved*
+  there. Skills-only changes bump the SKILL.md `version:` frontmatter, NEVER `APP_VERSION`.
+- **`/overnight` fill-realism check** (v1.1/1.2) — band-floor bids don't fill overnight;
+  `nightlows.mjs` scores recent nights; size as "up to", not a guarantee.
+- **Self-improving skills** (PLAN-5 K1) — each workflow skill's closing "Encode learnings"
+  section: after the market work (offers first), one canonical home per fact, background
+  subagent edits+commits. Market claims still need evidence (one session = one sample).
 
 ## Market judgment layer — lives in the project skills (moved by PLAN-5)
 The screen/positions judgment layer (500k gp/d floor, 24h-drift-is-a-pre-filter-only,
@@ -301,45 +230,16 @@ metadata, not a leak; the concern is content, not commit authorship.
   operative workflow until G1 lands — don't half-adopt PRs.
 
 ## The `STATE` object (js/state.js) — read before editing shared state
-Almost all app-wide mutable state (`ITEMS`, `watchlist`, `trades`, `bankroll`,
-`sortKey`, `LOG`, etc.) lives as properties on one exported object,
-`export const STATE = {...}` in `js/state.js`, accessed everywhere as
-`STATE.xxx` — not as bare imported `let` bindings. This is a hard ES module
-constraint, not a style choice: a module can `export let x` and other modules can
-*read* `x`, but only the declaring module can *reassign* `x` — any other module
-trying `x = newValue` on an imported binding is a SyntaxError. Since `market.js`,
-`ui.js`, `trends.js`, `main.js`, and `backup.js` all reassign things like `ITEMS`,
-`watchlist`, `bankroll` (not just mutate them in place), those had to become
-properties of one shared object instead (`STATE.ITEMS = ...` is a property
-mutation on an object all modules hold the same reference to — always legal).
-When adding new shared mutable state, put it on `STATE`, not as a new bare
-`export let`. Constants that are never reassigned (`API`, `APP_VERSION`, weight
-constants, etc.) stay as plain `export const` — no need to route those through
-`STATE`.
+The rule (all app-wide mutable state lives as properties on one exported `STATE` object,
+because a module can't reassign an imported bare `let` binding — that's a SyntaxError) is a
+**header comment at the top of `js/state.js`**, next to the object it governs. Read it
+before adding shared mutable state: put new mutable state on `STATE`, not a new bare
+`export let`; never-reassigned constants stay `export const`. (Moved out of CLAUDE.md by
+chunk K3; this pointer stays with the process rules above.)
 
 ## Environment notes (Windows machine)
-- RuneLite config lives under `~/.runelite/profiles2/*.properties`. Changes made
-  in-game only flush to disk on client close/restart — if a just-changed setting
-  still reads the old value, ask Ben to restart the client before re-checking.
-- Exchange Logger plugin log: `~/.runelite/exchange-logger/exchange.log`, JSON mode.
-  Real field names differ from the plugin's own naming conventions in the schema —
-  see the ADAPTER comment block at the top of `pipeline/sync-fills.mjs` for the
-  verified mapping (`item`→itemId, `offer`→price, `max`→qty, `qty`→filled,
-  `worth`→spent). Don't re-guess field names; that mapping was verified against real
-  log output.
-- The log **does** emit explicit `CANCELLED_BUY`/`CANCELLED_SELL` states (confirmed live
-  2026-07-02) — `normalizeStateStr` in `sync-fills.mjs` maps any `CANCEL*` to `'cancelled'`.
-  `buildEvents()` *also* keeps a sequence-aware fallback (last non-complete event before an
-  `EMPTY` or a slot item-change → cancelled) for cancels that drop straight to `EMPTY`
-  without a cancel line. Keep both paths; don't revert to pure line-by-line parsing.
-- **Manual fills injected into `coffer-manual.log` MUST carry the timestamp of when the
-  trade actually happened** (`--time` on add-manual-fill.mjs) — a "now" timestamp on a
-  backdated trade breaks FIFO matching (phantom-5-bludgeons incident, 2026-07-03). Also:
-  `fills.json` is an append-only merged archive — fixing/removing a source log line does NOT
-  by itself purge an already-merged event; append a `REMOVE` tombstone line (the chunk-1
-  vocabulary, confirmed working) to `coffer-manual.log`, then re-sync.
-- Task Scheduler job `CofferFillsSync` runs `wscript.exe
-  pipeline\run-fills-sync.vbs` every 20 min (hidden window). If any pipeline file
-  moves again, that task's registered path needs re-creating too — it's not
-  automatically kept in sync with the repo (`schtasks /Delete` + `/Create`, see
-  `pipeline/FILLS-PIPELINE.md` §4.7).
+The Windows-machine environment notes (RuneLite `profiles2` flush-on-restart, the Exchange
+Logger field mapping, cancel semantics, the manual-fill `--time` timestamp rule + `REMOVE`
+tombstones, the `CofferFillsSync` Task Scheduler job) are consolidated in
+**`pipeline/FILLS-PIPELINE.md` §10** (single home). Read that before touching the pipeline
+or a source log. (Moved out of CLAUDE.md by chunk K3.)

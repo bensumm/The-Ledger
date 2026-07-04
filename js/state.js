@@ -1,5 +1,23 @@
 import { now, pad2 } from './format.js';
 
+/*
+ * THE STATE OBJECT — read before adding shared mutable state.
+ * Almost all app-wide mutable state (ITEMS, watchlist, trades, bankroll, sortKey, LOG, ...)
+ * lives as properties on the single exported object `STATE` below, accessed everywhere as
+ * STATE.xxx — NOT as bare imported `let` bindings. This is a hard ES module constraint, not
+ * a style choice: a module can `export let x` and other modules can *read* x, but only the
+ * declaring module can *reassign* x — any other module doing `x = newValue` on an imported
+ * binding is a SyntaxError. Since market.js, ui.js, trends.js, main.js, and backup.js all
+ * REASSIGN things like ITEMS/watchlist/bankroll (not just mutate in place), those had to
+ * become properties of one shared object (`STATE.ITEMS = ...` is a property mutation on an
+ * object every module holds the same reference to — always legal).
+ * When adding new shared mutable state, put it on STATE, not as a new bare `export let`.
+ * Constants that are never reassigned (API, APP_VERSION, weight constants, ...) stay as
+ * plain `export const` — no need to route those through STATE.
+ * (Moved here from CLAUDE.md by PLAN.md chunk K3 — this is the one place every editor of
+ * shared state already looks; CLAUDE.md process rules keep a one-line pointer.)
+ */
+
 export const API='https://prices.runescape.wiki/api/v1/osrs';
 export const APP_VERSION='0.33.0';
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality

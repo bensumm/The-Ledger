@@ -294,3 +294,35 @@ Not yet built — planned as the next tool feature, roughly in order:
       `spent`/`worth` is gross, not post-tax. Also surfaced that execution price can
       differ from the quoted offer price even on a full fill.
 - [ ] Then: tool-side fetch+merge (§6.1) as the first index.html change
+
+## 10. Environment notes (Windows machine) — single home
+
+Consolidated here by PLAN.md chunk K3 (2026-07-04); CLAUDE.md keeps a one-line pointer.
+The field-name mapping and cancel semantics also appear in §9's done-checklist — that
+detail is authoritative there; the operational rules below are the single home.
+
+- **RuneLite config lives under `~/.runelite/profiles2/*.properties`.** Changes made
+  in-game only flush to disk on client close/restart — if a just-changed setting still
+  reads the old value, ask Ben to restart the client before re-checking.
+- **Exchange Logger plugin log:** `~/.runelite/exchange-logger/exchange.log`, JSON mode.
+  Real field names differ from the plugin's own naming conventions — see the ADAPTER
+  comment block at the top of `sync-fills.mjs` for the verified mapping (`item`→itemId,
+  `offer`→price, `max`→qty, `qty`→filled, `worth`→spent). Don't re-guess field names; that
+  mapping was verified against real log output (§9).
+- **Cancel semantics:** the log emits explicit `CANCELLED_BUY`/`CANCELLED_SELL` states
+  (confirmed live 2026-07-02) — `normalizeStateStr` maps any `CANCEL*` to `'cancelled'`.
+  `buildEvents()` *also* keeps a sequence-aware fallback (last non-complete event before an
+  `EMPTY` or a slot item-change → cancelled) for cancels that drop straight to `EMPTY`
+  without a cancel line. Keep both paths; don't revert to pure line-by-line parsing.
+- **Manual fills injected into `coffer-manual.log` MUST carry the timestamp of when the
+  trade actually happened** (`--time` on `add-manual-fill.mjs`) — a "now" timestamp on a
+  backdated trade breaks FIFO matching (the phantom-5-bludgeons incident, 2026-07-03).
+  Never edit RuneLite's own `exchange.log`; the writable source is the sibling
+  `coffer-manual.log`.
+- **`fills.json` is an append-only merged archive** — fixing or removing a source log line
+  does NOT by itself purge an already-merged event; append a `REMOVE` tombstone line (the
+  chunk-1 vocabulary, confirmed working) to `coffer-manual.log`, then re-sync.
+- **Task Scheduler job `CofferFillsSync`** runs `wscript.exe pipeline\run-fills-sync.vbs`
+  every 20 min (hidden window). If any pipeline file moves again, that task's registered
+  path needs re-creating too — it's not automatically kept in sync with the repo
+  (`schtasks /Delete` + `/Create`, see §4.7).
