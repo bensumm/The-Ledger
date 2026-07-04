@@ -204,6 +204,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   Interpretation of those verdicts lives in `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity, price window, falling-exclusion);
   `--mode` swaps only the step-3 edge (band / spread / rising / churn, or `all`).
+- `nightlows.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>]` scores the last ~14
+  local nights from the 1h timeseries: per-night low + overnight instasell volume, and the
+  bid levels touched on ~50%/~75%/all nights. `/overnight`'s fill-realism check runs it on
+  every candidate bid ("touched" ≠ limit filled; ~14 nights is a small sample).
 
 ## Open followups (not yet built)
 - **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — ALL open work lives
