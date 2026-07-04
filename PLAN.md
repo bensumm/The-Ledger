@@ -72,17 +72,9 @@ never injected into `fills.json`; advisory-only against `positions.json`, never 
   heuristic. Start by dumping the cheap features + survive/discard label for a sample and eyeballing
   the separation before committing to any formula.
 
-- **Ledger date grouping in local timezone, not GMT.** The period P&L / date bucketing must use
-  Ben's local timezone for day/week/month boundaries, not UTC — a trade realised at 1am local should
-  bucket to the local day, not slip into the previous/next UTC day. (The Ledger-redesign note in
-  CLAUDE.md already says "local-time boundaries"; this reinforces it as a hard requirement.)
-- **Overlay the per-item price + volume-per-day charts (item details).** Currently the price
-  fluctuation and volume charts render separately in the item-detail view. Try overlaying them on
-  one set of axes (price line + volume, e.g. volume as bars behind the price line). May or may not
-  read well — evaluate visually and keep separate if the overlay is cluttered.
-- **"Current time" vertical marker on both item-detail charts.** Add a vertical bar at "now" on the
-  price and volume charts so you can see at a glance where the current moment sits within the daily
-  cycle (are we early/late in a typical intraday swing).
+- ~~Ledger date grouping in local timezone~~ · ~~price+volume chart overlay~~ · ~~"current
+  time" chart marker~~ — **absorbed into `PLAN-4.md`** (chunks E and C3, 2026-07-04); that
+  plan is their tracking home now.
 
 ## Out of scope (tracked separately in CLAUDE.md)
 - Refresh-positions button; Ledger redesign (watchlist filter / grouping / period P&L);
