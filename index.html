@@ -216,8 +216,15 @@
 
   <section class="panel hidden" id="panel-logs">
     <div class="controls" style="justify-content:space-between; align-items:flex-start">
-      <span class="mini" style="max-width:560px">Diagnostics — newest first, persists across launches (last 50 events). <span class="li">info</span> · <span class="lw">warn</span> · <span class="ler">error</span>, from market, guide and storage. Successful loads are logged too, so you can confirm a build and a data source are live.</span>
-      <button id="clearLog" class="ghostbtn sm">Clear log &amp; banners</button>
+      <span class="mini" style="max-width:560px">Diagnostics — newest first, persists across launches (last 200 events). <span class="li">info</span> · <span class="lw">warn</span> · <span class="ler">error</span>: your <b>actions</b> (tab switches, watchlist, trades, refreshes) alongside <b>system</b> events from market, guide and storage. Successful loads are logged too, so you can confirm a build and a data source are live.</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <div class="segtoggle" id="logFilter" data-mode="all">
+          <button type="button" data-f="all" class="on">All</button>
+          <button type="button" data-f="action">Actions</button>
+          <button type="button" data-f="system">System</button>
+        </div>
+        <button id="clearLog" class="ghostbtn sm">Clear log &amp; banners</button>
+      </div>
     </div>
     <div class="tablewrap" style="padding:14px 16px"><div id="logsBody" class="loglist"></div></div>
   </section>

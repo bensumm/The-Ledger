@@ -10,6 +10,23 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Action logging pass (0.38.0, PLAN chunk L1)
+Instrument, don't rebuild: the `logEvent(level, scope, msg)` ring + persisted `logring` + Logs
+view already existed (`js/state.js`), but every caller was a *system* fetch path (market/guide/
+storage/fills). L1 adds a new `'action'` scope and logs the user's own actions, one line each,
+each including the object of the action and no PII (item names/ids/prices only). Instrumented at
+the **event handler**, never inside shared functions (`switchTab`/`loadAll` also run on
+init/programmatic paths we don't log), so a passive re-render never emits a log: tab-bar clicks,
+manual price refresh + Finder retry, scan refresh, watchlist add/remove, quote-expander opens,
+trade log/hide/delete + pending-row and manual-log edit/delete, Trends open (item + source:
+`link` for a deep-link, `manual` for a typed lookup — logged once at the single `runTrends`
+funnel), position review (with a verdict tally — `renderPositionCard` now returns `{html,
+verdict}` so the one caller can count them), backup export/import, and the bankroll/slots/strategy
+settings. `LOG_MAX` 50→200 to hold the extra volume. The Logs view gains a minimal **All /
+Actions / System** scope filter (`STATE.logFilter`, `logRowsHtml(withDate, filter)`,
+`setLogFilter`); the status-banner dropdown always shows All. Settings note: no secret is ever
+logged (the PAT M1 will add would log "PAT updated" only — value never).
+
 ### Screening economics + posture + watchlist-always-scanned (0.37.0, PLAN chunks S1/S2/S3)
 S1: the liquidity gate gains a **gp-flow alternative path** — an item passes on `limitVol ≥
 --floor` (50/d, unchanged) OR `limitVol × mid ≥ --gp-floor` (250m default), so an Avernic-class

@@ -46,7 +46,10 @@ import { fetchQuote, quoteTableHtml } from './quote.js';
 
 /* trends + growing hourly archive */
 export const ARCH_MAX_DAYS=60;
-export function openTrends(id){ const it=resolveId(id); if(!it) return; switchTab('trends'); document.getElementById('trItem').value=it.name; runTrends(); }
+// L1: track how a Trends open was initiated (deep-link vs. typed) so runTrends — the single
+// funnel every open passes through — logs the source without double-firing. Reset after each log.
+let trendSource='manual';
+export function openTrends(id){ const it=resolveId(id); if(!it) return; trendSource='link'; switchTab('trends'); document.getElementById('trItem').value=it.name; runTrends(); }
 export async function fetchTimeseries(id,step){
   const key=id+':'+step; if(tsCache[key]) return tsCache[key];
   const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
@@ -327,7 +330,8 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   const trWord=tr.falling?'Falling':(tr.rising?'Rising':'Flat'), trCls=tr.falling?'loss':(tr.rising?'gold':'gain');
   const mom=[]; if(tr.m7!=null)mom.push((tr.m7>=0?'+':'')+tr.m7.toFixed(0)+'%/7d'); if(tr.m30!=null)mom.push((tr.m30>=0?'+':'')+tr.m30.toFixed(0)+'%/30d'); if(tr.regime.ok)mom.push('regime '+(tr.regime.driftPct>=0?'+':'')+tr.regime.driftPct.toFixed(0)+'%');
   const tableHtml=qrow?quoteTableHtml(t.name, qrow):'';   // same standard columns as Finder/Trends, for consistency
-  return '<div class="suggest" style="margin-top:10px">'+
+  // L1: return the verdict alongside the html so reviewPositions can log a verdict tally (one caller).
+  const html='<div class="suggest" style="margin-top:10px">'+
     tableHtml+
     '<div class="stitle">'+t.name+' <span class="csub">×'+qty.toLocaleString()+' @ '+fmtP(buy)+'</span><span class="'+cls+'" style="float:right;font-weight:700">'+verdict+'</span></div>'+
     '<div class="sgrid">'+
@@ -337,6 +341,7 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
       '<div class="sbox"><div class="sk">List at</div><div class="sv '+cls+'">'+fmtP(listAt)+'</div><div class="ss '+sgn(profAt)+'">'+(profAt>=0?'+':'')+fmt(profAt)+'</div></div>'+
     '</div>'+
     '<div class="sreason">'+why+' <b>'+fill+'</b> at '+fmtP(listAt)+'.</div></div>';
+  return {html, verdict};
 }
 export async function reviewPositions(){
   const btn=document.getElementById('reviewPos'), box=document.getElementById('posReview');
@@ -347,17 +352,20 @@ export async function reviewPositions(){
   if(!open.length){ box.innerHTML='<div class="mini">No open positions with a known item to review'+(noId?' ('+noId+' manual entr'+(noId===1?'y has':'ies have')+' no linked item).':'.')+'</div>'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Reviewing…'; }
   box.innerHTML='<div class="mini">Pulling live prices, recent 2h range, and guide momentum for '+open.length+' position'+(open.length===1?'':'s')+'…</div>';
-  const cards=[];
+  const cards=[]; const tally={};   // L1: count verdicts (first word) for the action-log summary
   for(const t of open){
     try{
       const it=resolveId(t.itemId); if(!it||!it.high){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">No live quote available.</div></div>'); continue; }
       const [s5m,s6h]=await Promise.all([fetchTimeseries(t.itemId,'5m'), fetchTimeseries(t.itemId,'6h')]);
       let gser=[]; try{ gser=await fetchGuideSeries(t.itemId); }catch(e){}
       let qrow=null; try{ qrow=await fetchQuote(t.itemId,{held:true}); }catch(e){}   // held → always shown even if falling
-      cards.push(renderPositionCard(t, it, s5m, s6h, gser, qrow));
+      const r=renderPositionCard(t, it, s5m, s6h, gser, qrow);
+      cards.push(r.html); const key=String(r.verdict||'?').split(/[\s—-]/)[0]; tally[key]=(tally[key]||0)+1;
     }catch(e){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">Couldn’t load live data — try again.</div></div>'); }
   }
   box.innerHTML='<div class="stitle" style="margin-top:6px">Position review <span class="csub">live · after 2% tax · break-even = sell that nets cost · guidance, not guarantees</span></div>'+cards.join('');
+  const summ=Object.keys(tally).sort().map(k=>tally[k]+' '+k).join(', ');
+  logEvent('info','action','position review · '+open.length+(summ?' ('+summ+')':''));
   if(btn){ btn.disabled=false; btn.textContent='Review pricing'; }
 }
 /* T2: the "Recent movement (last 2h)" chart+readout. Uses the ALREADY-fetched 5m series and the
@@ -398,6 +406,7 @@ export async function runTrends(){
   const it=resolveItem(name);
   if(!it){ renderMatches(name); return; }   // no exact match -> whole-catalog substring search
   document.getElementById('trMatches').classList.add('hidden');
+  logEvent('info','action','trends → '+it.name+' ('+trendSource+')'); trendSource='manual';
   status.textContent='loading history…';
   document.getElementById('trResult').classList.add('hidden');
   try{

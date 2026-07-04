@@ -47,6 +47,11 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Action logging pass** (0.38.0, L1) — the `logEvent` ring gained an `'action'` scope for
+  user actions (tab/watchlist/trade/refresh/trends-open/position-review/backup/settings),
+  logged at the **event handler** (never inside shared `switchTab`/`loadAll`, so re-renders
+  don't log); `LOG_MAX` 50→200; Logs view has an All/Actions/System scope filter
+  (`STATE.logFilter`). Never log secret values ("PAT updated" only, once M1 adds a PAT).
 - **Gate-0 feed-inversion fix** (0.36.0, Q1) — a crossed feed (instasell>instabuy) is now
   `reliable:false`/`reliableReason:'feed-inversion'` in `computeQuote`, so `momVerdict()` Gate 0
   prints **NO-READ** instead of a decisive verdict off a non-price. `/positions`' interim

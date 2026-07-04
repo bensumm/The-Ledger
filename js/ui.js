@@ -77,6 +77,7 @@ function toggleFinderQuote(btn){
   qr.innerHTML='<td colspan="11"><div class="mini">Fetching live quote…</div></td>';
   tr.after(qr); btn.classList.add('on');
   const cell=qr.firstElementChild;
+  const it0=resolveId(id); logEvent('info','action','quote '+((it0&&it0.name)||('#'+id)));
   fetchQuote(id,{asked:true})
     .then(row=>{ const it=resolveId(id); cell.innerHTML=quoteTableHtml((it&&it.name)||('#'+id), row); })
     .catch(()=>{ cell.innerHTML='<div class="mini">Couldn’t load quote — try again.</div>'; });
@@ -85,11 +86,13 @@ export function showFinderError(){
   document.getElementById('finderBody').innerHTML='';
   const empty=document.getElementById('finderEmpty'); empty.classList.remove('hidden');
   empty.innerHTML='<div class="big">Couldn’t reach the price API</div><div class="sm">The OSRS Wiki prices service didn’t respond. Check your connection and try again.</div><button id="retryBtn">Retry</button>';
-  document.getElementById('retryBtn').onclick=()=>loadAll(false,true);
+  document.getElementById('retryBtn').onclick=()=>{ logEvent('info','action','retry price load'); loadAll(false,true); };
 }
 
 /* watchlist */
-export async function toggleWatch(id){ const i=STATE.watchlist.indexOf(id); if(i>=0){ STATE.watchlist.splice(i,1); delete STATE.signalCache[id]; } else STATE.watchlist.push(id); await sSet('watchlist',STATE.watchlist); renderAll(); computeSignals(); }
+export async function toggleWatch(id){ const i=STATE.watchlist.indexOf(id), it=resolveId(id), nm=(it&&it.name)||('#'+id);
+  if(i>=0){ STATE.watchlist.splice(i,1); delete STATE.signalCache[id]; logEvent('info','action','unwatch '+nm); } else { STATE.watchlist.push(id); logEvent('info','action','watch '+nm); }
+  await sSet('watchlist',STATE.watchlist); renderAll(); computeSignals(); }
 export function renderSignals(){
   const hr=new Date().getHours();
   const inCheap=w=>{ if(!w) return false; for(let k=0;k<3;k++) if((w.start+k)%24===hr) return true; return false; };
@@ -198,6 +201,7 @@ export async function addTrade(){
   const wrote=await writeToFillsLog(mode, it, qty, each, ts);
   if(!wrote){ fillsMsg('Couldn’t write to the fills log (permission denied?) — nothing was logged. Re-link the log or use pipeline/add-manual-fill.mjs.'); return; }
   const verb=mode==='buy'?'Bought':mode==='sell'?'Sold':mode==='withdraw'?'Withdrew':'Banked';
+  logEvent('info','action','logged '+mode+' '+qty+'× '+it.name);
   fillsMsg(verb+' '+qty+' × '+it.name+' → written to '+(await linkedName())+'. Shows as pending until the next pipeline sync absorbs it.');
   ['tItem','tQty','tBuy','tSell','tWhen'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderAll();
@@ -234,6 +238,7 @@ async function editPending(pid){
   if(!res.ok){ alert('Edit failed: '+res.reason); return; }
   p.qty=r.qty; p.each=r.each; p.ts=r.ts; p.line=newLine; p.created=now();
   await sSet('fillsPending', STATE.fillsPending);
+  logEvent('info','action','edit pending '+p.kind+' '+p.name);
   fillsMsg('Log line rewritten (old event tombstoned).');
   renderAll();
 }
@@ -246,6 +251,7 @@ async function delPending(pid){
   } else if(!confirm('No stored source line (pre-0.27 pending row) — remove the pending row only? Any log line it wrote stays.')) return;
   STATE.fillsPending=STATE.fillsPending.filter(x=>x.id!==pid);
   await sSet('fillsPending', STATE.fillsPending);
+  logEvent('info','action','delete pending '+p.kind+' '+p.name);
   fillsMsg('Entry removed from the log (tombstoned in case a sync already absorbed it).');
   renderAll();
 }
@@ -279,6 +285,7 @@ export async function editManualLog(){
     : [fillsLogLine({type:e.evt.type, itemId:e.evt.itemId, qty:r.qty, priceEach:r.each, ts:r.ts}), tombstoneLine(e.id)];
   const res=await rewriteFillsLog(e.line, repl);
   if(!res.ok){ alert('Rewrite failed: '+res.reason); return; }
+  logEvent('info','action',(r==='delete'?'delete manual log ':'edit manual log ')+nameOf(e.o.item));
   fillsMsg((r==='delete'?'Entry removed':'Entry rewritten')+' + old event tombstoned. Re-sync to apply: the scheduled sync runs within ~20 min (or run pipeline/sync-fills.mjs), then refresh prices here.');
 }
 export async function delTrade(tid){
@@ -286,6 +293,7 @@ export async function delTrade(tid){
   if(t && t.src==='fills'){ // fills entries are regenerated each sync — tombstone the key so it stays hidden
     if(!STATE.fillsHidden.includes(tid)){ STATE.fillsHidden.push(tid); await sSet('fillsHidden',STATE.fillsHidden); }
   }
+  logEvent('info','action',(t&&t.src==='fills'?'hide fills row ':'delete trade ')+((t&&t.name)||tid));
   STATE.trades=STATE.trades.filter(x=>x.tid!==tid); await sSet('trades',STATE.trades); renderAll();
 }
 /* auto-populate the Ledger from positions.json (pipeline-reconstructed real fills).

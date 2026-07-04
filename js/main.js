@@ -1,4 +1,4 @@
-import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog } from './state.js';
+import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog, setLogFilter } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
 import { renderFinder, addTrade, renderCoffer, recompute, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderScan, loadRepoWatchlist } from './ui.js';
@@ -11,21 +11,24 @@ export function switchTab(name){
   ['finder','scan','trends','watch','signals','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
   if(name==='scan') renderScan();   // lazy: fetch the published screen.json on first open (cached after)
 }
-document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
-document.getElementById('refreshBtn').onclick=()=>loadAll(false,true);
+// L1 action logging: instrument at the event handler (a genuine user click), NOT inside the
+// shared switchTab/loadAll functions — those also run on programmatic/init paths we don't log.
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{ logEvent('info','action','tab → '+b.dataset.tab); switchTab(b.dataset.tab); });
+document.getElementById('refreshBtn').onclick=()=>{ logEvent('info','action','manual price refresh'); loadAll(false,true); };
 document.getElementById('statusBanner').onclick=()=>document.getElementById('statusBanner').classList.toggle('open');
 document.getElementById('cofferToggle').onclick=async()=>{ STATE.cofferCollapsed=!STATE.cofferCollapsed; await sSet('cofferCollapsed',STATE.cofferCollapsed); applyCoffer(); };
 document.getElementById('clearLog').onclick=clearLog;
+document.querySelectorAll('#logFilter button').forEach(b=>b.onclick=()=>setLogFilter(b.dataset.f));
 document.getElementById('search').oninput=renderFinder;
 document.getElementById('priceTier').onchange=renderFinder;
 document.getElementById('sortSel').onchange=e=>{ STATE.sortKey=e.target.value; STATE.sortDir=-1; renderFinder(); };
-document.getElementById('stratSel').onchange=async e=>{ STATE.strategy=e.target.value; await sSet('strategy',STATE.strategy); recompute(); };
+document.getElementById('stratSel').onchange=async e=>{ STATE.strategy=e.target.value; logEvent('info','action','strategy → '+STATE.strategy); await sSet('strategy',STATE.strategy); recompute(); };
 document.getElementById('budgetToggle').onchange=e=>{ document.getElementById('budgetChip').classList.toggle('on',e.target.checked); renderFinder(); };
 document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclick=()=>{
   const k=th.dataset.k; if(STATE.sortKey===k) STATE.sortDir*=-1; else { STATE.sortKey=k; STATE.sortDir=(k==='name')?1:-1; }
   const sel=document.getElementById('sortSel'); if(['score','pph','margin','roi','volume'].includes(k)) sel.value=k; renderFinder();
 });
-const scanRef=document.getElementById('scanRefresh'); if(scanRef) scanRef.onclick=()=>renderScan(true);
+const scanRef=document.getElementById('scanRefresh'); if(scanRef) scanRef.onclick=()=>{ logEvent('info','action','scan refresh'); renderScan(true); };
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;
@@ -46,9 +49,9 @@ const mle=document.getElementById('manualLogEdit'); if(mle) mle.onclick=editManu
 const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
 document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));
 export const bankI=document.getElementById('bankInput');
-bankI.onchange=async()=>{ const v=parseGp(bankI.value); if(!isNaN(v)){ STATE.bankroll=v; bankI.value=fmt(v); await sSet('bankroll',v); recompute(); } };
+bankI.onchange=async()=>{ const v=parseGp(bankI.value); if(!isNaN(v)){ STATE.bankroll=v; bankI.value=fmt(v); logEvent('info','action','bankroll → '+fmt(v)); await sSet('bankroll',v); recompute(); } };
 export const slotsI=document.getElementById('slotsInput');
-slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1; if(v>8)v=8; STATE.slots=v; slotsI.value=v; await sSet('slots',v); recompute(); };
+slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1; if(v>8)v=8; STATE.slots=v; slotsI.value=v; logEvent('info','action','slots → '+v); await sSet('slots',v); recompute(); };
 
 /* init */
 (async function init(){

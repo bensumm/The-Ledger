@@ -19,7 +19,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.37.0';
+export const APP_VERSION='0.38.0';
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality
 // multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
 // (These become Settings-tab editable next pass.)
@@ -54,7 +54,8 @@ export const STATE = {
   ledgerWatchOnly: true, ledgerPeriod: 'all', ledgerExpanded: {},  // Ledger view: filter to watchlist, P&L bucket size (by sell date), drilled-in item groups
   sortKey: 'score', sortDir: -1,
   signalCache: {},
-  LOG: []                      // {t, level, scope, msg}
+  LOG: [],                     // {t, level, scope, msg}
+  logFilter: 'all'             // Logs view scope filter (L1): all | action | system
 };
 export function applyCoffer(){ const w=document.getElementById('cofferWrap'); if(w) w.classList.toggle('collapsed',STATE.cofferCollapsed); }
 export const tsCache={};
@@ -97,7 +98,7 @@ export async function sSet(k,v){
 }
 
 /* ---- diagnostics: log ring + health model + status banner ---- */
-export const LOG_MAX=50;
+export const LOG_MAX=200;   // L1: raised 50→200 now that user actions are logged alongside system events
 export const HEALTH={};            // scope -> {level, msg}
 export const SEV={ok:0, info:1, warn:2, error:3};
 export function logEvent(level, scope, msg){
@@ -116,9 +117,15 @@ export function worstHealth(){
   for(const k in HEALTH){ const h=HEALTH[k]; if(h.level==='ok') continue; if(!worst||SEV[h.level]>SEV[worst.level]) worst=h; }
   return worst;
 }
-export function logRowsHtml(withDate){
-  if(!STATE.LOG.length) return '<span class="empty2">No events logged.</span>';
-  return STATE.LOG.slice().reverse().map(e=>{
+// L1: scope filter for the Logs view — 'action' = user actions (scope 'action'),
+// 'system' = everything else (market/guide/storage/fills/…), 'all' = both. The banner
+// dropdown always passes 'all'; only the Logs tab honours STATE.logFilter.
+export function logRowsHtml(withDate, filter){
+  let rows=STATE.LOG;
+  if(filter==='action') rows=rows.filter(e=>e.scope==='action');
+  else if(filter==='system') rows=rows.filter(e=>e.scope!=='action');
+  if(!rows.length) return '<span class="empty2">No events logged.</span>';
+  return rows.slice().reverse().map(e=>{
     const cl=e.level==='error'?'ler':(e.level==='warn'?'lw':'li');
     const d=new Date(e.t*1000);
     const tm=(withDate?(pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '):'')+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
@@ -127,7 +134,12 @@ export function logRowsHtml(withDate){
 }
 export function renderLogViews(){
   const lg=document.getElementById('bannerLog'); if(lg) lg.innerHTML=logRowsHtml(false);
-  const tb=document.getElementById('logsBody'); if(tb) tb.innerHTML=logRowsHtml(true);
+  const tb=document.getElementById('logsBody'); if(tb) tb.innerHTML=logRowsHtml(true, STATE.logFilter);
+}
+export function setLogFilter(f){
+  STATE.logFilter=f;
+  document.querySelectorAll('#logFilter button').forEach(b=>b.classList.toggle('on', b.dataset.f===f));
+  renderLogViews();
 }
 export function renderBanner(){
   const el=document.getElementById('statusBanner'); if(!el) return;

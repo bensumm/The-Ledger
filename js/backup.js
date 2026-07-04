@@ -1,4 +1,4 @@
-import { STRAT, STATE, tsCache, mem, hasStore, idb, sGet, sSet } from './state.js';
+import { STRAT, STATE, tsCache, mem, hasStore, idb, sGet, sSet, logEvent } from './state.js';
 import { fmt } from './format.js';
 import { rebuildDatalist } from './market.js';
 import { renderAll, recompute } from './ui.js';
@@ -22,6 +22,7 @@ export async function doExport(){
     const url=URL.createObjectURL(blob), a=document.createElement('a');
     a.href=url; a.download='coffer-backup-'+new Date().toISOString().slice(0,10)+'.json';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+    logEvent('info','action','backup exported');
     flashStamp('backup exported');
   }catch(e){ alert('Export failed.'); }
 }
@@ -49,6 +50,7 @@ export function doImport(file){
       const n=(obj.data&&obj.data.archives)?Object.keys(obj.data.archives).length:0;
       if(!confirm('Import this backup? It overwrites the watchlist, ledger, settings and '+n+' hourly archive'+(n===1?'':'s')+' on this device.')) return;
       await applyBackup(obj);
+      logEvent('info','action','backup imported ('+n+' archive'+(n===1?'':'s')+')');
       if(STATE.ITEMS.length) recompute(); else renderAll();
       flashStamp('backup imported');
     }catch(e){ alert('Could not read that backup file.'); }
