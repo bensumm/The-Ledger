@@ -4,7 +4,7 @@
    (chunk 10.2 dedup). No market/quote math lives here — that is js/quotecore.js.
    Consumers: screen.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote.mjs,
    screen.mjs (mdTable/stdCells). */
-import { quoteCells } from '../js/quotecore.js';
+import { quoteCells, cellText } from '../js/quotecore.js';
 
 /* --- parseArgs(argv): the `--flag value` / bare-`--flag` loop.
    argv = process.argv.slice(2). A bare flag (no value, or followed by another --flag)
@@ -35,18 +35,18 @@ export function parseGp(s) {
   return Math.round(parseFloat(m[1]) * mult);
 }
 
-/* --- mdTable(headers, rows): generic markdown table (rows = array of cell arrays).
+/* --- mdTable(headers, rows): generic markdown table (rows = array of cells).
    Generic on purpose — both consumers APPEND columns to the standard set (quote.mjs
-   --positions adds Held@/Break-even/Verdict; screen.mjs adds Exp gp/d), which is why
-   quotecore's fixed-column quoteMarkdown() can't serve them. --- */
+   --positions adds Held@/Break-even/Verdict; screen.mjs adds Grade + Score gp/d), which is
+   why quotecore's fixed-column quoteMarkdown() can't serve them. A cell may be a plain
+   string OR a T1 structured `{t, c}` cell — cellText() renders the plain markdown text for
+   either, so stdout stays colorless while the app keeps the class. --- */
 export const mdTable = (headers, rows) =>
   ['| ' + headers.join(' | ') + ' |',
    '| ' + headers.map(() => '---').join(' | ') + ' |',
-   ...rows.map(r => '| ' + r.join(' | ') + ' |')].join('\n');
+   ...rows.map(r => '| ' + r.map(cellText).join(' | ') + ' |')].join('\n');
 
-/* --- stdCells(name, row): the standard 9-column QUOTE_HEADERS cells as an array,
-   ready for mdTable (or to have extra columns appended). Wraps quotecore.quoteCells. --- */
-export const stdCells = (name, row) => {
-  const c = quoteCells(name, row);
-  return [c.item, c.guide, c.mid, c.buy, c.sell, c.net, c.vol, c.mom, c.regime];
-};
+/* --- stdCells(name, row): the standard QUOTE_HEADERS cells as an ORDERED ARRAY of structured
+   `{t, c}` cells (T1), ready for mdTable (renders text) or the app publish path (keeps class),
+   or to have extra columns appended. Wraps quotecore.quoteCells directly. --- */
+export const stdCells = (name, row) => quoteCells(name, row);

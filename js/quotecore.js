@@ -319,37 +319,62 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now){
 }
 
 /* Canonical formatted cells — the SINGLE source both the app HTML table (js/quote.js) and the
-   chunk-3 markdown scripts build from, so the numbers are byte-identical everywhere. */
-export const QUOTE_HEADERS=['Item','Guide','Mid','Buy@ Quick / Opt','Sell@ Quick / Opt','Net/u Quick / Opt (ROI)','Vol/d','Mom','Regime'];
-// last-2h momentum symbol for the Mom column (dig-in views only; NOT the Finder bulk list).
-export const momSymbol=mom=>mom==='breakdown'?'↓':mom==='breakup'?'↑':'clean';
+   chunk-3 markdown scripts build from, so the numbers are byte-identical everywhere.
+   T1 (table v2): the composite Buy@/Sell@/Net columns collapsed into two SELF-CONTAINED
+   columns — Quick and Optimistic — each carrying its own `buy → sell · net (ROI)`; Mid is
+   dropped from the table (it's just the 24h-avg midpoint, redundant next to Guide + live
+   prices — the model still exposes row.mid for rating.mjs/watch.mjs). quoteCells now returns
+   an ORDERED ARRAY of structured cells `{t, c}` (t = plain text for markdown/cellText; c =
+   optional css class, app-only color). cellText() derives the exact markdown string the
+   scripts print, so stdout stays plain while the app colors gain/loss + momentum. */
+export const QUOTE_HEADERS=['Item','Guide','Quick','Optimistic','Vol/d','Momentum','Regime'];
+// Momentum strength — at/above this fraction of overshoot BEYOND the item's own 2h band edge
+// (row.momPct = (bandEdge−livePrice)/bandEdge, set pre-clamp in computeQuote) a break is
+// "strong" → a double arrow (↓↓ / ↑↑); below it a single arrow. Named + tunable.
+export const MOM_STRONG_PCT=0.02;   // ≥2% past the band edge = a strong break
+// Momentum display token {sym, cls} from the categorical `mom` (unchanged — momVerdict/cut-trigger
+// still consume `mom`) + its pre-clamp overshoot fraction. clean → '–' muted; single arrow amber;
+// strong break → ↓↓ loss(red) / ↑↑ gain(green). Same symbols in markdown + app (color app-only).
+export function momCell(mom, momPct){
+  const p=momPct||0;
+  if(mom==='breakdown') return p>=MOM_STRONG_PCT?{sym:'↓↓',cls:'loss'}:{sym:'↓',cls:'amber'};
+  if(mom==='breakup')   return p>=MOM_STRONG_PCT?{sym:'↑↑',cls:'gain'}:{sym:'↑',cls:'amber'};
+  return {sym:'–',cls:'mommuted'};
+}
+// signed price / roi for the composite cells (fmtP already renders a leading '-' for negatives)
+const sfmtP=n=>n==null?'—':((n>0?'+':'')+fmtP(n));
+const roiStr=r=>r==null?'—':((r>=0?'+':'')+r.toFixed(1)+'%');
+// pull the plain markdown text out of a structured cell (or a bare string) — the ONE place the
+// script stdout and the app HTML agree on what a cell says.
+export const cellText=c=>(c && typeof c==='object' && 't' in c)?c.t:c;
 export function quoteCells(name, row){
-  const roi=r=>r==null?'—':((r>=0?'+':'')+r.toFixed(1)+'%');
-  return {
-    item:  name,
-    guide: row.guide!=null?fmtP(row.guide):'—',
-    mid:   row.mid!=null?fmtP(row.mid):'—',
-    buy:   fmtP(row.quickBuy)+' / '+fmtP(row.optBuy),
-    sell:  fmtP(row.quickSell)+' / '+fmtP(row.optSell),
-    net:   fmtP(row.quickNet)+' / '+fmtP(row.optNet)+' ('+roi(row.quickRoi)+' / '+roi(row.optRoi)+')',
-    vol:   row.volDay!=null?fmt(row.volDay)+'/d':'—',
-    mom:   momSymbol(row.mom),
-    regime:(row.regime&&row.regime.ok)?(cap(row.regimeLabel)+' '+(row.regime.driftPct>=0?'+':'')+row.regime.driftPct.toFixed(0)+'%'):'—'
-  };
+  // one self-contained transact-basis cell: "buy → sell · +net (roi)", colored by net sign
+  const composite=(buy,sell,net,roi)=>({
+    t: fmtP(buy)+' → '+fmtP(sell)+' · '+sfmtP(net)+' ('+roiStr(roi)+')',
+    c: net==null?undefined:(net>=0?'gain':'loss')
+  });
+  const m=momCell(row.mom, row.momPct);
+  return [
+    {t:name},
+    {t:row.guide!=null?fmtP(row.guide):'—'},
+    composite(row.quickBuy, row.quickSell, row.quickNet, row.quickRoi),
+    composite(row.optBuy,   row.optSell,   row.optNet,   row.optRoi),
+    {t:row.volDay!=null?fmt(row.volDay)+'/d':'—', c:'mini'},
+    {t:m.sym, c:m.cls},
+    {t:(row.regime&&row.regime.ok)?(cap(row.regimeLabel)+' '+(row.regime.driftPct>=0?'+':'')+row.regime.driftPct.toFixed(0)+'%'):'—'}
+  ];
 }
 /* markdown table for the chunk-3 pipeline scripts (built now so both sides share quoteCells).
    rows: [{name, row}]
    NOTE (chunk 10.2): still UNADOPTED by quote.mjs/screen.mjs — deliberately. Both consumers
-   APPEND columns to the standard 9 (quote.mjs --positions → Held@/Break-even/Verdict;
-   screen.mjs → Exp gp/d), and this helper hard-codes QUOTE_HEADERS + the fixed 9-cell order,
-   so it can't express an extended table. The scripts instead share the generic
-   pipeline/cli.mjs mdTable(headers, rows) + stdCells(name, row) split (stdCells === this
-   function's `order(quoteCells(...))`). Kept as the documented fixed-column shared-API form
-   for a future consumer that wants exactly the standard table. */
+   APPEND columns to the standard set (quote.mjs --positions → Held@/Break-even/Verdict;
+   screen.mjs → Grade + Score gp/d), and this helper hard-codes QUOTE_HEADERS + the fixed cell
+   order, so it can't express an extended table. The scripts instead share the generic
+   pipeline/cli.mjs mdTable(headers, rows) + stdCells(name, row) split. Kept as the documented
+   fixed-column shared-API form for a future consumer that wants exactly the standard table. */
 export function quoteMarkdown(rows){
-  const c=quoteCells, order=x=>[x.item,x.guide,x.mid,x.buy,x.sell,x.net,x.vol,x.mom,x.regime];
   const head='| '+QUOTE_HEADERS.join(' | ')+' |';
   const sep ='| '+QUOTE_HEADERS.map(()=>'---').join(' | ')+' |';
-  const body=(rows||[]).map(({name,row})=>'| '+order(c(name,row)).join(' | ')+' |');
+  const body=(rows||[]).map(({name,row})=>'| '+quoteCells(name,row).map(cellText).join(' | ')+' |');
   return [head,sep,...body].join('\n');
 }

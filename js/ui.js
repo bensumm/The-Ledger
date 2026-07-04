@@ -53,12 +53,15 @@ export function renderFinder(){
     const gTitle=rt?('Rating factors — ROI '+Math.round(rt.roiS*100)+'% · Liquidity '+Math.round(rt.volS*100)+'% · Stability '+Math.round(rt.stabS*100)+'% · Turnaround '+Math.round(rt.turnS*100)+'% (stability = live price vs guide; full regime check is on Trends)'):'insufficient data';
     const tb=TREND_BADGE[(it.trend&&it.trend.state)||'none']||TREND_BADGE.none;
     const badge=tb.g?' <span class="tbadge '+tb.c+'" title="'+tb.t+(it.trend&&it.trend.divPct!=null?' · '+(it.trend.divPct>=0?'+':'')+it.trend.divPct.toFixed(1)+'% vs guide':'')+'">'+tb.g+'</span>':'';
+    // T1.4: Risk grade + Rating bar sit immediately after the item name (identity first),
+    // then the price/margin columns — cell order must match the <th> order in index.html.
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+badge+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
+      '<td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>'+
+      '<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
       '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
       '<td class="num gain">'+fmtP(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
-      '<td class="num gold">'+fmt(it.pph)+'</td><td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>'+
-      '<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
+      '<td class="num gold">'+fmt(it.pph)+'</td>'+
       '<td><button class="act qbtn" data-quote="'+it.id+'" title="on-demand standard market table (Quick/Optimistic, regime)">quote</button> <button class="star '+(watched?'on':'')+'" data-id="'+it.id+'">'+(watched?'★':'☆')+'</button></td></tr>';
   }).join('');
   body.querySelectorAll('.star').forEach(b=>b.onclick=()=>toggleWatch(+b.dataset.id));
@@ -520,13 +523,18 @@ const fmtAge=ms=>{ const s=Math.max(0,Math.round(ms/1000));
   const m=Math.round(s/60); if(m<90) return m+'m';
   const h=Math.round(m/60); if(h<48) return h+'h';
   return Math.round(h/24)+'d'; };
+// cells may be legacy plain strings (schema 1) OR T1 structured {t,c} (schema 2) — read both.
+const scText=c=>(c && typeof c==='object' && 't' in c)?c.t:c;
+const scCls =c=>(c && typeof c==='object' && c.c)?c.c:'';
 function scanTableHtml(headers, rows){
   if(!rows||!rows.length) return '<div class="scannone">— none —</div>';
   const head='<thead><tr>'+headers.map((h,i)=>'<th'+(i===0?' class="left"':'')+'>'+h+'</th>').join('')+'</tr></thead>';
   const body='<tbody>'+rows.map(r=>{ const cells=r.cells||[];
-    return '<tr>'+cells.map((c,i)=> i===0
-      ? '<td class="left"><span class="linkname" data-trend="'+r.id+'">'+c+'</span></td>'
-      : '<td>'+c+'</td>').join('')+'</tr>'; }).join('')+'</tbody>';
+    return '<tr>'+cells.map((c,i)=>{
+      if(i===0) return '<td class="left"><span class="linkname" data-trend="'+r.id+'">'+scText(c)+'</span></td>';
+      if(headers[i]==='Grade'){ const g=scText(c); return '<td><span class="grade r'+g+'">'+g+'</span></td>'; }
+      return '<td class="'+scCls(c)+'">'+scText(c)+'</td>';
+    }).join('')+'</tr>'; }).join('')+'</tbody>';
   return '<div class="tablewrap"><table class="scantable">'+head+body+'</table></div>';
 }
 // per-niche display metadata — one table per niche, each already sorted by Grade (screen.mjs sorts

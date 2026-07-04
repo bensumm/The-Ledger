@@ -83,30 +83,39 @@ committed project skills `/scan`, `/positions`, `/overnight`, `/morning`
 workflow runs. The ask→command table below still routes bare asks.
 
 ## Market analysis workflow — standard output format
-Every market read presented to Ben (screen, per-item quote, position review) is ONE table:
-`Item | Guide | Mid | Buy@ Quick/Opt | Sell@ Quick/Opt | Net/u Quick/Opt (ROI) | Vol/d | Mom | Regime`
-- Quick = transact now (buy at live instasell, sell at live instabuy). Optimistic = patient
-  2h-band edges (last 24×5m points: min avgLow / max avgHigh).
-- **Ordering + the `Mom` (last-2h momentum) column.** On ONE consistent basis, optBuy ≤ quickBuy
+Every market read presented to Ben (screen, per-item quote, position review) is ONE table
+(the **table v2** column set, T1):
+`Item | Guide | Quick | Optimistic | Vol/d | Momentum | Regime`
+- **Quick** and **Optimistic** are each SELF-CONTAINED cells reading `buy → sell · net/u (ROI)`
+  (net after 2% tax; the cell is colored gain/loss in the app). Quick = transact now (buy at live
+  instasell, sell at live instabuy). Optimistic = patient 2h-band edges (last 24×5m points: min
+  avgLow / max avgHigh). Mid is dropped from the table (redundant next to Guide + the live prices;
+  the row model still exposes `row.mid` for `rating.mjs`/`watch.mjs`).
+- **Ordering + the `Momentum` (last-2h momentum) column.** On ONE consistent basis, optBuy ≤ quickBuy
   ≤ quickSell ≤ optSell holds *normally*. A break means one of two things — check the bases FIRST:
   (1) **inconsistent bases → bug** (24h percentiles mixed with live quotes — the 2026-07-03
   incident); fix the script. (2) **consistent bases (live `/latest` + 2h 5m-band) → a real-time
   momentum tell**, not an error: the live price moved *outside* its own 2h band. `quickBuy < optBuy`
-  (live instasell below the 2h floor) = **↓ breaking down / active pullback** — don't buy in, and a
+  (live instasell below the 2h floor) = **breaking down / active pullback** — don't buy in, and a
   held big-ticket flashing this is a CUT trigger that fires *before* the lagging multi-day regime
   confirms (this is the signal whose absence cost us on the bludgeon exit). `quickSell > optSell`
-  (live instabuy above the 2h top) = **↑ breaking up / fresh 2h high**. Clean in-band = ranging.
+  (live instabuy above the 2h top) = **breaking up / fresh 2h high**. Clean in-band = ranging.
   The price columns clamp opt to never cross quick (correct *pricing*), so this tell is surfaced as
-  the **`Mom` column** (clean / ↓ / ↑), computed from the *pre-clamp* live-vs-band comparison. `Mom`
+  the **`Momentum` column**, computed from the *pre-clamp* live-vs-band comparison and rendered with
+  strength-graded arrows: `–` (clean/in-band, muted) · `↑`/`↓` (single-arrow break, amber) ·
+  `↑↑`/`↓↓` (strong break ≥ `MOM_STRONG_PCT` past the band edge — green up / red down). `Momentum`
   is a **dig-in / position-management** signal — it appears in the per-item views that fetch the real
   2h series (Trends card, Finder expander, position review) and the `quote.mjs`/`screen.mjs` scripts,
   and it drives the position cut-trigger (a held breakdown escalates toward CUT before the regime
-  confirms; big-ticket in-profit-but-breaking-down positions clear rather than hold). It is
-  deliberately NOT wired into the bulk Finder-list rating (approximate there / churns the sort).
-  Verified live 2026-07-03 — flags matched an independent 2h-drift read.
+  confirms; big-ticket in-profit-but-breaking-down positions clear rather than hold). The categorical
+  `mom` (clean/breakdown/breakup) is unchanged — the arrows are display strength only; `momVerdict`/
+  the cut-trigger still consume `mom`. It is deliberately NOT wired into the bulk Finder-list rating
+  (approximate there / churns the sort). Verified live 2026-07-03 — flags matched an independent
+  2h-drift read.
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
 - Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
-- Net/u after 2% tax. Regime = multi-day regimeDrift check (flat/rising/falling label).
+- Net/u (inside the Quick/Optimistic cells) is after 2% tax. Regime = multi-day regimeDrift check
+  (flat/rising/falling label).
 - Break-even = `ceil(buy/0.98)` — never list a held item below it.
 - **Falling-regime items are excluded from screens entirely — don't show or mention them.**
   Exception: items Ben holds or asks about → always show, with price-to-clear guidance.

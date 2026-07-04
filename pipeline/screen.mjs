@@ -201,8 +201,12 @@ function renderMode(mode, { cand, survivors }, qcache, map) {
     }
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null });
-    const std = stdCells(name, row);                        // [item, guide, mid, buy, sell, net, vol, mom, regime]
-    rows.push({ id: s.id, row, grade: r.grade, cells: [std[0], r.grade, ...std.slice(1), fmtP(r.score)], score: r.score });
+    const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
+    // insert Grade after Item, append Score gp/d — both structured {t} so the app publish path is
+    // uniform (Grade rendered as a pill app-side by header name; Score right-aligned num).
+    // `row`/`grade` kept on the pushed object — the O1 suggestions ledger reads them below.
+    const cells = [std[0], { t: r.grade }, ...std.slice(1), { t: fmtP(r.score), c: 'num' }];
+    rows.push({ id: s.id, row, grade: r.grade, cells, score: r.score });
     dist[r.grade] = (dist[r.grade] || 0) + 1;
   }
   rows.sort((a, b) => b.score - a.score);                   // display sorted by risk-adjusted grade/score
@@ -268,6 +272,7 @@ async function main() {
     const outPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'screen.json');
     const payload = {
       app: 'the-coffer-screen',
+      schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)
       generatedAt: new Date().toISOString(),
       mode: MODE,
       params: { floor: FLOOR, minRoi: MIN_ROI, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE },

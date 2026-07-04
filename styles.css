@@ -13,6 +13,7 @@
   .num{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
   .gain{color:var(--gain)} .loss{color:var(--loss)} .gold{color:var(--gold)}
   .amber{color:var(--amber)}
+  .mommuted{color:var(--muted)}   /* T1 Momentum column: clean/in-band '–' */
   .wrap{max-width:1220px; margin:0 auto; padding:0 18px}
 
   header{border-bottom:1px solid var(--line); background:linear-gradient(180deg,#1a130b,#140f08)}
@@ -102,9 +103,16 @@
   .chip input{accent-color:var(--gold); margin:0}
   .chip.on{border-color:var(--gold); color:var(--parch)}
 
-  .tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow)}
+  /* T1.5 sticky header + first column. .tablewrap is the scroll container (both axes), bounded
+     height so a long table scrolls INSIDE it while the header (and, on the flat Finder/Scan
+     tables, the first column) freeze. Sticky cells need OPAQUE backgrounds — they overlap
+     scrolled content — matching the row state: header = oak3, body first-col = oak, hover = row.
+     The sticky HEADER is global (harmless on every table); the sticky FIRST COLUMN is scoped to
+     the flat #finderTable / .scantable so the Ledger's grouped/detail rows (custom backgrounds)
+     and the single-row .qtwrap quote tables are left untouched. */
+  .tablewrap{overflow:auto; max-height:72vh; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow)}
   table{width:100%; border-collapse:collapse; min-width:880px}
-  thead th{background:var(--oak3); text-align:right; font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); padding:11px 13px; font-weight:600; white-space:nowrap; cursor:pointer; border-bottom:1px solid var(--line)}
+  thead th{position:sticky; top:0; z-index:2; background:var(--oak3); text-align:right; font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); padding:11px 13px; font-weight:600; white-space:nowrap; cursor:pointer; border-bottom:1px solid var(--line)}
   thead th.left{text-align:left}
   thead th.sorted{color:var(--gold)}
   thead th .arrow{font-size:9px; margin-left:3px}
@@ -112,6 +120,13 @@
   tbody td.left{text-align:left}
   tbody tr:hover{background:var(--row)}
   tbody tr:last-child td{border-bottom:none}
+  /* sticky first column — flat opportunity tables only */
+  #finderTable thead th.left, .scantable thead th.left{left:0; z-index:3}
+  #finderTable tbody td.left, .scantable tbody td.left{position:sticky; left:0; z-index:1; background:var(--oak)}
+  #finderTable tbody tr:hover td.left, .scantable tbody tr:hover td.left{background:var(--row)}
+  /* single-row standard-quote tables (Trends plan card / Finder expander / position review): no
+     bounded height needed — one data row, and the card supplies its own background. */
+  .qtwrap{overflow-x:auto; max-height:none}
   .itemname{font-weight:500; color:var(--parch)}
   .linkname{font-weight:500; color:var(--parch); cursor:pointer; border-bottom:1px dotted var(--line2)}
   .linkname:hover{color:var(--gold)}
