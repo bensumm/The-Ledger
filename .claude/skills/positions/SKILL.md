@@ -1,0 +1,84 @@
+---
+name: positions
+version: 1.0
+description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
+---
+
+# /positions — held-positions review, verdict interpretation, action plan
+
+Skills-versioning note: this file's `version` bumps on material behavior change; skills
+NEVER bump `APP_VERSION` (that marks the deployed app, which skills never touch).
+
+## 1. Run the script — never hand-fetch
+
+```
+node pipeline/quote.mjs --positions
+```
+
+That command IS the market read (reads `positions.json` open lots, quotes each held item,
+prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch. The gates
+already ran inside `momVerdict()` — your job is to *interpret* the printed verdicts, never
+to re-derive them.
+
+Freshness: `positions.json` re-syncs every ~20 min (Task Scheduler `CofferFillsSync`).
+Check the file's mtime; if it's older than ~25 min, say so before interpreting — a very
+recent trade may not be reflected. (`node pipeline/monitor.mjs` shows live log truth if a
+just-made trade matters.)
+
+## 2. Separate flip targets from incidental inventory
+
+Open lots include loot/supplies that were never flip targets (e.g. a stray Defence potion,
+molten glass). Do NOT spend verdict/action lines on sub-noise lots. Tests, in order:
+
+1. **Watchlist membership** — the natural positive signal (same idea as the Ledger
+   watchlist filter in CLAUDE.md's open followups).
+2. Absent watchlist data in-session, judgment: tiny total lot value (well under any sizing
+   threshold), consumable/loot character, never traded as a flip in `fills.json` history.
+
+Report incidentals in ONE collapsed line — "incidental inventory, ignored: X, Y" — and
+exclude them from the action plan. **Never CUT-recommend an incidental lot.**
+
+## 3. Interpret each verdict
+
+Vocabulary = `pipeline/MONITORING.md` step 4 (the PLAN-3 gate tree). The script emitted the
+verdict; you translate it into the action line:
+
+| Verdict | Action |
+| --- | --- |
+| NO-READ | No action — quote basis isn't a price. Keep any ask ≥ break-even; re-check at the next liquid window. |
+| DIURNAL-WATCH | Hold ≥ break-even; do NOT cut into a quiet-hour trough that recovered yesterday. |
+| SHOCK-WATCH | One-off volume shock, not a bleed — hold one more cycle; cut on a fresh low. |
+| CUT | Clear now at the instabuy. This is **controlled loss-taking** — freeing the capital — never "staying ahead of the drop" (MONITORING.md's sell-side framing; you can't outrun a fall by chasing your ask down). |
+| LIST-TO-CLEAR | List at the instabuy to clear. |
+| HOLD | Stay listed at the 2h top / patient edge. |
+| CUT-CANDIDATE | Underwater through a liquid window — persistence, not the clock. List to clear before a bigger loss. |
+
+**Reliability override (interim, pending the quotecore Gate-0 fix):** any row whose regime
+line carries the "⚠ feed inversion — quote basis unreliable" footnote is treated as
+**NO-READ-equivalent regardless of its printed verdict** (live 2026-07-04 datapoint: a
+footnoted item still printed CUT-CANDIDATE). No price action off an unreliable basis. This
+*extends* MONITORING.md Gate 0 — it doesn't contradict it — until the `js/quotecore.js`
+investigation (PLAN-5 "Out of scope") gates the verdict path itself.
+
+## 4. Render the action plan
+
+Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
+`item · held@ · break-even · verdict · exact action price`. Preserve the standard 9-column
+table exactly as the script printed it (that table is app-code canon — see CLAUDE.md
+"standard output format").
+
+Hard rules — cite, never recompute differently:
+- Never list below break-even `ceil(buy/0.98)`.
+- Held fallers ARE shown here with price-to-clear (the screen-exclusion rule's exception).
+- Guide = real GE guide price, never the wiki mapping `value` field.
+
+## 5. Interactive tail (standalone invocations only)
+
+- Ask Ben's **available capital** → size next moves against the action plan (big-ticket
+  caution: `BIG_TICKET_GP` = 10m lot value is the whole-lot threshold).
+- If cuts free GE slots → **offer `/scan`** to redeploy the capital.
+- **Offer the watch loop:** print the ready-to-paste command per MONITORING.md, surfacing
+  `watch.mjs`'s own cadence suggestion, e.g. `/loop 2m node pipeline/watch.mjs`.
+
+**Composition note:** when invoked from `/overnight`, SKIP this tail — `/overnight` owns
+the pause-for-capital as its phase boundary. The tail is for standalone use.

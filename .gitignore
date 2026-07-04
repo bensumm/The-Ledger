@@ -1,4 +1,6 @@
 .fills-commit-msg.tmp
+.claude/settings.local.json
+.claude/worktrees/
 pipeline/mapping.cache.json
 pipeline/held-override.json
 pipeline/.cache/
