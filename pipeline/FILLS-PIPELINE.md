@@ -332,7 +332,7 @@ The pipeline captured *what filled*; O1 adds *what the tool said* and *the marke
 placement*, so every offer's full story is recoverable and F1 (algorithm feedback) becomes a
 query rather than a re-derivation. Three pieces:
 
-### 10.1 `suggestions.jsonl` — the suggestions ledger (TRACKED, append-only)
+### 11.1 `suggestions.jsonl` — the suggestions ledger (TRACKED, append-only)
 Repo-root, committed. `quote.mjs` (per-item **and** `--positions`), `screen.mjs` (each rated
 niche row), and `watch.mjs` (each held/target read) append every emitted recommendation **at
 emit time, unconditionally**, via the shared `pipeline/suggestlog.mjs`. One JSON object per line:
@@ -348,7 +348,7 @@ includes it when present (same add-only-these-files discipline as `screen.json`)
 is still read-only w.r.t. the market/positions — this analytics append is the sole exception, and
 its header guardrail says so.
 
-### 10.2 Historical market-context retention (`/5m?timestamp=`)
+### 11.2 Historical market-context retention (`/5m?timestamp=`)
 Outcome analysis reconstructs the **trailing-2h band at each historical trade placement** (same
 basis as `patientTargets` / `computeQuote`'s `bandLo`/`bandHi`), which requires reading *past* 5m
 windows. The wiki `/5m?timestamp=<unix÷300>` bulk endpoint serves them, and a **live spot-check
@@ -359,7 +359,7 @@ that window. As insurance against re-fetching, the local `.cache/bands/` prune w
 90d** (`BANDS_RETENTION_DAYS` in `marketfetch.mjs`) — local + gitignored; **band data is never
 committed**.
 
-### 10.3 `pipeline/outcomes.mjs` — the join (DERIVED, gitignored)
+### 11.3 `pipeline/outcomes.mjs` — the join (DERIVED, gitignored)
 `node pipeline/outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
 gitignored `outcomes.json` (rebuildable any time; `outcomes.json` + `.cache/outcomes-bands/` are in
 `.gitignore`). A **campaign** = one intent to trade: a same-item/same-side chain of offers
