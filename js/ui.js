@@ -523,17 +523,20 @@ const fmtAge=ms=>{ const s=Math.max(0,Math.round(ms/1000));
   const m=Math.round(s/60); if(m<90) return m+'m';
   const h=Math.round(m/60); if(h<48) return h+'h';
   return Math.round(h/24)+'d'; };
-// cells may be legacy plain strings (schema 1) OR T1 structured {t,c} (schema 2) — read both.
+// cells may be legacy plain strings (schema 1) OR T1 structured {t,c[,title]} (schema 2) — read all.
 const scText=c=>(c && typeof c==='object' && 't' in c)?c.t:c;
 const scCls =c=>(c && typeof c==='object' && c.c)?c.c:'';
+const scTitle=c=>(c && typeof c==='object' && c.title)?c.title:'';      // S1 thin-grade honesty tooltip
+const attr=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 function scanTableHtml(headers, rows){
   if(!rows||!rows.length) return '<div class="scannone">— none —</div>';
   const head='<thead><tr>'+headers.map((h,i)=>'<th'+(i===0?' class="left"':'')+'>'+h+'</th>').join('')+'</tr></thead>';
   const body='<tbody>'+rows.map(r=>{ const cells=r.cells||[];
     return '<tr>'+cells.map((c,i)=>{
+      const ttl=scTitle(c), t=ttl?' title="'+attr(ttl)+'"':'';
       if(i===0) return '<td class="left"><span class="linkname" data-trend="'+r.id+'">'+scText(c)+'</span></td>';
-      if(headers[i]==='Grade'){ const g=scText(c); return '<td><span class="grade r'+g+'">'+g+'</span></td>'; }
-      return '<td class="'+scCls(c)+'">'+scText(c)+'</td>';
+      if(headers[i]==='Grade'){ const g=scText(c); return '<td'+t+'><span class="grade r'+g+'"'+(ttl?' title="'+attr(ttl)+'"':'')+'>'+g+'</span>'+(ttl?'<span class="thinflag" title="'+attr(ttl)+'">thin</span>':'')+'</td>'; }
+      return '<td class="'+scCls(c)+'"'+t+'>'+scText(c)+'</td>';
     }).join('')+'</tr>'; }).join('')+'</tbody>';
   return '<div class="tablewrap"><table class="scantable">'+head+body+'</table></div>';
 }
@@ -568,8 +571,10 @@ export async function renderScan(force){
   emptyEl.classList.add('hidden');
   // params line — say WHAT scan this is (mode + gates), so an old snapshot is self-explaining
   const p=scan.params||{}, mode=(scan.mode||'band');
+  const posture=(scan.posture||p.posture||'active');   // S2: which posture this scan reflects
   const priceWin=(p.minPrice?fmt(p.minPrice):'0')+'–'+(p.maxPrice?fmt(p.maxPrice):'∞');
-  if(metaEl) metaEl.innerHTML='<b>'+mode.toUpperCase()+'</b> scan · floor '+(p.floor??'—')+'/d · min ROI '+(p.minRoi??'—')+'% · '+priceWin+' gp · top '+(p.top??'—')+
+  if(metaEl) metaEl.innerHTML='<b>'+mode.toUpperCase()+'</b> scan · <b>'+posture.toUpperCase()+'</b> posture · floor '+(p.floor??'—')+'/d'+
+    (p.gpFloor?(' or '+fmt(p.gpFloor)+' gp-flow'):'')+' · min ROI '+(p.minRoi??'—')+'% · attn '+(p.minGpd?fmt(p.minGpd):'—')+'/d · '+priceWin+' gp · top '+(p.top??'—')+
     (['band','rising','churn'].includes(mode)?(' · band '+(p.bandHours??'—')+'h ≥'+(p.minActive??'—')+' windows'):'');
   // staleness — always surface the age (an hours-old scan is CONTEXT, not a live quote)
   const genMs=Date.parse(scan.generatedAt), ageMs=isNaN(genMs)?null:(Date.now()-genMs);
@@ -583,11 +588,41 @@ export async function renderScan(force){
   }
   const headers=scan.headers||[], niches=scan.niches||{};
   const present=NICHE_ORDER.filter(n=>Array.isArray(niches[n]));
-  tablesEl.innerHTML = present.length
+  let html = present.length
     ? present.map(n=>{ const m=NICHE_META[n]||{label:n,hint:''};
         return '<div class="scantier">'+m.label+(m.hint?' <span class="scanhint">— '+m.hint+'</span>':'')+'</div>'+scanTableHtml(headers, niches[n]); }).join('')
     : '<div class="scannone">— no niches in this scan —</div>';
+  // S3: the always-scanned Watchlist section (its own headers carry the extra Note column). Falling
+  // watchlist items ARE shown here (with a warning note) — the held/asked exception extends to them.
+  const wl=scan.watchlist;
+  if(wl && Array.isArray(wl.rows) && wl.rows.length){
+    html += '<div class="scantier scanwatch">Watchlist <span class="scanhint">— always shown, exempt from floors/gates; the Note says what a gate would have hidden</span></div>'+
+      scanTableHtml(wl.headers||headers, wl.rows);
+  }
+  tablesEl.innerHTML = html;
   tablesEl.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
+}
+
+/* S3: repo watchlist union. The pipeline can't read the browser's localStorage, so the shared
+   source of truth is tracked repo-root watchlist.json. The app treats STATE.watchlist as the UNION
+   of local (localStorage) + repo entries: merge any repo ids not already watched, IN-MEMORY (no
+   persist — write-back to the file is M1's PAT path; persisting here would bake repo items into
+   localStorage and break the union if the repo later drops them). Names resolve via the full mapping
+   (STATE.MAP), ids pass through. Call AFTER the market/mapping has loaded. */
+export async function loadRepoWatchlist(){
+  let arr;
+  try{ const r=await fetch('watchlist.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return; arr=await r.json(); }
+  catch{ return; }
+  if(!Array.isArray(arr) || !arr.length) return;
+  const resolve=e=>{
+    const s=String(e).trim();
+    if(/^\d+$/.test(s)) return +s;
+    const hit=STATE.byName[s.toLowerCase()]; if(hit) return hit.id;
+    const m=(STATE.MAP||[]).find(x=>x.name.toLowerCase()===s.toLowerCase()); return m?m.id:null;
+  };
+  let added=0;
+  for(const e of arr){ const id=resolve(e); if(id!=null && !STATE.watchlist.includes(id)){ STATE.watchlist.push(id); added++; } }
+  if(added){ logEvent('info','watchlist','union +'+added+' from repo watchlist.json'); renderWatch(); computeSignals(); }
 }
 
 export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); }

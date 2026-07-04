@@ -133,7 +133,11 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   (flat/rising/falling label).
 - Break-even = `ceil(buy/0.98)` — never list a held item below it.
 - **Falling-regime items are excluded from screens entirely — don't show or mention them.**
-  Exception: items Ben holds or asks about → always show, with price-to-clear guidance.
+  Exception: items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
+  guidance. `screen.mjs` appends a **Watchlist** section (from tracked repo-root `watchlist.json`)
+  quoting every watchlisted item as a full standard row — exempt from every floor/gate, graded, with
+  the reason a gate *would* have hidden it as a Note (below-floor / thin / one-sided / falling).
+  Falling watchlist items ARE shown there, with the falling warning.
 - Screens: `screen.mjs` prints one table per niche, adding a Grade + `Score gp/d` column to
   the canonical layout (grade cutoffs in `rating.mjs` are placeholders pending validation).
 **How to generate these tables — each canonical ask maps to a skill or an exact command.

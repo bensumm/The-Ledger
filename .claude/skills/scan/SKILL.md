@@ -59,8 +59,14 @@ This is the tribal layer the script can't do — apply ALL of these:
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
 - Falling-regime items are silently excluded by the script — never re-add or mention them.
-  Exception: items Ben holds or explicitly asks about → always show, with price-to-clear.
-- Preserve the standard 9-column table exactly as printed (app-code canon).
+  Exception: items Ben holds, explicitly asks about, or **watchlists** → always show, with
+  price-to-clear.
+- **Watchlist section (S3): always report, honestly.** The script appends a Watchlist table (from
+  repo-root `watchlist.json`) that is exempt from every floor/gate; each row carries a Note saying
+  what a gate would have hidden (below-floor / thin / one-sided / falling). Never silently drop a
+  watchlist row and never hype one past its read — surface it with its Note and one honest line.
+  Falling watchlist items appear here with the falling warning (they're excluded from the niches).
+- Preserve the standard table columns exactly as printed (app-code canon).
 
 ## 4. Output
 

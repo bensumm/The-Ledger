@@ -62,7 +62,7 @@ import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily
 import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
 import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -304,6 +304,78 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m) {
   return rows.map(r => ({ id: r.id, cells: r.cells }));
 }
 
+// --- S3: watchlist always scanned -------------------------------------------------------------
+// The pipeline can't read the browser's localStorage, so the watchlist source of truth is tracked
+// repo-root watchlist.json (array of item names/ids). Every scan ALWAYS quotes every watchlisted
+// item as a full standard row, EXEMPT from all floors/gates, graded, with the reason a gate WOULD
+// have hidden it as a Note — and FALLING watchlist items ARE shown (the held/asked falling-exception
+// now extends to watchlisted items). The app takes union(localStorage, repo file); write-back is M1.
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+function loadWatchlist(map) {
+  let raw;
+  try { raw = JSON.parse(readFileSync(join(REPO_ROOT, 'watchlist.json'), 'utf8')); }
+  catch { return []; }                                    // absent/unreadable → no watchlist section
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set(), out = [];
+  for (const entry of raw) {
+    const hit = map.resolve(typeof entry === 'number' ? String(entry) : entry);
+    if (!hit || seen.has(hit.id)) continue;
+    seen.add(hit.id); out.push(hit);
+  }
+  return out;
+}
+// best-effort realistic gp/day for a watchlist grade (no mode context) — band edge if we have one,
+// else the 24h-avg spread; same expUnits basis as the niches. Informational only.
+function roughExpGpDay(d, bands, id, limit) {
+  if (!d) return 0;
+  const b = bands && bands[id];
+  let net;
+  if (b && b.bandHi != null && b.bandLo != null) net = (b.bandHi - tax(b.bandHi)) - b.bandLo;
+  else if (d.avgHighPrice && d.avgLowPrice) net = (d.avgHighPrice - tax(d.avgHighPrice)) - d.avgLowPrice;
+  else return 0;
+  if (net <= 0) return 0;
+  return Math.round(expUnits(limit, Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0)) * net);
+}
+// the reason a gate WOULD have hidden this row (empty = it'd pass a normal scan) — surfaced as a Note.
+function watchlistNote(row, d, bands, id, limit) {
+  const hpv = d?.highPriceVolume || 0, lpv = d?.lowPriceVolume || 0;
+  if (hpv <= 0 || lpv <= 0) return 'one-sided book — uncrossable (ghost-spread)';
+  if (row.falling) return 'falling — price to clear, do not accumulate';
+  const limitVol = Math.min(hpv, lpv), mid = row.mid || ((d.avgHighPrice + d.avgLowPrice) / 2);
+  if (limitVol < FLOOR) return limitVol * mid >= GP_FLOOR ? `thin (~${limitVol}/day — size in units)` : 'thin/illiquid — few trades/day';
+  if (roughExpGpDay(d, bands, id, limit) < MIN_GPD) return `below ${(MIN_GPD/1e3).toLocaleString()}k/day attention floor`;
+  return '';                                               // would surface in a normal scan on merit
+}
+async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
+  const wl = loadWatchlist(map);
+  if (!wl.length) return null;
+  const { v24, bands } = ctx;
+  const rows = [], sugg = [];
+  for (const { id, name } of wl) {
+    let row = qcache.get(id);
+    if (!row) {                                           // not in any niche fetch pool → fetch it now
+      const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
+      const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
+      row = computeQuote({ latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true });
+    }
+    const d = v24[id], limit = map.byId[id]?.limit ?? null;
+    const limitVol = d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : 0;
+    const thin = d ? (limitVol > 0 && limitVol < FLOOR) : false;
+    const r = rateItem({ row, expGpDay: roughExpGpDay(d, bands, id, limit), thin });
+    const std = stdCells(name, row);
+    const gradeCell = thin ? { t: r.grade, title: `thin: ~${limitVol}/day two-sided — size in units, expect slow fills` } : { t: r.grade };
+    const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
+    rows.push({ id, cells });
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: r.grade }));
+  }
+  logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
+  const headers = [...HEADERS, 'Note'];
+  console.log(`## WATCHLIST — ${rows.length} item(s) (always shown; exempt from floors/gates; falling items shown with a warning)`);
+  console.log(mdTable(headers, rows.map(r => r.cells)));
+  console.log('');
+  return { headers, rows };
+}
+
 async function main() {
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   const map = await loadMapping();
@@ -338,6 +410,7 @@ async function main() {
   console.log('');
   const niches = {};
   for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m);
+  const watchlist = await runWatchlist(map, ctx, guide, latest, qcache, series5m);   // S3: always-scanned watchlist
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the
   // rows so a stale published file can never mismatch app-side header code; cells are byte-identical
@@ -353,9 +426,12 @@ async function main() {
       params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE },
       headers: HEADERS,
       niches,
+      // S3 watchlist section — its own headers (adds a Note column) travel with it so the app renders
+      // it as a distinct always-shown section; null when watchlist.json is empty/absent.
+      watchlist: watchlist ? { headers: watchlist.headers, rows: watchlist.rows } : null,
     };
     writeFileSync(outPath, JSON.stringify(payload, null, 2) + '\n');
-    console.log(`(published → screen.json: ${RUN_MODES.map(m => `${m} ${niches[m].length}`).join(', ')})`);
+    console.log(`(published → screen.json: ${RUN_MODES.map(m => `${m} ${niches[m].length}`).join(', ')}${watchlist ? `, watchlist ${watchlist.rows.length}` : ''})`);
   }
 }
 
