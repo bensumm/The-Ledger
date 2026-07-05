@@ -96,7 +96,7 @@ full story.
   `/overnight` `/morning` at `.claude/skills/*/SKILL.md`; per-workflow doctrine *moved*
   there. Skills-only changes bump the SKILL.md `version:` frontmatter, NEVER `APP_VERSION`.
 - **`/overnight` fill-realism check** (v1.1/1.2) — band-floor bids don't fill overnight;
-  `nightlows.mjs` scores recent nights; size as "up to", not a guarantee.
+  `windowrange.mjs` (né `nightlows.mjs`) scores recent nights; size as "up to", not a guarantee.
 - **Self-improving skills** (PLAN-5 K1) — each workflow skill's closing "Encode learnings"
   section: after the market work (offers first), one canonical home per fact, background
   subagent edits+commits. Market claims still need evidence (one session = one sample).
@@ -165,7 +165,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   the canonical layout (grade cutoffs in `rating.mjs` are placeholders pending validation).
 - **Time-of-day context on every price recommendation (Ben, 2026-07-05).** Whenever a
   specific buy or sell price is being suggested (scan pick, per-item quote follow-up,
-  position reprice, ladder rung), run a `nightlows.mjs` window read for the relevant
+  position reprice, ladder rung), run a `windowrange.mjs` window read for the relevant
   local-hours window (e.g. `--window 21-0` for a late-evening bid) and read the level
   against the last ~14 same-window lows — daily movement patterns are standing context,
   not an overnight-only tool. It caught the bludgeon evening bounce, re-priced the jaw
@@ -215,10 +215,13 @@ Script facts the skills rely on (current behavior, not doctrine):
   bids get an ACTIVE BIDS section with verdicts BID-OK / BID-BEHIND / CROSSING / CANCEL-BID
   (only CANCEL-BID — adverse-selection fill risk — alerts). Offers under 100k total value
   are noise, collapsed to one line. `quote.mjs --positions` remains the booked-lots view.
-- `nightlows.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>]` scores the last ~14
-  local nights from the 1h timeseries: per-night low + overnight instasell volume, and the
-  bid levels touched on ~50%/~75%/all nights. `/overnight`'s fill-realism check runs it on
-  every candidate bid ("touched" ≠ limit filled; ~14 nights is a small sample).
+- `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]` (renamed
+  from `nightlows.mjs` 2026-07-05 when the high side was added) scores the last ~14 local
+  days from the 1h timeseries: per-day window low AND high + instasell/instabuy volume, the
+  bid levels touched and ask levels reached on ~50%/~75%/all days, and `--bid`/`--ask`
+  scoring for specific candidates. `/overnight`'s fill-realism check runs it on every
+  candidate bid; the time-of-day doctrine bullet above runs it on every price rec
+  ("touched/reached" ≠ limit filled; ~14 days is a small sample).
 
 ## Open followups (not yet built)
 - **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — ALL open work lives

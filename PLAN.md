@@ -532,7 +532,7 @@ documented sample thresholds clear (process rule 4).
   thin per-unit margins, but if churn should stay useful it may need a niche-specific floor
   exemption (lane S, 2026-07-04).
 - README.md's pipeline file inventory is incomplete: missing `watch.mjs`, `rating.mjs`,
-  `nightlows.mjs`, `offers.mjs`, `outcomes.mjs`, `suggestlog.mjs`, `quotecore.test.mjs` and the
+  `windowrange.mjs` (né `nightlows.mjs`), `offers.mjs`, `outcomes.mjs`, `suggestlog.mjs`, `quotecore.test.mjs` and the
   tracked root files `watchlist.json`/`suggestions.jsonl`/`screen.json` (wave-3 scan,
   2026-07-04). Fix staged on branch `g1-readme-inventory` — becomes the G1 acceptance PR once
   the gh token is refreshed.

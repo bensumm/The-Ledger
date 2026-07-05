@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.5
+version: 1.6
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -19,7 +19,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    sessions price bids near the live instasell to fill; overnight inverts that. Before the
    pause, list every RESTING BUY offer (`node pipeline/watch.mjs` shows them with verdicts)
    and flag any bid priced at/near the live instasell or in the upper half of its band —
-   each must be **cancelled or dropped to the band floor / a `nightlows.mjs`-supported
+   each must be **cancelled or dropped to the band floor / a `windowrange.mjs`-supported
    level** before Ben walks away. A chase-priced bid left unattended fills into the first
    quiet-hours dip with nobody watching the exit — the exact adverse selection the active
    posture accepts only because someone is at the keyboard. Canonical posture doctrine:
@@ -48,7 +48,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      is the 2h-band FLOOR: an extreme print, not a typical price, and overnight is
      exactly when nobody crosses down to it (2026-07-04: both rune bids placed at the
      evening band floor went 0/25,000 in ~7.5h; by morning the floor had drifted above
-     the bids). **Run `node pipeline/nightlows.mjs "<item>" --bid <candidate>` for every
+     the bids). **Run `node pipeline/windowrange.mjs "<item>" --bid <candidate>` for every
      candidate bid** — it scores the last ~14 local nights from the 1h timeseries and
      prints the bid levels touched on ~50%/~75%/all nights plus the overnight instasell
      volume pool. Price must-fill bids at a level touched on **most** recent nights
