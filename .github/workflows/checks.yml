@@ -32,6 +32,9 @@ jobs:
       - name: quotecore acceptance fixtures
         run: node pipeline/quotecore.test.mjs
 
+      - name: reconstruction acceptance fixtures
+        run: node pipeline/reconstruct.test.mjs
+
       - name: fills.json / positions.json parse
         run: |
           node -e "
