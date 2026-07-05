@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.2
+version: 1.3
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -42,6 +42,16 @@ This is the tribal layer the script can't do — apply ALL of these:
   intraday band, the band IS the edge: ladder buys at band lows / sell at band tops (the
   crystal-teleport-seed lesson — the band beat mid-spread flips ~4:1). Never list below
   break-even; don't chase a softening item's buy.
+- **Entry aggression follows posture (Ben, 2026-07-05).** When Ben is ACTIVELY flipping
+  (at the client, watch loop running), price entries to FILL: recommend bids at or near
+  the live instasell — or the upper half of the band — accepting a thinner per-unit edge
+  so long as the exit still clears break-even meaningfully (the validated half-chase:
+  bludgeon 2026-07-05, +292k). A band-floor bid watching a riser run away costs more in
+  missed cycles than the floor discount saves — that day's chin/ring/jaw floor bids never
+  filled. When Ben is PASSIVE (walking away / overnight), invert: deep optimistic /
+  band-floor bids only, sized for the good payout if hit (`/overnight`'s fill-realism
+  check governs), and never leave a near-live chase bid resting unattended — it fills
+  into the first dip with nobody watching. State which posture a recommendation assumes.
 - **Band-top artifact detection.** A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
