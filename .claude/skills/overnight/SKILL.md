@@ -46,6 +46,14 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      (units × capital at risk, often 1–2 fills) and **flag retrace risk on the line**.
    - Honesty rule (process rule 4): the posture's stale-by-morning test is one prior night =
      one sample. It PICKS among existing edges; it does not predict. Don't oversell it.
+   - **Nightly-low TREND check (v1.7, 2026-07-05).** The posture's flat-regime gate passed
+     three items in one run (tormented bracelet, amulet of fury, zombie axe) whose *nightly
+     lows* were trending straight down or had just repriced — fallers/repricers in disguise
+     that the multi-day regime average hadn't caught yet. When the fill-realism windowrange
+     read comes back, also LOOK AT THE PER-DAY LOW COLUMN: lows stepping down night after
+     night (or a 0/14 touch count on a bid near live) = the item is falling into your bid —
+     skip it regardless of the regime label. The touch-quantiles alone can mislead when the
+     touches all predate a reprice (zombie axe: 10/14 touched, 0/4 post-reprice).
    - **Fill-realism check (v1.1; measured, not guessed, since v1.2).** The optimistic buy
      is the 2h-band FLOOR: an extreme print, not a typical price, and overnight is
      exactly when nobody crosses down to it (2026-07-04: both rune bids placed at the

@@ -90,6 +90,21 @@ down rather than binary hold-vs-cut. When the tripwire prints, EXECUTE without r
 the jaw 16.49m print (7-day floor break) is the anchor; the discipline only protects you if
 the named level is obeyed both ways.
 
+**Cut-and-rebid friction bar (2026-07-05, Ben-endorsed):** a cut paired with a deeper
+re-entry bid is a legitimate two-leg (the jaw anchor: cut 16.87m, rebid 16.42m) — but each
+sell pays 2% tax, so the pair only beats holding if the rebid sits **more than tax + half
+the spread below the clear price** (~2.5%+). Below that bar the "rebid" is tax bleed: the
+cut stands alone and the freed capital goes to a better home instead. State the discount vs
+friction numbers explicitly when recommending the pair.
+
+**Tripwire conviction (2026-07-05, one-sample refinement — honesty rule applies):** the jaw
+tripwire fired on a 1-in-1000 overshoot (16.49m against a 16.50m line) that stabilized
+immediately — the floor "break" was 20k deep and the item recovered within the hour. A
+structural tripwire should require conviction of the break before executing: a print
+**meaningfully through** the level (~0.5%+) or two consecutive passes below it, not a
+grazing touch. This tightens WHEN the tripwire fires; it does not soften obeying it once
+fired (the override-discipline rule above stands).
+
 **Limit-blocked CROSSING (2026-07-05):** a bid at/above the live instasell prints CROSSING
 ("expect fills about now") even when the 4h buy limit makes fills impossible — the gate can't
 see limits. Before expecting fills or repricing a "not filling" bid, check the last buys in
