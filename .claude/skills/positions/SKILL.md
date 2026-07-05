@@ -63,6 +63,13 @@ verdict; you translate it into the action line:
 
 **Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `nightlows.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
 
+**Fill-progress check before CUT-CANDIDATE action (2026-07-05):** before acting on a
+CUT-CANDIDATE (or shallow UNDERWATER), check whether the current ask is actively filling
+(`monitor.mjs` / the watch row's `listed n/m`). An ask that is transacting above the
+clear price beats repricing down to a lower clear — twice on 2026-07-04 the gate fired
+while the ask was filling (souls at 6k/25k) or 1gp under break-even; both were correctly
+held. Depth and fill progress are context the stateless gate can't see; judge with them.
+
 A feed-inverted row (regime line carries the "⚠ feed inversion — quote basis unreliable"
 footnote) now prints **NO-READ** on its own — Gate 0 in `momVerdict()` folds inversion into
 the reliability signal (Q1, quotecore 0.36.0). No interim override needed; just read the

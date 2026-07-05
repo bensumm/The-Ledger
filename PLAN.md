@@ -91,6 +91,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | ✅ `553c3a6`+`b57fbe8` (scheduler DELETED; ruleset id 18520289 active: PR+`checks` required, admin-always bypass verified. Two limits: **no merge queue** — user-owned repo; **PR creation token-blocked** until Ben runs `gh auth refresh -s repo`, then merge staged branch `g1-readme-inventory` as the acceptance PR) |
 | M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | DISPATCHED (wave 3, 2026-07-04) |
 | N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | DISPATCHED (wave 3, 2026-07-04) |
+| P1 | Snapshot-re-emission dedupe in reconstruct.mjs | `pipeline/reconstruct.mjs`, fixtures, `pipeline/FILLS-PIPELINE.md` | OPEN |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -432,6 +433,20 @@ before code** (a short committed doc section): delivery mechanism.
   names/prices only — already public in this repo; obscure topic name, no PII); (c)
   GitHub Actions + email (slowest, last resort).
 - Keep it out of the app entirely — pipeline + scheduled session only.
+
+### P1 — Snapshot-re-emission dedupe (diagnosed 2026-07-05)
+
+RuneLite re-broadcasts all GE slot states on login/world-hop/GE-open; completed-but-
+uncollected offers re-log their terminal line, and collapseOffers reads the second
+terminal as a second trade (phantom BUY lots; duplicate SELLs land in unmatched).
+Fix in `reconstruct.mjs`: drop a terminal event when the previous event for the same
+slot is an identical terminal (same item/qty/max/offer/worth) with NO intervening
+BUYING/SELLING placement line for that slot. A genuine repeat trade always has a fresh
+placement line between terminals; a snapshot re-emission never does — that's the
+discriminator. Must ship with fixtures covering: (a) the 2026-07-04 blowpipe dup pair,
+(b) a genuine same-price repeat buy (placement line between terminals — must NOT dedupe),
+(c) dup pair straddling an EMPTY-burst snapshot. Read FILLS-PIPELINE.md top to bottom
+first (§5.1 rule). Until P1 lands, the §10 interim tombstone procedure applies.
 
 ---
 

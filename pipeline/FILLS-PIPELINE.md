@@ -332,6 +332,22 @@ detail is authoritative there; the operational rules below are the single home.
   pipeline file would need the task re-registered — `schtasks /Delete` + `/Create` — because
   the task path is not kept in sync with the repo. The `run-fills-sync.vbs`/`.cmd` wrapper
   scripts remain in `pipeline/` for that possibility but are unused.)*
+
+### Duplicate terminal lines — snapshot re-emission (diagnosed 2026-07-05)
+The Exchange Logger occasionally writes a second, identical terminal line (BOUGHT/SOLD)
+for the same offer. Root cause: RuneLite re-broadcasts every GE slot's current state on
+login / world-hop / opening the GE (visible in the log as a burst of simultaneous EMPTY
+lines for the other slots at the same second); a completed-but-uncollected offer re-reports
+its terminal state and the plugin logs it again. Three cases on 2026-07-04 (soul SOLD,
+blowpipe BOUGHT, bludgeon SOLD). Effect: duplicate SELLs fall harmlessly into `unmatched`
+(no fabricated profit); a duplicate BUY creates a phantom open lot. Interim procedure:
+after any session with fills, scan for same-item/same-price terminal pairs minutes apart
+with no intervening BUYING/SELLING placement line for that slot, and tombstone the later
+one (`add-manual-fill.mjs --remove <eventId>`) before the next sync books it. The real
+fix (snapshot-aware dedupe in `reconstruct.mjs`) is a PLAN.md chunk — the discriminator:
+a genuine repeat trade always has a fresh placement line between two terminals on the
+same slot; a snapshot re-emission never does.
+
 ## 11. Outcomes dataset (O1 — the algorithm-feedback foundation)
 
 The pipeline captured *what filled*; O1 adds *what the tool said* and *the market context at

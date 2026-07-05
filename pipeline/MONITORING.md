@@ -101,6 +101,8 @@ Print-only — it never writes trade data. Each run emits:
 6. Keep each report tight — one line if nothing changed. Only re-run a full multi-day trend
    for a brand-new position or an offer clearly moving against us.
 
+**Per-item session context (Ben-confirmed doctrine, 2026-07-05).** The gate tree and watch alerts are stateless per tick; the agent servicing the loop is not. Maintain a running per-item dossier across the session — today's oscillation range, printed extremes and when, how each prior alert on this item resolved (noise vs. real), current ask/bid fill progress, and the entry's intent (patient band entry vs. deliberate chase) — and interpret every new alert against it before recommending action. A verdict is a prompt for judgment, not an order: a CANCEL-BID on a 1gp band breach at 1.9m/d volume reads differently from the same verdict on a thin big-ticket, and an UNDERWATER flag on a minutes-old chase entry (underwater by construction until +2%) differently from one on an hours-old patient lot.
+
 ## Cadence
 
 Cron-style loop (session-only) at ~5 min is comfortable; GE offers fill over minutes to
