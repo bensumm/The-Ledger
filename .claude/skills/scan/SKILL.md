@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.3
+version: 1.4
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -84,7 +84,28 @@ The judgment-filtered shortlist, one-line rationale per pick (why this edge is r
 a note of how many candidates the 500k floor eliminated. If a high-grade row was skipped,
 point at it and give the reason — that's the layer this skill exists for.
 
-## 5. Encode learnings (self-improvement — after the market work, never during)
+## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
+
+A scan is not done until the picks are compared against where Ben's capital already sits.
+After the shortlist, run `node pipeline/watch.mjs` (positions = held inventory + every
+active offer) and close the loop:
+
+- **Stale-bid displacement.** For each resting BUY offer, ask: does a shortlist pick offer
+  a better expected edge than what that parked capital is waiting on? A bid that's
+  BID-BEHIND with the floor rising away is a candidate to cancel and redeploy into a pick —
+  say so explicitly with the two edges side by side.
+- **Overlap check.** If a pick is something Ben already holds or bids, say that on the
+  pick's line (don't recommend doubling a position blind — buy-limit and concentration
+  both bite).
+- **Held-ask sanity.** If a shortlist item's read contradicts a current ask's premise
+  (e.g. the scan shows its band breaking down while Ben's ask rides the old top), flag it —
+  that's the `/positions` step-down doctrine firing from the scan side.
+
+This is a lightweight cross-check, not a full `/positions` review — don't re-verdict every
+lot; only surface lines where the scan changes what an existing position should do. When
+`/scan` runs inside `/overnight`, skip this pass (Phase 1 already resolved the book).
+
+## 6. Encode learnings (self-improvement — after the market work, never during)
 
 Each run may teach something (a judgment filter that misfired, a threshold that misled, a
 band-artifact that fooled the grade). Capture it — but the shortlist comes first, always.
