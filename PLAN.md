@@ -89,7 +89,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only: no UTC leaks found; `periodKey` midnight/week fixtures pass; convention rule added to CLAUDE.md — no code change, no APP_VERSION bump) |
 | L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | ✅ `3404681` (0.38.0) |
 | G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | ✅ `553c3a6`+`b57fbe8` (scheduler DELETED; ruleset id 18520289 active: PR+`checks` required, admin-always bypass verified. Two limits: **no merge queue** — user-owned repo; **PR creation token-blocked** until Ben runs `gh auth refresh -s repo`, then merge staged branch `g1-readme-inventory` as the acceptance PR) |
-| M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | DISPATCHED (wave 3, 2026-07-04) |
+| M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | ✅ `6789859`+`d3df7fe` (0.39.0; M1.5 in-cloud Action deliberately NOT built — designed follow-up in FILLS-PIPELINE.md §13.5, Ben's call if PC-off staleness bites) |
 | N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | ✅ `033318e` (trigger engine + MONITORING.md design section; delivery mechanism = Ben decision pending a live trial of the scheduled-Claude-session option) |
 | P1 | Snapshot-re-emission dedupe in reconstruct.mjs | `pipeline/reconstruct.mjs`, fixtures, `pipeline/FILLS-PIPELINE.md` | OPEN |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
@@ -546,6 +546,15 @@ documented sample thresholds clear (process rule 4).
   identical terminal line at a different timestamp (the re-log behavior that motivated
   `collapseOffers`), a fill could alert twice. Low risk in the 60-min window; watch during the
   N1 live trial (lane N, 2026-07-04).
+- No mobile editor for already-synced fills: mobile can edit/delete *pending* rows, but a fill
+  already in `positions.json` only offers local "Hide" — a mobile `editManualLog`-equivalent
+  (append a REMOVE tombstone for a chosen synced event id via the contents API) is the natural
+  follow-up (lane M, 2026-07-04).
+- Watchlist write-back stores ids, not names — `watchlist.json` flips names→ids on the first
+  mobile toggle. Harmless (`loadRepoWatchlist` resolves both), but hand-editors of that file
+  should know (lane M, 2026-07-04).
+- `mobile-fills.log` grows unbounded (append-only by design, like `coffer-manual.log`) — a
+  future compaction of absorbed/tombstoned lines could trim it (lane M, 2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
