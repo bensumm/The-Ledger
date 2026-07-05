@@ -1,6 +1,6 @@
 ---
 name: ship
-version: 2.1
+version: 2.2
 description: Land a change on main (attended direct-push under the admin bypass today; PR + checks once the gh token is refreshed) and verify it — confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
@@ -139,3 +139,25 @@ What actually works vs. what was intended:
 Net: the ruleset scaffolding is in place and the sync-cadence half of G1 is fully live; the
 PR-for-everything flow is available/encouraged but not yet exercisable (token) and not
 queue-serialized (user repo). Don't claim a working merge queue.
+
+## 7. Multi-lane dispatch (coordinator + subagents)
+
+The dispatch model when a wave has multiple lanes (PLAN.md's "Dispatch model"). Per lane:
+
+1. **Coordinator commits the plan file into the lane worktree** — the subagent starts with the
+   plan already on disk in its isolated worktree (`isolation: "worktree"`).
+2. **An Opus subagent implements the chunk** chunk-by-chunk with local commits, running
+   `node --check` on every touched file and `node pipeline/run-tests.mjs` when a tested module
+   is touched.
+3. **Coordinator verifies** the result against the chunk's Acceptance criteria.
+4. **On Ben's "merge":** `git fetch && git rebase origin/main` → re-run the tests →
+   `git push origin HEAD:main` (§2 admin bypass — never force-push `main`).
+5. **Poll `gh run list`** until both `checks` and (for app changes) `pages-build-deployment`
+   go green (§3).
+6. **`git pull --ff-only` the desk checkout** (`C:\dev\The-Ledger`), removing any untracked
+   copy of a file the branch newly tracks (an untracked local file blocks the ff of a newly
+   tracked path).
+
+**Overlapping lanes are hand-serialized** — land one at a time, rebasing each on the prior
+(there is no merge queue on this user-owned repo, §6). Disjoint-file lanes may land in any
+order; same-function overlaps must be sequenced.
