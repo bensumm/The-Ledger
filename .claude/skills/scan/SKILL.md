@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.5
+version: 1.6
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -20,6 +20,15 @@ a keyword/niche ("anything in herbs?") → **no script flag exists** — run the
 filter the output rows by niche yourself; `--publish` only if Ben wants the app's Scan tab
 updated. The script already gates (two-sided liquidity, price window, falling-exclusion)
 and grades (`rating.mjs`); your job is the judgment pass over what it prints.
+
+**Niche set (NY2, 2026-07-05 — Ben's ruling on NY1's evidence).** `--mode all` runs **band,
+spread, rising** — NOT churn. **Churn is off-by-default** (its 14 band-exclusive names are
+low-margin commodity staples that never beat band's edge); reach it only with an explicit
+`--mode churn`. **Rising** is kept but its candidate pool now carries a noise floor (big-ticket
+OR liquid), so its old cheap teleport-tab D-flood no longer shows. **Spread** is kept, unchanged
+— it surfaced the one niche-exclusive real flip (Hydra leather), so it stays pending genuine
+multi-day `--mode all` data. Evidence base: one evening of `suggestions.jsonl` — small sample,
+rising re-judged on a trending day.
 
 **Sync first (SY1).** The §5 position-context pass reads Ben's current book, and there is no
 scheduled sync (on-demand only since the `CofferFillsSync` job was eliminated — FILLS-PIPELINE

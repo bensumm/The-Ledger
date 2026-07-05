@@ -42,10 +42,16 @@
  *                     (--band-hours, default 2); gate bandRoi ≥ --min-roi AND the band must be
  *                     TRADED (≥ --min-active two-sided 5m windows, not one spike).
  *   spread          — the ORIGINAL screen: after-tax ROI of the 24h-average spread (bludgeon-style).
- *   rising          — rising regime + mom ≠ breakdown, entry priced at the band low. Frothy.
+ *   rising          — rising regime + mom ≠ breakdown, entry priced at the band low. Frothy. Its
+ *                     candidate pool carries a NY2.1 noise floor (risingPoolFloor): a rising
+ *                     candidate must be a big ticket (mid ≥ RISE_MID_FLOOR) OR liquid enough to
+ *                     move (limitVol ≥ RISE_LIQUID_VOL), which keeps the big-ticket momentum names
+ *                     AND the cheap-but-liquid risers (Dragon arrowtips / Cake) while dropping the
+ *                     cheap thin/mid teleport-tab D-flood that used to burn the fetch budget.
  *   churn           — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted
- *                     (no --min-roi gate), the high-frequency small-margin niche.
- *   all             — run band, spread, rising, churn in sequence (shared fetch cache).
+ *                     (no --min-roi gate), the high-frequency small-margin niche. NY2.2: DEMOTED to
+ *                     off-by-default — run `--mode churn` explicitly; `--mode all` no longer includes it.
+ *   all             — run band, spread, rising in sequence (shared fetch cache). Churn excluded (NY2.2).
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
@@ -64,11 +70,12 @@ import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
-const MODES = ['band', 'spread', 'rising', 'churn'];
+const MODES = ['band', 'spread', 'rising', 'churn'];   // valid explicit --mode values (churn reachable explicitly)
+const ALL_MODES = ['band', 'spread', 'rising'];        // NY2.2: --mode all runs these three — churn DEMOTED off-by-default
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 50;
@@ -106,6 +113,29 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
+// --- NY2.1: rising-pool NOISE FLOOR (rising niche only — does NOT touch the shared stack) --------
+// NY1 found the rising niche's blind fetch pool flooded with cheap teleport-tab/consumable
+// candidates (a trending evening surfaced 33 D-grade froth rows, zero worth an offer, all sub-~100k
+// mid) that burned the expensive per-item fetch budget. This is a rising-POOL pre-fetch floor; the
+// other niches and the shared gates are untouched.
+//
+// MEASURE CHOSEN — keep a rising candidate iff it is a BIG TICKET (mid ≥ RISE_MID_FLOOR) OR LIQUID
+// enough to move (limitVol ≥ RISE_LIQUID_VOL). Rationale (why not a naive price floor): the named
+// keepers span BOTH classes and a price-only floor would kill the cheap ones —
+//   • big-ticket momentum names (Armadyl crossbow ~42.6m, Twisted buckler ~22.9m, Webweaver bow
+//     ~18.9m, Abyssal bludgeon ~17.4m, Basilisk jaw ~17.1m, Toxic blowpipe ~10.6m) all clear the
+//     mid floor;
+//   • cheap-but-liquid risers (Dragon arrowtips ~4.9k, Cake ~617 — both graded S WHILE liquid)
+//     would be wrongly dropped by a price floor but sail through the liquid-volume arm.
+// The teleport-tab D-flood is cheap AND thin/mid (below BOTH arms) → it drops. RISE_LIQUID_VOL=1000
+// matches suggestlog's liqClass 'liquid' cutoff (one vocabulary; volDay == limitVol == min(hpv,lpv)).
+// HONESTY: one evening of data (NY1); rising was re-judged on a trending day — re-check on a flat one.
+const RISE_MID_FLOOR = A['rise-mid-floor'] != null ? parseGp(A['rise-mid-floor']) : 1_000_000;
+const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1000;
+// Pure predicate (exported for the NY2.1 unit check) — true = candidate survives the rising floor.
+export function risingPoolFloor(mid, limitVol, midFloor = RISE_MID_FLOOR, liqVol = RISE_LIQUID_VOL) {
+  return mid >= midFloor || limitVol >= liqVol;
+}
 // --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
 //   active   (default) — current behavior.
 //   overnight          — only flat/rising regimes with a confident (reliable) band, no thin fast-lane,
@@ -126,7 +156,7 @@ const PUBLISH = A.publish === true;
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
 
-const RUN_MODES = MODE === 'all' ? MODES : [MODE];
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // NY2.2: churn omitted from `all`
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
 const DAILY_DAYS = 17, DAILY_STEP_H = 6;                         // regime-proxy archive lookback / spacing
@@ -168,6 +198,7 @@ function gateCandidates(mode, { v24, map, bands }) {
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
     if (mid < MIN_PRICE || mid > MAX_PRICE) continue;   // price window (shared)
+    if (mode === 'rising' && !risingPoolFloor(mid, limitVol)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
     // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
     // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
     const thin = limitVol < FLOOR;
@@ -434,4 +465,7 @@ async function main() {
   }
 }
 
-await main();
+// Run only when invoked directly (`node pipeline/screen.mjs …`); importing the module (e.g. the
+// NY2.1 risingPoolFloor unit check) must NOT fire a full screen / hit the API. process.argv[1] is
+// undefined under `node -e`, so guard it (an eval context is never a direct invocation).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

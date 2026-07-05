@@ -83,7 +83,18 @@ export function gradeFor(score) {
    letter would OVERSELL it. Cap the letter at a mid-scale ceiling regardless of score; the Vol/d
    column + the grade tooltip carry the "~N trades/day — size in units, expect slow fills" caveat.
    (The exit-ease PENALTY itself is already delivered by liqFactor, which reads the low volDay; this
-   cap is the separate can-never-be-a-headline-flip ceiling.) */
+   cap is the separate can-never-be-a-headline-flip ceiling.)
+
+   NY2.4 — two DIFFERENT "thin"s, don't conflate them. This cap keys off the screen's `thin` flag,
+   which is the GP-FLOW-ONLY ADMISSION PATH: `limitVol < FLOOR` (50/day) AND admitted only because
+   `limitVol×mid ≥ GP_FLOOR` (screen.mjs gateCandidates). That is the ONLY `thin` that caps a grade,
+   and it is capped every time it reaches rateItem (both the niche and watchlist paths pass it). It is
+   NOT the same label as suggestlog's coarse `liqClass` 'thin' (`volDay < 100`) written to the `class`
+   field of suggestions.jsonl. Because `volDay == limitVol == min(hpv,lpv)`, an item with volume in
+   [50, 100)/day is `liqClass:'thin'` (logged) yet NOT gp-flow-thin (limitVol ≥ 50) → it grades ON
+   MERIT and can legitimately log `class:'thin', verdict:'S+'` (the Armadyl-crossbow case that looked
+   like a cap escape — it isn't; the cap never applied). No code gap; the ledger's `class` is just a
+   coarser vocabulary than the screen's admission `thin`. */
 export const THIN_GRADE_CAP = 'A-';
 export function capGrade(grade, cap) {
   const order = GRADE_CUTOFFS.map(([g]) => g);

@@ -235,8 +235,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE.
   Interpretation of those verdicts lives in `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
-  `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge (band /
-  spread / rising / churn, or `all`). Thin gp-flow big tickets ride a bounded `--thin-reserve`.
+  `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge. Four
+  niches exist — `band` / `spread` / `rising` / `churn` — but per Ben's **NY2** ruling (2026-07-05)
+  **`--mode all` runs band/spread/rising only; churn is off-by-default** (reach it with an explicit
+  `--mode churn`). `rising`'s candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid,
+  `risingPoolFloor`) that drops the cheap teleport-tab flood while keeping cheap-but-liquid risers.
+  Thin gp-flow big tickets ride a bounded `--thin-reserve`.
 - `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**
   keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
   velocity, and drops items whose *yesterday overnight window* printed below the current bid

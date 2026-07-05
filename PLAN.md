@@ -84,7 +84,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | ✅ `283e12a` |
 | K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit; 5 memories → skill pointers, `execute-plans-off-main` updated) |
 | K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | ✅ `ec02495` |
-| S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | ✅ `5ad72a9` (S1.3 spread-drop DEFERRED — needs a few days of `--mode all` publishes under the floor before removing) |
+| S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | ✅ `5ad72a9` (S1.3 spread-drop **STAYS DEFERRED** — NY2.3, Ben 2026-07-05: spread KEEPS, it surfaced the one niche-exclusive real flip (Hydra leather, +147k); revisit only on genuine multi-day `--mode all` data) |
 | S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | ✅ `12e8a86` (22:00–06:00 local; 4 posture fixtures, 14 total) |
 | S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | ✅ `3a38018` (0.37.0 at merge — S-lane authored as 0.36.0 in parallel with Q1) |
 | Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | ✅ `23deba0` (0.36.0 — inversion → `reliable:false` at the source; interim `/positions` override removed) |
@@ -109,6 +109,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | FX1 | Finder full-catalog search (soul-rune class) + Signals badge count | `js/ui.js`, `js/market.js` | ✅ `c12bf4b` (0.46.0; search unions catalog matches below MIN_PRICE — browse view byte-identical; badge `firing/total`) |
 | NY1 | Scan niche-yield audit (spread/rising value; S1.3 spread-drop decision) | `suggestions.jsonl` (read), analysis only | ✅ report delivered 2026-07-05 (analysis-only, no repo change). Evidence (~11.5h window, ~2 independent non-band samples — small, stated): rising 46% grade-D + 1 exclusive ≥B+ item + 0 exclusive flips → drop candidate; churn 84% band-overlap, never beats band's ceiling → demote/fold candidate; spread weakest grades BUT surfaced the one niche-exclusive real flip (+147k) → keep pending multi-day data (S1.3 stays deferred). Scarcity = concentration (2–6 NEW names per publish), not row count. **Ben decides drops** — nothing changed in `screen.mjs`/`/scan`. |
 | SY1 | Strategic sync-fills points in workflow skills | `.claude/skills/{morning,positions,overnight,scan}/SKILL.md` | ✅ `563da75` (positions 1.9 / morning 1.4 / scan 1.5 / overnight 1.7 — sync-first everywhere + MAIN-checkout caveat; /scan was the real gap) |
+| NY2 | Niche ruling: rising pool floor, churn off-by-default, spread stays, thin-cap anomaly | `pipeline/screen.mjs`, `rating.mjs` (maybe), `/scan` skill, docs | ✅ (worktree branch; pipeline+skills only, no APP_VERSION; /scan 1.6). NY2.1 `risingPoolFloor` (big-ticket OR liquid) on the rising pool; NY2.2 `--mode all`=band/spread/rising (churn explicit-only); NY2.3 S1.3 stays deferred (spread keeps); NY2.4 = DOC bug (liqClass 'thin' volDay<100 vs gp-flow admission thin limitVol<50 — no code gap), documented in rating.mjs/suggestlog.mjs |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -764,6 +765,36 @@ is not evidence (process rule 4), and S1.3's spread-drop was already deferred pe
   analysis only unless a drop is implemented; no APP_VERSION either way (screen.json
   shape unchanged, or Scan-tab niche list follows the published file automatically —
   verify `NICHE_ORDER` handles a missing niche, `js/ui.js:273`).
+
+### NY2 — Niche ruling implementation (Ben, 2026-07-05 — follows NY1's evidence + examples read)
+
+Ben ruled on NY1's evidence after seeing named examples: rising's D-flood is entirely cheap
+teleport-tab/consumable noise (33 D items, zero with mid ≥5m) while its top tier is exactly
+the big-ticket momentum class he wants (Armadyl crossbow S+, Twisted buckler, Webweaver,
+Bludgeon); churn's 14 band-exclusive items are modest commodity staples; spread's sole real
+contribution was Hydra leather (A-, the +147k niche-exclusive flip).
+
+- **NY2.1 rising — KEEP + floor its candidate pool.** Add a cheap pre-fetch floor to the
+  rising niche's candidate generation in `screen.mjs` (price or gp-flow based — executor
+  picks the cleanest: the D-flood is all sub-~100k mid, the keepers all ≥1m; a mid/unit
+  floor ~100k on the rising pool only, or reuse the gp-flow measure). Do NOT touch the
+  other niches' gates or the shared stack — this is a rising-pool pre-filter, tuned so the
+  named keepers above would still surface and the teleport-tab class would not.
+- **NY2.2 churn — DEMOTE to off-by-default.** `--mode all` runs band/spread/rising only;
+  `--mode churn` still works explicitly (the 14 commodity exclusives stay reachable).
+  App-side: verified graceful (NICHE_ORDER filters to niches present in screen.json — no
+  app change, no APP_VERSION). Update `/scan` skill + screen.mjs header + any doc that
+  enumerates "four niches" (rule-8 grep).
+- **NY2.3 spread — KEEP, unchanged.** Update the S1.3 deferred note to record Ben's
+  2026-07-05 ruling: spread stays pending genuine multi-day `--mode all` data (Hydra
+  leather is the anchor example of its different-shaped edge).
+- **NY2.4 thin-cap anomaly.** Armadyl crossbow logged S+ while classed `thin`, but S1 says
+  thin gp-flow qualifiers cap at A- (`THIN_GRADE_CAP`). Determine which is true: cap only
+  applies to the gp-flow-ONLY admission path (then fix the docs to say so precisely) or
+  the cap has a real gap (then fix `rating.mjs`, with a fixture). Small, bounded.
+- **NY2.5** Pipeline+skills only — no APP_VERSION (screen.json shape unchanged; a missing
+  churn key is already handled). SKILL.md version bump for `/scan`. State sample-size
+  honesty in any doc prose (one evening of data; rising re-judged on a trending day).
 
 ### SY1 — Strategic sync-fills runs (skills-only; parallel-safe)
 

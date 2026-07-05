@@ -33,6 +33,10 @@ const LEDGER = path.join(HERE, '..', 'suggestions.jsonl');
 // as computed then" for that script.
 // liqClassOf(volDay) is the raw-number core (outcomes.mjs joins on stored volDay, no row); liqClass(row)
 // is the row convenience wrapper. ONE threshold set (X1 dedup — was copied as liqClassOf in outcomes.mjs).
+// NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen.mjs's grade-capping `thin` (the gp-flow-only
+// admission path, limitVol < 50). Because volDay == limitVol, an item at 50–99/day logs class:'thin'
+// here yet is NOT gp-flow-thin, so it grades on merit — a class:'thin' + high grade in the ledger is
+// expected, not a cap escape (see rating.mjs THIN_GRADE_CAP note).
 export function liqClassOf(volDay) {
   if (volDay == null) return 'unknown';
   if (volDay < 100) return 'thin';
