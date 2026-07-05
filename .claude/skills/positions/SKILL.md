@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.4
+version: 1.5
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -60,6 +60,8 @@ verdict; you translate it into the action line:
 | CUT-CANDIDATE | Underwater through a liquid window — persistence, not the clock. List to clear before a bigger loss. |
 
 **Sell-velocity preference (Ben, 2026-07-04):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even `ceil(buy/0.98)` (the CUT/CUT-CANDIDATE verdicts remain the only exceptions). Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
+
+**Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `nightlows.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
 
 A feed-inverted row (regime line carries the "⚠ feed inversion — quote basis unreliable"
 footnote) now prints **NO-READ** on its own — Gate 0 in `momVerdict()` folds inversion into
