@@ -753,11 +753,11 @@ is not evidence (process rule 4), and S1.3's spread-drop was already deferred pe
   per-niche **unique contribution** (items ONLY that niche surfaces that ever grade ≥ B+);
   band↔churn Jaccard overlap; join to `positions.json` closed lots — which niche surfaced
   the flips Ben actually took (soul rune!).
-- **NY1.2** Decision + act: for each of spread/churn/rising — keep / drop / demote (e.g.
-  not in default `--mode all` output, still available by flag). If evidence is decisive,
-  implement in `screen.mjs` (+ `/scan` skill + docs reconciliation, incl. resolving the
-  S1.3 deferred note); if not decisive, write the dated re-check criterion into this plan
-  instead of acting. Also answer the *other* half of "small crop": is the perceived
+- **NY1.2** Recommendation ONLY — **the drop decision comes back to Ben with the
+  evidence** (Ben, 2026-07-05; supersedes the earlier "implement if decisive" wording).
+  For each of spread/churn/rising, recommend keep / drop / demote with the numbers
+  behind it; do NOT touch `screen.mjs`, `/scan`, or the S1.3 note — those change only
+  after Ben rules. Also answer the *other* half of "small crop": is the perceived
   scarcity concentration (few NEW names day to day) rather than few rows — report
   new-vs-repeat item counts per day.
 - **NY1.3** Report to Ben in prose (per rule 4: sample sizes stated). Pipeline-stdout /
