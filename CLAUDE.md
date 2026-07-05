@@ -14,7 +14,10 @@ push to `main`).
   persistence + diagnostics; `format.js` = formatting/tax helpers; `charts.js` =
   inline SVG rendering; `marketfetch.js` = shared browser fetch layer (one timeout-guarded
   `jget` + one cached `fetchTs`/`fetch24h` store, A2); `market.js` = price/guide fetch +
-  scoring; `trends.js` = archive + seasonal analysis; `table.js` = reusable sortable-table
+  scoring; `trends.js` = archive + seasonal analysis (renders the Trends view; its pure analytics
+  moved to `trendcore.js`); `trendcore.js` = pure DOM-free Trends analytics (hourly/seasonal
+  decomposition, the walk-forward `backtestPlan` gate, `patientTargets` offer sizing — moved out of
+  `trends.js` by TC1 so they're node-importable + fixture-tested); `table.js` = reusable sortable-table
   helper (TB1 — click-to-sort/arrow/persisted per-table sort; Finder + Watchlist adopt it);
   `ui.js` =
   Finder/Watchlist/Signals/Coffer/Scan rendering + `renderAll` coordinator; `ledger.js` =
@@ -77,34 +80,39 @@ full story.
   only, no verdict change. Real-log acceptance: 17 historical re-emits dropped (incl. the known 13:29), positions
   byte-identical to the committed `positions.json`. Do NOT resurrect the deleted cancel-to-EMPTY inference —
   EMPTY stays non-evidence. Full story: `FILLS-PIPELINE.md` §10, `CHANGELOG.md`.
+- **Trends analytics extraction** (0.50.0, TC1 — pure MOVE, behavior byte-identical) — the pure
+  DOM-free analytics (`analyseHourly`/`analyseBroad`, `seasonalFactors`/`hourFactors`/`factorStats`,
+  `bestWindow`, `buildPlan`, `patientTargets`, `dayGroups`/`backtestPlan`, `planSignal`, `median`)
+  moved out of DOM-pinned `js/trends.js` into new node-importable `js/trendcore.js` (mirrors TD2's
+  ledgercore/watchcore) → `pipeline/trendcore.test.mjs` finally pins the walk-forward `backtestPlan`
+  gate + `patientTargets` sizing + the seasonal decomposition. `trends.js` re-imports what it renders;
+  its tier-structure doctrine header stays there. **Don't-rebuild:** it was a straight move — don't
+  re-fork these back into trends.js.
+- **screen.mjs gate-stack extraction** (GC1, pipeline-only — no APP_VERSION) — the pre-fetch
+  candidate gate stack is now the exported, threshold-driven `gateCandidates(mode, ctx, thresholds)`
+  (behind screen.mjs's invocation guard) → `pipeline/gatecandidates.test.mjs` pins two-sided liquidity,
+  gp-flow thin admission, the 500k attention floor + thin exemption, the rising-pool noise floor, and
+  the per-mode edge. Byte-identical stdout (main() passes the same CLI values via a `THRESHOLDS`
+  object). **Note:** falling-EXCLUSION + rising-CONFIRM stay POST-fetch in `renderMode` (off the real
+  quote row), NOT in gateCandidates — don't move them there.
 - **Watch tab — the at-a-glance flipping desk** (0.49.0) — a verdict-first in-app surface
-  (`js/watch.js` render + pure `js/watchcore.js`, tab id `watch`; the old **Watchlist** tab was
-  renamed to id `watchlist` to free the name): freshness stamps → 4-cell summary (exposure / day
-  P/L / free capital / alert count) → one verdict-first card per held flip lot (severity stripe +
-  `momVerdict` pill + momentum glyph + P/L-at-action + a data grid + an action line + a persisted
-  per-item **session-context note** so a stateless CUT never reads as an order) → active offers
-  (from `STATE.offers`, verdict-tagged, behind a staleness banner) → today's fills feed. **Verdicts
-  are NOT reimplemented**: held cards call the shared `momVerdict()` and offers the new shared
-  `offerVerdict()` (both `js/quotecore.js`) — so a bid reads BID-OK/BID-BEHIND/CROSSING/CANCEL-BID
-  identically in the browser and in console `watch.mjs` (which was refactored to route through the
-  same `offerVerdict`, byte-identically). Alerts = CUT-family held + CANCEL-BID offers (tab badge +
-  summary share the one count). Re-quotes only while the tab is visible (reuses marketfetch's cache).
-  Notes persist under `watchnote:<id>`; **never log their contents** (L1). The **don't-rebuild
-  lesson**: the console `watch.mjs` stays the zero-lag "act now" authority; the Watch tab is the
-  standing desk picture off `positions.json`/`offers.json` — offers are only as fresh as the last
-  sync and are honestly bannered as such. Pure derivations are fixture-tested in
-  `pipeline/watchcore.test.mjs`.
+  (`js/watch.js` + pure node-importable `js/watchcore.js`, fixture-tested in
+  `pipeline/watchcore.test.mjs`; the old Watchlist tab took id `watchlist`). **Don't-rebuild:**
+  the console `watch.mjs` stays the zero-lag "act now" authority — the Watch tab is the standing
+  desk picture off `positions.json`/`offers.json`, honestly stale-bannered. Verdicts are NOT
+  reimplemented (held cards call shared `momVerdict()`, offers the shared `offerVerdict()`, both
+  `js/quotecore.js`; `watch.mjs` routes through the same `offerVerdict` byte-identically). Per-item
+  session notes persist under `watchnote:<id>` — **never log their contents** (L1). Full story:
+  `CHANGELOG.md` 0.49.0.
 - **Local log-watcher — desk-side freshness, zero git in the daemon** (0.48.0, LW1/LW2) — a
-  manual-start `pipeline/watch-log.mjs` daemon (`watch-log.cmd`) `fs.watch`es the exchange-logger dir
-  and runs the extracted git-FREE `regenerate()` core (also reachable as `sync-fills.mjs --local`),
-  writing `fills.json`/`positions.json`/new tracked `offers.json` locally on every fill/cancel within
-  ~seconds. On localhost the app polls those every 30s and shows a "book synced hh:mm · N open offers"
-  stamp (`IS_LOCALHOST`, `js/ledger.js`); on `bensumm.github.io` it's byte-identical to 0.47.0. The
-  **don't-rebuild lesson**: the daemon does **ZERO git** — that's how it gives live desk freshness
-  while preserving the FILLS-PIPELINE.md §12 invariant (no unattended writer **to `main`**). Never add
-  a Task Scheduler job for it, never make it commit/push (that reverses §12 — Ben's call, not scope
-  creep), and never have it fold un-pulled phone `mobile-fills.log` writes (attended sync's job). Full
-  story: `FILLS-PIPELINE.md` §14, `CHANGELOG.md`.
+  manual-start `pipeline/watch-log.mjs` daemon runs the git-free `regenerate()` core (also
+  `sync-fills.mjs --local`), writing `fills.json`/`positions.json`/tracked `offers.json` locally on
+  every fill; on localhost the app polls them for a "book synced" stamp (`js/ledger.js`).
+  **Don't-rebuild:** the daemon does **ZERO git** — that's how it gives live desk freshness while
+  preserving the §12 invariant (no unattended writer **to `main`**). Never give it a Task Scheduler
+  job or a commit/push (that reverses §12 — Ben's call, not scope creep), and never fold un-pulled
+  phone `mobile-fills.log` writes (attended sync's job). Full story: `FILLS-PIPELINE.md` §14,
+  `CHANGELOG.md`.
 - **Testability extractions + unlocked tests** (0.47.0, TD2 — pure MOVES/guard, behavior
   byte-identical) — three modules made node-importable so their real rules get committed fixtures:
   (1) `periodKey`/`groupTrades` → new pure `js/ledgercore.js` (`ledger.js` re-imports) →
@@ -115,7 +123,7 @@ full story.
   (3) `pipeline/alerts.mjs` gained the standard `import.meta.url===pathToFileURL(argv[1])` invocation
   guard (it used to FETCH on import) + exports `positionSignal`/`quietSuppresses` → `pipeline/alerts.test.mjs`
   (transition-only sig; quiet hours suppress position/price, fills exempt). Auto-discovered by TD1.0's
-  runner (no CI edits) — 7 suites now.
+  runner (no CI edits) — 7 suites at the time (16 as of TC1/GC1).
 - **Glob test runner + must-have money tests** (TD1, pipeline-only — no APP_VERSION) —
   `pipeline/run-tests.mjs` auto-discovers every `pipeline/**/*.test.mjs` (recursive, so colocated
   `lib/` tests are found), runs each in its own child process, and exits non-zero on ANY suite
@@ -352,7 +360,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   user-owned repo and PR creation is token-blocked for now, so chunks land via attended
   direct-push under the admin bypass (parallel lanes still use worktree subagents,
   hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
-  (`PLAN-2/3/4/5.md`) are **deleted** — full text via `git show 39e5d23:PLAN-4.md` (etc.).
+  (`PLAN-2/3/4/5.md`, and the folded `PLAN-LOCAL-WATCH.md`/`PLAN-LOG-HARDENING.md`) are
+  **deleted** — full text via `git show <sha>:PLAN-4.md` (etc.). A per-topic `PLAN-*.md` is
+  folded into `PLAN.md` and deleted the moment its last chunk ships — don't leave shipped plan
+  files at the repo root.
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
   and eventually the fills pipeline's realized-vs-suggested calibration; tracked in
@@ -423,6 +434,11 @@ metadata, not a leak; the concern is content, not commit authorship.
    `momVerdict` reconciliation is the anchor. If a plain-language ask should map to a specific
    script/flow, make that mapping explicit in the relevant CLAUDE.md section so a future agent
    runs the right thing immediately.
+9. **Post-wave cleanup.** When a wave's chunks are all shipped: `git branch -D` the
+   squash-landed lane branches — they read as "unmerged" to git (squash rewrites history), so
+   verify each landed against **PLAN.md's Status table**, NOT `git branch --merged`. Ask Ben
+   before deleting any *remote* branch (`git push origin --delete …`). Check `git status` for
+   orphan untracked artifacts a chunk left behind. Multi-lane dispatch mechanics are `/ship` §7.
 
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
 - **`main` is protected by a ruleset** (G1, 2026-07-04): PR + `checks` required, no

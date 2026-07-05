@@ -10,6 +10,41 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Trends analytics extraction + gate-stack extraction (0.50.0 TC1; GC1 pipeline-only, no bump)
+Two Wave-7 testability extractions, both pure MOVES with behavior held byte-identical (the TD2
+precedent: make a decision-bearing function node-importable so its real rules get a committed fixture,
+without changing them).
+
+**TC1 — `js/trendcore.js` (0.50.0).** The pure, DOM-free analytics behind the Trends view — everything
+from `bestWindow` / `analyseHourly` / `analyseBroad` / the `seasonalFactors`→`hourFactors`→`factorStats`
+decomposition through `buildPlan`, `patientTargets`, the walk-forward `dayGroups`/`backtestPlan` gate,
+and `planSignal` (plus `median` and the `sideVal`/`localDayKey`/`hourOf` helpers) — was living
+DOM-pinned in `js/trends.js` (which imports charts.js/ui.js/main.js at load), so the money-affecting
+`backtestPlan` gate and `patientTargets` sizing had NO test. Moved wholesale into node-importable
+`js/trendcore.js` (its only imports are node-safe `format.js` tax/netMargin and `quotecore.js`
+regimeDrift); `trends.js` re-imports the six it renders (`analyseHourly`, `analyseBroad`, `buildPlan`,
+`patientTargets`, `backtestPlan`, `planSignal`). The Trends tier-structure doctrine header stays in
+`trends.js` where its editors look. New `pipeline/trendcore.test.mjs` (19 checks) pins: the walk-forward
+gate (insufficient-days path + a clean 10-day diurnal cycle where buying the cheap window / selling the
+rich one beats naive spread-flip every out-of-sample day, `edge === stratRoi − spreadRoi`), patient vs
+falling offer sizing (20th/80th vs 10th/clear-at-instabuy percentiles), the seasonal detrend (a 2× price
+day yields identical hour factors), volume weighting, corrupt-print trimming, and `median`/`bestWindow`
+edges. No behavior change — a straight move; `APP_VERSION` → 0.50.0 because it touches deployed files.
+
+**GC1 — `gateCandidates` thresholds-as-argument (pipeline-only, no bump).** `screen.mjs`'s pre-fetch
+candidate gate stack was a module-scoped function closing over the CLI-derived constants (FLOOR,
+MIN_ROI, GP_FLOOR, MIN_GPD, the rising-pool floor, …), so it couldn't be fixtured. GC1 exports it as
+`gateCandidates(mode, ctx, thresholds = THRESHOLDS)` — every constant it used is now a named field of
+the `thresholds` object; `main()` passes a `THRESHOLDS` object built from the same CLI values, so stdout
+is byte-identical for every mode/flag. New `pipeline/gatecandidates.test.mjs` (8 checks) drives the whole
+stack with synthetic 24h/band data: two-sided liquidity, gp-flow big-ticket `thin` admission, the 500k
+attention floor + the thin exemption, the rising-pool noise floor (big-ticket OR liquid, rising-mode
+only), a traded-band requirement, and the price window. **Boundary honestly documented:** falling-
+EXCLUSION and rising-CONFIRM are NOT in `gateCandidates` — they run post-fetch in `renderMode` off the
+real `computeQuote` row — and held/asked/watchlist exemptions bypass the gate stack entirely (the S3
+watchlist path), so they're out of this function's scope and not fixtured here. Runner now discovers
+16 suites; no `checks.yml` edit (auto-discovery).
+
 ### Exchange-log hardening — impossible-transition validation + restart-blindness warning (LH1/LH2, pipeline-only, no APP_VERSION bump)
 **Origin (Ben, 2026-07-05):** "we've had a ton of problems with the log discrepancies… missing bids,
 phantom bids." A live-session catalogue found four failure classes; two were already fixed (the
@@ -70,7 +105,7 @@ reconciled to "silent backstop." Test suite: 14 suites green via `node pipeline/
 `validateslots.test.mjs` + `logblind.test.mjs`).
 
 ### Watch tab — the at-a-glance flipping desk (0.49.0)
-**Origin (Ben, 2026-07-05):** the approved `WATCH-TAB-MOCKUP.html` — a verdict-first desk surface that
+**Origin (Ben, 2026-07-05):** an approved HTML mockup (`WATCH-TAB-MOCKUP.html`, since deleted — recover via git history) — a verdict-first desk surface that
 turns the data LW1/LW2 made live at the desk (held book + offers) into a single glance: *what do I
 hold, what wants action, what's resting, what filled today.* Built exactly to the mockup, with the
 tweaks Ben pre-approved.
@@ -119,7 +154,7 @@ Verified with a headless Playwright pass against the real committed `positions.j
 incidental collapsed, offers rendered with a BID-BEHIND bid, today's fills fed, badge = 1, and the note
 round-tripping through localStorage — no console errors. APP_VERSION → 0.49.0.
 
-### Local log-watcher — desk-side freshness without an unattended writer (0.48.0, PLAN-LOCAL-WATCH LW1/LW2)
+### Local log-watcher — desk-side freshness without an unattended writer (0.48.0, LW1/LW2)
 **Origin (Ben, 2026-07-05):** "Can we have some process watch the log file and automatically sync?"
 The obvious build — a daemon that auto-commits/pushes on every change — would reintroduce exactly the
 **unattended writer to `main`** that §12 (schedule elimination, G1) deleted to unblock the PR + `checks`

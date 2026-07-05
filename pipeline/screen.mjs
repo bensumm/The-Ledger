@@ -136,6 +136,13 @@ const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1
 export function risingPoolFloor(mid, limitVol, midFloor = RISE_MID_FLOOR, liqVol = RISE_LIQUID_VOL) {
   return mid >= midFloor || limitVol >= liqVol;
 }
+// GC1: the CLI-derived thresholds gateCandidates consumes, grouped into ONE object so the gate stack
+// takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
+// main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
+const THRESHOLDS = {
+  FLOOR, MIN_ROI, MIN_PRICE, MAX_PRICE, MIN_NET_GP, MIN_ACTIVE, MIN_ACTIVE_THIN, MIN_GPD, GP_FLOOR,
+  RISE_MID_FLOOR, RISE_LIQUID_VOL,
+};
 // --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
 //   active   (default) — current behavior.
 //   overnight          — only flat/rising regimes with a confident (reliable) band, no thin fast-lane,
@@ -187,7 +194,12 @@ function proxyDrift(points) {
 const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : drift <= -5 ? 0.5 : 1;
 
 // --- gate stack + mode-specific step-3 edge, ranked by realistic gp/day (picks the fetch pool) ---
-function gateCandidates(mode, { v24, map, bands }) {
+// GC1: exported + threshold-driven. The gate LOGIC is byte-identical to before — every constant it
+// used to close over is now a named field of the `t` thresholds object (default THRESHOLDS = the CLI
+// values), so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window,
+// rising-pool floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and
+// `tax` are pure (no CLI state), so they stay module/import scope. Exported for gatecandidates.test.mjs.
+export function gateCandidates(mode, { v24, map, bands }, t = THRESHOLDS) {
   const cand = [];
   for (const idStr in v24) {
     const id = +idStr; const d = v24[idStr]; if (!d) continue;
@@ -197,12 +209,12 @@ function gateCandidates(mode, { v24, map, bands }) {
     const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
-    if (mid < MIN_PRICE || mid > MAX_PRICE) continue;   // price window (shared)
-    if (mode === 'rising' && !risingPoolFloor(mid, limitVol)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
+    if (mid < t.MIN_PRICE || mid > t.MAX_PRICE) continue;   // price window (shared)
+    if (mode === 'rising' && !risingPoolFloor(mid, limitVol, t.RISE_MID_FLOOR, t.RISE_LIQUID_VOL)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
     // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
     // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
-    const thin = limitVol < FLOOR;
-    if (thin && limitVol * mid < GP_FLOOR) continue;    // fails BOTH the unit floor and the gp-flow floor
+    const thin = limitVol < t.FLOOR;
+    if (thin && limitVol * mid < t.GP_FLOOR) continue;    // fails BOTH the unit floor and the gp-flow floor
     const limit = map.byId[id]?.limit ?? null;
 
     // --- step 3: mode swaps ONLY the edge definition + gate here ---
@@ -210,11 +222,11 @@ function gateCandidates(mode, { v24, map, bands }) {
     if (mode === 'spread') {
       modeNet = (avgHigh - tax(avgHigh)) - avgLow;      // 24h-avg spread, after tax
       modeRoi = modeNet / avgLow * 100;
-      if (modeRoi < MIN_ROI && !(thin && modeNet >= MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
+      if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
     } else {
       // band / rising / churn all price the edge off the traded intraday band
       const b = bands[id]; if (!b || b.bandLo == null || b.bandHi == null) continue;
-      const minActive = thin ? MIN_ACTIVE_THIN : MIN_ACTIVE;   // 6/2h is impossible at ~12/d — relax for thin
+      const minActive = thin ? t.MIN_ACTIVE_THIN : t.MIN_ACTIVE;   // 6/2h is impossible at ~12/d — relax for thin
       if (b.active5m < minActive) continue;             // band must be TRADED, not one spike
       activeWin = b.active5m;
       modeNet = (b.bandHi - tax(b.bandHi)) - b.bandLo;  // band low → band top, after tax
@@ -223,14 +235,14 @@ function gateCandidates(mode, { v24, map, bands }) {
         if (!(limitVol >= 2000 && limit != null && limit > 0)) continue;  // buy-limit-cycle commodity
         // tiny ROI accepted for churn — no --min-roi gate; volume does the work
       } else {
-        if (modeRoi < MIN_ROI && !(thin && modeNet >= MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
+        if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
       }
     }
     if (modeNet <= 0) continue;
     const expGpDay = Math.round(expUnits(limit, limitVol) * modeNet);
     // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
     // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note).
-    if (!thin && expGpDay < MIN_GPD) continue;
+    if (!thin && expGpDay < t.MIN_GPD) continue;
     cand.push({ id, limitVol, mid, limit, expGpDay, activeWin, thin });
   }
   return cand;

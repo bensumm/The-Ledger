@@ -74,6 +74,8 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | **4** | Repo-review cleanup (2026-07-05 three-agent audit): **D1** (doc reconciliation — docs only, parallel with anything) ∥ **R1→P1** (reconstruct test harness FIRST, then the snapshot dedupe lands with its fixtures in that harness) ∥ **X2→X1** (dead-scheduler excision, then pipeline dedup — both touch `sync-fills.mjs`/shared pipeline files, so sequenced) ∥ **A1→A2→A3** (app dead-code sweep → fetch/helper unification → ledger split; same-file chain, one agent) ∥ **BE1** (break-even tax-cap fix — `quotecore.js` + fixtures, disjoint from A-lane's files until A2; run before or parallel-early). **W1** (analysis cadence) and **CI1** (browser smoke in CI) are independent, any time. |
 | **5** | UX round + scan-yield audit (Ben, 2026-07-05): **rebase this branch onto `origin/main` first** (main gained skills commits + the `nightlows.mjs`→`windowrange.mjs` rename after the Wave-4 base — D1's doc edits may conflict). Then **TB1→LU1→FX1** (one app lane, sequential — shared `ui.js`/`ledger.js`/`styles.css`/`index.html`: reusable sortable table FIRST, then the Ledger UX rework that consumes it, then the Finder/Signals fixes) ∥ **NY1** (scan niche-yield audit — pipeline/analysis only) ∥ **SY1** (sync-fills doctrine — skills only). |
 | **6** | Business-logic tests + organization (Ben, 2026-07-05; two-Opus investigation first): **OR1** (docs-only org map — trivial, any time) → **OR2** (pipeline/lib/ split — mechanical but atomic, lands BEFORE the new tests so they're written at final paths) → **TD1** (must-have money tests) → **TD2** (extractions + the tests they unlock — the only app-file chunk, APP_VERSION bump) → **TD3** (nice-to-have test sweep). One lane, sequential — TD chunks all touch checks.yml and the test files. |
+| **LW/LH** | Folded from standalone plan files (2026-07-05, between waves): **LW1→LW2→LW3** (local log-watcher, ex `PLAN-LOCAL-WATCH.md` — now deleted) ∥ **LH1→LH2→LH3** (exchange-log hardening, ex `PLAN-LOG-HARDENING.md` — now deleted). Both shipped; full original plan text via `git show <sha>:PLAN-LOCAL-WATCH.md` / `PLAN-LOG-HARDENING.md`. |
+| **7** | Extraction + testability (2026-07-05; architecture-review verdict **"clean — no rework"**): **TC1** (trendcore extraction) ∥ **GC1** (gateCandidates extraction — absorbs TD3.5) — dispatched this session. Ready-unassigned: **SR1**, **GA1**. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -116,7 +118,17 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | OR2 | pipeline/lib/ split (8 imported-only libs out of the CLI bag) | `pipeline/lib/*` (moved), ~11 importing files, `.github/workflows/checks.yml`, docs | ✅ `94781cc` (git-mv ×8, 32 import rewrites, checks.yml glob extended, caches → `pipeline/.cache/`; static resolver: 45/45 specifiers resolve; sync-fills verified statically, never run) |
 | TD1 | Glob test runner + must-have money tests (format, rating, reconstruct tax-cap/partial-fill) | new `pipeline/run-tests.mjs`, `format.test.mjs`, `lib/rating.test.mjs`, `reconstruct.test.mjs` (extend), `checks.yml` (one-time runner swap), `/ship` skill | ✅ `d147bab` (runner: recursive discovery, per-file ✓/✗, fails on any suite AND on zero discovery — both proven; 4 suites/38 checks at landing) |
 | TD2 | Testability extractions + unlocked tests (ledgercore, table comparator, alerts guard) | new `js/ledgercore.js`, `js/ledger.js`, `js/table.js`, `pipeline/alerts.mjs`, new tests | ✅ `e442367` (0.47.0; pure moves chromium-proven byte-identical; alerts no longer fetches on import — ~7ms no-network import proof; ledgercore 7 / table 7 / alerts 8 checks) |
-| TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `pipeline/lib/{windowread,offers,cli}.test.mjs` | ✅ `a1110c7` (pipeline-only, no APP_VERSION; quotecore +5 → 21 checks, windowread 6, offers 3, cli/suggestlog 4; runner: 10 suites green; no checks.yml edit — auto-discovered. TD3.5 gateCandidates extraction → Discovered) |
+| TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `pipeline/lib/{windowread,offers,cli}.test.mjs` | ✅ `a1110c7` (pipeline-only, no APP_VERSION; quotecore +5 → 21 checks, windowread 6, offers 3, cli/suggestlog 4; runner: 10 suites green; no checks.yml edit — auto-discovered. TD3.5 gateCandidates extraction → GC1) |
+| LW1 | Local log-watcher — git-free `regenerate()` core (`sync-fills.mjs --local`) + `offers.json` emitter + `watch-log.mjs` daemon + tests | `pipeline/sync-fills.mjs`, new `offers.json`/`watch-log.mjs`/`watch-log.cmd`, `sync-fills.test.mjs` | ✅ `b97c87b` (offers.json `d395864`; pipeline-only. Load-bearing: the daemon does **ZERO git** — desk freshness without breaching the §12 no-unattended-writer-**to-`main`** invariant) |
+| LW2 | App localhost live-refresh (poll `positions.json`/`offers.json`, "book synced" stamp) | `js/ledger.js`, `js/state.js` | ✅ `9da9910` (0.48.0; Pages behavior byte-identical) |
+| LW3 | Local-watcher docs reconciliation (FILLS-PIPELINE §14 + §12 amend, README map, CLAUDE.md, CHANGELOG, MONITORING authority note) | docs | ✅ `8ad3a45` (folded `PLAN-LOCAL-WATCH.md` → this file, then deleted) |
+| LH1 | Exchange-log hardening — `validateSlotTransitions()` loud ingest-drop of impossible same-slot re-emit terminals (BEFORE the `fills.json` merge); `dedupeSnapshots` stays the silent backstop | `pipeline/lib/reconstruct.mjs`, `validateslots.test.mjs` | ✅ `c0fc711` (pipeline-only; 17 historical re-emits dropped incl. the 13:29 double-buy, positions byte-identical. Do NOT resurrect the deleted cancel-to-EMPTY inference — EMPTY stays non-evidence) |
+| LH2 | `blindWarningLine()` restart-blindness header in `monitor.mjs`/`watch.mjs` | new `pipeline/lib/logblind.mjs`, `logblind.test.mjs` | ✅ `f7bd006` (pipeline-only; display-only line, no verdict change) |
+| LH3 | Log-hardening docs reconciliation (FILLS-PIPELINE §5.1/§10 two artifact classes + validator, MONITORING blindness line, CLAUDE.md Done, CHANGELOG) | docs | ✅ `05ccea6` (folded `PLAN-LOG-HARDENING.md` → this file, then deleted) |
+| TC1 | trendcore extraction — pure analytics out of `js/trends.js` → `js/trendcore.js` + fixtures (`backtestPlan`/`patientTargets` are money-affecting + untested) | `js/trends.js`, new `js/trendcore.js`, new `pipeline/trendcore.test.mjs` | ✅ `eaa5414` (0.50.0; pure MOVE, byte-identical; `trendcore.test.mjs` 19 checks) |
+| GC1 | gateCandidates extraction — thresholds-as-argument so `screen.mjs`'s gate stack is fixture-testable (absorbs TD3.5) | `pipeline/screen.mjs`, new test | ✅ `HEAD` (this commit; pipeline-only, no APP_VERSION; byte-identical stdout via `THRESHOLDS`; `gatecandidates.test.mjs` 8 checks; runner 16 suites) |
+| SR1 | `suggestions.jsonl` rotation/compaction | `suggestions.jsonl`, `pipeline/lib/suggestlog.mjs` | ⏳ ready — unassigned |
+| GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ⏳ ready — unassigned |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -958,6 +970,72 @@ Three pinned modules hold real rules; each fix is a minimal MOVE/guard, not a re
 
 ---
 
+## LW/LH — folded standalone plans (2026-07-05, between waves)
+
+Two per-topic plans shipped in full between Wave 6 and Wave 7 and were then folded into this
+file and deleted (repo convention — like `PLAN-2/3/4/5.md`). Their Status rows are above; the
+full original plan text (design rationale, per-chunk specs, acceptance) lives in git history.
+
+- **Local log-watcher** (`PLAN-LOCAL-WATCH.md`, deleted at LW3): a manual-start
+  `pipeline/watch-log.mjs` daemon regenerates `fills.json`/`positions.json`/`offers.json`
+  locally on every log change and does **ZERO git** — desk-side freshness without an
+  unattended writer to `main` (§12 invariant preserved; the phrasing was tightened repo-wide
+  to "no unattended writer **to `main`**"). LW2 added the localhost poll + "book synced" stamp
+  (APP_VERSION 0.48.0); LW1/LW3 pipeline+docs only. **Don't rebuild:** never give the daemon a
+  Task Scheduler job or a commit/push — that reverses §12 (Ben's call, not scope creep). Full
+  text: `git show <sha>:PLAN-LOCAL-WATCH.md`.
+- **Exchange-log hardening** (`PLAN-LOG-HARDENING.md`, deleted at LH3): `validateSlotTransitions()`
+  drops provably-impossible same-slot re-emit terminals **loudly** at ingest (before the
+  `fills.json` merge; `dedupeSnapshots` remains the silent derivation backstop — don't merge the
+  two), and a `⚠ log may be blind` header line flags post-restart plugin silence. Pipeline+docs
+  only, no APP_VERSION. **Don't rebuild:** the validator fails toward keeping data (drops only
+  strictly-identical duplicates, everything else warns-and-keeps), and the deleted cancel-to-EMPTY
+  inference stays deleted — EMPTY lines are non-evidence. Full text:
+  `git show <sha>:PLAN-LOG-HARDENING.md`.
+
+## Wave 7 — extraction + testability (2026-07-05; dispatched this session)
+
+**Architecture-review verdict (2026-07-05): clean — no rework.** A full read of the
+app/pipeline module graph found the import cycles are deliberate late-binding (dynamic
+`import()` at call time, not load time), `js/ui.js` needs no further split beyond A3's ledger
+extraction, and the `pipeline/lib/` layering holds. The remaining work is targeted testability
+extraction of the two highest-value untested money/analytics paths — **NOT** a refactor. A
+future agent should not manufacture one.
+
+### TC1 — trendcore extraction [M] (ready now, dispatched this session)
+
+`js/trends.js` tangles pure analytics with DOM rendering; the money-affecting `backtestPlan`
+and `patientTargets` have ZERO fixtures. Extract the pure functions — `analyseHourly`,
+`analyseBroad`, `seasonalFactors`/`hourFactors`, `factorStats`, `bestWindow`, `backtestPlan`,
+`dayGroups`, `planSignal`, `buildPlan`, `patientTargets`, `median` — into a new
+node-importable `js/trendcore.js` (`trends.js` re-imports, render byte-identical, the A2/TD2
+precedent). Then `pipeline/trendcore.test.mjs` pins `backtestPlan` (the regime-guard/gate) and
+`patientTargets` (the 20th/80th band edges F1 will eventually replace). Pure move + guard;
+APP_VERSION bump (served file changes). Primary files: `js/trends.js`, new `js/trendcore.js`,
+new `pipeline/trendcore.test.mjs`.
+
+### GC1 — gateCandidates extraction [M] (ready now, dispatched this session)
+
+Absorbs the former TD3.5 Discovered item. `screen.mjs`'s gate stack (`gateCandidates`) is the
+highest-value untestable pipeline logic left — it closes over argv-derived module constants, so
+pinning it needs a **thresholds-as-argument** extraction: pass the gate thresholds (floor,
+gp-floor, min-gpd, max-price, thin-reserve…) in as a params object instead of reading
+module-level consts. Behavior byte-identical; then a colocated `*.test.mjs` pins two-sided
+liquidity **OR** gp-flow admission, the 500k attention floor, held/asked exemption, and
+falling-exclusion. Pipeline-only, no APP_VERSION. Primary files: `pipeline/screen.mjs`, new test.
+
+### Ready, unassigned
+
+- **SR1 [S] — `suggestions.jsonl` rotation/compaction.** The tracked file grows unbounded
+  (639 lines in ~2 days ≈ tens of MB/year at this pace) — needs a rotation story (monthly
+  archive files, or move history out of the deploy root) before it gets silly. Promoted from
+  Discovered.
+- **GA1 [S] — `.gitattributes` normalization.** Quiet the recurring `LF will be replaced by
+  CRLF` warnings on Windows commits with an `eol`/`text` normalization pass. Promoted from
+  Discovered.
+
+---
+
 ## Gated / unscheduled
 
 ### F1 — Algorithm feedback loop (ex PLAN-2 chunk D — GATED on O1's n thresholds)
@@ -986,6 +1064,19 @@ documented sample thresholds clear (process rule 4).
   sells, `BANKED` basis, `WITHDRAWN` for off-GE disposal). If revisited: one baseline
   export + GE-log replay = rolling estimate; bank truth stays advisory, never injected
   into `fills.json`. Full rationale: `git show 39e5d23:PLAN.md` (chunk 5 section).
+
+### Needs a Ben decision (not scheduled — list only, don't action unprompted)
+- **Stale remote branches** `wave4-repo-review-plan` + `g1-readme-inventory` — delete vs keep.
+  D1 superseded `g1-readme-inventory`'s README work; alternatively it could be the first
+  PR-path smoke once `gh auth refresh -s repo` runs. Ben's call.
+- **`git push origin --delete wave6-tests-org`** — the wave-6 lane branch, squash-landed.
+- **Orphan untracked desk files** — `pipeline/mapping.cache.json`, `pipeline/held-override.json`,
+  `pipeline/suggestions.jsonl` are pre-`.cache`-reorg (OR2.3) leftovers nothing reads; `rm`
+  after Ben confirms they're not live inputs on his machine.
+- **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
+- **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
+  REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the
+  `--max-price` default vs big tickets; a churn-niche `--min-gpd` exemption.
 
 ## Out of scope (standing decisions — don't re-open without Ben)
 
@@ -1020,14 +1111,12 @@ documented sample thresholds clear (process rule 4).
 ## Discovered
 
 **Open:**
-- `screen.mjs`'s gate stack (`gateCandidates`) is the highest-value UNtestable pipeline logic
-  left: it reads argv-derived module constants, so pinning it needs a thresholds-as-argument
-  extraction (pass the gate thresholds in rather than closing over module-level consts). Candidate
-  for a later focused chunk — deliberately NOT smuggled into TD3 (TD3.5, 2026-07-05).
+- ~~`screen.mjs`'s gate stack (`gateCandidates`) needs a thresholds-as-argument extraction to
+  be testable (TD3.5)~~ — promoted to chunk **GC1** (Wave 7).
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
-- Mixed line-ending handling (recurring `LF will be replaced by CRLF` warnings on Windows
-  commits) — a `.gitattributes` normalization pass would quiet it (lane K, 2026-07-04).
+- ~~Mixed line-ending handling (recurring `LF will be replaced by CRLF` warnings)~~ — promoted
+  to chunk **GA1** (Wave 7).
 - `quote.mjs` and `screen.mjs` can log a different liquidity `class` for the same item in
   `suggestions.jsonl` (volume read from `fetch24hOne` vs bulk `loadAll24h` at different
   moments — observed live on Toxic blowpipe: `mid` vs `thin`). Honest as-computed-then
@@ -1056,9 +1145,8 @@ documented sample thresholds clear (process rule 4).
 - `parseGp` exists in both `pipeline/cli.mjs:29` and `js/format.js:24` with slightly
   different behavior — intentional app/pipeline divergence; worth a one-line comment in
   each noting so (audit, 2026-07-05).
-- `suggestions.jsonl` grows unbounded in the tracked repo (639 lines in ~2 days ≈ tens of
-  MB/year at this pace) — needs a rotation/compaction story before it gets silly (e.g.
-  monthly archive files, or move history out of the deploy root) (audit, 2026-07-05).
+- ~~`suggestions.jsonl` grows unbounded in the tracked repo (639 lines in ~2 days ≈ tens of
+  MB/year)~~ — promoted to chunk **SR1** (Wave 7).
 - Log-file discovery near-duplicated between `sync-fills.readLogFiles` and
   `offers.readExchangeLog` — partly justified (`--log-dir` override, mobile file); unify
   only if either changes again (audit, 2026-07-05).

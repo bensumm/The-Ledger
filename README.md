@@ -49,7 +49,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (inline SVG), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
   + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
   (price/guide fetch + scoring), `trends.js` (archive + seasonal analysis +
-  regime/patient/backtest), `quotecore.js` (DOM-free quote model + canonical
+  regime/patient/backtest — renders the Trends view; pure analytics live in
+  `trendcore.js`), `trendcore.js` (TC1 — pure DOM-free Trends analytics:
+  hourly/seasonal decomposition, the walk-forward `backtestPlan` gate, `patientTargets`
+  offer sizing, `bestWindow`/`median`; moved out of `trends.js` for
+  `pipeline/trendcore.test.mjs`), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
   with the node analysis scripts), `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
@@ -125,7 +129,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     day/week/month bucketing), `table.test.mjs` (TD2 — the `compareRows` sort comparator),
     `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract), `sync-fills.test.mjs`
     (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
-    emitter) — all auto-discovered by `run-tests.mjs` (below), which CI runs once
+    emitter), `watchcore.test.mjs` (Watch-tab derivations + `offerVerdict`), `lib/cli.test.mjs`
+    (arg/`parseGp`/`median`), `lib/windowread.test.mjs` (window-range quantiles),
+    `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
+    (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
+    gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
+    screen.mjs's pre-fetch gate stack) — all auto-discovered by `run-tests.mjs` (below), which CI
+    runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
