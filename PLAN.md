@@ -116,7 +116,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | OR2 | pipeline/lib/ split (8 imported-only libs out of the CLI bag) | `pipeline/lib/*` (moved), ~11 importing files, `.github/workflows/checks.yml`, docs | queued (after OR1) |
 | TD1 | Glob test runner + must-have money tests (format, rating, reconstruct tax-cap/partial-fill) | new `pipeline/run-tests.mjs`, `format.test.mjs`, `rating.test.mjs`, `reconstruct.test.mjs` (extend), `checks.yml` (one-time runner swap), `/ship` skill | queued (after OR2) |
 | TD2 | Testability extractions + unlocked tests (ledgercore, table comparator, alerts guard) | new `js/ledgercore.js`, `js/ledger.js`, `js/table.js`, `pipeline/alerts.mjs`, new tests, `checks.yml` | queued (after TD1) |
-| TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `windowread.test.mjs`, `offers.test.mjs`, `cli.test.mjs`, `checks.yml` | queued (after TD2) |
+| TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `pipeline/lib/{windowread,offers,cli}.test.mjs` | ✅ (pipeline-only, no APP_VERSION; quotecore +5 → 21 checks, windowread 6, offers 3, cli/suggestlog 4; runner: 10 suites green; no checks.yml edit — auto-discovered. TD3.5 gateCandidates extraction → Discovered) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -1020,6 +1020,10 @@ documented sample thresholds clear (process rule 4).
 ## Discovered
 
 **Open:**
+- `screen.mjs`'s gate stack (`gateCandidates`) is the highest-value UNtestable pipeline logic
+  left: it reads argv-derived module constants, so pinning it needs a thresholds-as-argument
+  extraction (pass the gate thresholds in rather than closing over module-level consts). Candidate
+  for a later focused chunk — deliberately NOT smuggled into TD3 (TD3.5, 2026-07-05).
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
 - Mixed line-ending handling (recurring `LF will be replaced by CRLF` warnings on Windows

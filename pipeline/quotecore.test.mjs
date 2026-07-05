@@ -20,6 +20,7 @@
 import assert from 'node:assert/strict';
 import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, BIG_TICKET_GP } from '../js/quotecore.js';
 import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../js/quotecore.js';   // S2 posture helpers
+import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
 const NOW_MS  = NOW_SEC * 1000;
@@ -283,6 +284,101 @@ ok('breakEven: brute-force smallest-s at every region boundary', () => {
   assert.equal(breakEven(245_000_000), Math.ceil(245_000_000 / 0.98));         // 250,000,000 (uncapped branch)
   assert.equal(breakEven(245_000_001), 250_000_001);                           // capped branch = brute min
   assert.equal(bruteMin(245_000_001), 250_000_001);
+});
+
+// ============================================================================================
+// TD3.1 — computeQuote DERIVATION + display helpers (ordering clamp, mom, falling cap, labels).
+// Pins the row-model derivation the app tables + scripts all read, independent of the momVerdict
+// tree above. Synthetic 5m/6h series only.
+//   BUSINESS REQUIREMENTS pinned here:
+//     - The optimistic edges are CLAMPED so optBuy ≤ quickBuy ≤ quickSell ≤ optSell ALWAYS holds —
+//       the direct guard on the 2026-07-03 base-mixing incident (opt can never cross quick).
+//     - `mom` is derived from the PRE-clamp live-vs-band comparison: instasell below the 2h floor →
+//       'breakdown'; instabuy above the 2h top → 'breakup'; in-band → 'clean' (survives even when
+//       the display clamp annihilates the opt price).
+//     - A falling regime caps optSell at the live instabuy — never price a sell above a dropping
+//       market (the 0.20.0 price-to-clear rule).
+//     - regimeLabel flips at ±5% drift (falling ≤ −5, rising ≥ +5, else flat; unknown when !ok).
+//     - momCell renders a strong (double) arrow at/above MOM_STRONG_PCT past the band edge, a single
+//       arrow below it; clean → a muted en-dash.
+// ============================================================================================
+console.log('\nTD3.1 computeQuote derivation + display:');
+
+// a flat band of [lo, hi] over 24×5m windows (ts6h empty → regime unknown, falling=false)
+const bandRow = (latest, lo, hi, opts = {}) => rowOf(latest, mk5m(() => ({ low: lo, high: hi, vol: 500 })), opts);
+
+// 6h series whose recent-3d median vs prior-3-to-17d median sets the regime drift (falling/rising).
+function mk6h(recentMid, priorMid, days = 18) {
+  const pts = [], n = days * 4, tEnd = NOW_SEC - 6 * 3600, recentCut = tEnd - 3 * 86400;
+  for (let k = n; k >= 1; k--) {
+    const ts = NOW_SEC - k * 6 * 3600, m = ts >= recentCut ? recentMid : priorMid;
+    pts.push({ timestamp: ts, avgLowPrice: m - 5, avgHighPrice: m + 5 });
+  }
+  return pts;
+}
+
+// --- TD3.1a. ordering clamp holds — both a normal wide band and a pathological inside-spread band
+ok('ordering clamp: optBuy ≤ quickBuy ≤ quickSell ≤ optSell (base-mixing guard)', () => {
+  const latest = { low: 1000, high: 1010, lowTime: FRESH, highTime: FRESH };
+  const wide = bandRow(latest, 990, 1020);                 // band wider than the live spread
+  assert.ok(wide.optBuy <= wide.quickBuy && wide.quickBuy <= wide.quickSell && wide.quickSell <= wide.optSell);
+  assert.equal(quoteOrdered(wide), true);
+  assert.equal(wide.optBuy, 990); assert.equal(wide.optSell, 1020);
+  // pathological: the 2h band sits ENTIRELY inside the live spread — the clamp must stop opt crossing
+  const inside = bandRow(latest, 1003, 1007);
+  assert.equal(quoteOrdered(inside), true);
+  assert.equal(inside.optBuy, 1000, 'optBuy clamped up to quickBuy, never above it');
+  assert.equal(inside.optSell, 1010, 'optSell clamped down to quickSell, never below it');
+});
+
+// --- TD3.1b. mom derives from the PRE-clamp comparison (breakdown / breakup / clean)
+ok('mom: pre-clamp live-vs-band → breakdown / breakup / clean (survives the clamp)', () => {
+  // breakdown: instasell 980 below the 2h floor 990 — the opt display is annihilated (optBuy==quickBuy)
+  const bd = bandRow({ low: 980, high: 1010, lowTime: FRESH, highTime: FRESH }, 990, 1020);
+  assert.equal(bd.mom, 'breakdown');
+  assert.equal(bd.optBuy, bd.quickBuy, 'clamp collapses optBuy onto quickBuy, yet mom is still breakdown');
+  assert.ok(Math.abs(bd.momPct - (990 - 980) / 990) < 1e-9);
+  // breakup: instabuy 1030 above the 2h top 1020
+  const bu = bandRow({ low: 1000, high: 1030, lowTime: FRESH, highTime: FRESH }, 990, 1020);
+  assert.equal(bu.mom, 'breakup');
+  assert.equal(bu.optSell, bu.quickSell, 'clamp collapses optSell onto quickSell, yet mom is still breakup');
+  // clean: both live prices inside the band
+  const cl = bandRow({ low: 1000, high: 1010, lowTime: FRESH, highTime: FRESH }, 990, 1020);
+  assert.equal(cl.mom, 'clean');
+  assert.equal(cl.momPct, 0);
+});
+
+// --- TD3.1c. falling regime caps optSell at the live instabuy (0.20.0 price-to-clear)
+ok('falling regime caps optSell at the live instabuy (never price above a dropping market)', () => {
+  const latest = { low: 1000, high: 1010, lowTime: FRESH, highTime: FRESH };
+  const flat = bandRow(latest, 990, 1050);                                  // ts6h empty → not falling
+  assert.equal(flat.falling, false);
+  assert.equal(flat.optSell, 1050, 'without a falling regime, optSell reaches the 2h top');
+  const falling = bandRow(latest, 990, 1050, { ts6h: mk6h(900, 1000) });    // recent 900 vs prior 1000 = −10%
+  assert.equal(falling.regimeLabel, 'falling');
+  assert.equal(falling.falling, true);
+  assert.equal(falling.optSell, 1010, 'falling caps optSell at the live instabuy, not the 2h top');
+});
+
+// --- TD3.1d. regimeLabel flips at ±5%
+ok('regimeLabel: falling ≤ −5%, rising ≥ +5%, else flat; unknown when !ok', () => {
+  assert.deepEqual(regimeLabel({ ok: true, driftPct: -5 }), { label: 'falling', falling: true, rising: false });
+  assert.equal(regimeLabel({ ok: true, driftPct: -4.99 }).label, 'flat');
+  assert.equal(regimeLabel({ ok: true, driftPct: 0 }).label, 'flat');
+  assert.equal(regimeLabel({ ok: true, driftPct: 4.99 }).label, 'flat');
+  assert.deepEqual(regimeLabel({ ok: true, driftPct: 5 }), { label: 'rising', falling: false, rising: true });
+  assert.equal(regimeLabel({ ok: false }).label, 'unknown');
+  assert.equal(regimeLabel(null).label, 'unknown');
+});
+
+// --- TD3.1e. momCell strength arrows at MOM_STRONG_PCT
+ok('momCell: strong (double) arrow at/above MOM_STRONG_PCT, single arrow below, muted when clean', () => {
+  assert.deepEqual(momCell('breakdown', MOM_STRONG_PCT), { sym: '↓↓', cls: 'loss' });
+  assert.deepEqual(momCell('breakdown', MOM_STRONG_PCT - 0.0001), { sym: '↓', cls: 'amber' });
+  assert.deepEqual(momCell('breakdown', 0), { sym: '↓', cls: 'amber' });
+  assert.deepEqual(momCell('breakup', MOM_STRONG_PCT), { sym: '↑↑', cls: 'gain' });
+  assert.deepEqual(momCell('breakup', MOM_STRONG_PCT - 0.0001), { sym: '↑', cls: 'amber' });
+  assert.deepEqual(momCell('clean', 0), { sym: '–', cls: 'mommuted' });
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
