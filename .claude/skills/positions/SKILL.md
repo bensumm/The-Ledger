@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.8
+version: 1.9
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -21,10 +21,19 @@ already ran inside `momVerdict()` — your job is to *interpret* the printed ver
 to re-derive them.
 
 Freshness: there is **no scheduled sync** (the 20-min `CofferFillsSync` job was eliminated
-2026-07-04 — sync is on-demand only). **Sync first:** run `node pipeline/sync-fills.mjs`
-before quoting so `positions.json` reflects every logged trade, then run `--positions`
+2026-07-04 — sync is on-demand only). **Sync first (SY1):** run `node pipeline/sync-fills.mjs`
+before quoting so `positions.json` reflects every logged trade — including any phone-logged
+lines, since the sync ff-pulls `origin/main` (mobile `mobile-fills.log` writes) before
+reading the logs (the multi-writer contract, FILLS-PIPELINE §13.3) — then run `--positions`
 against the fresh file. (`node pipeline/monitor.mjs` shows live exchange-log truth if a
 just-made trade matters even more immediately.)
+
+**Run the sync from the MAIN checkout only (SY1.2):** `sync-fills.mjs` commits+pushes the
+pipeline artifacts (`fills.json`/`positions.json`) to `main` under the admin bypass, so run
+it from `C:\dev\The-Ledger` — **never a git worktree** (a worktree is on a feature branch;
+pushing pipeline artifacts from there would land them on the wrong ref). If this session is
+running inside a worktree and you can't reach the main checkout, SKIP the sync and say so —
+report that `positions.json` may be stale rather than pushing from the wrong branch.
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
 `--positions` prints no open lots, the review isn't done: run `node pipeline/watch.mjs` —

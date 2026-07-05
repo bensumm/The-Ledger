@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.6
+version: 1.7
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -14,7 +14,9 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
 
 1. **Invoke `/positions`** (Skill tool) → the cut/hold action plan with exact prices.
    Its standalone interactive tail (the capital question) is suppressed — the phase
-   boundary below owns it.
+   boundary below owns it. **Freshness (SY1):** `/positions` runs `node pipeline/sync-fills.mjs`
+   first (from the MAIN checkout, never a worktree — SY1.2), so the book is fresh for the
+   whole composition; don't re-run the sync when `/scan` runs in Phase 2.
 2. **Chase-bid sweep (Ben, 2026-07-05 — the entry-aggression posture flip).** Active
    sessions price bids near the live instasell to fill; overnight inverts that. Before the
    pause, list every RESTING BUY offer (`node pipeline/watch.mjs` shows them with verdicts)

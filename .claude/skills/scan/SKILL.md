@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.4
+version: 1.5
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -20,6 +20,18 @@ a keyword/niche ("anything in herbs?") → **no script flag exists** — run the
 filter the output rows by niche yourself; `--publish` only if Ben wants the app's Scan tab
 updated. The script already gates (two-sided liquidity, price window, falling-exclusion)
 and grades (`rating.mjs`); your job is the judgment pass over what it prints.
+
+**Sync first (SY1).** The §5 position-context pass reads Ben's current book, and there is no
+scheduled sync (on-demand only since the `CofferFillsSync` job was eliminated — FILLS-PIPELINE
+§12). Run `node pipeline/sync-fills.mjs` before the position-context pass (in practice, at the
+top of the scan) so held-inventory/offer context is current — it also ff-pulls `origin/main`
+so any phone-logged trades are folded in (the multi-writer contract, §13.3).
+**Run it from the MAIN checkout only (SY1.2):** the sync commits+pushes `fills.json`/
+`positions.json` to `main` under the admin bypass, so run it from `C:\dev\The-Ledger`, **never
+a git worktree** (a feature-branch context would push the artifacts to the wrong ref). If
+you're in a worktree and can't reach the main checkout, SKIP the sync and note the book may be
+stale. (When `/scan` runs inside `/overnight`, Phase 1 already synced via `/positions` — don't
+re-run it.)
 
 ## 2. Judgment pass over the rated rows
 
