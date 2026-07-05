@@ -59,6 +59,7 @@ const LOG_DIR   = argVal('--log-dir') || join(homedir(), '.runelite', 'exchange-
 const REPO_DIR  = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';    // your git clone
 const FILLS_REL = 'fills.json';                                    // raw event stream, repo-relative
 const POSITIONS_REL = 'positions.json';                            // reconstructed trades/positions (app auto-populates Ledger from this)
+const MOBILE_REL = 'mobile-fills.log';                             // M1: phone-written source log at the repo ROOT (NOT in LOG_DIR) — read, never written here
 const MAX_AGE_DAYS = 180;   // drop events older than this
 const MAX_EVENTS   = 20000; // hard cap on stored events
 const GIT_PUSH  = true;     // set false to stage commits without pushing
@@ -100,33 +101,62 @@ function readLogFiles() {
 // the commit/push block share it.
 const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toString().trim();
 
-// Clobber-guard (2026-07-04 incident). This checkout's rolling --auto commit is amended +
-// force-pushed each cycle. A worktree/manual `git push origin HEAD:main` advances origin/main
-// WITHOUT moving this checkout's local `main` ref, so the next --auto cycle would amend a STALE
-// auto-commit and force-push it — DROPPING those upstream commits (this is exactly how the
-// rating-rework push got wiped). Fix: before touching git, fast-forward local main to origin/main.
-// ff-only is non-destructive — it refuses rather than discard any uncommitted work; if it can't ff
-// (genuine divergence or a dirty tree), we leave HEAD alone and the amend-guard below downgrades to
-// a plain commit whose push is safely REJECTED rather than clobbering. Best-effort: any failure
-// (offline, no remote) is logged and ignored so the sync itself never breaks on this.
+// Multi-writer rebase-or-abort (M1 step 1 — the mobile-parity write path). Two writers now
+// touch origin/main: this PC sync (fills.json / positions.json / screen.json / suggestions.jsonl)
+// and the PHONE (mobile-fills.log, appended via the GitHub contents API). Their file sets are
+// DISJOINT by contract, so a phone push only ever moves origin/main *ahead* of this checkout —
+// never a real content conflict. This guard therefore:
+//   (1) fetches, then FAST-FORWARDS local main onto a moved origin/main BEFORE reading logs, so a
+//       phone-pushed mobile-fills.log is on disk and gets READ during reconstruction below. The
+//       sync then lands a FRESH commit on top of it (never an amend/force-push over the phone's
+//       commit — the scheduler-era --auto amend path is dead code, §12).
+//   (2) LOUDLY ABORTS on a genuine divergence (local main has commits origin/main lacks). Under the
+//       single-writer contract that is a STRUCTURAL bug (an unexpected local commit, a
+//       double-writer, or a stale branch), not something to paper over — a plain push would be
+//       rejected and a force-push would clobber the phone's commit, so we stop and make the human
+//       reconcile. This replaces the old best-effort "warn and continue".
+// A fetch/ref failure (offline, no remote) stays best-effort — logged and skipped so an offline
+// sync still writes fills.json locally; only a *confirmed* divergence aborts.
 function syncMainToRemote() {
-  try {
-    git('fetch origin');
-    const head = git('rev-parse HEAD'), remote = git('rev-parse origin/main');
-    if (head === remote) return;                       // already at the remote tip
-    let behind = false;
-    try { git(`merge-base --is-ancestor ${head} ${remote}`); behind = true; } catch { behind = false; }
-    if (behind) { git('merge --ff-only origin/main'); console.log('Clobber-guard: fast-forwarded local main to origin/main before sync.'); }
-    else console.warn('Clobber-guard: local main has DIVERGED from origin/main — not amending; a plain push will be rejected rather than clobber. Reconcile manually.');
-  } catch (e) { console.warn('Clobber-guard: main-sync skipped (' + e.message + ').'); }
+  try { git('fetch origin'); }
+  catch (e) { console.warn('Multi-writer guard: fetch skipped (' + e.message + ') — proceeding with local state (offline?).'); return; }
+  let head, remote;
+  try { head = git('rev-parse HEAD'); remote = git('rev-parse origin/main'); }
+  catch (e) { console.warn('Multi-writer guard: could not resolve refs (' + e.message + ') — proceeding with local state.'); return; }
+  if (head === remote) return;                          // already at the remote tip
+  let behind = false;
+  try { git(`merge-base --is-ancestor ${head} ${remote}`); behind = true; } catch { behind = false; }
+  if (behind) {
+    // origin/main moved ahead (typically a phone push to mobile-fills.log). ff so that file is
+    // readable below; the sync's own commit lands fresh on top.
+    git('merge --ff-only origin/main');
+    console.log('Multi-writer guard: fast-forwarded local main onto moved origin/main (phone-pushed log(s) now readable).');
+    return;
+  }
+  // Diverged — abort loudly. The phone writes ONLY mobile-fills.log; this machine writes ONLY
+  // fills.json/positions.json/screen.json/suggestions.jsonl. They must never collide, so a real
+  // divergence is a structural bug to fix by hand, not to force through.
+  console.error('Multi-writer guard: local main has DIVERGED from origin/main — ABORTING.');
+  console.error('  The phone writes only mobile-fills.log; this machine writes only fills.json/positions.json etc.');
+  console.error('  A divergence means an unexpected local commit, a double-writer, or a stale branch.');
+  console.error('  Inspect `git log --oneline origin/main..HEAD`, reconcile, then re-run the sync. Nothing was written.');
+  process.exit(1);
 }
 
 function main() {
   const files = readLogFiles();
-  if (!files.length) { console.log('No log files found in ' + LOG_DIR); return; }
+  // M1: mobile-fills.log lives at the REPO ROOT (tracked, appended by the phone via the GitHub
+  // contents API), NOT in LOG_DIR — pull it in as an extra source so mobile trades flow through
+  // the same reconstruction. Same line vocabulary as coffer-manual.log; its slot-9 lines sequence
+  // independently of the desktop/CLI slot-8 manuals. Only READ here — the phone owns writes to it.
+  // (The file is TRACKED, so it exists on disk in every checkout; the ff in syncMainToRemote below
+  // only updates its CONTENTS, read by the parse loop afterwards — `sources` membership is stable.)
+  const mobilePath = join(REPO_DIR, MOBILE_REL);
+  const sources = existsSync(mobilePath) ? [...files, mobilePath] : files;
+  if (!sources.length) { console.log('No log files found in ' + LOG_DIR + ' (and no ' + MOBILE_REL + ')'); return; }
 
   if (PROBE) {
-    for (const f of files.slice(-3)) {
+    for (const f of sources.slice(-3)) {
       console.log('\n=== ' + f + ' (last 10 lines) ===');
       const lines = readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean).slice(-10);
       for (const l of lines) {
@@ -139,15 +169,16 @@ function main() {
     return;
   }
 
-  // Clobber-guard: get local main onto origin/main BEFORE reading fills.json (so we also merge onto
-  // the freshest committed events) and before any amend/push. Skipped on --dry (no git side effects).
+  // Multi-writer guard: get local main onto origin/main BEFORE reading logs (so a phone-pushed
+  // mobile-fills.log is on disk and read below, and we merge onto the freshest committed events)
+  // and before any commit/push. Skipped on --dry (no git side effects). Aborts on divergence.
   if (!DRY) syncMainToRemote();
 
   // parse everything
   let rawLines = 0, parsedLines = 0;
   const rawParsed = [];
   const removeTargets = new Set(); // event ids tombstoned by REMOVE lines (chunk 1.4)
-  for (const f of files) {
+  for (const f of sources) {
     for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
       if (!line.trim()) continue;
       rawLines++;
@@ -198,7 +229,7 @@ function main() {
   const changed = eventsChanged || positionsChanged;
   const realisedTotal = pos.closed.reduce((s, t) => s + t.realised, 0);
 
-  console.log(`${files.length} log file(s), ${rawLines} lines (${parsedLines} valid trade line(s)), ${parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
+  console.log(`${sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${rawLines} lines (${parsedLines} valid trade line(s)), ${parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
   console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s)${positionsChanged ? '' : ' (no change)'}`);
   if (DRY) {
     for (const e of merged) {

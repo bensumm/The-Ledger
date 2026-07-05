@@ -1,0 +1,9 @@
+# mobile-fills.log — mobile GE trades captured via the app's GitHub-as-backend quick-add (PLAN.md M1).
+# Append-only SOURCE log. SAME line vocabulary as coffer-manual.log — BOUGHT / SOLD / WITHDRAWN /
+# BANKED fill lines plus {"state":"REMOVE","target":"<eventId>"} tombstones — but written to SLOT 9
+# (mobile) so its provenance stays distinct from desktop/CLI manual entries (slot 8) and live GE
+# slots (0-7). The phone appends here directly via the GitHub contents API (js/github.js); the PC's
+# sync-fills.mjs READS this file (it NEVER writes it — single-writer discipline) and folds the lines
+# into fills.json / positions.json through the normal reconstruction. Comment lines (starting with #)
+# are ignored by the parser. Do not hand-edit while the pipeline may run; append a REMOVE tombstone to
+# correct a line (fills.json is an append-only archive — deleting a source line alone won't purge it).
