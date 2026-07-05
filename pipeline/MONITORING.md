@@ -140,6 +140,15 @@ The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
   placement feedback never alerts.
 - **Noise guard:** offers under `NOISE_OFFER_GP` (100k) total value are collapsed to one
   ignored line — a stray supply order never earns a verdict.
+- **Window-context line (2026-07-05, the berserker-ring lesson):** every bid row (and every
+  held row with a live ask) carries a `window` line — the `windowread.mjs` quantiles for the
+  **coming 8 local hours** scored over the last ~7 days: bid touched k/N days, ~50%/~75% low
+  levels, ~75%/~50% high levels reached, plus the resting offer's own touch/reach count. It
+  is CONTEXT printed next to the verdict, never a verdict input — the 2h gate tree is
+  unchanged. It exists because the stateless 2h verdicts kept firing CANCEL-BID on a bid
+  whose real question was time-of-day (does this window print my level? what does tomorrow
+  recover to?) — evidence that previously required a manual `windowrange.mjs` call. Same
+  honesty bound: touched ≠ filled, ~7 days is a small sample.
 
 **Read-only, human-executed decision support — the hard guardrail.** This tool NEVER places
 or cancels a GE offer, not even stubbed. Automating GE interaction is botting and bannable.

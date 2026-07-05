@@ -53,6 +53,7 @@ import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
 import { readExchangeLog, activeOffers } from './offers.mjs';
 import { logSuggestions, suggestionEntry } from './suggestlog.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './windowread.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -126,8 +127,36 @@ async function fetchInputs(id) {
   const latest = await fetchLatest(id); await sleep(60);
   const ts5m = await fetchTs(id, '5m'); await sleep(60);
   const ts6h = await fetchTs(id, '6h'); await sleep(60);
-  const vol24 = await fetch24hOne(id);
-  return { latest, ts5m, ts6h, vol24 };
+  const vol24 = await fetch24hOne(id); await sleep(60);
+  const ts1h = await fetchTs(id, '1h'); // window-context line (windowread.mjs)
+  return { latest, ts5m, ts6h, vol24, ts1h };
+}
+
+// --- WINDOW CONTEXT line (2026-07-05, the ring lesson): the stateless 2h verdicts kept
+// firing on a bid whose real question was time-of-day ("does this window print my level,
+// and what does tomorrow recover to?") — evidence that previously needed a manual
+// windowrange.mjs call. This prints the same quantiles inline, scored over the COMING 8
+// machine-local hours across the last 7 days. Same honesty bound as windowrange.mjs:
+// touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
+const WINDOW_HOURS = 8;
+const WINDOW_DAYS = 7;
+function windowLine(ts1h, { bid = null, ask = null } = {}) {
+  if (!ts1h || !ts1h.length) return null;
+  const h = new Date().getHours();
+  const wStart = h, wEnd = (h + WINDOW_HOURS) % 24;
+  const stats = windowStats(ts1h, { nights: WINDOW_DAYS, wStart, wEnd });
+  if (!stats) return null;
+  const { lows, his } = stats;
+  const label = `next ${WINDOW_HOURS}h window (${String(wStart).padStart(2, '0')}–${String(wEnd).padStart(2, '0')}h × last ${stats.days.length}d)`;
+  const bits = [];
+  if (bid != null && lows.length)
+    bits.push(`bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d · lows ~50% ${fmtP(quantLow(lows, 0.5))} / ~75% ${fmtP(quantLow(lows, 0.75))}`);
+  if (ask != null && his.length)
+    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d`);
+  if (his.length)
+    bits.push(`highs reached ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`);
+  if (!bits.length) return null;
+  return `${label}: ${bits.join(' · ')}  (touched ≠ filled; small sample)`;
 }
 
 // --- per-item RISK read (7.4): spread · liquidity · regime · ticket/exposure + adverse selection.
@@ -238,7 +267,7 @@ async function buildItem({ id, name, qty, avgCost }, map, guide) {
   const meta = CLASSES[cls];
   const be = held ? breakEven(avgCost) : (row.quickBuy != null ? breakEven(row.quickBuy) : null);
   const lotValue = held ? qty * avgCost : null;
-  return { id, name, qty, avgCost, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m };
+  return { id, name, qty, avgCost, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts1h: inp.ts1h };
 }
 
 // A held item is an ALERT if the shared cut-trigger says CUT/CLEAR, or it's underwater
@@ -375,7 +404,10 @@ async function main() {
   ]);
 
   // header + provenance
-  const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
+  // LOCAL wall-clock, per the CLAUDE.md time-display convention (the old toISOString stamp
+  // printed UTC and mislabeled a 22:09 local session as 05:09 — 2026-07-05 confusion)
+  const d = new Date(), p2 = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
   console.log(`# Adaptive watch — ${stamp}  ·  READ-ONLY decision support (you place every offer)`);
   if (!TARGETS_ONLY) {
     console.log(posAge != null
@@ -405,6 +437,8 @@ async function main() {
       console.log(`\n${name} ×${qty}  [${meta.label} · re-check ${meta.cadence}m]  HELD @ ${fmtP(Math.round(avgCost))} (break-even ${fmtP(be)})${listed ? ' · ' + listed : ''}`);
       console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
       console.log(`  risk   ${riskRead(row, cls, lotValue)}`);
+      const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null });
+      if (wl) console.log(`  window ${wl}`);
       console.log(`  action ${heldAction(row, be, lotValue, ts5m)}`);
     }
   }
@@ -427,6 +461,8 @@ async function main() {
         console.log(`\n${name}  bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}  [${meta.label} · re-check ${meta.cadence}m]  (committed ${fmtP(off.max * off.offer)})`);
         console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
         console.log(`  risk   ${riskRead(row, cls, off.max * off.offer)}`);
+        const wl = windowLine(it.ts1h, { bid: off.offer });
+        if (wl) console.log(`  window ${wl}`);
         console.log(`  action ${bidAction(row, off)}`);
       }
     }

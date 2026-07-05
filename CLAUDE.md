@@ -214,9 +214,13 @@ Script facts the skills rely on (current behavior, not doctrine):
   `pipeline/offers.mjs`). Asks annotate their held row (`listed n/m @ X` / `NOT LISTED`);
   bids get an ACTIVE BIDS section with verdicts BID-OK / BID-BEHIND / CROSSING / CANCEL-BID
   (only CANCEL-BID — adverse-selection fill risk — alerts). Offers under 100k total value
-  are noise, collapsed to one line. `quote.mjs --positions` remains the booked-lots view.
+  are noise, collapsed to one line. Each bid row and listed-held row also prints a `window`
+  context line (coming-8h touch/reach quantiles over ~7 days, via the shared
+  `pipeline/windowread.mjs` — same math as `windowrange.mjs`): context beside the verdict,
+  never a verdict input. `quote.mjs --positions` remains the booked-lots view.
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]` (renamed
-  from `nightlows.mjs` 2026-07-05 when the high side was added) scores the last ~14 local
+  from `nightlows.mjs` 2026-07-05 when the high side was added; bucketing/quantile math lives
+  in `pipeline/windowread.mjs`, shared with `watch.mjs`'s window line) scores the last ~14 local
   days from the 1h timeseries: per-day window low AND high + instasell/instabuy volume, the
   bid levels touched and ask levels reached on ~50%/~75%/all days, and `--bid`/`--ask`
   scoring for specific candidates. `/overnight`'s fill-realism check runs it on every

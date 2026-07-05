@@ -32,6 +32,7 @@
  */
 import { loadMapping, fetchTs, fetchLatest } from './marketfetch.mjs';
 import { parseArgs, parseGp } from './cli.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './windowread.mjs';
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);
@@ -56,18 +57,7 @@ if (A.ask !== undefined && !Number.isFinite(ASK)) { console.error('error: --ask 
 
 const fmt = n => n == null ? '—' : n.toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
-// night key = local date of the morning the window ends on
-function nightKey(d) {
-  const key = new Date(d);
-  if (W_START > W_END && d.getHours() >= W_START) key.setDate(key.getDate() + 1); // pre-midnight hours belong to tomorrow's morning
-  return `${key.getFullYear()}-${pad2(key.getMonth() + 1)}-${pad2(key.getDate())}`;
-}
-const inWindow = h => W_START < W_END ? (h >= W_START && h < W_END) : (h >= W_START || h < W_END);
-// bid touched on ≥p of days ⇔ bid ≥ the p-quantile of window lows (ascending)
-const quant = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))];
-// ask reached on ≥p of days ⇔ ask ≤ the (1−p)-quantile of window highs (ascending): p of the
-// highs sit at/above that level (mirror of quant; p=1 → the minimum high = reached every day)
-const quantHi = (sorted, p) => sorted[Math.max(0, Math.min(sorted.length - 1, sorted.length - Math.ceil(p * sorted.length)))];
+// the bucketing/quantile math lives in windowread.mjs (shared with watch.mjs's window line)
 
 const map = await loadMapping();
 for (const want of positionals) {
@@ -75,53 +65,27 @@ for (const want of positionals) {
   if (!r) { console.log(`\n"${want}": not found in the item mapping — check spelling or pass an id.`); continue; }
   const [series, latest] = await Promise.all([fetchTs(r.id, '1h'), fetchLatest(r.id)]);
 
-  // bucket window-hours by day, newest-complete days only (skip today if we're inside the window)
-  const days = new Map(); // key -> {low, hi, volLo, volHi}
-  const now = new Date();
-  const today = inWindow(now.getHours()) ? nightKey(now) : null;
-  for (const pt of series) {
-    const d = new Date(pt.timestamp * 1000);
-    if (!inWindow(d.getHours())) continue;
-    const key = nightKey(d);
-    if (key === today) continue;
-    const n = days.get(key) || { low: null, hi: null, volLo: 0, volHi: 0 };
-    if (pt.avgLowPrice != null && (n.low == null || pt.avgLowPrice < n.low)) n.low = pt.avgLowPrice;
-    if (pt.avgHighPrice != null && (n.hi == null || pt.avgHighPrice > n.hi)) n.hi = pt.avgHighPrice;
-    n.volLo += pt.lowPriceVolume || 0;
-    n.volHi += pt.highPriceVolume || 0;
-    days.set(key, n);
-  }
-  const scored = [...days.entries()].filter(([, n]) => n.low != null || n.hi != null)
-    .sort((a, b) => b[0].localeCompare(a[0])).slice(0, NIGHTS).reverse();
-
+  const stats = windowStats(series, { nights: NIGHTS, wStart: W_START, wEnd: W_END });
   const winLabel = `${pad2(W_START)}:00–${pad2(W_END)}:00 local`;
-  console.log(`\n## ${r.name} — window range, last ${scored.length} day(s) (${winLabel}, 1h series)`);
-  if (!scored.length) { console.log('no traded window-hours in the available history — too thin to read this window.'); continue; }
+  console.log(`\n## ${r.name} — window range, last ${stats ? stats.days.length : 0} day(s) (${winLabel}, 1h series)`);
+  if (!stats) { console.log('no traded window-hours in the available history — too thin to read this window.'); continue; }
+  const { days: scored, lows, his, medVolLo, medVolHi } = stats;
   for (const [key, n] of scored)
     console.log(`  ${key}  low ${fmt(n.low)} · high ${fmt(n.hi)}  · sell-vol ${fmt(n.volLo)} · buy-vol ${fmt(n.volHi)}`);
 
-  const lows = scored.map(([, n]) => n.low).filter(v => v != null).sort((a, b) => a - b);
-  const his  = scored.map(([, n]) => n.hi).filter(v => v != null).sort((a, b) => a - b);
-  const medOf = arr => { const s = [...arr].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
-  const medVolLo = medOf(scored.map(([, n]) => n.volLo));
-  const medVolHi = medOf(scored.map(([, n]) => n.volHi));
   console.log(`  ---`);
   if (lows.length) {
-    console.log(`  BID side — touched on ~50% of days: ${fmt(quant(lows, 0.5))} · ~75%: ${fmt(quant(lows, 0.75))} · every day: ${fmt(lows[lows.length - 1])}`);
+    console.log(`  BID side — touched on ~50% of days: ${fmt(quantLow(lows, 0.5))} · ~75%: ${fmt(quantLow(lows, 0.75))} · every day: ${fmt(lows[lows.length - 1])}`);
     console.log(`    median window instasell volume: ${fmt(medVolLo)} u (the pool a resting bid competes for)`);
   }
   if (his.length) {
-    console.log(`  ASK side — reached on ~50% of days: ${fmt(quantHi(his, 0.5))} · ~75%: ${fmt(quantHi(his, 0.75))} · every day: ${fmt(his[0])}`);
+    console.log(`  ASK side — reached on ~50% of days: ${fmt(quantHigh(his, 0.5))} · ~75%: ${fmt(quantHigh(his, 0.75))} · every day: ${fmt(his[0])}`);
     console.log(`    median window instabuy volume: ${fmt(medVolHi)} u (the pool a resting ask competes for)`);
   }
   if (latest && latest.low != null) console.log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
-  if (BID != null && lows.length) {
-    const k = lows.filter(l => l <= BID).length;
-    console.log(`  --bid ${fmt(BID)} → would have been touched on ${k}/${lows.length} day(s)`);
-  }
-  if (ASK != null && his.length) {
-    const k = his.filter(h => h >= ASK).length;
-    console.log(`  --ask ${fmt(ASK)} → would have been reached on ${k}/${his.length} day(s)`);
-  }
+  if (BID != null && lows.length)
+    console.log(`  --bid ${fmt(BID)} → would have been touched on ${touchedDays(lows, BID)}/${lows.length} day(s)`);
+  if (ASK != null && his.length)
+    console.log(`  --ask ${fmt(ASK)} → would have been reached on ${reachedDays(his, ASK)}/${his.length} day(s)`);
   console.log(`  (touched/reached ≠ limit filled — small sample, ~${scored.length} days; a guide, not a guarantee)`);
 }
