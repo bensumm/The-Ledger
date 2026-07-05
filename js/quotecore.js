@@ -345,6 +345,27 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now){
   return null;   // clean, reliable, not escalated → caller keeps its existing regime verdict
 }
 
+/* Shared BUY-OFFER (resting bid) verdict — the ONE decision pipeline/watch.mjs (console) and the
+   in-app Watch tab both consume, so a resting bid reads IDENTICALLY in both (the momVerdict
+   precedent, extracted from watch.mjs's inline bidVerdict by the Watch-tab build). Pure:
+   (row, offerPrice) → one of 'CANCEL-BID' | 'NO-QUOTE' | 'CROSSING' | 'BID-BEHIND' | 'BID-OK'.
+   Gate ORDER is load-bearing and matches watch.mjs's original inline logic exactly:
+     CANCEL-BID  falling regime OR a reliable 2h breakdown → a fill here is adverse selection
+     NO-QUOTE    no live instasell to judge the bid against
+     CROSSING    bid ≥ live instasell → expect fills about now
+     BID-BEHIND  bid below the 2h band low → unlikely to fill soon
+     BID-OK      resting inside the band
+   Only CANCEL-BID is an ALERT (the sole state where a resting order needs action); the rest are
+   placement feedback. Fixture-pinned in pipeline/watchcore.test.mjs. */
+export function offerVerdict(row, offerPrice){
+  if(!row) return 'NO-QUOTE';
+  if(row.falling || (row.mom==='breakdown' && row.reliable)) return 'CANCEL-BID';
+  if(row.quickBuy==null) return 'NO-QUOTE';
+  if(offerPrice>=row.quickBuy) return 'CROSSING';
+  if(row.optBuy!=null && offerPrice<row.optBuy) return 'BID-BEHIND';
+  return 'BID-OK';
+}
+
 /* Canonical formatted cells — the SINGLE source both the app HTML table (js/quote.js) and the
    chunk-3 markdown scripts build from, so the numbers are byte-identical everywhere.
    T1 (table v2): the composite Buy@/Sell@/Net columns collapsed into two SELF-CONTAINED

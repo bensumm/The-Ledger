@@ -47,7 +47,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
+import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -231,21 +231,27 @@ function targetAction(row, cls, be) {
 // dropped to meet you. Everything else is placement feedback (behind the band / inside / crossing).
 function bidAction(row, off) {
   const filled = `${off.qty}/${fmt(off.max)} filled`;
-  if (row.falling || (row.mom === 'breakdown' && row.reliable))
-    return `CANCEL-BID — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill at ${fmtP(off.offer)} means the market dropped to meet you. Cancel unless you are deliberately pricing the fall.`;
-  if (row.quickBuy == null) return `NO QUOTE — can't judge the bid; leave it and re-check at a liquid window.`;
-  if (off.offer >= row.quickBuy)
-    return `CROSSING (${filled}) — bid ${fmtP(off.offer)} ≥ live instasell ${fmtP(row.quickBuy)}; expect fills about now. Have the exit priced before they land.`;
-  if (row.optBuy != null && off.offer < row.optBuy)
-    return `BID-BEHIND (${filled}) — bid ${fmtP(off.offer)} is below the 2h band low ${fmtP(row.optBuy)}${row.mom === 'breakup' ? ', and mom ↑ is moving the market further away' : ''}; unlikely to fill soon. Nudge up only while the exit still clears break-even; never chase past the edge.`;
-  return `BID-OK (${filled}) — resting inside the band (${fmtP(row.optBuy)} band low · ${fmtP(row.quickBuy)} live)${row.mom === 'breakup' ? '; note mom ↑ — fills get less likely as it runs' : ''}. Patience is the plan.`;
+  // decision via the SHARED offerVerdict (js/quotecore.js) so the console and the app Watch tab
+  // can never disagree on a bid's state; the strings below are watch.mjs's own (byte-identical).
+  switch (offerVerdict(row, off.offer)) {
+    case 'CANCEL-BID':
+      return `CANCEL-BID — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill at ${fmtP(off.offer)} means the market dropped to meet you. Cancel unless you are deliberately pricing the fall.`;
+    case 'NO-QUOTE':
+      return `NO QUOTE — can't judge the bid; leave it and re-check at a liquid window.`;
+    case 'CROSSING':
+      return `CROSSING (${filled}) — bid ${fmtP(off.offer)} ≥ live instasell ${fmtP(row.quickBuy)}; expect fills about now. Have the exit priced before they land.`;
+    case 'BID-BEHIND':
+      return `BID-BEHIND (${filled}) — bid ${fmtP(off.offer)} is below the 2h band low ${fmtP(row.optBuy)}${row.mom === 'breakup' ? ', and mom ↑ is moving the market further away' : ''}; unlikely to fill soon. Nudge up only while the exit still clears break-even; never chase past the edge.`;
+    default:
+      return `BID-OK (${filled}) — resting inside the band (${fmtP(row.optBuy)} band low · ${fmtP(row.quickBuy)} live)${row.mom === 'breakup' ? '; note mom ↑ — fills get less likely as it runs' : ''}. Patience is the plan.`;
+  }
 }
 
 // A bid is an ALERT only in the adverse-selection case (breakdown/falling) — the one state
 // where a RESTING order needs action. Placement feedback never alerts.
 function bidAlert(it) {
   const { row, name, bid } = it;
-  if (row.falling || (row.mom === 'breakdown' && row.reliable))
+  if (offerVerdict(row, bid.offer) === 'CANCEL-BID')
     return { level: 'CANCEL-BID', msg: `CANCEL-BID ${name} @ ${fmtP(bid.offer)} — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill here is adverse selection. Cancel unless you want the falling price.` };
   return null;
 }
@@ -371,10 +377,7 @@ async function main() {
   const targetVerdict = it => it.cls === 'FALLING' ? 'SKIP'
     : it.row.quickBuy == null ? 'NO-QUOTE'
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
-  const bidVerdict = it => (it.row.falling || (it.row.mom === 'breakdown' && it.row.reliable)) ? 'CANCEL-BID'
-    : it.row.quickBuy == null ? 'NO-QUOTE'
-    : it.bid.offer >= it.row.quickBuy ? 'CROSSING'
-    : (it.row.optBuy != null && it.bid.offer < it.row.optBuy) ? 'BID-BEHIND' : 'BID-OK';
+  const bidVerdict = it => offerVerdict(it.row, it.bid.offer);   // SHARED with the app Watch tab (js/quotecore.js)
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it) })),
     ...targets.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: targetVerdict(it) })),
