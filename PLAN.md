@@ -750,6 +750,11 @@ documented sample thresholds clear (process rule 4).
   should know (lane M, 2026-07-04).
 - `mobile-fills.log` grows unbounded (append-only by design, like `coffer-manual.log`) — a
   future compaction of absorbed/tombstoned lines could trim it (lane M, 2026-07-04).
+- P1's `dedupeSnapshots()` runs inside `reconstruct()` (positions.json + `monitor.mjs`), but
+  `outcomes.mjs` calls `collapseOffers`/`matchTrades` directly for campaign boundaries, so its
+  campaigns can still see a snapshot-duplicate terminal as a phantom offer. Low impact (outcomes
+  is derived/gitignored), but adopt `dedupeSnapshots` there if campaign counts ever look off
+  (P1, 2026-07-05).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.

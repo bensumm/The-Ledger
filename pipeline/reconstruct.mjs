@@ -151,6 +151,40 @@ export function buildEvents(rawLinesParsed) {
 
 export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the shared impl (chunk 4.1)
 
+// P1 (2026-07-05): snapshot-re-emission dedupe. RuneLite re-broadcasts every GE slot's current
+// state on login / world-hop / GE-open (visible as a burst of simultaneous EMPTY lines for the
+// idle slots), so a completed-but-uncollected offer re-logs its terminal (BOUGHT/SOLD) line and
+// collapseOffers would read the second terminal as a SECOND trade — a phantom open lot on a
+// duplicate BUY, a phantom orphan on a duplicate SELL (the 2026-07-04 soul/blowpipe/bludgeon
+// incident, FILLS-PIPELINE.md §10). Discriminator: a GENUINE repeat trade always has a fresh
+// BUYING/SELLING placement line between two terminals on the same slot; a re-emission never does.
+// So, walking each slot's event subsequence in ts order, drop a terminal whose immediately-
+// preceding same-slot event is an IDENTICAL terminal (same itemId/type + offer-size/price/
+// cumulative-filled/cumulative-spent). A placement (or a differing terminal) between them makes
+// the preceding slot-event a non-match, so the second terminal is kept. EMPTY lines for the OTHER
+// slots in a login burst are already consumed by buildEvents() and belong to different slots, so
+// they never count as an intervening placement for the traded slot. Runs at the DERIVATION layer
+// (reconstruct below), NOT at the merge/storage layer — fills.json stays the raw append-only
+// archive (both terminal lines persist); only the derived positions.json drops the phantom, so the
+// fix re-applies cleanly as logic evolves and a future re-diagnosis can still see the raw pair.
+function sameTerminal(a, b) {
+  return a.itemId === b.itemId && a.type === b.type && a.qty === b.qty &&
+         a.price === b.price && a.filled === b.filled && a.spent === b.spent;
+}
+export function dedupeSnapshots(events) {
+  const prevBySlot = new Map(); // slot -> last KEPT event for that slot (ts order)
+  const out = [];
+  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+    const prev = prevBySlot.get(e.slot);
+    if (e.state === 'complete' && prev && prev.state === 'complete' && sameTerminal(prev, e)) {
+      continue; // snapshot re-emission — drop, keep the earlier identical terminal as the slot's prev
+    }
+    out.push(e);
+    prevBySlot.set(e.slot, e);
+  }
+  return out;
+}
+
 export function collapseOffers(events) {
   const cur = new Map(); // slot -> in-progress offer
   const offers = [];
@@ -216,7 +250,11 @@ export function matchTrades(offers) {
 }
 
 export function reconstruct(events) {
-  const { closed, open, unmatched } = matchTrades(collapseOffers(events));
+  // dedupeSnapshots first (P1): strip snapshot re-emissions before offers are collapsed, so a
+  // phantom duplicate terminal never becomes a second offer. monitor.mjs shares reconstruct(), so
+  // its live held count gets the same fix. (outcomes.mjs calls collapseOffers/matchTrades directly
+  // for campaign boundaries and does NOT go through here — see the Discovered note in PLAN.md.)
+  const { closed, open, unmatched } = matchTrades(collapseOffers(dedupeSnapshots(events)));
   return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched };
 }
 

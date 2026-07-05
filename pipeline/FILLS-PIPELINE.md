@@ -166,7 +166,12 @@ positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**
 }
 ```
 
-Reconstruction (in `sync-fills.mjs`), deliberate — don't undo casually:
+Reconstruction (in `reconstruct.mjs`, called by `sync-fills.mjs` and `monitor.mjs`),
+deliberate — don't undo casually:
+- **`dedupeSnapshots()`** (P1, 2026-07-05) runs FIRST inside `reconstruct()`: it strips
+  RuneLite snapshot re-emissions (a completed-but-uncollected offer's terminal line re-logged
+  on login/world-hop) before offers are collapsed, so a phantom duplicate never becomes a
+  second trade. Discriminator + rationale in §10 "Duplicate terminal lines".
 - **`collapseOffers()`** reduces the per-transition stream to one row per *offer*
   (contiguous `slot+item+type` run), taking the final cumulative `filled`/`spent`.
   Executed price-each = `spent/filled` (gross), never the listed `price` (see §5).
@@ -339,20 +344,33 @@ detail is authoritative there; the operational rules below are the single home.
   amend/force-push branch were excised in chunk X2, 2026-07-05; git history holds the old
   machinery.)*
 
-### Duplicate terminal lines — snapshot re-emission (diagnosed 2026-07-05)
+### Duplicate terminal lines — snapshot re-emission (diagnosed 2026-07-05; auto-deduped since P1)
 The Exchange Logger occasionally writes a second, identical terminal line (BOUGHT/SOLD)
 for the same offer. Root cause: RuneLite re-broadcasts every GE slot's current state on
 login / world-hop / opening the GE (visible in the log as a burst of simultaneous EMPTY
 lines for the other slots at the same second); a completed-but-uncollected offer re-reports
 its terminal state and the plugin logs it again. Three cases on 2026-07-04 (soul SOLD,
-blowpipe BOUGHT, bludgeon SOLD). Effect: duplicate SELLs fall harmlessly into `unmatched`
-(no fabricated profit); a duplicate BUY creates a phantom open lot. Interim procedure:
-after any session with fills, scan for same-item/same-price terminal pairs minutes apart
-with no intervening BUYING/SELLING placement line for that slot, and tombstone the later
-one (`add-manual-fill.mjs --remove <eventId>`) before the next sync books it. The real
-fix (snapshot-aware dedupe in `reconstruct.mjs`) is a PLAN.md chunk — the discriminator:
-a genuine repeat trade always has a fresh placement line between two terminals on the
-same slot; a snapshot re-emission never does.
+blowpipe BOUGHT, bludgeon SOLD). Effect if left unhandled: duplicate SELLs fall harmlessly
+into `unmatched` (no fabricated profit), but a duplicate BUY creates a phantom open lot.
+
+**Fixed by P1 — `dedupeSnapshots()` in `reconstruct.mjs`, live since 2026-07-05.** The
+discriminator: a genuine repeat trade always has a fresh BUYING/SELLING placement line
+between two terminals on the same slot; a snapshot re-emission never does. So the derivation
+layer drops a terminal whose immediately-preceding same-slot event is an IDENTICAL terminal
+(same item/type + offer-size/price/cumulative-filled/cumulative-spent). It runs inside
+`reconstruct()` — the positions.json path AND the live `monitor.mjs` held count — NOT at the
+merge/storage layer, so `fills.json` still archives both raw lines and the fix re-applies
+cleanly as logic evolves. Fixtures (a: blowpipe dup pair, b: genuine same-price repeat with a
+placement between → NOT deduped, c: dup straddling an EMPTY-burst) live in
+`pipeline/reconstruct.test.mjs`.
+
+The old **interim manual procedure** — scan after each session for same-item/same-price
+terminal pairs minutes apart and tombstone the later one with `add-manual-fill.mjs --remove
+<eventId>` before the next sync — is **no longer needed** for this class; `dedupeSnapshots`
+handles it automatically. (`REMOVE` tombstones remain the correction mechanism for genuine
+mislogged events — see §5.1.) Note: `outcomes.mjs` calls `collapseOffers`/`matchTrades`
+directly (not through `reconstruct()`), so its campaign boundaries do not yet get this dedupe
+— tracked as a Discovered followup in PLAN.md.
 
 ## 11. Outcomes dataset (O1 — the algorithm-feedback foundation)
 

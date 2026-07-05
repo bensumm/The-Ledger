@@ -4,7 +4,7 @@
  *
  * reconstruct.mjs is the highest-risk pipeline code with real incident history (phantom
  * open lots, FIFO mis-pairs, snapshot re-emission) but had ZERO fixtures — this file (R1)
- * closes that gap. (P1's snapshot-dedupe fixtures land in this same harness.)
+ * closes that gap, and P1's snapshot-dedupe fixtures live in the same harness.
  *
  * Like quotecore.test.mjs: the reconstruction functions are PURE (no DOM, no network, no
  * git), so the whole chain is fixture-testable with SYNTHETIC events — no live data.
@@ -14,10 +14,13 @@
  *   R1 — buy→sell FIFO close; cancel-to-EMPTY inference; WITHDRAWN consume; BANKED basis lot;
  *        REMOVE tombstone deleting an already-persisted event; eventId GOLDEN value (guards the
  *        §5.1 eventId()↔eventIdFor() cross-file hash contract).
+ *   P1 — snapshot re-emission dedupe: (a) the 2026-07-04 blowpipe-style dup BOUGHT pair dedupes;
+ *        (b) a genuine same-price repeat buy with a placement line between terminals does NOT
+ *        dedupe; (c) a dup pair straddling an EMPTY-burst login snapshot dedupes.
  */
 import assert from 'node:assert/strict';
 import {
-  parseJsonLine, buildEvents, reconstruct, eventId,
+  parseJsonLine, buildEvents, reconstruct, eventId, dedupeSnapshots,
 } from './reconstruct.mjs';
 
 let pass = 0;
@@ -162,6 +165,57 @@ ok('eventId golden value pins the §5.1 hash contract', () => {
   const sample = { ts: 1751400000, slot: 2, itemId: 1515, type: 'buy', state: 'complete', filled: 5000, spent: 1400000 };
   assert.equal(eventId(sample), '5d78bec562b77d65',
     'golden eventId drift → eventId()/eventIdFor() field-order or hash changed; reconcile js/fillslog.js');
+});
+
+// ============================================================================================
+console.log('\nP1 snapshot re-emission dedupe acceptance:');
+
+// --- 7a. blowpipe-style duplicate BOUGHT pair → dedupe -------------------------------------
+// RuneLite re-broadcasts a completed-but-uncollected offer's terminal line on login. Two
+// identical BOUGHTs, same slot, NO placement between → the second is a re-emission, dropped.
+ok('duplicate BOUGHT pair (no intervening placement) → one lot, not a phantom pair', () => {
+  const { events } = runPipeline([
+    raw({ state: 'BUYING', slot: 0, item: 12924, time: '20:00:00', offerSize: 1, priceEach: 5000000 }),
+    raw({ state: 'BOUGHT', slot: 0, item: 12924, time: '20:05:00', filledQty: 1, grossWorth: 5000000, offerSize: 1, priceEach: 5000000 }),
+    // login re-broadcast 25 min later — identical terminal, no fresh BUYING between:
+    raw({ state: 'BOUGHT', slot: 0, item: 12924, time: '20:30:00', filledQty: 1, grossWorth: 5000000, offerSize: 1, priceEach: 5000000 }),
+  ]);
+  assert.equal(dedupeSnapshots(events).length, events.length - 1, 'exactly one terminal dropped');
+  const { open } = reconstruct(events);
+  assert.deepEqual(open.map(o => [o.itemId, o.qty]), [[12924, 1]], 'one blowpipe held, not a phantom two');
+});
+
+// --- 7b. genuine same-price repeat buy (placement between) → NOT dedupe ---------------------
+// Same item/price/qty twice, but a real BUYING placement separates the terminals → two real
+// trades; the discriminator must keep both.
+ok('genuine repeat buy with a placement line between terminals → NOT deduped', () => {
+  const { events } = runPipeline([
+    raw({ state: 'BUYING', slot: 0, item: 100, time: '10:00:00', offerSize: 1, priceEach: 100 }),
+    raw({ state: 'BOUGHT', slot: 0, item: 100, time: '10:05:00', filledQty: 1, grossWorth: 100, offerSize: 1, priceEach: 100 }),
+    raw({ state: 'BUYING', slot: 0, item: 100, time: '10:10:00', offerSize: 1, priceEach: 100 }),   // fresh placement
+    raw({ state: 'BOUGHT', slot: 0, item: 100, time: '10:15:00', filledQty: 1, grossWorth: 100, offerSize: 1, priceEach: 100 }),
+  ]);
+  assert.equal(dedupeSnapshots(events).length, events.length, 'placement between terminals → nothing dropped');
+  const { open } = reconstruct(events);
+  assert.deepEqual(open.map(o => [o.itemId, o.qty]), [[100, 2]], 'both real buys counted (2 held)');
+});
+
+// --- 7c. dup pair straddling an EMPTY-burst login snapshot → dedupe -------------------------
+// The login snapshot also re-broadcasts EMPTY for the OTHER slots (the burst). Those must not
+// count as an intervening placement for the traded slot; the identical terminal still dedupes.
+ok('duplicate SOLD straddling an EMPTY-burst snapshot → one unmatched, not two', () => {
+  const { events } = runPipeline([
+    raw({ state: 'SELLING', slot: 0, item: 566, time: '20:00:00', offerSize: 100, priceEach: 200 }),
+    raw({ state: 'SOLD', slot: 0, item: 566, time: '20:05:00', filledQty: 100, grossWorth: 20000, offerSize: 100, priceEach: 200 }),
+    // login burst: EMPTY re-broadcast for the other slots + the duplicate terminal on slot 0
+    raw({ state: 'EMPTY', slot: 1, item: 0, time: '20:30:00' }),
+    raw({ state: 'EMPTY', slot: 2, item: 0, time: '20:30:00' }),
+    raw({ state: 'EMPTY', slot: 3, item: 0, time: '20:30:00' }),
+    raw({ state: 'SOLD', slot: 0, item: 566, time: '20:30:00', filledQty: 100, grossWorth: 20000, offerSize: 100, priceEach: 200 }),
+  ]);
+  assert.equal(dedupeSnapshots(events).length, events.length - 1, 'the re-emitted SOLD is dropped');
+  const { unmatched } = reconstruct(events);   // no logged buy → orphan sell(s)
+  assert.deepEqual(unmatched.map(u => [u.itemId, u.qty]), [[566, 100]], 'one unmatched sell, not a phantom double');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
