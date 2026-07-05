@@ -35,8 +35,10 @@ push to `main`).
   Windows machine **on demand** — session-start or a manual push; the ~20-min
   `CofferFillsSync` Task Scheduler job was eliminated 2026-07-04, see FILLS-PIPELINE.md
   §12 — reads `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` **and**
-  `positions.json` at the repo root — both stay at root since the app fetches them
-  same-origin). `positions.json` is the derived view (`collapseOffers` +
+  `positions.json` at the repo root — both stay at root because the app fetches the derived
+  `positions.json` same-origin and `fills.json` is the ROOT-LOCKED source it reconstructs from;
+  see README.md "Map of the repo" for the full app-fetched/ROOT-LOCKED vs pipeline-only artifact
+  split and the `js/quotecore.js` + `js/format.js` shared-module ripple map). `positions.json` is the derived view (`collapseOffers` +
   FIFO `matchTrades`): `closed` trades w/ after-tax realised P/L, `open` inventory at
   real avg cost, and `unmatched` sells (pre-log inventory, no fabricated profit). The
   app auto-populates its Ledger/Coffer from it. Read `pipeline/FILLS-PIPELINE.md` §5.1

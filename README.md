@@ -64,7 +64,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `ui.js` by A3), `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
-- `fills.json` — raw real-trade event stream synced from RuneLite, fetched same-origin
+- `fills.json` — raw real-trade event stream synced from RuneLite; the pipeline source
+  `positions.json` is FIFO-reconstructed from (the app fetches the derived `positions.json`,
+  not this file directly)
 - `mobile-fills.log` — tracked, append-only source log the app appends mobile GE trades to
   (slot 9) via the GitHub contents API; read by `sync-fills.mjs` (M1, `FILLS-PIPELINE.md` §13)
 - `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
@@ -89,7 +91,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (shared arg/format/table helpers), `quote.mjs` (per-item / `--positions` market table),
     `screen.mjs` (opportunity screen), `rating.mjs` (grade/score model), `watch.mjs` (adaptive
     live position/offer monitor), `monitor.mjs` (live read-only log-state snapshot),
-    `nightlows.mjs` (overnight fill-realism scoring), `alerts.mjs` (N1 push-notification
+    `windowrange.mjs` (né `nightlows.mjs` — time-of-day range read / overnight fill-realism
+    scoring; pure math in `windowread.mjs`), `alerts.mjs` (N1 push-notification
     trigger engine), `outcomes.mjs` (derived campaign/outcomes join — gitignored output),
     `suggestlog.mjs` (shared `suggestions.jsonl` appender)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
@@ -98,6 +101,55 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
     `js/format.js` so their tables match the app exactly.
+
+## Map of the repo
+
+Two things bite when you move or edit a file here, so they get their own map: the root
+**data artifacts** (some are load-bearing at fixed paths; some are free to move) and the
+two **shared logic modules** that are served to the browser *and* imported by node.
+
+### Root data artifacts
+
+**ROOT-LOCKED** — the app fetches these same-origin and/or the deployed phone writes them at
+hardcoded contents-API paths, so moving any one is a coordinated app + pipeline +
+deployed-phone change (not a rename):
+
+| File | What locks it to the root |
+| --- | --- |
+| `positions.json` | app fetches same-origin (`js/ledger.js` `syncFills`) |
+| `screen.json` | app fetches same-origin (`js/ui.js` Scan tab) |
+| `watchlist.json` | app fetches same-origin (`js/ui.js`) **and** the phone writes it back via the contents API (`js/github.js` `WATCHLIST_PATH`) |
+| `mobile-fills.log` | the phone appends slot-9 lines via the contents API (`js/github.js` `MOBILE_LOG_PATH`); `sync-fills.mjs` reads it |
+| `fills.json` | the pipeline source `positions.json` is FIFO-reconstructed from; `sync-fills.mjs` commits it at the root (not app-fetched directly, but coupled to the same convention) |
+
+**Pipeline-only / movable** — no app fetch and no hardcoded remote path; a single path
+constant governs each, so these can move without touching the deployed app or phone:
+
+| File | Producer / consumer | Tracked? |
+| --- | --- | --- |
+| `alerts.json` | read by `pipeline/alerts.mjs` (N1) | tracked (ships empty) |
+| `suggestions.jsonl` | appended by `pipeline/suggestlog.mjs` | tracked, append-only |
+| `outcomes.json` | derived by `pipeline/outcomes.mjs` | gitignored |
+
+### Shared logic modules
+
+`js/quotecore.js` and `js/format.js` are served to the browser **and** imported by node —
+an edit ripples into the pipeline scripts and CI, not just the app. After editing either,
+run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
+
+| Module | Also imported by (pipeline) |
+| --- | --- |
+| `js/quotecore.js` | 9 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `cli.mjs`, `reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs` |
+| `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs` |
+
+### Test-location convention
+
+Tests are `*.test.mjs` files **colocated next to the code they pin** (e.g.
+`pipeline/quotecore.test.mjs` sits beside its subject) — there is **never** a `tests/`
+directory; adjacency beats grouping for agents. Each test is plain
+`node <file>.test.mjs` (no framework — copy the shape of an existing one) and is run in CI
+by `.github/workflows/checks.yml`. Follow the same rule for `js/` and `pipeline/lib/`
+subjects: put the test beside the file, not in a separate tree.
 
 ## Local development
 
