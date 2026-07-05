@@ -251,7 +251,16 @@ hours, so a sub-minute loop just burns API calls.
 
 ### What each tick surfaces
 
-1. **DROP / CUT ALERTS** (held only — you can't be underwater on what you don't hold).
+Output shape (2026-07-05): a one-line **HEADLINE** (`all quiet` / `⚠ N ALERTS`, plus the
+board's held/bid/target counts) with alert details directly under it → one **numbers-only
+TABLE** (`Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime |
+Break-even` — Quick/Optimistic cells on the canonical table-v2 basis; one row per held
+lot, resting offer, or target) → one compact **note line per item** (the action's first
+sentence + the window read's key number) → a **SUMMARY** footer (held exposure + bid
+capital totals, alert count, positions/log provenance, the `/loop` line, and the
+exit-discipline reminder). Content per item:
+
+1. **DROP / CUT ALERTS** (held breakdowns + CANCEL-BID offers), in the headline block.
    Escalation reuses the chunk-6 shared cut-trigger `momVerdict()`: a **2h breakdown on a held
    lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
    lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its

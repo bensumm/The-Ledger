@@ -120,8 +120,6 @@ function classify(row) {
   return 'UNKNOWN'; // liquid but regime unconfirmed, or volume unknown
 }
 
-const spreadPctOf = row => (row.quickBuy && row.quickSell != null)
-  ? (row.quickSell - row.quickBuy) / row.quickBuy * 100 : null;
 
 // --- WINDOW CONTEXT line (2026-07-05, the ring lesson): the stateless 2h verdicts kept
 // firing on a bid whose real question was time-of-day ("does this window print my level,
@@ -131,13 +129,19 @@ const spreadPctOf = row => (row.quickBuy && row.quickSell != null)
 // touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
 const WINDOW_HOURS = 8;
 const WINDOW_DAYS = 7;
-function windowLine(ts1h, { bid = null, ask = null } = {}) {
+function windowLine(ts1h, { bid = null, ask = null, compact = false } = {}) {
   if (!ts1h || !ts1h.length) return null;
   const h = new Date().getHours();
   const wStart = h, wEnd = (h + WINDOW_HOURS) % 24;
   const stats = windowStats(ts1h, { nights: WINDOW_DAYS, wStart, wEnd });
   if (!stats) return null;
   const { lows, his } = stats;
+  if (compact) { // one short clause for the notes list (same numbers, no label/caveat prose)
+    if (bid != null && lows.length) return `bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d`;
+    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d`;
+    if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`;
+    return null;
+  }
   const label = `next ${WINDOW_HOURS}h window (${String(wStart).padStart(2, '0')}–${String(wEnd).padStart(2, '0')}h × last ${stats.days.length}d)`;
   const bits = [];
   if (bid != null && lows.length)
@@ -150,32 +154,6 @@ function windowLine(ts1h, { bid = null, ask = null } = {}) {
   return `${label}: ${bits.join(' · ')}  (touched ≠ filled; small sample)`;
 }
 
-// --- per-item RISK read (7.4): spread · liquidity · regime · ticket/exposure + adverse selection.
-// The scalp/market-make note is gated to LIQUID_RANGING_WIDE only. The adverse-selection warning
-// fires whenever we'd suggest an aggressive low bid (optBuy < quickBuy) OUTSIDE a ranging book:
-// a fill at that low bid usually means the market dropped to meet it → often no exit margin.
-function riskRead(row, cls, exposureGp) {
-  const sp = spreadPctOf(row);
-  const spTxt = sp != null ? `spread ${sp.toFixed(1)}% (${fmtP(row.quickSell - row.quickBuy)}/u)` : 'spread —';
-  const liq = row.volDay != null
-    ? `vol ${fmt(row.volDay)}/d (${row.volDay >= LIQUID_FLOOR_PER_DAY ? 'liquid' : 'THIN — exit not guaranteed'})`
-    : 'vol — (liquidity unknown)';
-  const reg = (row.regime && row.regime.ok)
-    ? `regime ${row.regimeLabel} ${row.regime.driftPct >= 0 ? '+' : ''}${row.regime.driftPct.toFixed(0)}%`
-    : 'regime unconfirmed';
-  const unit = row.mid ?? row.quickBuy ?? row.quickSell;
-  const ticket = unit != null ? `unit ${fmtP(unit)}` : 'unit —';
-  const exp = exposureGp != null ? ` · exposure ${fmtP(exposureGp)}` : '';
-  const bits = [spTxt, liq, reg, ticket + exp];
-  // adverse-selection: aggressive low bid off a non-ranging / thin book
-  const lowBid = row.optBuy != null && row.quickBuy != null && row.optBuy < row.quickBuy;
-  if (cls === 'LIQUID_RANGING_WIDE') {
-    bits.push(`SCALP-OK: ranging wide band — laddering the band is the edge (still: a low-bid fill can precede a dip)`);
-  } else if (lowBid) {
-    bits.push(`ADVERSE-SELECTION: a fill at the low bid ${fmtP(row.optBuy)} usually means the market dropped to meet it → often no exit margin`);
-  }
-  return bits.join(' · ');
-}
 
 // --- ACTION line for a HELD lot. Sell-side framing is HONEST (clear-vs-hold), never
 // "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
@@ -384,88 +362,116 @@ async function main() {
     ...bidItems.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: bidVerdict(it) })),
   ]);
 
-  // header + provenance
+  // ---------------------------------------------------------------------------
+  // OUTPUT (2026-07-05 format, Ben's ask): HEADLINE (state + alerts up front) →
+  // one verdict-first block PER ITEM → SUMMARY footer (exposure/committed totals,
+  // provenance, loop, exit discipline). Same facts as before, reframed.
+  // ---------------------------------------------------------------------------
   // LOCAL wall-clock, per the CLAUDE.md time-display convention (the old toISOString stamp
   // printed UTC and mislabeled a 22:09 local session as 05:09 — 2026-07-05 confusion)
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
-  console.log(`# Adaptive watch — ${stamp}  ·  READ-ONLY decision support (you place every offer)`);
-  if (!TARGETS_ONLY) {
-    console.log(posAge != null
-      ? `held basis: positions.json (WITHDRAWN/BANKED-aware) · ${posAge}m old${posAge > 25 ? ' ⚠ stale — a very recent trade may not show yet' : ''}`
-      : `held basis: positions.json unavailable`);
-    console.log(offersInfo && !offersInfo.err
-      ? `offer basis: live exchange log · newest line ${offersInfo.staleMin}m ago${noise.length ? ` · noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total` : ''}`
-      : `offer basis: exchange log unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`);
-  }
-  console.log(`recommended loop: /loop ${loopMin}m node pipeline/watch.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
 
-  // === DROP ALERTS (held breakdowns + adverse-selection bids) ===
-  console.log('\n=== DROP / CUT ALERTS ===');
+  // ---- HEADLINE: the whole state in one line; alert details right under it ----
   const alerts = [...held.map(heldAlert), ...bidItems.map(bidAlert)].filter(Boolean);
-  if (!alerts.length) console.log('(none live — no held item breaking down/underwater/falling, no bid resting under a breakdown)');
+  const bidCount = bidItems.reduce((n, it) => n + it.bids.length, 0);
+  const orphanAsks = asks.filter(a => !held.some(h => h.id === a.item));
+  const counts = [];
+  if (held.length) counts.push(`${held.length} held`);
+  if (bidCount) counts.push(`${bidCount} bid${bidCount > 1 ? 's' : ''}`);
+  if (orphanAsks.length) counts.push(`${orphanAsks.length} unbooked ask${orphanAsks.length > 1 ? 's' : ''}`);
+  if (targets.length) counts.push(`${targets.length} target${targets.length > 1 ? 's' : ''}`);
+  console.log(`# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`);
   for (const a of alerts) console.log(`  ⚠ ${a.msg}`);
 
-  // === HELD POSITIONS ===
-  if (held.length) {
-    console.log('\n=== HELD POSITIONS ===');
-    for (const it of held) {
-      const { row, cls, meta, be, qty, avgCost, lotValue, ts5m, name } = it;
-      // pair with the live ask (exit-discipline visibility: an unlisted hold is a stranded lot)
-      const ask = asks.find(a => a.item === it.id);
-      const listed = ask ? `listed ${ask.qty}/${fmt(ask.max)} @ ${fmtP(ask.offer)}`
-        : (offersInfo && !offersInfo.err ? 'NOT LISTED' : null);
-      // a held item's still-open BUY must stay visible (2026-07-05: a filled-then-booked lot
-      // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
-      const openBid = bids.find(b => b.item === it.id);
-      const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)} still open` : '';
-      console.log(`\n${name} ×${qty}  [${meta.label} · re-check ${meta.cadence}m]  HELD @ ${fmtP(Math.round(avgCost))} (break-even ${fmtP(be)})${listed ? ' · ' + listed : ''}${bidNote}`);
-      console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
-      console.log(`  risk   ${riskRead(row, cls, lotValue)}`);
-      const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null });
-      if (wl) console.log(`  window ${wl}`);
-      console.log(`  action ${heldAction(row, be, lotValue, ts5m)}`);
+  // ---- TABLE: numbers only (one row per item/offer), notes carry the words ----
+  // Cell conventions match the canonical table v2 (CLAUDE.md): Quick/Optimistic are
+  // self-contained buy → sell cells on one basis; Mom is the arrow display of row.mom.
+  const momArrow = row => row.mom === 'breakup' ? '↑' : row.mom === 'breakdown' ? '↓' : '–';
+  const regimeCell = row => (row.regime && row.regime.ok)
+    ? `${row.regimeLabel} ${row.regime.driftPct >= 0 ? '+' : ''}${row.regime.driftPct.toFixed(0)}%` : '—';
+  const volCell = row => row.volDay != null
+    ? `${fmt(row.volDay)}/d${row.volDay < LIQUID_FLOOR_PER_DAY ? ' (thin)' : ''}` : '—';
+  const quoteCells = row => [
+    `${fmtP(row.quickBuy)} → ${fmtP(row.quickSell)}`,
+    `${fmtP(row.optBuy)} → ${fmtP(row.optSell)}`,
+  ];
+  const firstSentence = s => { const m = s.match(/^.*?[.;](?=\s|$)/); return m ? m[0] : s; };
+
+  const tableRows = [];   // [verdict, item, position, quick, opt, vol, mom, regime, be]
+  const notes = [];       // one compact line per item: action first-sentence + window read
+
+  for (const it of held) {
+    const { row, be, qty, avgCost, lotValue, ts5m, name } = it;
+    // pair with the live ask (exit-discipline visibility: an unlisted hold is a stranded lot)
+    const ask = asks.find(a => a.item === it.id);
+    const listed = ask ? `ask ${ask.qty}/${fmt(ask.max)} @ ${fmtP(ask.offer)}`
+      : (offersInfo && !offersInfo.err ? 'NOT LISTED' : '');
+    // a held item's still-open BUY must stay visible (2026-07-05: a filled-then-booked lot
+    // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
+    const openBid = bids.find(b => b.item === it.id);
+    const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)}` : '';
+    tableRows.push([heldVerdict(it), name,
+      `×${qty} @ ${fmtP(Math.round(avgCost))}${listed ? ' · ' + listed : ''}${bidNote}`,
+      ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
+    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
+    notes.push(`- ${name}: ${firstSentence(heldAction(row, be, lotValue, ts5m))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+  }
+
+  // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis
+  for (const a of orphanAsks) {
+    const nm = map.byId[a.item]?.name || ('#' + a.item);
+    tableRows.push(['UNBOOKED-ASK', nm, `ask ${a.qty}/${fmt(a.max)} @ ${fmtP(a.offer)}`, '—', '—', '—', '—', '—', '—']);
+    notes.push(`- ${nm}: not booked in positions.json yet (sync lag); break-even unknown — run sync-fills.mjs to book it.`);
+  }
+
+  for (const it of bidItems) {
+    const { row, name } = it;
+    for (const off of it.bids) {
+      tableRows.push([offerVerdict(row, off.offer), name,
+        `bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}`,
+        ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row),
+        row.quickBuy != null ? fmtP(breakEven(off.offer)) : '—']);
+      const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
+      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
     }
   }
 
-  // asks with no booked lot yet (fresh buy still inside the ~20m sync window) — honest gap, no fake basis
-  const orphanAsks = asks.filter(a => !held.some(h => h.id === a.item));
-  if (orphanAsks.length) {
-    if (!held.length) console.log('\n=== HELD POSITIONS ===');
-    for (const a of orphanAsks) {
-      console.log(`\n${map.byId[a.item]?.name || ('#' + a.item)}  ask ${a.qty}/${fmt(a.max)} @ ${fmtP(a.offer)} — not booked in positions.json yet (sync lag); break-even unknown here. Run sync-fills.mjs to book it.`);
-    }
+  for (const it of targets) {
+    const { row, cls, be, name } = it;
+    tableRows.push([targetVerdict(it), name, 'watched',
+      ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), be != null ? fmtP(be) : '—']);
+    notes.push(`- ${name}: ${firstSentence(targetAction(row, cls, be))}`);
   }
 
-  // === ACTIVE BIDS (resting buy offers — capital committed to buying) ===
-  if (bidItems.length) {
-    console.log('\n=== ACTIVE BIDS (resting buy offers) ===');
-    for (const it of bidItems) {
-      const { row, cls, meta, name } = it;
-      for (const off of it.bids) {
-        console.log(`\n${name}  bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}  [${meta.label} · re-check ${meta.cadence}m]  (committed ${fmtP(off.max * off.offer)})`);
-        console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
-        console.log(`  risk   ${riskRead(row, cls, off.max * off.offer)}`);
-        const wl = windowLine(it.ts1h, { bid: off.offer });
-        if (wl) console.log(`  window ${wl}`);
-        console.log(`  action ${bidAction(row, off)}`);
-      }
-    }
+  console.log('\n| Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime | Break-even |');
+  console.log('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+  for (const r of tableRows) console.log(`| ${r.join(' | ')} |`);
+
+  if (notes.length) {
+    console.log('');
+    for (const n of notes) console.log(n);
   }
 
-  // === TARGETS (buy-side watch) ===
-  if (targets.length) {
-    console.log('\n=== TARGETS (buy-side watch) ===');
-    for (const it of targets) {
-      const { row, cls, meta, be, name } = it;
-      console.log(`\n${name}  [${meta.label} · re-check ${meta.cadence}m]`);
-      console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}`);
-      console.log(`  risk   ${riskRead(row, cls, null)}`);
-      console.log(`  action ${targetAction(row, cls, be)}`);
-    }
+  // ---- SUMMARY: totals + provenance + loop + discipline ----
+  const exposure = held.reduce((n, it) => n + (it.lotValue || 0), 0);
+  const committed = bidItems.reduce((n, it) => n + it.bids.reduce((m, o) => m + o.max * o.offer, 0), 0);
+  console.log('\n=== SUMMARY ===');
+  const sumBits = [];
+  if (held.length) sumBits.push(`held exposure ${fmtP(exposure)} (${held.length} lot${held.length > 1 ? 's' : ''}${asks.length ? `, ${asks.length} listed` : ''})`);
+  if (bidCount) sumBits.push(`bid capital ${fmtP(committed)} (${bidCount} offer${bidCount > 1 ? 's' : ''})`);
+  sumBits.push(alerts.length ? `⚠ ${alerts.length} alert${alerts.length > 1 ? 's need' : ' needs'} action` : 'no alerts');
+  console.log(`  ${sumBits.join(' · ')}`);
+  if (!TARGETS_ONLY) {
+    console.log(posAge != null
+      ? `  held basis positions.json ${posAge}m old${posAge > 25 ? ' ⚠ stale — a very recent trade may not show yet' : ''}` +
+        (offersInfo && !offersInfo.err
+          ? ` · offer basis live log, newest line ${offersInfo.staleMin}m ago${noise.length ? ` · noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total` : ''}`
+          : ` · offer basis unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`)
+      : '  held basis positions.json unavailable');
   }
-
-  console.log('\n(Exit discipline: set the exit at entry · never leave a stranded ask · cut on breakdown rather than hoping. This tool NEVER places or cancels offers — you do.)');
+  console.log(`  loop /loop ${loopMin}m node pipeline/watch.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
+  console.log('  READ-ONLY decision support — exit at entry · never a stranded ask · cut on breakdown, not hope · you place every offer.');
 }
 
 await main();

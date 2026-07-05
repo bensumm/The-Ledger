@@ -310,8 +310,11 @@ Script facts the skills rely on (current behavior, not doctrine):
   staleness line (verdict logic unchanged).
 - `watch.mjs` watches every **position**, where a position = *any committed capital*: held
   inventory PLUS every active GE offer (Ben's definition, 2026-07-04; shared log reader
-  `pipeline/lib/offers.mjs`). Asks annotate their held row (`listed n/m @ X` / `NOT LISTED`);
-  bids get an ACTIVE BIDS section with verdicts BID-OK / BID-BEHIND / CROSSING / CANCEL-BID
+  `pipeline/lib/offers.mjs`). Output is headline (alerts up front) → one numbers-only
+  table (Verdict/Item/Position + the canonical quote columns) → one note line per item →
+  summary footer (2026-07-05 reformat; shape documented in MONITORING.md "What each tick
+  surfaces"). Asks annotate their held row's Position cell (`ask n/m @ X` / `NOT LISTED`);
+  bids get their own rows with verdicts BID-OK / BID-BEHIND / CROSSING / CANCEL-BID
   (only CANCEL-BID — adverse-selection fill risk — alerts). Offers under 100k total value
   are noise, collapsed to one line. Each bid row and listed-held row also prints a `window`
   context line (coming-8h touch/reach quantiles over ~7 days, via the shared
