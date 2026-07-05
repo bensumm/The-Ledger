@@ -67,7 +67,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   manual fills), `monitor.mjs` (live read-only position monitor), `marketfetch.mjs`
   (node-side price/guide fetch layer), `cli.mjs` (shared arg/format/table helpers for the
   node scripts), `quote.mjs` (per-item / `--positions` market table),
-  `screen.mjs` (opportunity screen). The `quote.mjs`/`screen.mjs` scripts import
+  `screen.mjs` (opportunity screen), `smoke.mjs` (CI headless-chromium DOM smoke of
+  `index.html`, all external network stubbed — wired into `.github/workflows/checks.yml`).
+  The `quote.mjs`/`screen.mjs` scripts import
   `js/quotecore.js` + `js/format.js` so their tables match the app exactly. See
   `pipeline/FILLS-PIPELINE.md`.
 

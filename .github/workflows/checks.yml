@@ -44,3 +44,24 @@ jobs:
               console.log(f, 'OK');
             }
           "
+
+  # Browser DOM smoke (CI1): the cheap `checks` job above only proves syntax + pure logic.
+  # This loads index.html in headless chromium with ALL external network stubbed and fails on
+  # any page error / app console error / empty pane — the "syntax passed but the app broke"
+  # class the process rules warn about. Separate job so the cheap checks still fail fast.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright + chromium
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Browser DOM smoke
+        run: node pipeline/smoke.mjs

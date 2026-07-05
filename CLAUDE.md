@@ -330,10 +330,14 @@ metadata, not a leak; the concern is content, not commit authorship.
 - **On-demand `sync-fills.mjs` pushes go direct to `main`** riding the admin bypass
   (pipeline-owned artifacts; clobber-guard reconciles). No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
-- **CI: `.github/workflows/checks.yml`** — cheap checks (JS syntax sweep, quotecore
-  fixtures, `fills.json`/`positions.json` parse) run on push, PR, and `merge_group`; it is
-  the ruleset's required status check. Agents may add/improve workflows within the
-  constraints in `/ship` §4 (public logs, no `~/.runelite`, seconds-fast, no secrets).
+- **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
+  + reconstruct acceptance fixtures, `fills.json`/`positions.json` parse) plus a separate
+  **`smoke` job** (CI1) that loads `index.html` in headless Playwright chromium with all
+  external network stubbed and fails on any page error / app console error / empty pane —
+  the "syntax passed but the app broke" class the process rules warn about (`pipeline/smoke.mjs`).
+  Both run on push, PR, and `merge_group`; the cheap job is split out so it fails fast. Agents
+  may add/improve workflows within the constraints in `/ship` §4 (public logs, no `~/.runelite`,
+  seconds-fast, no secrets).
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 The rule (all app-wide mutable state lives as properties on one exported `STATE` object,

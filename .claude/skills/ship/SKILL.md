@@ -1,6 +1,6 @@
 ---
 name: ship
-version: 2.0
+version: 2.1
 description: Land a change on main (attended direct-push under the admin bypass today; PR + checks once the gh token is refreshed) and verify it — confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
@@ -79,9 +79,13 @@ Triage on red:
 ## 4. CI / workflow editing (agents may add & improve — Ben, 2026-07-04)
 
 `.github/workflows/checks.yml` runs on push to `main`, PRs, `merge_group`, and manual
-dispatch: `node --check` over `js/*.js` + `pipeline/*.mjs`, the quotecore acceptance
-fixtures (`node pipeline/quotecore.test.mjs`), and JSON-parse of `fills.json`/
-`positions.json`. Constraints on any workflow change:
+dispatch. Two jobs: a cheap **`checks`** job (`node --check` over `js/*.js` + `pipeline/*.mjs`,
+the quotecore acceptance fixtures `node pipeline/quotecore.test.mjs`, the reconstruct fixtures
+`node pipeline/reconstruct.test.mjs`, and JSON-parse of `fills.json`/`positions.json`) and a
+separate **`smoke`** job (CI1) that installs Playwright chromium and runs
+`node pipeline/smoke.mjs` — a headless DOM smoke of `index.html` with all external network
+stubbed, failing on any page error / app console error / empty pane. Split jobs so the cheap
+one fails fast. Constraints on any workflow change:
 
 - **Public repo → public logs.** No PII in output; no secrets in output — and none are
   currently needed anywhere in CI: keep it that way if at all possible.
