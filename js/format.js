@@ -5,6 +5,8 @@ export const now=()=>Math.floor(Date.now()/1000);
 export const pad2=n=>(n<10?'0':'')+n;
 export function tax(p){ if(!p||p<50) return 0; return Math.min(Math.floor(p*0.02),TAXCAP); }
 export function netMargin(low,high){ if(!low||!high) return null; return (high-tax(high))-low; }
+// qty variant: per-unit after-tax margin × qty (the P/L-surface form). Same null-on-missing-price guard.
+export function netMarginQty(low,high,qty){ const m=netMargin(low,high); return m==null?null:m*qty; }
 export function fmt(n){
   if(n===null||n===undefined||isNaN(n)) return '—';
   const s=n<0?'-':''; const a=Math.abs(n);

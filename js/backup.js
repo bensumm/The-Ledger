@@ -1,4 +1,5 @@
-import { STRAT, STATE, tsCache, mem, hasStore, idb, sGet, sSet, logEvent } from './state.js';
+import { STRAT, STATE, mem, hasStore, idb, sGet, sSet, logEvent } from './state.js';
+import { clearTsCache } from './marketfetch.js';
 import { fmt } from './format.js';
 import { rebuildDatalist } from './market.js';
 import { renderAll, recompute } from './ui.js';
@@ -38,7 +39,7 @@ export async function applyBackup(obj){
   document.getElementById('bankInput').value=fmt(STATE.bankroll);
   document.getElementById('slotsInput').value=STATE.slots;
   document.getElementById('stratSel').value=STATE.strategy;
-  for(const k in tsCache) delete tsCache[k];
+  clearTsCache();
   rebuildDatalist();
 }
 export function doImport(file){

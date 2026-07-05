@@ -19,7 +19,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.41.0';
+export const APP_VERSION='0.42.0';
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality
 // multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
 // (These become Settings-tab editable next pass.)
@@ -58,7 +58,7 @@ export const STATE = {
   logFilter: 'all'             // Logs view scope filter (L1): all | action | system
 };
 export function applyCoffer(){ const w=document.getElementById('cofferWrap'); if(w) w.classList.toggle('collapsed',STATE.cofferCollapsed); }
-export const tsCache={};
+// (A2) the single-item series/quote cache moved to js/marketfetch.js (module-local Map).
 
 /* persistence
    - artifact window.storage when present (Claude sandbox)

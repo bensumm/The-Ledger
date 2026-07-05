@@ -1,5 +1,6 @@
-import { API, Z_BAND, ARCHIVE_MIN_GAP, STATE, tsCache, sGet, sSet, logEvent } from './state.js';
-import { tax, netMargin, fmt, fmtP, now, pad2, fmtHour, sgn, clamp } from './format.js';
+import { Z_BAND, ARCHIVE_MIN_GAP, STATE, sGet, sSet, logEvent } from './state.js';
+import { fetchTs } from './marketfetch.js';
+import { tax, netMargin, netMarginQty, fmt, fmtP, now, pad2, fmtHour, sgn, clamp } from './format.js';
 import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch, renderSignals } from './ui.js';
@@ -50,12 +51,7 @@ export const ARCH_MAX_DAYS=60;
 // funnel every open passes through — logs the source without double-firing. Reset after each log.
 let trendSource='manual';
 export function openTrends(id){ const it=resolveId(id); if(!it) return; trendSource='link'; switchTab('trends'); document.getElementById('trItem').value=it.name; runTrends(); }
-export async function fetchTimeseries(id,step){
-  const key=id+':'+step; if(tsCache[key]) return tsCache[key];
-  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
-  const r=await fetch(API+'/timeseries?id='+id+'&timestep='+step,{signal:ctrl.signal}); clearTimeout(to);
-  const d=(await r.json()).data||[]; tsCache[key]=d; return d;
-}
+// fetchTimeseries/fetchTs + their cache moved to js/marketfetch.js (A2); call fetchTs directly.
 export async function archGet(id){ const a=await sGet('tsa:'+id); return (a&&typeof a==='object')?a:{}; }
 export async function archMerge(id,series){
   const a=await archGet(id), cut=now()-ARCH_MAX_DAYS*86400;
@@ -65,7 +61,7 @@ export async function archMerge(id,series){
 }
 export function archToPoints(a){ return Object.keys(a).map(k=>{ const v=a[k]; return {timestamp:+k, avgHighPrice:v[0]||null, avgLowPrice:v[1]||null, highPriceVolume:v[2]||0, lowPriceVolume:v[3]||0}; }).sort((x,y)=>x.timestamp-y.timestamp); }
 export function archDays(a){ const ks=Object.keys(a); if(ks.length<2) return 0; let mn=Infinity,mx=-Infinity; ks.forEach(k=>{ k=+k; if(k<mn)mn=k; if(k>mx)mx=k; }); return Math.max(1,Math.round((mx-mn)/86400)); }
-export async function archiveHourly(id){ try{ const s=await fetchTimeseries(id,'1h'); await archMerge(id,s); }catch(e){} }
+export async function archiveHourly(id){ try{ const s=await fetchTs(id,'1h'); await archMerge(id,s); }catch(e){} }
 export async function archiveWatchlist(force){
   if(!STATE.watchlist.length) return false;
   if(!force){ const last=await sGet('tsa_last'); if(last && (now()-last)<ARCHIVE_MIN_GAP) return false; }
@@ -132,7 +128,7 @@ export function buildPlan(points, s6h, it){
   o.medCount=median(hfLow.counts.filter(c=>c>0))||0;
   const lowF=hfLow.factor.map(v=>v==null?1:v), highF=hfHigh.factor.map(v=>v==null?1:v);
   o.buyWin=bestWindow(lowF,3,'min'); o.sellWin=bestWindow(highF,3,'max');   // cheapest / richest hour windows — timing hint only
-  o.nowGross=(it.high-tax(it.high))-it.low; o.nowRoi=it.low?o.nowGross/it.low*100:0;
+  o.nowGross=netMargin(it.low,it.high); o.nowRoi=it.low?o.nowGross/it.low*100:0;
   o.nowSpread=it.high-it.low; o.nowTax=tax(it.high);                 // the plan IS the live spread vs the tax it must clear
   o.nowProfitable=o.nowGross>0;
   // 3-month drift
@@ -277,7 +273,7 @@ export function classifyPositionTrend(s6h, R){
 }
 export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   const buy=t.buy, qty=t.qty;
-  const sellNow=it.high, netNow=sellNow-tax(sellNow), profNow=(netNow-buy)*qty;
+  const sellNow=it.high, netNow=sellNow-tax(sellNow), profNow=netMarginQty(buy,sellNow,qty);
   const breakeven=breakEven(buy);                      // smallest sell that nets >= cost after 2% tax (tax-capped; shared quotecore)
   const canBE=netNow>=buy;
   const PT=patientTargets(s5m, it);
@@ -314,7 +310,7 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   } else {
     verdict='HOLD'; cls='gold'; listAt=breakeven; why='Underwater but flat — list at break-even and wait for the normal wobble up; no reason to realise a loss yet.';
   }
-  const netAt=listAt-tax(listAt), profAt=(netAt-buy)*qty;
+  const profAt=netMarginQty(buy,listAt,qty);
   const fill=listAt<=sellNow?'fills ~instantly':(listAt<=hiMax?'within the recent 2h range — fills with patience':'above the recent 2h high — may sit');
   const trWord=tr.falling?'Falling':(tr.rising?'Rising':'Flat'), trCls=tr.falling?'loss':(tr.rising?'gold':'gain');
   const mom=[]; if(tr.m7!=null)mom.push((tr.m7>=0?'+':'')+tr.m7.toFixed(0)+'%/7d'); if(tr.m30!=null)mom.push((tr.m30>=0?'+':'')+tr.m30.toFixed(0)+'%/30d'); if(tr.regime.ok)mom.push('regime '+(tr.regime.driftPct>=0?'+':'')+tr.regime.driftPct.toFixed(0)+'%');
@@ -345,7 +341,7 @@ export async function reviewPositions(){
   for(const t of open){
     try{
       const it=resolveId(t.itemId); if(!it||!it.high){ cards.push('<div class="suggest" style="margin-top:10px"><div class="stitle">'+t.name+'</div><div class="mini">No live quote available.</div></div>'); continue; }
-      const [s5m,s6h]=await Promise.all([fetchTimeseries(t.itemId,'5m'), fetchTimeseries(t.itemId,'6h')]);
+      const [s5m,s6h]=await Promise.all([fetchTs(t.itemId,'5m'), fetchTs(t.itemId,'6h')]);
       let gser=[]; try{ gser=await fetchGuideSeries(t.itemId); }catch(e){}
       let qrow=null; try{ qrow=await fetchQuote(t.itemId,{held:true}); }catch(e){}   // held → always shown even if falling
       const r=renderPositionCard(t, it, s5m, s6h, gser, qrow);
@@ -399,7 +395,7 @@ export async function runTrends(){
   status.textContent='loading history…';
   document.getElementById('trResult').classList.add('hidden');
   try{
-    const [s1h,s6h,s5m]=await Promise.all([fetchTimeseries(it.id,'1h'), fetchTimeseries(it.id,'6h'), fetchTimeseries(it.id,'5m')]);
+    const [s1h,s6h,s5m]=await Promise.all([fetchTs(it.id,'1h'), fetchTs(it.id,'6h'), fetchTs(it.id,'5m')]);
     const arch=await archMerge(it.id,s1h);
     const pts=archToPoints(arch);
     const a=analyseHourly(pts.length>1?pts:s1h);

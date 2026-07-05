@@ -12,10 +12,11 @@ push to `main`).
   `styles.css` holds all styles; logic is split into ES modules under `js/`
   (`state.js` = shared mutable state as one exported `STATE` object + constants +
   persistence + diagnostics; `format.js` = formatting/tax helpers; `charts.js` =
-  inline SVG rendering; `market.js` = price/guide fetch + scoring; `trends.js` =
-  archive + seasonal analysis; `ui.js` = Finder/Watchlist/Signals/Ledger/Coffer
-  rendering; `backup.js` = export/import; `main.js` = entry point, event wiring +
-  init). No build step, no framework, no bundler — deployed to GitHub Pages at
+  inline SVG rendering; `marketfetch.js` = shared browser fetch layer (one timeout-guarded
+  `jget` + one cached `fetchTs`/`fetch24h` store, A2); `market.js` = price/guide fetch +
+  scoring; `trends.js` = archive + seasonal analysis; `ui.js` =
+  Finder/Watchlist/Signals/Ledger/Coffer rendering; `backup.js` = export/import; `main.js` =
+  entry point, event wiring + init). No build step, no framework, no bundler — deployed to GitHub Pages at
   bensumm.github.io/The-Ledger/ exactly as these files sit on disk. See `README.md`
   for the full file inventory and deploy mechanics.
 - Split out of one 1375-line `index.html` file in 2026-07 once development moved

@@ -1,5 +1,5 @@
 import { API, STATE, sSet, logEvent, setHealth } from './state.js';
-import { tax, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
+import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
 import { loadAll, resolveItem, resolveId, computeScores, TREND_BADGE } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
@@ -111,7 +111,7 @@ export function renderSignals(){
   const inCheap=w=>{ if(!w) return false; for(let k=0;k<3;k++) if((w.start+k)%24===hr) return true; return false; };
   const rows=STATE.watchlist.filter(id=>STATE.signalCache[id]&&STATE.byId[id]).map(id=>{
     const it=STATE.byId[id], s=STATE.signalCache[id];
-    const gross=(it.high-tax(it.high))-it.low, roi=it.low?gross/it.low*100:0, profitable=gross>0;
+    const gross=netMargin(it.low,it.high), roi=it.low?gross/it.low*100:0, profitable=gross>0;
     const cheapNow=inCheap(s.buyWin);
     const buy = profitable && cheapNow && s.conf!=='low';   // cheap-hour window + live margin; falling knives NOT excluded (flagged in Trend)
     return {it,s,gross,roi,profitable,cheapNow,buy};
@@ -390,7 +390,7 @@ export async function syncFills(){
 }
 // After-tax realised P/L. Withdrawn rows (inventory taken for personal use) are realised 0
 // by definition — no sale happened; they must never count toward profit sums (chunk 1.5).
-export function realised(t){ if(t.withdrawn) return 0; return ((t.sell-tax(t.sell))-t.buy)*t.qty; }
+export function realised(t){ if(t.withdrawn) return 0; return netMarginQty(t.buy,t.sell,t.qty); }
 export function renderFillsMeta(){
   const el=document.getElementById('fillsMeta'); if(!el) return;
   const fills=STATE.trades.filter(t=>t.src==='fills'), un=STATE.fillsUnmatched||[];
@@ -517,12 +517,12 @@ export function renderLedger(){
     ob.innerHTML=(open.length?groupTrades(open).map(g=>{
       const it=g.itemId?resolveId(g.itemId):null, cur=it&&it.high?it.high:null;
       const totQty=g.rows.reduce((s,t)=>s+t.qty,0), avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
-      const un=cur!==null?g.rows.reduce((s,t)=>s+((cur-tax(cur))-t.buy)*t.qty,0):null, multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
+      const un=cur!==null?g.rows.reduce((s,t)=>s+netMarginQty(t.buy,cur,t.qty),0):null, multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
       const rowTag=t=>(t.src==='fills'?' '+ftag:' '+ltag)+(t.banked?' '+btag:'');
       const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):rowTag(g.rows[0]))+'</td>'+
         '<td class="num">'+totQty.toLocaleString()+'</td><td class="num">'+fmt(avgBuy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td>'+
         '<td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td><td>'+(multi?'':rowActions(g.rows[0]))+'</td></tr>';
-      let det=''; if(multi&&exp) det=g.rows.map(t=>{ const u=cur!==null?((cur-tax(cur))-t.buy)*t.qty:null;
+      let det=''; if(multi&&exp) det=g.rows.map(t=>{ const u=cur!==null?netMarginQty(t.buy,cur,t.qty):null;
         return '<tr class="detail"><td class="left sub">'+rowTag(t)+' '+t.qty.toLocaleString()+' @ '+fmt(t.buy)+'</td><td class="num">'+t.qty.toLocaleString()+'</td><td class="num">'+fmt(t.buy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td><td class="num '+(u!==null?sgn(u):'')+'">'+(u!==null?fmt(u):'—')+'</td><td>'+rowActions(t)+'</td></tr>'; }).join('');
       return head+det;
     }).join(''):'')+pendOpenRows;
@@ -682,7 +682,7 @@ export async function renderScan(force){
   const genMs=Date.parse(scan.generatedAt), ageMs=isNaN(genMs)?null:(Date.now()-genMs);
   if(staleEl){
     staleEl.classList.remove('hidden');
-    const stale=ageMs==null || ageMs>6*3600*1000;   // >6h → flag harder
+    const stale=ageMs==null || ageMs>FILLS_STALE_MS;   // >6h → flag harder (shared constant)
     staleEl.className='scanstale'+(stale?' warn':'');
     staleEl.innerHTML=ageMs==null
       ? 'Scan timestamp unknown — treat as context, not a live quote.'

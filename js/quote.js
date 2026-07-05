@@ -5,22 +5,11 @@
    fetching and reuse quotecore directly; this module is the browser half.
    Deps: state.js, format.js, quotecore.js — deliberately NO import of trends.js/market.js
    so there's no import cycle (trends.js and ui.js import FROM here). */
-import { API, STATE, tsCache } from './state.js';
+import { API, STATE } from './state.js';
+import { jget, fetchTs, fetch24h } from './marketfetch.js';   // A2: shared jget + one cached ts/24h store
 import { computeQuote, quoteCells, cellText, QUOTE_HEADERS } from './quotecore.js';
 
-/* User-Agent is a forbidden header in browsers (silently dropped) — the node scripts set it
-   for real; kept here only so the two fetch layers read the same. */
-const UA='TheCoffer/0.30 (bensumm; github.com/bensumm/The-Ledger)';
-async function jget(url){
-  const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(),15000);
-  try{ const r=await fetch(url,{signal:ctrl.signal, headers:{'User-Agent':UA}}); if(!r.ok) throw new Error('http '+r.status); return await r.json(); }
-  finally{ clearTimeout(to); }
-}
-async function fetchTs(id,step){ const key=id+':'+step; if(tsCache[key]) return tsCache[key];   // shares trends.js's tsCache key scheme
-  const d=(await jget(API+'/timeseries?id='+id+'&timestep='+step)).data||[]; tsCache[key]=d; return d; }
 async function fetchLatest(id){ const j=await jget(API+'/latest?id='+id); return (j.data&&(j.data[id]||j.data[String(id)]))||(STATE.LATEST&&STATE.LATEST[id])||null; }
-async function fetch24h(id){ const key='v24:'+id; if(tsCache[key]) return tsCache[key];
-  const j=await jget(API+'/24h?id='+id); const v=(j.data&&(j.data[id]||j.data[String(id)]))||null; if(v) tsCache[key]=v; return v; }
 
 const heldOpen=id=>!!(STATE.trades && STATE.trades.some(t=>t.itemId===id && t.sell===null));
 const guideOf =id=>{ const g=STATE.GUIDE&&STATE.GUIDE[id]; return (g&&g.price)||null; };

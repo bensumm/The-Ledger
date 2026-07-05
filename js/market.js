@@ -1,4 +1,5 @@
-import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, tsCache, sGet, sSet, logEvent, setHealth } from './state.js';
+import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
+import { jget, cached } from './marketfetch.js';
 import { netMargin, clamp, now } from './format.js';
 import { showFinderError, renderAll, syncFills } from './ui.js';
 import { archiveWatchlist, computeSignals } from './trends.js';
@@ -19,9 +20,8 @@ export async function loadMarket(force){
       if(L && V){ STATE.LATEST=L; STATE.VOL=V; return {fresh:false, ts:snapTs}; }
     }
   }
-  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
-  const [r1,r2]=await Promise.all([fetch(API+'/latest',{signal:ctrl.signal}), fetch(API+'/1h',{signal:ctrl.signal})]); clearTimeout(to);
-  STATE.LATEST=(await r1.json()).data; STATE.VOL=(await r2.json()).data;
+  const [r1,r2]=await Promise.all([jget(API+'/latest'), jget(API+'/1h')]);
+  STATE.LATEST=r1.data; STATE.VOL=r2.data;
   const ts=now(); await sSet('snap_latest',STATE.LATEST); await sSet('snap_vol',STATE.VOL); await sSet('snap_ts',ts);
   return {fresh:true, ts};
 }
@@ -41,9 +41,7 @@ export async function loadGuide(force){
   }
   // opportunistic: bulk dump (richest: price+last+volume) — usually CORS-blocked in a browser
   try{
-    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
-    const raw=await fetch(GUIDE_DUMP,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); });
-    clearTimeout(to);
+    const raw=await jget(GUIDE_DUMP);
     const g={}; let n=0;
     for(const k in raw){ if(k[0]==='%') continue; const o=raw[k]; if(!o||typeof o!=='object') continue;
       const id=(+o.id)||(+k); if(!id) continue;
@@ -55,9 +53,7 @@ export async function loadGuide(force){
   }catch(e){ logEvent('info','guide','bulk dump unavailable ('+(((e&&e.message)||e))+') — using wiki guide module'); }
   // primary in-browser: wiki module (id -> price, whole market)
   try{
-    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
-    const raw=await fetch(GUIDE_MODULE,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); });
-    clearTimeout(to);
+    const raw=await jget(GUIDE_MODULE);
     const g={}; let n=0;
     for(const k in raw){ const id=+k, p=raw[k]; if(!id||typeof p!=='number') continue; g[id]={price:p, last:null, volume:null}; n++; }
     if(!n) throw new Error('empty module');
@@ -69,13 +65,11 @@ export async function loadGuide(force){
 }
 /* per-item official guide series (price+volume) for momentum — api.weirdgloop.org */
 export async function fetchGuideSeries(id){
-  const key='g'+id; if(tsCache[key]) return tsCache[key];
-  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
-  const r=await fetch(GUIDE_HIST+id,{signal:ctrl.signal}); clearTimeout(to);
-  const j=await r.json(); const arr=(j&&(j[id]||j[String(id)]))||[];
-  const out=arr.map(p=>{ const ts=p.timestamp; const sec=typeof ts==='number'?(ts>2e10?Math.floor(ts/1000):ts):Math.floor(Date.parse(ts)/1000);
-    return {t:sec, price:+p.price, volume:+p.volume||0}; }).filter(p=>p.price&&p.t).sort((a,b)=>a.t-b.t);
-  tsCache[key]=out; return out;
+  return cached('g'+id, async()=>{
+    const j=await jget(GUIDE_HIST+id); const arr=(j&&(j[id]||j[String(id)]))||[];
+    return arr.map(p=>{ const ts=p.timestamp; const sec=typeof ts==='number'?(ts>2e10?Math.floor(ts/1000):ts):Math.floor(Date.parse(ts)/1000);
+      return {t:sec, price:+p.price, volume:+p.volume||0}; }).filter(p=>p.price&&p.t).sort((a,b)=>a.t-b.t);
+  });
 }
 
 export async function loadAll(forceMap, forceMarket){

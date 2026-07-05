@@ -39,7 +39,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `styles.css` — all styles
 - `js/` — app logic as ES modules: `state.js` (shared mutable state as one `STATE`
   object + constants + persistence + diagnostics), `format.js` (formatting/tax —
-  the canonical `tax()`/`breakEven()` helpers), `charts.js` (inline SVG), `market.js`
+  the canonical `tax()`/`breakEven()`/`netMargin`/`netMarginQty` helpers), `charts.js`
+  (inline SVG), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
+  + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
   (price/guide fetch + scoring), `trends.js` (archive + seasonal analysis +
   regime/patient/backtest), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
