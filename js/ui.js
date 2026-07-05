@@ -5,6 +5,7 @@ import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
 import { fetchQuote, quoteTableHtml } from './quote.js';
 import { renderLedger } from './ledger.js';   // A3: Ledger + fills-write cluster split out; renderAll still coordinates
+import { renderWatchTab } from './watch.js';   // WATCH tab: renderAll paints its sync structure (quotes fill in async)
 import { ghConfigured, putJsonFile, WATCHLIST_PATH } from './github.js';
 import { makeSortable } from './table.js';
 
@@ -359,5 +360,5 @@ export async function loadRepoWatchlist(){
   if(added){ logEvent('info','watchlist','union +'+added+' from repo watchlist.json'); renderWatch(); computeSignals(); }
 }
 
-export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); }
+export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); renderWatchTab(); }
 export function recompute(){ computeScores(); renderAll(); }

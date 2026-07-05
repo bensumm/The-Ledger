@@ -50,8 +50,9 @@
     <button data-tab="finder" class="active">Finder</button>
     <button data-tab="scan">Scan</button>
     <button data-tab="trends">Trends</button>
-    <button data-tab="watch">Watchlist <span class="badge" id="watchBadge">0</span></button>
+    <button data-tab="watchlist">Watchlist <span class="badge" id="watchBadge">0</span></button>
     <button data-tab="signals">Signals <span class="badge" id="sigBadge">0</span></button>
+    <button data-tab="watch">Watch <span class="badge" id="watchTabBadge">0</span></button>
     <button data-tab="ledger">Ledger <span class="badge" id="ledgerBadge">0</span></button>
     <button data-tab="logs">Logs</button>
   </nav>
@@ -135,7 +136,7 @@
   </section>
 
   <!-- WATCHLIST -->
-  <section class="panel hidden" id="panel-watch">
+  <section class="panel hidden" id="panel-watchlist">
     <div class="tablewrap">
       <table id="watchTable">
         <thead><tr><th class="left" data-k="name">Item</th><th data-k="low">Buy</th><th data-k="high">Sell</th><th data-k="margin">Margin</th><th data-k="roi">ROI</th><th data-k="turn">Turn</th><th data-k="pph">Profit/hr</th><th data-k="riskIndex">Risk</th><th></th></tr></thead>
@@ -155,6 +156,11 @@
       </table>
     </div>
     <div id="sigEmpty" class="empty hidden"></div>
+  </section>
+
+  <!-- WATCH (the at-a-glance flipping desk — verdicts from the shared momVerdict/offerVerdict) -->
+  <section class="panel hidden" id="panel-watch">
+    <div id="watchPane" class="watchpane"></div>
   </section>
 
   <!-- LEDGER -->

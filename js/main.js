@@ -3,6 +3,7 @@ import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
 import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist, finderSort } from './ui.js';
 import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync, startLocalPoll } from './ledger.js';   // A3: ledger + fills-write cluster; LW2: localhost live-refresh poll
+import { enterWatch, leaveWatch, refreshWatchQuotes } from './watch.js';   // WATCH tab: verdict-first flipping desk
 import { savePat } from './github.js';
 import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
@@ -10,8 +11,9 @@ import './backup.js'; // side-effect import: wires up the Export/Import buttons'
 /* tabs + events */
 export function switchTab(name){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  ['finder','scan','trends','watch','signals','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  ['finder','scan','trends','watchlist','watch','signals','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
   if(name==='scan') renderScan();   // lazy: fetch the published screen.json on first open (cached after)
+  if(name==='watch') enterWatch(); else leaveWatch();   // WATCH: re-quote loop runs only while the tab is visible
 }
 // L1 action logging: instrument at the event handler (a genuine user click), NOT inside the
 // shared switchTab/loadAll functions — those also run on programmatic/init paths we don't log.
@@ -90,4 +92,5 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   await loadAll();
   loadRepoWatchlist();   // S3: union repo watchlist.json into STATE.watchlist (in-memory, post-mapping)
   startLocalPoll();      // LW2: localhost only — poll positions.json/offers.json every ~30s for the local watch-log daemon's rewrites (no-op on the deployed origin)
+  setTimeout(refreshWatchQuotes, 1500);   // WATCH: one background quote pass so the tab's alert badge is live before it's opened (syncFills populates STATE.trades first)
 })();

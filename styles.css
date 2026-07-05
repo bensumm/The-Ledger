@@ -348,3 +348,91 @@ tr.detail.pend td{opacity:.85}
 }
 tr.detail.pend td.pend{color:var(--gold);font-style:italic}
 
+
+  /* ===== WATCH tab (0.49.0) — the at-a-glance flipping desk. All classes are w-prefixed and
+     scoped under #panel-watch so nothing collides with the app's existing .stale/.card/.cell/etc.
+     Ported from the approved 2026-07-05 mockup onto the app's tokens (single dark theme). ===== */
+  #panel-watch .watchpane{max-width:100%}
+  /* freshness stamps */
+  #panel-watch .wstamps{display:flex; gap:18px; flex-wrap:wrap; padding:2px 0 0; font-size:11px; color:var(--muted)}
+  #panel-watch .wstamps b{color:var(--parch2); font-weight:600}
+  #panel-watch .wdot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--muted)}
+  #panel-watch .wdot.ok{background:var(--gain)} #panel-watch .wdot.warn{background:var(--amber)}
+  /* summary strip */
+  #panel-watch .wsummary{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line);
+    border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:14px 0 8px; box-shadow:var(--shadow)}
+  #panel-watch .wcell{background:linear-gradient(180deg,var(--oak3),var(--oak2)); padding:13px 15px}
+  #panel-watch .wk{font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+  #panel-watch .wv{font-size:21px; font-weight:600; margin-top:6px; letter-spacing:-.01em}
+  #panel-watch .wm{font-size:11px; color:var(--muted); margin-top:2px}
+  @media(max-width:640px){ #panel-watch .wsummary{grid-template-columns:repeat(2,1fr)} }
+  /* section heads */
+  #panel-watch .wh2{font-family:'Cinzel',serif; font-size:13px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--parch2); margin:24px 0 10px; display:flex; align-items:baseline; gap:10px}
+  #panel-watch .wcnt{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:0}
+  /* verdict-first held cards — severity stripe on the left */
+  #panel-watch .wcard{border:1px solid var(--line); border-left-width:4px; border-radius:10px; overflow:hidden;
+    background:linear-gradient(180deg,var(--oak3),var(--oak2)); box-shadow:var(--shadow); margin-bottom:12px}
+  #panel-watch .wcard.hold{border-left-color:var(--gain)}
+  #panel-watch .wcard.watch{border-left-color:var(--amber)}
+  #panel-watch .wcard.cut{border-left-color:var(--loss)}
+  #panel-watch .whead{display:flex; align-items:center; gap:10px; padding:12px 14px 0; flex-wrap:wrap}
+  #panel-watch .winame{font-weight:600; font-size:15px}
+  #panel-watch .winame .linkname{font-size:15px; font-weight:600}
+  #panel-watch .wqty{color:var(--muted); font-weight:400}
+  #panel-watch .wpill{padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; letter-spacing:.05em;
+    font-family:'IBM Plex Mono',monospace; white-space:nowrap}
+  #panel-watch .wpill.hold{background:rgba(126,197,111,.14); color:var(--gain); border:1px solid rgba(126,197,111,.4)}
+  #panel-watch .wpill.watch{background:rgba(224,162,60,.13); color:var(--amber); border:1px solid rgba(224,162,60,.4)}
+  #panel-watch .wpill.cut{background:rgba(212,105,75,.14); color:var(--loss); border:1px solid rgba(212,105,75,.4)}
+  #panel-watch .wpill.bidok{background:rgba(230,181,74,.12); color:var(--gold); border:1px solid rgba(230,181,74,.35)}
+  #panel-watch .wmom{font-size:12px; color:var(--muted)}
+  #panel-watch .wmommut{color:var(--muted)}
+  #panel-watch .wsp{flex:1}
+  #panel-watch .wpnl{font-size:13px; white-space:nowrap}
+  #panel-watch .wgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:0 14px; padding:10px 14px 4px}
+  @media(max-width:640px){ #panel-watch .wgrid{grid-template-columns:repeat(2,1fr)} }
+  #panel-watch .wcg .wk{font-size:10px; letter-spacing:.12em}
+  #panel-watch .wcg .wv{font-size:14px; font-weight:400; margin:3px 0 10px}
+  #panel-watch .waction{margin:0 14px 8px; padding:9px 12px; border-radius:8px; font-size:13px; line-height:1.5;
+    background:rgba(230,181,74,.07); border:1px dashed var(--line2)}
+  #panel-watch .waction b{color:var(--gold)}
+  #panel-watch .waction.cut{background:rgba(212,105,75,.08)}
+  #panel-watch .waction.cut b{color:var(--loss)}
+  #panel-watch .wctx{margin:0 14px 12px; font-size:11.5px; color:var(--muted); line-height:1.55}
+  #panel-watch .wctx .lbl{color:var(--parch2); font-weight:600}
+  #panel-watch .wnote-edit,#panel-watch .wnote-add{background:none; border:none; color:var(--muted); cursor:pointer;
+    font-size:11.5px; padding:0 2px}
+  #panel-watch .wnote-edit:hover,#panel-watch .wnote-add:hover{color:var(--gold)}
+  #panel-watch .wcte{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+  #panel-watch .wnote-input{flex:1; min-width:180px; background:var(--oak); border:1px solid var(--line2); color:var(--parch);
+    border-radius:6px; padding:6px 9px; font-size:12px; font-family:inherit}
+  #panel-watch .wnote-input:focus{outline:none; border-color:var(--gold)}
+  #panel-watch .wnote-save,#panel-watch .wnote-cancel{background:var(--oak2); border:1px solid var(--line2); color:var(--parch2);
+    border-radius:6px; padding:5px 11px; font-size:12px; font-weight:600; cursor:pointer}
+  #panel-watch .wnote-save{background:var(--gold); color:var(--goldink); border-color:var(--gold)}
+  #panel-watch .wincid{color:var(--muted); font-size:11.5px; padding:4px 2px 2px; line-height:1.6}
+  /* offers */
+  #panel-watch .wstale{display:flex; gap:9px; align-items:flex-start; margin:0 0 10px; padding:10px 13px; border-radius:9px;
+    border:1px solid var(--amber); background:rgba(224,162,60,.10); font-size:12.5px; color:var(--parch); line-height:1.5}
+  #panel-watch .wstale .wdot2{width:8px; height:8px; border-radius:50%; background:var(--amber); flex:none; margin-top:5px}
+  #panel-watch .wstale b{color:var(--gold)}
+  #panel-watch .woffer{display:flex; align-items:center; gap:12px; padding:11px 14px; border:1px solid var(--line);
+    border-radius:9px; background:var(--oak2); margin-bottom:8px; flex-wrap:wrap}
+  #panel-watch .wfillbar{flex:none; width:110px; max-width:40vw; height:6px; border-radius:99px; background:var(--row); overflow:hidden}
+  #panel-watch .wfillbar i{display:block; height:100%; background:var(--gold); border-radius:99px}
+  #panel-watch .wfn{font-size:12px; color:var(--muted)}
+  #panel-watch .wctxnote{font-size:11.5px; color:var(--muted); text-align:right}
+  /* fills feed */
+  #panel-watch .wfills{border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--oak2)}
+  #panel-watch .wfill{display:flex; align-items:baseline; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line);
+    font-size:13.5px; flex-wrap:wrap}
+  #panel-watch .wfill:last-child{border-bottom:none}
+  #panel-watch .wfill.wempty{color:var(--muted); font-size:12.5px; justify-content:flex-start}
+  #panel-watch .wfill time{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); flex:none; width:44px}
+  #panel-watch .wside{font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; width:38px; flex:none}
+  #panel-watch .wside.sell{color:var(--gain)} #panel-watch .wside.buy{color:var(--gold)}
+  #panel-watch .wmuted{color:var(--muted)}
+  #panel-watch .wempty2{color:var(--muted); font-size:12.5px; padding:2px 2px 10px}
+  /* tab badge turns loss-red when it carries an alert count */
+  nav.tabs button .badge.alertbadge{color:var(--loss); font-weight:700}
