@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.1
+version: 1.2
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -12,9 +12,13 @@ exchange log. Skills never bump `APP_VERSION`.
 
 ## 1. What filled vs didn't — two sources, two jobs
 
+**Sync first.** There is no scheduled sync (the 20-min `CofferFillsSync` job was eliminated
+2026-07-04 — on-demand only). Run `node pipeline/sync-fills.mjs` at the top of the review so
+`positions.json`/`fills.json` reflect everything the exchange log captured overnight, *then*
+read them below.
+
 - **Booked numbers** ← `positions.json` (`closed` = after-tax realized P/L; `open` = new
-  inventory) + new `fills.json` events. These sync every ~20 min (Task Scheduler
-  `CofferFillsSync`) — note the ≤20-min lag if the file is fresh-stale.
+  inventory) + new `fills.json` events — fresh as of the sync you just ran.
 - **Live truth** ← `node pipeline/monitor.mjs` (reads the exchange log directly, ~0 lag):
   resting offers still open (didn't fill), recent fills/cancels. Use monitor for
   freshness, positions.json for booked numbers — never re-sum the log yourself.

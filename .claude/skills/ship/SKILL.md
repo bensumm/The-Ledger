@@ -1,7 +1,7 @@
 ---
 name: ship
-version: 1.0
-description: Push a change to main and verify it landed — rebase-push, then confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "commit and push", "is it live", "check the deploy", "check CI", any push to main.
+version: 2.0
+description: Land a change via PR + merge queue and verify it — open the PR, confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
 # /ship — push to main + verify it actually landed
@@ -18,35 +18,53 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
   the SKILL.md `version:`; pipeline-stdout-only → no bump, note it in the commit message.
 - No PII in any tracked file — the repo is public.
 
-## 2. Push
+## 2. Land the change — branch → PR → merge queue
 
-The fills pipeline auto-commits to `main` every ~20 min (`CofferFillsSync`), so a
-mid-session remote commit is NORMAL, not a conflict someone caused:
+Since G1 (2026-07-04) `main` is protected: it takes a **pull request** with the `checks`
+run green, and a **merge queue** serializes concurrent work. Do NOT push commits straight to
+`main` for ordinary changes.
 
 ```
-git fetch origin && git rebase origin/main && git push origin main
+git switch -c <short-branch>
+# ... your commits ...
+git push -u origin <short-branch>
+gh pr create --fill                 # NOT --draft when it's ready to land
+gh pr merge --squash --auto         # queues it; the queue merges once checks pass
 ```
 
-Rebase, never merge (standing rule). If the rebase conflicts on `fills.json`/
-`positions.json`, take the remote side and re-run your change's path — those files are
-pipeline-owned.
+The queue re-runs `checks` on the `merge_group` ref before merging, so a green PR that goes
+stale behind another merge is re-verified automatically. Rebase your branch on `origin/main`
+if it drifts far; **never force-push `main` itself.** git stays on git-over-SSH; `gh` does the
+PR/queue management (§5).
 
-## 3. Verify — a push isn't done until the runs are green
+**The one exception — attended on-demand data syncs.** `node pipeline/sync-fills.mjs` still
+pushes `fills.json`/`positions.json`/`suggestions.jsonl` **directly to `main`**, riding Ben's
+admin ruleset bypass (the attended actor is Ben or an agent acting as him). Deliberate: those
+are pipeline-owned artifacts, the sync is on-demand (no unattended writer exists anymore — the
+20-min `CofferFillsSync` job was eliminated, FILLS-PIPELINE.md §12), and the sync's
+clobber-guard fast-forwards onto a PR-merged `main` before committing. If a manual sync push
+is ever rejected by the ruleset, re-run the sync (the guard reconciles) or land the data via a
+PR like anything else. On a rebase conflict on `fills.json`/`positions.json`, take the remote
+side — those files are pipeline-owned.
+
+## 3. Verify — not done until the runs are green
 
 ```
 gh run list -L 3
 ```
 
-- The **`checks`** workflow run for your commit must reach `completed success`.
-- For app-touching changes, the **`pages-build-deployment`** run must too (that's the
-  live-site deploy). Follow one live with `gh run watch <databaseId>`.
+- The **`checks`** run on your PR (and its `merge_group` re-run) must reach
+  `completed success` — the queue won't merge otherwise.
+- After the merge, for app-touching changes the **`pages-build-deployment`** run on `main`
+  must too (that's the live-site deploy). Follow one live with `gh run watch <databaseId>`.
 - Don't call the change done (or end the session) before both are green.
 
 Triage on red:
-- Red on **your** commit → fix forward immediately; `main` is the deployed app.
-- Red on a `fills: auto-sync` commit → the unattended pipeline landed something broken
-  (CI is the *only* guard on those commits). Investigate the sync before anything else;
-  don't just push your change on top.
+- Red on **your PR** → fix forward on the branch; the queue re-verifies. `main` is the
+  deployed app, so nothing lands until the check passes — that's the point of the gate.
+- Red on a `fills: sync` commit (an attended data sync that pushed direct to `main`, §2) →
+  CI is the guard on those. Investigate the sync before anything else; don't stack a change
+  on top of a broken `main`.
 
 ## 4. CI / workflow editing (agents may add & improve — Ben, 2026-07-04)
 
@@ -76,11 +94,18 @@ fixtures (`node pipeline/quotecore.test.mjs`), and JSON-parse of `fills.json`/
   gh token. If git ever starts prompting for credentials, check
   `git config --get-all credential.helper`.
 
-## 6. Direction of travel — PR flow + merge queue (PLAN.md chunk G1, not yet enabled)
+## 6. PR flow + merge queue — NOW OPERATIVE (G1 landed 2026-07-04)
 
-Ben wants PR-for-everything with a merge queue (concurrent agent work → conflicts on
-`main`), sequenced BEFORE the M1/N1 big chunks. The blocker is the unattended 20-min
-sync push; Ben's read is the manual/on-demand flow covers ~99% of his use, so G1 step 0
-investigates demoting the schedule to on-demand or eliminating it — which would remove
-the need for any bypass identity. Full migration order lives in PLAN.md G1. **Until G1
-lands, direct-to-main (this skill) is the operative workflow** — don't half-adopt PRs.
+`main` is protected by a GitHub ruleset requiring a PR + the `checks` status check; a merge
+queue serializes concurrent agent work (the reason G1 existed — parallel subagents kept
+colliding on `main`). `checks.yml` runs on `merge_group`, so the queue re-verifies each PR
+against the just-merged tip.
+
+- **Everything lands via PR** (§2), including agent chunk work. The coordinator no longer
+  rebases parallel lanes onto `main` by hand — the queue does the serialization.
+- **Attended data syncs are the sole direct-to-main exception** (§2), riding Ben's admin
+  bypass. No machine/deploy-key bypass identity exists — the schedule that would have
+  needed one was eliminated (FILLS-PIPELINE.md §12).
+- The enabling decision (why the schedule died, the full dependency inventory) is
+  FILLS-PIPELINE.md §12; the ruleset/queue config as landed is recorded there and in the G1
+  commit.

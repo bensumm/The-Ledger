@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.5
+version: 1.6
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -20,11 +20,11 @@ prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch.
 already ran inside `momVerdict()` — your job is to *interpret* the printed verdicts, never
 to re-derive them.
 
-Freshness: `positions.json` re-syncs every ~20 min (Task Scheduler `CofferFillsSync`).
-Check the file's mtime; if it's older than ~25 min, say so before interpreting — a very
-recent trade may not be reflected. (`node pipeline/monitor.mjs` shows live log truth if a
-just-made trade matters. `node pipeline/sync-fills.mjs` is safe to run manually to force a
-sync when freshness matters.)
+Freshness: there is **no scheduled sync** (the 20-min `CofferFillsSync` job was eliminated
+2026-07-04 — sync is on-demand only). **Sync first:** run `node pipeline/sync-fills.mjs`
+before quoting so `positions.json` reflects every logged trade, then run `--positions`
+against the fresh file. (`node pipeline/monitor.mjs` shows live exchange-log truth if a
+just-made trade matters even more immediately.)
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
 `--positions` prints no open lots, the review isn't done: run `node pipeline/watch.mjs` —

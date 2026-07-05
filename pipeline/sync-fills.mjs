@@ -8,13 +8,17 @@
  *
  * Usage:
  *   node sync-fills.mjs            manual run: parse -> merge -> new commit -> push
- *   node sync-fills.mjs --auto     scheduled run: same, but amends the previous
- *                                  commit (force-push) if it was itself an --auto
- *                                  commit, so Task Scheduler doesn't pile up a new
- *                                  commit every 15-30 min forever. Use this from
- *                                  Task Scheduler; use the no-flag form for one-off
- *                                  manual/Claude-driven syncs, which stay as their
- *                                  own distinct checkpoint commits.
+ *   node sync-fills.mjs --auto     SCHEDULER-ERA / DEAD CODE since 2026-07-04. The
+ *                                  CofferFillsSync Task Scheduler job was ELIMINATED
+ *                                  (G1 / FILLS-PIPELINE.md §12) — sync is on-demand only
+ *                                  now, so nothing passes --auto in normal use. Retained
+ *                                  (not ripped out) so the rolling-commit machinery is
+ *                                  recoverable if a schedule is ever wanted again. What it
+ *                                  did: amend the previous commit + force-push if HEAD was
+ *                                  itself an --auto commit at the remote tip, so the job
+ *                                  didn't pile up a new commit every ~20 min. Manual runs
+ *                                  (the only kind now) never amend — each is its own
+ *                                  checkpoint commit, landed via the normal push path.
  *   node sync-fills.mjs --probe    print first raw lines of each log file
  *                                  (use this ONCE to verify field mapping)
  *   node sync-fills.mjs --dry      parse + merge + report, no git push
@@ -218,6 +222,9 @@ function main() {
 
   // commit + push
   //
+  // SCHEDULER-ERA (dead since 2026-07-04, FILLS-PIPELINE.md §12): --auto is no longer
+  // passed in normal use — the CofferFillsSync job that used it was eliminated and sync is
+  // on-demand only. Kept for recoverability. Historically:
   // --auto (Task Scheduler) runs collapse into a single rolling commit via
   // --amend + --force-with-lease, instead of piling up a new commit every
   // 15-30 min forever. This is only safe because we check the marker below:

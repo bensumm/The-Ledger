@@ -27,8 +27,9 @@ push to `main`).
   real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Lives
   in `pipeline/` (kept separate from the deployed app root): full design doc
   `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/sync-fills.mjs` (runs on Ben's
-  Windows machine via a Task Scheduler job `CofferFillsSync`, reads
-  `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` **and**
+  Windows machine **on demand** — session-start or a manual push; the ~20-min
+  `CofferFillsSync` Task Scheduler job was eliminated 2026-07-04, see FILLS-PIPELINE.md
+  §12 — reads `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` **and**
   `positions.json` at the repo root — both stay at root since the app fetches them
   same-origin). `positions.json` is the derived view (`collapseOffers` +
   FIFO `matchTrades`): `closed` trades w/ after-tax realised P/L, `open` inventory at
@@ -199,8 +200,8 @@ Script facts the skills rely on (current behavior, not doctrine):
   memory dedupe), S1–S3 (gp-flow gate + 500k floor + spread verdict, overnight posture,
   watchlist-always-scanned), E1 (local-time audit), L1 (action
   logging), M1 (mobile parity — includes the Refresh-positions button), N1 (push
-  notifications); F1 gated on O1. Sequential chunks land directly on main; parallel lanes
-  use worktree subagents merged by the coordinator. The historical plan docs
+  notifications); F1 gated on O1. All chunks land via PR + merge queue (G1, 2026-07-04);
+  parallel lanes use worktree subagents, serialized by the queue rather than hand-merged. The historical plan docs
   (`PLAN-2/3/4/5.md`) are **deleted** — full text via `git show 39e5d23:PLAN-4.md` (etc.).
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
@@ -238,15 +239,20 @@ metadata, not a leak; the concern is content, not commit authorship.
    Skills-only changes bump the SKILL.md `version:` frontmatter instead (never
    `APP_VERSION`); pipeline-only stdout tweaks may ship without a bump, noted in the
    commit message.
-6. Before running `git commit`/`git push` (including via `sync-fills.mjs`), it's fine
-   to just do it once the change has been described to Ben — but for the *pipeline
-   script's own* automated commits (via Task Scheduler), no confirmation loop is
-   possible or expected; that's by design (§4.7 of `pipeline/FILLS-PIPELINE.md`).
+6. **Ordinary changes land via PR + merge queue** (G1, 2026-07-04): branch → `gh pr
+   create` → `gh pr merge --squash --auto`, `checks` green before it merges — see `/ship`
+   §2 and the gh section below. Describe the change to Ben in prose before/with landing it
+   (a PR is fine to open once described). **The one exception is an attended on-demand
+   `sync-fills.mjs` push** of `fills.json`/`positions.json`/`suggestions.jsonl` straight to
+   `main`, riding Ben's admin ruleset bypass — those are pipeline-owned artifacts and the
+   sync's clobber-guard reconciles onto a PR-merged `main`. There is no unattended writer
+   anymore (the schedule was eliminated — `pipeline/FILLS-PIPELINE.md` §12).
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed for git operations;
    don't suggest installing anything else for those. The GitHub CLI (`gh`) IS
-   installed (2026-07-04) but is the API layer, not a git transport — see the
-   "GitHub CLI (`gh`), Actions CI, and shipping" section and the `/ship` skill.
+   installed (2026-07-04); it is the API + **PR/merge-queue management** layer, not a git
+   transport (git stays on SSH) — see the "GitHub CLI (`gh`), Actions CI, and shipping"
+   section and the `/ship` skill.
 8. **A documentation pass is part of every change — not optional, and not append-only.**
    Before calling a change done, update the docs the change touches: this `CLAUDE.md`
    (a "Done" pointer, plus any workflow/section it affects), and any affected doc
@@ -260,20 +266,23 @@ metadata, not a leak; the concern is content, not commit authorship.
    runs the right thing immediately.
 
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
-- **Every push to `main` follows the `/ship` skill** (rebase-push, then verify via
-  `gh run list` that the `checks` run — and, for app-touching changes, the
-  `pages-build-deployment` run — is green). A push isn't done until its runs are.
-- `gh` (installed + authed 2026-07-04) is the API layer only; git operations stay
-  on git-over-SSH. **Never run `gh auth setup-git`** (details in `/ship` §5).
-- **CI: `.github/workflows/checks.yml`** — cheap always-on checks (JS syntax
-  sweep, quotecore fixtures, `fills.json`/`positions.json` parse); it is the only
-  guard on the pipeline's unattended auto-commits. Agents may add/improve
-  workflows within the constraints in `/ship` §4 (public logs, no `~/.runelite`,
-  seconds-fast, no secrets).
-- **Direction of travel: PR flow for everything + merge queue** = PLAN.md chunk
-  G1 (sequenced before M1/N1; sync-cadence investigation first — Ben expects the
-  20-min sync to demote to on-demand or disappear). Direct-to-main stays the
-  operative workflow until G1 lands — don't half-adopt PRs.
+- **Changes land via PR + merge queue** (G1, 2026-07-04 — now operative): `main` is
+  protected by a ruleset requiring a PR + the `checks` run green, and a merge queue
+  serializes concurrent agent work. Follow the `/ship` skill — `gh pr create` →
+  `gh pr merge --squash --auto`, then verify via `gh run list` that `checks` (and, for
+  app-touching changes, `pages-build-deployment` after merge) is green.
+- `gh` (installed + authed 2026-07-04) is the API + **PR/merge-queue management** layer
+  (opening/merging PRs is expected now, not forbidden); git operations stay on
+  git-over-SSH. **Never run `gh auth setup-git`** (details in `/ship` §5).
+- **Attended on-demand `sync-fills.mjs` pushes are the sole direct-to-main exception**,
+  riding Ben's admin ruleset bypass (pipeline-owned artifacts; the clobber-guard reconciles
+  onto a PR-merged `main`). No unattended writer / machine bypass identity exists — the
+  schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
+- **CI: `.github/workflows/checks.yml`** — cheap checks (JS syntax sweep, quotecore
+  fixtures, `fills.json`/`positions.json` parse) run on push, PR, and `merge_group`; it is
+  the required status check the merge queue gates on. Agents may add/improve workflows
+  within the constraints in `/ship` §4 (public logs, no `~/.runelite`, seconds-fast, no
+  secrets).
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 The rule (all app-wide mutable state lives as properties on one exported `STATE` object,
@@ -299,6 +308,6 @@ getters; only reach for UTC when writing something that leaves the app.
 ## Environment notes (Windows machine)
 The Windows-machine environment notes (RuneLite `profiles2` flush-on-restart, the Exchange
 Logger field mapping, cancel semantics, the manual-fill `--time` timestamp rule + `REMOVE`
-tombstones, the `CofferFillsSync` Task Scheduler job) are consolidated in
-**`pipeline/FILLS-PIPELINE.md` §10** (single home). Read that before touching the pipeline
+tombstones, the on-demand sync cadence — the `CofferFillsSync` schedule was eliminated,
+§12) are consolidated in **`pipeline/FILLS-PIPELINE.md` §10** (single home). Read that before touching the pipeline
 or a source log. (Moved out of CLAUDE.md by chunk K3.)

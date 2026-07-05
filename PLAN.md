@@ -14,15 +14,18 @@ single-file discipline: this doc is both the plan and the scoreboard.
   smoke test for any app-facing change (ES modules don't load over `file://` — use
   `serve.cmd`); `APP_VERSION` bump in `js/state.js` if app behavior changed (skills-only
   changes do NOT bump it — SKILL.md `version:` frontmatter instead); a descriptive commit,
-  then push — and if the push touches the deployed app, watch the `pages-build-deployment`
-  run to `completed success` (`gh run list -L 1`; CLAUDE.md's gh rules). Prefer
-  exact-string edits that fail loudly.
+  then **land via PR + merge queue** (branch → `gh pr create` → `gh pr merge --squash
+  --auto`; `checks` green before it merges — G1, 2026-07-04, `/ship` §2) — and if the
+  change touches the deployed app, watch the post-merge `pages-build-deployment` run to
+  `completed success` (`gh run list -L 1`; CLAUDE.md's gh rules). Prefer exact-string edits
+  that fail loudly.
 - Repo is public — no PII in any tracked file or commit message.
 - NEVER edit RuneLite's own `exchange.log`; the writable source is the sibling
   `coffer-manual.log`.
 - `positions.json` / `fills.json` are pipeline outputs — only `sync-fills.mjs` writes them.
-- `git add` only the files you changed (a scheduler auto-commits positions/fills every
-  ~20 min; `git pull --rebase` before pushing).
+- `git add` only the files you changed. (There is no longer a scheduler auto-committing
+  positions/fills — sync is on-demand since G1; but an attended sync push or another lane's
+  merge can still move `main`, so rebase your branch on `origin/main` if it drifts.)
 - Discover unrelated debt → append to "Discovered" at the bottom; don't fix drive-by.
 - **Spec style:** write the rule + one cheap named anchor (e.g. "the bludgeon-exit lesson").
   Do NOT paste live data (prices, multi-item verification lists) — it rots and misleads.
@@ -34,11 +37,14 @@ single-file discipline: this doc is both the plan and the scoreboard.
 - Ben's main session is the **coordinator**. It hands one chunk ID per **Opus subagent**
   (Agent tool). Subagent brief template: *"Read CLAUDE.md fully, then PLAN.md's Executor
   rules and chunk `<ID>`. Execute the chunk, validate per the rules, commit."*
-- **Sequential chunks work directly on main** (sole consumer — Ben, 2026-07-04). **Chunks
-  running in parallel use worktree isolation** (Agent `isolation: "worktree"`); the
-  coordinator rebases each finished result onto main and pushes — no PRs (`gh` is
-  installed but scoped to API reads/deploy checks; see CLAUDE.md's gh rules), never
-  force-push main.
+- **All chunks land via PR + merge queue** (G1, 2026-07-04): branch → `gh pr create` →
+  `gh pr merge --squash --auto`; the queue re-runs `checks` on the `merge_group` ref and
+  merges when green, so concurrent lanes **serialize at the queue instead of conflicting on
+  `main`**. **Chunks running in parallel use worktree isolation** (Agent `isolation:
+  "worktree"`); the coordinator no longer hand-rebases finished results onto `main` — each
+  lane opens its own PR and the queue orders them. Never force-push `main`. (`gh` now does
+  PR/queue management as well as API reads/deploy checks — see CLAUDE.md's gh rules and
+  `/ship`.)
 - **Parallel-safety rule:** chunks may run concurrently only when their primary-file sets
   are disjoint (listed per chunk). Same-file-different-region overlaps are acceptable
   (git merges them); same-function overlaps are not — sequence those.
