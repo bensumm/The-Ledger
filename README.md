@@ -17,7 +17,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   quality dampener blending ROI, liquidity, stability, and turnaround; hover the Risk
   grade for the per-factor breakdown). Stability here is a cheap live-price-vs-guide
   proxy — the full regime-drift check lives on the Trends page. Sortable by rating,
-  profit/hr, margin, ROI, or volume.
+  profit/hr, margin, ROI, or volume. Typing a **search** query reveals *every* mapped
+  match — including cheap items (soul rune ~300gp) the browse-mode price floor normally
+  hides; those search-only rows show `—` for the rating columns and lean on the quote
+  button + star.
 - **Trends** — deep per-item analysis. A live "Suggested plan" (instant buy/sell +
   **patient pricing** that sizes a wider-margin offer off the recent 2h range),
   a **regime-shift guard** that warns when a recent price-level jump makes the

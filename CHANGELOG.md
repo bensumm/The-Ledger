@@ -10,6 +10,21 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Finder full-catalog search + Signals badge count (0.46.0, PLAN chunk FX1)
+Two verified UI bugs. (1) **"Soul rune" was unsearchable** — `buildItems()` excludes anything
+with `l.high < MIN_PRICE` (1000gp) from `STATE.ITEMS` to keep browse-mode noise out, but Finder
+search only filtered `STATE.ITEMS`, so sub-1000gp items could never be found even though search
+deliberately bypasses the browse gates. Fixed at the search layer (NOT by dropping `MIN_PRICE`):
+when a query is active, `currentFinderRows` unions in catalog matches via the existing off-screen
+`rawItem` path for ids not in `STATE.ITEMS` (needs a live price to quote). Those rows carry
+`offscreen:true` and lack `rate`/`score`/`fill`/`turn`; the renderer prints `—` for the grade and
+rating-bar cells (fmt/fmtP/fmtTurn already null-safe) with a "below the browse price floor" title.
+The quote button and star both work on them (they key off id; `resolveId`/`toggleWatch` already
+handle catalog items). Browse view (no query) is byte-identical — verified in chromium. (2) The
+**Signals badge read 0 with rows present**: `#sigBadge` showed only `firing` (rows whose BUY
+signal fires now), which misreads as "tab is empty". It now shows `firing/total` (e.g. `0/6`),
+plain `0` when there are no signal rows at all.
+
 ### Push-notification trigger engine (PLAN chunk N1 — pipeline + docs only, no APP_VERSION bump)
 Design-first: the delivery mechanism decision ships as a committed doc section
 (`pipeline/MONITORING.md` "Push notifications on market events") and the trigger ENGINE ships

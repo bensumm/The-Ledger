@@ -1,6 +1,6 @@
 import { API, STATE, sSet, logEvent, setHealth } from './state.js';
 import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
-import { loadAll, resolveId, computeScores, TREND_BADGE } from './market.js';
+import { loadAll, resolveId, computeScores, TREND_BADGE, rawItem } from './market.js';
 import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
 import { fetchQuote, quoteTableHtml } from './quote.js';
@@ -49,6 +49,17 @@ export function currentFinderRows(){
     if(budget && it.low>perSlot) return false;
     return true;
   });
+  if(searching){
+    // FX1.1: an explicit search reveals EVERY mapped match, including items MIN_PRICE keeps
+    // out of the browse universe (soul rune ~300gp). Union in off-screen catalog rows for ids
+    // not already in STATE.ITEMS via the shared rawItem path (needs a live price to quote).
+    const have=new Set(rows.map(r=>r.id));
+    for(const m of STATE.MAP){
+      if(m.name.toLowerCase().indexOf(q)<0) continue;
+      if(STATE.byId[m.id]||have.has(m.id)) continue;   // already surfaced from the flip universe
+      const it=rawItem(m); if(it){ rows.push(it); have.add(m.id); }
+    }
+  }
   rows=finderSort.sort(rows);
   return rows.slice(0,80);
 }
@@ -60,20 +71,23 @@ export function renderFinder(){
   if(!rows.length){ body.innerHTML=''; empty.classList.remove('hidden');
     empty.innerHTML='<div class="big">No flips match</div><div class="sm">Loosen the price tier or turn off “Affordable”. Margins under 2% never clear the tax, so they’re hidden by design.</div>'; return; }
   empty.classList.add('hidden');
-  const maxScore=Math.max(...rows.map(r=>r.score),1), staleT=now()-3600;
+  const maxScore=Math.max(...rows.map(r=>r.score||0),1), staleT=now()-3600;
   body.innerHTML=rows.map(it=>{
     const watched=STATE.watchlist.includes(it.id);
     const stale=(it.highTime<staleT||it.lowTime<staleT)?'<span class="stale">stale</span>':'';
-    const rel=Math.round(it.score/maxScore*100), g=grade(it.riskIndex);
+    const off=it.offscreen;   // FX1.1 search-only catalog row: no rating/score/fill/turn — render — and lean on the quote button
+    const rel=off?null:Math.round(it.score/maxScore*100), g=off?null:grade(it.riskIndex);
     const rt=it.rate;
-    const gTitle=rt?('Rating factors — ROI '+Math.round(rt.roiS*100)+'% · Liquidity '+Math.round(rt.volS*100)+'% · Stability '+Math.round(rt.stabS*100)+'% · Turnaround '+Math.round(rt.turnS*100)+'% (stability = live price vs guide; full regime check is on Trends)'):'insufficient data';
+    const gTitle=off?'below the browse price floor — search-surfaced; use quote for the live table':(rt?('Rating factors — ROI '+Math.round(rt.roiS*100)+'% · Liquidity '+Math.round(rt.volS*100)+'% · Stability '+Math.round(rt.stabS*100)+'% · Turnaround '+Math.round(rt.turnS*100)+'% (stability = live price vs guide; full regime check is on Trends)'):'insufficient data');
     const tb=TREND_BADGE[(it.trend&&it.trend.state)||'none']||TREND_BADGE.none;
     const badge=tb.g?' <span class="tbadge '+tb.c+'" title="'+tb.t+(it.trend&&it.trend.divPct!=null?' · '+(it.trend.divPct>=0?'+':'')+it.trend.divPct.toFixed(1)+'% vs guide':'')+'">'+tb.g+'</span>':'';
     // T1.4: Risk grade + Rating bar sit immediately after the item name (identity first),
     // then the price/margin columns — cell order must match the <th> order in index.html.
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+badge+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
-      '<td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>'+
-      '<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>'+
+      (off?'<td><span class="grade" title="'+gTitle+'">—</span></td>'
+          :'<td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>')+
+      (off?'<td class="num mini" title="'+gTitle+'">—</td>'
+          :'<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>')+
       '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
       '<td class="num gain">'+fmtP(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
@@ -132,7 +146,9 @@ export function renderSignals(){
     return {it,s,gross,roi,profitable,cheapNow,buy};
   }).sort((a,b)=>b.gross-a.gross);
   const firing=rows.filter(r=>r.buy).length;
-  document.getElementById('sigBadge').textContent=firing;
+  // FX1.2: show firing/total (e.g. 0/6) so a live-but-quiet tab no longer misreads as empty;
+  // plain 0 when there are no watched signal rows at all.
+  document.getElementById('sigBadge').textContent=rows.length?firing+'/'+rows.length:'0';
   const body=document.getElementById('sigBody'), empty=document.getElementById('sigEmpty');
   if(!rows.length){
     body.innerHTML=''; empty.classList.remove('hidden');

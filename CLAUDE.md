@@ -53,6 +53,15 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Finder full-catalog search + Signals badge count** (0.46.0, FX1) — a Finder **search query
+  now reveals every mapped match**, not just the flip universe: `currentFinderRows` (`js/ui.js`)
+  unions in off-screen catalog rows (shared `rawItem`, `js/market.js`) for ids `MIN_PRICE` keeps
+  out of `STATE.ITEMS` (soul rune ~300gp). Those `offscreen` rows lack rating/score/fill/turn →
+  the renderer prints `—` for the grade + score-bar cells (fmt/fmtP/fmtTurn already null to `—`);
+  the quote button + star work (both key off id via `resolveId`). Don't "fix" this by dropping
+  `MIN_PRICE` — it exists to keep browse-mode noise out; the reveal is search-only. The `#sigBadge`
+  now shows **`firing/total`** (e.g. `0/6`; plain `0` when no rows) so a live-but-quiet Signals tab
+  no longer misreads as empty.
 - **Reusable sortable-table component** (0.44.0, TB1) — `js/table.js` `makeSortable({tableId,
   name, columns, defaultKey, onSort})` owns click-to-sort, the direction toggle, the sorted-column
   `.sorted`/`▲▼` arrow, the null-safe `?? -Infinity` numeric comparator, and the risk-grade
