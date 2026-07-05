@@ -63,7 +63,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   auto-populate, Ledger render/controls, freshness + GitHub-sync panels; split out of
   `ui.js` by A3), `ledgercore.js` (TD2 — pure `periodKey`/`groupTrades` day-boundary
   bucketing + per-item grouping, moved out of `ledger.js` so node can import them for
-  `pipeline/ledgercore.test.mjs`), `backup.js` (export/import),
+  `pipeline/ledgercore.test.mjs`), `watch.js` (0.49.0 — the Watch tab: a verdict-first
+  flipping desk rendering held positions, active offers and today's fills, with verdicts
+  from the shared `momVerdict`/`offerVerdict`; per-item session-context notes persist under
+  `watchnote:<id>`), `watchcore.js` (0.49.0 — pure Watch-tab derivations: verdict→stripe
+  family, alert count, flip/incidental split, today's-fills feed + after-tax net, summary
+  aggregates; node-importable, fixture-tested in `pipeline/watchcore.test.mjs`),
+  `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite; the pipeline source
@@ -76,7 +82,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `offers.json` — tracked, flat snapshot of the live GE offer slots (`{slot, side, itemId,
   item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
-  freshness and stashes it on `STATE.offers` for the future Watch tab (`FILLS-PIPELINE.md` §14)
+  freshness and stashes it on `STATE.offers`, which the **Watch tab** (0.49.0, `js/watch.js`)
+  renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14)
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
   with local `STATE.watchlist` and `screen.mjs` always scans it (S3); app writes it back via
   the GitHub contents API (`js/github.js`)
@@ -163,7 +170,7 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 
 | Module | Also imported by (pipeline) |
 | --- | --- |
-| `js/quotecore.js` | 9 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs` |
+| `js/quotecore.js` | 10 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
 | `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs` |
 
 ### Test-location convention
@@ -187,12 +194,14 @@ so double-clicking `index.html` won't work. Run **`serve.cmd`** (tries the `py`
 launcher's `http.server`, falls back to `python3`, then `npx serve`) and open
 `http://localhost:8000/`. GitHub Pages is unaffected — it always serves over HTTP.
 
-`serve.cmd` is also the **live desk experience** (LW2): on localhost the app polls
-`positions.json` + `offers.json` every ~30s and renders a "book synced hh:mm · N open
-offers" stamp instead of the deployed Refresh-positions banner. Pair it with the
-`watch-log.mjs` daemon (`watch-log.cmd`) running alongside RuneLite and every fill /
-cancel / reprice shows up in the local app within ~40s — no keystrokes, **zero git commits**.
-On `bensumm.github.io` this poll is off and the M1 banner + button are unchanged.
+`serve.cmd` is also the **live desk experience** (LW2): it now `start /b`s the
+`watch-log.mjs` daemon in the same console (one Ctrl+C stops both, commit `74e437a`), so no
+separate `watch-log.cmd` step is needed. On localhost the app polls `positions.json` +
+`offers.json` every ~30s, so with RuneLite running every fill / cancel / reprice shows up in
+the local app within ~40s — no keystrokes, **zero git commits**. The **Watch tab** (0.49.0)
+is the desk surface over this data: verdict-first held cards, active offers, today's fills,
+with a "book synced hh:mm" stamp instead of the deployed Refresh-positions banner. On
+`bensumm.github.io` the poll is off and the M1 banner + button are unchanged.
 
 Data sources are the OSRS Wiki real-time prices API, the in-game GE guide price
 (wiki module + weirdgloop history), all fetched client-side.

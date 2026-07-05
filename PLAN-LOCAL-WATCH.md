@@ -63,6 +63,10 @@ This is the enabling layer for the planned in-app Watch tab (mockup reviewed by 
    existing M1 banner semantics stand — don't double-banner).
 3. No Watch-tab UI in this plan — that's its own future chunk (mockup exists);
    this chunk just guarantees the data under it is live at the desk.
+   **UPDATE (0.49.0): the Watch tab SHIPPED** — `js/watch.js` + pure `js/watchcore.js`
+   (+ `pipeline/watchcore.test.mjs`), a verdict-first desk surface (held positions, active
+   offers, today's fills) rendering LW2's `STATE.offers` and the held book, verdicts from the
+   shared `momVerdict`/`offerVerdict`. See CHANGELOG 0.49.0.
 
 ### Chunk LW3 — documentation reconciliation (process rule 8)
 

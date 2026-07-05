@@ -22,6 +22,10 @@ push to `main`).
   Ledger render/controls, freshness/GitHub-sync panels — split out of `ui.js` by A3);
   `ledgercore.js` = pure day-boundary bucketing + per-item grouping (`periodKey`/`groupTrades`,
   moved out of `ledger.js` by TD2 so they're node-importable + fixture-tested);
+  `watch.js` = the Watch tab (0.49.0 — verdict-first flipping desk: held cards, active offers,
+  today's fills; verdicts from the shared `momVerdict`/`offerVerdict`; per-item session notes under
+  `watchnote:<id>`); `watchcore.js` = pure Watch-tab derivations (verdict→stripe family, alert count,
+  flip/incidental split, today's-fills feed, summary aggregates — node-importable, fixture-tested);
   `backup.js` = export/import; `main.js` = entry point, event wiring + init). No build step, no framework, no bundler — deployed to GitHub Pages at
   bensumm.github.io/The-Ledger/ exactly as these files sit on disk. See `README.md`
   for the full file inventory and deploy mechanics.
@@ -60,6 +64,23 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Watch tab — the at-a-glance flipping desk** (0.49.0) — a verdict-first in-app surface
+  (`js/watch.js` render + pure `js/watchcore.js`, tab id `watch`; the old **Watchlist** tab was
+  renamed to id `watchlist` to free the name): freshness stamps → 4-cell summary (exposure / day
+  P/L / free capital / alert count) → one verdict-first card per held flip lot (severity stripe +
+  `momVerdict` pill + momentum glyph + P/L-at-action + a data grid + an action line + a persisted
+  per-item **session-context note** so a stateless CUT never reads as an order) → active offers
+  (from `STATE.offers`, verdict-tagged, behind a staleness banner) → today's fills feed. **Verdicts
+  are NOT reimplemented**: held cards call the shared `momVerdict()` and offers the new shared
+  `offerVerdict()` (both `js/quotecore.js`) — so a bid reads BID-OK/BID-BEHIND/CROSSING/CANCEL-BID
+  identically in the browser and in console `watch.mjs` (which was refactored to route through the
+  same `offerVerdict`, byte-identically). Alerts = CUT-family held + CANCEL-BID offers (tab badge +
+  summary share the one count). Re-quotes only while the tab is visible (reuses marketfetch's cache).
+  Notes persist under `watchnote:<id>`; **never log their contents** (L1). The **don't-rebuild
+  lesson**: the console `watch.mjs` stays the zero-lag "act now" authority; the Watch tab is the
+  standing desk picture off `positions.json`/`offers.json` — offers are only as fresh as the last
+  sync and are honestly bannered as such. Pure derivations are fixture-tested in
+  `pipeline/watchcore.test.mjs`.
 - **Local log-watcher — desk-side freshness, zero git in the daemon** (0.48.0, LW1/LW2) — a
   manual-start `pipeline/watch-log.mjs` daemon (`watch-log.cmd`) `fs.watch`es the exchange-logger dir
   and runs the extracted git-FREE `regenerate()` core (also reachable as `sync-fills.mjs --local`),

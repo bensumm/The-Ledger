@@ -192,6 +192,17 @@ deployed (`bensumm.github.io`) app is still as-of-last-attended-sync. So: the ap
 offers at the desk (via `offers.json`), but for a sell-the-instant-it-moves call the console read
 is still the source of truth.
 
+**The in-app Watch tab (0.49.0, `js/watch.js`) is the at-a-glance DESK surface, not a second
+authority.** It renders the same decisions this console produces — held verdicts from the shared
+`momVerdict()` and offer verdicts from the shared `offerVerdict()` (both in `js/quotecore.js`, so a
+bid reads BID-OK/BID-BEHIND/CROSSING/CANCEL-BID identically in the terminal and the browser) — but
+against `positions.json`/`offers.json`, so **offers are only as fresh as the last sync** and are
+honestly stamped/bannered as such (held quotes are live via the market API). What the tab adds over
+this console is a persisted **session-context note** per held item (entry thesis + tripwire), so a
+stateless CUT verdict never reads as an order. Division of labor: run the console `watch.mjs` for the
+zero-lag "act now" read; glance at the Watch tab for the standing desk picture (exposure, day P/L,
+which held lots want action, what filled today).
+
 ### Item-type classes → cadence + playbook
 
 Boundaries are **tunable named constants** at the top of `watch.mjs`, not magic numbers:

@@ -652,7 +652,8 @@ The app is the daemon's consumer. On localhost (`IS_LOCALHOST` in `js/state.js` 
 `location.hostname` localhost/127.0.0.1), the app polls `positions.json` + `offers.json` every ~30s
 (`js/ledger.js` `startLocalPoll`), compares `generatedAt`, and only on a change re-runs the
 **existing M1 `syncFills()` merge** (no second merge path) and stashes the offers on
-`STATE.offers`/`STATE.offersTs` (data home for the future Watch tab). It renders a compact
+`STATE.offers`/`STATE.offersTs` (consumed by the **Watch tab**, 0.49.0 `js/watch.js`, which renders
+them as verdict-tagged offer rows behind a staleness banner). It renders a compact
 "book synced hh:mm · N open offers" stamp (local time, stale-colored past ~10 min) **instead of** the
 M1 banner + Refresh button — the two never double-banner. On `bensumm.github.io` `IS_LOCALHOST` is
 false and behavior is byte-identical to 0.47.0 (M1 banner + button remain). Change detections log

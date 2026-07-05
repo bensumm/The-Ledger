@@ -10,6 +10,56 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Watch tab — the at-a-glance flipping desk (0.49.0)
+**Origin (Ben, 2026-07-05):** the approved `WATCH-TAB-MOCKUP.html` — a verdict-first desk surface that
+turns the data LW1/LW2 made live at the desk (held book + offers) into a single glance: *what do I
+hold, what wants action, what's resting, what filled today.* Built exactly to the mockup, with the
+tweaks Ben pre-approved.
+
+**What shipped:**
+- **A new `Watch` tab** rendered by `js/watch.js`, top-to-bottom: (1) three freshness stamps (prices
+  live / held book synced / offers as-of-sync — staleness is always stamped, never hidden); (2) a
+  4-cell summary strip (Exposure = deployed capital · Day P/L = today's realised · Free capital =
+  bankroll − deployed · Alerts); (3) **held positions** as one verdict-first card per flip lot —
+  severity stripe (green HOLD / amber WATCH / red CUT) + a `momVerdict()` pill + momentum glyph +
+  a right-aligned P/L-at-action figure + a 4-col data grid (Held @ / Break-even / Quick sell or
+  Target ask / Regime) + a dashed action line + a **session-context note**; incidental inventory
+  (sub-100k lots) collapses to one muted line; (4) **active offers** from `STATE.offers`, each a flat
+  verdict-tagged row (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID for bids, LISTED for asks) with a
+  fill-progress bar, behind an amber staleness banner (the browser can't read the exchange log —
+  offers are as-of-last-sync; held quotes above are live); (5) today's fills feed from `fills.json`.
+- **Shared verdicts, not reimplemented.** Held cards call the shared `momVerdict()`; the bid decision
+  was extracted from `pipeline/watch.mjs`'s inline `bidVerdict` into a new pure `offerVerdict(row,
+  offerPrice)` in `js/quotecore.js`, and `watch.mjs` now routes its `bidVerdict`/`bidAlert`/`bidAction`
+  through it — **byte-identical console output**, and a bid now reads identically in the terminal and
+  the browser (the `momVerdict` precedent). Break-even is the shared `breakEven()`; the momentum glyph
+  is `momCell()`. No tax/quote/verdict math is duplicated.
+- **The tweaks (Ben-approved):** (A) session-context notes are **editable in place** (✎ → inline input;
+  empty → "+ add context…"), persisted per item under `watchnote:<id>` via the app's `sSet`/`sGet`;
+  their contents are **never logged** (L1). (B) the bid logic is **shared, not forked** (above). (C)
+  pure derivations live in node-importable `js/watchcore.js` (verdict→stripe family, alert count,
+  flip/incidental split, today's-fills feed + after-tax net, summary aggregates) and are fixture-tested
+  in `pipeline/watchcore.test.mjs` (12 checks incl. `offerVerdict`'s gate order). (D) **Alerts =
+  CUT-family held verdicts (CUT / CUT-CANDIDATE / LIST-TO-CLEAR) + CANCEL-BID offers** — the tab badge
+  (red when >0) and the summary cell share the one count. (E) data sources reuse what the app already
+  has: held book from `positions.json` via `syncFills`, offers from `STATE.offers` (LW2), today's fills
+  from same-origin `fills.json` filtered to the LOCAL day, and Day P/L's after-tax net comes from the
+  matched `positions.json` close (fills.json alone has no profit) — an unmatched sell honestly shows a
+  blank net.
+- **Naming:** the pre-existing **Watchlist** tab used the id `watch`; it was renamed to id `watchlist`
+  (routing + panel id only; `watchTable`/`watchBadge`/`renderWatch` unchanged) so the new tab could
+  take `watch` (matching the pipeline's `watch.mjs` concept, and the smoke test's existing `watch`
+  entry). `pipeline/smoke.mjs` now enumerates 8 panes (`watchlist` + `watch`) and asserts both render
+  non-empty under stubs.
+- **Refresh model:** the market re-quote loop runs **only while the tab is visible** (started in
+  `switchTab`), reusing marketfetch's cached `ts`/`24h` store — a light refresh, not a new data poller.
+  One background pass fires at init so the alert badge is live before the tab is first opened.
+
+Verified with a headless Playwright pass against the real committed `positions.json`/`offers.json`/
+`fills.json`: two flip cards (Basilisk jaw → HOLD green, Serpentine helm → CUT red), the Soul-rune
+incidental collapsed, offers rendered with a BID-BEHIND bid, today's fills fed, badge = 1, and the note
+round-tripping through localStorage — no console errors. APP_VERSION → 0.49.0.
+
 ### Local log-watcher — desk-side freshness without an unattended writer (0.48.0, PLAN-LOCAL-WATCH LW1/LW2)
 **Origin (Ben, 2026-07-05):** "Can we have some process watch the log file and automatically sync?"
 The obvious build — a daemon that auto-commits/pushes on every change — would reintroduce exactly the
