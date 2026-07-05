@@ -200,8 +200,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   memory dedupe), S1–S3 (gp-flow gate + 500k floor + spread verdict, overnight posture,
   watchlist-always-scanned), E1 (local-time audit), L1 (action
   logging), M1 (mobile parity — includes the Refresh-positions button), N1 (push
-  notifications); F1 gated on O1. All chunks land via PR + merge queue (G1, 2026-07-04);
-  parallel lanes use worktree subagents, serialized by the queue rather than hand-merged. The historical plan docs
+  notifications); F1 gated on O1. `main` is protected by a PR+`checks` ruleset (G1,
+  2026-07-04); no merge queue on this user-owned repo and PR creation is token-blocked for
+  now, so chunks land via attended direct-push under the admin bypass (parallel lanes still
+  use worktree subagents, hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
   (`PLAN-2/3/4/5.md`) are **deleted** — full text via `git show 39e5d23:PLAN-4.md` (etc.).
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
@@ -239,14 +241,16 @@ metadata, not a leak; the concern is content, not commit authorship.
    Skills-only changes bump the SKILL.md `version:` frontmatter instead (never
    `APP_VERSION`); pipeline-only stdout tweaks may ship without a bump, noted in the
    commit message.
-6. **Ordinary changes land via PR + merge queue** (G1, 2026-07-04): branch → `gh pr
-   create` → `gh pr merge --squash --auto`, `checks` green before it merges — see `/ship`
-   §2 and the gh section below. Describe the change to Ben in prose before/with landing it
-   (a PR is fine to open once described). **The one exception is an attended on-demand
-   `sync-fills.mjs` push** of `fills.json`/`positions.json`/`suggestions.jsonl` straight to
-   `main`, riding Ben's admin ruleset bypass — those are pipeline-owned artifacts and the
-   sync's clobber-guard reconciles onto a PR-merged `main`. There is no unattended writer
-   anymore (the schedule was eliminated — `pipeline/FILLS-PIPELINE.md` §12).
+6. **`main` is protected by a ruleset** (G1, 2026-07-04 — PR + `checks` required, no
+   force-push/deletion; repository-admin **always** bypass). Two live caveats: no merge
+   queue (user-owned repo — unavailable) and PR *creation* is currently token-blocked
+   (`createPullRequest` → `FORBIDDEN`; needs `gh auth refresh -s repo`, Ben-only). **So the
+   practical path today is attended direct-push under the admin bypass** (`git fetch &&
+   rebase origin/main && push`); the PR-for-everything flow is the intent once the token is
+   refreshed — full state in `/ship` §2/§6. Describe the change to Ben before landing it.
+   On-demand `sync-fills.mjs` pushes of `fills.json`/`positions.json`/`suggestions.jsonl`
+   go direct to `main` too (pipeline-owned; clobber-guard reconciles). No unattended writer
+   remains (the schedule was eliminated — `pipeline/FILLS-PIPELINE.md` §12).
 7. Ben doesn't have a separate git GUI client on the Windows machine — git CLI + SSH
    auth to GitHub is already working and is the only tool needed for git operations;
    don't suggest installing anything else for those. The GitHub CLI (`gh`) IS
@@ -266,23 +270,22 @@ metadata, not a leak; the concern is content, not commit authorship.
    runs the right thing immediately.
 
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
-- **Changes land via PR + merge queue** (G1, 2026-07-04 — now operative): `main` is
-  protected by a ruleset requiring a PR + the `checks` run green, and a merge queue
-  serializes concurrent agent work. Follow the `/ship` skill — `gh pr create` →
-  `gh pr merge --squash --auto`, then verify via `gh run list` that `checks` (and, for
-  app-touching changes, `pages-build-deployment` after merge) is green.
-- `gh` (installed + authed 2026-07-04) is the API + **PR/merge-queue management** layer
-  (opening/merging PRs is expected now, not forbidden); git operations stay on
-  git-over-SSH. **Never run `gh auth setup-git`** (details in `/ship` §5).
-- **Attended on-demand `sync-fills.mjs` pushes are the sole direct-to-main exception**,
-  riding Ben's admin ruleset bypass (pipeline-owned artifacts; the clobber-guard reconciles
-  onto a PR-merged `main`). No unattended writer / machine bypass identity exists — the
-  schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
+- **`main` is protected by a ruleset** (G1, 2026-07-04): PR + `checks` required, no
+  force-push/deletion, repository-admin **always** bypass (ruleset id `18520289`). Two live
+  caveats — **no merge queue** (user-owned repo → unavailable) and **PR creation is
+  token-blocked** (`createPullRequest` → `FORBIDDEN`; fix = `gh auth refresh -s repo`,
+  interactive/Ben-only). So today changes land by **attended direct-push under the admin
+  bypass** (verified working, incl. the sync); the `gh pr create` → `gh pr merge --squash`
+  flow is the intent once the token is refreshed. Full honest state: `/ship` §2/§6.
+- `gh` (installed + authed 2026-07-04) is the API + ruleset/PR management layer; git
+  operations stay on git-over-SSH. **Never run `gh auth setup-git`** (details in `/ship` §5).
+- **On-demand `sync-fills.mjs` pushes go direct to `main`** riding the admin bypass
+  (pipeline-owned artifacts; clobber-guard reconciles). No unattended writer / machine
+  bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
 - **CI: `.github/workflows/checks.yml`** — cheap checks (JS syntax sweep, quotecore
   fixtures, `fills.json`/`positions.json` parse) run on push, PR, and `merge_group`; it is
-  the required status check the merge queue gates on. Agents may add/improve workflows
-  within the constraints in `/ship` §4 (public logs, no `~/.runelite`, seconds-fast, no
-  secrets).
+  the ruleset's required status check. Agents may add/improve workflows within the
+  constraints in `/ship` §4 (public logs, no `~/.runelite`, seconds-fast, no secrets).
 
 ## The `STATE` object (js/state.js) — read before editing shared state
 The rule (all app-wide mutable state lives as properties on one exported `STATE` object,

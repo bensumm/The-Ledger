@@ -1,7 +1,7 @@
 ---
 name: ship
 version: 2.0
-description: Land a change via PR + merge queue and verify it — open the PR, confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
+description: Land a change on main (attended direct-push under the admin bypass today; PR + checks once the gh token is refreshed) and verify it — confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
 # /ship — push to main + verify it actually landed
@@ -18,34 +18,45 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
   the SKILL.md `version:`; pipeline-stdout-only → no bump, note it in the commit message.
 - No PII in any tracked file — the repo is public.
 
-## 2. Land the change — branch → PR → merge queue
+## 2. Land the change
 
-Since G1 (2026-07-04) `main` is protected: it takes a **pull request** with the `checks`
-run green, and a **merge queue** serializes concurrent work. Do NOT push commits straight to
-`main` for ordinary changes.
+Since G1 (2026-07-04) `main` carries a protection ruleset (PR + green `checks` required, no
+force-push, no branch deletion). **Two current limitations** shape how you actually land work
+— be honest about them (§6 has the full state):
+- **No merge queue.** It is unavailable on this *user-owned* repo (the ruleset `merge_queue`
+  rule is rejected; a queue needs an org on Team/Enterprise). Enforcement is ruleset PR +
+  `checks` only — nothing serializes concurrent PRs automatically.
+- **PR creation is currently blocked by the gh token.** `createPullRequest` returns
+  `FORBIDDEN` (the token can read PRs and do admin writes, but not open them). Fixing it
+  needs an interactive `gh auth refresh -s repo` (Ben) — see §5. Until then the PR path
+  cannot be exercised.
+
+**Practical landing path today — attended direct-push under the admin bypass.** Ben and
+agents acting as him are repo admin and have an always-on ruleset bypass, so they push to
+`main` directly (this is also exactly how the on-demand sync pushes). Rebase on
+`origin/main` first; **never force-push `main`.**
+
+```
+git fetch origin && git rebase origin/main && git push origin main
+```
+
+**The intended path once the token is refreshed** (checks gate it; still no queue, so
+serialize by hand if lanes overlap):
 
 ```
 git switch -c <short-branch>
-# ... your commits ...
 git push -u origin <short-branch>
 gh pr create --fill                 # NOT --draft when it's ready to land
-gh pr merge --squash --auto         # queues it; the queue merges once checks pass
+# wait for `checks` green, then:
+gh pr merge --squash                # or --squash --auto (auto-merge on green)
 ```
 
-The queue re-runs `checks` on the `merge_group` ref before merging, so a green PR that goes
-stale behind another merge is re-verified automatically. Rebase your branch on `origin/main`
-if it drifts far; **never force-push `main` itself.** git stays on git-over-SSH; `gh` does the
-PR/queue management (§5).
-
-**The one exception — attended on-demand data syncs.** `node pipeline/sync-fills.mjs` still
-pushes `fills.json`/`positions.json`/`suggestions.jsonl` **directly to `main`**, riding Ben's
-admin ruleset bypass (the attended actor is Ben or an agent acting as him). Deliberate: those
-are pipeline-owned artifacts, the sync is on-demand (no unattended writer exists anymore — the
-20-min `CofferFillsSync` job was eliminated, FILLS-PIPELINE.md §12), and the sync's
-clobber-guard fast-forwards onto a PR-merged `main` before committing. If a manual sync push
-is ever rejected by the ruleset, re-run the sync (the guard reconciles) or land the data via a
-PR like anything else. On a rebase conflict on `fills.json`/`positions.json`, take the remote
-side — those files are pipeline-owned.
+**On-demand data syncs always push direct to `main`** regardless — `node
+pipeline/sync-fills.mjs` writes `fills.json`/`positions.json`/`suggestions.jsonl`, riding the
+admin bypass; the sync is on-demand (no unattended writer exists anymore — the 20-min
+`CofferFillsSync` job was eliminated, FILLS-PIPELINE.md §12), and its clobber-guard
+fast-forwards onto the current `main` before committing. On a rebase conflict on those files,
+take the remote side — they're pipeline-owned.
 
 ## 3. Verify — not done until the runs are green
 
@@ -53,15 +64,14 @@ side — those files are pipeline-owned.
 gh run list -L 3
 ```
 
-- The **`checks`** run on your PR (and its `merge_group` re-run) must reach
-  `completed success` — the queue won't merge otherwise.
-- After the merge, for app-touching changes the **`pages-build-deployment`** run on `main`
-  must too (that's the live-site deploy). Follow one live with `gh run watch <databaseId>`.
+- The **`checks`** run for your commit/PR must reach `completed success`.
+- For app-touching changes the **`pages-build-deployment`** run on `main` must too (that's
+  the live-site deploy). Follow one live with `gh run watch <databaseId>`.
 - Don't call the change done (or end the session) before both are green.
 
 Triage on red:
-- Red on **your PR** → fix forward on the branch; the queue re-verifies. `main` is the
-  deployed app, so nothing lands until the check passes — that's the point of the gate.
+- Red on **your** commit/PR → fix forward immediately; `main` is the deployed app. (Note:
+  an admin direct-push bypasses the required check, so CI runs *after* the push — watch it.)
 - Red on a `fills: sync` commit (an attended data sync that pushed direct to `main`, §2) →
   CI is the guard on those. Investigate the sync before anything else; don't stack a change
   on top of a broken `main`.
@@ -75,11 +85,13 @@ fixtures (`node pipeline/quotecore.test.mjs`), and JSON-parse of `fills.json`/
 
 - **Public repo → public logs.** No PII in output; no secrets in output — and none are
   currently needed anywhere in CI: keep it that way if at all possible.
-- **Nothing that reads `~/.runelite` can run in CI.** The fills sync is permanently a
-  Task Scheduler job on Ben's machine.
+- **Nothing that reads `~/.runelite` can run in CI.** The fills sync runs on Ben's machine
+  on demand (`node pipeline/sync-fills.mjs`) — the scheduled job was eliminated
+  (FILLS-PIPELINE.md §12), but CI still can never see the local logs.
 - **Keep CI seconds-fast.** Cheap invariants only on the hosted runner. A fixture test
   shipped without a CI hook is a wasted fixture — wire new ones into checks.yml.
-- Keep the `merge_group` trigger — it's required for the future merge queue.
+- Keep the `merge_group` trigger — harmless now (no queue on this user-owned repo, §6) but
+  required if the repo ever moves under an org and a merge queue becomes available.
 - A workflow change is a normal change: describe it to Ben, and verify its own run goes
   green after pushing.
 - Ben has a **Mac mini available as a self-hosted runner** — future enhancement for jobs
@@ -88,24 +100,37 @@ fixtures (`node pipeline/quotecore.test.mjs`), and JSON-parse of `fills.json`/
 
 ## 5. gh guardrails
 
-- git operations stay on **git-over-SSH**; `gh` is the API layer only (runs, logs,
-  `gh api`, and PR management once the PR flow lands).
-- **Never run `gh auth setup-git`** — it would hijack git's credential helper onto the
-  gh token. If git ever starts prompting for credentials, check
+- git operations stay on **git-over-SSH**; `gh` is the API layer (runs, logs, `gh api`,
+  ruleset management, and PR management — but PR *creation* is currently token-blocked, §6).
+- **To unblock the PR path:** `gh auth refresh -s repo` (interactive — Ben only; the current
+  token returns `FORBIDDEN` on `createPullRequest` and lacks the `workflow` scope). This is a
+  one-time fix; it does not change git's SSH transport.
+- **Never run `gh auth setup-git`** — it would hijack git's credential helper onto the gh
+  token. If git ever starts prompting for credentials, check
   `git config --get-all credential.helper`.
 
-## 6. PR flow + merge queue — NOW OPERATIVE (G1 landed 2026-07-04)
+## 6. Branch protection as landed by G1 (2026-07-04) — honest state
 
-`main` is protected by a GitHub ruleset requiring a PR + the `checks` status check; a merge
-queue serializes concurrent agent work (the reason G1 existed — parallel subagents kept
-colliding on `main`). `checks.yml` runs on `merge_group`, so the queue re-verifies each PR
-against the just-merged tip.
+`main` carries a GitHub ruleset (id `18520289`, "main protection"): rules = `pull_request`
+(0 approvals — Ben is solo), `required_status_checks` (context `checks`), `non_fast_forward`,
+`deletion`; **bypass = repository-admin role, mode `always`.** The enabling decision (why the
+schedule died, the full dependency inventory) is FILLS-PIPELINE.md §12.
 
-- **Everything lands via PR** (§2), including agent chunk work. The coordinator no longer
-  rebases parallel lanes onto `main` by hand — the queue does the serialization.
-- **Attended data syncs are the sole direct-to-main exception** (§2), riding Ben's admin
-  bypass. No machine/deploy-key bypass identity exists — the schedule that would have
-  needed one was eliminated (FILLS-PIPELINE.md §12).
-- The enabling decision (why the schedule died, the full dependency inventory) is
-  FILLS-PIPELINE.md §12; the ruleset/queue config as landed is recorded there and in the G1
-  commit.
+What actually works vs. what was intended:
+- **Schedule eliminated → on-demand sync: DONE and verified.** No unattended writer to
+  `main`; no machine/deploy-key bypass identity exists.
+- **Admin bypass DONE and verified** — a direct `sync-fills.mjs` push landed on protected
+  `main`, so Ben/agents-as-Ben can push directly (the practical path, §2).
+- **Merge queue: NOT AVAILABLE.** This is a *user-owned* repo; the ruleset `merge_queue` rule
+  is rejected (a queue needs an org on GitHub Team/Enterprise). Enforcement is ruleset PR +
+  `checks` only — no automatic serialization of concurrent PRs. Revisit only if the repo
+  moves under an org.
+- **PR creation: BLOCKED by the current gh token** (`createPullRequest` → `FORBIDDEN`). The
+  token reads PRs and does admin writes but can't open them, and lacks the `workflow` scope a
+  standard `gh auth login` grants. **To enable the PR path, Ben runs `gh auth refresh -s
+  repo` (interactive)**; agents can't do this (no interactive auth). Until then, land via
+  attended direct-push under the admin bypass (§2).
+
+Net: the ruleset scaffolding is in place and the sync-cadence half of G1 is fully live; the
+PR-for-everything flow is available/encouraged but not yet exercisable (token) and not
+queue-serialized (user repo). Don't claim a working merge queue.

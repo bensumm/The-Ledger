@@ -430,9 +430,14 @@ separate machine/deploy-key bypass identity was created.**
   removed, so the machinery is recoverable if a schedule is ever wanted again; the
   **clobber-guard** (`syncMainToRemote` + the remote-tip amend check) still runs on every
   sync and is what keeps a manual sync from clobbering a PR-merged `main`.
-- **`main` is protected by a ruleset** requiring a PR + the `checks` status check; the merge
-  queue serializes concurrent agent work. The on-demand sync pushes attended, riding Ben's
-  admin bypass — see the workflow docs (`/ship`, CLAUDE.md gh section, PLAN.md dispatch
-  model). **M1 must now assume no scheduled PC writer exists:** mobile freshness leans on the
-  Refresh button + (optionally) the stretch in-cloud reconstruction Action, never on a
-  background PC push.
+- **`main` is protected by a ruleset** (id `18520289`) requiring a PR + the `checks` status
+  check (no force-push/deletion), with a repository-admin **always** bypass. Two caveats as
+  landed: **no merge queue** (this is a user-owned repo — the ruleset `merge_queue` rule is
+  rejected; a queue needs an org on Team/Enterprise), and **PR creation is currently blocked
+  by the gh token** (`createPullRequest` → `FORBIDDEN`; fix = `gh auth refresh -s repo`,
+  interactive/Ben-only). So the on-demand sync — and attended work generally — pushes direct
+  to `main` under Ben's admin bypass (verified working); the PR-for-everything flow is the
+  intent once the token is refreshed. See the workflow docs (`/ship` §2/§6, CLAUDE.md gh
+  section, PLAN.md dispatch model). **M1 must now assume no scheduled PC writer exists:**
+  mobile freshness leans on the Refresh button + (optionally) the stretch in-cloud
+  reconstruction Action, never on a background PC push.

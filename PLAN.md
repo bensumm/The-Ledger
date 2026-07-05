@@ -14,11 +14,13 @@ single-file discipline: this doc is both the plan and the scoreboard.
   smoke test for any app-facing change (ES modules don't load over `file://` — use
   `serve.cmd`); `APP_VERSION` bump in `js/state.js` if app behavior changed (skills-only
   changes do NOT bump it — SKILL.md `version:` frontmatter instead); a descriptive commit,
-  then **land via PR + merge queue** (branch → `gh pr create` → `gh pr merge --squash
-  --auto`; `checks` green before it merges — G1, 2026-07-04, `/ship` §2) — and if the
-  change touches the deployed app, watch the post-merge `pages-build-deployment` run to
-  `completed success` (`gh run list -L 1`; CLAUDE.md's gh rules). Prefer exact-string edits
-  that fail loudly.
+  then land it (G1, 2026-07-04: `main` is protected by a PR+`checks` ruleset, but there's no
+  merge queue on this user-owned repo and PR creation is token-blocked for now, so the
+  practical path is **attended direct-push under the admin bypass** — `git fetch && rebase
+  origin/main && push`; the `gh pr create`→`gh pr merge` flow is the intent once `gh auth
+  refresh` lands — see `/ship` §2/§6) — and if the change touches the deployed app, watch the
+  `pages-build-deployment` run to `completed success` (`gh run list -L 1`). Prefer
+  exact-string edits that fail loudly.
 - Repo is public — no PII in any tracked file or commit message.
 - NEVER edit RuneLite's own `exchange.log`; the writable source is the sibling
   `coffer-manual.log`.
@@ -37,14 +39,14 @@ single-file discipline: this doc is both the plan and the scoreboard.
 - Ben's main session is the **coordinator**. It hands one chunk ID per **Opus subagent**
   (Agent tool). Subagent brief template: *"Read CLAUDE.md fully, then PLAN.md's Executor
   rules and chunk `<ID>`. Execute the chunk, validate per the rules, commit."*
-- **All chunks land via PR + merge queue** (G1, 2026-07-04): branch → `gh pr create` →
-  `gh pr merge --squash --auto`; the queue re-runs `checks` on the `merge_group` ref and
-  merges when green, so concurrent lanes **serialize at the queue instead of conflicting on
-  `main`**. **Chunks running in parallel use worktree isolation** (Agent `isolation:
-  "worktree"`); the coordinator no longer hand-rebases finished results onto `main` — each
-  lane opens its own PR and the queue orders them. Never force-push `main`. (`gh` now does
-  PR/queue management as well as API reads/deploy checks — see CLAUDE.md's gh rules and
-  `/ship`.)
+- **Landing (G1, 2026-07-04):** `main` is protected by a PR+`checks` ruleset with a
+  repository-admin **always** bypass. Because there's **no merge queue** (user-owned repo —
+  unavailable) and **PR creation is currently token-blocked** (`createPullRequest` →
+  `FORBIDDEN`, needs `gh auth refresh -s repo`), chunks land today by **attended direct-push
+  under the admin bypass**; the coordinator still **hand-rebases each finished lane onto
+  `main`** and pushes (parallel lanes use worktree isolation, `isolation: "worktree"`).
+  Never force-push `main`. The PR-per-lane flow (which would let the queue serialize lanes)
+  is the intent once the token is refreshed *and* the repo has a queue — see `/ship` §2/§6.
 - **Parallel-safety rule:** chunks may run concurrently only when their primary-file sets
   are disjoint (listed per chunk). Same-file-different-region overlaps are acceptable
   (git merges them); same-function overlaps are not — sequence those.
