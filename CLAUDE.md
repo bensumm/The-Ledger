@@ -163,6 +163,16 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   Falling watchlist items ARE shown there, with the falling warning.
 - Screens: `screen.mjs` prints one table per niche, adding a Grade + `Score gp/d` column to
   the canonical layout (grade cutoffs in `rating.mjs` are placeholders pending validation).
+- **Time-of-day context on every price recommendation (Ben, 2026-07-05).** Whenever a
+  specific buy or sell price is being suggested (scan pick, per-item quote follow-up,
+  position reprice, ladder rung), run a `nightlows.mjs` window read for the relevant
+  local-hours window (e.g. `--window 21-0` for a late-evening bid) and read the level
+  against the last ~14 same-window lows — daily movement patterns are standing context,
+  not an overnight-only tool. It caught the bludgeon evening bounce, re-priced the jaw
+  bid to the level its window actually touches, and exposed the webweaver 3-day repricer
+  (2026-07-05). Honesty rule applies: ~14 nights is a small sample; "touched ≠ filled";
+  it's a guide that shifts a price a few ticks, never a guarantee that overrides the
+  band/regime read.
 **How to generate these tables — each canonical ask maps to a skill or an exact command.
 These scripts exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e`
 fetch for a market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the
