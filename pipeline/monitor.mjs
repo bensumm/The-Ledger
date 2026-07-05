@@ -15,10 +15,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseJsonLine, buildEvents, reconstruct } from './lib/reconstruct.mjs';
+import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct } from './lib/reconstruct.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs'; // shared log discovery + open-offer semantics
 import { breakEven } from '../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
 import { loadMapping } from './lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
+import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -40,7 +41,36 @@ const terminal = rows.filter(r => /BOUGHT|SOLD|CANCELLED/.test(r.state) && (now-
 const ago = t => { const m = Math.round((now-ep(t))/60000); return m<=0?'just now':m+'m ago'; };
 const gp = n => Number(n).toLocaleString('en-US');
 
+// held positions reconstructed IN-MEMORY from the live log (shared FIFO). Computed up here so the
+// LH2 restart-blindness heuristic (below) can weigh held inventory against visible offers in the
+// header. LH1: validate the slot state machine (drops impossible same-slot double-terminals loudly)
+// before the reconstruction, same as the pipeline does before its fills.json merge. parseJsonLine
+// emits { remove } markers for REMOVE tombstone lines; the monitor doesn't apply tombstones, so drop
+// those markers before sequencing.
+const { events } = validateSlotTransitions(buildEvents(logLines.map(parseJsonLine).filter(r => r && r.remove === undefined)), { warn: false });
+const pos = reconstruct(events);
+let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) }));
+// Manual overrides. The Exchange Logger drops some SOLD events during fast same-second flipping, so
+// the log can hold more buys than sells → the reconstruction over-counts held (confirmed: seeds
+// logged 57 bought / 52 sold, but real held was 0). No FIFO fixes missing input, so
+// held-override.json lets you reconcile to ground truth:
+//   { "<itemId>": "<ISO-or-unix since>" }  — "I hold 0 of this as of <since>; count only its log
+//   fills AFTER that time." Set it when you know a position is phantom; new trades after <since>
+//   still track normally.
+let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE,'.cache','held-override.json'),'utf8')); } catch {}
+for (const [idStr, since] of Object.entries(ov)) {
+  const id = +idStr, sinceTs = typeof since==='number' ? since : Math.floor(Date.parse(since)/1000);
+  held = held.filter(h => h.item !== id);
+  for (const o of reconstruct(events.filter(e => e.itemId===id && e.ts >= sinceTs)).open)
+    held.push({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) });
+}
+
 console.log(`log freshness: newest line ${staleMin}m ago (wall-clock)`);
+// LH2: restart-blindness heads-up — a stale log with held inventory but no visible offers is the
+// post-restart blind state (the plugin re-emits nothing until a slot next changes). No behavioral
+// change; just names the failure so a session doesn't chase "vanished" offers.
+const blind = blindWarningLine({ staleMin, activeOfferCount: active.length, openLotCount: held.length });
+if (blind) console.log(blind);
 console.log('=== ACTIVE OFFERS (open now) ===');
 if (!active.length) console.log('(none — no live buy/sell offers)');
 for (const r of active) {
@@ -58,25 +88,8 @@ for (const r of terminal) {
 // FIFO (reconstruct.mjs). Real-time and correct — no positions.json lag, and collapseOffers
 // dedups re-logged/duplicate BOUGHT lines so the held count never phantoms. ---
 console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = shared tax-capped breakEven) ===');
-// parseJsonLine emits { remove } markers for REMOVE tombstone lines (the shared chunk-8 chain);
-// the monitor doesn't apply tombstones, so drop those markers before sequencing.
-const events = buildEvents(logLines.map(parseJsonLine).filter(r => r && r.remove === undefined));
-const pos = reconstruct(events);
-let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) }));
-// Manual overrides. The Exchange Logger drops some SOLD events during fast same-second
-// flipping, so the log can hold more buys than sells → the reconstruction over-counts held
-// (confirmed: seeds logged 57 bought / 52 sold, but real held was 0). No FIFO fixes missing
-// input, so held-override.json lets you reconcile to ground truth:
-//   { "<itemId>": "<ISO-or-unix since>" }  — "I hold 0 of this as of <since>; count only
-//   its log fills AFTER that time." Set it when you know a position is phantom; new trades
-//   after <since> still track normally.
-let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE,'.cache','held-override.json'),'utf8')); } catch {}
-for (const [idStr, since] of Object.entries(ov)) {
-  const id = +idStr, sinceTs = typeof since==='number' ? since : Math.floor(Date.parse(since)/1000);
-  held = held.filter(h => h.item !== id);
-  for (const o of reconstruct(events.filter(e => e.itemId===id && e.ts >= sinceTs)).open)
-    held.push({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) });
-}
+// (held + held-override reconciliation are computed near the top so the LH2 blindness check can use
+// the held count in the header; see that block.)
 if (Object.keys(ov).length) console.log('(held-override active — reconciling: ' + Object.keys(ov).map(id=>nm(+id)).join(', ') + ')');
 if (!held.length) console.log('(no open positions)');
 for (const h of held) {

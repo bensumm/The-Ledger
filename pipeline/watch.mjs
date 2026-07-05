@@ -54,6 +54,7 @@ import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
+import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -383,6 +384,13 @@ async function main() {
   if (targets.length) counts.push(`${targets.length} target${targets.length > 1 ? 's' : ''}`);
   console.log(`# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`);
   for (const a of alerts) console.log(`  ⚠ ${a.msg}`);
+  // LH2: restart-blindness heads-up — a stale log with held inventory but no visible offers is the
+  // post-restart blind state (the plugin re-emits nothing until a slot next changes). No behavioral
+  // change; just names the failure so a session doesn't chase "vanished" offers.
+  if (!TARGETS_ONLY && offersInfo && !offersInfo.err) {
+    const blind = blindWarningLine({ staleMin: offersInfo.staleMin, activeOfferCount: asks.length + bids.length, openLotCount: heldSpecs.length });
+    if (blind) console.log(`  ${blind}`);
+  }
 
   // ---- TABLE: numbers only (one row per item/offer), notes carry the words ----
   // Cell conventions match the canonical table v2 (CLAUDE.md): Quick/Optimistic are
