@@ -391,20 +391,9 @@ export function quoteCells(name, row){
     {t:(row.regime&&row.regime.ok)?(cap(row.regimeLabel)+' '+(row.regime.driftPct>=0?'+':'')+row.regime.driftPct.toFixed(0)+'%'):'—'}
   ];
 }
-/* markdown table for the chunk-3 pipeline scripts (built now so both sides share quoteCells).
-   rows: [{name, row}]
-   NOTE (chunk 10.2): still UNADOPTED by quote.mjs/screen.mjs — deliberately. Both consumers
-   APPEND columns to the standard set (quote.mjs --positions → Held@/Break-even/Verdict;
-   screen.mjs → Grade + Score gp/d), and this helper hard-codes QUOTE_HEADERS + the fixed cell
-   order, so it can't express an extended table. The scripts instead share the generic
-   pipeline/cli.mjs mdTable(headers, rows) + stdCells(name, row) split. Kept as the documented
-   fixed-column shared-API form for a future consumer that wants exactly the standard table. */
-export function quoteMarkdown(rows){
-  const head='| '+QUOTE_HEADERS.join(' | ')+' |';
-  const sep ='| '+QUOTE_HEADERS.map(()=>'---').join(' | ')+' |';
-  const body=(rows||[]).map(({name,row})=>'| '+quoteCells(name,row).map(cellText).join(' | ')+' |');
-  return [head,sep,...body].join('\n');
-}
+/* NOTE: a fixed-column quoteMarkdown() helper was removed by A1 (dead — quote.mjs/screen.mjs
+   both APPEND columns and share pipeline/cli.mjs's mdTable + stdCells split instead). The
+   structured quoteCells/cellText split above is the real shared table API. */
 
 /* ============================================================================================
    S2 — POSTURE HELPERS (overnight vs active screening). A SEPARATE, appended block: these are new,

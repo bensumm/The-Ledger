@@ -18,7 +18,7 @@ export function svgLine(values,opt){
   let minP=pts[0],maxP=pts[0]; pts.forEach(p=>{if(p.v<minP.v)minP=p; if(p.v>maxP.v)maxP=p;});
   const labels=opt.labels||[]; let xl='';
   (opt.ticks||[]).forEach(t=>{ if(t<n) xl+='<text class="axislbl" x="'+X(t)+'" y="'+(H-6)+'" text-anchor="middle">'+(labels[t]!=null?labels[t]:t)+'</text>'; });
-  const cls=opt.eq?'eline':'pline', acls=opt.eq?'earea':'parea';
+  const cls='pline', acls='parea';
   let base=''; if(opt.baseline!=null){ const by=Y(opt.baseline); base='<line class="baseln" x1="'+padL+'" x2="'+(W-padR)+'" y1="'+by+'" y2="'+by+'"/>'; }
   let refl=''; refs.forEach(r=>{ const y=Y(r.v).toFixed(1); refl+='<line class="'+(r.cls||'refln')+'" x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y+'" y2="'+y+'"/>'+(r.label?'<text class="axislbl reflbl" x="'+(W-padR)+'" y="'+(+y-2)+'" text-anchor="end">'+r.label+'</text>':''); });
   // optional "now" vertical marker (T2: hourly charts) at column index opt.nowIdx

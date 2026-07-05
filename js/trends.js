@@ -74,25 +74,21 @@ export async function archiveWatchlist(force){
 }
 export function bestWindow(arr,L,mode){ const n=arr.length; let best=null; for(let s=0;s<n;s++){ let sum=0; for(let k=0;k<L;k++) sum+=arr[(s+k)%n]; const avg=sum/L; if(!best||(mode==='min'?avg<best.avg:avg>best.avg)) best={start:s,end:(s+L-1)%n,avg}; } return best; }
 export function analyseBroad(series){
-  const trend=[]; let we={p:0,c:0,v:0}, wd={p:0,c:0,v:0};
+  const trend=[];
   series.forEach(pt=>{ const hi=pt.avgHighPrice, lo=pt.avgLowPrice, mid=(hi&&lo)?(hi+lo)/2:(hi||lo); if(!mid) return;
     trend.push(mid);
-    const vol=(pt.highPriceVolume||0)+(pt.lowPriceVolume||0), day=new Date(pt.timestamp*1000).getDay();
-    if(day===0||day===6){ we.p+=mid; we.c++; we.v+=vol; } else { wd.p+=mid; wd.c++; wd.v+=vol; }
   });
   if(!trend.length) return null;
   const days=series.length?Math.max(1,Math.round((series[series.length-1].timestamp-series[0].timestamp)/86400)):0;
-  return { trend, days, wePrice:we.c?we.p/we.c:null, wdPrice:wd.c?wd.p/wd.c:null, weVol:we.c?we.v/we.c:0, wdVol:wd.c?wd.v/wd.c:0 };
+  return { trend, days };
 }
 export function analyseHourly(series){
   const hp=Array(24).fill(0), hc=Array(24).fill(0), hv=Array(24).fill(0);
-  let we={p:0,pc:0,v:0,vc:0}, wd={p:0,pc:0,v:0,vc:0};
   series.forEach(pt=>{
     const hi=pt.avgHighPrice, lo=pt.avgLowPrice; let price=(hi&&lo)?(hi+lo)/2:(hi||lo); if(!price) return;
     const vol=(pt.highPriceVolume||0)+(pt.lowPriceVolume||0);
-    const dt=new Date(pt.timestamp*1000), h=dt.getHours(), day=dt.getDay();
+    const dt=new Date(pt.timestamp*1000), h=dt.getHours();
     hp[h]+=price; hc[h]++; hv[h]+=vol;
-    if(day===0||day===6){ we.p+=price; we.pc++; we.v+=vol; we.vc++; } else { wd.p+=price; wd.pc++; wd.v+=vol; wd.vc++; }
   });
   const hourPrice=hp.map((s,i)=>hc[i]?s/hc[i]:null);
   const hourVol=hv.map((s,i)=>hc[i]?s/hc[i]:0);
@@ -103,16 +99,13 @@ export function analyseHourly(series){
   const swingPct=(hourPrice[maxH]-hourPrice[minH])/meanPrice*100;
   let volPeak=0; hourVol.forEach((v,i)=>{ if(v>hourVol[volPeak])volPeak=i; });
   const days=series.length?Math.max(1,Math.round((series[series.length-1].timestamp-series[0].timestamp)/86400)):0;
-  return {hourPriceF,hourPrice,hourVol,meanPrice,minH,maxH,swingPct,volPeak,days,
-    wePrice:we.pc?we.p/we.pc:null, wdPrice:wd.pc?wd.p/wd.pc:null, weVol:we.vc?we.v/we.vc:0, wdVol:wd.vc?wd.v/wd.vc:0};
+  return {hourPriceF,hourPrice,hourVol,meanPrice,minH,maxH,swingPct,volPeak,days};
 }
 /* --- seasonal decomposition: price ~ level x hour-factor x weekday-factor --- */
 export function median(arr){ if(!arr||!arr.length) return null; const s=arr.slice().sort((a,b)=>a-b), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
 export const sideVal=(p,side)=>side==='low'?p.avgLowPrice:p.avgHighPrice;
 export const localDayKey=ts=>{ const d=new Date(ts*1000); return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); };
-export const weekKey=ts=>Math.floor(ts/604800);
 export const hourOf=ts=>new Date(ts*1000).getHours();
-export const dowOf=ts=>new Date(ts*1000).getDay();
 // detrend each point by its period's median, then volume-weighted trimmed mean of the ratios per bucket
 export function seasonalFactors(points, side, bucketFn, bucketN, periodKey){
   const groups={};
@@ -126,7 +119,6 @@ export function seasonalFactors(points, side, bucketFn, bucketN, periodKey){
   return { factor:acc.map(b=>b.w?b.s/b.w:null), counts:acc.map(b=>b.n) };
 }
 export const hourFactors=(pts,side)=>seasonalFactors(pts,side,hourOf,24,localDayKey);
-export const weekdayFactors=(pts,side)=>seasonalFactors(pts,side,dowOf,7,weekKey);
 export function factorStats(factor){
   const v=factor.filter(x=>x!=null); if(v.length<3) return {flat:true,swingPct:0,z:0};
   const mean=v.reduce((a,b)=>a+b,0)/v.length, sd=Math.sqrt(v.reduce((a,b)=>a+(b-mean)*(b-mean),0)/v.length);
@@ -143,10 +135,6 @@ export function buildPlan(points, s6h, it){
   o.nowGross=(it.high-tax(it.high))-it.low; o.nowRoi=it.low?o.nowGross/it.low*100:0;
   o.nowSpread=it.high-it.low; o.nowTax=tax(it.high);                 // the plan IS the live spread vs the tax it must clear
   o.nowProfitable=o.nowGross>0;
-  // weekday effect (buy side) from 6h layer
-  if(s6h&&s6h.length>6){ const wf=weekdayFactors(s6h,'low').factor;
-    const we=[0,6].map(d=>wf[d]).filter(v=>v!=null), wd=[1,2,3,4,5].map(d=>wf[d]).filter(v=>v!=null);
-    if(we.length&&wd.length){ const wem=we.reduce((a,b)=>a+b,0)/we.length, wdm=wd.reduce((a,b)=>a+b,0)/wd.length; o.weBuyDiscPct=(wdm-wem)/wdm*100; } }
   // 3-month drift
   if(s6h&&s6h.length>9){ const t=Math.floor(s6h.length/3);
     const older=median(s6h.slice(0,t).map(p=>p.avgLowPrice).filter(Boolean)), recent=median(s6h.slice(-t).map(p=>p.avgLowPrice).filter(Boolean));

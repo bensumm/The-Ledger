@@ -35,8 +35,8 @@ export async function loadGuide(force){
   if(!force){
     const gTs=await sGet('snap_guide_ts');
     if(gTs && (now()-gTs)<GUIDE_TTL){
-      const g=await sGet('snap_guide'), src=await sGet('snap_guide_src');
-      if(g){ STATE.GUIDE=g; STATE.guideSource=src||'cache'; STATE.guideTs=gTs; STATE.guideHasMomentum=(src==='dump'); setHealth('guide','ok',''); return; }
+      const g=await sGet('snap_guide');
+      if(g){ STATE.GUIDE=g; setHealth('guide','ok',''); return; }
     }
   }
   // opportunistic: bulk dump (richest: price+last+volume) — usually CORS-blocked in a browser
@@ -49,8 +49,7 @@ export async function loadGuide(force){
       const id=(+o.id)||(+k); if(!id) continue;
       g[id]={price:o.price??null, last:o.last??null, volume:o.volume??null}; n++; }
     if(!n) throw new Error('empty dump');
-    STATE.GUIDE=g; STATE.guideSource='dump'; STATE.guideTs=now(); STATE.guideHasMomentum=true;
-    await sSet('snap_guide',g); await sSet('snap_guide_ts',STATE.guideTs); await sSet('snap_guide_src','dump');
+    STATE.GUIDE=g; await sSet('snap_guide',g); await sSet('snap_guide_ts',now());
     setHealth('guide','ok',''); logEvent('info','guide','guide via bulk dump ('+n+' items, incl. volume & prior price)');
     return;
   }catch(e){ logEvent('info','guide','bulk dump unavailable ('+(((e&&e.message)||e))+') — using wiki guide module'); }
@@ -62,8 +61,7 @@ export async function loadGuide(force){
     const g={}; let n=0;
     for(const k in raw){ const id=+k, p=raw[k]; if(!id||typeof p!=='number') continue; g[id]={price:p, last:null, volume:null}; n++; }
     if(!n) throw new Error('empty module');
-    STATE.GUIDE=g; STATE.guideSource='module'; STATE.guideTs=now(); STATE.guideHasMomentum=false;
-    await sSet('snap_guide',g); await sSet('snap_guide_ts',STATE.guideTs); await sSet('snap_guide_src','module');
+    STATE.GUIDE=g; await sSet('snap_guide',g); await sSet('snap_guide_ts',now());
     setHealth('guide','ok',''); logEvent('info','guide','guide via wiki module ('+n+' items, price; momentum fetched per-item)');
     return;
   }catch(e){ logEvent('error','guide','guide module failed: '+(((e&&e.message)||e))); }

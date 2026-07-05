@@ -95,7 +95,6 @@
   .primarybtn:hover{background:var(--gold2)}
   .ghostbtn{background:var(--oak2); color:var(--parch2); border:1px solid var(--line2); border-radius:7px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer}
   .ghostbtn.sm{padding:7px 11px; font-size:11px}
-  .backup{display:flex; gap:6px; align-self:center}
   .ghostbtn:hover{border-color:var(--gold); color:var(--parch)}
   .slotsmini{display:flex; align-items:center; gap:6px; background:var(--oak2); border:1px solid var(--line2); border-radius:7px; padding:5px 10px; font-size:12px; color:var(--parch2)}
   .slotsmini input{width:42px; background:var(--oak); border:1px solid var(--line2); color:var(--parch); border-radius:5px; padding:5px 6px; font-family:'IBM Plex Mono',monospace; text-align:center; font-size:13px}
@@ -183,24 +182,15 @@
   .act.danger:hover{border-color:var(--loss); color:var(--loss)}
   .sectlabel{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin:22px 2px 9px}
 
-  .insight{background:linear-gradient(180deg,var(--oak3),var(--oak2)); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:16px; font-size:14px; line-height:1.65; color:var(--parch2)}
-  .insight b{color:var(--gold)} .insight .hl{color:var(--parch); font-weight:600}
   .chartgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px}
   .chartcard{background:var(--oak2); border:1px solid var(--line); border-radius:12px; padding:14px 16px}
   .ctitle{font-size:12px; font-weight:600; color:var(--parch); margin-bottom:10px; letter-spacing:.02em}
   .ctitle .csub{color:var(--muted); font-weight:400; font-size:11px; margin-left:4px}
   .ccap{font-size:11px; color:var(--muted); margin-top:8px}
-  .wkrow{display:flex; gap:12px}
-  .wkbox{flex:1; background:var(--oak); border:1px solid var(--line); border-radius:9px; padding:12px}
-  .wkbox .lbl{font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
-  .wkbox .b{font-family:'IBM Plex Mono',monospace; font-size:17px; margin-top:6px; color:var(--parch)}
-  .wkbox .s{font-size:11px; color:var(--muted); margin-top:3px}
   svg.chart{width:100%; height:auto; display:block}
   .axislbl{fill:var(--muted); font-size:9px; font-family:'IBM Plex Mono',monospace}
   .pline{fill:none; stroke:var(--gold); stroke-width:2}
   .parea{fill:rgba(230,181,74,.08)}
-  .eline{fill:none; stroke:var(--gain); stroke-width:2}
-  .earea{fill:rgba(126,197,111,.08)}
   .baseln{stroke:var(--line2); stroke-width:1; stroke-dasharray:3 3}
   .dotmin{fill:var(--gain)} .dotmax{fill:var(--loss)}
   .vbar{fill:var(--line2)} .vbar.peak{fill:var(--gold)}
@@ -239,7 +229,6 @@
   .sbox .sk{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
   .sbox .sv{font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--parch); margin-top:6px}
   .sbox .ss{font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4}
-  .cgain{color:var(--gain)} .closs{color:var(--loss)}
   .sreason{margin-top:14px; padding-top:13px; border-top:1px solid var(--line2); font-size:13.5px; line-height:1.7; color:var(--parch2)}
   .sreason b{color:var(--parch)} .sreason .hl{color:var(--gold); font-weight:600} .sreason i{color:var(--parch2)}
   /* T2 sectioned plan blurb — small labeled blocks at the .stitle scale; plain blocks, not collapsibles */
