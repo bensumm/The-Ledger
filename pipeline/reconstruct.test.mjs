@@ -90,18 +90,20 @@ ok('buy→sell FIFO close (partial second lot, correct after-tax realised)', () 
   assert.deepEqual(open.map(o => [o.itemId, o.qty, o.buyEach]), [[100, 5, 110]], 'lot B remainder stays open');
 });
 
-// --- 2. cancel-to-EMPTY inference ----------------------------------------------------------
-// A buy placed, never filled, slot drops straight to EMPTY (no explicit CANCELLED line) →
-// buildEvents retroactively marks it cancelled; a filled=0 cancel produces no position.
-ok('cancel-to-EMPTY inference (placed → EMPTY → cancelled, no phantom lot)', () => {
+// --- 2. EMPTY derives NO event (inference removed 2026-07-05) -------------------------------
+// A buy placed, never filled, slot drops straight to EMPTY (no explicit CANCELLED line):
+// the offer's line stays as-logged (NOT retro-marked cancelled — the logout-burst incident:
+// an all-slots-EMPTY snapshot while offers were live in-game fabricated phantom cancels).
+// Either way a filled=0 offer produces no position.
+ok('EMPTY after a placed offer derives no event and no phantom lot', () => {
   const { events } = runPipeline([
     raw({ state: 'BUYING', slot: 0, item: 200, time: '12:00:00', offerSize: 10, priceEach: 50 }),
     raw({ state: 'EMPTY', slot: 0, item: 0, time: '12:10:00' }),
   ]);
   assert.equal(events.length, 1);
-  assert.equal(events[0].state, 'cancelled', 'the sequence-aware fallback marks the un-completed offer cancelled');
+  assert.notEqual(events[0].state, 'cancelled', 'no retro-cancel from EMPTY — a running plugin always writes a real terminal');
   const { closed, open, unmatched } = reconstruct(events);
-  assert.deepEqual([closed, open, unmatched], [[], [], []], 'a filled=0 cancel yields no closed/open/unmatched');
+  assert.deepEqual([closed, open, unmatched], [[], [], []], 'a filled=0 offer yields no closed/open/unmatched');
 });
 
 // --- 3. WITHDRAWN consume ------------------------------------------------------------------

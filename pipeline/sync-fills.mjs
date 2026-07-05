@@ -70,8 +70,9 @@ const PROBE = args.has('--probe'), DRY = args.has('--dry');
  * Imported at the top of this file:
  *   parseJsonLine — one line -> normalized event (incl. the REMOVE tombstone
  *     marker + the WITHDRAW/BANK -> 'withdraw'/'banked' type mapping),
- *   buildEvents   — sequence raw parses -> events (incl. the sequence-aware
- *     cancel-inference fallback for offers that drop straight to EMPTY),
+ *   buildEvents   — sequence raw parses -> events (EMPTY lines are consumed as
+ *     slot boundaries only; the old cancel-to-EMPTY inference was removed
+ *     2026-07-05 after a logout EMPTY-burst fabricated phantom cancels),
  *   reconstruct   — collapseOffers + FIFO matchTrades (incl. the banked/withdraw
  *     branches + banked-aware open-lot keying),
  *   eventId       — the sha1 content-hash id (contract shared with js/fillslog.js).
@@ -167,7 +168,7 @@ function main() {
       }
     }
     console.log('\nIf PARSED shows empty:true for real trade lines, or wrong itemId/price/qty/filled/spent, fix parseJsonLine()/pick() names to match RAW.');
-    console.log('Note: cancellation is resolved across lines by buildEvents(), not visible per-line here — a cancelled offer\'s last line will show state:"partial"/"placed" here even though it ends up "cancelled" in fills.json.');
+    console.log('Note: a cancelled offer is only "cancelled" if the log has an explicit CANCELLED_* line — EMPTY never implies a cancel (inference removed 2026-07-05); an offer whose terminal was never logged keeps its last logged state.');
     return;
   }
 

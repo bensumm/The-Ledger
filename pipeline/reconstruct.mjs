@@ -126,24 +126,25 @@ export function parseJsonLine(line) {
   };
 }
 
-// Sequences raw per-line parses into final trade events, resolving
-// cancellations: if a slot's last trade event never reached 'complete'
-// before the slot goes EMPTY (or a different item appears in the same
-// slot), that last event is retroactively marked 'cancelled'.
+// Sequences raw per-line parses into final trade events. EMPTY lines are consumed as
+// slot-boundary markers only — they NEVER derive an event.
+//
+// The cancel-to-EMPTY inference that used to live here (offer → EMPTY with no terminal ⇒
+// retro-mark 'cancelled') was REMOVED 2026-07-05: a logout wrote an all-slots-EMPTY burst
+// while four offers were live in-game, and the inference fabricated four phantom cancels
+// (poisoning fills.json/positions.json — the "vanished offers" incident). A RUNNING plugin
+// always writes an explicit terminal (BOUGHT/SOLD/CANCELLED_*) for a real event, so an
+// EMPTY without one is never evidence of anything but "GE widgets not loaded". Plugin-OFF
+// gaps are handled the honest way — manual injection / tombstones in coffer-manual.log —
+// not by inferring events from absence. (P/L is unaffected by the removal: matchTrades
+// only consumes filled>0 offers, and collapseOffers closes an offer on the next
+// different-item event in the slot regardless of a 'cancelled' marking.)
 export function buildEvents(rawLinesParsed) {
   const sorted = [...rawLinesParsed].sort((a, b) => a.ts - b.ts);
-  const lastBySlot = new Map(); // slot -> last trade event object (mutated in place)
   const events = [];
   for (const r of sorted) {
-    const prev = lastBySlot.get(r.slot);
-    const slotChangedItem = prev && !r.empty && r.itemId !== prev.itemId;
-    if ((r.empty || slotChangedItem) && prev && prev.state !== 'complete' && prev.state !== 'cancelled') {
-      prev.state = 'cancelled';
-    }
-    if (r.empty || slotChangedItem) lastBySlot.delete(r.slot);
     if (r.empty) continue;
     events.push(r);
-    lastBySlot.set(r.slot, r);
   }
   for (const e of events) delete e.empty;
   return events;
