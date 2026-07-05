@@ -72,6 +72,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | **3** | **L1** (action logging — solo first, it instruments the final shapes) → **G1** (PR flow + merge queue — investigation then flip; deliberately BEFORE the two big chunks: M1's sync design depends on the cadence decision, and M1/N1 then land through the new PR flow) → **M1** (mobile parity) → **N1** (push notifications). M1 and N1 have disjoint file sets and *may* run in parallel if desired; both are large. G1's *investigation* may start any time; the workflow flip lands only between waves, never mid-wave. |
 | **4** | Repo-review cleanup (2026-07-05 three-agent audit): **D1** (doc reconciliation — docs only, parallel with anything) ∥ **R1→P1** (reconstruct test harness FIRST, then the snapshot dedupe lands with its fixtures in that harness) ∥ **X2→X1** (dead-scheduler excision, then pipeline dedup — both touch `sync-fills.mjs`/shared pipeline files, so sequenced) ∥ **A1→A2→A3** (app dead-code sweep → fetch/helper unification → ledger split; same-file chain, one agent) ∥ **BE1** (break-even tax-cap fix — `quotecore.js` + fixtures, disjoint from A-lane's files until A2; run before or parallel-early). **W1** (analysis cadence) and **CI1** (browser smoke in CI) are independent, any time. |
 | **5** | UX round + scan-yield audit (Ben, 2026-07-05): **rebase this branch onto `origin/main` first** (main gained skills commits + the `nightlows.mjs`→`windowrange.mjs` rename after the Wave-4 base — D1's doc edits may conflict). Then **TB1→LU1→FX1** (one app lane, sequential — shared `ui.js`/`ledger.js`/`styles.css`/`index.html`: reusable sortable table FIRST, then the Ledger UX rework that consumes it, then the Finder/Signals fixes) ∥ **NY1** (scan niche-yield audit — pipeline/analysis only) ∥ **SY1** (sync-fills doctrine — skills only). |
+| **6** | Business-logic tests + organization (Ben, 2026-07-05; two-Opus investigation first): **OR1** (docs-only org map — trivial, any time) → **OR2** (pipeline/lib/ split — mechanical but atomic, lands BEFORE the new tests so they're written at final paths) → **TD1** (must-have money tests) → **TD2** (extractions + the tests they unlock — the only app-file chunk, APP_VERSION bump) → **TD3** (nice-to-have test sweep). One lane, sequential — TD chunks all touch checks.yml and the test files. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -110,6 +111,11 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | NY1 | Scan niche-yield audit (spread/rising value; S1.3 spread-drop decision) | `suggestions.jsonl` (read), analysis only | ✅ report delivered 2026-07-05 (analysis-only, no repo change). Evidence (~11.5h window, ~2 independent non-band samples — small, stated): rising 46% grade-D + 1 exclusive ≥B+ item + 0 exclusive flips → drop candidate; churn 84% band-overlap, never beats band's ceiling → demote/fold candidate; spread weakest grades BUT surfaced the one niche-exclusive real flip (+147k) → keep pending multi-day data (S1.3 stays deferred). Scarcity = concentration (2–6 NEW names per publish), not row count. **Ben decides drops** — nothing changed in `screen.mjs`/`/scan`. |
 | SY1 | Strategic sync-fills points in workflow skills | `.claude/skills/{morning,positions,overnight,scan}/SKILL.md` | ✅ `563da75` (positions 1.9 / morning 1.4 / scan 1.5 / overnight 1.7 — sync-first everywhere + MAIN-checkout caveat; /scan was the real gap) |
 | NY2 | Niche ruling: rising pool floor, churn off-by-default, spread stays, thin-cap anomaly | `pipeline/screen.mjs`, `rating.mjs` (maybe), `/scan` skill, docs | ✅ `f982a31` (pipeline+skills only, no APP_VERSION; /scan 1.6). NY2.1 `risingPoolFloor` (big-ticket OR liquid) on the rising pool; NY2.2 `--mode all`=band/spread/rising (churn explicit-only); NY2.3 S1.3 stays deferred (spread keeps); NY2.4 = DOC bug (liqClass 'thin' volDay<100 vs gp-flow admission thin limitVol<50 — no code gap), documented in rating.mjs/suggestlog.mjs |
+| OR1 | Org map docs (nightlows drift, root-artifact/shared-module tables, test convention) | `README.md`, `CLAUDE.md` | queued |
+| OR2 | pipeline/lib/ split (8 imported-only libs out of the CLI bag) | `pipeline/lib/*` (moved), ~11 importing files, `.github/workflows/checks.yml`, docs | queued (after OR1) |
+| TD1 | Must-have money tests (format, rating, reconstruct tax-cap/partial-fill) | new `pipeline/format.test.mjs`, `rating.test.mjs`, `reconstruct.test.mjs` (extend), `checks.yml` | queued (after OR2) |
+| TD2 | Testability extractions + unlocked tests (ledgercore, table comparator, alerts guard) | new `js/ledgercore.js`, `js/ledger.js`, `js/table.js`, `pipeline/alerts.mjs`, new tests, `checks.yml` | queued (after TD1) |
+| TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `windowread.test.mjs`, `offers.test.mjs`, `cli.test.mjs`, `checks.yml` | queued (after TD2) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -812,6 +818,131 @@ that workflow skills don't consistently refresh before reading positions.
   sync pushes to `main` (pipeline-owned artifacts, admin bypass) — skills running in a
   worktree/branch context must run it from the MAIN checkout (`C:\dev\The-Ledger`), not
   the worktree, or skip it and say so.
+
+---
+
+## Wave 6 — business-logic tests + organization (Ben, 2026-07-05; two-Opus investigation 2026-07-05)
+
+Two read-only Opus passes fed this wave: an org-structure survey and a business-logic
+coverage inventory. Their load-bearing findings are baked into the chunks; don't re-survey.
+
+**Test house style (applies to every TD chunk, verbatim):** plain `node x.test.mjs`, no
+framework — copy the shape of `pipeline/quotecore.test.mjs`/`reconstruct.test.mjs` exactly:
+a top banner comment listing the BUSINESS REQUIREMENTS the file pins (one line each, written
+for an agent deciding "does my change break a requirement?"), `node:assert/strict`, a
+`ok(name, fn)` runner printing ` ✓ <requirement>` per check, synthetic fixtures only (never
+live data), non-zero exit on any failure, `All N checks passed.` footer. Tests are colocated
+next to their subject with the `.test.mjs` suffix — NEVER a `tests/` dir (CI + /ship
+reference explicit paths; adjacency beats grouping for agents). **Wiring rule: tests are not
+auto-discovered — every new test file must be added to `.github/workflows/checks.yml` in the
+same commit, or CI silently never runs it.**
+
+### OR1 — Org map, docs only (survey Tier A)
+
+- **OR1.1** Fix live doc drift: `pipeline/nightlows.mjs` no longer exists (renamed
+  `windowrange.mjs` + lib `windowread.mjs`); README.md:92 and the CLAUDE.md environment/
+  script bullets still point at it. Grep `nightlows` repo-wide and reconcile.
+- **OR1.2** Add a "map of the repo" section (README, with a CLAUDE.md pointer if useful) as
+  two scannable tables: (a) **root data artifacts** split into app-fetched/ROOT-LOCKED
+  (`fills.json`, `positions.json`, `screen.json`, `watchlist.json`, `mobile-fills.log` —
+  same-origin fetches + the phone's hardcoded contents-API paths; moving them is a
+  coordinated app+pipeline+deployed-phone change) vs pipeline-only/movable (`alerts.json`,
+  `suggestions.jsonl`, gitignored `outcomes.json`); (b) **shared logic modules**
+  `js/quotecore.js` + `js/format.js` flagged "served to the browser AND imported by 10/5
+  pipeline files — edits ripple to node scripts + CI; run `pipeline/*.test.mjs` after".
+- **OR1.3** Write the test-location convention down (the house-style block above, condensed):
+  `*.test.mjs` colocated next to its subject; new tests wired into checks.yml; no `tests/`
+  dir ever. Docs only, no APP_VERSION.
+- **Explicitly rejected** (survey Tier C — don't reopen): moving root data artifacts to
+  `data/`; moving `quotecore.js`/`format.js` out of `js/`; renaming the two `marketfetch`
+  twins (the dir disambiguates); a `tests/` dir.
+
+### OR2 — pipeline/lib/ split (survey Tier B1+B2; mechanical, atomic, lands before TD)
+
+`pipeline/` is a flat bag of four kinds of file; the CLI-vs-imported-lib distinction has no
+structural signal (the exec bit lies — `offers.mjs` is +x but pure lib). Split it:
+
+- **OR2.1** `git mv` the 8 imported-only libs → `pipeline/lib/`: `reconstruct.mjs`,
+  `offers.mjs`, `positions.mjs`, `marketfetch.mjs`, `cli.mjs`, `rating.mjs`,
+  `suggestlog.mjs`, `windowread.mjs`. CLI entrypoints, tests, `smoke.mjs`, and the two .md
+  docs stay at `pipeline/`.
+- **OR2.2** Atomic import rewrite in the same commit: (i) ~30 `./x.mjs` → `./lib/x.mjs`
+  lines across the 9 CLIs + 2 test files; (ii) each moved lib's `../js/*` → `../../js/*`;
+  (iii) lib→lib edges stay `./` inside `lib/`; (iv) **checks.yml syntax-sweep glob** — the
+  `for f in js/*.js pipeline/*.mjs` loop misses `pipeline/lib/*.mjs`; extend it (this is the
+  easy-to-miss one from the survey); (v) README/CLAUDE.md inventories; grep
+  `.claude/skills/*/SKILL.md` for lib paths (skills mostly name CLIs — verify).
+- **OR2.3** (B2, riding along since `pipeline/` is open) Consolidate gitignored pipeline
+  scratch under `pipeline/.cache/`: `mapping.cache.json`, `.alerts-state.json`,
+  `held-override.json` — single-line path constants in `marketfetch.mjs`/`alerts.mjs` +
+  `.gitignore`. Skip any file if a non-repo writer hardcodes its path (verify first).
+- **OR2.4** Acceptance: `node --check` sweep INCLUDING `pipeline/lib/`; run both test files;
+  run every CLI's `--help`/no-arg path (a missed relative import fails only at runtime, not
+  at `node --check`); run `node pipeline/smoke.mjs`; revert any `suggestions.jsonl`
+  pollution. Pipeline-only, no APP_VERSION.
+
+### TD1 — Must-have money tests (coverage inventory "must-have"; after OR2 so paths are final)
+
+- **TD1.1 `pipeline/format.test.mjs`** — the money primitives have NO direct test.
+  Requirements to pin: tax=0 under 50gp (GE exemption); tax=`floor(p·0.02)` in the normal
+  band (floor, never round); tax caps at 5m (what BE1 depends on); `netMargin`/
+  `netMarginQty` return null on a missing price (never a fabricated 0-margin); `parseGp`
+  honors k/m/b + commas, passes numbers through, garbage→NaN.
+- **TD1.2 `pipeline/rating.test.mjs`** — grade honesty (the S1 lesson). Requirements: a
+  gp-flow-thin item never grades above A- regardless of score (`THIN_GRADE_CAP`);
+  `capGrade` clamps down, never promotes; `gradeFor` monotonic (higher score never a worse
+  letter); `riskMult` = product of the five sub-factors and `score=round(expGpDay·riskMult)`;
+  `momFactor` punishes breakdown (0.45) harder than breakup (0.9). Header notes the cutoff
+  NUMBERS are placeholders — assert structure/ordering, not that a specific gp/d = A.
+- **TD1.3 Extend `pipeline/reconstruct.test.mjs`** — two money-path gaps: a big-ticket close
+  taxes at the 5m cap per unit inside `matchTrades` (not `floor(sell·0.02)`);
+  `collapseOffers` folds an incremental partial-fill sequence (same offer, rising cumulative
+  qty/worth) into ONE lot at final totals. Reuse the existing `raw()`/`runPipeline()` harness.
+- **TD1.4** Wire the two new files into checks.yml. Pipeline-only, no APP_VERSION.
+
+### TD2 — Testability extractions + the tests they unlock (the only app chunk — APP_VERSION bump)
+
+Three pinned modules hold real rules; each fix is a minimal MOVE/guard, not a refactor:
+
+- **TD2.1 `js/ledgercore.js`** — `periodKey` + `groupTrades` are pure Date/Map math but
+  `ledger.js`'s imports pin them to the DOM. Move them (~15 lines) to a new pure module;
+  `ledger.js` re-imports. Then **`pipeline/ledgercore.test.mjs`**: E1's near-midnight
+  day-boundary behavior finally gets a COMMITTED fixture (local 23:55 buckets to that day,
+  not UTC-rolled; week buckets split at local Monday; groupTrades aggregates qty/realised
+  per item). This is day-boundary money bucketing — highest-value extraction.
+- **TD2.2 `js/table.js`** — factor the comparator out of `makeSortable` into an exported
+  pure `compareRows(column, dir)`-style fn (construction currently calls
+  `getElementById`+`sGet`, pinning the module). **`pipeline/table.test.mjs`**: null→-Infinity
+  sinks missing fields; string vs numeric columns; the `invert` risk-grade quirk (lower
+  riskIndex sorts as better); direction flip.
+- **TD2.3 `pipeline/alerts.mjs`** — top-level `await runPositions()` executes (and FETCHES)
+  on import; wrap in the same `import.meta.url === pathToFileURL(argv[1])` guard
+  `screen.mjs` uses (a latent footgun regardless of tests), export `positionSignal`. Then
+  **`pipeline/alerts.test.mjs`**: transitions fire only on CHANGE (same verdict twice = one
+  alert); quiet hours suppress position/price but never fills (the N1 contract).
+- **TD2.4** Behavior of the app must be byte-identical (pure moves): chromium smoke + spot
+  checks on Ledger buckets and Finder/Watchlist sort. checks.yml wiring for the three new
+  test files. APP_VERSION bump (served files changed).
+
+### TD3 — Nice-to-have test sweep (after TD2; cheap, bounded)
+
+- **TD3.1** Extend `pipeline/quotecore.test.mjs`: computeQuote's ordering clamp
+  (optBuy≤quickBuy≤quickSell≤optSell — the direct guard on the 2026-07-03 base-mixing
+  incident) asserted first-class; `mom` derivation from the PRE-clamp comparison
+  (breakdown/breakup/clean); falling regime caps optSell at instabuy (the 0.20.0 rule);
+  `regimeLabel` flips at ±5%; `momCell` strength arrows at `MOM_STRONG_PCT`.
+- **TD3.2 `pipeline/windowread.test.mjs`**: `quantLow`/`quantHigh` = level touched on ≥p of
+  nights (feeds /overnight fill-realism); `inWindow` wraps midnight (22→6); `windowStats`
+  buckets a cross-midnight point to the morning it ends on.
+- **TD3.3 `pipeline/offers.test.mjs`**: latest-line-per-slot wins; only BUYING/SELLING
+  surface as active (Ben's committed-capital definition).
+- **TD3.4 `pipeline/cli.test.mjs`** (+suggestlog): cli `parseGp` sign/suffix/passthrough
+  (subtly different from format's — pin both); `median` even/odd/empty, input not mutated;
+  `liqClassOf` boundaries at 100/1000 (the NY2.4 vocabulary).
+- **TD3.5** checks.yml wiring. Pipeline-only, no APP_VERSION. **Flagged, not built:** the
+  screen gate stack (`gateCandidates`) is the highest-value UNtestable logic left — it
+  reads argv-derived module constants; testing it needs a thresholds-as-argument extraction.
+  Goes to Discovered as a candidate for a later chunk, not smuggled into this one.
 
 ---
 
