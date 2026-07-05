@@ -14,12 +14,22 @@
  *
  * Usage:
  *   node sync-fills.mjs            manual run: parse -> merge -> new commit -> push
+ *   node sync-fills.mjs --local    parse -> merge -> write fills/positions/offers.json,
+ *                                  ZERO git (no fetch/ff/commit/push). Desk-side freshness
+ *                                  for the localhost app (LW1); the watch-log.mjs daemon calls
+ *                                  the same regenerate() core in-process.
  *   node sync-fills.mjs --probe    print first raw lines of each log file
  *                                  (use this ONCE to verify field mapping)
  *   node sync-fills.mjs --dry      parse + merge + report, no git push
  *   --log-dir <dir> / --repo-dir <dir>   override the source log dir / output
  *                                  repo dir — for isolated fixture tests only
  *                                  (never point a test at the real dirs).
+ *
+ * --local NOTE: local mode does NOT fold un-pulled phone writes — mobile-fills.log is only as
+ * fresh as the local checkout (no fetch/ff happens on the local path). Folding a phone-pushed
+ * mobile-fills.log is the ATTENDED sync's job (syncMainToRemote ff before regeneration). That is
+ * acceptable: local mode serves desk-side freshness only, which never needs the phone's un-pulled
+ * lines. The daemon inherits the same property.
  *
  * Manual-line vocabulary (coffer-manual.log, slot 8 — see PLAN.md chunk 1):
  *   BOUGHT / SOLD                  normal manual fills (add-manual-fill.mjs / the app)
@@ -40,6 +50,10 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkS
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+// LW1: offers.json emitter. readOfferRows reads the exchange-logger dir raw; offersSnapshot builds
+// the flat live-offer snapshot; nameLookupFromCache resolves display names offline (best-effort).
+import { readOfferRows, offersSnapshot, nameLookupFromCache } from './lib/offers.mjs';
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
@@ -54,6 +68,7 @@ const LOG_DIR   = argVal('--log-dir') || join(homedir(), '.runelite', 'exchange-
 const REPO_DIR  = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';    // your git clone
 const FILLS_REL = 'fills.json';                                    // raw event stream, repo-relative
 const POSITIONS_REL = 'positions.json';                            // reconstructed trades/positions (app auto-populates Ledger from this)
+const OFFERS_REL = 'offers.json';                                  // LW1: flat snapshot of live GE offers (both modes; app renders w/ staleness banner)
 const MOBILE_REL = 'mobile-fills.log';                             // M1: phone-written source log at the repo ROOT (NOT in LOG_DIR) — read, never written here
 const MAX_AGE_DAYS = 180;   // drop events older than this
 const MAX_EVENTS   = 20000; // hard cap on stored events
@@ -61,7 +76,7 @@ const GIT_PUSH  = true;     // set false to stage commits without pushing
 /* =================================================================== */
 
 const args = new Set(process.argv.slice(2));
-const PROBE = args.has('--probe'), DRY = args.has('--dry');
+const PROBE = args.has('--probe'), DRY = args.has('--dry'), LOCAL = args.has('--local');
 
 /* ---------------------------------------------------------------------
  * ADAPTER + reconstruction now live in reconstruct.mjs (chunk 8) — the ONE
@@ -81,14 +96,14 @@ const PROBE = args.has('--probe'), DRY = args.has('--dry');
  * ------------------------------------------------------------------- */
 function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched }); } // ignore generatedAt
 
-function readLogFiles() {
-  if (!existsSync(LOG_DIR)) {
-    console.error(`Log dir not found: ${LOG_DIR}\nIs the Exchange Logger plugin installed and has it logged at least one trade?`);
+function readLogFiles(logDir = LOG_DIR) {
+  if (!existsSync(logDir)) {
+    console.error(`Log dir not found: ${logDir}\nIs the Exchange Logger plugin installed and has it logged at least one trade?`);
     process.exit(1);
   }
-  return readdirSync(LOG_DIR)
+  return readdirSync(logDir)
     .filter(f => /\.(log|txt|json)$/i.test(f))
-    .map(f => join(LOG_DIR, f))
+    .map(f => join(logDir, f))
     .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
 }
 
@@ -146,36 +161,30 @@ function syncMainToRemote() {
   process.exit(1);
 }
 
-function main() {
-  const files = readLogFiles();
+// ---------------------------------------------------------------------------
+// regenerate() — the reusable, git-FREE regeneration core (LW1).
+//
+// Reads all log sources (exchange-logger files in logDir + the repo-root mobile-fills.log +
+// coffer-manual.log, which lives inside logDir), merges with the existing fills.json, reconstructs
+// positions, and — when `write` is true — writes fills.json / positions.json / offers.json to
+// repoDir. Performs ZERO git operations: the multi-writer syncMainToRemote() guard and the
+// commit/push all live in the attended main() wrapper, NEVER here. This is exactly what
+// `sync-fills.mjs --local` runs and what pipeline/watch-log.mjs imports and calls in-process, so a
+// phone/PC never risks an unattended write to main (FILLS-PIPELINE.md §12 invariant).
+//
+// logDir/repoDir override the module defaults so an isolated fixture test (offers emitter, no-git
+// guard) can point at a temp dir with synthetic logs and NEVER touch the real ~/.runelite or repo.
+// Returns a stats object; write decisions mirror the attended path byte-for-byte (fills only when
+// events changed, positions only when positions changed, offers only when the live-offer set changed).
+export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR } = {}) {
+  const files = readLogFiles(logDir);
   // M1: mobile-fills.log lives at the REPO ROOT (tracked, appended by the phone via the GitHub
-  // contents API), NOT in LOG_DIR — pull it in as an extra source so mobile trades flow through
+  // contents API), NOT in logDir — pull it in as an extra source so mobile trades flow through
   // the same reconstruction. Same line vocabulary as coffer-manual.log; its slot-9 lines sequence
   // independently of the desktop/CLI slot-8 manuals. Only READ here — the phone owns writes to it.
-  // (The file is TRACKED, so it exists on disk in every checkout; the ff in syncMainToRemote below
-  // only updates its CONTENTS, read by the parse loop afterwards — `sources` membership is stable.)
-  const mobilePath = join(REPO_DIR, MOBILE_REL);
-  const sources = existsSync(mobilePath) ? [...files, mobilePath] : files;
-  if (!sources.length) { console.log('No log files found in ' + LOG_DIR + ' (and no ' + MOBILE_REL + ')'); return; }
-
-  if (PROBE) {
-    for (const f of sources.slice(-3)) {
-      console.log('\n=== ' + f + ' (last 10 lines) ===');
-      const lines = readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean).slice(-10);
-      for (const l of lines) {
-        console.log('RAW    :', l.slice(0, 300));
-        console.log('PARSED :', JSON.stringify(parseJsonLine(l)));
-      }
-    }
-    console.log('\nIf PARSED shows empty:true for real trade lines, or wrong itemId/price/qty/filled/spent, fix parseJsonLine()/pick() names to match RAW.');
-    console.log('Note: a cancelled offer is only "cancelled" if the log has an explicit CANCELLED_* line — EMPTY never implies a cancel (inference removed 2026-07-05); an offer whose terminal was never logged keeps its last logged state.');
-    return;
-  }
-
-  // Multi-writer guard: get local main onto origin/main BEFORE reading logs (so a phone-pushed
-  // mobile-fills.log is on disk and read below, and we merge onto the freshest committed events)
-  // and before any commit/push. Skipped on --dry (no git side effects). Aborts on divergence.
-  if (!DRY) syncMainToRemote();
+  const mobilePath = join(repoDir, MOBILE_REL);
+  const mobilePresent = existsSync(mobilePath);
+  const sources = mobilePresent ? [...files, mobilePath] : files;
 
   // parse everything
   let rawLines = 0, parsedLines = 0;
@@ -195,7 +204,7 @@ function main() {
   for (const e of events) e.id = eventId(e);
 
   // merge with existing fills.json (keeps events whose source logs rotated away)
-  const fillsPath = join(REPO_DIR, FILLS_REL);
+  const fillsPath = join(repoDir, FILLS_REL);
   let prior = [];
   if (existsSync(fillsPath)) {
     try { prior = JSON.parse(readFileSync(fillsPath, 'utf8')).events || []; }
@@ -213,7 +222,8 @@ function main() {
     .filter(e => e.ts >= cutoff && !removeTargets.has(e.id))
     .sort((a, b) => a.ts - b.ts);
   if (merged.length > MAX_EVENTS) merged = merged.slice(-MAX_EVENTS);
-  if (removeTargets.size) console.log(`${removeTargets.size} tombstone target(s); ${[...byIdMap.values()].filter(e => removeTargets.has(e.id)).length} event(s) removed`);
+  const removeTargetCount = removeTargets.size;
+  const removedCount = removeTargetCount ? [...byIdMap.values()].filter(e => removeTargets.has(e.id)).length : 0;
 
   // Compare against prior *content* (events only), not the full JSON blob —
   // generatedAt always differs run-to-run, so comparing the whole blob would
@@ -224,15 +234,77 @@ function main() {
   const eventsChanged = JSON.stringify(merged) !== JSON.stringify(prior);
 
   // reconstruct trades/positions from the full merged history
-  const positionsPath = join(REPO_DIR, POSITIONS_REL);
+  const positionsPath = join(repoDir, POSITIONS_REL);
   const pos = reconstruct(merged);
   let priorPosSig = null;
   if (existsSync(positionsPath)) { try { priorPosSig = positionsSig(JSON.parse(readFileSync(positionsPath, 'utf8'))); } catch { /* rebuild */ } }
   const positionsChanged = positionsSig(pos) !== priorPosSig;
-  const changed = eventsChanged || positionsChanged;
+
+  // LW1 offers.json — live GE offer slots (buy/sell resting), read from the exchange-logger dir
+  // ONLY (mobile/manual booked fills are not live offers). Best-effort + offline: a missing/
+  // unreadable log dir yields an empty-offers snapshot rather than throwing. Written in BOTH modes.
+  const offersPath = join(repoDir, OFFERS_REL);
+  let offerRows = [];
+  try { offerRows = readOfferRows(logDir); } catch { /* dir gone → empty offers */ }
+  const offersSnap = offersSnapshot(offerRows, nameLookupFromCache());
+  let priorOffers = null;
+  if (existsSync(offersPath)) { try { priorOffers = JSON.stringify(JSON.parse(readFileSync(offersPath, 'utf8')).offers); } catch { /* rewrite */ } }
+  const offersChanged = JSON.stringify(offersSnap.offers) !== priorOffers; // ignore generatedAt (like positions)
+
+  const changed = eventsChanged || positionsChanged || offersChanged;
   const realisedTotal = pos.closed.reduce((s, t) => s + t.realised, 0);
 
-  console.log(`${sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${rawLines} lines (${parsedLines} valid trade line(s)), ${parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
+  if (write) {
+    if (eventsChanged) writeFileSync(fillsPath, JSON.stringify({
+      app: 'the-coffer-fills', version: 1, generatedAt: new Date().toISOString(), events: merged
+    }));
+    if (positionsChanged) writeFileSync(positionsPath, JSON.stringify(pos));
+    if (offersChanged) writeFileSync(offersPath, JSON.stringify(offersSnap));
+  }
+
+  return { sources, mobilePath, mobilePresent, rawLines, parsedLines, parsed, merged, pos,
+    offersSnap, eventsChanged, positionsChanged, offersChanged, changed, realisedTotal, removeTargetCount, removedCount };
+}
+
+function main() {
+  if (PROBE) {
+    const files = readLogFiles();
+    const mobilePath = join(REPO_DIR, MOBILE_REL);
+    const sources = existsSync(mobilePath) ? [...files, mobilePath] : files;
+    if (!sources.length) { console.log('No log files found in ' + LOG_DIR + ' (and no ' + MOBILE_REL + ')'); return; }
+    for (const f of sources.slice(-3)) {
+      console.log('\n=== ' + f + ' (last 10 lines) ===');
+      const lines = readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean).slice(-10);
+      for (const l of lines) {
+        console.log('RAW    :', l.slice(0, 300));
+        console.log('PARSED :', JSON.stringify(parseJsonLine(l)));
+      }
+    }
+    console.log('\nIf PARSED shows empty:true for real trade lines, or wrong itemId/price/qty/filled/spent, fix parseJsonLine()/pick() names to match RAW.');
+    console.log('Note: a cancelled offer is only "cancelled" if the log has an explicit CANCELLED_* line — EMPTY never implies a cancel (inference removed 2026-07-05); an offer whose terminal was never logged keeps its last logged state.');
+    return;
+  }
+
+  // --local: regenerate + write fills/positions/offers.json, but NO git of any kind (no fetch/ff,
+  // no commit, no push, no syncMainToRemote). Desk-side freshness for the localhost app.
+  if (LOCAL) {
+    const r = regenerate({ write: true });
+    console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
+    console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
+    console.log(`[local] wrote fills/positions/offers as needed — NO git (desk-side freshness only).`);
+    return;
+  }
+
+  // Multi-writer guard: get local main onto origin/main BEFORE reading logs (so a phone-pushed
+  // mobile-fills.log is on disk and read below, and we merge onto the freshest committed events)
+  // and before any commit/push. Skipped on --dry (no git side effects). Aborts on divergence.
+  if (!DRY) syncMainToRemote();
+
+  const r = regenerate({ write: !DRY });
+  const { merged, pos, eventsChanged, positionsChanged, changed, realisedTotal, mobilePath, removeTargetCount, removedCount } = r;
+  if (removeTargetCount) console.log(`${removeTargetCount} tombstone target(s); ${removedCount} event(s) removed`);
+
+  console.log(`${r.sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);
   console.log(`positions: ${pos.closed.length} closed lot(s) (realised ${realisedTotal >= 0 ? '+' : ''}${realisedTotal} after tax), ${pos.open.length} open, ${pos.unmatched.length} unmatched sell(s)${positionsChanged ? '' : ' (no change)'}`);
   if (DRY) {
     for (const e of merged) {
@@ -249,10 +321,7 @@ function main() {
   }
   if (!changed) return;
 
-  if (eventsChanged) writeFileSync(fillsPath, JSON.stringify({
-    app: 'the-coffer-fills', version: 1, generatedAt: new Date().toISOString(), events: merged
-  }));
-  if (positionsChanged) writeFileSync(positionsPath, JSON.stringify(pos));
+  // fills.json / positions.json / offers.json already written by regenerate({ write: true }) above.
 
   // commit + push
   //
@@ -264,13 +333,14 @@ function main() {
   // clobbering a phone push or a PR-merged main — a plain push here is safely rejected on any
   // race it didn't already catch.
   try {
-    // Commit set: fills + positions always; screen.json (PLAN-2 C1 published scan) and
-    // suggestions.jsonl (O1 append-only suggestions ledger) only when they exist on disk — same
-    // add-only-these-files discipline, never a blanket `git add -A`. When present but unchanged
-    // they simply contribute nothing to the porcelain status below.
+    // Commit set: fills + positions always; offers.json (LW1 live-offer snapshot), screen.json
+    // (PLAN-2 C1 published scan) and suggestions.jsonl (O1 append-only suggestions ledger) only
+    // when they exist on disk — same add-only-these-files discipline, never a blanket `git add -A`.
+    // When present but unchanged they simply contribute nothing to the porcelain status below.
     const SCREEN_REL = 'screen.json';
     const SUGGEST_REL = 'suggestions.jsonl';
     const commitFiles = [FILLS_REL, POSITIONS_REL];
+    if (existsSync(join(REPO_DIR, OFFERS_REL))) commitFiles.push(OFFERS_REL);
     if (existsSync(join(REPO_DIR, SCREEN_REL))) commitFiles.push(SCREEN_REL);
     if (existsSync(join(REPO_DIR, SUGGEST_REL))) commitFiles.push(SUGGEST_REL);
     const fileArgs = commitFiles.join(' ');
@@ -302,4 +372,7 @@ function main() {
   }
 }
 
-main();
+// Invocation guard (matches alerts.mjs / TD2): main() runs ONLY when this file is executed
+// directly, so importing regenerate()/syncMainToRemote() (the watch-log.mjs daemon, the fixture
+// tests) never triggers a real sync — no reading the live log, and crucially NO git side effects.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
