@@ -19,7 +19,12 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.47.0';
+export const APP_VERSION='0.48.0';
+// LW2: true only when the app is served from a local dev host (serve.cmd → localhost). Used to
+// gate the local live-refresh poll + freshness stamp; on the deployed origin (bensumm.github.io)
+// it's false and every LW2 behavior stays off (M1 banner + Refresh button remain the mechanism).
+// Guarded so importing state.js outside a browser (never today, but cheap) doesn't throw.
+export const IS_LOCALHOST=(typeof location!=='undefined' && (location.hostname==='localhost' || location.hostname==='127.0.0.1'));
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality
 // multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
 // (These become Settings-tab editable next pass.)
@@ -48,6 +53,8 @@ export const STATE = {
   GUIDE: {},
   watchlist: [], trades: [], pinned: [], bankroll: 300_000_000, slots: 6, strategy: 'balanced',
   fillsHidden: [], fillsUnmatched: [], fillsTs: 0,   // auto-populated ledger from positions.json (RuneLite fills)
+  offers: [], offersTs: 0,   // LW2: live GE offer snapshot from offers.json (localhost poll) — data home for the future Watch tab
+
   fillsPending: [],   // optimistic rows for manual entries just written to coffer-manual.log, shown until the next sync absorbs them
   catById: {}, catByName: {},   // full-catalog indices (every mapped item, no flip floor)
   cofferCollapsed: false,

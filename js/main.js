@@ -2,7 +2,7 @@ import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, 
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
 import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist, finderSort } from './ui.js';
-import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync } from './ledger.js';   // A3: ledger + fills-write cluster
+import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync, startLocalPoll } from './ledger.js';   // A3: ledger + fills-write cluster; LW2: localhost live-refresh poll
 import { savePat } from './github.js';
 import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
@@ -89,4 +89,5 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   renderGhSync();
   await loadAll();
   loadRepoWatchlist();   // S3: union repo watchlist.json into STATE.watchlist (in-memory, post-mapping)
+  startLocalPoll();      // LW2: localhost only — poll positions.json/offers.json every ~30s for the local watch-log daemon's rewrites (no-op on the deployed origin)
 })();

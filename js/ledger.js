@@ -7,7 +7,7 @@
    stays the single coordination point and calls renderLedger here. A3 was a PURE MOVE — no
    logic changed. `realised`, `renderCoffer`, `FILLS_STALE_MS` and `fmtAge` stay in ui.js
    (shared with the Coffer/Scan surfaces) and are imported back here. */
-import { STATE, sSet, logEvent, setHealth } from './state.js';
+import { STATE, sSet, logEvent, setHealth, IS_LOCALHOST } from './state.js';
 import { tax, netMarginQty, fmt, fmtP, parseGp, now, pad2, sgn } from './format.js';
 import { resolveItem, resolveId } from './market.js';
 import { openTrends } from './trends.js';
@@ -261,6 +261,11 @@ export function renderFillsMeta(){
    FILLS_STALE_MS / fmtAge stay in ui.js (shared with the Coffer + Scan staleness surfaces). */
 export function renderFillsFresh(){
   const el=document.getElementById('fillsFresh'); if(!el) return;
+  // LW2: on localhost the live poll keeps the book fresh, so #fillsFresh hosts the compact
+  // "book synced" stamp (the single freshness surface here) instead of the M1 re-fetch banner —
+  // the two never double-banner. On the deployed origin IS_LOCALHOST is false and the M1 banner
+  // below is the mechanism, byte-identical to before.
+  if(IS_LOCALHOST){ renderLocalStamp(el); return; }
   const btn='<button id="refreshPositions" class="ghostbtn sm" type="button">↻ Refresh positions</button>';
   if(!STATE.fillsTs){
     el.className='fillsfresh';
@@ -278,6 +283,69 @@ export async function refreshPositions(){
   const rb=document.getElementById('refreshPositions'); if(rb){ rb.disabled=true; rb.textContent='Refreshing…'; }
   await syncFills();          // re-fetch positions.json same-origin; syncFills() re-renders the ledger + coffer
   renderFillsFresh();
+}
+
+/* LW2: localhost live-refresh. When served from a dev host (serve.cmd → localhost) the
+   pipeline/watch-log.mjs daemon rewrites positions.json/offers.json locally within ~10s of a
+   RuneLite log change; this poll picks those rewrites up with NO keystrokes. On the deployed
+   origin (bensumm.github.io) IS_LOCALHOST is false → startLocalPoll() is a no-op and none of
+   this runs (the M1 banner + Refresh-positions button remain the mechanism there).
+   Change is detected purely by generatedAt; only a CHANGE re-runs the existing M1 merge/render
+   (syncFills — we do NOT build a second merge path). Overlapping ticks are skipped. */
+const LOCAL_POLL_MS=30000;              // ~30s cadence (daemon debounce is ~10s, so ≤~40s end-to-end)
+const LOCAL_STALE_MS=10*60*1000;        // stamp goes stale past ~10 min with no fresh sync
+let localPollInFlight=false, localPollTimer=null;
+// Fetch offers.json same-origin (cache-busted like syncFills' positions.json). Stashes the flat
+// snapshot on STATE for the future Watch tab; on failure we keep the last-known offers.
+async function fetchOffers(){
+  try{
+    const r=await fetch('offers.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    const o=await r.json();
+    if(!o || o.app!=='the-coffer-offers') return;
+    STATE.offers=Array.isArray(o.offers)?o.offers:[];
+    STATE.offersTs=o.generatedAt?Math.floor(Date.parse(o.generatedAt)/1000):0;
+  }catch(e){ /* keep last-known offers; positions.generatedAt still drives the stamp */ }
+}
+async function pollLocal(){
+  if(localPollInFlight) return;         // skip this tick if the previous fetch is still running
+  localPollInFlight=true;
+  try{
+    // Peek positions.generatedAt cheaply; only re-run the (heavier) M1 merge if it actually moved.
+    let posTs=null;
+    try{
+      const r=await fetch('positions.json?t='+Date.now(),{cache:'no-store'});
+      if(r.ok){ const p=await r.json(); if(p && p.app==='the-coffer-positions') posTs=p.generatedAt?Math.floor(Date.parse(p.generatedAt)/1000):0; }
+    }catch(e){ /* transient; try again next tick, keep last state */ }
+    const offBefore=STATE.offersTs;
+    await fetchOffers();
+    const posChanged=posTs!==null && posTs!==STATE.fillsTs;
+    const offChanged=STATE.offersTs!==offBefore;
+    if(posChanged || offChanged) logEvent('info','system','local watcher: '+(posChanged?'positions.json':'offers.json')+' changed — refreshing');
+    if(posChanged) await syncFills();   // reuse the M1 merge/render path (re-fetches positions.json same-origin)
+    renderFillsFresh();                 // always tick the stamp (age + offer count); cheap
+  }finally{ localPollInFlight=false; }
+}
+export function startLocalPoll(){
+  if(!IS_LOCALHOST || localPollTimer) return;   // deployed origin → no polling at all
+  localPollTimer=setInterval(pollLocal, LOCAL_POLL_MS);
+  fetchOffers().then(renderFillsFresh);         // seed the offer count immediately (positions already fetched by init's syncFills)
+}
+/* LW2: the localhost freshness stamp — one line, LOCAL time (repo convention), stale-colored
+   past ~10 min. "book synced" = positions.json's generatedAt (STATE.fillsTs), the moment the
+   local daemon last regenerated the book; the offer count is a minimal live indicator (no Watch
+   tab in this chunk). Reuses the .fillsfresh/.warn classes (M1) so styling stays in styles.css. */
+function renderLocalStamp(el){
+  const nOff=(STATE.offers||[]).length, offTxt=' · <b>'+nOff+'</b> open offer'+(nOff===1?'':'s');
+  if(!STATE.fillsTs){
+    el.className='fillsfresh';
+    el.innerHTML='<span class="mini">Local watcher active — waiting for the first positions.json sync (run <b>node pipeline/watch-log.mjs</b>).</span>';
+    return;
+  }
+  const d=new Date(STATE.fillsTs*1000), hhmm=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const stale=(Date.now()-STATE.fillsTs*1000)>LOCAL_STALE_MS;
+  el.className='fillsfresh'+(stale?' warn':'');
+  el.innerHTML='<span class="mini">book synced <b>'+hhmm+'</b>'+offTxt+(stale?' — no update in 10+ min; is the watcher running?':'')+'</span>';
 }
 /* M1 GitHub-sync settings panel (the mobile equivalent of “Link fills log…”). Never shows the
    token — only whether one is saved and which repo it targets. */
