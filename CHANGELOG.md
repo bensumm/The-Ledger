@@ -39,7 +39,7 @@ suggestions) and the phone (`mobile-fills.log`, via the GitHub contents API) —
 file sets, so a phone push only ever moves `origin/main` *ahead*. The guard fast-forwards local
 main onto the moved remote BEFORE reading logs (so the phone's line is read this run) and lands a
 **fresh commit** on top (never amend/force over the phone's commit; the scheduler-era `--auto`
-amend path stays dead, §12). A genuine **divergence** now **aborts loudly (exit 1)** instead of
+amend path was later excised in chunk X2, §12). A genuine **divergence** now **aborts loudly (exit 1)** instead of
 warn-and-continue — under the single-writer contract it's a structural bug to reconcile by hand,
 not to force through. `main()` reads repo-root `mobile-fills.log` as an extra source (it is NOT in
 `LOG_DIR`); slot 9 keeps mobile provenance distinct from desktop/CLI slot-8 manuals; the PC only

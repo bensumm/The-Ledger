@@ -92,8 +92,9 @@ Claude is **not** in the runtime loop. The pipeline is plugin → file → git �
 7. ~~Register a Task Scheduler job~~ **— SUPERSEDED 2026-07-04 (G1, see §12).** The
    scheduled `CofferFillsSync` job was eliminated; **sync is now on-demand only** — run
    `node pipeline/sync-fills.mjs` at session start (the skills do this) or when you want a
-   manual push. The `--auto` amend/force-push flag was the scheduler's mechanism and is now
-   dead code (kept, commented as scheduler-era, in `sync-fills.mjs`). Git auth is via SSH
+   manual push. The `--auto` amend/force-push flag was the scheduler's mechanism and was
+   **excised** 2026-07-05 (chunk X2) — git history is the recovery story if a schedule is
+   ever wanted again. Git auth is via SSH
    (already working, `ssh -T git@github.com`), so no PAT/credential-manager setup is needed.
    *(Historical: the job ran `node sync-fills.mjs --auto` every ~20 min, amending its own
    rolling commit; that whole apparatus is gone — see §12 for why and what replaced it.)*
@@ -294,8 +295,9 @@ Not yet built — planned as the next tool feature, roughly in order:
       `node sync-fills.mjs --auto`, amending its own rolling commit + force-pushing every
       20 min. An "at logon" trigger was blocked by `Access is denied` in this environment
       and never pursued. The whole job was deleted with `schtasks /Delete /TN CofferFillsSync
-      /F` when G1 landed; `fills.json`/`positions.json` now update only when a session or
-      Ben runs the sync.)*
+      /F` when G1 landed; the `run-fills-sync.vbs`/`.cmd` wrappers and the `--auto` branch were
+      later excised (chunk X2, 2026-07-05); `fills.json`/`positions.json` now update only when a
+      session or Ben runs the sync.)*
 - [x] Sell-tax gross-vs-net question answered empirically and recorded here (§5) —
       `spent`/`worth` is gross, not post-tax. Also surfaced that execution price can
       differ from the quoted offer price even on a full fill.
@@ -332,10 +334,10 @@ detail is authoritative there; the operational rules below are the single home.
   `CofferFillsSync` Task Scheduler job that ran `wscript.exe pipeline\run-fills-sync.vbs`
   every 20 min was **eliminated**; there is no longer any unattended writer to `main`. Run
   `node pipeline/sync-fills.mjs` at session start (the session skills do this automatically)
-  or whenever a manual push is wanted. *(Historical: if the job were ever re-created, a moved
-  pipeline file would need the task re-registered — `schtasks /Delete` + `/Create` — because
-  the task path is not kept in sync with the repo. The `run-fills-sync.vbs`/`.cmd` wrapper
-  scripts remain in `pipeline/` for that possibility but are unused.)*
+  or whenever a manual push is wanted. *(Historical: if a schedule is ever wanted again, it
+  would be rebuilt from scratch — the `run-fills-sync.vbs`/`.cmd` wrappers and the `--auto`
+  amend/force-push branch were excised in chunk X2, 2026-07-05; git history holds the old
+  machinery.)*
 
 ### Duplicate terminal lines — snapshot re-emission (diagnosed 2026-07-05)
 The Exchange Logger occasionally writes a second, identical terminal line (BOUGHT/SOLD)
@@ -443,13 +445,15 @@ separate machine/deploy-key bypass identity was created.**
 
 **Consequences / what this changes:**
 - The Task Scheduler job `CofferFillsSync` is **deleted** (`schtasks /Delete /TN
-  CofferFillsSync /F`). The `run-fills-sync.vbs` / `run-fills-sync.cmd` wrappers stay in
-  `pipeline/` but are unused.
-- `sync-fills.mjs`'s `--auto` amend/force-push path is **dead code** — it existed only to
-  collapse the scheduler's rolling commits. Kept (commented as scheduler-era) rather than
-  removed, so the machinery is recoverable if a schedule is ever wanted again; the
-  **clobber-guard** (`syncMainToRemote` + the remote-tip amend check) still runs on every
-  sync and is what keeps a manual sync from clobbering a PR-merged `main`.
+  CofferFillsSync /F`). The `run-fills-sync.vbs` / `run-fills-sync.cmd` wrappers were
+  **excised** (chunk X2, 2026-07-05) — no longer in `pipeline/`.
+- `sync-fills.mjs`'s `--auto` amend/force-push path was **excised** (chunk X2, 2026-07-05).
+  It existed only to collapse the scheduler's rolling commits; with the schedule gone it was
+  dead code, so it was removed rather than kept commented — **git history is the recovery
+  story** if a schedule is ever wanted again. The **clobber-guard** (`syncMainToRemote`:
+  fetch → ff-or-loudly-abort) still runs on every sync and is what keeps a manual sync from
+  clobbering a phone push or a PR-merged `main`; every sync is now a plain fresh commit whose
+  push is safely rejected on any race the guard didn't already catch.
 - **`main` is protected by a ruleset** (id `18520289`) requiring a PR + the `checks` status
   check (no force-push/deletion), with a repository-admin **always** bypass. Two caveats as
   landed: **no merge queue** (this is a user-owned repo — the ruleset `merge_queue` rule is

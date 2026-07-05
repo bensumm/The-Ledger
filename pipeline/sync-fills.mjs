@@ -6,19 +6,14 @@
  * normalizes GE offer events into fills.json, commits and pushes to the
  * repo that GitHub Pages serves. The Coffer fetches fills.json same-origin.
  *
+ * Sync is ON-DEMAND ONLY. The scheduler-era `--auto` amend/force-push branch (and the
+ * CofferFillsSync Task Scheduler job / run-fills-sync wrappers that drove it) was EXCISED
+ * 2026-07-05 (chunk X2); it was dead since the schedule was eliminated 2026-07-04
+ * (G1 / FILLS-PIPELINE.md §12). Every run is now a fresh checkpoint commit landed via the
+ * normal push path; git history is the recovery story if a schedule is ever wanted again.
+ *
  * Usage:
  *   node sync-fills.mjs            manual run: parse -> merge -> new commit -> push
- *   node sync-fills.mjs --auto     SCHEDULER-ERA / DEAD CODE since 2026-07-04. The
- *                                  CofferFillsSync Task Scheduler job was ELIMINATED
- *                                  (G1 / FILLS-PIPELINE.md §12) — sync is on-demand only
- *                                  now, so nothing passes --auto in normal use. Retained
- *                                  (not ripped out) so the rolling-commit machinery is
- *                                  recoverable if a schedule is ever wanted again. What it
- *                                  did: amend the previous commit + force-push if HEAD was
- *                                  itself an --auto commit at the remote tip, so the job
- *                                  didn't pile up a new commit every ~20 min. Manual runs
- *                                  (the only kind now) never amend — each is its own
- *                                  checkpoint commit, landed via the normal push path.
  *   node sync-fills.mjs --probe    print first raw lines of each log file
  *                                  (use this ONCE to verify field mapping)
  *   node sync-fills.mjs --dry      parse + merge + report, no git push
@@ -66,8 +61,7 @@ const GIT_PUSH  = true;     // set false to stage commits without pushing
 /* =================================================================== */
 
 const args = new Set(process.argv.slice(2));
-const PROBE = args.has('--probe'), DRY = args.has('--dry'), AUTO = args.has('--auto');
-const AUTO_TRAILER = 'Auto-Fills-Sync: true'; // marks a commit as safe to amend-over on the next --auto run
+const PROBE = args.has('--probe'), DRY = args.has('--dry');
 
 /* ---------------------------------------------------------------------
  * ADAPTER + reconstruction now live in reconstruct.mjs (chunk 8) — the ONE
@@ -109,7 +103,7 @@ const git = cmd => execSync(`git ${cmd}`, { cwd: REPO_DIR, stdio: 'pipe' }).toSt
 //   (1) fetches, then FAST-FORWARDS local main onto a moved origin/main BEFORE reading logs, so a
 //       phone-pushed mobile-fills.log is on disk and gets READ during reconstruction below. The
 //       sync then lands a FRESH commit on top of it (never an amend/force-push over the phone's
-//       commit — the scheduler-era --auto amend path is dead code, §12).
+//       commit — the scheduler-era --auto amend path was excised in chunk X2, §12).
 //   (2) LOUDLY ABORTS on a genuine divergence (local main has commits origin/main lacks). Under the
 //       single-writer contract that is a STRUCTURAL bug (an unexpected local commit, a
 //       double-writer, or a stale branch), not something to paper over — a plain push would be
@@ -128,8 +122,16 @@ function syncMainToRemote() {
   try { git(`merge-base --is-ancestor ${head} ${remote}`); behind = true; } catch { behind = false; }
   if (behind) {
     // origin/main moved ahead (typically a phone push to mobile-fills.log). ff so that file is
-    // readable below; the sync's own commit lands fresh on top.
-    git('merge --ff-only origin/main');
+    // readable below; the sync's own commit lands fresh on top. A ff-only that fails here (dirty
+    // tree, a ref race) is not something to paper over — route it into the same loud "reconcile by
+    // hand" abort as a genuine divergence, so we never proceed on a half-updated checkout.
+    try { git('merge --ff-only origin/main'); }
+    catch (e) {
+      console.error('Multi-writer guard: fast-forward onto moved origin/main FAILED (' + e.message + ') — ABORTING.');
+      console.error('  origin/main moved ahead (a phone push?) but local main could not fast-forward — likely a dirty working tree or a ref race.');
+      console.error('  Inspect `git status` and `git log --oneline HEAD..origin/main`, reconcile, then re-run the sync. Nothing was written.');
+      process.exit(1);
+    }
     console.log('Multi-writer guard: fast-forwarded local main onto moved origin/main (phone-pushed log(s) now readable).');
     return;
   }
@@ -253,16 +255,13 @@ function main() {
 
   // commit + push
   //
-  // SCHEDULER-ERA (dead since 2026-07-04, FILLS-PIPELINE.md §12): --auto is no longer
-  // passed in normal use — the CofferFillsSync job that used it was eliminated and sync is
-  // on-demand only. Kept for recoverability. Historically:
-  // --auto (Task Scheduler) runs collapse into a single rolling commit via
-  // --amend + --force-with-lease, instead of piling up a new commit every
-  // 15-30 min forever. This is only safe because we check the marker below:
-  // we only amend when HEAD is itself a prior auto-sync commit (identified
-  // by the AUTO_TRAILER footer), so a manual/Claude-driven commit always
-  // starts a fresh chain rather than getting silently absorbed. Manual runs
-  // (no --auto) never amend — every manual run is its own checkpoint.
+  // On-demand only: every sync is its own fresh checkpoint commit landed via the normal push
+  // path. The scheduler-era --auto amend/--force-with-lease rolling-commit branch was excised
+  // 2026-07-05 (chunk X2) — it existed only to collapse the eliminated CofferFillsSync job's
+  // ~20-min commits (FILLS-PIPELINE.md §12); git history is the recovery story. The
+  // syncMainToRemote() clobber-guard above (ff-or-abort) is the live protection against
+  // clobbering a phone push or a PR-merged main — a plain push here is safely rejected on any
+  // race it didn't already catch.
   try {
     // Commit set: fills + positions always; screen.json (PLAN-2 C1 published scan) and
     // suggestions.jsonl (O1 append-only suggestions ledger) only when they exist on disk — same
@@ -279,42 +278,21 @@ function main() {
     if (!status) { console.log('Nothing to commit.'); return; }
 
     const nowIso = new Date().toISOString().slice(0, 16) + 'Z';
-    let amend = false, sinceIso = nowIso;
-    if (AUTO) {
-      let headMsg = '';
-      try { headMsg = git('log -1 --pretty=%B'); } catch { /* no commits yet */ }
-      const sinceMatch = headMsg.match(/Auto-Fills-Sync-Since:\s*(\S+)/);
-      // Amend ONLY when HEAD is a prior auto-sync commit AND is exactly the remote tip. The
-      // remote-tip check is the clobber-guard's teeth: if the ff above didn't land HEAD on
-      // origin/main (divergence / dirty tree / offline), we must NOT amend-and-force-push, or we'd
-      // drop whatever advanced origin/main. In that case we fall through to a plain commit whose
-      // push is safely rejected instead.
-      let atRemoteTip = false;
-      try { atRemoteTip = git('rev-parse HEAD') === git('rev-parse origin/main'); } catch { atRemoteTip = false; }
-      if (headMsg.includes(AUTO_TRAILER) && sinceMatch && atRemoteTip) {
-        amend = true;
-        sinceIso = sinceMatch[1];
-      }
-    }
-
-    const summary = AUTO
-      ? `fills: auto-sync ${amend ? `${sinceIso}–${nowIso}` : nowIso} (${merged.length} events)`
-      : `fills: sync ${nowIso} (${merged.length} events)`;
-    const message = AUTO ? `${summary}\n\n${AUTO_TRAILER}\nAuto-Fills-Sync-Since: ${sinceIso}` : summary;
+    const message = `fills: sync ${nowIso} (${merged.length} events)`;
 
     const tmpMsgFile = join(REPO_DIR, '.fills-commit-msg.tmp');
     writeFileSync(tmpMsgFile, message);
     try {
-      git(`commit ${amend ? '--amend' : ''} -F "${tmpMsgFile}"`);
+      git(`commit -F "${tmpMsgFile}"`);
     } finally {
       unlinkSync(tmpMsgFile);
     }
 
     if (GIT_PUSH) {
-      git(amend ? 'push --force-with-lease' : 'push');
-      console.log(amend ? 'Amended + force-pushed.' : 'Pushed.');
+      git('push');
+      console.log('Pushed.');
     } else {
-      console.log(`Committed${amend ? ' (amended)' : ''} (push disabled).`);
+      console.log('Committed (push disabled).');
     }
   } catch (err) {
     console.error('Git step failed:', err.message);
