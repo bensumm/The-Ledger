@@ -88,9 +88,9 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | ✅ `23deba0` (0.36.0 — inversion → `reliable:false` at the source; interim `/positions` override removed) |
 | E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only: no UTC leaks found; `periodKey` midnight/week fixtures pass; convention rule added to CLAUDE.md — no code change, no APP_VERSION bump) |
 | L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | ✅ `3404681` (0.38.0) |
-| G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | DISPATCHED (executor, wave 3, 2026-07-04). **Step-0 DECISION (Ben, 2026-07-04): eliminate the schedule — on-demand sync only; attended sessions ride a lightweight ruleset bypass (Ben's own actor); no machine bypass identity.** |
-| M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | OPEN |
-| N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | OPEN |
+| G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | ✅ `553c3a6`+`b57fbe8` (scheduler DELETED; ruleset id 18520289 active: PR+`checks` required, admin-always bypass verified. Two limits: **no merge queue** — user-owned repo; **PR creation token-blocked** until Ben runs `gh auth refresh -s repo`, then merge staged branch `g1-readme-inventory` as the acceptance PR) |
+| M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | DISPATCHED (wave 3, 2026-07-04) |
+| N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | DISPATCHED (wave 3, 2026-07-04) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
