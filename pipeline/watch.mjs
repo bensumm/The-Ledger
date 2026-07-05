@@ -434,7 +434,11 @@ async function main() {
       const ask = asks.find(a => a.item === it.id);
       const listed = ask ? `listed ${ask.qty}/${fmt(ask.max)} @ ${fmtP(ask.offer)}`
         : (offersInfo && !offersInfo.err ? 'NOT LISTED' : null);
-      console.log(`\n${name} ×${qty}  [${meta.label} · re-check ${meta.cadence}m]  HELD @ ${fmtP(Math.round(avgCost))} (break-even ${fmtP(be)})${listed ? ' · ' + listed : ''}`);
+      // a held item's still-open BUY must stay visible (2026-07-05: a filled-then-booked lot
+      // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
+      const openBid = bids.find(b => b.item === it.id);
+      const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)} still open` : '';
+      console.log(`\n${name} ×${qty}  [${meta.label} · re-check ${meta.cadence}m]  HELD @ ${fmtP(Math.round(avgCost))} (break-even ${fmtP(be)})${listed ? ' · ' + listed : ''}${bidNote}`);
       console.log(`  quote  buy ${fmtP(row.quickBuy)}/${fmtP(row.optBuy)}  sell ${fmtP(row.quickSell)}/${fmtP(row.optSell)}  mom ${row.mom}${row.reliable ? '' : ' · ⚠ ' + row.reliableReason}`);
       console.log(`  risk   ${riskRead(row, cls, lotValue)}`);
       const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null });

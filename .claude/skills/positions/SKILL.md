@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.7
+version: 1.8
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -62,6 +62,29 @@ verdict; you translate it into the action line:
 **Sell-velocity preference (Ben, 2026-07-04):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even `ceil(buy/0.98)` (the CUT/CUT-CANDIDATE verdicts remain the only exceptions). Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
 
 **Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `windowrange.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
+
+**Entry-age check — fresh entries draw false CUTs (2026-07-05, three-for-three):** the gate
+tree has no concept of entry age, so a just-filled patient buy shows "underwater" on the
+instant-clear price (almost definitionally true minutes after any patient fill) and drew a
+CUT-flavored verdict within ~20 minutes on every fresh entry in one session (jaw, bludgeon,
+wrath — all correctly overridden). On a lot held under ~an hour whose ENTRY THESIS is intact
+(the multi-day floor/base that justified the buy hasn't printed through), treat
+CUT/CUT-CANDIDATE/UNDERWATER as noise and judge against the thesis, not the verdict.
+
+**Override discipline — name a tripwire, then obey it (2026-07-05):** every verdict override
+must come with a CONCRETE structural level, named at override time (e.g. "below 16.50m = the
+7-day window floor is broken"), not an open-ended "hold anyway." While overriding, also track
+the DECAYING COST OF THE CUT (the instabuy you'd clear at falls while you hold — option-value
+bleed): if the clear price decays materially even without the tripwire printing, step the ask
+down rather than binary hold-vs-cut. When the tripwire prints, EXECUTE without re-litigating —
+the jaw 16.49m print (7-day floor break) is the anchor; the discipline only protects you if
+the named level is obeyed both ways.
+
+**Limit-blocked CROSSING (2026-07-05):** a bid at/above the live instasell prints CROSSING
+("expect fills about now") even when the 4h buy limit makes fills impossible — the gate can't
+see limits. Before expecting fills or repricing a "not filling" bid, check the last buys in
+`fills.json`: limit re-arms 4h after the first fill of the consumed batch (the soul-rune bid
+sat CROSSING for ~50 minutes, correctly untouched, until the 23:17 re-arm).
 
 **Fill-progress check before CUT-CANDIDATE action (2026-07-05):** before acting on a
 CUT-CANDIDATE (or shallow UNDERWATER), check whether the current ask is actively filling
