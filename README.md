@@ -45,11 +45,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
   with the node analysis scripts), `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
-  Access API writer for `coffer-manual.log` + tombstones), `ui.js`
+  Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
+  GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
+  `watchlist.json` via the contents API), `ui.js`
   (Finder/Watchlist/Signals/Ledger/Coffer rendering), `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite, fetched same-origin
+- `mobile-fills.log` — tracked, append-only source log the app appends mobile GE trades to
+  (slot 9) via the GitHub contents API; read by `sync-fills.mjs` (M1, `FILLS-PIPELINE.md` §13)
 - `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
   trades + open positions); the app auto-populates its Ledger/Coffer from it
 - `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by

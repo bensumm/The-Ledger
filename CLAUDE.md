@@ -55,11 +55,21 @@ full story.
   position/price (fills exempt). Delivery mechanism decided after a live trial of a scheduled
   Claude session + harness `PushNotification` (option a). Full contract: `MONITORING.md`
   "Push notifications on market events".
+- **Mobile parity — GitHub-as-backend writes** (0.39.0, M1) — the phone logs a GE trade by
+  appending a **slot-9** source line to tracked repo-root `mobile-fills.log` via the GitHub
+  contents API (`js/github.js`; fine-grained PAT in localStorage — never rendered/exported/logged,
+  "PAT updated" only). The Ledger quick-add routes desktop→FS-log (slot 8) / mobile→GitHub (slot 9,
+  GET sha → PUT append, 409 retry). `sync-fills.mjs` is now multi-writer: ff onto a moved
+  `origin/main` (phone push) BEFORE reading logs, **fresh commit** on top, **loud abort on
+  divergence** (disjoint single-writer contract — the phone writes ONLY `mobile-fills.log`, the PC
+  ONLY fills/positions/screen/suggestions). Freshness = a `generatedAt` staleness banner + a
+  **Refresh-positions** button (same-origin re-fetch — it can't regenerate `positions.json`). S3's
+  watchlist write-back rides the same contents-API path. Full detail: `FILLS-PIPELINE.md` §13.
 - **Action logging pass** (0.38.0, L1) — the `logEvent` ring gained an `'action'` scope for
   user actions (tab/watchlist/trade/refresh/trends-open/position-review/backup/settings),
   logged at the **event handler** (never inside shared `switchTab`/`loadAll`, so re-renders
   don't log); `LOG_MAX` 50→200; Logs view has an All/Actions/System scope filter
-  (`STATE.logFilter`). Never log secret values ("PAT updated" only, once M1 adds a PAT).
+  (`STATE.logFilter`). Never log secret values (M1's PAT logs "PAT updated" only — never the value).
 - **Gate-0 feed-inversion fix** (0.36.0, Q1) — a crossed feed (instasell>instabuy) is now
   `reliable:false`/`reliableReason:'feed-inversion'` in `computeQuote`, so `momVerdict()` Gate 0
   prints **NO-READ** instead of a decisive verdict off a non-price. `/positions`' interim

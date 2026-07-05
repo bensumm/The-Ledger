@@ -29,6 +29,52 @@ after a live trial of option (a)** — a scheduled Claude Code session using the
 `PushNotification` tool (zero new infra); (b) ntfy.sh from Task Scheduler and (c) Actions+email
 are the fallbacks. No app changes; no new scheduled task/Action/topic created in this chunk.
 
+### Mobile parity — GitHub-as-backend writes (0.39.0, PLAN chunk M1)
+A phone trade now lands in the same pipeline as a PC trade, and fix-at-the-source stays intact
+— the phone writes a *source log line*, never `fills.json`/`positions.json`. Four pieces:
+
+**Pipeline multi-writer path (`sync-fills.mjs`).** Finishes B1: `syncMainToRemote()` is now
+rebase-or-abort. Two writers touch `origin/main` — this PC sync (fills/positions/screen/
+suggestions) and the phone (`mobile-fills.log`, via the GitHub contents API) — with **disjoint**
+file sets, so a phone push only ever moves `origin/main` *ahead*. The guard fast-forwards local
+main onto the moved remote BEFORE reading logs (so the phone's line is read this run) and lands a
+**fresh commit** on top (never amend/force over the phone's commit; the scheduler-era `--auto`
+amend path stays dead, §12). A genuine **divergence** now **aborts loudly (exit 1)** instead of
+warn-and-continue — under the single-writer contract it's a structural bug to reconcile by hand,
+not to force through. `main()` reads repo-root `mobile-fills.log` as an extra source (it is NOT in
+`LOG_DIR`); slot 9 keeps mobile provenance distinct from desktop/CLI slot-8 manuals; the PC only
+READS it (stays out of the PC's commit set). Validated with a bare-repo fixture (ff-then-fresh-
+commit reads the mobile line into positions.json with the phone commit preserved; divergence aborts).
+
+**New tracked `mobile-fills.log`** (repo root, comment-header only) — same line vocabulary as
+`coffer-manual.log` (BOUGHT/SOLD/WITHDRAWN/BANKED + `{"state":"REMOVE","target":…}` tombstones).
+
+**App write path + quick-add (`js/github.js` new, `js/ui.js`, `js/fillslog.js`).** Settings gains a
+**GitHub sync** panel storing a fine-grained PAT in localStorage — never rendered back, never
+exported (`backup.js` doesn't touch it), never logged (`logEvent 'action'` says "PAT updated"
+only). owner/repo derive from the Pages origin (no account name hardcoded; localStorage overrides
+for custom hosts/testing). The existing Ledger quick-add now routes its write: desktop File System
+Access (slot 8) when the log is linked, else the mobile GitHub path (slot 9) when a token is saved
+— GET sha → PUT append; on 409/422 re-GET and retry. Backdated entries still carry the true trade
+time (the phantom-5-bludgeons rule); WITHDRAWN is a form mode and REMOVE is exposed via pending-row
+delete (mobile edit/delete = append tombstone(+new line), routed by an `origin:'gh'` tag). A dedupe
+guard warns on an identical item+side+price+qty just staged. Narrow-screen CSS enlarges tap targets
+(16px inputs to avoid iOS zoom).
+
+**Freshness UX (`js/ui.js`).** Since G1 there's no scheduled PC writer, so the phone's PRIMARY
+freshness mechanism is here: a `generatedAt` staleness banner on the Ledger (with age + a
+**Refresh-positions** button — a same-origin re-fetch; it can't regenerate positions.json, which
+needs the PC's RuneLite log) and a staleness chip on the Coffer. Mobile-entered lines still render
+immediately as `pending` rows, absorbed on the next `positions.json`. Folds in the S3 **watchlist
+write-back**: add/remove now persists to repo `watchlist.json` through the same contents-API path
+when a token is set (best-effort; the in-memory union still applies without one).
+
+Validation: `node --check` all touched modules; a Playwright (Edge channel) smoke over http drove
+the PAT-save UI, the real quick-add form submit → intercepted GitHub GET→PUT (slot-9 BOUGHT line,
+correct branch/sha/base64 body) → optimistic pending row, the watchlist-write shape, and the
+Refresh-positions re-fetch + banner. The GitHub write path can't be fully exercised without a real
+PAT, so the network call was intercepted with a fake token and the request shape asserted.
+
 ### Action logging pass (0.38.0, PLAN chunk L1)
 Instrument, don't rebuild: the `logEvent(level, scope, msg)` ring + persisted `logring` + Logs
 view already existed (`js/state.js`), but every caller was a *system* fetch path (market/guide/

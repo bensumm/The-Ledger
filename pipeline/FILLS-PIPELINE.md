@@ -178,9 +178,10 @@ Reconstruction (in `sync-fills.mjs`), deliberate — don't undo casually:
 - Cost basis is **FIFO**; itemId→name resolution is left to the app (it has the
   mapping), so `positions.json` stays name-free and stable across catalog changes.
 
-Manual-line vocabulary (0.27.0, PLAN.md chunk 1) — extra states valid ONLY in
-`coffer-manual.log` (slot 8), written by `add-manual-fill.mjs` or the app's linked
-file handle (`js/fillslog.js`):
+Manual-line vocabulary (0.27.0, PLAN.md chunk 1) — extra states valid in the manual source
+logs, written by `add-manual-fill.mjs`, the app's linked file handle (`js/fillslog.js`, desktop
+`coffer-manual.log`, **slot 8**), or the app's GitHub write path (M1, `mobile-fills.log`, **slot 9**
+— see §13):
 - **`WITHDRAWN`** — inventory taken for personal use. `matchTrades()` consumes open
   lots FIFO into closed rows flagged `withdrawn:true` with `realised: 0` (no sale,
   no tax); the app renders "withdrawn (used)" and excludes them from every profit
@@ -228,7 +229,10 @@ Not yet built — planned as the next tool feature, roughly in order:
 - Trades placed outside RuneLite (mobile client) are invisible to the plugin. Ben does in
   fact trade on mobile sometimes, so the log is *incomplete*, not wrong. **Fix at the
   source, not the derived view:** inject the missing fills into a sibling file
-  `coffer-manual.log` in `LOG_DIR` (NOT RuneLite's live `exchange.log`). `readLogFiles()`
+  `coffer-manual.log` in `LOG_DIR` (NOT RuneLite's live `exchange.log`). **As of M1 (0.39.0,
+  §13) the phone can capture these itself** — the app writes a slot-9 source line straight to the
+  tracked repo-root `mobile-fills.log` via the GitHub contents API, and `sync-fills.mjs` folds it
+  in like any other source log. `coffer-manual.log` (slot 8) remains the desktop/CLI path. `readLogFiles()`
   already ingests every `*.log` there and dedup is content-hashed, so injected lines flow
   through the real reconstruction into fills.json/positions.json and survive every re-sync.
   Two writers, same file/format:
@@ -457,3 +461,57 @@ separate machine/deploy-key bypass identity was created.**
   section, PLAN.md dispatch model). **M1 must now assume no scheduled PC writer exists:**
   mobile freshness leans on the Refresh button + (optionally) the stretch in-cloud
   reconstruction Action, never on a background PC push.
+
+## 13. Mobile write path — GitHub-as-backend (M1, 0.39.0)
+
+A phone GE trade lands in the same pipeline as a PC trade with seconds of friction, and
+fix-at-the-source is preserved: **the phone writes a SOURCE log line, never
+`fills.json`/`positions.json`** (single-writer — only `sync-fills.mjs` writes those). Ben trades
+on the official OSRS mobile client (no auto-capture possible), so this is frictionless *manual*
+capture, chosen as GitHub-contents-API-with-a-fine-grained-PAT — no cloud backend, no PC-as-server.
+
+### 13.1 `mobile-fills.log` (TRACKED, repo root, append-only)
+Same line vocabulary as `coffer-manual.log` — `BOUGHT`/`SOLD`/`WITHDRAWN`/`BANKED` fill lines plus
+`{"state":"REMOVE","target":"<eventId>"}` tombstones — but written to **slot 9** (mobile) so its
+provenance stays visible next to desktop/CLI manual entries (slot 8) and live GE slots (0–7). It
+ships with a comment-header only; comment lines (starting `#`) are ignored by `parseJsonLine()`.
+The **phone owns writes** to it (via the GitHub contents API); `sync-fills.mjs` only **READS** it —
+it lives at the repo root (NOT in `LOG_DIR`) and is pulled in as an extra parse source, then folded
+into `fills.json`/`positions.json` through the normal reconstruction. It stays **out of the PC's
+commit set** (the PC never modifies it).
+
+### 13.2 App side (`js/github.js`, `js/ui.js`, `js/fillslog.js`)
+On a phone the File System Access API (the desktop `coffer-manual.log` path) doesn't exist, so the
+app's **GitHub sync** panel (Ledger tab) stores a **fine-grained PAT** — Contents: Read and write,
+this repo only — in `localStorage`. Security: the token is never rendered back after entry, never
+exported (`backup.js`'s explicit field list omits it), and never logged ("PAT updated" only). The
+owner/repo derive from the Pages origin (`<owner>.github.io/<repo>/`) so no account name is
+hardcoded; `cofferGhOwner`/`cofferGhRepo`/`cofferGhBranch` localStorage overrides cover custom
+hosts and local testing. The Ledger quick-add routes its write — desktop FS log (slot 8) if linked,
+else the mobile GitHub path (slot 9) when a token is saved — as **GET sha → PUT append**, re-GET +
+retry on a 409/422 sha race (`appendMobileLines`). Backdated entries carry the true trade time (the
+phantom-5-bludgeons rule). Edits/deletes on a mobile pending row are append-only (a new line + a
+REMOVE tombstone), routed by an `origin:'gh'` tag. The S3 **watchlist write-back** uses the same
+path (`putJsonFile` → `watchlist.json`, ids) when a token is set.
+
+### 13.3 Multi-writer sync (see §12 + `sync-fills.mjs` `syncMainToRemote`)
+The PC sync and the phone are two writers to `origin/main` with **disjoint** file sets, so a phone
+push only moves `origin/main` ahead. The sync fast-forwards local main onto the moved remote BEFORE
+reading logs (so the phone's line is read this run) and lands a **fresh commit** on top — never
+amend/force over the phone's commit. A genuine **divergence aborts loudly (exit 1)**: under the
+disjoint-writer contract it is a structural bug (an unexpected local commit, a double-writer, a
+stale branch), to reconcile by hand — not to force through.
+
+### 13.4 Freshness (the phone's PRIMARY mechanism now — no scheduled PC writer, §12)
+The app shows a `generatedAt` staleness banner on the Ledger (age + a **Refresh-positions** button)
+and a staleness chip on the Coffer. The Refresh button is a **same-origin re-fetch** of
+`positions.json` — it CANNOT regenerate it (that needs the PC's RuneLite log + a sync run). Design
+copy says so. Mobile-entered lines render immediately as optimistic `pending` rows, dropped once a
+`positions.json` with a newer `generatedAt` absorbs them.
+
+### 13.5 Stretch (not built) — PC-free reconstruction
+A GitHub Action on pushes touching `mobile-fills.log` could merge + rebuild + commit
+`positions.json` in-cloud (`reconstruct.mjs` is pure; it must respect single-writer ownership as a
+third committer and never require `.runelite` logs). Deliberately NOT built — with no PC schedule,
+PC-off phone staleness *may* eventually justify it, but that's Ben's call, not an executor's. Until
+then the Refresh button is the freshness path.

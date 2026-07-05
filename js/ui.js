@@ -5,7 +5,8 @@ import { openTrends, computeSignals } from './trends.js';
 import { switchTab } from './main.js';
 import { fetchQuote, quoteTableHtml } from './quote.js';
 import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName,
-         tombstoneLine, manualLineEvent, eventIdFor, readFillsLog, rewriteFillsLog } from './fillslog.js';
+         tombstoneLine, manualLineEvent, eventIdFor, readFillsLog, rewriteFillsLog, MOBILE_SLOT } from './fillslog.js';
+import { hasPat, ghConfigured, ghTarget, appendMobileLines, putJsonFile, WATCHLIST_PATH } from './github.js';
 
 /* finder */
 export function currentFinderRows(){
@@ -92,7 +93,19 @@ export function showFinderError(){
 /* watchlist */
 export async function toggleWatch(id){ const i=STATE.watchlist.indexOf(id), it=resolveId(id), nm=(it&&it.name)||('#'+id);
   if(i>=0){ STATE.watchlist.splice(i,1); delete STATE.signalCache[id]; logEvent('info','action','unwatch '+nm); } else { STATE.watchlist.push(id); logEvent('info','action','watch '+nm); }
-  await sSet('watchlist',STATE.watchlist); renderAll(); computeSignals(); }
+  await sSet('watchlist',STATE.watchlist); renderAll(); computeSignals();
+  pushWatchlist(); }   // M1.4: best-effort write-back to repo watchlist.json (only when a GitHub token is set)
+/* M1.4: write STATE.watchlist (the local+repo union, as ids) back to the tracked repo-root
+   watchlist.json through the same contents-API path, so a phone's add/remove persists to the
+   source of truth the pipeline reads. No-op (and silent) when no token is configured — the S3
+   in-memory union still applies. Best-effort/fire-and-forget: never blocks the UI, warns on
+   failure but never alerts (the watchlist is low-stakes). */
+export async function pushWatchlist(){
+  if(!ghConfigured()) return;
+  const res=await putJsonFile(WATCHLIST_PATH, STATE.watchlist, 'mobile: watchlist ('+STATE.watchlist.length+' items)');
+  if(res.ok){ if(!res.noop) logEvent('info','action','watchlist synced to repo ('+STATE.watchlist.length+')'); }
+  else logEvent('warn','watchlist','repo write-back failed: '+res.reason);
+}
 export function renderSignals(){
   const hr=new Date().getHours();
   const inCheap=w=>{ if(!w) return false; for(let k=0;k<3;k++) if((w.start+k)%24===hr) return true; return false; };
@@ -168,6 +181,17 @@ async function writeToFillsLog(kind, it, qty, priceEach, ts){
   await sSet('fillsPending', STATE.fillsPending);
   return true;
 }
+// M1: mobile write path — append a slot-9 line to repo-root mobile-fills.log via the GitHub
+// contents API, then stage the same optimistic pending row (tagged origin:'gh' so Edit/Delete
+// route back through GitHub, not the desktop file handle). Returns {ok, reason}.
+async function writeToMobileLog(kind, it, qty, priceEach, ts){
+  const line=fillsLogLine({type:kind, itemId:it.id, qty, priceEach, ts, slot:MOBILE_SLOT});
+  const res=await appendMobileLines([line], 'mobile: '+kind+' '+qty+'× item '+it.id);
+  if(!res.ok) return res;
+  STATE.fillsPending.push({ id:'p'+Date.now()+Math.random().toString(36).slice(2,5), kind, itemId:it.id, name:it.name, qty, each:priceEach, ts:ts||now(), created:now(), line, origin:'gh' });
+  await sSet('fillsPending', STATE.fillsPending);
+  return {ok:true};
+}
 export async function addTrade(){
   const tt=document.getElementById('tType'), mode=tt?tt.dataset.mode:'buy';
   const name=document.getElementById('tItem').value.trim();
@@ -175,8 +199,12 @@ export async function addTrade(){
   if(!name){ alert('Enter an item.'); return; }
   const it=resolveItem(name);
   if(!it){ alert('Item not recognised — pick the exact name from the list (manual entries need the item id for the log).'); return; }
-  if(!(await isLinked())){
-    fillsMsg('Nothing was logged — manual entries persist only through the fills log. Click “Link fills log…” (Edge/Chrome) to grant access to coffer-manual.log, or use pipeline/add-manual-fill.mjs from the terminal.');
+  // Pick the write path: desktop File System Access (coffer-manual.log, slot 8) if the log is
+  // linked; else the mobile GitHub contents-API path (mobile-fills.log, slot 9) when a token is
+  // saved. Neither available -> guidance, nothing created.
+  const linked=await isLinked(), gh=ghConfigured();
+  if(!linked && !gh){
+    fillsMsg('Nothing was logged — manual entries persist only through a source log. On desktop click “Link fills log…” (Edge/Chrome); on mobile save a GitHub token under “GitHub sync” below. (Or use pipeline/add-manual-fill.mjs from the terminal.)');
     return;
   }
   // Optional real trade time (chunk 1.2). Backdated trades MUST carry the time the trade
@@ -198,11 +226,24 @@ export async function addTrade(){
     if(isNaN(buy)||buy<0||(buy===0&&mode!=='banked')){ alert(mode==='banked'?'Enter the basis each (0 is allowed for windfalls).':'Enter a buy price.'); return; }
     each=buy;
   } // withdraw: no price — the cost basis comes from the consumed open lot
-  const wrote=await writeToFillsLog(mode, it, qty, each, ts);
-  if(!wrote){ fillsMsg('Couldn’t write to the fills log (permission denied?) — nothing was logged. Re-link the log or use pipeline/add-manual-fill.mjs.'); return; }
+  // Dedupe guard (chunk 3): warn on an identical item+side+price+qty just staged, so a double-tap
+  // (or a retry after an ambiguous network result) doesn't silently double-log.
+  const dupWin=now()-600;
+  const dup=(STATE.fillsPending||[]).find(p=>p.itemId===it.id && p.kind===mode && p.qty===qty && p.each===each && (p.created||0)>=dupWin);
+  if(dup && !confirm('You logged '+qty+' × '+it.name+(mode==='withdraw'?' (withdraw)':' @ '+fmt(each))+' moments ago. Log it again?')) return;
+  let wrote=false;
+  if(linked){
+    wrote=await writeToFillsLog(mode, it, qty, each, ts);
+    if(!wrote){ fillsMsg('Couldn’t write to the fills log (permission denied?) — nothing was logged. Re-link the log or use pipeline/add-manual-fill.mjs.'); return; }
+  } else {
+    const res=await writeToMobileLog(mode, it, qty, each, ts);
+    if(!res.ok){ fillsMsg('Couldn’t write to GitHub — nothing was logged. '+res.reason+'. Check the token under “GitHub sync”.'); return; }
+    wrote=true;
+  }
   const verb=mode==='buy'?'Bought':mode==='sell'?'Sold':mode==='withdraw'?'Withdrew':'Banked';
-  logEvent('info','action','logged '+mode+' '+qty+'× '+it.name);
-  fillsMsg(verb+' '+qty+' × '+it.name+' → written to '+(await linkedName())+'. Shows as pending until the next pipeline sync absorbs it.');
+  logEvent('info','action','logged '+mode+' '+qty+'× '+it.name+(linked?'':' (mobile)'));
+  const dest=linked?('your fills log ('+(await linkedName())+')'):'mobile-fills.log on GitHub';
+  fillsMsg(verb+' '+qty+' × '+it.name+' → written to '+dest+'. Shows as pending until the next pipeline sync absorbs it.');
   ['tItem','tQty','tBuy','tSell','tWhen'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderAll();
 }
@@ -232,9 +273,13 @@ async function editPending(pid){
   const r=promptFillEdit(p.kind, p.qty, p.each, old.date+'T'+old.time.slice(0,5));
   if(r===null) return;
   if(r==='delete') return delPending(pid);
-  const newLine=fillsLogLine({type:p.kind, itemId:p.itemId, qty:r.qty, priceEach:r.each, ts:r.ts});
+  const gh=p.origin==='gh';
+  const newLine=fillsLogLine({type:p.kind, itemId:p.itemId, qty:r.qty, priceEach:r.each, ts:r.ts, slot:gh?MOBILE_SLOT:undefined});
   const oldId=await eventIdFor(manualLineEvent(old));
-  const res=await rewriteFillsLog(p.line, [newLine, tombstoneLine(oldId)]);
+  // Desktop rewrites the line in place; mobile is append-only, so an edit = append the new line +
+  // a REMOVE tombstone for the old event id (same net effect after the next sync).
+  const res=gh ? await appendMobileLines([newLine, tombstoneLine(oldId)], 'mobile: edit item '+p.itemId)
+               : await rewriteFillsLog(p.line, [newLine, tombstoneLine(oldId)]);
   if(!res.ok){ alert('Edit failed: '+res.reason); return; }
   p.qty=r.qty; p.each=r.each; p.ts=r.ts; p.line=newLine; p.created=now();
   await sSet('fillsPending', STATE.fillsPending);
@@ -246,7 +291,10 @@ async function delPending(pid){
   const p=STATE.fillsPending.find(x=>x.id===pid); if(!p) return;
   if(p.line){
     const oldId=await eventIdFor(manualLineEvent(JSON.parse(p.line)));
-    const res=await rewriteFillsLog(p.line, [tombstoneLine(oldId)]);
+    // A REMOVE tombstone purges the merged event on the next sync (fills.json is append-only).
+    // Desktop rewrites the source line to the tombstone; mobile appends the tombstone via GitHub.
+    const res=p.origin==='gh' ? await appendMobileLines([tombstoneLine(oldId)], 'mobile: remove item '+p.itemId)
+                              : await rewriteFillsLog(p.line, [tombstoneLine(oldId)]);
     if(!res.ok){ alert('Delete failed: '+res.reason); return; }
   } else if(!confirm('No stored source line (pre-0.27 pending row) — remove the pending row only? Any log line it wrote stays.')) return;
   STATE.fillsPending=STATE.fillsPending.filter(x=>x.id!==pid);
@@ -286,7 +334,7 @@ export async function editManualLog(){
   const res=await rewriteFillsLog(e.line, repl);
   if(!res.ok){ alert('Rewrite failed: '+res.reason); return; }
   logEvent('info','action',(r==='delete'?'delete manual log ':'edit manual log ')+nameOf(e.o.item));
-  fillsMsg((r==='delete'?'Entry removed':'Entry rewritten')+' + old event tombstoned. Re-sync to apply: the scheduled sync runs within ~20 min (or run pipeline/sync-fills.mjs), then refresh prices here.');
+  fillsMsg((r==='delete'?'Entry removed':'Entry rewritten')+' + old event tombstoned. Re-sync to apply: run pipeline/sync-fills.mjs on the PC (sync is on-demand now), then refresh prices here.');
 }
 export async function delTrade(tid){
   const t=STATE.trades.find(x=>x.tid===tid);
@@ -355,6 +403,46 @@ export function renderFillsMeta(){
     h+=' <span class="loss">'+un.length+' sell'+(un.length===1?'':'s')+' had no logged buy</span> (bought before logging started, so no cost basis — excluded from realised): '+names+'.'; }
   el.innerHTML=h;
 }
+/* M1.4 freshness UX. Since G1 there is no scheduled PC writer — positions.json only refreshes
+   when a session runs the sync, so the phone's PRIMARY freshness mechanism is (a) this staleness
+   banner off positions.json's generatedAt and (b) the Refresh-positions button (a same-origin
+   re-fetch — it CANNOT regenerate positions.json, which needs the PC's RuneLite log). */
+const FILLS_STALE_MS=6*3600*1000;   // > 6h since generatedAt -> flag harder (matches the scan banner)
+export function renderFillsFresh(){
+  const el=document.getElementById('fillsFresh'); if(!el) return;
+  const btn='<button id="refreshPositions" class="ghostbtn sm" type="button">↻ Refresh positions</button>';
+  if(!STATE.fillsTs){
+    el.className='fillsfresh';
+    el.innerHTML='<span class="mini">Real fills not fetched yet — tap to load positions.json (produced by the PC pipeline sync).</span> '+btn;
+  }else{
+    const ageMs=Date.now()-STATE.fillsTs*1000, stale=ageMs>FILLS_STALE_MS;
+    el.className='fillsfresh'+(stale?' warn':'');
+    el.innerHTML='<span class="mini">Real fills last synced <b>'+fmtAge(ageMs)+' ago</b>'+
+      (stale?' — may be behind. This only re-fetches; a fresh sync must run on the PC.':'.')+'</span> '+btn;
+  }
+  const rb=el.querySelector('#refreshPositions'); if(rb) rb.onclick=refreshPositions;
+}
+export async function refreshPositions(){
+  logEvent('info','action','refresh positions');
+  const rb=document.getElementById('refreshPositions'); if(rb){ rb.disabled=true; rb.textContent='Refreshing…'; }
+  await syncFills();          // re-fetch positions.json same-origin; syncFills() re-renders the ledger + coffer
+  renderFillsFresh();
+}
+/* M1 GitHub-sync settings panel (the mobile equivalent of “Link fills log…”). Never shows the
+   token — only whether one is saved and which repo it targets. */
+export function renderGhSync(){
+  const st=document.getElementById('ghSyncStatus'), clr=document.getElementById('ghPatClear'); if(!st) return;
+  const t=ghTarget(), where=(t.owner&&t.repo)?(t.owner+'/'+t.repo):null;
+  if(hasPat()){
+    st.innerHTML='GitHub token saved on this device (never shown again). Mobile entries append to <b>mobile-fills.log</b>'+
+      (where?(' in <b>'+where+'</b>'):'')+' and your watchlist syncs back through GitHub.'+
+      (where?'':' <span class="loss">Couldn’t read the repo from this URL — open the live GitHub Pages app so entries have somewhere to go.</span>');
+    if(clr) clr.classList.remove('hidden');
+  }else{
+    st.innerHTML='On mobile (no desktop file access) save a <b>fine-grained</b> GitHub token — Contents: Read and write, this repo only — to log trades and sync your watchlist. Stored on this device only, never exported, revocable at github.com.';
+    if(clr) clr.classList.add('hidden');
+  }
+}
 /* Ledger view controls: watchlist-only filter, per-item grouping w/ drill-in, period P&L */
 export function periodKey(ts, period){
   const d=new Date(ts*1000);
@@ -400,6 +488,7 @@ export function renderLedger(){
   const open=openAll.filter(ledgerKeep), closed=closedAll.filter(ledgerKeep);
   document.getElementById('ledgerBadge').textContent=open.length;
   renderFillsMeta();
+  renderFillsFresh();
   const wc=document.getElementById('ledgerWatchOnly'); if(wc) wc.checked=STATE.ledgerWatchOnly;
   document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.classList.toggle('on',b.dataset.period===STATE.ledgerPeriod));
   renderLegacyBanner();
@@ -511,6 +600,11 @@ export function renderCoffer(){
   document.getElementById('cofferOpen').textContent=fmt(openVal);
   document.getElementById('cofferOpenMeta').textContent=open.length+' position'+(open.length===1?'':'s')+' · liquidation value';
   document.getElementById('cofferDeployed').textContent=fmt(deployed);
+  // M1.4: surface fills staleness on the Coffer too (the summary reads off the same positions.json).
+  const cs=document.getElementById('cofferStale');
+  if(cs){ const ageMs=STATE.fillsTs?Date.now()-STATE.fillsTs*1000:null;
+    if(ageMs!=null && ageMs>FILLS_STALE_MS){ cs.classList.remove('hidden'); cs.textContent='fills '+fmtAge(ageMs)+' old'; }
+    else cs.classList.add('hidden'); }
   const pct=STATE.bankroll?Math.round(deployed/STATE.bankroll*100):0;
   document.getElementById('cofferDeployedMeta').textContent=pct+'% of '+fmt(STATE.bankroll)+' across '+STATE.slots+' slots';
   document.getElementById('cofferCompact').innerHTML=
@@ -614,9 +708,10 @@ export async function renderScan(force){
 /* S3: repo watchlist union. The pipeline can't read the browser's localStorage, so the shared
    source of truth is tracked repo-root watchlist.json. The app treats STATE.watchlist as the UNION
    of local (localStorage) + repo entries: merge any repo ids not already watched, IN-MEMORY (no
-   persist — write-back to the file is M1's PAT path; persisting here would bake repo items into
-   localStorage and break the union if the repo later drops them). Names resolve via the full mapping
-   (STATE.MAP), ids pass through. Call AFTER the market/mapping has loaded. */
+   persist — persisting here would bake repo items into localStorage and break the union if the repo
+   later drops them). Write-back to the file is M1's PAT path (pushWatchlist(), on every toggleWatch
+   when a token is set). Names resolve via the full mapping (STATE.MAP), ids pass through. Call AFTER
+   the market/mapping has loaded. */
 export async function loadRepoWatchlist(){
   let arr;
   try{ const r=await fetch('watchlist.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return; arr=await r.json(); }

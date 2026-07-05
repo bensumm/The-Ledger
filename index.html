@@ -32,7 +32,7 @@
 
 <div class="wrap">
   <div id="cofferWrap">
-    <button class="cofferbar" id="cofferToggle"><span class="cbchev" id="cofferChev">▾</span> The Coffer</button>
+    <button class="cofferbar" id="cofferToggle"><span class="cbchev" id="cofferChev">▾</span> The Coffer <span id="cofferStale" class="cofferstale hidden"></span></button>
     <div class="coffer">
       <div class="cell lead"><div class="k">Coffer · realised</div><div class="v num" id="cofferRealised">0</div><div class="meta" id="cofferRealisedMeta">closed flips, after tax</div></div>
       <div class="cell"><div class="k">Open positions</div><div class="v num" id="cofferOpen">0</div><div class="meta" id="cofferOpenMeta">liquidation value</div></div>
@@ -159,6 +159,7 @@
 
   <!-- LEDGER -->
   <section class="panel hidden" id="panel-ledger">
+    <div class="fillsfresh" id="fillsFresh"></div>
     <div class="mini hidden" id="fillsMeta" style="margin-bottom:12px; color:var(--parch2)"></div>
     <div class="ledgerctl">
       <label class="lchk"><input type="checkbox" id="ledgerWatchOnly" checked /> Watchlist only</label>
@@ -175,6 +176,15 @@
       <button id="manualLogEdit" class="ghostbtn sm" type="button">Edit manual entries…</button>
       <span id="fillsLogStatus" class="mini hidden"></span>
     </div>
+    <details class="ghsync" id="ghSync">
+      <summary>GitHub sync <span class="mini">— log &amp; sync from mobile (no desktop file access)</span></summary>
+      <div class="ghsrow">
+        <input id="ghPat" type="password" placeholder="Paste fine-grained GitHub token" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <button id="ghPatSave" class="ghostbtn sm" type="button">Save token</button>
+        <button id="ghPatClear" class="ghostbtn sm hidden" type="button">Remove token</button>
+      </div>
+      <div id="ghSyncStatus" class="mini"></div>
+    </details>
     <div class="ledgerform">
       <div class="fld"><label>Log</label>
         <div class="segtoggle" id="tType" data-mode="buy">

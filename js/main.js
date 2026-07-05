@@ -1,7 +1,8 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog, setLogFilter } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
-import { renderFinder, addTrade, renderCoffer, recompute, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderScan, loadRepoWatchlist } from './ui.js';
+import { renderFinder, addTrade, renderCoffer, recompute, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderScan, loadRepoWatchlist, renderGhSync } from './ui.js';
+import { savePat } from './github.js';
 import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
 
@@ -46,6 +47,15 @@ wireSeg('tTax');
 document.getElementById('reviewPos').onclick=reviewPositions;
 const fll=document.getElementById('fillsLogLink'); if(fll) fll.onclick=toggleFillsLogLink;
 const mle=document.getElementById('manualLogEdit'); if(mle) mle.onclick=editManualLog;
+// M1: GitHub token save/remove. NEVER log or echo the token value — only the action.
+const ghSaveBtn=document.getElementById('ghPatSave');
+if(ghSaveBtn) ghSaveBtn.onclick=()=>{ const inp=document.getElementById('ghPat'); const v=(inp&&inp.value)||'';
+  if(!v.trim()){ renderGhSync(); return; }
+  if(!savePat(v)){ alert('This browser is blocking storage (Private Browsing?) — the token can’t be saved.'); return; }
+  if(inp) inp.value=''; logEvent('info','action','PAT updated'); renderGhSync(); };
+const ghClearBtn=document.getElementById('ghPatClear');
+if(ghClearBtn) ghClearBtn.onclick=()=>{ if(!confirm('Remove the saved GitHub token from this device?')) return;
+  savePat(''); logEvent('info','action','PAT removed'); renderGhSync(); };
 const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
 document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));
 export const bankI=document.getElementById('bankInput');
@@ -75,6 +85,7 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   bankI.value=fmt(STATE.bankroll); slotsI.value=STATE.slots; document.getElementById('stratSel').value=STATE.strategy;
   renderCoffer();
   renderFillsLogLink();
+  renderGhSync();
   await loadAll();
   loadRepoWatchlist();   // S3: union repo watchlist.json into STATE.watchlist (in-memory, post-mapping)
 })();

@@ -12,6 +12,7 @@ import { idb } from './state.js';
 
 const HKEY='fillsLogHandle';
 const MANUAL_SLOT=8; // real GE slots are 0-7; 8 keeps synthetic events clear of live-slot cancel inference
+export const MOBILE_SLOT=9; // M1: mobile GitHub-as-backend entries (mobile-fills.log) — distinct from desktop/CLI slot 8 so provenance stays visible
 let handle=null, loaded=false;
 
 export function fsApiSupported(){ return typeof window!=='undefined' && typeof window.showOpenFilePicker==='function'; }
@@ -51,13 +52,14 @@ export async function unlinkFillsLog(){ handle=null; loaded=true; if(idb){ try{ 
 // type: 'buy' | 'sell' | 'withdraw' (inventory taken for personal use — price 0, consumes
 // open lots FIFO at realised 0) | 'banked' (pre-owned inventory entering the flip flow at a
 // declared basis). See the manual-line vocabulary in pipeline/sync-fills.mjs.
-export function fillsLogLine({type,itemId,qty,priceEach,ts}){
+// `slot` defaults to the desktop/CLI MANUAL_SLOT (8); mobile GitHub writes pass MOBILE_SLOT (9).
+export function fillsLogLine({type,itemId,qty,priceEach,ts,slot}){
   const d=new Date((ts||Math.floor(Date.now()/1000))*1000);
   const p=n=>String(n).padStart(2,'0');
   const date=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
   const time=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
   const state=type==='buy'?'BOUGHT':type==='sell'?'SOLD':type==='withdraw'?'WITHDRAWN':'BANKED';
-  return JSON.stringify({date,time,state,slot:MANUAL_SLOT,item:itemId,qty,worth:priceEach*qty,max:qty,offer:priceEach});
+  return JSON.stringify({date,time,state,slot:slot||MANUAL_SLOT,item:itemId,qty,worth:priceEach*qty,max:qty,offer:priceEach});
 }
 // Tombstone directive: on the next sync, sync-fills.mjs deletes the target event id from the
 // merged set — including events already persisted in fills.json (PLAN.md chunk 1.4).

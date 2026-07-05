@@ -305,5 +305,37 @@ td.left.sub{padding-left:22px}
 .fillslink .mini{color:var(--parch2)}
 .srctag.pend{color:var(--gold);border-color:var(--gold)}
 tr.detail.pend td{opacity:.85}
+
+/* M1: fills freshness banner + Refresh-positions (Ledger); Coffer staleness chip */
+.fillsfresh{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  border:1px solid var(--line2);border-radius:10px;padding:9px 13px;margin-bottom:12px;color:var(--parch2)}
+.fillsfresh.warn{background:rgba(224,162,60,.10);border-color:var(--amber)}
+.fillsfresh b{color:var(--gold);font-weight:600}
+.fillsfresh .ghostbtn{flex:0 0 auto}
+.cofferstale{font-size:11px;font-weight:600;color:var(--amber);border:1px solid var(--amber);
+  border-radius:999px;padding:1px 8px;margin-left:8px;vertical-align:middle}
+
+/* M1: GitHub-sync (mobile write path) settings panel */
+.ghsync{margin-bottom:14px;border:1px solid var(--line);border-radius:12px;background:var(--oak2);padding:6px 12px}
+.ghsync>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--parch2);padding:6px 0;list-style:none}
+.ghsync>summary::-webkit-details-marker{display:none}
+.ghsync>summary::before{content:'▸ ';color:var(--parch2)}
+.ghsync[open]>summary::before{content:'▾ '}
+.ghsync>summary .mini{font-weight:400;color:var(--muted)}
+.ghsrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.ghsrow input{flex:1 1 220px;min-width:0;box-sizing:border-box;background:var(--oak);border:1px solid var(--line2);
+  color:var(--parch);border-radius:7px;padding:10px 11px;font-size:13px;font-family:'IBM Plex Mono',monospace}
+.ghsrow input:focus{outline:none;border-color:var(--gold)}
+#ghSyncStatus{color:var(--parch2);margin-bottom:8px;line-height:1.6}
+
+/* M1: thumb-friendly quick-add on narrow screens — bigger tap targets across the ledger form */
+@media(max-width:720px){
+  .ledgerform{padding:14px}
+  .ledgerform input{padding:13px 12px;font-size:16px}   /* 16px avoids iOS input-zoom */
+  .ledgerform .segtoggle button{padding:11px 0;font-size:14px}
+  .ledgerform button.go{padding:15px 18px;font-size:15px}
+  .ghsrow input{padding:13px 12px;font-size:16px}
+  .fillsfresh .ghostbtn{padding:10px 14px}
+}
 tr.detail.pend td.pend{color:var(--gold);font-style:italic}
 
