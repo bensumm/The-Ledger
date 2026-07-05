@@ -426,7 +426,12 @@ per-cell median below `--min-n` (default `MIN_N_REPORT = 8`). The **F1 gate thre
 documents (the numbers that open F1): a per-cell fill-time/probability curve is trustworthy only at
 **n ≥ 30** per `(side × percentile × class × regime)` cell — regime bucketed **first**, the known
 confound — with **≥ 5** such cells populated (`MIN_N_F1` / `MIN_CELLS_F1`). These are defensible
-conventions, not derived values. On the current dataset (103 campaigns, ~2.5 days, 83% fill rate,
+conventions, not derived values. `--report` also prints two standing honesty lines (W1): an
+**F1-gate progress** line (`cells cleared / cells needed`, reusing the same constants) and a
+**concentration** line (top item's share of closed lots / realised P/L, with a `>40%` caveat that
+per-item reads are then mostly one sample). The `/morning` skill runs `--report` as a **weekly**
+descriptive read (first morning of each calendar week — descriptive analysis starts now, calibration
+stays gated). On the current dataset (103 campaigns, ~2.5 days, 83% fill rate,
 realized +2.8m over 39 closed sell campaigns) the join is validated and behaves correctly — buy
 placements cluster at the 0–20 band percentile, sells at 80–100, exactly the patient-pricing
 signature — but only **1** cell clears n≥30, so **F1 stays gated**: the schema/pipeline are sound,

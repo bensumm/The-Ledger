@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.2
+version: 1.3
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -68,3 +68,38 @@ reprice/cancel actions come first, always.
 Summarize `closed` trades since the last session (after-tax), what the overnight offers
 achieved vs the plan Ben recalls, and what to redeploy freed capital into — **offer
 `/scan`** for the redeploy.
+
+## 6. Weekly descriptive-outcomes read (once a week, not every morning)
+
+**Cadence (W1, 2026-07-05):** descriptive trade analysis starts NOW and runs **weekly** —
+calibration (F1) stays gated. Run this section on the **first `/morning` of each calendar
+week**. Concrete trigger a stateless session can apply: run it when **today is Monday
+(local)**; if Ben skipped Monday, run it on the next `/morning` that week (the weekly read
+should land once per Mon–Sun week — if unsure whether it already ran this week, ask Ben in
+one line rather than double-running). Every other morning, skip straight past this section.
+
+**What to run** — after the overnight review above is delivered (market work first, always):
+1. `node pipeline/outcomes.mjs --report` — fill-time distributions by band-percentile ×
+   liquidity class with **n per cell**, plus the F1-gate progress line and the
+   concentration line (top item's share of closed lots / realised P/L).
+2. A **realized-P/L attribution** read over `positions.json` `closed` lots (and
+   `outcomes.mjs`'s realised sell campaigns): per-item realised net after tax, **win rate**
+   (share of closed lots in profit), **hold-time distribution** (buy→sell), and
+   **realized-vs-suggested capture** (booked net vs what the nearest-prior suggestion's
+   band edges implied — the suggestion join `outcomes.mjs` already computes).
+
+**Honesty rules (process rule 4 — descriptive ≠ calibration):**
+- **Print n for every cut you report** and **refuse per-cell conclusions below the O1
+  thresholds** (`--report` already suppresses cells under `MIN_N_REPORT`; F1's calibration
+  gate is n≥30 per side×percentile×class×regime cell, ≥5 such cells — surfaced by the
+  F1-gate progress line). This is a *description of what happened*, never a fill-rate model.
+- **Respect the concentration caveat.** When one item is >40% of closed lots (the caveat the
+  report prints), per-item reads are mostly ONE sample — present them as anecdote, not a
+  rate. Do not extrapolate a per-item win rate or hold time off a handful of lots.
+- **One week is one sample too.** Week-over-week deltas are narrative colour until the
+  calendar accrues; never present a weekly swing as a trend.
+
+Deliverable: a short honest "here's what the record shows so far, and here's how far we are
+from calibration-grade (F1-gate progress)" — not a recommendation to change the algorithm.
+F1 opens only when its documented thresholds clear (weeks away at ~20 lots/day); this read
+just makes that distance visible every week.

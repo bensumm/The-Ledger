@@ -107,6 +107,12 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
 const pctBucket = p => p == null ? 'unknown'
   : p < 20 ? '0-20' : p < 40 ? '20-40' : p < 60 ? '40-60' : p < 80 ? '60-80' : '80-100';
 
+// FIFO closed lots from the last build() (the money path — reused for the concentration read below,
+// never re-derived). Set in build(); consumed by report(). Top-item share > this fraction prints the
+// "per-item reads are ~one sample" caveat (process rule 4 — descriptive honesty on a concentrated set).
+let CLOSED_LOTS = [];
+const CONCENTRATION_CAVEAT = 0.40;
+
 async function build() {
   if (!fs.existsSync(FILLS)) { console.error('fills.json not found at ' + FILLS); process.exit(1); }
   const events = (JSON.parse(fs.readFileSync(FILLS, 'utf8')).events || []);
@@ -116,6 +122,7 @@ async function build() {
   const offers = collapseOffers(events);
   stampFirstFill(events, offers);
   const { closed } = matchTrades(collapseOffers(events));   // FIFO â€” never re-implemented here
+  CLOSED_LOTS = closed;                                       // expose for report()'s concentration read
   const realisedBySellTs = new Map();                        // sell offer tsOpen -> realised net after tax
   for (const t of closed) { if (t.withdrawn) continue; realisedBySellTs.set(t.sellTs, (realisedBySellTs.get(t.sellTs) || 0) + t.realised); }
 
@@ -258,6 +265,24 @@ function report(o) {
   console.log(`\n# F1 gate (documented thresholds)`);
   console.log(`  A per-cell fill-time/probability curve is trustworthy only at nâ‰¥${MIN_N_F1} per (side Ã— percentile Ã— class Ã— regime) cell, with â‰¥${MIN_CELLS_F1} such cells populated (bucket by regime FIRST â€” the known confound).`);
   console.log(`  Right now: ${f1Cells} cell(s) clear nâ‰¥${MIN_N_F1}. F1 ${f1Cells >= MIN_CELLS_F1 ? 'MAY open.' : `stays GATED (need â‰¥${MIN_CELLS_F1}). The pipeline + schema are validated; the sample is not yet large enough â€” let it accrue.`}`);
+  // F1-gate progress (concise, reuses the same constants â€” never re-hardcode the thresholds)
+  console.log(`  F1-gate progress: ${f1Cells}/${MIN_CELLS_F1} cells cleared (${f1Cells >= MIN_CELLS_F1 ? 'threshold met' : `${Math.max(0, MIN_CELLS_F1 - f1Cells)} more needed at nâ‰¥${MIN_N_F1}/cell`}).`);
+
+  // Concentration: how much of the closed-lot record is one item. When the top item dominates,
+  // any "per-item" read is mostly one sample â€” print the caveat so the weekly read never oversells it.
+  const realClosed = CLOSED_LOTS.filter(t => !t.withdrawn);
+  console.log(`\n# Concentration`);
+  if (!realClosed.length) { console.log(`  no closed lots yet â€” nothing to attribute per item.`); return; }
+  const nameOf = id => (o.campaigns.find(c => c.itemId === id) || {}).name || ('#' + id);
+  const byItem = new Map();   // itemId -> { lots, realised }
+  for (const t of realClosed) { const e = byItem.get(t.itemId) || { lots: 0, realised: 0 }; e.lots++; e.realised += (t.realised || 0); byItem.set(t.itemId, e); }
+  const [topId, top] = [...byItem.entries()].sort((a, b) => b[1].lots - a[1].lots)[0];
+  const totalReal = realClosed.reduce((s, t) => s + (t.realised || 0), 0);
+  const lotShare = top.lots / realClosed.length;
+  const plShare = totalReal !== 0 ? top.realised / totalReal : null;
+  console.log(`  top item by closed lots: ${nameOf(topId)} â€” ${top.lots}/${realClosed.length} lots (${Math.round(lotShare * 100)}%)${plShare != null ? `, ${Math.round(plShare * 100)}% of realised P/L` : ''} across ${byItem.size} item(s).`);
+  if (lotShare > CONCENTRATION_CAVEAT)
+    console.log(`  âš  top item is >${Math.round(CONCENTRATION_CAVEAT * 100)}% of closed lots â€” per-item reads are mostly ONE sample; treat per-item medians as anecdote, not a rate (process rule 4).`);
 }
 
 const o = await build();
