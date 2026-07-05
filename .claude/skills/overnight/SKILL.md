@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.4
+version: 1.5
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -15,21 +15,30 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
 1. **Invoke `/positions`** (Skill tool) → the cut/hold action plan with exact prices.
    Its standalone interactive tail (the capital question) is suppressed — the phase
    boundary below owns it.
-2. **STOP and wait.** Ben executes the cuts/re-lists in-game, then states **how much
+2. **Chase-bid sweep (Ben, 2026-07-05 — the entry-aggression posture flip).** Active
+   sessions price bids near the live instasell to fill; overnight inverts that. Before the
+   pause, list every RESTING BUY offer (`node pipeline/watch.mjs` shows them with verdicts)
+   and flag any bid priced at/near the live instasell or in the upper half of its band —
+   each must be **cancelled or dropped to the band floor / a `nightlows.mjs`-supported
+   level** before Ben walks away. A chase-priced bid left unattended fills into the first
+   quiet-hours dip with nobody watching the exit — the exact adverse selection the active
+   posture accepts only because someone is at the keyboard. Canonical posture doctrine:
+   `/scan` §2 "Entry aggression follows posture"; this step is its overnight enforcement.
+3. **STOP and wait.** Ben executes the cuts/re-lists in-game, then states **how much
    capital he has free to commit overnight**. Resolving current positions is what
    determines free capital + free GE slots, so the capital statement is the phase
    boundary of /overnight. Do not proceed to Phase 2 on a guessed number.
 
 ## Phase 2 — scan, filter, size against stated capital
 
-3. **Run the overnight-posture screen** — `node pipeline/screen.mjs --posture overnight --publish`
+4. **Run the overnight-posture screen** — `node pipeline/screen.mjs --posture overnight --publish`
    (S2), or invoke `/scan` and pass `--posture overnight`. The posture already does the
    structural filtering for you: it keeps only flat/rising regimes with a confident (reliable)
    band, drops the thin gp-flow fast-lane and any 2h breakdown, ranks by net edge over velocity,
    and EXCLUDES items whose yesterday-overnight window printed materially below the current
    optimistic bid (`overnightStaleRisk` — the built-in stale/underwater-by-morning test). The
    500k gp/day floor is applied too. So you no longer hand-apply those exclusions.
-4. **What the posture does NOT decide — your remaining judgment layer:**
+5. **What the posture does NOT decide — your remaining judgment layer:**
    - **Big-ticket / mildly-rising items survive the posture** (they're flat/rising, non-thin) —
      that's intended: an optimistic big-ticket buy is a good overnight option. **Size them**
      (units × capital at risk, often 1–2 fills) and **flag retrace risk on the line**.
@@ -46,7 +55,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      (~75%+), never off a single night's dip (the 176 death-rune bid was one night's
      anomaly — the other 13 nights never went below 184). "Touched" ≠ limit filled —
      pair it with the volume line — and ~14 nights is a small sample (process rule 4).
-5. **Accumulation-and-capital table (required output).** Ben's exact ask: "how many can I
+6. **Accumulation-and-capital table (required output).** Ben's exact ask: "how many can I
    accumulate in 8h and how much capital does that require." For each recommended bid:
    - **Bid price** (the optimistic buy) **and the assumed sell price** (the optimistic
      2h-band sell target the Net/u uses — the table must state it, never leave the sell
@@ -63,7 +72,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    - **Net/u and total if fully cycled** at the stated sell price, after 2% tax.
    - **Prioritize top-down** (best risk-adjusted edge first) with a **running capital
      subtotal**, so Ben takes lines until the Phase-1 stated capital runs out.
-6. **Output the cut / hold / slot plan:** which positions were cut (Phase 1), which holds
+7. **Output the cut / hold / slot plan:** which positions were cut (Phase 1), which holds
    stay listed at what break-even-floored price, and the prioritized bid table with exact
    prices, expected units, and capital per line.
 
