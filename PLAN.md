@@ -90,7 +90,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | ✅ `3404681` (0.38.0) |
 | G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | ✅ `553c3a6`+`b57fbe8` (scheduler DELETED; ruleset id 18520289 active: PR+`checks` required, admin-always bypass verified. Two limits: **no merge queue** — user-owned repo; **PR creation token-blocked** until Ben runs `gh auth refresh -s repo`, then merge staged branch `g1-readme-inventory` as the acceptance PR) |
 | M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | DISPATCHED (wave 3, 2026-07-04) |
-| N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | DISPATCHED (wave 3, 2026-07-04) |
+| N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | ✅ `033318e` (trigger engine + MONITORING.md design section; delivery mechanism = Ben decision pending a live trial of the scheduled-Claude-session option) |
 | P1 | Snapshot-re-emission dedupe in reconstruct.mjs | `pipeline/reconstruct.mjs`, fixtures, `pipeline/FILLS-PIPELINE.md` | OPEN |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
@@ -534,7 +534,18 @@ documented sample thresholds clear (process rule 4).
 - README.md's pipeline file inventory is incomplete: missing `watch.mjs`, `rating.mjs`,
   `nightlows.mjs`, `offers.mjs`, `outcomes.mjs`, `suggestlog.mjs`, `quotecore.test.mjs` and the
   tracked root files `watchlist.json`/`suggestions.jsonl`/`screen.json` (wave-3 scan,
+  2026-07-04). Fix staged on branch `g1-readme-inventory` — becomes the G1 acceptance PR once
+  the gh token is refreshed.
+- `alerts.mjs` and `quote.mjs` each define their own ~5-line `fetchInputs(id)` helper
+  (latest/5m/6h/24h with polite spacing) — a shared `fetchQuoteInputs` in `marketfetch.mjs`
+  would unify them (and screen.mjs) if they ever drift (lane N, 2026-07-04).
+- Named price alerts fire on the live mid; side-specific semantics ("alert when I could *sell*
+  above Y" = instabuy basis) is a one-line change but a product decision for Ben (lane N,
   2026-07-04).
+- Fill-alert dedupe keys on `slot:item:state:date+time` — if the Exchange Logger re-logs an
+  identical terminal line at a different timestamp (the re-log behavior that motivated
+  `collapseOffers`), a fill could alert twice. Low risk in the 60-min window; watch during the
+  N1 live trial (lane N, 2026-07-04).
 
 **Resolved:** earlier per-plan Discovered lists (chunks 4/8/10 fixes) are preserved in git
 history — `git show 39e5d23:PLAN.md`.
