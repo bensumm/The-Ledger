@@ -10,6 +10,21 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Suggestlog path regression fix (SL1, pipeline-only — no APP_VERSION bump)
+OR2 moved `suggestlog.mjs` from `pipeline/` into `pipeline/lib/` but left its ledger path as
+`HERE/'..'/suggestions.jsonl` — correct from the old location, but from `lib/` it resolves to
+`pipeline/suggestions.jsonl`. Every market read from OR2 onward (2026-07-05 10:21→15:39, 351
+rows) appended the O1 suggestions ledger — the accrual dataset the F1 algorithm-feedback gate
+is waiting on — to that untracked fork while the tracked repo-root file sat frozen. Found when
+Ben questioned a cleanup recommendation to delete the "orphan" (the first-pass review had
+misread `HERE/..` as repo root); the near-miss is the lesson — **verify a file is dead by
+proving what writes it, not by checking what reads it.** Fix: path now two levels up (exported
+as `LEDGER`), the 351 stranded rows folded back into the tracked ledger in ts order, and new
+`pipeline/lib/suggestlog.test.mjs` pins the resolved path to the repo root (plus the
+never-fabricate-numbers entry contract and the liqClassOf thresholds). 17 suites. One
+follow-through at merge time: rows the desk writes to the forked path before it pulls this fix
+get folded the same way, then the stray file is deleted.
+
 ### Trends analytics extraction + gate-stack extraction (0.50.0 TC1; GC1 pipeline-only, no bump)
 Two Wave-7 testability extractions, both pure MOVES with behavior held byte-identical (the TD2
 precedent: make a decision-bearing function node-importable so its real rules get a committed fixture,

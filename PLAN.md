@@ -126,7 +126,8 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | LH2 | `blindWarningLine()` restart-blindness header in `monitor.mjs`/`watch.mjs` | new `pipeline/lib/logblind.mjs`, `logblind.test.mjs` | ✅ `f7bd006` (pipeline-only; display-only line, no verdict change) |
 | LH3 | Log-hardening docs reconciliation (FILLS-PIPELINE §5.1/§10 two artifact classes + validator, MONITORING blindness line, CLAUDE.md Done, CHANGELOG) | docs | ✅ `05ccea6` (folded `PLAN-LOG-HARDENING.md` → this file, then deleted) |
 | TC1 | trendcore extraction — pure analytics out of `js/trends.js` → `js/trendcore.js` + fixtures (`backtestPlan`/`patientTargets` are money-affecting + untested) | `js/trends.js`, new `js/trendcore.js`, new `pipeline/trendcore.test.mjs` | ✅ `eaa5414` (0.50.0; pure MOVE, byte-identical; `trendcore.test.mjs` 19 checks) |
-| GC1 | gateCandidates extraction — thresholds-as-argument so `screen.mjs`'s gate stack is fixture-testable (absorbs TD3.5) | `pipeline/screen.mjs`, new test | ✅ `HEAD` (this commit; pipeline-only, no APP_VERSION; byte-identical stdout via `THRESHOLDS`; `gatecandidates.test.mjs` 8 checks; runner 16 suites) |
+| GC1 | gateCandidates extraction — thresholds-as-argument so `screen.mjs`'s gate stack is fixture-testable (absorbs TD3.5) | `pipeline/screen.mjs`, new test | ✅ `cb3eb67` (pipeline-only, no APP_VERSION; byte-identical stdout via `THRESHOLDS`; `gatecandidates.test.mjs` 8 checks; runner 16 suites) |
+| SL1 | suggestlog path regression — OR2 moved `suggestlog.mjs` into `lib/` leaving `HERE/'..'` pointing at `pipeline/`, silently forking the O1 ledger into untracked `pipeline/suggestions.jsonl` (the F1-gating accrual data). Path fixed (two levels up), 351 stranded rows (2026-07-05 10:21→15:39) folded back into the tracked root ledger, resolved path pinned by test | `pipeline/lib/suggestlog.mjs`, new `pipeline/lib/suggestlog.test.mjs`, `suggestions.jsonl` | ✅ this commit (pipeline-only, no APP_VERSION; runner 17 suites; merge-time re-fold step in "Needs a Ben decision") |
 | SR1 | `suggestions.jsonl` rotation/compaction | `suggestions.jsonl`, `pipeline/lib/suggestlog.mjs` | ⏳ ready — unassigned |
 | GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ⏳ ready — unassigned |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
@@ -1070,9 +1071,17 @@ documented sample thresholds clear (process rule 4).
   D1 superseded `g1-readme-inventory`'s README work; alternatively it could be the first
   PR-path smoke once `gh auth refresh -s repo` runs. Ben's call.
 - **`git push origin --delete wave6-tests-org`** — the wave-6 lane branch, squash-landed.
-- **Orphan untracked desk files** — `pipeline/mapping.cache.json`, `pipeline/held-override.json`,
-  `pipeline/suggestions.jsonl` are pre-`.cache`-reorg (OR2.3) leftovers nothing reads; `rm`
-  after Ben confirms they're not live inputs on his machine.
+- **Orphan untracked desk files** — corrected after inspection (2026-07-05; the first-pass
+  "nothing reads them" claim was WRONG for one of the three):
+  - `pipeline/mapping.cache.json` — true orphan (entry-identical to the live
+    `pipeline/.cache/mapping.cache.json`, regenerable); safe to `rm`.
+  - `pipeline/held-override.json` — one entry (`23959` @ 2026-07-03); `monitor.mjs` reads
+    `.cache/held-override.json` so this copy went inert at OR2. Ben decides: obsolete → `rm`,
+    still wanted → move into `pipeline/.cache/`.
+  - `pipeline/suggestions.jsonl` — was NOT an orphan: OR2 moved `suggestlog.mjs` into `lib/`
+    without fixing its relative path, silently forking the O1 ledger there (SL1 fixed the path
+    + folded 351 stranded rows back). **Merge-time step:** after the desk pulls SL1, fold any
+    rows the desk wrote there since the last folded ts into root `suggestions.jsonl`, then `rm`.
 - **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
 - **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
   REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the

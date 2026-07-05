@@ -24,7 +24,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const LEDGER = path.join(HERE, '..', 'suggestions.jsonl');
+// HERE is pipeline/lib/ (since OR2 moved this file into lib/), so repo root is TWO levels up.
+// A single '..' here silently forked the ledger into untracked pipeline/suggestions.jsonl for
+// half a day (2026-07-05) — suggestlog.test.mjs pins the resolved path to the repo root.
+export const LEDGER = path.join(HERE, '..', '..', 'suggestions.jsonl');
 
 // Coarse liquidity class from the limiting-side daily volume — a stable, script-independent
 // vocabulary so quote.mjs / screen.mjs rows share one `class`. Thresholds mirror CLAUDE.md's

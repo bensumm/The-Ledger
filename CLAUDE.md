@@ -67,6 +67,12 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Suggestlog path regression fix** (SL1, pipeline-only — NO APP_VERSION) — the O1 ledger path in
+  `pipeline/lib/suggestlog.mjs` is now exported `LEDGER`, resolving TWO levels up to repo-root
+  `suggestions.jsonl` (OR2's move into `lib/` had silently forked it to untracked
+  `pipeline/suggestions.jsonl`; 351 stranded rows folded back). The resolved path is pinned by
+  `pipeline/lib/suggestlog.test.mjs` — don't re-relativize it. Lesson: prove a file is dead by
+  what WRITES it, not what reads it. Full story: `CHANGELOG.md`.
 - **Exchange-log hardening — impossible-transition validation + restart-blindness warning** (LH1/LH2,
   pipeline+docs only — NO APP_VERSION) — (LH1) `validateSlotTransitions()` (`pipeline/lib/reconstruct.mjs`)
   runs at INGEST next to `buildEvents()`, BEFORE the `fills.json` merge: a GE slot is a state machine, so a
