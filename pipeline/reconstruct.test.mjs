@@ -11,7 +11,7 @@
  * Run: `node pipeline/reconstruct.test.mjs`  (exits non-zero on any failure).
  *
  * Coverage:
- *   R1 — buy→sell FIFO close; cancel-to-EMPTY inference; WITHDRAWN consume; BANKED basis lot;
+ *   R1 — buy→sell FIFO close; EMPTY derives no event (inference removed); WITHDRAWN consume; BANKED basis lot;
  *        REMOVE tombstone deleting an already-persisted event; eventId GOLDEN value (guards the
  *        §5.1 eventId()↔eventIdFor() cross-file hash contract).
  *   P1 — snapshot re-emission dedupe: (a) the 2026-07-04 blowpipe-style dup BOUGHT pair dedupes;

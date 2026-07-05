@@ -23,11 +23,10 @@ import { tax } from '../../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
  *
  * The plugin emits explicit "CANCELLED_BUY"/"CANCELLED_SELL" states
  * (confirmed against a live log 2026-07-02) — normalizeStateStr() maps
- * any CANCEL* to 'cancelled'. It can ALSO drop an offer straight to
- * state:"EMPTY" without a cancel line, so buildEvents() below keeps a
- * sequence-aware fallback: any slot event that never reached 'complete'
- * before the slot goes EMPTY (or a different item appears in the slot) is
- * retroactively marked 'cancelled'. Keep both paths. parseJsonLine() here
+ * any CANCEL* to 'cancelled' — and that explicit line is the ONLY source of
+ * a cancel: the old cancel-to-EMPTY inference was REMOVED 2026-07-05 (a
+ * logout EMPTY-burst fabricated phantom cancels; see buildEvents() below
+ * and FILLS-PIPELINE.md §10). parseJsonLine() here
  * only normalizes one line; it returns `{ empty: true }` markers for
  * EMPTY/unrecognized lines so the sequencer can see slot-clear events.
  *
