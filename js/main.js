@@ -56,6 +56,8 @@ if(ghClearBtn) ghClearBtn.onclick=()=>{ if(!confirm('Remove the saved GitHub tok
   savePat(''); logEvent('info','action','PAT removed'); renderGhSync(); };
 const lwoEl=document.getElementById('ledgerWatchOnly'); if(lwoEl) lwoEl.onchange=e=>setLedgerWatchOnly(e.target.checked);
 document.querySelectorAll('#ledgerPeriod button').forEach(b=>b.onclick=()=>setLedgerPeriod(b.dataset.period));
+// LU1.4: the manual-entry form is a collapsible <details>, collapsed by default; persist its state.
+const lfd=document.getElementById('ledgerFormD'); if(lfd) lfd.ontoggle=()=>sSet('ledgerFormOpen', lfd.open);
 export const bankI=document.getElementById('bankInput');
 bankI.onchange=async()=>{ const v=parseGp(bankI.value); if(!isNaN(v)){ STATE.bankroll=v; bankI.value=fmt(v); logEvent('info','action','bankroll → '+fmt(v)); await sSet('bankroll',v); recompute(); } };
 export const slotsI=document.getElementById('slotsInput');
@@ -74,6 +76,7 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   const fp=await sGet('fillsPending'); if(Array.isArray(fp)) STATE.fillsPending=fp;
   const lwo=await sGet('ledgerWatchOnly'); if(typeof lwo==='boolean') STATE.ledgerWatchOnly=lwo;
   const lpd=await sGet('ledgerPeriod'); if(typeof lpd==='string') STATE.ledgerPeriod=lpd;
+  const lfo=await sGet('ledgerFormOpen'); if(lfo===true){ const d=document.getElementById('ledgerFormD'); if(d) d.open=true; }  // LU1.4: restore expanded form (collapsed default)
   const bk=await sGet('bankroll'); if(typeof bk==='number') STATE.bankroll=bk;
   const sl=await sGet('slots'); if(typeof sl==='number') STATE.slots=sl;
   const st=await sGet('strategy'); if(st&&STRAT[st]) STATE.strategy=st;

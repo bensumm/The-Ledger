@@ -271,7 +271,14 @@ Script facts the skills rely on (current behavior, not doctrine):
 - ~~**Ledger redesign — grouped, watchlist-filtered, period P&L**~~ — **BUILT** (watchlist
   filter, per-item grouping + drill-in, period P&L bucketed by SELL date — `renderLedger` /
   `periodKey` in `js/ledger.js`, A3 — were `js/ui.js`). The local-timezone day-boundary verification lives in PLAN.md
-  chunk E1.
+  chunk E1. **Ledger UX rework** (0.45.0, LU1) refined the surface: the grouped-row item name is now a
+  Trends link (`linkname`→`openTrends`) and multi-lot expansion moved to an explicit `.expbtn` chevron
+  (the old whole-row `data-grp` click is gone); the P&L period control (`#ledgerPeriod`) moved from the
+  top bar onto the "Closed flips" label; clicking a `#periodStrip` bucket filters the closed table to that
+  bucket's sell date (`STATE.ledgerBucket`, session-only — active bucket shows an `×`, "All" pill or
+  re-click clears, changing granularity clears); the manual-entry form is a collapsed-by-default
+  `<details id="ledgerFormD">` (persisted `ledgerFormOpen`); and the closed-flips columns sort via TB1's
+  `makeSortable` on group aggregates (default `last`-close desc = unchanged order).
 
 ## Repo is public — no PII
 This repo is public on GitHub. Never commit account names, RSNs, real names, emails,

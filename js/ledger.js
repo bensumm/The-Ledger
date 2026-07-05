@@ -10,6 +10,8 @@
 import { STATE, sSet, logEvent, setHealth } from './state.js';
 import { tax, netMarginQty, fmt, fmtP, parseGp, now, pad2, sgn } from './format.js';
 import { resolveItem, resolveId } from './market.js';
+import { openTrends } from './trends.js';
+import { makeSortable } from './table.js';
 import { renderAll, renderCoffer, realised, FILLS_STALE_MS, fmtAge } from './ui.js';
 import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName,
          tombstoneLine, manualLineEvent, eventIdFor, readFillsLog, rewriteFillsLog, MOBILE_SLOT } from './fillslog.js';
@@ -328,8 +330,30 @@ export async function renderFillsLogLink(){
     if(st){ st.classList.remove('hidden'); st.textContent='Manual entries need the fills log (single source of truth). Link coffer-manual.log to enable the form, or use pipeline/add-manual-fill.mjs from the terminal.'; } }
 }
 export async function setLedgerWatchOnly(v){ STATE.ledgerWatchOnly=v; await sSet('ledgerWatchOnly',v); renderLedger(); }
-export async function setLedgerPeriod(p){ STATE.ledgerPeriod=p; await sSet('ledgerPeriod',p); renderLedger(); }
+export async function setLedgerPeriod(p){ STATE.ledgerPeriod=p; STATE.ledgerBucket=null; /* LU1.3: changing granularity clears any active bucket filter */ await sSet('ledgerPeriod',p); renderLedger(); }
 export function toggleLedgerGroup(key){ STATE.ledgerExpanded[key]=!STATE.ledgerExpanded[key]; renderLedger(); }
+/* LU1.3: click a period bucket to filter the closed-flips table to that bucket's sell date;
+   clicking the active bucket (or the "All" pill, key='') clears. Session-only (STATE.ledgerBucket). */
+function setLedgerBucket(key){ STATE.ledgerBucket=(!key || STATE.ledgerBucket===key)?null:key; renderLedger(); }
+
+/* LU1.5: the closed-flips columns are sortable via the shared TB1 helper. Rows here are
+   per-item GROUP aggregates (groupTrades → totQty/avgBuy/avgSell/totTax/totReal), so the
+   comparators read those aggregates. Default `last` (most-recent close) desc reproduces the
+   pre-LU1 ordering; `last` has no visible header, so the table opens looking unchanged until a
+   header is clicked. */
+const closedSort=makeSortable({
+  tableId:'closedTable', name:'ledgerClosed', defaultKey:'last',
+  columns:[
+    {key:'last', type:'num', get:g=>g.last},
+    {key:'name', type:'str', get:g=>g.name},
+    {key:'totQty', type:'num', get:g=>g.totQty},
+    {key:'avgBuy', type:'num', get:g=>g.avgBuy},
+    {key:'avgSell', type:'num', get:g=>g.avgSell},
+    {key:'totTax', type:'num', get:g=>g.totTax},
+    {key:'totReal', type:'num', get:g=>g.totReal}
+  ],
+  onSort:()=>renderLedger()
+});
 
 export function renderLedger(){
   const openAll=STATE.trades.filter(t=>t.sell===null), closedAll=STATE.trades.filter(t=>t.sell!==null);
@@ -344,7 +368,11 @@ export function renderLedger(){
   const ltag='<span class="srctag" title="local-only pre-0.27 manual entry — the browser-local path was removed; re-inject via the log or delete (see the banner above)">local</span>';
   const btag='<span class="srctag" title="pre-owned inventory that entered the flip flow at a declared basis (not cash out of pocket)">banked</span>';
   const wtag='<span class="srctag" title="taken from inventory for personal use — no sale; excluded from realised">withdrawn</span>';
-  const caret=k=>'<span class="caret">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</span>';
+  // LU1.1: expansion is an explicit chevron BUTTON (only on multi-lot groups), and the item
+  // name is a Trends link (linkname/data-trend) — the same affordance Finder/Signals rows use.
+  // Row-click-to-expand (the old data-grp handler) is gone, so name-click can own the click.
+  const chev=k=>'<button class="expbtn" type="button" data-exp="'+k+'" title="Expand / collapse lots">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</button>';
+  const nameCell=g=>g.itemId!=null?'<span class="linkname" data-trend="'+g.itemId+'">'+g.name+'</span>':'<span class="itemname">'+g.name+'</span>';
   const cnt=n=>' <span class="cnt">×'+n+'</span>';
   // optimistic rows for entries just written to the fills log (dropped by syncFills once absorbed).
   // ALWAYS rendered regardless of the "Watchlist only" filter (chunk 4.5): a pending row is the
@@ -367,7 +395,7 @@ export function renderLedger(){
       const totQty=g.rows.reduce((s,t)=>s+t.qty,0), avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
       const un=cur!==null?g.rows.reduce((s,t)=>s+netMarginQty(t.buy,cur,t.qty),0):null, multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
       const rowTag=t=>(t.src==='fills'?' '+ftag:' '+ltag)+(t.banked?' '+btag:'');
-      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):rowTag(g.rows[0]))+'</td>'+
+      const head='<tr class="grp"><td class="left">'+(multi?chev(g.key):'')+nameCell(g)+(multi?cnt(g.rows.length):rowTag(g.rows[0]))+'</td>'+
         '<td class="num">'+totQty.toLocaleString()+'</td><td class="num">'+fmt(avgBuy)+'</td><td class="num">'+(cur!==null?fmt(cur):'—')+'</td>'+
         '<td class="num '+(un!==null?sgn(un):'')+'">'+(un!==null?fmt(un):'—')+'</td><td>'+(multi?'':rowActions(g.rows[0]))+'</td></tr>';
       let det=''; if(multi&&exp) det=g.rows.map(t=>{ const u=cur!==null?netMarginQty(t.buy,cur,t.qty):null;
@@ -379,35 +407,49 @@ export function renderLedger(){
   // ---- period P&L strip (closed flips bucketed by SELL date — sidesteps border-straddle) ----
   const strip=document.getElementById('periodStrip');
   if(strip){
-    if(STATE.ledgerPeriod==='all' || !closed.length){ strip.classList.add('hidden'); strip.innerHTML=''; }
+    if(STATE.ledgerPeriod==='all' || !closed.length){ strip.classList.add('hidden'); strip.innerHTML=''; STATE.ledgerBucket=null; }
     else{ const buckets=new Map();
       for(const t of closed){ if(t.withdrawn) continue; // withdrawals are not flips — no realised P/L to attribute
         const {key,label}=periodKey(t.closed||t.opened||now(), STATE.ledgerPeriod);
         if(!buckets.has(key)) buckets.set(key,{label,total:0,count:0}); const b=buckets.get(key); b.total+=realised(t); b.count++; }
-      const arr=[...buckets.entries()].sort((a,b)=>a[0]<b[0]?1:-1).slice(0,8).map(e=>e[1]);
+      const arr=[...buckets.entries()].sort((a,b)=>a[0]<b[0]?1:-1).slice(0,8);
+      // if the active bucket scrolled out of the top-8 (or no longer exists), drop the filter
+      if(STATE.ledgerBucket && !arr.some(e=>e[0]===STATE.ledgerBucket)) STATE.ledgerBucket=null;
       strip.classList.remove('hidden');
-      strip.innerHTML='<div class="pstitle">Realised by '+STATE.ledgerPeriod+' <span class="mini">· attributed by sell date</span></div><div class="pscells">'+
-        arr.map(b=>'<div class="pcell"><div class="pl">'+b.label+'</div><div class="pv num '+sgn(b.total)+'">'+fmt(b.total)+'</div><div class="pc">'+b.count+' flip'+(b.count===1?'':'s')+'</div></div>').join('')+'</div>';
+      // LU1.3: each bucket is a clickable filter; the active one highlights with an × to clear,
+      // and an "All" pill (data-bucket="") clears too. Highlighted = the current STATE.ledgerBucket.
+      const allOn=STATE.ledgerBucket?'':' on';
+      strip.innerHTML='<div class="pstitle">Realised by '+STATE.ledgerPeriod+' <span class="mini">· attributed by sell date · click to filter</span></div><div class="pscells">'+
+        '<div class="pcell allpill'+allOn+'" data-bucket="" title="Show all buckets">All</div>'+
+        arr.map(([key,b])=>{ const on=STATE.ledgerBucket===key;
+          return '<div class="pcell'+(on?' on':'')+'" data-bucket="'+key+'" title="'+(on?'Clear filter':'Filter to '+b.label)+'"><div class="pl">'+b.label+(on?' <span class="pclear">×</span>':'')+'</div><div class="pv num '+sgn(b.total)+'">'+fmt(b.total)+'</div><div class="pc">'+b.count+' flip'+(b.count===1?'':'s')+'</div></div>'; }).join('')+'</div>';
+      strip.querySelectorAll('[data-bucket]').forEach(el=>el.onclick=()=>setLedgerBucket(el.dataset.bucket));
     }
   }
 
   // ---- CLOSED (grouped by item; drill-in when >1 flip) ----
+  // LU1.3: when a period bucket is active, the table shows only that bucket's flips (matched on
+  // sell date, same basis as the strip — withdrawals excluded, they aren't attributed to a bucket).
+  const closedShown=(STATE.ledgerPeriod!=='all' && STATE.ledgerBucket)
+    ? closed.filter(t=>!t.withdrawn && periodKey(t.closed||t.opened||now(), STATE.ledgerPeriod).key===STATE.ledgerBucket)
+    : closed;
   const cb=document.getElementById('closedBody'), ce=document.getElementById('closedEmpty');
   if(!closed.length && !pendSells.length){ cb.innerHTML=''; ce.classList.remove('hidden');
     ce.innerHTML='<div class="empty"><div class="big">No closed flips'+(STATE.ledgerWatchOnly?' on your watchlist':'')+'</div><div class="sm">'+(STATE.ledgerWatchOnly&&closedAll.length?'Turn off “Watchlist only” to see '+closedAll.length+' hidden.':'Sold positions land here with realised profit after tax.')+'</div></div>';
-  }else if(!closed.length){ ce.classList.add('hidden'); cb.innerHTML=pendClosedRows;
+  }else if(!closedShown.length){ ce.classList.add('hidden'); cb.innerHTML=pendClosedRows;
   }else{ ce.classList.add('hidden');
     // withdrawn rows carry sell=0 and no tax — average/aggregate the SOLD rows only, so a
     // withdrawal never drags the group's avg sell or tax figures (realised() is already 0)
-    const groups=groupTrades(closed).map(g=>{ const totQty=g.rows.reduce((s,t)=>s+t.qty,0);
+    const groups=closedSort.sort(groupTrades(closedShown).map(g=>{ const totQty=g.rows.reduce((s,t)=>s+t.qty,0);
       const sold=g.rows.filter(t=>!t.withdrawn), soldQty=sold.reduce((s,t)=>s+t.qty,0);
       g.totQty=totQty; g.avgBuy=Math.round(g.rows.reduce((s,t)=>s+t.buy*t.qty,0)/totQty);
       g.avgSell=soldQty?Math.round(sold.reduce((s,t)=>s+t.sell*t.qty,0)/soldQty):null;
       g.totTax=sold.reduce((s,t)=>s+tax(t.sell)*t.qty,0); g.totReal=g.rows.reduce((s,t)=>s+realised(t),0); g.last=Math.max(...g.rows.map(t=>t.closed||0)); return g;
-    }).sort((a,b)=>b.last-a.last);
+    }));   // LU1.5: sort by group aggregates (default `last` desc = pre-LU1 order)
+    closedSort.decorate();
     cb.innerHTML=groups.map(g=>{ const multi=g.rows.length>1, exp=STATE.ledgerExpanded[g.key];
       const gtags=(g.rows.some(t=>t.src==='fills')?' '+ftag:'')+(g.rows.some(t=>t.src!=='fills')?' '+ltag:'')+(g.rows.some(t=>t.banked)?' '+btag:'')+(g.rows.some(t=>t.withdrawn)?' '+wtag:'');
-      const head='<tr class="grp'+(multi?' clk':'')+'"'+(multi?' data-grp="'+g.key+'"':'')+'><td class="left">'+(multi?caret(g.key):'')+'<span class="itemname">'+g.name+'</span>'+(multi?cnt(g.rows.length):'')+gtags+'</td>'+
+      const head='<tr class="grp"><td class="left">'+(multi?chev(g.key):'')+nameCell(g)+(multi?cnt(g.rows.length):'')+gtags+'</td>'+
         '<td class="num">'+g.totQty.toLocaleString()+'</td><td class="num">'+fmt(g.avgBuy)+'</td><td class="num">'+(g.avgSell!==null?fmt(g.avgSell):'<span class="mini">withdrawn</span>')+'</td>'+
         '<td class="num mini loss">'+fmt(g.totTax)+'</td><td class="num '+sgn(g.totReal)+'">'+fmt(g.totReal)+'</td><td>'+(multi?'':rowActions(g.rows[0]))+'</td></tr>';
       let det=''; if(multi&&exp) det=g.rows.slice().sort((a,b)=>(b.closed||0)-(a.closed||0)).map(t=>{ const r=realised(t), d=new Date((t.closed||0)*1000);
@@ -417,7 +459,9 @@ export function renderLedger(){
       return head+det;
     }).join('')+pendClosedRows;
   }
-  document.querySelectorAll('#openBody [data-grp],#closedBody [data-grp]').forEach(el=>el.onclick=e=>{ if(e.target.closest('button')) return; toggleLedgerGroup(el.dataset.grp); });
+  // LU1.1: expansion via the chevron button; item name links to Trends (same as Finder/Signals)
+  document.querySelectorAll('#openBody [data-exp],#closedBody [data-exp]').forEach(b=>b.onclick=()=>toggleLedgerGroup(b.dataset.exp));
+  document.querySelectorAll('#openBody [data-trend],#closedBody [data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delTrade(b.dataset.del));
   document.querySelectorAll('[data-pedit]').forEach(b=>b.onclick=()=>editPending(b.dataset.pedit));
   document.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>delPending(b.dataset.pdel));

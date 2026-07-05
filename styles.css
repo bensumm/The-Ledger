@@ -263,6 +263,12 @@
 tr.grp.clk{cursor:pointer}
 tr.grp.clk:hover{background:rgba(255,255,255,0.03)}
 .caret{display:inline-block;width:14px;color:var(--parch2);font-size:11px}
+/* LU1.1: expansion chevron button on multi-lot groups (replaces the old row-click-to-expand) */
+.expbtn{display:inline-block;width:16px;padding:0;margin-right:2px;background:transparent;border:none;color:var(--parch2);font-size:11px;cursor:pointer;vertical-align:baseline}
+.expbtn:hover{color:var(--gold)}
+/* LU1.2: the P&L-by control now rides the "Closed flips" section label */
+.sectlabel.closedhdr{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sectlabel .lperiod{letter-spacing:normal;text-transform:none}
 .cnt{color:var(--parch2);font-size:12px;font-weight:600}
 tr.detail{background:rgba(0,0,0,0.15)}
 
@@ -279,7 +285,13 @@ td.left.sub{padding-left:22px}
 .periodstrip{margin:8px 0 12px}
 .pstitle{font-size:12px;color:var(--parch2);margin-bottom:6px}
 .pscells{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-.pcell{flex:0 0 auto;min-width:92px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;text-align:right}
+.pcell{flex:0 0 auto;min-width:92px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;text-align:right;cursor:pointer}
+/* LU1.3: buckets are clickable filters; the active one and the "All" pill highlight in gold */
+.pcell:hover{border-color:var(--parch2)}
+.pcell.on{border-color:var(--gold);background:rgba(212,175,55,0.08)}
+.pcell.allpill{min-width:0;display:flex;align-items:center;text-align:center;color:var(--parch2);font-size:12px;font-weight:600}
+.pcell.allpill.on{color:var(--gold)}
+.pcell .pclear{color:var(--gold);font-weight:700}
 .pcell .pl{font-size:11px;color:var(--parch2)}
 .pcell .pv{font-size:14px;font-weight:700}
 .pcell .pc{font-size:10px;color:var(--parch2)}
@@ -312,6 +324,13 @@ tr.detail.pend td{opacity:.85}
 .ghsync>summary::before{content:'▸ ';color:var(--parch2)}
 .ghsync[open]>summary::before{content:'▾ '}
 .ghsync>summary .mini{font-weight:400;color:var(--muted)}
+/* LU1.4: manual-entry form collapsed by default in a <details> */
+.ledgerformd{margin-bottom:12px}
+.ledgerformd>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--parch2);padding:6px 0;list-style:none}
+.ledgerformd>summary::-webkit-details-marker{display:none}
+.ledgerformd>summary::before{content:'▸ ';color:var(--gold)}
+.ledgerformd[open]>summary::before{content:'▾ '}
+.ledgerformd>summary:hover{color:var(--gold)}
 .ghsrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
 .ghsrow input{flex:1 1 220px;min-width:0;box-sizing:border-box;background:var(--oak);border:1px solid var(--line2);
   color:var(--parch);border-radius:7px;padding:10px 11px;font-size:13px;font-family:'IBM Plex Mono',monospace}

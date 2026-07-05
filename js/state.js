@@ -19,7 +19,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.44.0';
+export const APP_VERSION='0.45.0';
 // Finder rating model — four transparent 0..1 sub-scores blended into a quality
 // multiplier that dampens the profit/hr magnitude anchor. Weights sum to 1.
 // (These become Settings-tab editable next pass.)
@@ -51,7 +51,7 @@ export const STATE = {
   fillsPending: [],   // optimistic rows for manual entries just written to coffer-manual.log, shown until the next sync absorbs them
   catById: {}, catByName: {},   // full-catalog indices (every mapped item, no flip floor)
   cofferCollapsed: false,
-  ledgerWatchOnly: true, ledgerPeriod: 'all', ledgerExpanded: {},  // Ledger view: filter to watchlist, P&L bucket size (by sell date), drilled-in item groups
+  ledgerWatchOnly: true, ledgerPeriod: 'all', ledgerExpanded: {}, ledgerBucket: null,  // Ledger view: filter to watchlist, P&L bucket size (by sell date), drilled-in item groups, active period-bucket filter (LU1.3 — session-only, not persisted)
   signalCache: {},
   LOG: [],                     // {t, level, scope, msg}
   logFilter: 'all'             // Logs view scope filter (L1): all | action | system

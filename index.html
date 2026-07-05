@@ -163,12 +163,6 @@
     <div class="mini hidden" id="fillsMeta" style="margin-bottom:12px; color:var(--parch2)"></div>
     <div class="ledgerctl">
       <label class="lchk"><input type="checkbox" id="ledgerWatchOnly" checked /> Watchlist only</label>
-      <div class="lperiod" id="ledgerPeriod"><span class="lpk">P&amp;L by</span>
-        <button type="button" data-period="all" class="on">All</button>
-        <button type="button" data-period="day">Day</button>
-        <button type="button" data-period="week">Week</button>
-        <button type="button" data-period="month">Month</button>
-      </div>
     </div>
     <div class="mini hidden" id="legacyBanner" style="margin-bottom:12px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--parch2)"></div>
     <div class="fillslink">
@@ -185,6 +179,8 @@
       </div>
       <div id="ghSyncStatus" class="mini"></div>
     </details>
+    <details class="ledgerformd" id="ledgerFormD">
+    <summary>Log a trade…</summary>
     <div class="ledgerform">
       <div class="fld"><label>Log</label>
         <div class="segtoggle" id="tType" data-mode="buy">
@@ -208,6 +204,7 @@
       <button id="addTrade" class="go">Open position</button>
     </div>
     <div class="mini" style="margin:-6px 0 12px; color:var(--parch2)">Leave “When” blank for “now”. Backdated trades <b>must</b> carry the real trade time — FIFO matching depends on it. Entries write to your linked fills log (the single source of truth); nothing is stored browser-only.</div>
+    </details>
     <div class="sectlabel">Open positions <button id="reviewPos" class="ghostbtn sm" style="margin-left:8px">Review pricing</button></div>
     <div id="posReview" class="hidden" style="margin-bottom:14px"></div>
     <div class="tablewrap"><table>
@@ -215,10 +212,17 @@
       <tbody id="openBody"></tbody>
     </table></div>
     <div id="openEmpty" class="empty hidden" style="border:1px solid var(--line);border-radius:12px"></div>
-    <div class="sectlabel">Closed flips</div>
+    <div class="sectlabel closedhdr">Closed flips
+      <div class="lperiod" id="ledgerPeriod"><span class="lpk">P&amp;L by</span>
+        <button type="button" data-period="all" class="on">All</button>
+        <button type="button" data-period="day">Day</button>
+        <button type="button" data-period="week">Week</button>
+        <button type="button" data-period="month">Month</button>
+      </div>
+    </div>
     <div id="periodStrip" class="periodstrip hidden"></div>
-    <div class="tablewrap"><table>
-      <thead><tr><th class="left">Item</th><th>Qty</th><th>Avg buy</th><th>Avg sold</th><th>Tax</th><th>Realised</th><th></th></tr></thead>
+    <div class="tablewrap"><table id="closedTable">
+      <thead><tr><th class="left" data-k="name">Item</th><th data-k="totQty">Qty</th><th data-k="avgBuy">Avg buy</th><th data-k="avgSell">Avg sold</th><th data-k="totTax">Tax</th><th data-k="totReal">Realised</th><th></th></tr></thead>
       <tbody id="closedBody"></tbody>
     </table></div>
     <div id="closedEmpty" class="empty hidden" style="border:1px solid var(--line);border-radius:12px"></div>

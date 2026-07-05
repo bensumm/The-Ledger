@@ -27,8 +27,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   when the timing edge is actually proven out-of-sample).
 - **Watchlist / Signals** — star items to track; live buy signals fire when a
   watched item has an after-tax spread during its historically-cheap window.
-- **Ledger** — manual position tracking with after-tax realized/unrealized P/L,
-  summarized in the "Coffer" header tiles.
+- **Ledger** — per-item grouped open/closed positions with after-tax realized/unrealized P/L,
+  summarized in the "Coffer" header tiles. Item names link to Trends; multi-lot groups expand via a
+  chevron; a "P&L by" Day/Week/Month control on the Closed-flips header drives a period strip whose
+  buckets click to filter the table by sell date; the manual-entry form is a collapsible section and the
+  closed columns are sortable.
 - **Fill-data pipeline** — see `pipeline/` (below): captures real GE trades from
   RuneLite to `fills.json` so the tool can eventually calibrate its predictions
   against actual fills.
