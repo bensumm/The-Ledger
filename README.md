@@ -61,17 +61,35 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (slot 9) via the GitHub contents API; read by `sync-fills.mjs` (M1, `FILLS-PIPELINE.md` §13)
 - `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
   trades + open positions); the app auto-populates its Ledger/Coffer from it
+- `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
+  with local `STATE.watchlist` and `screen.mjs` always scans it (S3); app writes it back via
+  the GitHub contents API (`js/github.js`)
+- `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
+  `pipeline/alerts.mjs` (N1); ships empty
+- `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
+  recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
+  via `pipeline/suggestlog.mjs`
+- `screen.json` — the published opportunity screen the app's Scan tab renders (written by
+  `screen.mjs --publish`)
 - `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by
-  Pages, not part of the app. `sync-fills.mjs` (parse log → `fills.json`/`positions.json`),
-  `reconstruct.mjs` (shared FIFO reconstruction), `add-manual-fill.mjs` (inject/tombstone
-  manual fills), `monitor.mjs` (live read-only position monitor), `marketfetch.mjs`
-  (node-side price/guide fetch layer), `cli.mjs` (shared arg/format/table helpers for the
-  node scripts), `quote.mjs` (per-item / `--positions` market table),
-  `screen.mjs` (opportunity screen), `smoke.mjs` (CI headless-chromium DOM smoke of
-  `index.html`, all external network stubbed — wired into `.github/workflows/checks.yml`).
-  The `quote.mjs`/`screen.mjs` scripts import
-  `js/quotecore.js` + `js/format.js` so their tables match the app exactly. See
-  `pipeline/FILLS-PIPELINE.md`.
+  Pages, not part of the app:
+  - `sync-fills.mjs` (parse logs → `fills.json`/`positions.json`, commit + push),
+    `reconstruct.mjs` (shared FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (shared
+    exchange-log discovery + open-offer semantics), `positions.mjs` (shared `readOpenPositions`
+    open-lot grouping), `add-manual-fill.mjs` (inject/tombstone manual fills)
+  - `marketfetch.mjs` (node-side price/guide fetch layer + historical bands), `cli.mjs`
+    (shared arg/format/table helpers), `quote.mjs` (per-item / `--positions` market table),
+    `screen.mjs` (opportunity screen), `rating.mjs` (grade/score model), `watch.mjs` (adaptive
+    live position/offer monitor), `monitor.mjs` (live read-only log-state snapshot),
+    `nightlows.mjs` (overnight fill-realism scoring), `alerts.mjs` (N1 push-notification
+    trigger engine), `outcomes.mjs` (derived campaign/outcomes join — gitignored output),
+    `suggestlog.mjs` (shared `suggestions.jsonl` appender)
+  - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
+    `quotecore.test.mjs` (verdict-tree fixtures) and `reconstruct.test.mjs` (FIFO/tombstone/
+    snapshot-dedupe fixtures) — all three wired into `.github/workflows/checks.yml`
+  - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
+    routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
+    `js/format.js` so their tables match the app exactly.
 
 ## Local development
 

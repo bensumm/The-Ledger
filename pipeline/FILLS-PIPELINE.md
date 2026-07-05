@@ -13,9 +13,17 @@
 
 ## 1. Project context (what The Coffer is)
 
-- Single self-contained web app, one file: **`index.html`** at the repo root, deployed
-  via **GitHub Pages** (bensumm.github.io/The-Ledger/). Vanilla JS, no build step, no
-  framework. PWA-packaged. Currently **v0.14.1**.
+> **Historical framing — 2026-07-01 handoff.** §§1–4, §6, and §9 below were written to
+> hand a mobile-session state to Claude Code; parts are now superseded. **Current state
+> lives in §5.1 (positions.json), §10 (environment notes — the single home), §11 (outcomes
+> dataset), §12 (sync cadence — schedule eliminated), and §13 (mobile write path).** The
+> app is no longer a single file and is not pinned to the version quoted below; see
+> `README.md` + `CLAUDE.md` for the live picture. Kept for the design rationale it carries.
+
+- Self-contained web app, deployed via **GitHub Pages** (bensumm.github.io/The-Ledger/).
+  Vanilla JS, no build step, no framework, PWA-packaged. (As of 2026-07 the app is split
+  across `index.html` + `styles.css` + `js/*` ES modules — it is no longer the single
+  `index.html` file described in this 2026-07-01 handoff.)
 - It's an OSRS Grand Exchange flipping cockpit: a Finder ranking flippable items by
   after-tax margin/ROI/risk, per-item Trends analytics (hourly seasonality, momentum,
   guide-price divergence, walk-forward backtest), live buy Signals for watched items,
@@ -30,15 +38,14 @@
 - Price semantics (flipper convention, opposite of wiki labels): **Buy** = `low` =
   instasell side = where you place buy offers. **Sell** = `high` = instabuy side.
 
-### Critical process rules (inherited from the mobile sessions — keep them)
-1. **The deployed `index.html` in the repo is canonical.** Never edit from a stale
-   copy. Confirm the file/version before changing it. A rollback incident happened
-   when edits were applied to an outdated snapshot.
-2. Validate every edit: extract the `<script>` body, run `node --check`, verify
-   brace/paren/bracket balance. Prefer exact-string-match patches that fail loudly.
-3. Ben wants **prose explanations** of what changed and why, alongside code.
-4. Be honest about statistical limits. Never oversell signal quality.
-5. Bump `APP_VERSION` and the `BUILD` date constant on every shipped change.
+### Critical process rules — see CLAUDE.md
+The process rules now live in **`CLAUDE.md` "Process rules"** (the canonical, current home):
+the repo files are canonical / don't work from a stale copy; `node --check` each touched
+`js/*.js` (each is standalone ESM now — no more `<script>`-body extraction) plus a real
+browser/Playwright run; prose explanations alongside code; honesty about statistical limits;
+bump `APP_VERSION` in `js/state.js` on shipped app changes (there is **no** `BUILD` date
+constant — that was a single-file-era artifact and no longer exists). This section is retained
+only as a pointer; do not re-derive the rules here.
 
 ## 2. What this pipeline is for
 
@@ -211,7 +218,16 @@ logs, written by `add-manual-fill.mjs`, the app's linked file handle (`js/fillsl
 
 ## 6. The Coffer side (mobile-session work, or Claude Code once comfortable)
 
-Not yet built — planned as the next tool feature, roughly in order:
+> **Mostly SHIPPED (historical roadmap).** Items 1–3 landed long ago: the app fetches +
+> merges `positions.json`/`fills.json` with a `generatedAt` staleness banner (0.18.0
+> auto-populate + M1's 0.39.0 Refresh-positions button), FIFO buy↔sell pairing lives in the
+> pipeline's `reconstruct.mjs` (not re-done in the browser), and the Ledger auto-populates
+> from `positions.json`. Items 4–6 (intent capture, calibration surfaces, skipped-signal
+> scoring) are the O1→F1 line — O1's `suggestions.jsonl` + `outcomes.mjs` now capture intent
+> and market context (§11); the calibration surfaces open when F1's sample gate clears. The
+> list below is the original ordering, kept for context.
+
+Original roadmap — planned as the next tool feature, roughly in order:
 
 1. **Fetch + merge**: on refresh, `fetch('fills.json')` (same-origin, cache-busted),
    store under a new storage key (e.g. `fills`), show "fills last synced Xh ago" and a
@@ -306,7 +322,10 @@ Not yet built — planned as the next tool feature, roughly in order:
 - [x] Sell-tax gross-vs-net question answered empirically and recorded here (§5) —
       `spent`/`worth` is gross, not post-tax. Also surfaced that execution price can
       differ from the quoted offer price even on a full fill.
-- [ ] Then: tool-side fetch+merge (§6.1) as the first index.html change
+- [x] Tool-side fetch+merge (§6.1) — **shipped 0.18.0** (`syncFills()` merges
+      `positions.json` into the Ledger/Coffer; the `generatedAt` staleness banner + M1's
+      0.39.0 Refresh-positions button close out the freshness half). The pipeline phase is
+      complete; ongoing work is the O1→F1 calibration line (§11).
 
 ## 10. Environment notes (Windows machine) — single home
 

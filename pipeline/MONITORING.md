@@ -18,9 +18,11 @@ band-bottom deterioration and a seed over-cap during the 2026-07-02 session.
 > cadence, drop/CUT alerts, and risk reads. Run `monitor.mjs` for the raw log state; run
 > `watch.mjs` to decide what to do.
 
-The **durable, session-independent** home for this logic is the app itself — the
-Refresh-positions button + a break-even/regime check on the Ledger (see CLAUDE.md
-"Open followups"). Until that exists, this doc + `monitor.mjs` are how the workflow runs.
+The **durable, session-independent** home for this logic is the app itself. The
+**Refresh-positions button shipped** (0.39.0, M1) — a same-origin `positions.json` re-fetch;
+what remains unbuilt is the in-app **break-even/regime deterioration check** on the Ledger. So
+today this doc + `monitor.mjs`/`watch.mjs` are still how the *judgment* half of the workflow
+runs; the app owns freshness.
 
 ## The tool: `pipeline/monitor.mjs`
 
@@ -41,13 +43,24 @@ Print-only — it never writes trade data. Each run emits:
 **Data sources, and why:**
 - Offers/fills come from the RuneLite Exchange Logger (`~/.runelite/exchange-logger/`) —
   real-time.
-- Held positions come from **`positions.json`** (the pipeline's `collapseOffers` +
-  `matchTrades` FIFO), *not* a re-parse of the log. A naive re-sum of terminal log events
-  double-counts re-logged/duplicate `BOUGHT` lines (found live 2026-07-02: an 11:01 buy
-  re-logged identically at 11:15 → a +5 phantom). `positions.json` already handles dedup,
-  cancels, partial fills, and pre-log inventory. The trade-off is its ~20m sync lag; the
-  tool prints the file's age so recent-trade lag is visible. Cost basis is static once
-  bought, so the lag rarely matters for deterioration calls.
+- Held positions are reconstructed **IN-MEMORY from the live exchange log** via the shared
+  pipeline FIFO (`reconstruct.mjs`), *not* read from `positions.json` — so `monitor.mjs`'s
+  held count is **real-time**, with no sync-file lag. (`watch.mjs`, by contrast, *does* read
+  `positions.json`; the two are reconciled because both run the same canonical
+  WITHDRAWN/BANKED-aware `reconstruct.mjs` chain — see the `watch.mjs` note below.) A naive
+  re-sum of terminal log events would double-count RuneLite's re-logged/duplicate terminal
+  lines (found live 2026-07-02: an 11:01 buy re-logged identically at 11:15 → a +5 phantom),
+  but `reconstruct()` runs **`dedupeSnapshots()`** (P1, 2026-07-05) first, dropping snapshot
+  re-emissions before the FIFO, so the in-memory held count never phantoms. Cost basis is
+  static once bought.
+- **`held-override.json` reconciliation knob** (`pipeline/held-override.json`, gitignored,
+  code-only — `monitor.mjs:66-80`): the Exchange Logger occasionally drops a `SOLD` event
+  during fast same-second flipping, so the log can hold more buys than sells and the
+  reconstruction *over*-counts held (confirmed: seeds logged 57 bought / 52 sold, real held
+  0 — no FIFO can invent the missing sell input). The file maps `{ "<itemId>": "<ISO-or-unix
+  since>" }` meaning "I hold 0 of this as of `<since>`; count only its log fills after that
+  time." Set it when you know a position is phantom; trades after `<since>` still track
+  normally, and the monitor prints `(held-override active — reconciling: …)` when it applies.
 - Item names are fetched from the wiki mapping and cached 24h in `mapping.cache.json`
   (gitignored).
 
@@ -129,9 +142,10 @@ node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch
 The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
 `positions.json`:
 - **Asks** annotate their held row — `listed n/m @ X`, or `NOT LISTED` (an unlisted hold is
-  a stranded lot — exit discipline). An ask whose buy isn't booked yet (inside the ~20m sync
-  window) prints with an honest "break-even unknown, run sync-fills.mjs" note, never a
-  fabricated basis.
+  a stranded lot — exit discipline). An ask whose buy isn't booked yet in `positions.json`
+  (i.e. traded since the last on-demand sync — there is no scheduled sync anymore, §12 of
+  FILLS-PIPELINE.md) prints with an honest "break-even unknown, run sync-fills.mjs" note,
+  never a fabricated basis.
 - **Bids** get their own section + verdict vocabulary: `BID-OK` (resting inside the band),
   `BID-BEHIND` (market moved away — unlikely to fill; nudge only while the edge holds),
   `CROSSING` (at/above live instasell — fills imminent, have the exit priced), and
@@ -164,8 +178,10 @@ nothing.
 WITHDRAWN/BANKED-aware `reconstruct.mjs` chain, so the held count agrees either way.
 `positions.json` (written by `sync-fills.mjs` via `reconstruct.mjs`) is chosen for `watch.mjs`
 because it's the already-persisted pipeline output — no log re-parse needed. The only trade-off
-is the ~20m sync lag — `watch.mjs` prints the file's age and flags it stale past 25m, so a very
-recent trade's lag is visible. Cost basis is static once bought, so lag rarely changes a call.
+is the file's staleness since the **last on-demand sync** (there is no scheduled sync anymore —
+§12 of FILLS-PIPELINE.md; run `sync-fills.mjs` at session start) — `watch.mjs` prints the file's
+age and flags it stale past 25m, so a very recent trade's lag is visible. Cost basis is static
+once bought, so lag rarely changes a call.
 
 ### Item-type classes → cadence + playbook
 
@@ -174,7 +190,12 @@ Boundaries are **tunable named constants** at the top of `watch.mjs`, not magic 
 - `LIQUID_FLOOR_PER_DAY = 100` — two-sided daily volume (the limiting side, `min(hi,lo)` from
   `computeQuote`) below which a book is **thin**. 100/d is the practical floor codified in
   the `/scan` skill (`.claude/skills/scan/SKILL.md`); below it, exits are unreliable
-  ghost-spreads.
+  ghost-spreads. **Two different things are both called "the floor" — don't conflate them:**
+  this ~100/d is the *judgment* ghost-spread floor (in `watch.mjs`/`/scan`, "is a book liquid
+  enough to trust an exit?"). `screen.mjs`'s `--floor` (default **50**) is a separate *script
+  gate* — the raw per-unit `limitVol ≥ FLOOR` liquidity threshold that a candidate must clear
+  (OR the `--gp-floor` gp-flow path, S1) to even enter the screen. Different purposes,
+  different values.
 - `BIG_TICKET_UNIT_GP = 1_000_000` — per-**unit** price at/above which one unit is large
   capital, so a drop is expensive per fill (bludgeon/lightbearer/seed territory). Distinct
   from chunk-6 `BIG_TICKET_GP` (a whole-**lot** qty×cost threshold, which `momVerdict` still

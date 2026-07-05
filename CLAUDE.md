@@ -242,16 +242,15 @@ Script facts the skills rely on (current behavior, not doctrine):
   ("touched/reached" ≠ limit filled; ~14 days is a small sample).
 
 ## Open followups (not yet built)
-- **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — ALL open work lives
-  there as waves of chunks the coordinator session hands to Opus subagents: T1/T2 (table v2 +
-  Trends sections/last-2h view), O1 (outcomes dataset), K1/K2 (self-improving skills +
-  memory dedupe), S1–S3 (gp-flow gate + 500k floor + spread verdict, overnight posture,
-  watchlist-always-scanned), E1 (local-time audit), L1 (action
-  logging), M1 (mobile parity — includes the Refresh-positions button), N1 (push
-  notifications); F1 gated on O1. `main` is protected by a PR+`checks` ruleset (G1,
-  2026-07-04); no merge queue on this user-owned repo and PR creation is token-blocked for
-  now, so chunks land via attended direct-push under the admin bypass (parallel lanes still
-  use worktree subagents, hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
+- **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — the plan + the
+  scoreboard. Waves 1–4 have **all shipped** (T1/T2, O1, K1–K3, S1–S3, Q1, E1, L1, G1, M1, N1,
+  and the Wave-4 cleanup D1/R1/P1/X1/X2/A1–A3/BE1/W1/CI1) — see PLAN.md's Status table for the
+  per-chunk shas. The only work still open is **F1** (algorithm feedback — GATED on O1's sample
+  thresholds, realistically weeks of accrual away) plus whatever sits in PLAN.md's **Discovered**
+  list. `main` is protected by a PR+`checks` ruleset (G1, 2026-07-04); no merge queue on this
+  user-owned repo and PR creation is token-blocked for now, so chunks land via attended
+  direct-push under the admin bypass (parallel lanes still use worktree subagents,
+  hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
   (`PLAN-2/3/4/5.md`) are **deleted** — full text via `git show 39e5d23:PLAN-4.md` (etc.).
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
