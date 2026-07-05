@@ -307,8 +307,9 @@ Original roadmap — planned as the next tool feature, roughly in order:
       offer)/`filled`(cumulative)/`spent`, all different from the original guesses;
       see the ADAPTER comment in `sync-fills.mjs`. Also: the plugin emits explicit
       `CANCELLED_BUY`/`CANCELLED_SELL` states (confirmed live 2026-07-02), mapped by
-      `normalizeStateStr`; `buildEvents()` also keeps a sequence-aware fallback for
-      cancels that drop straight to `EMPTY` without a cancel line.
+      `normalizeStateStr`. ~~`buildEvents()` also keeps a sequence-aware fallback for
+      cancels that drop straight to `EMPTY`~~ — **REMOVED 2026-07-05** (see §10 cancel
+      semantics: the logout EMPTY-burst incident).
 - [x] ~~Scheduled task running~~ **— SUPERSEDED 2026-07-04 (G1, §12): the schedule was
       eliminated; sync is on-demand only.** *(Historical: the Task Scheduler job
       `CofferFillsSync` ran `wscript.exe pipeline\run-fills-sync.vbs` — a hidden wrapper
@@ -343,9 +344,17 @@ detail is authoritative there; the operational rules below are the single home.
   mapping was verified against real log output (§9).
 - **Cancel semantics:** the log emits explicit `CANCELLED_BUY`/`CANCELLED_SELL` states
   (confirmed live 2026-07-02) — `normalizeStateStr` maps any `CANCEL*` to `'cancelled'`.
-  `buildEvents()` *also* keeps a sequence-aware fallback (last non-complete event before an
-  `EMPTY` or a slot item-change → cancelled) for cancels that drop straight to `EMPTY`
-  without a cancel line. Keep both paths; don't revert to pure line-by-line parsing.
+  That explicit line is the ONLY source of a cancel. The old cancel-to-EMPTY inference
+  (last non-complete event before an `EMPTY`/slot item-change → retro-marked cancelled)
+  was **REMOVED 2026-07-05**: a logout wrote an all-slots-`EMPTY` burst while four offers
+  were live in-game and the inference fabricated four phantom cancels (pushed to
+  fills.json/positions.json; repaired with REMOVE tombstones). A running plugin always
+  writes a real terminal line, so `EMPTY` is never evidence of a cancel — it's consumed as
+  a slot boundary only. An offer whose terminal was missed (plugin toggled off) is fixed
+  the honest way: manual injection/tombstone in `coffer-manual.log`. **Before injecting a
+  manual leg for a plugin-off gap, check which SIDE actually went unlogged** — on
+  2026-07-05 the buy was missed but the sell logged fine, and injecting both sides created
+  a duplicate sell (repaired with a tombstone). Don't re-add the inference.
 - **Manual fills injected into `coffer-manual.log` MUST carry the timestamp of when the
   trade actually happened** (`--time` on `add-manual-fill.mjs`) — a "now" timestamp on a
   backdated trade breaks FIFO matching (the phantom-5-bludgeons incident, 2026-07-03).

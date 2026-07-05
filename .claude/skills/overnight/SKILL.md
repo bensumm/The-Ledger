@@ -1,10 +1,31 @@
 ---
 name: overnight
-version: 1.7
+version: 1.8
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
 # /overnight — two-phase interactive composer
+
+## Time-geography of the overnight flip (v1.8, 2026-07-05 — Ben-endorsed)
+
+Ben is US-Pacific; OSRS demand is UK-centric. **Ben's sleep window (~01–09 local) = UK
+daytime (~08–16 GMT) — the deepest demand pool of the day**, measured 3–4× the quiet-window
+instabuy volume on every windowrange read taken so far (bludgeon 881 vs 232, jaw 477 vs 169,
+blowpipe 738 vs 220 median units). The game's actual quiet trough (GMT ~04–08) is Ben's
+**late evening, while he's still at the keyboard**. Consequences for every overnight plan:
+
+- **Overnight ASKS are structurally favored** — a band-top ask rides the UK-day wave while
+  Ben sleeps (the 2026-07-05 bludgeon: trough-priced 16.79m rebid AND 17.70m band-top ask
+  both filled inside the UK-day window). Don't under-price asks out of generic overnight
+  fill-fear; the window read (§ fill-realism, ask side) is the honest bound.
+- **Overnight DEEP BIDS are structurally disfavored** — placed at Ben's midnight they
+  target a floor that stops printing as UK demand lifts (~07–08 GMT ≈ Ben 00–01): the
+  soul-rune band-floor bids went 0-fill on two consecutive nights for exactly this reason.
+  The BUY window is Ben's evening (the GMT 04–08 trough) — buy the trough before bed, list
+  the ask, sleep through the sell window.
+- Evidence bounds (process rule 4): the volume asymmetry is measured and the timezone
+  geometry is fact; the behavioral sample (1 two-leg win, 2 bid failures) is small — keep
+  scoring fills against this model as nights accrue.
 
 This is a COMPOSITION, explicitly two-phase and interactive — never a single batch read.
 It invokes `/positions` and `/scan` **via the Skill tool** so tweaks to the children
