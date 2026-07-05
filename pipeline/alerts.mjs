@@ -40,14 +40,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from './marketfetch.mjs';
-import { readOpenPositions } from './positions.mjs';
-import { readExchangeLog } from './offers.mjs';
+import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from './lib/marketfetch.mjs';
+import { readOpenPositions } from './lib/positions.mjs';
+import { readExchangeLog } from './lib/offers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
 const ALERTS = path.join(HERE, '..', 'alerts.json');          // TRACKED — named price alerts, edited in sessions
-const STATE_FILE = path.join(HERE, '.alerts-state.json');     // GITIGNORED — last-run state per item/offer/alert
+const STATE_FILE = path.join(HERE, '.cache', '.alerts-state.json'); // GITIGNORED (pipeline/.cache/, OR2) — last-run state
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -75,7 +75,7 @@ function loadState() {
 function saveState(st) {
   if (DRY_RUN) return;
   st.version = 1; st.updatedAt = nowIso;
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 0)); }
+  try { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 0)); }
   catch (e) { console.error('! could not write alert state: ' + (e && e.message || e)); }
 }
 

@@ -78,26 +78,31 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pipeline/alerts.mjs` (N1); ships empty
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
-  via `pipeline/suggestlog.mjs`
+  via `pipeline/lib/suggestlog.mjs`
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen.mjs --publish`)
 - `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by
-  Pages, not part of the app:
-  - `sync-fills.mjs` (parse logs → `fills.json`/`positions.json`, commit + push),
-    `reconstruct.mjs` (shared FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (shared
-    exchange-log discovery + open-offer semantics), `positions.mjs` (shared `readOpenPositions`
-    open-lot grouping), `add-manual-fill.mjs` (inject/tombstone manual fills)
-  - `marketfetch.mjs` (node-side price/guide fetch layer + historical bands), `cli.mjs`
-    (shared arg/format/table helpers), `quote.mjs` (per-item / `--positions` market table),
-    `screen.mjs` (opportunity screen), `rating.mjs` (grade/score model), `watch.mjs` (adaptive
-    live position/offer monitor), `monitor.mjs` (live read-only log-state snapshot),
-    `windowrange.mjs` (né `nightlows.mjs` — time-of-day range read / overnight fill-realism
-    scoring; pure math in `windowread.mjs`), `alerts.mjs` (N1 push-notification
-    trigger engine), `outcomes.mjs` (derived campaign/outcomes join — gitignored output),
-    `suggestlog.mjs` (shared `suggestions.jsonl` appender)
+  Pages, not part of the app. **CLI entrypoints live directly in `pipeline/`; the
+  imported-only libraries they share live in `pipeline/lib/`** (OR2 — the split makes the
+  CLI-vs-lib distinction structural, since the exec bit doesn't):
+  - **CLI entrypoints (`pipeline/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
+    `fills.json`/`positions.json`, commit + push), `add-manual-fill.mjs` (inject/tombstone
+    manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
+    (opportunity screen), `watch.mjs` (adaptive live position/offer monitor), `monitor.mjs`
+    (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
+    range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
+    engine), `outcomes.mjs` (derived campaign/outcomes join — gitignored output)
+  - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
+    FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
+    semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
+    (node-side price/guide fetch layer + historical bands), `cli.mjs` (shared arg/format/table
+    helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
+    appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures) and `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures) — all three wired into `.github/workflows/checks.yml`
+  - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
+    `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
     `js/format.js` so their tables match the app exactly.
@@ -128,7 +133,7 @@ constant governs each, so these can move without touching the deployed app or ph
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/alerts.mjs` (N1) | tracked (ships empty) |
-| `suggestions.jsonl` | appended by `pipeline/suggestlog.mjs` | tracked, append-only |
+| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` | tracked, append-only |
 | `outcomes.json` | derived by `pipeline/outcomes.mjs` | gitignored |
 
 ### Shared logic modules
@@ -139,7 +144,7 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 
 | Module | Also imported by (pipeline) |
 | --- | --- |
-| `js/quotecore.js` | 9 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `cli.mjs`, `reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs` |
+| `js/quotecore.js` | 9 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs` |
 | `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs` |
 
 ### Test-location convention

@@ -21,10 +21,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP, isOvernightNow } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, fetchItemInputs } from './marketfetch.mjs';
-import { readOpenPositions } from './positions.mjs';
-import { mdTable, stdCells } from './cli.mjs';
-import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
+import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
+import { readOpenPositions } from './lib/positions.mjs';
+import { mdTable, stdCells } from './lib/cli.mjs';
+import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');

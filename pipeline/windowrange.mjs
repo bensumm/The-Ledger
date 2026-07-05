@@ -30,9 +30,9 @@
  *   --bid <gp>     score a specific candidate bid ("touched k/N days")
  *   --ask <gp>     score a specific candidate ask ("reached k/N days")
  */
-import { loadMapping, fetchTs, fetchLatest } from './marketfetch.mjs';
-import { parseArgs, parseGp } from './cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './windowread.mjs';
+import { loadMapping, fetchTs, fetchLatest } from './lib/marketfetch.mjs';
+import { parseArgs, parseGp } from './lib/cli.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);

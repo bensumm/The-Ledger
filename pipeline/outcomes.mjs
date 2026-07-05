@@ -27,10 +27,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collapseOffers, matchTrades } from './reconstruct.mjs';
-import { loadMapping, loadAll24h, loadHistBands } from './marketfetch.mjs';
-import { parseArgs, median } from './cli.mjs';
-import { liqClassOf } from './suggestlog.mjs';
+import { collapseOffers, matchTrades } from './lib/reconstruct.mjs';
+import { loadMapping, loadAll24h, loadHistBands } from './lib/marketfetch.mjs';
+import { parseArgs, median } from './lib/cli.mjs';
+import { liqClassOf } from './lib/suggestlog.mjs';
 import { fmtP, fmt, fmtTurn } from '../js/format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

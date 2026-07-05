@@ -4,7 +4,7 @@
    (chunk 10.2 dedup). No market/quote math lives here — that is js/quotecore.js.
    Consumers: screen.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote.mjs,
    screen.mjs (mdTable/stdCells). */
-import { quoteCells, cellText } from '../js/quotecore.js';
+import { quoteCells, cellText } from '../../js/quotecore.js';
 
 /* --- parseArgs(argv): the `--flag value` / bare-`--flag` loop.
    argv = process.argv.slice(2). A bare flag (no value, or followed by another --flag)

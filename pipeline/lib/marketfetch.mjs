@@ -15,12 +15,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.join(HERE, '.cache');
+const CACHE_DIR = path.join(HERE, '..', '.cache'); // pipeline/.cache/ — this file lives in pipeline/lib/ (OR2)
 const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window archive (gitignored via .cache/)
 const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
 const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
 const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (outcomes.mjs; tiny)
-const MAP_CACHE = path.join(HERE, 'mapping.cache.json'); // shared with add-manual-fill.mjs (name<->id)
+const MAP_CACHE = path.join(CACHE_DIR, 'mapping.cache.json'); // under pipeline/.cache/ (OR2); shared name<->id loader
 
 export const API = 'https://prices.runescape.wiki/api/v1/osrs';
 const MAP_URL = API + '/mapping';
@@ -72,6 +72,7 @@ export async function loadMapping() {
   try {
     arr = await jget(MAP_URL);
     const rich = {}; for (const it of arr) rich[it.id] = { name: it.name, limit: it.limit ?? null };
+    ensureCacheDir(); // MAP_CACHE now lives under .cache/ (OR2) — make sure it exists before writing
     fs.writeFileSync(MAP_CACHE, JSON.stringify(rich));
     return buildMapping(arr);
   } catch (e) {

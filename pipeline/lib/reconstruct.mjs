@@ -9,7 +9,7 @@
  * Pipeline: readLog -> parseJsonLine per line -> buildEvents -> reconstruct.
  */
 import { createHash } from 'node:crypto';
-import { tax } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
+import { tax } from '../../js/quotecore.js'; // the ONE tax impl (chunk 4.1)
 
 /* ---------------------------------------------------------------------
  * ADAPTER — Exchange Logger (JSON mode) writes one line per slot-state

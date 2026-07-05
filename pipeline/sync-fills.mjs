@@ -43,7 +43,7 @@ import { homedir } from 'node:os';
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
-import { parseJsonLine, buildEvents, reconstruct, eventId } from './reconstruct.mjs';
+import { parseJsonLine, buildEvents, reconstruct, eventId } from './lib/reconstruct.mjs';
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the

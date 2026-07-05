@@ -64,10 +64,10 @@
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, overnightStaleRisk } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './marketfetch.mjs';
-import { parseArgs, parseGp, mdTable, stdCells, median } from './cli.mjs';
-import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
-import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
+import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
+import { parseArgs, parseGp, mdTable, stdCells, median } from './lib/cli.mjs';
+import { rateItem, GRADE_CUTOFFS } from './lib/rating.mjs';
+import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

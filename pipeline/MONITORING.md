@@ -53,7 +53,7 @@ Print-only — it never writes trade data. Each run emits:
   but `reconstruct()` runs **`dedupeSnapshots()`** (P1, 2026-07-05) first, dropping snapshot
   re-emissions before the FIFO, so the in-memory held count never phantoms. Cost basis is
   static once bought.
-- **`held-override.json` reconciliation knob** (`pipeline/held-override.json`, gitignored,
+- **`held-override.json` reconciliation knob** (`pipeline/.cache/held-override.json`, gitignored,
   code-only — `monitor.mjs:66-80`): the Exchange Logger occasionally drops a `SOLD` event
   during fast same-second flipping, so the log can hold more buys than sells and the
   reconstruction *over*-counts held (confirmed: seeds logged 57 bought / 52 sold, real held
@@ -61,7 +61,7 @@ Print-only — it never writes trade data. Each run emits:
   since>" }` meaning "I hold 0 of this as of `<since>`; count only its log fills after that
   time." Set it when you know a position is phantom; trades after `<since>` still track
   normally, and the monitor prints `(held-override active — reconciling: …)` when it applies.
-- Item names are fetched from the wiki mapping and cached 24h in `mapping.cache.json`
+- Item names are fetched from the wiki mapping and cached 24h in `pipeline/.cache/mapping.cache.json`
   (gitignored).
 
 ## The polling routine (per tick)
@@ -294,7 +294,7 @@ pipeline + a scheduled session only, exactly like the monitoring routine above.
 ### The transition-only rule (the whole point)
 
 Every class fires on a **state CHANGE vs the last run, never on a level**. Last-run state
-lives in a small **gitignored** file `pipeline/.alerts-state.json` (`held` verdicts,
+lives in a small **gitignored** file `pipeline/.cache/.alerts-state.json` (`held` verdicts,
 fired-`fills` keys, `price`-cross state). So: the **first run seeds** state and reports only
 genuinely-new events; a **second run against an unchanged market emits nothing at all**; and
 only a real transition — a fresh verdict, a new terminal fill line, a first price cross —

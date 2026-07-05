@@ -15,10 +15,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseJsonLine, buildEvents, reconstruct } from './reconstruct.mjs';
-import { readExchangeLog, activeOffers } from './offers.mjs'; // shared log discovery + open-offer semantics
+import { parseJsonLine, buildEvents, reconstruct } from './lib/reconstruct.mjs';
+import { readExchangeLog, activeOffers } from './lib/offers.mjs'; // shared log discovery + open-offer semantics
 import { breakEven } from '../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
-import { loadMapping } from './marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
+import { loadMapping } from './lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -70,7 +70,7 @@ let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:bre
 //   { "<itemId>": "<ISO-or-unix since>" }  — "I hold 0 of this as of <since>; count only
 //   its log fills AFTER that time." Set it when you know a position is phantom; new trades
 //   after <since> still track normally.
-let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE,'held-override.json'),'utf8')); } catch {}
+let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE,'.cache','held-override.json'),'utf8')); } catch {}
 for (const [idStr, since] of Object.entries(ov)) {
   const id = +idStr, sinceTs = typeof since==='number' ? since : Math.floor(Date.parse(since)/1000);
   held = held.filter(h => h.item !== id);

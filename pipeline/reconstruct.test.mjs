@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import {
   parseJsonLine, buildEvents, reconstruct, eventId, dedupeSnapshots,
-} from './reconstruct.mjs';
+} from './lib/reconstruct.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

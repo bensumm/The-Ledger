@@ -400,7 +400,7 @@ query rather than a re-derivation. Three pieces:
 ### 11.1 `suggestions.jsonl` — the suggestions ledger (TRACKED, append-only)
 Repo-root, committed. `quote.mjs` (per-item **and** `--positions`), `screen.mjs` (each rated
 niche row), and `watch.mjs` (each held/target read) append every emitted recommendation **at
-emit time, unconditionally**, via the shared `pipeline/suggestlog.mjs`. One JSON object per line:
+emit time, unconditionally**, via the shared `pipeline/lib/suggestlog.mjs`. One JSON object per line:
 ```
 { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict }
 ```

@@ -49,11 +49,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
-import { loadMapping, loadGuide, fetchItemInputs } from './marketfetch.mjs';
-import { readOpenPositions } from './positions.mjs';
-import { readExchangeLog, activeOffers } from './offers.mjs';
-import { logSuggestions, suggestionEntry } from './suggestlog.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './windowread.mjs';
+import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
+import { readOpenPositions } from './lib/positions.mjs';
+import { readExchangeLog, activeOffers } from './lib/offers.mjs';
+import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
