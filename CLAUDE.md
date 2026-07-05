@@ -64,6 +64,19 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Exchange-log hardening — impossible-transition validation + restart-blindness warning** (LH1/LH2,
+  pipeline+docs only — NO APP_VERSION) — (LH1) `validateSlotTransitions()` (`pipeline/lib/reconstruct.mjs`)
+  runs at INGEST next to `buildEvents()`, BEFORE the `fills.json` merge: a GE slot is a state machine, so a
+  same-slot second terminal that is strictly identical to the prior terminal with no placement line between is
+  a snapshot re-emit (the 13:25:53/13:29:01 double-BOUGHT) — DROP it LOUDLY (`console.warn` + a sync-summary
+  count) so it never enters `fills.json`. Conservative: manual slots 8/9 exempt, any differing field warns but
+  is KEPT; warnings are gated to the attended sync (`warn:false` in the daemon/`--local`/`monitor` re-read
+  callers). `dedupeSnapshots()` stays as the SILENT derivation backstop for already-persisted phantoms — don't
+  merge the two. (LH2) a `⚠ log may be blind` header line in `monitor.mjs`/`watch.mjs` (`pipeline/lib/logblind.mjs`)
+  when the log is stale + shows no offers + you hold inventory (the post-restart plugin-silent state) — display
+  only, no verdict change. Real-log acceptance: 17 historical re-emits dropped (incl. the known 13:29), positions
+  byte-identical to the committed `positions.json`. Do NOT resurrect the deleted cancel-to-EMPTY inference —
+  EMPTY stays non-evidence. Full story: `FILLS-PIPELINE.md` §10, `CHANGELOG.md`.
 - **Watch tab — the at-a-glance flipping desk** (0.49.0) — a verdict-first in-app surface
   (`js/watch.js` render + pure `js/watchcore.js`, tab id `watch`; the old **Watchlist** tab was
   renamed to id `watchlist` to free the name): freshness stamps → 4-cell summary (exposure / day

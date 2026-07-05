@@ -34,6 +34,12 @@ Print-only — it never writes trade data. Each run emits:
 
 - **log freshness** — minutes since the newest exchange-log line, on the wall clock (so a
   stalled/idle log is distinguishable from a live-but-quiet market).
+- **restart-blindness warning (LH2)** — a `⚠ log may be blind` header line (in both `monitor.mjs`
+  and `watch.mjs`) when the log has gone stale (≥20m) AND shows no active offers AND you hold open
+  inventory: the post-restart state where the plugin has re-emitted nothing, so resting offers read
+  as missing. It changes no verdict — it just names the failure so a session doesn't chase "vanished"
+  offers (restart-check RuneLite or nudge a slot to force a re-emit). Pure line assembler in
+  `pipeline/lib/logblind.mjs` (`blindWarningLine`), fixtures in `pipeline/logblind.test.mjs`.
 - **ACTIVE OFFERS** — offers open right now (per-slot latest `BUYING`/`SELLING` state),
   with filled/total and the offer price.
 - **FILLS / CANCELS (last 30m)** — recent terminal events with executed price.

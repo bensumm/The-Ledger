@@ -176,10 +176,17 @@ positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**
 
 Reconstruction (in `reconstruct.mjs`, called by `sync-fills.mjs` and `monitor.mjs`),
 deliberate — don't undo casually:
-- **`dedupeSnapshots()`** (P1, 2026-07-05) runs FIRST inside `reconstruct()`: it strips
-  RuneLite snapshot re-emissions (a completed-but-uncollected offer's terminal line re-logged
-  on login/world-hop) before offers are collapsed, so a phantom duplicate never becomes a
-  second trade. Discriminator + rationale in §10 "Duplicate terminal lines".
+- **`validateSlotTransitions()`** (LH1, 2026-07-05) runs at INGEST — next to `buildEvents()`,
+  BEFORE the `fills.json` merge — as the LOUD, conservative catch for RuneLite snapshot re-emissions
+  (a completed-but-uncollected offer's terminal line re-logged on login/world-hop). It drops a
+  same-slot second terminal that is strictly identical to the prior terminal with no placement line
+  between, `console.warn`s per drop (with a dropped-count in the sync summary), and so a FRESH
+  re-emit never enters `fills.json` at all. Manual slots 8/9 are exempt; any differing field warns
+  but is KEPT (fail toward preserving data). Discriminator + rationale in §10 "Duplicate terminal lines".
+- **`dedupeSnapshots()`** (P1, 2026-07-05) runs inside `reconstruct()` as the SILENT DERIVATION-LAYER
+  BACKSTOP: it drops the same class using the same discriminator, catching any phantom ALREADY
+  persisted in an older (pre-LH1) `fills.json` — which the ingest validator never re-reads — so the
+  derived `positions.json` is correct even before that archive is re-cleaned.
 - **`collapseOffers()`** reduces the per-transition stream to one row per *offer*
   (contiguous `slot+item+type` run), taking the final cumulative `filled`/`spent`.
   Executed price-each = `spent/filled` (gross), never the listed `price` (see §5).
@@ -361,9 +368,17 @@ detail is authoritative there; the operational rules below are the single home.
   backdated trade breaks FIFO matching (the phantom-5-bludgeons incident, 2026-07-03).
   Never edit RuneLite's own `exchange.log`; the writable source is the sibling
   `coffer-manual.log`.
-- **`fills.json` is an append-only merged archive** — fixing or removing a source log line
-  does NOT by itself purge an already-merged event; append a `REMOVE` tombstone line (the
-  chunk-1 vocabulary, confirmed working) to `coffer-manual.log`, then re-sync.
+- **`fills.json` is an append-only merged archive of REAL events, but the log is NOT unfiltered
+  truth** — two known log-artifact classes are handled before/around the archive, not trusted into
+  it: (1) **snapshot re-emission** — an identical same-slot second terminal (the 13:29 double-BOUGHT)
+  is dropped LOUDLY at ingest by `validateSlotTransitions()` (LH1) so it never becomes a merged event,
+  with `dedupeSnapshots()` as the derivation backstop for any already-persisted duplicate (see the
+  "Duplicate terminal lines" subsection below); (2) **restart display-blindness** — after a client
+  restart the plugin re-emits nothing, so `monitor.mjs`/`watch.mjs` can read live offers as missing;
+  that is a *display* artifact (not a reconstruction one) surfaced by the LH2 "log may be blind"
+  header line. Beyond those, fixing or removing a source log line does NOT by itself purge an
+  already-merged event; append a `REMOVE` tombstone line (the chunk-1 vocabulary, confirmed working)
+  to `coffer-manual.log`, then re-sync.
 - **Sync cadence: on-demand only (no scheduled job) — 2026-07-04, see §12.** The
   `CofferFillsSync` Task Scheduler job that ran `wscript.exe pipeline\run-fills-sync.vbs`
   every 20 min was **eliminated**; there is no longer any unattended writer **to `main`**. Run
@@ -374,7 +389,7 @@ detail is authoritative there; the operational rules below are the single home.
   amend/force-push branch were excised in chunk X2, 2026-07-05; git history holds the old
   machinery.)*
 
-### Duplicate terminal lines — snapshot re-emission (diagnosed 2026-07-05; auto-deduped since P1)
+### Duplicate terminal lines — snapshot re-emission (diagnosed 2026-07-05; silent dedupe since P1, LOUD ingest validation since LH1)
 The Exchange Logger occasionally writes a second, identical terminal line (BOUGHT/SOLD)
 for the same offer. Root cause: RuneLite re-broadcasts every GE slot's current state on
 login / world-hop / opening the GE (visible in the log as a burst of simultaneous EMPTY
@@ -383,24 +398,39 @@ its terminal state and the plugin logs it again. Three cases on 2026-07-04 (soul
 blowpipe BOUGHT, bludgeon SOLD). Effect if left unhandled: duplicate SELLs fall harmlessly
 into `unmatched` (no fabricated profit), but a duplicate BUY creates a phantom open lot.
 
-**Fixed by P1 — `dedupeSnapshots()` in `reconstruct.mjs`, live since 2026-07-05.** The
-discriminator: a genuine repeat trade always has a fresh BUYING/SELLING placement line
-between two terminals on the same slot; a snapshot re-emission never does. So the derivation
-layer drops a terminal whose immediately-preceding same-slot event is an IDENTICAL terminal
-(same item/type + offer-size/price/cumulative-filled/cumulative-spent). It runs inside
-`reconstruct()` — the positions.json path AND the live `monitor.mjs` held count — NOT at the
-merge/storage layer, so `fills.json` still archives both raw lines and the fix re-applies
-cleanly as logic evolves. Fixtures (a: blowpipe dup pair, b: genuine same-price repeat with a
-placement between → NOT deduped, c: dup straddling an EMPTY-burst) live in
-`pipeline/reconstruct.test.mjs`.
+**The discriminator (both layers share it):** a genuine repeat trade always has a fresh
+BUYING/SELLING placement line between two terminals on the same slot; a snapshot re-emission never
+does — so a terminal whose immediately-preceding same-slot event is an IDENTICAL terminal (same
+item/type + offer-size/price/cumulative-filled/cumulative-spent, `sameTerminal()`) with nothing
+re-opening the slot between is a re-emit. This is the same "impossible transition" invariant the
+13:25:53/13:29:01 double-BOUGHT of a 17.4m item on slot 7 (2026-07-05, only one real) violated: a GE
+slot is a state machine and cannot close twice with no offer placed between.
 
-The old **interim manual procedure** — scan after each session for same-item/same-price
-terminal pairs minutes apart and tombstone the later one with `add-manual-fill.mjs --remove
-<eventId>` before the next sync — is **no longer needed** for this class; `dedupeSnapshots`
-handles it automatically. (`REMOVE` tombstones remain the correction mechanism for genuine
-mislogged events — see §5.1.) Note: `outcomes.mjs` calls `collapseOffers`/`matchTrades`
-directly (not through `reconstruct()`), so its campaign boundaries do not yet get this dedupe
-— tracked as a Discovered followup in PLAN.md.
+**Two layers, since LH1 (2026-07-05):**
+- **`validateSlotTransitions()` — the LOUD INGEST validator** (`reconstruct.mjs`, called next to
+  `buildEvents()` in `sync-fills.mjs` `regenerate()` and in `monitor.mjs`, BEFORE the `fills.json`
+  merge). Drops the identical re-emit, `console.warn`s per drop (with item/qty/price/slot + the prior
+  terminal's ts) and a dropped-count in the attended sync summary, and — because it runs pre-merge —
+  a FRESH re-emit **never enters `fills.json`**. Conservative: manual slots 8/9 are exempt; a same-slot
+  double-terminal that DIFFERS in any field warns but is KEPT (fail toward preserving data). The loud
+  warnings are gated to the attended sync (`warn:false` in the `--local`/`watch-log.mjs`/`monitor.mjs`
+  callers, which re-read the whole log every run and would otherwise re-print months-old re-emits every
+  tick). Fixtures in `pipeline/validateslots.test.mjs`.
+- **`dedupeSnapshots()` — the SILENT DERIVATION backstop** (inside `reconstruct()`). Catches the same
+  class at the positions.json layer, so a phantom ALREADY persisted in an older (pre-LH1) `fills.json`
+  — which the ingest validator never re-reads — is still dropped from the derived view. Fixtures
+  (a: blowpipe dup pair, b: genuine same-price repeat with a placement between → NOT deduped,
+  c: dup straddling an EMPTY-burst) live in `pipeline/reconstruct.test.mjs`.
+
+So `fills.json` is no longer guaranteed to archive both raw lines of a fresh re-emit (LH1 filters it
+at ingest); a pre-LH1 archive that still carries a duplicate pair is handled correctly by the
+derivation backstop and is cleaned out of the archive on any re-sync where the phantom no longer
+survives ingest. The old **interim manual procedure** — scan after each session for same-item/
+same-price terminal pairs minutes apart and tombstone the later one with `add-manual-fill.mjs
+--remove <eventId>` — is **no longer needed** for this class. (`REMOVE` tombstones remain the
+correction mechanism for genuine mislogged events — see §5.1.) Note: `outcomes.mjs` calls
+`collapseOffers`/`matchTrades` directly (not through `reconstruct()` or the ingest validator), so its
+campaign boundaries do not yet get this dedupe — tracked as a Discovered followup in PLAN.md.
 
 ## 11. Outcomes dataset (O1 — the algorithm-feedback foundation)
 

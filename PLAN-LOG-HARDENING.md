@@ -88,6 +88,18 @@ reconstruction** — but it is *detectable*, and today it cost a session two rou
 - `~/.runelite` stays read-only input.
 - All tests via `pipeline/run-tests.mjs` auto-discovery; no CI edits.
 
+## Status — ALL SHIPPED (2026-07-05)
+
+| Chunk | What | Status | Sha |
+| --- | --- | --- | --- |
+| LH1 | `validateSlotTransitions()` — loud ingest drop of impossible same-slot re-emit terminals (before the `fills.json` merge); `dedupeSnapshots` stays as the silent derivation backstop; warnings gated `warn:false` in the daemon/`--local`/`monitor`; fixtures in `validateslots.test.mjs` | **shipped** | `c0fc711` |
+| LH2 | `blindWarningLine()` restart-blindness header line in `monitor.mjs`/`watch.mjs` (`pipeline/lib/logblind.mjs`); fixtures in `logblind.test.mjs` | **shipped** | `f7bd006` |
+| LH3 | docs reconciliation (FILLS-PIPELINE §5.1/§10 two artifact classes + validator, MONITORING blindness line, CLAUDE.md Done pointer, CHANGELOG entry, this Status table) | **shipped** | this commit |
+
+Pipeline-only — **no `APP_VERSION` bump** on any chunk. Real-log acceptance: 17 historical re-emits
+dropped (incl. the known 13:29), positions byte-identical to the committed `positions.json`; 14 test
+suites green via `node pipeline/run-tests.mjs`.
+
 ## Acceptance
 
 1. Re-running the full reconstruction over the real logs drops exactly the known 13:29

@@ -10,6 +10,65 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Exchange-log hardening — impossible-transition validation + restart-blindness warning (LH1/LH2, pipeline-only, no APP_VERSION bump)
+**Origin (Ben, 2026-07-05):** "we've had a ton of problems with the log discrepancies… missing bids,
+phantom bids." A live-session catalogue found four failure classes; two were already fixed (the
+EMPTY-burst phantom-cancel inference was deleted 2026-07-05; the stale-positions basis is solved by
+LW1's `watch-log.mjs`). This is the remaining two. **Pipeline + docs only — no deployed-app change,
+so no `APP_VERSION` bump.**
+
+**LH1 — slot-state validation in reconstruction.** A GE slot is a state machine: a terminal event
+(BOUGHT/SOLD/CANCELLED_*) closes it, so a SECOND terminal on the same slot with NO placement/progress
+line between is IMPOSSIBLE unless the plugin re-emitted a stale slot state after a relog (the burst of
+simultaneous EMPTY lines on the OTHER slots is the tell). On 2026-07-05, 13:25:53 and 13:29:01 both
+logged `BOUGHT` item 13263 qty 1 @17,401,000 on slot 7 — only one buy was real.
+- New exported pure `validateSlotTransitions(events)` in `pipeline/lib/reconstruct.mjs`, run at
+  INGEST (next to `buildEvents()`, BEFORE the `fills.json` merge) in `sync-fills.mjs` `regenerate()`
+  and in `monitor.mjs`. Walking each GE slot's event subsequence in ts order, when a terminal follows
+  a terminal on the same slot with nothing re-opening it between: if STRICTLY identical to the prior
+  terminal (`sameTerminal`: item+type+qty+price+filled+spent) it is a provable re-emit → **DROPPED
+  LOUDLY** (a `console.warn` per drop with item/qty/price/slot + the prior terminal's ts, plus a
+  dropped-count in the sync summary line) and, because it runs pre-merge, it **never enters
+  `fills.json`**. Conservative: any differing field → warn but KEEP (fail toward preserving data);
+  manual slots 8/9 (no GE state machine) are exempt entirely. This does NOT resurrect the deleted
+  cancel-to-EMPTY inference — EMPTY lines are consumed by `buildEvents()` and never reach here, so
+  absence is still never evidence; only two REAL terminals trigger it.
+- The loud warnings are gated (`warn:false`) in the frequently-re-run callers — the `watch-log.mjs`
+  daemon, `sync-fills.mjs --local`, and `monitor.mjs` — which re-read the whole log every run and
+  would otherwise re-print months-old historical re-emits every tick; the attended sync stays loud.
+- `dedupeSnapshots()` (P1) remains the SILENT DERIVATION-LAYER BACKSTOP inside `reconstruct()`, using
+  the same discriminator, so a phantom ALREADY persisted in an older (pre-LH1) `fills.json` — which the
+  ingest validator never re-reads — is still dropped from the derived `positions.json`. Don't merge the
+  two layers: ingest (loud, keeps the archive clean going forward) vs derivation (silent, cleans history).
+- **Real-log acceptance:** re-running the reconstruction over the live logs into a temp dir dropped
+  **17** identical same-slot re-emits (incl. the known 13:29 bludgeon), each warned, and produced a
+  `positions.json` byte-identical (modulo `generatedAt`) to the committed one — confirming the drops
+  were already what the silent backstop did; LH1 only makes them visible and keeps them out of the
+  archive. Fixtures in `pipeline/validateslots.test.mjs` (the verbatim 13:29 case, the real-repeat
+  case with a placement between, a near-duplicate differing price → kept, manual slots exempt, P/L
+  parity, and a REMOVE tombstone still purging a surviving event).
+
+**LH2 — restart-blindness warning line.** After a client restart the Exchange Logger (emit-on-change)
+re-emits nothing until each slot next changes, so `monitor.mjs`/`watch.mjs` read resting offers as
+missing (NOT LISTED / no active bids) for minutes-to-hours — root cause is the plugin, not fixable in
+reconstruction, but detectable.
+- New pure `blindWarningLine()` + `BLIND_STALE_MIN` in `pipeline/lib/logblind.mjs`, wired into both
+  `monitor.mjs` and `watch.mjs` headers. **Chosen heuristic (self-contained, documented in the file
+  header):** fire when the newest exchange-log line is stale (≥20m) AND the log shows ZERO active
+  offers AND you hold open inventory (>0 lots) — the exact post-restart blind state, and very unlikely
+  otherwise (an idle desk fails the inventory gate; a live log fails staleness; a log showing your
+  offers fails the zero-offers gate). Deliberately avoids fragile RuneLite `launcher.log`/`client.log`
+  mtime parsing (client.log is rewritten continuously while running). Honest limitation, documented: it
+  can't see a blind state where you hold no inventory but only resting bids. No behavioral change — the
+  header line is the whole deliverable; verdicts/annotations are untouched. Fixtures in
+  `pipeline/logblind.test.mjs` (pure line assembly only, not the filesystem probe).
+
+**Docs (LH3):** `FILLS-PIPELINE.md` §5.1 + §10 name both artifact classes and the two-layer validator
+and reconcile the "append-only truth" phrasing (the log is an archive of REAL events, not unfiltered
+truth); `MONITORING.md` documents the blindness header line; the `reconstruct.mjs` P1 comment is
+reconciled to "silent backstop." Test suite: 14 suites green via `node pipeline/run-tests.mjs` (adds
+`validateslots.test.mjs` + `logblind.test.mjs`).
+
 ### Watch tab — the at-a-glance flipping desk (0.49.0)
 **Origin (Ben, 2026-07-05):** the approved `WATCH-TAB-MOCKUP.html` — a verdict-first desk surface that
 turns the data LW1/LW2 made live at the desk (held book + offers) into a single glance: *what do I
