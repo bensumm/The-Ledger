@@ -229,7 +229,7 @@ function rankAndSlice(mode, cand, dailySeries) {
 }
 
 const PLAYBOOK = {
-  band:   'Playbook: ladder BUYS at the band low, SELL at the band top; never list below break-even (ceil(buy/0.98)).',
+  band:   'Playbook: ladder BUYS at the band low, SELL at the band top; never list below break-even (tax-capped; shared breakEven).',
   spread: 'Playbook: mid-liquidity wide-spread flips (bludgeon-style). Buy the 24h avg low, sell the avg high.',
   rising: 'Playbook: rising + not-breaking-down; enter at the band low. FROTHY — size small, these are mid-reprice moves.',
   churn:  'Playbook: high-frequency buy-limit-cycle commodities. Thin per-unit, volume does the work — buy every limit, flip fast.',

@@ -12,12 +12,26 @@
    live quotes). Here the optimistic edges are CLAMPED against the SAME live quote, so the
    optimistic side can never be worse than the quick side — the mixing can't happen. */
 
-import { tax, netMargin, fmtP, fmt } from './format.js';
+import { tax, netMargin, fmtP, fmt, TAXCAP } from './format.js';
 export { tax, netMargin } from './format.js';   // re-export so node consumers (chunk 4.1) get the ONE tax impl
-// Break-even list price: the sell price that just clears the 2% GE tax on a lot bought at `buy`.
-// The ONE definition shared by the app, the pipeline monitor, and the analysis scripts (chunk 4.1)
-// so tax/break-even math can never drift between them.
-export const breakEven = buy => Math.ceil(buy/0.98);
+// Break-even list price: the smallest sell price `s` that still nets ≥ `buy` after the GE tax —
+// i.e. the smallest integer s with s - tax(s) ≥ buy. The ONE definition shared by the app, the
+// pipeline monitor, and the analysis scripts (chunk 4.1) so tax/break-even math can never drift.
+// PIECEWISE, matching format.js tax() exactly (BE1) — the plain ceil(buy/0.98) is the *uncapped*
+// inverse and is wrong in tax()'s two flat regions:
+//   • buy < 50            → buy       (a sell under 50gp is tax-exempt: tax(s)=0, so s=buy clears)
+//   • buy > 250m − TAXCAP → buy+TAXCAP (the 2% cap binds: floor(s·0.02) hits TAXCAP=5m at
+//                                       s ≥ TAXCAP/0.02 = 250m, so tax is flat 5m and true BE is
+//                                       buy+5m — ceil(buy/0.98) OVERSTATES it, e.g. a 1.633b bow
+//                                       demanded 1.666b vs 1.638b true)
+//   • otherwise           → ceil(buy/0.98)   (uncapped region — unchanged legacy formula)
+// The crossover (buy > TAXCAP/0.02 − TAXCAP = 245m) and smallest-s correctness at every region
+// boundary are brute-force-proven in pipeline/quotecore.test.mjs (BE1 fixtures).
+export const breakEven = buy => {
+  if (buy < 50) return buy;
+  if (buy > TAXCAP/0.02 - TAXCAP) return buy + TAXCAP;
+  return Math.ceil(buy/0.98);
+};
 // Total lot value (qty × avgCost, i.e. capital at risk — NOT per-unit) at/above which a 2h
 // breakdown against a rising regime is CLEARED rather than held (chunk 6 cut-trigger). Named +
 // tunable; lives here (the shared node+browser module) so reviewPositions and quote.mjs --positions
@@ -257,7 +271,8 @@ export function moveShape(ts5m){
      D-esc.  mom clean but underwater through a liquid window → CUT-CANDIDATE
      else    null → caller keeps its existing regime-based verdict
    Params: row (a computeQuote row — needs .mom/.quickSell/.rawBandHi/.optSell/.rising/.reliable/.ordered),
-   breakEvenPrice = ceil(avgCost/0.98), lotValue = qty×avgCost (vs BIG_TICKET_GP). ts5m/now are
+   breakEvenPrice = breakEven(avgCost) (tax-capped; see the breakEven definition above),
+   lotValue = qty×avgCost (vs BIG_TICKET_GP). ts5m/now are
    optional — pass the full 5m series (and now, ms) to activate Gates 1/2-shape/D; without them
    the tree degrades to Gate 0 + the original breakdown matrix. Returns null or
    { action, verdict, listAt, cls, gate, why }; listAt is a price or null (HOLD, no reprice). */

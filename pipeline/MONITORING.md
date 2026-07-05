@@ -35,8 +35,8 @@ Print-only — it never writes trade data. Each run emits:
 - **ACTIVE OFFERS** — offers open right now (per-slot latest `BUYING`/`SELLING` state),
   with filled/total and the offer price.
 - **FILLS / CANCELS (last 30m)** — recent terminal events with executed price.
-- **HELD POSITIONS** — qty, cost basis, and **break-even = `ceil(cost / 0.98)`** per open
-  lot, plus whether it's currently listed in a sell offer.
+- **HELD POSITIONS** — qty, cost basis, and **break-even** (shared `breakEven()`, tax-capped —
+  see CLAUDE.md "Break-even") per open lot, plus whether it's currently listed in a sell offer.
 
 **Data sources, and why:**
 - Offers/fills come from the RuneLite Exchange Logger (`~/.runelite/exchange-logger/`) —
@@ -215,8 +215,8 @@ hours, so a sub-minute loop just burns API calls.
    lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
    lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its
    multi-day regime is FALLING.
-2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below
-   `ceil(cost/0.98)`.
+2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below the shared
+   `breakEven()` (tax-capped; see CLAUDE.md "Break-even").
 3. **Per-item RISK read**: spread width, two-sided liquidity (limiting side), regime, unit
    ticket / capital exposure, and an **adverse-selection** warning for any aggressive low bid
    (`optBuy < quickBuy`) outside a ranging book — a fill at that low bid usually means the

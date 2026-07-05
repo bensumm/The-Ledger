@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseJsonLine, buildEvents, reconstruct } from './reconstruct.mjs';
 import { readExchangeLog, activeOffers } from './offers.mjs'; // shared log discovery + open-offer semantics
-import { breakEven } from '../js/quotecore.js'; // shared break-even = ceil(cost/0.98) (chunk 4.1)
+import { breakEven } from '../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
 import { loadMapping } from './marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -57,7 +57,7 @@ for (const r of terminal) {
 // --- held positions: reconstructed IN-MEMORY from the live log via the shared pipeline
 // FIFO (reconstruct.mjs). Real-time and correct — no positions.json lag, and collapseOffers
 // dedups re-logged/duplicate BOUGHT lines so the held count never phantoms. ---
-console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = ceil(cost/0.98)) ===');
+console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = shared tax-capped breakEven) ===');
 // parseJsonLine emits { remove } markers for REMOVE tombstone lines (the shared chunk-8 chain);
 // the monitor doesn't apply tombstones, so drop those markers before sequencing.
 const events = buildEvents(logLines.map(parseJsonLine).filter(r => r && r.remove === undefined));

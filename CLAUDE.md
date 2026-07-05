@@ -48,6 +48,13 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Break-even respects the 5m tax cap** (0.40.0, BE1) — shared `breakEven()` in `js/quotecore.js`
+  is now piecewise-consistent with `format.js` `tax()`: the smallest sell `s` with `s − tax(s) ≥ buy`
+  (`buy` when `buy<50`; `buy + TAXCAP` once the 2% cap binds at `buy > 245m`; else the unchanged
+  `ceil(buy/0.98)`). Below the cap it's a byte-identical no-op — only big tickets (the S1 gp-flow class)
+  were overstated (a 1.633b bow demanded 1.666b, true BE 1.638b). The two private copies were routed
+  through it (`trends.js` position card, `add-manual-fill.mjs` `--net` inverse); all pipeline callers
+  already used the shared fn. Boundary/smallest-s proof + three-region fixtures in `quotecore.test.mjs`.
 - **Push-notification trigger engine** (N1, pipeline+docs only — no APP_VERSION) — delivery-
   agnostic `pipeline/alerts.mjs` DETECTS + EMITS three transition-only classes (held-verdict
   escalation via shared `momVerdict`, offer fills via `offers.mjs`, named price crosses from
@@ -154,7 +161,11 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   rule (was a `/scan` post-filter). Thin gp-flow qualifiers and held/asked items are exempt.
 - Net/u (inside the Quick/Optimistic cells) is after 2% tax. Regime = multi-day regimeDrift check
   (flat/rising/falling label).
-- Break-even = `ceil(buy/0.98)` — never list a held item below it.
+- Break-even = the smallest sell price that still nets the buy cost after the 2% GE tax, computed by
+  the shared `breakEven()` in `js/quotecore.js` — **tax-capped, piecewise** (BE1): `buy` when `buy<50`
+  (sub-50gp sells are tax-exempt), `buy + TAXCAP` (5m) once the cap binds at `buy > 245m` (`ceil(buy/0.98)`
+  overstates a big-ticket break-even by up to 5m), else the uncapped `ceil(buy/0.98)`. Never list a held
+  item below it. This is the ONE definition — every other doc/skill points here.
 - **Falling-regime items are excluded from screens entirely — don't show or mention them.**
   Exception: items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
   guidance. `screen.mjs` appends a **Watchlist** section (from tracked repo-root `watchlist.json`)

@@ -245,4 +245,44 @@ ok('overnightStaleRisk: positive-evidence discipline (null bid / short series �
   assert.equal(overnightStaleRisk(shortSeries, 1000, NOW_MS), false);
 });
 
+// ============================================================================================
+// BE1 BREAK-EVEN FIXTURES — breakEven(buy) = smallest integer sell price s with s - tax(s) ≥ buy,
+// piecewise-consistent with format.js tax() across its THREE regions (exempt / uncapped / capped).
+// A local brute-force reference (independent of the implementation) proves smallest-s correctness
+// at every region boundary; explicit expected values pin the named cases.
+// ============================================================================================
+console.log('\nBE1 break-even acceptance:');
+const TAXCAP = 5_000_000;
+const taxRef = p => (!p || p < 50) ? 0 : Math.min(Math.floor(p * 0.02), TAXCAP);   // mirror format.js tax()
+// smallest integer s ≥ 0 with s - taxRef(s) ≥ buy, by linear scan up from max(0,buy) (net ≤ s)
+const bruteMin = buy => { for (let s = Math.max(0, buy); ; s++) if (s - taxRef(s) >= buy) return s; };
+
+// --- 11. Three named regions hit their exact expected values ------------------------------
+ok('breakEven: three regions (exempt / uncapped / capped) exact values', () => {
+  assert.equal(breakEven(40), 40);                          // exempt: sell <50gp is tax-free → s = buy
+  assert.equal(breakEven(49), 49);
+  assert.equal(breakEven(18_052_000), Math.ceil(18_052_000 / 0.98));  // uncapped: unchanged legacy ceil (no-op)
+  assert.equal(breakEven(1_633_000_000), 1_638_000_000);    // capped: 1.633b bow → buy+5m (was 1.666b uncapped — 28m too high)
+  assert.equal(breakEven(300_000_000), 305_000_000);        // capped: buy+TAXCAP
+});
+
+// --- 12. Every result is VALID (nets ≥ buy) and, in the exempt+capped regions, truly minimal --
+ok('breakEven: brute-force smallest-s at every region boundary', () => {
+  const inExemptOrCapped = buy => buy < 50 || buy > TAXCAP / 0.02 - TAXCAP;   // 250m−5m = 245m crossover
+  const sample = [];
+  for (let b = 0; b <= 120; b++) sample.push(b);                              // exempt→uncapped boundary (50)
+  for (let b = 244_999_990; b <= 245_000_010; b++) sample.push(b);            // uncapped→capped boundary (245m)
+  sample.push(250_000_000, 400_000_000, 1_000_000_000, 5_000_000_000);        // deep capped
+  for (const buy of sample) {
+    const be = breakEven(buy);
+    assert.ok(be - taxRef(be) >= buy, `breakEven(${buy})=${be} must net ≥ buy`);   // always valid (never lists below true BE)
+    if (inExemptOrCapped(buy)) assert.equal(be, bruteMin(buy), `breakEven(${buy}) must be the smallest valid s`);
+    else assert.ok(be >= bruteMin(buy), `breakEven(${buy}) must not undershoot true min`);  // uncapped ceil: valid, may +1
+  }
+  // the exact crossover: last uncapped value stays ceil, first capped value flips to buy+TAXCAP
+  assert.equal(breakEven(245_000_000), Math.ceil(245_000_000 / 0.98));         // 250,000,000 (uncapped branch)
+  assert.equal(breakEven(245_000_001), 250_000_001);                           // capped branch = brute min
+  assert.equal(bruteMin(245_000_001), 250_000_001);
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);

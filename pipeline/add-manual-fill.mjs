@@ -49,7 +49,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tax as GE_TAX } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) — no private copy
+import { tax as GE_TAX, breakEven } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + shared tax-capped inverse — no private copy
 import { parseArgs, parseGp } from './cli.mjs';
 import { loadMapping } from './marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
 
@@ -95,8 +95,7 @@ if (type === 'withdraw') {
 // --net: the given price is after-tax proceeds -> recover the gross listing the log stores
 if (A.net) {
   if (type !== 'sell') die('--net only applies to sells');
-  let gross = Math.round(priceEach / 0.98);              // uncapped inverse of the 2% tax
-  if (gross > 250_000_000) gross = priceEach + 5_000_000; // capped region: flat 5m tax
+  const gross = breakEven(priceEach);                   // shared tax-capped inverse: smallest gross listing whose after-tax proceeds ≥ this net
   console.log(`  net ${priceEach.toLocaleString()} -> gross listing ${gross.toLocaleString()} (tax ${GE_TAX(gross).toLocaleString()}/ea)`);
   priceEach = gross;
 }

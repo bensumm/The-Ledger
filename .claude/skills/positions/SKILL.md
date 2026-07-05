@@ -107,7 +107,7 @@ Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
 (that table is app-code canon — see CLAUDE.md "standard output format").
 
 Hard rules — cite, never recompute differently:
-- Never list below break-even `ceil(buy/0.98)`.
+- Never list below break-even (tax-capped; the shared `breakEven()` — see CLAUDE.md "Break-even").
 - Held fallers ARE shown here with price-to-clear (the screen-exclusion rule's exception).
 - Guide = real GE guide price, never the wiki mapping `value` field.
 

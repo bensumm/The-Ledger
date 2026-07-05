@@ -4,7 +4,7 @@ import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch, renderSignals } from './ui.js';
 import { switchTab } from './main.js';
-import { regimeDrift, momVerdict, momCell } from './quotecore.js';   // shared impls (regime + cut-trigger + T2 momentum token) so quotes/positions/Trends reuse them
+import { regimeDrift, momVerdict, momCell, breakEven } from './quotecore.js';   // shared impls (regime + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 
 /*
@@ -275,8 +275,9 @@ export function renderTrendHead(it){
   const pb=el.querySelector('[data-pin]'); if(pb) pb.onclick=async()=>{ await togglePin(it.id); renderTrendHead(it); };
 }
 /* --- position review: for each OPEN position, live guidance (HOLD / ADJUST / CUT + list-at price) ---
-   The pivot is the break-even sell price (ceil(buy/0.98) — the sell that nets cost after
-   2% tax) crossed with the trend. Reuses the same building blocks as the Trends plan:
+   The pivot is the break-even sell price (shared breakEven() — the smallest sell that nets
+   cost after the 2% tax, tax-capped; see quotecore) crossed with the trend. Reuses the same
+   building blocks as the Trends plan:
    patientTargets (recent 2h range edges), regimeDrift (3d vs 2wk level shift) and
    refineTrend (guide divergence + 7d/30d momentum). Guidance, not guarantees. */
 export function classifyPositionTrend(s6h, R){
@@ -289,7 +290,7 @@ export function classifyPositionTrend(s6h, R){
 export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   const buy=t.buy, qty=t.qty;
   const sellNow=it.high, netNow=sellNow-tax(sellNow), profNow=(netNow-buy)*qty;
-  const breakeven=Math.ceil(buy/0.98);                 // sell price that nets >= cost after 2% tax
+  const breakeven=breakEven(buy);                      // smallest sell that nets >= cost after 2% tax (tax-capped; shared quotecore)
   const canBE=netNow>=buy;
   const PT=patientTargets(s5m, it);
   const patientSell=PT.ok?PT.patientSell:sellNow, hiMax=PT.ok?PT.hiMax:sellNow;
