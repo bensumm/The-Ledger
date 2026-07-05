@@ -49,7 +49,7 @@ export function normalizeStateStr(s) {
   if (s.includes('CANCEL')) return 'cancelled'; // explicit CANCELLED_BUY/SELL states (confirmed live 2026-07-02)
   // WITHDRAWN (inventory taken for personal use) and BANKED (pre-owned stock entering the
   // flip flow) are one-shot synthetic manual events — treat as terminal 'complete' so
-  // collapseOffers marks them done and the cancel-inference sequencer leaves them alone.
+  // collapseOffers marks them done as single-line offers.
   if (s.includes('WITHDRAW') || s.includes('BANK')) return 'complete';
   if (s.includes('BOUGHT') || s.includes('SOLD') || s === 'COMPLETE' || s.includes('COMPLETED')) return 'complete';
   if (s.includes('BUYING') || s.includes('SELLING')) return 'partial'; // in-progress update; may be refined to 'placed' below
