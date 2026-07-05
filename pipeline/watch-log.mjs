@@ -46,7 +46,7 @@ const hhmm = () => new Date().toLocaleTimeString('en-US', { hour: '2-digit', min
 
 function runRegen() {
   try {
-    const r = regenerate({ write: true, logDir: watchDir, ...(repoDir ? { repoDir } : {}) }); // write fills/positions/offers.json; ZERO git.
+    const r = regenerate({ write: true, logDir: watchDir, warn: false, ...(repoDir ? { repoDir } : {}) }); // write fills/positions/offers.json; ZERO git. warn:false — the daemon re-reads the whole log each change, so it stays quiet on historical re-emits (attended sync is the loud one).
     console.log(`${hhmm()} regenerated — ${r.merged.length} events, ${r.offersSnap.offers.length} open offers${r.changed ? '' : ' (no change)'}`);
   } catch (e) {
     console.error(`${hhmm()} regeneration FAILED: ${e && e.message || e}`);

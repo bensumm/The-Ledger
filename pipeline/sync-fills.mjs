@@ -57,7 +57,7 @@ import { readOfferRows, offersSnapshot, nameLookupFromCache } from './lib/offers
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
-import { parseJsonLine, buildEvents, reconstruct, eventId } from './lib/reconstruct.mjs';
+import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from './lib/reconstruct.mjs';
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
@@ -176,7 +176,7 @@ function syncMainToRemote() {
 // guard) can point at a temp dir with synthetic logs and NEVER touch the real ~/.runelite or repo.
 // Returns a stats object; write decisions mirror the attended path byte-for-byte (fills only when
 // events changed, positions only when positions changed, offers only when the live-offer set changed).
-export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR } = {}) {
+export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR, warn = true } = {}) {
   const files = readLogFiles(logDir);
   // M1: mobile-fills.log lives at the REPO ROOT (tracked, appended by the phone via the GitHub
   // contents API), NOT in logDir — pull it in as an extra source so mobile trades flow through
@@ -199,7 +199,11 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR 
       if (r) { rawParsed.push(r); parsedLines++; }
     }
   }
-  const events = buildEvents(rawParsed);
+  // LH1: validate the per-slot state machine BEFORE the fills.json merge, so a suspected re-emit
+  // (an impossible second terminal on a slot with no placement between — the 13:29 double-BOUGHT)
+  // is dropped LOUDLY here and never enters the archive. Conservative: only exact-identical dups
+  // drop; any differing field warns but is kept. Manual slots 8/9 are exempt.
+  const { events, dropped: reEmitDropped } = validateSlotTransitions(buildEvents(rawParsed), { warn });
   const parsed = events.length;
   for (const e of events) e.id = eventId(e);
 
@@ -263,7 +267,8 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR 
   }
 
   return { sources, mobilePath, mobilePresent, rawLines, parsedLines, parsed, merged, pos,
-    offersSnap, eventsChanged, positionsChanged, offersChanged, changed, realisedTotal, removeTargetCount, removedCount };
+    offersSnap, eventsChanged, positionsChanged, offersChanged, changed, realisedTotal, removeTargetCount, removedCount,
+    reEmitDropped: reEmitDropped.length };
 }
 
 function main() {
@@ -288,7 +293,8 @@ function main() {
   // --local: regenerate + write fills/positions/offers.json, but NO git of any kind (no fetch/ff,
   // no commit, no push, no syncMainToRemote). Desk-side freshness for the localhost app.
   if (LOCAL) {
-    const r = regenerate({ write: true });
+    const r = regenerate({ write: true, warn: false }); // desk-side freshness — drop phantoms, but stay quiet (no per-event spam)
+    if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run an attended sync for the per-event detail)`);
     console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
     console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
     console.log(`[local] wrote fills/positions/offers as needed — NO git (desk-side freshness only).`);
@@ -301,7 +307,8 @@ function main() {
   if (!DRY) syncMainToRemote();
 
   const r = regenerate({ write: !DRY });
-  const { merged, pos, eventsChanged, positionsChanged, changed, realisedTotal, mobilePath, removeTargetCount, removedCount } = r;
+  const { merged, pos, eventsChanged, positionsChanged, changed, realisedTotal, mobilePath, removeTargetCount, removedCount, reEmitDropped } = r;
+  if (reEmitDropped) console.log(`⚠ ${reEmitDropped} suspected re-emit(s) dropped (impossible same-slot double-terminal) — see warnings above`);
   if (removeTargetCount) console.log(`${removeTargetCount} tombstone target(s); ${removedCount} event(s) removed`);
 
   console.log(`${r.sources.length} log source(s)${existsSync(mobilePath) ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events after sequencing, ${merged.length} after merge${eventsChanged ? '' : ' (no change)'}`);

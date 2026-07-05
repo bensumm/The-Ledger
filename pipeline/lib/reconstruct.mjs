@@ -149,6 +149,58 @@ export function buildEvents(rawLinesParsed) {
   return events;
 }
 
+// LH1 (2026-07-05): slot-state transition validator — the LOUD, conservative catch for the
+// "impossible transition" artifact class (the 13:25:53/13:29:01 double-BOUGHT of a 17.4m item on
+// slot 7, only one real). A GE slot is a state machine: a terminal event (BOUGHT/SOLD/CANCELLED_*)
+// closes it, so a SECOND terminal on the same slot with NO intervening placement/progress line is
+// IMPOSSIBLE unless the plugin re-emitted a stale slot state after a relog (visible as the
+// simultaneous EMPTY burst on the OTHER slots at that second). Walking each GE slot's event
+// subsequence in ts order, when a terminal follows a terminal on the same slot with nothing
+// re-opening the slot between them:
+//   - STRICTLY identical to the prior terminal (same item+type+qty+price+filled+spent, via
+//     sameTerminal) ⇒ a provable re-emit: DROP it and console.warn LOUDLY (never silent; and,
+//     because this runs at INGEST — next to buildEvents, before the fills.json merge — never
+//     written into fills.json either).
+//   - ANY field differs ⇒ a possible fast re-trade whose placement line we may just have missed:
+//     WARN but KEEP (fail toward preserving data; a REMOVE tombstone stays the manual override for
+//     anything the heuristic can't prove).
+// Manual-log slots 8 (desktop/CLI) and 9 (mobile) are NOT GE-slot state machines — they carry
+// independent one-shot lines (BANKED/WITHDRAWN/manual BOUGHT/SOLD) that legitimately repeat — so
+// they are EXEMPT entirely. This is a SUPERSET of the derivation-layer dedupeSnapshots() (it also
+// covers CANCELLED terminals and is loud); dedupeSnapshots() remains inside reconstruct() as the
+// silent backstop that additionally cleans a phantom ALREADY persisted in an older fills.json (the
+// merged set reconstruct() sees can still carry a pre-LH1 duplicate this ingest pass never re-reads).
+// This does NOT resurrect the deleted cancel-to-EMPTY inference: EMPTY lines are already consumed by
+// buildEvents() and never reach here, so absence is still never evidence — only two REAL terminals.
+function isTerminalState(s) { return s === 'complete' || s === 'cancelled'; }
+// `warn` (default true) controls the LOUD console.warn per suspect. The attended sync passes it
+// true (the visible deliverable + a summary count); the frequently-re-run callers (the watch-log
+// daemon, --local desk freshness, monitor's per-tick poll) pass it FALSE so months-old historical
+// re-emits — re-seen on every whole-log re-read — don't spam a background terminal. The DROP itself
+// is unconditional either way; only the chattiness is gated.
+export function validateSlotTransitions(events, { warn = true } = {}) {
+  const lastBySlot = new Map(); // GE slot -> last KEPT event on it (ts order)
+  const kept = [], dropped = [];
+  const iso = ts => new Date(ts * 1000).toISOString();
+  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+    if (e.slot === 8 || e.slot === 9) { kept.push(e); continue; } // manual slots: no state machine
+    const prev = lastBySlot.get(e.slot);
+    if (isTerminalState(e.state) && prev && isTerminalState(prev.state)) {
+      // two terminals in a row on this slot with nothing re-opening it between (a placement/progress
+      // line would have replaced prev with a non-terminal) — the impossible transition.
+      if (sameTerminal(prev, e)) {
+        dropped.push({ event: e, priorTs: prev.ts });
+        if (warn) console.warn(`⚠ suspected re-emit dropped: ${e.type.toUpperCase()} item ${e.itemId} qty ${e.qty} @${e.price} slot ${e.slot} at ${iso(e.ts)} — identical to the prior terminal at ${iso(prev.ts)}; a slot cannot close twice with no offer placed between.`);
+        continue; // drop e; prev stays as this slot's last terminal
+      }
+      if (warn) console.warn(`⚠ same-slot terminal after a terminal with no placement between, fields DIFFER — KEEPING (not provably a phantom): ${e.type.toUpperCase()} item ${e.itemId} qty ${e.qty} @${e.price} slot ${e.slot} at ${iso(e.ts)} (prior: item ${prev.itemId} qty ${prev.qty} @${prev.price} at ${iso(prev.ts)}).`);
+    }
+    kept.push(e);
+    lastBySlot.set(e.slot, e);
+  }
+  return { events: kept, dropped };
+}
+
 export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the shared impl (chunk 4.1)
 
 // P1 (2026-07-05): snapshot-re-emission dedupe. RuneLite re-broadcasts every GE slot's current
@@ -164,9 +216,11 @@ export const GE_TAX = tax; // 2% floored/item, capped 5m — re-export the share
 // the preceding slot-event a non-match, so the second terminal is kept. EMPTY lines for the OTHER
 // slots in a login burst are already consumed by buildEvents() and belong to different slots, so
 // they never count as an intervening placement for the traded slot. Runs at the DERIVATION layer
-// (reconstruct below), NOT at the merge/storage layer — fills.json stays the raw append-only
-// archive (both terminal lines persist); only the derived positions.json drops the phantom, so the
-// fix re-applies cleanly as logic evolves and a future re-diagnosis can still see the raw pair.
+// (reconstruct below): with LH1 (2026-07-05) this is now the SILENT BACKSTOP — validateSlotTransitions()
+// catches the same class LOUDLY at ingest (next to buildEvents, before the fills.json merge), so a
+// FRESH re-emit no longer reaches fills.json at all. dedupeSnapshots() still runs here so a phantom
+// ALREADY persisted in an older (pre-LH1) fills.json — which the ingest pass never re-reads — is
+// still dropped from the derived positions.json. Both layers use the SAME sameTerminal() discriminator.
 function sameTerminal(a, b) {
   return a.itemId === b.itemId && a.type === b.type && a.qty === b.qty &&
          a.price === b.price && a.filled === b.filled && a.spent === b.spent;
