@@ -10,7 +10,8 @@ single-file discipline: this doc is both the plan and the scoreboard.
 ## Executor rules (apply to every chunk, verbatim)
 
 - Each chunk ends with: `node --check` every touched `js/*.js` / `pipeline/*.mjs`; run
-  `node pipeline/quotecore.test.mjs` if quotecore was touched; a real browser or Playwright
+  `node pipeline/run-tests.mjs` (the auto-discovery runner — runs every `pipeline/**/*.test.mjs`)
+  if any tested module was touched; a real browser or Playwright
   smoke test for any app-facing change (ES modules don't load over `file://` — use
   `serve.cmd`); `APP_VERSION` bump in `js/state.js` if app behavior changed (skills-only
   changes do NOT bump it — SKILL.md `version:` frontmatter instead); a descriptive commit,

@@ -1,5 +1,5 @@
 # Non-gating repo checks (gating once branch protection / merge queue lands).
-# Runs the same checks agents run locally (CLAUDE.md rule 2 + quotecore fixtures):
+# Runs the same checks agents run locally (CLAUDE.md rule 2 + the auto-discovered test suites):
 # nothing here needs secrets or Ben's machine — the fills *sync* itself can never
 # move to CI (it reads ~/.runelite locally; Task Scheduler is its permanent home).
 name: checks
@@ -29,11 +29,8 @@ jobs:
           done
           echo "syntax OK"
 
-      - name: quotecore acceptance fixtures
-        run: node pipeline/quotecore.test.mjs
-
-      - name: reconstruction acceptance fixtures
-        run: node pipeline/reconstruct.test.mjs
+      - name: acceptance fixtures (auto-discovered *.test.mjs)
+        run: node pipeline/run-tests.mjs
 
       - name: fills.json / positions.json parse
         run: |

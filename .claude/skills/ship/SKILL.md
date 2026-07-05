@@ -80,8 +80,9 @@ Triage on red:
 
 `.github/workflows/checks.yml` runs on push to `main`, PRs, `merge_group`, and manual
 dispatch. Two jobs: a cheap **`checks`** job (`node --check` over `js/*.js` + `pipeline/*.mjs`,
-the quotecore acceptance fixtures `node pipeline/quotecore.test.mjs`, the reconstruct fixtures
-`node pipeline/reconstruct.test.mjs`, and JSON-parse of `fills.json`/`positions.json`) and a
+the auto-discovered acceptance fixtures `node pipeline/run-tests.mjs` — one runner that
+recursively finds and runs every `pipeline/**/*.test.mjs`, so adding a test file needs no CI
+edit — and JSON-parse of `fills.json`/`positions.json`) and a
 separate **`smoke`** job (CI1) that installs Playwright chromium and runs
 `node pipeline/smoke.mjs` — a headless DOM smoke of `index.html` with all external network
 stubbed, failing on any page error / app console error / empty pane. Split jobs so the cheap

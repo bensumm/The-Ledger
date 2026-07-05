@@ -55,6 +55,16 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Glob test runner + must-have money tests** (TD1, pipeline-only — no APP_VERSION) —
+  `pipeline/run-tests.mjs` auto-discovers every `pipeline/**/*.test.mjs` (recursive, so colocated
+  `lib/` tests are found), runs each in its own child process, and exits non-zero on ANY suite
+  failure OR zero discovery. **Adding a test file is the whole job** — `checks.yml` and `/ship`
+  call the runner once; never wire a new test into CI by hand again. New money-primitive coverage:
+  `pipeline/format.test.mjs` (tax exemption/floor/5m-cap, netMargin null-guard, parseGp) and
+  `pipeline/lib/rating.test.mjs` (thin A- cap, capGrade clamps-down-only, gradeFor monotonic,
+  riskMult = Π(factors), momFactor breakdown<breakup); `reconstruct.test.mjs` gained a big-ticket
+  5m-cap-per-unit close + a partial-fill `collapseOffers` fold. Test house style: banner of
+  BUSINESS REQUIREMENTS an agent can diff against, `node:assert/strict`, synthetic fixtures only.
 - **Finder full-catalog search + Signals badge count** (0.46.0, FX1) — a Finder **search query
   now reveals every mapped match**, not just the flip universe: `currentFinderRows` (`js/ui.js`)
   unions in off-screen catalog rows (shared `rawItem`, `js/market.js`) for ids `MIN_PRICE` keeps

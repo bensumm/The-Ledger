@@ -99,8 +99,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
     appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
-    `quotecore.test.mjs` (verdict-tree fixtures) and `reconstruct.test.mjs` (FIFO/tombstone/
-    snapshot-dedupe fixtures) — all three wired into `.github/workflows/checks.yml`
+    `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
+    snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
+    (grade/score model) — all auto-discovered by `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
@@ -150,11 +151,16 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 ### Test-location convention
 
 Tests are `*.test.mjs` files **colocated next to the code they pin** (e.g.
-`pipeline/quotecore.test.mjs` sits beside its subject) — there is **never** a `tests/`
-directory; adjacency beats grouping for agents. Each test is plain
-`node <file>.test.mjs` (no framework — copy the shape of an existing one) and is run in CI
-by `.github/workflows/checks.yml`. Follow the same rule for `js/` and `pipeline/lib/`
-subjects: put the test beside the file, not in a separate tree.
+`pipeline/quotecore.test.mjs` sits beside its subject, `pipeline/lib/rating.test.mjs` beside
+`pipeline/lib/rating.mjs`) — there is **never** a `tests/` directory; adjacency beats grouping
+for agents. Each test is plain `node <file>.test.mjs` (no framework — copy the shape of an
+existing one). They are **auto-discovered**: `pipeline/run-tests.mjs` recursively finds every
+`pipeline/**/*.test.mjs`, runs each in its own child process, and exits non-zero if any suite
+fails **or** if zero suites are found. CI (`.github/workflows/checks.yml`) and `/ship` call the
+runner once, so **adding a test file is the whole job** — nothing else wires it in. Follow the
+same rule for `js/` and `pipeline/lib/` subjects: put the test beside the file (tests for `js/`
+subjects live under `pipeline/`, which is where the runner globs — the `quotecore.test.mjs`/
+`format.test.mjs` precedent).
 
 ## Local development
 

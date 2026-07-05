@@ -17,10 +17,13 @@
  *   P1 — snapshot re-emission dedupe: (a) the 2026-07-04 blowpipe-style dup BOUGHT pair dedupes;
  *        (b) a genuine same-price repeat buy with a placement line between terminals does NOT
  *        dedupe; (c) a dup pair straddling an EMPTY-burst login snapshot dedupes.
+ *   TD1 — two money-path gaps: a big-ticket close taxes at the 5m CAP per unit inside matchTrades
+ *        (not floor(sell·0.02)); collapseOffers folds an incremental partial-fill sequence (same
+ *        offer, rising cumulative qty/worth) into ONE lot at the final totals.
  */
 import assert from 'node:assert/strict';
 import {
-  parseJsonLine, buildEvents, reconstruct, eventId, dedupeSnapshots,
+  parseJsonLine, buildEvents, reconstruct, eventId, dedupeSnapshots, collapseOffers,
 } from './lib/reconstruct.mjs';
 
 let pass = 0;
@@ -216,6 +219,46 @@ ok('duplicate SOLD straddling an EMPTY-burst snapshot → one unmatched, not two
   assert.equal(dedupeSnapshots(events).length, events.length - 1, 'the re-emitted SOLD is dropped');
   const { unmatched } = reconstruct(events);   // no logged buy → orphan sell(s)
   assert.deepEqual(unmatched.map(u => [u.itemId, u.qty]), [[566, 100]], 'one unmatched sell, not a phantom double');
+});
+
+// ============================================================================================
+console.log('\nTD1 money-path acceptance:');
+
+// --- 8. big-ticket close taxes at the 5m CAP per unit --------------------------------------
+// Buy 2 @ 200m, sell 2 @ 300m. GE_TAX(300m) = min(floor(300m·0.02)=6m, 5m) = 5m/unit — the CAP,
+// NOT the raw floor(sell·0.02). A regression that dropped the cap would tax 6m/unit and understate
+// realised by 1m/unit (the BE1 lesson, now enforced inside matchTrades).
+ok('big-ticket close taxes at the 5m cap per unit (not floor(sell·0.02))', () => {
+  const { events } = runPipeline([
+    raw({ state: 'BOUGHT', slot: 0, item: 600, time: '10:00:00', filledQty: 2, grossWorth: 400_000_000, offerSize: 2, priceEach: 200_000_000 }),
+    raw({ state: 'SOLD',   slot: 1, item: 600, time: '11:00:00', filledQty: 2, grossWorth: 600_000_000, offerSize: 2, priceEach: 300_000_000 }),
+  ]);
+  const { closed } = reconstruct(events);
+  assert.equal(closed.length, 1);
+  const c = closed[0];
+  assert.equal(c.tax, 2 * 5_000_000, 'tax = 5m cap × 2 units, not floor(300m·0.02)=6m/unit');
+  assert.notEqual(c.tax, 2 * Math.floor(300_000_000 * 0.02), 'the uncapped 2% would be 12m — the cap must bind');
+  // realised = ((sellEach − taxEach) − buyEach) × qty = ((300m − 5m) − 200m) × 2 = 190m.
+  assert.equal(c.realised, 190_000_000);
+  assert.deepEqual([c.qty, c.buyEach, c.sellEach], [2, 200_000_000, 300_000_000]);
+});
+
+// --- 9. collapseOffers folds an incremental partial-fill sequence into one lot --------------
+// The Exchange Logger emits a rising cumulative (filled, worth) as an offer fills piece by piece.
+// collapseOffers must keep ONE offer per slot at the FINAL totals (max cumulative), not one per line.
+ok('collapseOffers folds a rising partial-fill sequence into ONE lot at final totals', () => {
+  const { events } = runPipeline([
+    raw({ state: 'BUYING', slot: 0, item: 700, time: '10:00:00', offerSize: 10, priceEach: 100 }),                       // placed, filled 0
+    raw({ state: 'BUYING', slot: 0, item: 700, time: '10:02:00', offerSize: 10, priceEach: 100, filledQty: 3, grossWorth: 300 }),  // partial
+    raw({ state: 'BUYING', slot: 0, item: 700, time: '10:05:00', offerSize: 10, priceEach: 100, filledQty: 7, grossWorth: 700 }),  // more
+    raw({ state: 'BOUGHT', slot: 0, item: 700, time: '10:09:00', offerSize: 10, priceEach: 100, filledQty: 10, grossWorth: 1000 }),// terminal
+  ]);
+  const offers = collapseOffers(events);
+  assert.equal(offers.length, 1, 'the whole partial-fill sequence is ONE offer, not four');
+  assert.equal(offers[0].filled, 10, 'final cumulative filled, not an intermediate value');
+  assert.equal(offers[0].spent, 1000, 'final cumulative worth');
+  const { open } = reconstruct(events);
+  assert.deepEqual(open.map(o => [o.itemId, o.qty, o.buyEach]), [[700, 10, 100]], 'one open lot of 10 @ 100');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
