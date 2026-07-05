@@ -12,6 +12,7 @@ import { tax, netMarginQty, fmt, fmtP, parseGp, now, pad2, sgn } from './format.
 import { resolveItem, resolveId } from './market.js';
 import { openTrends } from './trends.js';
 import { makeSortable } from './table.js';
+import { periodKey, groupTrades } from './ledgercore.js';
 import { renderAll, renderCoffer, realised, FILLS_STALE_MS, fmtAge } from './ui.js';
 import { isLinked, appendFillsLog, fillsLogLine, fsApiSupported, linkFillsLog, unlinkFillsLog, linkedName,
          tombstoneLine, manualLineEvent, eventIdFor, readFillsLog, rewriteFillsLog, MOBILE_SLOT } from './fillslog.js';
@@ -293,21 +294,8 @@ export function renderGhSync(){
     if(clr) clr.classList.add('hidden');
   }
 }
-/* Ledger view controls: watchlist-only filter, per-item grouping w/ drill-in, period P&L */
-export function periodKey(ts, period){
-  const d=new Date(ts*1000);
-  if(period==='month') return {key:d.getFullYear()+'-'+pad2(d.getMonth()+1), label:d.toLocaleString([], {month:'short'})+' '+d.getFullYear()};
-  if(period==='week'){ const m=new Date(d); m.setHours(0,0,0,0); m.setDate(m.getDate()-((m.getDay()+6)%7)); // back to Monday
-    return {key:'w'+m.getFullYear()+'-'+pad2(m.getMonth()+1)+'-'+pad2(m.getDate()), label:'wk '+pad2(m.getMonth()+1)+'/'+pad2(m.getDate())}; }
-  return {key:d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()), label:pad2(d.getMonth()+1)+'/'+pad2(d.getDate())}; // day
-}
+/* periodKey + groupTrades moved to js/ledgercore.js (TD2.1 — pure Date/Map math, fixture-tested). */
 function ledgerKeep(t){ return !STATE.ledgerWatchOnly || STATE.watchlist.includes(t.itemId); }
-function groupTrades(trades){
-  const m=new Map();
-  for(const t of trades){ const k=t.itemId!=null?('i'+t.itemId):('n'+t.name);
-    if(!m.has(k)) m.set(k,{key:k, itemId:t.itemId, name:t.name, rows:[]}); m.get(k).rows.push(t); }
-  return [...m.values()];
-}
 /* Row actions: every ledger row is now fills-derived (Hide = tombstone in fillsHidden) or a
    legacy pre-0.27 local entry (Delete — see the migration banner). Editing happens at the
    SOURCE: pending rows and manual log lines rewrite coffer-manual.log (chunk 1.3), never

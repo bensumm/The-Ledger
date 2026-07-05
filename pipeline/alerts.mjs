@@ -37,7 +37,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from './lib/marketfetch.mjs';
@@ -62,6 +62,13 @@ const DRY_RUN = process.argv.includes('--dry-run');
 export const ALERT_COOLDOWN_MIN = 60;
 export const FILL_WINDOW_MIN = 60;
 export const FILL_DEDUPE_TTL_MIN = 720;   // 12h
+
+/* Quiet-hours contract (N1), as one pure named rule (TD2.3 — testable):
+ * during quiet hours (S2 posture clock, 22:00–06:00 local via isOvernightNow) POSITION and
+ * PRICE transitions are suppressed so the phone doesn't buzz overnight, but FILLS are EXEMPT —
+ * a completed trade always notifies. `quiet` is the boolean from isOvernightNow(). */
+export const QUIET_EXEMPT_CLASSES = new Set(['fill']);
+export function quietSuppresses(cls, quiet) { return !!quiet && !QUIET_EXEMPT_CLASSES.has(cls); }
 
 const now = Date.now();
 const nowIso = new Date(now).toISOString();
@@ -93,7 +100,7 @@ function emit(obj, human) {
 // Returns the alertable signal for a held row, or null. `sig` is the transition key stored in
 // state; a change in sig (and cooldown clear) is what fires. Verdict text is sourced from the
 // shared momVerdict() so it can't drift from the app / quote.mjs.
-function positionSignal(row, be, lotValue, ts5m) {
+export function positionSignal(row, be, lotValue, ts5m) {
   const mv = momVerdict(row, be, lotValue, ts5m);
   const strongDown = row.mom === 'breakdown' && (row.momPct || 0) >= MOM_STRONG_PCT;
   const underwater = be != null && row.quickSell != null && row.quickSell < be;
@@ -135,7 +142,7 @@ async function runPositions(st) {
     const transitioned = !prev || prev.sig !== s.sig;
     const cooldownOk = !prev || !prev.alertedAt || minsSince(prev.alertedAt) >= ALERT_COOLDOWN_MIN;
     if (transitioned && cooldownOk) {
-      if (quiet) { /* suppressed overnight: DO NOT commit — leave prev so it re-fires after 06:00 */ continue; }
+      if (quietSuppresses('position', quiet)) { /* suppressed overnight: DO NOT commit — leave prev so it re-fires after 06:00 */ continue; }
       emit(
         { class: 'position', itemId, item: name, qty, verdict: s.verdict, mom: s.mom, instabuy: row.quickSell, breakEven: be, why: s.why },
         `${name} ×${qty} — ${s.verdict}${s.mom ? ' ' + s.mom : ''} · live ${fmtP(row.quickSell)} vs break-even ${fmtP(be)}. ${s.why}`
@@ -205,7 +212,7 @@ async function runPriceAlerts(st, map, names) {
     const wasTriggered = prev && prev.crossed;
     if (triggered && !wasTriggered) {
       const cooldownOk = !prev || !prev.alertedAt || minsSince(prev.alertedAt) >= ALERT_COOLDOWN_MIN;
-      if (cooldownOk && !quiet) {
+      if (cooldownOk && !quietSuppresses('price', quiet)) {
         const nm = names[d.itemId] || map.byId[d.itemId]?.name || ('#' + d.itemId);
         emit(
           { class: 'price', itemId: d.itemId, item: nm, direction: dir, threshold: d.price, price: Math.round(mid), note: d.note || null },
@@ -227,15 +234,22 @@ async function runPriceAlerts(st, map, names) {
 }
 
 /* ---- main -------------------------------------------------------------------------------- */
-const st = loadState();
-const map = await loadMapping();
-const names = {}; for (const id in map.byId) names[id] = map.byId[id].name;
+async function main() {
+  const st = loadState();
+  const map = await loadMapping();
+  const names = {}; for (const id in map.byId) names[id] = map.byId[id].name;
 
-await runPositions(st);
-runFills(st, names);
-await runPriceAlerts(st, map, names);
+  await runPositions(st);
+  runFills(st, names);
+  await runPriceAlerts(st, map, names);
 
-saveState(st);
+  saveState(st);
 
-// Diagnostics go to STDERR so stdout carries ONLY alert lines (empty stdout = nothing fired).
-console.error(`alerts: ${emitted.length} transition(s)${DRY_RUN ? ' [dry-run: state not written]' : ''}${isOvernightNow() ? ' [quiet hours: position/price suppressed, fills exempt]' : ''} @ ${nowIso}`);
+  // Diagnostics go to STDERR so stdout carries ONLY alert lines (empty stdout = nothing fired).
+  console.error(`alerts: ${emitted.length} transition(s)${DRY_RUN ? ' [dry-run: state not written]' : ''}${isOvernightNow() ? ' [quiet hours: position/price suppressed, fills exempt]' : ''} @ ${nowIso}`);
+}
+
+// Run only when invoked directly (`node pipeline/alerts.mjs …`); importing the module (e.g. the
+// TD2.3 positionSignal unit test) must NOT fire a full run / hit the API. process.argv[1] is
+// undefined under `node -e`, so guard it (an eval context is never a direct invocation).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

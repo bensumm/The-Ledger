@@ -28,6 +28,21 @@ import { sGet, sSet } from './state.js';
  *   `defaultKey` is omitted the table starts UNSORTED (renders in caller order) until the
  *   user clicks a header — that preserves the Watchlist's insertion-order default.
  */
+/*
+ * compareRows(column, dir) → an (a,b)=>number comparator (TD2.2 — pure, node-importable).
+ * `column` is one descriptor from the `columns` list; `dir` is the RAW sort direction
+ * (-1 desc / +1 asc). 'str' columns compare with a locale-naive `>`/`<` on the raw dir;
+ * 'num' columns sink a missing field to -Infinity so blanks sort last. `invert` (the
+ * risk-grade quirk — a lower riskIndex is a BETTER grade, so "desc" must show grade A first)
+ * flips the NUMERIC direction only — a string column ignores it, matching the pre-TD2 code.
+ */
+export function compareRows(column, dir){
+  const c=column;
+  if(c.type==='str') return (a,b)=>{ const av=c.get(a), bv=c.get(b); return dir*((av>bv)?1:(av<bv?-1:0)); };
+  const ndir=c.invert?-dir:dir;
+  return (a,b)=>{ const av=c.get(a)??-Infinity, bv=c.get(b)??-Infinity; return ndir*((av>bv)?1:(av<bv?-1:0)); };
+}
+
 export function makeSortable({ tableId, name, columns, defaultKey=null, onSort }){
   const table=document.getElementById(tableId);
   const byKey={}; for(const c of columns) byKey[c.key]=c;
@@ -59,11 +74,7 @@ export function makeSortable({ tableId, name, columns, defaultKey=null, onSort }
     setSort(k, dir){ if(!byKey[k]) return; state.key=k; state.dir=(dir===1||dir===-1)?dir:natDir(k); persist(); },
     sort(rows){
       const c=state.key && byKey[state.key]; if(!c) return rows;   // no active column → caller order
-      const dir=c.invert?-state.dir:state.dir, dir0=state.dir;
-      return rows.slice().sort((a,b)=>{
-        if(c.type==='str'){ const av=c.get(a), bv=c.get(b); return dir0*((av>bv)?1:(av<bv?-1:0)); }
-        const av=c.get(a)??-Infinity, bv=c.get(b)??-Infinity; return dir*((av>bv)?1:(av<bv?-1:0));
-      });
+      return rows.slice().sort(compareRows(c, state.dir));
     },
     decorate(){
       if(!table) return;

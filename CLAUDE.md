@@ -20,6 +20,8 @@ push to `main`).
   Finder/Watchlist/Signals/Coffer/Scan rendering + `renderAll` coordinator; `ledger.js` =
   Ledger view + fills-write cluster (manual-entry writes, positions.json auto-populate,
   Ledger render/controls, freshness/GitHub-sync panels — split out of `ui.js` by A3);
+  `ledgercore.js` = pure day-boundary bucketing + per-item grouping (`periodKey`/`groupTrades`,
+  moved out of `ledger.js` by TD2 so they're node-importable + fixture-tested);
   `backup.js` = export/import; `main.js` = entry point, event wiring + init). No build step, no framework, no bundler — deployed to GitHub Pages at
   bensumm.github.io/The-Ledger/ exactly as these files sit on disk. See `README.md`
   for the full file inventory and deploy mechanics.
@@ -55,6 +57,17 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Testability extractions + unlocked tests** (0.47.0, TD2 — pure MOVES/guard, behavior
+  byte-identical) — three modules made node-importable so their real rules get committed fixtures:
+  (1) `periodKey`/`groupTrades` → new pure `js/ledgercore.js` (`ledger.js` re-imports) →
+  `pipeline/ledgercore.test.mjs` finally pins E1's local-time day-boundary bucketing (23:55 stays on
+  its LOCAL day, week splits at the local Monday); (2) the sort comparator factored out of
+  `makeSortable` into exported pure `compareRows(column, dir)` in `js/table.js` →
+  `pipeline/table.test.mjs` (null→-Infinity sink, str-vs-num, the risk-grade `invert` quirk, dir flip);
+  (3) `pipeline/alerts.mjs` gained the standard `import.meta.url===pathToFileURL(argv[1])` invocation
+  guard (it used to FETCH on import) + exports `positionSignal`/`quietSuppresses` → `pipeline/alerts.test.mjs`
+  (transition-only sig; quiet hours suppress position/price, fills exempt). Auto-discovered by TD1.0's
+  runner (no CI edits) — 7 suites now.
 - **Glob test runner + must-have money tests** (TD1, pipeline-only — no APP_VERSION) —
   `pipeline/run-tests.mjs` auto-discovers every `pipeline/**/*.test.mjs` (recursive, so colocated
   `lib/` tests are found), runs each in its own child process, and exits non-zero on ANY suite

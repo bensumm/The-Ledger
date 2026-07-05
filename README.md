@@ -61,7 +61,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (Finder/Watchlist/Signals/Coffer/Scan rendering + the `renderAll` coordinator),
   `ledger.js` (Ledger view + fills-write cluster — manual-entry writes, positions.json
   auto-populate, Ledger render/controls, freshness + GitHub-sync panels; split out of
-  `ui.js` by A3), `backup.js` (export/import),
+  `ui.js` by A3), `ledgercore.js` (TD2 — pure `periodKey`/`groupTrades` day-boundary
+  bucketing + per-item grouping, moved out of `ledger.js` so node can import them for
+  `pipeline/ledgercore.test.mjs`), `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite; the pipeline source
@@ -91,7 +93,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (opportunity screen), `watch.mjs` (adaptive live position/offer monitor), `monitor.mjs`
     (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
-    engine), `outcomes.mjs` (derived campaign/outcomes join — gitignored output)
+    engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
+    (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
+    `outcomes.mjs` (derived campaign/outcomes join — gitignored output)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
     semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
@@ -101,7 +105,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
-    (grade/score model) — all auto-discovered by `run-tests.mjs` (below), which CI runs once
+    (grade/score model), `ledgercore.test.mjs` (TD2 — `periodKey`/`groupTrades` local
+    day/week/month bucketing), `table.test.mjs` (TD2 — the `compareRows` sort comparator),
+    `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract) — all auto-discovered by
+    `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
