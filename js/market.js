@@ -1,7 +1,8 @@
 import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
 import { jget, cached } from './marketfetch.js';
 import { netMargin, clamp, now } from './format.js';
-import { showFinderError, renderAll, syncFills } from './ui.js';
+import { showFinderError, renderAll } from './ui.js';
+import { syncFills } from './ledger.js';   // A3: positions.json auto-populate now lives with the Ledger
 import { archiveWatchlist, computeSignals } from './trends.js';
 
 /* catalog */

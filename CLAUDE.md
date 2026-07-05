@@ -15,8 +15,10 @@ push to `main`).
   inline SVG rendering; `marketfetch.js` = shared browser fetch layer (one timeout-guarded
   `jget` + one cached `fetchTs`/`fetch24h` store, A2); `market.js` = price/guide fetch +
   scoring; `trends.js` = archive + seasonal analysis; `ui.js` =
-  Finder/Watchlist/Signals/Ledger/Coffer rendering; `backup.js` = export/import; `main.js` =
-  entry point, event wiring + init). No build step, no framework, no bundler — deployed to GitHub Pages at
+  Finder/Watchlist/Signals/Coffer/Scan rendering + `renderAll` coordinator; `ledger.js` =
+  Ledger view + fills-write cluster (manual-entry writes, positions.json auto-populate,
+  Ledger render/controls, freshness/GitHub-sync panels — split out of `ui.js` by A3);
+  `backup.js` = export/import; `main.js` = entry point, event wiring + init). No build step, no framework, no bundler — deployed to GitHub Pages at
   bensumm.github.io/The-Ledger/ exactly as these files sit on disk. See `README.md`
   for the full file inventory and deploy mechanics.
 - Split out of one 1375-line `index.html` file in 2026-07 once development moved
@@ -84,8 +86,8 @@ full story.
   override is gone. Don't re-add per-consumer inversion checks — the reliability signal is shared.
 - **Finder rating rework** (0.17.0) — `computeScores()` in `js/market.js`: four 0..1
   sub-scores → a `quality` dampener on profit/hr.
-- **Ledger auto-populate from fills** (0.18.0) — `syncFills()` in `js/ui.js` merges
-  `positions.json` (`src:'fills'`, idempotent, tombstoned via `STATE.fillsHidden`).
+- **Ledger auto-populate from fills** (0.18.0) — `syncFills()` in `js/ledger.js` (A3 — was
+  `js/ui.js`) merges `positions.json` (`src:'fills'`, idempotent, tombstoned via `STATE.fillsHidden`).
 - **Position review workflow** (0.19.0) — `reviewPositions()` in `js/trends.js`:
   HOLD/ADJUST/CUT + "list at X" per open lot.
 - **Falling items → price to clear** (0.20.0) — SUPERSEDED 0.19.0's "list high above
@@ -257,7 +259,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   PLAN.md's unscheduled notes).
 - ~~**Ledger redesign — grouped, watchlist-filtered, period P&L**~~ — **BUILT** (watchlist
   filter, per-item grouping + drill-in, period P&L bucketed by SELL date — `renderLedger` /
-  `periodKey` in `js/ui.js`). The local-timezone day-boundary verification lives in PLAN.md
+  `periodKey` in `js/ledger.js`, A3 — were `js/ui.js`). The local-timezone day-boundary verification lives in PLAN.md
   chunk E1.
 
 ## Repo is public — no PII
@@ -349,7 +351,7 @@ freshness) is derived with the local-time `Date` getters (`getHours`/`getMonth`/
 wire format only**: epoch-second `ts` fields, backup metadata (`exportedAt`), the backup
 filename slug. The manual-log `date`/`time` strings are written in local wall-clock time by
 both `fillsLogLine` (`js/fillslog.js`) and `pipeline/add-manual-fill.mjs`, so rendering them
-raw (e.g. the synced-line list in `editManualLog`, `js/ui.js`) is already local. Verified by
+raw (e.g. the synced-line list in `editManualLog`, `js/ledger.js` — A3, was `js/ui.js`) is already local. Verified by
 the E1 audit (2026-07-04) with a near-midnight `periodKey` fixture — a local 23:55 dip buckets
 to that day, not the UTC-rolled next day. When adding a rendered timestamp, use the local
 getters; only reach for UTC when writing something that leaves the app.

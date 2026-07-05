@@ -50,7 +50,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
   GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
   `watchlist.json` via the contents API), `ui.js`
-  (Finder/Watchlist/Signals/Ledger/Coffer rendering), `backup.js` (export/import),
+  (Finder/Watchlist/Signals/Coffer/Scan rendering + the `renderAll` coordinator),
+  `ledger.js` (Ledger view + fills-write cluster — manual-entry writes, positions.json
+  auto-populate, Ledger render/controls, freshness + GitHub-sync panels; split out of
+  `ui.js` by A3), `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons
 - `fills.json` — raw real-trade event stream synced from RuneLite, fetched same-origin

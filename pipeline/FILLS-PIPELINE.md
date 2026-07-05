@@ -502,7 +502,9 @@ it lives at the repo root (NOT in `LOG_DIR`) and is pulled in as an extra parse 
 into `fills.json`/`positions.json` through the normal reconstruction. It stays **out of the PC's
 commit set** (the PC never modifies it).
 
-### 13.2 App side (`js/github.js`, `js/ui.js`, `js/fillslog.js`)
+### 13.2 App side (`js/github.js`, `js/ledger.js`, `js/fillslog.js`)
+<!-- A3 (0.43.0): the quick-add / mobile-write code (addTrade, writeToMobileLog, renderGhSync) moved from js/ui.js to js/ledger.js. -->
+
 On a phone the File System Access API (the desktop `coffer-manual.log` path) doesn't exist, so the
 app's **GitHub sync** panel (Ledger tab) stores a **fine-grained PAT** — Contents: Read and write,
 this repo only — in `localStorage`. Security: the token is never rendered back after entry, never
