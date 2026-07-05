@@ -14,7 +14,9 @@ push to `main`).
   persistence + diagnostics; `format.js` = formatting/tax helpers; `charts.js` =
   inline SVG rendering; `marketfetch.js` = shared browser fetch layer (one timeout-guarded
   `jget` + one cached `fetchTs`/`fetch24h` store, A2); `market.js` = price/guide fetch +
-  scoring; `trends.js` = archive + seasonal analysis; `ui.js` =
+  scoring; `trends.js` = archive + seasonal analysis; `table.js` = reusable sortable-table
+  helper (TB1 — click-to-sort/arrow/persisted per-table sort; Finder + Watchlist adopt it);
+  `ui.js` =
   Finder/Watchlist/Signals/Coffer/Scan rendering + `renderAll` coordinator; `ledger.js` =
   Ledger view + fills-write cluster (manual-entry writes, positions.json auto-populate,
   Ledger render/controls, freshness/GitHub-sync panels — split out of `ui.js` by A3);
@@ -51,6 +53,16 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Reusable sortable-table component** (0.44.0, TB1) — `js/table.js` `makeSortable({tableId,
+  name, columns, defaultKey, onSort})` owns click-to-sort, the direction toggle, the sorted-column
+  `.sorted`/`▲▼` arrow, the null-safe `?? -Infinity` numeric comparator, and the risk-grade
+  inversion quirk (`invert:true` — lower riskIndex = a better grade). Per-table sort state persists
+  under `sort:<name>` via `sSet` (the Finder's sort used to reset each reload). The Finder and
+  Watchlist adopt it; the old Finder-only `STATE.sortKey`/`sortDir` pair + hand-rolled comparator
+  + per-render arrow code are **deleted** — don't reintroduce a bespoke per-table comparator, extend
+  the shared helper. `defaultKey` omitted ⇒ the table starts unsorted (Watchlist keeps insertion
+  order until a header is clicked). Non-sortable headers (`th` without `data-k`) no longer show the
+  click cursor (`styles.css`). Scan tables stay server-rendered snapshots (not adopted).
 - **Break-even respects the 5m tax cap** (0.40.0, BE1) — shared `breakEven()` in `js/quotecore.js`
   is now piecewise-consistent with `format.js` `tax()`: the smallest sell `s` with `s − tax(s) ≥ buy`
   (`buy` when `buy<50`; `buy + TAXCAP` once the 2% cap binds at `buy > 245m`; else the unchanged

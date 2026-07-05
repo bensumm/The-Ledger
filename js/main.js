@@ -1,7 +1,7 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog, setLogFilter } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
-import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist } from './ui.js';
+import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist, finderSort } from './ui.js';
 import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync } from './ledger.js';   // A3: ledger + fills-write cluster
 import { savePat } from './github.js';
 import { runTrends, reviewPositions } from './trends.js';
@@ -23,13 +23,10 @@ document.getElementById('clearLog').onclick=clearLog;
 document.querySelectorAll('#logFilter button').forEach(b=>b.onclick=()=>setLogFilter(b.dataset.f));
 document.getElementById('search').oninput=renderFinder;
 document.getElementById('priceTier').onchange=renderFinder;
-document.getElementById('sortSel').onchange=e=>{ STATE.sortKey=e.target.value; STATE.sortDir=-1; renderFinder(); };
+document.getElementById('sortSel').onchange=e=>{ finderSort.setSort(e.target.value,-1); renderFinder(); };
 document.getElementById('stratSel').onchange=async e=>{ STATE.strategy=e.target.value; logEvent('info','action','strategy → '+STATE.strategy); await sSet('strategy',STATE.strategy); recompute(); };
 document.getElementById('budgetToggle').onchange=e=>{ document.getElementById('budgetChip').classList.toggle('on',e.target.checked); renderFinder(); };
-document.querySelectorAll('#finderTable thead th[data-k]').forEach(th=>th.onclick=()=>{
-  const k=th.dataset.k; if(STATE.sortKey===k) STATE.sortDir*=-1; else { STATE.sortKey=k; STATE.sortDir=(k==='name')?1:-1; }
-  const sel=document.getElementById('sortSel'); if(['score','pph','margin','roi','volume'].includes(k)) sel.value=k; renderFinder();
-});
+// Finder header click-to-sort + the sort-select sync are owned by finderSort (js/table.js, TB1).
 const scanRef=document.getElementById('scanRefresh'); if(scanRef) scanRef.onclick=()=>{ logEvent('info','action','scan refresh'); renderScan(true); };
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });

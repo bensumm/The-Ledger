@@ -104,7 +104,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | BE1 | Break-even ignores the 5m tax cap | `js/quotecore.js`, `js/trends.js`, `pipeline/add-manual-fill.mjs`, `quotecore.test.mjs`, docs sweep | ✅ `82340d5` (0.40.0; brute-force boundary proof — no-op below the 245m cap crossover) |
 | W1 | Trade-analysis cadence (weekly descriptive outcomes read) | `.claude/skills/morning/SKILL.md` or new skill, `pipeline/outcomes.mjs` | ✅ `5666eac` (/morning v1.3; pipeline-stdout only, no APP_VERSION) |
 | CI1 | Browser smoke test in CI | `.github/workflows/checks.yml`, new smoke script | ✅ `69bf79d` (new `pipeline/smoke.mjs`; validated locally — CI-side run unverified until the branch hits Actions) |
-| TB1 | Reusable sortable-table component | new `js/table.js`, `js/ui.js` (Finder + Watchlist adopt), `styles.css` | queued |
+| TB1 | Reusable sortable-table component | new `js/table.js`, `js/ui.js` (Finder + Watchlist adopt), `styles.css` | ✅ `0234ee0` (0.44.0; chromium sort/reverse/persist interactive test + full smoke green) |
 | LU1 | Ledger UX rework (click→Trends, expand button, P&L filter placement, period-bucket filter, collapsible entry, sortable closed table) | `js/ledger.js`, `index.html`, `styles.css` | queued (after TB1) |
 | FX1 | Finder full-catalog search (soul-rune class) + Signals badge count | `js/ui.js`, `js/market.js` | queued (after LU1) |
 | NY1 | Scan niche-yield audit (spread/rising value; S1.3 spread-drop decision) | `suggestions.jsonl` (read), `pipeline/outcomes.mjs` or one-off analysis, `pipeline/screen.mjs` (only if decisive) | queued |

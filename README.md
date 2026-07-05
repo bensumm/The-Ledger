@@ -49,7 +49,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
   GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
-  `watchlist.json` via the contents API), `ui.js`
+  `watchlist.json` via the contents API), `table.js` (TB1 — reusable sortable-table
+  helper: click-to-sort headers, direction toggle, arrow decoration, per-table sort
+  state persisted under `sort:<name>`; the Finder and Watchlist adopt it), `ui.js`
   (Finder/Watchlist/Signals/Coffer/Scan rendering + the `renderAll` coordinator),
   `ledger.js` (Ledger view + fills-write cluster — manual-entry writes, positions.json
   auto-populate, Ledger render/controls, freshness + GitHub-sync panels; split out of

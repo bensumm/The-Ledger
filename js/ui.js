@@ -6,8 +6,30 @@ import { switchTab } from './main.js';
 import { fetchQuote, quoteTableHtml } from './quote.js';
 import { renderLedger } from './ledger.js';   // A3: Ledger + fills-write cluster split out; renderAll still coordinates
 import { ghConfigured, putJsonFile, WATCHLIST_PATH } from './github.js';
+import { makeSortable } from './table.js';
 
-/* finder */
+/* finder — sort owned by the shared sortable-table helper (TB1); columns mirror the
+   #finderTable header data-k set. riskIndex inverts (lower index = better grade). */
+export const finderSort=makeSortable({
+  tableId:'finderTable', name:'finder', defaultKey:'score',
+  columns:[
+    {key:'name', type:'str', get:r=>r.name},
+    {key:'riskIndex', type:'num', invert:true, get:r=>r.riskIndex},
+    {key:'score', type:'num', get:r=>r.score},
+    {key:'low', type:'num', get:r=>r.low},
+    {key:'high', type:'num', get:r=>r.high},
+    {key:'margin', type:'num', get:r=>r.margin},
+    {key:'roi', type:'num', get:r=>r.roi},
+    {key:'fill', type:'num', get:r=>r.fill},
+    {key:'turn', type:'num', get:r=>r.turn},
+    {key:'pph', type:'num', get:r=>r.pph}
+  ],
+  onSort:()=>{ syncSortSel(); renderFinder(); }
+});
+// keep the Finder's sort <select> in step when a header click lands on one of its options.
+export function syncSortSel(){ const sel=document.getElementById('sortSel');
+  if(sel && ['score','pph','margin','roi','volume'].includes(finderSort.key)) sel.value=finderSort.key; }
+
 export function currentFinderRows(){
   const q=document.getElementById('search').value.trim().toLowerCase();
   const tier=document.getElementById('priceTier').value;
@@ -27,20 +49,14 @@ export function currentFinderRows(){
     if(budget && it.low>perSlot) return false;
     return true;
   });
-  const dir=(STATE.sortKey==='riskIndex')?-STATE.sortDir:STATE.sortDir;
-  rows.sort((a,b)=>{ if(STATE.sortKey==='name') return STATE.sortDir*((a.name>b.name)?1:-1);
-    const av=a[STATE.sortKey]??-Infinity, bv=b[STATE.sortKey]??-Infinity; return dir*((av>bv)?1:(av<bv?-1:0)); });
+  rows=finderSort.sort(rows);
   return rows.slice(0,80);
 }
 export function renderFinder(){
   const body=document.getElementById('finderBody'), empty=document.getElementById('finderEmpty');
   if(!STATE.ITEMS.length) return;
   const rows=currentFinderRows();
-  document.querySelectorAll('#finderTable thead th').forEach(th=>{
-    th.classList.toggle('sorted', th.dataset.k===STATE.sortKey);
-    const old=th.querySelector('.arrow'); if(old) old.remove();
-    if(th.dataset.k===STATE.sortKey){ const s=document.createElement('span'); s.className='arrow'; s.textContent=STATE.sortDir<0?'▼':'▲'; th.appendChild(s); }
-  });
+  finderSort.decorate();
   if(!rows.length){ body.innerHTML=''; empty.classList.remove('hidden');
     empty.innerHTML='<div class="big">No flips match</div><div class="sm">Loosen the price tier or turn off “Affordable”. Margins under 2% never clear the tax, so they’re hidden by design.</div>'; return; }
   empty.classList.add('hidden');
@@ -142,13 +158,31 @@ export function renderSignals(){
   }).join('');
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
 }
+/* watchlist — sortable via the shared helper (TB1); default UNSORTED (insertion order) until
+   a header is clicked. Rows are {id,it} wrappers so the getters read the resolved item. */
+export const watchSort=makeSortable({
+  tableId:'watchTable', name:'watch',
+  columns:[
+    {key:'name', type:'str', get:r=>r.it.name},
+    {key:'low', type:'num', get:r=>r.it.low},
+    {key:'high', type:'num', get:r=>r.it.high},
+    {key:'margin', type:'num', get:r=>r.it.margin},
+    {key:'roi', type:'num', get:r=>r.it.roi},
+    {key:'turn', type:'num', get:r=>r.it.turn},
+    {key:'pph', type:'num', get:r=>r.it.pph},
+    {key:'riskIndex', type:'num', invert:true, get:r=>r.it.riskIndex}
+  ],
+  onSort:()=>renderWatch()
+});
 export function renderWatch(){
   document.getElementById('watchBadge').textContent=STATE.watchlist.length;
   const body=document.getElementById('watchBody'), empty=document.getElementById('watchEmpty');
   if(!STATE.watchlist.length){ body.innerHTML=''; empty.classList.remove('hidden');
     empty.innerHTML='<div class="big">Nothing watched yet</div><div class="sm">Star items in the Finder to park them here and track their margins each refresh.</div>'; return; }
   empty.classList.add('hidden');
-  body.innerHTML=STATE.watchlist.map(id=>{ const it=resolveId(id); if(!it) return ''; const off=!!it.offscreen;
+  let rows=STATE.watchlist.map(id=>{ const it=resolveId(id); return it?{id,it}:null; }).filter(Boolean);
+  rows=watchSort.sort(rows); watchSort.decorate();
+  body.innerHTML=rows.map(({id,it})=>{ const off=!!it.offscreen;
     const gradeCell=off?'<span class="mini">—</span>':'<span class="grade r'+grade(it.riskIndex??1)+'">'+grade(it.riskIndex??1)+'</span>';
     return '<tr><td class="left"><span class="linkname" data-trend="'+id+'">'+it.name+'</span>'+(off?' <span class="mini">quote</span>':'')+'</td>'+
       '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+

@@ -113,6 +113,7 @@
   table{width:100%; border-collapse:collapse; min-width:880px}
   thead th{position:sticky; top:0; z-index:2; background:var(--oak3); text-align:right; font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); padding:11px 13px; font-weight:600; white-space:nowrap; cursor:pointer; border-bottom:1px solid var(--line)}
   thead th.left{text-align:left}
+  thead th:not([data-k]){cursor:default}   /* TB1: only sortable headers (data-k) show the click cursor */
   thead th.sorted{color:var(--gold)}
   thead th .arrow{font-size:9px; margin-left:3px}
   tbody td{padding:10px 13px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; font-size:13.5px}
