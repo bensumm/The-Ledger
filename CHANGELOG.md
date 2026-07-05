@@ -10,6 +10,25 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Push-notification trigger engine (PLAN chunk N1 — pipeline + docs only, no APP_VERSION bump)
+Design-first: the delivery mechanism decision ships as a committed doc section
+(`pipeline/MONITORING.md` "Push notifications on market events") and the trigger ENGINE ships
+as `pipeline/alerts.mjs` — **delivery-agnostic**, it only DETECTS and EMITS. Three trigger
+classes: (1) POSITION — a held item's `momVerdict()` escalates to CUT/CUT-CANDIDATE or Momentum
+`↓↓`, verdict from the shared gate tree (never re-derived); (2) FILL — a resting offer
+completed, from the exchange log via `offers.mjs` (same source as `monitor.mjs`); (3) PRICE — a
+live mid crosses a named alert in the tracked repo-root `alerts.json`. **Transition-only**:
+fires on a state CHANGE vs the last run (a small gitignored `pipeline/.alerts-state.json`),
+never on a level — first run seeds, an unchanged second run emits nothing, a persistent breach
+doesn't re-buzz. Named constants `ALERT_COOLDOWN_MIN=60` (anti-flap, position/price only),
+`FILL_WINDOW_MIN=60`, `FILL_DEDUPE_TTL_MIN=720`. **Quiet hours** (S2's `isOvernightNow()`,
+22:00–06:00 local) suppress position/price alerts and preserve the transition so it re-fires
+after 06:00 — **fills are exempt** (a completed trade always buzzes). Structured JSON + human
+line on stdout, diagnostics on stderr (empty stdout = nothing fired). Delivery is **decided
+after a live trial of option (a)** — a scheduled Claude Code session using the harness
+`PushNotification` tool (zero new infra); (b) ntfy.sh from Task Scheduler and (c) Actions+email
+are the fallbacks. No app changes; no new scheduled task/Action/topic created in this chunk.
+
 ### Action logging pass (0.38.0, PLAN chunk L1)
 Instrument, don't rebuild: the `logEvent(level, scope, msg)` ring + persisted `logring` + Logs
 view already existed (`js/state.js`), but every caller was a *system* fetch path (market/guide/

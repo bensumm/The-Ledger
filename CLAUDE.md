@@ -48,6 +48,13 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Push-notification trigger engine** (N1, pipeline+docs only — no APP_VERSION) — delivery-
+  agnostic `pipeline/alerts.mjs` DETECTS + EMITS three transition-only classes (held-verdict
+  escalation via shared `momVerdict`, offer fills via `offers.mjs`, named price crosses from
+  tracked `alerts.json`) against a gitignored `.alerts-state.json`; quiet hours suppress
+  position/price (fills exempt). Delivery mechanism decided after a live trial of a scheduled
+  Claude session + harness `PushNotification` (option a). Full contract: `MONITORING.md`
+  "Push notifications on market events".
 - **Action logging pass** (0.38.0, L1) — the `logEvent` ring gained an `'action'` scope for
   user actions (tab/watchlist/trade/refresh/trends-open/position-review/backup/settings),
   logged at the **event handler** (never inside shared `switchTab`/`loadAll`, so re-renders

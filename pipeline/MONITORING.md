@@ -234,3 +234,99 @@ Set the exit **at entry** (the SCALP-BUY line prints the paired sell target), do
 multi-day regime floor can't protect a same-day softening call. On a thin/softening book, the
 flat patient premium/unit rarely beats freeing the locked capital; clear at the instabuy and
 redeploy.
+
+---
+
+## Push notifications on market events (`pipeline/alerts.mjs`) — PLAN chunk N1
+
+Ben's phone should buzz on the market events that matter while he's away, and **stay silent
+otherwise**. This is the design contract; the trigger ENGINE ships as `pipeline/alerts.mjs`
+(delivery-agnostic — see the mechanism decision below). No app involvement: this is
+pipeline + a scheduled session only, exactly like the monitoring routine above.
+
+### The three trigger classes
+
+1. **POSITION** — a held position's verdict escalates to **CUT / CUT-CANDIDATE**, or
+   **Momentum hits `↓↓`** (a *strong* 2h breakdown — `mom==='breakdown'` and the pre-clamp
+   overshoot ≥ `MOM_STRONG_PCT`) on a held item. The verdict comes from the **shared
+   `momVerdict()` gate tree** in `js/quotecore.js` — byte-identical to `quote.mjs
+   --positions` and the app's position review, never re-derived. No new prediction logic:
+   an alert fires on the *same* gate-tree evidence a CUT prints on. The falling-regime +
+   underwater CUT (the 0.20.0 clear rule, which `momVerdict` returns `null` for and
+   `quote.mjs`'s wrapper labels) is included as a fourth escalation path.
+2. **FILL** — a resting GE offer **filled/completed**, read from the exchange log via
+   `offers.mjs`/`readExchangeLog()` (the same source `monitor.mjs` uses). Each terminal
+   `BOUGHT`/`SOLD` line in the last `FILL_WINDOW_MIN` is a distinct event.
+3. **PRICE** — a live price crosses an **explicit named alert** ("tell me if X breaks Y"),
+   read from the tracked repo-root **`alerts.json`**. Basis is the live mid
+   (`(instabuy+instasell)/2` from `/latest`) — one symmetric reference for both directions.
+
+### The transition-only rule (the whole point)
+
+Every class fires on a **state CHANGE vs the last run, never on a level**. Last-run state
+lives in a small **gitignored** file `pipeline/.alerts-state.json` (`held` verdicts,
+fired-`fills` keys, `price`-cross state). So: the **first run seeds** state and reports only
+genuinely-new events; a **second run against an unchanged market emits nothing at all**; and
+only a real transition — a fresh verdict, a new terminal fill line, a first price cross —
+prints. A persistent breach (an item that stays underwater, a price that stays past its
+threshold) does **not** re-buzz.
+
+Structured output: each alert is **one JSON line + one human line on stdout**; diagnostics go
+to **stderr**, so **empty stdout literally means nothing fired** (the delivery session keys
+off that). `--dry-run` detects + emits without writing state (for testing / previewing).
+
+### Named constants (tune in `alerts.mjs`, never inline)
+
+- `ALERT_COOLDOWN_MIN = 60` — a POSITION or PRICE alert for the same (class, item) won't
+  re-fire within this window even if the state oscillates (anti-flap). A genuine new
+  transition is still *required*; the cooldown only throttles a chattering signal. **Not**
+  applied to fills — each fill is a discrete event.
+- `FILL_WINDOW_MIN = 60` — how far back each run scans the log for terminal fills.
+- `FILL_DEDUPE_TTL_MIN = 720` — how long a fired fill-event key is remembered so a
+  still-in-window terminal line isn't re-alerted next run (must exceed `FILL_WINDOW_MIN`).
+- `MOM_STRONG_PCT` (imported from `quotecore.js`, the same `↓↓`/`↑↑` threshold the table uses).
+
+### Quiet hours (S2 posture clock) — EXCEPT fills
+
+POSITION and PRICE alerts are **suppressed during quiet hours** (22:00–06:00 local, via the
+shared `isOvernightNow()` — the same S2 overnight window) so the phone doesn't buzz
+overnight. A suppressed transition is deliberately **NOT committed to state**, so it
+**re-surfaces and fires once at the first run after 06:00** — you don't lose an overnight
+escalation, you just get it in the morning. **FILLS are exempt**: a completed trade always
+notifies, day or night (a fill is money that changed hands, not a judgment call you can defer).
+
+### Named price alerts — `alerts.json`
+
+Tracked repo-root file, an array of `{ itemId, direction: "above"|"below", price, note? }`.
+`"above"` fires when the mid rises to/through `price`; `"below"` when it falls to/through it.
+**Edited in sessions for now** ("add a price alert on X at Y" → append an entry); an app-side
+editor is out of scope for N1. Item ids/prices only — no PII (already public in this repo).
+Ships empty (`[]`).
+
+### Delivery mechanism — decision, framed for Ben (trial (a) before committing)
+
+The engine emits; *something* must run it and push the result. Three options, in
+recommended order:
+
+- **(a) Scheduled Claude Code background session + the harness `PushNotification` tool —
+  RECOMMENDED TRIAL.** A Cron/`/schedule` routine runs `node pipeline/alerts.mjs` every few
+  minutes and calls its own `PushNotification` on each emitted human line. **Zero new infra**
+  (no topic, no server, no Actions), notifications land in Ben's Claude app, and the session
+  can add judgment (e.g. collapse three alerts into one message). This is the intended path
+  to **trial live first** before anything heavier is built.
+- **(b) `ntfy.sh` topic pushed from a Task Scheduler script** — no Claude dependency, native
+  phone push. Caveats: an ntfy topic name is effectively a public channel, so content stays
+  item-names/prices-only (already public here) on an **obscure, unguessable topic name**;
+  and — named honestly — **G1 just *deleted* the only scheduled job** (`CofferFillsSync`) on
+  cadence-elimination grounds. A new **unattended** scheduler is a *different* tradeoff than
+  the git-push cadence G1 killed (this one only *reads* + pushes a notification, never writes
+  `main`), but re-introducing "a thing that runs on a timer on Ben's PC" is exactly what G1
+  moved away from — so (b) is a deliberate step back toward scheduling, taken only if (a)'s
+  trial shows a real need for Claude-independent push.
+- **(c) GitHub Actions + email** — last resort. Slowest (cron granularity + mail latency),
+  runs on a public-log runner, and can't see `~/.runelite` so it's blind to fill events
+  (class 2) — only the market-fetch classes would work. Named for completeness; not intended.
+
+**Status: option (a) is to be trialed live before any delivery mechanism is committed.** The
+engine (`alerts.mjs`) is delivery-agnostic on purpose so the trial needs no engine changes,
+and switching to (b)/(c) later is a change of *who runs it*, not *what it computes*.
