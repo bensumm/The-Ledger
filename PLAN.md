@@ -71,6 +71,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | **2** | **S1→S2→S3** (screening economics → overnight posture → watchlist section, one agent — all `screen.mjs`-centric) ∥ **Q1** (Gate-0 reliability fix — quotecore + fixtures) ∥ **E1** (local-time audit) |
 | **3** | **L1** (action logging — solo first, it instruments the final shapes) → **G1** (PR flow + merge queue — investigation then flip; deliberately BEFORE the two big chunks: M1's sync design depends on the cadence decision, and M1/N1 then land through the new PR flow) → **M1** (mobile parity) → **N1** (push notifications). M1 and N1 have disjoint file sets and *may* run in parallel if desired; both are large. G1's *investigation* may start any time; the workflow flip lands only between waves, never mid-wave. |
 | **4** | Repo-review cleanup (2026-07-05 three-agent audit): **D1** (doc reconciliation — docs only, parallel with anything) ∥ **R1→P1** (reconstruct test harness FIRST, then the snapshot dedupe lands with its fixtures in that harness) ∥ **X2→X1** (dead-scheduler excision, then pipeline dedup — both touch `sync-fills.mjs`/shared pipeline files, so sequenced) ∥ **A1→A2→A3** (app dead-code sweep → fetch/helper unification → ledger split; same-file chain, one agent) ∥ **BE1** (break-even tax-cap fix — `quotecore.js` + fixtures, disjoint from A-lane's files until A2; run before or parallel-early). **W1** (analysis cadence) and **CI1** (browser smoke in CI) are independent, any time. |
+| **5** | UX round + scan-yield audit (Ben, 2026-07-05): **rebase this branch onto `origin/main` first** (main gained skills commits + the `nightlows.mjs`→`windowrange.mjs` rename after the Wave-4 base — D1's doc edits may conflict). Then **TB1→LU1→FX1** (one app lane, sequential — shared `ui.js`/`ledger.js`/`styles.css`/`index.html`: reusable sortable table FIRST, then the Ledger UX rework that consumes it, then the Finder/Signals fixes) ∥ **NY1** (scan niche-yield audit — pipeline/analysis only) ∥ **SY1** (sync-fills doctrine — skills only). |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -103,6 +104,11 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | BE1 | Break-even ignores the 5m tax cap | `js/quotecore.js`, `js/trends.js`, `pipeline/add-manual-fill.mjs`, `quotecore.test.mjs`, docs sweep | ✅ `82340d5` (0.40.0; brute-force boundary proof — no-op below the 245m cap crossover) |
 | W1 | Trade-analysis cadence (weekly descriptive outcomes read) | `.claude/skills/morning/SKILL.md` or new skill, `pipeline/outcomes.mjs` | ✅ `5666eac` (/morning v1.3; pipeline-stdout only, no APP_VERSION) |
 | CI1 | Browser smoke test in CI | `.github/workflows/checks.yml`, new smoke script | ✅ `69bf79d` (new `pipeline/smoke.mjs`; validated locally — CI-side run unverified until the branch hits Actions) |
+| TB1 | Reusable sortable-table component | new `js/table.js`, `js/ui.js` (Finder + Watchlist adopt), `styles.css` | queued |
+| LU1 | Ledger UX rework (click→Trends, expand button, P&L filter placement, period-bucket filter, collapsible entry, sortable closed table) | `js/ledger.js`, `index.html`, `styles.css` | queued (after TB1) |
+| FX1 | Finder full-catalog search (soul-rune class) + Signals badge count | `js/ui.js`, `js/market.js` | queued (after LU1) |
+| NY1 | Scan niche-yield audit (spread/rising value; S1.3 spread-drop decision) | `suggestions.jsonl` (read), `pipeline/outcomes.mjs` or one-off analysis, `pipeline/screen.mjs` (only if decisive) | queued |
+| SY1 | Strategic sync-fills points in workflow skills | `.claude/skills/{morning,positions,overnight,scan}/SKILL.md` | queued |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -631,6 +637,150 @@ fail on any console error / unhandled rejection, assert the four tab panes rende
 non-empty with seeded localStorage + stubbed network (no live wiki calls in CI — fixture
 JSON responses; keep it seconds-fast per the `/ship` §4 constraints). This is the check
 that would make the ruleset's required-PR flow actually protective for app changes.
+
+---
+
+## Wave 5 — UX round + scan-yield audit (Ben, 2026-07-05)
+
+Coordinator investigation findings are baked into each chunk — the root causes below were
+verified against the code on 2026-07-05, not guessed. Wave-5 app chunks build on A3's
+`js/ledger.js` split (this branch), so the wave lands on top of Wave 4. **Rebase onto
+`origin/main` before dispatch** — main gained skills commits and the
+`nightlows.mjs`→`windowrange.mjs` rename after the Wave-4 base.
+
+### TB1 — Reusable sortable-table component (foundation — runs first)
+
+Ben: "the columns should be sortable — we should build a standard table object we can
+reuse i.e. watchlist, finder etc."
+
+Today the Finder has the only sortable table, as bespoke wiring: `STATE.sortKey`/
+`STATE.sortDir`, a hand-rolled comparator in `currentFinderRows()` (`js/ui.js:30-32`), and
+per-render `<th>` arrow decoration (`js/ui.js:39-43`). Watchlist, Signals, Scan and the
+Ledger tables have no sorting.
+
+- **TB1.1** New `js/table.js` (zero-build vanilla, same idiom as the rest of `js/`):
+  a small helper that takes a `<table>` (or thead selector) + column descriptors
+  (`{key, type:'num'|'str', get(row)}`) + a re-render callback, and owns: click-to-sort on
+  headers, direction toggle, sorted-column arrow/class, a stable comparator with the
+  Finder's null-handling (`??-Infinity`) and the risk-grade inversion quirk (lower
+  riskIndex = better ⇒ direction flip, `js/ui.js:30`). Per-table sort state persists via
+  `sSet` (one key per table, e.g. `sort:finder`), replacing the Finder-only
+  `STATE.sortKey`/`sortDir` pair.
+- **TB1.2** Adopt it in the **Finder** (delete the bespoke comparator + arrow code; byte-
+  identical default ordering) and the **Watchlist** table. Scan tab tables are
+  server-rendered `cells` snapshots (`screen.json`) — adopt there only if it falls out
+  free; do not restructure the snapshot format.
+- **TB1.3** Acceptance: Finder default sort unchanged (rating desc), clicking each header
+  sorts and re-clicking reverses, arrow tracks the active column, watchlist sortable,
+  `node --check` + chromium smoke green. APP_VERSION bump.
+
+### LU1 — Ledger UX rework (after TB1 — consumes it)
+
+Five Ben asks, one surface (`js/ledger.js` `renderLedger` + the `#panel-ledger` markup,
+`index.html:160-225`):
+
+- **LU1.1 Row click → Trends; expansion moves to a button.** Today clicking a grouped
+  closed/open row toggles expansion (`data-grp` handler, `js/ledger.js:420`). Change:
+  clicking the **item name** opens Trends for that item (`openTrends(itemId)` — same
+  `linkname` affordance the Finder/Signals rows already use), and the multi-lot detail
+  expansion moves to an explicit **Expand/Collapse chevron button** in the row (only on
+  groups with >1 lot, where expansion does something today).
+- **LU1.2 P&L period filter moves next to "Closed flips".** The All/Day/Week/Month
+  segmented control (`#ledgerPeriod`, `index.html:166-171`) only affects the closed-flips
+  period strip — move it out of the top `ledgerctl` bar to sit on the "Closed flips"
+  section label line (`index.html:218`). "Watchlist only" stays at the top (it filters
+  open AND closed).
+- **LU1.3 Period bucket click filters the item list.** When grouped by day/week/month,
+  clicking a bucket in `#periodStrip` filters the closed-flips table below to that
+  bucket's trades (`periodKey` match on sell date). Clearing must be intuitive: the active
+  bucket renders highlighted with an `×`, clicking it again (or an explicit "All" pill)
+  clears; switching period granularity also clears. Filter state is session-only (not
+  persisted).
+- **LU1.4 Manual entry collapsible.** Wrap the manual-entry form (`.ledgerform` +
+  its caveat line, `index.html:188-210`) in a `<details>` (same pattern as the existing
+  `#ghSync` details at `index.html:179`), summary "Log a trade…", collapsed by default;
+  persist open/closed via `sSet`. The Link-fills-log/Edit-manual-entries row and GitHub
+  sync details stay where they are.
+- **LU1.5 Sortable closed-flips columns** via TB1 (default: last-close desc, today's
+  order). Grouped rows sort by group aggregates (qty/avg buy/avg sold/tax/realised).
+- **LU1.6** Acceptance: all five behaviors verified in a real chromium session (click
+  name → Trends opens the right item; expand button works; period buttons live by Closed
+  flips; bucket filter applies + clears; form collapsed by default; columns sort).
+  APP_VERSION bump. Doc pass: CLAUDE.md Ledger-redesign line + README if it describes the
+  Ledger layout.
+
+### FX1 — Finder full-catalog search + Signals badge count (after LU1)
+
+Two small verified bugs, both `js/ui.js`:
+
+- **FX1.1 "Soul rune" unsearchable — root cause `MIN_PRICE`.** `buildItems()` skips any
+  item with `l.high < MIN_PRICE` (=1000, `js/state.js:36`; `js/market.js:138`), so
+  sub-1000gp items (soul rune ~300gp — a live S-grade band/churn row in today's
+  `screen.json`) never enter `STATE.ITEMS`, and Finder search
+  (`currentFinderRows`, which filters only `STATE.ITEMS`) can't find them even though the
+  search path deliberately bypasses the browse gates (`js/ui.js:18`). Fix at the search
+  layer, not by dropping MIN_PRICE (it exists to keep browse-mode noise out): when a
+  search query is active, union in catalog matches via the existing off-screen path
+  (`searchCatalog`/`rawItem`, `js/market.js:105-125`) for ids not in `STATE.ITEMS`.
+  Guard the renderer: off-screen rows lack `rate`/`score`/`fill`/`turn` — render `—`
+  (the `gTitle` fallback already handles `!rt`). The quote button + star must work on
+  them (both key off id; `toggleWatch`→`resolveId` already handles catalog items).
+- **FX1.2 Signals badge reads 0 with rows present — by design, but misleading.**
+  `#sigBadge` shows `firing` = rows where the BUY signal fires now (`js/ui.js:118-119`),
+  not the row count, so it reads 0 while the tab lists several watched items. Change the
+  badge to `firing/total` (e.g. `0/6`) — keeps the firing signal prominent, kills the
+  "tab is empty" misread. If the badge styling makes `x/y` too wide, fallback: show
+  `total` with a distinct "firing" style only when `firing>0`, coordinator's call at
+  execution.
+- **FX1.3** Acceptance: searching "soul" surfaces Soul rune with live prices + working
+  quote/star; browse view (no query) byte-identical; badge shows both numbers; chromium
+  smoke green. APP_VERSION bump.
+
+### NY1 — Scan niche-yield audit (pipeline/analysis; parallel-safe)
+
+Ben: "only receiving a small crop of viable items from the scan flow — was one of the
+niches completely removable since it never surfaces good items?"
+
+Coordinator snapshot (2026-07-04 `screen.json`, mode all): **band** 34 rows, 33 ≥ A-;
+**churn** 35 rows, 25 ≥ A-; **spread** 40 rows, best grade B+ (26 C/D); **rising** 39
+rows, 20 grade-D. 34 of 106 distinct items appear in 2+ niches, band∩churn overlap heavy
+(runes). So spread/rising look weak and churn looks like band's shadow — but ONE snapshot
+is not evidence (process rule 4), and S1.3's spread-drop was already deferred pending
+"a few days of `--mode all` publishes".
+
+- **NY1.1** Evidence read over the accrued **O1 `suggestions.jsonl`** (every surfaced row
+  since Wave 1, with niche + grade + prices): per-niche grade distribution over time;
+  per-niche **unique contribution** (items ONLY that niche surfaces that ever grade ≥ B+);
+  band↔churn Jaccard overlap; join to `positions.json` closed lots — which niche surfaced
+  the flips Ben actually took (soul rune!).
+- **NY1.2** Decision + act: for each of spread/churn/rising — keep / drop / demote (e.g.
+  not in default `--mode all` output, still available by flag). If evidence is decisive,
+  implement in `screen.mjs` (+ `/scan` skill + docs reconciliation, incl. resolving the
+  S1.3 deferred note); if not decisive, write the dated re-check criterion into this plan
+  instead of acting. Also answer the *other* half of "small crop": is the perceived
+  scarcity concentration (few NEW names day to day) rather than few rows — report
+  new-vs-repeat item counts per day.
+- **NY1.3** Report to Ben in prose (per rule 4: sample sizes stated). Pipeline-stdout /
+  analysis only unless a drop is implemented; no APP_VERSION either way (screen.json
+  shape unchanged, or Scan-tab niche list follows the published file automatically —
+  verify `NICHE_ORDER` handles a missing niche, `js/ui.js:273`).
+
+### SY1 — Strategic sync-fills runs (skills-only; parallel-safe)
+
+Ben: "run `node pipeline/sync-fills.mjs` at strategic points to avoid stale data."
+The sync is on-demand since the scheduler was eliminated (FILLS-PIPELINE §12) — the gap is
+that workflow skills don't consistently refresh before reading positions.
+
+- **SY1.1** Audit the four workflow skills + MONITORING.md: which already run/mention the
+  sync at session start. Encode: **/positions**, **/morning**, **/overnight** run
+  `node pipeline/sync-fills.mjs` FIRST (before any positions/fills read); **/scan** runs it
+  only when the position-context pass needs the book (it does, since 1.4 — so yes, first
+  there too). Note the multi-writer contract: the sync ff-pulls `origin/main` (phone
+  lines) before reading logs, so this also picks up mobile entries — that's the point.
+- **SY1.2** SKILL.md `version:` bumps only, never APP_VERSION. One caveat to encode: the
+  sync pushes to `main` (pipeline-owned artifacts, admin bypass) — skills running in a
+  worktree/branch context must run it from the MAIN checkout (`C:\dev\The-Ledger`), not
+  the worktree, or skip it and say so.
 
 ---
 
