@@ -70,6 +70,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | **1** | **T1→T2** (tables + Trends, one agent — shared styling) ∥ **O1** (outcomes dataset — pipeline-only, and the data compounds with calendar time, so it starts now) ∥ **K1→K2→K3** (self-improving skills + memory dedupe + CLAUDE.md slimming round 2 — K3 also touches js file headers/docs, still conflict-free with the other lanes) |
 | **2** | **S1→S2→S3** (screening economics → overnight posture → watchlist section, one agent — all `screen.mjs`-centric) ∥ **Q1** (Gate-0 reliability fix — quotecore + fixtures) ∥ **E1** (local-time audit) |
 | **3** | **L1** (action logging — solo first, it instruments the final shapes) → **G1** (PR flow + merge queue — investigation then flip; deliberately BEFORE the two big chunks: M1's sync design depends on the cadence decision, and M1/N1 then land through the new PR flow) → **M1** (mobile parity) → **N1** (push notifications). M1 and N1 have disjoint file sets and *may* run in parallel if desired; both are large. G1's *investigation* may start any time; the workflow flip lands only between waves, never mid-wave. |
+| **4** | Repo-review cleanup (2026-07-05 three-agent audit): **D1** (doc reconciliation — docs only, parallel with anything) ∥ **R1→P1** (reconstruct test harness FIRST, then the snapshot dedupe lands with its fixtures in that harness) ∥ **X2→X1** (dead-scheduler excision, then pipeline dedup — both touch `sync-fills.mjs`/shared pipeline files, so sequenced) ∥ **A1→A2→A3** (app dead-code sweep → fetch/helper unification → ledger split; same-file chain, one agent) ∥ **BE1** (break-even tax-cap fix — `quotecore.js` + fixtures, disjoint from A-lane's files until A2; run before or parallel-early). **W1** (analysis cadence) and **CI1** (browser smoke in CI) are independent, any time. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -91,7 +92,17 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | ✅ `553c3a6`+`b57fbe8` (scheduler DELETED; ruleset id 18520289 active: PR+`checks` required, admin-always bypass verified. Two limits: **no merge queue** — user-owned repo; **PR creation token-blocked** until Ben runs `gh auth refresh -s repo`, then merge staged branch `g1-readme-inventory` as the acceptance PR) |
 | M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | ✅ `6789859`+`d3df7fe` (0.39.0; M1.5 in-cloud Action deliberately NOT built — designed follow-up in FILLS-PIPELINE.md §13.5, Ben's call if PC-off staleness bites) |
 | N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | ✅ `033318e` (trigger engine + MONITORING.md design section; delivery mechanism = Ben decision pending a live trial of the scheduled-Claude-session option) |
-| P1 | Snapshot-re-emission dedupe in reconstruct.mjs | `pipeline/reconstruct.mjs`, fixtures, `pipeline/FILLS-PIPELINE.md` | OPEN |
+| P1 | Snapshot-re-emission dedupe in reconstruct.mjs | `pipeline/reconstruct.mjs`, fixtures, `pipeline/FILLS-PIPELINE.md` | OPEN (sequence after R1 — its fixtures land in R1's harness) |
+| D1 | Doc reconciliation pass (stale "open followups", FILLS-PIPELINE handoff frame, MONITORING lag/held-source, README inventory) | `CLAUDE.md`, `README.md`, `pipeline/MONITORING.md`, `pipeline/FILLS-PIPELINE.md`, `.claude/skills/positions/SKILL.md` | OPEN |
+| R1 | Reconstruction test harness + CI wiring | new `pipeline/reconstruct.test.mjs`, `.github/workflows/checks.yml` | OPEN |
+| X1 | Pipeline dedup (fetchInputs ×3, open-lot grouping ×3, mapping loaders, liqClass ×2) | `pipeline/marketfetch.mjs`, `quote.mjs`, `watch.mjs`, `alerts.mjs`, `monitor.mjs`, `add-manual-fill.mjs`, `outcomes.mjs`, `suggestlog.mjs` | OPEN |
+| X2 | Dead-scheduler excision (+ ff-merge abort guard) | `pipeline/sync-fills.mjs`, delete `run-fills-sync.cmd`/`.vbs` | OPEN |
+| A1 | App dead-code sweep (write-only STATE props, dead chart/CSS/trends fields) | `js/state.js`, `market.js`, `charts.js`, `trends.js`, `quotecore.js`, `styles.css`, `index.html` | OPEN |
+| A2 | App fetch/helper unification (`js/marketfetch.js`, netMargin routing) | new `js/marketfetch.js`, `js/trends.js`, `market.js`, `quote.js`, `ui.js`, `format.js` | OPEN |
+| A3 | Split `js/ledger.js` out of `ui.js` | `js/ui.js`, new `js/ledger.js`, `main.js`, `index.html` | OPEN |
+| BE1 | Break-even ignores the 5m tax cap | `js/quotecore.js`, `js/trends.js`, `pipeline/add-manual-fill.mjs`, `quotecore.test.mjs`, docs sweep | OPEN |
+| W1 | Trade-analysis cadence (weekly descriptive outcomes read) | `.claude/skills/morning/SKILL.md` or new skill, `pipeline/outcomes.mjs` | OPEN |
+| CI1 | Browser smoke test in CI | `.github/workflows/checks.yml`, new smoke script | OPEN |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
 
 ---
@@ -450,6 +461,179 @@ first (§5.1 rule). Until P1 lands, the §10 interim tombstone procedure applies
 
 ---
 
+## Wave 4 — repo-review cleanup + hardening (three-agent audit, 2026-07-05)
+
+Source: a full-repo review (app code / pipeline / docs, one Opus agent each) plus a
+coordinator data-audit. Every "dead"/"duplicate" claim below was verified by the reviewing
+agent (callers grepped, exports traced — including `index.html` inline handlers and
+pipeline imports of `js/` modules) — executors should still re-verify before deleting,
+but these are not speculative.
+
+### D1 — Doc reconciliation pass (drift audit fixes)
+
+All doc-only; no APP_VERSION. One agent, one commit, rule-8 style (fix in place, move
+never copy):
+1. **CLAUDE.md "Open followups"** still lists ~12 shipped chunks (T1…N1) as "not yet
+   built" — replace the enumeration with: P1 + Wave-4 chunks + F1 (gated) are open; the
+   rest shipped, see PLAN.md Status.
+2. **`pipeline/FILLS-PIPELINE.md` stale handoff frame:** §1 claims a single-file app at
+   v0.14.1; §6 marks the long-shipped Coffer fetch/merge/Ledger work "Not yet built"; §9's
+   checklist last item is done since 0.18.0; §4 restates process rules from the
+   single-file era (a `<script>`-extraction step and a `BUILD` constant that doesn't
+   exist). Fix: banner the historical sections ("2026-07-01 handoff — current state in
+   §5.1/§10/§12/§13") or trim; §4 becomes a pointer to CLAUDE.md's process rules.
+3. **`pipeline/MONITORING.md`:** (a) "Data sources" says monitor's held positions come
+   from `positions.json` — the code does the opposite (in-memory reconstruction from the
+   live log, `monitor.mjs:67-96`; the doc even self-contradicts at L154). Rewrite, and
+   document the `held-override.json` reconciliation knob (currently code-only). (b) Three
+   "~20m sync lag" mentions describe the eliminated schedule — reword to "lag since the
+   last on-demand sync". (c) L21-23 "Until that exists" ignores the shipped
+   Refresh-positions button (0.39.0) — only the Ledger break-even/regime check remains
+   unbuilt.
+4. **README file inventory** — missing 8 `pipeline/*.mjs` and tracked root files
+   `alerts.json`/`watchlist.json`/`suggestions.jsonl`/`screen.json`. The staged
+   `g1-readme-inventory` branch predates N1 and omits `alerts.json` — reconcile/extend it.
+5. **Small:** one clause distinguishing the two "floors" (`--floor 50` script gate vs the
+   ~100/d ghost-spread judgment floor in `/scan`/`watch.mjs` — different purposes, both
+   called "the floor"); `/positions` verdict table gains the two HOLD sub-verdict rows
+   (`HOLD — list high`, `HOLD — watch`; skill version bump).
+Verified clean (don't spend time re-checking): verdict vocabulary, column sets,
+version-bump rules, PR-vs-direct-push story, memory-index pointers.
+
+### R1 — Reconstruction test harness (highest risk-reduction in the audit)
+
+`quotecore.test.mjs` covers the verdict tree exhaustively, but `reconstruct.mjs` — the
+money path with the actual incident history (phantom lots, FIFO mis-pairs, snapshot
+re-emission) — has **zero fixtures**, as do `sync-fills.mjs` merge/tombstone logic,
+`offers.mjs`, and `outcomes.mjs`. New `pipeline/reconstruct.test.mjs` with synthetic
+event fixtures: buy→sell FIFO close; cancel-to-EMPTY inference; `WITHDRAWN` consume;
+`BANKED` basis lot; `REMOVE` tombstone deleting a persisted event; an `eventId` golden
+value (guards the §5.1 `eventId()`↔`eventIdFor()` cross-file contract). Wire into
+`checks.yml` next to the quotecore run. Read FILLS-PIPELINE.md top-to-bottom first (§5.1
+rule). **P1 then lands its snapshot-dedupe fixtures in this harness — R1 before P1.**
+
+### X1 — Pipeline dedup (three verified triplications + two mapping loaders)
+
+1. `fetchInputs(id)` (latest+5m+6h+24h, 60ms spacing) is byte-identical in
+   `quote.mjs:45`, `watch.mjs:125`, `alerts.mjs:91` → one `fetchItemInputs(id)` exported
+   from `marketfetch.mjs` (this resolves the lane-N Discovered note below).
+2. The "parse positions.json → open lots → group by itemId at weighted-avg cost →
+   breakEven" block is copied in `quote.mjs:114`, `watch.mjs:289`, `alerts.mjs:125` → one
+   shared `readOpenPositions()` (small `pipeline/positions.mjs` or alongside
+   `reconstruct.mjs`).
+3. `monitor.mjs:29-37` and `add-manual-fill.mjs:116-124` each hand-roll mapping-cache
+   loading + raw `fetch` with ad-hoc UAs, bypassing `marketfetch.loadMapping()`/`jget` —
+   adopt the shared loader (it already returns `{byId, resolve()}` and tolerates the flat
+   cache shape).
+4. `liqClass` thresholds duplicated (`suggestlog.mjs:34` vs `outcomes.mjs:109`) → import
+   one; same for the `median` one-liner (`screen.mjs:144`, `outcomes.mjs:55`).
+Behavior-identical refactor; pipeline-only, no APP_VERSION. Sequence after X2 (both edit
+shared pipeline files).
+
+### X2 — Dead-scheduler excision + sync ff-guard
+
+The `CofferFillsSync` job died 2026-07-04 but its machinery survives: `run-fills-sync.cmd`
+/ `run-fills-sync.vbs` (verified: referenced only by each other + historical prose) and
+the entire `--auto` branch in `sync-fills.mjs` — `AUTO`, `AUTO_TRAILER`,
+`Auto-Fills-Sync-Since`, and a `push --force-with-lease` path (L283-317) living inside an
+otherwise fresh-commit-only, disjoint-writer sync. Git history is the recovery story;
+delete the two files and the `--auto` branch (keep `syncMainToRemote`'s clobber-guard —
+that's the live protection). Also: the `merge --ff-only origin/main` call (L132) is the
+one un-wrapped git call in that path — route its failure into the same loud structured
+"reconcile by hand" abort as the divergence case. Update FILLS-PIPELINE §12's
+"retained for recoverability" note (rule 8).
+
+### A1 — App dead-code sweep
+
+All verified caller-free by the review agent; re-verify each grep before deleting
+(remember `index.html` inline handlers + pipeline imports of `js/quotecore.js`/`format.js`):
+1. Write-only STATE props `guideSource`/`guideTs`/`guideHasMomentum` (`state.js:48`,
+   assigned in `market.js` + persisted to `snap_guide_src`, read nowhere).
+2. `quoteMarkdown` + its `QUOTE_HEADERS` use (`quotecore.js:387`) — self-described as
+   unadopted; **delete** (the `quoteCells`/`cellText` split is the real shared API; Ben
+   can veto at review).
+3. `svgLine` `opt.eq` branch (`charts.js:21`) + `.eline`/`.earea` CSS — no caller passes
+   `eq`.
+4. Dead weekend/weekday fields in `analyseBroad`/`analyseHourly`/`buildPlan`
+   (`trends.js:85,106-107,149` — feed the removed weekday boxes; `runTrends` reads none
+   of them).
+5. Dead CSS: `.insight`(+children), `.wkrow`/`.wkbox`, `.backup`, `.cgain`/`.closs`.
+6. Dead `id="cofferChev"` (`index.html:35` — CSS parent rule does the rotation).
+APP_VERSION bump; browser smoke per executor rules (dead-code removal is where "syntax
+passed but a render broke" bites).
+
+### A2 — App fetch/helper unification
+
+1. New `js/marketfetch.js` (mirrors the pipeline convention, breaks the quote↔trends
+   cycle-avoidance duplication): `jget(url)` with the shared AbortController+15s-timeout
+   body (currently hand-rolled ~6×: `market.js:22,44,59,75`, `trends.js:55`,
+   `quote.js:14`) and one cached `fetchTs(id,step)` (currently duplicated
+   `trends.js:53-58` vs `quote.js:19-20`, same cache-key scheme).
+2. Route the six inline `(high-tax(high))-low` sites (`trends.js:143,291`,
+   `ui.js:114,520,525,597`) through `format.js`'s existing `netMargin` (+ a qty variant) —
+   the exact drift class the tax consolidation targets, and the prerequisite for BE1's
+   fix reaching every P/L surface.
+3. Reuse `FILLS_STALE_MS` in `renderScan` (`ui.js:685` hard-codes `6*3600*1000`).
+APP_VERSION bump. After A1 (same files).
+
+### A3 — Split `js/ledger.js` out of `ui.js`
+
+`ui.js` (733 lines) holds four unrelated surfaces. The Ledger + fills-write cluster
+(~380 lines: `addTrade`, `writeToFillsLog`/`writeToMobileLog`, `promptFillEdit`,
+`editPending`/`delPending`, `editManualLog`, `renderLedger`, `renderFillsMeta`/`Fresh`,
+`renderGhSync`, `periodKey`, `groupTrades`) is cohesive, owns the `fillslog.js`/`github.js`
+imports, and touches nothing in Finder/Watch/Signals → pure move to `js/ledger.js`,
+`renderAll` stays the coordinator. No logic change; APP_VERSION bump; full browser smoke
+(every moved handler exercised once). Optional rider if either site is being touched
+anyway: factor the `quoteTableHtml`/`scanTableHtml` linkname-header scaffold
+(`quote.js:44` vs `ui.js:633`).
+
+### BE1 — Break-even ignores the 5m tax cap (coordinator finding, 2026-07-05)
+
+`tax()` (`js/format.js:6`) correctly models the 50gp exemption and the 5m `TAXCAP`, but
+`breakEven = ceil(buy/0.98)` (`quotecore.js:20`, inline at `trends.js:292`, inverse at
+`add-manual-fill.mjs:99`) is the *uncapped* inverse. Above 250m the cap binds: true
+break-even is `buy + 5m`, i.e. `ceil(buy/0.98)` **overstates** it (a 1.6b bow: 1.633b
+demanded vs 1.605b true — 28m too high), and under 50gp it's `buy` exactly. Conservative
+direction (never lists *below* true BE) — but it's exactly the big-ticket class S1's
+gp-flow gate admits, so wrong asks on the items where per-unit gp matters most. Fix:
+`breakEven(buy)` = smallest `s` with `s - tax(s) ≥ buy` (piecewise: `<50` → `buy`;
+capped region → `buy + TAXCAP`; else `ceil(buy/0.98)`); replace the trends.js inline and
+the add-manual-fill inverse (its "uncapped inverse" comment already flags it); fixtures
+for the three regions in `quotecore.test.mjs`; docs sweep for `ceil(buy/0.98)`
+(CLAUDE.md, MONITORING.md, `/positions`, `screen.mjs` playbook string — state the
+piecewise rule once, pointer elsewhere). APP_VERSION bump.
+
+### W1 — Trade-analysis cadence (the "when do we start analyzing" answer, encoded)
+
+Data as of 2026-07-05: 640 fill events / 64 closed lots / 15 items / 3 days; 639
+suggestions logged; F1's gate at 1 of ≥5 cells. Decision: **descriptive analysis starts
+now, weekly; calibration stays gated.**
+1. A weekly descriptive read — `outcomes.mjs --report` + realized-P/L attribution
+   (per-item, win rate, hold-time distribution, realized-vs-suggested spread capture) —
+   becomes a standing ritual: fold into `/morning` as a once-a-week section (or a tiny
+   `/review` skill — executor's call with Ben). Report must print n per cell and refuse
+   conclusions below the O1 thresholds (process rule 4 — descriptive ≠ calibration).
+2. Add two cheap honesty lines to the report: **concentration** (top item's share of
+   closed lots — currently 29/64 from one item, so "per-item" reads are mostly one
+   sample) and **F1-gate progress** (cells cleared / needed), so every weekly read shows
+   how far from calibration-grade we are.
+3. F1 unchanged: opens when its documented thresholds clear, realistically weeks away at
+   ~20 lots/day — the gate check is now visible weekly instead of silent.
+
+### CI1 — Browser smoke test in CI (blind spot: only syntax is checked)
+
+`checks.yml` runs `node --check` + quotecore fixtures + JSON parses — an
+import/export mismatch or a render-path throw ships green today; every incident class
+the process rules warn about ("syntax check passed but the app broke") is invisible to
+CI. Add a minimal Playwright(-chromium) job: serve the repo root, load `index.html`,
+fail on any console error / unhandled rejection, assert the four tab panes render
+non-empty with seeded localStorage + stubbed network (no live wiki calls in CI — fixture
+JSON responses; keep it seconds-fast per the `/ship` §4 constraints). This is the check
+that would make the ruleset's required-PR flow actually protective for app changes.
+
+---
+
 ## Gated / unscheduled
 
 ### F1 — Algorithm feedback loop (ex PLAN-2 chunk D — GATED on O1's n thresholds)
@@ -536,9 +720,20 @@ documented sample thresholds clear (process rule 4).
   tracked root files `watchlist.json`/`suggestions.jsonl`/`screen.json` (wave-3 scan,
   2026-07-04). Fix staged on branch `g1-readme-inventory` — becomes the G1 acceptance PR once
   the gh token is refreshed.
-- `alerts.mjs` and `quote.mjs` each define their own ~5-line `fetchInputs(id)` helper
-  (latest/5m/6h/24h with polite spacing) — a shared `fetchQuoteInputs` in `marketfetch.mjs`
-  would unify them (and screen.mjs) if they ever drift (lane N, 2026-07-04).
+- ~~`alerts.mjs` and `quote.mjs` each define their own ~5-line `fetchInputs(id)` helper~~ —
+  promoted to chunk **X1** (2026-07-05 audit found a third copy in `watch.mjs`).
+- Signals render 2-3× during init (`market.js:96-101`: `renderAll` → bare `computeSignals`
+  → `archiveWatchlist().then(computeSignals)`) — idempotent, functionally fine; note for a
+  future perf pass, not a bug (audit, 2026-07-05).
+- `parseGp` exists in both `pipeline/cli.mjs:29` and `js/format.js:24` with slightly
+  different behavior — intentional app/pipeline divergence; worth a one-line comment in
+  each noting so (audit, 2026-07-05).
+- `suggestions.jsonl` grows unbounded in the tracked repo (639 lines in ~2 days ≈ tens of
+  MB/year at this pace) — needs a rotation/compaction story before it gets silly (e.g.
+  monthly archive files, or move history out of the deploy root) (audit, 2026-07-05).
+- Log-file discovery near-duplicated between `sync-fills.readLogFiles` and
+  `offers.readExchangeLog` — partly justified (`--log-dir` override, mobile file); unify
+  only if either changes again (audit, 2026-07-05).
 - Named price alerts fire on the live mid; side-specific semantics ("alert when I could *sell*
   above Y" = instabuy basis) is a one-line change but a product decision for Ben (lane N,
   2026-07-04).
