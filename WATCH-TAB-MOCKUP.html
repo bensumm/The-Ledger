@@ -1,0 +1,199 @@
+<title>The Coffer — Watch tab mockup</title>
+<style>
+  /* The Coffer's own tokens (styles.css) — this mockup is single-theme dark on purpose:
+     the app commits to the oak/parchment world and the Watch tab lives inside it. */
+  :root{
+    --oak:#14100a; --oak2:#1d160d; --oak3:#271e12; --row:#221a10;
+    --line:#3a2e1c; --line2:#4a3a22;
+    --parch:#ece0c4; --parch2:#b8a981; --muted:#86765a;
+    --gold:#e6b54a; --gold2:#f6d27a; --goldink:#3a2c0d;
+    --gain:#7ec56f; --loss:#d4694b; --amber:#e0a23c;
+    --shadow:0 1px 0 rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --serif:'Cinzel',Georgia,'Times New Roman',serif;
+    --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{color-scheme:dark}
+  body{margin:0; background:radial-gradient(1200px 600px at 80% -10%, #251a0e 0%, transparent 60%) , var(--oak);
+    color:var(--parch); font-family:'Inter',system-ui,sans-serif; font-size:15px; line-height:1.45;
+    -webkit-font-smoothing:antialiased; padding:0 0 64px}
+  .num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+  .gain{color:var(--gain)} .loss{color:var(--loss)} .amber{color:var(--amber)} .goldc{color:var(--gold)}
+  .wrap{max-width:960px; margin:0 auto; padding:0 16px}
+
+  /* header / tab strip (matches the app's) */
+  header{border-bottom:1px solid var(--line); background:linear-gradient(180deg,#1a130b,#140f08)}
+  .bar{display:flex; align-items:center; gap:14px; padding:14px 16px; max-width:960px; margin:0 auto; flex-wrap:wrap}
+  .mark{font-family:var(--serif); font-weight:700; letter-spacing:.14em; font-size:20px; color:var(--gold)}
+  .tabs{display:flex; gap:2px; flex-wrap:wrap}
+  .tab{padding:7px 13px; border-radius:8px; font-size:13px; color:var(--muted); cursor:pointer; border:1px solid transparent}
+  .tab.on{color:var(--gold); background:var(--oak3); border-color:var(--line2)}
+  .tab .badge{display:inline-block; margin-left:6px; padding:1px 7px; border-radius:99px; font-size:11px;
+    font-family:var(--mono); background:rgba(212,105,75,.18); color:var(--loss); border:1px solid rgba(212,105,75,.4)}
+
+  /* freshness stamps */
+  .stamps{display:flex; gap:18px; flex-wrap:wrap; padding:12px 0 0; font-size:11px; color:var(--muted)}
+  .stamps b{color:var(--parch2); font-weight:600}
+  .stamps .dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:1px}
+  .dot.ok{background:var(--gain)} .dot.warn{background:var(--amber)}
+
+  /* summary strip */
+  .summary{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line);
+    border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:14px 0 22px; box-shadow:var(--shadow)}
+  .summary .cell{background:linear-gradient(180deg,var(--oak3),var(--oak2)); padding:13px 15px}
+  .summary .k{font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted)}
+  .summary .v{font-family:var(--mono); font-size:21px; font-weight:600; margin-top:6px; letter-spacing:-.01em}
+  .summary .m{font-size:11px; color:var(--muted); margin-top:2px}
+  @media(max-width:640px){ .summary{grid-template-columns:repeat(2,1fr)} }
+
+  /* section heads */
+  h2{font-family:var(--serif); font-size:13px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--parch2); margin:26px 0 10px; display:flex; align-items:baseline; gap:10px}
+  h2 .cnt{font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:0}
+
+  /* verdict-first position cards, severity stripe on the left */
+  .card{border:1px solid var(--line); border-left-width:4px; border-radius:10px; overflow:hidden;
+    background:linear-gradient(180deg,var(--oak3),var(--oak2)); box-shadow:var(--shadow); margin-bottom:12px}
+  .card.hold{border-left-color:var(--gain)}
+  .card.watch{border-left-color:var(--amber)}
+  .card.cut{border-left-color:var(--loss)}
+  .chead{display:flex; align-items:center; gap:10px; padding:12px 14px 0; flex-wrap:wrap}
+  .iname{font-weight:650; font-size:15px}
+  .iname .qty{color:var(--muted); font-weight:400}
+  .pill{padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; letter-spacing:.06em; font-family:var(--mono)}
+  .pill.hold{background:rgba(126,197,111,.14); color:var(--gain); border:1px solid rgba(126,197,111,.4)}
+  .pill.cutc{background:rgba(212,105,75,.14); color:var(--loss); border:1px solid rgba(212,105,75,.4)}
+  .pill.bidok{background:rgba(230,181,74,.12); color:var(--gold); border:1px solid rgba(230,181,74,.35)}
+  .mom{font-family:var(--mono); font-size:12px; color:var(--muted)}
+  .mom.up{color:var(--gain)} .mom.dn{color:var(--loss)}
+  .spacer{flex:1}
+  .pnl{font-family:var(--mono); font-size:13px}
+
+  .cgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:0 14px; padding:10px 14px 4px}
+  @media(max-width:640px){ .cgrid{grid-template-columns:repeat(2,1fr)} }
+  .cg .k{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+  .cg .v{font-family:var(--mono); font-size:14px; margin:3px 0 10px}
+  .cg .v small{color:var(--muted); font-size:11px}
+
+  .action{margin:0 14px 8px; padding:9px 12px; border-radius:8px; font-size:13px;
+    background:rgba(230,181,74,.07); border:1px dashed var(--line2)}
+  .action b{color:var(--gold)}
+  .action.cut{background:rgba(212,105,75,.08)}
+  .action.cut b{color:var(--loss)}
+  .ctx{margin:0 14px 12px; font-size:11.5px; color:var(--muted); line-height:1.55}
+  .ctx .lbl{color:var(--parch2); font-weight:600}
+
+  /* staleness banner for offers */
+  .stale{display:flex; gap:9px; align-items:center; margin:0 0 10px; padding:10px 13px; border-radius:9px;
+    border:1px solid var(--amber); background:rgba(224,162,60,.10); font-size:12.5px; color:var(--parch)}
+  .stale .dot2{width:8px; height:8px; border-radius:50%; background:var(--amber); flex:none}
+  .stale b{color:var(--gold)}
+
+  .offer{display:flex; align-items:center; gap:12px; padding:11px 14px; border:1px solid var(--line);
+    border-radius:9px; background:var(--oak2); margin-bottom:8px; flex-wrap:wrap}
+  .offer .fillbar{flex:none; width:110px; height:6px; border-radius:99px; background:var(--row); overflow:hidden}
+  .offer .fillbar i{display:block; height:100%; background:var(--gold); border-radius:99px}
+  .offer .fn{font-size:12px; color:var(--muted); font-family:var(--mono)}
+
+  /* fills feed */
+  .fill{display:flex; align-items:baseline; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line);
+    font-size:13.5px; flex-wrap:wrap}
+  .fills{border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--oak2)}
+  .fill:last-child{border-bottom:none}
+  .fill time{font-family:var(--mono); font-size:11.5px; color:var(--muted); flex:none; width:44px}
+  .fill .side{font-family:var(--mono); font-size:11px; font-weight:700; width:38px; flex:none}
+  .side.sell{color:var(--gain)} .side.buy{color:var(--gold)}
+
+  .foot{margin-top:26px; font-size:11px; color:var(--muted); line-height:1.7}
+  .foot b{color:var(--parch2)}
+</style>
+
+<header>
+  <div class="bar">
+    <span class="mark">THE COFFER</span>
+    <nav class="tabs">
+      <span class="tab">Finder</span><span class="tab">Watchlist</span><span class="tab">Signals</span>
+      <span class="tab on">Watch<span class="badge">1</span></span>
+      <span class="tab">Ledger</span><span class="tab">Scan</span>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stamps">
+    <span><span class="dot ok"></span>Prices <b>live</b> · refreshed 40s ago</span>
+    <span><span class="dot ok"></span>Held book <b>synced 10:14</b> (positions.json)</span>
+    <span><span class="dot warn"></span>Offers <b>as of last sync</b> — see below</span>
+  </div>
+
+  <div class="summary">
+    <div class="cell"><div class="k">Exposure</div><div class="v num">28.46m</div><div class="m">2 flip positions</div></div>
+    <div class="cell"><div class="k">Day P/L</div><div class="v num gain">+1,225,529</div><div class="m">3 closed flips</div></div>
+    <div class="cell"><div class="k">Free capital</div><div class="v num goldc">~17.9m</div><div class="m">bludgeon sale returned</div></div>
+    <div class="cell"><div class="k">Alerts</div><div class="v num loss">1</div><div class="m">CUT-CANDIDATE</div></div>
+  </div>
+
+  <h2>Held positions <span class="cnt">2 flips · incidentals collapsed</span></h2>
+
+  <div class="card cut">
+    <div class="chead">
+      <span class="iname">Toxic blowpipe (empty) <span class="qty">×1</span></span>
+      <span class="pill cutc">CUT-CANDIDATE</span>
+      <span class="mom">mom –</span>
+      <span class="spacer"></span>
+      <span class="pnl loss num">−81k at clear</span>
+    </div>
+    <div class="cgrid">
+      <div class="cg"><div class="k">Held @</div><div class="v">10.56m</div></div>
+      <div class="cg"><div class="k">Break-even</div><div class="v">10.78m</div></div>
+      <div class="cg"><div class="k">Quick sell</div><div class="v">10.70m</div></div>
+      <div class="cg"><div class="k">Regime</div><div class="v gain">rising +10%</div></div>
+    </div>
+    <div class="action cut"><b>Verdict: list @ 10.70m to clear</b> — underwater through a liquid window.</div>
+    <div class="ctx"><span class="lbl">Session context:</span> dip-in-riser entry, tripwire <span class="num">10.40m</span> — verdict is entry-age noise while the tripwire holds. Window: 10.85m ask reached ~50% of days.</div>
+  </div>
+
+  <div class="card hold">
+    <div class="chead">
+      <span class="iname">Berserker ring <span class="qty">×6</span></span>
+      <span class="pill hold">HOLD — LIST HIGH</span>
+      <span class="mom">mom –</span>
+      <span class="spacer"></span>
+      <span class="pnl num gain">+142k at target</span>
+    </div>
+    <div class="cgrid">
+      <div class="cg"><div class="k">Held @ avg</div><div class="v">2.98m</div></div>
+      <div class="cg"><div class="k">Break-even</div><div class="v">3.04m</div></div>
+      <div class="cg"><div class="k">Target ask</div><div class="v gain">3.07m</div></div>
+      <div class="cg"><div class="k">Regime</div><div class="v">flat −1%</div></div>
+    </div>
+    <div class="action"><b>List @ 3.07m</b> — band top, break-even-floored. Ranging market earns the premium.</div>
+    <div class="ctx"><span class="lbl">Window (next 8h × 7d):</span> highs reached ~75% of days at <span class="num">3.02m</span>, ~50% at <span class="num">3.08m</span> · touched ≠ filled, small sample.</div>
+  </div>
+
+  <h2>Active offers <span class="cnt">from last sync</span></h2>
+  <div class="stale"><span class="dot2"></span><div><b>Offers as of 10:14 sync.</b> The browser can't read the exchange log — run a sync (or check in-game) for live offer state. Held quotes above are live.</div></div>
+
+  <div class="offer">
+    <span class="iname">Soul rune</span>
+    <span class="pill bidok">BID-BEHIND</span>
+    <span class="fillbar"><i style="width:1%"></i></span>
+    <span class="fn num">200 / 25,000 @ 380</span>
+    <span class="spacer"></span>
+    <span class="fn">floor lifting away · displacement candidate</span>
+  </div>
+
+  <h2>Today's fills</h2>
+  <div class="fills">
+    <div class="fill"><time>10:11</time><span class="side sell">SELL</span><span>Abyssal bludgeon ×1 @ <span class="num">17,949,500</span></span><span class="spacer"></span><span class="num gain">+190,510</span></div>
+    <div class="fill"><time>09:32</time><span class="side buy">BUY</span><span>Abyssal bludgeon ×1 @ <span class="num">17,400,000</span></span><span class="spacer"></span><span class="num muted"></span></div>
+    <div class="fill"><time>07:58</time><span class="side sell">SELL</span><span>Abyssal bludgeon ×1 @ <span class="num">17,700,000</span></span><span class="spacer"></span><span class="num gain">+804,020</span></div>
+  </div>
+
+  <p class="foot">
+    <b>Mockup notes.</b> Verdicts come from the same shared <span class="num">momVerdict()</span> gate tree the console uses — identical vocabulary, live in the browser.
+    Severity stripe + pill = verdict; green/amber/red is state, gold stays the accent. The <b>session-context line</b> is the one thing the console can't persist —
+    here it's a per-item note (tripwire, entry thesis) stored in localStorage, shown under every verdict so a stateless CUT never reads as an order.
+    Offers are the honest gap: staleness is bannered, never hidden.
+  </p>
+</div>
