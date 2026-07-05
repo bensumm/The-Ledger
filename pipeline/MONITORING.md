@@ -178,10 +178,19 @@ nothing.
 WITHDRAWN/BANKED-aware `reconstruct.mjs` chain, so the held count agrees either way.
 `positions.json` (written by `sync-fills.mjs` via `reconstruct.mjs`) is chosen for `watch.mjs`
 because it's the already-persisted pipeline output — no log re-parse needed. The only trade-off
-is the file's staleness since the **last on-demand sync** (there is no scheduled sync anymore —
-§12 of FILLS-PIPELINE.md; run `sync-fills.mjs` at session start) — `watch.mjs` prints the file's
-age and flags it stale past 25m, so a very recent trade's lag is visible. Cost basis is static
-once bought, so lag rarely changes a call.
+is the file's staleness since the **last regeneration**. Two things now regenerate it: an on-demand
+`sync-fills.mjs` run (there is no scheduled sync — §12 of FILLS-PIPELINE.md; run it at session start)
+and, when running, the `watch-log.mjs` daemon (§14) that rewrites `positions.json`/`offers.json`
+locally on every log change with **zero git**. `watch.mjs` prints the file's age and flags it stale
+past 25m, so a very recent trade's lag is visible. Cost basis is static once bought, so lag rarely
+changes a call.
+
+**Console `watch.mjs`/`monitor.mjs` remain the zero-lag authority** — they read the exchange log
+directly (`offers.mjs`, ~0 lag). The localhost app's live view (LW2, `FILLS-PIPELINE.md` §14) trails
+them only by the daemon's debounce (~10s) + the app's poll (~30s); it is not the authority, and the
+deployed (`bensumm.github.io`) app is still as-of-last-attended-sync. So: the app *can* now see live
+offers at the desk (via `offers.json`), but for a sell-the-instant-it-moves call the console read
+is still the source of truth.
 
 ### Item-type classes → cadence + playbook
 

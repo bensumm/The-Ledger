@@ -29,7 +29,9 @@ push to `main`).
   from mobile-only Claude sessions to Claude Code on a PC — the single-file
   constraint was about zero-build Pages deploys, not mobile editing, so the split
   keeps zero-build while making the code far more reviewable/diffable. Local testing
-  needs `serve.cmd` now (ES modules don't load over `file://`); see README.
+  needs `serve.cmd` now (ES modules don't load over `file://`); see README. `serve.cmd` is also
+  the **live desk experience** (LW2): on localhost the app polls `positions.json`/`offers.json`
+  and, paired with the `watch-log.mjs` daemon, reflects fills/offers within ~40s with zero git.
 - **Fill-data pipeline**: closes the loop between the tool's trade suggestions and
   real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Lives
   in `pipeline/` (kept separate from the deployed app root): full design doc
@@ -37,8 +39,9 @@ push to `main`).
   Windows machine **on demand** — session-start or a manual push; the ~20-min
   `CofferFillsSync` Task Scheduler job was eliminated 2026-07-04, see FILLS-PIPELINE.md
   §12 — reads `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` **and**
-  `positions.json` at the repo root — both stay at root because the app fetches the derived
-  `positions.json` same-origin and `fills.json` is the ROOT-LOCKED source it reconstructs from;
+  `positions.json` at the repo root (plus `offers.json`, LW1 — a flat live-GE-offer snapshot the
+  localhost app fetches same-origin) — these stay at root because the app fetches the derived
+  `positions.json`/`offers.json` same-origin and `fills.json` is the ROOT-LOCKED source it reconstructs from;
   see README.md "Map of the repo" for the full app-fetched/ROOT-LOCKED vs pipeline-only artifact
   split and the `js/quotecore.js` + `js/format.js` shared-module ripple map). `positions.json` is the derived view (`collapseOffers` +
   FIFO `matchTrades`): `closed` trades w/ after-tax realised P/L, `open` inventory at
@@ -57,6 +60,17 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Local log-watcher — desk-side freshness, zero git in the daemon** (0.48.0, LW1/LW2) — a
+  manual-start `pipeline/watch-log.mjs` daemon (`watch-log.cmd`) `fs.watch`es the exchange-logger dir
+  and runs the extracted git-FREE `regenerate()` core (also reachable as `sync-fills.mjs --local`),
+  writing `fills.json`/`positions.json`/new tracked `offers.json` locally on every fill/cancel within
+  ~seconds. On localhost the app polls those every 30s and shows a "book synced hh:mm · N open offers"
+  stamp (`IS_LOCALHOST`, `js/ledger.js`); on `bensumm.github.io` it's byte-identical to 0.47.0. The
+  **don't-rebuild lesson**: the daemon does **ZERO git** — that's how it gives live desk freshness
+  while preserving the FILLS-PIPELINE.md §12 invariant (no unattended writer **to `main`**). Never add
+  a Task Scheduler job for it, never make it commit/push (that reverses §12 — Ben's call, not scope
+  creep), and never have it fold un-pulled phone `mobile-fills.log` writes (attended sync's job). Full
+  story: `FILLS-PIPELINE.md` §14, `CHANGELOG.md`.
 - **Testability extractions + unlocked tests** (0.47.0, TD2 — pure MOVES/guard, behavior
   byte-identical) — three modules made node-importable so their real rules get committed fixtures:
   (1) `periodKey`/`groupTrades` → new pure `js/ledgercore.js` (`ledger.js` re-imports) →

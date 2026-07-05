@@ -10,6 +10,47 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Local log-watcher — desk-side freshness without an unattended writer (0.48.0, PLAN-LOCAL-WATCH LW1/LW2)
+**Origin (Ben, 2026-07-05):** "Can we have some process watch the log file and automatically sync?"
+The obvious build — a daemon that auto-commits/pushes on every change — would reintroduce exactly the
+**unattended writer to `main`** that §12 (schedule elimination, G1) deleted to unblock the PR + `checks`
+protection. So we took **option 1**: regenerate locally on every log change, **never** commit or push.
+The daemon does **zero git**; publishing to Pages (and the phone) stays attended and on-demand, so the
+§12 invariant is preserved intact — the phrasing was tightened everywhere to "no unattended writer *to
+`main`*", which a local-file-only daemon does not breach.
+
+**LW1 (pipeline-only, no APP_VERSION bump):**
+- The reconstruction core is extracted from `sync-fills.mjs`'s `main()` into an exported, git-free
+  `regenerate({ write, logDir, repoDir })` — reads exchange-logger + `coffer-manual.log` +
+  `mobile-fills.log`, merges with `fills.json`, reconstructs, writes `fills.json`/`positions.json`/
+  `offers.json` (each only on a real content change). `main()` sits behind the standard
+  `import.meta.url === pathToFileURL(argv[1])` invocation guard, so importing `regenerate()` triggers
+  no sync and **no git**. New `sync-fills.mjs --local` runs it with zero git; the attended no-flag path
+  is byte-identical to before plus `offers.json` in its commit set. `--local` deliberately does **not**
+  fold un-pulled phone writes — that needs the attended sync's fetch/ff (acceptable: local mode serves
+  the person at the PC).
+- New **tracked root `offers.json`** — a dumb flat snapshot of the live GE offer slots (`{slot, side,
+  itemId, item, price, qty, filled, lastUpdateTs}`), sourced from `pipeline/lib/offers.mjs`
+  (`readOfferRows` → `offersSnapshot`, names resolved offline/best-effort from the mapping cache).
+  EMPTY/terminal/cancelled slots excluded. It closes the gap `positions.json` (booked fills only) can't
+  see: committed capital sitting in open offers.
+- **`pipeline/watch-log.mjs` + `watch-log.cmd`** — the daemon: `fs.watch` on the exchange-logger
+  **directory** (catches rotation; `coffer-manual.log` is a sibling there, so manual edits fire the
+  same watcher — no second watch), ~10s debounce to absorb Windows' rename/duplicate bursts, then
+  `regenerate()` **in-process** (same core as `--local` — no second pipeline copy to drift). Manual
+  start, dies with the terminal, **no Task Scheduler** — that's the point.
+- Tests (auto-discovered): `sync-fills.test.mjs` guards that `regenerate()` does zero git; `offersSnapshot`
+  cases added to `pipeline/lib/offers.test.mjs`. 11 suites green.
+
+**LW2 (deployed-app change, APP_VERSION 0.47.0 → 0.48.0):** on localhost (`IS_LOCALHOST` in
+`js/state.js`) the app polls `positions.json` + `offers.json` every ~30s, compares `generatedAt`, and
+on a change re-runs the **existing M1 `syncFills()` merge** (no second merge path) and stashes offers on
+`STATE.offers`/`STATE.offersTs` (data home for the future Watch tab). It renders a compact "book synced
+hh:mm · N open offers" stamp (local time, stale-colored past ~10 min) **instead of** the M1 banner +
+Refresh button — never double-banner. On `bensumm.github.io` `IS_LOCALHOST` is false and behavior is
+byte-identical to 0.47.0. With the daemon running, a fill/cancel/reprice reflects in the desk app within
+~40s (debounce + poll), no keystrokes, zero new git commits. Full design: `FILLS-PIPELINE.md` §14.
+
 ### Finder full-catalog search + Signals badge count (0.46.0, PLAN chunk FX1)
 Two verified UI bugs. (1) **"Soul rune" was unsearchable** — `buildItems()` excludes anything
 with `l.high < MIN_PRICE` (1000gp) from `STATE.ITEMS` to keep browse-mode noise out, but Finder

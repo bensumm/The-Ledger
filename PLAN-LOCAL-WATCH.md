@@ -93,6 +93,14 @@ This is the enabling layer for the planned in-app Watch tab (mockup reviewed by 
   events — debounce handles it; don't add a polling fallback unless it proves flaky
   in practice (keep it simple first).
 
+## Status — ALL SHIPPED (2026-07-05)
+
+| Chunk | What | Status | Sha |
+| --- | --- | --- | --- |
+| LW1 | `--local` mode + `regenerate()` core + `offers.json` emitter + `watch-log.mjs` daemon + tests | **shipped** | `b97c87b` (+ initial `offers.json` `d395864`) |
+| LW2 | app localhost live-refresh (poll `positions.json`/`offers.json`, "book synced" stamp; APP_VERSION 0.48.0) | **shipped** | `9da9910` |
+| LW3 | documentation reconciliation (FILLS-PIPELINE §14 + §12 amend, README map, CLAUDE.md Done, CHANGELOG 0.48.0, MONITORING authority note) | **shipped** | this commit |
+
 ## Acceptance
 
 1. Daemon running + a GE offer placed/filled in-game → localhost app reflects it

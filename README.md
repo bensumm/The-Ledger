@@ -73,6 +73,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (slot 9) via the GitHub contents API; read by `sync-fills.mjs` (M1, `FILLS-PIPELINE.md` §13)
 - `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
   trades + open positions); the app auto-populates its Ledger/Coffer from it
+- `offers.json` — tracked, flat snapshot of the live GE offer slots (`{slot, side, itemId,
+  item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
+  both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
+  freshness and stashes it on `STATE.offers` for the future Watch tab (`FILLS-PIPELINE.md` §14)
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
   with local `STATE.watchlist` and `screen.mjs` always scans it (S3); app writes it back via
   the GitHub contents API (`js/github.js`)
@@ -88,7 +92,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   imported-only libraries they share live in `pipeline/lib/`** (OR2 — the split makes the
   CLI-vs-lib distinction structural, since the exec bit doesn't):
   - **CLI entrypoints (`pipeline/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
-    `fills.json`/`positions.json`, commit + push), `add-manual-fill.mjs` (inject/tombstone
+    `fills.json`/`positions.json`/`offers.json`, commit + push; `--local` writes them with
+    **zero git** for desk-side freshness — LW1, exported `regenerate()` core),
+    `watch-log.mjs` (LW1 local daemon — `fs.watch` the exchange-logger dir + `regenerate()`
+    in-process on every change, ~10s debounce, **zero git**; started manually via
+    `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
+    `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
     (opportunity screen), `watch.mjs` (adaptive live position/offer monitor), `monitor.mjs`
     (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
@@ -107,8 +116,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
     (grade/score model), `ledgercore.test.mjs` (TD2 — `periodKey`/`groupTrades` local
     day/week/month bucketing), `table.test.mjs` (TD2 — the `compareRows` sort comparator),
-    `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract) — all auto-discovered by
-    `run-tests.mjs` (below), which CI runs once
+    `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract), `sync-fills.test.mjs`
+    (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
+    emitter) — all auto-discovered by `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
@@ -130,6 +140,7 @@ deployed-phone change (not a rename):
 | File | What locks it to the root |
 | --- | --- |
 | `positions.json` | app fetches same-origin (`js/ledger.js` `syncFills`) |
+| `offers.json` | app fetches same-origin on localhost (`js/ledger.js` `fetchOffers`, LW2) — live GE offer snapshot written by `sync-fills.mjs`/`watch-log.mjs` |
 | `screen.json` | app fetches same-origin (`js/ui.js` Scan tab) |
 | `watchlist.json` | app fetches same-origin (`js/ui.js`) **and** the phone writes it back via the contents API (`js/github.js` `WATCHLIST_PATH`) |
 | `mobile-fills.log` | the phone appends slot-9 lines via the contents API (`js/github.js` `MOBILE_LOG_PATH`); `sync-fills.mjs` reads it |
@@ -175,6 +186,13 @@ ES module scripts can't load over `file://` (browsers block it for CORS reasons)
 so double-clicking `index.html` won't work. Run **`serve.cmd`** (tries the `py`
 launcher's `http.server`, falls back to `python3`, then `npx serve`) and open
 `http://localhost:8000/`. GitHub Pages is unaffected — it always serves over HTTP.
+
+`serve.cmd` is also the **live desk experience** (LW2): on localhost the app polls
+`positions.json` + `offers.json` every ~30s and renders a "book synced hh:mm · N open
+offers" stamp instead of the deployed Refresh-positions banner. Pair it with the
+`watch-log.mjs` daemon (`watch-log.cmd`) running alongside RuneLite and every fill /
+cancel / reprice shows up in the local app within ~40s — no keystrokes, **zero git commits**.
+On `bensumm.github.io` this poll is off and the M1 banner + button are unchanged.
 
 Data sources are the OSRS Wiki real-time prices API, the in-game GE guide price
 (wiki module + weirdgloop history), all fetched client-side.

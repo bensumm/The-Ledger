@@ -16,7 +16,8 @@
 > **Historical framing — 2026-07-01 handoff.** §§1–4, §6, and §9 below were written to
 > hand a mobile-session state to Claude Code; parts are now superseded. **Current state
 > lives in §5.1 (positions.json), §10 (environment notes — the single home), §11 (outcomes
-> dataset), §12 (sync cadence — schedule eliminated), and §13 (mobile write path).** The
+> dataset), §12 (sync cadence — schedule eliminated), §13 (mobile write path), and §14 (the
+> local log-watcher — desk-side freshness with zero git).** The
 > app is no longer a single file and is not pinned to the version quoted below; see
 > `README.md` + `CLAUDE.md` for the live picture. Kept for the design rationale it carries.
 
@@ -365,9 +366,10 @@ detail is authoritative there; the operational rules below are the single home.
   chunk-1 vocabulary, confirmed working) to `coffer-manual.log`, then re-sync.
 - **Sync cadence: on-demand only (no scheduled job) — 2026-07-04, see §12.** The
   `CofferFillsSync` Task Scheduler job that ran `wscript.exe pipeline\run-fills-sync.vbs`
-  every 20 min was **eliminated**; there is no longer any unattended writer to `main`. Run
+  every 20 min was **eliminated**; there is no longer any unattended writer **to `main`**. Run
   `node pipeline/sync-fills.mjs` at session start (the session skills do this automatically)
-  or whenever a manual push is wanted. *(Historical: if a schedule is ever wanted again, it
+  or whenever a manual push is wanted. (The local `watch-log.mjs` daemon, §14, regenerates the
+  root artifacts in the working tree with **zero git** — it is not a writer to `main`.) *(Historical: if a schedule is ever wanted again, it
   would be rebuilt from scratch — the `run-fills-sync.vbs`/`.cmd` wrappers and the `--auto`
   amend/force-push branch were excised in chunk X2, 2026-07-05; git history holds the old
   machinery.)*
@@ -470,7 +472,12 @@ the sample simply must accrue calendar time (why O1 starts now).
 **Decision (Ben, 2026-07-04):** delete the `CofferFillsSync` Task Scheduler job entirely.
 `sync-fills.mjs` becomes **on-demand only** — invoked at session start by the skills that
 need fresh data, or manually when Ben wants a push. There is no longer any *unattended*
-writer to `main`. This is what unblocked the branch → PR → merge-queue migration (G1): with
+writer to `main`. (Precision, added by LW1/§14: the invariant is specifically **no unattended
+writer to `main`**. The local log-watcher daemon — `watch-log.mjs`, 2026-07-05 — regenerates
+`fills.json`/`positions.json`/`offers.json` in the working tree on every log change but does
+**zero git**, so it writes only *local files* and does **not** breach this. Publishing to
+`main`/Pages stays attended and on-demand, exactly as below.) This is what unblocked the branch →
+PR → merge-queue migration (G1): with
 the 20-min auto-push gone, every write to `main` is attended, so `main` can require a PR +
 green `checks` without a machine-identity bypass. Attended sessions (Ben, or an agent
 pushing as his actor) ride a lightweight ruleset bypass on his own GitHub role; **no
@@ -552,7 +559,9 @@ REMOVE tombstone), routed by an `origin:'gh'` tag. The S3 **watchlist write-back
 path (`putJsonFile` → `watchlist.json`, ids) when a token is set.
 
 ### 13.3 Multi-writer sync (see §12 + `sync-fills.mjs` `syncMainToRemote`)
-The PC sync and the phone are two writers to `origin/main` with **disjoint** file sets, so a phone
+The PC sync and the phone are two writers to `origin/main` with **disjoint** file sets (the PC
+commits `fills.json` / `positions.json` / `offers.json` / `screen.json` / `suggestions.jsonl`; the
+phone appends only `mobile-fills.log`), so a phone
 push only moves `origin/main` ahead. The sync fast-forwards local main onto the moved remote BEFORE
 reading logs (so the phone's line is read this run) and lands a **fresh commit** on top — never
 amend/force over the phone's commit. A genuine **divergence aborts loudly (exit 1)**: under the
@@ -572,3 +581,80 @@ A GitHub Action on pushes touching `mobile-fills.log` could merge + rebuild + co
 third committer and never require `.runelite` logs). Deliberately NOT built — with no PC schedule,
 PC-off phone staleness *may* eventually justify it, but that's Ben's call, not an executor's. Until
 then the Refresh button is the freshness path.
+
+## 14. Local log-watcher — desk-side freshness without an unattended writer (LW1/LW2, 0.48.0)
+
+**Origin (Ben, 2026-07-05):** "Can we have some process watch the log file and automatically
+sync?" Chosen answer — **option 1: regenerate locally on every log change, never auto-commit/push.**
+It gives the app at the PC live positions **and** live offers within ~seconds of every
+fill/cancel/reprice while **keeping the §12 invariant fully intact** — the daemon does **zero git**.
+Publishing to Pages (and therefore the phone) stays attended and on-demand, exactly as before §14.
+
+### 14.1 `regenerate()` core + `sync-fills.mjs --local`
+The reconstruction core is factored out of `sync-fills.mjs`'s `main()` into an exported, **git-free**
+`regenerate({ write, logDir, repoDir })`: it reads the exchange-logger files + the repo-root
+`mobile-fills.log` + `coffer-manual.log`, merges with the existing `fills.json`, reconstructs, and —
+when `write` is true — writes `fills.json` / `positions.json` / `offers.json` to `repoDir` (each
+only on a real content change, ignoring `generatedAt`). It performs **no git operations at all** —
+the multi-writer `syncMainToRemote()` guard and the commit/push live only in the attended `main()`
+wrapper. `main()` is behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation
+guard, so importing `regenerate()` (the daemon, the tests) never triggers a sync — no live-log read
+side effect, and crucially **no git**.
+
+- `node pipeline/sync-fills.mjs --local` runs `regenerate()` and writes the three artifacts with
+  **zero git** (no fetch/ff, no commit, no push, `syncMainToRemote` never called). It is desk-side
+  freshness only.
+- **`--local` does NOT fold un-pulled phone writes.** `mobile-fills.log` is only as fresh as the
+  local checkout — no fetch/ff happens on the local path — so a phone-pushed line the PC hasn't
+  pulled is invisible until the next **attended** sync (which ff's origin/main before reading logs).
+  That is acceptable: local mode serves the person sitting at the PC, who never needs the phone's
+  un-pulled lines. The daemon inherits the same property.
+- The attended (no-flag) path is unchanged byte-for-byte (same multi-writer guard, tombstone line,
+  summaries, change-gating) **plus `offers.json` now joins its commit set** (added only when present
+  on disk, alongside `fills.json`/`positions.json`/`screen.json`/`suggestions.jsonl` — never a
+  blanket `git add -A`).
+
+### 14.2 `offers.json` (TRACKED root artifact, written in BOTH modes)
+A flat snapshot of the live GE offer slots, app-fetched same-origin like `positions.json`:
+
+```
+{ app:'the-coffer-offers', version:1, generatedAt:<ISO>,
+  offers:[ { slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs } ] }
+```
+
+Source: `pipeline/lib/offers.mjs` (`readOfferRows()` → `offersSnapshot()`). `side` is
+`BUYING`→`buy` / `SELLING`→`sell`; `price` = offer price each; `qty` = total offer size; `filled` =
+cumulative filled so far; `lastUpdateTs` = the offer line's epoch ms. **EMPTY / terminal / cancelled
+slots are excluded** (only per-slot latest `BUYING`/`SELLING` states survive). Item names resolve
+offline/best-effort from the shared mapping cache (`nameLookupFromCache()`, no network — falls back
+to `#<id>`). The schema is deliberately **dumb and flat**; presentation is the app/future-Watch-tab's
+job. It is read from the exchange-logger dir **only** (booked mobile/manual fills are not live
+offers). `positions.json` still knows only booked fills — `offers.json` is what closes the
+committed-capital-in-open-offers gap for the app.
+
+### 14.3 `watch-log.mjs` — the daemon
+`node pipeline/watch-log.mjs` (or the root `watch-log.cmd` wrapper) `fs.watch`es the exchange-logger
+**directory** (not a single file, so log rotation is caught; `coffer-manual.log` is a sibling inside
+that same dir, so manual-fill / REMOVE-tombstone edits fire the same watcher — no second watch), and
+on every change runs `regenerate()` **in-process** after a ~10s debounce (which coalesces Windows'
+duplicate/rename event bursts). One console line per run (`hh:mm regenerated — N events, M open
+offers`); an initial pass runs at startup so the artifacts are fresh the moment it launches.
+
+Started **manually**, dies with the terminal (Ctrl+C), **no Task Scheduler job — that is the whole
+point** (a scheduled daemon would reintroduce an unattended writer). It calls the same
+`regenerate()` core `--local` runs, so there is no second copy of the pipeline to drift. It does
+**zero git, ever** — and does **not** fold un-pulled phone writes (§14.1). Because it shares the
+reconstruction chain, a client-restart EMPTY burst regenerates identical artifacts harmlessly
+(`buildEvents()` ignores EMPTY lines).
+
+### 14.4 The LW2 consumer — localhost live-refresh (app, 0.48.0)
+The app is the daemon's consumer. On localhost (`IS_LOCALHOST` in `js/state.js` —
+`location.hostname` localhost/127.0.0.1), the app polls `positions.json` + `offers.json` every ~30s
+(`js/ledger.js` `startLocalPoll`), compares `generatedAt`, and only on a change re-runs the
+**existing M1 `syncFills()` merge** (no second merge path) and stashes the offers on
+`STATE.offers`/`STATE.offersTs` (data home for the future Watch tab). It renders a compact
+"book synced hh:mm · N open offers" stamp (local time, stale-colored past ~10 min) **instead of** the
+M1 banner + Refresh button — the two never double-banner. On `bensumm.github.io` `IS_LOCALHOST` is
+false and behavior is byte-identical to 0.47.0 (M1 banner + button remain). Change detections log
+under the `'system'` scope. Net effect: with the daemon running, a fill/cancel/reprice shows in the
+desk app within ~40s (debounce + poll) with no keystrokes and **zero new git commits**.
