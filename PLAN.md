@@ -113,7 +113,7 @@ Largest chunks (mobile parity, push notifications) deliberately last (Ben, 2026-
 | NY2 | Niche ruling: rising pool floor, churn off-by-default, spread stays, thin-cap anomaly | `pipeline/screen.mjs`, `rating.mjs` (maybe), `/scan` skill, docs | ✅ `f982a31` (pipeline+skills only, no APP_VERSION; /scan 1.6). NY2.1 `risingPoolFloor` (big-ticket OR liquid) on the rising pool; NY2.2 `--mode all`=band/spread/rising (churn explicit-only); NY2.3 S1.3 stays deferred (spread keeps); NY2.4 = DOC bug (liqClass 'thin' volDay<100 vs gp-flow admission thin limitVol<50 — no code gap), documented in rating.mjs/suggestlog.mjs |
 | OR1 | Org map docs (nightlows drift, root-artifact/shared-module tables, test convention) | `README.md`, `CLAUDE.md` | queued |
 | OR2 | pipeline/lib/ split (8 imported-only libs out of the CLI bag) | `pipeline/lib/*` (moved), ~11 importing files, `.github/workflows/checks.yml`, docs | queued (after OR1) |
-| TD1 | Must-have money tests (format, rating, reconstruct tax-cap/partial-fill) | new `pipeline/format.test.mjs`, `rating.test.mjs`, `reconstruct.test.mjs` (extend), `checks.yml` | queued (after OR2) |
+| TD1 | Glob test runner + must-have money tests (format, rating, reconstruct tax-cap/partial-fill) | new `pipeline/run-tests.mjs`, `format.test.mjs`, `rating.test.mjs`, `reconstruct.test.mjs` (extend), `checks.yml` (one-time runner swap), `/ship` skill | queued (after OR2) |
 | TD2 | Testability extractions + unlocked tests (ledgercore, table comparator, alerts guard) | new `js/ledgercore.js`, `js/ledger.js`, `js/table.js`, `pipeline/alerts.mjs`, new tests, `checks.yml` | queued (after TD1) |
 | TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `windowread.test.mjs`, `offers.test.mjs`, `cli.test.mjs`, `checks.yml` | queued (after TD2) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED |
@@ -832,10 +832,14 @@ a top banner comment listing the BUSINESS REQUIREMENTS the file pins (one line e
 for an agent deciding "does my change break a requirement?"), `node:assert/strict`, a
 `ok(name, fn)` runner printing ` ✓ <requirement>` per check, synthetic fixtures only (never
 live data), non-zero exit on any failure, `All N checks passed.` footer. Tests are colocated
-next to their subject with the `.test.mjs` suffix — NEVER a `tests/` dir (CI + /ship
-reference explicit paths; adjacency beats grouping for agents). **Wiring rule: tests are not
-auto-discovered — every new test file must be added to `.github/workflows/checks.yml` in the
-same commit, or CI silently never runs it.**
+next to their subject with the `.test.mjs` suffix — NEVER a `tests/` dir (adjacency beats
+grouping for agents). **Discovery rule (Ben, 2026-07-05): tests are AUTO-DISCOVERED by a
+glob runner — adding a test file is the whole job; nothing else changes.** TD1.0 builds
+`pipeline/run-tests.mjs`: recursively finds every `*.test.mjs` under `pipeline/` (so
+colocated `lib/` tests are found too), runs each as a child process, prints one ✓/✗ line
+per file plus each file's own output, exits non-zero if ANY file fails (or if it discovers
+ZERO files — a glob that silently matches nothing is the failure mode to guard).
+`checks.yml` and `/ship` call the runner once and never need editing on a test add.
 
 ### OR1 — Org map, docs only (survey Tier A)
 
@@ -883,6 +887,11 @@ structural signal (the exec bit lies — `offers.mjs` is +x but pure lib). Split
 
 ### TD1 — Must-have money tests (coverage inventory "must-have"; after OR2 so paths are final)
 
+- **TD1.0 `pipeline/run-tests.mjs`** — the auto-discovery runner (see the Discovery rule in
+  the wave header). Replace checks.yml's two explicit `node pipeline/*.test.mjs` lines with
+  ONE runner invocation; update the `/ship` skill's test reference the same way (rule-8 grep
+  for other explicit test-path mentions — CLAUDE.md executor-rules line included). Verify the
+  runner fails loudly on: a failing test file, and an empty glob.
 - **TD1.1 `pipeline/format.test.mjs`** — the money primitives have NO direct test.
   Requirements to pin: tax=0 under 50gp (GE exemption); tax=`floor(p·0.02)` in the normal
   band (floor, never round); tax caps at 5m (what BE1 depends on); `netMargin`/
@@ -898,7 +907,8 @@ structural signal (the exec bit lies — `offers.mjs` is +x but pure lib). Split
   taxes at the 5m cap per unit inside `matchTrades` (not `floor(sell·0.02)`);
   `collapseOffers` folds an incremental partial-fill sequence (same offer, rising cumulative
   qty/worth) into ONE lot at final totals. Reuse the existing `raw()`/`runPipeline()` harness.
-- **TD1.4** Wire the two new files into checks.yml. Pipeline-only, no APP_VERSION.
+- **TD1.4** No CI wiring needed beyond TD1.0 — the runner discovers the new files; verify
+  `node pipeline/run-tests.mjs` reports all suites. Pipeline-only, no APP_VERSION.
 
 ### TD2 — Testability extractions + the tests they unlock (the only app chunk — APP_VERSION bump)
 
@@ -921,8 +931,8 @@ Three pinned modules hold real rules; each fix is a minimal MOVE/guard, not a re
   **`pipeline/alerts.test.mjs`**: transitions fire only on CHANGE (same verdict twice = one
   alert); quiet hours suppress position/price but never fills (the N1 contract).
 - **TD2.4** Behavior of the app must be byte-identical (pure moves): chromium smoke + spot
-  checks on Ledger buckets and Finder/Watchlist sort. checks.yml wiring for the three new
-  test files. APP_VERSION bump (served files changed).
+  checks on Ledger buckets and Finder/Watchlist sort. New test files are auto-discovered
+  (TD1.0) — no CI edits. APP_VERSION bump (served files changed).
 
 ### TD3 — Nice-to-have test sweep (after TD2; cheap, bounded)
 
@@ -939,7 +949,8 @@ Three pinned modules hold real rules; each fix is a minimal MOVE/guard, not a re
 - **TD3.4 `pipeline/cli.test.mjs`** (+suggestlog): cli `parseGp` sign/suffix/passthrough
   (subtly different from format's — pin both); `median` even/odd/empty, input not mutated;
   `liqClassOf` boundaries at 100/1000 (the NY2.4 vocabulary).
-- **TD3.5** checks.yml wiring. Pipeline-only, no APP_VERSION. **Flagged, not built:** the
+- **TD3.5** Auto-discovered (TD1.0) — no CI edits. Pipeline-only, no APP_VERSION.
+  **Flagged, not built:** the
   screen gate stack (`gateCandidates`) is the highest-value UNtestable logic left — it
   reads argv-derived module constants; testing it needs a thresholds-as-argument extraction.
   Goes to Discovered as a candidate for a later chunk, not smuggled into this one.
