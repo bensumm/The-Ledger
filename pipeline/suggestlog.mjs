@@ -31,13 +31,15 @@ const LEDGER = path.join(HERE, '..', 'suggestions.jsonl');
 // two-sided practical floor (~100/d) and a rough liquid cutoff. watch.mjs instead passes its
 // richer classify() taxonomy label (FALLING / THIN_BIG_TICKET_VOLATILE / …) — that IS "the label
 // as computed then" for that script.
-export function liqClass(row) {
-  const v = row && row.volDay;
-  if (v == null) return 'unknown';
-  if (v < 100) return 'thin';
-  if (v < 1000) return 'mid';
+// liqClassOf(volDay) is the raw-number core (outcomes.mjs joins on stored volDay, no row); liqClass(row)
+// is the row convenience wrapper. ONE threshold set (X1 dedup — was copied as liqClassOf in outcomes.mjs).
+export function liqClassOf(volDay) {
+  if (volDay == null) return 'unknown';
+  if (volDay < 100) return 'thin';
+  if (volDay < 1000) return 'mid';
   return 'liquid';
 }
+export function liqClass(row) { return liqClassOf(row && row.volDay); }
 
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate
 // from logSuggestions so a caller can assemble a batch, then log once.

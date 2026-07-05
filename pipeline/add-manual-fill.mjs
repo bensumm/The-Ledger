@@ -51,12 +51,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tax as GE_TAX } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) — no private copy
 import { parseArgs, parseGp } from './cli.mjs';
+import { loadMapping } from './marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 const OUT = path.join(LOG_DIR, 'coffer-manual.log'); // sibling file; ingested by sync-fills.mjs, never written by RuneLite
-const MAP_CACHE = path.join(HERE, 'mapping.cache.json');
-const MAP_URL = 'https://prices.runescape.wiki/api/v1/osrs/mapping';
 const MANUAL_SLOT = 8; // real GE slots are 0-7; 8 keeps synthetic events clear of live-slot cancel inference
 
 // --- args (parseArgs/parseGp shared via cli.mjs, chunk 10.2) ---
@@ -109,27 +108,16 @@ const pad = n => String(n).padStart(2, '0');
 const date = `${when.getFullYear()}-${pad(when.getMonth()+1)}-${pad(when.getDate())}`;
 const time = `${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}`;
 
-// resolve item id + name.
-// mapping.cache.json is shared with marketfetch.mjs, which writes the richer {id:{name,limit}}
-// shape; flatten to {id:name} on read so --item resolution keeps working regardless of which
-// script last wrote the cache (chunk 4.5 — a rich cache used to break name lookups here).
-const flattenNames = obj => { const m = {}; for (const k in obj) { const v = obj[k]; m[k] = (v && typeof v === 'object') ? v.name : v; } return m; };
-async function loadNames() {
-  try { if (Date.now() - fs.statSync(MAP_CACHE).mtimeMs < 24*3600*1000) return flattenNames(JSON.parse(fs.readFileSync(MAP_CACHE,'utf8'))); } catch {}
-  try {
-    const arr = await (await fetch(MAP_URL, { headers: { 'user-agent': 'the-coffer-manual/1.0' } })).json();
-    const m = {}; for (const it of arr) m[it.id] = it.name;
-    fs.writeFileSync(MAP_CACHE, JSON.stringify(m)); return m;
-  } catch { try { return flattenNames(JSON.parse(fs.readFileSync(MAP_CACHE,'utf8'))); } catch { return {}; } }
-}
+// resolve item id + name via the shared mapping loader (loadMapping().resolve() handles both a
+// numeric id and a case-insensitive name, and tolerates whichever cache shape another script last
+// wrote — chunk 4.5's flat-vs-rich cache hazard is handled inside loadMapping now).
 let itemId, itemName;
 if (A.id) { itemId = parseInt(A.id, 10); if (!Number.isFinite(itemId)) die('--id must be a number');
-  const names = await loadNames(); itemName = names[itemId] || ('#'+itemId); }
-else if (A.item) { const names = await loadNames();
-  const want = String(A.item).toLowerCase();
-  const hit = Object.entries(names).find(([, n]) => String(n).toLowerCase() === want);
+  const map = await loadMapping(); itemName = map.byId[itemId]?.name || ('#'+itemId); }
+else if (A.item) { const map = await loadMapping();
+  const hit = map.resolve(A.item);
   if (!hit) die(`no item named "${A.item}" in the mapping — check spelling or pass --id`);
-  itemId = Number(hit[0]); itemName = hit[1];
+  itemId = hit.id; itemName = hit.name;
 } else die('pass --item <name> or --id <n>');
 
 // build the schema-correct completed-offer line (see sync-fills.mjs ADAPTER):

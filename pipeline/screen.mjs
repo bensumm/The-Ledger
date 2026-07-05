@@ -59,7 +59,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, overnightStaleRisk } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './marketfetch.mjs';
-import { parseArgs, parseGp, mdTable, stdCells } from './cli.mjs';
+import { parseArgs, parseGp, mdTable, stdCells, median } from './cli.mjs';
 import { rateItem, GRADE_CUTOFFS } from './rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
 import { writeFileSync, readFileSync } from 'node:fs';
@@ -141,7 +141,6 @@ const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); retur
 // regimeDrift, but computed from the whole-market archive and NEVER displayed — it only ORDERS the
 // fetch pool so we spend the expensive per-item fetches on likely survivors. The real regime (and the
 // falling-exclusion + rising-confirm) is still the post-fetch computeQuote. ---
-const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 function proxyDrift(points) {
   if (!points || points.length < 2) return null;
   const tEnd = points[points.length - 1].ts;

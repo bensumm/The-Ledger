@@ -35,6 +35,11 @@ export function parseGp(s) {
   return Math.round(parseFloat(m[1]) * mult);
 }
 
+/* --- median(a): middle value of a numeric array (mean of the two middle values for an even
+   length); null for an empty/absent array. The ONE copy — was byte-identical in screen.mjs
+   (band medians) and outcomes.mjs (fill-time cells) (X1 dedup). Does not mutate its input. --- */
+export const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
 /* --- mdTable(headers, rows): generic markdown table (rows = array of cells).
    Generic on purpose — both consumers APPEND columns to the standard set (quote.mjs
    --positions adds Held@/Break-even/Verdict; screen.mjs adds Grade + Score gp/d), which is

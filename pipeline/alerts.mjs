@@ -40,7 +40,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
+import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from './marketfetch.mjs';
+import { readOpenPositions } from './positions.mjs';
 import { readExchangeLog } from './offers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -86,16 +87,6 @@ function emit(obj, human) {
   console.log('ALERT [' + obj.class + '] ' + human);
 }
 
-/* ---- per-item live inputs (same primitives quote.mjs uses; a 4-line fetch helper, not a
- *      re-implementation of the quote math — that all lives in computeQuote/momVerdict) ------ */
-async function fetchInputs(id) {
-  const latest = await fetchLatest(id); await sleep(60);
-  const ts5m = await fetchTs(id, '5m'); await sleep(60);
-  const ts6h = await fetchTs(id, '6h'); await sleep(60);
-  const vol24 = await fetch24hOne(id);
-  return { latest, ts5m, ts6h, vol24 };
-}
-
 /* ==========================================================================================
  * CLASS 1 — POSITION verdict escalation / strong breakdown
  * ========================================================================================== */
@@ -123,29 +114,22 @@ function positionSignal(row, be, lotValue, ts5m) {
 }
 
 async function runPositions(st) {
-  let pos;
-  try { pos = JSON.parse(fs.readFileSync(POSITIONS, 'utf8')); }
-  catch { console.error('! cannot read positions.json — skipping position alerts'); return; }
-  const open = (pos.open || []).filter(l => l.qty > 0);
-  if (!open.length) return;
-  // group by itemId at weighted-avg cost (same as quote.mjs --positions)
-  const byItem = new Map();
-  for (const l of open) {
-    const g = byItem.get(l.itemId) || { qty: 0, cost: 0 };
-    g.qty += l.qty; g.cost += l.qty * l.buyEach; byItem.set(l.itemId, g);
-  }
+  // open lots grouped by itemId at weighted-avg cost — the shared reader (same view as
+  // quote.mjs --positions / watch.mjs); positions.json is read-only here.
+  const { err, groups } = readOpenPositions(POSITIONS);
+  if (err) { console.error('! cannot read positions.json — skipping position alerts'); return; }
+  if (!groups.length) return;
   const map = await loadMapping();
   const guide = await loadGuide();
   const quiet = isOvernightNow();
   const seen = new Set();
-  for (const [itemId, g] of byItem) {
+  for (const { itemId, qty, cost, avgCost } of groups) {
     seen.add(String(itemId));
     const name = map.byId[itemId]?.name || ('#' + itemId);
-    const avgCost = g.cost / g.qty;
     const be = breakEven(avgCost);
-    const inp = await fetchInputs(itemId);
+    const inp = await fetchItemInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    const s = positionSignal(row, be, g.cost, inp.ts5m);
+    const s = positionSignal(row, be, cost, inp.ts5m);
     const prev = st.held[String(itemId)] || null;
     if (!s) { st.held[String(itemId)] = { sig: null }; continue; }   // no longer alerting → clear baseline
     const transitioned = !prev || prev.sig !== s.sig;
@@ -153,8 +137,8 @@ async function runPositions(st) {
     if (transitioned && cooldownOk) {
       if (quiet) { /* suppressed overnight: DO NOT commit — leave prev so it re-fires after 06:00 */ continue; }
       emit(
-        { class: 'position', itemId, item: name, qty: g.qty, verdict: s.verdict, mom: s.mom, instabuy: row.quickSell, breakEven: be, why: s.why },
-        `${name} ×${g.qty} — ${s.verdict}${s.mom ? ' ' + s.mom : ''} · live ${fmtP(row.quickSell)} vs break-even ${fmtP(be)}. ${s.why}`
+        { class: 'position', itemId, item: name, qty, verdict: s.verdict, mom: s.mom, instabuy: row.quickSell, breakEven: be, why: s.why },
+        `${name} ×${qty} — ${s.verdict}${s.mom ? ' ' + s.mom : ''} · live ${fmtP(row.quickSell)} vs break-even ${fmtP(be)}. ${s.why}`
       );
       st.held[String(itemId)] = { sig: s.sig, alertedAt: now };
     } else {

@@ -45,12 +45,12 @@
  *   node pipeline/watch.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
  *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
  */
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
-import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs } from './marketfetch.mjs';
+import { readOpenPositions } from './positions.mjs';
 import { readExchangeLog, activeOffers } from './offers.mjs';
 import { logSuggestions, suggestionEntry } from './suggestlog.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './windowread.mjs';
@@ -122,15 +122,6 @@ function classify(row) {
 
 const spreadPctOf = row => (row.quickBuy && row.quickSell != null)
   ? (row.quickSell - row.quickBuy) / row.quickBuy * 100 : null;
-
-async function fetchInputs(id) {
-  const latest = await fetchLatest(id); await sleep(60);
-  const ts5m = await fetchTs(id, '5m'); await sleep(60);
-  const ts6h = await fetchTs(id, '6h'); await sleep(60);
-  const vol24 = await fetch24hOne(id); await sleep(60);
-  const ts1h = await fetchTs(id, '1h'); // window-context line (windowread.mjs)
-  return { latest, ts5m, ts6h, vol24, ts1h };
-}
 
 // --- WINDOW CONTEXT line (2026-07-05, the ring lesson): the stateless 2h verdicts kept
 // firing on a bid whose real question was time-of-day ("does this window print my level,
@@ -260,7 +251,7 @@ function bidAlert(it) {
 }
 
 async function buildItem({ id, name, qty, avgCost }, map, guide) {
-  const inp = await fetchInputs(id);
+  const inp = await fetchItemInputs(id, { ts1h: true }); // ts1h feeds the window-context line
   const held = qty != null;
   const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, held, asked: true });
   const cls = classify(row);
@@ -296,14 +287,6 @@ function heldAlert(it) {
   return null;
 }
 
-function positionsProvenance() {
-  try {
-    const p = JSON.parse(fs.readFileSync(POSITIONS, 'utf8'));
-    const ageMin = p.generatedAt ? Math.round((Date.now() - Date.parse(p.generatedAt)) / 60000) : null;
-    return { pos: p, ageMin };
-  } catch (e) { return { err: e && e.message || String(e) }; }
-}
-
 async function main() {
   const args = process.argv.slice(2);
   const TARGETS_ONLY = args.includes('--targets-only');
@@ -316,17 +299,12 @@ async function main() {
   const heldSpecs = [];
   let posAge = null;
   if (!TARGETS_ONLY) {
-    const { pos, ageMin, err } = positionsProvenance();
+    const { groups, ageMin, err } = readOpenPositions(POSITIONS);
     if (err) { console.error('cannot read positions.json: ' + err); }
     else {
       posAge = ageMin;
-      const byItem = new Map();
-      for (const l of (pos.open || []).filter(l => l.qty > 0)) {
-        const g = byItem.get(l.itemId) || { qty: 0, cost: 0 };
-        g.qty += l.qty; g.cost += l.qty * l.buyEach; byItem.set(l.itemId, g);
-      }
-      for (const [id, g] of byItem)
-        heldSpecs.push({ id, name: map.byId[id]?.name || ('#' + id), qty: g.qty, avgCost: g.cost / g.qty });
+      for (const { itemId, qty, avgCost } of groups)
+        heldSpecs.push({ id: itemId, name: map.byId[itemId]?.name || ('#' + itemId), qty, avgCost });
     }
   }
 

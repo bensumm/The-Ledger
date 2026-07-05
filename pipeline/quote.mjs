@@ -17,12 +17,12 @@
  * and formats. The ordering invariant optBuy ≤ quickBuy ≤ quickSell ≤ optSell is guaranteed
  * by computeQuote; a ⚠ basis flag prints if a feed inversion ever breaks it.
  */
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP, isOvernightNow } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, fetchLatest, fetchTs, fetch24hOne, sleep } from './marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs } from './marketfetch.mjs';
+import { readOpenPositions } from './positions.mjs';
 import { mdTable, stdCells } from './cli.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './suggestlog.mjs';
 
@@ -42,15 +42,6 @@ function regimeLine(name, row, limit) {
   return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${inv}`;
 }
 
-async function fetchInputs(id) {
-  // small spacing keeps us polite across a multi-item ask
-  const latest = await fetchLatest(id); await sleep(60);
-  const ts5m = await fetchTs(id, '5m'); await sleep(60);
-  const ts6h = await fetchTs(id, '6h'); await sleep(60);
-  const vol24 = await fetch24hOne(id);
-  return { latest, ts5m, ts6h, vol24 };
-}
-
 async function runItems() {
   if (!tokens.length) { console.error('usage: node pipeline/quote.mjs "<item or id>" [...more]  |  node pipeline/quote.mjs --positions'); process.exit(1); }
   const map = await loadMapping();
@@ -63,7 +54,7 @@ async function runItems() {
   }
   const rows = [], lines = [], sugg = [];
   for (const { id, name } of resolved) {
-    const inp = await fetchInputs(id);
+    const inp = await fetchItemInputs(id);
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
@@ -112,29 +103,20 @@ function verdict(row, breakEven, lotValue, ts5m) {
 }
 
 async function runPositions() {
-  let pos;
-  try { pos = JSON.parse(fs.readFileSync(POSITIONS, 'utf8')); }
-  catch (e) { console.error('cannot read positions.json: ' + (e && e.message || e)); process.exit(1); }
-  const open = (pos.open || []).filter(l => l.qty > 0);
-  if (!open.length) { console.log('No open positions in positions.json.'); return; }
-  // group by itemId at weighted-avg cost
-  const byItem = new Map();
-  for (const l of open) {
-    const g = byItem.get(l.itemId) || { qty: 0, cost: 0 };
-    g.qty += l.qty; g.cost += l.qty * l.buyEach; byItem.set(l.itemId, g);
-  }
+  const { err, groups, openLots } = readOpenPositions(POSITIONS);
+  if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
+  if (!groups.length) { console.log('No open positions in positions.json.'); return; }
   const map = await loadMapping();
   const guide = await loadGuide();
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
   const rows = [], lines = [], sugg = [], staleRisk = [];
-  for (const [itemId, g] of byItem) {
+  for (const { itemId, qty, cost, avgCost } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
-    const avgCost = g.cost / g.qty;
     const be = breakEven(avgCost);
-    const inp = await fetchInputs(itemId);
+    const inp = await fetchItemInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    const v = verdict(row, be, g.cost, inp.ts5m);
-    rows.push([...stdCells(name + ` ×${g.qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
+    const v = verdict(row, be, cost, inp.ts5m);
+    rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
     sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v }));  // the emitted per-position verdict string
     // S2 morning-staleness watch (informational only — the Verdict column above is UNCHANGED). A resting
@@ -144,7 +126,7 @@ async function runPositions() {
   }
   // O1 suggestions ledger: log the position verdicts at emit time, unconditionally.
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
-  console.log(`# Open positions vs market (${byItem.size} items, ${open.length} lots)\n`);
+  console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
   console.log(mdTable(headers, rows));
   console.log('');
   console.log(lines.join('\n'));

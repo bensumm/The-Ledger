@@ -29,7 +29,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collapseOffers, matchTrades } from './reconstruct.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from './marketfetch.mjs';
-import { parseArgs } from './cli.mjs';
+import { parseArgs, median } from './cli.mjs';
+import { liqClassOf } from './suggestlog.mjs';
 import { fmtP, fmt, fmtTurn } from '../js/format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -52,7 +53,6 @@ const REPORT = !!A.report, NO_BANDS = !!A['no-bands'], JSON_OUT = !!A.json;
 const MIN_N = A['min-n'] != null ? +A['min-n'] : MIN_N_REPORT;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 
-const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 // -------------------------------------------------------------------------------------------
 // First-fill timing: collapseOffers loses intermediate event timing, so scan the raw events to
@@ -106,12 +106,6 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
 
 const pctBucket = p => p == null ? 'unknown'
   : p < 20 ? '0-20' : p < 40 ? '20-40' : p < 60 ? '40-60' : p < 80 ? '60-80' : '80-100';
-function liqClassOf(volDay) {
-  if (volDay == null) return 'unknown';
-  if (volDay < 100) return 'thin';
-  if (volDay < 1000) return 'mid';
-  return 'liquid';
-}
 
 async function build() {
   if (!fs.existsSync(FILLS)) { console.error('fills.json not found at ' + FILLS); process.exit(1); }

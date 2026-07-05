@@ -1,6 +1,7 @@
-/* marketfetch.mjs — the ONE node-side fetch layer for the chunk-3 analysis scripts
-   (quote.mjs, screen.mjs). DOM-free; pairs with js/quotecore.js (which owns ALL the
-   quote/tax/regime MATH — this file only fetches raw inputs and feeds them in).
+/* marketfetch.mjs — the ONE node-side fetch layer for the pipeline analysis scripts
+   (quote.mjs, screen.mjs, watch.mjs, alerts.mjs; loadMapping is also the shared name/id
+   loader for monitor.mjs / add-manual-fill.mjs). DOM-free; pairs with js/quotecore.js (which
+   owns ALL the quote/tax/regime MATH — this file only fetches raw inputs and feeds them in).
 
    Data sources (identical to what the browser app uses in js/market.js + js/state.js):
      - live/series/24h prices : prices.runescape.wiki  /latest /timeseries /24h /mapping
@@ -122,6 +123,20 @@ export async function loadGuide() {
 export async function fetchLatest(id) { const j = await jget(API + '/latest?id=' + id); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
 export async function fetchTs(id, step) { return (await jget(API + '/timeseries?id=' + id + '&timestep=' + step)).data || []; }
 export async function fetch24hOne(id) { const j = await jget(API + '/24h?id=' + id); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
+
+/* --- fetchItemInputs(id): the combined latest + 5m + 6h series + 24h-vol read every per-item
+   consumer needs, with polite 60ms spacing across a multi-item ask. THE one copy — was a
+   byte-identical `fetchInputs()` inlined in quote.mjs / watch.mjs / alerts.mjs (X1 dedup;
+   resolves the lane-N note). Feeds straight into computeQuote({ ...inp, guide, limit, … }). --- */
+export async function fetchItemInputs(id, { ts1h = false } = {}) {
+  const latest = await fetchLatest(id); await sleep(60);
+  const ts5m = await fetchTs(id, '5m'); await sleep(60);
+  const ts6h = await fetchTs(id, '6h'); await sleep(60);
+  const vol24 = await fetch24hOne(id);
+  const out = { latest, ts5m, ts6h, vol24 };
+  if (ts1h) { await sleep(60); out.ts1h = await fetchTs(id, '1h'); } // window-context line (watch.mjs only)
+  return out;
+}
 
 /* --- fetchTsCached(id, step, ttlMs): fetchTs with a short-TTL per-item disk cache under
    .cache/ts/. Used ONLY by the screen (a discovery read where a few-minutes-stale series is
