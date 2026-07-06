@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.10
+version: 1.11
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -26,6 +26,17 @@ blowpipe 738 vs 220 median units). The game's actual quiet trough (GMT ~04–08)
 - Evidence bounds (process rule 4): the volume asymmetry is measured and the timezone
   geometry is fact; the behavioral sample (1 two-leg win, 2 bid failures) is small — keep
   scoring fills against this model as nights accrue.
+- **Weekend→weekday calendar shift (v1.11, 2026-07-06 — Ben's call, 1 observation).** The
+  day-of-week matters the same way the hour does: weekend sessions carry deeper player
+  demand, so window-quantile reads built on Fri–Sun days OVERSTATE what a Mon–Thu morning
+  reaches (anchor: the DWH 15.65–15.71m "reached 3/3 mornings" stat was all weekend
+  mornings; the Monday session peaked ~15.52m and the asks had to step down). The inverse
+  is the working hypothesis for Thu/Fri heading into the weekend: expect highs to jump, so
+  don't under-price a Thursday-night ask off midweek quantiles. **Check before trusting any
+  window read: which weekdays were the sample days, and which weekday is the target
+  window?** If the read crosses the weekend/weekday boundary, discount (or raise) the
+  quantiles and say so on the line. Evidence: one Monday morning + a plausible prior —
+  score this as weeks accrue; the Thu/Fri lift side is still unobserved.
 
 This is a COMPOSITION, explicitly two-phase and interactive — never a single batch read.
 It invokes `/positions` and `/scan` **via the Skill tool** so tweaks to the children
