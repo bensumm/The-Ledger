@@ -110,7 +110,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
-    (opportunity screen), `watch.mjs` (adaptive live position/offer monitor), `monitor.mjs`
+    (opportunity screen), `watch.mjs` (adaptive live position/offer monitor; also appends
+    change-only guide-price observations to `pipeline/.guide-history.jsonl` — below), `monitor.mjs`
     (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
@@ -138,6 +139,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
+  - `pipeline/.guide-history.jsonl` (gitignored, deliberately OUTSIDE `.cache/` so cache
+    pruning never touches it) — change-only GE guide-price observations for watched items,
+    one JSON line `{ts,id,name,guide,prev}` per observed change, appended by `watch.mjs`
+    `logGuideChanges()` at watch cadence. Purpose: pin each item's ~daily guide-update
+    time + magnitude to feed the guide-re-anchor pricing edge (PLAN.md Discovered,
+    2026-07-06). Consumer: none yet — accruing samples for that future chunk.
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
     `js/format.js` so their tables match the app exactly.

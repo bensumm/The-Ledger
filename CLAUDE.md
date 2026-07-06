@@ -440,6 +440,12 @@ metadata, not a leak; the concern is content, not commit authorship.
    `momVerdict` reconciliation is the anchor. If a plain-language ask should map to a specific
    script/flow, make that mapping explicit in the relevant CLAUDE.md section so a future agent
    runs the right thing immediately.
+   **The file inventory is part of this pass (Ben, 2026-07-06):** `README.md`'s repo
+   inventory + "Map of the repo" is the file registry. Every NEW file — source, doc, data
+   artifact, even a gitignored one — gets an entry there at creation: its purpose, what it
+   contains, and who produces/consumes it. Every change that alters a file's purpose or
+   contract updates its entry in the same commit. A file with no inventory entry is
+   undocumented by definition — don't leave one behind.
 9. **Post-wave cleanup.** When a wave's chunks are all shipped: `git branch -D` the
    squash-landed lane branches — they read as "unmerged" to git (squash rewrites history), so
    verify each landed against **PLAN.md's Status table**, NOT `git branch --merged`. Ask Ben
