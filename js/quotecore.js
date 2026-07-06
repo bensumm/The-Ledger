@@ -93,6 +93,74 @@ export function regimeLabel(regime){
   return {label:'flat', falling:false, rising:false};
 }
 
+/* --- PHASE classifier — trajectory SHAPE over the ~21d 6h series (spike → decay → basing) -------
+   COMPLEMENTARY to regimeDrift/regimeLabel, which stays the flat/rising/falling GATE driver (this
+   changes NOTHING about that). phase() reads the *shape* of a pump-and-fade off the SAME `ts6h`
+   points computeQuote already fetches (points = [{avgLowPrice, avgHighPrice, timestamp}]) → ZERO new
+   network. It is consumed ONLY by the pipeline (screen.mjs display + the opt-in basing-rescue); the
+   deployed app renders nothing off it, so this ships without an APP_VERSION bump.
+
+   Returns { phase, curMid, baseMid, peakMid, lowSlope }, phase ∈ 'base'|'spike'|'decay'|'basing'|'unknown':
+     base    stable / no recent spike (or a spike so old it's the new normal)
+     spike   currently elevated well above the pre-spike base, with a recent peak
+     decay   pulled back off a recent peak and lows STILL stepping down (still falling)
+     basing  pulled back off a recent peak, back near base, and recent lows FLATTENED (the DWH case)
+     unknown too few points / no measurable current-or-base level
+
+   ALL thresholds below are NAMED PLACEHOLDERS pending validation — same discipline as the
+   rating.mjs grade cutoffs; do NOT cite them as calibrated. */
+export const PHASE_CUR_DAYS            = 2;    // window whose median mid = the CURRENT level
+export const PHASE_BASE_LOOKBACK_DAYS  = 14;   // points at/older than this = the pre-spike BASE
+export const PHASE_PEAK_RECENT_DAYS    = 6;    // a peak within this many days of the series end is "recent"
+export const PHASE_RECENT_LOW_DAYS     = 4;    // window over which the daily-low slope is measured
+export const PHASE_SPIKE_PCT           = 0.08; // cur ≥ base×(1+this) ⇒ elevated (a spike)
+export const PHASE_DECAY_FROM_PEAK_PCT = 0.08; // cur ≤ peak×(1−this) ⇒ pulled back off the peak
+export const PHASE_LOW_FLAT_PCT        = 0.02; // |recent daily-low slope| ≤ this ⇒ lows flattened (basing)
+export function phase(points){
+  const nul={phase:'unknown', curMid:null, baseMid:null, peakMid:null, lowSlope:null};
+  if(!points || points.length<2) return nul;
+  const mid=p=>(p.avgLowPrice&&p.avgHighPrice)?(p.avgLowPrice+p.avgHighPrice)/2:(p.avgLowPrice||p.avgHighPrice);
+  const pts=points.filter(p=>p && p.timestamp!=null && mid(p)!=null).slice().sort((a,b)=>a.timestamp-b.timestamp);
+  if(pts.length<2) return nul;
+  const tEnd=pts[pts.length-1].timestamp;
+  // current level: median mid over the last CUR_DAYS; pre-spike base: median mid over the OLDEST
+  // portion (points at/before tEnd − BASE_LOOKBACK_DAYS). Timestamp-window style mirrors regimeDrift.
+  const curMid  = med(pts.filter(p=>p.timestamp>=tEnd-PHASE_CUR_DAYS*86400).map(mid));
+  const baseMid = med(pts.filter(p=>p.timestamp<=tEnd-PHASE_BASE_LOOKBACK_DAYS*86400).map(mid));
+  // peak: max mid over ALL points + its recency (first occurrence wins, so a flat series' "peak" is
+  // its oldest point ⇒ not recent ⇒ never mistaken for a spike/decay).
+  let peakMid=null, peakTs=tEnd;
+  for(const p of pts){ const m=mid(p); if(peakMid==null || m>peakMid){ peakMid=m; peakTs=p.timestamp; } }
+  const peakRecent = peakMid!=null && (tEnd-peakTs)<=PHASE_PEAK_RECENT_DAYS*86400;
+  // recent daily-low slope: bucket the last RECENT_LOW_DAYS into LOCAL days (repo local-time rule),
+  // take each day's MIN avgLowPrice, then the fractional change first-day→last-day. Negative = lows
+  // stepping down; ~zero = flattened. null when <2 buckets / no first-day low.
+  const lowCut=tEnd-PHASE_RECENT_LOW_DAYS*86400;
+  const dayLow=new Map();
+  for(const p of pts){
+    if(p.timestamp<lowCut || p.avgLowPrice==null) continue;
+    const dt=new Date(p.timestamp*1000);
+    const key=dt.getFullYear()*10000+(dt.getMonth()+1)*100+dt.getDate();
+    const cur=dayLow.get(key);
+    if(cur==null || p.avgLowPrice<cur) dayLow.set(key, p.avgLowPrice);
+  }
+  const keys=[...dayLow.keys()].sort((a,b)=>a-b);
+  let lowSlope=null;
+  if(keys.length>=2){ const f=dayLow.get(keys[0]), l=dayLow.get(keys[keys.length-1]); if(f>0) lowSlope=(l-f)/f; }
+  if(curMid==null || baseMid==null) return {phase:'unknown', curMid, baseMid, peakMid, lowSlope};
+  // classify (ordered; each branch defers only on positive evidence)
+  const elevated  = curMid >= baseMid*(1+PHASE_SPIKE_PCT);
+  let ph;
+  if(elevated && peakRecent) ph='spike';
+  else {
+    const pulledBack = peakRecent && peakMid!=null && curMid <= peakMid*(1-PHASE_DECAY_FROM_PEAK_PCT);
+    if(pulledBack && lowSlope!=null && lowSlope < -PHASE_LOW_FLAT_PCT)          ph='decay';
+    else if(pulledBack && lowSlope!=null && Math.abs(lowSlope) <= PHASE_LOW_FLAT_PCT) ph='basing';
+    else ph='base';
+  }
+  return {phase:ph, curMid, baseMid, peakMid, lowSlope};
+}
+
 /* Build the full row model for one item from raw fetched inputs (all DOM-free):
      latest : {low, high, ...}         live /latest snapshot (low=instasell, high=instabuy)
      ts5m   : [{avgLowPrice,avgHighPrice,...}]  5m timeseries (last 24 used for the 2h band)

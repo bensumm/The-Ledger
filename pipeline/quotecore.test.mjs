@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, BIG_TICKET_GP } from '../js/quotecore.js';
 import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../js/quotecore.js';   // S2 posture helpers
 import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
+import { phase, regimeDrift } from '../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
 const NOW_MS  = NOW_SEC * 1000;
@@ -379,6 +380,83 @@ ok('momCell: strong (double) arrow at/above MOM_STRONG_PCT, single arrow below, 
   assert.deepEqual(momCell('breakup', MOM_STRONG_PCT), { sym: '↑↑', cls: 'gain' });
   assert.deepEqual(momCell('breakup', MOM_STRONG_PCT - 0.0001), { sym: '↑', cls: 'amber' });
   assert.deepEqual(momCell('clean', 0), { sym: '–', cls: 'mommuted' });
+});
+
+// ============================================================================================
+// PHASE CLASSIFIER — trajectory SHAPE over the ~21d 6h series (spike → decay → basing). phase() is
+// OBSERVATIONAL enrichment off the SAME ts6h computeQuote already fetches (zero new network); it is
+// COMPLEMENTARY to regimeDrift/regimeLabel (which stays the flat/rising/falling gate driver — and is
+// regression-guarded here to prove phase() did not disturb it). Thresholds are unvalidated placeholders.
+//   BUSINESS REQUIREMENTS pinned here:
+//     - a flat stable series → 'base' (no recent spike; the flat "peak" is oldest ⇒ not recent).
+//     - a series elevated well above its early base with a recent peak → 'spike'.
+//     - a series that peaked recently and whose recent daily-lows are STILL stepping down → 'decay'.
+//     - a series that peaked, fell back near the early base, and whose last ~4 days' lows have
+//       FLATTENED → 'basing' (the decayed-and-holding DWH anchor case the basing-rescue keys off).
+//     - too-few-points → 'unknown'.
+//     - regimeDrift/regimeLabel still label an existing-style fixture correctly (no accidental change).
+// ============================================================================================
+console.log('\nphase() classifier acceptance:');
+
+// 21 days of oldest-first 6h points ending ~6h before NOW_SEC; fn(daysAgo)->{low,high}. daysAgo is a
+// clean multiple of 0.25 (6h), so the fixtures can place a sharp single-point peak deterministically.
+function mk6hDays(fn) {
+  const pts = [];
+  for (let k = 84; k >= 1; k--) {
+    const ts = NOW_SEC - k * 6 * 3600, daysAgo = k * 0.25;
+    const { low, high } = fn(daysAgo);
+    pts.push({ timestamp: ts, avgLowPrice: low, avgHighPrice: high });
+  }
+  return pts;
+}
+
+ok('flat stable series → base', () => {
+  const p = phase(mk6hDays(() => ({ low: 995, high: 1005 })));   // mid 1000 throughout
+  assert.equal(p.phase, 'base');
+});
+
+ok('elevated above base with a recent peak → spike', () => {
+  const p = phase(mk6hDays(d => { const mid = d <= 2 ? 1400 : 1000; return { low: mid - 10, high: mid + 10 }; }));
+  assert.equal(p.phase, 'spike');
+  assert.ok(p.curMid >= p.baseMid * 1.08, 'current level is elevated above the base');
+});
+
+ok('peaked recently, lows still stepping down → decay', () => {
+  const p = phase(mk6hDays(d => {
+    if (d === 5) return { low: 1490, high: 1510 };      // sharp recent peak (mid 1500)
+    if (d > 5) return { low: 995, high: 1005 };          // pre-spike base (mid 1000)
+    const low = 1000 + Math.round(d * 25);               // last <5d: lows stepping DOWN as time advances
+    return { low, high: low + 40 };
+  }));
+  assert.equal(p.phase, 'decay');
+  assert.ok(p.lowSlope < -0.02, 'recent daily-lows are still falling');
+});
+
+ok('peaked, fell back to base, recent lows flattened → basing (DWH anchor)', () => {
+  const p = phase(mk6hDays(d => {
+    if (d === 5) return { low: 1490, high: 1510 };      // sharp recent peak (mid 1500)
+    if (d > 5) return { low: 995, high: 1005 };          // pre-spike base (mid 1000)
+    return { low: 1000, high: 1040 };                    // decayed & FLAT (mid 1020, lows pinned at 1000)
+  }));
+  assert.equal(p.phase, 'basing');
+  assert.ok(Math.abs(p.lowSlope) <= 0.02, 'recent daily-lows have flattened');
+  assert.ok(p.curMid < p.baseMid * 1.08, 'no longer elevated — back near the base');
+});
+
+ok('too-few-points → unknown', () => {
+  assert.equal(phase([{ timestamp: NOW_SEC, avgLowPrice: 1000, avgHighPrice: 1010 }]).phase, 'unknown');
+  assert.equal(phase([]).phase, 'unknown');
+  assert.equal(phase(null).phase, 'unknown');
+});
+
+// regression guard: phase()'s addition must not have disturbed regimeDrift/regimeLabel.
+ok('regimeDrift/regimeLabel unchanged (falling fixture still labels falling)', () => {
+  const falling6h = mk6h(900, 1000);                     // recent-3d 900 vs prior ~2wk 1000 = −10%
+  const rl = regimeLabel(regimeDrift(falling6h));
+  assert.equal(rl.label, 'falling');
+  assert.equal(rl.falling, true);
+  assert.equal(regimeLabel(regimeDrift(mk6h(1100, 1000))).label, 'rising');   // +10%
+  assert.equal(regimeLabel(regimeDrift(mk6h(1000, 1000))).label, 'flat');     // 0%
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

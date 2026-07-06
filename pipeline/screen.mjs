@@ -62,11 +62,11 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, overnightStaleRisk } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, overnightStaleRisk, phase } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells, median } from './lib/cli.mjs';
-import { rateItem, GRADE_CUTOFFS } from './lib/rating.mjs';
+import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -160,6 +160,14 @@ const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'acti
 // file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
 // for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
 const PUBLISH = A.publish === true;
+// --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
+// default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
+// cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
+// would normally DROP but whose phase()==='basing' (decayed off a spike, lows flattened) is instead
+// SURFACED, capped to PHASE_BASING_GRADE_CAP and flagged provisional. Conservative, gated trial —
+// thresholds are unvalidated placeholders. capGrade is reused from rating.mjs (no rating.mjs change).
+const PHASE_RESCUE = A['phase-rescue'] === true;
+const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-rescue surface
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
 
@@ -286,14 +294,23 @@ function gradeDist(dist) {
 }
 
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer
-function renderMode(mode, { cand, survivors }, qcache, map, series5m) {
+function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0 };  // post-fetch discard reasons (--stats)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
-    if (row.falling) { disc.falling++; continue; }           // screen rule: never surface fallers
+    // Part A: phase() over the SAME ts6h this row was already quoted from (zero new fetch) —
+    // observational trajectory shape, folded into the Regime cell below when informative.
+    const ph = phase(series6h && series6h.get(s.id));
+    // Part B (opt-in): a faller the screen would drop is RESCUED only when --phase-rescue is set AND
+    // it has decayed to a basing shape. Default (flag off): unchanged falling-exclusion (byte-identical).
+    let rescued = false;
+    if (row.falling) {
+      if (PHASE_RESCUE && ph.phase === 'basing') { rescued = true; disc.rescued++; }
+      else { disc.falling++; continue; }                     // screen rule: never surface fallers
+    }
     if (mode === 'rising') {                                  // rising-mode confirm
       if (!row.rising) { disc.notRising++; continue; }
       if (row.mom === 'breakdown') { disc.breakdown++; continue; }
@@ -308,18 +325,30 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m) {
     }
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
+    // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
+    // — a provisional surface must not advertise a headline grade off a still-declining regime.
+    const grade = rescued ? capGrade(r.grade, PHASE_BASING_GRADE_CAP) : r.grade;
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
+    // Part A: fold an informative phase into the existing Regime cell (no new column — the canonical
+    // width/contract is untouched). A rescued row gets an explicit provisional note; other spike/decay/
+    // basing rows get a ` · <phase>` suffix; base/unknown add nothing. Mutates only this call's fresh
+    // std copy (quoteCells returns a new array each call) — the shared `row` model is not touched.
+    const rc = std[std.length - 1];
+    if (rescued) rc.t = rc.t + ' · basing after decay — provisional';
+    else if (ph.phase === 'spike' || ph.phase === 'decay' || ph.phase === 'basing') rc.t = rc.t + ' · ' + ph.phase;
     // insert Grade after Item, append Score gp/d — both structured {t} so the app publish path is
     // uniform (Grade rendered as a pill app-side by header name; Score right-aligned num). A thin
     // (gp-flow-only) row carries a `title` on the Grade cell — the honesty tooltip (rendered app-side;
     // cellText ignores it so stdout stays clean). `row`/`grade` kept on the pushed object — the O1
     // suggestions ledger reads them below.
-    const gradeCell = s.thin
-      ? { t: r.grade, title: `thin: ~${s.limitVol}/day two-sided — size in units, expect slow fills` }
-      : { t: r.grade };
+    const gradeCell = rescued
+      ? { t: grade, title: 'basing after decay — provisional (falling-exclusion overridden by --phase-rescue); grade capped at ' + PHASE_BASING_GRADE_CAP }
+      : s.thin
+        ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — size in units, expect slow fills` }
+        : { t: grade };
     const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }];
-    rows.push({ id: s.id, row, grade: r.grade, cells, score: r.score });
-    dist[r.grade] = (dist[r.grade] || 0) + 1;
+    rows.push({ id: s.id, row, grade, cells, score: r.score });
+    dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
   // unit (patient band-edge net/u) over velocity — you want the fattest unattended margin, not churn.
@@ -338,7 +367,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m) {
   console.log(`Grades: ${gradeDist(dist)}`);
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '');
+    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '');
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');
@@ -436,7 +465,7 @@ async function main() {
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it
   const ids = new Set();
   for (const m of RUN_MODES) for (const s of gated[m].survivors) ids.add(s.id);
-  const qcache = new Map(), series5m = new Map();
+  const qcache = new Map(), series5m = new Map(), series6h = new Map();
   for (const id of ids) {
     const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
     const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
@@ -444,6 +473,7 @@ async function main() {
     const limit = map.byId[id]?.limit ?? null;
     qcache.set(id, computeQuote({ latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
     series5m.set(id, ts5m);   // kept raw for the overnight-posture staleness read (overnightStaleRisk)
+    series6h.set(id, ts6h);   // kept raw for the Part A phase() trajectory read (same ts6h as the quote)
   }
 
   console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
@@ -451,7 +481,7 @@ async function main() {
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
   const niches = {};
-  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m);
+  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h);
   const watchlist = await runWatchlist(map, ctx, guide, latest, qcache, series5m);   // S3: always-scanned watchlist
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the

@@ -10,6 +10,51 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Trajectory phase() classifier + opt-in basing-rescue (pipeline-only — NO APP_VERSION)
+`computeQuote` already fetches a ~21-day 6h series (`ts6h`) per candidate and runs `regimeDrift` over
+it, so the multi-week price history is ALREADY in hand — this adds a richer *trajectory-shape*
+classifier over the SAME data with ZERO new network fetches. `regimeDrift`/`regimeLabel`
+(flat/rising/falling) stays the untouched gate driver; `phase()` is complementary observational
+enrichment.
+
+- **Part A — `phase(points)` in `js/quotecore.js`** (next to `regimeDrift`/`regimeLabel`, reusing the
+  same `mid(p)` idiom + the private `med()` helper). Returns `{ phase, curMid, baseMid, peakMid,
+  lowSlope }` with `phase ∈ 'base'|'spike'|'decay'|'basing'|'unknown'`. Derived quantities mirror
+  `regimeDrift`'s timestamp-window style off `tEnd = last timestamp`: `curMid` = median mid over the
+  last `PHASE_CUR_DAYS` (2); `baseMid` = median mid over the OLDEST portion (`ts ≤ tEnd −
+  PHASE_BASE_LOOKBACK_DAYS·86400`, 14d) = the pre-spike base; `peakMid` = max mid over ALL points +
+  `peakRecent` (peak within `PHASE_PEAK_RECENT_DAYS`=6); `lowSlope` = fractional first-day→last-day
+  change of the per-LOCAL-day min `avgLowPrice` over the last `PHASE_RECENT_LOW_DAYS` (4). Ordered
+  classification: elevated (`cur ≥ base×(1+PHASE_SPIKE_PCT`=0.08`)`) + recent peak → `spike`; else
+  pulled back off a recent peak (`cur ≤ peak×(1−PHASE_DECAY_FROM_PEAK_PCT`=0.08`)`) with lows still
+  falling (`lowSlope < −PHASE_LOW_FLAT_PCT`=0.02) → `decay`, or lows flattened
+  (`|lowSlope| ≤ PHASE_LOW_FLAT_PCT`) → `basing`; else `base`; `<2` points / no cur-or-base level →
+  `unknown`. **All thresholds are NAMED PLACEHOLDERS pending validation** (same discipline as the
+  `rating.mjs` grade cutoffs) — do not cite them as calibrated. `regimeDrift`/`regimeLabel` are
+  untouched and regression-guarded in the test.
+- **Part A display (`pipeline/screen.mjs`)** — `renderMode` calls `phase()` on the SAME `ts6h` each
+  row was quoted from (a new `series6h` map alongside the existing `series5m`) and FOLDS an
+  informative phase into the existing Regime cell (`Rising +77% · spike`, `Flat -8% · basing`). NO new
+  column — the canonical width/contract is intact; `base`/`unknown` add nothing. This is display-only
+  and does NOT change which rows are gated in/out. It mutates only the per-call `stdCells` copy, never
+  the shared `row` model.
+- **Part B — `--phase-rescue` (OFF by default; default output byte-identical)** — when set, an item
+  the falling-exclusion would normally DROP but whose `phase()==='basing'` is instead SURFACED, its
+  Regime cell noted `· basing after decay — provisional`, its grade CAPPED at `PHASE_BASING_GRADE_CAP`
+  (`B`) by reusing `rating.mjs`'s already-exported `capGrade` (NO `rating.mjs` change), and a
+  provisional tooltip on the Grade cell. `--stats` reports a `basing-rescued N` count. Deliberately
+  minimal/conservative — a gated trial, not a default behavior change.
+- **Tests (`pipeline/quotecore.test.mjs`)** — a `phase()` block (synthetic 6h fixtures only) pins
+  `base`/`spike`/`decay`/`basing`(the DWH anchor)/`unknown`, plus a regression assertion that
+  `regimeDrift`/`regimeLabel` still label an existing-style fixture. All 17 suites stay green (27
+  checks in this file).
+- **NO APP_VERSION bump:** `phase()` lives in the shared `quotecore.js` but is consumed ONLY by the
+  pipeline `screen.mjs`; the deployed app imports nothing new (`grep phase js/` finds only the
+  definition) and renders byte-identically — allowed to ship without a bump per process rule 5.
+- **Docs handled separately (to avoid a same-file edit race):** the `CLAUDE.md` "Regime" doctrine line
+  and the `/scan` SKILL.md phase documentation are being reconciled by a concurrent skills edit + a
+  human follow-up, NOT in this change's four-file set.
+
 ### Daemon liveness heartbeat — split "watcher live" from "book synced" (0.51.0, LW3)
 The localhost freshness stamp conflated two different facts and produced a false "is the watcher
 running?" alarm during quiet trading. The stamp was derived entirely from `positions.json`'s
