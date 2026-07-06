@@ -283,36 +283,45 @@ exit-discipline reminder). Content per item:
 
 The agent driving the loop does NOT relay the script's table + note lines verbatim — the
 script's verdict and the agent's judgment can disagree (fresh-entry noise, window-not-open,
-named overrides), and two verdicts in one report is the failure mode Ben rejected. Render
-each pass as **one stacked block per item** where the Verdict line is already the corrected
-call and the script's verdict appears nowhere else:
+named overrides), and two verdicts in one report is the failure mode Ben rejected. There is
+ONE source of truth: the corrected call, stated once, as a **color dot** on the item line
+(the script's verdict appears nowhere unless the override names it in the Context). Layout
+(iterated with Ben 2026-07-05, in this order):
 
 ```
-Item: <name> ×<qty>
-Guide: …
-Quick: …            (script's cells, verbatim)
-Optimistic: …
-Vol/d: …
-Momentum: …
-Regime: …
-Held@: …            (offer-only rows: Position: bid/ask n/m @ X instead)
+<dot> Item: <name> ×<qty> · Held@: <cost>     (offer-only rows: Position: bid/ask n/m @ X)
 Break-even: …
-Verdict: <THE call> (overrides script's <verdict> — <one-clause reason>)   ← only when they differ
+Vol/d: …
+Profit: ~+XXXk (at the planned exit price)
+Sells by (estimated): <window, with its quantile — "01–09 UK-day window (~75% of days
+print Y+ within 8h)">
 
-Action plan:
-<exact prices with timing targets ("X, targeting Y" — the skills' timing-target rule),
-tripwires/step-down triggers named>
+Context:
+<the action plan: exact prices with timing targets ("X, targeting Y"), tripwires /
+step-down triggers named, override reason if the dot disagrees with the script>
 
 ────────────────────────────────────────  (separator between items)
 
+then ONE table for the remaining numbers, all items:
+| Item | Guide | Buy | Sell | Momentum | Regime |
+(Buy/Sell cells: quick (Q) · optimistic (O), script values verbatim)
+
+────────────────────────────────────────
+
 Summary:
-<the board's shape in 1–3 sentences: what rides which window, capital committed,
-the next decision trigger>
+<the board's shape in 1–3 sentences: what rides which window, capital committed, the
+next armed decision trigger>
 ```
 
-Numbers come from the script verbatim (never recomputed); only the Verdict and Action plan
-are the agent's. Quiet passes may compress to a one-liner — the block format is for passes
-where something is held, alerted, or changed.
+**Fixed verdict→dot palette (same verdict = same color, always; the dot reflects the
+CORRECTED verdict):** 🔴 CUT / CUT-CANDIDATE / CANCEL-BID (act now) · 🟠 LIST-TO-CLEAR /
+UNDERWATER (decision pending) · 🟡 SHOCK-WATCH / DIURNAL-WATCH / BID-BEHIND / CROSSING
+(watch) · 🟢 HOLD / HOLD—list high / BID-OK (working as planned) · ⚪ NO-READ / watched.
+Markdown has no text color — the dots ARE the palette; don't improvise others.
+
+Numbers come from the script verbatim (never recomputed); only the dot, Profit/Sells-by
+estimates, and Context are the agent's. Quiet passes may compress to a one-liner — the
+block format is for passes where something is held, alerted, or changed.
 
 ### Honest sell-side framing (read this before repricing a sell)
 
