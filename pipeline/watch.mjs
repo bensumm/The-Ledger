@@ -48,7 +48,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH_HOURS } from '../js/quotecore.js';
+import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH_HOURS,
+  diurnalRead, phase, underwaterHours } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -59,6 +60,8 @@ import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness 
 import { loadState, saveState, computeDeltas, advanceState, convictionGate } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized per-held emit contract
+import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
+import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-capital redeploy prompt
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -228,6 +231,22 @@ function supportLine(ts1h) {
   return `support ${fmtP(support)} · cut-trigger ${fmtP(Math.round(cutTrigger(support)))} (context — not a verdict)`;
 }
 
+// --- V6 RECOVERY-READ (ADVISORY, OUTPUT-ONLY — recover-vs-drop forecast) ---------------------
+// COMPOSES signals momVerdict already computed (diurnal seasonal · regime/phase trend · underwater
+// persistence · position vs the V2 support level) into a LEAN via the pure lib/recovery.mjs. It is
+// NEVER a verdict/alert input — it surfaces a forecast line for the human/LLM, and the cut-trigger
+// (V2/V4) stays the mechanical backstop. No new fetch (reuses each item's already-fetched series).
+// Support prefers the item's already-computed it._support (held rows); else derived from ts1h.
+function recoveryReadFor(it) {
+  const { row, be, ts5m, ts6h } = it;
+  const regime = { label: row.regimeLabel, rising: row.rising, falling: row.falling };
+  const diurnal = ts5m ? diurnalRead(ts5m) : null;
+  const ph = ts6h ? phase(ts6h) : null;
+  const uw = (ts5m && be != null) ? underwaterHours(ts5m, be) : null;
+  const support = (it._support != null) ? it._support : structuralSupport(dayLowsFrom(it.ts1h));
+  return recoveryRead({ diurnal, regime, phase: ph, underwater: uw, price: row.quickSell, support: support ?? null });
+}
+
 
 // --- ACTION line for a HELD lot. Sell-side framing is HONEST (clear-vs-hold), never
 // "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
@@ -322,7 +341,7 @@ async function buildItem({ id, name, qty, avgCost, buyTs }, map, guide) {
   const lotValue = held ? qty * avgCost : null;
   // V3 lot-context: buyTs (oldest lot's buy time, unix s) enables the entry-age softening;
   // askFilling is set later in main() once the live asks are known (needs both this row + asks).
-  return { id, name, qty, avgCost, buyTs: buyTs ?? null, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts1h: inp.ts1h, askFilling: false };
+  return { id, name, qty, avgCost, buyTs: buyTs ?? null, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts6h: inp.ts6h, ts1h: inp.ts1h, askFilling: false };
 }
 
 // V3 lot-context for momVerdict's Gate-D softening — { buyTs, askFilling } off a built held item.
@@ -530,6 +549,15 @@ async function main() {
   if (targets.length) counts.push(`${targets.length} target${targets.length > 1 ? 's' : ''}`);
   console.log(`# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`);
   for (const a of alerts) console.log(`  ⚠ ${a.msg}`);
+  // V6 COMPANION — capital awareness: a SELL that FREED ≥ threshold since last pass (a held lot's
+  // qty dropped, detected via V1's prior-pass state) surfaces a redeploy prompt. Surface-ONLY — it
+  // never auto-places and never runs the scan (Ben places every offer; the LLM/Ben runs /scan).
+  // Guarded like every other state use; a fresh/stale prior yields no event (no startup misfire).
+  try {
+    const freed = freedCapital(priorState, held.map(it => ({ id: it.id, qty: it.qty, sellPrice: it.row.quickSell })), { now: nowMs });
+    if (freed.prompt)
+      console.log(`  ⋯ freed ~${fmtP(freed.totalFreed)} this pass — consider a scan to redeploy (${freed.events.length} lot${freed.events.length > 1 ? 's' : ''} sold since last pass)`);
+  } catch { /* companion is surface-only observability — never break a pass */ }
   // LH2: restart-blindness heads-up — a stale log with held inventory but no visible offers is the
   // post-restart blind state (the plugin re-emits nothing until a slot next changes). No behavioral
   // change; just names the failure so a session doesn't chase "vanished" offers.
@@ -580,10 +608,18 @@ async function main() {
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
     const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, lotCtxOf(it)));
-    let conviction = null, delta = null, tripwire = null;
+    let conviction = null, delta = null, tripwire = null, recovery = null;
     try {
       delta = it._deltas ? deltaLine(it._deltas) : null;
       tripwire = supportLine(it.ts1h);
+      // V6 recovery-read — computed on every held lot, SURFACED only when the naive action isn't
+      // obviously right (underwater / thin-margin / ask not filling / lean conflicts with verdict).
+      // ADVISORY: it changes no verdict and raises no alert.
+      const read = recoveryReadFor(it);
+      const askListedNotFilling = !!(ask && (ask.qty === 0 || ask.qty == null));
+      const trig = recoveryTrigger({ kind: 'held', instabuy: row.quickSell, breakEven: be,
+        lean: read.lean, verdict: heldVerdict(it), askListedNotFilling });
+      if (trig.surface) recovery = recoveryLine(read);
       // V4 arm-then-confirm: an armed-but-unconfirmed escalation is VISIBLE here as the conviction
       // field (never a headline ⚠ alert — that only fires once convictionGate escalates, in the
       // headline block). Two armed shapes, distinct notes. Confirmed escalations live in the headline.
@@ -595,7 +631,7 @@ async function main() {
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
       reliableReason: row.reliable ? null : row.reliableReason,
-      conviction, delta, tripwire,
+      conviction, delta, tripwire, recovery,
       listAt: heldListAt(row, be, mvHeld), breakEven: be,
       fillProgress: listed || null,
     }));
@@ -617,6 +653,16 @@ async function main() {
         row.quickBuy != null ? fmtP(breakEven(off.offer)) : '—']);
       const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
       notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+      // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
+      // (BID-BEHIND: below the band, it fills only if the price drops to it). ADVISORY context:
+      // a drop-lean means it's likely to fill, a recover-lean that it drifts away. No verdict input.
+      try {
+        const bidDirectional = offerVerdict(row, off.offer) === 'BID-BEHIND';
+        if (recoveryTrigger({ kind: 'bid', bidDirectional }).surface) {
+          const line = recoveryLine(recoveryReadFor(it));
+          if (line) notes.push(`    ${line}`);
+        }
+      } catch { /* advisory only — never block a watch pass */ }
       // V1 cross-pass deltas for a resting bid. breakEven is left null (underwater is a held-lot
       // concept), so a bid only surfaces Δ instabuy / mom transition / band-top drift. Identity
       // carries the offer price → a re-priced bid resets its counters. Guarded (observability only).

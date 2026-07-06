@@ -136,6 +136,11 @@ Discovered / Needs-a-Ben-decision lists.
 | TC1 | trendcore extraction — pure analytics out of `js/trends.js` → `js/trendcore.js` + fixtures | `js/trends.js`, new `js/trendcore.js`, new `pipeline/trendcore.test.mjs` | ✅ `eaa5414` (0.50.0; pure MOVE, byte-identical; `trendcore.test.mjs` 19 checks) |
 | GC1 | gateCandidates extraction — thresholds-as-argument so `screen.mjs`'s gate stack is fixture-testable (absorbs TD3.5) | `pipeline/screen.mjs`, new test | ✅ `cb3eb67` (pipeline-only, no APP_VERSION; byte-identical stdout via `THRESHOLDS`; `gatecandidates.test.mjs` 8 checks; runner 16 suites) |
 | SL1 | suggestlog path regression — OR2 moved `suggestlog.mjs` into `lib/` leaving `HERE/'..'` pointing at `pipeline/`, silently forking the O1 ledger into untracked `pipeline/suggestions.jsonl`. Path fixed (two levels up), 351 stranded rows folded back, resolved path pinned by test | `pipeline/lib/suggestlog.mjs`, new `pipeline/lib/suggestlog.test.mjs`, `suggestions.jsonl` | ✅ `1702126` (pipeline-only, no APP_VERSION; runner 17 suites) |
+| V1+V2 | Verdict-layer temporal memory — watch-loop cross-pass state store + per-pass deltas (`computeDeltas`/`advanceState`, `passesUnderwater`, band-top drift) + structural-support/cut-trigger tripwire, OUTPUT-ONLY | new `pipeline/lib/watchstate.mjs`/`levels.mjs` + tests, `pipeline/watch.mjs`, `.cache/watch-state.json` | ✅ `8a5d160` (pipeline-only, no APP_VERSION; adds context lines, changes no verdict/alert. Don't-rebuild: temporal memory lives OUTSIDE pure `momVerdict`) |
+| V3 | Gate-D lot-context softening — `momVerdict` OPTIONAL `lotCtx={buyTs,askFilling}` softens ONLY the clean-momentum CUT-CANDIDATE (WATCH — fresh entry / HOLD — ask filling), NEVER the Gate-2 breakdown CUT | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, callers, `js/trends.js`/`watch.js`/`watchcore.js`, `pipeline/lib/positions.mjs`, docs | ✅ `692baee` (0.52.0 — the one APP_VERSION bump; app inherits via `reviewPositions`. Invariant fixture: breakdown CUT byte-identical with/without lotCtx) |
+| V4 | Conviction gating — arm-then-confirm alerts via pure `convictionGate()` (+ `passesBelowSupport`); gates only ESCALATION to a headline, verdict strings unchanged | `pipeline/lib/watchstate.mjs`, `pipeline/watch.mjs`, tests, docs | ✅ `2a87269` (pipeline-only, no APP_VERSION; `js/quotecore.js` untouched. Invariant: Gate-2 breakdown CUT EXEMPT — immediate regardless of pass count) |
+| V5 | Emit-contract standardization — one stable, ordered per-held note block via pure `heldNoteBlock`/`heldListAt`; the sell/list-at + break-even line GUARANTEED on every held lot | new `pipeline/lib/emit.mjs` + test, `pipeline/watch.mjs`, docs | ✅ `825469f` (pipeline+docs, no APP_VERSION; output-format-only — no verdict/alert/row-selection change) |
+| V6 | Recovery-read forecast (ADVISORY recover-vs-drop LEAN composing momVerdict's signals) + capital-awareness Companion (freed-capital redeploy prompt) — both OUTPUT-ONLY, surfaced only when the naive action isn't obviously right | new `pipeline/lib/recovery.mjs`/`capital.mjs` + tests, `pipeline/watch.mjs`, `pipeline/lib/emit.mjs`, docs, `.claude/skills/positions/SKILL.md` (1.15) | ✅ (this commit; pipeline+docs, no APP_VERSION; pure core untouched, breakdown-cut invariant trivially held. Don't-rebuild: a LEAN not a probability — `spike` caps to `uncertain`; never a verdict/alert input. Companion is surface-only — never auto-places/runs the scan. Folded + deleted `PLAN-VERDICT.md`) |
 | SR1 | `suggestions.jsonl` rotation/compaction | `suggestions.jsonl`, `pipeline/lib/suggestlog.mjs` | ⏳ ready — unassigned (spec below) |
 | GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ⏳ ready — unassigned (spec below) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED (spec below) |
@@ -176,12 +181,13 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
 
 ## Other unscheduled notes
 
-- **Verdict-layer temporal memory — `PLAN-VERDICT.md`** (V1–V5, own plan file): give the watch
-  loop cross-pass memory + conviction gating WITHOUT touching pure `momVerdict`. V1+V2 (watch-loop
-  state store + structural-support tripwire — OUTPUT-ONLY) are DONE (this commit); V3 (lot-context
-  softening of the Gate-D CUT-CANDIDATE only), V4 (arm-then-confirm conviction gating in
-  watch.mjs), V5 (emit-contract standardization + doc reconcile) are PENDING and specced there.
-  Fold + delete `PLAN-VERDICT.md` when V5 ships (the per-topic-plan rule).
+- **Verdict-layer temporal memory (V1–V6) — DONE, `PLAN-VERDICT.md` folded + deleted.** The whole
+  series gave the watch loop cross-pass memory, conviction gating, a standard emit contract, and an
+  advisory recovery-read + capital companion WITHOUT touching pure `momVerdict`/`offerVerdict` (the
+  temporal + advisory layers live OUTSIDE the pure core; only V3's optional `lotCtx` arg touched it,
+  and that's a no-op when omitted). Shas in the Status table (V1+V2 `8a5d160`, V3 `692baee`, V4
+  `2a87269`, V5 `825469f`, V6 this commit). Documented follow-on (NOT built): app Watch-tab adoption
+  of the same context lines (the app has no per-pass store — console-first was deliberate).
 - **Screen pre-filter heuristic from a pattern study:** the niche screens do a blind
   fetch-and-check (esp. `rising`: ~30 of 40 top candidates discarded after the expensive
   per-item confirm). Study: dump cheap 24h/band features + survive/discard labels for a

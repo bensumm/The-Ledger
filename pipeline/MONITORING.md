@@ -290,6 +290,9 @@ sub-line. Field order, always the same:
    first-seen / reset / all-quiet pass.
 4. **structural tripwire** (V2) — `support X · cut-trigger Y`, when computable. Omitted when <2
    usable daily lows.
+4a. **recovery-read** (V6, ADVISORY) — `recovery-read: likely recovers|drops|uncertain — <drivers>
+   (a lean, not a probability)`. Surfaced ONLY on a non-clean position (see item 6); omitted on a
+   cleanly-good lot. It is decision SUPPORT, distinct from the verdict — never a verdict/alert input.
 5. **sell/list-at (+ break-even) + fill-progress** — `sell: list @ X · break-even Y · <ask n/m
    or NOT LISTED>`. This field is **ALWAYS emitted on a held lot, unconditionally** — the standing
    user rule (Ben, 2026-07-06): *always state the sell price for every held item, because a fill
@@ -350,6 +353,32 @@ of the numbered signals, in more detail:
    The line itself is context (it names the level; `CUT_TRIGGER_DELTA` is an unvalidated
    placeholder), but as of **V4** a *convincing* break of this tripwire drives the arm-then-confirm
    structural-break alert in item 1 (`< cut-trigger`, or 2 consecutive passes below support).
+6. **RECOVERY-READ line** (V6, ADVISORY, OUTPUT-ONLY — nested under a held/bid note), e.g.
+   `recovery-read: likely recovers — post-trough hour · flat regime · at support (a lean, not a
+   probability)`. It answers the question every non-clean position poses — *recover above break-even,
+   or keep dropping?* — by COMPOSING signals `momVerdict` already computes (`diurnalRead` seasonal ·
+   `regimeLabel`/`phase` trend · `underwaterHours` persistence · position vs the V2 structural
+   support), via the pure `lib/recovery.mjs`. **It decides NOTHING**: it changes no verdict, raises no
+   alert, and auto-cuts nothing — the cut-trigger (V2/V4) stays the mechanical backstop; this is
+   decision SUPPORT the human/LLM reads. HONESTY (process rule 4): it's a LEAN, not a probability — it
+   leans on the robust STRUCTURAL shape (UK day/night, the item's regime/phase/support), not a precise
+   per-item-per-hour number (low-sample, the F1 cell-count problem), and it is BLIND to shocks /
+   repricings: a `phase==='spike'` CAPS confidence (a decisive lean is downgraded to `uncertain`).
+   **Trigger gating** (Ben, 2026-07-06 — "if it isn't in a great position, sanity check"): computed on
+   every held lot + resting offer, but SURFACED only when the naive action isn't obviously right —
+   (a) underwater, (b) thin margin just above break-even, (c) a listed-but-unfilled ask, (d) a resting
+   bid whose fill hinges on direction (`BID-BEHIND`), or (e) the lean CONFLICTS with the verdict (a
+   green lot with a drop-lean — the highest-value case). SILENT on a cleanly-good position (comfortably
+   green + filling + rising + clean momentum) — the naive action stands. Fixture-pinned in
+   `pipeline/recovery.test.mjs`.
+7. **FREED-CAPITAL prompt** (V6 Companion, SURFACE-ONLY — in the headline block), e.g.
+   `⋯ freed ~7.4m this pass — consider a scan to redeploy`. When a SELL that FREED ≥
+   `FREED_CAPITAL_SCAN_GP` (default 5m, a documented placeholder) is detected — a held lot whose qty
+   dropped since last pass, read off V1's prior-pass state (`lib/capital.mjs`) — the loop surfaces a
+   redeploy prompt. It NEVER auto-places an offer and NEVER runs the scan (Ben places every offer; the
+   LLM/Ben runs `/scan`). Anchor-free and guarded: a fresh/empty prior (startup), a stale-gap prior
+   (overnight pause), or a lot that grew/is unchanged yields no prompt (no misfire). Fixture-pinned in
+   `pipeline/capital.test.mjs`.
 
 ### Reporting a pass to Ben — the single-source-of-truth block format (Ben, 2026-07-05)
 

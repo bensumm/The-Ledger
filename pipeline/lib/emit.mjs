@@ -11,6 +11,9 @@
  *                         the HEADLINE, not here — this block surfaces the ARMED state)
  *   3. Δ-since-last     — the V1 cross-pass delta line, when a signal is informative
  *   4. structural tripwire — the V2 `support X · cut-trigger Y` line, when computable
+ *   4a. recovery-read   — the V6 ADVISORY recover-vs-drop lean, when the trigger surfaces it (a
+ *                         non-clean position); distinct from the verdict — decision SUPPORT, not a
+ *                         verdict/alert input
  *   5. sell/list-at (+ break-even) + fill-progress — ALWAYS on a held lot
  *
  * Field 5 is the load-bearing guarantee: EVERY held lot surfaces its list-at sell price + break-even
@@ -46,7 +49,7 @@ export function heldListAt(row, be, mv) {
  */
 export function heldNoteBlock({
   name, verdict, window: win, reliableReason,
-  conviction, delta, tripwire,
+  conviction, delta, tripwire, recovery,
   listAt, breakEven, fillProgress,
 }) {
   const lines = [];
@@ -60,6 +63,8 @@ export function heldNoteBlock({
   if (delta) lines.push(`    ${delta}`);
   // 4. STRUCTURAL TRIPWIRE (V2) — support/cut-trigger, when computable.
   if (tripwire) lines.push(`    ${tripwire}`);
+  // 4a. RECOVERY-READ (V6) — the ADVISORY recover-vs-drop lean, when the trigger surfaces it.
+  if (recovery) lines.push(`    ${recovery}`);
   // 5. SELL/LIST-AT (+ break-even) + fill-progress — GUARANTEED (the standing user rule above).
   const sellBits = [`sell: list @ ${fmtP(listAt)}`, `break-even ${fmtP(breakEven)}`];
   if (fillProgress) sellBits.push(fillProgress);

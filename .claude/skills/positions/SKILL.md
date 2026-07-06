@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.14
+version: 1.15
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -217,6 +217,16 @@ Hard rules — cite, never recompute differently:
 - Never list below break-even (tax-capped; the shared `breakEven()` — see CLAUDE.md "Break-even").
 - Held fallers ARE shown here with price-to-clear (the screen-exclusion rule's exception).
 - Guide = real GE guide price, never the wiki mapping `value` field.
+
+**Reading the `recovery-read` line (V6, `watch.mjs` notes) as decision SUPPORT.** On a non-clean
+held lot, `watch.mjs` surfaces `recovery-read: likely recovers|drops|uncertain — <drivers>` — a
+COMPOSED lean from the same signals the verdict already used (diurnal · regime/phase · underwater-
+persistence · vs structural support). Use it to *prioritise your dig-in*, never as an order: it
+decides nothing and never overrides `momVerdict`. The highest-value case is a **conflict** — a green
+lot with a drop-lean, or a mechanical cut-trigger with a recover-lean (the 2026-07-06 webweaver:
+rising + at support leaned recover where the tripwire leaned cut). Honesty holds: it's a LEAN not a
+probability, structural not per-hour, and BLIND to shocks (a `spike` caps it to `uncertain`) — when
+it's `uncertain` or conflicts, that's your signal to apply judgment, not to defer to the line.
 
 ## 5. Interactive tail (standalone invocations only)
 

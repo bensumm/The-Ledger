@@ -78,7 +78,7 @@ full story.
   fields fail to compute — Ben's standing rule (2026-07-06): always state the sell price for every
   held item, since a fill you didn't see may have happened. `heldListAt` prefers the shared
   momVerdict `listAt`, else the band-top-floored-at-BE fallback — never re-fork that. OUTPUT-FORMAT-
-  ONLY (no verdict/alert/row-selection change). Full state: `PLAN-VERDICT.md` V5, `MONITORING.md`
+  ONLY (no verdict/alert/row-selection change). Full state: PLAN.md V5 row, `MONITORING.md`
   "What each tick surfaces" (the emit-contract block).
 - **Conviction gating — arm-then-confirm alerts** (V4, pipeline-only — NO APP_VERSION) — the pure
   `convictionGate()` in `pipeline/lib/watchstate.mjs` gates whether a held verdict escalates to a
@@ -88,7 +88,23 @@ full story.
   support (new `passesBelowSupport` counter, same reset policy). Pass 1 → ARMED (a visible note, not
   a headline). **Don't-rebuild / invariant:** the **Gate-2 breakdown `CUT` is EXEMPT — it alerts
   immediately, byte-identically** (pinned by an "immediate regardless of pass count" fixture); never
-  gate it. Full state: `PLAN-VERDICT.md` V4, `pipeline/MONITORING.md` "What each tick surfaces" item 1.
+  gate it. Full state: PLAN.md V4 row, `pipeline/MONITORING.md` "What each tick surfaces" item 1.
+- **Verdict self-sufficiency — recovery-read forecast + capital companion** (V6, pipeline-only — NO
+  APP_VERSION; the last chunk of the V1–V6 verdict-layer series, `PLAN-VERDICT.md` folded into
+  `PLAN.md` + deleted) — two ADVISORY, OUTPUT-ONLY surfaces in `watch.mjs`, neither a verdict/alert
+  input (`momVerdict`/`offerVerdict`/`convictionGate` untouched — the breakdown-cut invariant holds
+  trivially). (1) The pure `pipeline/lib/recovery.mjs` COMPOSES momVerdict's existing signals
+  (`diurnalRead` seasonal · `regimeLabel`/`phase` trend · `underwaterHours` persistence · position vs
+  the V2 support) into a recover-vs-drop LEAN (`likely-recovers`/`likely-drops`/`uncertain` + drivers),
+  surfaced as `recovery-read: …` ONLY on a non-clean position (underwater / thin-margin / unfilled ask
+  / `BID-BEHIND` bid / lean-conflicts-verdict) and silent on a cleanly-good one. **Don't-rebuild /
+  honesty:** it's a LEAN not a probability (structural shape, not a low-sample per-hour number), and
+  `phase==='spike'` CAPS it to `uncertain` (blind to a repricing) — never wire it into a verdict/alert.
+  (2) The pure `pipeline/lib/capital.mjs` detects capital freed by a booked SELL between passes (a held
+  lot's qty dropped, off V1's prior-pass state) and, ≥ `FREED_CAPITAL_SCAN_GP` (5m placeholder),
+  surfaces a `⋯ freed ~X — consider a scan to redeploy` prompt — surface-only, never auto-places/runs
+  the scan; a fresh/stale-gap prior yields no misfire. Fixtures: `pipeline/recovery.test.mjs` +
+  `pipeline/capital.test.mjs` (22 suites). Full story: `CHANGELOG.md` / PLAN.md V-series row.
 - **Suggestlog path regression fix** (SL1, pipeline-only — NO APP_VERSION) — the O1 ledger path in
   `pipeline/lib/suggestlog.mjs` is now exported `LEDGER`, resolving TWO levels up to repo-root
   `suggestions.jsonl` (OR2's move into `lib/` had silently forked it to untracked
@@ -245,7 +261,7 @@ full story.
   Gate-D softenings WATCH — fresh entry / HOLD — ask filling). Fixtures:
   `pipeline/quotecore.test.mjs`. `MONITORING.md` step 4 is the tree. Every gate defers only
   on positive evidence (real breakdown cuts byte-identically — regression-guarded).
-- **Gate-D lot-context softening** (0.52.0, PLAN-VERDICT V3) — `momVerdict()` gained an OPTIONAL
+- **Gate-D lot-context softening** (0.52.0, V3) — `momVerdict()` gained an OPTIONAL
   6th param `lotCtx={buyTs, askFilling}` that softens ONLY the clean-momentum Gate-D
   CUT-CANDIDATE: a lot bought < `FRESH_HOURS` (1h, placeholder, exported from `js/quotecore.js`)
   ago → **WATCH — fresh entry**; an own ask filling above the clear price → **HOLD — ask
@@ -406,7 +422,16 @@ Script facts the skills rely on (current behavior, not doctrine):
   **sell/list-at + break-even field is ALWAYS emitted on a held lot** (`sell: list @ X ·
   break-even Y · ask n/m`) — the standing rule (Ben, 2026-07-06): always state the sell price
   for every held item, since a fill you didn't see may have happened. It's output-format-only
-  (no verdict/alert change). Asks annotate their held row's Position cell (`ask n/m @ X` / `NOT LISTED`);
+  (no verdict/alert change). The block also carries an **ADVISORY `recovery-read` line (V6,
+  `pipeline/lib/recovery.mjs`)** — a recover-vs-drop LEAN composed from the signals momVerdict
+  already computes (diurnal · regime/phase · underwater-persistence · vs the V2 support), surfaced
+  ONLY on a non-clean position (underwater / thin-margin / unfilled ask / a `BID-BEHIND` bid / a
+  lean that conflicts with the verdict) and silent on a cleanly-good one. It is decision SUPPORT —
+  NEVER a verdict/alert input, decides/auto-cuts nothing; a `phase==='spike'` caps its confidence to
+  `uncertain` (blind to a repricing). The headline may also show a **V6 Companion freed-capital
+  prompt** (`⋯ freed ~X this pass — consider a scan to redeploy`) when a booked SELL freed ≥
+  `FREED_CAPITAL_SCAN_GP` (5m placeholder) since last pass (`pipeline/lib/capital.mjs`) — surface-only,
+  it never auto-places and never runs the scan. Asks annotate their held row's Position cell (`ask n/m @ X` / `NOT LISTED`);
   bids get their own rows with verdicts BID-OK / BID-BEHIND / CROSSING / CANCEL-BID
   (only CANCEL-BID — adverse-selection fill risk — alerts). Offers under 100k total value
   are noise, collapsed to one line. Each bid row and listed-held row also prints a `window`

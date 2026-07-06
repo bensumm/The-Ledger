@@ -146,9 +146,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (V2 — PURE `structuralSupport`/`cutTrigger`: recent higher-low support + a δ-below cut-trigger
     tripwire off the per-day lows watch.mjs already fetches — OUTPUT-ONLY context, no verdict),
     `emit.mjs` (V5 — PURE `heldNoteBlock`/`heldListAt`: the watch loop's stable, consistently-ordered
-    per-HELD-lot note block — `verdict · conviction · Δ · tripwire · sell/list-at (+ break-even) ·
-    fill-progress`, with the sell line GUARANTEED on every held lot; orders/formats already-computed
-    pieces, decides nothing — output-format-only)
+    per-HELD-lot note block — `verdict · conviction · Δ · tripwire · recovery-read (V6) · sell/list-at
+    (+ break-even) · fill-progress`, with the sell line GUARANTEED on every held lot; orders/formats
+    already-computed pieces, decides nothing — output-format-only),
+    `recovery.mjs` (V6 — PURE `recoveryRead`/`recoveryLine`/`recoveryTrigger`: the ADVISORY
+    recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
+    underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a
+    non-clean position — decides NOTHING, never a verdict/alert input; a `spike` caps confidence),
+    `capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
+    passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
+    only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
@@ -164,8 +171,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     screen.mjs's pre-fetch gate stack), `watchstate.test.mjs` (V1 — cross-pass deltas + the
     consecutive-underwater/below-support counters' reset policy + V4 `convictionGate` arm-then-confirm
     escalation incl. the breakdown-exempt invariant), `levels.test.mjs` (V2 — higher-low support /
-    cut-trigger + graceful degradation) and `emit.test.mjs` (V5 — the per-held emit contract: the
-    guaranteed sell line + fixed field order + `heldListAt` precedence) — all auto-discovered by
+    cut-trigger + graceful degradation), `emit.test.mjs` (V5 — the per-held emit contract: the
+    guaranteed sell line + fixed field order + `heldListAt` precedence), `recovery.test.mjs` (V6 — the
+    advisory recover-vs-drop composition, the spike confidence-cap, and the trigger gating) and
+    `capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
+    guards) — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, and
