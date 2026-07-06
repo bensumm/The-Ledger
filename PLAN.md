@@ -197,11 +197,12 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
 - **Stale remote branches** `wave4-repo-review-plan` + `g1-readme-inventory` — delete vs keep.
   D1 superseded `g1-readme-inventory`'s README work; alternatively it could be the first
   PR-path smoke once `gh auth refresh -s repo` runs. Ben's call.
-- **`pipeline/held-override.json`** (desk, untracked) — one entry (`23959` @ 2026-07-03);
-  `monitor.mjs` reads `.cache/held-override.json`, so this copy went inert at OR2. Ben
-  decides: obsolete → `rm`, still wanted → move into `pipeline/.cache/`. (The other two
-  desk orphans — `pipeline/mapping.cache.json` and the SL1-forked `pipeline/suggestions.jsonl`
-  — were cleaned + folded 2026-07-05.)
+- ~~**`pipeline/held-override.json`** (desk, untracked)~~ — RESOLVED 2026-07-06: `rm`'d. It was
+  inert (`monitor.mjs` reads `.cache/held-override.json`, not this root copy — it forked at OR2) AND
+  redundant (its one entry, `23959` @ 2026-07-03, already reconciles to 0 open in `positions.json`
+  via the coffer-manual.log tombstones). Nothing read it. (The other two desk orphans —
+  `pipeline/mapping.cache.json` and the SL1-forked `pipeline/suggestions.jsonl` — were cleaned +
+  folded 2026-07-05.)
 - **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
 - **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
   REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the

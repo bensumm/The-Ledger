@@ -148,12 +148,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
-  - `pipeline/.guide-history.jsonl` (gitignored, deliberately OUTSIDE `.cache/` so cache
-    pruning never touches it) — change-only GE guide-price observations for watched items,
+  - `pipeline/.guide-history.jsonl` (**tracked** as of 2026-07-06 — Ben's call: it's an accruing
+    observation record, so it lives in the repo to survive a lost machine; kept OUTSIDE `.cache/`
+    so cache pruning never touches it) — change-only GE guide-price observations for watched items,
     one JSON line `{ts,id,name,guide,prev}` per observed change, appended by `watch.mjs`
     `logGuideChanges()` at watch cadence. Purpose: pin each item's ~daily guide-update
     time + magnitude to feed the guide-re-anchor pricing edge (PLAN.md Discovered,
-    2026-07-06). Consumer: none yet — accruing samples for that future chunk.
+    2026-07-06). Consumer: none yet — accruing samples for that future chunk. (Not auto-committed by
+    `sync-fills.mjs`; commit it periodically so the record on `origin` stays current.)
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
     `js/format.js` so their tables match the app exactly.
