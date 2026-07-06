@@ -308,7 +308,11 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   bid to the level its window actually touches, and exposed the webweaver 3-day repricer
   (2026-07-05). Honesty rule applies: ~14 nights is a small sample; "touched ≠ filled";
   it's a guide that shifts a price a few ticks, never a guarantee that overrides the
-  band/regime read.
+  band/regime read. That read is the NARROW-WINDOW *timing* check (is this price touched in
+  the relevant local-hours window). For a marginal/big-ticket hold-or-cut, the FULL-DAY
+  multi-week *trajectory* read (`windowrange.mjs --window 0-23 --nights 21`, phase-mapped to
+  base/spike/decay) is the distinct tool that builds confidence on where price is heading —
+  see the `/positions` skill's "trajectory read for confidence".
 **How to generate these tables — each canonical ask maps to a skill or an exact command.
 These scripts exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e`
 fetch for a market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the

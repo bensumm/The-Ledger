@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.11
+version: 1.12
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -37,6 +37,16 @@ blowpipe 738 vs 220 median units). The game's actual quiet trough (GMT ~04–08)
   window?** If the read crosses the weekend/weekday boundary, discount (or raise) the
   quantiles and say so on the line. Evidence: one Monday morning + a plausible prior —
   score this as weeks accrue; the Thu/Fri lift side is still unobserved.
+  - **Correction — check the FULL-DAY basis before trusting a narrow-slice fade (v1.12,
+    2026-07-06).** On the one item since examined on the FULL-DAY basis (DWH, 3 Sun→Mon
+    transitions), full-day LOWS were flat-to-up across every weekend→weekday transition
+    (06-21→22 −0.3%, 06-28→29 +0.3%, 07-05→06 +0.6%) — the apparent fade showed ONLY in the
+    narrow 00-08 demand slice (which is noisier). So before trusting a weekend fade, re-read
+    on the full day: `node pipeline/windowrange.mjs "<item>" --window 0-23 --nights 21`.
+    Treat the v1.11 weekend→weekday claim above as UNCONFIRMED on full-day data — do NOT
+    call it wrong; it holds so far only on the narrow slice, on one item / ~3 weekends
+    (process rule 4). The fuller method is `/positions` "trajectory read for confidence on a
+    marginal/big-ticket hold" (full-day, phase-mapped, base-anchored) — cross-reference it.
 
 This is a COMPOSITION, explicitly two-phase and interactive — never a single batch read.
 It invokes `/positions` and `/scan` **via the Skill tool** so tweaks to the children

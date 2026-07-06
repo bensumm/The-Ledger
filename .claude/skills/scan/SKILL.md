@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.8
+version: 1.9
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -84,6 +84,10 @@ This is the tribal layer the script can't do — apply ALL of these:
   flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
   (S1). Treat a `thin` row honestly: the edge is real but you can only place a few units/day, fills
   are slow, and its wide band can be a thin-trading artifact — size in units, never chase.
+  For a big-ticket price SUGGESTION where you want confidence in the entry / where the item is
+  heading, run the same full-day multi-week trajectory read — `/positions` "trajectory read for
+  confidence on a marginal/big-ticket hold" (`windowrange.mjs --window 0-23 --nights 21`,
+  phase-mapped). Point to it; don't copy the method here.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
 - **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,

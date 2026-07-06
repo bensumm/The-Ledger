@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.10
+version: 1.11
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -72,6 +72,38 @@ verdict; you translate it into the action line:
 **Sell-velocity preference (Ben, 2026-07-04):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
 
 **Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `windowrange.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
+
+**Trajectory read for confidence on a marginal/big-ticket hold (Ben, 2026-07-06 — the DWH
+retro):** the stateless verdict and a narrow-window read can leave a big-ticket hold-vs-cut
+call genuinely uncertain; a detailed FULL-DAY multi-week trajectory read is what generated
+real decision confidence (the DWH verdict flipped to HOLD-list-high minutes after this read,
+which the market then confirmed). Run it as **diligence for a big-ticket / underwater /
+marginal hold-vs-cut decision** — NOT on every quote (this ties to memory "size scales
+diligence"). Method:
+
+1. **Use the FULL-DAY window, not the narrow demand slice:**
+   `node pipeline/windowrange.mjs "<item>" --window 0-23 --nights 21`. The narrow 00-08
+   demand slice OVERSTATED a weekend→weekday fade that the full-day lows did not show
+   (see the `/overnight` correction below) — read the whole day.
+2. **Pull enough history (2–3 weeks, `--nights 21`) to capture the PRE-SPIKE BASE** — so a
+   post-spike decay can be read against the floor it is returning toward. (Same family as
+   `/overnight`'s "decay-trend trough projection" — cross-reference it, don't duplicate: that
+   one projects tonight's trough from the low trend; this one names the base a decay returns to.)
+3. **Map days-of-week and NAME THE PHASE (base / spike / decay).** Then check whether the
+   per-day LOWS have STOPPED stepping down: a decay that has round-tripped to the pre-spike
+   base with lows that have stopped falling = BASING = hold-supportive. The cut tripwire
+   then becomes "a convincing break BELOW the pre-spike base low" (a concrete structural
+   level, per the override-discipline rule below).
+4. **Gate by size / marginality** (above) — this is expensive diligence, reserved for the
+   holds where the hold-vs-cut call is close and the lot is big.
+
+DWH anchor (full-day, 15 days): a stable pre-spike base ~15.2–15.6m low / 15.8–16.2m high
+(06-21→06-26), a spike to intraday 19.94m (06-30) / 18.80m (07-01), then a decay back to the
+base with lows basing at 15.0–15.2m over the last 3 days (07-04/05/06) — a completed
+spike-and-return; the named tripwire was sub-15.00m (a break below the base low). **Honesty
+guard (process rule 4):** the METHOD encodes freely, but the market findings here are a tiny
+sample — n=1 item, ~3 Sun→Mon transitions, one spike-and-return. Treat "basing = bottoming"
+as a hypothesis to keep testing, not an established pattern.
 
 **Entry-age check — fresh entries draw false CUTs (2026-07-05, three-for-three):** the gate
 tree has no concept of entry age, so a just-filled patient buy shows "underwater" on the
