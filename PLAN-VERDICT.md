@@ -37,6 +37,9 @@ authority — watch.mjs remains decision support; Ben places every offer.
 - **V3 alone** — the first behavior change (a pure-momVerdict signature extension + app inherit).
 - **V4 alone** — conviction gating in the loop (no pure-core change).
 - **V5** — emit-contract + doc reconciliation.
+- **V6** — recovery-read (advisory recover-vs-drop forecast) + the capital-awareness companion —
+  the payoff layer: the deterministic signals feed a *surfaced forecast*, so the LLM digs in only
+  when the read is uncertain or conflicts with the verdict.
 
 ## Resolved open decisions
 
@@ -135,6 +138,48 @@ authority — watch.mjs remains decision support; Ben places every offer.
   fill-progress` — and a reconciliation pass so MONITORING/CLAUDE/`/positions`/`/morning` describe the
   temporal layer consistently (process rule 8).
 
+### V6 — recovery-read (recover-vs-drop forecast, ADVISORY) — **PENDING**
+- **Files:** a PURE composer (new `pipeline/lib/` helper, or `js/quotecore.js` if the app will share
+  it) that composes momVerdict's EXISTING inputs — `diurnalRead` (seasonal), `regimeDrift` + `phase`
+  (trend direction), `underwaterHours` (persistence) — into a lean; surfaced in `pipeline/watch.mjs`;
+  fixture-tested. Console-first (app Watch-tab adoption a documented follow-on).
+- **APP_VERSION:** none if the composer is pipeline-consumed only (the `phase()` precedent); a bump
+  only if the app renders it.
+- **Tag:** OUTPUT-ONLY + ADVISORY — a surfaced line, NOT a verdict input. It informs the human/LLM; it
+  never auto-cuts (respects the "do not codify judgment" line — the lean is decision SUPPORT, the
+  verdict/alert paths are untouched).
+- **What it does:** answers the question every non-clean position poses — *recover above BE, or keep
+  dropping?* — as `seasonal (diurnal + weekly) × regime/phase direction × persistence` → a lean
+  {likely-recovers | likely-drops | uncertain} + drivers, e.g. `recovery-read: likely recovers —
+  post-trough hour + flat regime + at support`. Composes signals already computed (no new fetch). The
+  cut-trigger δ (V2/V4) becomes a backstop, not the whole decision.
+- **TRIGGER (Ben, 2026-07-06 — "if it isn't in a great position, sanity check"):** compute cheaply on
+  every held lot + resting offer, but SURFACE only when the naive action isn't obviously right —
+  (a) underwater, (b) thin-margin just above BE, (c) a decaying / unfilled ask, (d) a resting bid
+  whose fill hinges on direction, or (e) the lean CONFLICTS with the current verdict (e.g. a green lot
+  with a drop-lean — the highest-value case). SILENT on cleanly-good positions (comfortably green +
+  filling + rising + clean momentum) — the naive action stands. Same informative-gating as V1/V2.
+- **HONESTY (process rule 4):** a LEAN, not a probability; the per-item hourly magnitude is low-sample
+  (the F1 cell-count problem) so lean on the robust STRUCTURAL shape (UK day/night, weekday/weekend),
+  not a precise per-hour number; blind to shocks/repricings — `phase` (spike) is the only warning and
+  it caps confidence. Anchor: the 2026-07-06 webweaver — rising regime + at structural support leaned
+  recover, and it did (18.18m→18.55m) where the mechanical tripwire leaned cut.
+- **TEST MANIFEST:** each trigger condition surfaces / stays silent as specified; the lean composes
+  correctly for the canonical cases (quiet-trough + flat + at-support → recovers; falling + persisted
+  through a liquid window → drops; conflicting inputs → uncertain); a cleanly-good position → silent.
+
+### Companion — capital awareness + auto-scan on freed capital (Ben, 2026-07-06) — **PENDING**
+- Rides V1's state store. The loop already knows DEPLOYED capital (held + resting bids) but NOT free
+  cash — that isn't in the RuneLite logs. Assume reinvested unless told otherwise.
+- **Design:** the robust version is event-driven — when a watch pass detects a SELL that freed ≥ ~5m
+  (via V1 fill deltas), SURFACE a scan prompt inline in the loop output ("freed 7.4m — scan?"). A
+  fuller version anchors to a stated bankroll and tracks proceeds−spend for a running free-cash
+  figure, but the freed-capital trigger needs no anchor and is the honest floor.
+- **Tag:** OUTPUT-ONLY (surfaces a suggestion; never auto-places — Ben places every offer).
+  Console-first.
+- Split from V6 because it's a loop/capital feature, not a verdict-layer forecast — sequence it after
+  V4/V5 or fold into V6's land; coordinator's call.
+
 ---
 
 ## VETTING
@@ -152,6 +197,8 @@ cost the bludgeon exit; softening or delaying it is the failure mode to guard.
   Gate-D candidate and the structural-break cut are gated — pinned by an "immediate regardless of pass
   count" fixture.
 - **V5:** format-only; no verdict/alert logic touched.
+- **V6:** ADVISORY — a surfaced forecast line, never a verdict/alert input, so the invariant is
+  untouched (same guarantee as V1/V2's output-only lines). The Companion is likewise surface-only.
 
 ### Risks + mitigations
 - **State corruption / bad reset.** A corrupt/partial state file must not break a pass, and a stale
@@ -177,5 +224,6 @@ cost the bludgeon exit; softening or delaying it is the failure mode to guard.
 - V3 — DONE (0.52.0)
 - V4 — PENDING
 - V5 — PENDING
+- V6 — PENDING (recovery-read forecast + the capital-awareness companion)
 
-Fold this file into PLAN.md and delete it when V5 ships (the per-topic-plan rule in CLAUDE.md).
+Fold this file into PLAN.md and delete it when V6 ships (the per-topic-plan rule in CLAUDE.md).
