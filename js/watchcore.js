@@ -7,9 +7,10 @@
 
 // Held-verdict → severity FAMILY for the card's left stripe + pill tint. Semantic colour encodes
 // STATE (green/amber/red); gold stays the accent, never good/bad (the design-system rule).
-//   hold  (green): the HOLD family — HOLD, "HOLD — list high", "HOLD — watch"
+//   hold  (green): the HOLD family — HOLD, "HOLD — list high", "HOLD — watch", "HOLD — ask filling"
 //   cut   (red):   CUT, CUT-CANDIDATE, LIST-TO-CLEAR, FALLING (all price-to-clear situations)
-//   watch (amber): DIURNAL-WATCH, SHOCK-WATCH, NO-READ, UNDERWATER, NO-QUOTE — caution, not a cut
+//   watch (amber): DIURNAL-WATCH, SHOCK-WATCH, NO-READ, UNDERWATER, NO-QUOTE, "WATCH — fresh entry"
+//                  — caution, not a cut. (The V3 Gate-D softenings land in hold/watch by prefix.)
 export function verdictFamily(verdict){
   const v=String(verdict||'').toUpperCase();
   if(v.startsWith('HOLD')) return 'hold';

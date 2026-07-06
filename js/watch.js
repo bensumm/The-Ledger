@@ -215,6 +215,8 @@ function actionText(verdict, mv, row, be, listAt) {
       case 'CLEAR': return B('List @ ' + at + ' to clear', '2h breakdown — bank it, don’t hold for the patient premium.');
       case 'HOLD_STRONG': return B('List @ ' + at, 'band top — don’t sell into strength.');
       case 'HOLD_WATCH': return B('Hold', 'a lone 2h dip vs a rising regime — usually noise.');
+      case 'HOLD_FILLING': return B('Hold @ ' + at, 'your own ask is filling above the clear price — an ask transacting above the clear beats repricing down. Let it fill.');
+      case 'HOLD_FRESH': return B('Hold @ ' + at, 'a fresh (&lt;1h) patient fill is definitionally underwater on the instant read — give the thesis its window; don’t cut a brand-new lot.');
     }
   }
   if (verdict === 'FALLING') return B((row.quickSell != null && row.quickSell >= be ? 'Sell @ ' : 'Cut @ ') + at, 'falling regime — price to clear, don’t list above the drop.');

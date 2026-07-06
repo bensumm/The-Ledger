@@ -221,9 +221,20 @@ full story.
   drives the held-position cut-trigger. Deliberately NOT wired into the bulk Finder list.
 - **Underwater-at-tick triage — the gate tree** (0.33.0, PLAN-3) — `momVerdict()` is the
   whole tree; Gate-0 `reliable` + `diurnalRead`/`moveShape`/`underwaterHours`; verdicts
-  NO-READ/DIURNAL-WATCH/SHOCK-WATCH/CUT/LIST-TO-CLEAR/HOLD/CUT-CANDIDATE. Fixtures:
+  NO-READ/DIURNAL-WATCH/SHOCK-WATCH/CUT/LIST-TO-CLEAR/HOLD/CUT-CANDIDATE (plus the V3
+  Gate-D softenings WATCH — fresh entry / HOLD — ask filling). Fixtures:
   `pipeline/quotecore.test.mjs`. `MONITORING.md` step 4 is the tree. Every gate defers only
   on positive evidence (real breakdown cuts byte-identically — regression-guarded).
+- **Gate-D lot-context softening** (0.52.0, PLAN-VERDICT V3) — `momVerdict()` gained an OPTIONAL
+  6th param `lotCtx={buyTs, askFilling}` that softens ONLY the clean-momentum Gate-D
+  CUT-CANDIDATE: a lot bought < `FRESH_HOURS` (1h, placeholder, exported from `js/quotecore.js`)
+  ago → **WATCH — fresh entry**; an own ask filling above the clear price → **HOLD — ask
+  filling**. Absent `lotCtx`, momVerdict is byte-identical to before; the Gate-2 breakdown CUT is
+  NEVER softened (regression-pinned in `quotecore.test.mjs`). Callers pass it: `watch.mjs` (buyTs
+  from the open lot + askFilling from the live ask), `quote.mjs --positions` (buyTs only),
+  `js/trends.js reviewPositions` (buyTs from `t.opened` — the app inherits the entry-age
+  softening). `readOpenPositions` groups now carry `buyTs` (oldest lot). Don't re-fork the
+  softening back into the breakdown matrix.
 - **Project skills + skill-versioning convention** (PLAN-5) — `/positions` `/scan`
   `/overnight` `/morning` at `.claude/skills/*/SKILL.md`; per-workflow doctrine *moved*
   there. Skills-only changes bump the SKILL.md `version:` frontmatter, NEVER `APP_VERSION`.
@@ -345,7 +356,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   footnote when the quote basis is unreliable.
 - `quote.mjs --positions` adds Held@/Break-even/Verdict columns; the verdict vocabulary is
   the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
-  NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE.
+  NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE, plus the
+  V3 Gate-D softenings WATCH — fresh entry (fresh lot) / HOLD — ask filling (own ask filling
+  above the clear).
   Interpretation of those verdicts lives in `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge. Four

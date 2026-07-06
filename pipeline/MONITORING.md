@@ -103,6 +103,13 @@ Print-only — it never writes trade data. Each run emits:
      **through a liquid (busy-hour) window** → **CUT-CANDIDATE**: a genuine daily trough
      recovers when the book fills, so this is persistence, not the clock. This is what stops a
      flat-regime underwater lot sitting on WATCH forever.
+   - **D-softening — lot context (V3).** The Gate-D CUT-CANDIDATE is *softened* (never the Gate-2
+     breakdown CUT) when the caller passes a lot context: an **own ask actively filling above the
+     clear price** → **HOLD — ask filling** (a fill above the clear beats repricing down); a lot
+     **bought under `FRESH_HOURS` (1h, placeholder) ago** → **WATCH — fresh entry** (a fresh
+     patient fill is definitionally underwater on the instant-clear price and hasn't had its
+     thesis window). Both hold the ask ≥ break-even; neither is an alert. A fresh lot that
+     *genuinely breaks down* still CUTs immediately (Gate 2 is untouched).
    - **regime falling** (drift ≤ −5%) with no live break still lands **CUT-CANDIDATE** (list
      to clear at the instabuy — take the small loss before a bigger one; the 0.20.0
      falling-item rule).
@@ -334,8 +341,9 @@ next armed decision trigger>
 
 **Fixed verdict→dot palette (same verdict = same color, always; the dot reflects the
 CORRECTED verdict):** 🔴 CUT / CUT-CANDIDATE / CANCEL-BID (act now) · 🟠 LIST-TO-CLEAR /
-UNDERWATER (decision pending) · 🟡 SHOCK-WATCH / DIURNAL-WATCH / BID-BEHIND / CROSSING
-(watch) · 🟢 HOLD / HOLD—list high / BID-OK (working as planned) · ⚪ NO-READ / watched.
+UNDERWATER (decision pending) · 🟡 SHOCK-WATCH / DIURNAL-WATCH / WATCH — fresh entry /
+BID-BEHIND / CROSSING (watch) · 🟢 HOLD / HOLD—list high / HOLD — ask filling / BID-OK
+(working as planned) · ⚪ NO-READ / watched.
 Markdown has no text color — the dots ARE the palette; don't improvise others.
 
 Numbers come from the script verbatim (never recomputed); only the dot, Profit/Sells-by

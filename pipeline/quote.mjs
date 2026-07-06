@@ -72,9 +72,11 @@ async function runItems() {
    The precise 2h `mom` cut-trigger (chunk 6) runs FIRST via the SHARED momVerdict() — identical
    matrix to the app's reviewPositions — so a held breakdown escalates toward CUT / clear before
    the regime-only branches. lotValue = qty × avgCost (capital at risk). mom clean → fall through. */
-function verdict(row, breakEven, lotValue, ts5m) {
+function verdict(row, breakEven, lotValue, ts5m, buyTs) {
   const instabuy = row.quickSell;         // what you'd clear at right now
-  const mv = momVerdict(row, breakEven, lotValue, ts5m);
+  // V3: pass the lot's buy timestamp so a fresh (<FRESH_HOURS) underwater lot isn't cut on the
+  // instant read. askFilling is undefined here — quote.mjs has no live offer view (degrades fine).
+  const mv = momVerdict(row, breakEven, lotValue, ts5m, undefined, { buyTs });
   if (mv) {
     const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
     // PLAN-3 gate-tree tags (each names the gate/evidence in one line).
@@ -110,12 +112,12 @@ async function runPositions() {
   const guide = await loadGuide();
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
   const rows = [], lines = [], sugg = [], staleRisk = [];
-  for (const { itemId, qty, cost, avgCost } of groups) {
+  for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const be = breakEven(avgCost);
     const inp = await fetchItemInputs(itemId);
     const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    const v = verdict(row, be, cost, inp.ts5m);
+    const v = verdict(row, be, cost, inp.ts5m, buyTs);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
     sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v }));  // the emitted per-position verdict string

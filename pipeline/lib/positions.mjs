@@ -8,8 +8,11 @@ import fs from 'node:fs';
 /* readOpenPositions(positionsPath) -> one of:
      { err }                                    // positions.json unreadable/unparseable
      { pos, groups, openLots, ageMin }          // success (groups may be empty)
-   groups: [{ itemId, qty, cost, avgCost }] — open lots summed per item at weighted-avg cost
-     (cost = Σ qty·buyEach; avgCost = cost/qty). Insertion order follows first-seen itemId in
+   groups: [{ itemId, qty, cost, avgCost, buyTs }] — open lots summed per item at weighted-avg
+     cost (cost = Σ qty·buyEach; avgCost = cost/qty). buyTs (V3) = the OLDEST lot's buy timestamp
+     (unix seconds) in the group, so the momVerdict entry-age softening treats a grouped position
+     as "fresh" only when the ENTIRE position is recent (a stale lot with a fresh top-up is not
+     softened). null when no lot carries a buyTs. Insertion order follows first-seen itemId in
      the open-lots list (stable, matches the prior inline grouping). openLots = number of open
      lots (pre-grouping) for the "N items, M lots" line. ageMin = minutes since pos.generatedAt
      (the ~sync-lag age), or null if absent.
@@ -21,10 +24,12 @@ export function readOpenPositions(positionsPath) {
   const open = (pos.open || []).filter(l => l.qty > 0);
   const byItem = new Map();
   for (const l of open) {
-    const g = byItem.get(l.itemId) || { qty: 0, cost: 0 };
-    g.qty += l.qty; g.cost += l.qty * l.buyEach; byItem.set(l.itemId, g);
+    const g = byItem.get(l.itemId) || { qty: 0, cost: 0, buyTs: null };
+    g.qty += l.qty; g.cost += l.qty * l.buyEach;
+    if (l.buyTs != null) g.buyTs = (g.buyTs == null) ? l.buyTs : Math.min(g.buyTs, l.buyTs); // oldest lot
+    byItem.set(l.itemId, g);
   }
-  const groups = [...byItem].map(([itemId, g]) => ({ itemId, qty: g.qty, cost: g.cost, avgCost: g.cost / g.qty }));
+  const groups = [...byItem].map(([itemId, g]) => ({ itemId, qty: g.qty, cost: g.cost, avgCost: g.cost / g.qty, buyTs: g.buyTs }));
   const ageMin = pos.generatedAt ? Math.round((Date.now() - Date.parse(pos.generatedAt)) / 60000) : null;
   return { pos, groups, openLots: open.length, ageMin };
 }

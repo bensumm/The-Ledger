@@ -18,7 +18,7 @@
  *   - quoteOrdered invariant untouched by the new fields
  */
 import assert from 'node:assert/strict';
-import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, BIG_TICKET_GP } from '../js/quotecore.js';
+import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, BIG_TICKET_GP, FRESH_HOURS } from '../js/quotecore.js';
 import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../js/quotecore.js';   // S2 posture helpers
 import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
 import { phase, regimeDrift } from '../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
@@ -206,6 +206,100 @@ ok('quoteOrdered invariant holds + reliable clean not-underwater → null verdic
   assert.equal(quoteOrdered(row), true);
   const be = breakEven(900);                      // 919 < instabuy 1002 → NOT underwater
   assert.equal(momVerdict(row, be, 5000, ts5m, NOW_MS), null);
+});
+
+// ============================================================================================
+// V3 — lot-context softening of the Gate-D clean-momentum CUT-CANDIDATE.
+//   BUSINESS REQUIREMENTS pinned here:
+//   - lotCtx softens ONLY the Gate-D clean CUT-CANDIDATE, NEVER the Gate-2 breakdown CUT
+//     (the byte-identical breakdown-cut invariant — the whole point of V3).
+//   - a fresh (<FRESH_HOURS) underwater-through-a-liquid-window lot → WATCH — fresh entry.
+//   - an own ask filling above the clear price → HOLD — ask filling.
+//   - the softening is time-bounded (an aged lot still → CUT-CANDIDATE) and opt-in (no lotCtx →
+//     unchanged CUT-CANDIDATE).
+//   - lotCtx never leaks into Gate 0/1/2 (belt-and-suspenders).
+// ============================================================================================
+const FRESH_BUY = NOW_SEC - 30 * 60;                 // bought 30 min ago (< FRESH_HOURS=1h)
+const OLD_BUY   = NOW_SEC - (FRESH_HOURS + 1) * 3600; // bought > FRESH_HOURS ago
+
+// Reusable clean+underwater-through-a-liquid-peak row (identical to fixture 6 → CUT-CANDIDATE).
+function cleanUnderwaterRow() {
+  const ts5m = mk5m(() => ({ low: 4850, high: 4950, vol: 500 }));   // avgHigh 4950 < break-even span
+  const latest = { low: 4880, high: 4900, lowTime: FRESH, highTime: FRESH };  // in-band → mom clean
+  const row = rowOf(latest, ts5m);
+  return { row, ts5m, be: breakEven(5000) };         // 5103 > instabuy 4900 → underwater
+}
+
+// V3.1 — REGRESSION / THE INVARIANT: a real breakdown CUT is byte-identical with and without a
+// fresh buyTs + filling ask. A fresh entry that GENUINELY breaks down still cuts; a filling ask
+// does NOT rescue a breakdown. (Reuses the bludgeon breakdown+underwater+big-ticket setup.)
+ok('V3 INVARIANT: breakdown CUT byte-identical with vs without lotCtx (fresh + askFilling)', () => {
+  const ts5m = mk5m((ha, i) => {
+    if (ha >= 2) return { low: 99000, high: 99200, vol: 500 };
+    const low = 99000 - (23 - i) * 90;
+    return { low, high: low + 200, vol: 500 };
+  });
+  assert.equal(moveShape(ts5m), 'bleed');
+  const latest = { low: 96900, high: 97200, lowTime: FRESH, highTime: FRESH };
+  const row = rowOf(latest, ts5m);
+  assert.equal(row.mom, 'breakdown');
+  const be = breakEven(105000), lotValue = 200 * 105000;
+  const base    = momVerdict(row, be, lotValue, ts5m, NOW_MS);
+  const withCtx = momVerdict(row, be, lotValue, ts5m, NOW_MS, { buyTs: FRESH_BUY, askFilling: true });
+  assert.equal(base.action, 'CUT');
+  assert.deepEqual(withCtx, base, 'lotCtx must NOT alter the breakdown CUT (byte-identical)');
+});
+
+// V3.2 — no lotCtx → today's behavior unchanged (CUT-CANDIDATE).
+ok('V3: clean+underwater liquid-window, NO lotCtx → CUT-CANDIDATE (unchanged)', () => {
+  const { row, ts5m, be } = cleanUnderwaterRow();
+  const mv = momVerdict(row, be, 50_000, ts5m, NOW_MS);   // no 6th arg
+  assert.equal(mv.verdict, 'CUT-CANDIDATE');
+  assert.equal(mv.action, 'CUT');
+  assert.equal(mv.gate, 'D');
+});
+
+// V3.3 — fresh buyTs (< FRESH_HOURS) → softened to WATCH — fresh entry, not CUT.
+ok('V3: same row + fresh buyTs (<FRESH_HOURS) → WATCH — fresh entry (softened)', () => {
+  const { row, ts5m, be } = cleanUnderwaterRow();
+  const mv = momVerdict(row, be, 50_000, ts5m, NOW_MS, { buyTs: FRESH_BUY });
+  assert.equal(mv.verdict, 'WATCH — fresh entry');
+  assert.equal(mv.action, 'HOLD_FRESH');
+  assert.equal(mv.gate, 'D');
+  assert.notEqual(mv.action, 'CUT');
+  assert.equal(mv.listAt, be, 'holds the ask at break-even, not the clear price');
+});
+
+// V3.4 — aged buyTs (> FRESH_HOURS) → the softening is time-bounded → still CUT-CANDIDATE.
+ok('V3: same row + aged buyTs (>FRESH_HOURS) → still CUT-CANDIDATE (time-bounded)', () => {
+  const { row, ts5m, be } = cleanUnderwaterRow();
+  const mv = momVerdict(row, be, 50_000, ts5m, NOW_MS, { buyTs: OLD_BUY });
+  assert.equal(mv.verdict, 'CUT-CANDIDATE');
+  assert.equal(mv.action, 'CUT');
+});
+
+// V3.5 — askFilling → suppressed to HOLD — ask filling (fill-progress beats repricing down).
+ok('V3: same row + askFilling → HOLD — ask filling (suppressed)', () => {
+  const { row, ts5m, be } = cleanUnderwaterRow();
+  const mv = momVerdict(row, be, 50_000, ts5m, NOW_MS, { askFilling: true });
+  assert.equal(mv.verdict, 'HOLD — ask filling');
+  assert.equal(mv.action, 'HOLD_FILLING');
+  assert.equal(mv.gate, 'D');
+  assert.notEqual(mv.action, 'CUT');
+  // askFilling wins over an aged lot too (fill-progress is the stronger positive evidence)
+  const mv2 = momVerdict(row, be, 50_000, ts5m, NOW_MS, { askFilling: true, buyTs: OLD_BUY });
+  assert.equal(mv2.action, 'HOLD_FILLING');
+});
+
+// V3.6 — lotCtx does NOT leak into Gate 0/1/2 (belt-and-suspenders). A stale quote still NO-READs,
+// and the bludgeon breakdown still CUTs, regardless of a fresh/filling lotCtx.
+ok('V3: lotCtx does not leak into Gate 0 (stale → NO-READ regardless of lotCtx)', () => {
+  const ts5m = mk5m(() => ({ low: 990, high: 1010, vol: 500 }));
+  const latest = { low: 980, high: 1010, lowTime: NOW_SEC - 5 * 3600, highTime: NOW_SEC - 5 * 3600 };
+  const row = rowOf(latest, ts5m);
+  const be = breakEven(1200);
+  const mv = momVerdict(row, be, 5000, ts5m, NOW_MS, { buyTs: FRESH_BUY, askFilling: true });
+  assert.equal(mv.action, 'NO_READ');   // Gate 0 fires first; lotCtx never consulted
 });
 
 // ============================================================================================

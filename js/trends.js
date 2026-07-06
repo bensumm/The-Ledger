@@ -159,7 +159,11 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   // Pass the 5m series so the PLAN-3 gate tree can run its diurnal / shape / underwater-persistence
   // reads (Gates 1/2-shape/D). NO-READ, DIURNAL-WATCH and SHOCK-WATCH arrive here as ordinary mv
   // verdicts and render through the shared branch below.
-  const mv=qrow?momVerdict(qrow, breakeven, lotValue, s5m):null;
+  // V3: pass the lot's buy timestamp (t.opened = the fill's buyTs, unix s; see ledger.js syncFills)
+  // so the app inherits the entry-age softening — a fresh (<FRESH_HOURS) underwater lot shows
+  // WATCH — fresh entry, not CUT-CANDIDATE. askFilling is undefined here (no live offer view in
+  // this card), so momVerdict degrades to entry-age only. Absent t.opened → undefined → unchanged.
+  const mv=qrow?momVerdict(qrow, breakeven, lotValue, s5m, undefined, {buyTs:t.opened}):null;
   if(mv){
     verdict=mv.verdict; cls=mv.cls; why=mv.why;
     // NO-READ / HOLD_WATCH carry no reprice (listAt null): NO-READ keeps the ask at break-even

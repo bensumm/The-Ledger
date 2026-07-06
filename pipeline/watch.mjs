@@ -48,7 +48,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
+import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH_HOURS } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -231,9 +231,9 @@ function supportLine(ts1h) {
 // --- ACTION line for a HELD lot. Sell-side framing is HONEST (clear-vs-hold), never
 // "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
 // 2h breakdown escalates before the lagging multi-day regime confirms.
-function heldAction(row, be, lotValue, ts5m) {
+function heldAction(row, be, lotValue, ts5m, lotCtx) {
   const instabuy = row.quickSell;
-  const mv = momVerdict(row, be, lotValue, ts5m);
+  const mv = momVerdict(row, be, lotValue, ts5m, undefined, lotCtx);
   if (mv) {
     // PLAN-3 gate-tree verdicts (each says WHICH gate fired + the evidence, in one line).
     if (mv.action === 'NO_READ')
@@ -242,6 +242,10 @@ function heldAction(row, be, lotValue, ts5m) {
       return `DIURNAL-WATCH @ ${fmtP(mv.listAt)} — underwater at a quiet hour that dipped & recovered yesterday (Gate 1). Hold ≥ break-even; do NOT cut into the trough. If still underwater at a liquid hour, the defense is spent → re-assess.`;
     if (mv.action === 'SHOCK_WATCH')
       return `SHOCK-WATCH @ ${fmtP(mv.listAt)} — a one-off volume-spike shock that stabilized, not a bleed, on a small lot with an intact regime (Gate 2). Hold one more cycle; a fresh low next tick = bleed → cut.`;
+    if (mv.action === 'HOLD_FILLING')
+      return `HOLD — ask filling @ ${fmtP(mv.listAt)} — your own ask is filling above the clear price (Gate D, V3); an ask transacting above the clear beats repricing down. Hold it; let it keep filling.`;
+    if (mv.action === 'HOLD_FRESH')
+      return `WATCH — fresh entry @ ${fmtP(mv.listAt)} — a fresh (<${FRESH_HOURS}h) patient fill is definitionally underwater on the instant read (Gate D, V3). Hold the ask ≥ break-even and give the thesis its window; don't cut a brand-new lot.`;
     if (mv.action === 'CUT')
       return `${mv.verdict} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window: persistence, not the clock' : 'controlled loss-taking: stop the bleed, free the capital'}. This is NOT out-running the drop; chasing the ask lower just sells cheaper.`;
     if (mv.action === 'CLEAR')
@@ -307,7 +311,7 @@ function bidAlert(it) {
   return null;
 }
 
-async function buildItem({ id, name, qty, avgCost }, map, guide) {
+async function buildItem({ id, name, qty, avgCost, buyTs }, map, guide) {
   const inp = await fetchItemInputs(id, { ts1h: true }); // ts1h feeds the window-context line
   const held = qty != null;
   const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, held, asked: true });
@@ -315,8 +319,14 @@ async function buildItem({ id, name, qty, avgCost }, map, guide) {
   const meta = CLASSES[cls];
   const be = held ? breakEven(avgCost) : (row.quickBuy != null ? breakEven(row.quickBuy) : null);
   const lotValue = held ? qty * avgCost : null;
-  return { id, name, qty, avgCost, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts1h: inp.ts1h };
+  // V3 lot-context: buyTs (oldest lot's buy time, unix s) enables the entry-age softening;
+  // askFilling is set later in main() once the live asks are known (needs both this row + asks).
+  return { id, name, qty, avgCost, buyTs: buyTs ?? null, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts1h: inp.ts1h, askFilling: false };
 }
+
+// V3 lot-context for momVerdict's Gate-D softening — { buyTs, askFilling } off a built held item.
+// Pure read; every held momVerdict call routes through this so the app/console share one lotCtx.
+const lotCtxOf = it => ({ buyTs: it.buyTs, askFilling: it.askFilling });
 
 // A held item is an ALERT if the shared cut-trigger says CUT/CLEAR, or it's underwater
 // (instabuy < break-even), or its multi-day regime is falling. Reuses momVerdict — no
@@ -324,7 +334,7 @@ async function buildItem({ id, name, qty, avgCost }, map, guide) {
 function heldAlert(it) {
   const { row, be, lotValue, ts5m, name } = it;
   const instabuy = row.quickSell;
-  const mv = momVerdict(row, be, lotValue, ts5m);
+  const mv = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
   if (mv) {
     if (mv.action === 'CUT')
       return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window; free the capital' : '2h breakdown & underwater; free the capital'}.` };
@@ -360,8 +370,8 @@ async function main() {
     if (err) { console.error('cannot read positions.json: ' + err); }
     else {
       posAge = ageMin;
-      for (const { itemId, qty, avgCost } of groups)
-        heldSpecs.push({ id: itemId, name: map.byId[itemId]?.name || ('#' + itemId), qty, avgCost });
+      for (const { itemId, qty, avgCost, buyTs } of groups)
+        heldSpecs.push({ id: itemId, name: map.byId[itemId]?.name || ('#' + itemId), qty, avgCost, buyTs });
     }
   }
 
@@ -404,6 +414,14 @@ async function main() {
 
   const held = [];
   for (const s of heldSpecs) held.push(await buildItem(s, map, guide));
+  // V3 askFilling: the held lot's own ask is actively transacting ABOVE the clear price. Simple,
+  // honest heuristic (no cross-pass state) — an active SELLING offer on the item with filled units
+  // (qty>0) priced above the live instabuy (row.quickSell). Feeds momVerdict's Gate-D fill-progress
+  // softening: an ask filling above the clear beats repricing down.
+  for (const it of held) {
+    const ask = asks.find(a => a.item === it.id);
+    it.askFilling = !!(ask && ask.qty > 0 && it.row.quickSell != null && ask.offer > it.row.quickSell);
+  }
   const targets = [];
   for (const s of targetSpecs) targets.push(await buildItem(s, map, guide));
   const bidItems = [];
@@ -420,7 +438,7 @@ async function main() {
   // O1 suggestions ledger: log every held/target read at emit time, unconditionally. `class` is
   // watch's richer classify() taxonomy label; verdict is the concise action token for the read.
   const heldVerdict = it => {
-    const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m);
+    const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m, undefined, lotCtxOf(it));
     if (mv) return mv.verdict;
     if (it.row.falling) return 'FALLING';
     if (it.row.quickSell != null && it.be != null && it.row.quickSell < it.be) return 'UNDERWATER';
@@ -503,7 +521,7 @@ async function main() {
       `×${qty} @ ${fmtP(Math.round(avgCost))}${listed ? ' · ' + listed : ''}${bidNote}`,
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
-    notes.push(`- ${name}: ${firstSentence(heldAction(row, be, lotValue, ts5m))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+    notes.push(`- ${name}: ${firstSentence(heldAction(row, be, lotValue, ts5m, lotCtxOf(it)))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
     // V1/V2 output-only context: cross-pass deltas + structural-support levels. Guarded so a
     // state failure never breaks the pass (observability only, like logGuideChanges).
     try {

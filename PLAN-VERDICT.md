@@ -86,10 +86,17 @@ authority — watch.mjs remains decision support; Ben places every offer.
   an older one; strictly-declining → N-day floor; cut-trigger = support−δ and strictly below;
   supportLevels bundles both / null when unknown; <2 lows → null; lookback window bounds the series.
 
-### V3 — lot-context softening of the Gate-D CUT-CANDIDATE — **PENDING**
-- **Files:** `js/quotecore.js` (`momVerdict` gains an OPTIONAL `lotCtx={buyTs, fillProgress}` arg),
-  `pipeline/quotecore.test.mjs` (new gate fixtures + the byte-identical breakdown-cut regression),
-  callers pass lotCtx (`watch.mjs`, `quote.mjs --positions`, trends.js reviewPositions).
+### V3 — lot-context softening of the Gate-D CUT-CANDIDATE — **DONE (0.52.0)**
+- **Files:** `js/quotecore.js` (`momVerdict` gains an OPTIONAL `lotCtx={buyTs, askFilling}` 6th arg
+  + exported `FRESH_HOURS=1` placeholder), `pipeline/quotecore.test.mjs` (6 new V3 fixtures incl.
+  the byte-identical breakdown-cut regression — now 33 checks), callers pass lotCtx (`watch.mjs`
+  held rows: buyTs from the open lot + askFilling = an active ask filled>0 above the clear price;
+  `quote.mjs --positions`: buyTs only, askFilling undefined; `js/trends.js reviewPositions`: buyTs
+  from `t.opened`), `pipeline/lib/positions.mjs` (`readOpenPositions` groups carry `buyTs` = oldest
+  lot), `js/watch.js` + `js/watchcore.js` (verdict-string reconcile), docs (MONITORING §4 /
+  `/positions` §3 v1.13 / CLAUDE.md). **Note:** the plan draft said `fillProgress`; shipped as the
+  clearer boolean `askFilling`. New verdicts: **WATCH — fresh entry** (entry-age) / **HOLD — ask
+  filling** (fill-progress) — both hold ≥ break-even, neither is an alert.
 - **APP_VERSION:** **YES** (deployed app inherits — trends.js reviewPositions renders it).
 - **Tag:** BEHAVIOR CHANGE.
 - **What it does:** entry age (from `buyTs`, carried on open lots in positions.json) + fill-progress
@@ -167,7 +174,7 @@ cost the bludgeon exit; softening or delaying it is the failure mode to guard.
 ## Status
 - V1 — DONE (this commit)
 - V2 — DONE (this commit)
-- V3 — PENDING
+- V3 — DONE (0.52.0)
 - V4 — PENDING
 - V5 — PENDING
 

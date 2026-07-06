@@ -37,6 +37,13 @@ export const breakEven = buy => {
 // tunable; lives here (the shared node+browser module) so reviewPositions and quote.mjs --positions
 // use ONE constant and can never drift.
 export const BIG_TICKET_GP = 10_000_000;
+// V3 lot-context softening of the Gate-D clean-momentum CUT-CANDIDATE (see momVerdict). A lot
+// bought less than FRESH_HOURS ago is DEFINITIONALLY underwater on the instant-clear price — a
+// patient fill hasn't had its thesis window to work yet — so the "a genuine trough would have
+// recovered by now" persistence-cut doesn't apply, "by now" being minutes. PLACEHOLDER (Ben's
+// chosen 1h start) — monitor the real loop cadence and tune; cited nowhere as calibrated. Softens
+// ONLY Gate-D; it NEVER touches the Gate-2 breakdown CUT.
+export const FRESH_HOURS = 1;
 
 // --- PLAN-3 underwater-triage tunables (named, not magic numbers) --------------------------
 // GATE 0 (quote reliability). A live /latest print older than STALE_QUOTE_MIN minutes is stale
@@ -336,15 +343,22 @@ export function moveShape(ts5m){
      GATE 2  mom breakup                      → HOLD_STRONG
              mom breakdown, small-lot shock   → SHOCK_WATCH (one more cycle)
              mom breakdown otherwise          → CUT / HOLD_WATCH / CLEAR (unchanged matrix)
-     D-esc.  mom clean but underwater through a liquid window → CUT-CANDIDATE
+     D-esc.  mom clean but underwater through a liquid window → CUT-CANDIDATE, UNLESS lotCtx
+             softens it (V3): a lot bought <FRESH_HOURS ago → WATCH — fresh entry; an own ask
+             actively filling above the clear price → HOLD — ask filling. These softenings apply
+             ONLY to this Gate-D CUT-CANDIDATE; they NEVER reach the Gate-2 breakdown CUT above,
+             so the byte-identical breakdown-cut invariant holds (V3 regression fixture proves it).
      else    null → caller keeps its existing regime-based verdict
    Params: row (a computeQuote row — needs .mom/.quickSell/.rawBandHi/.optSell/.rising/.reliable/.ordered),
    breakEvenPrice = breakEven(avgCost) (tax-capped; see the breakEven definition above),
    lotValue = qty×avgCost (vs BIG_TICKET_GP). ts5m/now are
    optional — pass the full 5m series (and now, ms) to activate Gates 1/2-shape/D; without them
-   the tree degrades to Gate 0 + the original breakdown matrix. Returns null or
-   { action, verdict, listAt, cls, gate, why }; listAt is a price or null (HOLD, no reprice). */
-export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now){
+   the tree degrades to Gate 0 + the original breakdown matrix. lotCtx (V3) is optional too —
+   { buyTs (unix SECONDS the lot was bought), askFilling (bool: the held lot's own ask is
+   transacting above the clear price) } — when omitted, momVerdict is IDENTICAL to before (the
+   ts5m/now optional-degradation precedent), so every existing caller is unaffected. Returns null
+   or { action, verdict, listAt, cls, gate, why }; listAt is a price or null (HOLD, no reprice). */
+export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
   if(!row) return null;
   const instabuy=row.quickSell;   // clear-now price (live instabuy)
   // GATE 0 — is this reading even a price? An unreliable quote yields NO price action, and a
@@ -406,6 +420,26 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now){
   if(underwater && ts5m){
     const uw=underwaterHours(ts5m, breakEvenPrice);
     if(uw.coveredLiquidPeak){
+      // V3 — lot-context softening, applied ONLY to this Gate-D clean-momentum persistence cut
+      // (mom==='clean', so the mom==='breakdown' CUT above is never reached from here — the
+      // byte-identical breakdown invariant is structurally preserved). Both branches downgrade
+      // to a HOLD/WATCH; neither is an alert.
+      const askFilling=!!(lotCtx && lotCtx.askFilling);
+      const buyTs=lotCtx && lotCtx.buyTs;
+      const nowMs2=(now!=null)?now:Date.now();
+      // (1) fill-progress beats repricing down: an own ask actively transacting ABOVE the clear
+      //     price is already exiting better than the instant-clear — hold it, don't reprice down.
+      if(askFilling){
+        return {action:'HOLD_FILLING', verdict:'HOLD — ask filling', listAt:breakEvenPrice, cls:'gain', gate:'D',
+          why:'the band has printed below break-even for ~'+uw.hours.toFixed(1)+'h including a liquid window, but your own ask is actively filling ABOVE the clear price ('+fmtP(instabuy)+') — an ask transacting above the clear beats repricing down. Hold it and let the ask keep filling; don’t chase the price down.'};
+      }
+      // (2) entry-age: a fresh patient fill is definitionally underwater on the instant-clear
+      //     price and hasn't had its thesis window — the persistence-cut's "would have recovered
+      //     by now" is minutes here, not evidence. Give it the window; keep the ask ≥ break-even.
+      if(buyTs!=null && (nowMs2 - buyTs*1000) < FRESH_HOURS*3600*1000){
+        return {action:'HOLD_FRESH', verdict:'WATCH — fresh entry', listAt:breakEvenPrice, cls:'gold', gate:'D',
+          why:'the band has printed below break-even for ~'+uw.hours.toFixed(1)+'h including a liquid window, but this lot was bought under '+FRESH_HOURS+'h ago — a fresh patient fill is definitionally underwater on the instant-clear price, and its thesis window hasn’t elapsed. Hold the ask ≥ break-even ('+fmtP(breakEvenPrice)+') and re-assess once it has had time to work; do NOT cut a brand-new fill on the instant read.'};
+      }
       return {action:'CUT', verdict:'CUT-CANDIDATE', listAt:instabuy, cls:'loss', gate:'D',
         why:'no live 2h break, but the band has printed below break-even for ~'+uw.hours.toFixed(1)+'h including a liquid (busy-hour) window — a genuine daily trough would have recovered when the book filled. This is persistence, not the clock: list to clear at the instabuy ('+fmtP(instabuy)+').'};
     }

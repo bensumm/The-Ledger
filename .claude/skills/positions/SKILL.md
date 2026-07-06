@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.12
+version: 1.13
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -79,6 +79,8 @@ verdict; you translate it into the action line:
 | HOLD — list high | Momentum broke UP (fresh 2h high / `mom` breakup) — list at the 2h top / patient edge and let it run. |
 | HOLD — watch | A lone 2h pullback against a *rising* regime on a sub-`BIG_TICKET_GP` lot — usually noise, not a breakdown; hold and watch, it may reabsorb (no reprice, `listAt` null). |
 | CUT-CANDIDATE | Underwater through a liquid window — persistence, not the clock. List to clear before a bigger loss. |
+| WATCH — fresh entry | The Gate-D CUT-CANDIDATE **softened** because the lot was bought under `FRESH_HOURS` (1h, placeholder) ago (V3). A fresh patient fill is *definitionally* underwater on the instant-clear price and hasn't had its thesis window. Hold the ask ≥ break-even and give it the window; do NOT cut a brand-new lot on the instant read. (A fresh lot that *genuinely breaks down* still CUTs — Gate 2 is untouched.) |
+| HOLD — ask filling | The Gate-D CUT-CANDIDATE **suppressed** because your own ask is actively filling ABOVE the clear price (V3). A fill above the clear beats repricing down — hold it and let the ask keep filling; don't chase the price down. |
 
 **Sell-velocity preference (Ben, 2026-07-04):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
 
