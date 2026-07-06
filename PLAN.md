@@ -1175,6 +1175,23 @@ documented sample thresholds clear (process rule 4).
   should know (lane M, 2026-07-04).
 - `mobile-fills.log` grows unbounded (append-only by design, like `coffer-manual.log`) — a
   future compaction of absorbed/tombstoned lines could trim it (lane M, 2026-07-04).
+- `monitor.mjs`'s "HELD POSITIONS" view diverges from the canonical book when tombstones
+  exist: it rebuilds a FIFO from the live exchange log(s) only, without applying
+  `coffer-manual.log` REMOVE tombstones, so already-purged lots reappear as phantom holds
+  (observed live 2026-07-05: 2× enhanced crystal teleport seed @ 3.345m showed held in
+  monitor while `positions.json` correctly had 1 open lot — the agent read monitor as truth
+  and gave wrong listing advice). Fix direction: fold the manual log's tombstones into
+  monitor's in-memory reconstruction (same event pipeline as sync), or label the section
+  honestly ("live-log FIFO — may include tombstoned lots"). Watch-loop session, 2026-07-05.
+- LH2's blind-warning heuristic can't catch the *false-EMPTY snapshot* restart variant: a
+  client bounce made the plugin write a fresh all-slots `EMPTY` snapshot (16:10:02
+  2026-07-05) while real offers stood in-game — log is FRESH (so the staleness gate never
+  fires) yet every slot reads empty and watch prints NOT LISTED for listed items. Detectable
+  signature: an all-slots-EMPTY re-emit burst arriving with no intervening fill/cancel
+  terminals while the pipeline FIFO says inventory is held (and/or offers were visible in
+  the immediately-prior log state). Display-only warning like LH2, same header channel —
+  never verdict input, and EMPTY stays non-evidence for fills (don't resurrect the deleted
+  cancel-to-EMPTY inference). Watch-loop session, 2026-07-05.
 - P1's `dedupeSnapshots()` runs inside `reconstruct()` (positions.json + `monitor.mjs`), but
   `outcomes.mjs` calls `collapseOffers`/`matchTrades` directly for campaign boundaries, so its
   campaigns can still see a snapshot-duplicate terminal as a phantom offer. Low impact (outcomes
