@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.11
+version: 1.12
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -34,6 +34,17 @@ it from `C:\dev\The-Ledger` — **never a git worktree** (a worktree is on a fea
 pushing pipeline artifacts from there would land them on the wrong ref). If this session is
 running inside a worktree and you can't reach the main checkout, SKIP the sync and say so —
 report that `positions.json` may be stale rather than pushing from the wrong branch.
+
+**Act on the stale-book banner — re-sync, don't just note it (Ben, 2026-07-06).** When
+`watch.mjs`'s summary prints `held basis positions.json Nm old ⚠ stale` and the age keeps
+CLIMBING across passes, the banner is a prompt to ACT: run `node pipeline/sync-fills.mjs`
+(from the MAIN checkout) to refresh the book BEFORE trusting or reporting the held count —
+do not merely mention the banner and report off the stale file. Anchor (the failure this
+fixes): on 2026-07-06 the book sat frozen ~2+ hours (age climbed past 300m) while positions
+had actually changed; the held count was reported as ×2/×1 off a stale book when the real
+position had already half-closed. (This complements the LW3 heartbeat — the heartbeat is the
+localhost app's liveness signal; this is the operator's rule when reading `watch.mjs` in a
+session.)
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
 `--positions` prints no open lots, the review isn't done: run `node pipeline/watch.mjs` —
@@ -70,6 +81,17 @@ verdict; you translate it into the action line:
 | CUT-CANDIDATE | Underwater through a liquid window — persistence, not the clock. List to clear before a bigger loss. |
 
 **Sell-velocity preference (Ben, 2026-07-04):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
+
+**HOLD defaults to the band-TOP premium — step a NEW/test lane down to a reachable level
+(Ben, 2026-07-06):** `momVerdict`'s HOLD emits "list @ <band top>" (the Optimistic 2h high)
+as its default patient-premium ask. That default is right for a PROVEN lane you're happy to
+wait on, but WRONG for a NEW/test lane, where velocity > premium: don't parrot the verdict's
+band-top note — surface a step-down explicitly. Price the ask at a level the item actually
+REACHES often (run the `windowrange.mjs --ask <level>` reach check the doctrine already
+requires), take a little less profit, and get a few real laps to learn the lane's fill
+behavior. Example (2026-07-06, one item — not a rule): a webweaver ask defaulted to 18.90m
+(reached only 2/7 in the next-8h window); stepping to 18.70m (+226k/lap, +1.25%, reached 4/5
+in the current regime) traded ~half the premium for a fillable ask. Break-even floor unchanged.
 
 **Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `windowrange.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
 

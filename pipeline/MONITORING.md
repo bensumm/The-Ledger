@@ -189,7 +189,9 @@ is the file's staleness since the **last regeneration**. Two things now regenera
 and, when running, the `watch-log.mjs` daemon (§14) that rewrites `positions.json`/`offers.json`
 locally on every log change with **zero git**. `watch.mjs` prints the file's age and flags it stale
 past 25m, so a very recent trade's lag is visible. Cost basis is static once bought, so lag rarely
-changes a call.
+changes a call. **When that stale flag's age keeps climbing across passes, act on it** — re-sync
+before trusting the held count (the operator rule lives in `/positions` §1's freshness area, near
+SY1); the banner is a prompt, not decoration.
 
 **Console `watch.mjs`/`monitor.mjs` remain the zero-lag authority** — they read the exchange log
 directly (`offers.mjs`, ~0 lag). The localhost app's live view (LW2, `FILLS-PIPELINE.md` §14) trails

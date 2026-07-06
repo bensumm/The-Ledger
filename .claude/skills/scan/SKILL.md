@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.10
+version: 1.11
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -73,6 +73,16 @@ This is the tribal layer the script can't do — apply ALL of these:
   band-floor bids only, sized for the good payout if hit (`/overnight`'s fill-realism
   check governs), and never leave a near-live chase bid resting unattended — it fills
   into the first dip with nobody watching. State which posture a recommendation assumes.
+  **New-lane exception — the FIRST entry into a NEW/unproven item is cautious even when
+  actively flipping (Ben, 2026-07-06).** Fill-aggression is *earned* by knowing the lane —
+  you've watched its fills and band behavior. On a brand-new item you're buying information
+  first, and an instant fill teaches you nothing about whether the price was good. So a first
+  entry gets a passive bid BELOW live (price improvement) and/or a smaller starter size, not a
+  fill-priced near-live bid. Frame it as a "test with an exit AND a cautious entry." Anchor
+  (2026-07-06): a webweaver-bow first entry priced at the band low (= live instasell) filled
+  near-instantly, and within ~5 minutes the instabuy dropped 18.51m→18.35m with momentum
+  flipping to a 2h breakdown — the adverse-selection cost of a fill-priced first entry,
+  materializing in real time.
 - **Band-top artifact detection.** A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
@@ -81,11 +91,18 @@ This is the tribal layer the script can't do — apply ALL of these:
   → overnight-retrace risk. Size small; skip for unattended holds.
 - **Phase tag on the Regime cell (2026-07-06).** `screen.mjs` annotates each Regime cell with a
   trajectory phase from the shared `phase()` (off the same 6h series, zero extra fetch): `spike`
-  (elevated over its own base — retrace risk, i.e. the fresh-repricer case above, read it as such),
-  `decay` (pulled back from a recent peak with lows STILL stepping down — a falling knife), or
-  `basing` (decayed back to the pre-spike base with lows FLATTENED — a possible base-buy). It's a
-  read aid, not a gate: a `spike` tag on a high grade is the size-small/skip cue; a `basing` tag is
-  the prompt to run the full `/positions` "trajectory read for confidence" before committing.
+  (elevated over its own base), `decay` (pulled back from a recent peak with lows STILL stepping
+  down — a falling knife), or `basing` (decayed back to the pre-spike base with lows FLATTENED —
+  a possible base-buy). It's a read aid, not a gate. **A `spike` tag is NOT automatically "about
+  to retrace" (Ben, 2026-07-06).** The Tier-1 tag can't tell froth from a genuine reprice: `spike`
+  covers BOTH the frothy-about-to-retrace case (DWH) AND a real reprice UP to a new sustained
+  higher level (webweaver: base ~15.7m repriced to ~18m, with recent daily LOWS *rising*/higher-lows,
+  not decaying). So treat a `spike` on an item you're considering as a PROMPT to run the full
+  `/positions` "trajectory read for confidence" (`windowrange.mjs --window 0-23 --nights 21`,
+  phase-mapped) and read the recent-low trend: RISING higher-lows = a healthy reprice (holdable);
+  lows flattening/falling from a recent peak = the froth-retrace case (size-small/skip). A `basing`
+  tag is likewise the prompt to run that same trajectory read before committing. Honesty (process
+  rule 4): the webweaver reprice is one item of evidence.
   `--phase-rescue` (OFF by default) is a gated trial that surfaces a `basing` faller the
   falling-exclusion would otherwise drop (grade-capped B, flagged provisional) — turn it on only to
   trial base-buy candidates, and treat its picks as unproven (thresholds are placeholders, one item
