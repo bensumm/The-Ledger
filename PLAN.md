@@ -333,6 +333,28 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   campaigns can still see a snapshot-duplicate terminal as a phantom offer. Low impact (outcomes
   is derived/gitignored), but adopt `dedupeSnapshots` there if campaign counts ever look off
   (P1, 2026-07-05).
+- **Cross-invocation fetch cache for the CLI scripts → chunk FC1 (Ben, 2026-07-06 — cut
+  redundant GE API pulls).** Each pipeline script (`watch.mjs`, `screen.mjs`, `quote.mjs`,
+  `windowrange.mjs`) spawns a cold `node` process with no shared fetch state, so running a
+  `windowrange` right after a `screen` re-pulls `/latest` + `/5m` + `/24h` rows the screen
+  already fetched seconds earlier — and a tight watch loop re-pulls the full quote stack per
+  item every pass even on a quiet, unchanged book. The browser app already dedupes within a
+  session (`js/marketfetch.js` `fetchTs`/`fetch24h` in-memory store) but the CLI has no
+  equivalent across processes. **Spec:** a small file-backed TTL cache in `$TMPDIR` (or a
+  gitignored `pipeline/.fetch-cache/`) wrapping the shared CLI fetch layer — key on
+  endpoint+item, store the JSON with a fetched-at stamp, serve from cache when age < TTL
+  (~60s for `/latest`/`/5m`; longer, ~10–15 min, for `/24h` and the 1h timeseries which move
+  slowly), bypass on a `--no-cache`/`--fresh` flag and for any write-committing path. Must be
+  a pure wrapper: **byte-identical numbers** (a cache hit returns the same payload a live
+  fetch would have within the TTL), gitignored, and inventory-registered in README at
+  creation. Measure first — confirm the endpoint layer is genuinely shared before building, and
+  size the TTLs so a stale cache can never feed a *decision* (a held/bid quote a verdict runs
+  on should stay short-TTL or bypass). Honesty: the win is real on back-to-back reads and quiet
+  loops; it does nothing for a book that's actually moving (cache correctly misses on fresh
+  data). Behavioral mitigations already in place (loop at 3m not 1m; don't double-run
+  `windowrange` when watch's window line answers it) capture most of the idle savings without
+  this — FC1 is the structural fix for the screen→windowrange→watch same-item overlap. Watch-loop
+  session, 2026-07-06.
 
 **Resolved / promoted:** `gateCandidates` testability → chunk **GC1**; LF/CRLF warnings →
 chunk **GA1**; `fetchInputs` triplication → chunk **X1**; `suggestions.jsonl` unbounded growth
