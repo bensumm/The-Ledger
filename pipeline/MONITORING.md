@@ -279,6 +279,41 @@ exit-discipline reminder). Content per item:
    market dropped to meet it, so you often have no exit margin. The scalp/market-make note is
    **gated to `LIQUID_RANGING_WIDE` only**.
 
+### Reporting a pass to Ben — the single-source-of-truth block format (Ben, 2026-07-05)
+
+The agent driving the loop does NOT relay the script's table + note lines verbatim — the
+script's verdict and the agent's judgment can disagree (fresh-entry noise, window-not-open,
+named overrides), and two verdicts in one report is the failure mode Ben rejected. Render
+each pass as **one stacked block per item** where the Verdict line is already the corrected
+call and the script's verdict appears nowhere else:
+
+```
+Item: <name> ×<qty>
+Guide: …
+Quick: …            (script's cells, verbatim)
+Optimistic: …
+Vol/d: …
+Momentum: …
+Regime: …
+Held@: …            (offer-only rows: Position: bid/ask n/m @ X instead)
+Break-even: …
+Verdict: <THE call> (overrides script's <verdict> — <one-clause reason>)   ← only when they differ
+
+Action plan:
+<exact prices with timing targets ("X, targeting Y" — the skills' timing-target rule),
+tripwires/step-down triggers named>
+
+────────────────────────────────────────  (separator between items)
+
+Summary:
+<the board's shape in 1–3 sentences: what rides which window, capital committed,
+the next decision trigger>
+```
+
+Numbers come from the script verbatim (never recomputed); only the Verdict and Action plan
+are the agent's. Quiet passes may compress to a one-liner — the block format is for passes
+where something is held, alerted, or changed.
+
 ### Honest sell-side framing (read this before repricing a sell)
 
 **You cannot "stay ahead of a drop" by chasing your ask down — that is just selling cheaper.**
