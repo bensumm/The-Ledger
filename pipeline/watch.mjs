@@ -58,6 +58,7 @@ import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './li
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
 import { loadState, saveState, computeDeltas, advanceState, convictionGate } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
+import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized per-held emit contract
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -571,22 +572,33 @@ async function main() {
     tableRows.push([heldVerdict(it), name,
       `×${qty} @ ${fmtP(Math.round(avgCost))}${listed ? ' · ' + listed : ''}${bidNote}`,
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
+    // V5 EMIT CONTRACT: one standard, consistently-ordered per-held block — verdict · conviction ·
+    // Δ-since-last · structural tripwire · sell/list-at (+ break-even) · fill-progress. The
+    // guaranteed pieces (verdict, list-at, break-even, fill-progress) are computed OUTSIDE the
+    // try so a context-field failure never drops the load-bearing sell line; the optional context
+    // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
-    notes.push(`- ${name}: ${firstSentence(heldAction(row, be, lotValue, ts5m, lotCtxOf(it)))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
-    // V1/V2 output-only context: cross-pass deltas + structural-support levels (computed in the
-    // held conviction loop above — RENDER only here). Guarded so a render failure never breaks a pass.
+    const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
+    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, lotCtxOf(it)));
+    let conviction = null, delta = null, tripwire = null;
     try {
-      const dl = it._deltas ? deltaLine(it._deltas) : null;
-      if (dl) notes.push(`    ${dl}`);
-      const sl = supportLine(it.ts1h);
-      if (sl) notes.push(`    ${sl}`);
-      // V4 arm-then-confirm: an armed-but-unconfirmed escalation stays VISIBLE here (never a headline
-      // ⚠ alert — that only fires once convictionGate escalates). Two armed shapes, distinct notes.
+      delta = it._deltas ? deltaLine(it._deltas) : null;
+      tripwire = supportLine(it.ts1h);
+      // V4 arm-then-confirm: an armed-but-unconfirmed escalation is VISIBLE here as the conviction
+      // field (never a headline ⚠ alert — that only fires once convictionGate escalates, in the
+      // headline block). Two armed shapes, distinct notes. Confirmed escalations live in the headline.
       if (it.gate && it.gate.armed && it.gate.reason === 'cut-candidate-armed')
-        notes.push(`    CUT-CANDIDATE armed — ${ordinal((it._deltas && it._deltas.passesUnderwater) || 1)} underwater pass through a liquid window; headline alert on the next consecutive underwater pass.`);
+        conviction = `CUT-CANDIDATE armed — ${ordinal((it._deltas && it._deltas.passesUnderwater) || 1)} underwater pass through a liquid window; headline alert on the next consecutive underwater pass.`;
       else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
-        notes.push(`    approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline alert if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support next pass.`);
+        conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline alert if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support next pass.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
+    notes.push(...heldNoteBlock({
+      name, verdict: verdictText, window: wl,
+      reliableReason: row.reliable ? null : row.reliableReason,
+      conviction, delta, tripwire,
+      listAt: heldListAt(row, be, mvHeld), breakEven: be,
+      fillProgress: listed || null,
+    }));
   }
 
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis

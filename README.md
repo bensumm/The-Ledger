@@ -122,7 +122,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (opportunity screen), `watch.mjs` (adaptive live position/offer monitor; also appends
     change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
     the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
-    `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`),
+    `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`; each held
+    lot's note block follows the V5 EMIT CONTRACT built by `lib/emit.mjs`),
     `monitor.mjs`
     (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
@@ -143,7 +144,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Thin `loadState`/`saveState` are the only fs surface — verdict strings untouched, `momVerdict`
     untouched), `levels.mjs`
     (V2 — PURE `structuralSupport`/`cutTrigger`: recent higher-low support + a δ-below cut-trigger
-    tripwire off the per-day lows watch.mjs already fetches — OUTPUT-ONLY context, no verdict)
+    tripwire off the per-day lows watch.mjs already fetches — OUTPUT-ONLY context, no verdict),
+    `emit.mjs` (V5 — PURE `heldNoteBlock`/`heldListAt`: the watch loop's stable, consistently-ordered
+    per-HELD-lot note block — `verdict · conviction · Δ · tripwire · sell/list-at (+ break-even) ·
+    fill-progress`, with the sell line GUARANTEED on every held lot; orders/formats already-computed
+    pieces, decides nothing — output-format-only)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
@@ -158,9 +163,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
     screen.mjs's pre-fetch gate stack), `watchstate.test.mjs` (V1 — cross-pass deltas + the
     consecutive-underwater/below-support counters' reset policy + V4 `convictionGate` arm-then-confirm
-    escalation incl. the breakdown-exempt invariant) and `levels.test.mjs` (V2 — higher-low support /
-    cut-trigger + graceful degradation) — all auto-discovered by `run-tests.mjs` (below), which CI
-    runs once
+    escalation incl. the breakdown-exempt invariant), `levels.test.mjs` (V2 — higher-low support /
+    cut-trigger + graceful degradation) and `emit.test.mjs` (V5 — the per-held emit contract: the
+    guaranteed sell line + fixed field order + `heldListAt` precedence) — all auto-discovered by
+    `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, and
     `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map

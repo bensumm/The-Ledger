@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.4
+version: 1.5
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -49,6 +49,10 @@ or it's realizing the band, and you say which (MONITORING.md's sell-side framing
 `node pipeline/quote.mjs --positions` → verdict + price-to-clear for anything acquired
 overnight. The incidental-inventory filter and verdict interpretation follow the shared
 `/positions` doctrine (invoke it via the Skill tool rather than duplicating its rules).
+If you read a `node pipeline/watch.mjs` pass here instead, each held lot's note block is the
+fixed V5 EMIT CONTRACT — verdict → conviction → Δ → tripwire → **guaranteed
+`sell: list @ X · break-even Y` line** → fill-progress (`MONITORING.md` "What each tick
+surfaces"); the sell line is where you read every held item's list-at without re-deriving it.
 
 ## 5. Encode learnings (self-improvement — after the review, never during)
 

@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.13
+version: 1.14
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -50,6 +50,16 @@ session.)
 `--positions` prints no open lots, the review isn't done: run `node pipeline/watch.mjs` —
 its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
 and report the offer set as the position set.
+
+**Reading `watch.mjs`'s per-held note block (the V5 EMIT CONTRACT).** Every held lot's note
+block is the same fixed, ordered shape: `verdict · conviction-state (V4 armed) · Δ-since-last
+(V1) · structural tripwire (V2) · sell/list-at (+ break-even) · fill-progress`. The
+**`sell: list @ X · break-even Y · <ask n/m or NOT LISTED>` line is ALWAYS present on a held
+lot** — that guaranteed field is where you read the current list-at + break-even for every held
+item without re-deriving it (Ben's rule: a fill you didn't see may have happened). Optional
+fields drop out when N/A; the sell line never does. Full contract: `MONITORING.md` "What each
+tick surfaces". (This is the SCRIPT's list-at; the step-down doctrine below can still override
+it for a new/test lane.)
 
 ## 2. Separate flip targets from incidental inventory
 

@@ -69,6 +69,17 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **watch.mjs per-held EMIT CONTRACT** (V5, pipeline+docs only — NO APP_VERSION) — the pure
+  `heldNoteBlock()` in `pipeline/lib/emit.mjs` (fixture-pinned `pipeline/emit.test.mjs`) makes each
+  held lot's note block ONE stable, consistently-ordered shape: `verdict · conviction-state (V4
+  armed) · Δ-since-last (V1) · structural tripwire (V2) · sell/list-at (+ break-even) · fill-progress`.
+  **Don't-rebuild / the load-bearing rule:** the **sell/list-at + break-even line is ALWAYS emitted on
+  a held lot** (`sell: list @ X · break-even Y · ask n/m`), guaranteed even if the optional context
+  fields fail to compute — Ben's standing rule (2026-07-06): always state the sell price for every
+  held item, since a fill you didn't see may have happened. `heldListAt` prefers the shared
+  momVerdict `listAt`, else the band-top-floored-at-BE fallback — never re-fork that. OUTPUT-FORMAT-
+  ONLY (no verdict/alert/row-selection change). Full state: `PLAN-VERDICT.md` V5, `MONITORING.md`
+  "What each tick surfaces" (the emit-contract block).
 - **Conviction gating — arm-then-confirm alerts** (V4, pipeline-only — NO APP_VERSION) — the pure
   `convictionGate()` in `pipeline/lib/watchstate.mjs` gates whether a held verdict escalates to a
   headline ⚠ ALERT in `watch.mjs` (verdict strings UNCHANGED; `js/quotecore.js` untouched). A Gate-D
@@ -386,9 +397,16 @@ Script facts the skills rely on (current behavior, not doctrine):
 - `watch.mjs` watches every **position**, where a position = *any committed capital*: held
   inventory PLUS every active GE offer (Ben's definition, 2026-07-04; shared log reader
   `pipeline/lib/offers.mjs`). Output is headline (alerts up front) → one numbers-only
-  table (Verdict/Item/Position + the canonical quote columns) → one note line per item →
+  table (Verdict/Item/Position + the canonical quote columns) → a per-item note block →
   summary footer (2026-07-05 reformat; shape documented in MONITORING.md "What each tick
-  surfaces"). Asks annotate their held row's Position cell (`ask n/m @ X` / `NOT LISTED`);
+  surfaces"). Each HELD lot's note block follows a **stable, ordered EMIT CONTRACT (V5,
+  `pipeline/lib/emit.mjs` `heldNoteBlock`)**: `verdict · conviction-state (V4 armed) ·
+  Δ-since-last (V1) · structural tripwire (V2) · sell/list-at (+ break-even) · fill-progress`,
+  same fields in the same order every pass, optional fields dropped when N/A. The
+  **sell/list-at + break-even field is ALWAYS emitted on a held lot** (`sell: list @ X ·
+  break-even Y · ask n/m`) — the standing rule (Ben, 2026-07-06): always state the sell price
+  for every held item, since a fill you didn't see may have happened. It's output-format-only
+  (no verdict/alert change). Asks annotate their held row's Position cell (`ask n/m @ X` / `NOT LISTED`);
   bids get their own rows with verdicts BID-OK / BID-BEHIND / CROSSING / CANCEL-BID
   (only CANCEL-BID — adverse-selection fill risk — alerts). Offers under 100k total value
   are noise, collapsed to one line. Each bid row and listed-held row also prints a `window`

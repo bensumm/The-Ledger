@@ -270,10 +270,36 @@ Output shape (2026-07-05): a one-line **HEADLINE** (`all quiet` / `⚠ N ALERTS`
 board's held/bid/target counts) with alert details directly under it → one **numbers-only
 TABLE** (`Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime |
 Break-even` — Quick/Optimistic cells on the canonical table-v2 basis; one row per held
-lot, resting offer, or target) → one compact **note line per item** (the action's first
-sentence + the window read's key number) → a **SUMMARY** footer (held exposure + bid
-capital totals, alert count, positions/log provenance, the `/loop` line, and the
-exit-discipline reminder). Content per item:
+lot, resting offer, or target) → a compact **note block per item** → a **SUMMARY** footer
+(held exposure + bid capital totals, alert count, positions/log provenance, the `/loop`
+line, and the exit-discipline reminder).
+
+**Per-held EMIT CONTRACT (V5 — the stable, ordered note block).** V1–V4 grew each held lot's
+note organically; V5 fixes it into ONE predictable block so a reader (human or LLM) always gets
+the same fields in the same order and can rely on them. The block is built by the pure
+`lib/emit.mjs` `heldNoteBlock()` (fixture-pinned in `pipeline/emit.test.mjs`) — it ORDERS +
+FORMATS already-computed pieces and decides nothing (output-format-only; no verdict/alert/row-
+selection change). The header line is `- <name>: …`; every other field is a nested (4-space)
+sub-line. Field order, always the same:
+
+1. **verdict** — the momVerdict/offerVerdict action's first sentence (+ the window read's key
+   number, + a `⚠ <reason>` reliability flag when the quote is soft), on the header line.
+2. **conviction-state** (V4) — the arm-then-confirm note, when armed. Omitted when not armed.
+   (Confirmed escalations appear in the HEADLINE, not here; this field surfaces the ARMED state.)
+3. **Δ-since-last** (V1) — the cross-pass delta line, when a signal is informative. Omitted on a
+   first-seen / reset / all-quiet pass.
+4. **structural tripwire** (V2) — `support X · cut-trigger Y`, when computable. Omitted when <2
+   usable daily lows.
+5. **sell/list-at (+ break-even) + fill-progress** — `sell: list @ X · break-even Y · <ask n/m
+   or NOT LISTED>`. This field is **ALWAYS emitted on a held lot, unconditionally** — the standing
+   user rule (Ben, 2026-07-06): *always state the sell price for every held item, because a fill
+   you didn't see may have happened; it saves a re-ask.* The list-at is `breakEven()`-floored (never
+   below break-even) and is the shared momVerdict's `listAt` when it has one, else the same band-top-
+   floored-at-BE fallback the action prose uses (`heldListAt`), so the guaranteed field never drifts
+   from the verdict. It is guaranteed even if the optional context fields (2–4) fail to compute.
+
+Resting-bid and target rows keep their own single note line (buy-side; no held sell price). Content
+of the numbered signals, in more detail:
 
 1. **DROP / CUT ALERTS** (held breakdowns + CANCEL-BID offers), in the headline block.
    Escalation reuses the chunk-6 shared cut-trigger `momVerdict()`: a **2h breakdown on a held

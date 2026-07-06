@@ -141,14 +141,23 @@ authority — watch.mjs remains decision support; Ben places every offer.
   immediate structural escalation; a non-convincing graze arms, 2nd below-support pass escalates;
   **INVARIANT** — a Gate-2 breakdown CUT escalates immediately regardless of pass count / conviction.
 
-### V5 — standardize the emit contract + doc reconcile — **PENDING**
-- **Files:** `pipeline/watch.mjs` (unified per-item line), `pipeline/MONITORING.md`, `CLAUDE.md`,
-  `.claude/skills/positions/SKILL.md`, `.claude/skills/morning/SKILL.md`.
+### V5 — standardize the emit contract + doc reconcile — **DONE**
+- **Files:** NEW pure `pipeline/lib/emit.mjs` (`heldNoteBlock`/`heldListAt`), NEW
+  `pipeline/emit.test.mjs` (5 checks), `pipeline/watch.mjs` (held loop routes through the emitter),
+  `pipeline/MONITORING.md`, `CLAUDE.md`, `README.md` (file inventory), `.claude/skills/positions/SKILL.md`
+  (v1.14), `.claude/skills/morning/SKILL.md` (v1.5).
 - **APP_VERSION:** none (pipeline+docs).
 - **Tag:** OUTPUT-ONLY (format) + docs.
-- **What it does:** one standard emit line — `verdict · conviction · Δ-since-last · tripwire ·
-  fill-progress` — and a reconciliation pass so MONITORING/CLAUDE/`/positions`/`/morning` describe the
-  temporal layer consistently (process rule 8).
+- **What it does:** one standard, consistently-ordered per-HELD-item note block —
+  `verdict · conviction-state (V4 armed) · Δ-since-last (V1) · structural tripwire (V2) ·
+  sell/list-at (+ break-even) · fill-progress` — built by the pure `heldNoteBlock()`. The
+  **sell/list-at + break-even field is ALWAYS emitted on a held lot**, guaranteed even if the
+  optional context fields fail to compute (Ben's standing rule, 2026-07-06: always state the sell
+  price for every held item since a fill you didn't see may have happened). `heldListAt` prefers the
+  shared momVerdict `listAt`, else the band-top-floored-at-BE fallback the action prose uses (no
+  drift). Decides nothing — orders/formats already-computed pieces; no verdict/alert/row-selection
+  change. Docs reconciled so MONITORING/CLAUDE/README/`/positions`/`/morning` describe the emit
+  contract consistently (process rule 8).
 
 ### V6 — recovery-read (recover-vs-drop forecast, ADVISORY) — **PENDING**
 - **Files:** a PURE composer (new `pipeline/lib/` helper, or `js/quotecore.js` if the app will share
@@ -235,7 +244,7 @@ cost the bludgeon exit; softening or delaying it is the failure mode to guard.
 - V2 — DONE (this commit)
 - V3 — DONE (0.52.0)
 - V4 — DONE (pipeline-only — no APP_VERSION)
-- V5 — PENDING
+- V5 — DONE (pipeline+docs — no APP_VERSION)
 - V6 — PENDING (recovery-read forecast + the capital-awareness companion)
 
 Fold this file into PLAN.md and delete it when V6 ships (the per-topic-plan rule in CLAUDE.md).
