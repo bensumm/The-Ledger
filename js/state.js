@@ -19,7 +19,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.50.0';
+export const APP_VERSION='0.51.0';
 // LW2: true only when the app is served from a local dev host (serve.cmd → localhost). Used to
 // gate the local live-refresh poll + freshness stamp; on the deployed origin (bensumm.github.io)
 // it's false and every LW2 behavior stays off (M1 banner + Refresh button remain the mechanism).
@@ -54,6 +54,7 @@ export const STATE = {
   watchlist: [], trades: [], pinned: [], bankroll: 300_000_000, slots: 6, strategy: 'balanced',
   fillsHidden: [], fillsUnmatched: [], fillsTs: 0,   // auto-populated ledger from positions.json (RuneLite fills)
   offers: [], offersTs: 0,   // LW2: live GE offer snapshot from offers.json (localhost poll) — data home for the future Watch tab
+  heartbeatTs: 0,   // LW3: epoch-seconds of the local daemon's last heartbeat.json write (localhost poll) — DAEMON LIVENESS, independent of book changes (positions.generatedAt freezes on quiet no-fill stretches)
 
   fillsPending: [],   // optimistic rows for manual entries just written to coffer-manual.log, shown until the next sync absorbs them
   catById: {}, catByName: {},   // full-catalog indices (every mapped item, no flip floor)

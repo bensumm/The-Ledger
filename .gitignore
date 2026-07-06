@@ -4,3 +4,4 @@
 pipeline/.cache/
 pipeline/.guide-history.jsonl
 outcomes.json
+heartbeat.json

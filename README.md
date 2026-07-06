@@ -88,6 +88,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
   freshness and stashes it on `STATE.offers`, which the **Watch tab** (0.49.0, `js/watch.js`)
   renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14)
+- `heartbeat.json` — **gitignored, local-only, never deployed** — a tiny daemon-liveness
+  heartbeat (`{app:'the-coffer-heartbeat', generatedAt:<ISO>}`) written by `watch-log.mjs`
+  every ~30s (LW3). The localhost app polls it (`js/ledger.js` `fetchHeartbeat`) for the
+  "watcher live" freshness stamp — liveness INDEPENDENT of book changes, because
+  `positions.json`'s `generatedAt` only advances on a fill and legitimately freezes during
+  quiet no-fill stretches. Does zero git; a stale heartbeat (>90s) is what trips the
+  "watcher down?" warning
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
   with local `STATE.watchlist` and `screen.mjs` always scans it (S3); app writes it back via
   the GitHub contents API (`js/github.js`)
@@ -106,7 +113,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `fills.json`/`positions.json`/`offers.json`, commit + push; `--local` writes them with
     **zero git** for desk-side freshness — LW1, exported `regenerate()` core),
     `watch-log.mjs` (LW1 local daemon — `fs.watch` the exchange-logger dir + `regenerate()`
-    in-process on every change, ~10s debounce, **zero git**; started manually via
+    in-process on every change, ~10s debounce, **zero git**; also writes a liveness
+    `heartbeat.json` at the repo root every ~30s (LW3, zero git) so the localhost stamp shows
+    "watcher live" independent of book changes; started manually via
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
@@ -214,11 +223,16 @@ launcher's `http.server`, falls back to `python3`, then `npx serve`) and open
 `serve.cmd` is also the **live desk experience** (LW2): it now `start /b`s the
 `watch-log.mjs` daemon in the same console (one Ctrl+C stops both, commit `74e437a`), so no
 separate `watch-log.cmd` step is needed. On localhost the app polls `positions.json` +
-`offers.json` every ~30s, so with RuneLite running every fill / cancel / reprice shows up in
-the local app within ~40s — no keystrokes, **zero git commits**. The **Watch tab** (0.49.0)
-is the desk surface over this data: verdict-first held cards, active offers, today's fills,
-with a "book synced hh:mm" stamp instead of the deployed Refresh-positions banner. On
-`bensumm.github.io` the poll is off and the M1 banner + button are unchanged.
+`offers.json` + `heartbeat.json` every ~30s, so with RuneLite running every fill / cancel /
+reprice shows up in the local app within ~40s — no keystrokes, **zero git commits**. The
+**Watch tab** (0.49.0) is the desk surface over this data: verdict-first held cards, active
+offers, today's fills, with a two-part freshness stamp instead of the deployed
+Refresh-positions banner — **`watcher live hh:mm`** (from `heartbeat.json`, the real daemon
+liveness signal — warns "watcher down?" if >90s stale) **·** `book synced hh:mm` (from
+`positions.json`, informational, no age warning since a frozen book is normal when trading is
+quiet). This split (LW3) fixed a false "is the watcher running?" alarm the old
+positions-only stamp raised during no-fill stretches. On `bensumm.github.io` the poll is off
+and the M1 banner + button are unchanged.
 
 Data sources are the OSRS Wiki real-time prices API, the in-game GE guide price
 (wiki module + weirdgloop history), all fetched client-side.

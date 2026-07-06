@@ -10,6 +10,37 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Daemon liveness heartbeat — split "watcher live" from "book synced" (0.51.0, LW3)
+The localhost freshness stamp conflated two different facts and produced a false "is the watcher
+running?" alarm during quiet trading. The stamp was derived entirely from `positions.json`'s
+`generatedAt` (`STATE.fillsTs`) — but the `watch-log.mjs` daemon only rewrites `positions.json`
+when the BOOKED positions change (a fill). During a no-fill stretch `positions.generatedAt`
+legitimately freezes, so the stamp looked dead (and warned "no update in 10+ min; is the watcher
+running?") even though the daemon was alive and watching. The daemon is purely event-driven
+(`fs.watch`, no polling fallback), so there was NO signal that measured daemon liveness independent
+of book changes.
+
+The fix adds a real heartbeat and separates liveness from book-change:
+- **Daemon (`pipeline/watch-log.mjs`):** a `setInterval` (`HEARTBEAT_MS`, 30s) — plus one write at
+  startup — writes a tiny root `heartbeat.json` (`{app:'the-coffer-heartbeat', generatedAt:<ISO>}`)
+  via `fs.writeFileSync` in a try/catch (a heartbeat failure never crashes the daemon). It does
+  **ZERO git and ZERO log re-read** — pure liveness, regenerating nothing; explicitly NOT the
+  "polling fallback" the plan avoided. It lands at the repo ROOT (new: `watch-log.mjs` imports the
+  now-exported `REPO_DIR` from `sync-fills.mjs`, honoring the same `--repo-dir` override the
+  `regenerate()` call uses) so the same-origin serve can fetch it. `heartbeat.json` is gitignored
+  (never committed/pushed), so the FILLS-PIPELINE §12 "no unattended writer to `main`" invariant is
+  preserved.
+- **App (`js/ledger.js`, localhost-only):** `pollLocal` now also fetches `heartbeat.json` (new
+  `fetchHeartbeat`, seeded in `startLocalPoll` alongside `fetchOffers`) into `STATE.heartbeatTs`
+  (new on the STATE object, `js/state.js`). `renderLocalStamp` now shows TWO facts: **`watcher live
+  hh:mm`** from the heartbeat (older than `HEARTBEAT_STALE_MS` = 90s → red "watcher down? — restart
+  node pipeline/watch-log.mjs", `.warn` class) — THIS line carries the liveness warning; and
+  **`book synced hh:mm · N open offers`** from `STATE.fillsTs`, which NO LONGER warns on age (a
+  frozen book is normal when trading is quiet). The old 10-min book-age warning (`LOCAL_STALE_MS`)
+  is removed. The deployed origin (`bensumm.github.io`, `IS_LOCALHOST` false) path — the M1 re-fetch
+  banner + Refresh-positions button — is byte-identical; all heartbeat logic lives inside the
+  localhost-only branch.
+
 ### Suggestlog path regression fix (SL1, pipeline-only — no APP_VERSION bump)
 OR2 moved `suggestlog.mjs` from `pipeline/` into `pipeline/lib/` but left its ledger path as
 `HERE/'..'/suggestions.jsonl` — correct from the old location, but from `lib/` it resolves to

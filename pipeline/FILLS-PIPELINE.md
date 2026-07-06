@@ -612,7 +612,7 @@ third committer and never require `.runelite` logs). Deliberately NOT built — 
 PC-off phone staleness *may* eventually justify it, but that's Ben's call, not an executor's. Until
 then the Refresh button is the freshness path.
 
-## 14. Local log-watcher — desk-side freshness without an unattended writer (LW1/LW2, 0.48.0)
+## 14. Local log-watcher — desk-side freshness without an unattended writer (LW1/LW2, 0.48.0; heartbeat LW3, 0.51.0)
 
 **Origin (Ben, 2026-07-05):** "Can we have some process watch the log file and automatically
 sync?" Chosen answer — **option 1: regenerate locally on every log change, never auto-commit/push.**
@@ -677,15 +677,37 @@ point** (a scheduled daemon would reintroduce an unattended writer). It calls th
 reconstruction chain, a client-restart EMPTY burst regenerates identical artifacts harmlessly
 (`buildEvents()` ignores EMPTY lines).
 
+**Liveness heartbeat (LW3, 0.51.0).** `regenerate()` only rewrites `positions.json` when the BOOKED
+positions change — so during a quiet no-fill stretch `positions.generatedAt` legitimately freezes,
+which is a book-change signal, NOT a daemon-liveness signal. Reading it as liveness produced a false
+"is the watcher running?" alarm on the localhost stamp. To measure liveness independently, the daemon
+also writes a tiny gitignored root-level `heartbeat.json` (`{app:'the-coffer-heartbeat',
+generatedAt:<ISO>}`) once at startup and then every `HEARTBEAT_MS` (30s) via `setInterval`, wrapped in
+try/catch (a heartbeat failure never crashes the daemon). It lands at the repo ROOT (imported
+`REPO_DIR` from `sync-fills.mjs`, honoring the same `--repo-dir` override the `regenerate()` call
+uses) so the same-origin `serve` can fetch it. The heartbeat does **ZERO git and ZERO log re-read** —
+pure liveness, regenerating nothing; it is explicitly NOT the "polling fallback" the plan avoided, and
+because `heartbeat.json` is gitignored (never committed/pushed) the §12 "no unattended writer to
+`main`" invariant is preserved.
+
 ### 14.4 The LW2 consumer — localhost live-refresh (app, 0.48.0)
 The app is the daemon's consumer. On localhost (`IS_LOCALHOST` in `js/state.js` —
-`location.hostname` localhost/127.0.0.1), the app polls `positions.json` + `offers.json` every ~30s
-(`js/ledger.js` `startLocalPoll`), compares `generatedAt`, and only on a change re-runs the
-**existing M1 `syncFills()` merge** (no second merge path) and stashes the offers on
-`STATE.offers`/`STATE.offersTs` (consumed by the **Watch tab**, 0.49.0 `js/watch.js`, which renders
-them as verdict-tagged offer rows behind a staleness banner). It renders a compact
-"book synced hh:mm · N open offers" stamp (local time, stale-colored past ~10 min) **instead of** the
-M1 banner + Refresh button — the two never double-banner. On `bensumm.github.io` `IS_LOCALHOST` is
-false and behavior is byte-identical to 0.47.0 (M1 banner + button remain). Change detections log
+`location.hostname` localhost/127.0.0.1), the app polls `positions.json` + `offers.json` +
+`heartbeat.json` every ~30s (`js/ledger.js` `startLocalPoll`), compares `generatedAt`, and only on a
+change re-runs the **existing M1 `syncFills()` merge** (no second merge path) and stashes the offers
+on `STATE.offers`/`STATE.offersTs` (consumed by the **Watch tab**, 0.49.0 `js/watch.js`, which renders
+them as verdict-tagged offer rows behind a staleness banner). It renders a **two-part** freshness
+stamp (LW3) **instead of** the M1 banner + Refresh button — the two never double-banner:
+- **`watcher live hh:mm`** from `heartbeat.json` (`STATE.heartbeatTs`, `fetchHeartbeat`) — the real
+  daemon-liveness line. If the heartbeat is older than `HEARTBEAT_STALE_MS` (90s, ~3 missed beats) it
+  turns into a red **"watcher down? — restart node pipeline/watch-log.mjs"** warning. THIS line, not
+  the book line, carries the liveness alarm now.
+- **`book synced hh:mm · N open offers`** from `positions.json` (`STATE.fillsTs`) — informational,
+  **no age warning** (a frozen book is normal during quiet trading; the old ~10-min book-age warning
+  was the false alarm and is removed).
+
+On `bensumm.github.io` `IS_LOCALHOST` is false and behavior is byte-identical to 0.47.0 (M1 banner +
+button remain) — all heartbeat logic lives inside the localhost-only branch. Change detections log
 under the `'system'` scope. Net effect: with the daemon running, a fill/cancel/reprice shows in the
-desk app within ~40s (debounce + poll) with no keystrokes and **zero new git commits**.
+desk app within ~40s (debounce + poll) with no keystrokes and **zero new git commits**, and the
+"watcher live" line stays fresh even across a long no-fill stretch.

@@ -65,7 +65,7 @@ import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, event
 // never reads/writes Ben's real log or the live fills.json/positions.json.
 function argVal(name){ const i = process.argv.indexOf(name); return (i >= 0 && i + 1 < process.argv.length) ? process.argv[i + 1] : undefined; }
 const LOG_DIR   = argVal('--log-dir') || join(homedir(), '.runelite', 'exchange-logger'); // plugin output
-const REPO_DIR  = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';    // your git clone
+export const REPO_DIR  = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';    // your git clone (exported: watch-log.mjs imports it as the repo ROOT to place heartbeat.json same-origin)
 const FILLS_REL = 'fills.json';                                    // raw event stream, repo-relative
 const POSITIONS_REL = 'positions.json';                            // reconstructed trades/positions (app auto-populates Ledger from this)
 const OFFERS_REL = 'offers.json';                                  // LW1: flat snapshot of live GE offers (both modes; app renders w/ staleness banner)

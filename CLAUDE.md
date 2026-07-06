@@ -37,8 +37,10 @@ push to `main`).
   constraint was about zero-build Pages deploys, not mobile editing, so the split
   keeps zero-build while making the code far more reviewable/diffable. Local testing
   needs `serve.cmd` now (ES modules don't load over `file://`); see README. `serve.cmd` is also
-  the **live desk experience** (LW2): on localhost the app polls `positions.json`/`offers.json`
-  and, paired with the `watch-log.mjs` daemon, reflects fills/offers within ~40s with zero git.
+  the **live desk experience** (LW2): on localhost the app polls `positions.json`/`offers.json`/
+  `heartbeat.json` and, paired with the `watch-log.mjs` daemon, reflects fills/offers within ~40s
+  with zero git; the daemon's 30s `heartbeat.json` (LW3) drives a "watcher live" liveness stamp
+  that stays fresh even when the book is frozen during a quiet no-fill stretch.
 - **Fill-data pipeline**: closes the loop between the tool's trade suggestions and
   real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Lives
   in `pipeline/` (kept separate from the deployed app root): full design doc
@@ -110,10 +112,22 @@ full story.
   `js/quotecore.js`; `watch.mjs` routes through the same `offerVerdict` byte-identically). Per-item
   session notes persist under `watchnote:<id>` — **never log their contents** (L1). Full story:
   `CHANGELOG.md` 0.49.0.
+- **Daemon liveness heartbeat — separate "watcher live" from "book synced"** (0.51.0, LW3) — the
+  `watch-log.mjs` daemon now writes a gitignored root `heartbeat.json` (`{app,generatedAt}`) every
+  30s (`HEARTBEAT_MS`, imports `REPO_DIR` from `sync-fills.mjs` for the root path, zero git/zero
+  log-read); the localhost app polls it (`fetchHeartbeat`, `STATE.heartbeatTs`) and `renderLocalStamp`
+  now shows TWO lines — **`watcher live hh:mm`** (the liveness signal, warns "watcher down?" past 90s)
+  and **`book synced hh:mm · N offers`** (positions.generatedAt, no age warning). **Why:** the daemon
+  only rewrites `positions.json` on a book change, so a quiet no-fill stretch froze the old
+  positions-only stamp and raised a false "is the watcher running?" alarm — liveness now has its own
+  independent signal. **Don't-rebuild:** the heartbeat is pure liveness (regenerates nothing) and
+  gitignored — it is NOT a polling fallback and NOT an unattended writer to `main` (§12 preserved).
+  Full story: `FILLS-PIPELINE.md` §14, `CHANGELOG.md`.
 - **Local log-watcher — desk-side freshness, zero git in the daemon** (0.48.0, LW1/LW2) — a
   manual-start `pipeline/watch-log.mjs` daemon runs the git-free `regenerate()` core (also
   `sync-fills.mjs --local`), writing `fills.json`/`positions.json`/tracked `offers.json` locally on
-  every fill; on localhost the app polls them for a "book synced" stamp (`js/ledger.js`).
+  every fill; on localhost the app polls them for the freshness stamp (`js/ledger.js`; the "book
+  synced" line — the LW3 heartbeat adds the "watcher live" liveness line above it).
   **Don't-rebuild:** the daemon does **ZERO git** — that's how it gives live desk freshness while
   preserving the §12 invariant (no unattended writer **to `main`**). Never give it a Task Scheduler
   job or a commit/push (that reverses §12 — Ben's call, not scope creep), and never fold un-pulled

@@ -293,7 +293,7 @@ export async function refreshPositions(){
    Change is detected purely by generatedAt; only a CHANGE re-runs the existing M1 merge/render
    (syncFills — we do NOT build a second merge path). Overlapping ticks are skipped. */
 const LOCAL_POLL_MS=30000;              // ~30s cadence (daemon debounce is ~10s, so ≤~40s end-to-end)
-const LOCAL_STALE_MS=10*60*1000;        // stamp goes stale past ~10 min with no fresh sync
+const HEARTBEAT_STALE_MS=90*1000;       // LW3: heartbeat older than ~90s (3 missed 30s beats) = watcher down
 let localPollInFlight=false, localPollTimer=null;
 // Fetch offers.json same-origin (cache-busted like syncFills' positions.json). Stashes the flat
 // snapshot on STATE for the future Watch tab; on failure we keep the last-known offers.
@@ -307,6 +307,19 @@ async function fetchOffers(){
     STATE.offersTs=o.generatedAt?Math.floor(Date.parse(o.generatedAt)/1000):0;
   }catch(e){ /* keep last-known offers; positions.generatedAt still drives the stamp */ }
 }
+// LW3: fetch heartbeat.json same-origin (cache-busted). This measures DAEMON LIVENESS independent
+// of book changes — the daemon rewrites it every ~30s even during a quiet no-fill stretch (when
+// positions.generatedAt legitimately freezes). On failure keep the last-known value (transient);
+// the stamp then ages naturally and trips the watcher-down warning if the daemon really stopped.
+async function fetchHeartbeat(){
+  try{
+    const r=await fetch('heartbeat.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    const h=await r.json();
+    if(!h || h.app!=='the-coffer-heartbeat') return;
+    STATE.heartbeatTs=h.generatedAt?Math.floor(Date.parse(h.generatedAt)/1000):0;
+  }catch(e){ /* keep last-known heartbeatTs; it ages until the daemon writes again */ }
+}
 async function pollLocal(){
   if(localPollInFlight) return;         // skip this tick if the previous fetch is still running
   localPollInFlight=true;
@@ -319,6 +332,7 @@ async function pollLocal(){
     }catch(e){ /* transient; try again next tick, keep last state */ }
     const offBefore=STATE.offersTs;
     await fetchOffers();
+    await fetchHeartbeat();             // LW3: refresh the liveness signal every tick (drives the "watcher live" line)
     const posChanged=posTs!==null && posTs!==STATE.fillsTs;
     const offChanged=STATE.offersTs!==offBefore;
     if(posChanged || offChanged) logEvent('info','system','local watcher: '+(posChanged?'positions.json':'offers.json')+' changed — refreshing');
@@ -329,23 +343,35 @@ async function pollLocal(){
 export function startLocalPoll(){
   if(!IS_LOCALHOST || localPollTimer) return;   // deployed origin → no polling at all
   localPollTimer=setInterval(pollLocal, LOCAL_POLL_MS);
-  fetchOffers().then(renderFillsFresh);         // seed the offer count immediately (positions already fetched by init's syncFills)
+  Promise.all([fetchOffers(), fetchHeartbeat()]).then(renderFillsFresh);   // seed the offer count + liveness heartbeat immediately (positions already fetched by init's syncFills)
 }
-/* LW2: the localhost freshness stamp — one line, LOCAL time (repo convention), stale-colored
-   past ~10 min. "book synced" = positions.json's generatedAt (STATE.fillsTs), the moment the
-   local daemon last regenerated the book; the offer count is a minimal live indicator (no Watch
-   tab in this chunk). Reuses the .fillsfresh/.warn classes (M1) so styling stays in styles.css. */
+/* LW3: the localhost freshness stamp — now TWO facts on separate bases, LOCAL time (repo
+   convention). It used to conflate daemon-liveness with book-change by reading only
+   positions.generatedAt (STATE.fillsTs); but the daemon rewrites positions.json ONLY when the
+   booked positions change (a fill), so a quiet no-fill stretch froze the stamp and produced a
+   false "is the watcher running?" alarm. Split:
+     - watcher live  ← STATE.heartbeatTs (heartbeat.json, rewritten every ~30s regardless of fills).
+       THIS line carries the liveness warning: older than ~90s → red "watcher down?" + restart hint.
+     - book synced   ← STATE.fillsTs (positions.generatedAt) — the moment the book last CHANGED.
+       No longer warns on age (a frozen book is normal during quiet trading); keeps the offer count.
+   Reuses the .fillsfresh/.warn classes (M1) so styling stays in styles.css. */
 function renderLocalStamp(el){
-  const nOff=(STATE.offers||[]).length, offTxt=' · <b>'+nOff+'</b> open offer'+(nOff===1?'':'s');
   if(!STATE.fillsTs){
     el.className='fillsfresh';
     el.innerHTML='<span class="mini">Local watcher active — waiting for the first positions.json sync (run <b>node pipeline/watch-log.mjs</b>).</span>';
     return;
   }
-  const d=new Date(STATE.fillsTs*1000), hhmm=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  const stale=(Date.now()-STATE.fillsTs*1000)>LOCAL_STALE_MS;
-  el.className='fillsfresh'+(stale?' warn':'');
-  el.innerHTML='<span class="mini">book synced <b>'+hhmm+'</b>'+offTxt+(stale?' — no update in 10+ min; is the watcher running?':'')+'</span>';
+  const tm=ts=>new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  // Liveness line (heartbeat). A missing/stale heartbeat is the ONLY thing that warns now.
+  const hbStale=!STATE.heartbeatTs || (Date.now()-STATE.heartbeatTs*1000)>HEARTBEAT_STALE_MS;
+  const liveTxt=hbStale
+    ? '<span class="warn">watcher down? — restart <b>node pipeline/watch-log.mjs</b></span>'
+    : 'watcher live <b>'+tm(STATE.heartbeatTs)+'</b>';
+  // Book line (positions.generatedAt) — informational only, no age warning.
+  const nOff=(STATE.offers||[]).length, offTxt=' · <b>'+nOff+'</b> open offer'+(nOff===1?'':'s');
+  const bookTxt='book synced <b>'+tm(STATE.fillsTs)+'</b>'+offTxt;
+  el.className='fillsfresh'+(hbStale?' warn':'');
+  el.innerHTML='<span class="mini">'+liveTxt+' · '+bookTxt+'</span>';
 }
 /* M1 GitHub-sync settings panel (the mobile equivalent of “Link fills log…”). Never shows the
    token — only whether one is saved and which repo it targets. */
