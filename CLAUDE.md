@@ -285,7 +285,15 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `expGpDay` is below the floor *pre-rating* — the structural home of Ben's "never surface sub-500k"
   rule (was a `/scan` post-filter). Thin gp-flow qualifiers and held/asked items are exempt.
 - Net/u (inside the Quick/Optimistic cells) is after 2% tax. Regime = multi-day regimeDrift check
-  (flat/rising/falling label).
+  (flat/rising/falling label). `screen.mjs` additionally annotates the Regime cell with a **phase
+  tag** (`spike`/`decay`/`basing`) from the shared `phase()` (`js/quotecore.js`), computed off the
+  same 6h series `regimeDrift` already uses — **zero extra fetch** — e.g. `Flat -8% · basing`. It's a
+  display-only trajectory tell (where the item sits in a spike→decay→base arc), NOT a gate, and the
+  app never renders it (pipeline-only, so it ships without an `APP_VERSION` bump). `screen.mjs
+  --phase-rescue` (OFF by default → default output byte-identical) is an opt-in trial that surfaces a
+  `basing`-classified faller the falling-exclusion would otherwise drop, capped at grade B and flagged
+  provisional; its thresholds are unvalidated placeholders. Full trajectory method: `/positions`
+  "trajectory read for confidence".
 - Break-even = the smallest sell price that still nets the buy cost after the 2% GE tax, computed by
   the shared `breakEven()` in `js/quotecore.js` — **tax-capped, piecewise** (BE1): `buy` when `buy<50`
   (sub-50gp sells are tax-exempt), `buy + TAXCAP` (5m) once the cap binds at `buy > 245m` (`ceil(buy/0.98)`

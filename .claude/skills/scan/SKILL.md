@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.9
+version: 1.10
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -79,6 +79,17 @@ This is the tribal layer the script can't do — apply ALL of these:
   ROI looks too good.
 - **Fresh-repricer flag.** A large multi-day regime move = the item was recently repriced
   → overnight-retrace risk. Size small; skip for unattended holds.
+- **Phase tag on the Regime cell (2026-07-06).** `screen.mjs` annotates each Regime cell with a
+  trajectory phase from the shared `phase()` (off the same 6h series, zero extra fetch): `spike`
+  (elevated over its own base — retrace risk, i.e. the fresh-repricer case above, read it as such),
+  `decay` (pulled back from a recent peak with lows STILL stepping down — a falling knife), or
+  `basing` (decayed back to the pre-spike base with lows FLATTENED — a possible base-buy). It's a
+  read aid, not a gate: a `spike` tag on a high grade is the size-small/skip cue; a `basing` tag is
+  the prompt to run the full `/positions` "trajectory read for confidence" before committing.
+  `--phase-rescue` (OFF by default) is a gated trial that surfaces a `basing` faller the
+  falling-exclusion would otherwise drop (grade-capped B, flagged provisional) — turn it on only to
+  trial base-buy candidates, and treat its picks as unproven (thresholds are placeholders, one item
+  of evidence). Honesty rule (process rule 4): the classifier is new and unvalidated.
 - **Big-ticket caution.** High per-unit capital → each fill is expensive; require real
   gp-flow (units × net), not a unit count. The script now SURFACES these via the gp-flow gate,
   flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
