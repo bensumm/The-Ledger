@@ -56,10 +56,13 @@ import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
+import { loadState, saveState, computeDeltas, advanceState } from './lib/watchstate.mjs'; // V1 cross-pass memory
+import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
 const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // gitignored, change-only guide log
+const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
@@ -181,6 +184,47 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false } = {}) {
     bits.push(`highs reached ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`);
   if (!bits.length) return null;
   return `${label}: ${bits.join(' · ')}  (touched ≠ filled; small sample)`;
+}
+
+// --- V1 CROSS-PASS DELTA line (OUTPUT-ONLY temporal memory) ---------------------------------
+// Renders the deltas from watchstate.computeDeltas() into one nested context line, e.g.
+//   Δ instabuy -220k (5m) · mom clean→clean · 3rd pass underwater · band-top decaying 18.9m→18.8m
+// Emitted ONLY when at least one signal is informative (a real Δ, a mom transition, ≥2 consecutive
+// underwater passes, or a non-flat band-top drift) — a first-seen/reset pass or an all-quiet pass
+// prints nothing. This changes NO verdict and raises NO alert; it is pure observability.
+const ordinal = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+function deltaLine(d) {
+  if (!d || d.firstSeen) return null;
+  const informative = (d.instabuyDelta != null && d.instabuyDelta !== 0)
+    || d.momChanged || d.passesUnderwater >= 2
+    || (d.bandTopTrend && d.bandTopTrend !== 'flat');
+  if (!informative) return null;
+  const bits = [];
+  if (d.instabuyDelta != null && d.instabuyDelta !== 0) {
+    const g = d.gapMs != null ? ` (${Math.max(1, Math.round(d.gapMs / 60000))}m)` : '';
+    bits.push(`Δ instabuy ${d.instabuyDelta > 0 ? '+' : ''}${fmtP(d.instabuyDelta)}${g}`);
+  }
+  if (d.momTransition) bits.push(`mom ${d.momTransition}`);
+  if (d.passesUnderwater >= 2) bits.push(`${ordinal(d.passesUnderwater)} pass underwater`);
+  if (d.bandTopTrend && d.bandTopTrend !== 'flat' && d.bandTopFrom != null)
+    bits.push(`band-top ${d.bandTopTrend} ${fmtP(d.bandTopFrom)}→${fmtP(d.bandTopTo)}`);
+  return bits.length ? bits.join(' · ') : null;
+}
+
+// --- V2 STRUCTURAL-SUPPORT line (OUTPUT-ONLY context) ---------------------------------------
+// Recent daily lows → structural support + a cut-trigger below it, off the SAME 1h series the
+// window line already uses (windowStats with a full-day window; no new fetch). Context on held
+// rows; it drives NO verdict and raises NO alert (conviction gating is V4).
+function dayLowsFrom(ts1h) {
+  if (!ts1h || !ts1h.length) return [];
+  const stats = windowStats(ts1h, { nights: SUPPORT_LOOKBACK_DAYS, wStart: 0, wEnd: 0 }); // wStart==wEnd ⇒ full day
+  if (!stats) return [];
+  return stats.days.map(([, n]) => n.low).filter(v => v != null); // oldest→newest complete-day lows
+}
+function supportLine(ts1h) {
+  const support = structuralSupport(dayLowsFrom(ts1h));
+  if (support == null) return null;
+  return `support ${fmtP(support)} · cut-trigger ${fmtP(Math.round(cutTrigger(support)))} (context — not a verdict)`;
 }
 
 
@@ -438,6 +482,13 @@ async function main() {
   const tableRows = [];   // [verdict, item, position, quick, opt, vol, mom, regime, be]
   const notes = [];       // one compact line per item: action first-sentence + window read
 
+  // V1: cross-pass memory. Load the prior pass's state (degrades to {} on any failure — a state
+  // read must never break a pass), compute per-item deltas below, rebuild the state fresh from
+  // THIS pass's items (so vanished positions drop out), and save it at pass end. now = ms.
+  const nowMs = Date.now();
+  const priorState = loadState(WATCH_STATE);
+  const newState = {};
+
   for (const it of held) {
     const { row, be, qty, avgCost, lotValue, ts5m, name } = it;
     // pair with the live ask (exit-discipline visibility: an unlisted hold is a stranded lot)
@@ -453,6 +504,17 @@ async function main() {
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
     notes.push(`- ${name}: ${firstSentence(heldAction(row, be, lotValue, ts5m))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+    // V1/V2 output-only context: cross-pass deltas + structural-support levels. Guarded so a
+    // state failure never breaks the pass (observability only, like logGuideChanges).
+    try {
+      const key = 'held:' + it.id;
+      const cur = { identity: `hld:${qty}:${Math.round(avgCost)}`, instabuy: row.quickSell, mom: row.mom, bandTop: row.rawBandHi, breakEven: be };
+      const dl = deltaLine(computeDeltas(priorState[key], cur, nowMs));
+      newState[key] = advanceState(priorState[key], cur, nowMs);
+      if (dl) notes.push(`    ${dl}`);
+      const sl = supportLine(it.ts1h);
+      if (sl) notes.push(`    ${sl}`);
+    } catch { /* state/levels are observability only — never block a watch pass */ }
   }
 
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis
@@ -471,6 +533,16 @@ async function main() {
         row.quickBuy != null ? fmtP(breakEven(off.offer)) : '—']);
       const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
       notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+      // V1 cross-pass deltas for a resting bid. breakEven is left null (underwater is a held-lot
+      // concept), so a bid only surfaces Δ instabuy / mom transition / band-top drift. Identity
+      // carries the offer price → a re-priced bid resets its counters. Guarded (observability only).
+      try {
+        const key = `bid:${it.id}:${off.offer}`;
+        const cur = { identity: `bid:${off.offer}:${off.max}`, instabuy: row.quickSell, mom: row.mom, bandTop: row.rawBandHi, breakEven: null };
+        const dl = deltaLine(computeDeltas(priorState[key], cur, nowMs));
+        newState[key] = advanceState(priorState[key], cur, nowMs);
+        if (dl) notes.push(`    ${dl}`);
+      } catch { /* observability only — never block a watch pass */ }
     }
   }
 
@@ -489,6 +561,10 @@ async function main() {
     console.log('');
     for (const n of notes) console.log(n);
   }
+
+  // V1: persist THIS pass's state (rebuilt fresh from current items) for the next pass's deltas.
+  // Guarded — a save failure is silent; it must never break the pass output.
+  try { saveState(WATCH_STATE, newState); } catch { /* observability only */ }
 
   // ---- SUMMARY: totals + provenance + loop + discipline ----
   const exposure = held.reduce((n, it) => n + (it.lotValue || 0), 0);

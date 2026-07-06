@@ -280,6 +280,23 @@ exit-discipline reminder). Content per item:
    (`optBuy < quickBuy`) outside a ranging book — a fill at that low bid usually means the
    market dropped to meet it, so you often have no exit margin. The scalp/market-make note is
    **gated to `LIQUID_RANGING_WIDE` only**.
+4. **CROSS-PASS Δ context line** (V1, OUTPUT-ONLY — nested under a held/bid note), e.g.
+   `Δ instabuy -220k (5m) · mom clean→breakdown · 3rd pass underwater · band-top decaying 18.9m→18.8m`.
+   This is the temporal memory a single stateless tick cannot have — how the position moved
+   BETWEEN consecutive passes (Δ instabuy with the pass gap, a momentum transition, the
+   consecutive-`passesUnderwater` count, and band-top drift), computed by the pure
+   `lib/watchstate.mjs` against a small local `.cache/watch-state.json` and emitted ONLY when a
+   signal is informative (a first-seen or reset pass, or an all-quiet one, prints nothing). It
+   is **context, NOT a verdict input** — it changes no verdict, no alert, no row selection; the
+   counters reset on a re-buy / re-priced offer or a gap > `STALE_GAP_MS` so they only ever
+   reflect consecutive, recent passes. (Conviction gating off these counts is a later chunk;
+   see `PLAN-VERDICT.md`.)
+5. **STRUCTURAL-SUPPORT line** (V2, OUTPUT-ONLY — nested under a held note), e.g.
+   `support 17.59m · cut-trigger 17.50m (context — not a verdict)`. The recent higher-low that
+   held (or the N-day floor) and a placeholder δ-below cut-trigger tripwire, off the per-day
+   lows watch.mjs already fetches for the window line (`lib/levels.mjs` — **no new fetch**).
+   Also context only in V1/V2: it raises no alert and gates no verdict yet (`CUT_TRIGGER_DELTA`
+   is an unvalidated placeholder). Arming a cut on a convincingly-broken tripwire is `PLAN-VERDICT.md` V4.
 
 ### Reporting a pass to Ben — the single-source-of-truth block format (Ben, 2026-07-05)
 

@@ -120,7 +120,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
     (opportunity screen), `watch.mjs` (adaptive live position/offer monitor; also appends
-    change-only guide-price observations to `pipeline/.guide-history.jsonl` — below), `monitor.mjs`
+    change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
+    the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
+    `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`),
+    `monitor.mjs`
     (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
@@ -131,7 +134,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands), `cli.mjs` (shared arg/format/table
     helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
-    appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`)
+    appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
+    `watchstate.mjs` (V1 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
+    `advanceState` compute Δ instabuy, mom transitions, a consecutive-`passesUnderwater` counter, and
+    band-top drift, with a reset policy on identity change / `STALE_GAP_MS`; thin `loadState`/
+    `saveState` are the only fs surface — OUTPUT-ONLY, does not touch `momVerdict`), `levels.mjs`
+    (V2 — PURE `structuralSupport`/`cutTrigger`: recent higher-low support + a δ-below cut-trigger
+    tripwire off the per-day lows watch.mjs already fetches — OUTPUT-ONLY context, no verdict)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
@@ -144,10 +153,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
-    screen.mjs's pre-fetch gate stack) — all auto-discovered by `run-tests.mjs` (below), which CI
+    screen.mjs's pre-fetch gate stack), `watchstate.test.mjs` (V1 — cross-pass deltas + the
+    consecutive-underwater counter's reset policy) and `levels.test.mjs` (V2 — higher-low support /
+    cut-trigger + graceful degradation) — all auto-discovered by `run-tests.mjs` (below), which CI
     runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
-    `mapping.cache.json`, `.alerts-state.json`, and the optional `held-override.json`
+    `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, and
+    `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map
+    `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, underwater,
+    passesUnderwater, bandTopHist[]}`, rewritten fresh each pass by `watch.mjs` so vanished positions
+    drop out; counters reset on identity change or a gap > `STALE_GAP_MS`. Local, disposable —
+    deleting it just loses one pass of delta history)
   - `pipeline/.guide-history.jsonl` (**tracked** as of 2026-07-06 — Ben's call: it's an accruing
     observation record, so it lives in the repo to survive a lost machine; kept OUTSIDE `.cache/`
     so cache pruning never touches it) — change-only GE guide-price observations for watched items,

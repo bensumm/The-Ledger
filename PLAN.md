@@ -176,6 +176,12 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
 
 ## Other unscheduled notes
 
+- **Verdict-layer temporal memory — `PLAN-VERDICT.md`** (V1–V5, own plan file): give the watch
+  loop cross-pass memory + conviction gating WITHOUT touching pure `momVerdict`. V1+V2 (watch-loop
+  state store + structural-support tripwire — OUTPUT-ONLY) are DONE (this commit); V3 (lot-context
+  softening of the Gate-D CUT-CANDIDATE only), V4 (arm-then-confirm conviction gating in
+  watch.mjs), V5 (emit-contract standardization + doc reconcile) are PENDING and specced there.
+  Fold + delete `PLAN-VERDICT.md` when V5 ships (the per-topic-plan rule).
 - **Screen pre-filter heuristic from a pattern study:** the niche screens do a blind
   fetch-and-check (esp. `rising`: ~30 of 40 top candidates discarded after the expensive
   per-item confirm). Study: dump cheap 24h/band features + survive/discard labels for a
