@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.6
+version: 1.7
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -104,6 +104,13 @@ This is the tribal layer the script can't do — apply ALL of these:
 The judgment-filtered shortlist, one-line rationale per pick (why this edge is real), plus
 a note of how many candidates the 500k floor eliminated. If a high-grade row was skipped,
 point at it and give the reason — that's the layer this skill exists for.
+
+**Every recommended price states its timing target (Ben, 2026-07-05):** a pick's bid and
+sell are each "X, targeting Y" — bind the number to the window/mechanism expected to fill
+it (e.g. "bid 17.00m — tonight's 18:00–23:00 trough, projected 16.8–17.0m" / "sell 17.55m —
+the 23:00–03:00 UK-morning lift, reached 7/7d"; a churn item's target can simply be "normal
+daily churn"). Run the time-of-day `windowrange.mjs` read the CLAUDE.md doctrine already
+requires and quote it — never a bare number.
 
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 

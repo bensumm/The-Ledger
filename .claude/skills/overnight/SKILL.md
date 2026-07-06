@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.8
+version: 1.9
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -91,6 +91,10 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    - **Bid price** (the optimistic buy) **and the assumed sell price** (the optimistic
      2h-band sell target the Net/u uses — the table must state it, never leave the sell
      side implicit). Both on the standard quote basis; sell never below break-even.
+     **Each carries its timing target (Ben, 2026-07-05):** bind both numbers to the window
+     expected to fill them — the bid to the overnight-window read the fill-realism check
+     already produced ("touched ~75% of nights"), the sell to when tomorrow's flow should
+     reach it (morning lift / next-day churn). "X, targeting Y" — never a bare number.
    - **Expected units over ~8h** = `min(buyLimit × 2, 8/24 × 0.10 × volDay)` — the buy
      limit refreshes ~every 4h → 2 windows overnight, capped at a 10% share of
      limiting-side daily volume (the SAME convention as `screen.mjs`'s `expUnits =

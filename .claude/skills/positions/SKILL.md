@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.9
+version: 1.10
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -126,7 +126,17 @@ verdict the script emits.
 ## 4. Render the action plan
 
 Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
-`item · held@ · break-even · verdict · exact action price`. Preserve the standard 10-column
+`item · held@ · break-even · verdict · exact action price`.
+
+**Every action price states its timing target (Ben, 2026-07-05):** a recommended price is
+"X, targeting Y" — bind the number to the window/mechanism expected to fill it, e.g.
+"17.55m — targets the 23:00–03:00 UK-morning lift (reached 7/7d)" or "10.70m — velocity
+clear, fills on current prints". The data is already in hand (the `windowrange.mjs`/
+window-line read the doctrine above requires); this rule just forbids a bare number. It
+also sets the re-check expectation: a price whose window hasn't arrived yet isn't "not
+filling".
+
+Preserve the standard 10-column
 `--positions` table exactly as the script printed it —
 `Item | Guide | Quick | Optimistic | Vol/d | Momentum | Regime | Held@ | Break-even | Verdict`
 (that table is app-code canon — see CLAUDE.md "standard output format").
