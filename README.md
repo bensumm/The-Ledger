@@ -135,10 +135,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (node-side price/guide fetch layer + historical bands), `cli.mjs` (shared arg/format/table
     helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
     appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
-    `watchstate.mjs` (V1 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
-    `advanceState` compute Δ instabuy, mom transitions, a consecutive-`passesUnderwater` counter, and
-    band-top drift, with a reset policy on identity change / `STALE_GAP_MS`; thin `loadState`/
-    `saveState` are the only fs surface — OUTPUT-ONLY, does not touch `momVerdict`), `levels.mjs`
+    `watchstate.mjs` (V1/V4 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
+    `advanceState` compute Δ instabuy, mom transitions, consecutive-`passesUnderwater`/
+    `passesBelowSupport` counters, and band-top drift, with a reset policy on identity change /
+    `STALE_GAP_MS`; plus the V4 `convictionGate()` — the pure arm-then-confirm ALERT-escalation
+    decision (Gate-2 breakdown CUT exempt/immediate; Gate-D CUT-CANDIDATE + structural break gated).
+    Thin `loadState`/`saveState` are the only fs surface — verdict strings untouched, `momVerdict`
+    untouched), `levels.mjs`
     (V2 — PURE `structuralSupport`/`cutTrigger`: recent higher-low support + a δ-below cut-trigger
     tripwire off the per-day lows watch.mjs already fetches — OUTPUT-ONLY context, no verdict)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
@@ -154,15 +157,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
     screen.mjs's pre-fetch gate stack), `watchstate.test.mjs` (V1 — cross-pass deltas + the
-    consecutive-underwater counter's reset policy) and `levels.test.mjs` (V2 — higher-low support /
+    consecutive-underwater/below-support counters' reset policy + V4 `convictionGate` arm-then-confirm
+    escalation incl. the breakdown-exempt invariant) and `levels.test.mjs` (V2 — higher-low support /
     cut-trigger + graceful degradation) — all auto-discovered by `run-tests.mjs` (below), which CI
     runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, and
     `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map
-    `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, underwater,
-    passesUnderwater, bandTopHist[]}`, rewritten fresh each pass by `watch.mjs` so vanished positions
-    drop out; counters reset on identity change or a gap > `STALE_GAP_MS`. Local, disposable —
+    `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, support,
+    underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh
+    each pass by `watch.mjs` so vanished positions drop out; counters reset on identity change or a
+    gap > `STALE_GAP_MS`. Local, disposable —
     deleting it just loses one pass of delta history)
   - `pipeline/.guide-history.jsonl` (**tracked** as of 2026-07-06 — Ben's call: it's an accruing
     observation record, so it lives in the repo to survive a lost machine; kept OUTSIDE `.cache/`

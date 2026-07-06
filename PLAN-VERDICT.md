@@ -112,22 +112,34 @@ authority — watch.mjs remains decision support; Ben places every offer.
   softened) and OFF (fresh lot → unchanged), AND an explicit assertion that the Gate-2 breakdown CUT
   is byte-identical with and without lotCtx (the invariant).
 
-### V4 — conviction gating (arm-then-confirm) — **PENDING**
-- **Files:** `pipeline/watch.mjs` + `pipeline/lib/watchstate.mjs` (NOT js/quotecore.js — the pure core
-  stays pure), `pipeline/watchstate.test.mjs` (escalation fixtures).
+### V4 — conviction gating (arm-then-confirm) — **DONE**
+- **Files:** `pipeline/lib/watchstate.mjs` (new pure `convictionGate()` + a `passesBelowSupport`
+  counter mirroring `passesUnderwater` — added to the state entry, `computeDeltas`, `advanceState`),
+  `pipeline/watch.mjs` (a pre-headline held-conviction loop stores `it.gate`; `heldAlert` consults it;
+  armed notes render in the table loop), `pipeline/watchstate.test.mjs` (now 19 checks — 8 new V4
+  fixtures), docs (`pipeline/MONITORING.md`, `.claude/skills/positions/SKILL.md`,
+  `.claude/skills/morning/SKILL.md`, `CLAUDE.md`). **NOT js/quotecore.js — the pure core stays pure.**
 - **APP_VERSION:** none (pipeline-only; the app has no per-pass store — the documented follow-on).
 - **Tag:** BEHAVIOR CHANGE **to alerts only** (verdict strings unchanged; what *escalates to a headline
   ALERT* is gated).
-- **What it does:** a Gate-D `CUT-CANDIDATE` must survive **2 consecutive underwater-liquid passes**
-  (V1's `passesUnderwater`) before it escalates to an ALERT; a structural-break cut needs the V2
-  tripwire **convincingly broken** (price < cut-trigger, i.e. ≥ `CUT_TRIGGER_DELTA` below support) OR
-  2 passes. The Gate-2 breakdown `CUT` stays **IMMEDIATE** (exempt — a live breakdown is not a thing to
-  sit on). Live evidence FOR this (2026-07-06 webweaver): a named ~18.25m tripwire broke to ~18.18m
-  then bounced to ~18.55m **within one pass** — an immediate-fire cut would have sold the low;
-  arm-then-confirm threads it.
-- **TEST MANIFEST:** 1 underwater-liquid pass → armed, no alert; 2nd consecutive → alert; a reset
-  (gap/identity/surface) → re-arm from scratch; tripwire broken by ≥δ → immediate structural alert;
-  breakdown CUT → immediate regardless of pass count (exempt).
+- **What it does:** the pure `convictionGate({verdict, gate, passesUnderwater, price, support,
+  cutTrigger, passesBelowSupport}) → {escalate, armed, reason}` decides ONLY whether a held verdict
+  becomes a headline ⚠ ALERT. Precedence: (1) Gate-2 breakdown `CUT` — **EXEMPT**, escalates
+  immediately/unconditionally (the byte-identical invariant); (2) structural break **convincingly**
+  broken — price < cut-trigger (≥`CUT_TRIGGER_DELTA` below support) OR below support for 2 consecutive
+  passes → escalate; (3) Gate-D `CUT-CANDIDATE` — arm on pass 1, escalate on the 2nd consecutive
+  underwater-liquid pass; (4) a single non-convincing graze of support → arm. `momVerdict` output is
+  untouched — the Verdict column still prints `CUT-CANDIDATE`; only the headline is gated. Armed items
+  show a visible note (`CUT-CANDIDATE armed — 1st underwater pass…` / `approaching cut-trigger —
+  armed…`), not a headline. The alert count reflects only confirmed escalations + always-immediate
+  breakdowns/other existing alerts. Live evidence FOR this (2026-07-06 webweaver): a named ~18.25m
+  tripwire broke to ~18.18m then bounced to ~18.55m **within one pass** — an immediate-fire cut would
+  have sold the low; arm-then-confirm threads it.
+- **TEST MANIFEST (8 new, `watchstate.test.mjs`):** `passesBelowSupport` increments over consecutive
+  below-support passes; it resets on surface/identity/stale-gap; Gate-D 1st pass → armed no alert;
+  2nd consecutive → escalate; a reset re-arms from pass 1; price ≥δ below support (single pass) →
+  immediate structural escalation; a non-convincing graze arms, 2nd below-support pass escalates;
+  **INVARIANT** — a Gate-2 breakdown CUT escalates immediately regardless of pass count / conviction.
 
 ### V5 — standardize the emit contract + doc reconcile — **PENDING**
 - **Files:** `pipeline/watch.mjs` (unified per-item line), `pipeline/MONITORING.md`, `CLAUDE.md`,
@@ -222,7 +234,7 @@ cost the bludgeon exit; softening or delaying it is the failure mode to guard.
 - V1 — DONE (this commit)
 - V2 — DONE (this commit)
 - V3 — DONE (0.52.0)
-- V4 — PENDING
+- V4 — DONE (pipeline-only — no APP_VERSION)
 - V5 — PENDING
 - V6 — PENDING (recovery-read forecast + the capital-awareness companion)
 

@@ -280,6 +280,25 @@ exit-discipline reminder). Content per item:
    lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
    lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its
    multi-day regime is FALLING.
+   - **Conviction gating — arm-then-confirm (V4).** Whether a verdict becomes a *headline* ⚠ ALERT
+     is gated by the pure `convictionGate()` (`lib/watchstate.mjs`) — the verdict *string* is
+     unchanged (the Verdict column still prints `CUT-CANDIDATE`); only escalation is gated:
+     - the **Gate-2 breakdown `CUT` is EXEMPT** — it escalates IMMEDIATELY on pass 1, unconditionally
+       (a live 2h breakdown while underwater is not a thing to sit on; this is the byte-identical
+       invariant);
+     - a **Gate-D clean-momentum `CUT-CANDIDATE`** must survive **2 consecutive underwater-liquid
+       passes** (V1's `passesUnderwater`) before it becomes a headline alert. Pass 1 → **ARMED**: a
+       visible note (`CUT-CANDIDATE armed — 1st underwater pass…`), NOT a headline. A reset
+       (identity change / gap > `STALE_GAP_MS` / surfaced above break-even) re-arms from scratch;
+     - a **structural-break `CUT`** fires when the live instabuy is **convincingly** below the V2
+       cut-trigger (`< cut-trigger`, i.e. ≥ `CUT_TRIGGER_DELTA` below support) OR below support for
+       **2 consecutive passes** (`passesBelowSupport`); a single non-convincing graze **arms**
+       (`approaching cut-trigger — armed…`) rather than alerting. This is the codified
+       override-discipline "require conviction (0.5% or two passes)" — the direct fix for the
+       2026-07-06 too-tight tripwire (a level broke −0.9% then bounced within one pass).
+     The headline alert count reflects only **confirmed** escalations + the always-immediate
+     breakdowns / UNDERWATER / FALLING / CANCEL-BID. Armed candidates are visible in the notes,
+     never the headline.
 2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below the shared
    `breakEven()` (tax-capped; see CLAUDE.md "Break-even").
 3. **Per-item RISK read**: spread width, two-sided liquidity (limiting side), regime, unit
@@ -294,16 +313,17 @@ exit-discipline reminder). Content per item:
    consecutive-`passesUnderwater` count, and band-top drift), computed by the pure
    `lib/watchstate.mjs` against a small local `.cache/watch-state.json` and emitted ONLY when a
    signal is informative (a first-seen or reset pass, or an all-quiet one, prints nothing). It
-   is **context, NOT a verdict input** — it changes no verdict, no alert, no row selection; the
+   is **context, NOT a verdict input** — it changes no verdict and no row selection; the
    counters reset on a re-buy / re-priced offer or a gap > `STALE_GAP_MS` so they only ever
-   reflect consecutive, recent passes. (Conviction gating off these counts is a later chunk;
-   see `PLAN-VERDICT.md`.)
+   reflect consecutive, recent passes. The `passesUnderwater` / `passesBelowSupport` counts here
+   ALSO feed V4's arm-then-confirm alert gating (item 1) — the line itself still raises no alert.
 5. **STRUCTURAL-SUPPORT line** (V2, OUTPUT-ONLY — nested under a held note), e.g.
    `support 17.59m · cut-trigger 17.50m (context — not a verdict)`. The recent higher-low that
    held (or the N-day floor) and a placeholder δ-below cut-trigger tripwire, off the per-day
    lows watch.mjs already fetches for the window line (`lib/levels.mjs` — **no new fetch**).
-   Also context only in V1/V2: it raises no alert and gates no verdict yet (`CUT_TRIGGER_DELTA`
-   is an unvalidated placeholder). Arming a cut on a convincingly-broken tripwire is `PLAN-VERDICT.md` V4.
+   The line itself is context (it names the level; `CUT_TRIGGER_DELTA` is an unvalidated
+   placeholder), but as of **V4** a *convincing* break of this tripwire drives the arm-then-confirm
+   structural-break alert in item 1 (`< cut-trigger`, or 2 consecutive passes below support).
 
 ### Reporting a pass to Ben — the single-source-of-truth block format (Ben, 2026-07-05)
 

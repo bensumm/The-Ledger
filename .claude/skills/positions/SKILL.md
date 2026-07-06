@@ -159,7 +159,13 @@ immediately — the floor "break" was 20k deep and the item recovered within the
 structural tripwire should require conviction of the break before executing: a print
 **meaningfully through** the level (~0.5%+) or two consecutive passes below it, not a
 grazing touch. This tightens WHEN the tripwire fires; it does not soften obeying it once
-fired (the override-discipline rule above stands).
+fired (the override-discipline rule above stands). **`watch.mjs` now enforces this
+mechanically (V4, arm-then-confirm):** its structural-break headline ALERT fires only when the
+live instabuy is `< cut-trigger` (≥ `CUT_TRIGGER_DELTA` below support) OR below support for two
+consecutive passes; a single graze *arms* (a visible note) instead of alerting. Likewise a
+Gate-D `CUT-CANDIDATE` needs two consecutive underwater-liquid passes to become a headline
+alert. The **Gate-2 breakdown `CUT` is exempt — it still alerts immediately** (a live breakdown
+is not a thing to sit on).
 
 **Limit-blocked CROSSING (2026-07-05):** a bid at/above the live instasell prints CROSSING
 ("expect fills about now") even when the 4h buy limit makes fills impossible — the gate can't

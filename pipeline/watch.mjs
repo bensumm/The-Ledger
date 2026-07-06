@@ -56,7 +56,7 @@ import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
-import { loadState, saveState, computeDeltas, advanceState } from './lib/watchstate.mjs'; // V1 cross-pass memory
+import { loadState, saveState, computeDeltas, advanceState, convictionGate } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -330,23 +330,46 @@ const lotCtxOf = it => ({ buyTs: it.buyTs, askFilling: it.askFilling });
 
 // A held item is an ALERT if the shared cut-trigger says CUT/CLEAR, or it's underwater
 // (instabuy < break-even), or its multi-day regime is falling. Reuses momVerdict — no
-// separate escalation logic.
+// separate escalation logic. V4: the Gate-D clean-momentum CUT-CANDIDATE and a structural break
+// are ARM-THEN-CONFIRM (they become a headline alert only once convictionGate — computed in main
+// and stored on `it.gate` — says escalate; until then they are visible armed NOTES, not headlines).
+// The Gate-2 breakdown CUT is EXEMPT: immediate on pass 1, byte-identically as before (the invariant).
 function heldAlert(it) {
-  const { row, be, lotValue, ts5m, name } = it;
+  const { row, be, lotValue, ts5m, name, gate } = it;
   const instabuy = row.quickSell;
   const mv = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
   if (mv) {
-    if (mv.action === 'CUT')
-      return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window; free the capital' : '2h breakdown & underwater; free the capital'}.` };
-    if (mv.action === 'CLEAR')
-      return { level: 'CLEAR', msg: `LIST-TO-CLEAR ${name} @ ${fmtP(mv.listAt)} — 2h breakdown; bank it, don't hold for the premium.` };
-    if (mv.action === 'NO_READ')
-      return { level: 'NO-READ', msg: `NO-READ ${name} (${row.reliableReason}) — can't price a decision off this quote. Keep any ask ≥ break-even ${fmtP(be)}; re-check at a liquid window.` };
-    if (mv.action === 'DIURNAL_WATCH')
-      return { level: 'DIURNAL', msg: `DIURNAL-WATCH ${name} — underwater at a quiet hour that recovered yesterday. Hold ≥ break-even ${fmtP(be)}; don't cut into the trough.` };
-    if (mv.action === 'SHOCK_WATCH')
-      return { level: 'SHOCK', msg: `SHOCK-WATCH ${name} @ ${fmtP(mv.listAt)} — one-off shock, not a bleed; hold one more cycle.` };
+    if (mv.action === 'CUT') {
+      if (mv.gate === 2)
+        // Gate-2 breakdown CUT — EXEMPT from conviction gating: escalate immediately (the invariant).
+        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — 2h breakdown & underwater; free the capital.` };
+      // Gate-D CUT-CANDIDATE — headline only once conviction confirms (2 consecutive underwater
+      // passes). Until then it's armed: fall through so no headline fires (the armed note is emitted
+      // in the table loop). If it just escalated, alert with the confirmation count.
+      if (gate && gate.escalate && gate.reason === 'cut-candidate') {
+        const pu = (it._deltas && it._deltas.passesUnderwater) || 2;
+        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — underwater through a liquid window, confirmed over ${pu} consecutive passes; free the capital.` };
+      }
+      // armed Gate-D (or masked by a structural escalation handled just below) — no headline here.
+    } else {
+      if (mv.action === 'CLEAR')
+        return { level: 'CLEAR', msg: `LIST-TO-CLEAR ${name} @ ${fmtP(mv.listAt)} — 2h breakdown; bank it, don't hold for the premium.` };
+      if (mv.action === 'NO_READ')
+        return { level: 'NO-READ', msg: `NO-READ ${name} (${row.reliableReason}) — can't price a decision off this quote. Keep any ask ≥ break-even ${fmtP(be)}; re-check at a liquid window.` };
+      if (mv.action === 'DIURNAL_WATCH')
+        return { level: 'DIURNAL', msg: `DIURNAL-WATCH ${name} — underwater at a quiet hour that recovered yesterday. Hold ≥ break-even ${fmtP(be)}; don't cut into the trough.` };
+      if (mv.action === 'SHOCK_WATCH')
+        return { level: 'SHOCK', msg: `SHOCK-WATCH ${name} @ ${fmtP(mv.listAt)} — one-off shock, not a bleed; hold one more cycle.` };
+    }
   }
+  // Structural-break escalation (V4) — a CONVINCING break of the V2 tripwire (≥δ below support, or
+  // 2 consecutive passes below support). Independent of the mom verdict; not gated by underwater.
+  if (gate && gate.escalate && gate.reason === 'structural')
+    return { level: 'CUT', msg: `CUT — structural break ${name} @ ${fmtP(instabuy)} — broke below structural support ${fmtP(it._support)} (cut-trigger ${fmtP(Math.round(it._cutTrigger))}); the level that held gave way. Price to clear at the instabuy.` };
+  // An ARMED Gate-D candidate must NOT fall through to the immediate UNDERWATER alert — that would
+  // defeat arm-then-confirm (an armed CUT-CANDIDATE is by definition underwater). A structural-armed
+  // graze is purely additive and does NOT suppress the softer underwater/falling signals.
+  if (gate && gate.armed && gate.reason === 'cut-candidate-armed') return null;
   if (instabuy != null && be != null && instabuy < be)
     return { level: 'UNDERWATER', msg: `UNDERWATER ${name} — live sell ${fmtP(instabuy)} < break-even ${fmtP(be)}. Hold ≥ break-even only if regime is flat/rising; cut if it turns.` };
   if (row.falling)
@@ -422,6 +445,37 @@ async function main() {
     const ask = asks.find(a => a.item === it.id);
     it.askFilling = !!(ask && ask.qty > 0 && it.row.quickSell != null && ask.offer > it.row.quickSell);
   }
+
+  // V1/V4 cross-pass memory + CONVICTION GATING — computed HERE (before the headline) so each held
+  // item carries its arm-then-confirm decision (it.gate) into both the alert list and the notes.
+  // Load the prior pass's state (loadState degrades to {} on any failure — a state read must never
+  // break a pass), compute per-held deltas + the escalation decision, rebuild state fresh from THIS
+  // pass (so vanished positions drop out), and save at pass end. now = ms; guarded per item.
+  const nowMs = Date.now();
+  const priorState = loadState(WATCH_STATE);
+  const newState = {};
+  for (const it of held) {
+    it.gate = { escalate: false, armed: false, reason: null };
+    it._deltas = null; it._support = null; it._cutTrigger = null;
+    try {
+      const key = 'held:' + it.id;
+      const support = structuralSupport(dayLowsFrom(it.ts1h));
+      const trig = support != null ? cutTrigger(support) : null;
+      const cur = { identity: `hld:${it.qty}:${Math.round(it.avgCost)}`,
+        instabuy: it.row.quickSell, mom: it.row.mom, bandTop: it.row.rawBandHi, breakEven: it.be, support };
+      const d = computeDeltas(priorState[key], cur, nowMs);
+      newState[key] = advanceState(priorState[key], cur, nowMs);
+      it._deltas = d; it._support = support; it._cutTrigger = trig;
+      const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m, undefined, lotCtxOf(it));
+      it.gate = convictionGate({
+        verdict: mv && mv.verdict, gate: mv && mv.gate,
+        passesUnderwater: d.passesUnderwater,
+        price: it.row.quickSell, support, cutTrigger: trig,
+        passesBelowSupport: d.passesBelowSupport,
+      });
+    } catch { /* gating/state are observability-adjacent — degrade to no-escalation, never break a pass */ }
+  }
+
   const targets = [];
   for (const s of targetSpecs) targets.push(await buildItem(s, map, guide));
   const bidItems = [];
@@ -500,12 +554,9 @@ async function main() {
   const tableRows = [];   // [verdict, item, position, quick, opt, vol, mom, regime, be]
   const notes = [];       // one compact line per item: action first-sentence + window read
 
-  // V1: cross-pass memory. Load the prior pass's state (degrades to {} on any failure — a state
-  // read must never break a pass), compute per-item deltas below, rebuild the state fresh from
-  // THIS pass's items (so vanished positions drop out), and save it at pass end. now = ms.
-  const nowMs = Date.now();
-  const priorState = loadState(WATCH_STATE);
-  const newState = {};
+  // V1/V4 cross-pass memory: priorState/newState/nowMs are computed above (held conviction loop),
+  // so held rows only RENDER from it._deltas / it.gate here; bid deltas are still computed inline
+  // (bids carry no conviction gating). newState is persisted once at pass end.
 
   for (const it of held) {
     const { row, be, qty, avgCost, lotValue, ts5m, name } = it;
@@ -522,16 +573,19 @@ async function main() {
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
     notes.push(`- ${name}: ${firstSentence(heldAction(row, be, lotValue, ts5m, lotCtxOf(it)))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
-    // V1/V2 output-only context: cross-pass deltas + structural-support levels. Guarded so a
-    // state failure never breaks the pass (observability only, like logGuideChanges).
+    // V1/V2 output-only context: cross-pass deltas + structural-support levels (computed in the
+    // held conviction loop above — RENDER only here). Guarded so a render failure never breaks a pass.
     try {
-      const key = 'held:' + it.id;
-      const cur = { identity: `hld:${qty}:${Math.round(avgCost)}`, instabuy: row.quickSell, mom: row.mom, bandTop: row.rawBandHi, breakEven: be };
-      const dl = deltaLine(computeDeltas(priorState[key], cur, nowMs));
-      newState[key] = advanceState(priorState[key], cur, nowMs);
+      const dl = it._deltas ? deltaLine(it._deltas) : null;
       if (dl) notes.push(`    ${dl}`);
       const sl = supportLine(it.ts1h);
       if (sl) notes.push(`    ${sl}`);
+      // V4 arm-then-confirm: an armed-but-unconfirmed escalation stays VISIBLE here (never a headline
+      // ⚠ alert — that only fires once convictionGate escalates). Two armed shapes, distinct notes.
+      if (it.gate && it.gate.armed && it.gate.reason === 'cut-candidate-armed')
+        notes.push(`    CUT-CANDIDATE armed — ${ordinal((it._deltas && it._deltas.passesUnderwater) || 1)} underwater pass through a liquid window; headline alert on the next consecutive underwater pass.`);
+      else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
+        notes.push(`    approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline alert if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support next pass.`);
     } catch { /* state/levels are observability only — never block a watch pass */ }
   }
 

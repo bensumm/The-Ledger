@@ -69,6 +69,15 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Conviction gating — arm-then-confirm alerts** (V4, pipeline-only — NO APP_VERSION) — the pure
+  `convictionGate()` in `pipeline/lib/watchstate.mjs` gates whether a held verdict escalates to a
+  headline ⚠ ALERT in `watch.mjs` (verdict strings UNCHANGED; `js/quotecore.js` untouched). A Gate-D
+  `CUT-CANDIDATE` needs 2 consecutive underwater-liquid passes (V1's `passesUnderwater`) to alert; a
+  structural break needs the V2 tripwire convincingly broken (`< cut-trigger`) OR 2 passes below
+  support (new `passesBelowSupport` counter, same reset policy). Pass 1 → ARMED (a visible note, not
+  a headline). **Don't-rebuild / invariant:** the **Gate-2 breakdown `CUT` is EXEMPT — it alerts
+  immediately, byte-identically** (pinned by an "immediate regardless of pass count" fixture); never
+  gate it. Full state: `PLAN-VERDICT.md` V4, `pipeline/MONITORING.md` "What each tick surfaces" item 1.
 - **Suggestlog path regression fix** (SL1, pipeline-only — NO APP_VERSION) — the O1 ledger path in
   `pipeline/lib/suggestlog.mjs` is now exported `LEDGER`, resolving TWO levels up to repo-root
   `suggestions.jsonl` (OR2's move into `lib/` had silently forked it to untracked

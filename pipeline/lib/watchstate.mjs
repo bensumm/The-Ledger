@@ -16,11 +16,15 @@
 // guards every call and loadState degrades to {} rather than throw.
 //
 // State entry shape (one per position key, e.g. "held:27652" / "bid:27652:18000000"):
-//   { ts, identity, instabuy, mom, bandTop, breakEven, underwater, passesUnderwater, bandTopHist:[] }
+//   { ts, identity, instabuy, mom, bandTop, breakEven, support,
+//     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist:[] }
 // `identity` is a caller-chosen stable string for the position lot/offer (held: qty+avgCost; bid:
 // offer price+max). A changed identity, or a gap since the last pass exceeding STALE_GAP_MS, RESETS
-// the counters — so `passesUnderwater` only ever reflects CONSECUTIVE, RECENT passes of the SAME
-// position, never a stale count carried across a re-buy or an hours-long loop pause.
+// the counters — so `passesUnderwater` (and `passesBelowSupport`) only ever reflect CONSECUTIVE,
+// RECENT passes of the SAME position, never a stale count carried across a re-buy or an hours-long
+// loop pause. `passesBelowSupport` (V4) mirrors `passesUnderwater` but counts consecutive passes
+// whose live instabuy printed below the V2 structural support level — it feeds the arm-then-confirm
+// structural-break escalation (convictionGate below).
 
 import fs from 'node:fs';
 import { dirname } from 'node:path';
@@ -41,6 +45,9 @@ export const BANDTOP_FLAT_PCT = 0.003;   // ±0.3%
 
 // A position is underwater when its live instabuy (clear-now price) is below its break-even.
 const isUnderwater = o => o != null && o.instabuy != null && o.breakEven != null && o.instabuy < o.breakEven;
+// A position is below structural support (V4) when its live instabuy prints under the V2 support
+// level. Independent of underwater — a lot can break support while still above its own break-even.
+const isBelowSupport = o => o != null && o.instabuy != null && o.support != null && o.instabuy < o.support;
 
 // Reset policy: identity changed (different lot / re-priced offer) OR the gap since the last pass
 // is too large to be a consecutive poll. A missing prior is NOT a reset (it's first-seen — handled
@@ -67,18 +74,21 @@ export function classifyBandTop(hist) {
 /* PURE. Compute the per-item deltas of `cur` (this pass's observation) against `prior` (the stored
    entry from last pass). Never mutates. `cur` = { identity, instabuy, mom, bandTop, breakEven }.
    Returns a flat deltas object:
-     { firstSeen, reset, underwater, passesUnderwater,
+     { firstSeen, reset, underwater, passesUnderwater, belowSupport, passesBelowSupport,
        instabuyDelta, instabuyDir, gapMs,
        momFrom, momTo, momTransition, momChanged,
        bandTopTrend, bandTopFrom, bandTopTo }
    On a first-sighting OR a reset the cross-pass deltas are null/absent (nothing consecutive to
-   compare) — but `passesUnderwater` still initialises to 1 when the fresh observation is underwater. */
+   compare) — but `passesUnderwater`/`passesBelowSupport` still initialise to 1 when the fresh
+   observation is already underwater / below support. */
 export function computeDeltas(prior, cur, now) {
   const firstSeen = !prior;
   const reset = shouldReset(prior, cur, now);
   const fresh = firstSeen || reset;
   const underwater = isUnderwater(cur);
   const passesUnderwater = underwater ? ((fresh ? 0 : (prior.passesUnderwater || 0)) + 1) : 0;
+  const belowSupport = isBelowSupport(cur);
+  const passesBelowSupport = belowSupport ? ((fresh ? 0 : (prior.passesBelowSupport || 0)) + 1) : 0;
 
   let instabuyDelta = null, instabuyDir = null, gapMs = null;
   if (!fresh && prior.instabuy != null && cur && cur.instabuy != null) {
@@ -100,7 +110,7 @@ export function computeDeltas(prior, cur, now) {
     if (bt) { bandTopTrend = bt.trend; bandTopFrom = bt.from; bandTopTo = bt.to; }
   }
 
-  return { firstSeen, reset, underwater, passesUnderwater,
+  return { firstSeen, reset, underwater, passesUnderwater, belowSupport, passesBelowSupport,
     instabuyDelta, instabuyDir, gapMs,
     momFrom, momTo, momTransition, momChanged,
     bandTopTrend, bandTopFrom, bandTopTo };
@@ -113,6 +123,8 @@ export function advanceState(prior, cur, now) {
   const fresh = !prior || shouldReset(prior, cur, now);
   const underwater = isUnderwater(cur);
   const passesUnderwater = underwater ? ((fresh ? 0 : (prior.passesUnderwater || 0)) + 1) : 0;
+  const belowSupport = isBelowSupport(cur);
+  const passesBelowSupport = belowSupport ? ((fresh ? 0 : (prior.passesBelowSupport || 0)) + 1) : 0;
   const priorHist = fresh ? [] : (prior.bandTopHist || []);
   const bandTopHist = (cur && cur.bandTop != null ? [...priorHist, cur.bandTop] : priorHist).slice(-BANDTOP_HIST);
   return {
@@ -122,10 +134,63 @@ export function advanceState(prior, cur, now) {
     mom: cur ? (cur.mom ?? null) : null,
     bandTop: cur ? (cur.bandTop ?? null) : null,
     breakEven: cur ? (cur.breakEven ?? null) : null,
+    support: cur ? (cur.support ?? null) : null,
     underwater,
     passesUnderwater,
+    belowSupport,
+    passesBelowSupport,
     bandTopHist,
   };
+}
+
+/* PURE. The V4 arm-then-confirm ESCALATION decision — decides ONLY whether a held-lot verdict is
+   allowed to become a HEADLINE ⚠ ALERT this pass. It does NOT change any verdict string (momVerdict
+   is untouched) and NOT any pricing; watch.mjs consumes { escalate, armed, reason } to route an
+   escalation into the headline block (escalate) vs. a visible armed NOTE (armed) vs. nothing.
+
+   Inputs (all from the current pass; the cross-pass counts come from computeDeltas):
+     verdict, gate          — momVerdict()'s verdict string + gate (e.g. 'CUT-CANDIDATE'/'D', 'CUT'/2)
+     passesUnderwater       — consecutive underwater-liquid passes (V1 counter)
+     price                  — live instabuy (clear-now price)
+     support, cutTrigger    — V2 structural support + the (support−δ) tripwire
+     passesBelowSupport     — consecutive passes with price below support (V4 counter)
+
+   PRECEDENCE (highest first):
+     1. Gate-2 breakdown CUT — EXEMPT: escalates IMMEDIATELY, unconditionally, never gated. This is
+        the byte-identical breakdown invariant — a live 2h breakdown while underwater is not a thing
+        to sit on; delaying it is the exact failure that cost the bludgeon exit.
+     2. Structural break CONVINCINGLY broken — price ≥δ below support (i.e. below the cut-trigger) OR
+        below support for 2 consecutive passes → escalate. Codifies the override-discipline
+        "require conviction (0.5% or two passes)"; the direct fix for the 2026-07-06 too-tight
+        tripwire (a level broke −0.9% then bounced within one pass — arm-then-confirm would hold).
+     3. Gate-D clean-momentum CUT-CANDIDATE — arm-then-confirm: must survive 2 consecutive
+        underwater-liquid passes before escalating; the 1st pass ARMS (visible note, not a headline).
+     4. A single non-convincing graze of support (below support, not through the trigger, <2 passes)
+        → ARM the structural break (visible note), no headline.
+   Anything else → neither escalate nor armed. */
+export function convictionGate({ verdict, gate, passesUnderwater = 0,
+  price = null, support = null, cutTrigger = null, passesBelowSupport = 0 } = {}) {
+  // 1. Gate-2 breakdown CUT — EXEMPT (the invariant). Immediate regardless of any conviction count.
+  if (verdict === 'CUT' && gate === 2)
+    return { escalate: true, armed: false, reason: 'breakdown' };
+
+  const belowSupport = price != null && support != null && price < support;
+  const throughTrigger = belowSupport && cutTrigger != null && price < cutTrigger;
+
+  // 2. Structural break convincingly broken → immediate structural escalation.
+  if (throughTrigger || (belowSupport && passesBelowSupport >= 2))
+    return { escalate: true, armed: false, reason: 'structural' };
+
+  // 3. Gate-D CUT-CANDIDATE — arm on pass 1, escalate on the 2nd consecutive underwater-liquid pass.
+  if (verdict === 'CUT-CANDIDATE' && gate === 'D') {
+    if (passesUnderwater >= 2) return { escalate: true, armed: false, reason: 'cut-candidate' };
+    return { escalate: false, armed: true, reason: 'cut-candidate-armed' };
+  }
+
+  // 4. A single non-convincing graze of support → arm (visible note), no headline.
+  if (belowSupport) return { escalate: false, armed: true, reason: 'structural-armed' };
+
+  return { escalate: false, armed: false, reason: null };
 }
 
 // --- THIN IO (the only fs surface; never in the tested path) -------------------------------

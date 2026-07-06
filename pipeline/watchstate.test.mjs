@@ -21,7 +21,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  computeDeltas, advanceState, classifyBandTop, shouldReset,
+  computeDeltas, advanceState, classifyBandTop, shouldReset, convictionGate,
   STALE_GAP_MS, BANDTOP_FLAT_PCT,
 } from './lib/watchstate.mjs';
 
@@ -154,6 +154,93 @@ ok('advanceState does not mutate prior or cur', () => {
   advanceState(prior, cur, T0 + MIN);
   assert.deepEqual(prior, frozen);
   assert.deepEqual(cur, curFrozen);
+});
+
+/* --- V4 passesBelowSupport counter (mirrors passesUnderwater; feeds the structural break) ---- */
+// a below-support observation: instabuy 90 prints under support 100 (independent of break-even).
+const below = (o = {}) => obs({ support: 100, instabuy: 90, ...o });
+
+ok('passesBelowSupport increments over consecutive below-support passes', () => {
+  let s = advanceState(undefined, below(), T0);
+  assert.equal(s.passesBelowSupport, 1);
+  s = advanceState(s, below({ instabuy: 88 }), T0 + 5 * MIN);
+  assert.equal(s.passesBelowSupport, 2);
+  const d = computeDeltas(s, below({ instabuy: 86 }), T0 + 10 * MIN);
+  assert.equal(d.passesBelowSupport, 3);            // the 3rd pass's delta reports 3 below-support
+  assert.equal(d.belowSupport, true);
+});
+
+ok('passesBelowSupport resets on surfacing above support, identity change, and a stale gap', () => {
+  // surface back above support → 0
+  let s = advanceState(advanceState(undefined, below(), T0), below({ instabuy: 88 }), T0 + 5 * MIN);
+  assert.equal(s.passesBelowSupport, 2);
+  s = advanceState(s, below({ instabuy: 120 }), T0 + 10 * MIN);   // 120 ≥ support 100
+  assert.equal(s.passesBelowSupport, 0);
+  // identity change re-counts from this episode
+  const prior = advanceState(advanceState(undefined, below(), T0), below({ instabuy: 88 }), T0 + 5 * MIN);
+  const idCur = below({ identity: 'hld:2:200', instabuy: 86 });
+  assert.equal(computeDeltas(prior, idCur, T0 + 10 * MIN).passesBelowSupport, 1);
+  // stale-gap re-counts from the resumed episode
+  const staleNow = prior.ts + STALE_GAP_MS + 1;
+  assert.equal(computeDeltas(prior, below({ instabuy: 86 }), staleNow).passesBelowSupport, 1);
+});
+
+/* --- V4 convictionGate: arm-then-confirm escalation decision -------------------------------- */
+ok('Gate-D CUT-CANDIDATE arms on the 1st underwater-liquid pass (no headline escalation)', () => {
+  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', passesUnderwater: 1 });
+  assert.equal(g.escalate, false);
+  assert.equal(g.armed, true);
+  assert.equal(g.reason, 'cut-candidate-armed');
+});
+
+ok('Gate-D CUT-CANDIDATE escalates on the 2nd consecutive underwater-liquid pass', () => {
+  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', passesUnderwater: 2 });
+  assert.equal(g.escalate, true);
+  assert.equal(g.armed, false);
+  assert.equal(g.reason, 'cut-candidate');
+});
+
+ok('a reset between the two passes re-arms the CUT-CANDIDATE from scratch (back to pass 1)', () => {
+  // one underwater pass, then a reset (identity change) → computeDeltas re-counts to 1 → armed again
+  const prior = advanceState(undefined, obs({ instabuy: 90 }), T0);       // passesUnderwater 1
+  const cur = obs({ identity: 'hld:9:900', instabuy: 90, breakEven: 950 }); // new lot, still underwater
+  const d = computeDeltas(prior, cur, T0 + 5 * MIN);
+  assert.equal(d.reset, true);
+  assert.equal(d.passesUnderwater, 1);
+  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', passesUnderwater: d.passesUnderwater });
+  assert.equal(g.escalate, false);
+  assert.equal(g.armed, true);
+});
+
+ok('price ≥δ below structural support (single pass) → immediate structural escalation', () => {
+  const support = 20_000_000, trigger = support * (1 - 0.005);   // cut-trigger = support − 0.5%
+  const g = convictionGate({ verdict: 'HOLD', gate: null, price: trigger - 1, support, cutTrigger: trigger, passesBelowSupport: 1 });
+  assert.equal(g.escalate, true);
+  assert.equal(g.armed, false);
+  assert.equal(g.reason, 'structural');
+});
+
+ok('a single non-convincing graze of support arms; a 2nd consecutive below-support pass escalates', () => {
+  const support = 20_000_000, trigger = support * (1 - 0.005);
+  const price = support - 10_000;                                 // below support but ABOVE cut-trigger
+  const g1 = convictionGate({ verdict: 'HOLD', gate: null, price, support, cutTrigger: trigger, passesBelowSupport: 1 });
+  assert.equal(g1.escalate, false);
+  assert.equal(g1.armed, true);
+  assert.equal(g1.reason, 'structural-armed');
+  const g2 = convictionGate({ verdict: 'HOLD', gate: null, price, support, cutTrigger: trigger, passesBelowSupport: 2 });
+  assert.equal(g2.escalate, true);
+  assert.equal(g2.reason, 'structural');
+});
+
+ok('INVARIANT: a Gate-2 breakdown CUT escalates IMMEDIATELY regardless of pass count / conviction', () => {
+  // no matter the underwater/below-support counts or support levels, the breakdown CUT is never gated
+  for (const pu of [0, 1, 2]) {
+    const g = convictionGate({ verdict: 'CUT', gate: 2, passesUnderwater: pu,
+      price: 999, support: 1000, cutTrigger: 995, passesBelowSupport: 0 });
+    assert.equal(g.escalate, true, `breakdown CUT must escalate at passesUnderwater=${pu}`);
+    assert.equal(g.armed, false);
+    assert.equal(g.reason, 'breakdown');
+  }
 });
 
 console.log(`\nAll ${pass} checks passed.`);
