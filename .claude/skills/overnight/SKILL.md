@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.9
+version: 1.10
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -75,6 +75,17 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      night (or a 0/14 touch count on a bid near live) = the item is falling into your bid —
      skip it regardless of the regime label. The touch-quantiles alone can mislead when the
      touches all predate a reprice (zombie axe: 10/14 touched, 0/4 post-reprice).
+   - **Decay-trend trough projection (v1.10, 2026-07-05 — Ben-endorsed).** The mirror case:
+     an item in a POST-SPIKE DECAY (nightly lows stepping down toward a prior base). There
+     the raw touch-quantiles mislead in the *other* direction — pre-spike days sat far BELOW
+     tonight's level, so a candidate bid shows "touched 9/14 days" while none of those
+     touches describe the current regime. Project tonight's trough from the **night-over-
+     night low trend** instead (the per-day low column, most recent 3–5 nights): read the
+     step size, extend it one night, and price the bid at/just above the projected floor.
+     Anchor: the bludgeon decay (window lows 18.85→18.08→17.79→17.03m) priced the 17.02m
+     bid that filled; the 14-day quantiles would have said anything under 18.8m was safe.
+     Evidence: one item, ~4 nights (process rule 4) — this is a "read the low column's
+     trend" prompt, not a formula.
    - **Fill-realism check (v1.1; measured, not guessed, since v1.2).** The optimistic buy
      is the 2h-band FLOOR: an extreme print, not a typical price, and overnight is
      exactly when nobody crosses down to it (2026-07-04: both rune bids placed at the

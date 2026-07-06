@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.7
+version: 1.8
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -86,6 +86,16 @@ This is the tribal layer the script can't do — apply ALL of these:
   are slow, and its wide band can be a thin-trading artifact — size in units, never chase.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
+- **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,
+  Ben's framing).** Read the current book's recent lanes before pitching new picks: an
+  item that has closed several profitable laps TODAY is a live, validated edge — the
+  default recommendation is to **increase exposure there to test the theory** (up to the
+  buy limit / concentration comfort), not to spread into a fresh unproven pick of similar
+  grade. Conversely, a lane that is REALLY SLOW (capital parked, asks not filling across
+  multiple windows — the jaw) is a rotation prompt: say explicitly "this lane is stalling,
+  look elsewhere" and offer the redeploy. Frame both as *tests with an exit* (one day of
+  laps is one sample — process rule 4); the buy limit is usually the binding constraint,
+  so state it on the line.
 
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
