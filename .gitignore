@@ -2,4 +2,5 @@
 .claude/settings.local.json
 .claude/worktrees/
 pipeline/.cache/
+pipeline/.guide-history.jsonl
 outcomes.json

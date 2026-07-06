@@ -1192,6 +1192,20 @@ documented sample thresholds clear (process rule 4).
   the immediately-prior log state). Display-only warning like LH2, same header channel —
   never verdict input, and EMPTY stays non-evidence for fills (don't resurrect the deleted
   cancel-to-EMPTY inference). Watch-loop session, 2026-07-05.
+- **Guide-price update tracking → predict the re-anchor (Ben, 2026-07-06 — wants this as an
+  edge for single-item lane flipping).** The GE guide price updates ~once/day per item at an
+  item-specific time; the update instantly re-anchors guide-price buyers, compressing (or
+  lifting) the realtime ceiling — observed live: bludgeon guide 17.61m→17.43m between 21:48
+  and 00:03, fury 2.80m→2.72m the same evening, and both of the day's above-average bludgeon
+  ask fills printed while the ask sat UNDER the pre-update guide. Capture already shipped
+  (watch.mjs `logGuideChanges` → gitignored `pipeline/.guide-history.jsonl`, change-only
+  lines `{ts,id,name,guide,prev}` at watch cadence, so update time pins to ~15 min). The
+  chunk to build once samples accrue: per-item update-time estimate + magnitude model
+  (yesterday's realtime drift ≈ today's guide step), surfaced as a line on `quote.mjs`/
+  `watch.mjs` rows ("guide update expected ~23:00, projected ≈17.2m") and folded into the
+  ask-pricing doctrine (price asks against the POST-update guide when the update lands
+  before the sell window). Honesty: 2 observed updates so far — needs days of history
+  before the timing claim is real. Watch-loop session, 2026-07-06.
 - P1's `dedupeSnapshots()` runs inside `reconstruct()` (positions.json + `monitor.mjs`), but
   `outcomes.mjs` calls `collapseOffers`/`matchTrades` directly for campaign boundaries, so its
   campaigns can still see a snapshot-duplicate terminal as a phantom offer. Low impact (outcomes

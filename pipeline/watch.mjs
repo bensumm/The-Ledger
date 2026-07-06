@@ -45,6 +45,7 @@
  *   node pipeline/watch.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
  *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP } from '../js/quotecore.js';
@@ -58,6 +59,33 @@ import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness 
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
+const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // gitignored, change-only guide log
+
+/* Append one line per watched item whose GE guide price CHANGED since the last logged value
+   (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
+   item's ~daily guide refresh lands + its magnitude is the raw material for pricing around
+   the guide-anchored buyer re-anchor (Ben, 2026-07-06). Local, best-effort, never throws. */
+function logGuideChanges(items, guide) {
+  try {
+    const last = {};
+    if (fs.existsSync(GUIDE_HISTORY)) {
+      for (const line of fs.readFileSync(GUIDE_HISTORY, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        try { const r = JSON.parse(line); last[r.id] = r.guide; } catch { /* skip bad line */ }
+      }
+    }
+    const out = [];
+    const seen = new Set();
+    for (const it of items) {
+      const g = guide[it.id];
+      if (g == null || seen.has(it.id)) continue;
+      seen.add(it.id);
+      if (last[it.id] === g) continue;
+      out.push(JSON.stringify({ ts: Math.floor(Date.now() / 1000), id: it.id, name: it.name, guide: g, prev: last[it.id] ?? null }));
+    }
+    if (out.length) fs.appendFileSync(GUIDE_HISTORY, out.join('\n') + '\n');
+  } catch { /* observability only — never block a watch pass */ }
+}
 
 // ---------------------------------------------------------------------------
 // CLASSIFICATION taxonomy — tunable named constants, NOT magic numbers.
@@ -342,6 +370,7 @@ async function main() {
   }
 
   const all = [...held, ...targets, ...bidItems];
+  logGuideChanges(all, guide); // pin guide-update timing/magnitude for watched items
   const loopMin = Math.min(...all.map(it => it.meta.cadence));
 
   // O1 suggestions ledger: log every held/target read at emit time, unconditionally. `class` is
