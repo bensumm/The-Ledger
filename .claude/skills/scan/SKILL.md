@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.12
+version: 1.13
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -94,6 +94,19 @@ This is the tribal layer the script can't do — apply ALL of these:
   lots (bludgeon 22% of closed), and F1 is still gated — it is a LEAN to test against the
   accruing never-filled-bid count, NOT a hard gate. Liquid items and passive/overnight deep
   band-floor bids are unaffected (there the deep bid is the intended play).
+- **Velocity beats magnitude AT CURRENT CAPITAL — but the crossover comes with size (HYPOTHESIS,
+  2026-07-06 — Ben's framing, backed by the YV1 record).** The measured record so far says
+  high-liquidity fast-cyclers have been the most capital-efficient play *by far* at our current
+  investment level: a liquid item cycles in minutes for a given % gain, while a mid-liquidity
+  big-ticket waits ~half a day for a *similar* % — so the big-ticket's slower lap is pure
+  opportunity cost when both return ~the same percentage. **So default the pick toward the liquid
+  fast-cycle lane at this capital level** (thin margin × huge volume × fast turns), not the patient
+  big-ticket. **The crossover:** as capital grows and you play items whose *absolute* per-unit swings
+  are millions (bigger fluctuation magnitude), the patient big-ticket flip's absolute upside outgrows
+  the velocity edge — at higher variance/risk. So the velocity preference is REGIME-DEPENDENT on
+  position size, not absolute. **Honesty (process rule 4):** this is a lean off a small, concentrated
+  record (bludgeon ~21% of closed lots) — the crossover point is unmeasured; track it as sizes climb,
+  don't treat it as a fixed rule. Companion to the parked-capital-leak hypothesis above.
 - **Band-top artifact detection.** A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
