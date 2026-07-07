@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.14
+version: 1.15
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -123,6 +123,19 @@ This is the tribal layer the script can't do — apply ALL of these:
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
   ROI looks too good.
+- **Asymmetric ask-reach read — the verification gate (2026-07-07, method).** The screen's ROI is
+  computed off the 2h optimistic band edges, which are often extremes the market never actually
+  pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the
+  doctrine already requires and read it two ways: **band-top ask reached ~0/7 days = artifact, SKIP**
+  (the ROI is an illusion — realistic sells sit below break-even; anchor: Dharok's 4.85m and ruby
+  bolts' 3,098 both reached 0/7 while the screen showed +9%/+1.7%). **Band-top ask reached ~7/7 days
+  AND live instasell sitting BELOW the item's own recent bid-side window floor = a real dip-buy**
+  (you're buying an actual intraday dip at market, fills now, no chase — anchor: super restore, live
+  10,377 under the ~10,610 7-day floor with the 10,752 sell reaching 7/7). The tell that separates a
+  clean entry from a trap is not the grade or the ROI — it's **where live sits relative to the item's
+  own window** (below the floor = dip; at/above an unreachable top = illusion). Honesty (rule 4): the
+  METHOD (verify ask-reach before pitching) encodes freely; "dips below the window floor are buys" is
+  a hypothesis off one still-open trade, not a proven pattern — keep scoring it.
 - **Fresh-repricer flag.** A large multi-day regime move = the item was recently repriced
   → overnight-retrace risk. Size small; skip for unattended holds.
 - **Phase tag on the Regime cell (2026-07-06).** `screen.mjs` annotates each Regime cell with a

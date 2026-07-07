@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.15
+version: 1.16
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -104,6 +104,19 @@ requires), take a little less profit, and get a few real laps to learn the lane'
 behavior. Example (2026-07-06, one item — not a rule): a webweaver ask defaulted to 18.90m
 (reached only 2/7 in the next-8h window); stepping to 18.70m (+226k/lap, +1.25%, reached 4/5
 in the current regime) traded ~half the premium for a fillable ask. Break-even floor unchanged.
+
+**Rising-item asks — do NOT under-price to a mid-band clear (Ben, 2026-07-07 — the berserker
+overnight retro):** the step-down rules above are for a STALLED ask (not filling / decaying top).
+The opposite error is just as costly: on an item with momentum ↑ / a RISING regime, an ask parked
+at a mid-band *clear* price fills you out BEFORE the run finishes. When mom is ↑ or the regime is
+rising, price the ask nearer the band TOP (or hold the lot) — do NOT step it down to a level that
+clears mid-climb, and do NOT pre-emptively exit a rising held lot into a lower ask just to book the
+trade. Anchor (one costed sample): a berserker overnight ask left at the 3.04m mid-band clear filled
+at 3,039m while the ring kept running to 3,087m+ live instabuy — leaving ~+240k (≈+48k/ring ×5) on
+the table, and a rebuy to recapture it pays the 2% tax twice (worse than having held). Applies
+doubly overnight, where the UK-day lift is exactly the run you want the ask to ride (`/overnight`
+time-geography). This is the complement of the sell-velocity step-down, not a contradiction: step
+DOWN a stalled/decaying ask; price UP or hold a rising one. Break-even floor unchanged.
 
 **Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `windowrange.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
 
