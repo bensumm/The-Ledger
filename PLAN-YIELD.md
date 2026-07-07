@@ -15,8 +15,8 @@ into `PLAN.md` and is deleted when its last chunk ships** (like `PLAN-VERDICT.md
 | YS1 | ✅ shipped (outcomes.mjs → schema v2: `stateAtFill`/`holdTimeSec`/`parkedSec`/`velocityClass`/`predicted`; dedupe routed; `velocity.mjs`+test. Refinement: the pure `velocityClass` landed here, not YV1, so outcomes.mjs is edited once) |
 | YS2 | ✅ shipped (`suggestionEntry` lean-includes forward fields; `posture` wired into quote/screen/watch; tripwire/fillWindow/thesis/velocity = plumbing until a caller can honestly compute them; `suggestlog.test.mjs` extended) |
 | YV1 | ✅ shipped (`lib/capitalutil.mjs` `bookUtilization`+`parkedStats`; watch footer working/parked line; outcomes `--report` #3 velocity+capital section; `capitalutil.test.mjs`. Scan per-row velocity tag deferred — needs outcomes.json wired into screen; the `--report` section is the primary #3 home) |
-| YT1 | ⏳ building |
-| YP2 | ⏳ |
+| YT1 | ✅ shipped (`lib/sessionthesis.mjs` + `thesis.mjs` CLI (sole writer) + read-only watch reminder line after the emit contract; `sessionthesis.test.mjs`) |
+| YP2 | ⏳ building |
 | YP1 | ⏳ (gated on `.guide-history.jsonl` accrual — ships self-gating) |
 | YA1 | ⏳ (app; APP_VERSION bump) |
 

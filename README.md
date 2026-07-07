@@ -125,7 +125,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`; each held
     lot's note block follows the V5 EMIT CONTRACT built by `lib/emit.mjs`),
     `monitor.mjs`
-    (live read-only log-state snapshot), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
+    (live read-only log-state snapshot), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
+    THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
+    to print a per-held reminder), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
@@ -167,7 +169,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     MEASURED round-trip hold; placeholder thresholds), `capitalutil.mjs` (#3/YV1 — PURE
     `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
     "how long bids sat" + velocity mix over outcomes campaigns); output-only, never a verdict input),
-    `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    `sessionthesis.mjs` (YT1 #4 — PURE session-thesis state model: `loadThesis`/`saveThesis`/`upsert`/
+    `clear`/`prune`/`thesisLine`, the intent-per-lane store watch.mjs reads read-only; persists like
+    watchstate), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
@@ -195,14 +199,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     payload + default-off toggle), `histstate.test.mjs` (YF1 — `deriveState` band-percentile
     clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard),
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
-    `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix)
+    `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix),
+    `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1
     `fetch/` per-URL cache (opt-in cross-invocation fetch cache — one `{ts,url,data}` file per
     cached GET, disposable), the YF1 `outcomes-daily/` per-item reduced past 1h@6h series (sibling
-    of `outcomes-bands/`), and
+    of `outcomes-bands/`), the YT1 `session-thesis.json` (intent-per-lane store; `thesis.mjs` writes,
+    watch.mjs reads), and
     `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map
     `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, support,
     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh

@@ -63,11 +63,13 @@ import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized
 import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization } from './lib/capitalutil.mjs';   // YV1 (#3) — working-vs-parked capital line
+import { loadThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
 const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // gitignored, change-only guide log
 const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
+const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
@@ -474,6 +476,7 @@ async function main() {
   // pass (so vanished positions drop out), and save at pass end. now = ms; guarded per item.
   const nowMs = Date.now();
   const priorState = loadState(WATCH_STATE);
+  const thesisStore = pruneThesis(loadThesis(THESIS_PATH));   // YT1 (#4) read-only: the agent's recorded intent per lane
   const newState = {};
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
@@ -637,6 +640,10 @@ async function main() {
       listAt: heldListAt(row, be, mvHeld), breakEven: be,
       fillProgress: listed || null,
     }));
+    // YT1 (#4): the recorded session thesis for this lane, as an ADDITIONAL nested reminder AFTER the
+    // guaranteed emit-contract fields (never displaces the sell/list-at line; never a verdict input).
+    const th = thesisLine(thesisStore[it.id]);
+    if (th) notes.push(`    ${th}`);
   }
 
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis
