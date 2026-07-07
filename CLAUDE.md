@@ -69,6 +69,20 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Yield-improvement program** (FC1/YF1/YS1/YS2/YV1/YT1/YP2/YP1/YA1, 2026-07-06 — `PLAN-YIELD.md`
+  folded into `PLAN.md` + deleted; shas in the Status table's YIELD block) — the measurement spine +
+  its read layers. **Don't-rebuild:** `outcomes.mjs` is the schema-v2 data spine (EXTENDED, never
+  rebuilt) — `stateAtFill` (band-pctl+regime+phase AS OF every fill via the shared `lib/histstate.mjs`
+  `loadHistState`, itself feeding the SHIPPED `regimeDrift`/`phase` — no market math re-implemented),
+  measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the join, null on
+  pre-YS2 rows). #3 velocity/capital-util (`lib/capitalutil.mjs`/`velocity.mjs`), #4 session-thesis
+  (`lib/sessionthesis.mjs` + `thesis.mjs` CLI, watch read-only), #2 state-transition scan
+  (`lib/statetransition.mjs`) + guide re-anchor (`lib/guideanchor.mjs`), #5 the one in-app
+  Utilization cell (`js/watchcore.js` `capitalSplit`). **The honesty invariants are load-bearing:**
+  F1 stays GATED (descriptive ≠ calibrated); YP1 ships SILENT below its update-count gate; every new
+  surface is OUTPUT-ONLY, never a verdict/alert input; FC1 is OFF by default so decision paths stay
+  byte-identical. Fill-probability + the Trends recommend-price button were DEFERRED (F1-gated), not
+  dropped. Full story: `CHANGELOG.md` (YA1 0.53.0 entry) + `PLAN.md` YIELD Status block.
 - **watch.mjs per-held EMIT CONTRACT** (V5, pipeline+docs only — NO APP_VERSION) — the pure
   `heldNoteBlock()` in `pipeline/lib/emit.mjs` (fixture-pinned `pipeline/emit.test.mjs`) makes each
   held lot's note block ONE stable, consistently-ordered shape: `verdict · conviction-state (V4

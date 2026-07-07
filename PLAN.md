@@ -84,6 +84,7 @@ Discovered / Needs-a-Ben-decision lists.
 | **6** | Business-logic tests + org: OR1 (org map docs) → OR2 (pipeline/lib/ split) → TD1 (money tests) → TD2 (extractions + tests) → TD3 (nice-to-have sweep). |
 | **LW/LH** | LW1→LW2→LW3 (local log-watcher) ∥ LH1→LH2→LH3 (exchange-log hardening) — folded from standalone plan files, both shipped. |
 | **7** | TC1 (trendcore extraction) ∥ GC1 (gateCandidates extraction) ∥ SL1 (suggestlog path regression). **Ready-unassigned: SR1, GA1** (specs below). |
+| **YIELD** | Yield-improvement program (folded from `PLAN-YIELD.md`, all shipped 2026-07-06): FC1 (fetch cache) → YF1 (historical market-state helper) → YS1 (outcomes v2 schema) ∥ YS2 (forward suggestion enrichment) → YV1 (velocity+capital-util #3) → YT1 (session-thesis #4) ∥ YP2 (state-transition scan #2) → YP1 (guide re-anchor #2, gated) → YA1 (in-app utilization #5). Full story: `CHANGELOG.md`. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
 ## Status
@@ -141,6 +142,15 @@ Discovered / Needs-a-Ben-decision lists.
 | V4 | Conviction gating — arm-then-confirm alerts via pure `convictionGate()` (+ `passesBelowSupport`); gates only ESCALATION to a headline, verdict strings unchanged | `pipeline/lib/watchstate.mjs`, `pipeline/watch.mjs`, tests, docs | ✅ `2a87269` (pipeline-only, no APP_VERSION; `js/quotecore.js` untouched. Invariant: Gate-2 breakdown CUT EXEMPT — immediate regardless of pass count) |
 | V5 | Emit-contract standardization — one stable, ordered per-held note block via pure `heldNoteBlock`/`heldListAt`; the sell/list-at + break-even line GUARANTEED on every held lot | new `pipeline/lib/emit.mjs` + test, `pipeline/watch.mjs`, docs | ✅ `825469f` (pipeline+docs, no APP_VERSION; output-format-only — no verdict/alert/row-selection change) |
 | V6 | Recovery-read forecast (ADVISORY recover-vs-drop LEAN composing momVerdict's signals) + capital-awareness Companion (freed-capital redeploy prompt) — both OUTPUT-ONLY, surfaced only when the naive action isn't obviously right | new `pipeline/lib/recovery.mjs`/`capital.mjs` + tests, `pipeline/watch.mjs`, `pipeline/lib/emit.mjs`, docs, `.claude/skills/positions/SKILL.md` (1.15) | ✅ (this commit; pipeline+docs, no APP_VERSION; pure core untouched, breakdown-cut invariant trivially held. Don't-rebuild: a LEAN not a probability — `spike` caps to `uncertain`; never a verdict/alert input. Companion is surface-only — never auto-places/runs the scan. Folded + deleted `PLAN-VERDICT.md`) |
+| FC1 | Opt-in cross-invocation fetch cache (OFF by default → decision paths byte-identical) | `pipeline/lib/marketfetch.mjs`, `fetchcache.test.mjs` | ✅ `0e48b2c` (pipeline-only) |
+| YF1 | Shared historical market-state helper (`loadHistDaily` + pure `deriveState` → band-pctl+regime+phase AS OF a past ts) | `pipeline/lib/marketfetch.mjs`, new `lib/histstate.mjs`, test | ✅ `2ab0139` (pipeline-only) |
+| YS1 | outcomes.mjs → schema v2 (`stateAtFill` every fill, `holdTimeSec`/`parkedSec`/`velocityClass`, `predicted`; dedupe routed) | `pipeline/outcomes.mjs`, new `lib/velocity.mjs`, test | ✅ `92ffa1c` (pipeline-only) |
+| YS2 | Forward prediction-field logging (`posture` wired; tripwire/fillWindow/velocity/thesis plumbing, lean-included) | `lib/suggestlog.mjs`, `quote.mjs`, `screen.mjs`, `watch.mjs` | ✅ `27f0baa` (pipeline-only) |
+| YV1 | Velocity + capital-utilization analytics (#3) — `lib/capitalutil.mjs`; watch footer + outcomes `--report` section | new `lib/capitalutil.mjs`, `watch.mjs`, `outcomes.mjs`, test | ✅ `1ea914d` (pipeline-only; scan per-row velocity tag deferred) |
+| YT1 | Session-thesis memory (#4) — `lib/sessionthesis.mjs` + `thesis.mjs` CLI (sole writer) + read-only watch reminder | new `lib/sessionthesis.mjs`/`thesis.mjs`, `watch.mjs`, test | ✅ `5439fed` (pipeline-only) |
+| YP2 | State-transition scan (#2) — `lib/statetransition.mjs` off `phase()`; screen stdout "WATCH CLOSELY" (captures basing fallers) | new `lib/statetransition.mjs`, `screen.mjs`, test | ✅ `9f60c15` (pipeline-only) |
+| YP1 | Guide re-anchor prediction (#2, HONESTY-GATED — ships silent, 0/16 rows clear the gate) + `.guide-history.jsonl` gitignored→tracked doc fix | new `lib/guideanchor.mjs`, `quote.mjs`, `watch.mjs`, `PLAN.md`, test | ✅ `a93da6a` (pipeline-only) |
+| YA1 | In-app capital-utilization line — Watch tab (#5); pure `capitalSplit`. Fill-probability + Trends recommend-price button DEFERRED (F1-gated) | `js/watchcore.js`, `watch.js`, `state.js`, `styles.css`, `watchcore.test.mjs` | ✅ `a7fd785` (0.53.0; CI smoke + Pages green) |
 | SR1 | `suggestions.jsonl` rotation/compaction | `suggestions.jsonl`, `pipeline/lib/suggestlog.mjs` | ⏳ ready — unassigned (spec below) |
 | GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ⏳ ready — unassigned (spec below) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED (spec below) |
@@ -314,7 +324,7 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   the immediately-prior log state). Display-only warning like LH2, same header channel —
   never verdict input, and EMPTY stays non-evidence for fills (don't resurrect the deleted
   cancel-to-EMPTY inference). Watch-loop session, 2026-07-05.
-- **Guide-price update tracking → predict the re-anchor (Ben, 2026-07-06 — wants this as an
+- **[✅ SHIPPED as YP1 `a93da6a`]** **Guide-price update tracking → predict the re-anchor (Ben, 2026-07-06 — wants this as an
   edge for single-item lane flipping).** The GE guide price updates ~once/day per item at an
   item-specific time; the update instantly re-anchors guide-price buyers, compressing (or
   lifting) the realtime ceiling — observed live: bludgeon guide 17.61m→17.43m between 21:48
@@ -333,7 +343,8 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   campaigns can still see a snapshot-duplicate terminal as a phantom offer. Low impact (outcomes
   is derived/gitignored), but adopt `dedupeSnapshots` there if campaign counts ever look off
   (P1, 2026-07-05).
-- **Cross-invocation fetch cache for the CLI scripts → chunk FC1 (Ben, 2026-07-06 — cut
+- **[✅ SHIPPED as FC1 `0e48b2c` — opt-in, OFF by default so decision paths stay byte-identical]**
+  **Cross-invocation fetch cache for the CLI scripts → chunk FC1 (Ben, 2026-07-06 — cut
   redundant GE API pulls).** Each pipeline script (`watch.mjs`, `screen.mjs`, `quote.mjs`,
   `windowrange.mjs`) spawns a cold `node` process with no shared fetch state, so running a
   `windowrange` right after a `screen` re-pulls `/latest` + `/5m` + `/24h` rows the screen
@@ -358,5 +369,10 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
 
 **Resolved / promoted:** `gateCandidates` testability → chunk **GC1**; LF/CRLF warnings →
 chunk **GA1**; `fetchInputs` triplication → chunk **X1**; `suggestions.jsonl` unbounded growth
-→ chunk **SR1**; README pipeline-inventory gap → shipped in **D1**. Earlier per-plan Discovered
+→ chunk **SR1**; README pipeline-inventory gap → shipped in **D1**; cross-invocation fetch cache →
+shipped as **FC1**; guide re-anchor prediction → shipped as **YP1** (both in the YIELD wave).
+The YIELD wave also left these DEFERRED (honesty-gated, not dropped): in-app fill-probability + the
+Trends "recommend price adjustment" button (both need **F1** open + a published outcomes artifact);
+`outcomes.mjs` `dedupeSnapshots` gap is now CLOSED (YS1); the scan per-row velocity tag (needs
+`outcomes.json` loaded into `screen.mjs`). Earlier per-plan Discovered
 lists (chunks 4/8/10 fixes) are preserved in git history — `git show 39e5d23:PLAN.md`.
