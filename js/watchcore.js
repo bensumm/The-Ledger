@@ -4,6 +4,7 @@
    offer verdict is offerVerdict()'s — this module only MAPS those to card severity / alert
    membership and folds the summary/feed aggregates; it never recomputes a verdict. No imports
    from browser-only modules (keeps it pure + testable). */
+import { fmtP } from './format.js';   // format.js is DOM-free/shared — used to own the --brief line format
 
 // Held-verdict → severity FAMILY for the card's left stripe + pill tint. Semantic colour encodes
 // STATE (green/amber/red); gold stays the accent, never good/bad (the design-system rule).
@@ -85,4 +86,33 @@ export function summary(openFlips=[], closedToday=[]){
 export function capitalSplit(workingGp=0, parkedGp=0){
   const w=workingGp||0, p=parkedGp||0, committed=w+p;
   return {workingGp:w, parkedGp:p, committed, utilizationPct: committed>0 ? Math.round(w/committed*100) : null};
+}
+
+// --- watch.mjs --brief compact book: the format is OWNED BY THE SCRIPT, not the agent ------------
+// Rationale: the recurring one-line-per-item loop report kept drifting (collapsed lines, dropped
+// sell prices) because the layout lived in the agent's head. These pure functions make the layout a
+// fixed contract: ONE line per position, a dot from the verdict, and `list @ X (BE Y)` ALWAYS present
+// when a sell/BE is known (Ben's standing rules output-format-compact-lines + state-sell-price-in-loop
+// — now enforced mechanically). The agent only ADDS judgment notes; it no longer formats the book.
+// Palette is the fixed MONITORING.md "verdict→dot" contract (Ben-iterated 2026-07-05) — do not diverge.
+export function briefDot(verdict){
+  const v=String(verdict||'').toUpperCase();
+  if(v==='CUT'||v==='CUT-CANDIDATE'||v==='CANCEL-BID') return '🔴';               // act now
+  if(v==='LIST-TO-CLEAR'||v==='UNDERWATER') return '🟠';                          // decision pending
+  if(v==='NO-READ'||v==='NO-QUOTE'||v==='UNBOOKED-ASK') return '⚪';              // no priceable read / watched
+  if(verdictFamily(v)==='hold'||v==='BID-OK') return '🟢';                        // working as planned
+  return '🟡';                                                                     // watch: SHOCK/DIURNAL/WATCH-fresh/BID-BEHIND/CROSSING
+}
+// One line per position. `listAt`/`breakEven` are raw gp (null when unknown); the `→ list X (BE Y)`
+// tail is emitted whenever listAt is present, so a resting bid still carries its intended sell.
+export function briefLine({verdict, name, position, listAt=null, breakEven=null}){
+  const sell = listAt!=null
+    ? `→ list ${fmtP(listAt)}${breakEven!=null?` (BE ${fmtP(breakEven)})`:''}`
+    : (breakEven!=null?`(BE ${fmtP(breakEven)})`:'');
+  return `${briefDot(verdict)} ${name} · ${position}${sell?` ${sell}`:''} · ${verdict}`;
+}
+export function briefBook(rows=[], {time='', alerts=0}={}){
+  const n=rows.length;
+  const head=`# book ${time} · ${n} position${n===1?'':'s'}${alerts?` · ⚠ ${alerts} alert${alerts===1?'':'s'}`:' · all quiet'}`.replace(/\s+/g,' ').trim();
+  return [head, ...rows.map(briefLine)];
 }

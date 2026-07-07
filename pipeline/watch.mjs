@@ -51,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH_HOURS,
   diurnalRead, phase, underwaterHours, isOvernightNow } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
+import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
@@ -409,6 +410,7 @@ function heldAlert(it) {
 async function main() {
   const args = process.argv.slice(2);
   const TARGETS_ONLY = args.includes('--targets-only');
+  const BRIEF = args.includes('--brief');   // compact one-line-per-item book (stable, script-owned format)
   const tokens = args.filter(a => !a.startsWith('--'));
 
   const map = await loadMapping();
@@ -593,6 +595,7 @@ async function main() {
   const firstSentence = s => { const m = s.match(/^.*?[.;](?=\s|$)/); return m ? m[0] : s; };
 
   const tableRows = [];   // [verdict, item, position, quick, opt, vol, mom, regime, be]
+  const briefRows = [];   // parallel {verdict,name,position,listAt,breakEven} for the --brief book (script-owned format)
   const notes = [];       // one compact line per item: action first-sentence + window read
 
   // V1/V4 cross-pass memory: priorState/newState/nowMs are computed above (held conviction loop),
@@ -609,8 +612,9 @@ async function main() {
     // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
     const openBid = bids.find(b => b.item === it.id);
     const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)}` : '';
-    tableRows.push([heldVerdict(it), name,
-      `×${qty} @ ${fmtP(Math.round(avgCost))}${listed ? ' · ' + listed : ''}${bidNote}`,
+    const heldVer = heldVerdict(it);
+    const heldPos = `×${qty} @ ${fmtP(Math.round(avgCost))}${listed ? ' · ' + listed : ''}${bidNote}`;
+    tableRows.push([heldVer, name, heldPos,
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
     // V5 EMIT CONTRACT: one standard, consistently-ordered per-held block — verdict · conviction ·
     // Δ-since-last · structural tripwire · sell/list-at (+ break-even) · fill-progress. The
@@ -644,13 +648,15 @@ async function main() {
       else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
         conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support ~${persistMin}m.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
+    const heldLa = heldListAt(row, be, mvHeld);
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
       reliableReason: row.reliable ? null : row.reliableReason,
       conviction, delta, tripwire, recovery,
-      listAt: heldListAt(row, be, mvHeld), breakEven: be,
+      listAt: heldLa, breakEven: be,
       fillProgress: listed || null,
     }));
+    briefRows.push({ verdict: heldVer, name, position: heldPos, listAt: heldLa, breakEven: be });
     // YT1 (#4): the recorded session thesis for this lane, as an ADDITIONAL nested reminder AFTER the
     // guaranteed emit-contract fields (never displaces the sell/list-at line; never a verdict input).
     const th = thesisLine(thesisStore[it.id]);
@@ -664,17 +670,24 @@ async function main() {
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis
   for (const a of orphanAsks) {
     const nm = map.byId[a.item]?.name || ('#' + a.item);
-    tableRows.push(['UNBOOKED-ASK', nm, `ask ${a.qty}/${fmt(a.max)} @ ${fmtP(a.offer)}`, '—', '—', '—', '—', '—', '—']);
+    const orphanPos = `ask ${a.qty}/${fmt(a.max)} @ ${fmtP(a.offer)}`;
+    tableRows.push(['UNBOOKED-ASK', nm, orphanPos, '—', '—', '—', '—', '—', '—']);
+    briefRows.push({ verdict: 'UNBOOKED-ASK', name: nm, position: orphanPos, listAt: a.offer, breakEven: null });
     notes.push(`- ${nm}: not booked in positions.json yet (sync lag); break-even unknown — run sync-fills.mjs to book it.`);
   }
 
   for (const it of bidItems) {
     const { row, name } = it;
     for (const off of it.bids) {
-      tableRows.push([offerVerdict(row, off.offer), name,
-        `bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}`,
+      const bidVer = offerVerdict(row, off.offer);
+      const bidPos = `bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}`;
+      const bidBe = row.quickBuy != null ? breakEven(off.offer) : null;
+      // intended sell if the bid fills: the band top, floored at the fill's own break-even (state-sell-price-in-loop)
+      const bidListAt = (bidBe != null && row.optSell != null) ? Math.max(row.optSell, bidBe) : null;
+      tableRows.push([bidVer, name, bidPos,
         ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row),
-        row.quickBuy != null ? fmtP(breakEven(off.offer)) : '—']);
+        bidBe != null ? fmtP(bidBe) : '—']);
+      briefRows.push({ verdict: bidVer, name, position: bidPos, listAt: bidListAt, breakEven: bidBe });
       const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
       notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
       // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
@@ -702,18 +715,28 @@ async function main() {
 
   for (const it of targets) {
     const { row, cls, be, name } = it;
-    tableRows.push([targetVerdict(it), name, 'watched',
+    const tgtVer = targetVerdict(it);
+    tableRows.push([tgtVer, name, 'watched',
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), be != null ? fmtP(be) : '—']);
+    briefRows.push({ verdict: tgtVer, name, position: 'watched', listAt: row.optSell ?? null, breakEven: be ?? null });
     notes.push(`- ${name}: ${firstSentence(targetAction(row, cls, be))}`);
   }
 
-  console.log('\n| Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime | Break-even |');
-  console.log('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
-  for (const r of tableRows) console.log(`| ${r.join(' | ')} |`);
-
-  if (notes.length) {
+  if (BRIEF) {
+    // --brief: the compact one-line-per-item book. Format is OWNED BY watchcore.briefLine (stable,
+    // fixture-pinned) — the agent relays this verbatim and only ADDS judgment notes. Headline
+    // (alerts) above and SUMMARY below still print; the verbose table + per-item notes are skipped.
     console.log('');
-    for (const n of notes) console.log(n);
+    for (const b of briefRows) console.log(briefLine(b));
+  } else {
+    console.log('\n| Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime | Break-even |');
+    console.log('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+    for (const r of tableRows) console.log(`| ${r.join(' | ')} |`);
+
+    if (notes.length) {
+      console.log('');
+      for (const n of notes) console.log(n);
+    }
   }
 
   // V1: persist THIS pass's state (rebuilt fresh from current items) for the next pass's deltas.

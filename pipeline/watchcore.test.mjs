@@ -20,7 +20,8 @@
  */
 import assert from 'node:assert/strict';
 import { verdictFamily, isHeldAlert, alertCount, splitHeld, INCIDENTAL_GP,
-         isSameLocalDay, todaysFills, summary, capitalSplit, CANCEL_BID } from '../js/watchcore.js';
+         isSameLocalDay, todaysFills, summary, capitalSplit, CANCEL_BID,
+         briefDot, briefLine, briefBook } from '../js/watchcore.js';
 import { offerVerdict } from '../js/quotecore.js';
 
 let pass = 0;
@@ -139,6 +140,50 @@ ok('offerVerdict: NO-QUOTE / CROSSING / BID-BEHIND / BID-OK by band position', (
   assert.equal(offerVerdict(orow(), 90), 'BID-BEHIND');   // below the 2h band low (95)
   assert.equal(offerVerdict(orow(), 97), 'BID-OK');       // inside the band
   assert.equal(offerVerdict(null, 90), 'NO-QUOTE');
+});
+
+/* --- --brief compact book (the SCRIPT-OWNED loop format) ----------------------------------- */
+ok('briefDot maps verdicts to the right severity dot', () => {
+  assert.equal(briefDot('CUT'), '🔴');
+  assert.equal(briefDot('CUT-CANDIDATE'), '🔴');       // act-now family (matches MONITORING palette)
+  assert.equal(briefDot('CANCEL-BID'), '🔴');
+  assert.equal(briefDot('LIST-TO-CLEAR'), '🟠');       // decision pending
+  assert.equal(briefDot('UNDERWATER'), '🟠');
+  assert.equal(briefDot('CROSSING'), '🟡');            // watch
+  assert.equal(briefDot('HOLD'), '🟢');
+  assert.equal(briefDot('HOLD — list high'), '🟢');
+  assert.equal(briefDot('BID-OK'), '🟢');
+  assert.equal(briefDot('BID-BEHIND'), '🟡');            // watch family
+  assert.equal(briefDot('WATCH — fresh entry'), '🟡');  // "WATCH…" is watch amber, not HOLD green
+  assert.equal(briefDot('HOLD — ask filling'), '🟢');   // HOLD-prefix softening stays green
+  assert.equal(briefDot('NO-READ'), '⚪');
+});
+ok('briefLine ALWAYS carries list @ X (BE Y) when a sell is known — even on a resting bid', () => {
+  // a held lot
+  assert.equal(
+    briefLine({ verdict: 'HOLD', name: 'Crushed nest', position: '×7 @ 4,680 · NOT LISTED', listAt: 4821, breakEven: 4776 }),
+    '🟢 Crushed nest · ×7 @ 4,680 · NOT LISTED → list 4,821 (BE 4,776) · HOLD');
+  // a resting bid still states its intended sell (state-sell-price-in-loop, now mechanical)
+  assert.equal(
+    briefLine({ verdict: 'BID-OK', name: 'Super combat potion(4)', position: 'bid 0/550 @ 12,146', listAt: 12500, breakEven: 12394 }),
+    '🟢 Super combat potion(4) · bid 0/550 @ 12,146 → list 12,500 (BE 12,394) · BID-OK');
+});
+ok('briefLine degrades gracefully when list-at is unknown (BE-only, then bare)', () => {
+  assert.equal(briefLine({ verdict: 'NO-READ', name: 'X', position: 'ask 0/1 @ 35.6m', listAt: null, breakEven: 35510000 }),
+    '⚪ X · ask 0/1 @ 35.6m (BE 35.51m) · NO-READ');
+  assert.equal(briefLine({ verdict: 'UNBOOKED-ASK', name: 'Y', position: 'ask 1/1 @ 100', listAt: null, breakEven: null }),
+    '⚪ Y · ask 1/1 @ 100 · UNBOOKED-ASK');
+});
+ok('briefBook header states count + alert state; one line per row', () => {
+  const rows = [
+    { verdict: 'HOLD', name: 'A', position: 'p', listAt: 10, breakEven: 8 },
+    { verdict: 'CUT-CANDIDATE', name: 'B', position: 'q', listAt: 20, breakEven: 18 },
+  ];
+  const out = briefBook(rows, { time: '14:52', alerts: 1 });
+  assert.equal(out.length, 3);                              // header + one line PER row (never collapsed)
+  assert.equal(out[0], '# book 14:52 · 2 positions · ⚠ 1 alert');
+  const quiet = briefBook([rows[0]], { time: '09:00', alerts: 0 });
+  assert.equal(quiet[0], '# book 09:00 · 1 position · all quiet');
 });
 
 console.log(`\nAll ${pass} checks passed.`);
