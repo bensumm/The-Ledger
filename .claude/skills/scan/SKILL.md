@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.16
+version: 1.17
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -63,6 +63,22 @@ This is the tribal layer the script can't do — apply ALL of these:
   intraday band, the band IS the edge: ladder buys at band lows / sell at band tops (the
   crystal-teleport-seed lesson — the band beat mid-spread flips ~4:1). Never list below
   break-even; don't chase a softening item's buy.
+- **Anchor pricing — sit on the fillable side of a round number / guide (Ben, 2026-07-07).** A
+  shared PSYCHOLOGICAL ANCHOR — a round number (esp. a round million: 16.000m, 17.000m) or the
+  CURRENT guide price — clusters orders at it: buyers won't pay OVER it (resistance), sellers won't
+  sell UNDER it (support). That leaves a **dead zone just on the wrong side**. So when a
+  band/live-justified price lands next to an anchor, **nudge it across to the fillable side**: **asks
+  just UNDER** the anchor (10,699, not 10,700+), **bids just OVER** it (16.001m, never 15.997m —
+  you'd sit just beneath the seller cluster and catch nothing). Two guards: (1) **nudge, not
+  override** — the rule refines a price you already justified off the band/live read; it never sets
+  the price alone (if the band says bid 15.5m, bid 15.5m, don't jump to 16m to be "over a round").
+  (2) **guide is an anchor ONLY when guide ≈ live** — a STALE/diverged guide (post-reprice, guide
+  lagging the live market — Seeking arrow guide 2,832 vs live ~4,800) is NOT the anchor; there the
+  round numbers near the LIVE price are. First confirming evidence (2026-07-07): a super-restore ask
+  stalled 5+ passes at 10,713 (above the 10,700 anchor), kissing 10,698 and retreating, then filled
+  promptly at 10,699 once dropped just under the anchor (+108/u). **Honesty (rule 4):** the
+  microstructure logic (order clustering at anchors) is well-established, but this is n=1 in OUR
+  fills — keep scoring it (a 3,001-vs-2,957 bid test would add the buy-side sample).
 - **Entry aggression follows posture (Ben, 2026-07-05).** When Ben is ACTIVELY flipping
   (at the client, watch loop running), price entries to FILL: recommend bids at or near
   the live instasell — or the upper half of the band — accepting a thinner per-unit edge
