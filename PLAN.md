@@ -146,7 +146,7 @@ Discovered / Needs-a-Ben-decision lists.
 | YF1 | Shared historical market-state helper (`loadHistDaily` + pure `deriveState` → band-pctl+regime+phase AS OF a past ts) | `pipeline/lib/marketfetch.mjs`, new `lib/histstate.mjs`, test | ✅ `2ab0139` (pipeline-only) |
 | YS1 | outcomes.mjs → schema v2 (`stateAtFill` every fill, `holdTimeSec`/`parkedSec`/`velocityClass`, `predicted`; dedupe routed) | `pipeline/outcomes.mjs`, new `lib/velocity.mjs`, test | ✅ `92ffa1c` (pipeline-only) |
 | YS2 | Forward prediction-field logging (`posture` wired; tripwire/fillWindow/velocity/thesis plumbing, lean-included) | `lib/suggestlog.mjs`, `quote.mjs`, `screen.mjs`, `watch.mjs` | ✅ `27f0baa` (pipeline-only) |
-| YV1 | Velocity + capital-utilization analytics (#3) — `lib/capitalutil.mjs`; watch footer + outcomes `--report` section | new `lib/capitalutil.mjs`, `watch.mjs`, `outcomes.mjs`, test | ✅ `1ea914d` (pipeline-only; scan per-row velocity tag deferred) |
+| YV1 | Velocity + capital-utilization analytics (#3) — `lib/capitalutil.mjs`; watch footer + outcomes `--report` section | new `lib/capitalutil.mjs`, `watch.mjs`, `outcomes.mjs`, test | ✅ `1ea914d` (pipeline-only). Follow-ups shipped: scan velocity FOOTNOTE `7502889` (`lib/velocitytag.mjs`); total-capital view `2fdae81` (`totalCapital`+`lib/cashstate.mjs`+`cash.mjs`) |
 | YT1 | Session-thesis memory (#4) — `lib/sessionthesis.mjs` + `thesis.mjs` CLI (sole writer) + read-only watch reminder | new `lib/sessionthesis.mjs`/`thesis.mjs`, `watch.mjs`, test | ✅ `5439fed` (pipeline-only) |
 | YP2 | State-transition scan (#2) — `lib/statetransition.mjs` off `phase()`; screen stdout "WATCH CLOSELY" (captures basing fallers) | new `lib/statetransition.mjs`, `screen.mjs`, test | ✅ `9f60c15` (pipeline-only) |
 | YP1 | Guide re-anchor prediction (#2, HONESTY-GATED — ships silent, 0/16 rows clear the gate) + `.guide-history.jsonl` gitignored→tracked doc fix | new `lib/guideanchor.mjs`, `quote.mjs`, `watch.mjs`, `PLAN.md`, test | ✅ `a93da6a` (pipeline-only) |
@@ -373,6 +373,11 @@ chunk **GA1**; `fetchInputs` triplication → chunk **X1**; `suggestions.jsonl` 
 shipped as **FC1**; guide re-anchor prediction → shipped as **YP1** (both in the YIELD wave).
 The YIELD wave also left these DEFERRED (honesty-gated, not dropped): in-app fill-probability + the
 Trends "recommend price adjustment" button (both need **F1** open + a published outcomes artifact);
-`outcomes.mjs` `dedupeSnapshots` gap is now CLOSED (YS1); the scan per-row velocity tag (needs
-`outcomes.json` loaded into `screen.mjs`). Earlier per-plan Discovered
+`outcomes.mjs` `dedupeSnapshots` gap is now CLOSED (YS1). The scan per-row velocity tag deferral is
+now **SHIPPED** (`7502889`) as a stdout velocity FOOTNOTE (`lib/velocitytag.mjs` reads the gitignored
+`outcomes.json`) rather than a table column — kept out of the published cells so the canonical
+table/`screen.json`/app contract stay byte-identical (same discipline as the phase fold). Also
+shipped post-YIELD: **total-capital view** (`2fdae81`) — `capitalutil.totalCapital` + `lib/cashstate.mjs`
++ `pipeline/cash.mjs` add a committed + STATED idle-cash line to the watch footer (idle GP is in no
+log, so it's a stated snapshot, staleness-bannered, never a verdict input). Earlier per-plan Discovered
 lists (chunks 4/8/10 fixes) are preserved in git history — `git show 39e5d23:PLAN.md`.
