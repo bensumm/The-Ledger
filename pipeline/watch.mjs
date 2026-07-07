@@ -64,10 +64,11 @@ import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs'
 import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization } from './lib/capitalutil.mjs';   // YV1 (#3) — working-vs-parked capital line
 import { loadThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
+import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
-const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // gitignored, change-only guide log
+const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
 const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
 const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
 
@@ -477,6 +478,7 @@ async function main() {
   const nowMs = Date.now();
   const priorState = loadState(WATCH_STATE);
   const thesisStore = pruneThesis(loadThesis(THESIS_PATH));   // YT1 (#4) read-only: the agent's recorded intent per lane
+  const guideHist = loadGuideHistory(GUIDE_HISTORY);          // YP1 (#2) advisory: guide re-anchor history (gated → silent until it accrues)
   const newState = {};
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
@@ -644,6 +646,10 @@ async function main() {
     // guaranteed emit-contract fields (never displaces the sell/list-at line; never a verdict input).
     const th = thesisLine(thesisStore[it.id]);
     if (th) notes.push(`    ${th}`);
+    // YP1 (#2): advisory guide re-anchor line — gated (silent below GUIDE_MIN_UPDATES observed
+    // updates), output-only, never a verdict input. Price asks against the POST-update guide.
+    const ga = guideAnchorLine(guideAnchorModel(guideUpdates(guideHist, it.id)), guide[it.id] ?? null);
+    if (ga) notes.push(`    ${ga}`);
   }
 
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis

@@ -25,9 +25,11 @@ import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { mdTable, stdCells } from './lib/cli.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
+import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
+const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl');   // YP1: watch.mjs writes it, we read it advisory
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
@@ -52,12 +54,15 @@ async function runItems() {
     if (!hit) { console.error(`! no item named "${t}" — check spelling or pass a numeric id`); continue; }
     resolved.push(hit);
   }
+  const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
   const rows = [], lines = [], sugg = [];
   for (const { id, name } of resolved) {
     const inp = await fetchItemInputs(id);
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
+    const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
+    if (gl) lines.push('  ' + gl);
     sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active' }));  // per-item read has no verdict
   }
   // O1 suggestions ledger: log every emitted read at emit time, unconditionally (analytics only).
@@ -111,6 +116,7 @@ async function runPositions() {
   const map = await loadMapping();
   const guide = await loadGuide();
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
+  const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
   const rows = [], lines = [], sugg = [], staleRisk = [];
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
@@ -120,6 +126,8 @@ async function runPositions() {
     const v = verdict(row, be, cost, inp.ts5m, buyTs);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
+    const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
+    if (gl) lines.push('  ' + gl);
     sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v, posture: isOvernightNow() ? 'overnight' : 'active' }));  // the emitted per-position verdict string
     // S2 morning-staleness watch (informational only — the Verdict column above is UNCHANGED). A resting
     // SELL is at risk of being stale/underwater by morning if it can't clear at profit now (instabuy <

@@ -320,7 +320,7 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   lifting) the realtime ceiling — observed live: bludgeon guide 17.61m→17.43m between 21:48
   and 00:03, fury 2.80m→2.72m the same evening, and both of the day's above-average bludgeon
   ask fills printed while the ask sat UNDER the pre-update guide. Capture already shipped
-  (watch.mjs `logGuideChanges` → gitignored `pipeline/.guide-history.jsonl`, change-only
+  (watch.mjs `logGuideChanges` → TRACKED `pipeline/.guide-history.jsonl`, change-only
   lines `{ts,id,name,guide,prev}` at watch cadence, so update time pins to ~15 min). The
   chunk to build once samples accrue: per-item update-time estimate + magnitude model
   (yesterday's realtime drift ≈ today's guide step), surfaced as a line on `quote.mjs`/

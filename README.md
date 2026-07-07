@@ -171,6 +171,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     "how long bids sat" + velocity mix over outcomes campaigns); output-only, never a verdict input),
     `statetransition.mjs` (YP2 #2 — PURE `stateTransition(phase())`: flags a basing faller / a spike on
     rising-vs-falling lows for the screen's "watch closely" list; descriptive, never a buy signal),
+    `guideanchor.mjs` (YP1 #2 — PURE guide re-anchor model off `.guide-history.jsonl`: modal update
+    hour + median step, HONESTY-GATED below `GUIDE_MIN_UPDATES` (ships silent today — the wild history
+    is all baselines); advisory line on quote/watch, never a verdict input),
     `sessionthesis.mjs` (YT1 #4 — PURE session-thesis state model: `loadThesis`/`saveThesis`/`upsert`/
     `clear`/`prune`/`thesisLine`, the intent-per-lane store watch.mjs reads read-only; persists like
     watchstate), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
@@ -203,7 +206,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
     `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix),
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
-    `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard)
+    `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
+    `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
@@ -224,7 +228,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     one JSON line `{ts,id,name,guide,prev}` per observed change, appended by `watch.mjs`
     `logGuideChanges()` at watch cadence. Purpose: pin each item's ~daily guide-update
     time + magnitude to feed the guide-re-anchor pricing edge (PLAN.md Discovered,
-    2026-07-06). Consumer: none yet — accruing samples for that future chunk. (Not auto-committed by
+    2026-07-06). Consumer: `pipeline/lib/guideanchor.mjs` (YP1 — the guide re-anchor model, honesty-gated
+    on accrual; quote.mjs/watch.mjs surface its advisory line, silent until enough real updates accrue). (Not auto-committed by
     `sync-fills.mjs`; commit it periodically so the record on `origin` stays current.)
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +

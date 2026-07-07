@@ -17,8 +17,8 @@ into `PLAN.md` and is deleted when its last chunk ships** (like `PLAN-VERDICT.md
 | YV1 | ✅ shipped (`lib/capitalutil.mjs` `bookUtilization`+`parkedStats`; watch footer working/parked line; outcomes `--report` #3 velocity+capital section; `capitalutil.test.mjs`. Scan per-row velocity tag deferred — needs outcomes.json wired into screen; the `--report` section is the primary #3 home) |
 | YT1 | ✅ shipped (`lib/sessionthesis.mjs` + `thesis.mjs` CLI (sole writer) + read-only watch reminder line after the emit contract; `sessionthesis.test.mjs`) |
 | YP2 | ✅ shipped (`lib/statetransition.mjs` off `phase()`; screen.mjs stdout "WATCH CLOSELY" list, deduped across niches, captures basing fallers before the falling-drop; `statetransition.test.mjs`) |
-| YP1 | ⏳ building (gated on `.guide-history.jsonl` accrual — ships self-gating) |
-| YA1 | ⏳ (app; APP_VERSION bump) |
+| YP1 | ✅ shipped (`lib/guideanchor.mjs` model + gated advisory line on quote/watch; ships SILENT — 0/16 real history rows clear the gate; also reconciled the `.guide-history.jsonl` gitignored→tracked doc drift; `guideanchor.test.mjs`) |
+| YA1 | ⏳ building (app; APP_VERSION bump) |
 
 Ben's fixed priority: **#1 (highest) → #3 → #4 (folds into #1) → #2 → #5 (eventually).**
 The unifying insight that shapes everything below: **#1 is the data spine; #3/#4/#2 are read
