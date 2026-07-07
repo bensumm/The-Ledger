@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.13
+version: 1.14
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -83,6 +83,18 @@ This is the tribal layer the script can't do — apply ALL of these:
   near-instantly, and within ~5 minutes the instabuy dropped 18.51m→18.35m with momentum
   flipping to a 2h breakdown — the adverse-selection cost of a fill-priced first entry,
   materializing in real time.
+  **BUT the new-lane caution SCALES DOWN with liquidity (Ben, 2026-07-06 — "risk is just an
+  opportunity to learn").** On a HYPER-LIQUID item the deep two-sided pool IS the risk mitigant: a
+  fill-priced first entry that goes wrong exits straight back into hundreds of thousands of daily
+  units, so the downside is a little tax/spread, not being stranded — the adverse selection that
+  burned the *big-ticket* webweaver is cheap on a liquid commodity. So on a liquid lane, **price the
+  first entry to FILL (at/near live) and size it fully** rather than sitting at a band-floor bid
+  burning cycles — you learn the lane by trading it, and the liquidity is your exit. Reserve the
+  cautious below-live / half-size first entry for ILLIQUID or big-ticket lanes where you genuinely
+  can't exit cheaply. (Anchor: sitting a snape-grass bid 16 below live while it traded, 2026-07-06 —
+  the caution cost cycles the 107k/day liquidity already covered.) The break-even floor and
+  real-breakdown cuts are unchanged — this relaxes ENTRY timidity, not the floors. See Claude memory
+  `risk-tolerance-lean-in`.
 - **Parked-capital leak on mid-liquidity band-floor bids (HYPOTHESIS, 2026-07-06 — YV1
   data, not yet a rule).** The first `outcomes.mjs --report` capital-efficiency read showed
   **~24% of bids never filled** and that band-low (0–20 pct) **mid-liquidity** buys are the
