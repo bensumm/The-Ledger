@@ -11,8 +11,8 @@ into `PLAN.md` and is deleted when its last chunk ships** (like `PLAN-VERDICT.md
 | Chunk | State |
 | --- | --- |
 | FC1 | ✅ shipped (opt-in fetch cache; OFF by default → decision paths byte-identical; `fetchcache.test.mjs`) |
-| YF1 | ⏳ building |
-| YS1 | ⏳ |
+| YF1 | ✅ shipped (`loadHistDaily` + pure `deriveState` in `lib/histstate.mjs`; `histstate.test.mjs`) |
+| YS1 | ⏳ building |
 | YS2 | ⏳ |
 | YV1 | ⏳ |
 | YT1 | ⏳ |

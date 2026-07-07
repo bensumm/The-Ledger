@@ -21,6 +21,7 @@ const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window
 const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
 const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
 const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (outcomes.mjs; tiny)
+const OD_DIR = path.join(CACHE_DIR, 'outcomes-daily'); // per-item REDUCED historical 1h@6h series (YF1 loadHistDaily; tiny)
 const MAP_CACHE = path.join(CACHE_DIR, 'mapping.cache.json'); // under pipeline/.cache/ (OR2); shared name<->id loader
 
 export const API = 'https://prices.runescape.wiki/api/v1/osrs';
@@ -441,5 +442,62 @@ export async function loadHistBands(reqs, hours = 2) {
       if (d.lv > 0 || d.hv > 0) tradedWin++;
     }
     return { bandLo, bandHi, active5m, tradedWin, loVol, hiVol, nWin, covered };
+  });
+}
+
+/* --- loadHistDaily(reqs, days, stepHours): the PAST-ANCHORED sibling of loadHistBands (YF1). For a
+   SET of (item, endUnix) requests it reconstructs the trailing `days` 6h-sampled series ENDING at
+   each endUnix — the exact `[{avgLowPrice, avgHighPrice, timestamp}]` shape regimeDrift()/phase()
+   consume — sourced from the historical whole-market /1h?timestamp bulk endpoint (the ONLY way to
+   read a PAST 1h window; per-item /timeseries has no timestamp param). This is what lets
+   lib/histstate.mjs classify regime + phase AS OF a fill, not just now.
+
+   Same disk discipline as loadHistBands: each distinct 6h window (aligned to the step grid so
+   nearby reqs share windows) is fetched ONCE whole-market, every requested item extracted from it,
+   only the reduced per-item datum {lo,hi} persisted under .cache/outcomes-daily/<id>.json. A window
+   with no entry for an item is cached as null so it is never re-fetched. Past windows are immutable.
+
+   reqs: [{ id, endUnix }]. Returns an array aligned to reqs, each an ASCENDING points list
+   [{ avgLowPrice, avgHighPrice, timestamp }] (windows with no trade for that item are dropped). --- */
+export async function loadHistDaily(reqs, days = 17, stepHours = 6) {
+  ensureCacheDir();
+  try { fs.mkdirSync(OD_DIR, { recursive: true }); } catch {}
+  const step = stepHours * 3600;                              // 6h = 21600, divisible by 3600 (grid-legal for /1h?timestamp)
+  const nWin = Math.max(2, Math.ceil(days * 24 / stepHours));
+  const align = t => Math.floor(t / step) * step;
+  const ids = new Set(reqs.map(r => r.id));
+
+  const store = new Map();                                    // id -> { window: {lo,hi}|null }
+  for (const id of ids) { let s = {}; try { s = JSON.parse(fs.readFileSync(path.join(OD_DIR, id + '.json'), 'utf8')); } catch {} store.set(id, s); }
+
+  const reqWindows = reqs.map(r => { const latest = align(r.endUnix); const ws = []; for (let i = 0; i < nWin; i++) ws.push(latest - i * step); return ws; });
+  const missing = new Set();
+  reqs.forEach((r, idx) => { const s = store.get(r.id); for (const w of reqWindows[idx]) if (s[w] === undefined) missing.add(w); });
+
+  const dirty = new Set();
+  for (const w of [...missing].sort((a, b) => b - a)) {
+    let data = null;
+    try { data = (await jget(API + '/1h?timestamp=' + w)).data || {}; } catch { data = null; }
+    await sleep(70);
+    for (const id of ids) {
+      const s = store.get(id);
+      if (s[w] !== undefined) continue;
+      if (data === null) continue;                            // fetch failed → leave undefined for a later retry
+      const e = data[id] || data[String(id)];
+      s[w] = e ? { lo: e.avgLowPrice ?? null, hi: e.avgHighPrice ?? null } : null;
+      dirty.add(id);
+    }
+  }
+  for (const id of dirty) { try { fs.writeFileSync(path.join(OD_DIR, id + '.json'), JSON.stringify(store.get(id))); } catch {} }
+
+  return reqs.map((r, idx) => {
+    const s = store.get(r.id);
+    const pts = [];
+    for (const w of [...reqWindows[idx]].sort((a, b) => a - b)) {
+      const d = s[w]; if (!d) continue;
+      if (d.lo == null && d.hi == null) continue;
+      pts.push({ avgLowPrice: d.lo, avgHighPrice: d.hi, timestamp: w });
+    }
+    return pts;
   });
 }

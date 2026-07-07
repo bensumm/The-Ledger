@@ -133,7 +133,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
     semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
-    (node-side price/guide fetch layer + historical bands + the FC1 opt-in cross-invocation fetch
+    (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
+    `loadHistDaily` (YF1) + the FC1 opt-in cross-invocation fetch
     cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
     within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
     helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
@@ -157,7 +158,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     non-clean position — decides NOTHING, never a verdict/alert input; a `spike` caps confidence),
     `capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
-    only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire)
+    only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
+    `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
+    classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
+    honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
+    state-transition scan both read — no market math re-implemented)
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
@@ -178,12 +184,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     advisory recover-vs-drop composition, the spike confidence-cap, and the trigger gating) and
     `capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
     guards), `fetchcache.test.mjs` (FC1 — the opt-in fetch cache's TTL hit/miss + byte-identical
-    payload + default-off toggle) — all auto-discovered by
+    payload + default-off toggle), `histstate.test.mjs` (YF1 — `deriveState` band-percentile
+    clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard)
+    — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1
     `fetch/` per-URL cache (opt-in cross-invocation fetch cache — one `{ts,url,data}` file per
-    cached GET, disposable), and
+    cached GET, disposable), the YF1 `outcomes-daily/` per-item reduced past 1h@6h series (sibling
+    of `outcomes-bands/`), and
     `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map
     `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, support,
     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh
