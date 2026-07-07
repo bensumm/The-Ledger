@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.16
+version: 1.17
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -220,6 +220,17 @@ clear, fills on current prints". The data is already in hand (the `windowrange.m
 window-line read the doctrine above requires); this rule just forbids a bare number. It
 also sets the re-check expectation: a price whose window hasn't arrived yet isn't "not
 filling".
+
+**Verify the SELL leg before quoting a profit — MANDATORY, not judgment (Ben, 2026-07-07, the
+DHCB overpitch).** Whenever you pitch a dip-bid's or a hold's expected profit off a band top /
+optimistic sell, **run `windowrange.mjs --ask <sell target>` first and quote the REACHABLE sell
+(the ~50–75%-day reach level), never the raw 2h band top.** The band top is a CANDIDATE (input),
+not the pitched number — on a thin + wide-band item it is an artifact that never reaches. This is a
+hard checklist step (like `/overnight`'s fill-realism check), because the failure was a *skipped
+step*, not a bad call: DHCB's band-top sell 36.21m reached **0/7 days**, I quoted +690–810k off it
+without running `--ask`, and the reachable sell was ~35.6m (+80k, which then went underwater). No
+edge is real until BOTH legs are verified — the buy (trajectory / dip-vs-knife) AND the sell
+(`--ask` reach).
 
 Preserve the standard 10-column
 `--positions` table exactly as the script printed it —
