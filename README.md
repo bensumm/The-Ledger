@@ -133,7 +133,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
     semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
-    (node-side price/guide fetch layer + historical bands), `cli.mjs` (shared arg/format/table
+    (node-side price/guide fetch layer + historical bands + the FC1 opt-in cross-invocation fetch
+    cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
+    within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
     helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
     appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
     `watchstate.mjs` (V1/V4 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
@@ -175,10 +177,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     guaranteed sell line + fixed field order + `heldListAt` precedence), `recovery.test.mjs` (V6 — the
     advisory recover-vs-drop composition, the spike confidence-cap, and the trigger gating) and
     `capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
-    guards) — all auto-discovered by
+    guards), `fetchcache.test.mjs` (FC1 — the opt-in fetch cache's TTL hit/miss + byte-identical
+    payload + default-off toggle) — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
-    `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, and
+    `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1
+    `fetch/` per-URL cache (opt-in cross-invocation fetch cache — one `{ts,url,data}` file per
+    cached GET, disposable), and
     `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map
     `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, support,
     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh

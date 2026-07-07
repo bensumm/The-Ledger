@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(HERE, '..', '.cache'); // pipeline/.cache/ — this file lives in pipeline/lib/ (OR2)
@@ -53,6 +54,46 @@ export async function jget(url) {
   } finally { clearTimeout(to); }
 }
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* --- FC1: opt-in cross-invocation fetch cache (PLAN-YIELD) -----------------------------------
+   OFF by default. Enable with COFFER_FETCH_CACHE=1 (env) or setFetchCache(true). When enabled, the
+   per-item GET reads below (fetchLatest / fetchTs / fetch24hOne) are served from a gitignored
+   per-URL file cache under .cache/fetch/ when younger than a per-endpoint TTL — a PURE wrapper: a
+   cache HIT returns the exact payload a live fetch would have returned within the TTL, so numbers
+   stay byte-identical. This kills the redundant re-pulls when a screen → windowrange → watch on the
+   same item all fire seconds apart. Default-OFF is deliberate: every existing decision path
+   (quote --positions, the watch verdict pass) stays byte-identical unless a caller opts in, and the
+   TTLs are sized so even when enabled a live price can only be seconds stale — NEVER enable the
+   cache on a position-management or write-committing run (a verdict wants the live book). The bulk
+   screen loaders keep their own readCache/writeCache store; FC1 only wraps the per-item fetchers
+   that had no cross-process cache. .cache/ is already gitignored (OR2), so no new ignore entry. */
+const FETCH_DIR = path.join(CACHE_DIR, 'fetch');
+let cacheEnabled = process.env.COFFER_FETCH_CACHE === '1';
+export function setFetchCache(on) { cacheEnabled = !!on; }
+export function fetchCacheEnabled() { return cacheEnabled; }
+// per-endpoint TTLs (ms): live /latest + the 5m band move fast → short; /24h + the 1h/6h series move
+// slowly → longer. Sized so a cached value can never feed a decision a stale price it would regret.
+export const FETCH_TTL = { latest: 60e3, ts5m: 60e3, tsSlow: 15 * 60e3, vol24: 15 * 60e3 };
+const fetchCacheName = url => createHash('sha1').update(url).digest('hex') + '.json';
+// pure-ish cache primitives (dir injectable so they're fixture-testable without the network)
+export function _fetchCacheGet(dir, url, ttlMs, now = Date.now()) {
+  try {
+    const o = JSON.parse(fs.readFileSync(path.join(dir, fetchCacheName(url)), 'utf8'));
+    if (o && o.url === url && (now - o.ts) < ttlMs) return o.data;
+  } catch {}
+  return undefined;   // miss (absent, wrong url, or expired) — never a fabricated payload
+}
+export function _fetchCachePut(dir, url, data, now = Date.now()) {
+  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, fetchCacheName(url)), JSON.stringify({ ts: now, url, data })); } catch {}
+}
+export async function cachedJget(url, ttlMs) {
+  if (!cacheEnabled || !(ttlMs > 0)) return jget(url);          // disabled → straight passthrough (byte-identical)
+  const hit = _fetchCacheGet(FETCH_DIR, url, ttlMs);
+  if (hit !== undefined) return hit;
+  const data = await jget(url);
+  _fetchCachePut(FETCH_DIR, url, data);
+  return data;
+}
 
 /* --- mapping (id<->name, buy limit). 24h TTL, cache shared with add-manual-fill.mjs.
    Returns { byId:{id:{name,limit}}, resolve(nameOrId)->{id,name}|null } --- */
@@ -121,9 +162,9 @@ export async function loadGuide() {
 }
 
 /* --- single-item live inputs (quote.mjs / --positions) --- */
-export async function fetchLatest(id) { const j = await jget(API + '/latest?id=' + id); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
-export async function fetchTs(id, step) { return (await jget(API + '/timeseries?id=' + id + '&timestep=' + step)).data || []; }
-export async function fetch24hOne(id) { const j = await jget(API + '/24h?id=' + id); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
+export async function fetchLatest(id) { const j = await cachedJget(API + '/latest?id=' + id, FETCH_TTL.latest); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
+export async function fetchTs(id, step) { return (await cachedJget(API + '/timeseries?id=' + id + '&timestep=' + step, step === '5m' ? FETCH_TTL.ts5m : FETCH_TTL.tsSlow)).data || []; }
+export async function fetch24hOne(id) { const j = await cachedJget(API + '/24h?id=' + id, FETCH_TTL.vol24); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
 
 /* --- fetchItemInputs(id): the combined latest + 5m + 6h series + 24h-vol read every per-item
    consumer needs, with polite 60ms spacing across a multi-item ask. THE one copy — was a
