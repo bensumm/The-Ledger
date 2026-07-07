@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.11
+version: 1.12
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -83,6 +83,17 @@ This is the tribal layer the script can't do — apply ALL of these:
   near-instantly, and within ~5 minutes the instabuy dropped 18.51m→18.35m with momentum
   flipping to a 2h breakdown — the adverse-selection cost of a fill-priced first entry,
   materializing in real time.
+- **Parked-capital leak on mid-liquidity band-floor bids (HYPOTHESIS, 2026-07-06 — YV1
+  data, not yet a rule).** The first `outcomes.mjs --report` capital-efficiency read showed
+  **~24% of bids never filled** and that band-low (0–20 pct) **mid-liquidity** buys are the
+  slowest to fill (~24m median vs ~9m liquid) — i.e. mid-liquidity band-floor bids are where
+  capital gets stranded. So when *actively* flipping, lean toward pricing a mid-liquidity entry
+  nearer the live instasell rather than the deep band floor: the missed cycles + stranded gp
+  likely cost more than the floor discount saves (the measured-evidence companion to the
+  posture rule above). **Honesty (process rule 4):** this is descriptive off ~116 concentrated
+  lots (bludgeon 22% of closed), and F1 is still gated — it is a LEAN to test against the
+  accruing never-filled-bid count, NOT a hard gate. Liquid items and passive/overnight deep
+  band-floor bids are unaffected (there the deep bid is the intended play).
 - **Band-top artifact detection.** A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
