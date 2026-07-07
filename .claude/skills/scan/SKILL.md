@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.15
+version: 1.16
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -156,6 +156,25 @@ This is the tribal layer the script can't do — apply ALL of these:
   falling-exclusion would otherwise drop (grade-capped B, flagged provisional) — turn it on only to
   trial base-buy candidates, and treat its picks as unproven (thresholds are placeholders, one item
   of evidence). Honesty rule (process rule 4): the classifier is new and unvalidated.
+- **Froth entry — the check is a CLASSIFIER, not a PREDICTOR (2026-07-07, method).** When tempted
+  to trade a spike ("catch the froth window"), run the froth-entry diligence — the 21-night full-day
+  trajectory (`windowrange.mjs "<item>" --window 0-23 --nights 21`) read for the **lows-trend + volume**
+  — but be clear about what it can and cannot do. It tells you, for a move ALREADY UNDERWAY, whether
+  it's the good kind or a knife: **spike + rising-then-holding lows + solid/rising volume = a healthy
+  reprice to a new sustained base** (ride/dabble-able off that base, with a hard tripwire below the new
+  base low), vs **spike + FALLING lows = distribution/knife** (never enter). What it CANNOT do is
+  predict the IGNITION: the explosive first leg fires out of a flat-or-soft base driven by an EXOGENOUS
+  catalyst (meta shift, update, news) that is not in the price history, and volume typically rises WITH
+  the spike, not ahead of it — so there is no leading price/volume signal for the launch. Anchor
+  (2026-07-07): webweaver bow exploded 07-01 (14.3m→19.7m) out of a flat base whose lows were slightly
+  FALLING the day before — nothing on 06-30 forecast it; the check would only have flagged it (correctly,
+  as holding-lows) on 07-02, after the leg. **The strategic consequence:** froth trading here is "ride
+  the healthy moves already in motion and dodge the knives," NOT "catch the explosion" (unforecastable
+  with price-history tools). Two more guards carry over: a big-ticket spike (webweaver ~18m/unit) is NOT
+  dabble-sized — a genuine SMALL froth experiment needs a CHEAP holding-lows spike where 2–4m buys a
+  survivable position; and every froth entry pre-commits a mechanical exit (first pass of falling lows /
+  momentum ↓ = exit, no averaging down). Honesty (rule 4): n≈0 froth trades of our own — this is
+  data-gathering with a capped downside, not a proven edge.
 - **Big-ticket caution.** High per-unit capital → each fill is expensive; require real
   gp-flow (units × net), not a unit count. The script now SURFACES these via the gp-flow gate,
   flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
