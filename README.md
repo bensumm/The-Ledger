@@ -183,6 +183,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `.capital-state.json`; kept out of pure `capitalutil.mjs`),
     `statetransition.mjs` (YP2 #2 — PURE `stateTransition(phase())`: flags a basing faller / a spike on
     rising-vs-falling lows for the screen's "watch closely" list; descriptive, never a buy signal),
+    `velocitytag.mjs` (Build 2 — PURE `buildVelocityIndex`/`velocityTag` over the gitignored
+    outcomes.json campaigns: per-item dominant velocity + median time-to-first-fill + % of bids that
+    never filled, for screen.mjs's stdout velocity footnote; a label off history, never a rate/gate),
     `guideanchor.mjs` (YP1 #2 — PURE guide re-anchor model off `.guide-history.jsonl`: modal update
     hour + median step, HONESTY-GATED below `GUIDE_MIN_UPDATES` (ships silent today — the wild history
     is all baselines); advisory line on quote/watch, never a verdict input),
@@ -218,6 +221,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
     `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix
     + `totalCapital` committed/idle-cash split, null-safe when cash unknown),
+    `velocitytag.test.mjs` (Build 2 — `buildVelocityIndex` aggregation/dominant-class/median + null-safe;
+    `velocityTag` minN gate, `fast·~Nm` format, ≥20% unfilled suffix),
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate)

@@ -69,6 +69,7 @@ import { parseArgs, parseGp, mdTable, stdCells, median } from './lib/cli.mjs';
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
+import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -376,6 +377,22 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) 
   console.log(mode !== 'spread' ? `(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)` : '(basis: 24h-average spread)');
   console.log(rows.length ? mdTable(HEADERS, rows.map(r => r.cells)) : '_none_');
   console.log(`Grades: ${gradeDist(dist)}`);
+  // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
+  // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
+  // STDOUT-ONLY — deliberately NOT in the published cells, so the canonical table + screen.json/app
+  // contract stay byte-identical (same discipline as the phase fold into the Regime cell). A label,
+  // never a sort/gate; absent/empty outcomes.json → silent.
+  if (VEL && VEL.byItem.size && rows.length) {
+    const tags = [];
+    for (const r of rows) {
+      const t = velocityTag(VEL.byItem.get(r.id));
+      if (t) tags.push(`${map.byId[r.id]?.name || ('#' + r.id)} ${t}`);
+    }
+    if (tags.length) {
+      const ageH = VEL.generatedAt ? Math.round((Date.now() - new Date(VEL.generatedAt).getTime()) / 3600000) : null;
+      console.log(`velocity (outcomes.json${ageH != null ? `, ${ageH}h old` : ''}; descriptive per-item history, not a rate): ${tags.join(' · ')}`);
+    }
+  }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
     const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '');
@@ -393,6 +410,15 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) 
 // have hidden it as a Note — and FALLING watchlist items ARE shown (the held/asked falling-exception
 // now extends to watchlisted items). The app takes union(localStorage, repo file); write-back is M1.
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// Build 2: per-item velocity index from the gitignored outcomes.json (YV1 campaigns), loaded ONCE.
+// Descriptive footnote source only — absent/unreadable/empty file → null → the footnote stays silent
+// (never a fetch, never a fabricated tag). Refreshed by `outcomes.mjs --report`.
+function loadVelocityIndex() {
+  try { return buildVelocityIndex(JSON.parse(readFileSync(join(REPO_ROOT, 'outcomes.json'), 'utf8'))); }
+  catch { return null; }
+}
+const VEL = loadVelocityIndex();
 function loadWatchlist(map) {
   let raw;
   try { raw = JSON.parse(readFileSync(join(REPO_ROOT, 'watchlist.json'), 'utf8')); }
