@@ -68,6 +68,7 @@ import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily
 import { parseArgs, parseGp, mdTable, stdCells, median } from './lib/cli.mjs';
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
+import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -293,6 +294,10 @@ function gradeDist(dist) {
   return parts.length ? parts.join('  ') : '—';
 }
 
+// YP2 (#2): items in a transition state worth watching, collected across all niches' fetched pools
+// (deduped by id). Populated in renderMode BEFORE the falling-exclusion so a basing faller is caught.
+const watchClosely = new Map();   // id -> { name, state, note }
+
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer
 function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) {
   const rows = [];
@@ -304,6 +309,12 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) 
     // Part A: phase() over the SAME ts6h this row was already quoted from (zero new fetch) —
     // observational trajectory shape, folded into the Regime cell below when informative.
     const ph = phase(series6h && series6h.get(s.id));
+    // YP2 (#2): collect a transition-state item (basing faller / spike on rising vs falling lows)
+    // BEFORE the falling-exclusion below drops it — a basing faller is exactly the case we want to
+    // watch. Descriptive prompt only; deduped across niches; never a buy signal.
+    const trans = stateTransition(ph);
+    if (trans && trans.watch && !watchClosely.has(s.id))
+      watchClosely.set(s.id, { name: map.byId[s.id]?.name || ('#' + s.id), state: trans.state, note: trans.note });
     // Part B (opt-in): a faller the screen would drop is RESCUED only when --phase-rescue is set AND
     // it has decayed to a basing shape. Default (flag off): unchanged falling-exclusion (byte-identical).
     let rescued = false;
@@ -482,6 +493,14 @@ async function main() {
   console.log('');
   const niches = {};
   for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h);
+  // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
+  // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
+  // deliberately stdout-only (no screen.json / app render — that surfacing is #5).
+  if (watchClosely.size) {
+    console.log(`## WATCH CLOSELY — ${watchClosely.size} item(s) in a transition state (descriptive, not a buy signal)`);
+    for (const e of watchClosely.values()) console.log(`- ${e.name}: ${e.state} — ${e.note}`);
+    console.log('');
+  }
   const watchlist = await runWatchlist(map, ctx, guide, latest, qcache, series5m);   // S3: always-scanned watchlist
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the

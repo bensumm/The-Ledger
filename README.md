@@ -119,7 +119,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
-    (opportunity screen), `watch.mjs` (adaptive live position/offer monitor; also appends
+    (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list), `watch.mjs` (adaptive live position/offer monitor; also appends
     change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
     the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
     `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`; each held
@@ -169,6 +169,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     MEASURED round-trip hold; placeholder thresholds), `capitalutil.mjs` (#3/YV1 — PURE
     `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
     "how long bids sat" + velocity mix over outcomes campaigns); output-only, never a verdict input),
+    `statetransition.mjs` (YP2 #2 — PURE `stateTransition(phase())`: flags a basing faller / a spike on
+    rising-vs-falling lows for the screen's "watch closely" list; descriptive, never a buy signal),
     `sessionthesis.mjs` (YT1 #4 — PURE session-thesis state model: `loadThesis`/`saveThesis`/`upsert`/
     `clear`/`prune`/`thesisLine`, the intent-per-lane store watch.mjs reads read-only; persists like
     watchstate), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
@@ -200,7 +202,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard),
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
     `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix),
-    `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip)
+    `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
+    `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
