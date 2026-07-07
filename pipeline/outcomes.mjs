@@ -20,6 +20,15 @@
  *   SAME basis as patientTargets) Â· 2h spread + limiting-side volume Â· realized net after tax
  *   where it closes a FIFO lot Â· the nearest PRIOR suggestion for the item.
  *
+ * SCHEMA v2 (YS1, PLAN-YIELD) adds, per campaign: `stateAtFill` (band-pctl + regime + phase AS OF the
+ * fill, via lib/histstate.mjs - reconstructed for EVERY fill, not just suggestion-matched ones, with
+ * `reconstructed:false` honesty when the history is gone); the measured `holdTimeSec` (round-trip
+ * buy->sell), `parkedSec` (rest before first fill, or whole lifetime if never filled), and
+ * `velocityClass`; and `predicted` (posture/tripwire/fillWindowHrs/thesis - copied from the joined
+ * suggestion, null on rows that predate YS2's forward logging - backfill can NEVER invent these).
+ * Reconstruction now routes through `dedupeSnapshots` (was bypassed) so a snapshot re-emit can't
+ * spawn a phantom campaign. Output stays derived + gitignored (outcomes.json).
+ *
  * FIFO realized P/L reuses reconstruct.mjs matchTrades (NEVER re-implemented here); collapseOffers
  * gives the canonical offer boundaries. First-read purpose is SCHEMA VALIDATION, not conclusions:
  * the --report is honest about n and refuses per-cell summaries below the floor (process rule 4).
@@ -27,8 +36,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collapseOffers, matchTrades } from './lib/reconstruct.mjs';
+import { collapseOffers, matchTrades, dedupeSnapshots } from './lib/reconstruct.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from './lib/marketfetch.mjs';
+import { loadHistState } from './lib/histstate.mjs';
+import { velocityClass } from './lib/velocity.mjs';
 import { parseArgs, median } from './lib/cli.mjs';
 import { liqClassOf } from './lib/suggestlog.mjs';
 import { fmtP, fmt, fmtTurn } from '../js/format.js';
@@ -101,6 +112,9 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
   return { ts: best.ts, script: best.script, mode: best.mode ?? null, verdict: best.verdict ?? null,
     quickBuy: best.quickBuy ?? null, optBuy: best.optBuy ?? null, quickSell: best.quickSell ?? null,
     optSell: best.optSell ?? null, mom: best.mom ?? null, regime: best.regime ?? null, class: best.class ?? null,
+    // YS2 forward-enrichment fields (null on legacy rows that predate the enrichment - never fabricated):
+    posture: best.posture ?? null, tripwire: best.tripwire ?? null, fillWindowHrs: best.fillWindowHrs ?? null,
+    thesis: best.thesis ?? null, velocityClassPredicted: best.velocityClass ?? null,
     lagMin: Math.round((placementTs - best.ts) / 60) };
 }
 
@@ -119,12 +133,19 @@ async function build() {
   if (!events.length) { console.error('fills.json has no events.'); process.exit(1); }
 
   // reuse the canonical reconstruction: offers + FIFO closed lots (for realized P/L join by sellTs)
-  const offers = collapseOffers(events);
-  stampFirstFill(events, offers);
-  const { closed } = matchTrades(collapseOffers(events));   // FIFO â€” never re-implemented here
+  // YS1: dedupeSnapshots FIRST — the same snapshot-re-emit dedupe reconstruct() applies (this path
+  // used to bypass it, so a phantom terminal could spawn a phantom campaign; PLAN Discovered fix).
+  const deduped = dedupeSnapshots(events);
+  const offers = collapseOffers(deduped);
+  stampFirstFill(deduped, offers);
+  const { closed } = matchTrades(offers);   // FIFO â€” never re-implemented here
   CLOSED_LOTS = closed;                                       // expose for report()'s concentration read
   const realisedBySellTs = new Map();                        // sell offer tsOpen -> realised net after tax
   for (const t of closed) { if (t.withdrawn) continue; realisedBySellTs.set(t.sellTs, (realisedBySellTs.get(t.sellTs) || 0) + t.realised); }
+  // YS1: round-trip hold (sellTs - buyTs) per closed lot, keyed by the sell offer tsOpen -> holdTimeSec
+  const holdBySellTs = new Map();
+  for (const t of closed) { if (t.withdrawn || t.buyTs == null || t.sellTs == null) continue;
+    (holdBySellTs.get(t.sellTs) || holdBySellTs.set(t.sellTs, []).get(t.sellTs)).push(t.sellTs - t.buyTs); }
 
   const campaigns = groupCampaigns(offers);
 
@@ -154,7 +175,19 @@ async function build() {
     const reqs = campaigns.map(c => ({ id: c.itemId, endUnix: c.offers[0].tsOpen }));
     process.stderr.write(`(fetching historical 2h bands for ${reqs.length} placements â€” this can take a moment; --no-bands to skip)\n`);
     try { bands = await loadHistBands(reqs, BAND_HOURS); }
-    catch (e) { console.warn('(historical band fetch failed â€” band percentile = null: ' + ((e && e.message) || e) + ')'); bands = null; }
+    catch (e) { console.warn('(historical band fetch failed - band percentile = null: ' + ((e && e.message) || e) + ')'); bands = null; }
+  }
+
+  // YS1: market STATE AT FILL for EVERY campaign (band-pctl + regime + phase), anchored at the first
+  // fill (or placement if never filled) - widens the base beyond the suggestion-matched subset.
+  let states = null;
+  if (!NO_BANDS) {
+    const sreqs = campaigns.map(c => {
+      const ff = c.offers.map(o => o.tsFirstFill).filter(t => t != null).sort((a, b) => a - b)[0];
+      return { id: c.itemId, endUnix: ff ?? c.offers[0].tsOpen, price: c.offers[0].price };
+    });
+    try { states = await loadHistState(sreqs); }
+    catch (e) { console.warn('(historical state fetch failed - stateAtFill = null: ' + ((e && e.message) || e) + ')'); states = null; }
   }
 
   const out = campaigns.map((c, idx) => {
@@ -190,6 +223,16 @@ async function build() {
     }
 
     const volDay = volDayOf(c.itemId);
+    // YS1 - measured velocity / parked primitives + fill-time state + predicted (copied from the join)
+    const parkedSec = firstFillTs != null ? (firstFillTs - placementTs) : (last.tsClose - first.tsOpen);
+    let holdTimeSec = null;
+    if (c.type === 'sell') {
+      const hs = [];
+      for (const o of c.offers) { const arr = holdBySellTs.get(o.tsOpen); if (arr) hs.push(...arr); }
+      if (hs.length) holdTimeSec = Math.round(median(hs));
+    }
+    const st = states ? states[idx] : null;
+    const sug = joinSuggestion(sugByItem, c.itemId, placementTs);
     return {
       itemId: c.itemId, name: map.byId[c.itemId]?.name || ('#' + c.itemId), side: c.type, manual,
       placementTs, placementPrice, targetQty, filledUnits, filledFraction, terminalState,
@@ -200,11 +243,17 @@ async function build() {
       bandLo, bandHi, bandPct, bandCovered, spread2h, limitVol2h,
       volDayCurrent: volDay, liqClass: liqClassOf(volDay),
       realised,
-      suggestion: joinSuggestion(sugByItem, c.itemId, placementTs),
+      // YS1 additions (schema v2):
+      stateAtFill: st ? { atTs: firstFillTs ?? placementTs, bandPct: st.bandPct, regime: st.regime,
+        phase: st.phase, reconstructed: st.reconstructed, source: st.source } : null,
+      holdTimeSec, parkedSec, velocityClass: velocityClass(holdTimeSec),
+      suggestion: sug,
+      predicted: sug ? { posture: sug.posture, tripwire: sug.tripwire, fillWindowHrs: sug.fillWindowHrs,
+        thesis: sug.thesis, velocityClassPredicted: sug.velocityClassPredicted } : null,
     };
   });
 
-  return { app: 'the-coffer-outcomes', version: 1, generatedAt: new Date().toISOString(),
+  return { app: 'the-coffer-outcomes', version: 2, generatedAt: new Date().toISOString(),
     params: { bandHours: BAND_HOURS, repriceGapMin: REPRICE_GAP / 60, suggestWindowMin: SUGGEST_WINDOW / 60, noBands: NO_BANDS },
     campaigns: out };
 }
@@ -221,6 +270,8 @@ function summarize(o) {
   console.log(`  filled: ${filled.length} (${c.length ? Math.round(filled.length / c.length * 100) : 0}%)  Â·  never filled: ${cancelled.length}  Â·  repriced at least once: ${c.filter(x => x.repriceCount > 0).length}`);
   console.log(`  time-to-first-fill: median ${ttf.length ? fmtTurn(median(ttf) / 3600) : 'â€”'} over n=${ttf.length}`);
   console.log(`  band percentile present: ${c.filter(x => x.bandPct != null).length}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  Â·  suggestion joined: ${sj}/${c.length}`);
+  const stated = c.filter(x => x.stateAtFill && x.stateAtFill.reconstructed).length;
+  console.log(`  fill-time state reconstructed: ${stated}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  Â·  velocity classed: ${c.filter(x => x.velocityClass && x.velocityClass !== 'n/a').length}/${c.length}`);
   const realisedC = c.filter(x => x.realised != null);
   console.log(`  realized (closed sell campaigns): n=${realisedC.length}, net ${realisedC.length ? (realisedC.reduce((s, x) => s + x.realised, 0) >= 0 ? '+' : '') + fmt(realisedC.reduce((s, x) => s + x.realised, 0)) : 'â€”'}`);
 }
@@ -260,7 +311,13 @@ function report(o) {
   // F1 gate verdict â€” the documented thresholds this chunk delivers
   const filledTimes = o.campaigns.filter(x => x.everFilled && x.timeToFirstFill != null);
   const cellCounts = {};
-  for (const r of filledTimes) { const k = r.side + '|' + pctBucket(r.bandPct) + '|' + r.liqClass + '|' + (r.suggestion ? r.suggestion.regime : 'noreg'); cellCounts[k] = (cellCounts[k] || 0) + 1; }
+  // YS1: regime for the F1 cell now prefers the fill-time stateAtFill.regime (present for EVERY fill),
+  // falling back to the joined suggestion's regime then 'noreg' - this widens the base beyond the
+  // suggestion-matched subset (still gated; regime stays the first bucketing axis, the known confound).
+  for (const r of filledTimes) {
+    const reg = (r.stateAtFill && r.stateAtFill.regime && r.stateAtFill.regime !== 'unknown') ? r.stateAtFill.regime
+      : (r.suggestion ? r.suggestion.regime : 'noreg');
+    const k = r.side + '|' + pctBucket(r.bandPct) + '|' + r.liqClass + '|' + reg; cellCounts[k] = (cellCounts[k] || 0) + 1; }
   const f1Cells = Object.values(cellCounts).filter(n => n >= MIN_N_F1).length;
   console.log(`\n# F1 gate (documented thresholds)`);
   console.log(`  A per-cell fill-time/probability curve is trustworthy only at nâ‰¥${MIN_N_F1} per (side Ã— percentile Ã— class Ã— regime) cell, with â‰¥${MIN_CELLS_F1} such cells populated (bucket by regime FIRST â€” the known confound).`);

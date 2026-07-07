@@ -129,7 +129,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
-    `outcomes.mjs` (derived campaign/outcomes join — gitignored output)
+    `outcomes.mjs` (derived campaign/outcomes join — gitignored output; schema v2 (YS1) adds per-campaign
+    `stateAtFill` (band-pctl+regime+phase AS OF the fill via `lib/histstate.mjs`, for EVERY fill),
+    measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the joined
+    suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
     semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
@@ -159,7 +162,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
-    `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    `velocity.mjs` (#3/YS1 — PURE `velocityClass(holdTimeSec)` → fast-cycler/mid/slow-hold/n·a off a
+    MEASURED round-trip hold; placeholder thresholds), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
@@ -185,7 +189,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
     guards), `fetchcache.test.mjs` (FC1 — the opt-in fetch cache's TTL hit/miss + byte-identical
     payload + default-off toggle), `histstate.test.mjs` (YF1 — `deriveState` band-percentile
-    clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard)
+    clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard),
+    `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
