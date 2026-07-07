@@ -62,6 +62,7 @@ import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/leve
 import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized per-held emit contract
 import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-capital redeploy prompt
+import { bookUtilization } from './lib/capitalutil.mjs';   // YV1 (#3) — working-vs-parked capital line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
@@ -704,6 +705,10 @@ async function main() {
   const sumBits = [];
   if (held.length) sumBits.push(`held exposure ${fmtP(exposure)} (${held.length} lot${held.length > 1 ? 's' : ''}${asks.length ? `, ${asks.length} listed` : ''})`);
   if (bidCount) sumBits.push(`bid capital ${fmtP(committed)} (${bidCount} offer${bidCount > 1 ? 's' : ''})`);
+  // YV1 (#3): point-in-time capital utilization — working (held, able to profit) vs parked (resting
+  // bids). Output-only context; never a verdict/alert input. Idle capital is a yield leak too.
+  const util = bookUtilization({ workingGp: exposure, parkedGp: committed });
+  if (util.utilizationPct != null) sumBits.push(`capital ${util.utilizationPct}% working / ${100 - util.utilizationPct}% parked`);
   sumBits.push(alerts.length ? `⚠ ${alerts.length} alert${alerts.length > 1 ? 's need' : ' needs'} action` : 'no alerts');
   console.log(`  ${sumBits.join(' · ')}`);
   if (!TARGETS_ONLY) {

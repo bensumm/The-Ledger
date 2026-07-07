@@ -164,7 +164,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
     `velocity.mjs` (#3/YS1 — PURE `velocityClass(holdTimeSec)` → fast-cycler/mid/slow-hold/n·a off a
-    MEASURED round-trip hold; placeholder thresholds), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    MEASURED round-trip hold; placeholder thresholds), `capitalutil.mjs` (#3/YV1 — PURE
+    `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
+    "how long bids sat" + velocity mix over outcomes campaigns); output-only, never a verdict input),
+    `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
@@ -191,7 +194,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     guards), `fetchcache.test.mjs` (FC1 — the opt-in fetch cache's TTL hit/miss + byte-identical
     payload + default-off toggle), `histstate.test.mjs` (YF1 — `deriveState` band-percentile
     clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard),
-    `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard)
+    `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
+    `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus

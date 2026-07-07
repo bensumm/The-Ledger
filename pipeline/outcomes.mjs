@@ -40,6 +40,7 @@ import { collapseOffers, matchTrades, dedupeSnapshots } from './lib/reconstruct.
 import { loadMapping, loadAll24h, loadHistBands } from './lib/marketfetch.mjs';
 import { loadHistState } from './lib/histstate.mjs';
 import { velocityClass } from './lib/velocity.mjs';
+import { parkedStats } from './lib/capitalutil.mjs';
 import { parseArgs, median } from './lib/cli.mjs';
 import { liqClassOf } from './lib/suggestlog.mjs';
 import { fmtP, fmt, fmtTurn } from '../js/format.js';
@@ -324,6 +325,16 @@ function report(o) {
   console.log(`  Right now: ${f1Cells} cell(s) clear nâ‰¥${MIN_N_F1}. F1 ${f1Cells >= MIN_CELLS_F1 ? 'MAY open.' : `stays GATED (need â‰¥${MIN_CELLS_F1}). The pipeline + schema are validated; the sample is not yet large enough â€” let it accrue.`}`);
   // F1-gate progress (concise, reuses the same constants â€” never re-hardcode the thresholds)
   console.log(`  F1-gate progress: ${f1Cells}/${MIN_CELLS_F1} cells cleared (${f1Cells >= MIN_CELLS_F1 ? 'threshold met' : `${Math.max(0, MIN_CELLS_F1 - f1Cells)} more needed at nâ‰¥${MIN_N_F1}/cell`}).`);
+
+  // #3 velocity + capital efficiency (YV1) â€” a DESCRIPTIVE read off the MEASURED velocityClass /
+  // parkedSec YS1 records. Makes visible that yield leaks to idle capital + slow fills, not just bad
+  // picks. Not a rate: a per-item velocity off a few lots is a LABEL (concentration caveat below).
+  const ps = parkedStats(o.campaigns);
+  const vd = ps.velocityDist;
+  console.log(`\n# Velocity + capital efficiency (#3 â€” descriptive, measured; NOT a rate)`);
+  console.log(`  velocity mix: ${['fast-cycler', 'mid', 'slow-hold', 'n/a'].map(k => `${k} ${vd[k] || 0}`).join(' Â· ')}`);
+  console.log(`  bids: ${ps.nBids} (${ps.nFilledBids} filled, ${ps.nNeverFilled} never filled)  Â·  median time a filled bid sat before first fill: ${ps.medianParkedSec != null ? fmtTurn(ps.medianParkedSec / 3600) : 'â€”'}`);
+  console.log(`  âš  yield leaks to idle capital + slow fills as much as to bad picks; treat a per-item velocity as a label, not a rate.`);
 
   // Concentration: how much of the closed-lot record is one item. When the top item dominates,
   // any "per-item" read is mostly one sample â€” print the caveat so the weekly read never oversells it.
