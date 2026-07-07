@@ -18,7 +18,7 @@ into `PLAN.md` and is deleted when its last chunk ships** (like `PLAN-VERDICT.md
 | YT1 | ✅ shipped (`lib/sessionthesis.mjs` + `thesis.mjs` CLI (sole writer) + read-only watch reminder line after the emit contract; `sessionthesis.test.mjs`) |
 | YP2 | ✅ shipped (`lib/statetransition.mjs` off `phase()`; screen.mjs stdout "WATCH CLOSELY" list, deduped across niches, captures basing fallers before the falling-drop; `statetransition.test.mjs`) |
 | YP1 | ✅ shipped (`lib/guideanchor.mjs` model + gated advisory line on quote/watch; ships SILENT — 0/16 real history rows clear the gate; also reconciled the `.guide-history.jsonl` gitignored→tracked doc drift; `guideanchor.test.mjs`) |
-| YA1 | ⏳ building (app; APP_VERSION bump) |
+| YA1 | ✅ shipped (0.53.0 — Watch-tab Utilization cell via pure `capitalSplit` in watchcore; `watchcore.test.mjs` fixture. **Fill-probability + Trends "recommend price" button DEFERRED** — both gated on F1 + a published outcomes artifact; shipping them would fabricate calibration. Console-first stays intentional) |
 
 Ben's fixed priority: **#1 (highest) → #3 → #4 (folds into #1) → #2 → #5 (eventually).**
 The unifying insight that shapes everything below: **#1 is the data spine; #3/#4/#2 are read

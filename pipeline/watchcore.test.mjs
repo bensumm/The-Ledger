@@ -20,7 +20,7 @@
  */
 import assert from 'node:assert/strict';
 import { verdictFamily, isHeldAlert, alertCount, splitHeld, INCIDENTAL_GP,
-         isSameLocalDay, todaysFills, summary, CANCEL_BID } from '../js/watchcore.js';
+         isSameLocalDay, todaysFills, summary, capitalSplit, CANCEL_BID } from '../js/watchcore.js';
 import { offerVerdict } from '../js/quotecore.js';
 
 let pass = 0;
@@ -113,6 +113,15 @@ ok('summary sums deployed capital (exposure) and today\'s realised (day P/L) wit
   assert.equal(s.flipCount, 2);
   assert.equal(s.dayPL, 1_225_529);
   assert.equal(s.closedCount, 3);
+});
+
+ok('capitalSplit: working/(working+parked) %, null when nothing committed (YA1 #3)', () => {
+  const u = capitalSplit(28_460_000, 11_540_000);
+  assert.equal(u.committed, 40_000_000);
+  assert.equal(u.utilizationPct, 71);
+  assert.equal(capitalSplit(0, 500).utilizationPct, 0, 'all parked → 0% working');
+  assert.equal(capitalSplit(500, 0).utilizationPct, 100, 'all held → 100%');
+  assert.equal(capitalSplit(0, 0).utilizationPct, null, 'nothing committed → null, never a fake %');
 });
 
 /* --- shared offer verdict (byte-identical gate order to watch.mjs's original) -------------- */

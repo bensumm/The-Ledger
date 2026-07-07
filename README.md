@@ -72,7 +72,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   from the shared `momVerdict`/`offerVerdict`; per-item session-context notes persist under
   `watchnote:<id>`), `watchcore.js` (0.49.0 — pure Watch-tab derivations: verdict→stripe
   family, alert count, flip/incidental split, today's-fills feed + after-tax net, summary
-  aggregates; node-importable, fixture-tested in `pipeline/watchcore.test.mjs`),
+  aggregates, and the YA1 `capitalSplit` working-vs-parked utilization; node-importable,
+  fixture-tested in `pipeline/watchcore.test.mjs`),
   `backup.js` (export/import),
   `main.js` (entry point — event wiring + init, loaded as `<script type="module">`)
 - `manifest.json`, `icon-*.png` — PWA manifest and icons

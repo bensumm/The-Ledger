@@ -10,6 +10,23 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### YA1 (0.53.0) — in-app capital-utilization line (Watch tab; the yield program's #5)
+The one honest, self-contained app surface from the PLAN-YIELD program's #5 (app surfacing). The
+Watch tab summary gains a **Utilization** cell — working (held inventory, able to profit) vs parked
+(capital tied up in resting UNFILLED buy bids) — computed client-side from data the tab already has
+(`positions.json` exposure + `offers.json` buy bids). The pure `capitalSplit()` lives in
+`js/watchcore.js` (fixture-pinned in `watchcore.test.mjs`), mirroring pipeline `lib/capitalutil.mjs`
+`bookUtilization` (a tiny parallel so the browser needs no node-only import). Shown ONLY when capital
+is actually parked (a clean book is trivially 100% working → noise); a low % renders amber (idle
+capital is a yield leak). Display-only, never a verdict input. The `.wsummary` grid moved to
+`auto-fit` so 4 or 5 cells both lay out cleanly.
+
+**Deliberately NOT built (validation-gate honesty):** the two headline #5 features — in-app
+fill-probability and the Trends "recommend price adjustment" button — stay DEFERRED. Both depend on
+**F1 calibration (still GATED)** and on a **published outcomes artifact the app doesn't fetch**;
+surfacing a fill-probability the model hasn't earned would violate the program's entire honesty
+discipline. Console-first stays the intentional design. Full program story: `PLAN-YIELD.md`.
+
 ### Trajectory phase() classifier + opt-in basing-rescue (pipeline-only — NO APP_VERSION)
 `computeQuote` already fetches a ~21-day 6h series (`ts6h`) per candidate and runs `regimeDrift` over
 it, so the multi-week price history is ALREADY in hand — this adds a richer *trajectory-shape*

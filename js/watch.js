@@ -19,7 +19,7 @@ import { fmt, fmtP, netMargin } from './format.js';
 import { resolveId } from './market.js';
 import { openTrends } from './trends.js';
 import { realised, fmtAge } from './ui.js';
-import { verdictFamily, isHeldAlert, CANCEL_BID, splitHeld, todaysFills, summary, isSameLocalDay } from './watchcore.js';
+import { verdictFamily, isHeldAlert, CANCEL_BID, splitHeld, todaysFills, summary, capitalSplit, isSameLocalDay } from './watchcore.js';
 
 const FRESH_MS = 10 * 60 * 1000;          // "book synced"/offers go amber past ~10 min (localhost)
 const WATCH_REFRESH_MS = 180000;          // re-quote every ~3 min while the tab is open
@@ -137,13 +137,20 @@ function stampsHtml() {
     + dotStamp(bookCls, bookTxt) + dotStamp(offFresh ? 'ok' : 'warn', offTxt) + '</div>';
 }
 
-function summaryHtml(agg, alerts, alertMeta) {
+function summaryHtml(agg, alerts, alertMeta, util) {
   const free = STATE.bankroll - agg.exposureGp;
   const cell = (k, v, vcls, m) => '<div class="wcell"><div class="wk">' + k + '</div><div class="wv num ' + (vcls || '') + '">' + v + '</div><div class="wm">' + m + '</div></div>';
+  // #3 utilization (YA1): working (held) vs parked (unfilled bids). Shown ONLY when capital is
+  // actually parked in resting bids (else it's noise — a clean book is trivially 100% working); a
+  // low % is amber (idle capital is a yield leak too). Display-only, never a verdict.
+  const utilCell = (util && util.utilizationPct != null && util.parkedGp > 0)
+    ? cell('Utilization', util.utilizationPct + '%', util.utilizationPct >= 50 ? '' : 'loss', fmt(util.parkedGp) + ' parked in bids')
+    : '';
   return '<div class="wsummary">'
     + cell('Exposure', fmt(agg.exposureGp), '', agg.flipCount + ' flip position' + (agg.flipCount === 1 ? '' : 's'))
     + cell('Day P/L', (agg.dayPL > 0 ? '+' : '') + fmt(agg.dayPL), agg.dayPL > 0 ? 'gain' : (agg.dayPL < 0 ? 'loss' : ''), agg.closedCount + ' closed flip' + (agg.closedCount === 1 ? '' : 's'))
     + cell('Free capital', fmt(free), 'gold', 'of ' + fmt(STATE.bankroll) + ' bankroll')
+    + utilCell
     + cell('Alerts', String(alerts), alerts > 0 ? 'loss' : '', alertMeta)
     + '</div>';
 }
@@ -267,6 +274,10 @@ export function renderWatchTab() {
   const withVal = groups.map(g => ({ ...g }));
   const { flips, incidentals } = splitHeld(withVal);
   const agg = summary(flips, closedToday());
+  // #3 (YA1): parked capital = resting UNFILLED buy-bid value (asks list already-held inventory, so
+  // they don't count). working = held exposure. Client-side from the data the tab already has.
+  const parkedGp = (STATE.offers || []).filter(o => o.side === 'buy').reduce((s, o) => s + (o.price || 0) * Math.max(0, (o.qty || 0) - (o.filled || 0)), 0);
+  const util = capitalSplit(agg.exposureGp, parkedGp);
 
   // alerts (spec D): CUT-family held + CANCEL-BID buy offers — both from the quote cache
   const heldVerdicts = flips.map(g => { const q = quoteCache.get(g.itemId); return q ? heldVerdict(q.row, breakEven(g.avgBuy), g.value, q.ts5m).verdict : null; }).filter(Boolean);
@@ -299,7 +310,7 @@ export function renderWatchTab() {
   offHtml += offers.length ? offers.map(offerRowHtml).join('') : '<div class="wempty2">No active GE offers in the last synced snapshot.</div>';
 
   pane.innerHTML = stampsHtml()
-    + summaryHtml(agg, alerts, alertMeta)
+    + summaryHtml(agg, alerts, alertMeta, util)
     + '<h2 class="wh2">Held positions <span class="wcnt">' + flips.length + ' flip' + (flips.length === 1 ? '' : 's') + (incidentals.length ? ' · incidentals collapsed' : '') + '</span></h2>' + heldHtml
     + '<h2 class="wh2">Active offers <span class="wcnt">' + (offFresh ? 'live' : 'from last sync') + '</span></h2>' + offHtml
     + '<h2 class="wh2">Today’s fills</h2>' + fillFeedHtml();
