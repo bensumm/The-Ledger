@@ -8,8 +8,9 @@
  * / timestamps only — NO PII; the repo is public). sync-fills.mjs adds it to its commit set
  * when present.
  *
- * Line schema (the O1 contract):
- *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict }
+ * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
+ *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
+ *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis? }
  *     ts      — unix SECONDS at emit time
  *     script  — 'quote' | 'screen' | 'watch'
  *     mode    — the mode/niche as computed then (screen niche name, or null)
@@ -50,8 +51,17 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate
 // from logSuggestions so a caller can assemble a batch, then log once.
-export function suggestionEntry(row, { itemId, cls, verdict } = {}) {
-  return {
+//
+// YS2 forward-enrichment (PLAN-YIELD): the caller may ALSO pass prediction fields the backfill can
+// never invent — posture (active/overnight, the posture the read was made under), tripwire (the
+// named structural level being watched), fillWindowHrs (predicted time-to-fill), velocityClass
+// (predicted fast/slow), thesis (one-line intent — NO PII). They are LEAN-INCLUDED: a field is
+// written ONLY when the caller supplies a non-null value, so a row with no forward context stays
+// byte-for-byte the shape it had before (keeps suggestions.jsonl from ballooning — SR1). Honesty:
+// a script logs only what it can HONESTLY compute (e.g. posture from the clock/flag); it never
+// fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
+export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis } = {}) {
+  const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
     optBuy:    row.optBuy    ?? null,
@@ -62,6 +72,12 @@ export function suggestionEntry(row, { itemId, cls, verdict } = {}) {
     class:     cls ?? null,
     verdict:   verdict ?? null,
   };
+  if (posture != null)       e.posture = posture;
+  if (tripwire != null)      e.tripwire = tripwire;
+  if (fillWindowHrs != null) e.fillWindowHrs = fillWindowHrs;
+  if (velocityClass != null) e.velocityClass = velocityClass;
+  if (thesis != null)        e.thesis = thesis;
+  return e;
 }
 
 // Append entries to suggestions.jsonl. Best-effort: a logging failure must NEVER break a market

@@ -140,8 +140,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `loadHistDaily` (YF1) + the FC1 opt-in cross-invocation fetch
     cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
     within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
-    helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl`
-    appender), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
+    helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl` appender; YS2 `suggestionEntry` also lean-includes the
+    forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
+    written only when a caller honestly supplies them, so legacy rows stay byte-identical), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
     `watchstate.mjs` (V1/V4 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
     `advanceState` compute Δ instabuy, mom transitions, consecutive-`passesUnderwater`/
     `passesBelowSupport` counters, and band-top drift, with a reset policy on identity change /
@@ -243,7 +244,7 @@ constant governs each, so these can move without touching the deployed app or ph
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/alerts.mjs` (N1) | tracked (ships empty) |
-| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` | tracked, append-only |
+| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/…) | tracked, append-only |
 | `outcomes.json` | derived by `pipeline/outcomes.mjs` | gitignored |
 
 ### Shared logic modules

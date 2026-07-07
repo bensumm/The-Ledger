@@ -58,7 +58,7 @@ async function runItems() {
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null }));  // per-item read has no verdict
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active' }));  // per-item read has no verdict
   }
   // O1 suggestions ledger: log every emitted read at emit time, unconditionally (analytics only).
   logSuggestions('quote', { mode: null, params: { positions: false } }, sugg);
@@ -120,7 +120,7 @@ async function runPositions() {
     const v = verdict(row, be, cost, inp.ts5m, buyTs);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
-    sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v }));  // the emitted per-position verdict string
+    sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v, posture: isOvernightNow() ? 'overnight' : 'active' }));  // the emitted per-position verdict string
     // S2 morning-staleness watch (informational only — the Verdict column above is UNCHANGED). A resting
     // SELL is at risk of being stale/underwater by morning if it can't clear at profit now (instabuy <
     // break-even) or the market is weakening (falling regime / live 2h breakdown).

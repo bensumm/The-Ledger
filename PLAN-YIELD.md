@@ -13,8 +13,8 @@ into `PLAN.md` and is deleted when its last chunk ships** (like `PLAN-VERDICT.md
 | FC1 | ✅ shipped (opt-in fetch cache; OFF by default → decision paths byte-identical; `fetchcache.test.mjs`) |
 | YF1 | ✅ shipped (`loadHistDaily` + pure `deriveState` in `lib/histstate.mjs`; `histstate.test.mjs`) |
 | YS1 | ✅ shipped (outcomes.mjs → schema v2: `stateAtFill`/`holdTimeSec`/`parkedSec`/`velocityClass`/`predicted`; dedupe routed; `velocity.mjs`+test. Refinement: the pure `velocityClass` landed here, not YV1, so outcomes.mjs is edited once) |
-| YS2 | ⏳ building |
-| YV1 | ⏳ |
+| YS2 | ✅ shipped (`suggestionEntry` lean-includes forward fields; `posture` wired into quote/screen/watch; tripwire/fillWindow/thesis/velocity = plumbing until a caller can honestly compute them; `suggestlog.test.mjs` extended) |
+| YV1 | ⏳ building |
 | YT1 | ⏳ |
 | YP2 | ⏳ |
 | YP1 | ⏳ (gated on `.guide-history.jsonl` accrual — ships self-gating) |

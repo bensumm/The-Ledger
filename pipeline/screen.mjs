@@ -358,7 +358,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade })));
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE })));
 
   console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; fallers excluded)`);
   console.log(PLAYBOOK[mode]);
@@ -437,7 +437,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const gradeCell = thin ? { t: r.grade, title: `thin: ~${limitVol}/day two-sided — size in units, expect slow fills` } : { t: r.grade };
     const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
     rows.push({ id, cells });
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: r.grade }));
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: r.grade, posture: POSTURE }));
   }
   logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
   const headers = [...HEADERS, 'Note'];

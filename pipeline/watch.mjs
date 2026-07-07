@@ -49,7 +49,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH_HOURS,
-  diurnalRead, phase, underwaterHours } from '../js/quotecore.js';
+  diurnalRead, phase, underwaterHours, isOvernightNow } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -522,10 +522,11 @@ async function main() {
     : it.row.quickBuy == null ? 'NO-QUOTE'
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
   const bidVerdict = it => offerVerdict(it.row, it.bid.offer);   // SHARED with the app Watch tab (js/quotecore.js)
+  const wPosture = isOvernightNow() ? 'overnight' : 'active';   // YS2: the posture this live read was made under
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
-    ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it) })),
-    ...targets.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: targetVerdict(it) })),
-    ...bidItems.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: bidVerdict(it) })),
+    ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture })),
+    ...targets.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: targetVerdict(it), posture: wPosture })),
+    ...bidItems.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: bidVerdict(it), posture: wPosture })),
   ]);
 
   // ---------------------------------------------------------------------------
