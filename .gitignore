@@ -4,3 +4,6 @@
 pipeline/.cache/
 outcomes.json
 heartbeat.json
+
+# total-capital: Ben's stated idle-cash balance (cash.mjs) — desk-side, never committed
+.capital-state.json

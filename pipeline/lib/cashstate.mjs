@@ -1,0 +1,32 @@
+/* cashstate.mjs — persist Ben's STATED idle-cash balance for the total-capital read
+   (capitalutil.totalCapital). The GE cash stack is not in any log (fills/positions/offers carry
+   committed capital only), so idle GP can only be tracked from a figure Ben states via
+   pipeline/cash.mjs. Stored in gitignored `.capital-state.json` at the repo root
+   ({ cashGp, statedAt }); read by watch.mjs's SUMMARY footer. Impure (fs) — kept OUT of the pure
+   capitalutil.mjs so that module stays fixture-testable. */
+import fs from 'node:fs';
+import path from 'node:path';
+import { REPO_DIR } from '../sync-fills.mjs';
+
+const FILE = repoDir => path.join(repoDir, '.capital-state.json');
+
+/* readCash() -> { cashGp, statedAt } | null (null = unknown → footer shows committed absolute only). */
+export function readCash(repoDir = REPO_DIR) {
+  try {
+    const j = JSON.parse(fs.readFileSync(FILE(repoDir), 'utf8'));
+    if (j && typeof j.cashGp === 'number') return { cashGp: j.cashGp, statedAt: j.statedAt || null };
+  } catch { /* absent/unreadable → unknown */ }
+  return null;
+}
+
+/* writeCash(gp) -> the persisted record; stamps statedAt so the footer can age/staleness-banner it. */
+export function writeCash(cashGp, repoDir = REPO_DIR) {
+  const rec = { cashGp, statedAt: new Date().toISOString() };
+  fs.writeFileSync(FILE(repoDir), JSON.stringify(rec, null, 2) + '\n');
+  return rec;
+}
+
+/* clearCash() -> true if a stored balance was removed (forget the stated figure). */
+export function clearCash(repoDir = REPO_DIR) {
+  try { fs.unlinkSync(FILE(repoDir)); return true; } catch { return false; }
+}

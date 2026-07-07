@@ -19,6 +19,24 @@ export function bookUtilization({ workingGp = 0, parkedGp = 0 } = {}) {
   return { workingGp: w, parkedGp: p, committed, utilizationPct };
 }
 
+/* totalCapital({ workingGp, parkedGp, cashGp }) -> the WHOLE pool, not just the committed split.
+   committedGp = working + parked (capital in offers/inventory). cashGp = idle bank GP that earns
+   nothing — the biggest efficiency leak, but NOT derivable from any log (the GE cash stack isn't in
+   fills/positions/offers), so it is a STATED figure (pipeline/cash.mjs) or null when unknown.
+   cashGp null  -> totalGp/committedPct/idlePct all null (we only know the committed absolute; never
+     fake an idle % we can't measure).
+   cashGp given (incl. 0) -> totalGp = committed + cash; committedPct = committed/total; idlePct =
+     cash/total (rounded, summing to 100). */
+export function totalCapital({ workingGp = 0, parkedGp = 0, cashGp = null } = {}) {
+  const committedGp = (workingGp || 0) + (parkedGp || 0);
+  if (cashGp == null) return { committedGp, cashGp: null, totalGp: null, committedPct: null, idlePct: null };
+  const cash = cashGp || 0;
+  const totalGp = committedGp + cash;
+  if (totalGp <= 0) return { committedGp, cashGp: cash, totalGp, committedPct: null, idlePct: null };
+  const committedPct = Math.round((committedGp / totalGp) * 100);
+  return { committedGp, cashGp: cash, totalGp, committedPct, idlePct: 100 - committedPct };
+}
+
 /* parkedStats(campaigns) -> distribution + idle read over the outcomes campaign records.
    nBids / nFilledBids / nNeverFilled, medianParkedSec (of FILLED bids), and the velocityClass mix. */
 export function parkedStats(campaigns) {

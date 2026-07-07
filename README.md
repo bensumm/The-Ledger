@@ -89,6 +89,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
   freshness and stashes it on `STATE.offers`, which the **Watch tab** (0.49.0, `js/watch.js`)
   renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14)
+- `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's STATED idle-cash
+  balance (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `watch.mjs`'s SUMMARY
+  total-capital line. The GE cash stack is in no log, so idle GP is a stated snapshot: it ages the
+  moment a trade happens (staleness-bannered) and is NEVER a verdict/alert input — purely the
+  denominator for the idle-vs-working picture
 - `heartbeat.json` — **gitignored, local-only, never deployed** — a tiny daemon-liveness
   heartbeat (`{app:'the-coffer-heartbeat', generatedAt:<ISO>}`) written by `watch-log.mjs`
   every ~30s (LW3). The localhost app polls it (`js/ledger.js` `fetchHeartbeat`) for the
@@ -128,7 +133,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `monitor.mjs`
     (live read-only log-state snapshot), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
-    to print a per-held reminder), `windowrange.mjs` (né `nightlows.mjs` — time-of-day
+    to print a per-held reminder), `cash.mjs` (CLI to set/read/clear the STATED idle-cash balance
+    in `.capital-state.json` — the total-capital denominator `watch.mjs`'s SUMMARY reads),
+    `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
@@ -169,7 +176,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocity.mjs` (#3/YS1 — PURE `velocityClass(holdTimeSec)` → fast-cycler/mid/slow-hold/n·a off a
     MEASURED round-trip hold; placeholder thresholds), `capitalutil.mjs` (#3/YV1 — PURE
     `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
-    "how long bids sat" + velocity mix over outcomes campaigns); output-only, never a verdict input),
+    "how long bids sat" + velocity mix over outcomes campaigns) + `totalCapital` (committed +
+    STATED idle cash → the WHOLE-pool idle-vs-working split, null-safe when cash is unknown);
+    output-only, never a verdict input),
+    `cashstate.mjs` (impure fs sibling — `readCash`/`writeCash`/`clearCash` over the gitignored
+    `.capital-state.json`; kept out of pure `capitalutil.mjs`),
     `statetransition.mjs` (YP2 #2 — PURE `stateTransition(phase())`: flags a basing faller / a spike on
     rising-vs-falling lows for the screen's "watch closely" list; descriptive, never a buy signal),
     `guideanchor.mjs` (YP1 #2 — PURE guide re-anchor model off `.guide-history.jsonl`: modal update
@@ -205,7 +216,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     payload + default-off toggle), `histstate.test.mjs` (YF1 — `deriveState` band-percentile
     clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard),
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
-    `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix),
+    `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix
+    + `totalCapital` committed/idle-cash split, null-safe when cash unknown),
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate)

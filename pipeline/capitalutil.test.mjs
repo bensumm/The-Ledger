@@ -13,7 +13,7 @@
  *     is excluded from the parked-time median (it has no first-fill).
  */
 import assert from 'node:assert/strict';
-import { bookUtilization, parkedStats } from './lib/capitalutil.mjs';
+import { bookUtilization, parkedStats, totalCapital } from './lib/capitalutil.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -48,6 +48,33 @@ ok('parkedStats: bid/filled/never-filled counts + parked-time median (filled onl
   assert.equal(ps.velocityDist['fast-cycler'], 1);
   assert.equal(ps.velocityDist['slow-hold'], 1);
   assert.equal(ps.velocityDist['n/a'], 1);
+});
+
+ok('totalCapital: committed + stated idle cash, pcts sum to 100', () => {
+  const t = totalCapital({ workingGp: 24_000_000, parkedGp: 8_000_000, cashGp: 8_000_000 });
+  assert.equal(t.committedGp, 32_000_000);
+  assert.equal(t.totalGp, 40_000_000);
+  assert.equal(t.committedPct, 80);
+  assert.equal(t.idlePct, 20, 'committedPct + idlePct == 100');
+});
+
+ok('totalCapital: cash UNKNOWN (null) → total/pcts null, committed absolute still known', () => {
+  const t = totalCapital({ workingGp: 500, parkedGp: 300, cashGp: null });
+  assert.equal(t.committedGp, 800, 'we always know the committed absolute');
+  assert.equal(t.totalGp, null, 'never fake a total we can\'t measure');
+  assert.equal(t.committedPct, null);
+  assert.equal(t.idlePct, null);
+  assert.equal(totalCapital({ workingGp: 500, parkedGp: 300 }).totalGp, null, 'omitted cash == unknown');
+});
+
+ok('totalCapital: cash 0 → all-committed (100% / 0% idle); empty book → total 0, pcts null', () => {
+  const allIn = totalCapital({ workingGp: 1000, parkedGp: 0, cashGp: 0 });
+  assert.equal(allIn.totalGp, 1000);
+  assert.equal(allIn.committedPct, 100);
+  assert.equal(allIn.idlePct, 0, 'cash 0 is KNOWN idle=0, not unknown');
+  const empty = totalCapital({ workingGp: 0, parkedGp: 0, cashGp: 0 });
+  assert.equal(empty.totalGp, 0);
+  assert.equal(empty.committedPct, null, 'no capital at all → no pct, never divide by zero');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
