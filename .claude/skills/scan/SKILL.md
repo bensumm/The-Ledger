@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.17
+version: 1.18
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -74,11 +74,22 @@ This is the tribal layer the script can't do — apply ALL of these:
   the price alone (if the band says bid 15.5m, bid 15.5m, don't jump to 16m to be "over a round").
   (2) **guide is an anchor ONLY when guide ≈ live** — a STALE/diverged guide (post-reprice, guide
   lagging the live market — Seeking arrow guide 2,832 vs live ~4,800) is NOT the anchor; there the
-  round numbers near the LIVE price are. First confirming evidence (2026-07-07): a super-restore ask
-  stalled 5+ passes at 10,713 (above the 10,700 anchor), kissing 10,698 and retreating, then filled
-  promptly at 10,699 once dropped just under the anchor (+108/u). **Honesty (rule 4):** the
-  microstructure logic (order clustering at anchors) is well-established, but this is n=1 in OUR
-  fills — keep scoring it (a 3,001-vs-2,957 bid test would add the buy-side sample).
+  round numbers near the LIVE price are. (3) **The nudge only works on a WIDE band — never fill-now-
+  cross a TIGHT band (Ben, 2026-07-07, the bones miss).** Crossing to the fillable side means paying up
+  by a hair; that's free on a wide band but on a TIGHT band it pays up into your own edge and leaves
+  ~nothing. Before nudging a BID up over a round, check there is still meaningful margin from the
+  nudged price to the band top; if not, DON'T fill-now-cross — leave the patient band-low bid and wait
+  for the dip. (4) **On a LIQUID item a fill-priced bid fills the FULL size FAST** — so a thin-margin
+  fill-now bid doesn't leave a small position, it leaves a LARGE one you can't cancel before it fills,
+  parked at breakeven. Anchors weigh margin-per-unit AND how much size you're about to lock. Evidence
+  (2026-07-07): **sell-side CONFIRMED** — the super-restore ask stalled 5+ passes at 10,713 (above the
+  10,700 anchor), then filled promptly at 10,699 once dropped just under it (+108/u, ~+113k). **Buy-side
+  CONFIRMED but with the tight-band cost** — a bones bid bumped 2,957→3,001 (just over the 3,000 anchor)
+  filled where 2,957 sat dead (anchor logic holds), BUT 3,001 sat near the top of the tight 2,957–3,073
+  band so it ate ~26 of the 36gp/u edge, AND all 7,500 filled on 163k/d before it could be cancelled →
+  22.5m locked at breakeven. **Honesty (rule 4):** order-clustering microstructure is well-established;
+  our fills are n=2 (one each side) — the anchor DIRECTION holds both ways, the tight-band + liquid-
+  fills-fast guards are the cost side; keep scoring.
 - **Entry aggression follows posture (Ben, 2026-07-05).** When Ben is ACTIVELY flipping
   (at the client, watch loop running), price entries to FILL: recommend bids at or near
   the live instasell — or the upper half of the band — accepting a thinner per-unit edge
