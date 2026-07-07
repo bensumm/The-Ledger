@@ -153,11 +153,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl` appender; YS2 `suggestionEntry` also lean-includes the
     forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
     written only when a caller honestly supplies them, so legacy rows stay byte-identical), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
-    `watchstate.mjs` (V1/V4 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
-    `advanceState` compute Δ instabuy, mom transitions, consecutive-`passesUnderwater`/
-    `passesBelowSupport` counters, and band-top drift, with a reset policy on identity change /
-    `STALE_GAP_MS`; plus the V4 `convictionGate()` — the pure arm-then-confirm ALERT-escalation
-    decision (Gate-2 breakdown CUT exempt/immediate; Gate-D CUT-CANDIDATE + structural break gated).
+    `watchstate.mjs` (V1/V4/V7 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
+    `advanceState` compute Δ instabuy, mom transitions, `passesUnderwater`/`passesBelowSupport` counters
+    (display), the `underwaterSince`/`belowSupportSince`/`breakdownSince` streak timestamps, and band-top
+    drift, with a reset policy on identity change / `STALE_GAP_MS`; plus the `convictionGate()` — the pure
+    arm-then-confirm ALERT-escalation decision, now **TIME-based (V7, `ALERT_PERSIST_MS`)** so alert
+    sensitivity is independent of loop cadence (Gate-2 breakdown CUT exempt/immediate; Gate-D
+    CUT-CANDIDATE, structural break, AND `LIST-TO-CLEAR` gated on elapsed persistence).
     Thin `loadState`/`saveState` are the only fs surface — verdict strings untouched, `momVerdict`
     untouched), `levels.mjs`
     (V2 — PURE `structuralSupport`/`cutTrigger`: recent higher-low support + a δ-below cut-trigger

@@ -185,59 +185,75 @@ ok('passesBelowSupport resets on surfacing above support, identity change, and a
   assert.equal(computeDeltas(prior, below({ instabuy: 86 }), staleNow).passesBelowSupport, 1);
 });
 
-/* --- V4 convictionGate: arm-then-confirm escalation decision -------------------------------- */
-ok('Gate-D CUT-CANDIDATE arms on the 1st underwater-liquid pass (no headline escalation)', () => {
-  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', passesUnderwater: 1 });
-  assert.equal(g.escalate, false);
-  assert.equal(g.armed, true);
-  assert.equal(g.reason, 'cut-candidate-armed');
+/* --- V4/V7 convictionGate: TIME-based arm-then-confirm escalation --------------------------- */
+const PERSIST = 4 * MIN;   // explicit test threshold (real default = ALERT_PERSIST_MS)
+
+ok('Gate-D CUT-CANDIDATE arms while underwater < persist, escalates once it PERSISTS ≥ persist', () => {
+  const armed = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', underwaterMs: 1 * MIN, persistMs: PERSIST });
+  assert.equal(armed.escalate, false);
+  assert.equal(armed.armed, true);
+  assert.equal(armed.reason, 'cut-candidate-armed');
+  const esc = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', underwaterMs: PERSIST, persistMs: PERSIST });
+  assert.equal(esc.escalate, true);
+  assert.equal(esc.armed, false);
+  assert.equal(esc.reason, 'cut-candidate');
 });
 
-ok('Gate-D CUT-CANDIDATE escalates on the 2nd consecutive underwater-liquid pass', () => {
-  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', passesUnderwater: 2 });
-  assert.equal(g.escalate, true);
-  assert.equal(g.armed, false);
-  assert.equal(g.reason, 'cut-candidate');
+ok('CADENCE-INDEPENDENCE: escalation depends on elapsed TIME, not pass count', () => {
+  // the whole point of V7 — 300 passes a second apart or 2 passes 5 min apart, only elapsed ms matters
+  assert.equal(convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', underwaterMs: PERSIST - 1, persistMs: PERSIST }).escalate, false,
+    'just under the window stays armed no matter how many passes accrued');
+  assert.equal(convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', underwaterMs: PERSIST + 1, persistMs: PERSIST }).escalate, true,
+    'past the window escalates');
 });
 
-ok('a reset between the two passes re-arms the CUT-CANDIDATE from scratch (back to pass 1)', () => {
-  // one underwater pass, then a reset (identity change) → computeDeltas re-counts to 1 → armed again
-  const prior = advanceState(undefined, obs({ instabuy: 90 }), T0);       // passesUnderwater 1
-  const cur = obs({ identity: 'hld:9:900', instabuy: 90, breakEven: 950 }); // new lot, still underwater
-  const d = computeDeltas(prior, cur, T0 + 5 * MIN);
-  assert.equal(d.reset, true);
-  assert.equal(d.passesUnderwater, 1);
-  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', passesUnderwater: d.passesUnderwater });
-  assert.equal(g.escalate, false);
-  assert.equal(g.armed, true);
+ok('LIST-TO-CLEAR (V7): a single-pass breakdown flicker only ARMS; escalates once breakdown HOLDS ≥ persist', () => {
+  const flicker = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, breakdownMs: 1 * MIN, persistMs: PERSIST });
+  assert.equal(flicker.escalate, false, 'a 1-pass momentum flicker must NOT headline (the fast-cadence fix)');
+  assert.equal(flicker.armed, true);
+  assert.equal(flicker.reason, 'clear-armed');
+  const held = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, breakdownMs: PERSIST, persistMs: PERSIST });
+  assert.equal(held.escalate, true);
+  assert.equal(held.reason, 'clear');
 });
 
-ok('price ≥δ below structural support (single pass) → immediate structural escalation', () => {
+ok('price ≥δ below structural support (through the trigger) → IMMEDIATE structural escalation (no time gate)', () => {
   const support = 20_000_000, trigger = support * (1 - 0.005);   // cut-trigger = support − 0.5%
-  const g = convictionGate({ verdict: 'HOLD', gate: null, price: trigger - 1, support, cutTrigger: trigger, passesBelowSupport: 1 });
+  const g = convictionGate({ verdict: 'HOLD', gate: null, price: trigger - 1, support, cutTrigger: trigger, belowSupportMs: 0, persistMs: PERSIST });
   assert.equal(g.escalate, true);
   assert.equal(g.armed, false);
   assert.equal(g.reason, 'structural');
 });
 
-ok('a single non-convincing graze of support arms; a 2nd consecutive below-support pass escalates', () => {
+ok('a non-convincing graze of support arms; escalates once below support PERSISTS ≥ persist', () => {
   const support = 20_000_000, trigger = support * (1 - 0.005);
   const price = support - 10_000;                                 // below support but ABOVE cut-trigger
-  const g1 = convictionGate({ verdict: 'HOLD', gate: null, price, support, cutTrigger: trigger, passesBelowSupport: 1 });
+  const g1 = convictionGate({ verdict: 'HOLD', gate: null, price, support, cutTrigger: trigger, belowSupportMs: 1 * MIN, persistMs: PERSIST });
   assert.equal(g1.escalate, false);
   assert.equal(g1.armed, true);
   assert.equal(g1.reason, 'structural-armed');
-  const g2 = convictionGate({ verdict: 'HOLD', gate: null, price, support, cutTrigger: trigger, passesBelowSupport: 2 });
+  const g2 = convictionGate({ verdict: 'HOLD', gate: null, price, support, cutTrigger: trigger, belowSupportMs: PERSIST, persistMs: PERSIST });
   assert.equal(g2.escalate, true);
   assert.equal(g2.reason, 'structural');
 });
 
-ok('INVARIANT: a Gate-2 breakdown CUT escalates IMMEDIATELY regardless of pass count / conviction', () => {
-  // no matter the underwater/below-support counts or support levels, the breakdown CUT is never gated
-  for (const pu of [0, 1, 2]) {
-    const g = convictionGate({ verdict: 'CUT', gate: 2, passesUnderwater: pu,
-      price: 999, support: 1000, cutTrigger: 995, passesBelowSupport: 0 });
-    assert.equal(g.escalate, true, `breakdown CUT must escalate at passesUnderwater=${pu}`);
+ok('a reset zeroes the underwater streak → elapsed 0 → back to armed', () => {
+  const prior = advanceState(undefined, obs({ instabuy: 90 }), T0);
+  const cur = obs({ identity: 'hld:9:900', instabuy: 90, breakEven: 950 }); // new lot, still underwater
+  const d = computeDeltas(prior, cur, T0 + 5 * MIN);
+  assert.equal(d.reset, true);
+  assert.equal(d.underwaterMs, 0, 'a reset restarts the streak now → 0 elapsed (cannot escalate)');
+  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', underwaterMs: d.underwaterMs, persistMs: PERSIST });
+  assert.equal(g.escalate, false);
+  assert.equal(g.armed, true);
+});
+
+ok('INVARIANT: a Gate-2 breakdown CUT escalates IMMEDIATELY regardless of elapsed time / conviction', () => {
+  // no matter the elapsed durations or support levels, the breakdown CUT is never time-gated
+  for (const um of [0, 1 * MIN, 10 * MIN]) {
+    const g = convictionGate({ verdict: 'CUT', gate: 2, underwaterMs: um,
+      price: 999, support: 1000, cutTrigger: 995, belowSupportMs: 0, breakdownMs: 0, persistMs: PERSIST });
+    assert.equal(g.escalate, true, `breakdown CUT must escalate at underwaterMs=${um}`);
     assert.equal(g.armed, false);
     assert.equal(g.reason, 'breakdown');
   }

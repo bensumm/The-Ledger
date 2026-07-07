@@ -94,15 +94,30 @@ full story.
   momVerdict `listAt`, else the band-top-floored-at-BE fallback — never re-fork that. OUTPUT-FORMAT-
   ONLY (no verdict/alert/row-selection change). Full state: PLAN.md V5 row, `MONITORING.md`
   "What each tick surfaces" (the emit-contract block).
-- **Conviction gating — arm-then-confirm alerts** (V4, pipeline-only — NO APP_VERSION) — the pure
+- **Cadence-independent alert gating — TIME-based arm-then-confirm** (V7, pipeline-only — NO
+  APP_VERSION) — `convictionGate()` (`pipeline/lib/watchstate.mjs`) now escalates on **elapsed
+  WALL-CLOCK time a condition has persisted** (`ALERT_PERSIST_MS`, 4-min placeholder), NOT a pass
+  count. **Why:** a pass-count threshold made a faster /loop manufacture faster alerts — at 1-min
+  cadence "2 consecutive passes" was 2 min of noise; a choppy market checked every minute produced
+  flicker headlines. Time-gating makes sensitivity independent of cadence. **New:** `LIST-TO-CLEAR`
+  (a 2h-momentum breakdown, previously UNGATED — it headlined every ↓ pass) is now arm-then-confirmed
+  too: a single-pass flicker only ARMS; it headlines only once the breakdown HOLDS ≥ `ALERT_PERSIST_MS`.
+  Persistence is measured from `underwaterSince`/`belowSupportSince`/`breakdownSince` timestamps in
+  the watch-state. **Don't-rebuild / invariant preserved:** the **Gate-2 breakdown `CUT` stays EXEMPT
+  — immediate, never time-gated** (pinned by an "immediate regardless of elapsed time" fixture); note
+  `LIST-TO-CLEAR` also carries `gate:2` but its verdict is `LIST-TO-CLEAR` not `CUT`, so it is gated,
+  not exempt. `watchstate.test.mjs` pins the time-based gate + a cadence-independence fixture. Full
+  state: `pipeline/MONITORING.md` "What each tick surfaces" item 1.
+- **Conviction gating — arm-then-confirm alerts** (V4, pipeline-only — NO APP_VERSION; the pass-count
+  thresholds below were SUPERSEDED by V7's time-based gating above — read that first) — the pure
   `convictionGate()` in `pipeline/lib/watchstate.mjs` gates whether a held verdict escalates to a
   headline ⚠ ALERT in `watch.mjs` (verdict strings UNCHANGED; `js/quotecore.js` untouched). A Gate-D
-  `CUT-CANDIDATE` needs 2 consecutive underwater-liquid passes (V1's `passesUnderwater`) to alert; a
-  structural break needs the V2 tripwire convincingly broken (`< cut-trigger`) OR 2 passes below
-  support (new `passesBelowSupport` counter, same reset policy). Pass 1 → ARMED (a visible note, not
-  a headline). **Don't-rebuild / invariant:** the **Gate-2 breakdown `CUT` is EXEMPT — it alerts
-  immediately, byte-identically** (pinned by an "immediate regardless of pass count" fixture); never
-  gate it. Full state: PLAN.md V4 row, `pipeline/MONITORING.md` "What each tick surfaces" item 1.
+  `CUT-CANDIDATE` needs the underwater condition to persist (V7: ≥ `ALERT_PERSIST_MS`; was 2 passes)
+  to alert; a structural break needs the V2 tripwire convincingly broken (`< cut-trigger`) OR below
+  support persisted (V7: ≥ `ALERT_PERSIST_MS`; was 2 passes). First observation → ARMED (a visible
+  note, not a headline). **Don't-rebuild / invariant:** the **Gate-2 breakdown `CUT` is EXEMPT — it
+  alerts immediately, byte-identically** (pinned by an "immediate regardless of conviction" fixture);
+  never gate it. Full state: `pipeline/MONITORING.md` "What each tick surfaces" item 1.
 - **Verdict self-sufficiency — recovery-read forecast + capital companion** (V6, pipeline-only — NO
   APP_VERSION; the last chunk of the V1–V6 verdict-layer series, `PLAN-VERDICT.md` folded into
   `PLAN.md` + deleted) — two ADVISORY, OUTPUT-ONLY surfaces in `watch.mjs`, neither a verdict/alert

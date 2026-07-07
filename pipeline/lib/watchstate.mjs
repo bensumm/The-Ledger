@@ -17,7 +17,12 @@
 //
 // State entry shape (one per position key, e.g. "held:27652" / "bid:27652:18000000"):
 //   { ts, identity, instabuy, mom, bandTop, breakEven, support,
-//     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist:[] }
+//     underwater, passesUnderwater, belowSupport, passesBelowSupport,
+//     underwaterSince, belowSupportSince, breakdownSince, bandTopHist:[] }
+// The `*Since` fields are the WALL-CLOCK start of each currently-true condition streak (underwater /
+// below-support / 2h-momentum breakdown); they persist across passes so the next pass can measure
+// how long the condition has HELD — that elapsed time (not a pass count) is what convictionGate uses
+// to escalate an alert, making sensitivity independent of the loop cadence (V7).
 // `identity` is a caller-chosen stable string for the position lot/offer (held: qty+avgCost; bid:
 // offer price+max). A changed identity, or a gap since the last pass exceeding STALE_GAP_MS, RESETS
 // the counters — so `passesUnderwater` (and `passesBelowSupport`) only ever reflect CONSECUTIVE,
@@ -42,12 +47,29 @@ export const BANDTOP_HIST = 4;
 // Placeholder pending validation (same discipline as the rating.mjs / phase() cutoffs) — a display
 // threshold only, it drives no verdict.
 export const BANDTOP_FLAT_PCT = 0.003;   // ±0.3%
+// How long an alertable condition (underwater, below-support, 2h-momentum breakdown) must PERSIST
+// in WALL-CLOCK time before a held verdict escalates to a HEADLINE ⚠ alert (the arm-then-confirm
+// window). TIME-based, NOT pass-based, ON PURPOSE: a pass-count threshold means "checking twice as
+// often manufactures alerts twice as fast" — at a 1-min loop "2 consecutive passes" is 2 min of
+// noise, at 5-min it was 10 min. Gating on elapsed time makes the alert sensitivity INDEPENDENT of
+// the loop cadence, so a rapid choppy-market cadence stops producing flicker headlines. Placeholder
+// (4 min) pending validation. The Gate-2 breakdown CUT is EXEMPT from this (see convictionGate #1).
+export const ALERT_PERSIST_MS = 4 * 60 * 1000;
 
 // A position is underwater when its live instabuy (clear-now price) is below its break-even.
 const isUnderwater = o => o != null && o.instabuy != null && o.breakEven != null && o.instabuy < o.breakEven;
 // A position is below structural support (V4) when its live instabuy prints under the V2 support
 // level. Independent of underwater — a lot can break support while still above its own break-even.
 const isBelowSupport = o => o != null && o.instabuy != null && o.support != null && o.instabuy < o.support;
+// A position is in a 2h-momentum breakdown when its `mom` reads 'breakdown' — the driver of the
+// LIST-TO-CLEAR verdict. Tracked for the same time-based arm-then-confirm as underwater/below-support.
+const isBreakdown = o => o != null && o.mom === 'breakdown';
+
+// The wall-clock start of a currently-true condition streak: keep the prior streak's start if the
+// condition held last pass (and this isn't a fresh episode), else it starts now; null when false.
+const sinceOf = (on, priorSince, fresh, now) => on ? ((!fresh && priorSince != null) ? priorSince : now) : null;
+// Elapsed ms of a streak whose start is `since` (0 when not started / unknown).
+const elapsed = (since, now) => (since != null && now != null) ? Math.max(0, now - since) : 0;
 
 // Reset policy: identity changed (different lot / re-priced offer) OR the gap since the last pass
 // is too large to be a consecutive poll. A missing prior is NOT a reset (it's first-seen — handled
@@ -89,6 +111,15 @@ export function computeDeltas(prior, cur, now) {
   const passesUnderwater = underwater ? ((fresh ? 0 : (prior.passesUnderwater || 0)) + 1) : 0;
   const belowSupport = isBelowSupport(cur);
   const passesBelowSupport = belowSupport ? ((fresh ? 0 : (prior.passesBelowSupport || 0)) + 1) : 0;
+  // Time-based streak durations (cadence-independent, for convictionGate). `*Since` carries forward
+  // from the prior entry when the condition still holds; the elapsed ms is what the gate compares.
+  const breakdown = isBreakdown(cur);
+  const underwaterSince = sinceOf(underwater, prior && prior.underwaterSince, fresh, now);
+  const belowSupportSince = sinceOf(belowSupport, prior && prior.belowSupportSince, fresh, now);
+  const breakdownSince = sinceOf(breakdown, prior && prior.breakdownSince, fresh, now);
+  const underwaterMs = elapsed(underwaterSince, now);
+  const belowSupportMs = elapsed(belowSupportSince, now);
+  const breakdownMs = elapsed(breakdownSince, now);
 
   let instabuyDelta = null, instabuyDir = null, gapMs = null;
   if (!fresh && prior.instabuy != null && cur && cur.instabuy != null) {
@@ -111,6 +142,7 @@ export function computeDeltas(prior, cur, now) {
   }
 
   return { firstSeen, reset, underwater, passesUnderwater, belowSupport, passesBelowSupport,
+    underwaterMs, belowSupportMs, breakdownMs,
     instabuyDelta, instabuyDir, gapMs,
     momFrom, momTo, momTransition, momChanged,
     bandTopTrend, bandTopFrom, bandTopTo };
@@ -125,6 +157,11 @@ export function advanceState(prior, cur, now) {
   const passesUnderwater = underwater ? ((fresh ? 0 : (prior.passesUnderwater || 0)) + 1) : 0;
   const belowSupport = isBelowSupport(cur);
   const passesBelowSupport = belowSupport ? ((fresh ? 0 : (prior.passesBelowSupport || 0)) + 1) : 0;
+  // Persist the streak starts so the next pass can measure elapsed persistence (time-based gating).
+  const breakdown = isBreakdown(cur);
+  const underwaterSince = sinceOf(underwater, prior && prior.underwaterSince, fresh, now);
+  const belowSupportSince = sinceOf(belowSupport, prior && prior.belowSupportSince, fresh, now);
+  const breakdownSince = sinceOf(breakdown, prior && prior.breakdownSince, fresh, now);
   const priorHist = fresh ? [] : (prior.bandTopHist || []);
   const bandTopHist = (cur && cur.bandTop != null ? [...priorHist, cur.bandTop] : priorHist).slice(-BANDTOP_HIST);
   return {
@@ -139,6 +176,9 @@ export function advanceState(prior, cur, now) {
     passesUnderwater,
     belowSupport,
     passesBelowSupport,
+    underwaterSince,
+    belowSupportSince,
+    breakdownSince,
     bandTopHist,
   };
 }
@@ -168,26 +208,41 @@ export function advanceState(prior, cur, now) {
      4. A single non-convincing graze of support (below support, not through the trigger, <2 passes)
         → ARM the structural break (visible note), no headline.
    Anything else → neither escalate nor armed. */
-export function convictionGate({ verdict, gate, passesUnderwater = 0,
-  price = null, support = null, cutTrigger = null, passesBelowSupport = 0 } = {}) {
-  // 1. Gate-2 breakdown CUT — EXEMPT (the invariant). Immediate regardless of any conviction count.
+export function convictionGate({ verdict, gate,
+  price = null, support = null, cutTrigger = null,
+  underwaterMs = 0, belowSupportMs = 0, breakdownMs = 0, persistMs = ALERT_PERSIST_MS } = {}) {
+  // 1. Gate-2 breakdown CUT — EXEMPT (the invariant). Immediate, unconditional, never time-gated.
+  //    A live 2h breakdown WHILE UNDERWATER is not a thing to sit on; delaying it is the exact
+  //    failure that cost the bludgeon exit. (Note: LIST-TO-CLEAR also carries gate:2 but its verdict
+  //    is 'LIST-TO-CLEAR', not 'CUT' — so it does NOT match here and IS gated at #4.)
   if (verdict === 'CUT' && gate === 2)
     return { escalate: true, armed: false, reason: 'breakdown' };
 
   const belowSupport = price != null && support != null && price < support;
   const throughTrigger = belowSupport && cutTrigger != null && price < cutTrigger;
 
-  // 2. Structural break convincingly broken → immediate structural escalation.
-  if (throughTrigger || (belowSupport && passesBelowSupport >= 2))
+  // 2. Structural break: CONVINCINGLY through the trigger (immediate) OR below support PERSISTED for
+  //    ≥ persistMs (time-based; was "2 consecutive passes"). Codifies require-conviction.
+  if (throughTrigger || (belowSupport && belowSupportMs >= persistMs))
     return { escalate: true, armed: false, reason: 'structural' };
 
-  // 3. Gate-D CUT-CANDIDATE — arm on pass 1, escalate on the 2nd consecutive underwater-liquid pass.
+  // 3. Gate-D clean-momentum CUT-CANDIDATE — arm-then-confirm on TIME: escalate once underwater has
+  //    persisted ≥ persistMs; before that it ARMS (visible note, not a headline).
   if (verdict === 'CUT-CANDIDATE' && gate === 'D') {
-    if (passesUnderwater >= 2) return { escalate: true, armed: false, reason: 'cut-candidate' };
+    if (underwaterMs >= persistMs) return { escalate: true, armed: false, reason: 'cut-candidate' };
     return { escalate: false, armed: true, reason: 'cut-candidate-armed' };
   }
 
-  // 4. A single non-convincing graze of support → arm (visible note), no headline.
+  // 4. LIST-TO-CLEAR (a 2h-momentum breakdown that is NOT the gate-2 underwater CUT) — arm-then-confirm
+  //    on TIME: escalate to a headline only once the breakdown has persisted ≥ persistMs; a single
+  //    flicker only ARMS. This is the cadence-independent fix for the fast-loop flicker headlines
+  //    (a momentum reading that flips clean↔breakdown each minute never reaches a headline).
+  if (verdict === 'LIST-TO-CLEAR') {
+    if (breakdownMs >= persistMs) return { escalate: true, armed: false, reason: 'clear' };
+    return { escalate: false, armed: true, reason: 'clear-armed' };
+  }
+
+  // 5. A single non-convincing graze of support → arm (visible note), no headline.
   if (belowSupport) return { escalate: false, armed: true, reason: 'structural-armed' };
 
   return { escalate: false, armed: false, reason: null };

@@ -309,22 +309,33 @@ of the numbered signals, in more detail:
    lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
    lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its
    multi-day regime is FALLING.
-   - **Conviction gating — arm-then-confirm (V4).** Whether a verdict becomes a *headline* ⚠ ALERT
-     is gated by the pure `convictionGate()` (`lib/watchstate.mjs`) — the verdict *string* is
-     unchanged (the Verdict column still prints `CUT-CANDIDATE`); only escalation is gated:
-     - the **Gate-2 breakdown `CUT` is EXEMPT** — it escalates IMMEDIATELY on pass 1, unconditionally
-       (a live 2h breakdown while underwater is not a thing to sit on; this is the byte-identical
-       invariant);
-     - a **Gate-D clean-momentum `CUT-CANDIDATE`** must survive **2 consecutive underwater-liquid
-       passes** (V1's `passesUnderwater`) before it becomes a headline alert. Pass 1 → **ARMED**: a
-       visible note (`CUT-CANDIDATE armed — 1st underwater pass…`), NOT a headline. A reset
-       (identity change / gap > `STALE_GAP_MS` / surfaced above break-even) re-arms from scratch;
+   - **Conviction gating — arm-then-confirm, TIME-based (V4 + V7).** Whether a verdict becomes a
+     *headline* ⚠ ALERT is gated by the pure `convictionGate()` (`lib/watchstate.mjs`) — the verdict
+     *string* is unchanged (the Verdict column still prints `CUT-CANDIDATE`); only escalation is gated.
+     **As of V7 the confirmation is WALL-CLOCK TIME, not a pass count** (`ALERT_PERSIST_MS`, 4-min
+     placeholder): a condition must PERSIST for the window before it headlines, so a faster loop no
+     longer manufactures faster alerts — sensitivity is independent of the /loop cadence (the fix for
+     the 1-min-cadence flicker headlines). The persistence is measured from `underwaterSince` /
+     `belowSupportSince` / `breakdownSince` timestamps carried across passes.
+     - the **Gate-2 breakdown `CUT` is EXEMPT** — it escalates IMMEDIATELY, unconditionally, never
+       time-gated (a live 2h breakdown while underwater is not a thing to sit on; the byte-identical
+       invariant). Note `LIST-TO-CLEAR` also carries `gate:2` but its verdict string is
+       `LIST-TO-CLEAR`, not `CUT`, so it is NOT exempt — it IS gated (next bullet);
+     - a **Gate-D clean-momentum `CUT-CANDIDATE`** must stay underwater-liquid for **≥ `ALERT_PERSIST_MS`**
+       before it headlines. Before that → **ARMED**: a visible note (`CUT-CANDIDATE armed — underwater
+       ~Nm…`), NOT a headline. A reset (identity change / gap > `STALE_GAP_MS` / surfaced above
+       break-even) zeroes the streak (elapsed 0) and re-arms;
+     - a **`LIST-TO-CLEAR`** (a 2h-momentum breakdown on a held lot that is NOT the gate-2 underwater
+       CUT) now ALSO arms-then-confirms on time (V7): a single-pass momentum flicker only **arms**
+       (`LIST-TO-CLEAR armed — 2h breakdown ~Nm so far (a flicker at this cadence)…`); it headlines
+       only once the breakdown HOLDS ≥ `ALERT_PERSIST_MS`. This is the direct fix for the momentum
+       reading that flips clean↔breakdown each minute and used to headline every ↓ pass;
      - a **structural-break `CUT`** fires when the live instabuy is **convincingly** below the V2
        cut-trigger (`< cut-trigger`, i.e. ≥ `CUT_TRIGGER_DELTA` below support) OR below support for
-       **2 consecutive passes** (`passesBelowSupport`); a single non-convincing graze **arms**
-       (`approaching cut-trigger — armed…`) rather than alerting. This is the codified
-       override-discipline "require conviction (0.5% or two passes)" — the direct fix for the
-       2026-07-06 too-tight tripwire (a level broke −0.9% then bounced within one pass).
+       **≥ `ALERT_PERSIST_MS`**; a single non-convincing graze **arms** (`approaching cut-trigger —
+       armed…`) rather than alerting. This is the codified override-discipline "require conviction
+       (0.5% or sustained)" — the fix for the 2026-07-06 too-tight tripwire (a level broke −0.9% then
+       bounced within one pass).
      The headline alert count reflects only **confirmed** escalations + the always-immediate
      breakdowns / UNDERWATER / FALLING / CANCEL-BID. Armed candidates are visible in the notes,
      never the headline.

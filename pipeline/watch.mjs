@@ -57,7 +57,7 @@ import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
-import { loadState, saveState, computeDeltas, advanceState, convictionGate } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4 conviction gating
+import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized per-held emit contract
 import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
@@ -372,13 +372,17 @@ function heldAlert(it) {
       // passes). Until then it's armed: fall through so no headline fires (the armed note is emitted
       // in the table loop). If it just escalated, alert with the confirmation count.
       if (gate && gate.escalate && gate.reason === 'cut-candidate') {
-        const pu = (it._deltas && it._deltas.passesUnderwater) || 2;
-        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — underwater through a liquid window, confirmed over ${pu} consecutive passes; free the capital.` };
+        const um = Math.max(0, Math.round(((it._deltas && it._deltas.underwaterMs) || 0) / 60000));
+        return { level: mv.verdict, msg: `${mv.verdict} ${name} @ ${fmtP(mv.listAt)} — underwater through a liquid window, sustained ~${um}m; free the capital.` };
       }
       // armed Gate-D (or masked by a structural escalation handled just below) — no headline here.
     } else {
-      if (mv.action === 'CLEAR')
-        return { level: 'CLEAR', msg: `LIST-TO-CLEAR ${name} @ ${fmtP(mv.listAt)} — 2h breakdown; bank it, don't hold for the premium.` };
+      // LIST-TO-CLEAR — V7 arm-then-confirm on TIME: headline only once the 2h breakdown has PERSISTED
+      // (gate.reason==='clear'). A single-pass momentum flicker only arms (no headline) — fall through
+      // (the armed note is emitted in the table loop; a genuine structural break below still fires).
+      if (mv.action === 'CLEAR' && gate && gate.escalate && gate.reason === 'clear')
+        return { level: 'CLEAR', msg: `LIST-TO-CLEAR ${name} @ ${fmtP(mv.listAt)} — 2h breakdown held; bank it, don't hold for the premium.` };
+      if (mv.action === 'CLEAR') { /* armed flicker or structural — no CLEAR headline; fall through */ }
       if (mv.action === 'NO_READ')
         return { level: 'NO-READ', msg: `NO-READ ${name} (${row.reliableReason}) — can't price a decision off this quote. Keep any ask ≥ break-even ${fmtP(be)}; re-check at a liquid window.` };
       if (mv.action === 'DIURNAL_WATCH')
@@ -496,9 +500,9 @@ async function main() {
       const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m, undefined, lotCtxOf(it));
       it.gate = convictionGate({
         verdict: mv && mv.verdict, gate: mv && mv.gate,
-        passesUnderwater: d.passesUnderwater,
         price: it.row.quickSell, support, cutTrigger: trig,
-        passesBelowSupport: d.passesBelowSupport,
+        // V7: TIME-based arm-then-confirm — elapsed persistence, not pass count (cadence-independent).
+        underwaterMs: d.underwaterMs, belowSupportMs: d.belowSupportMs, breakdownMs: d.breakdownMs,
       });
     } catch { /* gating/state are observability-adjacent — degrade to no-escalation, never break a pass */ }
   }
@@ -631,10 +635,14 @@ async function main() {
       // V4 arm-then-confirm: an armed-but-unconfirmed escalation is VISIBLE here as the conviction
       // field (never a headline ⚠ alert — that only fires once convictionGate escalates, in the
       // headline block). Two armed shapes, distinct notes. Confirmed escalations live in the headline.
+      const persistMin = Math.round(ALERT_PERSIST_MS / 60000);
+      const heldMin = ms => Math.max(0, Math.round((ms || 0) / 60000));
       if (it.gate && it.gate.armed && it.gate.reason === 'cut-candidate-armed')
-        conviction = `CUT-CANDIDATE armed — ${ordinal((it._deltas && it._deltas.passesUnderwater) || 1)} underwater pass through a liquid window; headline alert on the next consecutive underwater pass.`;
+        conviction = `CUT-CANDIDATE armed — underwater ~${heldMin(it._deltas && it._deltas.underwaterMs)}m through a liquid window; headline only once it persists ~${persistMin}m (time-based, not per-pass).`;
+      else if (it.gate && it.gate.armed && it.gate.reason === 'clear-armed')
+        conviction = `LIST-TO-CLEAR armed — 2h breakdown ~${heldMin(it._deltas && it._deltas.breakdownMs)}m so far (a flicker at this cadence); headline only if the breakdown HOLDS ~${persistMin}m.`;
       else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
-        conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline alert if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support next pass.`;
+        conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support ~${persistMin}m.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
