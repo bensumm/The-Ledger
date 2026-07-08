@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.22
+version: 1.23
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -173,6 +173,17 @@ This is the tribal layer the script can't do — apply ALL of these:
     price off the `recent-3 ~50%` quantile instead. It is NOT a looser gate (the band-top-artifact SKIP
     above still stands); it stops the count fooling you on a regime-change item. A stable item never
     flags. Do NOT re-derive a reach number by hand — read the split the script prints.
+    - **A `⚠ stale` flag on a BID means "don't assert the fill" — price to live instead (Ben,
+      2026-07-08, first live save).** The stale flag exists on the bid side precisely to stop you
+      claiming a fill the recent regime won't give. When `--bid X` shows `⚠ stale` (recent nights sat
+      ABOVE X — the floor repriced up), X is a band-floor extreme recent sellers don't cross down to;
+      do NOT pitch it as "fills the dip." Either **bid at/just under the live instasell** (the
+      fill-correct level — you give up the hoped-for entry to actually get filled) or call it an
+      explicit patient dip-catch that *probably misses* (a fine resting bid, no downside — just don't
+      size the plan around it). Anchor: I pitched Hydra leather at its 13.44m 2h-floor (recent 0/3,
+      ⚠ stale) as a dip-fill; live instasell was 13.53m, ~90k above the bid — it needed the pullback
+      to *deepen*, which recent history argued against. Repriced to 13.50m (near live) to actually
+      fill. The reachable-ASK side (3/3 recent) was genuine; it was the bid fill I got ahead of.
   **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
