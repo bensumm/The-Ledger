@@ -69,6 +69,23 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **Thesis-gated hold alerts — silence expected-underwater** (TG1, 2026-07-07, pipeline-only — NO
+  APP_VERSION) — a patient/accumulation hold is DEFINITIONALLY underwater on the instant-clear from
+  the moment its bid fills, so the `UNDERWATER`/`CUT-CANDIDATE` headline cried wolf every pass (Ben:
+  "tired of being told I'm underwater when that's the plan"). The fix lives in the ALERT gate, NOT
+  the verdict core. **Don't-rebuild / the load-bearing rules:** (1) `momVerdict()` (`js/quotecore.js`)
+  is UNTOUCHED — the verdict still SAYS underwater (honest); only the *headline* is gated. (2) The
+  thesis branch lives in `convictionGate()` (`pipeline/lib/watchstate.mjs`) — a declared thesis with
+  a numeric tripwire, live ABOVE the tripwire → ARMED note (`per thesis: silent above X…`), no
+  headline; live at/below the tripwire → falls through to the normal V4/V7 escalation (real risk
+  headlines). (3) The **Gate-2 breakdown `CUT` stays EXEMPT** — checked BEFORE the thesis branch, a
+  real breakdown is NEVER silenced (`LIST-TO-CLEAR` is also excluded from the silence). (4) The store
+  is AGENT-WRITTEN like the greenlist — TRACKED root `hold-thesis.json` (`{id,exitPrice,tripwire,
+  horizon,ts}`, 14-day TTL), read via `pipeline/lib/holdthesis.mjs`, watch READ-ONLY; when Ben
+  declares a hold plan the agent appends/upserts an entry (`upsertThesis`). No thesis / empty store →
+  byte-identical to today (opt-in, safe-degrade). Fixtures: `pipeline/lib/holdthesis.test.mjs` +
+  the TG1 block in `pipeline/watchstate.test.mjs`. Full story: `MONITORING.md` "What each tick
+  surfaces" item 1 (the THESIS-silence bullet) + the `holdthesis.mjs` header.
 - **MERCH-book quarantine — `ignored-items.json` + greenlist** (2026-07-07, pipeline-only — NO
   APP_VERSION) — items Ben transacts but doesn't flip (farming inputs snapdragon seed 5300 /
   snapdragon 3000, loot, personal-use) are quarantined from the DERIVED merch views. **Don't-rebuild

@@ -108,6 +108,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the GitHub contents API (`js/github.js`)
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/alerts.mjs` (N1); ships empty
+- `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
+  a flat array of `{id, exitPrice, tripwire, horizon, ts}`. When Ben declares a patient/accumulation
+  hold ("accumulate nest, exit 4,848, tripwire 4,678, multi-day") the agent appends/upserts an entry
+  (the greenlist pattern — hand-edit or via `holdthesis.mjs upsertThesis`); a 14-day TTL prunes stale
+  intent. `watch.mjs` reads it READ-ONLY through `pipeline/lib/holdthesis.mjs` and passes it into
+  `convictionGate` (`lib/watchstate.mjs`): while the live price holds ABOVE the declared tripwire, the
+  EXPECTED-underwater `UNDERWATER`/`CUT-CANDIDATE` headline is silenced to an armed note (being
+  underwater vs the instant-clear IS the plan); below the tripwire the real-risk headline fires.
+  `momVerdict` is untouched (the verdict stays honest); only the headline is gated. The Gate-2
+  breakdown `CUT` is never silenced. Ships empty (`[]`); fixture-pinned in
+  `pipeline/lib/holdthesis.test.mjs` + `pipeline/watchstate.test.mjs`.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
   `items` are dropped from the DERIVED merch views (`positions.json` phantom lots + unmatched-harvest
@@ -205,7 +216,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     is all baselines); advisory line on quote/watch, never a verdict input),
     `sessionthesis.mjs` (YT1 #4 — PURE session-thesis state model: `loadThesis`/`saveThesis`/`upsert`/
     `clear`/`prune`/`thesisLine`, the intent-per-lane store watch.mjs reads read-only; persists like
-    watchstate), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    watchstate),
+    `holdthesis.mjs` (TG1 — PURE declared-hold-thesis store: `loadHoldThesis`/`saveHoldThesis`/
+    `thesisFor`/`upsertThesis`/`clearThesis`/`pruneHoldThesis` over the TRACKED root `hold-thesis.json`
+    array of `{id,exitPrice,tripwire,horizon,ts}`; watch.mjs reads it read-only and feeds it to
+    `convictionGate` to SILENCE the expected-underwater headline while live holds above the declared
+    tripwire — never touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
@@ -238,6 +254,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocitytag.test.mjs` (Build 2 — `buildVelocityIndex` aggregation/dominant-class/median + null-safe;
     `velocityTag` minN gate, `fast·~Nm` format, ≥20% unfilled suffix),
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
+    `holdthesis.test.mjs` (TG1 — load-degrades-to-[]/round-trip/thesisFor-newest/upsert-replaces/clear/prune-TTL),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate)
     — all auto-discovered by

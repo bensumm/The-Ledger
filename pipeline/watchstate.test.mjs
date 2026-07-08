@@ -259,4 +259,73 @@ ok('INVARIANT: a Gate-2 breakdown CUT escalates IMMEDIATELY regardless of elapse
   }
 });
 
+/* --- TG1: the thesis branch — silence expected-underwater above the declared tripwire ------ */
+// A declared hold plan: exit 4848, tripwire 4678 (the nest example from the chunk spec).
+const NEST_THESIS = { exitPrice: 4848, tripwire: 4678, horizon: 'multi-day' };
+
+ok('TG1: an UNDERWATER lot with a thesis, live ABOVE the tripwire → ARMED note, NO headline', () => {
+  // being underwater vs the instant-clear IS the plan; live 4700 is above the 4678 tripwire.
+  const g = convictionGate({ verdict: 'HOLD', gate: null, price: 4700, underwater: true, thesis: NEST_THESIS,
+    underwaterMs: 10 * MIN, persistMs: PERSIST });
+  assert.equal(g.escalate, false, 'expected-underwater above the tripwire must NOT headline');
+  assert.equal(g.armed, true);
+  assert.equal(g.reason, 'thesis-armed');
+  assert.equal(g.thesis, NEST_THESIS, 'the branch echoes the thesis for the note');
+});
+
+ok('TG1: a Gate-D CUT-CANDIDATE with a thesis, live ABOVE the tripwire → ARMED (thesis wins over #3)', () => {
+  // a fully-persisted CUT-CANDIDATE would normally escalate (#3); the thesis silences it above the tripwire.
+  const g = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', price: 4700, underwater: true,
+    thesis: NEST_THESIS, underwaterMs: PERSIST * 3, persistMs: PERSIST });
+  assert.equal(g.escalate, false, 'a declared thesis above the tripwire silences even a persisted CUT-CANDIDATE');
+  assert.equal(g.armed, true);
+  assert.equal(g.reason, 'thesis-armed');
+});
+
+ok('TG1: live AT-OR-BELOW the tripwire falls through to the normal escalation (real risk headlines)', () => {
+  // live 4650 < tripwire 4678: the real risk — fall through to the Gate-D #3 escalation (persisted).
+  const below = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', price: 4650, underwater: true,
+    thesis: NEST_THESIS, underwaterMs: PERSIST, persistMs: PERSIST });
+  assert.equal(below.escalate, true, 'below the tripwire, a persisted CUT-CANDIDATE headlines as usual');
+  assert.equal(below.reason, 'cut-candidate');
+  // exactly AT the tripwire is NOT "above" (price > tripwire is strict) → also falls through.
+  const at = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', price: 4678, underwater: true,
+    thesis: NEST_THESIS, underwaterMs: PERSIST, persistMs: PERSIST });
+  assert.equal(at.escalate, true, 'AT the tripwire is a break — not silenced');
+});
+
+ok('TG1 INVARIANT: a Gate-2 breakdown CUT is NEVER silenced by a thesis, even above the tripwire', () => {
+  // the breakdown CUT is checked BEFORE the thesis branch — a real breakdown is real risk, thesis or not.
+  const g = convictionGate({ verdict: 'CUT', gate: 2, price: 4700, underwater: true, thesis: NEST_THESIS,
+    underwaterMs: 10 * MIN, persistMs: PERSIST });
+  assert.equal(g.escalate, true, 'a Gate-2 breakdown CUT must headline even with a declared thesis above the tripwire');
+  assert.equal(g.reason, 'breakdown');
+});
+
+ok('TG1: LIST-TO-CLEAR is NOT thesis-silenced (a live 2h breakdown is a real move, gated by #4 not thesis)', () => {
+  // even underwater + above the tripwire, a LIST-TO-CLEAR follows its own V7 arm-then-confirm, not the thesis.
+  const g = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, price: 4700, underwater: true,
+    thesis: NEST_THESIS, breakdownMs: PERSIST, persistMs: PERSIST });
+  assert.equal(g.reason, 'clear', 'LIST-TO-CLEAR escalates on its own held breakdown, unaffected by the thesis');
+  assert.equal(g.escalate, true);
+});
+
+ok('TG1 SAFE-DEGRADE: no thesis (or a thesis with no numeric tripwire) → byte-identical to today', () => {
+  // no thesis: the underwater CUT-CANDIDATE arms/escalates purely on the V4/V7 rule (thesis absent).
+  const noThesis = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', price: 4700, underwater: true,
+    underwaterMs: 1 * MIN, persistMs: PERSIST });
+  assert.equal(noThesis.reason, 'cut-candidate-armed', 'absent a thesis, behavior is the plain V4/V7 path');
+  // a thesis missing a numeric tripwire cannot gate → same plain path.
+  const noTrip = convictionGate({ verdict: 'CUT-CANDIDATE', gate: 'D', price: 4700, underwater: true,
+    thesis: { exitPrice: 4848, tripwire: null }, underwaterMs: 1 * MIN, persistMs: PERSIST });
+  assert.equal(noTrip.reason, 'cut-candidate-armed', 'a tripwire-less thesis is inert — no silencing');
+});
+
+ok('TG1: a thesis on a lot that is NOT underwater does not arm (nothing to silence)', () => {
+  // above break-even, no CUT-CANDIDATE, above the tripwire → the thesis branch does not fire.
+  const g = convictionGate({ verdict: 'HOLD', gate: null, price: 4700, underwater: false, thesis: NEST_THESIS });
+  assert.equal(g.armed, false, 'a healthy lot has no expected-underwater signal to silence');
+  assert.equal(g.reason, null);
+});
+
 console.log(`\nAll ${pass} checks passed.`);

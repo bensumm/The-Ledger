@@ -284,8 +284,10 @@ sub-line. Field order, always the same:
 
 1. **verdict** — the momVerdict/offerVerdict action's first sentence (+ the window read's key
    number, + a `⚠ <reason>` reliability flag when the quote is soft), on the header line.
-2. **conviction-state** (V4) — the arm-then-confirm note, when armed. Omitted when not armed.
-   (Confirmed escalations appear in the HEADLINE, not here; this field surfaces the ARMED state.)
+2. **conviction-state** (V4/V7 + TG1) — the arm-then-confirm note, when armed. Omitted when not
+   armed. (Confirmed escalations appear in the HEADLINE, not here; this field surfaces the ARMED
+   state.) A **TG1 thesis-armed** lot surfaces `per thesis (<horizon>): expected-underwater — silent
+   above tripwire X, exit Y; headline only on a break below.` here instead of the plain V4 armed note.
 3. **Δ-since-last** (V1) — the cross-pass delta line, when a signal is informative. Omitted on a
    first-seen / reset / all-quiet pass.
 4. **structural tripwire** (V2) — `support X · cut-trigger Y`, when computable. Omitted when <2
@@ -336,9 +338,26 @@ of the numbered signals, in more detail:
        armed…`) rather than alerting. This is the codified override-discipline "require conviction
        (0.5% or sustained)" — the fix for the 2026-07-06 too-tight tripwire (a level broke −0.9% then
        bounced within one pass).
+     - **THESIS silence (TG1) — a declared hold plan silences the EXPECTED-underwater headline.** A
+       patient/accumulation hold is *definitionally* underwater on the instant-clear from the moment
+       its bid fills, so `UNDERWATER`/`CUT-CANDIDATE` cries wolf every pass on a lot where being
+       underwater IS the plan. When an **agent-written hold thesis** (`hold-thesis.json`, read via
+       `lib/holdthesis.mjs`) declares `{exitPrice, tripwire, horizon}` for the item AND the live price
+       still holds **ABOVE the declared tripwire**, `convictionGate` returns **ARMED, not a headline**
+       (`per thesis (multi-day): expected-underwater — silent above tripwire X, exit Y; headline only
+       on a break below.`). Below the tripwire it **falls through** to the normal escalation above so
+       the *real* risk headlines. The verdict string is UNCHANGED (`momVerdict` is untouched — the
+       Verdict column still prints `UNDERWATER`/`CUT-CANDIDATE`, honest); only the headline is gated.
+       **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
+       silenced by a thesis; `LIST-TO-CLEAR` (a live 2h breakdown) is excluded from the silence; and
+       absent a thesis (empty store) behavior is byte-identical to today. The thesis is a *declaration*
+       Ben makes — never a market claim; it silences a known-expected signal, never manufactures a new
+       one. The store is TRACKED (`hold-thesis.json` at repo root, agent-written like the greenlist,
+       14-day TTL); watch reads it READ-ONLY.
      The headline alert count reflects only **confirmed** escalations + the always-immediate
-     breakdowns / UNDERWATER / FALLING / CANCEL-BID. Armed candidates are visible in the notes,
-     never the headline.
+     breakdowns / UNDERWATER / FALLING / CANCEL-BID (an UNDERWATER/CUT-CANDIDATE is suppressed only
+     when a declared hold thesis silences it above the tripwire — TG1). Armed candidates (including
+     thesis-armed) are visible in the notes, never the headline.
 2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below the shared
    `breakEven()` (tax-capped; see CLAUDE.md "Break-even").
 3. **Per-item RISK read**: spread width, two-sided liquidity (limiting side), regime, unit

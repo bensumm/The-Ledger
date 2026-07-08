@@ -195,10 +195,24 @@ export function advanceState(prior, cur, now) {
      support, cutTrigger    — V2 structural support + the (support−δ) tripwire
      passesBelowSupport     — consecutive passes with price below support (V4 counter)
 
+   THESIS (TG1) — the agent-written declared-hold-plan input. `thesis = {exitPrice, tripwire, horizon}`
+   (from pipeline/lib/holdthesis.mjs, watch-READ-ONLY) plus `underwater` (live instabuy < break-even).
+   A patient/accumulation hold is DEFINITIONALLY underwater on the instant-clear from the moment its
+   bid fills, so the UNDERWATER/CUT-CANDIDATE headline cries wolf every pass on a lot where being
+   underwater IS the plan. When a thesis is declared and the live price still holds ABOVE the declared
+   tripwire, the expected-underwater signal is SILENCED to an armed NOTE (no headline) — the real risk
+   is the tripwire, not break-even. Below the tripwire it falls through to the normal V4/V7 escalation
+   so the genuine break headlines. momVerdict is UNTOUCHED — the verdict still SAYS underwater
+   (honest); only the headline is gated. Absent a thesis, behavior is byte-identical to today.
+
    PRECEDENCE (highest first):
      1. Gate-2 breakdown CUT — EXEMPT: escalates IMMEDIATELY, unconditionally, never gated. This is
         the byte-identical breakdown invariant — a live 2h breakdown while underwater is not a thing
-        to sit on; delaying it is the exact failure that cost the bludgeon exit.
+        to sit on; delaying it is the exact failure that cost the bludgeon exit. NEVER silenced by a
+        thesis (a real breakdown is real risk, thesis or not).
+     1b. THESIS silence (TG1) — a declared-thesis underwater/CUT-CANDIDATE lot whose live price is
+        still ABOVE the tripwire → ARM (visible note), no headline. Below the tripwire → fall through.
+        Excludes LIST-TO-CLEAR (a live 2h breakdown is a real move, gated by #4, not thesis-silenced).
      2. Structural break CONVINCINGLY broken — price ≥δ below support (i.e. below the cut-trigger) OR
         below support for 2 consecutive passes → escalate. Codifies the override-discipline
         "require conviction (0.5% or two passes)"; the direct fix for the 2026-07-06 too-tight
@@ -210,13 +224,24 @@ export function advanceState(prior, cur, now) {
    Anything else → neither escalate nor armed. */
 export function convictionGate({ verdict, gate,
   price = null, support = null, cutTrigger = null,
-  underwaterMs = 0, belowSupportMs = 0, breakdownMs = 0, persistMs = ALERT_PERSIST_MS } = {}) {
+  underwaterMs = 0, belowSupportMs = 0, breakdownMs = 0, persistMs = ALERT_PERSIST_MS,
+  thesis = null, underwater = false } = {}) {
   // 1. Gate-2 breakdown CUT — EXEMPT (the invariant). Immediate, unconditional, never time-gated.
   //    A live 2h breakdown WHILE UNDERWATER is not a thing to sit on; delaying it is the exact
   //    failure that cost the bludgeon exit. (Note: LIST-TO-CLEAR also carries gate:2 but its verdict
-  //    is 'LIST-TO-CLEAR', not 'CUT' — so it does NOT match here and IS gated at #4.)
+  //    is 'LIST-TO-CLEAR', not 'CUT' — so it does NOT match here and IS gated at #4.) Checked BEFORE
+  //    the thesis branch so a declared thesis can NEVER silence a real breakdown CUT.
   if (verdict === 'CUT' && gate === 2)
     return { escalate: true, armed: false, reason: 'breakdown' };
+
+  // 1b. THESIS silence (TG1) — expected-underwater is not news. A declared thesis with a numeric
+  //     tripwire silences the UNDERWATER/CUT-CANDIDATE headline while the live price holds ABOVE the
+  //     tripwire → ARM, no headline. Below the tripwire, fall through to the normal escalation so the
+  //     real risk headlines. LIST-TO-CLEAR is excluded (a live 2h breakdown is a real move, not the
+  //     expected-underwater signal). No thesis / no numeric tripwire / no price → skip (byte-identical).
+  if (thesis && thesis.tripwire != null && price != null && price > thesis.tripwire
+      && verdict !== 'LIST-TO-CLEAR' && (underwater || verdict === 'CUT-CANDIDATE'))
+    return { escalate: false, armed: true, reason: 'thesis-armed', thesis };
 
   const belowSupport = price != null && support != null && price < support;
   const throughTrigger = belowSupport && cutTrigger != null && price < cutTrigger;

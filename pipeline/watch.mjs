@@ -67,6 +67,7 @@ import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-ca
 import { bookUtilization, totalCapital } from './lib/capitalutil.mjs';   // YV1 (#3) — working-vs-parked capital line
 import { readCash } from './lib/cashstate.mjs';            // total-capital: STATED idle-cash denominator (cash.mjs)
 import { loadThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
+import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,7 @@ const POSITIONS = path.join(HERE, '..', 'positions.json');
 const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
 const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
 const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
+const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
@@ -400,7 +402,9 @@ function heldAlert(it) {
   // An ARMED Gate-D candidate must NOT fall through to the immediate UNDERWATER alert — that would
   // defeat arm-then-confirm (an armed CUT-CANDIDATE is by definition underwater). A structural-armed
   // graze is purely additive and does NOT suppress the softer underwater/falling signals.
-  if (gate && gate.armed && gate.reason === 'cut-candidate-armed') return null;
+  // TG1: a thesis-armed lot is expected-underwater above its declared tripwire — same suppression as
+  // the Gate-D armed case (else it would fall straight to the plain UNDERWATER headline TG1 silences).
+  if (gate && gate.armed && (gate.reason === 'cut-candidate-armed' || gate.reason === 'thesis-armed')) return null;
   if (instabuy != null && be != null && instabuy < be)
     return { level: 'UNDERWATER', msg: `UNDERWATER ${name} — live sell ${fmtP(instabuy)} < break-even ${fmtP(be)}. Hold ≥ break-even only if regime is flat/rising; cut if it turns.` };
   if (row.falling)
@@ -486,11 +490,12 @@ async function main() {
   const nowMs = Date.now();
   const priorState = loadState(WATCH_STATE);
   const thesisStore = pruneThesis(loadThesis(THESIS_PATH));   // YT1 (#4) read-only: the agent's recorded intent per lane
+  const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // TG1 read-only: agent-declared hold plans (gate the expected-underwater headline)
   const guideHist = loadGuideHistory(GUIDE_HISTORY);          // YP1 (#2) advisory: guide re-anchor history (gated → silent until it accrues)
   const newState = {};
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
-    it._deltas = null; it._support = null; it._cutTrigger = null;
+    it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null;
     try {
       const key = 'held:' + it.id;
       const support = structuralSupport(dayLowsFrom(it.ts1h));
@@ -500,12 +505,15 @@ async function main() {
       const d = computeDeltas(priorState[key], cur, nowMs);
       newState[key] = advanceState(priorState[key], cur, nowMs);
       it._deltas = d; it._support = support; it._cutTrigger = trig;
+      it._thesis = thesisFor(holdThesisStore, it.id);   // TG1: the agent-declared hold plan for this lot (or null)
       const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m, undefined, lotCtxOf(it));
       it.gate = convictionGate({
         verdict: mv && mv.verdict, gate: mv && mv.gate,
         price: it.row.quickSell, support, cutTrigger: trig,
         // V7: TIME-based arm-then-confirm — elapsed persistence, not pass count (cadence-independent).
         underwaterMs: d.underwaterMs, belowSupportMs: d.belowSupportMs, breakdownMs: d.breakdownMs,
+        // TG1: the declared-hold-thesis silence (expected-underwater not news above the tripwire).
+        thesis: it._thesis, underwater: d.underwater,
       });
     } catch { /* gating/state are observability-adjacent — degrade to no-escalation, never break a pass */ }
   }
@@ -642,7 +650,14 @@ async function main() {
       // headline block). Two armed shapes, distinct notes. Confirmed escalations live in the headline.
       const persistMin = Math.round(ALERT_PERSIST_MS / 60000);
       const heldMin = ms => Math.max(0, Math.round((ms || 0) / 60000));
-      if (it.gate && it.gate.armed && it.gate.reason === 'cut-candidate-armed')
+      if (it.gate && it.gate.armed && it.gate.reason === 'thesis-armed') {
+        // TG1: expected-underwater silenced per the declared hold plan while live holds above the tripwire.
+        const th = it._thesis || {};
+        const exitBit = th.exitPrice != null ? `, exit ${fmtP(th.exitPrice)}` : '';
+        const horizonBit = th.horizon ? ` (${th.horizon})` : '';
+        conviction = `per thesis${horizonBit}: expected-underwater — silent above tripwire ${fmtP(th.tripwire)}${exitBit}; headline only on a break below.`;
+      }
+      else if (it.gate && it.gate.armed && it.gate.reason === 'cut-candidate-armed')
         conviction = `CUT-CANDIDATE armed — underwater ~${heldMin(it._deltas && it._deltas.underwaterMs)}m through a liquid window; headline only once it persists ~${persistMin}m (time-based, not per-pass).`;
       else if (it.gate && it.gate.armed && it.gate.reason === 'clear-armed')
         conviction = `LIST-TO-CLEAR armed — 2h breakdown ~${heldMin(it._deltas && it._deltas.breakdownMs)}m so far (a flicker at this cadence); headline only if the breakdown HOLDS ~${persistMin}m.`;
