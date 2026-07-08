@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.23
+version: 1.24
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -270,6 +270,30 @@ This is the tribal layer the script can't do — apply ALL of these:
   position was fine, the *unlabeled* horizon wasn't. **Honesty (rule 4):** the ~10–20% share is a
   sizing sanity-check, not a formula; it's a labeling discipline (call the roll horizon at entry),
   never a hard cap.
+- **Buy-limit-aware sizing — NEVER suggest a quantity over the 4h GE limit (Ben, 2026-07-08).**
+  Every accumulation/tranche suggestion is CAPPED by the item's GE buy limit (`quote.mjs` prints it
+  as `· buy limit N/4h`; also in the mapping — look it up before sizing). A "tranche" is ONE window's
+  worth = **≤ limit units**; a position bigger than the limit is a **multi-window accumulation by
+  definition** — state the per-window cap, the gp it represents, and how many 4h windows it takes
+  (e.g. "11k darts = ~2.0m/window; 44k = 4 windows ≈ 16h"). Do NOT pitch a single-tranche size that
+  silently exceeds the limit (the anchor: I suggested "~45–55k amethyst darts" against an 11k/4h
+  limit — that's 4+ windows, not a tranche). Two follow-ons: (1) **if the item was already bought
+  today, the limit is partially/fully consumed** — check `fills.json` for today's BUY batch; the
+  limit re-arms **4h after the FIRST fill of the consumed batch** (same clock as the `/positions`
+  limit-blocked-CROSSING rule), so size the REMAINING headroom, not the full limit, and say when it
+  re-arms. (2) **a null/untracked limit ≠ unlimited** — flag it and size conservatively off volume,
+  don't assume you can pour capital in. This makes the buy limit a first-class input to every size,
+  not an afterthought.
+- **A thin CURRENT 2h band ≠ no edge — read the recent DAILY range on a proven lane (Ben,
+  2026-07-08).** The screen's band is the last-2h window; it looks THIN precisely when live sits at
+  the top or bottom of the item's wider daily range. Do NOT dismiss a known/proven lane (one you've
+  flipped before) off the thin 2h band — run the full-day `windowrange.mjs --window 0-23` and read
+  the **recent daily lows→highs** (the band you actually flip over), recency-verified per RC1. Bid
+  the recent daily-LOW zone, sell the recent daily-HIGH zone. If live isn't at the low right now,
+  it's a **patient dip-bid** (rest it, it fills on the next daily dip), not a fill-now — say which.
+  Anchor: I skipped Berserker ring as "thin band" off its 3.11–3.23m 2h window, but its recent daily
+  range is ~2.93m→3.165m (both recent 3/3) = a real +5.9% band-flip; live was just near the daily top
+  (3.11m), so it was a patient dip-bid at 2.93m, not "no edge."
 
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
