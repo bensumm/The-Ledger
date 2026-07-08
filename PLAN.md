@@ -194,10 +194,27 @@ volDay, mom, regimeLabel, phase, reliable, thin, avgLow24/High24`) plus the raw 
 context. A probe reads that row; because all three surfaces build the same row, one module works
 everywhere.
 
+**A probe hooks a named pipeline STAGE — not just "annotates a row" (Ben, 2026-07-07).** The probes
+fall into different KINDS by WHERE they intercept the pipeline, and the interface is general precisely
+because it is stage-keyed. The pipeline is a sequence of stages —
+`fetch → gate → observe (derive the row) → rate → price (form the recommendation) → render` — and a
+probe registers at ONE stage with that stage's input/output contract:
+
+| Hook (`stage`) | Input | Output | Seed probes | The question it answers |
+| --- | --- | --- | --- | --- |
+| **`observe`** | the derived row + ctx | a **tag** (`{tag,note?}`) | dip, froth, decant | *"what do I see in this item?"* |
+| **`price`** | row + `{side, proposed}` + ctx | an **adjusted price** (`{price,reason}`) | anchor | *"refine the price I'd place"* |
+| **`gate`** *(future)* | a candidate | admit / skip | e.g. phase-rescue | *"surface what the gate would drop"* |
+
 **Module shape** — one file `pipeline/modules/<name>.mjs` exporting
-`{ name, version, theory, surfaces, probe(row, ctx) → annotation | null }`. Pure. `annotation` is
-either a **state tag** (`{tag:'⬇DIP -2.4%', note?}`) or a **price nudge** (`{tag, price}`) — the
-interface must carry both shapes (dip is a tag, anchor is a nudge).
+`{ name, version, theory, stage, surfaces, probe(...) }`, where `probe`'s signature matches the
+declared `stage`:
+```js
+{ name:'dip',    stage:'observe', surfaces:['screen','quote'], probe(row, ctx)             → tag|null }
+{ name:'anchor', stage:'price',   surfaces:['screen','quote'], probe(row,{side,proposed},ctx)→ {price,reason}|null }
+```
+Pure. The loader groups probes BY STAGE; each stage's runner calls its probes with that stage's
+context and collects the right output type (tags to render, or a price adjustment to surface).
 
 **Loader** `pipeline/lib/modules.mjs` — auto-discovers `pipeline/modules/*.mjs` (same glob trick as
 `run-tests.mjs`); `runProbes(row, surface, ctx)` returns the fired annotations. **Presence = enabled**
@@ -208,10 +225,16 @@ column** (recommended over stuffing the Regime cell: reads as obviously-experime
 canonical table clean). **Byte-identical when no module is present** (`runProbes` → `[]` → nothing
 appends) — that empty-passthrough IS the removability guarantee.
 
-**Invariants (non-negotiable):**
-- **OUTPUT-ONLY — a probe annotates, NEVER feeds a gate/verdict/rating** (same discipline as the
-  YIELD surfaces + the phase tag). This is what keeps decision paths byte-identical whether a module
-  loads or not, and what makes deletion safe.
+**Invariants (non-negotiable) — split by stage:**
+- **NEVER the decision core.** No probe of any stage feeds a **verdict / gate / rating / reconstruction**
+  (same discipline as the YIELD surfaces + the phase tag). That core stays byte-identical whether any
+  module loads or not — that's what makes deletion safe.
+- **`observe` probes are pure additive annotations** — they touch NO number; output is byte-identical
+  minus the tag. Delete → gone without a trace.
+- **`price` probes modify only the *advisory recommendation*** (the human-facing suggested ask/bid) —
+  by design (that's the whole point of anchor), never a gate/verdict input. Delete → the recommended
+  price reverts to the un-nudged band value. So "output-only" splits cleanly: signal probes touch
+  nothing, pricing probes touch only the suggested price, neither can move a decision.
 - Each module states its **theory + version** in the header; optional `pipeline/modules/<name>.log`
   firing log so a probe can be **scored hit/miss later** — the validate-before-promote loop (a proven
   probe graduates into a real gate/niche; a wrong one gets deleted). Optional `<name>.test.mjs` rides
