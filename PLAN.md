@@ -71,9 +71,9 @@ section hold the "why", and the full original spec is recoverable via `git show 
 ## Order of operations
 
 Waves 1–7 have all shipped (see Status). The scheduled-but-open work is **SR1**, **GA1**
-(Wave 7, ready-unassigned) and **PM1** (probe-module system — the biggest open piece, spec
-below), plus the gated **F1**; everything else lives in the Discovered / Needs-a-Ben-decision
-lists.
+(Wave 7, ready-unassigned), **PM1** (probe-module system — the biggest open piece) and **TG1**
+(thesis-gated hold alerts) — specs below, both headed to Fable — plus the gated **F1**;
+everything else lives in the Discovered / Needs-a-Ben-decision lists.
 
 | Wave | What (all ✅ — detail via `git show <sha>:PLAN.md`) |
 | --- | --- |
@@ -93,6 +93,7 @@ lists.
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
 | PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | new `pipeline/modules/`, `pipeline/lib/modules.mjs`, `screen.mjs`/`quote.mjs` render tap, migrate `⬇DIP` out of `screen.mjs`, fixtures | ⏳ READY-UNASSIGNED (spec in Open chunk specs; → Fable) |
+| TG1 | Thesis-gated hold alerts (silence expected-underwater; alert on tripwire, not break-even) | agent-written thesis store, `pipeline/lib/watchstate.mjs` `convictionGate` branch, `watch.mjs`, `watchstate.test.mjs` | ⏳ READY-UNASSIGNED (spec in Open chunk specs; → Fable) |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | ✅ `c7b53e7` (0.34.0) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | ✅ `70633f6` (0.35.0) |
 | O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate documented: n≥30 per side×pctl×class×regime cell, ≥5 cells — currently 1, stays GATED) |
@@ -274,6 +275,56 @@ are deliberate later steps (the CLI side is pipeline-only, no APP_VERSION; an ap
 APP_VERSION). **Resolves** the uncommitted `⬇DIP` prototype in `screen.mjs`. Honesty (rule 4): a probe
 is a THEORY under test — its firings are data to score, never a validated edge until the hit/miss log
 says so.
+
+### TG1 — Thesis-gated hold alerts (silence expected-underwater) [S/M] (ready, unassigned)
+
+**Why.** The watch `UNDERWATER`/`CUT-CANDIDATE` headline measures the live instabuy against
+**break-even**, but a patient/accumulation hold is *definitionally* underwater on the instant-clear
+from the moment its bid fills — so the alert cries wolf every pass on a position where being
+underwater IS the plan (Ben, 2026-07-07: "I'm tired of being told I'm underwater when that's the plan
+from the start"). The real risk on such a lot isn't break-even, it's the **tripwire** (the structural
+break level, e.g. nest 4,678). This generalizes the "fresh entries draw false CUTs" lesson (V3) from
+a just-filled lot to a *declared* multi-day/patient hold.
+
+**Layer — the ALERT gate, NOT the verdict core (this is the key architectural call).** `momVerdict`
+stays truthful (you ARE underwater vs the instant-clear) and **byte-identical** — the fix lives in the
+escalation layer that already exists:
+- **`momVerdict()` (`js/quotecore.js`)** — emits the verdict. **UNTOUCHED** (shared app+pipeline pure
+  core; making the verdict lie would corrupt what the app reads too). The verdict is honest, not the problem.
+- **`convictionGate()` (`pipeline/lib/watchstate.mjs`, V4/V7)** — *already* owns headline-vs-quiet-note
+  escalation. This chunk adds a **thesis branch** here.
+- **`watch.mjs`** — reads the thesis, passes it into `convictionGate` (exactly as it already passes
+  `lotCtx` into `momVerdict`).
+
+**Three pieces:**
+1. **A declared per-lot thesis, AGENT-WRITTEN (the greenlist pattern):** `{id, exitPrice, tripwire,
+   horizon, ts}` in a small store (its own `thesis.json`/`.thesis-state.json`, or extend YT1's
+   `pipeline/lib/sessionthesis.mjs`). When Ben states a hold plan ("accumulate nest, exit 4,848,
+   tripwire 4,678, multi-day"), the agent writes the entry; watch reads it **read-only**. Never a
+   verdict input beyond the alert gate.
+2. **`watch.mjs` passes the thesis into `convictionGate`** alongside the existing watch-state.
+3. **`convictionGate` thesis branch:** a held `UNDERWATER`/`CUT-CANDIDATE` with a declared thesis AND
+   `live > tripwire` → **ARMED note, NO headline** (expected-underwater is not news); `live < tripwire`
+   (with the existing V4/V7 conviction — meaningfully through, or persisted ≥ `ALERT_PERSIST_MS`) →
+   **headline fires** (the real risk). Absent a thesis, behavior is byte-identical to today.
+
+**Invariants (pin with fixtures in `watchstate.test.mjs`):**
+- `momVerdict` byte-identical — the verdict still SAYS underwater (honest); only the *headline* is gated.
+- **Gate-2 breakdown `CUT` stays EXEMPT — always headlines immediately, thesis or not** (the invariant
+  held since V4/V7; a real breakdown is NEVER silenced by a declared thesis).
+- No thesis / empty store → today's behavior exactly (opt-in, safe-degrade).
+- Read-only: the thesis is a *declaration*, never mutates fills/positions; watch stays READ-ONLY.
+
+**Output.** The book still shows the verdict (`UNDERWATER` stays visible — honest) but it no longer
+HEADLINES while above the tripwire; the note names the level it's gating against
+("per thesis: silent above 4,678, headline on a break"). 
+
+**Scope/size.** [S/M]: thesis store + reader + the `convictionGate` branch + fixtures (the tripwire-gate
+case, the breakdown-cut-still-exempt case, the no-thesis-byte-identical case). Pipeline-only
+(watch/convictionGate), **no APP_VERSION**; the app's Watch tab could adopt the same declared thesis
+later (separate, APP_VERSION). Honesty (rule 4): a thesis is Ben's DECLARED plan, not a market claim —
+it silences a known-expected signal, never manufactures a new one. Sibling to PM1 (probes surface NEW
+signals; TG1 silences a KNOWN-expected one) and to V3/V4/V7 (context into the verdict/alert layers).
 
 ### F1 — Algorithm feedback loop (GATED on O1's n thresholds)
 
