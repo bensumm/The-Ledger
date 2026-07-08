@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.19
+version: 1.20
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -236,6 +236,19 @@ This is the tribal layer the script can't do — apply ALL of these:
   look elsewhere" and offer the redeploy. Frame both as *tests with an exit* (one day of
   laps is one sample — process rule 4); the buy limit is usually the binding constraint,
   so state it on the line.
+- **Peak-throughput sizing — decide "one-window clear" vs "multi-day roll" AT ENTRY (Ben,
+  2026-07-07, the nest retro).** Before building an accumulation position, read the **"median
+  window instabuy volume"** line the `--ask` sell-leg verify already prints (the pool your ask
+  competes for in the sell window — no new fetch). Size so your position is a realistic **share
+  (~10–20%)** of that pool for a **one-window clear** — you compete with other sellers, so you
+  won't take the whole pool. If the position is bigger than that share, it is a **multi-day roll
+  by definition**: SAY SO at entry and price the ask for the multi-day horizon — don't discover
+  the ceiling when the peak fades and the stack strands underwater. Anchor: a nest accumulation
+  of 2,622 (+3.6k bid) against ~28k window-instabuy was ~10% (clearable in a window), but we
+  never STATED the horizon, so a faded evening peak read as a problem instead of the plan — the
+  position was fine, the *unlabeled* horizon wasn't. **Honesty (rule 4):** the ~10–20% share is a
+  sizing sanity-check, not a formula; it's a labeling discipline (call the roll horizon at entry),
+  never a hard cap.
 
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
