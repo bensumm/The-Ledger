@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.20
+version: 1.22
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -163,6 +163,16 @@ This is the tribal layer the script can't do — apply ALL of these:
   own window** (below the floor = dip; at/above an unreachable top = illusion). Honesty (rule 4): the
   METHOD (verify ask-reach before pitching) encodes freely; "dips below the window floor are buys" is
   a hypothesis off one still-open trade, not a proven pattern — keep scoring it.
+  - **The reach count is REGIME-contaminated — trust the recency split, not the raw N/M (RC1,
+    2026-07-08).** A flat `reached 4/14` / `touched 14/14` count is dominated by stale, older-priced
+    days on any item that changed regime inside the window, so it lies in BOTH directions: an **ask**
+    on a crashed item reads reachable off pre-crash days (blood rune: 4/14 all pre-crash, recent 0/3);
+    a **bid** on a repriced-up item reads reachable off old cheap days the floor has left. `windowrange
+    --bid/--ask` now prints the **recent-3-night** hit rate beside the full one and flags **`⚠ stale`**
+    when the full count is rosier than recent — when you see `⚠ stale`, DISCOUNT the full count and
+    price off the `recent-3 ~50%` quantile instead. It is NOT a looser gate (the band-top-artifact SKIP
+    above still stands); it stops the count fooling you on a regime-change item. A stable item never
+    flags. Do NOT re-derive a reach number by hand — read the split the script prints.
   **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
@@ -267,6 +277,18 @@ This is the tribal layer the script can't do — apply ALL of these:
 The judgment-filtered shortlist, one-line rationale per pick (why this edge is real), plus
 a note of how many candidates the 500k floor eliminated. If a high-grade row was skipped,
 point at it and give the reason — that's the layer this skill exists for.
+
+**Cover every niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A
+recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task — the dip-hunt
+— quietly becomes the *only* thing evaluated, and the broader mandate (candidates for the
+dry/committed capital) silently collapses to "nothing." The fix is structural, not
+willpower: the report must give an **explicit one-line read on EACH niche every pass** —
+`Dips · Band big-tickets · Spread · Rising` — even when the answer is "nothing, because X".
+A slot you must fill can't be silently dropped (same principle as the ONE-LINE-PER-ITEM and
+recent-reach rules — make the output enforce the coverage). "No dips" ends the *dip* line,
+never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no new dips"
+while band big-tickets (bludgeon/sang/tassets class) went unmentioned for an hour — Ben had
+to ask "are we looking at other niches?"; the miss was omission, not a bad call.
 
 **Every recommended price states its timing target (Ben, 2026-07-05):** a pick's bid and
 sell are each "X, targeting Y" — bind the number to the window/mechanism expected to fill
