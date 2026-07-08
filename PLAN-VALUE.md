@@ -95,10 +95,35 @@ tax-paid sell of a big move, not fast churn. State the hold horizon at entry."*
 - Firing/scoring: log value-mode picks via the PM2 firing-log convention so hit/miss accrues before we
   ever promote it past provisional.
 
+### F. Ranking at scale — the pool WILL be large (Ben, 2026-07-08)
+Expect this niche to surface **many, many candidates** — dropping the 500k gp/day throughput floor and
+lowering the liquidity bar means a big fraction of the market sits in *some* stable range. So a usable
+ranking + a hard cutoff is NOT optional; it's the central design problem (a wall of 300 rows is
+useless). The ranking must be derived from the term-structure (§C) itself. Requirements:
+- **A composite rank score off the 1/3/7/14/28d low/high shape** — the §B `valueScore`
+  (after-tax cycle amplitude × proximity-to-low × floor-stability), computed from the term structure.
+  The term-structure SHAPE is the ranking signal: flat-lows-all-ranges (durable floor) and
+  low-across-the-long-ranges rank ABOVE a low that only holds on the short ranges. Encode the shape as
+  scalar features (e.g. low-dispersion across ranges = stability; short-vs-long low delta = knife
+  penalty; live-vs-14d-low = proximity) and combine.
+- **A hard cutoff / top-N** — like the fast screen's per-niche fetch pool + grade cutoffs: rank the
+  whole gated pool by score, fetch/rate only the top N, and print a bounded shortlist with a footer
+  count of how many the gate admitted vs. how many were shown. Never dump the full pool.
+- **Two tiers fall out of proximity (rank, don't gate — decision 1):** the top of the list = **buy-now**
+  (live at/near the multi-week low); the tail = **watch** (good range, mid-cycle — wait for the dip).
+  Consider a small cap per tier so neither floods.
+- **Honesty:** with n≈0 the rank WEIGHTS are placeholders (rule 4) — the point of the PM2 firing log is
+  to learn *which* term-structure features actually predict a good hold, then tune the weights. Ship
+  the ranking as a starting hypothesis, not a calibrated model; expect to re-weight once data accrues.
+- Open sub-question: is the right primary sort **cycle amplitude** (biggest move), **proximity** (most
+  actionable now), or a **blend**? Start with the blend in §B; let the firing log arbitrate.
+
 ## Build chunks (proposed, small + independent)
 - **V-A** `gateCandidates('value', …)` — the value gate (cycle-amplitude floor, lowered liquidity,
-  phase-based knife rejection) + the value edge/score. Pure, fixture-tested (`gatecandidates.test.mjs`
-  already exists as the home).
+  phase-based knife rejection) + the value edge/score + **the rank-and-cutoff (§F)**: the composite
+  term-structure `valueScore`, a hard top-N on the (expected-large) pool, and the buy-now/watch tiering.
+  Pure, fixture-tested (`gatecandidates.test.mjs` already exists as the home) — pin the ranking on a
+  synthetic large pool so the flood-control is regression-guarded.
 - **V-B** multi-range read helper — a pure `valueRanges(series)` (recent/medium/long low·high +
   consistency flag), fixture-tested; reuses `windowread.mjs`/`phase()` primitives, no new market math.
 - **V-C** `renderMode` value branch + the VALUE table + provisional/hold-horizon framing; OFF by
