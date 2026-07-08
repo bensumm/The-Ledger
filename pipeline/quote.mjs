@@ -19,11 +19,12 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP, isOvernightNow } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP, isOvernightNow, phase } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { mdTable, stdCells } from './lib/cli.mjs';
+import { loadModules, runProbes } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface)
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
 
@@ -55,7 +56,8 @@ async function runItems() {
     resolved.push(hit);
   }
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
-  const rows = [], lines = [], sugg = [];
+  await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
+  const rows = [], lines = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
     const inp = await fetchItemInputs(id);
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
@@ -64,11 +66,26 @@ async function runItems() {
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) lines.push('  ' + gl);
     sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active' }));  // per-item read has no verdict
+    // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
+    // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
+    // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).
+    const fired = runProbes(row, 'quote', {
+      surface: 'quote', owned: false, id, name, thin: false,
+      phase: phase(inp.ts6h), avgLow24: inp.vol24?.avgLowPrice ?? null, avgHigh24: inp.vol24?.avgHighPrice ?? null,
+      series5m: inp.ts5m, series6h: inp.ts6h, map,
+      price: row.optSell != null ? { side: 'ask', proposed: row.optSell } : undefined,
+    });
+    probeStrs.push(fired.map(f => f.tag).join(' · '));
   }
   // O1 suggestions ledger: log every emitted read at emit time, unconditionally (analytics only).
   logSuggestions('quote', { mode: null, params: { positions: false } }, sugg);
   if (!rows.length) process.exit(1);
-  console.log(mdTable(QUOTE_HEADERS, rows));
+  // PM1: append the `Probes` column ONLY when a probe fired (byte-identical table otherwise — the
+  // removability guarantee). stdout-only; no app/publish path on the per-item quote surface.
+  const anyProbe = probeStrs.some(Boolean);
+  const headers = anyProbe ? [...QUOTE_HEADERS, 'Probes'] : QUOTE_HEADERS;
+  const outRows = anyProbe ? rows.map((r, i) => [...r, { t: probeStrs[i], c: 'mini' }]) : rows;
+  console.log(mdTable(headers, outRows));
   console.log('');
   console.log(lines.join('\n'));
 }

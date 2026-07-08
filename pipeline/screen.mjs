@@ -70,6 +70,7 @@ import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
+import { loadModules, runProbes } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant)
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -299,8 +300,10 @@ function gradeDist(dist) {
 // (deduped by id). Populated in renderMode BEFORE the falling-exclusion so a basing faller is caught.
 const watchClosely = new Map();   // id -> { name, state, note }
 
-// render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer
-function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) {
+// render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer.
+// v24 (the whole-market 24h map) is passed through for the PM1 probe ctx (dip's avgLow24, decant's
+// sibling dose prices) — read-only, never a gate/verdict input.
+function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, v24) {
   const rows = [];
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0 };  // post-fetch discard reasons (--stats)
@@ -359,7 +362,20 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) 
         ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — size in units, expect slow fills` }
         : { t: grade };
     const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }];
-    rows.push({ id: s.id, row, grade, cells, score: r.score });
+    // PM1: run the loaded probes over this row. OUTPUT-ONLY — a probe reads the row/ctx and returns a
+    // display tag (observe) or an advisory price nudge (price); it NEVER touched `grade`/`r`/the cells
+    // above (all already computed). ctx carries the 24h avg (dip), the phase trajectory (froth), the
+    // whole-market map (decant siblings) and an advisory ask price (anchor). Empty when no probe fired.
+    const d24 = v24 && (v24[s.id] || v24[String(s.id)]);
+    const fired = runProbes(row, 'screen', {
+      surface: 'screen', owned: false, id: s.id, name, thin: s.thin,
+      phase: ph, avgLow24: d24?.avgLowPrice ?? null, avgHigh24: d24?.avgHighPrice ?? null,
+      series5m: series5m && series5m.get(s.id), series6h: series6h && series6h.get(s.id),
+      v24all: v24, map,
+      price: row.optSell != null ? { side: 'ask', proposed: row.optSell } : undefined,
+    });
+    const probeStr = fired.map(f => f.tag).join(' · ');
+    rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -375,7 +391,14 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h) 
   console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; fallers excluded)`);
   console.log(PLAYBOOK[mode]);
   console.log(mode !== 'spread' ? `(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)` : '(basis: 24h-average spread)');
-  console.log(rows.length ? mdTable(HEADERS, rows.map(r => r.cells)) : '_none_');
+  // PM1: the dedicated `Probes` column is appended to the PRINTED table ONLY when at least one row
+  // fired a probe — so with no module present (or none firing) the table is BYTE-IDENTICAL to pre-PM1
+  // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
+  // the app render) — an app Probes column is a separate, APP_VERSION-bumping step (out of PM1 scope).
+  const anyProbe = rows.some(r => r.probeStr);
+  const printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
+  const printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
+  console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
   console.log(`Grades: ${gradeDist(dist)}`);
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
   // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
@@ -517,8 +540,9 @@ async function main() {
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
+  await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   const niches = {};
-  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h);
+  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h, v24);
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).

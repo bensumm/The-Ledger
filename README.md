@@ -147,8 +147,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     "watcher live" independent of book changes; started manually via
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
     `add-manual-fill.mjs` (inject/tombstone
-    manual fills), `quote.mjs` (per-item / `--positions` market table), `screen.mjs`
-    (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list), `watch.mjs` (adaptive live position/offer monitor; also appends
+    manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 appends a stdout-only
+    `Probes` column on the per-item read when a probe fires), `screen.mjs`
+    (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 appends a
+    stdout-only `Probes` column per niche when a probe fires — never in the published `screen.json`),
+    `watch.mjs` (adaptive live position/offer monitor; also appends
     change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
     the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
     `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`; each held
@@ -225,7 +228,28 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
-    state-transition scan both read — no market math re-implemented)
+    state-transition scan both read — no market math re-implemented),
+    `modules.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
+    `pipeline/modules/*.mjs`, groups by stage (`observe`/`price`/`gate`), and `runProbes(row,surface,ctx)`
+    returns the fired display annotations. **Presence = enabled** (delete the file to disable). The
+    **empty-passthrough guarantee** — no module present or none fire ⇒ `[]` ⇒ nothing appends ⇒
+    byte-identical output — is the removability contract. `collectNeeds` exposes the multi-item
+    `needs(row,ctx)` sibling-id declaration (decant). NO probe of any stage feeds a
+    verdict/gate/rating/reconstruction — observe probes touch no number, price probes touch only the
+    advisory recommendation)
+  - **Probe modules (`pipeline/modules/*.mjs`, PM1 — experimental per-item theory plug-ins):** each a
+    pure `{name,version,theory,stage,surfaces,needs?,probe}` file, trial-and-keep-or-drop, surfaced in
+    the stdout `Probes` column on screen/quote (never a verdict/gate/rating input). `dip.mjs`
+    (`observe` — live instasell under the 24h avg low on a flat/rising non-decay reliable non-thin book
+    ⇒ `⬇DIP -N%`, the migrated ex-`screen.mjs` prototype; owned ⇒ average-down framing for the watch
+    follow-on), `froth.mjs` (`observe` — a spike/rising CLASSIFIER: rising/holding lows ⇒
+    healthy-reprice, falling lows ⇒ knife, off `phase().lowSlope`), `anchor.mjs` (`price` — the
+    round-number PRICE-NUDGE: a proposed ask just past a round wall ⇒ `⚓ ask X (under Y)`; proves the
+    loader carries the `{price,reason}` shape), `decant.mjs` (`observe`, MULTI-ITEM — potion dose
+    arbitrage: reads 1/2/3-dose sibling prices off the whole-market 24h map (`ctx.v24all`) and flags a
+    lower dose whose per-4-dose cost beats the 4-dose; declares its siblings via `needs()`; screen-only,
+    since the per-item quote surface has no whole-market map). Optional gitignored `<name>.log` firing
+    logs are the defined-but-unwired hit/miss scoring convention.
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
@@ -256,7 +280,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
     `holdthesis.test.mjs` (TG1 — load-degrades-to-[]/round-trip/thesisFor-newest/upsert-replaces/clear/prune-TTL),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
-    `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate)
+    `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate),
+    `modules.test.mjs` (PM1 — the loader's empty-passthrough + stage grouping, the observe-touches-no-number
+    and price-only-when-ctx.price invariants, and each seed probe's gates: dip fire/silence + owned framing,
+    froth healthy-vs-knife, anchor's `{price}` nudge, decant's `bestDecant` dose math + `needs()` declaration)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus

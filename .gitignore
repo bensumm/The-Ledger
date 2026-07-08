@@ -7,3 +7,6 @@ heartbeat.json
 
 # total-capital: Ben's stated idle-cash balance (cash.mjs) — desk-side, never committed
 .capital-state.json
+
+# PM1 probe firing logs (optional per-probe hit/miss ledgers) — desk-side scoring data, never committed
+pipeline/modules/*.log

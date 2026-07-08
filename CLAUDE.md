@@ -86,6 +86,25 @@ full story.
   byte-identical to today (opt-in, safe-degrade). Fixtures: `pipeline/lib/holdthesis.test.mjs` +
   the TG1 block in `pipeline/watchstate.test.mjs`. Full story: `MONITORING.md` "What each tick
   surfaces" item 1 (the THESIS-silence bullet) + the `holdthesis.mjs` header.
+- **Probe-module system — theory-testing plug-ins** (PM1, 2026-07-07, pipeline-only — NO APP_VERSION)
+  — a pluggable way to trial a per-item market THEORY, see it in a dedicated stdout `Probes` column, and
+  DELETE it in one `rm`. `pipeline/lib/modules.mjs` is the LOADER + stage-keyed runner: it auto-discovers
+  `pipeline/modules/*.mjs` (presence = enabled), groups probes BY STAGE (`observe` → `{tag,note}`; `price`
+  → `{price,reason}`; `gate` future), and `runProbes(row,surface,ctx)` returns the fired annotations.
+  screen.mjs + quote.mjs append a `Probes` column ONLY when a probe fires. **Don't-rebuild / the
+  load-bearing invariants:** (1) the **empty-passthrough guarantee** — no module present OR none fire ⇒
+  `[]` ⇒ nothing appends ⇒ **byte-identical** output (proven: with-vs-without the modules dir differ ONLY
+  by the appended column) — that IS the removability contract, never break it; (2) **NO probe of any
+  stage feeds a verdict/gate/rating/reconstruction** — observe probes touch NO number, price probes touch
+  ONLY the advisory recommendation; (3) the `Probes` column is **stdout-only**, deliberately NOT in the
+  published `screen.json`/app (an app Probes column bumps APP_VERSION — a separate later step). Four seed
+  probes: **dip** (the migrated ex-`screen.mjs` `⬇DIP` prototype — same gates), **froth** (spike/rising
+  knife-vs-healthy classifier off `phase().lowSlope`), **anchor** (the `price`-stage round-number nudge,
+  proving both output shapes), **decant** (MULTI-ITEM — reads dose siblings off the whole-market 24h map
+  `ctx.v24all` and declares them via `needs(row,ctx)`; screen-only). Watch surface + owned dip-inversion
+  (average-down) are the deliberate follow-on. A firing is DATA to score, never a validated edge (rule 4).
+  Fixtures: `pipeline/modules.test.mjs`. Full story: the `pipeline/lib/modules.mjs` header + README's
+  probe-modules inventory entry.
 - **MERCH-book quarantine — `ignored-items.json` + greenlist** (2026-07-07, pipeline-only — NO
   APP_VERSION) — items Ben transacts but doesn't flip (farming inputs snapdragon seed 5300 /
   snapdragon 3000, loot, personal-use) are quarantined from the DERIVED merch views. **Don't-rebuild
