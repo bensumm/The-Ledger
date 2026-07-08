@@ -70,7 +70,7 @@ import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
-import { loadModules, runProbes } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant)
+import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -374,6 +374,8 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
       v24all: v24, map,
       price: row.optSell != null ? { side: 'ask', proposed: row.optSell } : undefined,
     });
+    // PM2: record every firing to pipeline/modules/<module>.log (failure-safe, stdout-untouched).
+    logFirings(fired, { surface: 'screen', id: s.id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
     const probeStr = fired.map(f => f.tag).join(' · ');
     rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr });
     dist[grade] = (dist[grade] || 0) + 1;

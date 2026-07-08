@@ -22,14 +22,19 @@
  *     - anchor: an ask just above a round wall ⇒ nudge to anchor−1; a clear-of-wall ask ⇒ null.
  *     - decant: bestDecant picks the cheapest lower-dose variant that beats the 4-dose by ≥ the discount;
  *       the probe reads siblings off ctx.v24all + declares them via needs().
+ *   FIRING LOG (PM2)
+ *     - logFirings appends ONE well-formed JSONL line per fired annotation to modules/<module>.log,
+ *       carrying {ts, module, version, stage, surface, id, name, tag, price(price-stage), quote context}.
+ *     - No firing (empty/non-array) ⇒ NO write ⇒ NO file created.
+ *     - A write failure is swallowed — logFirings never throws (a broken log can't break a render).
  *
  * Run: node pipeline/modules.test.mjs   (auto-discovered by run-tests.mjs).
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadModules, runProbes, collectNeeds, loadedModules, resetModules, MODULES_DIR } from './lib/modules.mjs';
+import { loadModules, runProbes, logFirings, collectNeeds, loadedModules, resetModules, MODULES_DIR } from './lib/modules.mjs';
 import dip, { DIP_MIN_PCT } from './modules/dip.mjs';
 import froth from './modules/froth.mjs';
 import anchor, { anchorNudge, nearestAnchors } from './modules/anchor.mjs';
@@ -150,6 +155,48 @@ ok(g.price.map(m => m.name).join(',') === 'anchor', 'price stage = anchor');
   ok(decant.probe(baseRow(), { name: 'Dragon dagger', map, v24all, avgLow24: 1000 }) === null, 'decant silent on a non-potion (no dose siblings)');
   eq(decant.needs(baseRow(), { name: 'Prayer potion(4)', map }).sort(), [101, 102, 103], 'decant needs() declares the 1/2/3-dose sibling ids');
   eq(collectNeeds([{ id: 104, row: baseRow() }], 'screen', () => ({ name: 'Prayer potion(4)', map })).sort(), [101, 102, 103], 'collectNeeds unions the declared sibling ids (minus ids already present)');
+}
+
+// ---- FIRING LOG (PM2) --------------------------------------------------------------------------
+{
+  await loadModules();   // ensure the real seed set is loaded so version lookup resolves
+  const logDir = mkdtempSync(join(tmpdir(), 'coffer-modules-log-'));
+
+  // a fired observe annotation + a fired price annotation, as runProbes would return them
+  const fired = [
+    { module: 'dip', stage: 'observe', tag: '⬇DIP -2.0%', note: null },
+    { module: 'anchor', stage: 'price', tag: '⚓ ask 10,699 (under 10,700)', price: 10699, note: null },
+  ];
+  logFirings(fired, { surface: 'screen', id: 4151, name: 'Abyssal whip', quickBuy: 980, quickSell: 1050, guide: 1020, regimeLabel: 'flat', phase: 'base' }, logDir);
+
+  const dipLog = join(logDir, 'dip.log');
+  const anchorLog = join(logDir, 'anchor.log');
+  ok(existsSync(dipLog) && existsSync(anchorLog), 'logFirings writes one <module>.log per fired module');
+
+  const dipLine = JSON.parse(readFileSync(dipLog, 'utf8').trim());
+  ok(dipLine.module === 'dip' && dipLine.stage === 'observe' && dipLine.tag === '⬇DIP -2.0%', 'dip line carries module/stage/tag');
+  ok(dipLine.version === 1, 'firing line carries the probe DECLARED version (looked up from the loaded set)');
+  ok(dipLine.surface === 'screen' && dipLine.id === 4151 && dipLine.name === 'Abyssal whip', 'firing line carries surface/id/name context');
+  ok(dipLine.quickBuy === 980 && dipLine.quickSell === 1050 && dipLine.guide === 1020 && dipLine.regimeLabel === 'flat' && dipLine.phase === 'base', 'firing line carries the live quote context (to score without re-fetching)');
+  ok(typeof dipLine.ts === 'number' && dipLine.ts > 0, 'firing line carries an epoch-second ts');
+  ok(!('price' in dipLine), 'an observe firing carries NO price field');
+
+  const anchorLine = JSON.parse(readFileSync(anchorLog, 'utf8').trim());
+  ok(anchorLine.stage === 'price' && anchorLine.price === 10699, 'a price firing carries the nudged price');
+
+  // appends, not overwrites
+  logFirings([{ module: 'dip', stage: 'observe', tag: '⬇DIP -3.0%', note: null }], { surface: 'quote', id: 4151, name: 'Abyssal whip' }, logDir);
+  ok(readFileSync(dipLog, 'utf8').trim().split('\n').length === 2, 'a second firing APPENDS (does not overwrite)');
+
+  // no firing ⇒ no write ⇒ no file created
+  const emptyLogDir = mkdtempSync(join(tmpdir(), 'coffer-modules-nolog-'));
+  logFirings([], { surface: 'screen', id: 1 }, emptyLogDir);
+  logFirings(null, { surface: 'screen', id: 1 }, emptyLogDir);
+  ok(readdirSync(emptyLogDir).length === 0, 'no firing (empty/null) ⇒ NO file created');
+
+  // failure-safe: a non-existent dir cannot write → swallowed, never throws
+  assert.doesNotThrow(() => logFirings(fired, { surface: 'screen', id: 1 }, join(logDir, 'no', 'such', 'nested', 'dir')), 'a write failure is swallowed — logFirings never throws');
+  passed++;
 }
 
 console.log(`\n✓ modules.test.mjs — ${passed} checks passed.`);

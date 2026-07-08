@@ -86,6 +86,21 @@ full story.
   byte-identical to today (opt-in, safe-degrade). Fixtures: `pipeline/lib/holdthesis.test.mjs` +
   the TG1 block in `pipeline/watchstate.test.mjs`. Full story: `MONITORING.md` "What each tick
   surfaces" item 1 (the THESIS-silence bullet) + the `holdthesis.mjs` header.
+- **Probe firing logs — the hit/miss ledger wired** (PM2, 2026-07-07, pipeline-only — NO APP_VERSION) —
+  PM1 defined the per-probe `pipeline/modules/<name>.log` firing-log convention but left it UNWIRED; PM2
+  wires the writes so the validate-before-promote data accrues. `logFirings(fired, meta)`
+  (`pipeline/lib/modules.mjs`) appends ONE compact JSONL line per fired annotation —
+  `{ts,module,version,stage,surface,id,name,tag,price(price-stage only),quickBuy,quickSell,guide,regimeLabel,phase}`
+  — enough to SCORE the firing later without re-fetching; `version` is the probe's DECLARED version (looked
+  up from the loaded set). Called EXPLICITLY by `screen.mjs` renderMode + `quote.mjs` runItems right after
+  their `runProbes` calls. **Don't-rebuild / the load-bearing rules:** (1) `runProbes` stays PURE — logging
+  is a separate explicit call, never folded into the runner; (2) **failure-safe** — every write is
+  try/caught + swallowed, a broken log can NEVER break a render (same discipline as runProbes' throw-
+  swallowing); (3) **byte-identical stdout** — logging adds NO output change (proven: a live `quote.mjs`
+  diff before-vs-after is identical; the Probes column is untouched); (4) no firing ⇒ no write ⇒ no file.
+  SCORING (hit/miss) is deliberately a LATER chunk — PM2 only accrues. Fixtures: the FIRING LOG block in
+  `pipeline/modules.test.mjs`. Full story: the `pipeline/lib/modules.mjs` header (FIRING LOG) + README's
+  probe-modules inventory entry.
 - **Probe-module system — theory-testing plug-ins** (PM1, 2026-07-07, pipeline-only — NO APP_VERSION)
   — a pluggable way to trial a per-item market THEORY, see it in a dedicated stdout `Probes` column, and
   DELETE it in one `rm`. `pipeline/lib/modules.mjs` is the LOADER + stage-keyed runner: it auto-discovers

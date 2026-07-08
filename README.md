@@ -236,7 +236,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     byte-identical output — is the removability contract. `collectNeeds` exposes the multi-item
     `needs(row,ctx)` sibling-id declaration (decant). NO probe of any stage feeds a
     verdict/gate/rating/reconstruction — observe probes touch no number, price probes touch only the
-    advisory recommendation)
+    advisory recommendation. `logFirings(fired,meta)` (PM2) appends the fired annotations to
+    `pipeline/modules/<module>.log` — called by each surface AFTER the PURE runProbes; failure-safe)
   - **Probe modules (`pipeline/modules/*.mjs`, PM1 — experimental per-item theory plug-ins):** each a
     pure `{name,version,theory,stage,surfaces,needs?,probe}` file, trial-and-keep-or-drop, surfaced in
     the stdout `Probes` column on screen/quote (never a verdict/gate/rating input). `dip.mjs`
@@ -248,8 +249,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     loader carries the `{price,reason}` shape), `decant.mjs` (`observe`, MULTI-ITEM — potion dose
     arbitrage: reads 1/2/3-dose sibling prices off the whole-market 24h map (`ctx.v24all`) and flags a
     lower dose whose per-4-dose cost beats the 4-dose; declares its siblings via `needs()`; screen-only,
-    since the per-item quote surface has no whole-market map). Optional gitignored `<name>.log` firing
-    logs are the defined-but-unwired hit/miss scoring convention.
+    since the per-item quote surface has no whole-market map). The gitignored `pipeline/modules/<name>.log`
+    firing log is now WIRED (PM2): `logFirings` appends one compact JSONL line per firing —
+    `{ts,module,version,stage,surface,id,name,tag,price(price-stage),quickBuy,quickSell,guide,regimeLabel,phase}`
+    — the hit/miss ledger the validate-before-promote loop scores later (SCORING is a later chunk).
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
@@ -283,8 +286,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate),
     `modules.test.mjs` (PM1 — the loader's empty-passthrough + stage grouping, the observe-touches-no-number
     and price-only-when-ctx.price invariants, and each seed probe's gates: dip fire/silence + owned framing,
-    froth healthy-vs-knife, anchor's `{price}` nudge, decant's `bestDecant` dose math + `needs()` declaration)
-    — all auto-discovered by
+    froth healthy-vs-knife, anchor's `{price}` nudge, decant's `bestDecant` dose math + `needs()` declaration;
+    PM2 — `logFirings` writes a well-formed line to the right `<module>.log`, appends not overwrites, no
+    firing ⇒ no file, and a write failure is swallowed) — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1

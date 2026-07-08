@@ -24,7 +24,7 @@ import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { mdTable, stdCells } from './lib/cli.mjs';
-import { loadModules, runProbes } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface)
+import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
 
@@ -69,12 +69,15 @@ async function runItems() {
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).
+    const ph = phase(inp.ts6h);
     const fired = runProbes(row, 'quote', {
       surface: 'quote', owned: false, id, name, thin: false,
-      phase: phase(inp.ts6h), avgLow24: inp.vol24?.avgLowPrice ?? null, avgHigh24: inp.vol24?.avgHighPrice ?? null,
+      phase: ph, avgLow24: inp.vol24?.avgLowPrice ?? null, avgHigh24: inp.vol24?.avgHighPrice ?? null,
       series5m: inp.ts5m, series6h: inp.ts6h, map,
       price: row.optSell != null ? { side: 'ask', proposed: row.optSell } : undefined,
     });
+    // PM2: record every firing to pipeline/modules/<module>.log (failure-safe, stdout-untouched).
+    logFirings(fired, { surface: 'quote', id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
     probeStrs.push(fired.map(f => f.tag).join(' · '));
   }
   // O1 suggestions ledger: log every emitted read at emit time, unconditionally (analytics only).

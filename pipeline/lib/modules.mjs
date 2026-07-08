@@ -18,7 +18,7 @@
  *   'gate'     | probe(candidate, ctx)  (FUTURE)          | {admit, reason}|null | (phase-rescue)
  *
  * MODULE SHAPE — `export default { name, version, theory, stage, surfaces, needs?, enabled?, probe }`:
- *   name      unique string (also the <name>.mjs basename + optional <name>.log firing log).
+ *   name      unique string (also the <name>.mjs basename + the <name>.log firing log, PM2 — see FIRING LOG).
  *   version   the probe is a THEORY UNDER TEST; bump when its logic changes so a firing log is scoreable.
  *   theory    one-line human statement of what it's testing (rule 4 honesty: a firing is DATA, not an edge).
  *   stage     'observe' | 'price' | 'gate' — dictates the probe() signature + which runner calls it.
@@ -49,6 +49,15 @@
  * BYTE-IDENTICAL to a build with no probe system at all. Callers add the dedicated `Probes` column
  * ONLY when at least one row produced a tag (so "no module present OR none fire → byte-identical").
  *
+ * FIRING LOG (PM2 — wired). Every fired annotation is APPENDED to `pipeline/modules/<module>.log`
+ * (gitignored) by `logFirings(fired, meta)`, called EXPLICITLY by each surface AFTER runProbes (runProbes
+ * itself stays PURE). One compact JSONL line per firing carries enough to SCORE it later without
+ * re-fetching: `{ts, module, version, stage, surface, id, name, tag, price (price-stage only), quickBuy,
+ * quickSell, guide, regimeLabel, phase}`. `version` is the probe's DECLARED version (looked up from the
+ * loaded set) so a re-scored log knows which theory-version fired. Writes are individually try/caught +
+ * swallowed (a broken log never breaks a render); no firing ⇒ no write ⇒ no file. SCORING (hit/miss) is
+ * a later chunk — PM2 only accrues the data.
+ *
  * INVARIANTS (non-negotiable — split by stage):
  *   - NEVER the decision core. No probe of any stage feeds a verdict / gate / rating / reconstruction.
  *     That core stays byte-identical whether any module loads or not — that is what makes deletion safe.
@@ -69,7 +78,7 @@
  * no whole-market map); until such a caller exists it is advisory only. This keeps PM1 light while the
  * `needs` interface is fully defined and documented.
  */
-import { readdirSync } from 'node:fs';
+import { readdirSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -173,4 +182,42 @@ export function collectNeeds(items, surface, ctxFor = () => ({})) {
     }
   }
   return [...want];
+}
+
+/* logFirings(fired, meta) — the PM2 hit/miss ledger writer. Appends ONE compact JSONL line per fired
+   annotation to `pipeline/modules/<module>.log` (gitignored), recording enough context to SCORE the
+   firing later WITHOUT re-fetching: identity (id/name), the probe's declared `version` (looked up from
+   the loaded set so a scoreable log knows which theory-version fired), the fired tag, the nudged price
+   (price-stage only), and the live quote context (quickBuy/quickSell/guide/regime/phase) as of the pass.
+   SCORING is a later chunk — this only accrues the data. NOT part of runProbes (which the header
+   promises is PURE): a surface calls this explicitly AFTER runProbes.
+   FAILURE-SAFE: every write is individually try/caught + swallowed — a broken log can NEVER break a
+   render (the same throw-swallowing discipline as runProbes). No firing → no write → no file created.
+   `dir` defaults to MODULES_DIR (surface callers omit it); it exists only so a fixture can target a temp dir. */
+export function logFirings(fired, meta = {}, dir = MODULES_DIR) {
+  if (!Array.isArray(fired) || !fired.length) return;   // no firing → nothing written (no file created)
+  const g = _loaded;
+  const ts = Math.floor(Date.now() / 1000);
+  for (const f of fired) {
+    try {
+      const probe = g && g.all.find(m => m.name === f.module);
+      const line = {
+        ts,
+        module: f.module,
+        version: probe ? (probe.version ?? null) : null,
+        stage: f.stage,
+        surface: meta.surface ?? null,
+        id: meta.id ?? null,
+        name: meta.name ?? null,
+        tag: f.tag ?? null,
+        ...(f.stage === 'price' ? { price: f.price ?? null } : {}),
+        quickBuy: meta.quickBuy ?? null,
+        quickSell: meta.quickSell ?? null,
+        guide: meta.guide ?? null,
+        regimeLabel: meta.regimeLabel ?? null,
+        phase: meta.phase ?? null,
+      };
+      appendFileSync(join(dir, `${f.module}.log`), JSON.stringify(line) + '\n');
+    } catch { /* swallow — a broken firing log never breaks a render */ }
+  }
 }
