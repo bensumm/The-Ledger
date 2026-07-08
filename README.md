@@ -144,6 +144,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen.mjs --publish`)
+- `.gitattributes` — repo EOL normalization (GA1): text sources (`*.js`/`*.mjs`/`*.json`/
+  `*.jsonl`/`*.md`/`*.yml`/`*.css`/`*.html`/`*.log` + `.gitignore`/`LICENSE`) are `text eol=lf`,
+  the Windows batch launchers (`serve.cmd`/`watch-log.cmd`/`*.cmd`) are `text eol=crlf`, and
+  `*.png` is `binary`. Makes line endings explicit instead of per-machine `core.autocrlf`
+  guessing — that guessing is what emitted the recurring Windows "LF will be replaced by CRLF"
+  warnings on commits touching `suggestions.jsonl`/`pipeline/.guide-history.jsonl`/`PLAN.md`
 - `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by
   Pages, not part of the app. **CLI entrypoints live directly in `pipeline/`; the
   imported-only libraries they share live in `pipeline/lib/`** (OR2 — the split makes the

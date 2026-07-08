@@ -1,0 +1,31 @@
+# Line-ending normalization for The Coffer / The-Ledger.
+#
+# This is a Node + GitHub Pages repo: nothing is served or executed with a
+# CRLF-required format except the Windows .cmd launchers. So the deliberate
+# default is LF everywhere in the repo (and in the working tree), which makes
+# EOL handling explicit instead of leaving it to each machine's core.autocrlf
+# guess — that guessing is what emits the recurring Windows
+# "LF will be replaced by CRLF" warnings on commits touching suggestions.jsonl,
+# pipeline/.guide-history.jsonl, PLAN.md, and friends.
+
+# --- Text sources: store LF in the repo, check out LF on every platform. ---
+*.js            text eol=lf
+*.mjs           text eol=lf
+*.json          text eol=lf
+*.jsonl         text eol=lf
+*.md            text eol=lf
+*.yml           text eol=lf
+*.css           text eol=lf
+*.html          text eol=lf
+*.log           text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+LICENSE         text eol=lf
+
+# --- Windows batch launchers must keep CRLF in the working tree. ---
+serve.cmd       text eol=crlf
+watch-log.cmd   text eol=crlf
+*.cmd           text eol=crlf
+
+# --- Binary assets: never apply text/EOL conversion. ---
+*.png           binary

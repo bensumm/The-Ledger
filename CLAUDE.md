@@ -69,6 +69,14 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **`.gitattributes` EOL normalization** (GA1, repo-config only — NO APP_VERSION) — makes line
+  endings explicit (text sources `eol=lf`, the Windows `*.cmd` launchers `eol=crlf`, `*.png`
+  `binary`) so `core.autocrlf` no longer guesses and the recurring Windows "LF will be replaced by
+  CRLF" commit warnings stop. **Don't-rebuild:** the index already stored LF for every text file
+  (working tree was CRLF via autocrlf), so `git add --renormalize` was a no-op — `.gitattributes`
+  only pins that behavior deterministically; don't add a blanket `* text=auto` that could reclassify
+  the single-line machine-JSON outputs (`fills.json`/`positions.json`/`offers.json` have zero
+  line-ending bytes and are left untouched). Inventory entry: README's file registry.
 - **`suggestions.jsonl` rotation/compaction** (SR1, pipeline-only — NO APP_VERSION) — the O1 ledger
   grew unbounded in the DEPLOY ROOT (~3k rows/day). `pipeline/lib/suggestlog.mjs` now bounds the
   active root file to the CURRENT calendar month: on every append `logSuggestions` calls
