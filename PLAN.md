@@ -70,9 +70,10 @@ section hold the "why", and the full original spec is recoverable via `git show 
 
 ## Order of operations
 
-Waves 1–7 have all shipped (see Status). The only scheduled-but-open work is **SR1** and
-**GA1** (Wave 7, ready-unassigned) plus the gated **F1**; everything else lives in the
-Discovered / Needs-a-Ben-decision lists.
+Waves 1–7 have all shipped (see Status). The scheduled-but-open work is **SR1**, **GA1**
+(Wave 7, ready-unassigned) and **PM1** (probe-module system — the biggest open piece, spec
+below), plus the gated **F1**; everything else lives in the Discovered / Needs-a-Ben-decision
+lists.
 
 | Wave | What (all ✅ — detail via `git show <sha>:PLAN.md`) |
 | --- | --- |
@@ -91,6 +92,7 @@ Discovered / Needs-a-Ben-decision lists.
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
+| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | new `pipeline/modules/`, `pipeline/lib/modules.mjs`, `screen.mjs`/`quote.mjs` render tap, migrate `⬇DIP` out of `screen.mjs`, fixtures | ⏳ READY-UNASSIGNED (spec in Open chunk specs; → Fable) |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | ✅ `c7b53e7` (0.34.0) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | ✅ `70633f6` (0.35.0) |
 | O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate documented: n≥30 per side×pctl×class×regime cell, ≥5 cells — currently 1, stays GATED) |
@@ -177,6 +179,79 @@ Quiet the recurring `LF will be replaced by CRLF` warnings on Windows commits wi
 commit — scope it (or stage the renormalize commit separately) so a real change never hides
 inside an EOL churn diff. Promoted from Discovered.
 
+### PM1 — Probe-module system (theory-testing plug-ins) [M] (ready, unassigned)
+
+**Why.** Formalize the ad-hoc `⬇DIP` flag (still UNCOMMITTED in `pipeline/screen.mjs` — this
+chunk finally commits it) into a pluggable **probe-module** system: a lightweight way to trial a
+per-item theory, see it in the output, and DELETE it cleanly if the theory is wrong. It is the
+lightweight cousin of a niche — a *niche* is a permanent, validated candidate MODE (band/spread/
+rising, heavy, in `screen.mjs`); a *probe* is an experimental per-row ANNOTATION (light, pluggable,
+trial-and-keep-or-drop). Ben's framing (2026-07-07); he'll hand this spec to Fable to implement.
+
+**Tap point — the shared quote row.** Every surface (`screen`/`quote`/`watch`) builds a per-item
+row off `js/quotecore.js` with the same core fields (`guide, quickBuy/Sell, optLow/High, band,
+volDay, mom, regimeLabel, phase, reliable, thin, avgLow24/High24`) plus the raw 6h/24h series in
+context. A probe reads that row; because all three surfaces build the same row, one module works
+everywhere.
+
+**Module shape** — one file `pipeline/modules/<name>.mjs` exporting
+`{ name, version, theory, surfaces, probe(row, ctx) → annotation | null }`. Pure. `annotation` is
+either a **state tag** (`{tag:'⬇DIP -2.4%', note?}`) or a **price nudge** (`{tag, price}`) — the
+interface must carry both shapes (dip is a tag, anchor is a nudge).
+
+**Loader** `pipeline/lib/modules.mjs` — auto-discovers `pipeline/modules/*.mjs` (same glob trick as
+`run-tests.mjs`); `runProbes(row, surface, ctx)` returns the fired annotations. **Presence = enabled**
+(delete the file to disable; optional `enabled:false` soft-off). 
+
+**Render integration** — each surface adds ONE line appending fired tags to a dedicated **`Probes`
+column** (recommended over stuffing the Regime cell: reads as obviously-experimental and keeps the
+canonical table clean). **Byte-identical when no module is present** (`runProbes` → `[]` → nothing
+appends) — that empty-passthrough IS the removability guarantee.
+
+**Invariants (non-negotiable):**
+- **OUTPUT-ONLY — a probe annotates, NEVER feeds a gate/verdict/rating** (same discipline as the
+  YIELD surfaces + the phase tag). This is what keeps decision paths byte-identical whether a module
+  loads or not, and what makes deletion safe.
+- Each module states its **theory + version** in the header; optional `pipeline/modules/<name>.log`
+  firing log so a probe can be **scored hit/miss later** — the validate-before-promote loop (a proven
+  probe graduates into a real gate/niche; a wrong one gets deleted). Optional `<name>.test.mjs` rides
+  the existing runner.
+
+**Surface-semantics nuance — design the interface for it.** The SAME signal can MEAN different things
+per surface: `⬇DIP` = "buy candidate" on screen/quote (items you don't own) but INVERTS to "position
+falling / average-down window" on watch (items you hold). So `probe` receives `ctx.surface` +
+`ctx.owned` and may return per-surface framing. **Ship screen+quote first** (identical buy meaning);
+make **watch a deliberate follow-on** where dip is reframed as "average-down", not copy-pasted as a
+buy tag.
+
+**The four seed probes (dip is the reference migration; the rest are follow-on files):**
+- **dip** — `quickBuy < avgLow24`, gated flat/rising + not-spike/decay + reliable + non-thin →
+  `⬇DIP -N%`. A market-STATE tag. **First deliverable: migrate the uncommitted `screen.mjs`
+  prototype into `pipeline/modules/dip.mjs`** (proves the system + cleans the hack).
+- **froth** — a spike CLASSIFIER, not a predictor (per the `/scan` froth doctrine): on a `spike`/
+  `rising` row, read the recent-low trend (needs the trajectory/series in ctx) → `healthy-reprice`
+  (rising-then-holding lows) vs `knife` (falling lows). A trajectory-STATE tag.
+- **anchor** — price-microstructure (per the `/scan` anchor-pricing doctrine): given band edges +
+  guide + nearby round numbers, detect when the natural actionable price (band top for an ask / band
+  low for a bid) lands in the dead zone just-wrong-side of an anchor → emit the **nudged price**
+  (`⚓ ask 10,699 (under 10,700)`). A PRICE-NUDGE annotation, not a state tag — it proves the interface
+  carries both output shapes.
+- **decant** — potion-dose arbitrage: for a flippable 4-dose potion, compare the per-4-dose-equivalent
+  cost of its 1/2/3-dose variants (buy N cheap low-dose, decant via the NPC to 4-dose) against buying
+  the 4-dose directly → flag when a lower-dose variant is discounted enough to beat the 4-dose after
+  tax. **This is a MULTI-ITEM probe** — it needs the sibling dose-variant prices, not just the one row.
+  So PM1 must define how a probe declares **extra data needs** (a `needs:[siblingIds]` the loader
+  pre-fetches, or running off already-cached sibling rows) — decant is the probe that stress-tests the
+  "tap into what we fetch" boundary and forces that decision. (Dose-variant item ids: the potion's
+  1/2/3/4-dose forms are distinct GE items — the module maps them.)
+
+**Scope/size.** [M] core = loader + `Probes` column + **dip migrated** + a fixture. froth/anchor/decant
+are each a small follow-on file. Pipeline-first (screen/quote); watch surface + the app `Probes` column
+are deliberate later steps (the CLI side is pipeline-only, no APP_VERSION; an app Probes column bumps
+APP_VERSION). **Resolves** the uncommitted `⬇DIP` prototype in `screen.mjs`. Honesty (rule 4): a probe
+is a THEORY under test — its firings are data to score, never a validated edge until the hit/miss log
+says so.
+
 ### F1 — Algorithm feedback loop (GATED on O1's n thresholds)
 
 The payoff of O1. Fill-probability/fill-time curves by band-percentile × item class →
@@ -225,6 +300,9 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   via the coffer-manual.log tombstones). Nothing read it. (The other two desk orphans —
   `pipeline/mapping.cache.json` and the SL1-forked `pipeline/suggestions.jsonl` — were cleaned +
   folded 2026-07-05.)
+- **Orphan `yield-improvement-brief.md`** (repo root, untracked, 2026-07-07) — the YIELD program
+  shipped and folded into PLAN.md/CHANGELOG, so the brief is dead. Recommend `rm` (recoverable via
+  the shipped chunks); left in place pending Ben's OK since it predates this session.
 - **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
 - **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
   REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the
