@@ -72,9 +72,11 @@ section hold the "why", and the full original spec is recoverable via `git show 
 
 Waves 1–7 have all shipped (see Status), and **PM1** (probe-module system) + **TG1**
 (thesis-gated hold alerts) shipped 2026-07-08 (Fable lanes; shas in Status — specs pruned per
-the fold-out discipline, recoverable via `git show a46e69a:PLAN.md`). The only scheduled-but-open
-work is **SR1** and **GA1** (small, ready-unassigned, specs below) plus the gated **F1**;
-everything else lives in the Discovered / Needs-a-Ben-decision lists.
+the fold-out discipline, recoverable via `git show a46e69a:PLAN.md`), followed the same day by
+**PM2** (probe firing logs), **SR1** (suggestions rotation) and **GA1** (`.gitattributes`) —
+shas in Status. **Nothing scheduled remains open except the gated F1**; everything else lives
+in the Discovered / Needs-a-Ben-decision lists (the PM1/TG1 app-surface follow-ons are the
+natural next candidates).
 
 | Wave | What (all ✅ — detail via `git show <sha>:PLAN.md`) |
 | --- | --- |
@@ -85,7 +87,7 @@ everything else lives in the Discovered / Needs-a-Ben-decision lists.
 | **5** | UX round: TB1→LU1→FX1 (sortable table → Ledger UX → Finder/Signals fixes) ∥ NY1→NY2 (scan niche-yield audit → ruling) ∥ SY1 (sync-fills doctrine). |
 | **6** | Business-logic tests + org: OR1 (org map docs) → OR2 (pipeline/lib/ split) → TD1 (money tests) → TD2 (extractions + tests) → TD3 (nice-to-have sweep). |
 | **LW/LH** | LW1→LW2→LW3 (local log-watcher) ∥ LH1→LH2→LH3 (exchange-log hardening) — folded from standalone plan files, both shipped. |
-| **7** | TC1 (trendcore extraction) ∥ GC1 (gateCandidates extraction) ∥ SL1 (suggestlog path regression). **Ready-unassigned: SR1, GA1** (specs below). |
+| **7** | TC1 (trendcore extraction) ∥ GC1 (gateCandidates extraction) ∥ SL1 (suggestlog path regression). |
 | **YIELD** | Yield-improvement program (folded from `PLAN-YIELD.md`, all shipped 2026-07-06): FC1 (fetch cache) → YF1 (historical market-state helper) → YS1 (outcomes v2 schema) ∥ YS2 (forward suggestion enrichment) → YV1 (velocity+capital-util #3) → YT1 (session-thesis #4) ∥ YP2 (state-transition scan #2) → YP1 (guide re-anchor #2, gated) → YA1 (in-app utilization #5). Full story: `CHANGELOG.md`. |
 | gated | **F1** (algorithm feedback) — opens only when O1's sample thresholds clear |
 
@@ -155,31 +157,14 @@ everything else lives in the Discovered / Needs-a-Ben-decision lists.
 | YP2 | State-transition scan (#2) — `lib/statetransition.mjs` off `phase()`; screen stdout "WATCH CLOSELY" (captures basing fallers) | new `lib/statetransition.mjs`, `screen.mjs`, test | ✅ `9f60c15` (pipeline-only) |
 | YP1 | Guide re-anchor prediction (#2, HONESTY-GATED — ships silent, 0/16 rows clear the gate) + `.guide-history.jsonl` gitignored→tracked doc fix | new `lib/guideanchor.mjs`, `quote.mjs`, `watch.mjs`, `PLAN.md`, test | ✅ `a93da6a` (pipeline-only) |
 | YA1 | In-app capital-utilization line — Watch tab (#5); pure `capitalSplit`. Fill-probability + Trends recommend-price button DEFERRED (F1-gated) | `js/watchcore.js`, `watch.js`, `state.js`, `styles.css`, `watchcore.test.mjs` | ✅ `a7fd785` (0.53.0; CI smoke + Pages green) |
-| SR1 | `suggestions.jsonl` rotation/compaction | `suggestions.jsonl`, `pipeline/lib/suggestlog.mjs` | ⏳ ready — unassigned (spec below) |
-| GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ⏳ ready — unassigned (spec below) |
+| PM2 | Probe firing logs — wire the hit/miss ledger | `pipeline/lib/modules.mjs` (`logFirings`), `screen.mjs`, `quote.mjs`, `modules.test.mjs` | ✅ `5ca4f95` (pipeline-only, no APP_VERSION; one JSONL line per firing to gitignored `pipeline/modules/<name>.log` — `{ts,module,version,stage,surface,id,name,tag,price?,quickBuy,quickSell,guide,regimeLabel,phase}`, enough to score without re-fetching. `runProbes` stays PURE — surfaces call `logFirings` explicitly after it; writes individually swallowed, no firing ⇒ no file; stdout byte-identical, live-diffed. SCORING is a later chunk — this only accrues data) |
+| SR1 | `suggestions.jsonl` rotation/compaction | `pipeline/lib/suggestlog.mjs` (+`ARCHIVE_DIR`/`rotateLedger`/`readSuggestionLines`), `outcomes.mjs`, `sync-fills.mjs`, tests | ✅ `457a7bd` (pipeline-only, no APP_VERSION; completed months roll to tracked `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` OUT of the deploy root, triggered inside `logSuggestions` by a cheap first-line month check. Crash-safe archive-before-truncate, exact-line dedup ⇒ idempotent, unparseable rows never dropped; `outcomes.mjs` reads active+archives via `readSuggestionLines` so F1's calibration set never shrinks; active-path pin (SL1) intact. First real archive fires at the 2026-08 boundary — all current rows are 2026-07) |
+| GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ✅ `3a7f68f` (repo-config only; deliberate per-type `text eol=lf` (js/mjs/json/jsonl/md/yml/css/html/log), `*.cmd eol=crlf`, `*.png binary` — NO blanket `text=auto`. The renormalize commit was EMPTY: the index already stored LF everywhere, so the warnings were autocrlf noise, not churn; the single-line `fills/positions/offers.json` blobs have no EOL bytes and stay untouched) |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED (spec below) |
 
 ---
 
 ## Open chunk specs
-
-### SR1 — `suggestions.jsonl` rotation/compaction [S] (ready, unassigned)
-
-The tracked file grows unbounded (639 lines in ~2 days ≈ tens of MB/year at this pace, and
-it lives in the deploy root) — needs a rotation story before it gets silly: monthly archive
-files (`suggestions-YYYY-MM.jsonl`), or move history out of the deploy root entirely. The
-writer is the shared `logSuggestions`/`LEDGER` path in `pipeline/lib/suggestlog.mjs` (SL1) —
-keep O1's F1-gating accrual intact (rows are the calibration data, don't drop them; archive,
-don't delete). Whatever scheme is chosen, the resolved active-ledger path stays pinned by
-`pipeline/lib/suggestlog.test.mjs`. Pipeline-only, no APP_VERSION. Promoted from Discovered.
-
-### GA1 — `.gitattributes` normalization [S] (ready, unassigned)
-
-Quiet the recurring `LF will be replaced by CRLF` warnings on Windows commits with a new
-`.gitattributes` doing an `eol`/`text` normalization pass. Watch for churn: a blanket
-`text=auto` re-normalization can rewrite line endings across many tracked files in one
-commit — scope it (or stage the renormalize commit separately) so a real change never hides
-inside an EOL churn diff. Promoted from Discovered.
 
 ### F1 — Algorithm feedback loop (GATED on O1's n thresholds)
 
@@ -220,18 +205,17 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   into `fills.json`. Full rationale: `git show 39e5d23:PLAN.md` (chunk 5 section).
 
 ### Needs a Ben decision (not scheduled — list only, don't action unprompted)
-- **Stale remote branches** `wave4-repo-review-plan` + `g1-readme-inventory` — delete vs keep.
-  D1 superseded `g1-readme-inventory`'s README work; alternatively it could be the first
-  PR-path smoke once `gh auth refresh -s repo` runs. Ben's call.
+- ~~**Stale remote branches** `wave4-repo-review-plan` + `g1-readme-inventory`~~ — RESOLVED
+  2026-07-08: Ben confirmed, both deleted from origin (only `main` remains). The first PR-path
+  smoke once `gh auth refresh -s repo` runs will use a fresh branch.
 - ~~**`pipeline/held-override.json`** (desk, untracked)~~ — RESOLVED 2026-07-06: `rm`'d. It was
   inert (`monitor.mjs` reads `.cache/held-override.json`, not this root copy — it forked at OR2) AND
   redundant (its one entry, `23959` @ 2026-07-03, already reconciles to 0 open in `positions.json`
   via the coffer-manual.log tombstones). Nothing read it. (The other two desk orphans —
   `pipeline/mapping.cache.json` and the SL1-forked `pipeline/suggestions.jsonl` — were cleaned +
   folded 2026-07-05.)
-- **Orphan `yield-improvement-brief.md`** (repo root, untracked, 2026-07-07) — the YIELD program
-  shipped and folded into PLAN.md/CHANGELOG, so the brief is dead. Recommend `rm` (recoverable via
-  the shipped chunks); left in place pending Ben's OK since it predates this session.
+- ~~**Orphan `yield-improvement-brief.md`**~~ — RESOLVED 2026-07-08: Ben OK'd, `rm`'d (it was
+  untracked; the YIELD program's content lives in PLAN.md/CHANGELOG).
 - **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
 - **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
   REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the
@@ -276,10 +260,11 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
   surface** for probes — dip inverts to "average-down window" on an owned lot (the framing is
   already coded in `modules/dip.mjs` behind `ctx.owned`; wiring watch.mjs to run probes is the
   chunk); (2) an **app `Probes` column** (APP_VERSION bump — separate step, published-cells
-  contract change); (3) the `pipeline/modules/<name>.log` **hit/miss firing logs** — the
-  convention is defined + gitignored but unwired; needed before any probe can graduate
-  (validate-before-promote). decant also models no decant fee/low-dose fill liquidity —
-  documented in-file, a firing is a prompt to check, not an edge.
+  contract change); (3) ~~firing logs~~ — SHIPPED as **PM2** `5ca4f95`; the remaining piece is
+  the **SCORING pass** (read `pipeline/modules/<name>.log`, judge hit/miss against subsequent
+  price action, graduate-or-delete — needs firings to accrue first). decant also models no
+  decant fee/low-dose fill liquidity — documented in-file, a firing is a prompt to check, not
+  an edge.
 - **TG1 follow-on (deliberate):** the app Watch tab could adopt the declared `hold-thesis.json`
   silence (it currently shows the ungated verdict) — separate chunk, APP_VERSION bump.
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
