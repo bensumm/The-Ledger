@@ -197,7 +197,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     on append via `rotateLedger` — no-row-loss archive-then-truncate, idempotent — and `readSuggestionLines`
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
     forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
-    written only when a caller honestly supplies them, so legacy rows stay byte-identical), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
+    written only when a caller honestly supplies them, so legacy rows stay byte-identical), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`; incl. the RC1 `recencySplit`/`recentQuant` reach-contamination guard that flags a `⚠ stale` full touched/reached count concentrated in an older price regime),
     `watchstate.mjs` (V1/V4/V7 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
     `advanceState` compute Δ instabuy, mom transitions, `passesUnderwater`/`passesBelowSupport` counters
     (display), the `underwaterSince`/`belowSupportSince`/`breakdownSince` streak timestamps, and band-top
@@ -280,7 +280,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract), `sync-fills.test.mjs`
     (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
     emitter), `watchcore.test.mjs` (Watch-tab derivations + `offerVerdict`), `lib/cli.test.mjs`
-    (arg/`parseGp`/`median`), `lib/windowread.test.mjs` (window-range quantiles),
+    (arg/`parseGp`/`median`), `lib/windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard),
     `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —

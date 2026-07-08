@@ -32,7 +32,7 @@
  */
 import { loadMapping, fetchTs, fetchLatest } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp } from './lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS } from './lib/windowread.mjs';
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);
@@ -74,18 +74,28 @@ for (const want of positionals) {
     console.log(`  ${key}  low ${fmt(n.low)} · high ${fmt(n.hi)}  · sell-vol ${fmt(n.volLo)} · buy-vol ${fmt(n.volHi)}`);
 
   console.log(`  ---`);
+  const rq = (side, p) => { const v = recentQuant(scored, side, p, RECENT_NIGHTS); return v == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(v)}`; };
   if (lows.length) {
-    console.log(`  BID side — touched on ~50% of days: ${fmt(quantLow(lows, 0.5))} · ~75%: ${fmt(quantLow(lows, 0.75))} · every day: ${fmt(lows[lows.length - 1])}`);
+    console.log(`  BID side — touched on ~50% of days: ${fmt(quantLow(lows, 0.5))} · ~75%: ${fmt(quantLow(lows, 0.75))} · every day: ${fmt(lows[lows.length - 1])}${rq('bid', 0.5)}`);
     console.log(`    median window instasell volume: ${fmt(medVolLo)} u (the pool a resting bid competes for)`);
   }
   if (his.length) {
-    console.log(`  ASK side — reached on ~50% of days: ${fmt(quantHigh(his, 0.5))} · ~75%: ${fmt(quantHigh(his, 0.75))} · every day: ${fmt(his[0])}`);
+    console.log(`  ASK side — reached on ~50% of days: ${fmt(quantHigh(his, 0.5))} · ~75%: ${fmt(quantHigh(his, 0.75))} · every day: ${fmt(his[0])}${rq('ask', 0.5)}`);
     console.log(`    median window instabuy volume: ${fmt(medVolHi)} u (the pool a resting ask competes for)`);
   }
   if (latest && latest.low != null) console.log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
+  // recency split on the scored candidate: recent-N hit rate beside the full count, ⚠ when the
+  // full count is rosier than recent (stale-regime contamination — don't trust the full number)
+  const splitNote = (side, level) => {
+    const s = recencySplit(scored, side, level, RECENT_NIGHTS);
+    let note = ` · recent ${s.recentHit}/${s.recentDays}`;
+    if (s.staleOptimistic) note += ` ⚠ stale — the full count is concentrated in an older price regime; recent nights ${side === 'bid' ? "don't dip to this bid" : "don't reach this ask"}, discount it`;
+    else if (s.diverges) note += ` (recent ${side === 'bid' ? 'dips lower/more often' : 'reaches higher/more often'} than the full window)`;
+    return note;
+  };
   if (BID != null && lows.length)
-    console.log(`  --bid ${fmt(BID)} → would have been touched on ${touchedDays(lows, BID)}/${lows.length} day(s)`);
+    console.log(`  --bid ${fmt(BID)} → would have been touched on ${touchedDays(lows, BID)}/${lows.length} day(s)${splitNote('bid', BID)}`);
   if (ASK != null && his.length)
-    console.log(`  --ask ${fmt(ASK)} → would have been reached on ${reachedDays(his, ASK)}/${his.length} day(s)`);
+    console.log(`  --ask ${fmt(ASK)} → would have been reached on ${reachedDays(his, ASK)}/${his.length} day(s)${splitNote('ask', ASK)}`);
   console.log(`  (touched/reached ≠ limit filled — small sample, ~${scored.length} days; a guide, not a guarantee)`);
 }

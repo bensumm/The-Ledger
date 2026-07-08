@@ -30,6 +30,48 @@ export const quantHigh = (sortedHis, p) =>
 export const touchedDays = (lows, bid) => lows.filter(l => l <= bid).length;
 export const reachedDays = (his, ask) => his.filter(h => h >= ask).length;
 
+// --- recency split (reach-contamination guard) ------------------------------------------------
+// The touched/reached COUNT above is over the whole N-night window, so on an item that changed
+// price REGIME inside the window the count is dominated by stale days and misdescribes the level's
+// CURRENT reachability. Two-sided, one bug — in BOTH the stale days are the OLDER, higher-priced ones:
+//   • ask, FALLING/crashed item — reached 14/14 (or 4/14) full but ~0/3 recent: old higher days
+//     cleared the ask; recent nights don't reach it, so it's stranded/pre-regime (super-restore,
+//     nest, blood rune).
+//   • bid, RISING/repriced item — touched 14/14 full but ~1/3 recent: old cheaper days cleared a low
+//     bid; the floor has since risen, so the bid may not fill.
+// The fix is NOT a looser threshold (that re-opens the DHCB band-top-artifact miss) — it's showing
+// the recent-N hit rate BESIDE the full one and flagging when the full count is rosier than recent
+// ("stale-optimistic"). Pure over windowStats().days ([[key,{low,hi}], …] oldest→newest).
+export const RECENT_NIGHTS = 3;      // recent window compared against the full window
+export const RECENCY_DIVERGE = 1 / 3; // hit-fraction gap that flags a stale-regime contamination
+
+export function recencySplit(days, side, level, recentN = RECENT_NIGHTS) {
+  const vals = days.map(([, n]) => (side === 'bid' ? n.low : n.hi)).filter(v => v != null);
+  const hit = side === 'bid' ? (v => v <= level) : (v => v >= level);
+  const recent = vals.slice(-recentN);           // days is oldest→newest ⇒ tail = most recent
+  const fullN = vals.length, recentDays = recent.length;
+  const fullHit = vals.filter(hit).length, recentHit = recent.filter(hit).length;
+  const fullFrac = fullN ? fullHit / fullN : 0;
+  const recentFrac = recentDays ? recentHit / recentDays : 0;
+  // only a meaningful call with a full recent window AND a longer full window behind it
+  const scored = recentDays >= recentN && fullN >= recentN + 2;
+  // divergence: a big fraction gap, OR the definitive case — recent nights hit it ZERO times while
+  // the full window shows a real rate (≥20%). The zero-clause catches a partial-rate crash like blood
+  // rune (4/14 full → 0/3 recent, a 0.29 gap under the fraction threshold but unambiguously stale).
+  const gap = fullFrac - recentFrac;
+  const diverges = scored && (Math.abs(gap) >= RECENCY_DIVERGE || (recentHit === 0 && fullHit > 0 && fullFrac >= 0.2));
+  const staleOptimistic = diverges && recentFrac < fullFrac; // full count rosier than recent = the trap
+  return { fullN, fullHit, recentDays, recentHit, fullFrac, recentFrac, diverges, staleOptimistic };
+}
+
+// the recent-N slice's quantile, to sit beside the full-window quantile in a summary line.
+export function recentQuant(days, side, p, recentN = RECENT_NIGHTS) {
+  const vals = days.map(([, n]) => (side === 'bid' ? n.low : n.hi)).filter(v => v != null).slice(-recentN);
+  if (!vals.length) return null;
+  const sorted = [...vals].sort((a, b) => a - b);
+  return side === 'bid' ? quantLow(sorted, p) : quantHigh(sorted, p);
+}
+
 /**
  * Bucket a 1h timeseries into per-day window stats.
  * @param {Array} series  raw /timeseries 1h points ({timestamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume})

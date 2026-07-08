@@ -57,7 +57,7 @@ import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays } from './lib/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from './lib/windowread.mjs';
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
@@ -181,18 +181,21 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false } = {}) {
   const stats = windowStats(ts1h, { nights: WINDOW_DAYS, wStart, wEnd });
   if (!stats) return null;
   const { lows, his } = stats;
+  // recency-split guard: a ⚠ marker when the full touched/reached count is concentrated in an
+  // older price regime (recent nights don't dip to the bid / reach the ask) — see windowread.mjs
+  const stale = (side, level) => recencySplit(stats.days, side, level, RECENT_NIGHTS).staleOptimistic ? ' ⚠stale' : '';
   if (compact) { // one short clause for the notes list (same numbers, no label/caveat prose)
-    if (bid != null && lows.length) return `bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d`;
-    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d`;
+    if (bid != null && lows.length) return `bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)}`;
+    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}`;
     if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`;
     return null;
   }
   const label = `next ${WINDOW_HOURS}h window (${String(wStart).padStart(2, '0')}–${String(wEnd).padStart(2, '0')}h × last ${stats.days.length}d)`;
   const bits = [];
   if (bid != null && lows.length)
-    bits.push(`bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d · lows ~50% ${fmtP(quantLow(lows, 0.5))} / ~75% ${fmtP(quantLow(lows, 0.75))}`);
+    bits.push(`bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)} · lows ~50% ${fmtP(quantLow(lows, 0.5))} / ~75% ${fmtP(quantLow(lows, 0.75))}`);
   if (ask != null && his.length)
-    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d`);
+    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}`);
   if (his.length)
     bits.push(`highs reached ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`);
   if (!bits.length) return null;

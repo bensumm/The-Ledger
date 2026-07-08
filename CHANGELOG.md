@@ -10,6 +10,159 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### RC1 — recency split, the reach-contamination guard (2026-07-08, pipeline-only — NO APP_VERSION)
+`windowrange.mjs`/`watch.mjs`'s flat full-window touched/reached COUNT lies on an item that changed price
+REGIME inside the window — the count is dominated by stale, older-priced days. Two-sided, one bug (in both,
+the stale days are the older higher-priced ones): an **ask** on a fallen/crashed item reads "reached 4/14"
+where all four reaches are pre-crash (the blood-rune case: pre-crash highs 313–315, recovery tops 299–310,
+so 313 is a fresh re-touch not an established sell); a **bid** on a repriced-up item reads "touched 14/14"
+off old cheap days the floor has since left. Ben caught it live ("14/14 could also be because it's dropping,
+like the nests") and again reading the runes. Fix: the pure `recencySplit()`/`recentQuant()` in
+`pipeline/lib/windowread.mjs` print the **recent-3-night** hit rate + a `recent-3 ~50%` quantile beside the
+full-window ones, and append **`⚠ stale`** when the full count is rosier than recent — a big fraction gap OR
+the definitive case, recent hits it ZERO times while the full window shows a ≥20% rate (which catches a
+partial-rate crash like blood rune's 4/14→0/3, a 0.29 gap under the fraction threshold). **Not a threshold
+loosening** — the DHCB band-top-artifact SKIP is intact; this stops the *count* misdescribing a regime-change
+item. Surfaces in `windowrange.mjs` (`--bid`/`--ask` lines + summary) and `watch.mjs`'s window line (compact
+`⚠stale`). A stable item never flags (super-restore's real 14/14 ask, recent 3/3, stays silent — verified
+live). Fixtures: `pipeline/lib/windowread.test.mjs` (both sides + stable-no-flag + thin-history-no-flag).
+
+### GA1 — `.gitattributes` EOL normalization (repo-config only — NO APP_VERSION)
+Makes line endings explicit (text sources `eol=lf`, the Windows `*.cmd` launchers `eol=crlf`, `*.png`
+`binary`) so `core.autocrlf` no longer guesses and the recurring Windows "LF will be replaced by CRLF"
+commit warnings stop. **Don't-rebuild:** the index already stored LF for every text file (working tree
+was CRLF via autocrlf), so `git add --renormalize` was a no-op — `.gitattributes` only pins that behavior
+deterministically; don't add a blanket `* text=auto` that could reclassify the single-line machine-JSON
+outputs (`fills.json`/`positions.json`/`offers.json` have zero line-ending bytes and are left untouched).
+Inventory entry: README's file registry.
+
+### SR1 — `suggestions.jsonl` rotation/compaction (pipeline-only — NO APP_VERSION)
+The O1 ledger grew unbounded in the DEPLOY ROOT (~3k rows/day). `pipeline/lib/suggestlog.mjs` now bounds
+the active root file to the CURRENT calendar month: on every append `logSuggestions` calls `rotateLedger()`
+(cheap first-line-month guard) which rolls each COMPLETED month out to
+`pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`. **Don't-rebuild / the load-bearing rules:**
+(1) rows are F1's calibration data — ARCHIVE, never delete; rotation writes each archive fully (dedup,
+tmp+rename) BEFORE truncating the active file, so it's crash-safe + idempotent + zero-row-loss; (2) any
+FULL-HISTORY reader (`outcomes.mjs`'s F1 join) MUST read active + archives via the shared
+`readSuggestionLines` — reading the active file alone silently halves the calibration set after the first
+rotation; (3) the active-ledger path stays REPO-ROOT, pinned by `pipeline/lib/suggestlog.test.mjs` (SL1) —
+only history relocates; don't re-relativize `LEDGER`. `sync-fills.mjs` commits the archive dir alongside
+`suggestions.jsonl`. Note: as of landing, 100% of rows are the current month, so the first rotation is a
+no-op — the first real archive fires at the next month boundary. Fixtures:
+`pipeline/lib/suggestlog.test.mjs`. Full story: `FILLS-PIPELINE.md` §11.1.
+
+### TG1 — Thesis-gated hold alerts, silence expected-underwater (2026-07-07, pipeline-only — NO APP_VERSION)
+A patient/accumulation hold is DEFINITIONALLY underwater on the instant-clear from the moment its bid fills,
+so the `UNDERWATER`/`CUT-CANDIDATE` headline cried wolf every pass (Ben: "tired of being told I'm underwater
+when that's the plan"). The fix lives in the ALERT gate, NOT the verdict core. **Don't-rebuild / the
+load-bearing rules:** (1) `momVerdict()` (`js/quotecore.js`) is UNTOUCHED — the verdict still SAYS underwater
+(honest); only the *headline* is gated. (2) The thesis branch lives in `convictionGate()`
+(`pipeline/lib/watchstate.mjs`) — a declared thesis with a numeric tripwire, live ABOVE the tripwire → ARMED
+note (`per thesis: silent above X…`), no headline; live at/below the tripwire → falls through to the normal
+V4/V7 escalation (real risk headlines). (3) The **Gate-2 breakdown `CUT` stays EXEMPT** — checked BEFORE the
+thesis branch, a real breakdown is NEVER silenced (`LIST-TO-CLEAR` is also excluded from the silence). (4) The
+store is AGENT-WRITTEN like the greenlist — TRACKED root `hold-thesis.json` (`{id,exitPrice,tripwire,horizon,
+ts}`, 14-day TTL), read via `pipeline/lib/holdthesis.mjs`, watch READ-ONLY; when Ben declares a hold plan the
+agent appends/upserts an entry (`upsertThesis`). No thesis / empty store → byte-identical to today (opt-in,
+safe-degrade). Fixtures: `pipeline/lib/holdthesis.test.mjs` + the TG1 block in `pipeline/watchstate.test.mjs`.
+Full story: `MONITORING.md` "What each tick surfaces" item 1 (the THESIS-silence bullet) + the `holdthesis.mjs`
+header.
+
+### PM2 — Probe firing logs wired (2026-07-07, pipeline-only — NO APP_VERSION)
+PM1 defined the per-probe `pipeline/modules/<name>.log` firing-log convention but left it UNWIRED; PM2 wires
+the writes so the validate-before-promote data accrues. `logFirings(fired, meta)` (`pipeline/lib/modules.mjs`)
+appends ONE compact JSONL line per fired annotation —
+`{ts,module,version,stage,surface,id,name,tag,price(price-stage only),quickBuy,quickSell,guide,regimeLabel,phase}`
+— enough to SCORE the firing later without re-fetching; `version` is the probe's DECLARED version (looked up
+from the loaded set). Called EXPLICITLY by `screen.mjs` renderMode + `quote.mjs` runItems right after their
+`runProbes` calls. **Don't-rebuild / the load-bearing rules:** (1) `runProbes` stays PURE — logging is a
+separate explicit call, never folded into the runner; (2) **failure-safe** — every write is try/caught +
+swallowed, a broken log can NEVER break a render; (3) **byte-identical stdout** — logging adds NO output change
+(the Probes column is untouched); (4) no firing ⇒ no write ⇒ no file. SCORING (hit/miss) is deliberately a
+LATER chunk — PM2 only accrues. Fixtures: the FIRING LOG block in `pipeline/modules.test.mjs`. Full story: the
+`pipeline/lib/modules.mjs` header (FIRING LOG) + README's probe-modules inventory entry.
+
+### PM1 — Probe-module system, theory-testing plug-ins (2026-07-07, pipeline-only — NO APP_VERSION)
+A pluggable way to trial a per-item market THEORY, see it in a dedicated stdout `Probes` column, and DELETE it
+in one `rm`. `pipeline/lib/modules.mjs` is the LOADER + stage-keyed runner: it auto-discovers
+`pipeline/modules/*.mjs` (presence = enabled), groups probes BY STAGE (`observe` → `{tag,note}`; `price` →
+`{price,reason}`; `gate` future), and `runProbes(row,surface,ctx)` returns the fired annotations. screen.mjs +
+quote.mjs append a `Probes` column ONLY when a probe fires. **Don't-rebuild / the load-bearing invariants:**
+(1) the **empty-passthrough guarantee** — no module present OR none fire ⇒ `[]` ⇒ nothing appends ⇒
+**byte-identical** output — that IS the removability contract, never break it; (2) **NO probe of any stage feeds
+a verdict/gate/rating/reconstruction** — observe probes touch NO number, price probes touch ONLY the advisory
+recommendation; (3) the `Probes` column is **stdout-only**, deliberately NOT in the published
+`screen.json`/app (an app Probes column bumps APP_VERSION — a separate later step). Four seed probes: **dip**
+(the migrated ex-`screen.mjs` `⬇DIP` prototype — same gates), **froth** (spike/rising knife-vs-healthy
+classifier off `phase().lowSlope`), **anchor** (the `price`-stage round-number nudge, proving both output
+shapes), **decant** (MULTI-ITEM — reads dose siblings off the whole-market 24h map `ctx.v24all` and declares
+them via `needs(row,ctx)`; screen-only). Watch surface + owned dip-inversion (average-down) are the deliberate
+follow-on. A firing is DATA to score, never a validated edge (rule 4). Fixtures: `pipeline/modules.test.mjs`.
+Full story: the `pipeline/lib/modules.mjs` header + README's probe-modules inventory entry.
+
+### MERCH-book quarantine — `ignored-items.json` + greenlist (2026-07-07, pipeline-only — NO APP_VERSION)
+Items Ben transacts but doesn't flip (farming inputs, loot, personal-use) are quarantined from the DERIVED
+merch views. **Don't-rebuild / the load-bearing rule:** `pipeline/lib/ignored.mjs` `quarantineEvents` filters
+the `reconstruct()` INPUT only — `fills.json` stays the FULL merged audit (never delete an ignored item's
+events; it's a VIEW filter). Intent isn't in the log, so an ignored item is quarantined BY DEFAULT and a
+specific transaction is surfaced as a real flip ONLY via a `greenlisted` entry matched on id+price(±3%)+ts(±6h).
+**The greenlist is agent-written:** when you recommend a flip of an ignored item and Ben confirms qty+price,
+APPEND `{id,qty,price,ts,consumed:false}` to `ignored-items.json`'s `greenlisted` array (Ben only flips these
+on a rec, so that gate catches every legit flip). Wired in `sync-fills.mjs` (positions/offers) + `lib/offers.mjs
+activeOffers` (watch); real-log validated snapdragon 6→0 entries with realised P/L byte-identical. Fixtures:
+`pipeline/ignored.test.mjs`. Full story: the `pipeline/lib/ignored.mjs` header + README's `ignored-items.json`
+inventory entry.
+
+### V5 — watch.mjs per-held EMIT CONTRACT (pipeline+docs only — NO APP_VERSION)
+The pure `heldNoteBlock()` in `pipeline/lib/emit.mjs` (fixture-pinned `pipeline/emit.test.mjs`) makes each held
+lot's note block ONE stable, consistently-ordered shape: `verdict · conviction-state (V4 armed) · Δ-since-last
+(V1) · structural tripwire (V2) · sell/list-at (+ break-even) · fill-progress`. **Don't-rebuild / the
+load-bearing rule:** the **sell/list-at + break-even line is ALWAYS emitted on a held lot** (`sell: list @ X ·
+break-even Y · ask n/m`), guaranteed even if the optional context fields fail to compute — Ben's standing rule
+(2026-07-06): always state the sell price for every held item, since a fill you didn't see may have happened.
+`heldListAt` prefers the shared momVerdict `listAt`, else the band-top-floored-at-BE fallback — never re-fork
+that. OUTPUT-FORMAT-ONLY (no verdict/alert/row-selection change). Full state: PLAN.md V5 row, `MONITORING.md`
+"What each tick surfaces" (the emit-contract block).
+
+### V7 — Cadence-independent alert gating, TIME-based arm-then-confirm (pipeline-only — NO APP_VERSION)
+`convictionGate()` (`pipeline/lib/watchstate.mjs`) now escalates on **elapsed WALL-CLOCK time a condition has
+persisted** (`ALERT_PERSIST_MS`, 4-min placeholder), NOT a pass count. **Why:** a pass-count threshold made a
+faster /loop manufacture faster alerts — at 1-min cadence "2 consecutive passes" was 2 min of noise; a choppy
+market checked every minute produced flicker headlines. Time-gating makes sensitivity independent of cadence.
+**New:** `LIST-TO-CLEAR` (a 2h-momentum breakdown, previously UNGATED — it headlined every ↓ pass) is now
+arm-then-confirmed too: a single-pass flicker only ARMS; it headlines only once the breakdown HOLDS ≥
+`ALERT_PERSIST_MS`. Persistence is measured from `underwaterSince`/`belowSupportSince`/`breakdownSince`
+timestamps in the watch-state. **Don't-rebuild / invariant preserved:** the **Gate-2 breakdown `CUT` stays
+EXEMPT — immediate, never time-gated** (pinned by an "immediate regardless of elapsed time" fixture); note
+`LIST-TO-CLEAR` also carries `gate:2` but its verdict is `LIST-TO-CLEAR` not `CUT`, so it is gated, not exempt.
+`watchstate.test.mjs` pins the time-based gate + a cadence-independence fixture. Full state:
+`pipeline/MONITORING.md` "What each tick surfaces" item 1.
+
+### V4 — Conviction gating, arm-then-confirm alerts (pipeline-only — NO APP_VERSION)
+(The pass-count thresholds here were SUPERSEDED by V7's time-based gating above — read that first.) The pure
+`convictionGate()` in `pipeline/lib/watchstate.mjs` gates whether a held verdict escalates to a headline ⚠ ALERT
+in `watch.mjs` (verdict strings UNCHANGED; `js/quotecore.js` untouched). A Gate-D `CUT-CANDIDATE` needs the
+underwater condition to persist (V7: ≥ `ALERT_PERSIST_MS`; was 2 passes) to alert; a structural break needs the
+V2 tripwire convincingly broken (`< cut-trigger`) OR below support persisted. First observation → ARMED (a
+visible note, not a headline). **Don't-rebuild / invariant:** the **Gate-2 breakdown `CUT` is EXEMPT — it alerts
+immediately, byte-identically** (pinned by an "immediate regardless of conviction" fixture); never gate it. Full
+state: `pipeline/MONITORING.md` "What each tick surfaces" item 1.
+
+### V6 — Verdict self-sufficiency, recovery-read forecast + capital companion (pipeline-only — NO APP_VERSION)
+The last chunk of the V1–V6 verdict-layer series (`PLAN-VERDICT.md` folded into `PLAN.md` + deleted) — two
+ADVISORY, OUTPUT-ONLY surfaces in `watch.mjs`, neither a verdict/alert input (`momVerdict`/`offerVerdict`/
+`convictionGate` untouched — the breakdown-cut invariant holds trivially). (1) The pure
+`pipeline/lib/recovery.mjs` COMPOSES momVerdict's existing signals (`diurnalRead` seasonal · `regimeLabel`/
+`phase` trend · `underwaterHours` persistence · position vs the V2 support) into a recover-vs-drop LEAN
+(`likely-recovers`/`likely-drops`/`uncertain` + drivers), surfaced as `recovery-read: …` ONLY on a non-clean
+position (underwater / thin-margin / unfilled ask / `BID-BEHIND` bid / lean-conflicts-verdict) and silent on a
+cleanly-good one. **Don't-rebuild / honesty:** it's a LEAN not a probability, and `phase==='spike'` CAPS it to
+`uncertain` (blind to a repricing) — never wire it into a verdict/alert. (2) The pure `pipeline/lib/capital.mjs`
+detects capital freed by a booked SELL between passes (a held lot's qty dropped, off V1's prior-pass state) and,
+≥ `FREED_CAPITAL_SCAN_GP` (5m placeholder), surfaces a `⋯ freed ~X — consider a scan to redeploy` prompt —
+surface-only, never auto-places/runs the scan; a fresh/stale-gap prior yields no misfire. Fixtures:
+`pipeline/recovery.test.mjs` + `pipeline/capital.test.mjs` (22 suites).
+
 ### YA1 (0.53.0) — in-app capital-utilization line (Watch tab; the yield program's #5)
 The one honest, self-contained app surface from the PLAN-YIELD program's #5 (app surfacing). The
 Watch tab summary gains a **Utilization** cell — working (held inventory, able to profit) vs parked

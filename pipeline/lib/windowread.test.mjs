@@ -15,7 +15,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats } from './windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant } from './windowread.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -90,6 +90,60 @@ ok('windowStats: returns null when the history has no traded window-hours', () =
   const daytimeOnly = [pt(ts(2026, 0, 11, 12), 100, 110), pt(ts(2026, 0, 11, 14), 100, 110)];
   const now = new Date(2026, 0, 20, 12, 0, 0);
   assert.equal(windowStats(daytimeOnly, { wStart: 22, wEnd: 6, now }), null);
+});
+
+// --- 4. recencySplit: the reach-contamination guard (two-sided) ------------------------------
+// days shape = windowStats().days: [[key,{low,hi}], …] oldest→newest. Model the two live anchors.
+const day = (key, low, hi) => [key, { low, hi }];
+
+ok('recencySplit ASK: a falling/crashed item reaches the ask on OLD days only → stale-optimistic', () => {
+  // blood-rune shape: pre-crash highs 313–315 reach a 313 ask; recent recovery tops 299–310 do NOT.
+  const days = [
+    day('d1', 306, 313), day('d2', 305, 314), day('d3', 306, 315), day('d4', 300, 315), // old: reach 313
+    day('d5', 272, 286), day('d6', 269, 281), day('d7', 272, 283),                        // crash: don't
+    day('d8', 286, 299), day('d9', 290, 301), day('d10', 300, 310),                        // recent 3: don't
+  ];
+  const s = recencySplit(days, 'ask', 313);
+  assert.equal(s.fullHit, 4, '313 reached on the 4 pre-crash days');
+  assert.equal(s.recentHit, 0, 'the recent 3 nights top out 299–310 — none reach 313');
+  assert.equal(s.diverges, true);
+  assert.equal(s.staleOptimistic, true, 'full count (4/10) is rosier than recent (0/3) — the trap');
+});
+
+ok('recencySplit BID: a rising/repriced item was touched on OLD days only → stale-optimistic', () => {
+  // floor repriced UP: a 100 bid was touched on old cheap days; recent nights bottom at 130+.
+  const days = [
+    day('d1', 95, 110), day('d2', 98, 112), day('d3', 90, 111), day('d4', 100, 115), // old: dip ≤100
+    day('d5', 120, 140), day('d6', 128, 145), day('d7', 132, 150),                    // recent 3: don't
+  ];
+  const s = recencySplit(days, 'bid', 100);
+  assert.equal(s.fullHit, 4, '100 touched on the 4 old cheap days');
+  assert.equal(s.recentHit, 0, 'recent 3 nights bottom at 120+ — never dip to 100');
+  assert.equal(s.staleOptimistic, true, 'the bid looks reachable only off a stale cheaper regime');
+});
+
+ok('recencySplit: a STABLE item does not flag (recent frac ≈ full frac)', () => {
+  const days = [
+    day('d1', 100, 200), day('d2', 102, 198), day('d3', 99, 201), day('d4', 101, 199),
+    day('d5', 100, 200), day('d6', 98, 202), day('d7', 101, 199),
+  ];
+  const s = recencySplit(days, 'ask', 199);           // reached every day, old and recent alike
+  assert.equal(s.diverges, false, 'a stable item is reached consistently → no divergence, no ⚠');
+  assert.equal(s.staleOptimistic, false);
+});
+
+ok('recencySplit: too little history is unscored (no false ⚠ on a thin series)', () => {
+  const days = [day('d1', 100, 200), day('d2', 100, 300), day('d3', 100, 400)]; // fullN < recentN+2
+  const s = recencySplit(days, 'ask', 400);
+  assert.equal(s.diverges, false, 'not enough days behind the recent window to make the call');
+});
+
+ok('recentQuant: returns the recent-N slice quantile, not the full window', () => {
+  const days = [
+    day('d1', 90, 300), day('d2', 92, 305), day('d3', 88, 310),  // old (ignored by recent-3)
+    day('d4', 130, 200), day('d5', 132, 205), day('d6', 128, 210), // recent 3
+  ];
+  assert.equal(recentQuant(days, 'bid', 0.5, 3), 130, 'recent-3 median low, not the old ~90');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
