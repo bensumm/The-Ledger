@@ -30,6 +30,102 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // half a day (2026-07-05) — suggestlog.test.mjs pins the resolved path to the repo root.
 export const LEDGER = path.join(HERE, '..', '..', 'suggestions.jsonl');
 
+// SR1 — rotation/compaction. The active LEDGER lives in the DEPLOY ROOT and grows unbounded
+// (~3k rows/day ≈ >1MB/day). To keep the root file bounded to the CURRENT calendar month while
+// never dropping a row (rows are F1's calibration data — ARCHIVE, never delete), completed months
+// are moved OUT of the root into monthly archive files `suggestions-YYYY-MM.jsonl` under a tracked
+// `pipeline/suggestions-archive/` dir (out of the deploy root, still committed by sync-fills). The
+// resolved ACTIVE path above stays pinned by suggestlog.test.mjs — only history relocates.
+export const ARCHIVE_DIR = path.join(HERE, '..', 'suggestions-archive');
+
+// UTC month key (YYYY-MM) for a unix-SECONDS ts. Archive naming is a STORAGE/wire concern, so it
+// uses UTC (consistent with the CLAUDE.md time-convention: ISO/UTC is storage, local getters are
+// display). The current-month boundary uses the same UTC basis so the two never disagree.
+function monthKey(tsSec) {
+  const d = new Date(tsSec * 1000);
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+}
+export function currentMonthKey(now = Date.now()) { return monthKey(Math.floor(now / 1000)); }
+
+// Cheap guard: read only the FIRST line (oldest row — the ledger is appended in ts order) and
+// return its month, without slurping a month-sized file on every append. Returns null if the file
+// is missing/empty/unparseable (→ caller skips rotation, appends normally).
+function firstLineMonth() {
+  let fd;
+  try {
+    fd = fs.openSync(LEDGER, 'r');
+    const buf = Buffer.alloc(8192);
+    const bytes = fs.readSync(fd, buf, 0, buf.length, 0);
+    const s = buf.toString('utf8', 0, bytes);
+    const nl = s.indexOf('\n');
+    const line = (nl >= 0 ? s.slice(0, nl) : s).trim();
+    if (!line) return null;
+    const ts = JSON.parse(line).ts;
+    return ts == null ? null : monthKey(ts);
+  } catch { return null; }
+  finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+}
+
+// Move every row OLDER than the current month out of the active LEDGER into its monthly archive.
+// SAFETY (no row loss): each archive is written FULLY (existing ∪ new, deduped by exact line, via
+// tmp+rename) BEFORE the active file is rewritten to drop the moved rows — so a crash mid-rotation
+// leaves the rows still in the active file and a re-run re-archives them idempotently (dedup means
+// no duplicates). Unparseable / ts-less lines are KEPT in the active file, never discarded. Handles
+// multiple accumulated prior months in one pass. Returns { rotated, months } for reporting.
+export function rotateLedger(now = Date.now(), { ledger = LEDGER, archiveDir = ARCHIVE_DIR } = {}) {
+  if (!fs.existsSync(ledger)) return { rotated: 0, months: [] };
+  const cur = currentMonthKey(now);
+  const lines = fs.readFileSync(ledger, 'utf8').split(/\r?\n/).filter(l => l.trim());
+  const keep = [];
+  const byMonth = new Map();
+  for (const line of lines) {
+    let ts = null;
+    try { ts = JSON.parse(line).ts; } catch { keep.push(line); continue; }  // keep unparseable in place
+    const mk = (ts == null) ? cur : monthKey(ts);
+    if (mk >= cur) keep.push(line);                                          // current (or defensive future) stays active
+    else (byMonth.get(mk) || byMonth.set(mk, []).get(mk)).push(line);
+  }
+  if (byMonth.size === 0) return { rotated: 0, months: [] };
+  fs.mkdirSync(archiveDir, { recursive: true });
+  let rotated = 0;
+  for (const [mk, mlines] of byMonth) {
+    const file = path.join(archiveDir, `suggestions-${mk}.jsonl`);
+    const existing = fs.existsSync(file)
+      ? fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(l => l.trim()) : [];
+    const seen = new Set(existing);
+    const merged = existing.slice();
+    for (const l of mlines) if (!seen.has(l)) { merged.push(l); seen.add(l); rotated++; }
+    const tmp = file + '.tmp';
+    fs.writeFileSync(tmp, merged.join('\n') + '\n');
+    fs.renameSync(tmp, file);                                               // archive committed before active shrinks
+  }
+  const tmpA = ledger + '.tmp';
+  fs.writeFileSync(tmpA, keep.length ? keep.join('\n') + '\n' : '');
+  fs.renameSync(tmpA, ledger);
+  return { rotated, months: [...byMonth.keys()] };
+}
+
+// Read EVERY suggestion line across the active ledger + all monthly archives, oldest-file first
+// (active last = newest). Rotation splits the O1 dataset across files, so any reader that needs the
+// FULL history (outcomes.mjs's F1 calibration join) MUST read through here, not the active file
+// alone — reading LEDGER directly would silently halve the calibration set after the first rotation.
+export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR } = {}) {
+  const files = [];
+  if (fs.existsSync(archiveDir)) {
+    for (const f of fs.readdirSync(archiveDir)) {
+      if (/^suggestions-\d{4}-\d{2}\.jsonl$/.test(f)) files.push(path.join(archiveDir, f));
+    }
+    files.sort();                                                          // YYYY-MM sorts chronologically
+  }
+  files.push(ledger);                                                      // active month last
+  const out = [];
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) if (line.trim()) out.push(line);
+  }
+  return out;
+}
+
 // Coarse liquidity class from the limiting-side daily volume — a stable, script-independent
 // vocabulary so quote.mjs / screen.mjs rows share one `class`. Thresholds mirror CLAUDE.md's
 // two-sided practical floor (~100/d) and a rough liquid cutoff. watch.mjs instead passes its
@@ -84,6 +180,14 @@ export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, 
 // read (the ledger is analytics, not the product) — it warns and moves on. One fs call per batch.
 export function logSuggestions(script, { mode = null, params = null } = {}, entries = []) {
   if (!entries || !entries.length) return;
+  // SR1: before appending, roll any completed month out to its archive so the active root file
+  // stays bounded to the current month. Cheap guard — only reads the whole file (rotateLedger) when
+  // the OLDEST row predates the current month; otherwise a single small first-line read. Best-effort:
+  // rotation must NEVER break a market read (the ledger is analytics, not the product).
+  try {
+    const fm = firstLineMonth();
+    if (fm && fm < currentMonthKey()) rotateLedger();
+  } catch (err) { console.error('(suggestlog: rotation skipped — ' + ((err && err.message) || err) + ')'); }
   const ts = Math.floor(Date.now() / 1000);
   const text = entries.map(e => JSON.stringify({ ts, script, mode, params, ...e })).join('\n') + '\n';
   try { fs.appendFileSync(LEDGER, text); }

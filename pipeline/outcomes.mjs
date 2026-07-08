@@ -42,13 +42,12 @@ import { loadHistState } from './lib/histstate.mjs';
 import { velocityClass } from './lib/velocity.mjs';
 import { parkedStats } from './lib/capitalutil.mjs';
 import { parseArgs, median } from './lib/cli.mjs';
-import { liqClassOf } from './lib/suggestlog.mjs';
+import { liqClassOf, readSuggestionLines } from './lib/suggestlog.mjs';
 import { fmtP, fmt, fmtTurn } from '../js/format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
 const FILLS = path.join(ROOT, 'fills.json');
-const SUGGESTIONS = path.join(ROOT, 'suggestions.jsonl');
 const OUT = path.join(ROOT, 'outcomes.json');
 
 // --- tunable named constants (NOT magic numbers) ---------------------------------------------
@@ -150,17 +149,17 @@ async function build() {
 
   const campaigns = groupCampaigns(offers);
 
-  // suggestions ledger, ascending per item, for the nearest-prior join
+  // suggestions ledger, ascending per item, for the nearest-prior join. SR1: read the ACTIVE
+  // ledger + every monthly archive (readSuggestionLines) — after rotation the active root file
+  // holds only the current month, so reading it alone would silently halve the F1 calibration set.
   const sugByItem = new Map();
-  if (fs.existsSync(SUGGESTIONS)) {
-    for (const line of fs.readFileSync(SUGGESTIONS, 'utf8').split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      let s; try { s = JSON.parse(line); } catch { continue; }
-      if (s.itemId == null || s.ts == null) continue;
-      (sugByItem.get(s.itemId) || sugByItem.set(s.itemId, []).get(s.itemId)).push(s);
-    }
-    for (const list of sugByItem.values()) list.sort((a, b) => a.ts - b.ts);
+  for (const line of readSuggestionLines()) {
+    if (!line.trim()) continue;
+    let s; try { s = JSON.parse(line); } catch { continue; }
+    if (s.itemId == null || s.ts == null) continue;
+    (sugByItem.get(s.itemId) || sugByItem.set(s.itemId, []).get(s.itemId)).push(s);
   }
+  for (const list of sugByItem.values()) list.sort((a, b) => a.ts - b.ts);
 
   // current 24h volume â†’ liquidity class per item (honest caveat: CURRENT day, not at-placement â€”
   // an at-placement daily figure isn't in the historical endpoints; the 2h limiting volume below IS

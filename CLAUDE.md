@@ -69,6 +69,20 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **`suggestions.jsonl` rotation/compaction** (SR1, pipeline-only — NO APP_VERSION) — the O1 ledger
+  grew unbounded in the DEPLOY ROOT (~3k rows/day). `pipeline/lib/suggestlog.mjs` now bounds the
+  active root file to the CURRENT calendar month: on every append `logSuggestions` calls
+  `rotateLedger()` (cheap first-line-month guard) which rolls each COMPLETED month out to
+  `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`. **Don't-rebuild / the load-bearing rules:**
+  (1) rows are F1's calibration data — ARCHIVE, never delete; rotation writes each archive fully
+  (dedup, tmp+rename) BEFORE truncating the active file, so it's crash-safe + idempotent + zero-row-loss;
+  (2) any FULL-HISTORY reader (`outcomes.mjs`'s F1 join) MUST read active + archives via the shared
+  `readSuggestionLines` — reading the active file alone silently halves the calibration set after the
+  first rotation; (3) the active-ledger path stays REPO-ROOT, pinned by `pipeline/lib/suggestlog.test.mjs`
+  (SL1) — only history relocates; don't re-relativize `LEDGER`. `sync-fills.mjs` commits the archive dir
+  alongside `suggestions.jsonl`. Note: as of landing, 100% of rows are the current month, so the first
+  rotation is a no-op — the first real archive fires at the next month boundary. Fixtures:
+  `pipeline/lib/suggestlog.test.mjs`. Full story: `FILLS-PIPELINE.md` §11.1.
 - **Thesis-gated hold alerts — silence expected-underwater** (TG1, 2026-07-07, pipeline-only — NO
   APP_VERSION) — a patient/accumulation hold is DEFINITIONALLY underwater on the instant-clear from
   the moment its bid fills, so the `UNDERWATER`/`CUT-CANDIDATE` headline cried wolf every pass (Ben:

@@ -454,6 +454,19 @@ includes it when present (same add-only-these-files discipline as `screen.json`)
 is still read-only w.r.t. the market/positions — this analytics append is the sole exception, and
 its header guardrail says so.
 
+**Rotation/compaction (SR1).** The active root file is bounded to the CURRENT calendar month.
+On every append `logSuggestions` first calls `rotateLedger()` (guarded by a cheap first-line-month
+check, so it only does real work once the oldest row predates the current month): each completed
+month is moved OUT of the deploy root into `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`.
+Rotation NEVER drops a row — it writes each archive fully (existing ∪ new, deduped, tmp+rename)
+*before* truncating the active file, so a crash mid-rotation leaves the rows in the active file and
+a re-run re-archives them idempotently. Unparseable / ts-less lines stay in the active file, never
+discarded. The rows are F1's calibration data: **archived, never deleted.** Any full-history reader
+MUST read active + archives via `readSuggestionLines` — `outcomes.mjs`'s F1 join does — since after
+the first rotation the active file holds only the current month. `sync-fills.mjs` commits the
+`pipeline/suggestions-archive/` dir alongside `suggestions.jsonl`. The active-ledger path stays
+pinned to the repo root by `pipeline/lib/suggestlog.test.mjs` (only history relocates).
+
 ### 11.2 Historical market-context retention (`/5m?timestamp=`)
 Outcome analysis reconstructs the **trailing-2h band at each historical trade placement** (same
 basis as `patientTargets` / `computeQuote`'s `bandLo`/`bandHi`), which requires reading *past* 5m
@@ -525,9 +538,11 @@ separate machine/deploy-key bypass identity was created.**
 - **`/morning` / `/overnight` / `/positions` reconstruction freshness.** These run on the PC
   and now **invoke `node pipeline/sync-fills.mjs` at session start** (skills updated in G1) —
   a forced sync gives them strictly fresher data than a ≤20-min-stale file ever did.
-- **`suggestions.jsonl` (O1) growth.** Append-only analytics that compounds with calendar
-  time; it does not need a *cadence*, only to be committed when a session runs a script that
-  appends to it (the same on-demand sync commits it — the commit set is unchanged).
+- **`suggestions.jsonl` (O1) growth.** Append-only analytics that accrues with calendar time,
+  but the ACTIVE root file is now bounded to the current month by SR1 rotation (§11.1) — completed
+  months roll into `pipeline/suggestions-archive/`, so the deploy-root file no longer grows
+  unbounded. It does not need a *cadence*, only to be committed when a session runs a script that
+  appends to it (the same on-demand sync commits both the active file and the archive dir).
 - **Remote readers of `fills.json`.** None besides the app's `positions.json` path; no
   external consumer depends on sub-hour freshness.
 
@@ -590,7 +605,8 @@ path (`putJsonFile` → `watchlist.json`, ids) when a token is set.
 
 ### 13.3 Multi-writer sync (see §12 + `sync-fills.mjs` `syncMainToRemote`)
 The PC sync and the phone are two writers to `origin/main` with **disjoint** file sets (the PC
-commits `fills.json` / `positions.json` / `offers.json` / `screen.json` / `suggestions.jsonl`; the
+commits `fills.json` / `positions.json` / `offers.json` / `screen.json` / `suggestions.jsonl` (+ its
+`pipeline/suggestions-archive/` when rotation has produced it); the
 phone appends only `mobile-fills.log`), so a phone
 push only moves `origin/main` ahead. The sync fast-forwards local main onto the moved remote BEFORE
 reading logs (so the phone's line is read this run) and lands a **fresh commit** on top — never

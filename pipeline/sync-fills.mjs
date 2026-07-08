@@ -352,10 +352,14 @@ function main() {
     // When present but unchanged they simply contribute nothing to the porcelain status below.
     const SCREEN_REL = 'screen.json';
     const SUGGEST_REL = 'suggestions.jsonl';
+    // SR1: suggestions.jsonl rotation moves completed months into pipeline/suggestions-archive/;
+    // commit that dir too (scoped path, never a blanket `git add -A`) so archived history is published.
+    const SUGGEST_ARCHIVE_REL = 'pipeline/suggestions-archive';
     const commitFiles = [FILLS_REL, POSITIONS_REL];
     if (existsSync(join(REPO_DIR, OFFERS_REL))) commitFiles.push(OFFERS_REL);
     if (existsSync(join(REPO_DIR, SCREEN_REL))) commitFiles.push(SCREEN_REL);
     if (existsSync(join(REPO_DIR, SUGGEST_REL))) commitFiles.push(SUGGEST_REL);
+    if (existsSync(join(REPO_DIR, SUGGEST_ARCHIVE_REL))) commitFiles.push(SUGGEST_ARCHIVE_REL);
     const fileArgs = commitFiles.join(' ');
     git(`add ${fileArgs}`);
     const status = git(`status --porcelain ${fileArgs}`);

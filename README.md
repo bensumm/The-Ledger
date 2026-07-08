@@ -131,7 +131,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   fixture-pinned in `pipeline/ignored.test.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
-  via `pipeline/lib/suggestlog.mjs`
+  via `pipeline/lib/suggestlog.mjs`. **Bounded to the CURRENT month (SR1):** on append,
+  `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
+  root file never grows past ~a month of rows. F1-gating accrual is preserved — history is
+  archived, never deleted.
+- `pipeline/suggestions-archive/` — tracked dir of completed-month archive files
+  `suggestions-YYYY-MM.jsonl` (SR1), moved OUT of the deploy root by `rotateLedger`
+  (`pipeline/lib/suggestlog.mjs`). Same schema/lines as the active ledger; the append-only O1
+  calibration history. Read together with the active file via `readSuggestionLines` — any full-
+  history reader (`outcomes.mjs`'s F1 join) MUST use that helper, not the active file alone.
+  Created lazily on the first rotation (empty until a month completes); committed by
+  `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen.mjs --publish`)
 - `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by
@@ -176,7 +186,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `loadHistDaily` (YF1) + the FC1 opt-in cross-invocation fetch
     cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
     within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
-    helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl` appender; YS2 `suggestionEntry` also lean-includes the
+    helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl` appender + SR1
+    rotation: `logSuggestions` rolls completed months into `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`
+    on append via `rotateLedger` — no-row-loss archive-then-truncate, idempotent — and `readSuggestionLines`
+    reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
     forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
     written only when a caller honestly supplies them, so legacy rows stay byte-identical), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`),
     `watchstate.mjs` (V1/V4/V7 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
@@ -342,8 +355,9 @@ constant governs each, so these can move without touching the deployed app or ph
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/alerts.mjs` (N1) | tracked (ships empty) |
-| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/…) | tracked, append-only |
-| `outcomes.json` | derived by `pipeline/outcomes.mjs` | gitignored |
+| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/…); SR1-bounded to the current month | tracked, append-only |
+| `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | tracked, append-only (lazy) |
+| `outcomes.json` | derived by `pipeline/outcomes.mjs` (F1 join reads active+archives) | gitignored |
 
 ### Shared logic modules
 
