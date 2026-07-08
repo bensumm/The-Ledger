@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { offerQuarantined } from './ignored.mjs';   // MERCH-book quarantine for resting farm/loot offers
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // pipeline/lib/
 export const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
@@ -64,8 +65,8 @@ export function nameLookupFromCache() {
  *  price = offer price each; qty = TOTAL offer size (max); filled = cumulative filled so far (qty
  *  field); lastUpdateTs = the offer line's epoch ms. EMPTY / terminal / cancelled slots are already
  *  excluded by activeOffers(). `nameFor(id)` is best-effort (falls back to '#<id>'). */
-export function offersSnapshot(rows, nameFor = () => undefined) {
-  const offers = activeOffers(rows).map(r => ({
+export function offersSnapshot(rows, nameFor = () => undefined, ignoredCfg = null) {
+  const offers = activeOffers(rows, ignoredCfg).map(r => ({   // same MERCH-book quarantine as watch's live view
     slot: r.slot,
     side: r.state === 'BUYING' ? 'buy' : 'sell',
     itemId: r.item,
@@ -80,12 +81,16 @@ export function offersSnapshot(rows, nameFor = () => undefined) {
 
 /** Latest line per slot = that slot's current state; BUYING/SELLING = an open offer.
  *  Returns [{ slot, state, item, qty, max, offer, ts }] (qty = filled so far). */
-export function activeOffers(rows) {
+export function activeOffers(rows, ignoredCfg = null) {
   const bySlot = new Map();
   for (const r of rows) bySlot.set(r.slot, r);
   const out = [];
   for (const [, r] of bySlot) {
     if (r.state === 'BUYING' || r.state === 'SELLING') {
+      // MERCH-book quarantine: a resting offer on an ignored item (farming/loot, ignored-items.json)
+      // is not a flip — drop it from the merch offer view unless its price matches a live greenlist
+      // entry. Keeps farm bids off watch's CANCEL-BID rows. Absent cfg → unchanged (monitor passes none).
+      if (ignoredCfg && offerQuarantined(ignoredCfg, r.item, r.offer)) continue;
       out.push({ ...r, ts: Date.parse(r.date + 'T' + r.time) }); // raw fields kept (date/time/worth) — monitor prints them
     }
   }

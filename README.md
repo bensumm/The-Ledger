@@ -108,6 +108,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the GitHub contents API (`js/github.js`)
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/alerts.mjs` (N1); ships empty
+- `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
+  book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
+  `items` are dropped from the DERIVED merch views (`positions.json` phantom lots + unmatched-harvest
+  sells, `offers.json`, and watch's live-offer rows) while their raw events STAY in `fills.json`
+  (full audit — this is a VIEW filter, never a deletion). A `greenlisted` array `[{id,qty,price,ts,
+  consumed}]` surfaces a *specific* transaction as a real flip (matched on id + price ±3% + ts ±6h) —
+  the agent appends one when Ben confirms a recommended flip of an ignored item (he only flips these
+  on a rec, so every legit flip passes that gate). Read + matched by `pipeline/lib/ignored.mjs`,
+  applied in `sync-fills.mjs` (positions/offers derivation) and `lib/offers.mjs activeOffers` (watch);
+  fixture-pinned in `pipeline/ignored.test.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
   via `pipeline/lib/suggestlog.mjs`

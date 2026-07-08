@@ -1,0 +1,8 @@
+{
+  "_doc": "Items quarantined from the MERCH book (positions.json / watch / screen) — farming inputs, loot, personal-use consumables. Their events STAY in fills.json (full audit); this only filters the derived merch views. A transaction on an ignored item is shown as a real flip ONLY if it matches a `greenlisted` entry (id + price within ±3% + ts within ±6h) — the agent appends one when Ben confirms a recommended flip of an ignored item. See pipeline/lib/ignored.mjs + FILLS-PIPELINE.md.",
+  "items": [
+    { "id": 5300, "name": "Snapdragon seed", "reason": "farming" },
+    { "id": 3000, "name": "Snapdragon", "reason": "farming" }
+  ],
+  "greenlisted": []
+}

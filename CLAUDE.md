@@ -69,6 +69,20 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 Deep per-version writeups (the "why", superseded approaches) live in `CHANGELOG.md`. Below
 is the one load-bearing "do not rebuild this" line per entry; open `CHANGELOG.md` for the
 full story.
+- **MERCH-book quarantine — `ignored-items.json` + greenlist** (2026-07-07, pipeline-only — NO
+  APP_VERSION) — items Ben transacts but doesn't flip (farming inputs snapdragon seed 5300 /
+  snapdragon 3000, loot, personal-use) are quarantined from the DERIVED merch views. **Don't-rebuild
+  / the load-bearing rule:** `pipeline/lib/ignored.mjs` `quarantineEvents` filters the `reconstruct()`
+  INPUT only — `fills.json` stays the FULL merged audit (never delete an ignored item's events; it's
+  a VIEW filter). Intent isn't in the log, so an ignored item is quarantined BY DEFAULT and a
+  specific transaction is surfaced as a real flip ONLY via a `greenlisted` entry matched on
+  id+price(±3%)+ts(±6h). **The greenlist is agent-written:** when you recommend a flip of an
+  ignored item and Ben confirms qty+price, APPEND `{id,qty,price,ts,consumed:false}` to
+  `ignored-items.json`'s `greenlisted` array (Ben only flips these on a rec, so that gate catches
+  every legit flip). Wired in `sync-fills.mjs` (positions/offers) + `lib/offers.mjs activeOffers`
+  (watch); real-log validated snapdragon 6→0 entries with realised P/L byte-identical. Fixtures:
+  `pipeline/ignored.test.mjs`. Full story: the `pipeline/lib/ignored.mjs` header + README's
+  `ignored-items.json` inventory entry.
 - **Yield-improvement program** (FC1/YF1/YS1/YS2/YV1/YT1/YP2/YP1/YA1, 2026-07-06 — `PLAN-YIELD.md`
   folded into `PLAN.md` + deleted; shas in the Status table's YIELD block) — the measurement spine +
   its read layers. **Don't-rebuild:** `outcomes.mjs` is the schema-v2 data spine (EXTENDED, never

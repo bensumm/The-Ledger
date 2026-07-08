@@ -52,6 +52,7 @@ import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH
   diurnalRead, phase, underwaterHours, isOvernightNow } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
+import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
@@ -436,7 +437,7 @@ async function main() {
     try {
       const { rows, staleMin } = readExchangeLog();
       offersInfo = { staleMin };
-      for (const o of activeOffers(rows)) {
+      for (const o of activeOffers(rows, loadIgnored(path.join(HERE, '..')))) {   // quarantine farm/loot offers (ignored-items.json)
         if (o.max * o.offer < NOISE_OFFER_GP) { noise.push(o); continue; }
         (o.state === 'BUYING' ? bids : asks).push(o);
       }

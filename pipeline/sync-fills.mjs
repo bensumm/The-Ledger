@@ -58,6 +58,7 @@ import { readOfferRows, offersSnapshot, nameLookupFromCache } from './lib/offers
 // event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
 import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from './lib/reconstruct.mjs';
+import { loadIgnored, quarantineEvents } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
@@ -237,9 +238,14 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   // events, not just a fresh timestamp.
   const eventsChanged = JSON.stringify(merged) !== JSON.stringify(prior);
 
-  // reconstruct trades/positions from the full merged history
+  // reconstruct trades/positions from the merged history — but QUARANTINE ignored items (farming
+  // inputs / loot / personal-use, repo-root ignored-items.json) from the MERCH derivation: their
+  // non-greenlisted events are dropped from the reconstruct() input so positions.json carries no
+  // phantom farm lots or unmatched-harvest sells. fills.json above stays the FULL merged audit —
+  // this is a view filter, never a deletion. A greenlisted flip (agent-confirmed) flows through.
   const positionsPath = join(repoDir, POSITIONS_REL);
-  const pos = reconstruct(merged);
+  const ignoredCfg = loadIgnored(repoDir);
+  const pos = reconstruct(quarantineEvents(merged, ignoredCfg));
   let priorPosSig = null;
   if (existsSync(positionsPath)) { try { priorPosSig = positionsSig(JSON.parse(readFileSync(positionsPath, 'utf8'))); } catch { /* rebuild */ } }
   const positionsChanged = positionsSig(pos) !== priorPosSig;
@@ -250,7 +256,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   const offersPath = join(repoDir, OFFERS_REL);
   let offerRows = [];
   try { offerRows = readOfferRows(logDir); } catch { /* dir gone → empty offers */ }
-  const offersSnap = offersSnapshot(offerRows, nameLookupFromCache());
+  const offersSnap = offersSnapshot(offerRows, nameLookupFromCache(), ignoredCfg);   // quarantine farm/loot offers from offers.json (app-fetched)
   let priorOffers = null;
   if (existsSync(offersPath)) { try { priorOffers = JSON.stringify(JSON.parse(readFileSync(offersPath, 'utf8')).offers); } catch { /* rewrite */ } }
   const offersChanged = JSON.stringify(offersSnap.offers) !== priorOffers; // ignore generatedAt (like positions)
