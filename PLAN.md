@@ -70,9 +70,10 @@ section hold the "why", and the full original spec is recoverable via `git show 
 
 ## Order of operations
 
-Waves 1–7 have all shipped (see Status). The scheduled-but-open work is **SR1**, **GA1**
-(Wave 7, ready-unassigned), **PM1** (probe-module system — the biggest open piece) and **TG1**
-(thesis-gated hold alerts) — specs below, both headed to Fable — plus the gated **F1**;
+Waves 1–7 have all shipped (see Status), and **PM1** (probe-module system) + **TG1**
+(thesis-gated hold alerts) shipped 2026-07-08 (Fable lanes; shas in Status — specs pruned per
+the fold-out discipline, recoverable via `git show a46e69a:PLAN.md`). The only scheduled-but-open
+work is **SR1** and **GA1** (small, ready-unassigned, specs below) plus the gated **F1**;
 everything else lives in the Discovered / Needs-a-Ben-decision lists.
 
 | Wave | What (all ✅ — detail via `git show <sha>:PLAN.md`) |
@@ -92,8 +93,8 @@ everything else lives in the Discovered / Needs-a-Ben-decision lists.
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
-| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | new `pipeline/modules/`, `pipeline/lib/modules.mjs`, `screen.mjs`/`quote.mjs` render tap, migrate `⬇DIP` out of `screen.mjs`, fixtures | ⏳ READY-UNASSIGNED (spec in Open chunk specs; → Fable) |
-| TG1 | Thesis-gated hold alerts (silence expected-underwater; alert on tripwire, not break-even) | agent-written thesis store, `pipeline/lib/watchstate.mjs` `convictionGate` branch, `watch.mjs`, `watchstate.test.mjs` | ⏳ READY-UNASSIGNED (spec in Open chunk specs; → Fable) |
+| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | new `pipeline/modules/*` + `pipeline/lib/modules.mjs`, `screen.mjs`/`quote.mjs` render taps, `modules.test.mjs` | ✅ `6aba80b` (pipeline-only, no APP_VERSION; stage-keyed loader, `Probes` column appended ONLY when a probe fires — no-modules output byte-identical, diff-proven. `⬇DIP` prototype migrated out of screen.mjs; decant reads dose siblings off `ctx.v24all` zero-fetch, `needs()`/`collectNeeds()` define the multi-item pre-fetch contract for future surfaces. Follow-ons in Discovered: watch surface w/ owned dip→avg-down inversion, app Probes column (APP_VERSION), `<name>.log` hit/miss scoring) |
+| TG1 | Thesis-gated hold alerts (silence expected-underwater; alert on tripwire, not break-even) | new tracked `hold-thesis.json` + `pipeline/lib/holdthesis.mjs`, `convictionGate` thesis branch, `watch.mjs`, tests | ✅ `b2634a1` (pipeline-only, no APP_VERSION; `momVerdict` UNTOUCHED — headline-only gate. Dedicated agent-written store (greenlist pattern, 14-day TTL), NOT an extension of YT1's display-only sessionthesis. Invariants pinned: Gate-2 breakdown CUT checked BEFORE the thesis branch (never silenced), LIST-TO-CLEAR excluded, no-thesis byte-identical; also gates the plain instabuy<BE UNDERWATER headline via the thesis-armed fall-through guard. Live-verified on the crushed-nest lot) |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | ✅ `c7b53e7` (0.34.0) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | ✅ `70633f6` (0.35.0) |
 | O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate documented: n≥30 per side×pctl×class×regime cell, ≥5 cells — currently 1, stays GATED) |
@@ -179,152 +180,6 @@ Quiet the recurring `LF will be replaced by CRLF` warnings on Windows commits wi
 `text=auto` re-normalization can rewrite line endings across many tracked files in one
 commit — scope it (or stage the renormalize commit separately) so a real change never hides
 inside an EOL churn diff. Promoted from Discovered.
-
-### PM1 — Probe-module system (theory-testing plug-ins) [M] (ready, unassigned)
-
-**Why.** Formalize the ad-hoc `⬇DIP` flag (still UNCOMMITTED in `pipeline/screen.mjs` — this
-chunk finally commits it) into a pluggable **probe-module** system: a lightweight way to trial a
-per-item theory, see it in the output, and DELETE it cleanly if the theory is wrong. It is the
-lightweight cousin of a niche — a *niche* is a permanent, validated candidate MODE (band/spread/
-rising, heavy, in `screen.mjs`); a *probe* is an experimental per-row ANNOTATION (light, pluggable,
-trial-and-keep-or-drop). Ben's framing (2026-07-07); he'll hand this spec to Fable to implement.
-
-**Tap point — the shared quote row.** Every surface (`screen`/`quote`/`watch`) builds a per-item
-row off `js/quotecore.js` with the same core fields (`guide, quickBuy/Sell, optLow/High, band,
-volDay, mom, regimeLabel, phase, reliable, thin, avgLow24/High24`) plus the raw 6h/24h series in
-context. A probe reads that row; because all three surfaces build the same row, one module works
-everywhere.
-
-**A probe hooks a named pipeline STAGE — not just "annotates a row" (Ben, 2026-07-07).** The probes
-fall into different KINDS by WHERE they intercept the pipeline, and the interface is general precisely
-because it is stage-keyed. The pipeline is a sequence of stages —
-`fetch → gate → observe (derive the row) → rate → price (form the recommendation) → render` — and a
-probe registers at ONE stage with that stage's input/output contract:
-
-| Hook (`stage`) | Input | Output | Seed probes | The question it answers |
-| --- | --- | --- | --- | --- |
-| **`observe`** | the derived row + ctx | a **tag** (`{tag,note?}`) | dip, froth, decant | *"what do I see in this item?"* |
-| **`price`** | row + `{side, proposed}` + ctx | an **adjusted price** (`{price,reason}`) | anchor | *"refine the price I'd place"* |
-| **`gate`** *(future)* | a candidate | admit / skip | e.g. phase-rescue | *"surface what the gate would drop"* |
-
-**Module shape** — one file `pipeline/modules/<name>.mjs` exporting
-`{ name, version, theory, stage, surfaces, probe(...) }`, where `probe`'s signature matches the
-declared `stage`:
-```js
-{ name:'dip',    stage:'observe', surfaces:['screen','quote'], probe(row, ctx)             → tag|null }
-{ name:'anchor', stage:'price',   surfaces:['screen','quote'], probe(row,{side,proposed},ctx)→ {price,reason}|null }
-```
-Pure. The loader groups probes BY STAGE; each stage's runner calls its probes with that stage's
-context and collects the right output type (tags to render, or a price adjustment to surface).
-
-**Loader** `pipeline/lib/modules.mjs` — auto-discovers `pipeline/modules/*.mjs` (same glob trick as
-`run-tests.mjs`); `runProbes(row, surface, ctx)` returns the fired annotations. **Presence = enabled**
-(delete the file to disable; optional `enabled:false` soft-off). 
-
-**Render integration** — each surface adds ONE line appending fired tags to a dedicated **`Probes`
-column** (recommended over stuffing the Regime cell: reads as obviously-experimental and keeps the
-canonical table clean). **Byte-identical when no module is present** (`runProbes` → `[]` → nothing
-appends) — that empty-passthrough IS the removability guarantee.
-
-**Invariants (non-negotiable) — split by stage:**
-- **NEVER the decision core.** No probe of any stage feeds a **verdict / gate / rating / reconstruction**
-  (same discipline as the YIELD surfaces + the phase tag). That core stays byte-identical whether any
-  module loads or not — that's what makes deletion safe.
-- **`observe` probes are pure additive annotations** — they touch NO number; output is byte-identical
-  minus the tag. Delete → gone without a trace.
-- **`price` probes modify only the *advisory recommendation*** (the human-facing suggested ask/bid) —
-  by design (that's the whole point of anchor), never a gate/verdict input. Delete → the recommended
-  price reverts to the un-nudged band value. So "output-only" splits cleanly: signal probes touch
-  nothing, pricing probes touch only the suggested price, neither can move a decision.
-- Each module states its **theory + version** in the header; optional `pipeline/modules/<name>.log`
-  firing log so a probe can be **scored hit/miss later** — the validate-before-promote loop (a proven
-  probe graduates into a real gate/niche; a wrong one gets deleted). Optional `<name>.test.mjs` rides
-  the existing runner.
-
-**Surface-semantics nuance — design the interface for it.** The SAME signal can MEAN different things
-per surface: `⬇DIP` = "buy candidate" on screen/quote (items you don't own) but INVERTS to "position
-falling / average-down window" on watch (items you hold). So `probe` receives `ctx.surface` +
-`ctx.owned` and may return per-surface framing. **Ship screen+quote first** (identical buy meaning);
-make **watch a deliberate follow-on** where dip is reframed as "average-down", not copy-pasted as a
-buy tag.
-
-**The four seed probes (dip is the reference migration; the rest are follow-on files):**
-- **dip** — `quickBuy < avgLow24`, gated flat/rising + not-spike/decay + reliable + non-thin →
-  `⬇DIP -N%`. A market-STATE tag. **First deliverable: migrate the uncommitted `screen.mjs`
-  prototype into `pipeline/modules/dip.mjs`** (proves the system + cleans the hack).
-- **froth** — a spike CLASSIFIER, not a predictor (per the `/scan` froth doctrine): on a `spike`/
-  `rising` row, read the recent-low trend (needs the trajectory/series in ctx) → `healthy-reprice`
-  (rising-then-holding lows) vs `knife` (falling lows). A trajectory-STATE tag.
-- **anchor** — price-microstructure (per the `/scan` anchor-pricing doctrine): given band edges +
-  guide + nearby round numbers, detect when the natural actionable price (band top for an ask / band
-  low for a bid) lands in the dead zone just-wrong-side of an anchor → emit the **nudged price**
-  (`⚓ ask 10,699 (under 10,700)`). A PRICE-NUDGE annotation, not a state tag — it proves the interface
-  carries both output shapes.
-- **decant** — potion-dose arbitrage: for a flippable 4-dose potion, compare the per-4-dose-equivalent
-  cost of its 1/2/3-dose variants (buy N cheap low-dose, decant via the NPC to 4-dose) against buying
-  the 4-dose directly → flag when a lower-dose variant is discounted enough to beat the 4-dose after
-  tax. **This is a MULTI-ITEM probe** — it needs the sibling dose-variant prices, not just the one row.
-  So PM1 must define how a probe declares **extra data needs** (a `needs:[siblingIds]` the loader
-  pre-fetches, or running off already-cached sibling rows) — decant is the probe that stress-tests the
-  "tap into what we fetch" boundary and forces that decision. (Dose-variant item ids: the potion's
-  1/2/3/4-dose forms are distinct GE items — the module maps them.)
-
-**Scope/size.** [M] core = loader + `Probes` column + **dip migrated** + a fixture. froth/anchor/decant
-are each a small follow-on file. Pipeline-first (screen/quote); watch surface + the app `Probes` column
-are deliberate later steps (the CLI side is pipeline-only, no APP_VERSION; an app Probes column bumps
-APP_VERSION). **Resolves** the uncommitted `⬇DIP` prototype in `screen.mjs`. Honesty (rule 4): a probe
-is a THEORY under test — its firings are data to score, never a validated edge until the hit/miss log
-says so.
-
-### TG1 — Thesis-gated hold alerts (silence expected-underwater) [S/M] (ready, unassigned)
-
-**Why.** The watch `UNDERWATER`/`CUT-CANDIDATE` headline measures the live instabuy against
-**break-even**, but a patient/accumulation hold is *definitionally* underwater on the instant-clear
-from the moment its bid fills — so the alert cries wolf every pass on a position where being
-underwater IS the plan (Ben, 2026-07-07: "I'm tired of being told I'm underwater when that's the plan
-from the start"). The real risk on such a lot isn't break-even, it's the **tripwire** (the structural
-break level, e.g. nest 4,678). This generalizes the "fresh entries draw false CUTs" lesson (V3) from
-a just-filled lot to a *declared* multi-day/patient hold.
-
-**Layer — the ALERT gate, NOT the verdict core (this is the key architectural call).** `momVerdict`
-stays truthful (you ARE underwater vs the instant-clear) and **byte-identical** — the fix lives in the
-escalation layer that already exists:
-- **`momVerdict()` (`js/quotecore.js`)** — emits the verdict. **UNTOUCHED** (shared app+pipeline pure
-  core; making the verdict lie would corrupt what the app reads too). The verdict is honest, not the problem.
-- **`convictionGate()` (`pipeline/lib/watchstate.mjs`, V4/V7)** — *already* owns headline-vs-quiet-note
-  escalation. This chunk adds a **thesis branch** here.
-- **`watch.mjs`** — reads the thesis, passes it into `convictionGate` (exactly as it already passes
-  `lotCtx` into `momVerdict`).
-
-**Three pieces:**
-1. **A declared per-lot thesis, AGENT-WRITTEN (the greenlist pattern):** `{id, exitPrice, tripwire,
-   horizon, ts}` in a small store (its own `thesis.json`/`.thesis-state.json`, or extend YT1's
-   `pipeline/lib/sessionthesis.mjs`). When Ben states a hold plan ("accumulate nest, exit 4,848,
-   tripwire 4,678, multi-day"), the agent writes the entry; watch reads it **read-only**. Never a
-   verdict input beyond the alert gate.
-2. **`watch.mjs` passes the thesis into `convictionGate`** alongside the existing watch-state.
-3. **`convictionGate` thesis branch:** a held `UNDERWATER`/`CUT-CANDIDATE` with a declared thesis AND
-   `live > tripwire` → **ARMED note, NO headline** (expected-underwater is not news); `live < tripwire`
-   (with the existing V4/V7 conviction — meaningfully through, or persisted ≥ `ALERT_PERSIST_MS`) →
-   **headline fires** (the real risk). Absent a thesis, behavior is byte-identical to today.
-
-**Invariants (pin with fixtures in `watchstate.test.mjs`):**
-- `momVerdict` byte-identical — the verdict still SAYS underwater (honest); only the *headline* is gated.
-- **Gate-2 breakdown `CUT` stays EXEMPT — always headlines immediately, thesis or not** (the invariant
-  held since V4/V7; a real breakdown is NEVER silenced by a declared thesis).
-- No thesis / empty store → today's behavior exactly (opt-in, safe-degrade).
-- Read-only: the thesis is a *declaration*, never mutates fills/positions; watch stays READ-ONLY.
-
-**Output.** The book still shows the verdict (`UNDERWATER` stays visible — honest) but it no longer
-HEADLINES while above the tripwire; the note names the level it's gating against
-("per thesis: silent above 4,678, headline on a break"). 
-
-**Scope/size.** [S/M]: thesis store + reader + the `convictionGate` branch + fixtures (the tripwire-gate
-case, the breakdown-cut-still-exempt case, the no-thesis-byte-identical case). Pipeline-only
-(watch/convictionGate), **no APP_VERSION**; the app's Watch tab could adopt the same declared thesis
-later (separate, APP_VERSION). Honesty (rule 4): a thesis is Ben's DECLARED plan, not a market claim —
-it silences a known-expected signal, never manufactures a new one. Sibling to PM1 (probes surface NEW
-signals; TG1 silences a KNOWN-expected one) and to V3/V4/V7 (context into the verdict/alert layers).
 
 ### F1 — Algorithm feedback loop (GATED on O1's n thresholds)
 
@@ -417,6 +272,16 @@ currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/da
 ## Discovered
 
 **Open:**
+- **PM1 follow-ons (deliberate, not scope-cut — PM1 `6aba80b`, 2026-07-08):** (1) the **watch
+  surface** for probes — dip inverts to "average-down window" on an owned lot (the framing is
+  already coded in `modules/dip.mjs` behind `ctx.owned`; wiring watch.mjs to run probes is the
+  chunk); (2) an **app `Probes` column** (APP_VERSION bump — separate step, published-cells
+  contract change); (3) the `pipeline/modules/<name>.log` **hit/miss firing logs** — the
+  convention is defined + gitignored but unwired; needed before any probe can graduate
+  (validate-before-promote). decant also models no decant fee/low-dose fill liquidity —
+  documented in-file, a firing is a prompt to check, not an edge.
+- **TG1 follow-on (deliberate):** the app Watch tab could adopt the declared `hold-thesis.json`
+  silence (it currently shows the ungated verdict) — separate chunk, APP_VERSION bump.
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
 - `quote.mjs` and `screen.mjs` can log a different liquidity `class` for the same item in
