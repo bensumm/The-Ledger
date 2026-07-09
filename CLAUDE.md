@@ -161,8 +161,11 @@ Script facts the skills rely on (current behavior, not doctrine):
   reads the root `offers.json` book (so `HOLD — ask filling` actually prints — quote lacked an
   offer read before), reads the watch loop's `.cache/watch-state.json` READ-ONLY for a conviction
   line, renders the verdict via the ONE shared `renderHeldVerdict`, and runs one `loadSnapshot()`
-  per pass for the passive Tier-1 archive append. Interpretation of those verdicts lives in
-  `/positions`.
+  per pass for the passive Tier-1 archive append. **P4b** adds a `Paths` block per held lot — the
+  persistence-gated dominant thesis-path + weighed menu (shared `renderPathLine`, placeholder
+  weights; a confirmed migration prints `path MIGRATED a → b`) — decision support, never an alert;
+  read-only off the shared watch-state (only watch.mjs persists it). Interpretation of those
+  verdicts lives in `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge. Four
   niches exist — `band` / `spread` / `rising` / `churn` — but per Ben's **NY2** ruling (2026-07-05)
@@ -204,9 +207,14 @@ Script facts the skills rely on (current behavior, not doctrine):
   **P0**: the held verdict prose is now the SHARED `renderHeldVerdict` (verbose) from
   `pipeline/lib/context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
   the old inline `heldAction`, diff-verified) — and each pass runs one `loadSnapshot()` for the passive
-  Tier-1 archive append (per-item live fetch semantics unchanged).
+  Tier-1 archive append (per-item live fetch semantics unchanged). **P4b**: each held note block gains
+  a persistence-gated dominant-path line (`path <key> 0.62 · menu: …`; a confirmed migration prints
+  `path MIGRATED a → b`) — the path engine's weighed read through the `pathPersistence`
+  arm-then-confirm + hysteresis gate (`PATH_PERSIST_MS`/`PATH_HYSTERESIS_MARGIN`, placeholders), so
+  flapping weights never whiplash the headline path; decision support only, no path-driven alert
+  class. watch.mjs is the ONE writer of the path fields on watch-state.
   `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
-  for askFilling + conviction; the booked FIFO lots are still the basis).
+  for askFilling + conviction + the same read-only path line; the booked FIFO lots are still the basis).
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]` (bucketing/quantile
   math in `js/windowread.mjs` — moved out of `pipeline/lib/` by P2 so it's node- AND app-importable,
   shared with `watch.mjs`'s window line + `js/validate.mjs`'s `reachValidator`) scores the last ~14 local

@@ -41,7 +41,8 @@
  */
 import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../js/quotecore.js';
 import { fmtP } from '../../js/format.js';
-import { computeDeltas, advanceState, convictionGate } from './watchstate.mjs';
+import { computeDeltas, advanceState, convictionGate, pathPersistence } from './watchstate.mjs';
+import { enumeratePaths, weighPaths } from '../../js/paths.mjs';
 
 // ---------------------------------------------------------------------------
 // STAGE ENRICHERS — each (ctx, input) → ctx, mutating exactly one namespace and returning ctx so
@@ -146,15 +147,89 @@ export function positionStage(ctx, {
   return ctx;
 }
 
+/* --- paths stage (V2-P4b) — the path-engine slice of the chain ------------------------------------
+   Derives the js/paths.mjs scoring context from the already-built namespaces (market row + history
+   phase + position lot), enumerates + weighs the candidate paths, and runs the P4b PERSISTENCE GATE
+   (pathPersistence, lib/watchstate.mjs — arm-then-confirm + hysteresis) against the prior watch-state
+   entry so a flapping weight can never whiplash the headline path. PURE — no fetch, no fs; the caller
+   supplies the prior state entry + clock, exactly like positionStage's conviction inputs.
+
+   enteredUnder source (P4b contract): the tracked hold-thesis entry's `enteredUnder` (declared via
+   `thesis.mjs set --path`), read off ctx.position.thesis; null when undeclared — NEVER fabricated.
+   The declared `path` field additionally SEEDS the incumbent when the watch-state entry carries no
+   persisted currentPath yet (a declared plan shouldn't be displaced without arm-then-confirm just
+   because the state file is fresh).
+
+   Persistence fields ride the position stage's `newStateEntry` ADDITIVELY (`currentPath` /
+   `pathArmedKey` / `pathArmedSince` / `enteredUnder`) so the ONE writer (watch.mjs) persists them
+   with the entry it already saves; quote.mjs builds the same ctx but never persists (P0 read-only
+   contract). `fresh` (first-seen / reset, from position deltas) drops the prior so a re-bought lot
+   re-establishes its path from scratch, mirroring the conviction counters. */
+export function pathsStage(ctx, { watchStatePrior = null, nowMs = Date.now(), fresh = null } = {}) {
+  const row = ctx.market ? ctx.market.row : null;
+  const ph = ctx.history ? ctx.history.phase : null;
+  const p = ctx.position || {};
+  // fresh (first-seen / reset ⇒ drop the prior) defaults off the position stage's own deltas,
+  // so buildItemContext callers don't have to pre-compute what the chain already knows.
+  const isFresh = fresh != null ? !!fresh : !!(p.deltas && (p.deltas.firstSeen || p.deltas.reset));
+  const thesis = p.thesis || null;
+  const enteredUnder = thesis && thesis.enteredUnder != null ? thesis.enteredUnder : null;
+  const declaredPath = thesis && thesis.path != null ? thesis.path : null;
+  const ts = ctx.history ? ctx.history.termStructure : null;
+  const floor = (ts && ts.hasData && ts.floor != null) ? ts.floor : null;
+  const live = row ? (row.quickSell ?? row.mid ?? null) : null;
+  // the DERIVED scoring context js/paths.mjs speaks (all fields optional; absence degrades there)
+  const derived = {
+    held: !!p.held,
+    regime: row ? (row.falling ? 'falling' : row.rising ? 'rising' : (row.regime && row.regime.ok ? 'flat' : null)) : null,
+    phase: ph ? (ph.phase ?? null) : null,
+    mom: row ? (row.mom ?? null) : null,
+    underwater: (p.be != null && row && row.quickSell != null) ? row.quickSell < p.be : undefined,
+    aboveFloor: (floor != null && live != null) ? live >= floor : undefined,
+    breakEven: p.be ?? null,
+    quickBuy: row ? row.quickBuy : null, quickSell: row ? row.quickSell : null,
+    optBuy: row ? row.optBuy : null, optSell: row ? row.optSell : null,
+    floor,
+    reliable: row ? row.reliable : undefined,
+    bandWidthPct: (row && row.optBuy > 0 && row.optSell != null) ? (row.optSell - row.optBuy) / row.optBuy : null,
+    enteredUnder,
+  };
+  const weighedRes = weighPaths(enumeratePaths(derived), derived);   // {dominant, weighed, enteredUnder, migration(RAW)}
+  // Persistence: seed the incumbent from the DECLARED path when no persisted currentPath exists yet.
+  const prior0 = isFresh ? null : watchStatePrior;
+  const prior = (prior0 && prior0.currentPath != null) ? prior0
+    : (declaredPath != null ? { ...(prior0 || {}), currentPath: declaredPath } : prior0);
+  const incumbentKey = prior && prior.currentPath != null ? prior.currentPath : null;
+  const incumbent = incumbentKey != null ? weighedRes.weighed.find(w => w.key === incumbentKey) : null;
+  const persisted = pathPersistence(prior, {
+    dominantKey: weighedRes.dominant ? weighedRes.dominant.key : null,
+    dominantViability: weighedRes.dominant ? weighedRes.dominant.viability : null,
+    incumbentViability: incumbent ? incumbent.viability : null,
+    enteredUnder, now: nowMs,
+  });
+  ctx.paths = { ...weighedRes, persisted, declaredPath };
+  // fold the persistence fields into the next-pass state entry (ADDITIVE; only watch.mjs saves it)
+  if (ctx.position && ctx.position.newStateEntry) {
+    ctx.position.newStateEntry.currentPath = persisted.currentPath ?? null;
+    ctx.position.newStateEntry.pathArmedKey = persisted.armedKey ?? null;
+    ctx.position.newStateEntry.pathArmedSince = persisted.armedSince ?? null;
+    ctx.position.newStateEntry.enteredUnder = enteredUnder ?? null;
+  }
+  return ctx;
+}
+
 /* buildItemContext — compose the whole chain from per-stage inputs. Any stage's input may be omitted
-   (that namespace still initialises, degrading downstream). Returns the ctx object. */
-export function buildItemContext({ identity = {}, market = {}, history = {}, intraday = {}, position = null } = {}) {
+   (that namespace still initialises, degrading downstream). Returns the ctx object. `paths` (P4b)
+   runs the path stage after position; pass `{ watchStatePrior, nowMs, fresh }` (or `true` for
+   defaults) to weigh + persistence-gate the lot's thesis-paths. */
+export function buildItemContext({ identity = {}, market = {}, history = {}, intraday = {}, position = null, paths = null } = {}) {
   const ctx = {};
   identityStage(ctx, identity);
   marketStage(ctx, market);
   historyStage(ctx, history);
   intradayStage(ctx, intraday);
   if (position) positionStage(ctx, position);
+  if (paths) pathsStage(ctx, paths === true ? {} : paths);
   return ctx;
 }
 
@@ -247,4 +322,34 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
   return mode === 'verbose'
     ? heldActionVerbose(row, p.be, p.lotValue, ts5m, mv)
     : heldVerdictCompact(row, p.be, mv);
+}
+
+/* renderPathLine(ctx) — the ONE shared dominant-path line (V2-P4b), rendered ALONGSIDE the verdict
+   by both surfaces (watch.mjs's held note block; quote.mjs --positions' per-item info lines). It is
+   the renderer-family sibling of renderHeldVerdict — the verdict string itself is deliberately
+   UNTOUCHED (momVerdict byte-identity, P4a-pinned); the path read is decision SUPPORT beside it,
+   never an alert input. Shape:
+     path <current> 0.62 · entered under <key> · menu: <alt> 0.45 · <alt> 0.40 (support, not a verdict)
+   A CONFIRMED migration (persisted currentPath ≠ enteredUnder — survived the arm-then-confirm gate)
+   headlines the line as `path MIGRATED <enteredUnder> → <current>`; a challenger still inside the
+   persistMs window shows as `<key> challenging (arming ~Nm/Pm)`. Returns null when no path read
+   exists (not held / paths stage not run) so callers can drop the line cleanly.
+   HONESTY: the printed viabilities are the P4a PLACEHOLDER heuristics — shape, not calibration. */
+export function renderPathLine(ctx) {
+  const pa = ctx && ctx.paths;
+  if (!pa || !pa.dominant) return null;
+  const P = pa.persisted || {};
+  const cur = P.currentPath != null ? P.currentPath : pa.dominant.key;
+  const viaOf = k => { const w = pa.weighed.find(x => x.key === k); return (w && w.viability != null) ? w.viability.toFixed(2) : '?'; };
+  const min = ms => Math.max(0, Math.round((ms || 0) / 60000));
+  const entered = P.enteredUnder != null ? P.enteredUnder : pa.enteredUnder;
+  const head = P.migration
+    ? `path MIGRATED ${entered} → ${cur} ${viaOf(cur)}${P.confirmedThisPass ? ' (confirmed this pass)' : ''}`
+    : `path ${cur} ${viaOf(cur)}${entered != null ? ` · entered under ${entered}` : ''}`;
+  const arming = P.arming && P.armedKey != null
+    ? ` · ${P.armedKey} ${viaOf(P.armedKey)} challenging (arming ~${min(P.armedMs)}m/${min(P.persistMs)}m)`
+    : '';
+  const alts = pa.weighed.filter(w => w.key !== cur && w.key !== (P.arming ? P.armedKey : null))
+    .slice(0, 3).map(w => `${w.key} ${viaOf(w.key)}`).join(' · ');
+  return `${head}${arming}${alts ? ` · menu: ${alts}` : ''} (support, not a verdict — placeholder weights)`;
 }

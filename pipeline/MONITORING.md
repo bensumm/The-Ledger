@@ -300,13 +300,30 @@ sub-line. Field order, always the same:
 4a. **recovery-read** (V6, ADVISORY) — `recovery-read: likely recovers|drops|uncertain — <drivers>
    (a lean, not a probability)`. Surfaced ONLY on a non-clean position (see item 6); omitted on a
    cleanly-good lot. It is decision SUPPORT, distinct from the verdict — never a verdict/alert input.
+4b. **dominant path** (V2-P4b, decision SUPPORT) — `path <current> 0.62 · entered under <key> ·
+   menu: <alt> 0.45 · <alt> 0.40 (support, not a verdict — placeholder weights)`. The
+   persistence-gated path read: the shared `pathsStage` (`lib/context.mjs`) weighs the lot's
+   thesis-paths (`js/paths.mjs`) each pass, and `pathPersistence` (`lib/watchstate.mjs`) applies the
+   SAME arm-then-confirm discipline as the alert gate to path DOMINANCE — a flip must beat the
+   incumbent by `PATH_HYSTERESIS_MARGIN` AND hold dominant for `PATH_PERSIST_MS` (both named
+   PLACEHOLDERS, unvalidated) before the persisted `currentPath` changes; a flip-back while a
+   challenger is arming DISARMS it, so flapping weights never whiplash the headline path. A
+   challenger inside the window shows as `<key> challenging (arming ~Nm/Pm)`; a CONFIRMED migration
+   (current ≠ the hold-thesis `enteredUnder`) headlines the line as
+   `path MIGRATED <enteredUnder> → <current>`. It is NEVER an alert input (no path-driven alert
+   class exists; path-aware CANCEL-BID semantics are P5) and the verdict string is untouched. The
+   same line prints on `quote.mjs --positions` (a `Paths` block) off the SAME shared state —
+   read-only there; only the watch loop persists the `currentPath`/`pathArmedKey`/`pathArmedSince`/
+   `enteredUnder` fields on the `held:<id>` state entry (additive; legacy entries unaffected). The
+   declared hold-thesis `path` (from `thesis.mjs set --path`) seeds the incumbent when the state
+   file carries no persisted path yet, so a declared plan is never displaced without arm-then-confirm.
 5. **sell/list-at (+ break-even) + fill-progress** — `sell: list @ X · break-even Y · <ask n/m
    or NOT LISTED>`. This field is **ALWAYS emitted on a held lot, unconditionally** — the standing
    user rule (Ben, 2026-07-06): *always state the sell price for every held item, because a fill
    you didn't see may have happened; it saves a re-ask.* The list-at is `breakEven()`-floored (never
    below break-even) and is the shared momVerdict's `listAt` when it has one, else the same band-top-
    floored-at-BE fallback the action prose uses (`heldListAt`), so the guaranteed field never drifts
-   from the verdict. It is guaranteed even if the optional context fields (2–4) fail to compute.
+   from the verdict. It is guaranteed even if the optional context fields (2–4b) fail to compute.
 
 Resting-bid and target rows keep their own single note line (buy-side; no held sell price). Content
 of the numbered signals, in more detail:

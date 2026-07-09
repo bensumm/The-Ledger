@@ -10,6 +10,63 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P4b — Path persistence + migration + held wiring (2026-07-08, pipeline-only — NO APP_VERSION)
+P4a's `weighPaths` re-weighs a held lot's thesis-paths every pass, so its `dominant`/`migration` are
+INSTANTANEOUS — two near-tied paths can trade the top spot tick-to-tick, and surfacing that as a fresh
+"migrated" headline each pass is exactly the whiplash the alert layer already learned to gate (V4/V7).
+P4b applies the SAME arm-then-confirm discipline to path dominance and wires the path read into both
+held surfaces.
+- **New `pathPersistence()` (`pipeline/lib/watchstate.mjs`)** — the pure cross-pass dominance gate,
+  colocated with `convictionGate` because it is the same kind of stateful watch-state memory (it takes
+  already-derived path KEYS and never imports js/paths.mjs, so watchstate stays paths-agnostic). A
+  dominance flip must (a) beat the incumbent's viability by `PATH_HYSTERESIS_MARGIN` to even ARM and
+  (b) hold dominant for `PATH_PERSIST_MS` of wall-clock time to CONFIRM into the persisted
+  `currentPath`; a flip back while arming DISARMS; a different challenger restarts the clock; no prior
+  `currentPath` (first sighting / reset episode) adopts the dominant immediately. **HONESTY (rule 4):
+  `PATH_PERSIST_MS` (8 min — deliberately 2× `ALERT_PERSIST_MS`: a path change is a bigger structural
+  claim than an alert) and `PATH_HYSTERESIS_MARGIN` (0.05 viability) are NAMED PLACEHOLDERS** — they
+  encode the shape of the whiplash guard, not calibrated magnitudes; P6's walk-forward per-item×path
+  evidence (and F1's realized-outcome joins) is what would validate them.
+- **`pathsStage()` + `renderPathLine()` (`pipeline/lib/context.mjs`)** — the chain's `paths` slice
+  (PLAN.md: … position → validate → **paths** → render) and the renderer-family home. `pathsStage`
+  derives the js/paths.mjs scoring ctx from the built namespaces (market row → regime/mom, history →
+  phase + term-structure floor when present, position → underwater/BE/thesis), weighs the paths, runs
+  the persistence gate off the shared `held:<id>` watch-state entry, and folds
+  `currentPath`/`pathArmedKey`/`pathArmedSince`/`enteredUnder` ADDITIVELY into the position stage's
+  `newStateEntry`. `enteredUnder` comes ONLY from the tracked hold-thesis entry (`thesis.mjs set
+  --path`) — null when undeclared, never fabricated; the declared `path` seeds the INCUMBENT when the
+  state file has no persisted path yet, so a declared plan can't be displaced without arm-then-confirm.
+  `renderPathLine(ctx)` is the ONE shared dominant-path line: `path <cur> 0.62 · entered under <k> ·
+  menu: …`; an arming challenger shows `<key> challenging (arming ~Nm/Pm)`; a CONFIRMED migration
+  headlines as `path MIGRATED <enteredUnder> → <current>`. **Deviation from the spec's "P0's renderer
+  becomes the dominant-path renderer", reported honestly:** `renderHeldVerdict`'s output strings are
+  deliberately UNTOUCHED (the P0 byte-identity + P4a momVerdict pins stand); the path renderer ships
+  as a SIBLING export in the same renderer module both surfaces consume — one home, no fork, verdicts
+  stable.
+- **Wiring** — `watch.mjs`: the held conviction loop runs `pathsStage` per lot (fresh on first-seen/
+  reset, guarded like all state math) and the V5 note block gains field **4b (dominant path)** between
+  recovery-read and the guaranteed sell line (emit contract order otherwise unchanged; sell line still
+  ALWAYS last — `emit.test.mjs` extended). watch.mjs stays the ONE writer of the state file.
+  `quote.mjs --positions`: builds the same stage read-only (P0 contract — it renders armed/current
+  path state but never persists) and prints a `Paths (persistence-gated dominant per held lot)` block
+  under the Conviction block. NO path-driven alert class exists (migration prominence is prose in the
+  note/verdict area only; path-aware CANCEL-BID is P5). momVerdict/verdict strings byte-identical;
+  fetch semantics unchanged on both surfaces.
+- **Back-compat + fixtures** — watch-state schema change is additive: legacy `.cache/watch-state.json`
+  entries (no path fields) load unchanged (`computeDeltas`/`advanceState` pinned byte-identical with/
+  without the new fields) and establish their path on first pass. New `pipeline/pathpersist.test.mjs`
+  (13 checks) pins the PLAN.md acceptance: flapping dominance never flips the persisted
+  `currentPath`/headline inside `persistMs` (simulated tick sequences, both pure-gate and end-to-end
+  through `pathsStage`+`renderPathLine`), a real migration arms → confirms → `MIGRATED` prose, the
+  entered-under-`hold-recovery` decay-knife migrates toward the exit family (be-escape/cut) through
+  the gate, hysteresis (a near-tie never arms), and the legacy back-compat. All 41 suites green;
+  live smoke of both surfaces verified (path line renders identically on watch + quote off the same
+  state; the P4a byte-identity and Gate-2-CUT-exempt fixtures untouched).
+- **What would validate the placeholders:** enough migration events with realized outcomes to compare
+  confirm-window/hysteresis settings against whipsaw-vs-lag cost — the P6 walk-forward replay over the
+  Tier-1 archive + the suggestions×fills retro-join. Until then, treat the printed viabilities and the
+  8-min/0.05 gate as shape, not signal.
+
 ### V2-P4a — Path engine core, pure (2026-07-08, pipeline-only — NO APP_VERSION)
 The v2 verdict model stops being "item → one label" and becomes "item × THESIS → an action under that
 thesis". A held lot can be, at once, a value-hold above its multi-week floor, a be-escape if you just

@@ -49,7 +49,7 @@ export function heldListAt(row, be, mv) {
  */
 export function heldNoteBlock({
   name, verdict, window: win, reliableReason,
-  conviction, delta, tripwire, recovery,
+  conviction, delta, tripwire, recovery, path,
   listAt, breakEven, fillProgress,
 }) {
   const lines = [];
@@ -65,6 +65,9 @@ export function heldNoteBlock({
   if (tripwire) lines.push(`    ${tripwire}`);
   // 4a. RECOVERY-READ (V6) — the ADVISORY recover-vs-drop lean, when the trigger surfaces it.
   if (recovery) lines.push(`    ${recovery}`);
+  // 4b. DOMINANT PATH (V2-P4b) — the persistence-gated path read (renderPathLine, lib/context.mjs).
+  //     Decision SUPPORT alongside the verdict — never an alert input; omitted when no path read.
+  if (path) lines.push(`    ${path}`);
   // 5. SELL/LIST-AT (+ break-even) + fill-progress — GUARANTEED (the standing user rule above).
   const sellBits = [`sell: list @ ${fmtP(listAt)}`, `break-even ${fmtP(breakEven)}`];
   if (fillProgress) sellBits.push(fillProgress);

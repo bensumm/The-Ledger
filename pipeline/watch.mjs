@@ -52,7 +52,7 @@ import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
   diurnalRead, phase, underwaterHours, isOvernightNow } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
-import { renderHeldVerdict } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface)
+import { renderHeldVerdict, pathsStage, renderPathLine } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line
 import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -478,7 +478,7 @@ async function main() {
   const newState = {};
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
-    it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null;
+    it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null;
     try {
       const key = 'held:' + it.id;
       const support = structuralSupport(dayLowsFrom(it.ts1h));
@@ -498,6 +498,16 @@ async function main() {
         // TG1: the declared-hold-thesis silence (expected-underwater not news above the tripwire).
         thesis: it._thesis, underwater: d.underwater,
       });
+      // V2-P4b: weigh the lot's thesis-paths + persistence-gate dominance flips (arm-then-confirm +
+      // hysteresis, pathPersistence via pathsStage) against the prior state entry. pathsStage folds
+      // currentPath/pathArmedKey/pathArmedSince/enteredUnder ADDITIVELY into newState[key] — this
+      // loop stays the ONE writer of the state file. Decision SUPPORT only: it renders a note line
+      // (renderPathLine) and raises NO alert (path-aware CANCEL-BID semantics are P5, not here).
+      it._pathCtx = pathsStage({
+        market: { row: it.row },
+        history: { phase: it.ts6h ? phase(it.ts6h) : null, termStructure: null },
+        position: { held: true, be: it.be, deltas: d, thesis: it._thesis, newStateEntry: newState[key] },
+      }, { watchStatePrior: priorState[key], nowMs, fresh: d.firstSeen || d.reset });
     } catch { /* gating/state are observability-adjacent — degrade to no-escalation, never break a pass */ }
   }
 
@@ -648,10 +658,15 @@ async function main() {
         conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support ~${persistMin}m.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
     const heldLa = heldListAt(row, be, mvHeld);
+    // V2-P4b: the persistence-gated dominant-path line (shared renderPathLine) — decision support
+    // rendered ALONGSIDE the verdict in the note block; a CONFIRMED migration surfaces prominently
+    // here as `path MIGRATED <enteredUnder> → <current>` (never a new alert class).
+    let pathLine = null;
+    try { pathLine = it._pathCtx ? renderPathLine(it._pathCtx) : null; } catch { /* support-only */ }
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
       reliableReason: row.reliable ? null : row.reliableReason,
-      conviction, delta, tripwire, recovery,
+      conviction, delta, tripwire, recovery, path: pathLine,
       listAt: heldLa, breakEven: be,
       fillProgress: listed || null,
     }));

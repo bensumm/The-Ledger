@@ -56,6 +56,23 @@ ok('the sell line survives even when every optional field is present, and stays 
   assert.equal(sellLine(lines), lines[lines.length - 1]);  // ALWAYS last
 });
 
+ok('P4b: an optional path line slots between recovery and the sell line; omitted when null', () => {
+  const base = {
+    name: 'Decay knife', verdict: 'CUT-CANDIDATE @ 39.5k — underwater.',
+    window: null, reliableReason: null,
+    conviction: null, delta: null, tripwire: null, recovery: 'recovery-read: likely drops — decay',
+    listAt: 42_000, breakEven: 42_000, fillProgress: null,
+  };
+  const withPath = heldNoteBlock({ ...base, path: 'path MIGRATED hold-recovery → cut 0.89 (support, not a verdict)' });
+  assert.equal(withPath.length, 4);                       // header, recovery, path, sell
+  assert.ok(withPath[1].includes('recovery-read'));
+  assert.ok(withPath[2].includes('path MIGRATED'), 'the path line rides after recovery');
+  assert.equal(sellLine(withPath), withPath[withPath.length - 1], 'the sell line is STILL last');
+  // no path → byte-identical to the pre-P4b block
+  const noPath = heldNoteBlock(base);
+  assert.deepEqual(noPath, [withPath[0], withPath[1], withPath[3]]);
+});
+
 ok('window + reliability flag ride the header line; a null fillProgress drops from the sell line', () => {
   const lines = heldNoteBlock({
     name: 'Dragon bones', verdict: 'HOLD — list @ 2.5k.',

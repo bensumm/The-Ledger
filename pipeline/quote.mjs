@@ -30,7 +30,7 @@ import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs'
 import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
-import { buildItemContext, renderHeldVerdict } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer
+import { buildItemContext, renderHeldVerdict, renderPathLine } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line
 import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
@@ -140,7 +140,7 @@ async function runPositions() {
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
-  const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [];
+  const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [], pathLines = [];
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const inp = await getInputs(itemId);
@@ -158,6 +158,10 @@ async function runPositions() {
         // conviction still covers underwater/breakdown/thesis persistence off the shared state.
         watchStatePrior: priorState['held:' + itemId] || null, nowMs, thesisEntry: thesisFor(holdThesisStore, itemId),
       },
+      // P4b: the path stage — weigh the lot's thesis-paths + run the persistence gate off the SAME
+      // shared watch-state entry watch.mjs persists. READ-ONLY here (P0 contract): quote renders the
+      // armed/current path state but never saves it — only the watch loop writes the state file.
+      paths: { watchStatePrior: priorState['held:' + itemId] || null, nowMs },
     });
     const row = ctx.market.row;
     const be = ctx.position.be;
@@ -185,6 +189,10 @@ async function runPositions() {
       convLines.push(`  ${name}: expected-underwater — silenced above declared tripwire ${fmtP(ctx.position.thesis?.tripwire)} (per hold thesis).`);
     else if (g && g.escalate && g.reason === 'cut-candidate')
       convLines.push(`  ${name}: CUT-CANDIDATE confirmed — underwater sustained ~${heldMin(d && d.underwaterMs)}m (≥ ${persistMin}m) through a liquid window.`);
+    // P4b: the shared dominant-path line (same renderPathLine watch.mjs's note block uses) — the
+    // persistence-gated path read off the SAME state, so the two surfaces agree on the current path.
+    const pl = renderPathLine(ctx);
+    if (pl) pathLines.push(`  ${name}: ${pl}`);
     // S2 morning-staleness watch (informational only — the Verdict column above is UNCHANGED). A resting
     // SELL is at risk of being stale/underwater by morning if it can't clear at profit now (instabuy <
     // break-even) or the market is weakening (falling regime / live 2h breakdown).
@@ -201,6 +209,11 @@ async function runPositions() {
     console.log('');
     console.log('Conviction (shared watch-state):');
     console.log(convLines.join('\n'));
+  }
+  if (pathLines.length) {
+    console.log('');
+    console.log('Paths (persistence-gated dominant per held lot — decision support, placeholder weights):');
+    console.log(pathLines.join('\n'));
   }
   if (isOvernightNow() && staleRisk.length) {
     console.log('');

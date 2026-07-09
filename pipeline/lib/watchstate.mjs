@@ -273,6 +273,86 @@ export function convictionGate({ verdict, gate,
   return { escalate: false, armed: false, reason: null };
 }
 
+// --- V2-P4b PATH DOMINANCE PERSISTENCE (arm-then-confirm + hysteresis) -----------------------
+// The path engine (js/paths.mjs) re-weighs an item's candidate theses EVERY pass; its `dominant`
+// is the INSTANTANEOUS top-ranked path and its `migration` flag is RAW (dominant ≠ enteredUnder,
+// no memory). On a choppy read two near-tied paths can trade the top spot pass-to-pass — surfacing
+// that as a fresh "migrated to X" headline every tick is exactly the whiplash the alert layer
+// already learned to gate. So dominance gets the SAME arm-then-confirm discipline convictionGate
+// gives alerts: a challenger path must (a) beat the confirmed path by a HYSTERESIS margin AND
+// (b) hold the top spot for PATH_PERSIST_MS of WALL-CLOCK time before it becomes the persisted
+// `currentPath` (the one the headline renders). A flip back to the confirmed path while a
+// challenger is arming DISARMS it — so pure flapping never confirms. This lives HERE (not in the
+// dependency-free js/paths.mjs) because it is stateful cross-pass memory keyed on the watch-state
+// entry, exactly like convictionGate; it takes already-derived path KEYS (never imports paths.mjs),
+// so watchstate.mjs stays paths-agnostic and this stays a pure function.
+//
+// ⚠ PLACEHOLDERS (honesty rule 4): PATH_PERSIST_MS and PATH_HYSTERESIS_MARGIN encode the SHAPE of
+// the whiplash guard (a path change is a bigger structural claim than an alert, so it confirms
+// SLOWER and stickier — PATH_PERSIST_MS > ALERT_PERSIST_MS), NOT a calibrated magnitude. P6's
+// evidence-based viability (walk-forward per item×path) is what would validate these; until then
+// they are unvalidated and cited nowhere as calibrated.
+export const PATH_PERSIST_MS = 8 * 60 * 1000;   // a dominance FLIP must hold this long to confirm (2× ALERT_PERSIST_MS)
+export const PATH_HYSTERESIS_MARGIN = 0.05;     // a challenger must beat the incumbent's viability by ≥ this to even ARM
+
+// Migration = a CONFIRMED current path that differs from the path the lot was entered under.
+const migrated = (cur, enteredUnder) => !!(cur != null && enteredUnder != null && cur !== enteredUnder);
+
+/* PURE. The path-dominance arm-then-confirm gate. Given the PRIOR watch-state entry (for its
+   persisted currentPath / pathArmedKey / pathArmedSince) and THIS pass's instantaneous dominant
+   path key (+ its viability and the incumbent path's re-scored viability, for the hysteresis
+   margin), decide the persisted currentPath after this pass, whether a challenger is arming, and
+   whether a migration CONFIRMED this tick. now = ms. Never mutates; every input optional.
+
+   Returns { currentPath, armedKey, armedSince, confirmedThisPass, arming, armedMs, migration,
+             enteredUnder, persistMs }.
+
+   Contract:
+     - No prior currentPath (first pass / a fresh episode with prior nulled by the caller): adopt
+       the current dominant IMMEDIATELY as currentPath (nothing established to whiplash).
+     - Dominant == currentPath: re-affirmed → DISARM any pending challenger (the flap guard).
+     - Dominant != currentPath (a FLIP):
+         · Hysteresis: the challenger must beat the incumbent's viability by ≥ hysteresisMargin
+           (a near-tie is noise) — else keep currentPath and disarm. When viabilities are absent
+           the margin can't be applied, so it degrades to the time gate alone.
+         · Time: an armed challenger of the SAME key confirms once it has been armed ≥ persistMs;
+           before that it stays armed (currentPath unchanged). A different/first challenger arms
+           afresh (armedSince = now). */
+export function pathPersistence(prior, {
+  dominantKey = null, dominantViability = null, incumbentViability = null,
+  enteredUnder = null, now = null, persistMs = PATH_PERSIST_MS, hysteresisMargin = PATH_HYSTERESIS_MARGIN,
+} = {}) {
+  const priorCurrent = (prior && prior.currentPath != null) ? prior.currentPath : null;
+  const base = { armedKey: null, armedSince: null, confirmedThisPass: false, arming: false, armedMs: 0,
+    enteredUnder, persistMs };
+  const done = (currentPath, extra = {}) => ({
+    ...base, currentPath, migration: migrated(currentPath, enteredUnder), ...extra });
+
+  // Initial establishment — nothing to whiplash against; adopt the current dominant now.
+  if (priorCurrent == null) return done(dominantKey ?? null);
+  // Re-affirmed — the dominant is still the confirmed path → disarm any pending challenger.
+  if (dominantKey == null || dominantKey === priorCurrent) return done(priorCurrent);
+
+  // A FLIP. Hysteresis: require a decisive margin over the incumbent (a near-tie is flap noise).
+  const haveVia = dominantViability != null && incumbentViability != null;
+  const decisive = haveVia ? (dominantViability - incumbentViability) >= hysteresisMargin : true;
+  if (!decisive) return done(priorCurrent);   // marginal flip → hold the confirmed path, disarm
+
+  // Decisive flip → arm-then-confirm on TIME (cadence-independent, mirrors convictionGate).
+  const armedKey = (prior && prior.pathArmedKey != null) ? prior.pathArmedKey : null;
+  const armedSince = (prior && prior.pathArmedSince != null) ? prior.pathArmedSince : null;
+  if (armedKey === dominantKey && armedSince != null) {
+    const armedMs = elapsed(armedSince, now);
+    if (now != null && armedMs >= persistMs)
+      return done(dominantKey, { confirmedThisPass: true, armedMs });   // CONFIRM the migration
+    return { ...base, currentPath: priorCurrent, migration: migrated(priorCurrent, enteredUnder),
+      armedKey: dominantKey, armedSince, arming: true, armedMs };        // still arming
+  }
+  // Arm afresh (new/different challenger, or not previously armed).
+  return { ...base, currentPath: priorCurrent, migration: migrated(priorCurrent, enteredUnder),
+    armedKey: dominantKey, armedSince: now, arming: true, armedMs: 0 };
+}
+
 // --- THIN IO (the only fs surface; never in the tested path) -------------------------------
 // loadState degrades to {} on ANY failure (missing file, corrupt JSON) — a bad state file must
 // never break a pass. saveState writes the whole keyed map compactly, creating .cache/ if needed.
