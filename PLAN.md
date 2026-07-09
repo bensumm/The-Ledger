@@ -178,7 +178,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | `pipeline/lib/retrojoin.mjs`, `pipeline/retrojoin.mjs` | ✅ `6c3f1b5` |
 | V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/strategies.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
 | V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | ✅ `6432a05` (two-sided gate + thesis edge NEVER relaxed; sub-floor rows stdout-only, never screen.json; ledger rows carry a lean `subFloor` marker) |
-| V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/skill-lint.mjs`, `docs/LORE.md` | OPEN |
+| V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/skill-lint.mjs`, `docs/LORE.md` | ✅ `105326a` (RETIRE dispositions in `docs/SKILL-TRIAGE.md` are PROPOSALS pending Ben sign-off; skill-lint in CI — rule-blocks need a code pointer or `judgment:` tag) |
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
 
 ---
@@ -280,17 +280,11 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
 
 ### Chunks (each carries its own reconciling docs pass + README inventory in the same commit)
 
-**D0, P0–P5, P6a, P6b, P6c — SHIPPED.** Specs pruned per the fold-out discipline; shas in Status,
+**D0, P0–P6c, P7 — SHIPPED.** Specs pruned per the fold-out discipline; shas in Status,
 full spec text via `git show 4753e44:PLAN.md` (the last revision before this compaction), and
-each chunk's landing commit message is the authoritative "what shipped" record.
+each chunk's landing commit message is the authoritative "what shipped" record. P7 leftover:
+the 3 RETIRE dispositions in `docs/SKILL-TRIAGE.md` await Ben sign-off before any deletion.
 
-- **P7 — Docs/skills triage + skill-lint + CLAUDE.md diet.** Three-way triage
-  (encode/keep-as-judgment/retire) of EVERY prose rule in the four market skills + the memory
-  index, disposition table in the PR; new `pipeline/skill-lint.mjs` in CI (rule-blocks need a
-  code pointer or `judgment:` tag; warn on untagged-prose growth); CLAUDE.md slims to routing +
-  process rules + pointers, lore → `docs/LORE.md`; `MONITORING.md` emit contract → headline+
-  alternatives; README reconciliation sweep; grep-and-fix everything the falling amendment
-  supersedes.
 - **P8 — Desk orchestrator (after P0–P5 harden).** `pipeline/desk.mjs`: cold start → sync-fills
   → snapshot → positions review → weighed action menu → drives the watch loop (the `/loop`
   target). One process owns cadence + appends (serialized writers by construction) but
