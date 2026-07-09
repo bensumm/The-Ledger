@@ -178,7 +178,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | `pipeline/lib/retrojoin.mjs`, `pipeline/retrojoin.mjs` | ✅ `6c3f1b5` |
 | V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/strategies.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
 | V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | ✅ `6432a05` (two-sided gate + thesis edge NEVER relaxed; sub-floor rows stdout-only, never screen.json; ledger rows carry a lean `subFloor` marker) |
-| V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/skill-lint.mjs`, `docs/LORE.md` | ✅ `105326a` (RETIRE dispositions in `docs/SKILL-TRIAGE.md` are PROPOSALS pending Ben sign-off; skill-lint in CI — rule-blocks need a code pointer or `judgment:` tag) |
+| V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/skill-lint.mjs`, `docs/LORE.md` | ✅ `105326a` (skill-lint in CI — rule-blocks need a code pointer or `judgment:` tag). Lone RETIRE disposition executed `f8de508` (Ben 2026-07-09): `/overnight` v1.11 weekend-shift prose → one-line full-day check (v1.15) |
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
 
 ---
@@ -282,8 +282,9 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
 
 **D0, P0–P6c, P7 — SHIPPED.** Specs pruned per the fold-out discipline; shas in Status,
 full spec text via `git show 4753e44:PLAN.md` (the last revision before this compaction), and
-each chunk's landing commit message is the authoritative "what shipped" record. P7 leftover:
-the 3 RETIRE dispositions in `docs/SKILL-TRIAGE.md` await Ben sign-off before any deletion.
+each chunk's landing commit message is the authoritative "what shipped" record. P7's lone RETIRE
+disposition (`docs/SKILL-TRIAGE.md` had exactly 1, not 3) is now executed (`f8de508`, Ben
+2026-07-09) — no P7 leftovers.
 
 - **P8 — Desk orchestrator (after P0–P5 harden).** `pipeline/desk.mjs`: cold start → sync-fills
   → snapshot → positions review → weighed action menu → drives the watch loop (the `/loop`
@@ -333,6 +334,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   into `fills.json`. Full rationale: `git show 39e5d23:PLAN.md` (chunk 5 section).
 
 ### Needs a Ben decision (not scheduled — list only, don't action unprompted)
+- **`pnl.mjs` — go/no-go (proposed 2026-07-09, script-helper audit; NOT approved).** A standing
+  P&L query helper over `positions.json` (realized after-tax closed P/L + open-inventory mark, by
+  item / period / watchlist) so a "how am I doing?" ask stops spawning ad-hoc `node -e` reads — the
+  same fewer-scripts-on-the-fly rationale that landed `limits.mjs` (LM1). Would share
+  `js/ledgercore.js`'s period bucketing so numbers match the app Ledger. Build only on Ben's word.
 - **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
 - **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
   REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the
