@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.25
+version: 1.26
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -60,6 +60,11 @@ This is the tribal layer the script can't do — apply ALL of these:
   SCRIPT — `screen.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
+- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** If a niche prints `SUB-FLOOR
+  FALLBACK` (zero candidates cleared the floors → the script re-ran beneath them and shows the best
+  ≤5, grades `C (sub-floor)`-capped), relay it AS sub-floor: name the floor that emptied the niche,
+  never present a sub-floor row as a normal recommendation, and default to "nothing qualified today"
+  unless Ben explicitly wants to fish below the bar. The bar itself was not lowered.
 - **24h-drift is a pre-filter only.** A current-vs-24h-avg read of "flat/slightly soft"
   repeatedly masks multi-day fallers. The screen's displayed Regime column is the real
   multi-day `regimeDrift` check — trust it, and never recommend off a 24h impression alone.

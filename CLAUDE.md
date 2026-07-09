@@ -205,7 +205,11 @@ Script facts the skills rely on (current behavior, not doctrine):
   default entry path `*` + the weighed js/paths.mjs menu) — decision SUPPORT, display-only, NOT in
   `screen.json`; and the spec's `defaultPath` is logged to `suggestions.jsonl` as a lean `path` field so a
   later fill can infer the entry thesis. The default-path map (band/spread/churn→`scalp`, rising→
-  `value-hold`) is a Ben-vetoable judgment proposal, not a gate.
+  `value-hold`) is a Ben-vetoable judgment proposal, not a gate. **P6c**: a niche whose gate is EMPTY at
+  the configured floors re-runs beneath the floor (`subFloorFallback` — a min-gpd→liquidity relaxation
+  ladder; the two-sided gate + the thesis edge are NEVER relaxed) and prints the best ≤5 rows labeled
+  `sub-floor — shown because nothing cleared <floor>`, grades capped `C (sub-floor)` — stdout-only,
+  never in `screen.json`, ledger rows carry a lean `subFloor` marker; a non-empty niche is untouched.
 - **P2/P3 validators (`js/validate.mjs`, run on EVERY surface):** a registry of PURE
   `(ctx)→{status:pass|caution|reject,reason,evidence}` validators. Screens DROP `reject` rows (counted
   in `--stats` + a `rejected: N (top reasons)` footer) and FLAG `caution`; explicit asks / held /

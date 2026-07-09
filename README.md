@@ -232,7 +232,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `pathsStage` per lot off the SAME watch-state entry — READ-ONLY, never persisted here — and
     prints a `Paths (persistence-gated dominant per held lot)` block via the shared `renderPathLine`), `screen.mjs`
     (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 appends a
-    stdout-only `Probes` column per niche when a probe fires — never in the published `screen.json`),
+    stdout-only `Probes` column per niche when a probe fires — never in the published `screen.json`;
+    P6c: a niche whose gate is EMPTY at the configured floors re-runs beneath the floor
+    (`subFloorFallback` in `lib/gatecandidates.mjs` — a min-gpd → liquidity relaxation ladder; the
+    two-sided gate and the thesis edge are never relaxed) and prints the best ≤`SUBFLOOR_TOP` rows
+    honestly labeled `sub-floor — shown because nothing cleared <floor>`, grades capped at
+    `SUBFLOOR_GRADE_CAP`; stdout-only — never published to `screen.json`, ledger rows carry a lean
+    `subFloor` marker),
     `watch.mjs` (adaptive live position/offer monitor; also appends
     change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
     the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
@@ -497,7 +503,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `context.test.mjs` (P0 — the context chain's per-stage enrichers (identity/market/history/intraday/
     position), THE PIN (`HOLD — ask filling` renders the same verdict on compact + verbose off one
     `ctx.position.mv`), and the CONVICTION PIN (an armed-not-escalated Gate-D CUT-CANDIDATE is
-    consistent on both surfaces, then escalates once the underwater streak persists ≥ `ALERT_PERSIST_MS`))
+    consistent on both surfaces, then escalates once the underwater streak persists ≥ `ALERT_PERSIST_MS`)),
+    `subfloor.test.mjs` (P6c — the empty-result sub-floor fallback: `subFloorFallback`'s relaxation
+    ladder identifies WHICH floor emptied the niche (min-gpd vs liquidity), never relaxes the two-sided
+    gate or the thesis edge (null when those emptied it), the honest `subFloorLabel` wording, the
+    `SUBFLOOR_TOP` slice bound + `SUBFLOOR_GRADE_CAP` clamp, the value-niche scope-out, and the lean
+    `subFloor` suggestions-ledger marker's absent-field byte-identity)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +

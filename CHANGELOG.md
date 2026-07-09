@@ -29,6 +29,36 @@ with a lopsided vol24 is byte-identical). No APP_VERSION: the app renders via qu
 untouched (the P5 data-only-quotecore-field precedent). Once the D0 archive holds weeks of 5m
 snapshots, a rolling imbalance-vs-forward-move calibration is the natural follow-on.
 
+### V2-P6c — empty-result sub-floor fallback (2026-07-09, pipeline-only — NO APP_VERSION)
+Ben's 2026-07-09 ruling: when a niche's floors leave ZERO candidates, the screen must not print an
+empty table and stop — it re-runs the gate BENEATH the floor and shows the best sub-floor rows
+HONESTLY LABELED, never silently lowering the bar. New `subFloorFallback(mode, ctx, thresholds)` in
+`pipeline/lib/gatecandidates.mjs`: fires ONLY when `gateCandidates` came back empty at the configured
+floors (a niche with ≥1 candidate is untouched — verified byte-identical stdout on a live cached-data
+before/after diff, and the P1 replay goldens are unchanged), then walks a two-step relaxation ladder
+through the SAME `gateCandidates` (no forked gate logic) to identify WHICH floor emptied it:
+(1) `min-gpd` — relax only the 500k attention floor; (2) `liquidity` — also relax the gp-flow floor,
+admitting sub-unit-floor two-sided items via the existing `thin` path. The two-sided liquidity gate
+and the per-niche THESIS EDGE (min-roi / churn volume / scalp margin) are NEVER relaxed — a market
+they emptied returns null and the normal `_none_` output stands unchanged.
+
+**Honesty contract.** The table banner replaces the niche header: `SUB-FLOOR FALLBACK — 0 candidates
+cleared the configured floors` + the label `sub-floor — shown because nothing cleared <floor + its
+configured value>; relaxed (<which>) for this table only`. Every row ALSO carries it: grades are
+capped at `SUBFLOOR_GRADE_CAP` ('C' — a sub-floor row can never print a grade a qualified row could)
+and render as `C (sub-floor)`. Cap = best `SUBFLOOR_TOP` (5) by the existing `rankAndSlice` ordering.
+Both constants are NAMED PLACEHOLDERS.
+
+**Scope discipline.** Stdout-only: a sub-floor niche publishes `[]` to `screen.json` — byte-identical
+to what a pre-P6c empty niche published (no APP_VERSION bump). Suggestions-ledger rows ARE logged
+(a surfaced row Ben acts on must stay joinable for F1 calibration) but carry a lean
+`subFloor: 'min-gpd'|'liquidity'` marker (YS2 absent-field pattern — normal rows byte-identical,
+pinned by test) so calibration can segment them. Validators still run on fallback rows (reject still
+DROPS — verified live), per-spec falling doctrine + posture unchanged, watchlist/held exemptions
+untouched. The VALUE niche is scoped out (its floors are its own term-structure amplitude gate + §F
+flood control with an admitted-vs-shown footer, and it's provisional/off-by-default n≈0). Tests: new
+`subfloor.test.mjs` (11 checks); 46 suites green.
+
 ### V2-P6b — per-thesis TTF estimators + rank replaces gp/d (2026-07-09, pipeline-only — NO APP_VERSION)
 Ben's 2026-07-09 ruling: "I despise gp/d as a metric; it makes so many assumptions about fill speed and
 fill price… let's get something that's more accurate per thesis and less hand wavey." `expGpDay`

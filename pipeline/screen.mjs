@@ -78,7 +78,7 @@ import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // here: gateCandidates/risingPoolFloor/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
-import { gateCandidates, rankAndSlice, surviveMode, expUnits, VALUE_TOP_DEFAULT } from './lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, surviveMode, expUnits, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from './lib/gatecandidates.mjs';
 import { valueRanges, valueScore, valueGate, valueTier } from '../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
 // P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — strategies.mjs) and reads each spec's inferred default
@@ -272,7 +272,14 @@ function pathLine(name, weighed, defaultPath) {
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer.
 // v24 (the whole-market 24h map) is passed through for the PM1 probe ctx (dip's avgLow24, decant's
 // sibling dose prices) — read-only, never a gate/verdict input.
-function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, v24, daily) {
+// P6c: `subFloor` (from subFloorFallback, set by main() ONLY when the niche's gated pool was EMPTY at
+// the configured floors) switches this render into the honestly-labeled sub-floor fallback: banner names
+// the relaxed floor + its value, every grade is capped at SUBFLOOR_GRADE_CAP and suffixed `(sub-floor)`,
+// the suggestions-ledger rows carry a lean `subFloor` marker, and NOTHING is published to screen.json
+// (the app contract stays byte-identical — a previously-empty niche still publishes []). Everything else
+// — validators (reject still DROPS), per-spec falling doctrine, posture — runs UNCHANGED on the fallback
+// rows: a sub-floor pass relaxes floors, never doctrine. subFloor==null ⇒ byte-identical to pre-P6c.
+function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, v24, daily) {
   const rows = [];
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0 };  // post-fetch discard reasons (--stats)
@@ -331,7 +338,10 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
-    const grade = rescued ? capGrade(r.grade, PHASE_BASING_GRADE_CAP) : r.grade;
+    // P6c: a sub-floor fallback row is capped harder still (SUBFLOOR_GRADE_CAP) — it did NOT clear the
+    // configured floors, so it must never print a grade a qualified row could.
+    let grade = rescued ? capGrade(r.grade, PHASE_BASING_GRADE_CAP) : r.grade;
+    if (subFloor) grade = capGrade(grade, SUBFLOOR_GRADE_CAP);
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // Part A: fold an informative phase into the existing Regime cell (no new column — the canonical
     // width/contract is untouched). A rescued row gets an explicit provisional note; other spike/decay/
@@ -350,6 +360,10 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
       : s.thin
         ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — size in units, expect slow fills` }
         : { t: grade };
+    // P6c: every sub-floor row carries the label ON THE ROW (not just the banner) — grade prints as
+    // `C (sub-floor)` so a copied/quoted row can never pass for a qualified one. (These rows are never
+    // published, so the title is stdout-inert, but it keeps the cell honest if that ever changes.)
+    if (subFloor) { gradeCell.t = grade + ' (sub-floor)'; gradeCell.title = subFloorLabel(subFloor) + (gradeCell.title ? '; ' + gradeCell.title : `; grade capped at ${SUBFLOOR_GRADE_CAP}`); }
     // P6b: the last cell is the risk-adjusted per-thesis rank + its honest components (net · P~ · ttf~)
     // instead of the demoted `Score gp/d`. The numeric r.score (risk-adjusted rank) is the sort key.
     const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
@@ -386,12 +400,25 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   // P4c: log the surfacing spec's inferred DEFAULT entry path on each row so a later fill can infer the
   // thesis a position was entered under when no explicit thesis.mjs --path was declared.
   const defaultPath = STRATEGIES[mode].defaultPath;
+  // P6c: sub-floor rows ARE logged (a surfaced row Ben acts on must stay joinable to its fill for the
+  // F1 calibration), but each carries a lean `subFloor: <'min-gpd'|'liquidity'>` marker (the YS2
+  // absent-field pattern — normal rows stay byte-identical) so calibration can segment or exclude them
+  // and a ledger reader can never mistake one for a floor-qualified suggestion.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, ...estFields(r.er) })));
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er) })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
-  console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
+  // P6c: the sub-floor banner replaces the normal header line — it states up front that ZERO candidates
+  // cleared the configured floors, WHICH floor was relaxed and its value, the cap, and that these rows
+  // are NOT qualified. The bar was re-run beneath the floor, never silently lowered.
+  if (subFloor) {
+    console.log(`## ${mode.toUpperCase()} — SUB-FLOOR FALLBACK — 0 candidates cleared the configured floors`);
+    console.log(`⚠ ${subFloorLabel(subFloor)}. Best ${SUBFLOOR_TOP} max, grades capped at ${SUBFLOOR_GRADE_CAP} — these rows did NOT qualify.`);
+    console.log(`(${rows.length} rated from ${cand.length} sub-floor gated, top ${survivors.length} fetched; ${fallNote})`);
+  } else {
+    console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
+  }
   console.log(PLAYBOOK[mode]);
   console.log(mode !== 'spread' ? `(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)` : '(basis: 24h-average spread)');
   // PM1: the dedicated `Probes` column is appended to the PRINTED table ONLY when at least one row
@@ -444,7 +471,10 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');
-  // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link)
+  // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link).
+  // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
+  // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).
+  if (subFloor) return [];
   return rows.map(r => ({ id: r.id, cells: r.cells }));
 }
 
@@ -620,6 +650,20 @@ async function main() {
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx, THRESHOLDS);
     const top = STRATEGIES[m].gate === 'value' ? VALUE_TOP_DEFAULT : TOP;
+    // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's
+    // relaxation ladder) and surface the best SUBFLOOR_TOP honestly labeled — never an empty table with the
+    // opportunity silently invisible, never a silently lowered bar. Fires ONLY on a zero-candidate niche
+    // (any niche with ≥1 candidate is untouched, byte-identical); if even the relaxed gate is empty (the
+    // edge/market, not the floors, emptied it) the normal `_none_` output stands unchanged. The fallback
+    // pool rides the same bulk data already loaded at gate time and the same per-item fetch path a normal
+    // niche uses, capped at SUBFLOOR_TOP (≤5 — strictly fewer fetches than any non-empty niche's top-N).
+    if (!cand.length && STRATEGIES[m].gate !== 'value') {
+      const fb = subFloorFallback(m, ctx, THRESHOLDS);
+      if (fb) {
+        gated[m] = { cand: fb.cand, survivors: rankAndSlice(m, fb.cand, daily, { thinReserve: THIN_RESERVE, top: SUBFLOOR_TOP }), subFloor: fb };
+        continue;
+      }
+    }
     gated[m] = { cand, survivors: rankAndSlice(m, cand, daily, { thinReserve: THIN_RESERVE, top }) };
   }
 

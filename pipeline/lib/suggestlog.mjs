@@ -11,8 +11,10 @@
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
- *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN? }   (P6b rank estimate — the quoted pair +
+ *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
+ *     subFloor? }   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
+ *     sub-floor fallback under THAT relaxed floor; lean-included, absent on floor-qualified rows)
  *     ts      — unix SECONDS at emit time
  *     script  — 'quote' | 'screen' | 'watch'
  *     mode    — the mode/niche as computed then (screen niche name, or null)
@@ -160,7 +162,7 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -195,6 +197,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, 
   if (rank != null)          e.rank = rank;
   if (estBasis != null)      e.estBasis = estBasis;
   if (estN != null)          e.estN = estN;
+  // P6c — a screen row surfaced by the EMPTY-RESULT SUB-FLOOR FALLBACK carries which floor was relaxed
+  // ('min-gpd' | 'liquidity'). Lean-included (the YS2 pattern — pinned by subfloor.test.mjs): a normal
+  // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude
+  // sub-floor rows instead of mistaking them for qualified suggestions.
+  if (subFloor != null)      e.subFloor = subFloor;
   return e;
 }
 

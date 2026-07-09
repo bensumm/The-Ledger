@@ -64,6 +64,14 @@ export const TOP_DEFAULT = 40;
 // P5 — the value niche's HARD top-N (§F flood control: the gated pool WILL be large; never dump it).
 export const VALUE_TOP_DEFAULT = 25;
 
+// P6c — empty-result sub-floor fallback sizing + honesty cap (Ben, 2026-07-09: when a niche's floors
+// leave ZERO candidates, re-run BENEATH the floor and show the best few HONESTLY LABELED — never
+// silently lower the bar). Both are named PLACEHOLDERS (rule 4): the cap count is a small "best few",
+// and the grade ceiling makes a sub-floor row structurally unable to print a headline grade (it did
+// NOT clear the attention/liquidity bar, so it must never read like a qualified pick).
+export const SUBFLOOR_TOP = 5;
+export const SUBFLOOR_GRADE_CAP = 'C';
+
 // realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
 // of the limiting-side daily volume. Null limit → volume share only.
 export const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); return limit != null ? Math.min(limit * 6, vShare) : vShare; };
@@ -165,6 +173,45 @@ function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS)
     cand.push({ id, limitVol, mid, limit, thin, valueScore: valueScore(vr), valueRanges: vr, tier: valueTier(vr) });
   }
   return cand;
+}
+
+/* --- P6c: empty-result sub-floor fallback --------------------------------------------------------
+   TRIGGER (screen.mjs owns it): a niche whose gateCandidates() came back EMPTY at the configured
+   floors. This helper then re-runs the SAME gate stack (no forked logic — it just calls
+   gateCandidates with relaxed thresholds) down a two-step ladder to find WHICH floor emptied it:
+     1. 'min-gpd'    — relax ONLY the attention floor (MIN_GPD → 0). If candidates appear, the 500k
+                       gp/day bar was the emptier; everything shown still cleared liquidity + edge.
+     2. 'liquidity'  — ALSO relax the gp-flow floor (GP_FLOOR → 0), which admits every TWO-SIDED item
+                       below the unit floor as `thin` (the existing thin path — grade cap, tooltip).
+                       The two-sided gate itself (hpv>0 && lpv>0) is NON-NEGOTIABLE and never relaxed,
+                       and the per-niche EDGE (min-roi / churn volume / scalp margin) is the THESIS,
+                       not a floor — it is never relaxed either.
+   Returns { cand, relaxed, floorDesc } for the first ladder step that un-empties the pool, or null
+   when even the fully-relaxed gate finds nothing (the market, not the floors, is empty — the screen
+   keeps its normal `_none_` output). The VALUE niche is out of scope: its floors are its own
+   term-structure amplitude gate (+ §F flood control with an admitted-vs-shown footer), not the
+   MIN_GPD/GP_FLOOR pair this ladder relaxes — and it's provisional/off-by-default (n≈0). */
+export function subFloorFallback(mode, ctx, t = DEFAULT_THRESHOLDS) {
+  const spec = STRATEGIES[mode];
+  if (!spec || spec.gate === 'value') return null;
+  const ladder = [
+    { key: 'min-gpd',
+      floorDesc: `the ${(t.MIN_GPD / 1e3).toLocaleString()}k gp/day attention floor (--min-gpd)`,
+      relax: { ...t, MIN_GPD: 0 } },
+    { key: 'liquidity',
+      floorDesc: `the liquidity floor (${t.FLOOR}/day units OR ${(t.GP_FLOOR / 1e6).toLocaleString()}m gp-flow) — even with the attention floor relaxed`,
+      relax: { ...t, MIN_GPD: 0, GP_FLOOR: 0 } },
+  ];
+  for (const step of ladder) {
+    const cand = gateCandidates(mode, ctx, step.relax);
+    if (cand.length) return { cand, relaxed: step.key, floorDesc: step.floorDesc };
+  }
+  return null;
+}
+// The one honest label every sub-floor surface carries (spec wording): names WHICH floor was relaxed
+// and its configured value. A reader must never mistake a sub-floor row for a qualified one.
+export function subFloorLabel(fb) {
+  return `sub-floor — shown because nothing cleared ${fb.floorDesc}; relaxed (${fb.relaxed}) for this table only`;
 }
 
 // Rank the gated pool and take the top-N to fetch. The proxy (from the bulk daily archive) orders
