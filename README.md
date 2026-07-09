@@ -194,7 +194,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `suggestions-YYYY-MM.jsonl` (SR1), moved OUT of the deploy root by `rotateLedger`
   (`pipeline/lib/suggestlog.mjs`). Same schema/lines as the active ledger; the append-only O1
   calibration history. Read together with the active file via `readSuggestionLines` — any full-
-  history reader (`outcomes.mjs`'s F1 join) MUST use that helper, not the active file alone.
+  history reader (`outcomes.mjs`'s F1 join, `retrojoin.mjs`'s P6a suggestion→fill join) MUST use
+  that helper, not the active file alone.
   Created lazily on the first rotation (empty until a month completes); committed by
   `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
@@ -259,7 +260,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `outcomes.mjs` (derived campaign/outcomes join — gitignored output; schema v2 (YS1) adds per-campaign
     `stateAtFill` (band-pctl+regime+phase AS OF the fill via `lib/histstate.mjs`, for EVERY fill),
     measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the joined
-    suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`)
+    suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`),
+    `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-niche +
+    per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
+    spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
+    buy offers. The SUGGESTION-keyed FORWARD counterpart to outcomes.mjs's campaign-keyed backward
+    join; the ground-truth TTF calibrator for P6 and the input to the spread/band/churn
+    consolidation question. Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
+    n on every aggregate, deliberately NO grades/verdicts — the archive is weeks-cold and mostly
+    not-taken)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
@@ -306,7 +315,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
     forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
     written only when a caller honestly supplies them, so legacy rows stay byte-identical; P2 also
-    lean-includes a `validators` flag list). **`windowread.mjs` MOVED to `js/`** (P2 — see the `js/`
+    lean-includes a `validators` flag list), `retrojoin.mjs` (P6a — the PURE, fixture-tested join
+    core behind `pipeline/retrojoin.mjs`: `retroJoin(suggestions, fillsEvents)` classifies each
+    suggestion row's forward outcome (filled / filled-worse / not-taken), measures suggestion→fill
+    latency + the FIFO-matched round-trip (realized net / hold time, reusing reconstruct.mjs's
+    helpers — never re-implemented), with a NEAREST-PRIOR one-fill-one-suggestion dedup rule; and
+    `aggregateOutcomes(rows)` groups per niche + per path with n on every field. NAMED-placeholder
+    per-mode horizons; no fs/fetch — caller feeds parsed rows). **`windowread.mjs` MOVED to `js/`** (P2 — see the `js/`
     inventory above; consumed here by `windowrange.mjs`/`watch.mjs`),
     `watchstate.mjs` (V1/V4/V7 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
     `advanceState` compute Δ instabuy, mom transitions, `passesUnderwater`/`passesBelowSupport` counters
@@ -553,8 +568,8 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 
 | Module | Also imported by (pipeline) |
 | --- | --- |
-| `js/quotecore.js` | 10 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
-| `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`; also `js/strategies.mjs` (P4c — `tax` for the spec edges) |
+| `js/quotecore.js` | 11 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
+| `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) |
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |

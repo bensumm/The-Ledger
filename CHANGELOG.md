@@ -10,6 +10,45 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P6a — the retro-join calibrator (2026-07-09, pipeline-only — NO APP_VERSION)
+The FOUNDATION slice of P6 (evidence-based viability + TTF). A new **suggestion→fill retro-join**:
+for every suggestion row the tool ever logged (active `suggestions.jsonl` + the monthly archives,
+via the ONE shared `readSuggestionLines`), join FORWARD to `fills.json` BUY events for the same
+item AFTER the suggestion and classify the outcome — `filled` (a buy fill at ≤ the suggested buy
+within a per-mode horizon), `filled-worse` (bought that item in the window but above the suggested
+price), or `not-taken` (no buy fill in the window — the DOMINANT class; most suggestions are never
+acted on, and the report says so honestly). Where a closed FIFO round-trip exists it adds the
+buy→sell hold time + realized after-tax net. This is the ground-truth TTF calibrator the P6 ruling
+(Ben 2026-07-09) demands — realized suggestion→fill latency from OUR OWN FILLS, never touch-proxies
+(touched ≠ filled: queue position is invisible) — and its per-niche "realized profit per unit of
+attention" read is the input that will later decide the spread/band/churn consolidation question.
+
+**Extend vs sibling — a SIBLING.** `outcomes.mjs` already exists but is CAMPAIGN-keyed and joins
+BACKWARD (each offer-campaign → its nearest PRIOR suggestion) to validate the campaign schema +
+band-percentile fill-time cells. The retro-join is SUGGESTION-keyed and joins FORWARD (each
+suggestion → the fills it plausibly caused); the primary key, join direction, and output all
+differ, so folding it into outcomes.mjs would blur two concerns. It REUSES rather than duplicates:
+the same FIFO helpers (`collapseOffers`/`matchTrades`/`dedupeSnapshots`) and the ONE shared
+suggestions reader — no second reader was created.
+
+- `pipeline/lib/retrojoin.mjs` — the PURE, node-importable, fs/fetch-free join core (`retroJoin` +
+  `aggregateOutcomes`), synthetic-fixture-tested in `pipeline/retrojoin.test.mjs` (10 assertions:
+  filled/filled-worse/not-taken, exact latency, the nearest-prior one-fill-one-suggestion dedup, a
+  path-less row aggregating under mode, a round-trip's realized net, partial fills, determinism).
+- `pipeline/retrojoin.mjs` — the read-only REPORT (`node pipeline/retrojoin.mjs`): per-niche +
+  per-path accounting with **n on every aggregate and deliberately NO grades/verdicts** (process
+  rule 4 — the archive began accruing 2026-07-08, so a weeks-cold, mostly-not-taken sample is
+  EXPECTED). `--json` dumps the raw joined rows.
+- **NAMED PLACEHOLDERS:** the per-mode fill horizons — `HORIZON_INTRADAY_SEC` (12h; scalp/band/
+  spread/churn), `HORIZON_MULTIDAY_SEC` (7d; rising/value), `HORIZON_DEFAULT_SEC` (24h; mode-less
+  quote/positions rows). The whole point of the retro-join is that it MEASURES the real latency so
+  a later chunk (P6b/c) can replace these guesses with data. Nothing here is calibrated.
+
+First real run: 11,356 suggestion rows × 115 buy offers → 18 filled · 55 filled-worse · 11,283
+not-taken (99% not-taken — honest and expected this early). TTF estimators, per-thesis ranking,
+`weighPaths` viability feeding, and the sub-floor fallback are LATER chunks; this is the calibrator
+they feed.
+
 ### V2-P5 — scalp/value niches + path-aware bids + per-strategy falling doctrine (2026-07-09, pipeline-only + inert quotecore/paths/termstructure widening — NO APP_VERSION)
 The DOCTRINE chunk of the Pipeline-v2 wave: Ben's 2026-07-08 amendment — "a falling item is not
 necessarily a poor purchase; we cannot judge falling without its history and typical fluctuations" —
