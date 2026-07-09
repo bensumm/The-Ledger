@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.29
+version: 1.31
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -168,7 +168,10 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **The screen now DOES the windowrange analysis in-script (2026-07-09) — read its `ℹ trajectory/reach`
   notes first.** _(enforced: `js/validate.mjs` trajectory + reach validators, `pipeline/screen.mjs` Leg B)_
   Each surfaced row now carries auto-computed INFORM notes (never a drop, n≈0 rollout): a **reach** note
-  (the sell-leg `--ask` reachability + RC1 stale bump, off the 1h series fetched per survivor) and a
+  covering **BOTH legs** (2026-07-09) — the sell-leg `--ask` reachability AND the buy-leg `bid` touch
+  (`reach bid X touched N/14d` — the 2h band min is artifact-prone, and an unreachable bid inflates the
+  grade; the Primordial/Nightmare-staff S- catch), each with the RC1 stale bump, off the 1h series
+  fetched per survivor — and a
   **trajectory** note classifying the buy-leg shape — **knife** (spike + monotone-down lows → "not a dip",
   the Nightmare-staff catch), **oscillating** (repeating local minima → "buyable at the local min", the
   Hydra case), **based** (flat value-low), **elevated** (bought high). This is the encoded form of the
@@ -176,6 +179,20 @@ This is the tribal layer the script can't do — apply ALL of these:
   CONFIRMATION on the handful you actually pitch, not the primary detector (a `would reject`/`would caution`
   note is the screen telling you what a stricter thesis would have done). Still verify by hand before
   quoting a profit — the notes are inform-only and thresholds are placeholders.
+- **The DIURNAL TIMING block auto-derives the peak-timing bid/ask (2026-07-09) — READ IT.**
+  _(enforced: `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`, `pipeline/screen.mjs` Diurnal timing block)_
+  After the reach notes, `screen.mjs` prints a `Diurnal timing` line per surfaced pick (FREE — off the
+  in-hand 1h series): `BID <x> (basis, dip HH–HH) · ASK <y> (peak HH–HH) · ~net/u (roi%)`, with `⚠
+  trend-dominates → bid to live` when a multi-day trend erases the intraday dip (the Ghrazi lesson — the
+  BID is then priced to live, not to a stale low). A `★` marks a **clean diurnal candidate** (concentrated
+  dip+peak, trend-quiet, positive after-tax ≥ min-ROI). This is the ENCODED form of the manual per-item
+  windowrange dance below — it caught BOTH the stale-low bids we pitched manually (Virtus, Ghrazi) and
+  reorders the shelf (a `★` big-ticket can beat a higher-graded row). Read it FIRST; then `windowrange
+  --profile "<item>"` for the full hour-by-hour table on the handful you actually pitch. Honesty: `★`
+  doesn't know froth (a spike item's amplitude flatters the roi — cross-check the phase tag), thresholds
+  are placeholders, and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we
+  hiding winners?") is a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet
+  surface the excluded universe.
 - **Asymmetric ask-reach read — the verification gate (2026-07-07, method).** _(judgment: method; tool `pipeline/windowrange.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
   pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the

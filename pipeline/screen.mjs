@@ -68,7 +68,8 @@
  * fetches + gates + rates + renders.
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
-import { tax, fmt, fmtP } from '../js/format.js';
+import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
+import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // diurnal peak-timing read (auto, off the in-hand 1h series)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -232,6 +233,9 @@ const DAILY_DAYS = IS_VALUE ? 28 : 17, DAILY_STEP_H = 6;
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
 const TS_TTL_1H = 15 * 60 * 1000;                                // Leg B (2026-07-09): the 1h series reachValidator scores — fetched for SURVIVORS only
+const DIURNAL_NIGHTS = 7;                                        // recent local days the hour-of-day profile aggregates over
+// (no top-N cap: the read is FREE — the 1h series is already in hand and the survivor set is already
+//  gate-bounded — so it runs on EVERY surfaced pick, same coverage as the Entry-paths block below.)
 
 // P1: the gate stack (`gateCandidates`), the fetch-pool ranker (`rankAndSlice` + `proxyDrift` +
 // `softFactor`), the `risingPoolFloor` predicate, and `expUnits` all live in lib/gatecandidates.mjs
@@ -338,8 +342,10 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     if (!sv.keep) { disc[sv.discardReason]++; continue; }
     const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
-    // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window, but
-    // screen does NOT fetch the 1h series (only ts5m/ts6h) → it DEGRADES to pass/no-data here. P3's
+    // P2/P3 validators. reachValidator (via the spec plan) scores the patient ask (optSell) against the
+    // reach window off the Leg-B 1h series; a SECOND inform-only reach call below scores the patient BID
+    // (optBuy) reachability — the 2h band min is an artifact-prone floor and an unreachable bid inflates
+    // the grade (2026-07-09 bid-leg fix). P3's
     // floorValidator scores the patient BUY (optBuy) against the durable multi-week floor from the
     // loadDaily {ts,mid} regime-proxy series ALREADY loaded at gate time (daily[id]) — no new fetch.
     // A buy parked well above where the 14/28d structure says support prints (the decay-knife shape) is
@@ -376,7 +382,20 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     }
     // inform-mode findings (the analysis that WOULD have gated under a stricter thesis) — surfaced as a
     // decision-support note, never a drop. This is where the trajectory/reach read lands on a surfaced row.
-    const informed = informFlags(vres);
+    // Bid-leg reach (2026-07-09): the spec's `reach` validator scores only the ASK (optSell); the
+    // optimistic BID is the 2h band min, so a single artifact-low 5m print (touched 0/Nd) inflates the
+    // grade off an UNREACHABLE buy with no warning (the Primordial-boots S- catch — estimateRank prices
+    // optBuy→optSell). Score the bid leg the same INFORM way (mirrors renderValueMode's side:'bid' call),
+    // reusing the 1h series already fetched for the ask reach — zero new fetch, never drops a row.
+    let bidReach = [];
+    if (row.optBuy != null && series1h && series1h.get(s.id)) {
+      const bidRes = runValidators(
+        { intraday: { ts1h: series1h.get(s.id), reach: { side: 'bid', level: row.optBuy } } },
+        { specs: [{ key: 'reach', mode: 'inform' }] },
+      );
+      bidReach = informFlags(bidRes);
+    }
+    const informed = [...informFlags(vres), ...bidReach];
     if (informed.length)
       informNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF
@@ -489,6 +508,35 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   }
   for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
   for (const n of informNotes) console.log(`ℹ trajectory/reach — ${n}`);
+  // Diurnal timing (2026-07-09) — the peak-timing read auto-run on the top surfaced picks. FREE: the 1h
+  // series is already in hand (Leg B fetched it per survivor), so this adds NO fetch. For each top pick it
+  // derives the stale-guarded bid (dip-window level, priced to LIVE when a dominating trend erases the dip
+  // — the Ghrazi lesson) and the ask (peak-window level) via the shared js/windowread.mjs engine — the
+  // same one `windowrange --profile` uses, so the numbers match. Decision SUPPORT / stdout-only, never in
+  // screen.json. This is the encoded form of the per-pick windowrange dance the pricing doctrine required;
+  // a CLEAN pick (concentrated, trend-quiet, positive after-tax swing) is flagged as a diurnal candidate.
+  const diurnalLines = [];
+  for (const r of rows) {
+    const prof = hourProfile(series1h && series1h.get(r.id), { nights: DIURNAL_NIGHTS });
+    if (!prof) continue;
+    const dr = deriveDiurnalRange(prof, { liveLo: r.row.quickBuy ?? null, liveHi: r.row.quickSell ?? null });
+    if (!dr) continue;
+    const nm = map.byId[r.id]?.name || ('#' + r.id);
+    const win = w => `${fmtHour(w.startH)}–${fmtHour(w.endH)}`;
+    // after-tax swing at the derived pair — the honest edge; a positive, non-trend-dominated, concentrated
+    // read is a diurnal candidate (★). tax() nets the ask; bond exemption not modelled here (support line).
+    const net = (dr.bid != null && dr.ask != null) ? Math.round(dr.ask - tax(dr.ask) - dr.bid) : null;
+    const roi = (net != null && dr.bid) ? net / dr.bid * 100 : null;
+    const concentrated = dr.dipWindow.startH !== dr.dipWindow.endH && dr.peakWindow.startH !== dr.peakWindow.endH;
+    const candidate = net != null && net > 0 && !prof.trendDominates && concentrated && roi != null && roi >= MIN_ROI;
+    const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
+    const edge = net != null ? ` · ~${fmt(net)}/u (${roi.toFixed(1)}%)` : '';
+    diurnalLines.push(`${candidate ? '★ ' : ''}${nm} — BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${edge}${trend}`);
+  }
+  if (diurnalLines.length) {
+    console.log(`Diurnal timing (peak-timing bid/ask off the in-hand 1h series — support, not a gate; ★ = clean diurnal candidate):`);
+    for (const l of diurnalLines) console.log(`  ↳ ${l}`);
+  }
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
   // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
   // STDOUT-ONLY — deliberately NOT in the published cells, so the canonical table + screen.json/app

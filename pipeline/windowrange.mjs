@@ -32,7 +32,7 @@
  */
 import { loadMapping, fetchTs, fetchLatest } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp } from './lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS } from '../js/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);
@@ -64,6 +64,32 @@ for (const want of positionals) {
   const r = map.resolve(want);
   if (!r) { console.log(`\n"${want}": not found in the item mapping — check spelling or pass an id.`); continue; }
   const [series, latest] = await Promise.all([fetchTs(r.id, '1h'), fetchLatest(r.id)]);
+
+  // --profile: the hour-of-day diurnal read (peak-timing) — locates the daily dip/peak WINDOWS and
+  // derives a stale-guarded bid/ask, instead of scoring one hand-picked --window. Same 1h series.
+  if (A.profile !== undefined) {
+    const prof = hourProfile(series, { nights: NIGHTS });
+    console.log(`\n## ${r.name} — diurnal profile, last ${prof ? prof.nights : 0} day(s) (local hour-of-day, 1h series)`);
+    if (!prof) { console.log('  too thin to profile — need ≥4 traded days of hourly history.'); continue; }
+    const inDip = new Set(prof.dip.hours), inPeak = new Set(prof.peak.hours);
+    for (const x of prof.hours) {
+      const tag = inDip.has(x.h) ? ' ⬇dip' : inPeak.has(x.h) ? ' ⬆peak' : '';
+      console.log(`  ${pad2(x.h)}:00  low ${fmt(x.lowRecent)} · high ${fmt(x.hiRecent)}  · n ${x.n}${tag}`);
+    }
+    const win = (w) => `${pad2(w.startH)}:00–${pad2(w.endH)}:00`;
+    console.log(`  ---`);
+    console.log(`  DIP window ${win(prof.dip)} — recent level ${fmt(prof.dip.level)}`);
+    console.log(`  PEAK window ${win(prof.peak)} — recent level ${fmt(prof.peak.level)}`);
+    console.log(`  intraday amplitude ~${fmt(prof.amplitude)}${prof.amplitudePct != null ? ` (${(prof.amplitudePct * 100).toFixed(1)}%)` : ''} · trend ${prof.trendPerDay == null ? '—' : (prof.trendPerDay >= 0 ? '+' : '') + fmt(Math.round(prof.trendPerDay)) + '/day'}${prof.trendDominates ? ' ⚠ trend-dominates' : ''}`);
+    if (latest && latest.low != null) console.log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
+    const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });
+    if (dr) {
+      console.log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})`);
+      for (const n of dr.notes) console.log(`    ⓘ ${n}`);
+    }
+    console.log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);
+    continue;
+  }
 
   const stats = windowStats(series, { nights: NIGHTS, wStart: W_START, wEnd: W_END });
   const winLabel = `${pad2(W_START)}:00–${pad2(W_END)}:00 local`;

@@ -16,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant } from '../js/windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -145,6 +145,73 @@ ok('recentQuant: returns the recent-N slice quantile, not the full window', () =
     day('d4', 130, 200), day('d5', 132, 205), day('d6', 128, 210), // recent 3
   ];
   assert.equal(recentQuant(days, 'bid', 0.5, 3), 130, 'recent-3 median low, not the old ~90');
+});
+
+// --- 5. hourProfile: locate + CLUSTER the daily dip and peak windows -------------------------
+// Build a synthetic diurnal shape over 6 days: lows dip in the evening (21–23), highs peak in the
+// early morning (04–06); everything else flat. now is a daytime instant so nothing special-cases.
+function diurnal(days, { baseFn }) {
+  const s = [];
+  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
+    const base = baseFn(di);
+    const low = base + ([21, 22, 23].includes(h) ? -50 : 0);
+    const hi = base + ([4, 5, 6].includes(h) ? 70 : 10);
+    s.push(pt(ts(2026, 0, 5 + di, h), low, hi, 20, 20));
+  }
+  return s;
+}
+const noonNow = new Date(2026, 0, 20, 12, 0, 0);
+
+ok('hourProfile: finds the evening dip window and morning peak window, clustered', () => {
+  const prof = hourProfile(diurnal(6, { baseFn: () => 1000 }), { nights: 14, now: noonNow });
+  assert.ok(prof, 'a 6-day series is profilable');
+  assert.deepEqual(prof.dip.hours, [21, 22, 23], 'dip clusters the three evening hours');
+  assert.equal(prof.dip.startH, 21); assert.equal(prof.dip.endH, 0, 'dip window 21:00–00:00');
+  assert.deepEqual(prof.peak.hours, [4, 5, 6], 'peak clusters the three morning hours');
+  assert.equal(prof.peak.startH, 4); assert.equal(prof.peak.endH, 7, 'peak window 04:00–07:00');
+  assert.equal(prof.dip.level, 950, 'dip level = the recent dip-hour low');
+  assert.equal(prof.peak.level, 1070, 'peak level = the recent peak-hour high (base 1000 + 70)');
+  assert.equal(prof.trendDominates, false, 'a flat base has no dominating trend');
+});
+
+ok('hourProfile: a rising floor sets trendDominates when drift outpaces the intraday swing', () => {
+  const prof = hourProfile(diurnal(6, { baseFn: di => 900 + 50 * di }), { nights: 14, now: noonNow });
+  assert.ok(prof);
+  assert.deepEqual(prof.dip.hours, [21, 22, 23], 'shape survives the trend (dip still evening)');
+  assert.ok(prof.trendPerDay > 0, 'the daily-low slope is positive');
+  assert.equal(prof.trendDominates, true, '≈50/day drift ≥ 0.25×~120 amplitude → dominates');
+});
+
+ok('hourProfile: too little history is unprofilable (null, no false read)', () => {
+  assert.equal(hourProfile(diurnal(2, { baseFn: () => 1000 }), { nights: 14, now: noonNow }), null,
+    '2 days < HOURPROFILE_MIN_DAYS');
+});
+
+// --- 6. deriveDiurnalRange: the stale-to-live guard (the Ghrazi lesson) -----------------------
+const prof = (dipLevel, peakLevel, trendDominates) => ({
+  dip: { level: dipLevel, startH: 21, endH: 0 }, peak: { level: peakLevel, startH: 4, endH: 7 },
+  amplitude: peakLevel - dipLevel, amplitudePct: null, trendPerDay: trendDominates ? 50 : 0, trendDominates,
+});
+
+ok('deriveDiurnalRange: an erased dip (dip ≥ live) is priced to live, not to a stale low', () => {
+  const r = deriveDiurnalRange(prof(1000, 1080, true), { liveLo: 990 });
+  assert.equal(r.bid, 990, 'live instasell (990) is already below the stale 1000 dip → bid to live');
+  assert.equal(r.bidBasis, 'live');
+  assert.ok(r.notes.some(n => /trend-dominates/.test(n)));
+});
+
+ok('deriveDiurnalRange: a dip below live under a rising floor stays patient but is flagged may-miss', () => {
+  const r = deriveDiurnalRange(prof(1000, 1080, true), { liveLo: 1010 });
+  assert.equal(r.bid, 1000, 'the dip (1000) is genuinely below live (1010) → keep the patient bid');
+  assert.equal(r.bidBasis, 'patient-dip');
+  assert.ok(r.notes.some(n => /may miss/.test(n)), 'but warn the rising floor may starve it');
+});
+
+ok('deriveDiurnalRange: a clean dip below live with no trend is an unflagged patient bid', () => {
+  const r = deriveDiurnalRange(prof(1000, 1080, false), { liveLo: 1010 });
+  assert.equal(r.bid, 1000); assert.equal(r.bidBasis, 'patient-dip');
+  assert.equal(r.notes.length, 0, 'no trend, dip below live → nothing to warn about');
+  assert.equal(r.ask, 1080);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

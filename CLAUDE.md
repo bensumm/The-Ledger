@@ -121,6 +121,18 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   ~14d is a small sample, it shifts a price a few ticks, never overrides band/regime). For a marginal/
   big-ticket hold-or-cut, the FULL-DAY multi-week *trajectory* read (`--window 0-23 --nights 21`,
   phase-mapped) is the distinct confidence tool — see `/positions` "trajectory read for confidence".
+  - **The DIURNAL PROFILE now auto-derives this (2026-07-09).** `screen.mjs` runs an hour-of-day
+    `hourProfile` + `deriveDiurnalRange` (shared `js/windowread.mjs`) on EVERY surfaced pick off the
+    already-in-hand 1h series (zero extra fetch) and prints a **Diurnal timing** support block: the
+    stale-guarded BID (the recent DIP-window level, priced to LIVE when a dominating multi-day trend
+    erases the intraday dip — the Ghrazi lesson) and the ASK (recent PEAK-window level), with the after-
+    tax swing; a clean read (concentrated dip+peak, trend-quiet, positive after-tax ≥ min-ROI) is starred
+    `★` as a **diurnal candidate**. The SHAPE is de-trended (each hour's deviation from its own day's
+    baseline) so the trend can't fool the dip/peak detection; each side clusters off its OWN deviation
+    spread. `windowrange.mjs --profile` prints the full hour-by-hour table + the derived range for one
+    item. This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
+    manual `--window`/`--profile` read is now a CONFIRMATION on what you actually pitch (thresholds are
+    placeholders; ★ doesn't know froth, so a spike item's amplitude can flatter it — support, not a gate).
 **How to generate these tables — each canonical ask maps to a skill or an exact command.
 These scripts exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e`
 fetch for a market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the
@@ -209,7 +221,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
   **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
   ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; `quote.mjs` still
-  doesn't fetch it, so reach degrades there. `trajectoryValidator` (2026-07-09, BUY-side) is the SHAPE
+  doesn't fetch it, so reach degrades there. **Reach now scores BOTH legs (2026-07-09):** the spec-plan
+  `reach` validator scores the patient ASK (`optSell`); `screen.mjs` (`renderMode`) additionally runs a
+  SECOND inform-only reach call on the patient BID (`optBuy`, `side:'bid'` — mirrors `renderValueMode`)
+  because the 2h band min is artifact-prone and an unreachable bid silently inflates the grade
+  (`estimateRank(optBuy→optSell)` — the Nightmare-staff/Primordial S- catch). Both fold into the one
+  `ℹ trajectory/reach` note per row; inform-only, never drops. `trajectoryValidator` (2026-07-09, BUY-side) is the SHAPE
   read (distinct from floor's LEVEL read): `js/termstructure.mjs`'s `classifyTrajectory` off the daily-mid
   series labels **knife** (spike + monotone-down lows — the Nightmare-staff catch → reject), **oscillating**
   (repeating local minima around a flat/declining mean — a falling-BUT-buyable rhythm like Hydra leather →
@@ -266,7 +283,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   class. watch.mjs is the ONE writer of the path fields on watch-state.
   `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
   for askFilling + conviction + the same read-only path line; the booked FIFO lots are still the basis).
-- `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]` (bucketing/quantile
+- `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--profile]` (bucketing/quantile
   math in `js/windowread.mjs` — moved out of `pipeline/lib/` by P2 so it's node- AND app-importable,
   shared with `watch.mjs`'s window line + `js/validate.mjs`'s `reachValidator`) scores the last ~14 local
   days: per-day window low/high + volume, bid/ask levels touched/reached on ~50%/~75%/all days, `--bid`/
@@ -274,6 +291,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   ~50%` quantile beside the full-window ones, with a `⚠ stale` flag when the full count is concentrated
   in an older price regime (the reach-contamination guard; see `windowread.mjs` header). `/overnight`'s
   fill-realism check runs it on every candidate bid ("touched/reached" ≠ filled; ~14d is a small sample).
+  **`--profile`** switches to the hour-of-day **diurnal** read (`hourProfile`/`deriveDiurnalRange`): the
+  per-local-hour dip/peak table + the derived stale-guarded BID/ASK (de-trended shape, side-specific
+  clustering, trend-dominates → price to live). `screen.mjs` runs this automatically on every surfaced
+  pick (the **Diurnal timing** block, ★ = clean candidate) — see the time-of-day doctrine bullet above.
 
 ## Open followups (not yet built)
 - **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — the plan + the

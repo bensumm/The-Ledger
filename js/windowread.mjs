@@ -111,3 +111,173 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
     medVolHi: medOf(scored.map(([, n]) => n.volHi)),
   };
 }
+
+// --- hour-of-day diurnal profile (the peak-timing read) ---------------------------------------
+// windowStats scores ONE fixed wall-clock window; hourProfile instead buckets the SAME 1h series by
+// LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak
+// print and derive a bid/ask from the shape rather than guessing a window up front. This is Ben's
+// default pricing method (peak-timing): bid at the recent dip-hour level, ask at the recent peak-hour
+// level. Two robustness guards are baked in, both learned the hard way (Ghrazi, 2026-07-09):
+//   • CLUSTER, don't point-pick — a single hour over ~7 nights is ≤7 samples (noisy). The dip/peak are
+//     the CONTIGUOUS run of hours near the extreme (Ben: "analyse the hourly output to define the range").
+//   • TREND-DOMINATES flag — when the multi-day floor drifts faster than the intraday swing is deep, a
+//     "dip" bid never fills (the floor rises past it). deriveDiurnalRange then prices the bid to LIVE.
+// SHAPE (which hours are low/high) reads off the FULL-window median (more samples, stabler); the LEVEL
+// quoted reads off the RECENT-N median (trend-accurate). PURE over an already-fetched 1h series.
+export const HOURPROFILE_MIN_DAYS = 4;   // fewer scored days than this ⇒ too thin to profile → null
+export const DIP_CLUSTER_FRAC = 0.34;    // an hour within this fraction of the intraday amplitude of the
+                                         //   extreme joins the dip/peak cluster (the contiguous window)
+export const TREND_DOM_FRAC = 0.25;      // |daily-low drift/day| ≥ this fraction of amplitude ⇒ the
+                                         //   multi-day trend dominates the intraday swing (price to live)
+
+const median = arr => { const s = arr.filter(v => v != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
+
+// least-squares slope per step of a numeric series (oldest→newest); null if <2 points.
+function slopePerStep(ys) {
+  const n = ys.length; if (n < 2) return null;
+  const xm = (n - 1) / 2, ym = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (i - xm) * (ys[i] - ym); den += (i - xm) ** 2; }
+  return den ? num / den : null;
+}
+
+// the [start,end) span of a circular-contiguous set of hours (for a readable "20–00" window label).
+function spanOf(hrsSet) {
+  const arr = [...hrsSet];
+  if (arr.length >= 24) return { startH: 0, endH: 0 };
+  let startH = arr.find(h => !hrsSet.has((h + 23) % 24));
+  if (startH == null) startH = Math.min(...arr);
+  let endH = startH;
+  for (let step = 0; step < 24; step++) {
+    if (hrsSet.has((startH + step) % 24) && !hrsSet.has((startH + step + 1) % 24)) { endH = (startH + step + 1) % 24; break; }
+  }
+  return { startH, endH };
+}
+
+/**
+ * hourProfile(series, opts) — per-local-hour dip/peak structure of a 1h /timeseries.
+ * @param {object} opts { nights=14, now=new Date(), recentN=RECENT_NIGHTS }
+ * @returns {null | { hours, dip, peak, amplitude, amplitudePct, trendPerDay, trendDominates, nights }}
+ *   hours: [{ h, n, lowFull, hiFull, lowRecent, hiRecent, volLo, volHi }] (hours with data, ascending)
+ *   dip:  { startH, endH, hours:[…], level, atHour }  level = recent dip-cluster low (the bid candidate)
+ *   peak: { startH, endH, hours:[…], level, atHour }  level = recent peak-cluster high (the ask candidate)
+ */
+export function hourProfile(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
+  const pad2 = n => String(n).padStart(2, '0');
+  const dk = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const byHour = new Map();       // h → [{ day, low, hi, volLo, volHi }]
+  const dayMids = new Map();      // day → [mids] (for the per-day baseline that DE-TRENDS the shape)
+  const dayLow = new Map();       // day → min avgLowPrice across the day (the trend series)
+  const daySet = new Set();
+  for (const pt of series || []) {
+    if (pt.avgLowPrice == null && pt.avgHighPrice == null) continue;
+    const d = new Date(pt.timestamp * 1000);
+    const h = d.getHours(), day = dk(d);
+    daySet.add(day);
+    if (!byHour.has(h)) byHour.set(h, []);
+    byHour.get(h).push({ day, low: pt.avgLowPrice, hi: pt.avgHighPrice, volLo: pt.lowPriceVolume || 0, volHi: pt.highPriceVolume || 0 });
+    const mid = (pt.avgLowPrice != null && pt.avgHighPrice != null) ? (pt.avgLowPrice + pt.avgHighPrice) / 2 : (pt.avgLowPrice ?? pt.avgHighPrice);
+    if (mid != null) { if (!dayMids.has(day)) dayMids.set(day, []); dayMids.get(day).push(mid); }
+    if (pt.avgLowPrice != null) { const c = dayLow.get(day); if (c == null || pt.avgLowPrice < c) dayLow.set(day, pt.avgLowPrice); }
+  }
+  const allDays = [...daySet].sort();                    // ascending (oldest→newest)
+  const keep = new Set(allDays.slice(-nights));
+  if (keep.size < HOURPROFILE_MIN_DAYS) return null;
+  const recentSet = new Set(allDays.slice(-recentN));
+  // per-day baseline = median of that day's hourly mids. Subtracting it DE-TRENDS the shape read so the
+  // multi-day drift (which otherwise swamps the ~intraday swing and picks dip/peak hours off which OLD
+  // cheap days each hour happened to sample — the Ghrazi contamination) cancels out. SHAPE reads off the
+  // deviation-from-baseline; the LEVEL quoted still reads off the RECENT absolute low/high (trend-accurate).
+  const baseline = new Map([...dayMids].map(([day, mids]) => [day, median(mids)]));
+
+  const hours = [];
+  for (let h = 0; h < 24; h++) {
+    const byDay = new Map();                              // one sample/day (dedupe any intra-hour dupes)
+    for (const s of (byHour.get(h) || [])) if (keep.has(s.day)) byDay.set(s.day, s);
+    if (!byDay.size) continue;
+    const samples = [...byDay.values()];
+    const recent = samples.filter(s => recentSet.has(s.day));
+    const devLow = samples.map(s => (s.low != null && baseline.has(s.day)) ? s.low - baseline.get(s.day) : null);
+    const devHi = samples.map(s => (s.hi != null && baseline.has(s.day)) ? s.hi - baseline.get(s.day) : null);
+    const rlows = recent.map(s => s.low).filter(v => v != null);
+    const rhis = recent.map(s => s.hi).filter(v => v != null);
+    hours.push({
+      h, n: samples.length,
+      devLow: median(devLow), devHi: median(devHi),                       // de-trended SHAPE
+      lowRecent: rlows.length ? median(rlows) : median(samples.map(s => s.low)),   // absolute LEVEL
+      hiRecent: rhis.length ? median(rhis) : median(samples.map(s => s.hi)),
+      volLo: median(samples.map(s => s.volLo)), volHi: median(samples.map(s => s.volHi)),
+    });
+  }
+  const withLow = hours.filter(x => x.devLow != null);
+  const withHi = hours.filter(x => x.devHi != null);
+  if (withLow.length < 2 || withHi.length < 2) return null;
+
+  const dipHour = withLow.reduce((a, b) => (b.devLow < a.devLow ? b : a));
+  const peakHour = withHi.reduce((a, b) => (b.devHi > a.devHi ? b : a));
+  const amplitude = peakHour.devHi - dipHour.devLow;      // trend-free intraday swing (dip-low → peak-high)
+  const hourMap = new Map(hours.map(x => [x.h, x]));
+  // grow a contiguous (circular) cluster out from an extreme while neighbours stay within band AND exist
+  const cluster = (startH, within, levelFn) => {
+    const set = new Set([startH]);
+    for (const dir of [1, -1]) for (let step = 1; step < 24; step++) {
+      const x = hourMap.get((startH + dir * step + 24) % 24);
+      if (!x || !within(x)) break;
+      set.add(x.h);
+    }
+    return { set, level: median([...set].map(h => levelFn(hourMap.get(h)))), hours: [...set].sort((a, b) => a - b) };
+  };
+  // cluster each side off its OWN deviation spread, NOT the combined amplitude — else a one-sided signal
+  // (Ghrazi's evening HIGHS spike but its LOWS are flat) inflates the other side's threshold and the dip
+  // cluster swallows the whole day. A flat side keeps a tight threshold → a small (or single-hour) cluster.
+  const lowDevs = withLow.map(x => x.devLow), hiDevs = withHi.map(x => x.devHi);
+  const lowSpread = Math.max(...lowDevs) - Math.min(...lowDevs);
+  const hiSpread = Math.max(...hiDevs) - Math.min(...hiDevs);
+  const dipThresh = dipHour.devLow + DIP_CLUSTER_FRAC * lowSpread;
+  const peakThresh = peakHour.devHi - DIP_CLUSTER_FRAC * hiSpread;
+  const dipC = cluster(dipHour.h, x => x.devLow != null && x.devLow <= dipThresh, x => x.lowRecent);
+  const peakC = cluster(peakHour.h, x => x.devHi != null && x.devHi >= peakThresh, x => x.hiRecent);
+
+  const trendSeries = allDays.slice(-nights).map(d => dayLow.get(d)).filter(v => v != null);
+  const trendPerDay = slopePerStep(trendSeries);
+  const trendDominates = amplitude > 0 && trendPerDay != null && Math.abs(trendPerDay) >= TREND_DOM_FRAC * amplitude;
+
+  return {
+    hours,
+    dip: { ...spanOf(dipC.set), hours: dipC.hours, level: dipC.level, atHour: dipHour.h },
+    peak: { ...spanOf(peakC.set), hours: peakC.hours, level: peakC.level, atHour: peakHour.h },
+    amplitude, amplitudePct: dipHour.lowRecent ? amplitude / dipHour.lowRecent : null,
+    trendPerDay, trendDominates, nights: keep.size,
+  };
+}
+
+/**
+ * deriveDiurnalRange(profile, { liveLo, liveHi }) — turn an hourProfile into a bid/ask with the
+ * stale-to-live guard applied. PURE and tax-agnostic: it returns levels + basis + notes; the CALLER
+ * owns tax/break-even/grading (windowread is timing math, not the quote engine). The guard: if the
+ * recent dip level is NOT below the live instasell (a trend-erased dip), a resting bid there won't
+ * fill — price it to live instead. This is the ONE home for the Ghrazi lesson so screen + windowrange
+ * derive an identical range.
+ */
+export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {}) {
+  if (!profile || !profile.dip || !profile.peak) return null;
+  const notes = [];
+  let bid = profile.dip.level, bidBasis = 'patient-dip';
+  if (liveLo != null && bid != null && bid >= liveLo) {
+    bid = liveLo; bidBasis = 'live';
+    notes.push(profile.trendDominates
+      ? 'trend-dominates — the rising floor erases the intraday dip; priced to fill at live instasell'
+      : 'dip not below live — priced to fill at live instasell');
+  } else if (bid != null && profile.trendDominates) {
+    notes.push('trend-dominates — dip is below live but the floor is rising; a resting bid may miss if the trend holds');
+  }
+  const ask = profile.peak.level;
+  if (bid != null && ask != null && ask <= bid) notes.push('degenerate — peak level not above dip level (flat/thin window)');
+  return {
+    bid, ask, bidBasis,
+    dipWindow: { startH: profile.dip.startH, endH: profile.dip.endH },
+    peakWindow: { startH: profile.peak.startH, endH: profile.peak.endH },
+    amplitude: profile.amplitude, amplitudePct: profile.amplitudePct,
+    trendDominates: profile.trendDominates, trendPerDay: profile.trendPerDay, notes,
+  };
+}

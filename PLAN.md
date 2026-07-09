@@ -382,6 +382,15 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 ## Discovered
 
 **Open:**
+- **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day
+  `hourProfile`/`deriveDiurnalRange` engine + the screen's `Diurnal timing` block auto-run on SURVIVORS
+  only (free — series in hand). Ben's open question — "are the gates EXCLUDING items that are profitable
+  under the detailed diurnal read?" — needs the bounded experiment: run the profile on a fetch-budgeted
+  set of gate-excluded rows (reuse the `subFloorFallback` "peek below the gate" primitive), and LOG which
+  would've been profitable at fill-correct diurnal prices → emit a "diurnal candidates" list (NOT
+  auto-added to the curated `watchlist.json`; Ben promotes). Costs 1h fetches (the gate funnel's expensive
+  step) so it needs a budget. Honest prior (rule 4): the deep read has so far DISQUALIFIED picks (Virtus,
+  Ghrazi) as often as promoted, so this may tighten the shelf rather than widen it — either outcome is signal.
 - **Value niche lacks the LM1 limit stage (LM1 `9517655`, 2026-07-09):** `--mode value` renders via
   `valueGate`, not `runValidators`, so `limitValidator` doesn't reach it. Provisional/off-by-default
   (n≈0) — wire the limits stage in when the value path grows a validator pass, not before.

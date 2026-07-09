@@ -60,9 +60,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
   with the node analysis scripts), `windowread.mjs` (P2 — pure window-range/reach math:
   `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
-  `recencySplit`/`recentQuant` reach-contamination guard; MOVED here from `pipeline/lib/`
+  `recencySplit`/`recentQuant` reach-contamination guard + the **hour-of-day diurnal profile**
+  `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
+  clustering, and the stale-to-live guard; the peak-timing engine `screen.mjs` auto-runs and
+  `windowrange --profile` prints); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/windowrange.mjs`,
-  `pipeline/watch.mjs` and `js/validate.mjs` — NOT yet app-imported),
+  `pipeline/watch.mjs`, `pipeline/screen.mjs` and `js/validate.mjs` — NOT yet app-imported),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
@@ -275,7 +278,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `cash.mjs` (CLI to set/read/clear the STATED idle-cash balance
     in `.capital-state.json` — the total-capital denominator `watch.mjs`'s SUMMARY reads),
     `windowrange.mjs` (né `nightlows.mjs` — time-of-day
-    range read / overnight fill-realism scoring), `limits.mjs` (LM1 — the buy-limit read:
+    range read / overnight fill-realism scoring; `--profile` = the hour-of-day diurnal dip/peak read
+    + derived stale-guarded bid/ask), `limits.mjs` (LM1 — the buy-limit read:
     `node pipeline/limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),
@@ -625,7 +629,7 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | --- | --- |
 | `js/quotecore.js` | 11 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
 | `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) + `pipeline/lib/estimators.mjs` (P6b — `netMargin`/`clamp` for the rank composite) |
-| `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
+| `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |
 | `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
