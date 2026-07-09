@@ -10,6 +10,28 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### LM1 — buy-limit awareness on every suggesting flow (2026-07-09, pipeline-only — NO APP_VERSION)
+Ben's ruling: "limits.mjs ... should be a part of every flow that suggests items ie we can flag as
+profitable but disqualify on limits and state when the limit should reset." New pure
+`pipeline/lib/limits.mjs` (`limitWindow` — the community-documented rolling-4h model: each bought unit
+counts against the limit for 4h; returns bought-in-window / remaining / nextFreeAt / fullResetAt;
+`buysByItem` extracts BUY fills via the SAME `collapseOffers(dedupeSnapshots(...))` chain the
+reconstruction uses) + CLI `pipeline/limits.mjs "<item>"`. Wired into every suggesting surface via a
+new `limitValidator` in the js/validate.mjs registry (BUY-side: remaining 0 → reject with "buy limit
+exhausted (bought N/N this 4h window) — next frees ~HH:MM"; remaining < 25% (`LIMIT_CAUTION_FRAC`,
+placeholder) → caution; absent stage / null limit → degrade to pass — null limit = UNKNOWN, never
+unlimited). screen.mjs builds the per-item window map once per run from fills.json (local file, no
+fetch) — an exhausted-limit candidate is dropped into the counted `rejected:` footer WITH its reset
+time (profitable-but-disqualified stays visible); held/asked/watchlist rows are never hidden (flag =
+NOTE). quote.mjs extends the regime line: `buy limit 25,000/4h (bought 8,400 this window — 16,600
+left, next frees ~14:20)`, gated on in-window buys so zero-usage output is byte-identical. HONESTY
+(documented in the lib header + CLI footer): fills.json sees only logged fills, so bought-in-window is
+a LOWER bound and remaining an UPPER bound (a mobile/unlogged buy is invisible); units attribute to
+the offer's close time (conservative skew). Known gap: the provisional `--mode value` niche renders
+via `valueGate`, not `runValidators`, so it lacks the limit stage (PLAN.md Discovered). 48 suites.
+No APP_VERSION: `js/validate.mjs` is node-only today (no app module imports it, verified) and the
+validator degrades without the pipeline-supplied stage.
+
 ### Buy/sell pressure ratio on quote + watch (2026-07-09, pipeline stdout only — NO APP_VERSION)
 Ben's ask: surface the buy/sell pressure ratio in the live fetch output, with its shortcomings
 documented. `computeQuote` (js/quotecore.js) now derives `row.pressure = {hpv, lpv, ratio}` from the

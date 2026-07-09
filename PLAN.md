@@ -375,6 +375,9 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 ## Discovered
 
 **Open:**
+- **Value niche lacks the LM1 limit stage (LM1 `9517655`, 2026-07-09):** `--mode value` renders via
+  `valueGate`, not `runValidators`, so `limitValidator` doesn't reach it. Provisional/off-by-default
+  (n≈0) — wire the limits stage in when the value path grows a validator pass, not before.
 - **Spread/band/churn consolidation — evidence-gated (Ben, 2026-07-09):** Ben reads the three as
   one scalp family (lookback ~0 / 2h / 2h-on-liquid) and doubts spread earns its keep ("fleeting,
   small flips"). Ruling: do NOT consolidate by judgment now — P4c made each niche a cheap data
