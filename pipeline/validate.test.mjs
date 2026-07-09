@@ -15,6 +15,10 @@
  *     reach it) BUMPS severity one step — a would-be caution becomes reject.
  *   - degrade contract: no 1h series / no candidate / thin sample → pass with a no-data-shaped note,
  *     NEVER a reject on the absence of data.
+ *
+ * NOTE: the P3 floorValidator's acceptance (decay-knife reject / genuine-dip pass / no-data + held-lot
+ * degrade) lives in pipeline/termstructure.test.mjs (next to the js/termstructure.mjs math it drives).
+ * This suite only pins that the registry now RUNS both reach + floor.
  */
 import assert from 'node:assert/strict';
 import {
@@ -47,10 +51,9 @@ ok('worseOf orders reject > caution > pass', () => {
   assert.equal(worseOf('pass', 'pass'), 'pass');
 });
 ok('runValidators returns the registry results; worstStatus/flags/leanValidators summarize', () => {
-  const res = runValidators({ intraday: { ts1h: null } });   // no data → single pass result
-  assert.equal(res.length, 1);
-  assert.equal(res[0].key, 'reach');
-  assert.equal(res[0].status, 'pass');
+  const res = runValidators({ intraday: { ts1h: null } });   // no data → all validators degrade to pass
+  assert.deepEqual(res.map(r => r.key).sort(), ['floor', 'reach'], 'registry runs reach + floor (P3)');
+  assert.ok(res.every(r => r.status === 'pass'), 'no data → every validator degrades to pass');
   assert.equal(worstStatus(res), 'pass');
   assert.equal(flags(res).length, 0);
   assert.equal(leanValidators(res), undefined, 'a clean row logs no validators field (YS2 lean-include)');

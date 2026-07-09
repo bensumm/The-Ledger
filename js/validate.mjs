@@ -27,9 +27,12 @@
  *
  * THRESHOLDS ARE PLACEHOLDERS (process rule 4). Every cutoff below is named + flagged; none is
  * validated. reachValidator REUSES js/windowread.mjs's existing quantile/recency logic and constants
- * (RECENT_NIGHTS, recencySplit's staleOptimistic) rather than inventing parallel ones.
+ * (RECENT_NIGHTS, recencySplit's staleOptimistic) rather than inventing parallel ones; floorValidator
+ * REUSES js/termstructure.mjs's term-structure math (the durable floor + typical fluctuation) rather
+ * than re-deriving it — that module is the ONE home for the multi-week structure read.
  */
 import { windowStats, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from './windowread.mjs';
+import { termStructure } from './termstructure.mjs';
 
 // --- status algebra ---------------------------------------------------------------------------
 export const STATUS = { PASS: 'pass', CAUTION: 'caution', REJECT: 'reject' };
@@ -114,11 +117,72 @@ export function reachValidator(ctx) {
   return { key, status, reason, evidence };
 }
 
+// --- floorValidator ---------------------------------------------------------------------------
+// PLACEHOLDER thresholds (rule 4 — none validated; the study that would tune them is F1/P6). The
+// floor + typical-swing math itself lives in js/termstructure.mjs (its own PLACEHOLDERs); these two
+// govern how far above the durable floor a BUY is allowed to sit before we caution/reject it.
+export const FLOOR_CAUTION_RANGES = 1.0;   // buy > this many typical swings above the durable floor ⇒ caution
+export const FLOOR_REJECT_RANGES = 2.0;    // buy > this many typical swings above the durable floor ⇒ reject
+//   VALIDATE (F1/P6): the walk-forward loss rate of buying at N typical-swings above the durable
+//   floor vs the base rate — the point at which "elevated above support" actually predicts a bleed.
+
+/**
+ * floorValidator(ctx) — BUY-SIDE ONLY. Answers: does this buy sit NEAR a durable multi-week floor, or
+ * is the bid parked well ABOVE where the 14/28d structure says support durably prints (the decay-knife
+ * shape — you'd be buying an elevated price mid-collapse, not a real dip)? It measures the buy level's
+ * distance above the durable floor in units of the item's TYPICAL fluctuation (IQR): within ~one normal
+ * swing of the floor → pass; several swings above → reject.
+ *
+ * BUY-SIDE DISCIPLINE (load-bearing — the spec's "must NOT reject/flag held lots' sell decisions"):
+ *   - A HELD lot (ctx.position.held) is a SELL decision → this validator DEGRADES to pass immediately.
+ *     Held/asked/watchlist rows are never hidden anyway (the surface's job), but floorValidator does not
+ *     even form an opinion on them — it only judges a would-be BUY.
+ *
+ * READS:
+ *   ctx.history.termStructure   the js/termstructure.mjs structure (CALLER-fed; { hasData:false } or
+ *                               absent → degrade). floor + typicalSwing come from here.
+ *   ctx.floor.level             the buy candidate to score (the bid we'd place). Falls back to
+ *                               ctx.market.row.optBuy (the patient band-floor bid) when not set.
+ *
+ * DEGRADES to pass (never rejects on absence — the archive only began accruing 2026-07-08, so a null /
+ * thin structure is the COMMON early case): held lot, no term structure, structure with no data, no
+ * durable floor (too few multi-week points), no typical swing, or no buy candidate.
+ */
+export function floorValidator(ctx) {
+  const key = 'floor';
+  const pos = ctx && ctx.position;
+  if (pos && pos.held) return degrade(key, 'held-lot-sell-side');   // BUY-side only — never judge a held sell
+
+  const ts = ctx && ctx.history && ctx.history.termStructure;
+  if (!ts || ts.hasData === false) return degrade(key, 'no-term-structure');
+  const floor = ts.floor, swing = ts.typicalSwing;
+  if (floor == null) return degrade(key, 'no-durable-floor');       // too few multi-week points to assert a floor
+  if (!(swing > 0)) return degrade(key, 'no-typical-swing');
+
+  const row = ctx && ctx.market && ctx.market.row;
+  const level = (ctx && ctx.floor && ctx.floor.level != null) ? ctx.floor.level
+              : (row && row.optBuy != null ? row.optBuy : null);
+  if (level == null) return degrade(key, 'no-buy-candidate');
+
+  const ranges = (level - floor) / swing;   // how many typical swings above the durable floor the bid sits
+  const evidence = {
+    level, floor: round2(floor), typicalSwing: round2(swing),
+    floorLookback: ts.floorLookback, ranges: round2(ranges), current: ts.current,
+  };
+  const status = ranges > FLOOR_REJECT_RANGES ? 'reject'
+               : ranges > FLOOR_CAUTION_RANGES ? 'caution'
+               : 'pass';
+  const reason = status === 'pass'
+    ? `buy ${level} near ${ts.floorLookback}d floor ${Math.round(floor)} (${round2(ranges)}× swing)`
+    : `buy ${level} is ${round2(ranges)}× typical swing above the ${ts.floorLookback}d floor ${Math.round(floor)} — not near durable support`;
+  return { key, status, reason, evidence };
+}
+
 // --- the registry -----------------------------------------------------------------------------
 // keyed so a declarative strategy spec (P4c) can name the validators it runs by key. REGISTRY_ORDER
 // is the display/priority order (worst-first is computed via worstStatus, not the array order).
-export const VALIDATORS = { reach: reachValidator };
-export const REGISTRY_ORDER = ['reach'];
+export const VALIDATORS = { reach: reachValidator, floor: floorValidator };
+export const REGISTRY_ORDER = ['reach', 'floor'];
 
 /* runValidators(ctx, {only}) — run the registry (or the named subset) over one ctx. Each call is
    try/caught so a throwing validator degrades to pass (never breaks a market read). Returns an array

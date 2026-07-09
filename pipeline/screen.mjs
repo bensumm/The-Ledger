@@ -74,6 +74,7 @@ import { gateCandidates, rankAndSlice, surviveMode, expUnits } from './lib/gatec
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { runValidators, flags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution
+import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
@@ -211,7 +212,7 @@ const watchClosely = new Map();   // id -> { name, state, note }
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer.
 // v24 (the whole-market 24h map) is passed through for the PM1 probe ctx (dip's avgLow24, decant's
 // sibling dose prices) — read-only, never a gate/verdict input.
-function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, v24) {
+function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, v24, daily) {
   const rows = [];
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0 };  // post-fetch discard reasons (--stats)
@@ -238,12 +239,21 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     if (!sv.keep) { disc[sv.discardReason]++; continue; }
     const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
-    // P2 validators — score the patient ask (optSell, the band playbook's list-at) against the reach
-    // window. screen does NOT fetch the 1h series (only ts5m/ts6h), so reachValidator DEGRADES to
-    // pass/no-data here (documented — the wiring is live so P3's floorValidator populates it). Reject
-    // DROPS the row (counted + a footer); caution keeps the row but is counted/flagged. Explicit
+    // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window, but
+    // screen does NOT fetch the 1h series (only ts5m/ts6h) → it DEGRADES to pass/no-data here. P3's
+    // floorValidator scores the patient BUY (optBuy) against the durable multi-week floor from the
+    // loadDaily {ts,mid} regime-proxy series ALREADY loaded at gate time (daily[id]) — no new fetch.
+    // A buy parked well above where the 14/28d structure says support prints (the decay-knife shape) is
+    // REJECTED (dropped + counted + footer); a marginally-elevated buy is CAUTIONed (row still shows).
+    // A cold/absent daily series degrades to pass (the common case until the archive warms). Explicit
     // asks/held/watchlist are handled on their own surfaces where nothing is ever hidden.
-    const vres = runValidators({ intraday: { ts1h: null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null } });
+    const ts = termStructure(daily && daily[s.id]);
+    const vres = runValidators({
+      market: { row },
+      history: { termStructure: ts },
+      intraday: { ts1h: null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
+      floor: { level: row.optBuy != null ? row.optBuy : null },
+    });
     const vworst = worstStatus(vres);
     if (vworst === 'reject') {
       disc.reject++;
@@ -318,9 +328,10 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
   console.log(`Grades: ${gradeDist(dist)}`);
   // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
-  // the count + the top-3 reasons. N==0 (the current reality on this surface: reachValidator degrades
-  // to pass because screen doesn't fetch the 1h series) → NO line → default output byte-identical.
-  // Caution rows still show; each is flagged on its own line here (never a per-item `·`-join).
+  // the count + the top-3 reasons. reachValidator still degrades to pass here (no 1h series fetched);
+  // P3's floorValidator CAN reject (a buy parked well above the durable multi-week floor) once the
+  // loadDaily archive has enough history — until it warms, floor also degrades to pass and this line is
+  // absent (default output byte-identical). Caution rows still show; each is flagged on its own line.
   if (disc.reject > 0) {
     const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
     console.log(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
@@ -468,7 +479,7 @@ async function main() {
   console.log('');
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   const niches = {};
-  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h, v24);
+  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h, v24, daily);
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).

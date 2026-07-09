@@ -21,13 +21,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { mdTable, stdCells } from './lib/cli.mjs';
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
+import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer
 import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
@@ -65,6 +66,11 @@ async function runItems() {
   }
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
+  // P3: read-only daily mids from whatever the Tier-1 archive already holds (noFetch → zero network,
+  // no fetch-semantics change on this surface) → floorValidator's term structure. Cold archive → empty
+  // series → floorValidator degrades to pass. Best-effort: any archive error leaves daily empty.
+  let daily = {};
+  try { ({ series: daily } = await loadDaily(28, 6, { noFetch: true })); } catch { daily = {}; }
   const rows = [], lines = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
     const inp = await fetchItemInputs(id);
@@ -73,11 +79,17 @@ async function runItems() {
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) lines.push('  ' + gl);
-    // P2 validators — score the patient ask (optSell) against the reach window. quote does NOT fetch
-    // the 1h series (fetchItemInputs default ts1h:false), so reachValidator DEGRADES to pass/no-data
-    // here; the wiring is real (it fires the moment a caller carries ts1h). An explicit ask is NEVER
-    // hidden — a fired flag is a NOTE + logged; the table row is untouched.
-    const vres = runValidators({ intraday: { ts1h: inp.ts1h ?? null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null } });
+    // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window; quote
+    // does NOT fetch the 1h series (fetchItemInputs default ts1h:false), so it DEGRADES to pass/no-data.
+    // P3's floorValidator scores the patient BUY (optBuy) — a per-item quote IS a buy-interest read —
+    // against the durable multi-week floor from the read-only daily mids (cold archive → degrade). An
+    // explicit ask is NEVER hidden: a fired flag is a NOTE + logged; the table row is untouched.
+    const vres = runValidators({
+      market: { row },
+      history: { termStructure: termStructure(daily[id]) },
+      intraday: { ts1h: inp.ts1h ?? null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
+      floor: { level: row.optBuy != null ? row.optBuy : null },
+    });
     for (const f of flags(vres)) lines.push(`  ⚠ ${f.key}: ${f.reason}`);
     sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the

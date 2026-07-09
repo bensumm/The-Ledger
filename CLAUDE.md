@@ -170,15 +170,22 @@ Script facts the skills rely on (current behavior, not doctrine):
   `--mode churn`). `rising`'s candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid,
   `risingPoolFloor`) that drops the cheap teleport-tab flood while keeping cheap-but-liquid risers.
   Thin gp-flow big tickets ride a bounded `--thin-reserve`.
-- **P2 validators (`js/validate.mjs`, run on EVERY surface):** a registry of PURE
+- **P2/P3 validators (`js/validate.mjs`, run on EVERY surface):** a registry of PURE
   `(ctx)→{status:pass|caution|reject,reason,evidence}` validators. Screens DROP `reject` rows (counted
   in `--stats` + a `rejected: N (top reasons)` footer) and FLAG `caution`; explicit asks / held /
   watchlist rows are NEVER hidden (a fired flag is a NOTE + a lean `validators` field on the
-  suggestions ledger). `reachValidator` wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a
-  rarely-reached level → caution, never-reached → reject, stale-optimistic bumps one step). It needs
+  suggestions ledger). `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a
+  rarely-reached level → caution, never-reached → reject, stale-optimistic bumps one step); it needs
   the 1h series, which **`screen.mjs`/`quote.mjs` don't fetch** (no fetch-semantics change), so it
-  DEGRADES to `pass`/no-data on both today — the framework is live for P3's whole-market
-  `floorValidator`. Thresholds are named PLACEHOLDERS.
+  DEGRADES to `pass`/no-data on both today. `floorValidator` (P3, BUY-side only) wraps
+  `js/termstructure.mjs`'s durable multi-week **floor** + **typical fluctuation** (the 1/3/7/14/28d term
+  structure over the daily-mid series): a buy parked well above where the 14/28d structure says support
+  durably prints (the decay-knife shape) → reject, marginally-elevated → caution, at/below the floor → pass.
+  It reads the `loadDaily` regime-proxy series ALREADY at gate time on `screen.mjs` and the read-only
+  archived daily mids (`loadDaily …{noFetch:true}`) on a per-item `quote.mjs` buy read — no fetch-semantics
+  change; a HELD lot (`quote --positions`) is a sell decision so it degrades. The archive only began
+  accruing 2026-07-08, so a thin/cold series DEGRADES to pass (a real reject needs a warm multi-week
+  series). Thresholds are named PLACEHOLDERS.
 - `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**
   keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
   velocity, and drops items whose *yesterday overnight window* printed below the current bid

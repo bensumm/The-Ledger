@@ -10,6 +10,40 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P3 — floorValidator + term structure off the Tier-1 archive (2026-07-08, pipeline-only — NO APP_VERSION)
+The falling-exclusion amendment ("we cannot judge falling without an item's history and typical
+fluctuations") gets its first concrete evidence read: a PURE multi-day **term structure** + a
+BUY-side **`floorValidator`** on every buy surface.
+- **New `js/termstructure.mjs`** (lives in `js/`, NOT `pipeline/lib/`, because `js/validate.mjs`'s
+  floorValidator imports it and a `js/` module may not import `pipeline/lib/` — same home rule as
+  `quotecore.js`/`windowread.mjs`). Pure DOM-free math over a daily-mid `[{ts,mid}]` series (the
+  `loadDaily` regime proxy / the Tier-1 archive): the **1/3/7/14/28-day structure** (median/low/high +
+  where the current level sits in each lookback's range), a **durable floor** (a low quantile —
+  `FLOOR_QUANTILE` 0.15 — of the longest multi-week lookback with ≥ `FLOOR_MIN_POINTS`), and a
+  **typical fluctuation** = the inter-quartile range of that lookback (IQR, so a single recent
+  spike/decay doesn't inflate "normal"). A short/empty series degrades to `hasData:false` (never throws).
+- **`floorValidator`** (registered in `js/validate.mjs`, BUY-side ONLY): rejects/cautions a buy that is
+  NOT near the durable floor — it measures the buy level's distance above the floor in units of the
+  typical swing (`> FLOOR_REJECT_RANGES` 2.0 → reject, `> FLOOR_CAUTION_RANGES` 1.0 → caution). The
+  decay-knife shape (bid parked well above where the 14/28d structure says support prints) rejects; a
+  genuine dip (bid at/below the durable floor) passes. A **HELD lot is a SELL decision → degrades to
+  pass**, so it never touches a positions review; explicit asks / held / watchlist are never hidden.
+- **Wired on both buy surfaces off data ALREADY at gate time — no fetch-semantics change.** `screen.mjs`
+  feeds `floorValidator` the `daily[id]` regime-proxy series it already loads at gate time (reject DROPS
+  the row + `--stats` + footer, caution flags it). `quote.mjs`'s per-item read (a buy-interest read)
+  feeds it the **read-only** daily mids from whatever the archive already holds (new `loadDaily(…​,
+  {noFetch:true})` — zero network; a flagged buy is a NOTE, the row is never hidden). `quote.mjs
+  --positions` leaves it null by construction (held = sell side).
+- **HONEST LIMIT (rule 4):** every threshold is a named PLACEHOLDER (the F1/P6 walk-forward study would
+  tune them); the archive only began accruing 2026-07-08, so an item with little/no daily history
+  DEGRADES to pass — a real reject needs a warm multi-week series. Verified live: it drew a `caution` on
+  Masori body (buy 1.02× typical swing above the 28d floor) on `screen --mode band` and the same NOTE on
+  a per-item `quote`, both exit 0. New `pipeline/termstructure.test.mjs` pins the math + the acceptance
+  (decay-knife reject / genuine-dip pass / no-data + held-lot degrade, both surface ctx shapes);
+  `pipeline/validate.test.mjs` re-pinned to the two-validator registry. The P1 replay goldens are
+  UNCHANGED — `replay.mjs` drives the gate funnel (gateCandidates→surviveMode), not the validator DROP,
+  so floorValidator does not touch its output.
+
 ### V2-P2 — Validate stage + reachValidator, every surface (2026-07-08, pipeline-only — NO APP_VERSION)
 The Pipeline-v2 wave's per-surface gate differences (the quote-vs-watch verdict fork's third root) get
 their shared home: a registry of PURE validators in **`js/validate.mjs`** — `(ctx) → {status:
@@ -32,7 +66,8 @@ they only downgrade on affirmative evidence, never on the absence of data (the m
   / watchlist rows are NEVER hidden (a fired flag is a NOTE + a lean `validators` field on the
   suggestions ledger). **HONEST LIMIT:** `screen.mjs`/`quote.mjs` don't fetch the 1h series (no
   fetch-semantics change was allowed), so `reachValidator` DEGRADES to `pass`/no-data on both today —
-  default output is byte-identical; the framework is live for P3's whole-market `floorValidator`.
+  default output is byte-identical; the framework carried P3's whole-market `floorValidator` (shipped —
+  it scores the patient BUY against the durable multi-week floor off the daily proxy already at gate time).
 - `suggestionEntry` widened with a lean-included `validators` field (YS2 pattern — present only when a
   flag fired, so clean rows log byte-identically). New `pipeline/validate.test.mjs` pins registry
   semantics + the reachValidator fixtures (rarely-reached, never-reached, RC1 stale→reject, degrade).

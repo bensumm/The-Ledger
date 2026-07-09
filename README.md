@@ -64,7 +64,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence, degrades to pass on missing data and never throws; `runValidators`/`worstStatus`/
   `flags`/`leanValidators`. Screens DROP reject + FLAG caution; explicit asks/held/watchlist are never
-  hidden. NOT yet app-imported → adding it does not bump APP_VERSION), `quote.js` (browser orchestrator that fetches one
+  hidden. `floorValidator` (P3, BUY-side only) rejects/cautions a buy parked well above the durable
+  multi-week floor; a HELD lot degrades. NOT yet app-imported → adding it does not bump APP_VERSION),
+  `termstructure.mjs` (P3 — pure DOM-free multi-day term structure over a daily-mid `[{ts,mid}]` series:
+  the 1/3/7/14/28d `termStructure` (median/low/high/pctInRange per lookback), a durable **floor** (low
+  quantile of the longest multi-week lookback) + a **typical fluctuation** (IQR); degrades to
+  `hasData:false` on a short series. Consumed by `js/validate.mjs`'s floorValidator + `pipeline/screen.mjs`/
+  `pipeline/quote.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
+  `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
   GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
@@ -344,6 +351,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
     emitter), `watchcore.test.mjs` (Watch-tab derivations + `offerVerdict`), `lib/cli.test.mjs`
     (arg/`parseGp`/`median`), `windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard; moved to `pipeline/` beside the other `js/`-module tests when P2 moved windowread to `js/`), `validate.test.mjs` (P2 — the validator registry semantics + reachValidator fixtures: rarely-reached→caution, never-reached→reject, RC1 stale-optimistic→bumped reject, and the no-data/thin-sample degrade-to-pass contract),
+    `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
+    decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and
+    the no-data/thin-floor/held-lot degrade-to-pass contract on both surface ctx shapes),
     `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
@@ -423,8 +433,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (~30–35GB/yr, Ben-approved) that the wiki API only serves ~30h/item live — the ONLY route to broad
     intraday history, feeding P3's term structure + P6's backtests. Deliberately OUTSIDE `pipeline/.cache/`
     (that tree is disposable/pruned; the archive must survive). Producer: `pipeline/lib/archive.mjs`
-    (`append`, via `loadDaily`/`loadSnapshot`). Consumers: `loadDaily`'s regime proxy today; the Pipeline-v2
-    context chain (P0+) as it lands. NEVER committed (huge, machine-local, reproducible-by-accrual).
+    (`append`, via `loadDaily`/`loadSnapshot`). Consumers: `loadDaily`'s regime proxy + P3's
+    `js/termstructure.mjs` durable-floor read (via `loadDaily`, incl. the read-only `{noFetch:true}` path
+    quote.mjs uses); the Pipeline-v2 context chain (P0+) as it lands. NEVER committed (huge, machine-local,
+    reproducible-by-accrual).
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
     `js/format.js` so their tables match the app exactly.
@@ -471,7 +483,8 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | `js/quotecore.js` | 10 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
 | `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs` |
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
-| `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs` (P2 — the validator registry; not yet app-imported) |
+| `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
+| `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |
 
 ### Test-location convention
 

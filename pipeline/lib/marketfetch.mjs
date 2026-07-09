@@ -321,8 +321,13 @@ export async function loadBands(hours = 2) {
 
    Returns { [id]: [{ ts, mid }] } ascending by ts — the input shape a regime-drift proxy consumes.
    This is a PROXY for picking the fetch pool; the DISPLAYED regime is still the real per-item
-   computeQuote/regimeDrift, and the falling-exclusion + rising-confirm remain post-fetch. --- */
-export async function loadDaily(days = 17, stepHours = 6, { db } = {}) {
+   computeQuote/regimeDrift, and the falling-exclusion + rising-confirm remain post-fetch.
+
+   { noFetch }: P3 — assemble the daily mids from ONLY what the archive already holds (raw obs + seed),
+   skipping the whole-market /1h backfill. This is the read-only path a surface that must NOT change its
+   fetch semantics uses (quote.mjs's per-item read feeds it to floorValidator's term structure): zero
+   network, degrades to a sparse/empty series when the archive is cold. --- */
+export async function loadDaily(days = 17, stepHours = 6, { db, noFetch = false } = {}) {
   const archive = db || openArchive();
   const ownArchive = !db;
   try {
@@ -335,7 +340,8 @@ export async function loadDaily(days = 17, stepHours = 6, { db } = {}) {
     const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
 
     // backfill only the windows the archive lacks (raw obs OR seed); bulk /1h once each, append RAW.
-    for (const w of windows) {
+    // noFetch (read-only) skips this loop entirely — assemble from whatever is already stored.
+    for (const w of noFetch ? [] : windows) {
       if (archive.hasDailyWindow(w)) continue;                  // check-before-fetch ⇒ no wasted network
       let resp = null;
       try { resp = await jget(API + '/1h?timestamp=' + w); } catch { resp = null; }

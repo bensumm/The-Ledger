@@ -63,7 +63,10 @@ export function marketStage(ctx, { inp = {}, guide = null, limit = null, held = 
 }
 
 /* history — multi-day trajectory. phase() over the 6h series (spike/decay/basing); termStructure is
-   the P3 Tier-1 extension point (1/3/7/14/28d), left null here so downstream `?? null`-degrades. */
+   the P3 read (js/termstructure.mjs — 1/3/7/14/28d + durable floor + typical fluctuation), passed in by
+   the caller when it has a daily-mid series. Left null when absent so downstream `?? null`-degrades; the
+   BUY-side floorValidator reads it (a HELD lot on this chain is a sell decision → floorValidator degrades
+   regardless, so quote.mjs --positions deliberately leaves it null). */
 export function historyStage(ctx, { ts6h = null, termStructure = null } = {}) {
   ctx.history = { phase: ts6h ? phase(ts6h) : null, termStructure };
   return ctx;
