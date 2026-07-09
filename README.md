@@ -71,7 +71,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   quantile of the longest multi-week lookback) + a **typical fluctuation** (IQR); degrades to
   `hasData:false` on a short series. Consumed by `js/validate.mjs`'s floorValidator + `pipeline/screen.mjs`/
   `pipeline/quote.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
-  `quote.js` (browser orchestrator that fetches one
+  `paths.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
+  (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
+  list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
+  {dominant,weighed,enteredUnder,migration}` (viability-weighted ordering off PLACEHOLDER heuristics
+  over the derived ctx — regime/phase/underwater/aboveFloor/band-width; `no-data` evidence notes,
+  degrade-not-throw). Path = `{key,thesis,action,levels,tripwire,horizon,economics,viability,evidence}`.
+  Consumes the enriched ItemContext; recomputes no prices. Alternatives are decision SUPPORT, never
+  alert inputs; persistence-gated dominance/migration is P4b. NOT yet app-imported → no APP_VERSION
+  bump. Fixture-pinned `pipeline/paths.test.mjs`), `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
   GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
@@ -127,9 +135,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/alerts.mjs` (N1); ships empty
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
-  a flat array of `{id, exitPrice, tripwire, horizon, ts}`. When Ben declares a patient/accumulation
-  hold ("accumulate nest, exit 4,848, tripwire 4,678, multi-day") the agent appends/upserts an entry
-  (the greenlist pattern — hand-edit or via `holdthesis.mjs upsertThesis`); a 14-day TTL prunes stale
+  a flat array of `{id, exitPrice, tripwire, horizon, path, enteredUnder, ts}` (`path`/`enteredUnder`
+  added additively by P4a — the js/paths.mjs entry-path declaration; legacy entries without them stay
+  valid). When Ben declares a patient/accumulation hold ("accumulate nest, exit 4,848, tripwire 4,678,
+  multi-day") the agent appends/upserts an entry (the greenlist pattern — hand-edit, `holdthesis.mjs
+  upsertThesis`, or `thesis.mjs set … --path <key>` which declares the path/enteredUnder here); a
+  14-day TTL prunes stale
   intent. `watch.mjs` reads it READ-ONLY through `pipeline/lib/holdthesis.mjs` and passes it into
   `convictionGate` (`lib/watchstate.mjs`): while the live price holds ABOVE the declared tripwire, the
   EXPECTED-underwater `UNDERWATER`/`CUT-CANDIDATE` headline is silenced to an armed note (being
@@ -204,7 +215,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `monitor.mjs`
     (live read-only log-state snapshot), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
-    to print a per-held reminder), `cash.mjs` (CLI to set/read/clear the STATED idle-cash balance
+    to print a per-held reminder. **P4a** — `set … --path <key> [--entered-under <key>]` ALSO declares
+    the path-engine entry path into the TRACKED root `hold-thesis.json` via `holdthesis.upsertThesis`,
+    preserving any existing plan fields; enteredUnder defaults to the path on first declaration),
+    `cash.mjs` (CLI to set/read/clear the STATED idle-cash balance
     in `.capital-state.json` — the total-capital denominator `watch.mjs`'s SUMMARY reads),
     `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
@@ -301,9 +315,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     watchstate),
     `holdthesis.mjs` (TG1 — PURE declared-hold-thesis store: `loadHoldThesis`/`saveHoldThesis`/
     `thesisFor`/`upsertThesis`/`clearThesis`/`pruneHoldThesis` over the TRACKED root `hold-thesis.json`
-    array of `{id,exitPrice,tripwire,horizon,ts}`; watch.mjs reads it read-only and feeds it to
-    `convictionGate` to SILENCE the expected-underwater headline while live holds above the declared
-    tripwire — never touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
+    array of `{id,exitPrice,tripwire,horizon,path,enteredUnder,ts}` — **P4a** grew the additive optional
+    `path`/`enteredUnder` (the js/paths.mjs entry-path declaration; LEGACY entries without them stay
+    fully valid, both default null); watch.mjs reads it read-only and feeds it to `convictionGate` to
+    SILENCE the expected-underwater headline while live holds above the declared tripwire — never
+    touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
     `context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer: staged PURE
     enrichers `identityStage`/`marketStage`/`historyStage`/`intradayStage`/`positionStage` +
     `buildItemContext` build an `ItemContext` (identity → market row → history/phase → intraday series
@@ -343,7 +359,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `{ts,module,version,stage,surface,id,name,tag,price(price-stage),quickBuy,quickSell,guide,regimeLabel,phase}`
     — the hit/miss ledger the validate-before-promote loop scores later (SCORING is a later chunk).
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
-    `quotecore.test.mjs` (verdict-tree fixtures), `reconstruct.test.mjs` (FIFO/tombstone/
+    `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
+    `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
+    the exit-family, the genuine-dip counter-fixture, enteredUnder→migration, and the
+    degrade-not-throw/no-data contract), `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
     (grade/score model), `ledgercore.test.mjs` (TD2 — `periodKey`/`groupTrades` local
     day/week/month bucketing), `table.test.mjs` (TD2 — the `compareRows` sort comparator),
@@ -383,7 +402,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocitytag.test.mjs` (Build 2 — `buildVelocityIndex` aggregation/dominant-class/median + null-safe;
     `velocityTag` minN gate, `fast·~Nm` format, ≥20% unfilled suffix),
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
-    `holdthesis.test.mjs` (TG1 — load-degrades-to-[]/round-trip/thesisFor-newest/upsert-replaces/clear/prune-TTL),
+    `holdthesis.test.mjs` (TG1 — load-degrades-to-[]/round-trip/thesisFor-newest/upsert-replaces/clear/prune-TTL;
+    P4a — path/enteredUnder persistence + the legacy-entry back-compat fixture),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate),
     `modules.test.mjs` (PM1 — the loader's empty-passthrough + stage grouping, the observe-touches-no-number
@@ -485,6 +505,7 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |
+| `js/paths.mjs` | `pipeline/paths.test.mjs` only (P4a — the pure path engine; no runtime consumer yet, P4b wires `watch.mjs`/`quote.mjs`; not yet app-imported) |
 
 ### Test-location convention
 

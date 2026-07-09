@@ -4,20 +4,31 @@
    the reminder under each held lot. A thesis is INTENT — never a verdict/alert input, decides nothing.
    NO PII in a thesis string (the repo is public; the store is local but the discipline stands).
 
-     node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"]
+   P4a — `--path <key>` also DECLARES the path-engine entry path for the lot into the TRACKED
+   hold-thesis store (repo-root hold-thesis.json, the path-carrying store js/paths.mjs' enteredUnder
+   feeds off — NOT the gitignored session-thesis file). It upserts { path, enteredUnder } on the lot,
+   preserving any existing exitPrice/tripwire/horizon/enteredUnder; enteredUnder defaults to the
+   declared path on FIRST declaration (override with `--entered-under <key>`). A path key is one of
+   js/paths.mjs' PATH_KEYS ('value-hold'/'hold-recovery'/'scalp'/'be-escape'/'list-to-clear'/'cut').
+   (Two-store note: session-thesis = free-text INTENT/reminder; hold-thesis = the declared, gating,
+   path-carrying plan. `--path` writes only the latter.)
+
+     node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
      node pipeline/thesis.mjs clear "<item|id>"
      node pipeline/thesis.mjs list */
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from './lib/marketfetch.mjs';
 import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';
+import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis } from './lib/holdthesis.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json');
+const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // TRACKED repo-root store (P4a path decl)
 
 function usage() {
   console.log('Usage:\n' +
-    '  node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"]\n' +
+    '  node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
     '  node pipeline/thesis.mjs clear "<item|id>"\n' +
     '  node pipeline/thesis.mjs list');
 }
@@ -44,12 +55,14 @@ async function main() {
     return;
   }
 
-  // split positionals from the --tripwire/--window flags
+  // split positionals from the --tripwire/--window/--path/--entered-under flags
   const flags = {}, pos = [];
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--tripwire') flags.tripwire = argv[++i];
     else if (a === '--window') flags.window = argv[++i];
+    else if (a === '--path') flags.path = argv[++i];
+    else if (a === '--entered-under') flags.enteredUnder = argv[++i];
     else pos.push(a);
   }
 
@@ -68,6 +81,21 @@ async function main() {
     const store = upsertThesis(pruneThesis(loadThesis(THESIS_PATH)), id, { thesis, tripwire: flags.tripwire, window: flags.window });
     saveThesis(THESIS_PATH, store);
     console.log(`set thesis for ${name} (${id}): ${thesisLine(store[id])}`);
+    // P4a: `--path` ALSO declares the path-engine entry path into the tracked hold-thesis store,
+    // preserving any existing declared plan fields (exitPrice/tripwire/horizon/enteredUnder). This
+    // is the ONLY store js/paths.mjs reads enteredUnder off; the session thesis above is display-only.
+    if (flags.path) {
+      const hstore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
+      const prev = holdThesisFor(hstore, id) || {};
+      const enteredUnder = flags.enteredUnder != null ? flags.enteredUnder
+        : (prev.enteredUnder != null ? prev.enteredUnder : flags.path);   // first declaration = entered under this path
+      const next = upsertHoldThesis(hstore, {
+        id, exitPrice: prev.exitPrice ?? null, tripwire: prev.tripwire ?? null,
+        horizon: prev.horizon ?? null, path: flags.path, enteredUnder,
+      });
+      saveHoldThesis(HOLD_THESIS_PATH, next);
+      console.log(`declared path for ${name} (${id}): path=${flags.path} enteredUnder=${enteredUnder} (hold-thesis.json)`);
+    }
     return;
   }
 

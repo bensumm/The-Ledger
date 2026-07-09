@@ -67,10 +67,11 @@ ok('thesisFor picks the MOST-RECENTLY-declared when several entries share an id'
 });
 
 /* --- upsert replaces, never duplicates ------------------------------------------------------ */
-ok('upsertThesis appends a new entry with the full {id,exitPrice,tripwire,horizon,ts} shape', () => {
+ok('upsertThesis appends a new entry with the full {id,exitPrice,tripwire,horizon,path,enteredUnder,ts} shape', () => {
   const out = upsertThesis([], { id: 5075, exitPrice: 4848, tripwire: 4678, horizon: 'multi-day' }, NOW);
   assert.equal(out.length, 1);
-  assert.deepEqual(out[0], { id: 5075, exitPrice: 4848, tripwire: 4678, horizon: 'multi-day', ts: NOW });
+  // P4a: path/enteredUnder are part of the shape now, defaulting to null when omitted.
+  assert.deepEqual(out[0], { id: 5075, exitPrice: 4848, tripwire: 4678, horizon: 'multi-day', path: null, enteredUnder: null, ts: NOW });
 });
 ok('upsertThesis REPLACES an existing id (no duplicate) and is PURE', () => {
   const before = [{ id: 5075, tripwire: 4678, exitPrice: 4848, horizon: 'multi-day', ts: NOW - DAY }];
@@ -81,7 +82,26 @@ ok('upsertThesis REPLACES an existing id (no duplicate) and is PURE', () => {
 });
 ok('upsertThesis defaults the optional fields to null', () => {
   const out = upsertThesis([], { id: 42 }, NOW);
-  assert.deepEqual(out[0], { id: 42, exitPrice: null, tripwire: null, horizon: null, ts: NOW });
+  assert.deepEqual(out[0], { id: 42, exitPrice: null, tripwire: null, horizon: null, path: null, enteredUnder: null, ts: NOW });
+});
+
+/* --- P4a: path / enteredUnder are additive + optional; legacy entries stay fully valid ------- */
+ok('upsertThesis persists a declared path + enteredUnder (P4a)', () => {
+  const out = upsertThesis([], { id: 5075, tripwire: 4678, path: 'value-hold', enteredUnder: 'hold-recovery' }, NOW);
+  assert.deepEqual(out[0], { id: 5075, exitPrice: null, tripwire: 4678, horizon: null, path: 'value-hold', enteredUnder: 'hold-recovery', ts: NOW });
+});
+ok('a LEGACY entry (no path/enteredUnder keys) loads / looks up / prunes UNCHANGED (P4a back-compat)', () => {
+  // exactly the pre-P4a on-disk shape — no path/enteredUnder keys at all.
+  const legacy = [{ id: 5075, exitPrice: 4848, tripwire: 4678, horizon: 'multi-day', ts: NOW }];
+  const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg1-')), 'store.json');
+  saveHoldThesis(p, legacy);
+  assert.deepEqual(loadHoldThesis(p), legacy, 'legacy shape round-trips byte-for-byte (no keys injected on load)');
+  assert.equal(thesisFor(legacy, 5075).tripwire, 4678, 'thesisFor reads a legacy entry unchanged');
+  assert.deepEqual(pruneHoldThesis(legacy, NOW).map(e => e.id), [5075], 'a fresh legacy entry survives prune unchanged');
+  // upserting a NEW field onto a legacy id replaces it with the full shape (legacy value preserved where re-passed).
+  const upgraded = upsertThesis(legacy, { id: 5075, tripwire: 4678, horizon: 'multi-day', exitPrice: 4848, path: 'value-hold' }, NOW);
+  assert.equal(upgraded[0].path, 'value-hold');
+  assert.equal(upgraded[0].enteredUnder, null);
 });
 
 /* --- clear ---------------------------------------------------------------------------------- */

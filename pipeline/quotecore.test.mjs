@@ -303,6 +303,34 @@ ok('V3: lotCtx does not leak into Gate 0 (stale → NO-READ regardless of lotCtx
 });
 
 // ============================================================================================
+// P4a — lotCtx.path is PLUMBED THROUGH ONLY (no gate reads it). A lotCtx carrying a dominant path
+// key must yield a BYTE-IDENTICAL verdict to one that omits it, across every gate the path could
+// plausibly reach. This mirrors the V3 INVARIANT: adding the new optional field changes NOTHING
+// until P4b/P5 deliberately wire it. If this ever fails, a path read leaked into the verdict early.
+// ============================================================================================
+ok('P4a INVARIANT: lotCtx.path does NOT alter the Gate-D CUT-CANDIDATE (byte-identical)', () => {
+  const { row, ts5m, be } = cleanUnderwaterRow();
+  const base    = momVerdict(row, be, 50_000, ts5m, NOW_MS);
+  const withPath = momVerdict(row, be, 50_000, ts5m, NOW_MS, { path: 'value-hold' });
+  assert.equal(base.verdict, 'CUT-CANDIDATE');
+  assert.deepEqual(withPath, base, 'a declared path must NOT change the verdict (plumbing-only)');
+});
+ok('P4a INVARIANT: lotCtx.path does NOT alter the breakdown CUT, alone or with V3 fields', () => {
+  const ts5m = mk5m((ha, i) => {
+    if (ha >= 2) return { low: 99000, high: 99200, vol: 500 };
+    const low = 99000 - (23 - i) * 90;
+    return { low, high: low + 200, vol: 500 };
+  });
+  const latest = { low: 96900, high: 97200, lowTime: FRESH, highTime: FRESH };
+  const row = rowOf(latest, ts5m);
+  const be = breakEven(105000), lotValue = 200 * 105000;
+  const base    = momVerdict(row, be, lotValue, ts5m, NOW_MS);
+  const withPath = momVerdict(row, be, lotValue, ts5m, NOW_MS, { path: 'cut', buyTs: FRESH_BUY, askFilling: true });
+  assert.equal(base.action, 'CUT');
+  assert.deepEqual(withPath, base, 'path never reaches the Gate-2 breakdown CUT (Gate-2-CUT-exempt preserved)');
+});
+
+// ============================================================================================
 // S2 POSTURE FIXTURES (overnight vs active) — appended block, independent of the momVerdict tree
 // above. Exercises the new pure helpers isOvernightNow / overnightStaleRisk only.
 // ============================================================================================

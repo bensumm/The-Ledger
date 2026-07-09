@@ -10,6 +10,44 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P4a — Path engine core, pure (2026-07-08, pipeline-only — NO APP_VERSION)
+The v2 verdict model stops being "item → one label" and becomes "item × THESIS → an action under that
+thesis". A held lot can be, at once, a value-hold above its multi-week floor, a be-escape if you just
+want your capital back, and a cut if the floor is eroding — each is a PATH, and the desk should show the
+dominant one as the headline with the rest as a weighed MENU. This chunk builds the PURE core only
+(persistence/migration wiring is P4b; declarative strategy specs are P4c).
+- **New `js/paths.mjs`** — dependency-free, DOM-free, app-importable like `quotecore.js`.
+  `enumeratePaths(ctx) → Path[]` returns the sensible candidate thesis-paths (held lots →
+  hold-recovery/value-hold/be-escape/list-to-clear/cut; unheld candidates → scalp/value-hold/avoid —
+  the union of the momVerdict verdict vocabulary + PLAN.md's path mentions, cast as first-class
+  non-mutually-exclusive theses). `weighPaths(paths, ctx) → {dominant, weighed, enteredUnder, migration}`
+  scores each by viability off the ALREADY-DERIVED context (regime/phase/underwater/aboveFloor/
+  band-width) and sorts. Path shape = `{key, thesis, action∈BUY/HOLD/LIST/CUT/AVOID, levels, tripwire,
+  horizon, economics, viability, evidence}`; alternatives are decision SUPPORT, never alert inputs.
+  `migration` is the raw dominant≠enteredUnder flag (the arm-then-confirm persistence gate + hysteresis
+  is P4b). **HONESTY (rule 4):** every viability weight is a NAMED PLACEHOLDER heuristic encoding only
+  the SHAPE of the judgment (a falling decay-knife's hold-family MUST rank below its exit-family), NOT a
+  calibrated magnitude — P6 replaces them with evidence-based, sample-sized viability. Pure + degrade-
+  not-throw: an unprovable path floors to a LOW (never-zero) viability with a `no-data` evidence note;
+  missing ctx never throws.
+- **`holdthesis.mjs` generalized** — entries grow the additive optional `path` + `enteredUnder`
+  (defaulting null); LEGACY entries written before P4a stay fully valid (load/lookup/prune never read
+  them). A back-compat fixture pins that a legacy-shape entry round-trips byte-for-byte.
+- **`thesis.mjs set … --path <key> [--entered-under <key>]`** declares the path-engine entry path into
+  the TRACKED root `hold-thesis.json` (the path-carrying store js/paths.mjs reads `enteredUnder` off —
+  NOT the gitignored session-thesis file, which stays free-text intent), preserving any existing plan
+  fields; enteredUnder defaults to the path on first declaration and is preserved when the path later
+  migrates.
+- **`lotCtx` widened with an optional `path`** in `momVerdict` (`js/quotecore.js`) — PLUMBED THROUGH
+  ONLY: no gate reads it, so a lotCtx carrying a path yields a BYTE-IDENTICAL verdict to one omitting it
+  (pinned by a new "P4a INVARIANT" fixture mirroring the V3 invariant; the Gate-2-CUT-exempt contract is
+  preserved verbatim). Wiring a verdict to the dominant path is deliberately P4b/P5.
+- **Acceptance:** a decay-knife held lot (falling regime, decay phase, underwater, above the multi-week
+  floor) ranks value-hold/hold-recovery LOWEST and the exit-family (cut > list-to-clear > be-escape)
+  higher, with cut dominant; a genuine-dip counter-fixture (rising/basing) ranks a hold above the cut
+  (proving the weights aren't trivially always-exit). New `pipeline/paths.test.mjs` (9 checks) +
+  extended `holdthesis.test.mjs`/`quotecore.test.mjs`; all suites green via `run-tests.mjs`.
+
 ### V2-P3 — floorValidator + term structure off the Tier-1 archive (2026-07-08, pipeline-only — NO APP_VERSION)
 The falling-exclusion amendment ("we cannot judge falling without an item's history and typical
 fluctuations") gets its first concrete evidence read: a PURE multi-day **term structure** + a

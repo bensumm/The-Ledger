@@ -26,14 +26,23 @@
  * cache would silently forget the plan on the next machine. It carries item ids/prices only (no PII).
  *
  * Store shape: a flat ARRAY of entries (mirrors the greenlist), one per declared lot:
- *   { id, exitPrice, tripwire, horizon, ts }
- *     id        — item id (number)
- *     exitPrice — the declared target sell (gp); display only
- *     tripwire  — the declared structural break level (gp); THE gating level
- *     horizon   — free-text plan horizon ("multi-day", "overnight", …); display only
- *     ts        — unix SECONDS the entry was declared; drives TTL expiry
+ *   { id, exitPrice, tripwire, horizon, path, enteredUnder, ts }
+ *     id           — item id (number)
+ *     exitPrice    — the declared target sell (gp); display only
+ *     tripwire     — the declared structural break level (gp); THE gating level
+ *     horizon      — free-text plan horizon ("multi-day", "overnight", …); display only
+ *     path         — (P4a, optional) the CURRENT declared path key for the lot (js/paths.mjs
+ *                    PATH_KEYS — 'value-hold' / 'hold-recovery' / …); null when undeclared
+ *     enteredUnder — (P4a, optional) the path key the lot was ENTERED under; feeds the path
+ *                    engine's MIGRATION flag (dominant ≠ enteredUnder); null when undeclared
+ *     ts           — unix SECONDS the entry was declared; drives TTL expiry
  * An entry with no numeric tripwire cannot gate (thesisFor still returns it for display, but the
  * convictionGate branch no-ops without a tripwire — safe-degrade to today's behavior).
+ *
+ * BACK-COMPAT (P4a): path/enteredUnder are ADDITIVE + optional. LEGACY entries written before P4a
+ * (no path/enteredUnder keys) stay fully valid everywhere — load/lookup/prune never read them, and
+ * upsertThesis defaults both to null. The path engine treats a missing path/enteredUnder as
+ * "undeclared" (no migration signal), exactly the degrade-not-throw contract js/paths.mjs relies on.
  */
 import fs from 'node:fs';
 
@@ -59,11 +68,15 @@ export function thesisFor(store, id) {
 }
 
 /* upsertThesis — the agent's write path: replace any existing entry for the id, else append. PURE
-   (returns a new array). tripwire/exitPrice/horizon default to null; ts stamps the declaration. */
-export function upsertThesis(store, { id, exitPrice = null, tripwire = null, horizon = null } = {},
+   (returns a new array). tripwire/exitPrice/horizon/path/enteredUnder default to null; ts stamps the
+   declaration. path/enteredUnder (P4a) are additive — omitting them writes a null-valued but
+   fully-shaped entry, so a store of new-shape entries reads identically to the legacy shape wherever
+   those keys go unused. */
+export function upsertThesis(store,
+  { id, exitPrice = null, tripwire = null, horizon = null, path = null, enteredUnder = null } = {},
   now = Math.floor(Date.now() / 1000)) {
   const rest = (store || []).filter(e => !(e && e.id === id));
-  return [...rest, { id, exitPrice, tripwire, horizon, ts: now }];
+  return [...rest, { id, exitPrice, tripwire, horizon, path, enteredUnder, ts: now }];
 }
 
 /* clearThesis — drop every entry for an id (the plan is done / abandoned). PURE. */

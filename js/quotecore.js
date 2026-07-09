@@ -355,8 +355,13 @@ export function moveShape(ts5m){
    optional — pass the full 5m series (and now, ms) to activate Gates 1/2-shape/D; without them
    the tree degrades to Gate 0 + the original breakdown matrix. lotCtx (V3) is optional too —
    { buyTs (unix SECONDS the lot was bought), askFilling (bool: the held lot's own ask is
-   transacting above the clear price) } — when omitted, momVerdict is IDENTICAL to before (the
-   ts5m/now optional-degradation precedent), so every existing caller is unaffected. Returns null
+   transacting above the clear price),
+     path (P4a, OPTIONAL: the js/paths.mjs dominant path key this lot is being held under —
+       'value-hold'/'hold-recovery'/'cut'/… ) } — when omitted, momVerdict is IDENTICAL to before
+   (the ts5m/now optional-degradation precedent), so every existing caller is unaffected.
+   P4a NOTE: `path` is PLUMBED THROUGH ONLY — NO gate reads it yet, so a lotCtx that carries a path
+   yields a BYTE-IDENTICAL verdict to one that omits it (pinned in quotecore.test.mjs "P4a" fixture).
+   Wiring a verdict to the dominant path is P4b/P5 work, deliberately not done here. Returns null
    or { action, verdict, listAt, cls, gate, why }; listAt is a price or null (HOLD, no reprice). */
 export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
   if(!row) return null;
