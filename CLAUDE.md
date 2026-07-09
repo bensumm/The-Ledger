@@ -172,7 +172,15 @@ Script facts the skills rely on (current behavior, not doctrine):
   **`--mode all` runs band/spread/rising only; churn is off-by-default** (reach it with an explicit
   `--mode churn`). `rising`'s candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid,
   `risingPoolFloor`) that drops the cheap teleport-tab flood while keeping cheap-but-liquid risers.
-  Thin gp-flow big tickets ride a bounded `--thin-reserve`.
+  Thin gp-flow big tickets ride a bounded `--thin-reserve`. **P4c**: the four niches are now DECLARATIVE
+  strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,validators,defaultPath}`) that
+  `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the
+  P1 replay goldens pin it; a new niche registers a spec, no gatecandidates/screen edit). Each surfaced
+  row gains a compact stdout entry-path annotation (`↳ <item> — scalp* 0.60 · …`: the spec's inferred
+  default entry path `*` + the weighed js/paths.mjs menu) — decision SUPPORT, display-only, NOT in
+  `screen.json`; and the spec's `defaultPath` is logged to `suggestions.jsonl` as a lean `path` field so a
+  later fill can infer the entry thesis. The default-path map (band/spread/churn→`scalp`, rising→
+  `value-hold`) is a Ben-vetoable judgment proposal, not a gate.
 - **P2/P3 validators (`js/validate.mjs`, run on EVERY surface):** a registry of PURE
   `(ctx)→{status:pass|caution|reject,reason,evidence}` validators. Screens DROP `reject` rows (counted
   in `--stats` + a `rejected: N (top reasons)` footer) and FLAG `caution`; explicit asks / held /

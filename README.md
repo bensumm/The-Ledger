@@ -81,7 +81,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   alert inputs; `migration` here is the RAW instantaneous flag — the persistence-gated
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/context.mjs`). NOT yet app-imported →
-  no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`), `quote.js` (browser orchestrator that fetches one
+  no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`),
+  `strategies.mjs` (P4c — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's four niches
+  (band/spread/rising/churn) as data-shaped specs `{key,label,inAll,pool:{risingFloor},edge,rank,
+  confirm,validators,defaultPath}`. `pipeline/lib/gatecandidates.mjs` looks up `STRATEGIES[mode]` and
+  calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` instead of branching on the niche
+  name — byte-identical to the old inline logic (pinned by the P1 replay goldens), so P5 registers the
+  scalp/value specs WITHOUT editing gatecandidates.mjs or screen.mjs again. `defaultPath` = the inferred
+  DEFAULT ENTRY PATH the surfacing implies (band/spread/churn → `scalp`, rising → `value-hold` — a
+  Ben-vetoable judgment proposal), written to `suggestions.jsonl` (lean `path` field) + shown as the
+  screen's per-row entry-path annotation. `validateStrategySpec` + `pipeline/strategies.test.mjs` are the
+  CONFORMANCE suite (structural contract + no-throw + determinism over the replay archetypes). Imports
+  only `tax` from format.js + `PATH_KEYS` from paths.mjs. NOT yet app-imported → no APP_VERSION bump),
+  `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
   GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
@@ -526,11 +538,12 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | Module | Also imported by (pipeline) |
 | --- | --- |
 | `js/quotecore.js` | 10 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
-| `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs` |
+| `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`; also `js/strategies.mjs` (P4c — `tax` for the spec edges) |
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |
-| `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
+| `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
+| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`), `pipeline/strategies.test.mjs` (P4c — the declarative niche registry; not yet app-imported) |
 
 ### Test-location convention
 

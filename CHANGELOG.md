@@ -10,6 +10,48 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P4c — Declarative strategy specs + surfacing-side paths (2026-07-08, pipeline-only — NO APP_VERSION)
+Before P4c the screen's four niches lived as imperative `if (mode === 'spread') … else …` branches
+inside `pipeline/lib/gatecandidates.mjs` — the niche name was a magic string threaded through the gate
+stack, the fetch-pool ranker, and the survival doctrine. P4c re-expresses each niche as a DATA-SHAPED
+SPEC so P5 can add the scalp/value specs (and the amended per-spec falling gates) by REGISTERING a spec,
+not by editing gatecandidates.mjs / screen.mjs again.
+- **New `js/strategies.mjs`** — a pure, DOM-free registry (imports only `tax` from format.js + `PATH_KEYS`
+  from paths.mjs; app- and node-importable like quotecore/paths). Each niche is a spec `{key, label, inAll,
+  pool:{risingFloor}, edge, rank, confirm, validators, defaultPath}`. The `edge` functions are a MECHANICAL
+  re-expression of the exact inline blocks gatecandidates.mjs used to run (same `tax` math, same gate
+  order, a `continue` is now a `return null`). `gateCandidates`/`rankAndSlice` look up `STRATEGIES[mode]`
+  and drive off `spec.edge` / `spec.pool.risingFloor` / `spec.rank`; `screen.mjs` derives its MODES/
+  ALL_MODES from the registry (the niche names live in ONE place now). NY2.1 rising-pool floor + NY2.2
+  churn-off-by-default preserved.
+- **BYTE-IDENTITY (the refactor-proof).** The P1 replay goldens (`pipeline/fixtures/replay/golden.json`)
+  pass UNCHANGED (no `--update`); `gatecandidates.test.mjs` + `survivemode.test.mjs` stay green + unedited.
+  A LIVE `screen.mjs --mode band` diff — same on-disk fetch cache, pre-refactor vs post-refactor with the
+  new annotation block stripped — was **byte-identical** (zero diff). The survival doctrine (falling-
+  exclusion / rising-confirm / posture) is UNTOUCHED in `surviveMode` (still keyed on mode) — the amended
+  per-spec falling doctrine is P5, and the registry is the seam it slots into.
+- **Screen shows the weighed path set per candidate** — each surfaced row gains a compact stdout
+  annotation (`  ↳ Cake — scalp* 0.60 · value-hold 0.30 · avoid 0.30`): the surfacing spec's inferred
+  default entry path (marked `*`) + the weighed js/paths.mjs alternatives (unheld enumeration: scalp/
+  value-hold/avoid) off the already-derived row+phase (no new fetch). Decision SUPPORT, display-only — it
+  never hides/reorders a row and is deliberately NOT in the published `screen.json` cells (the app
+  contract stays byte-identical). Viabilities are the P4a PLACEHOLDER heuristics (shape, not calibration).
+- **Inferred default entry path via the suggestions ledger** — `suggestionEntry` gains a lean `path`
+  field (the spec's `defaultPath`), lean-included exactly like the YS2 fields: a caller that supplies no
+  path (quote.mjs, watchlist rows) logs a byte-identical shape. It lets a later fill attribute a position
+  to a thesis when no explicit `thesis.mjs set --path` was declared (the P4b fallback: explicit hold-
+  thesis > inferred > null; P4c only WRITES the field).
+- **HONESTY (rule 4).** The DEFAULT ENTRY PATH per niche (band/spread/churn → `scalp`, rising →
+  `value-hold`) is a JUDGMENT proposal, **Ben-vetoable** — it encodes how `/scan` describes each niche's
+  intent (band/spread/churn are flip-first "buy the low, sell the top" plays → intraday `scalp`; rising
+  is a "size-small, mid-reprice move" you hold through the froth → `value-hold`). Not a gate; changing it
+  is a one-line registry edit.
+- **Conformance suite (`pipeline/strategies.test.mjs`)** — iterates the registry asserting every spec's
+  structural contract (`validateStrategySpec`: required fields, edge callable, `defaultPath` an ENTRY
+  path key in paths.mjs's vocabulary, gates well-formed), proves the checker BITES on a deliberately-
+  malformed spec, and runs each edge over the shared replay archetypes for no-throw + determinism — so P5
+  registering scalp/value gets conformance-checked for free. 42 suites green (was 41).
+
 ### V2-P4b — Path persistence + migration + held wiring (2026-07-08, pipeline-only — NO APP_VERSION)
 P4a's `weighPaths` re-weighs a held lot's thesis-paths every pass, so its `dominant`/`migration` are
 INSTANTANEOUS — two near-tied paths can trade the top spot tick-to-tick, and surfacing that as a fresh

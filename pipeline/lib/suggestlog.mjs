@@ -10,7 +10,7 @@
  *
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
- *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators? }
+ *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path? }
  *     ts      — unix SECONDS at emit time
  *     script  — 'quote' | 'screen' | 'watch'
  *     mode    — the mode/niche as computed then (screen niche name, or null)
@@ -158,7 +158,7 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -176,6 +176,12 @@ export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, 
   if (velocityClass != null) e.velocityClass = velocityClass;
   if (thesis != null)        e.thesis = thesis;
   if (validators != null)    e.validators = validators;
+  // P4c: `path` is the INFERRED default entry-path key from the surfacing strategy spec
+  // (js/strategies.mjs defaultPath — band/spread/churn → scalp, rising → value-hold). Lean-included
+  // exactly like the YS2 fields, so a caller that supplies no path (quote.mjs, watchlist rows) logs a
+  // byte-identical shape. It lets a later fill attribute a position to a thesis when no explicit
+  // `thesis.mjs set --path` was declared (the P4b fallback: explicit hold-thesis > inferred > null).
+  if (path != null)          e.path = path;
   return e;
 }
 

@@ -71,6 +71,11 @@ import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits } from './lib/gatecandidates.mjs';
+// P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
+// the registry (the names live in ONE place — strategies.mjs) and reads each spec's inferred default
+// entry path for the suggestions ledger + the per-row path annotation.
+import { STRATEGIES, MODE_KEYS, ALL_MODE_KEYS } from '../js/strategies.mjs';
+import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { runValidators, flags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution
@@ -84,8 +89,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
-const MODES = ['band', 'spread', 'rising', 'churn'];   // valid explicit --mode values (churn reachable explicitly)
-const ALL_MODES = ['band', 'spread', 'rising'];        // NY2.2: --mode all runs these three — churn DEMOTED off-by-default
+const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/spread/rising/churn)
+const ALL_MODES = ALL_MODE_KEYS; // P4c: --mode all runs the inAll specs — NY2.2 keeps churn DEMOTED off-by-default
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 50;
@@ -209,6 +214,33 @@ function gradeDist(dist) {
 // (deduped by id). Populated in renderMode BEFORE the falling-exclusion so a basing faller is caught.
 const watchClosely = new Map();   // id -> { name, state, note }
 
+// P4c: the weighed ENTRY-path menu for a surfaced (unheld) candidate. Builds the DERIVED path-scoring
+// ctx from the computeQuote row + phase (the same shape context.mjs's pathsStage derives for held lots,
+// minus the position/floor fields a screen candidate doesn't have — those degrade in js/paths.mjs), then
+// enumerates + weighs the unheld theses (scalp / value-hold / avoid). Display-only, DECISION SUPPORT —
+// never a gate, never reorders/hides a row (the P4c contract). Viabilities are the P4a PLACEHOLDER
+// heuristics (shape, not calibration). Returns the weighPaths() `weighed` array (sorted by viability).
+function weighEntryPaths(row, ph) {
+  const derived = {
+    held: false,
+    regime: row.falling ? 'falling' : row.rising ? 'rising' : (row.regime && row.regime.ok ? 'flat' : null),
+    phase: ph ? (ph.phase ?? null) : null,
+    mom: row.mom ?? null,
+    quickBuy: row.quickBuy, quickSell: row.quickSell, optBuy: row.optBuy, optSell: row.optSell,
+    reliable: row.reliable,
+    bandWidthPct: (row.optBuy > 0 && row.optSell != null) ? (row.optSell - row.optBuy) / row.optBuy : null,
+  };
+  return weighPaths(enumeratePaths(derived), derived).weighed;
+}
+// One compact path line for a surfaced row: the niche's inferred DEFAULT entry path (marked `*`) plus
+// the weighed alternatives, e.g. `Cake — scalp* 0.60 · value-hold 0.30 · avoid 0.30`. One line per item
+// (no `·`-join across items). The `↳` prefix makes the block trivially greppable for the byte-identity
+// proof (the ONE intended stdout addition — strip these lines and the rest is byte-identical).
+function pathLine(name, weighed, defaultPath) {
+  const menu = weighed.map(w => `${w.key}${w.key === defaultPath ? '*' : ''} ${w.viability.toFixed(2)}`).join(' · ');
+  return `  ↳ ${name} — ${menu}`;
+}
+
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer.
 // v24 (the whole-market 24h map) is passed through for the PM1 probe ctx (dip's avgLow24, decant's
 // sibling dose prices) — read-only, never a gate/verdict input.
@@ -302,7 +334,11 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     // PM2: record every firing to pipeline/modules/<module>.log (failure-safe, stdout-untouched).
     logFirings(fired, { surface: 'screen', id: s.id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
     const probeStr = fired.map(f => f.tag).join(' · ');
-    rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr, validators: leanValidators(vres) });
+    // P4c: the weighed entry-path menu for this surfaced candidate (display-only; computed off the
+    // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
+    // the same sorted order as the table.
+    const pathWeighed = weighEntryPaths(row, ph);
+    rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr, validators: leanValidators(vres), pathWeighed });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -312,8 +348,11 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
+  // P4c: log the surfacing spec's inferred DEFAULT entry path on each row so a later fill can infer the
+  // thesis a position was entered under when no explicit thesis.mjs --path was declared.
+  const defaultPath = STRATEGIES[mode].defaultPath;
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators })));
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath })));
 
   console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; fallers excluded)`);
   console.log(PLAYBOOK[mode]);
@@ -352,6 +391,15 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
       const ageH = VEL.generatedAt ? Math.round((Date.now() - new Date(VEL.generatedAt).getTime()) / 3600000) : null;
       console.log(`velocity (outcomes.json${ageH != null ? `, ${ageH}h old` : ''}; descriptive per-item history, not a rate): ${tags.join(' · ')}`);
     }
+  }
+  // P4c: the weighed ENTRY-PATH menu per surfaced row — the surfacing spec's inferred default path
+  // (marked `*`) + the weighed alternatives from js/paths.mjs (scalp / value-hold / avoid). Decision
+  // SUPPORT, not a gate: it never hides or reorders a row (the block prints in the SAME sorted order as
+  // the table above). STDOUT-ONLY — deliberately NOT in the published screen.json cells, so the
+  // canonical table + app contract stay byte-identical (same discipline as the phase/velocity folds).
+  if (rows.length) {
+    console.log(`Entry paths (surfacing default \`*\` + weighed menu; support, not a gate — placeholder weights):`);
+    for (const r of rows) console.log(pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath));
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;

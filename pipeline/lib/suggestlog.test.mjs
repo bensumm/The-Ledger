@@ -43,6 +43,14 @@ ok('YS2 forward fields are omitted when absent (legacy row stays byte-identical)
   const legacy = suggestionEntry({ quickBuy: 100 }, { itemId: 1, cls: 'mid', verdict: 'BUY' });
   assert.ok(!('posture' in legacy) && !('tripwire' in legacy) && !('fillWindowHrs' in legacy) &&
     !('velocityClass' in legacy) && !('thesis' in legacy), 'no forward keys when none supplied');
+  assert.ok(!('path' in legacy), 'P4c: no path key when none supplied — clean row byte-identical');
+});
+
+ok('P4c: the inferred entry `path` is lean-included (present only when supplied)', () => {
+  const e = suggestionEntry({}, { itemId: 5, cls: 'liquid', verdict: 'A', path: 'scalp' });
+  assert.equal(e.path, 'scalp', 'supplied path is written');
+  const none = suggestionEntry({}, { itemId: 6, cls: 'liquid', verdict: 'A' });
+  assert.ok(!('path' in none), 'absent path stays absent (SL1-style byte-identity)');
 });
 
 ok('YS2 forward fields are included only when supplied (lean, non-null)', () => {

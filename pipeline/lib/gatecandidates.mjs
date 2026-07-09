@@ -10,7 +10,10 @@
  * The four concerns that live here (all pure, no CLI/network/fs state):
  *   1. gateCandidates(mode, ctx, thresholds) — the PRE-FETCH gate stack (two-sided liquidity OR
  *      gp-flow, price window, rising-pool noise floor, per-mode step-3 edge, 500k attention floor).
- *      Threshold-driven so fixtures drive it; defaults to DEFAULT_THRESHOLDS (the CLI defaults).
+ *      Threshold-driven so fixtures drive it; defaults to DEFAULT_THRESHOLDS (the CLI defaults). P4c:
+ *      the per-mode step-3 EDGE + the rising-pool rule + the rank mode are now DECLARATIVE strategy
+ *      specs (js/strategies.mjs) this looks up by `mode` — byte-identical, but a new niche registers a
+ *      spec instead of adding an `if (mode === …)` branch here.
  *   2. rankAndSlice(mode, cand, dailySeries, opts) + proxyDrift + softFactor — the fetch-pool
  *      ORDERING (never displayed): proxy-drift deprioritizes probable fallers, rising pre-ranks by
  *      the proxy, thin gp-flow qualifiers get a bounded reserve, then TOP-N slice.
@@ -25,12 +28,18 @@
  * behavior (falling ⇒ dropped unless --phase-rescue basing). Ben's 2026-07-08 falling amendment
  * lands at P5 — the fixtures here will change then, and that diff IS the doctrine change.
  *
- * ALL numeric math (tax, overnightStaleRisk, median) is the shared impl imported below, so the
- * numbers stay byte-identical to screen.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
+ * ALL numeric math (the spec edges' tax, overnightStaleRisk, median) is the shared impl (tax lives in
+ * strategies.mjs's edge functions now, imported from js/format.js there), so the numbers stay
+ * byte-identical to screen.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
 import { overnightStaleRisk } from '../../js/quotecore.js';
-import { tax } from '../../js/format.js';
 import { median } from './cli.mjs';
+// P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
+// js/strategies.mjs. gateCandidates/rankAndSlice look up STRATEGIES[mode] and call spec.edge / read
+// spec.pool.risingFloor / spec.rank instead of branching on the niche name — byte-identical behavior
+// (the P1 replay goldens pin it), but a new niche (P5 scalp/value) registers a spec instead of editing
+// this file. `tax` moved with the edge functions into strategies.mjs.
+import { STRATEGIES } from '../../js/strategies.mjs';
 
 // DEFAULT_THRESHOLDS: the gate-stack constants at their CLI defaults (screen.mjs builds its own
 // THRESHOLDS from parsed args and passes it explicitly; this default serves fixtures / import callers
@@ -79,6 +88,8 @@ export const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : dri
 // so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window, rising-pool
 // floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and `tax` are pure.
 export function gateCandidates(mode, { v24, map, bands }, t = DEFAULT_THRESHOLDS) {
+  const spec = STRATEGIES[mode];
+  if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
   const cand = [];
   for (const idStr in v24) {
     const id = +idStr; const d = v24[idStr]; if (!d) continue;
@@ -89,34 +100,19 @@ export function gateCandidates(mode, { v24, map, bands }, t = DEFAULT_THRESHOLDS
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
     if (mid < t.MIN_PRICE || mid > t.MAX_PRICE) continue;   // price window (shared)
-    if (mode === 'rising' && !risingPoolFloor(mid, limitVol, t.RISE_MID_FLOOR, t.RISE_LIQUID_VOL)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
+    if (spec.pool.risingFloor && !risingPoolFloor(mid, limitVol, t.RISE_MID_FLOOR, t.RISE_LIQUID_VOL)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
     // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
     // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
     const thin = limitVol < t.FLOOR;
     if (thin && limitVol * mid < t.GP_FLOOR) continue;    // fails BOTH the unit floor and the gp-flow floor
     const limit = map.byId[id]?.limit ?? null;
 
-    // --- step 3: mode swaps ONLY the edge definition + gate here ---
-    let modeNet, modeRoi, activeWin = null;
-    if (mode === 'spread') {
-      modeNet = (avgHigh - tax(avgHigh)) - avgLow;      // 24h-avg spread, after tax
-      modeRoi = modeNet / avgLow * 100;
-      if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
-    } else {
-      // band / rising / churn all price the edge off the traded intraday band
-      const b = bands[id]; if (!b || b.bandLo == null || b.bandHi == null) continue;
-      const minActive = thin ? t.MIN_ACTIVE_THIN : t.MIN_ACTIVE;   // 6/2h is impossible at ~12/d — relax for thin
-      if (b.active5m < minActive) continue;             // band must be TRADED, not one spike
-      activeWin = b.active5m;
-      modeNet = (b.bandHi - tax(b.bandHi)) - b.bandLo;  // band low → band top, after tax
-      modeRoi = modeNet / b.bandLo * 100;
-      if (mode === 'churn') {
-        if (!(limitVol >= 2000 && limit != null && limit > 0)) continue;  // buy-limit-cycle commodity
-        // tiny ROI accepted for churn — no --min-roi gate; volume does the work
-      } else {
-        if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
-      }
-    }
+    // --- step 3: the DECLARATIVE spec's edge — P4c re-expressed the old inline per-mode branch as
+    // strategies.mjs edge functions (byte-identical: a `continue` is now a `return null`). Returns the
+    // after-tax { modeNet, modeRoi, activeWin } or null when the item fails this niche's edge/gate. ---
+    const edge = spec.edge({ avgHigh, avgLow, band: bands ? bands[id] : undefined, limitVol, limit, thin }, t);
+    if (!edge) continue;
+    const { modeNet, activeWin } = edge;
     if (modeNet <= 0) continue;
     const expGpDay = Math.round(expUnits(limit, limitVol) * modeNet);
     // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
@@ -142,7 +138,8 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   // (limitVol×mid, not the noisy bandNet). Net effect: the non-thin survivor set is materially unchanged
   // (gp-flow ADDS ≤ thinReserve rows/niche, doesn't reshuffle).
   const nonThin = cand.filter(c => !c.thin);
-  if (mode === 'rising') {
+  const spec = STRATEGIES[mode];
+  if (spec && spec.rank === 'proxy') {
     // fetch rising-likely items first: proxy drift desc (unknowns last), expGpDay as tiebreak
     nonThin.sort((a, b) => ((b.proxyDrift ?? -1e12) - (a.proxyDrift ?? -1e12)) || (b.expGpDay - a.expGpDay));
   } else {
