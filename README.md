@@ -196,7 +196,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `loadHistDaily` (YF1) + the FC1 opt-in cross-invocation fetch
     cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
     within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
-    helpers), `rating.mjs` (grade/score model), `suggestlog.mjs` (shared `suggestions.jsonl` appender + SR1
+    helpers), `rating.mjs` (grade/score model), `gatecandidates.mjs` (P1 — screen.mjs's PURE
+    candidate-selection + survival doctrine, moved out of screen.mjs so it's node-importable +
+    fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the
+    `risingPoolFloor` predicate (GC1's threshold-driven form, default `DEFAULT_THRESHOLDS`), the
+    fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`), and the extracted
+    post-fetch `surviveMode(mode,row,phase,opts)` — falling-exclusion/`--phase-rescue`/rising-confirm/
+    overnight-posture, returning `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc`
+    counters; logic byte-identical to the old inline code, diff-proven), `suggestlog.mjs` (shared `suggestions.jsonl` appender + SR1
     rotation: `logSuggestions` rolls completed months into `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`
     on append via `rotateLedger` — no-row-loss archive-then-truncate, idempotent — and `readSuggestionLines`
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
@@ -288,7 +295,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
-    screen.mjs's pre-fetch gate stack), `watchstate.test.mjs` (V1 — cross-pass deltas + the
+    the pre-fetch gate stack; P1 — the `rankAndSlice`/`proxyDrift`/`softFactor` fetch-pool
+    ordering: thin-reserve slots, rising proxy-first ordering, soft-factor deprioritization, TOP
+    slice), `survivemode.test.mjs` (P1 — the post-fetch `surviveMode` doctrine: falling-exclusion +
+    `--phase-rescue` basing rescue, rising-confirm, overnight-posture, and the load-bearing
+    rescued-carries-through-a-later-posture-drop dual-counter invariant), `watchstate.test.mjs` (V1 — cross-pass deltas + the
     consecutive-underwater/below-support counters' reset policy + V4 `convictionGate` arm-then-confirm
     escalation incl. the breakdown-exempt invariant), `levels.test.mjs` (V2 — higher-low support /
     cut-trigger + graceful degradation), `emit.test.mjs` (V5 — the per-held emit contract: the

@@ -62,10 +62,15 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, overnightStaleRisk, phase } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
 import { tax, fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
-import { parseArgs, parseGp, mdTable, stdCells, median } from './lib/cli.mjs';
+import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
+// P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
+// here: gateCandidates/risingPoolFloor/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
+// renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
+// THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
+import { gateCandidates, rankAndSlice, surviveMode, expUnits } from './lib/gatecandidates.mjs';
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
@@ -133,12 +138,9 @@ const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
 // The teleport-tab D-flood is cheap AND thin/mid (below BOTH arms) → it drops. RISE_LIQUID_VOL=1000
 // matches suggestlog's liqClass 'liquid' cutoff (one vocabulary; volDay == limitVol == min(hpv,lpv)).
 // HONESTY: one evening of data (NY1); rising was re-judged on a trending day — re-check on a flat one.
+// (The pure `risingPoolFloor` predicate moved to lib/gatecandidates.mjs with the gate stack, P1.)
 const RISE_MID_FLOOR = A['rise-mid-floor'] != null ? parseGp(A['rise-mid-floor']) : 1_000_000;
 const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1000;
-// Pure predicate (exported for the NY2.1 unit check) — true = candidate survives the rising floor.
-export function risingPoolFloor(mid, limitVol, midFloor = RISE_MID_FLOOR, liqVol = RISE_LIQUID_VOL) {
-  return mid >= midFloor || limitVol >= liqVol;
-}
 // GC1: the CLI-derived thresholds gateCandidates consumes, grouped into ONE object so the gate stack
 // takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
@@ -181,106 +183,11 @@ const DAILY_DAYS = 17, DAILY_STEP_H = 6;                         // regime-proxy
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
 
-// realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
-// of the limiting-side daily volume. Null limit → volume share only.
-const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); return limit != null ? Math.min(limit * 6, vShare) : vShare; };
-
-// --- regime proxy off loadDaily's bulk {ts,mid} series: SAME 3d-vs-prior-~2wk shape as quotecore's
-// regimeDrift, but computed from the whole-market archive and NEVER displayed — it only ORDERS the
-// fetch pool so we spend the expensive per-item fetches on likely survivors. The real regime (and the
-// falling-exclusion + rising-confirm) is still the post-fetch computeQuote. ---
-function proxyDrift(points) {
-  if (!points || points.length < 2) return null;
-  const tEnd = points[points.length - 1].ts;
-  const recentCut = tEnd - 3 * 86400, priorCut = tEnd - 17 * 86400;
-  const recent = [], prior = [];
-  for (const p of points) { if (p.mid == null) continue; if (p.ts >= recentCut) recent.push(p.mid); else if (p.ts >= priorCut) prior.push(p.mid); }
-  if (recent.length < 4 || prior.length < 6) return null;       // too little archive → unknown (fall back to raw rank)
-  const rm = median(recent), pm = median(prior);
-  if (!rm || !pm) return null;
-  return (rm - pm) / pm * 100;
-}
-// PLACEHOLDER fetch-pool ordering weight — deprioritize probable fallers (they'd be discarded
-// post-fetch anyway). Chunk-C study sets these numbers; null (unknown regime) = mild trust.
-const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : drift <= -5 ? 0.5 : 1;
-
-// --- gate stack + mode-specific step-3 edge, ranked by realistic gp/day (picks the fetch pool) ---
-// GC1: exported + threshold-driven. The gate LOGIC is byte-identical to before — every constant it
-// used to close over is now a named field of the `t` thresholds object (default THRESHOLDS = the CLI
-// values), so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window,
-// rising-pool floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and
-// `tax` are pure (no CLI state), so they stay module/import scope. Exported for gatecandidates.test.mjs.
-export function gateCandidates(mode, { v24, map, bands }, t = THRESHOLDS) {
-  const cand = [];
-  for (const idStr in v24) {
-    const id = +idStr; const d = v24[idStr]; if (!d) continue;
-    const hpv = d.highPriceVolume || 0, lpv = d.lowPriceVolume || 0;
-    if (hpv <= 0 || lpv <= 0) continue;                 // two-sided liquidity gate (shared, NON-NEGOTIABLE)
-    const limitVol = Math.min(hpv, lpv);
-    const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
-    if (!avgHigh || !avgLow) continue;
-    const mid = (avgHigh + avgLow) / 2;
-    if (mid < t.MIN_PRICE || mid > t.MAX_PRICE) continue;   // price window (shared)
-    if (mode === 'rising' && !risingPoolFloor(mid, limitVol, t.RISE_MID_FLOOR, t.RISE_LIQUID_VOL)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
-    // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
-    // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
-    const thin = limitVol < t.FLOOR;
-    if (thin && limitVol * mid < t.GP_FLOOR) continue;    // fails BOTH the unit floor and the gp-flow floor
-    const limit = map.byId[id]?.limit ?? null;
-
-    // --- step 3: mode swaps ONLY the edge definition + gate here ---
-    let modeNet, modeRoi, activeWin = null;
-    if (mode === 'spread') {
-      modeNet = (avgHigh - tax(avgHigh)) - avgLow;      // 24h-avg spread, after tax
-      modeRoi = modeNet / avgLow * 100;
-      if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
-    } else {
-      // band / rising / churn all price the edge off the traded intraday band
-      const b = bands[id]; if (!b || b.bandLo == null || b.bandHi == null) continue;
-      const minActive = thin ? t.MIN_ACTIVE_THIN : t.MIN_ACTIVE;   // 6/2h is impossible at ~12/d — relax for thin
-      if (b.active5m < minActive) continue;             // band must be TRADED, not one spike
-      activeWin = b.active5m;
-      modeNet = (b.bandHi - tax(b.bandHi)) - b.bandLo;  // band low → band top, after tax
-      modeRoi = modeNet / b.bandLo * 100;
-      if (mode === 'churn') {
-        if (!(limitVol >= 2000 && limit != null && limit > 0)) continue;  // buy-limit-cycle commodity
-        // tiny ROI accepted for churn — no --min-roi gate; volume does the work
-      } else {
-        if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) continue;   // %-ROI OR (thin & abs-gp)
-      }
-    }
-    if (modeNet <= 0) continue;
-    const expGpDay = Math.round(expUnits(limit, limitVol) * modeNet);
-    // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
-    // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note).
-    if (!thin && expGpDay < t.MIN_GPD) continue;
-    cand.push({ id, limitVol, mid, limit, expGpDay, activeWin, thin });
-  }
-  return cand;
-}
-
-// Rank the gated pool and take the top-N to fetch. The proxy (from the bulk daily archive) orders
-// WHICH items we spend the expensive per-item fetch on — deprioritizing probable fallers, and for
-// rising mode pushing likely-rising items to the front so its fetch budget isn't wasted on flats.
-function rankAndSlice(mode, cand, dailySeries) {
-  for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
-  // Thin gp-flow qualifiers are held OUT of the main ranking and given a bounded RESERVE instead.
-  // Two reasons: (1) their intraday band is priced off a thinly-traded 2h window, so bandNet is noisy
-  // and often inflated (the band-top-artifact lesson) → a raw-expGpDay rank lets them CROWD OUT genuine
-  // liquid flips; (2) the design intent is "surface the big ticket honestly, don't let it take over".
-  // So the main pool is non-thin only; thin items get up to THIN_RESERVE slots, ranked by real gp-flow
-  // (limitVol×mid, not the noisy bandNet). Net effect: the non-thin survivor set is materially unchanged
-  // (gp-flow ADDS ≤ THIN_RESERVE rows/niche, doesn't reshuffle).
-  const nonThin = cand.filter(c => !c.thin);
-  if (mode === 'rising') {
-    // fetch rising-likely items first: proxy drift desc (unknowns last), expGpDay as tiebreak
-    nonThin.sort((a, b) => ((b.proxyDrift ?? -1e12) - (a.proxyDrift ?? -1e12)) || (b.expGpDay - a.expGpDay));
-  } else {
-    nonThin.sort((a, b) => (b.expGpDay * softFactor(b.proxyDrift)) - (a.expGpDay * softFactor(a.proxyDrift)));
-  }
-  const reserved = cand.filter(c => c.thin).sort((a, b) => (b.limitVol * b.mid) - (a.limitVol * a.mid)).slice(0, THIN_RESERVE);
-  return [...reserved, ...nonThin].slice(0, TOP);
-}
+// P1: the gate stack (`gateCandidates`), the fetch-pool ranker (`rankAndSlice` + `proxyDrift` +
+// `softFactor`), the `risingPoolFloor` predicate, and `expUnits` all live in lib/gatecandidates.mjs
+// now (imported above). main() passes screen's CLI THRESHOLDS to gateCandidates and { thinReserve,
+// top } to rankAndSlice explicitly (the lib defaults to the same values via DEFAULT_THRESHOLDS /
+// THIN_RESERVE_DEFAULT / TOP_DEFAULT). expUnits is reused below by roughExpGpDay (the watchlist path).
 
 const PLAYBOOK = {
   band:   'Playbook: ladder BUYS at the band low, SELL at the band top; never list below break-even (tax-capped; shared breakEven).',
@@ -319,25 +226,14 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     const trans = stateTransition(ph);
     if (trans && trans.watch && !watchClosely.has(s.id))
       watchClosely.set(s.id, { name: map.byId[s.id]?.name || ('#' + s.id), state: trans.state, note: trans.note });
-    // Part B (opt-in): a faller the screen would drop is RESCUED only when --phase-rescue is set AND
-    // it has decayed to a basing shape. Default (flag off): unchanged falling-exclusion (byte-identical).
-    let rescued = false;
-    if (row.falling) {
-      if (PHASE_RESCUE && ph.phase === 'basing') { rescued = true; disc.rescued++; }
-      else { disc.falling++; continue; }                     // screen rule: never surface fallers
-    }
-    if (mode === 'rising') {                                  // rising-mode confirm
-      if (!row.rising) { disc.notRising++; continue; }
-      if (row.mom === 'breakdown') { disc.breakdown++; continue; }
-    }
-    if (POSTURE === 'overnight') {
-      // overnight posture: only a confident, patient, non-thin edge that won't be stale by morning.
-      if (s.thin) { disc.posture++; continue; }                                      // no thin fast-lane
-      if (!(row.regimeLabel === 'flat' || row.rising)) { disc.posture++; continue; } // confident flat/rising only (drops unknown)
-      if (!row.reliable) { disc.posture++; continue; }                              // needs a trustworthy band
-      if (row.mom === 'breakdown') { disc.posture++; continue; }                    // no active pullback overnight
-      if (overnightStaleRisk(series5m && series5m.get(s.id), row.optBuy)) { disc.posture++; continue; }  // stale/underwater by morning
-    }
+    // P1: the post-fetch survival doctrine (falling-exclusion + --phase-rescue basing rescue,
+    // rising-mode confirm, overnight-posture filters) is the pure surviveMode() in gatecandidates.mjs.
+    // Byte-identical to the old inline chain: `rescued` still increments disc.rescued at the point of
+    // rescue (even if a later gate drops the row), and discardReason maps 1:1 onto the disc counters.
+    const sv = surviveMode(mode, row, ph, { phaseRescue: PHASE_RESCUE, posture: POSTURE, thin: s.thin, series5m: series5m && series5m.get(s.id) });
+    if (sv.rescued) disc.rescued++;
+    if (!sv.keep) { disc[sv.discardReason]++; continue; }
+    const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
@@ -520,8 +416,8 @@ async function main() {
   // gate every mode, then proxy-rank its gated pool and take the top-N fetch pool
   const gated = {};
   for (const m of RUN_MODES) {
-    const cand = gateCandidates(m, ctx);
-    gated[m] = { cand, survivors: rankAndSlice(m, cand, daily) };
+    const cand = gateCandidates(m, ctx, THRESHOLDS);
+    gated[m] = { cand, survivors: rankAndSlice(m, cand, daily, { thinReserve: THIN_RESERVE, top: TOP }) };
   }
 
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it

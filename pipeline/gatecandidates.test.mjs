@@ -2,11 +2,12 @@
 /**
  * gatecandidates.test.mjs — acceptance fixtures for screen.mjs's candidate gate stack (GC1).
  *
- * GC1 extracted screen.mjs's pre-fetch gating into the exported, threshold-driven gateCandidates()
- * (behind screen.mjs's import.meta.url invocation guard, so importing it fires NO screen/network).
- * The gate LOGIC is byte-identical to before — GC1 only replaced the closed-over module-level CLI
- * constants with a `thresholds` argument so fixtures can drive the whole stack with synthetic 24h /
- * band data (no live API). No live data (CLAUDE.md rule 4).
+ * GC1 extracted screen.mjs's pre-fetch gating into the exported, threshold-driven gateCandidates();
+ * P1 then RELOCATED it (with risingPoolFloor + the rest of the pool-selection cluster) into
+ * pipeline/lib/gatecandidates.mjs — a pure module, so importing it fires NO screen/network. The gate
+ * LOGIC is byte-identical to the original inline screen.mjs code — the `thresholds` argument (default
+ * DEFAULT_THRESHOLDS) lets fixtures drive the whole stack with synthetic 24h / band data (no live
+ * API). No live data (CLAUDE.md rule 4).
  * Run: `node pipeline/gatecandidates.test.mjs`  (exits non-zero on any failure).
  *
  * WHAT gateCandidates OWNS (and this file pins) — the PRE-FETCH gate stack:
@@ -20,14 +21,16 @@
  *     %-ROI ≥ MIN_ROI OR (thin & abs-gp ≥ MIN_NET_GP); churn swaps in a volume+limit gate.
  *   - the 500k/day attention floor (expGpDay ≥ MIN_GPD), from which THIN gp-flow qualifiers are EXEMPT.
  *
- * WHAT IT DOES NOT OWN (so it's NOT fixtured here): falling-regime EXCLUSION and the rising-CONFIRM
- * both run POST-fetch in renderMode() off the real computeQuote row (row.falling / row.rising), not in
- * gateCandidates. Held/asked/watchlist EXEMPTIONS never reach gateCandidates either — the S3 watchlist
- * path bypasses the gate stack entirely (runWatchlist). The only exemption inside this function is the
- * thin-gp-flow exemption from the attention floor, pinned below.
+ * WHAT gateCandidates DOES NOT OWN (so it's not fixtured HERE): the POST-fetch survival doctrine —
+ * falling-regime EXCLUSION, the rising-CONFIRM, and the overnight-posture filters — runs off the real
+ * computeQuote row (row.falling / row.rising / row.reliable / …), not in gateCandidates. P1 extracted
+ * that doctrine into the pure surviveMode() (same lib/gatecandidates.mjs) and it IS fixtured now — in
+ * the sibling survivemode.test.mjs. Held/asked/watchlist EXEMPTIONS never reach gateCandidates either —
+ * the S3 watchlist path bypasses the gate stack entirely (runWatchlist). The only exemption inside
+ * gateCandidates is the thin-gp-flow exemption from the attention floor, pinned below.
  */
 import assert from 'node:assert/strict';
-import { gateCandidates, risingPoolFloor } from './screen.mjs';
+import { gateCandidates, risingPoolFloor, rankAndSlice, proxyDrift, softFactor } from './lib/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -45,7 +48,7 @@ const rec = (avgLow, avgHigh, hpv, lpv = hpv) => ({ avgLowPrice: avgLow, avgHigh
 const band = (bandLo, bandHi, active5m) => ({ bandLo, bandHi, active5m });
 const ctx = (v24, byId = {}, bands = {}) => ({ v24, map: { byId }, bands });
 
-console.log('screen.mjs gateCandidates() acceptance:');
+console.log('gatecandidates.mjs gateCandidates() acceptance:');
 
 /* --- two-sided liquidity gate ------------------------------------------------------------- */
 ok('two-sided liquidity: a one-sided book (lpv=0) is dropped; a two-sided one survives', () => {
@@ -122,6 +125,89 @@ ok('price window: mid outside [MIN_PRICE, MAX_PRICE] is dropped', () => {
   const v24 = { 5: rec(50_000_000, 55_000_000, 100000) };   // mid 52.5m > 45m default MAX_PRICE (wide spread clears tax)
   assert.equal(gateCandidates('spread', ctx(v24), baseT).length, 0, 'above MAX_PRICE → dropped');
   assert.equal(gateCandidates('spread', ctx(v24), { ...baseT, MAX_PRICE: 60_000_000 }).length, 1, 'raised MAX_PRICE admits it');
+});
+
+/* === fetch-pool ORDERING: proxyDrift / softFactor / rankAndSlice (P1) ===================== *
+ * These were untested inline in screen.mjs — a selection effect that silently drops opportunities.
+ * All pure now, driven with synthetic {ts,mid} archives + candidate stubs (no live API).            */
+
+// build a bulk daily {ts,mid} series with a chosen recent (last-3d) vs prior (4–17d) median so
+// proxyDrift returns a known drift %. 6 prior points + 4 recent points clear its min-sample gates.
+function dseries(recentMid, priorMid) {
+  const day = 86400, tEnd = 1_700_000_000, pts = [];
+  for (let i = 9; i >= 4; i--) pts.push({ ts: tEnd - i * day, mid: priorMid });   // prior: 4–9d before tEnd
+  for (const d of [2, 1.5, 1, 0]) pts.push({ ts: tEnd - Math.round(d * day), mid: recentMid });  // recent: ≤3d, last = tEnd
+  return pts;
+}
+
+console.log('\ngatecandidates.mjs proxyDrift() / softFactor():');
+
+ok('proxyDrift: null on missing/too-short/too-sparse series', () => {
+  assert.equal(proxyDrift(null), null);
+  assert.equal(proxyDrift([{ ts: 1, mid: 100 }]), null);
+  assert.equal(proxyDrift([{ ts: 1000, mid: 100 }, { ts: 2000, mid: 100 }]), null);  // <4 recent / <6 prior
+});
+
+ok('proxyDrift: recent-vs-prior median drift %, signed', () => {
+  assert.equal(proxyDrift(dseries(110, 100)), 10, 'recent 10% above prior → +10');
+  assert.equal(proxyDrift(dseries(90, 100)), -10, 'recent 10% below prior → -10');
+  assert.equal(proxyDrift(dseries(100, 100)), 0, 'flat → 0 (NOT null — rm/pm truthy)');
+});
+
+ok('softFactor: null→0.7, ≤-8→0.1, ≤-5→0.5, else 1 (boundaries)', () => {
+  assert.equal(softFactor(null), 0.7);
+  assert.equal(softFactor(0), 1);
+  assert.equal(softFactor(-4), 1);
+  assert.equal(softFactor(-5), 0.5);
+  assert.equal(softFactor(-6), 0.5);
+  assert.equal(softFactor(-8), 0.1);
+  assert.equal(softFactor(-9), 0.1);
+});
+
+console.log('\ngatecandidates.mjs rankAndSlice():');
+
+// candidate stub (shape rankAndSlice consumes): id, expGpDay, thin, limitVol, mid.
+const c = (id, expGpDay, over = {}) => ({ id, expGpDay, thin: false, limitVol: 100, mid: 5000, ...over });
+
+ok('non-rising ranking deprioritizes a probable faller via softFactor', () => {
+  // equal expGpDay; id 1 has a -10% proxy drift (softFactor 0.1) so it sorts BELOW the flat id 2.
+  const cand = [c(1, 1000), c(2, 1000)];
+  const daily = { 1: dseries(90, 100), 2: dseries(100, 100) };
+  const out = rankAndSlice('band', cand, daily, { top: 40, thinReserve: 6 });
+  assert.deepEqual(out.map(x => x.id), [2, 1]);
+});
+
+ok('rising mode orders by proxy drift desc (a strong riser beats a higher-expGpDay flat)', () => {
+  const cand = [c(1, 500), c(2, 9999)];
+  const daily = { 1: dseries(110, 100), 2: dseries(100, 100) };   // id1 +10% drift, id2 flat
+  const out = rankAndSlice('rising', cand, daily);
+  assert.deepEqual(out.map(x => x.id), [1, 2], 'proxy-first: the riser leads despite id2\'s bigger expGpDay');
+});
+
+ok('thin gp-flow qualifiers ride a bounded reserve, PREPENDED, ranked by limitVol×mid', () => {
+  const cand = [
+    c(10, 100000),                                              // liquid main-pool row
+    c(20, 5, { thin: true, limitVol: 20, mid: 18_000_000 }),    // thin big ticket, gp-flow 360m
+    c(21, 5, { thin: true, limitVol: 10, mid: 18_000_000 }),    // thin, gp-flow 180m
+  ];
+  const out = rankAndSlice('band', cand, {}, { thinReserve: 6, top: 40 });
+  assert.deepEqual(out.map(x => x.id), [20, 21, 10], 'reserve (by gp-flow desc) first, then the non-thin pool');
+});
+
+ok('thinReserve caps how many thin rows are admitted', () => {
+  const cand = [
+    c(20, 5, { thin: true, limitVol: 30, mid: 10_000_000 }),
+    c(21, 5, { thin: true, limitVol: 20, mid: 10_000_000 }),
+    c(22, 5, { thin: true, limitVol: 10, mid: 10_000_000 }),
+  ];
+  const out = rankAndSlice('band', cand, {}, { thinReserve: 2, top: 40 });
+  assert.deepEqual(out.map(x => x.id), [20, 21], 'only the top-2 thin by gp-flow');
+});
+
+ok('top slices the combined reserve+pool list', () => {
+  const cand = [c(1, 300), c(2, 200), c(3, 100)];               // no series → all softFactor 0.7 → expGpDay order
+  const out = rankAndSlice('band', cand, {}, { top: 2, thinReserve: 6 });
+  assert.deepEqual(out.map(x => x.id), [1, 2]);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
