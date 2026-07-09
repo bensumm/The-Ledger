@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.26
+version: 1.27
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -22,7 +22,7 @@ updated. The script already gates (two-sided liquidity, price window, per-spec f
 and grades (`rating.mjs`); your job is the judgment pass over what it prints.
 
 **P5 niches — scalp / value (both PROVISIONAL, n≈0, OFF-by-default; explicit `--mode` only).**
-- **`--mode scalp`** — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
+- **`--mode scalp`** _(judgment: when to chase — desk-presence call)_ — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
   faller isn't auto-bad). It INCLUDES fallers other niches exclude. Flip-only/no-hold, HARD intraday
   stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
   never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
@@ -56,29 +56,29 @@ re-run it.)
 
 This is the tribal layer the script can't do — apply ALL of these:
 
-- **500k gp/day attention floor** (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
+- **500k gp/day attention floor** _(enforced: `pipeline/screen.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
   SCRIPT — `screen.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
-- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** If a niche prints `SUB-FLOOR
+- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/gatecandidates.mjs`)_ If a niche prints `SUB-FLOOR
   FALLBACK` (zero candidates cleared the floors → the script re-ran beneath them and shows the best
   ≤5, grades `C (sub-floor)`-capped), relay it AS sub-floor: name the floor that emptied the niche,
   never present a sub-floor row as a normal recommendation, and default to "nothing qualified today"
   unless Ben explicitly wants to fish below the bar. The bar itself was not lowered.
-- **24h-drift is a pre-filter only.** A current-vs-24h-avg read of "flat/slightly soft"
+- **24h-drift is a pre-filter only.** _(judgment: interpretation discipline)_ A current-vs-24h-avg read of "flat/slightly soft"
   repeatedly masks multi-day fallers. The screen's displayed Regime column is the real
   multi-day `regimeDrift` check — trust it, and never recommend off a 24h impression alone.
-- **Two-sided liquidity discipline.** Real liquidity = a two-sided daily market
+- **Two-sided liquidity discipline.** _(enforced: `pipeline/lib/gatecandidates.mjs` two-sided gate; the ~100/day floor is `judgment:`)_ Real liquidity = a two-sided daily market
   (`lowPriceVolume>0 && highPriceVolume>0` on the 24h endpoint), never the `/volumes` count
   (bursty/weekly, overstates tradability). ~100/day limiting-side is the practical floor;
   below it the juicy "margins" are ghost-spreads (cosmetics, ornament kits — uncrossable).
-- **Tax dominates thin flips.** The 2% tax eats most of a tight spread — need meaningfully
+- **Tax dominates thin flips.** _(judgment: the >0.5% after-tax bar)_ The 2% tax eats most of a tight spread — need meaningfully
   >~0.5% after-tax to bother. Stable/tight ≠ profitable.
-- **Band-is-the-edge pricing.** For a liquid item with a stable *regime* but a wide
+- **Band-is-the-edge pricing.** _(judgment: pricing call)_ For a liquid item with a stable *regime* but a wide
   intraday band, the band IS the edge: ladder buys at band lows / sell at band tops (the
   crystal-teleport-seed lesson — the band beat mid-spread flips ~4:1). Never list below
   break-even; don't chase a softening item's buy.
-- **Anchor pricing — sit on the fillable side of a round number / guide (Ben, 2026-07-07).** A
+- **Anchor pricing — sit on the fillable side of a round number / guide (Ben, 2026-07-07).** _(judgment: pricing nudge, n=2)_ A
   shared PSYCHOLOGICAL ANCHOR — a round number (esp. a round million: 16.000m, 17.000m) or the
   CURRENT guide price — clusters orders at it: buyers won't pay OVER it (resistance), sellers won't
   sell UNDER it (support). That leaves a **dead zone just on the wrong side**. So when a
@@ -105,7 +105,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   22.5m locked at breakeven. **Honesty (rule 4):** order-clustering microstructure is well-established;
   our fills are n=2 (one each side) — the anchor DIRECTION holds both ways, the tight-band + liquid-
   fills-fast guards are the cost side; keep scoring.
-- **Entry aggression follows posture (Ben, 2026-07-05).** When Ben is ACTIVELY flipping
+- **Entry aggression follows posture (Ben, 2026-07-05).** _(judgment: posture call)_ When Ben is ACTIVELY flipping
   (at the client, watch loop running), price entries to FILL: recommend bids at or near
   the live instasell — or the upper half of the band — accepting a thinner per-unit edge
   so long as the exit still clears break-even meaningfully (the validated half-chase:
@@ -138,7 +138,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   real-breakdown cuts are unchanged — this relaxes ENTRY timidity, not the floors. See Claude memory
   `risk-tolerance-lean-in`.
 - **Parked-capital leak on mid-liquidity band-floor bids (HYPOTHESIS, 2026-07-06 — YV1
-  data, not yet a rule).** The first `outcomes.mjs --report` capital-efficiency read showed
+  data, not yet a rule).** _(judgment: unproven lean, F1-gated)_ The first `outcomes.mjs --report` capital-efficiency read showed
   **~24% of bids never filled** and that band-low (0–20 pct) **mid-liquidity** buys are the
   slowest to fill (~24m median vs ~9m liquid) — i.e. mid-liquidity band-floor bids are where
   capital gets stranded. So when *actively* flipping, lean toward pricing a mid-liquidity entry
@@ -149,7 +149,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   accruing never-filled-bid count, NOT a hard gate. Liquid items and passive/overnight deep
   band-floor bids are unaffected (there the deep bid is the intended play).
 - **Velocity beats magnitude AT CURRENT CAPITAL — but the crossover comes with size (HYPOTHESIS,
-  2026-07-06 — Ben's framing, backed by the YV1 record).** The measured record so far says
+  2026-07-06 — Ben's framing, backed by the YV1 record).** _(judgment: unproven lean, crossover unmeasured)_ The measured record so far says
   high-liquidity fast-cyclers have been the most capital-efficient play *by far* at our current
   investment level: a liquid item cycles in minutes for a given % gain, while a mid-liquidity
   big-ticket waits ~half a day for a *similar* % — so the big-ticket's slower lap is pure
@@ -161,11 +161,11 @@ This is the tribal layer the script can't do — apply ALL of these:
   position size, not absolute. **Honesty (process rule 4):** this is a lean off a small, concentrated
   record (bludgeon ~21% of closed lots) — the crossover point is unmeasured; track it as sizes climb,
   don't treat it as a fixed rule. Companion to the parked-capital-leak hypothesis above.
-- **Band-top artifact detection.** A single outlier print inflating the band (one lone
+- **Band-top artifact detection.** _(judgment: artifact spotting; `--min-active` supports)_ A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
   ROI looks too good.
-- **Asymmetric ask-reach read — the verification gate (2026-07-07, method).** The screen's ROI is
+- **Asymmetric ask-reach read — the verification gate (2026-07-07, method).** _(judgment: method; tool `pipeline/windowrange.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
   pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the
   doctrine already requires and read it two ways: **band-top ask reached ~0/7 days = artifact, SKIP**
@@ -212,7 +212,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   profit until `--ask` confirms the reach. (Decided against re-scoring the screen off a reachable sell:
   the cheap ts6h proxy understates reach → false negatives that HIDE good sells, worse than the
   problem; run `--ask` on the handful you actually pitch instead — accurate + cheap.)
-- **Fresh-repricer flag.** A large multi-day regime move = the item was recently repriced
+- **Fresh-repricer flag.** _(judgment: sizing call)_ A large multi-day regime move = the item was recently repriced
   → overnight-retrace risk. Size small; skip for unattended holds.
 - **Phase tag on the Regime cell (2026-07-06).** `screen.mjs` annotates each Regime cell with a
   trajectory phase from the shared `phase()` (off the same 6h series, zero extra fetch): `spike`
@@ -232,7 +232,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   falling-exclusion would otherwise drop (grade-capped B, flagged provisional) — turn it on only to
   trial base-buy candidates, and treat its picks as unproven (thresholds are placeholders, one item
   of evidence). Honesty rule (process rule 4): the classifier is new and unvalidated.
-- **Froth entry — the check is a CLASSIFIER, not a PREDICTOR (2026-07-07, method).** When tempted
+- **Froth entry — the check is a CLASSIFIER, not a PREDICTOR (2026-07-07, method).** _(judgment: method, n≈0 froth trades)_ When tempted
   to trade a spike ("catch the froth window"), run the froth-entry diligence — the 21-night full-day
   trajectory (`windowrange.mjs "<item>" --window 0-23 --nights 21`) read for the **lows-trend + volume**
   — but be clear about what it can and cannot do. It tells you, for a move ALREADY UNDERWAY, whether
@@ -251,7 +251,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   survivable position; and every froth entry pre-commits a mechanical exit (first pass of falling lows /
   momentum ↓ = exit, no averaging down). Honesty (rule 4): n≈0 froth trades of our own — this is
   data-gathering with a capped downside, not a proven edge.
-- **Big-ticket caution.** High per-unit capital → each fill is expensive; require real
+- **Big-ticket caution.** _(judgment: sizing; gp-flow gate in `pipeline/screen.mjs`)_ High per-unit capital → each fill is expensive; require real
   gp-flow (units × net), not a unit count. The script now SURFACES these via the gp-flow gate,
   flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
   (S1). Treat a `thin` row honestly: the edge is real but you can only place a few units/day, fills
@@ -263,7 +263,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
 - **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,
-  Ben's framing).** Read the current book's recent lanes before pitching new picks: an
+  Ben's framing).** _(judgment: exposure call)_ Read the current book's recent lanes before pitching new picks: an
   item that has closed several profitable laps TODAY is a live, validated edge — the
   default recommendation is to **increase exposure there to test the theory** (up to the
   buy limit / concentration comfort), not to spread into a fresh unproven pick of similar
@@ -273,7 +273,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   laps is one sample — process rule 4); the buy limit is usually the binding constraint,
   so state it on the line.
 - **Peak-throughput sizing — decide "one-window clear" vs "multi-day roll" AT ENTRY (Ben,
-  2026-07-07, the nest retro).** Before building an accumulation position, read the **"median
+  2026-07-07, the nest retro).** _(judgment: sizing labeling discipline)_ Before building an accumulation position, read the **"median
   window instabuy volume"** line the `--ask` sell-leg verify already prints (the pool your ask
   competes for in the sell window — no new fetch). Size so your position is a realistic **share
   (~10–20%)** of that pool for a **one-window clear** — you compete with other sellers, so you
@@ -300,7 +300,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   don't assume you can pour capital in. This makes the buy limit a first-class input to every size,
   not an afterthought.
 - **A thin CURRENT 2h band ≠ no edge — read the recent DAILY range on a proven lane (Ben,
-  2026-07-08).** The screen's band is the last-2h window; it looks THIN precisely when live sits at
+  2026-07-08).** _(judgment: read call; tool `pipeline/windowrange.mjs`)_ The screen's band is the last-2h window; it looks THIN precisely when live sits at
   the top or bottom of the item's wider daily range. Do NOT dismiss a known/proven lane (one you've
   flipped before) off the thin 2h band — run the full-day `windowrange.mjs --window 0-23` and read
   the **recent daily lows→highs** (the band you actually flip over), recency-verified per RC1. Bid
@@ -312,9 +312,14 @@ This is the tribal layer the script can't do — apply ALL of these:
 
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
-- Falling-regime items are silently excluded by the script — never re-add or mention them.
-  Exception: items Ben holds, explicitly asks about, or **watchlists** → always show, with
-  price-to-clear.
+- Falling handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5 — memory
+  `falling-exclusion-amended`, encoded in `js/strategies.mjs` `spec.falling`). The `band`/`spread`/
+  `rising`/`churn` niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
+  or mention a falling row. But `--mode scalp` ACCEPTS fallers (a deliberate intraday flip expects a
+  falling wide band) and `--mode value` KNIFE-GUARDS (rejects a decay knife, accepts a flat/basing
+  value-low) — do NOT call a scalp/value faller a mistake; the spec surfaced it on purpose. Exception
+  for the EXCLUDE niches: items Ben holds, explicitly asks about, or **watchlists** → always show,
+  with price-to-clear.
 - **Watchlist section (S3): always report, honestly.** The script appends a Watchlist table (from
   repo-root `watchlist.json`) that is exempt from every floor/gate; each row carries a Note saying
   what a gate would have hidden (below-floor / thin / one-sided / falling). Never silently drop a
@@ -353,14 +358,14 @@ A scan is not done until the picks are compared against where Ben's capital alre
 After the shortlist, run `node pipeline/watch.mjs` (positions = held inventory + every
 active offer) and close the loop:
 
-- **Stale-bid displacement.** For each resting BUY offer, ask: does a shortlist pick offer
+- **Stale-bid displacement.** _(judgment: redeploy call)_ For each resting BUY offer, ask: does a shortlist pick offer
   a better expected edge than what that parked capital is waiting on? A bid that's
   BID-BEHIND with the floor rising away is a candidate to cancel and redeploy into a pick —
   say so explicitly with the two edges side by side.
-- **Overlap check.** If a pick is something Ben already holds or bids, say that on the
+- **Overlap check.** _(judgment: concentration call)_ If a pick is something Ben already holds or bids, say that on the
   pick's line (don't recommend doubling a position blind — buy-limit and concentration
   both bite).
-- **Held-ask sanity.** If a shortlist item's read contradicts a current ask's premise
+- **Held-ask sanity.** _(judgment: cross-check)_ If a shortlist item's read contradicts a current ask's premise
   (e.g. the scan shows its band breaking down while Ben's ask rides the old top), flag it —
   that's the `/positions` step-down doctrine firing from the scan side.
 
@@ -373,16 +378,16 @@ lot; only surface lines where the scan changes what an existing position should 
 Each run may teach something (a judgment filter that misfired, a threshold that misled, a
 band-artifact that fooled the grade). Capture it — but the shortlist comes first, always.
 
-- **Timing:** only AFTER the shortlist is delivered and Ben's offers are placed/adjusted
+- **Timing:** _(judgment: process)_ only AFTER the shortlist is delivered and Ben's offers are placed/adjusted
   (or he says he's done). Never interleave doc edits with live market work — offers first,
   encoding after (Ben's explicit rule).
-- **Prompt:** at that point ask one short question — "anything from this run worth
+- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
   encoding?" — and propose the candidates this run surfaced (a judgment call that
   worked/failed, a threshold that misled, a screen that hid/hyped a real edge, a gap).
-- **Routing — one canonical home per fact, move never copy:** judgment-layer lessons → this
+- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ judgment-layer lessons → this
   SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user preferences →
   Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
-- **Execution:** spawn a **background subagent** to make the edits + commit so this
+- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
   conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** process learnings encode freely; a *market* claim (a
+- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
   new threshold, a pattern) needs the usual evidence standard — one session is one sample.

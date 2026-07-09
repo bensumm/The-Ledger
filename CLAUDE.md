@@ -8,56 +8,25 @@ context before assuming something is new.
 push to `main`).
 
 ## What this is
-- **The Coffer**: OSRS Grand Exchange flipping tool. `index.html` is markup only;
-  `styles.css` holds all styles; logic is split into ES modules under `js/`
-  (`state.js` = shared mutable state as one exported `STATE` object + constants +
-  persistence + diagnostics; `format.js` = formatting/tax helpers; `charts.js` =
-  inline SVG rendering; `marketfetch.js` = shared browser fetch layer (one timeout-guarded
-  `jget` + one cached `fetchTs`/`fetch24h` store, A2); `market.js` = price/guide fetch +
-  scoring; `trends.js` = archive + seasonal analysis (renders the Trends view; its pure analytics
-  moved to `trendcore.js`); `trendcore.js` = pure DOM-free Trends analytics (hourly/seasonal
-  decomposition, the walk-forward `backtestPlan` gate, `patientTargets` offer sizing — moved out of
-  `trends.js` by TC1 so they're node-importable + fixture-tested); `table.js` = reusable sortable-table
-  helper (TB1 — click-to-sort/arrow/persisted per-table sort; Finder + Watchlist adopt it);
-  `ui.js` =
-  Finder/Watchlist/Signals/Coffer/Scan rendering + `renderAll` coordinator; `ledger.js` =
-  Ledger view + fills-write cluster (manual-entry writes, positions.json auto-populate,
-  Ledger render/controls, freshness/GitHub-sync panels — split out of `ui.js` by A3);
-  `ledgercore.js` = pure day-boundary bucketing + per-item grouping (`periodKey`/`groupTrades`,
-  moved out of `ledger.js` by TD2 so they're node-importable + fixture-tested);
-  `watch.js` = the Watch tab (0.49.0 — verdict-first flipping desk: held cards, active offers,
-  today's fills; verdicts from the shared `momVerdict`/`offerVerdict`; per-item session notes under
-  `watchnote:<id>`); `watchcore.js` = pure Watch-tab derivations (verdict→stripe family, alert count,
-  flip/incidental split, today's-fills feed, summary aggregates — node-importable, fixture-tested);
-  `backup.js` = export/import; `main.js` = entry point, event wiring + init). No build step, no framework, no bundler — deployed to GitHub Pages at
-  bensumm.github.io/The-Ledger/ exactly as these files sit on disk. See `README.md`
-  for the full file inventory and deploy mechanics.
-- Split out of one 1375-line `index.html` file in 2026-07 once development moved
-  from mobile-only Claude sessions to Claude Code on a PC — the single-file
-  constraint was about zero-build Pages deploys, not mobile editing, so the split
-  keeps zero-build while making the code far more reviewable/diffable. Local testing
-  needs `serve.cmd` now (ES modules don't load over `file://`); see README. `serve.cmd` is also
-  the **live desk experience** (LW2): on localhost the app polls `positions.json`/`offers.json`/
-  `heartbeat.json` and, paired with the `watch-log.mjs` daemon, reflects fills/offers within ~40s
-  with zero git; the daemon's 30s `heartbeat.json` (LW3) drives a "watcher live" liveness stamp
-  that stays fresh even when the book is frozen during a quiet no-fill stretch.
-- **Fill-data pipeline**: closes the loop between the tool's trade suggestions and
-  real GE trades, captured client-side via RuneLite's Exchange Logger plugin. Lives
-  in `pipeline/` (kept separate from the deployed app root): full design doc
-  `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/sync-fills.mjs` (runs on Ben's
-  Windows machine **on demand** — session-start or a manual push; the ~20-min
-  `CofferFillsSync` Task Scheduler job was eliminated 2026-07-04, see FILLS-PIPELINE.md
-  §12 — reads `.runelite/exchange-logger/*`, writes/commits/pushes `fills.json` **and**
-  `positions.json` at the repo root (plus `offers.json`, LW1 — a flat live-GE-offer snapshot the
-  localhost app fetches same-origin) — these stay at root because the app fetches the derived
-  `positions.json`/`offers.json` same-origin and `fills.json` is the ROOT-LOCKED source it reconstructs from;
-  see README.md "Map of the repo" for the full app-fetched/ROOT-LOCKED vs pipeline-only artifact
-  split and the `js/quotecore.js` + `js/format.js` shared-module ripple map). `positions.json` is the derived view (`collapseOffers` +
-  FIFO `matchTrades`): `closed` trades w/ after-tax realised P/L, `open` inventory at
-  real avg cost, and `unmatched` sells (pre-log inventory, no fabricated profit). The
-  app auto-populates its Ledger/Coffer from it. Read `pipeline/FILLS-PIPELINE.md` §5.1
-  before touching the reconstruction. Read the whole doc top to bottom before touching
-  either script path.
+- **The Coffer**: OSRS Grand Exchange flipping tool. `index.html` is markup only; `styles.css`
+  holds all styles; logic is split into ES modules under `js/`. **No build step, no framework, no
+  bundler** — deployed to GitHub Pages exactly as the files sit on disk. The **full module/file
+  inventory is `README.md`** ("Files" + "Map of the repo") — the ONE registry; don't duplicate it
+  here. Why it's split out of the old single `index.html`, and how localhost differs (the LW2/LW3
+  live desk): `docs/LORE.md`. Local testing needs `serve.cmd` (ES modules don't load over
+  `file://`); see README "Local development".
+- **Fill-data pipeline**: closes the loop between the tool's suggestions and real GE trades,
+  captured client-side via RuneLite's Exchange Logger. Lives in `pipeline/` (separate from the
+  deployed app root); design doc `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/sync-fills.mjs`
+  (**on-demand only** — the `CofferFillsSync` scheduler was eliminated 2026-07-04, §12). It reads
+  `.runelite/exchange-logger/*` and writes/commits/pushes `fills.json` + the derived `positions.json`
+  (+ `offers.json`, LW1). `positions.json` is the FIFO-reconstructed view (`collapseOffers` +
+  `matchTrades`): `closed` after-tax realised P/L, `open` inventory at real avg cost, `unmatched`
+  pre-log sells. **`fills.json` and the derived artifacts are ROOT-LOCKED** (app fetches them
+  same-origin — README "Map of the repo" has the full ROOT-LOCKED vs movable split + the
+  `js/quotecore.js`/`js/format.js` shared-module ripple map). **Read `pipeline/FILLS-PIPELINE.md`
+  §5.1 before touching the reconstruction, and the whole doc before either script path.** History of
+  the pipeline's evolution: `docs/LORE.md`.
 
 ## Trends tab structure
 The per-item Trends view's decision-priority tier structure (plan card → "Why this trend?"
@@ -66,13 +35,15 @@ The per-item Trends view's decision-priority tier structure (plan card → "Why 
 that's where every editor of the view already is. (Moved out of CLAUDE.md by chunk K3.)
 
 ## Where shipped work is documented (check before assuming something is new)
-Shipped changes and the "why" (rationale, superseded approaches) live in **`CHANGELOG.md`** and
-`git log`; the file/artifact registry lives in **`README.md`**; each load-bearing "don’t-rebuild"
-invariant lives in the header of the module/test that governs it (e.g. the Gate-2-`CUT`-exempt rule
-in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in `pipeline/watch-log.mjs`, the
-probe empty-passthrough contract in `pipeline/lib/modules.mjs`). Before building something that
-feels new, check `git log` + `CHANGELOG.md` — much of it already exists; don’t work from a stale
-assumption that a capability is missing.
+Shipped changes + the "why" live in **`CHANGELOG.md`** + `git log`; the file/artifact registry is
+**`README.md`**; narrative/history + superseded-approach stories are **`docs/LORE.md`**; each
+load-bearing "don’t-rebuild" invariant lives in the header of the module/test that governs it (e.g.
+the Gate-2-`CUT`-exempt rule in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in
+`pipeline/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/modules.mjs`).
+Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`**, enforced by
+`pipeline/skill-lint.mjs` in CI. Before building something that feels new, check `git log` +
+`CHANGELOG.md` — much of it already exists; don’t work from a stale assumption that a capability is
+missing.
 
 ## Market judgment layer — lives in the project skills (moved by PLAN-5)
 The screen/positions judgment layer (500k gp/d floor, 24h-drift-is-a-pre-filter-only,
@@ -349,7 +320,7 @@ metadata, not a leak; the concern is content, not commit authorship.
    supersedes or contradicts and fix them in place** (e.g. a superseded matrix/table, a stale
    "verdict set", a now-inaccurate trigger condition). Adding a new section while leaving an
    old one that says the opposite is the failure mode to avoid — the 0.30.0→0.33.0
-   `momVerdict` reconciliation is the anchor. If a plain-language ask should map to a specific
+   `momVerdict` reconciliation is the anchor (story in `docs/LORE.md`). If a plain-language ask should map to a specific
    script/flow, make that mapping explicit in the relevant CLAUDE.md section so a future agent
    runs the right thing immediately.
    **The file inventory is part of this pass (Ben, 2026-07-06):** `README.md`'s repo

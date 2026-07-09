@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.5
+version: 1.6
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -60,19 +60,19 @@ The morning reconstruction can teach what the overnight plan got wrong (a bid th
 have been repriced, a staleness call that missed). Capture it — but the re-verdicts and any
 reprice/cancel actions come first, always.
 
-- **Timing:** only AFTER the review is delivered and Ben has repriced/cancelled the stale
+- **Timing:** _(judgment: process)_ only AFTER the review is delivered and Ben has repriced/cancelled the stale
   offers (or says he's done). Never interleave doc edits with the market work — offers
   first, encoding after (Ben's explicit rule).
-- **Prompt:** at that point ask one short question — "anything from this run worth
+- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
   encoding?" — and propose the candidates this run surfaced (an overnight call that
   worked/failed, a re-verdict that read wrong, a reconstruction gap).
-- **Routing — one canonical home per fact, move never copy:** an overnight-posture lesson →
+- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ an overnight-posture lesson →
   the `/overnight` SKILL.md; a positions judgment lesson → `/positions`; morning-flow
   doctrine → this SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user
   preferences → Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
-- **Execution:** spawn a **background subagent** to make the edits + commit so this
+- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
   conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** process learnings encode freely; a *market* claim (a
+- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
   fill-rate, a nightly pattern) needs the usual evidence standard — one night is one sample.
 
 ## 4. Book the realized P/L narrative
@@ -101,14 +101,14 @@ one line rather than double-running). Every other morning, skip straight past th
    band edges implied — the suggestion join `outcomes.mjs` already computes).
 
 **Honesty rules (process rule 4 — descriptive ≠ calibration):**
-- **Print n for every cut you report** and **refuse per-cell conclusions below the O1
+- **Print n for every cut you report** _(enforced: `pipeline/outcomes.mjs` `--report` suppresses cells under `MIN_N_REPORT`)_ and **refuse per-cell conclusions below the O1
   thresholds** (`--report` already suppresses cells under `MIN_N_REPORT`; F1's calibration
   gate is n≥30 per side×percentile×class×regime cell, ≥5 such cells — surfaced by the
   F1-gate progress line). This is a *description of what happened*, never a fill-rate model.
-- **Respect the concentration caveat.** When one item is >40% of closed lots (the caveat the
+- **Respect the concentration caveat.** _(judgment: honesty)_ When one item is >40% of closed lots (the caveat the
   report prints), per-item reads are mostly ONE sample — present them as anecdote, not a
   rate. Do not extrapolate a per-item win rate or hold time off a handful of lots.
-- **One week is one sample too.** Week-over-week deltas are narrative colour until the
+- **One week is one sample too.** _(judgment: honesty)_ Week-over-week deltas are narrative colour until the
   calendar accrues; never present a weekly swing as a trend.
 
 Deliverable: a short honest "here's what the record shows so far, and here's how far we are

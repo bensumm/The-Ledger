@@ -287,56 +287,33 @@ lot, resting offer, or target) → a compact **note block per item** → a **SUM
 (held exposure + bid capital totals, alert count, positions/log provenance, the `/loop`
 line, and the exit-discipline reminder).
 
-**Per-held EMIT CONTRACT (V5 — the stable, ordered note block).** V1–V4 grew each held lot's
-note organically; V5 fixes it into ONE predictable block so a reader (human or LLM) always gets
-the same fields in the same order and can rely on them. The block is built by the pure
-`lib/emit.mjs` `heldNoteBlock()` (fixture-pinned in `pipeline/emit.test.mjs`) — it ORDERS +
-FORMATS already-computed pieces and decides nothing (output-format-only; no verdict/alert/row-
-selection change). The header line is `- <name>: …`; every other field is a nested (4-space)
-sub-line. Field order, always the same:
+**Per-held EMIT CONTRACT (V5 — the stable, ordered note block).** Each held lot's note block is
+ONE predictable block so a reader (human or LLM) always gets the same fields in the same order.
+**The authority is the `lib/emit.mjs` `heldNoteBlock()` header** (fixture-pinned in
+`pipeline/emit.test.mjs`) — it ORDERS + FORMATS already-computed pieces and decides nothing
+(output-format-only; no verdict/alert/row-selection change). Header line `- <name>: …`; every other
+field is a nested (4-space) sub-line. **Fixed field order:**
 
-1. **verdict** — the momVerdict/offerVerdict action's first sentence (+ the window read's key
-   number, + an optional compact `pressure buy 1.4×` — the trailing-24h hpv/lpv flow imbalance,
-   `pressureText` off `row.pressure` in `js/quotecore.js`; display-only context, never a
-   verdict/gate input, shortcomings documented at the derivation in `computeQuote` — + a
-   `⚠ <reason>` reliability flag when the quote is soft), on the header line. Bid and target
-   note lines carry the same compact pressure token.
-2. **conviction-state** (V4/V7 + TG1) — the arm-then-confirm note, when armed. Omitted when not
-   armed. (Confirmed escalations appear in the HEADLINE, not here; this field surfaces the ARMED
-   state.) A **TG1 thesis-armed** lot surfaces `per thesis (<horizon>): expected-underwater — silent
-   above tripwire X, exit Y; headline only on a break below.` here instead of the plain V4 armed note.
-3. **Δ-since-last** (V1) — the cross-pass delta line, when a signal is informative. Omitted on a
-   first-seen / reset / all-quiet pass.
-4. **structural tripwire** (V2) — `support X · cut-trigger Y`, when computable. Omitted when <2
-   usable daily lows.
-4a. **recovery-read** (V6, ADVISORY) — `recovery-read: likely recovers|drops|uncertain — <drivers>
-   (a lean, not a probability)`. Surfaced ONLY on a non-clean position (see item 6); omitted on a
-   cleanly-good lot. It is decision SUPPORT, distinct from the verdict — never a verdict/alert input.
-4b. **dominant path** (V2-P4b, decision SUPPORT) — `path <current> 0.62 · entered under <key> ·
-   menu: <alt> 0.45 · <alt> 0.40 (support, not a verdict — placeholder weights)`. The
-   persistence-gated path read: the shared `pathsStage` (`lib/context.mjs`) weighs the lot's
-   thesis-paths (`js/paths.mjs`) each pass, and `pathPersistence` (`lib/watchstate.mjs`) applies the
-   SAME arm-then-confirm discipline as the alert gate to path DOMINANCE — a flip must beat the
-   incumbent by `PATH_HYSTERESIS_MARGIN` AND hold dominant for `PATH_PERSIST_MS` (both named
-   PLACEHOLDERS, unvalidated) before the persisted `currentPath` changes; a flip-back while a
-   challenger is arming DISARMS it, so flapping weights never whiplash the headline path. A
-   challenger inside the window shows as `<key> challenging (arming ~Nm/Pm)`; a CONFIRMED migration
-   (current ≠ the hold-thesis `enteredUnder`) headlines the line as
-   `path MIGRATED <enteredUnder> → <current>`. The held-lot path line is NEVER an alert input (no
-   path-driven HELD alert class exists) and the verdict string is untouched. (P5 wired path-awareness
-   into the separate BID gate — `offerVerdict`'s per-thesis CANCEL-BID above — not into the held verdict.) The
-   same line prints on `quote.mjs --positions` (a `Paths` block) off the SAME shared state —
-   read-only there; only the watch loop persists the `currentPath`/`pathArmedKey`/`pathArmedSince`/
-   `enteredUnder` fields on the `held:<id>` state entry (additive; legacy entries unaffected). The
-   declared hold-thesis `path` (from `thesis.mjs set --path`) seeds the incumbent when the state
-   file carries no persisted path yet, so a declared plan is never displaced without arm-then-confirm.
+1. **verdict** — momVerdict/offerVerdict action's first sentence (+ window read's key number, an
+   optional compact `pressure buy 1.4×` flow token, and a `⚠ <reason>` soft-quote flag).
+2. **conviction-state** (V4/V7 + TG1) — the arm-then-confirm note, when armed (a TG1 thesis-armed
+   lot shows the per-thesis expected-underwater line instead). Omitted when not armed.
+3. **Δ-since-last** (V1) — cross-pass delta, when informative.
+4. **structural tripwire** (V2) — `support X · cut-trigger Y`, when computable.
+4a. **recovery-read** (V6, ADVISORY) — `recovery-read: likely recovers|drops|uncertain — <drivers>`;
+   only on a non-clean lot. Decision SUPPORT, never a verdict/alert input.
+4b. **dominant path** (V2-P4b, decision SUPPORT) — the persistence-gated `path <current> 0.62 ·
+   entered under <key> · menu: …` line (a CONFIRMED migration headlines as `path MIGRATED a → b`).
+   Never an alert input; the verdict string is untouched.
 5. **sell/list-at (+ break-even) + fill-progress** — `sell: list @ X · break-even Y · <ask n/m
-   or NOT LISTED>`. This field is **ALWAYS emitted on a held lot, unconditionally** — the standing
-   user rule (Ben, 2026-07-06): *always state the sell price for every held item, because a fill
-   you didn't see may have happened; it saves a re-ask.* The list-at is `breakEven()`-floored (never
-   below break-even) and is the shared momVerdict's `listAt` when it has one, else the same band-top-
-   floored-at-BE fallback the action prose uses (`heldListAt`), so the guaranteed field never drifts
-   from the verdict. It is guaranteed even if the optional context fields (2–4b) fail to compute.
+   or NOT LISTED>`. **ALWAYS emitted on a held lot, unconditionally** (Ben, 2026-07-06: a fill you
+   didn't see may have happened) — `breakEven()`-floored, guaranteed even if fields 2–4b fail to
+   compute. This is the load-bearing invariant the skills read for every held item's list-at.
+
+The exact wording/derivation of every field (the pressure token's shortcomings, the path-dominance
+`pathPersistence` arm-then-confirm, the `heldListAt` precedence, why `quote.mjs --positions` prints
+the same path line read-only) lives in the `lib/emit.mjs` + `lib/context.mjs` + `lib/watchstate.mjs`
+headers — the authority; don't restate it here.
 
 Resting-bid and target rows keep their own single note line (buy-side; no held sell price). Content
 of the numbered signals, in more detail:

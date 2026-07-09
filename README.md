@@ -200,10 +200,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen.mjs --publish`)
-- `docs/` — repo docs that aren't app/pipeline reference: `PLANNING.md` (the planning process
-  itself — required plan sections, chunk design rules, the skills improvement loop, anti-patterns;
-  written 2026-07-08, follow it when producing any improvement plan; `docs/LORE.md` will join it
-  at Pipeline-v2 P7)
+- `docs/` — repo docs that aren't app/pipeline reference:
+  - `PLANNING.md` — the planning process itself (required plan sections, chunk design rules, the
+    skills improvement loop, anti-patterns; written 2026-07-08, follow it when producing any
+    improvement plan).
+  - `LORE.md` (P7) — narrative/history + superseded-approach rationale (the single-file→split
+    story, the LW2/LW3 live desk, the pipeline's eliminated scheduler, the incident anchors behind
+    the process rules, the rejected/retired approaches). Nothing here is load-bearing — CLAUDE.md
+    "Where shipped work is documented" points here for the stories; invariants stay in module headers.
+  - `SKILL-TRIAGE.md` (P7) — the three-way triage (ENCODE / KEEP-AS-JUDGMENT / RETIRE-proposal) of
+    every prose rule-block in the four market skills + the memory index. The semantic record behind
+    the `pipeline/skill-lint.mjs` tags; hand-maintained — add a row when a skill gains a rule.
 - `.gitattributes` — repo EOL normalization (GA1): text sources (`*.js`/`*.mjs`/`*.json`/
   `*.jsonl`/`*.md`/`*.yml`/`*.css`/`*.html`/`*.log` + `.gitignore`/`LICENSE`) are `text eol=lf`,
   the Windows batch launchers (`serve.cmd`/`watch-log.cmd`/`*.cmd`) are `text eol=crlf`, and
@@ -439,6 +446,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     firing log is now WIRED (PM2): `logFirings` appends one compact JSONL line per firing —
     `{ts,module,version,stage,surface,id,name,tag,price(price-stage),quickBuy,quickSell,guide,regimeLabel,phase}`
     — the hit/miss ledger the validate-before-promote loop scores later (SCORING is a later chunk).
+  - `skill-lint.mjs` (P7 — a HEURISTIC linter for the four market `SKILL.md` files, run in CI's
+    cheap `checks` job + auto-discovered by `run-tests.mjs` via its test: every top-level `- **…**`
+    rule-block must carry a backticked `code-pointer` OR an explicit `judgment:` tag; FAILs on
+    untagged blocks and prints per-file + total counts so untagged-prose GROWTH is visible. Exports
+    `lintText`/`lintFile`/`SKILL_FILES` for the test. Deliberately NOT a Markdown parser — a
+    growth-visibility guard; the semantic dispositions live in `docs/SKILL-TRIAGE.md`),
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
@@ -508,7 +521,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     ladder identifies WHICH floor emptied the niche (min-gpd vs liquidity), never relaxes the two-sided
     gate or the thesis edge (null when those emptied it), the honest `subFloorLabel` wording, the
     `SUBFLOOR_TOP` slice bound + `SUBFLOOR_GRADE_CAP` clamp, the value-niche scope-out, and the lean
-    `subFloor` suggestions-ledger marker's absent-field byte-identity)
+    `subFloor` suggestions-ledger marker's absent-field byte-identity),
+    `skill-lint.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
+    detection, the two tag forms (code-pointer vs `judgment:`), frontmatter/fence exclusions, the
+    counting, and the LIVE regression guard that all four committed SKILL.md files lint clean)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +

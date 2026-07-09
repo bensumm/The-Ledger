@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.17
+version: 1.18
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -268,16 +268,16 @@ the pause-for-capital as its phase boundary. The tail is for standalone use.
 Each run may teach something (a verdict that read wrong, an incidental-lot judgment that
 misfired, a threshold that misled). Capture it — but the market work comes first, always.
 
-- **Timing:** only AFTER the action plan is delivered and Ben's offers are placed/adjusted
+- **Timing:** _(judgment: process)_ only AFTER the action plan is delivered and Ben's offers are placed/adjusted
   (or he says he's done). Never interleave doc edits with live market work — offers first,
   encoding after (Ben's explicit rule).
-- **Prompt:** at that point ask one short question — "anything from this run worth
+- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
   encoding?" — and propose the candidates this run surfaced (a judgment call that
   worked/failed, a threshold that misled, a verdict that read wrong, a workflow gap).
-- **Routing — one canonical home per fact, move never copy:** judgment-layer lessons → this
+- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ judgment-layer lessons → this
   SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user preferences →
   Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
-- **Execution:** spawn a **background subagent** to make the edits + commit so this
+- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
   conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** process learnings encode freely; a *market* claim (a
+- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
   new threshold, a pattern) needs the usual evidence standard — one session is one sample.

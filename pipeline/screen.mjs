@@ -14,7 +14,8 @@
  * The screen has ONE shared gate stack for every mode; --mode only swaps the step-3 EDGE
  * DEFINITION + ranking. Shared gates: two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0,
  * limiting side ≥ --floor — the ghost-spread lesson), --min-price/--max-price on mid, top-N per-item
- * regime confirm via computeQuote, falling-regime items SILENTLY excluded (CLAUDE.md screen rule).
+ * regime confirm via computeQuote, per-spec falling doctrine (P5: band/spread/rising/churn EXCLUDE
+ * fallers, scalp ACCEPTS, value KNIFE-GUARDS — `js/strategies.mjs` `spec.falling`, NOT a global rule).
  *
  * Fetch-pool ordering (the pre-filter rework): the expensive step is the per-item timeseries fetch,
  * so WHICH gated items make the top-N fetch pool matters. loadDaily() builds a BULK multi-day

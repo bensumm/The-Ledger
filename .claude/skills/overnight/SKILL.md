@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.13
+version: 1.14
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -14,11 +14,11 @@ instabuy volume on every windowrange read taken so far (bludgeon 881 vs 232, jaw
 blowpipe 738 vs 220 median units). The game's actual quiet trough (GMT ~04–08) is Ben's
 **late evening, while he's still at the keyboard**. Consequences for every overnight plan:
 
-- **Overnight ASKS are structurally favored** — a band-top ask rides the UK-day wave while
+- **Overnight ASKS are structurally favored** _(judgment: time-geography lean, n small)_ — a band-top ask rides the UK-day wave while
   Ben sleeps (the 2026-07-05 bludgeon: trough-priced 16.79m rebid AND 17.70m band-top ask
   both filled inside the UK-day window). Don't under-price asks out of generic overnight
   fill-fear; the window read (§ fill-realism, ask side) is the honest bound.
-- **Overnight DEEP BIDS are structurally disfavored** — placed at Ben's midnight they
+- **Overnight DEEP BIDS are structurally disfavored** _(judgment: time-geography lean, n small)_ — placed at Ben's midnight they
   target a floor that stops printing as UK demand lifts (~07–08 GMT ≈ Ben 00–01): the
   soul-rune band-floor bids went 0-fill on two consecutive nights for exactly this reason.
   The BUY window is Ben's evening (the GMT 04–08 trough) — buy the trough before bed, list
@@ -26,7 +26,7 @@ blowpipe 738 vs 220 median units). The game's actual quiet trough (GMT ~04–08)
 - Evidence bounds (process rule 4): the volume asymmetry is measured and the timezone
   geometry is fact; the behavioral sample (1 two-leg win, 2 bid failures) is small — keep
   scoring fills against this model as nights accrue.
-- **Weekend→weekday calendar shift (v1.11, 2026-07-06 — Ben's call, 1 observation).** The
+- **Weekend→weekday calendar shift (v1.11, 2026-07-06 — Ben's call, 1 observation).** _(judgment: unconfirmed on full-day data)_ The
   day-of-week matters the same way the hour does: weekend sessions carry deeper player
   demand, so window-quantile reads built on Fri–Sun days OVERSTATE what a Mon–Thu morning
   reaches (anchor: the DWH 15.65–15.71m "reached 3/3 mornings" stat was all weekend
@@ -158,17 +158,17 @@ The overnight run often teaches the most (a fill-realism read that was wrong, an
 accumulation estimate that overshot, a filter that let a fresh repricer through). Capture
 it — but the bid table and placed offers come first, always.
 
-- **Timing:** only AFTER Phase 2's plan is delivered and Ben has placed the overnight bids
+- **Timing:** _(judgment: process)_ only AFTER Phase 2's plan is delivered and Ben has placed the overnight bids
   (or says he's done). Never interleave doc edits with the setup — offers first, encoding
   after (Ben's explicit rule).
-- **Prompt:** at that point ask one short question — "anything from this run worth
+- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
   encoding?" — and propose the candidates this run surfaced (a sizing/fill-realism call
   that worked/failed, a threshold that misled, a filter gap).
-- **Routing — one canonical home per fact, move never copy:** overnight-posture judgment →
+- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ overnight-posture judgment →
   this SKILL.md (bump its `version:`); a positions/scan judgment lesson → that child's
   SKILL.md; table/app contracts → CLAUDE.md; user preferences → Claude memory; monitoring
   doctrine → `pipeline/MONITORING.md`.
-- **Execution:** spawn a **background subagent** to make the edits + commit so this
+- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
   conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** process learnings encode freely; a *market* claim (a
+- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
   fill-rate, a nightly pattern) needs the usual evidence standard — one night is one sample.

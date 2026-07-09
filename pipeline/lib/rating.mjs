@@ -28,7 +28,8 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 // Regime stability. Flat = full marks; rising is discounted by froth magnitude (a +5% drift barely
 // dents, a +100% reprice is frothy → size-small territory); an unconfirmed regime takes a mild
-// haircut. Falling never reaches here — the screen excludes fallers before rating.
+// haircut. Falling reaches here only via the falling-ACCEPTING specs (P5 scalp/value — `js/strategies.mjs`
+// `spec.falling`); the default band/spread/rising/churn niches still EXCLUDE fallers before rating.
 export function regimeFactor(row) {
   if (!row.regime || !row.regime.ok) return 0.85;                 // unconfirmed / too little history
   if (row.rising) return clamp(0.9 - (row.regime.driftPct - 5) / 95 * 0.4, 0.5, 0.9); // +5%→0.9 … +100%→0.5
