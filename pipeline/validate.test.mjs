@@ -52,7 +52,7 @@ ok('worseOf orders reject > caution > pass', () => {
 });
 ok('runValidators returns the registry results; worstStatus/flags/leanValidators summarize', () => {
   const res = runValidators({ intraday: { ts1h: null } });   // no data → all validators degrade to pass
-  assert.deepEqual(res.map(r => r.key).sort(), ['floor', 'reach'], 'registry runs reach + floor (P3)');
+  assert.deepEqual(res.map(r => r.key).sort(), ['floor', 'limit', 'reach'], 'registry runs reach + floor (P3) + limit (LM1)');
   assert.ok(res.every(r => r.status === 'pass'), 'no data → every validator degrades to pass');
   assert.equal(worstStatus(res), 'pass');
   assert.equal(flags(res).length, 0);

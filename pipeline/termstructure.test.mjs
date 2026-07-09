@@ -180,12 +180,12 @@ ok('a HELD lot is a SELL decision → PASS (held-lot-sell-side), even parked abo
   assert.equal(r.reason, 'held-lot-sell-side');
 });
 
-// --- 5. registry wiring: floor is registered and runs alongside reach --------------------------
-ok('runValidators runs BOTH reach and floor (registry has both keys)', () => {
-  const res = runValidators({ intraday: { ts1h: null } });   // both degrade with no inputs
+// --- 5. registry wiring: floor is registered and runs alongside reach (+ limit, LM1) -----------
+ok('runValidators runs reach + floor + limit (registry has all keys)', () => {
+  const res = runValidators({ intraday: { ts1h: null } });   // all degrade with no inputs
   const keys = res.map(r => r.key).sort();
-  assert.deepEqual(keys, ['floor', 'reach']);
-  assert.ok(res.every(r => r.status === 'pass'), 'no inputs → both degrade to pass');
+  assert.deepEqual(keys, ['floor', 'limit', 'reach']);
+  assert.ok(res.every(r => r.status === 'pass'), 'no inputs → all degrade to pass');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

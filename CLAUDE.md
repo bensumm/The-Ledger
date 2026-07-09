@@ -130,10 +130,13 @@ deliberate):**
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
 | "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/watch.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
+| "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
 
 Script facts the skills rely on (current behavior, not doctrine):
 - `quote.mjs` takes multiple items in one call; prints one combined table + a regime line
-  per item that includes the **buy limit** (`· buy limit N/4h`), the **buy/sell pressure**
+  per item that includes the **buy limit** (`· buy limit N/4h`; **LM1**: when `fills.json` shows
+  logged buys inside the rolling 4h window it appends `(bought X this window — Y left, next frees
+  ~HH:MM)`, local time — zero in-window buys ⇒ byte-identical to before), the **buy/sell pressure**
   (`· pressure buy 1.4× (hpv 3.05m / lpv 1.91m)` — realized trailing-24h hpv/lpv flow imbalance
   off the SAME /24h fetch; display-only, never a gate/verdict input; a flow proxy, NOT an order
   book — cite it with the shortcomings documented at the derivation in `js/quotecore.js`
@@ -196,7 +199,13 @@ Script facts the skills rely on (current behavior, not doctrine):
   archived daily mids (`loadDaily …{noFetch:true}`) on a per-item `quote.mjs` buy read — no fetch-semantics
   change; a HELD lot (`quote --positions`) is a sell decision so it degrades. The archive only began
   accruing 2026-07-08, so a thin/cold series DEGRADES to pass (a real reject needs a warm multi-week
-  series). Thresholds are named PLACEHOLDERS.
+  series). Thresholds are named PLACEHOLDERS. **`limitValidator` (LM1, BUY-side)** wraps the rolling-4h
+  `limitWindow` (`pipeline/lib/limits.mjs`, fed per-item buys from `fills.json` via `buysByItem`): a
+  suggested buy whose 4h window is EXHAUSTED (`remaining === 0`) → **reject** (screen drops + counts it,
+  naming when it next frees; quote/held/watchlist NOTE it), nearly-spent (`< LIMIT_CAUTION_FRAC` of the
+  limit) → **caution**. Absent stage (the browser app supplies none) or a null/UNKNOWN limit → degrade
+  to pass (a null limit is never "unlimited"). Honesty: logged fills only, so it can UNDER-count buys —
+  a pass is never a guarantee. No app module imports `validate.mjs`, so no APP_VERSION bump.
 - `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**
   keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
   velocity, and drops items whose *yesterday overnight window* printed below the current bid

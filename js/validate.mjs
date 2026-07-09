@@ -178,11 +178,53 @@ export function floorValidator(ctx) {
   return { key, status, reason, evidence };
 }
 
+// --- limitValidator ---------------------------------------------------------------------------
+// LM1 (Ben 2026-07-09: "limits.mjs ... a part of every flow that suggests items ie we can flag as
+// profitable but disqualify on limits and state when the limit should reset"). BUY-SIDE. Reads a
+// caller-supplied 4h buy-limit WINDOW (pipeline/lib/limits.mjs `limitWindow` result) and disqualifies
+// a suggested buy that has NO room left in the rolling 4h window — a profitable item Ben has already
+// bought his limit of this window is not a buy NOW, it's a buy after the limit frees.
+export const LIMIT_CAUTION_FRAC = 0.25;   // PLACEHOLDER (rule 4): remaining < this fraction of the limit ⇒ caution
+//   VALIDATE: what fraction-remaining actually predicts "won't fill a full lap before the reset" — a
+//   sizing heuristic, not yet a measured one.
+
+// LOCAL wall-clock HH:MM for a unix-SECONDS instant (repo rule: rendered times are local). Kept tiny +
+// local so validate.mjs stays DOM-free / node- AND app-importable.
+function localHHMM(tsSec) {
+  if (tsSec == null) return '—';
+  return new Date(tsSec * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * limitValidator(ctx) — BUY-SIDE. Answers: does this suggested buy have room left in the item's rolling
+ * 4h GE buy limit? Reads ctx.limits.window (a pipeline/lib/limits.mjs `limitWindow` result the PIPELINE
+ * callers supply — screen/quote build it from fills.json; the browser app supplies nothing).
+ *   remaining === 0                         → REJECT  (buy limit exhausted — states when it next frees)
+ *   0 < remaining < LIMIT_CAUTION_FRAC×limit → CAUTION (nearly exhausted — same numbers + reset time)
+ *   otherwise                                → pass
+ * DEGRADES to pass (never rejects on absence — the P2/P3 precedent): no limits stage (app / a surface
+ * that didn't build one), or a null limit (UNKNOWN — never treat unknown as "no limit").
+ */
+export function limitValidator(ctx) {
+  const key = 'limit';
+  const w = ctx && ctx.limits && ctx.limits.window;
+  if (!w) return degrade(key, 'no-limit-window');
+  if (w.limit == null || w.remaining == null) return degrade(key, 'null-limit-unknown');
+  const { limit, boughtInWindow, remaining, nextFreeAt } = w;
+  const evidence = { limit, boughtInWindow, remaining, nextFreeAt };
+  const frees = nextFreeAt != null ? ` — next frees ~${localHHMM(nextFreeAt)}` : '';
+  if (remaining === 0)
+    return { key, status: 'reject', reason: `buy limit exhausted (bought ${boughtInWindow}/${limit} this 4h window)${frees}`, evidence };
+  if (remaining < limit * LIMIT_CAUTION_FRAC)
+    return { key, status: 'caution', reason: `buy limit nearly exhausted (bought ${boughtInWindow}/${limit} this 4h window, ${remaining} left)${frees}`, evidence };
+  return { key, status: 'pass', reason: `buy limit ok (bought ${boughtInWindow}/${limit} this 4h window, ${remaining} left)`, evidence };
+}
+
 // --- the registry -----------------------------------------------------------------------------
 // keyed so a declarative strategy spec (P4c) can name the validators it runs by key. REGISTRY_ORDER
 // is the display/priority order (worst-first is computed via worstStatus, not the array order).
-export const VALIDATORS = { reach: reachValidator, floor: floorValidator };
-export const REGISTRY_ORDER = ['reach', 'floor'];
+export const VALIDATORS = { reach: reachValidator, floor: floorValidator, limit: limitValidator };
+export const REGISTRY_ORDER = ['reach', 'floor', 'limit'];
 
 /* runValidators(ctx, {only}) — run the registry (or the named subset) over one ctx. Each call is
    try/caught so a throwing validator degrades to pass (never breaks a market read). Returns an array

@@ -17,6 +17,7 @@
  * and formats. The ordering invariant optBuy ≤ quickBuy ≤ quickSell ≤ optSell is guaranteed
  * by computeQuote; a ⚠ basis flag prints if a feed inversion ever breaks it.
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText } from '../js/quotecore.js';
@@ -28,6 +29,7 @@ import { mdTable, stdCells } from './lib/cli.mjs';
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
+import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line
@@ -40,16 +42,31 @@ const OFFERS = path.join(HERE, '..', 'offers.json');   // P0: flat live-offer sn
 const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl');   // YP1: watch.mjs writes it, we read it advisory
 const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch.mjs (read-only here)
 const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
+const FILLS = path.join(HERE, '..', 'fills.json');   // LM1: RuneLite-logged fills → per-item 4h buy-limit windows (no fetch)
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
 const tokens = args.filter(a => !a.startsWith('--'));
 
-function regimeLine(name, row, limit) {
+// LM1: per-item 4h buy-limit windows, built ONCE per run from the repo-root fills.json (local file, no
+// fetch). Empty map (absent/unreadable) ⇒ every item has zero in-window buys ⇒ byte-identical output.
+function loadBuysByItem() {
+  try { return buysByItem(JSON.parse(fs.readFileSync(FILLS, 'utf8')).events || []); }
+  catch { return new Map(); }
+}
+// LOCAL wall-clock HH:MM for a unix-SECONDS instant (repo rule: rendered times are local).
+function hhmm(tsSec) { return tsSec == null ? '—' : new Date(tsSec * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+
+function regimeLine(name, row, limit, win) {
   const r = row.regime;
   const drift = (r && r.ok) ? `${r.driftPct >= 0 ? '+' : ''}${r.driftPct.toFixed(1)}% (3d vs prior ~2wk median)` : 'insufficient history';
-  // buy limit per ~4h window — already fetched (loadMapping); /overnight sizing reads it here
-  const lim = limit != null ? ` · buy limit ${limit.toLocaleString()}/4h` : '';
+  // buy limit per ~4h window — already fetched (loadMapping); /overnight sizing reads it here. LM1: when
+  // there ARE in-window logged buys, append what's been bought / left / when capacity next frees (local).
+  let lim = limit != null ? ` · buy limit ${limit.toLocaleString()}/4h` : '';
+  if (win && win.boughtInWindow > 0) {
+    const left = win.remaining == null ? 'limit unknown' : `${win.remaining.toLocaleString()} left`;
+    lim += ` (bought ${win.boughtInWindow.toLocaleString()} this window — ${left}, next frees ~${hhmm(win.nextFreeAt)})`;
+  }
   // buy/sell pressure — realized trailing-24h flow imbalance (zero extra fetch; see the
   // SHORTCOMINGS comment in computeQuote — flow proxy, not an order book, lags intraday shifts)
   const pt = pressureText(row.pressure);
@@ -69,6 +86,7 @@ async function runItems() {
     resolved.push(hit);
   }
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
+  const buysByItemMap = loadBuysByItem();   // LM1: per-item 4h buy-limit windows (regime-line + limitValidator)
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   // P3: read-only daily mids from whatever the Tier-1 archive already holds (noFetch → zero network,
   // no fetch-semantics change on this surface) → floorValidator's term structure. Cold archive → empty
@@ -80,7 +98,8 @@ async function runItems() {
     const inp = await fetchItemInputs(id);
     const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
-    lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
+    const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
+    lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null, limWin));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) lines.push('  ' + gl);
     // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window; quote
@@ -93,6 +112,7 @@ async function runItems() {
       history: { termStructure: termStructure(daily[id]) },
       intraday: { ts1h: inp.ts1h ?? null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
       floor: { level: row.optBuy != null ? row.optBuy : null },
+      limits: { window: limWin },   // LM1: a buy read — limitValidator flags an exhausted/near buy limit as a NOTE (never hides the row)
     });
     for (const f of flags(vres)) lines.push(`  ⚠ ${f.key}: ${f.reason}`);
     sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
@@ -144,6 +164,7 @@ async function runPositions() {
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
+  const buysByItemMap = loadBuysByItem();   // LM1: per-item 4h buy-limit windows (regime-line + limitValidator — accumulation awareness on a held lot)
   const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [], pathLines = [];
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
@@ -174,9 +195,13 @@ async function runPositions() {
     // on the built ctx (row now available) and run the registry. ts1h is NOT fetched here → degrade to
     // pass/no-data; a held lot is NEVER hidden, a fired flag is a NOTE + logged (verdict unchanged).
     ctx.intraday.reach = row.optSell != null ? { side: 'ask', level: row.optSell } : null;
+    // LM1: buy-limit window overlay — accumulation awareness on a held lot (if you'd top up, how much
+    // room is left this 4h window). limitValidator flags an exhausted/near limit as a NOTE (never hides).
+    const limWin = limitWindow({ buys: buysByItemMap.get(itemId) || [], limit: map.byId[itemId]?.limit ?? null });
+    ctx.limits = { window: limWin };
     const vres = runValidators(ctx);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
-    lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
+    lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null, limWin));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) lines.push('  ' + gl);
     for (const f of flags(vres)) lines.push(`  ⚠ ${name} ${f.key}: ${f.reason}`);

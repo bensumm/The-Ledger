@@ -22,9 +22,10 @@ tag. The linter is a growth-visibility heuristic, NOT a semantic checker (it can
 a cited script actually enforces the rule) — this table is the semantic record, hand-maintained.
 When a rule is added to a skill, add its row here and tag it, or CI goes red.
 
-Counts (2026-07-09): 56 rule-blocks across the four skills — 8 ENCODE (enforced today),
-45 KEEP-AS-JUDGMENT, 1 RETIRE-proposal, 2 F1-gated HYPOTHESIS blocks (flagged for revisit at
-F1, NOT retires — see the notable list at the bottom). All 30 memory entries triaged below.
+Counts (2026-07-09, LM1): 56 rule-blocks across the four skills — 9 ENCODE (enforced today; +1
+buy-limit sizing, now `limitValidator`), 44 KEEP-AS-JUDGMENT, 1 RETIRE-proposal, 2 F1-gated
+HYPOTHESIS blocks (flagged for revisit at F1, NOT retires — see the notable list at the bottom).
+All 30 memory entries triaged below.
 (Corrected from "3 RETIRE-proposals" — only one table row actually proposes a retirement.)
 
 ---
@@ -56,7 +57,7 @@ F1, NOT retires — see the notable list at the bottom). All 30 memory entries t
 | Skip despite high grade | KEEP-AS-JUDGMENT | Grade cutoffs are placeholders (`pipeline/lib/rating.mjs`). |
 | Lane management — scale/rotate | KEEP-AS-JUDGMENT | Exposure call. |
 | Peak-throughput sizing — one-window vs multi-day | KEEP-AS-JUDGMENT | Labeling discipline. |
-| Buy-limit-aware sizing | KEEP-AS-JUDGMENT | `quote.mjs` prints `· buy limit N/4h`; ENCODE candidate: a screen validator capping suggested qty at the 4h limit (not built). Memory `buy-limit-caps-every-size`. |
+| Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen.mjs`/`quote.mjs`); `quote.mjs` regime line shows bought/left/next-frees; `node pipeline/limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
 | Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/windowrange.mjs`; the "proven lane" call is judgment. |
 | Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/strategies.mjs`; watchlist section + Note in `pipeline/screen.mjs` (S3); columns pinned in `js/quotecore.js`. |
 | Cover every niche each pass | KEEP-AS-JUDGMENT | Output-coverage discipline (memory `salient-subtask-crowds-out-mandate`). |
@@ -117,7 +118,7 @@ skill); those are effectively already ENCODE-or-relocated and just need to stay 
 | --- | --- | --- |
 | stale-branch-delete-ok | KEEP-AS-JUDGMENT | Process rule; lives in CLAUDE.md process rule 9 too. |
 | arrows-on-hold-pending-update | KEEP-AS-JUDGMENT | TEMPORARY veto; retire once arrows settle post-update (Ben re-evaluates). |
-| buy-limit-caps-every-size | KEEP-AS-JUDGMENT | ENCODE candidate (screen qty-cap validator); `quote.mjs` prints the limit today. |
+| buy-limit-caps-every-size | ENCODE | LM1 (2026-07-09): `limitValidator` (`js/validate.mjs`) off `limitWindow` (`pipeline/lib/limits.mjs`) disqualifies an over-limit buy on every suggesting surface; `pipeline/limits.mjs` CLI is the direct read. The multi-window-accumulation framing stays judgment. |
 | peak-timing-default-for-pricing | KEEP-AS-JUDGMENT | Method over `windowrange.mjs`; "encode into skills later" — now in `/scan`+`/overnight` timing-target rules. |
 | pricing-ok-on-ignored-items | ENCODE (partial) | `ignored-items.json` + `pipeline/lib/ignored.mjs` implement the view-filter; "pricing OK" is the judgment. |
 | gather-before-recommending | KEEP-AS-JUDGMENT | Core discipline; no code gate. |

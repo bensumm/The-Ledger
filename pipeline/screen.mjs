@@ -89,6 +89,7 @@ import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed 
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { runValidators, flags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution
+import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
@@ -316,11 +317,16 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // A cold/absent daily series degrades to pass (the common case until the archive warms). Explicit
     // asks/held/watchlist are handled on their own surfaces where nothing is ever hidden.
     const ts = termStructure(daily && daily[s.id]);
+    // LM1: the buy-limit window for this candidate — limitValidator DISQUALIFIES a suggested buy with
+    // no room left in the rolling 4h window (reject → dropped + counted) and CAUTIONs a nearly-spent
+    // one. Zero in-window buys ⇒ remaining==limit ⇒ pass (byte-identical). Absent limit ⇒ degrade.
+    const limWin = limitWindow({ buys: BUYS_BY_ITEM.get(s.id) || [], limit: map.byId[s.id]?.limit ?? null });
     const vres = runValidators({
       market: { row },
       history: { termStructure: ts },
       intraday: { ts1h: null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
       floor: { level: row.optBuy != null ? row.optBuy : null },
+      limits: { window: limWin },
     });
     const vworst = worstStatus(vres);
     if (vworst === 'reject') {
@@ -637,8 +643,18 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
   return { headers, rows };
 }
 
+// LM1: per-item 4h buy-limit windows. Built ONCE per run from the repo-root fills.json (cheap local
+// file, no fetch) and read by renderMode's validator ctx (`limits` stage). Empty map ⇒ every item has
+// zero in-window buys ⇒ limitValidator passes ⇒ byte-identical output (the degrade contract).
+let BUYS_BY_ITEM = new Map();
+function loadBuysByItem() {
+  try { return buysByItem(JSON.parse(readFileSync(join(REPO_ROOT, 'fills.json'), 'utf8')).events || []); }
+  catch { return new Map(); }   // absent/unreadable fills.json → no limit context (validator degrades to pass)
+}
+
 async function main() {
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
+  BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
   const map = await loadMapping();
   const [v24, latest, guide] = [await loadAll24h(), await loadAllLatest(), await loadGuide()];
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;

@@ -267,7 +267,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `cash.mjs` (CLI to set/read/clear the STATED idle-cash balance
     in `.capital-state.json` — the total-capital denominator `watch.mjs`'s SUMMARY reads),
     `windowrange.mjs` (né `nightlows.mjs` — time-of-day
-    range read / overnight fill-realism scoring), `alerts.mjs` (N1 push-notification trigger
+    range read / overnight fill-realism scoring), `limits.mjs` (LM1 — the buy-limit read:
+    `node pipeline/limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
+    local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
+    no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),
+    `alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
     `outcomes.mjs` (derived campaign/outcomes join — gitignored output; schema v2 (YS1) adds per-campaign
@@ -287,7 +291,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
     position stage wants, so quote.mjs can see the live book without the `~/.runelite` log dir),
-    `positions.mjs` (shared `readOpenPositions` open-lot grouping), `archive.mjs`
+    `positions.mjs` (shared `readOpenPositions` open-lot grouping), `limits.mjs` (LM1 — PURE rolling-4h
+    buy-limit window math: `limitWindow({buys,limit,now})` → `{limit,boughtInWindow,remaining,nextFreeAt,
+    fullResetAt}` (null limit = UNKNOWN, never unlimited) + `buysByItem(events)` extracting per-item BUY
+    fills the SAME way `reconstruct.mjs` does (`collapseOffers∘dedupeSnapshots`, final cumulative filled,
+    banked/sells excluded). Consumed by `pipeline/limits.mjs` CLI + `screen.mjs`/`quote.mjs`'s
+    `limitValidator` ctx; honesty: logged fills only, so `remaining` is an UPPER bound), `archive.mjs`
     (D0 — the Tier-1 SQLite market archive: a thin `node:sqlite` (`DatabaseSync`) wrapper storing
     RAW `/1h`+`/5m` bulk observations keyed `(grain, ts, itemId)` with `INSERT OR IGNORE` + WAL/
     busy_timeout. `open`/`append`/`seriesFor`/`marketAt`/`exportFixture`/`pruneBefore`; NEVER archives

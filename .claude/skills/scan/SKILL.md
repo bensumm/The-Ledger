@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.27
+version: 1.28
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -286,19 +286,24 @@ This is the tribal layer the script can't do — apply ALL of these:
   sizing sanity-check, not a formula; it's a labeling discipline (call the roll horizon at entry),
   never a hard cap.
 - **Buy-limit-aware sizing — NEVER suggest a quantity over the 4h GE limit (Ben, 2026-07-08).**
-  Every accumulation/tranche suggestion is CAPPED by the item's GE buy limit (`quote.mjs` prints it
-  as `· buy limit N/4h`; also in the mapping — look it up before sizing). A "tranche" is ONE window's
-  worth = **≤ limit units**; a position bigger than the limit is a **multi-window accumulation by
-  definition** — state the per-window cap, the gp it represents, and how many 4h windows it takes
-  (e.g. "11k darts = ~2.0m/window; 44k = 4 windows ≈ 16h"). Do NOT pitch a single-tranche size that
-  silently exceeds the limit (the anchor: I suggested "~45–55k amethyst darts" against an 11k/4h
-  limit — that's 4+ windows, not a tranche). Two follow-ons: (1) **if the item was already bought
-  today, the limit is partially/fully consumed** — check `fills.json` for today's BUY batch; the
-  limit re-arms **4h after the FIRST fill of the consumed batch** (same clock as the `/positions`
-  limit-blocked-CROSSING rule), so size the REMAINING headroom, not the full limit, and say when it
-  re-arms. (2) **a null/untracked limit ≠ unlimited** — flag it and size conservatively off volume,
-  don't assume you can pour capital in. This makes the buy limit a first-class input to every size,
-  not an afterthought.
+  _(code-pointer: `pipeline/lib/limits.mjs` `limitWindow` + `js/validate.mjs` `limitValidator`; ask =
+  `node pipeline/limits.mjs "<item>"`)_ Every accumulation/tranche suggestion is CAPPED by the item's
+  GE buy limit (`quote.mjs` prints it as `· buy limit N/4h`; also in the mapping — look it up before
+  sizing). A "tranche" is ONE window's worth = **≤ limit units**; a position bigger than the limit is a
+  **multi-window accumulation by definition** — state the per-window cap, the gp it represents, and how
+  many 4h windows it takes (e.g. "11k darts = ~2.0m/window; 44k = 4 windows ≈ 16h"). Do NOT pitch a
+  single-tranche size that silently exceeds the limit (the anchor: I suggested "~45–55k amethyst darts"
+  against an 11k/4h limit — that's 4+ windows, not a tranche). This is now ENCODED on every suggesting
+  surface (LM1): the rolling-4h `limitWindow` math is fed to the BUY-side `limitValidator`, which
+  **REJECTs** (screen drops it, quote/held/watchlist note it) a buy whose window is exhausted and
+  **CAUTIONs** one nearly spent — and `quote.mjs`'s regime line appends `(bought X this window — Y
+  left, next frees ~HH:MM)` when there are in-window logged buys. Two follow-ons the numbers already do
+  for you: (1) **if the item was already bought today, the limit is partially/fully consumed** — run
+  `node pipeline/limits.mjs "<item>"` (reads `fills.json`, no fetch) for bought/remaining + the local
+  `next frees ~HH:MM` / `fully resets ~HH:MM`; size the REMAINING headroom, not the full limit. HONEST
+  LIMIT: only RuneLite-logged fills are visible, so a mobile/unlogged buy is invisible — "left" is an
+  UPPER bound, not a guarantee. (2) **a null/untracked limit ≠ unlimited** — the validator DEGRADES to
+  pass on a null limit (never green-lights it); flag it and size conservatively off volume.
 - **A thin CURRENT 2h band ≠ no edge — read the recent DAILY range on a proven lane (Ben,
   2026-07-08).** _(judgment: read call; tool `pipeline/windowrange.mjs`)_ The screen's band is the last-2h window; it looks THIN precisely when live sits at
   the top or bottom of the item's wider daily range. Do NOT dismiss a known/proven lane (one you've
