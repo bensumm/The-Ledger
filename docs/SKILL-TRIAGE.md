@@ -22,11 +22,10 @@ tag. The linter is a growth-visibility heuristic, NOT a semantic checker (it can
 a cited script actually enforces the rule) — this table is the semantic record, hand-maintained.
 When a rule is added to a skill, add its row here and tag it, or CI goes red.
 
-Counts (2026-07-09, LM1): 56 rule-blocks across the four skills — 9 ENCODE (enforced today; +1
-buy-limit sizing, now `limitValidator`), 44 KEEP-AS-JUDGMENT, 1 RETIRE-proposal, 2 F1-gated
-HYPOTHESIS blocks (flagged for revisit at F1, NOT retires — see the notable list at the bottom).
-All 30 memory entries triaged below.
-(Corrected from "3 RETIRE-proposals" — only one table row actually proposes a retirement.)
+Counts (2026-07-09): 56 rule-blocks across the four skills — 9 ENCODE (enforced today; +1
+buy-limit sizing, now `limitValidator`), 44 KEEP-AS-JUDGMENT, 1 RETIRED (the lone retire-proposal,
+signed off & executed by Ben 2026-07-09 — see below), 2 F1-gated HYPOTHESIS blocks (flagged for
+revisit at F1, NOT retires — see the notable list at the bottom). All 30 memory entries triaged below.
 
 ---
 
@@ -82,7 +81,7 @@ All 30 memory entries triaged below.
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
 | Overnight ASKS favored / DEEP BIDS disfavored (time-geography) | KEEP-AS-JUDGMENT | Volume asymmetry measured, behavioral sample small (1 win / 2 fails). |
-| Weekend→weekday calendar shift (v1.11) | **RETIRE (PROPOSAL)** | Superseded by its own v1.12 correction ("check the FULL-DAY basis first" — the fade showed only in the narrow slice; UNCONFIRMED on full-day). Propose demoting v1.11 to a one-line "narrow-slice only, see full-day check" and keeping v1.12. Ben's call. |
+| Weekend→weekday calendar shift (v1.11) | **RETIRED** (Ben, 2026-07-09) | Collapsed to a one-line weekday-basis check pointing at the full-day read (`--window 0-23 --nights 21`); the narrow-slice fade is folded in as an UNCONFIRMED judgment note. `/overnight` v1.15. |
 | Phase 1 chase-bid sweep / STOP-and-wait / measurement-spine refresh | ENCODE | `pipeline/watch.mjs`, `pipeline/outcomes.mjs`; the pause-for-capital is the interactive boundary (process). |
 | Phase 2 posture screen (what it does / does not decide) | ENCODE | `pipeline/screen.mjs --posture overnight` (S2) does the structural filtering; the sizing/retrace judgment stays. |
 | Nightly-low trend / decay-trough projection / fill-realism checks | KEEP-AS-JUDGMENT | Read `pipeline/windowrange.mjs`'s per-day low column; projecting the trough is judgment (small sample). |
@@ -144,9 +143,10 @@ skill); those are effectively already ENCODE-or-relocated and just need to stay 
 | state-sell-price-every-loop-item | ENCODE (partial) | `lib/emit.mjs` guarantees the sell line on every held lot (V5); the agent-side "every line carries list @ X" is the judgment mirror. |
 | salient-subtask-crowds-out-mandate | KEEP-AS-JUDGMENT | Encoded into `/scan`'s per-niche coverage rule (v1.21). |
 
-**Notable RETIRE proposals (all need Ben's sign-off):**
-1. `/overnight` **Weekend→weekday calendar shift (v1.11)** — superseded by its own v1.12 full-day
-   correction; propose collapsing to one line.
+**RETIRE dispositions:**
+1. `/overnight` **Weekend→weekday calendar shift (v1.11)** — **DONE** (Ben, 2026-07-09): collapsed
+   to a one-line weekday-basis check pointing at the full-day read; the narrow-slice fade survives
+   as an UNCONFIRMED judgment note (`/overnight` v1.15).
 2. The two `/scan` **HYPOTHESIS** blocks (parked-capital leak, velocity-beats-magnitude) are NOT
    retire proposals — they're honestly F1-gated leans; flagged here so they get revisited (kept or
    promoted) when F1 opens, not left to rot.
