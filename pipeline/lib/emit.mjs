@@ -6,7 +6,8 @@
  * consistently-ordered block so a reader (human or LLM) always gets the same fields in the same
  * order. The fields, in contract order:
  *
- *   1. verdict          — the momVerdict action's first sentence (already computed by heldAction)
+ *   1. verdict          — the momVerdict action's first sentence (already computed by heldAction),
+ *                         + window context + optional compact buy/sell pressure on the same line
  *   2. conviction-state — the V4 arm-then-confirm note, when armed (confirmed escalations live in
  *                         the HEADLINE, not here — this block surfaces the ARMED state)
  *   3. Δ-since-last     — the V1 cross-pass delta line, when a signal is informative
@@ -48,14 +49,17 @@ export function heldListAt(row, be, mv) {
  * sub-line. Optional fields are dropped when null/empty; the sell line is ALWAYS emitted last.
  */
 export function heldNoteBlock({
-  name, verdict, window: win, reliableReason,
+  name, verdict, window: win, reliableReason, pressure,
   conviction, delta, tripwire, recovery, path,
   listAt, breakEven, fillProgress,
 }) {
   const lines = [];
-  // 1. VERDICT — action first sentence, + window context + a reliability flag when the quote is soft.
+  // 1. VERDICT — action first sentence, + window context + buy/sell pressure (the compact
+  //    pressureText string, OPTIONAL — trailing-24h flow imbalance, display-only context; see
+  //    the SHORTCOMINGS comment in js/quotecore.js computeQuote) + a reliability flag when soft.
   lines.push(`- ${name}: ${verdict}`
     + (win ? ` · window ${win}` : '')
+    + (pressure ? ` · pressure ${pressure}` : '')
     + (reliableReason ? ` · ⚠ ${reliableReason}` : ''));
   // 2. CONVICTION-STATE (V4) — the armed note, when applicable.
   if (conviction) lines.push(`    ${conviction}`);

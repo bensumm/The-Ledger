@@ -10,6 +10,25 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Buy/sell pressure ratio on quote + watch (2026-07-09, pipeline stdout only — NO APP_VERSION)
+Ben's ask: surface the buy/sell pressure ratio in the live fetch output, with its shortcomings
+documented. `computeQuote` (js/quotecore.js) now derives `row.pressure = {hpv, lpv, ratio}` from the
+/24h endpoint it ALREADY receives (zero extra fetch): `highPriceVolume` = units transacted at the
+instabuy side (buyers crossing the spread), `lowPriceVolume` = the instasell side (sellers crossing);
+ratio = hpv/lpv. The ONE display formatter `pressureText` renders it as the dominant side
+(`buy 1.4× (hpv 3.05m / lpv 2.3m)`, compact `buy 1.4×`; null when either side is zero/absent).
+Surfaced on: the `quote.mjs` per-item regime line, and the `watch.mjs` held note-block header
+(new optional `pressure` field in the V5 emit contract, `lib/emit.mjs` — omitted-when-null pinned
+byte-identical), plus the bid and target note lines. **Documented shortcomings (at the derivation):**
+it is REALIZED flow, not an order book (Jagex exposes no resting bid/ask depth — "N buyers waiting"
+is genuinely unavailable); side attribution is the wiki's price-side heuristic; it's a TRAILING 24h
+window that lags intraday shifts (the Momentum column stays the live directional tell); flip-heavy
+items trend toward 1.0× by construction, so a strong skew on a liquid item means more than balance
+does. Display-only — deliberately NOT a gate, verdict, or rating input (pinned: a verdict fixture
+with a lopsided vol24 is byte-identical). No APP_VERSION: the app renders via quoteCells, which is
+untouched (the P5 data-only-quotecore-field precedent). Once the D0 archive holds weeks of 5m
+snapshots, a rolling imbalance-vs-forward-move calibration is the natural follow-on.
+
 ### V2-P6b — per-thesis TTF estimators + rank replaces gp/d (2026-07-09, pipeline-only — NO APP_VERSION)
 Ben's 2026-07-09 ruling: "I despise gp/d as a metric; it makes so many assumptions about fill speed and
 fill price… let's get something that's more accurate per thesis and less hand wavey." `expGpDay`

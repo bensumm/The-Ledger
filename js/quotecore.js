@@ -243,11 +243,30 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   if(falling && quickSell!=null) optSell=quickSell;
   const mid=(quickBuy!=null&&quickSell!=null)?(quickBuy+quickSell)/2:(quickBuy||quickSell||null);
   const volDay=vol24?Math.min(vol24.highPriceVolume||0, vol24.lowPriceVolume||0):null;
+  // --- buy/sell PRESSURE (realized 24h volume imbalance) — zero extra fetch ----------------
+  // highPriceVolume = units that transacted at the instabuy side (buyers crossing the spread);
+  // lowPriceVolume = units at the instasell side (sellers crossing). hpv/lpv > 1 ⇒ net aggressive
+  // BUYING over the window; < 1 ⇒ net aggressive selling. Vol/d deliberately keeps only
+  // min(hpv,lpv) (the two-sided-liquidity gate), so the imbalance itself is preserved here.
+  // KNOWN SHORTCOMINGS (be honest when citing this number):
+  //   • It is REALIZED flow, not the order book — Jagex exposes no resting bid/ask depth, so
+  //     "N buyers vs M sellers waiting" is genuinely unavailable; this infers pressure from
+  //     which side of the spread trades actually printed on.
+  //   • Side attribution is the wiki's price-side heuristic (trade at the high = a buyer
+  //     crossing) — a mispriced/instant flip can be attributed to the wrong side.
+  //   • It is a TRAILING 24h window: it lags an intraday shift by hours. The Momentum column
+  //     (live vs own 2h band, same read) is the LIVE directional tell; pressure is the slower
+  //     flow backdrop. Don't read a fresh reversal from it.
+  //   • Flip-heavy items trend toward 1.0× by construction (every flip prints once on each side),
+  //     so a strong skew on a liquid item is more informative than balance is.
+  // Display-only (quote/watch regime+note lines); NOT a gate, verdict, or rating input.
+  const hpv=vol24?(vol24.highPriceVolume||0):null, lpv=vol24?(vol24.lowPriceVolume||0):null;
+  const pressure={hpv, lpv, ratio:(hpv>0 && lpv>0)?hpv/lpv:null};
   const quickNet=(quickSell!=null&&quickBuy!=null)?netMargin(quickBuy,quickSell):null;
   const optNet  =(optSell!=null&&optBuy!=null)?netMargin(optBuy,optSell):null;
   const quickRoi=(quickNet!=null&&quickBuy)?quickNet/quickBuy*100:null;
   const optRoi  =(optNet!=null&&optBuy)?optNet/optBuy*100:null;
-  const row={ quickBuy, quickSell, optBuy, optSell, mid, guide:guide??null, volDay,
+  const row={ quickBuy, quickSell, optBuy, optSell, mid, guide:guide??null, volDay, pressure,
     quickNet, optNet, quickRoi, optRoi, limit:limit??null,
     regime, regimeLabel:rl.label, falling, rising:rl.rising, held:!!held, asked:!!asked,
     mom, momPct, rawBandLo, rawBandHi,
@@ -256,6 +275,21 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   row.ordered=quoteOrdered(row);
   return row;
 }
+/* Compact display text for row.pressure — the ONE formatter every surface prints from (quote.mjs
+   regime line, watch.mjs note lines), so the phrasing can't drift. Reads the DOMINANT side:
+   `buy 1.4×` = 1.4 units bought aggressively per unit sold aggressively over the trailing 24h;
+   `sell 1.3×` = the inverse. Full form appends the raw sides `(hpv 32.1k / lpv 23.0k)`; compact
+   form is the bare `buy 1.4×`. Returns null when either side is zero/absent (a one-sided or
+   unfetched book has no meaningful ratio — and one-sidedness is already the liquidity gate's job).
+   Read the SHORTCOMINGS comment at the derivation in computeQuote before leaning on this number:
+   realized trailing-24h flow, not an order book; lags intraday shifts (Momentum is the live tell). */
+export function pressureText(pressure, {compact}={}){
+  if(!pressure || pressure.ratio==null) return null;
+  const r=pressure.ratio, side=r>=1?'buy':'sell', mag=r>=1?r:1/r;
+  const head=side+' '+mag.toFixed(1)+'×';
+  return compact?head:head+' (hpv '+fmt(pressure.hpv)+' / lpv '+fmt(pressure.lpv)+')';
+}
+
 /* the ordering INVARIANT as a testable predicate (chunk-2 acceptance asserts this on fixtures) */
 export function quoteOrdered(row){
   return !!row && row.quickBuy!=null && row.quickSell!=null &&

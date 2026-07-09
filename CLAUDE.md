@@ -162,8 +162,13 @@ deliberate):**
 
 Script facts the skills rely on (current behavior, not doctrine):
 - `quote.mjs` takes multiple items in one call; prints one combined table + a regime line
-  per item that includes the **buy limit** (`· buy limit N/4h`) and a `⚠ feed inversion`
-  footnote when the quote basis is unreliable.
+  per item that includes the **buy limit** (`· buy limit N/4h`), the **buy/sell pressure**
+  (`· pressure buy 1.4× (hpv 3.05m / lpv 1.91m)` — realized trailing-24h hpv/lpv flow imbalance
+  off the SAME /24h fetch; display-only, never a gate/verdict input; a flow proxy, NOT an order
+  book — cite it with the shortcomings documented at the derivation in `js/quotecore.js`
+  `computeQuote`; the Momentum column stays the LIVE directional tell), and a `⚠ feed inversion`
+  footnote when the quote basis is unreliable. watch.mjs held/bid/target note lines carry the
+  same pressure token in compact form.
 - `quote.mjs --positions` adds Held@/Break-even/Verdict columns; the verdict vocabulary is
   the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
   NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE, plus the

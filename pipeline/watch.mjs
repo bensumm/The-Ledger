@@ -49,7 +49,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
-  diurnalRead, phase, underwaterHours, isOvernightNow } from '../js/quotecore.js';
+  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
 import { renderHeldVerdict, pathsStage, renderPathLine } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line
@@ -674,6 +674,7 @@ async function main() {
     try { pathLine = it._pathCtx ? renderPathLine(it._pathCtx) : null; } catch { /* support-only */ }
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
+      pressure: pressureText(row.pressure, { compact: true }),
       reliableReason: row.reliable ? null : row.reliableReason,
       conviction, delta, tripwire, recovery, path: pathLine,
       listAt: heldLa, breakEven: be,
@@ -712,7 +713,8 @@ async function main() {
         bidBe != null ? fmtP(bidBe) : '—']);
       briefRows.push({ verdict: bidVer, name, position: bidPos, listAt: bidListAt, breakEven: bidBe });
       const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
-      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+      const bidPress = pressureText(row.pressure, { compact: true });
+      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${wl ? ` · window ${wl}` : ''}${bidPress ? ` · pressure ${bidPress}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
       // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
       // (BID-BEHIND: below the band, it fills only if the price drops to it). ADVISORY context:
       // a drop-lean means it's likely to fill, a recover-lean that it drifts away. No verdict input.
@@ -742,7 +744,8 @@ async function main() {
     tableRows.push([tgtVer, name, 'watched',
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), be != null ? fmtP(be) : '—']);
     briefRows.push({ verdict: tgtVer, name, position: 'watched', listAt: row.optSell ?? null, breakEven: be ?? null });
-    notes.push(`- ${name}: ${firstSentence(targetAction(row, cls, be))}`);
+    const tgtPress = pressureText(row.pressure, { compact: true });
+    notes.push(`- ${name}: ${firstSentence(targetAction(row, cls, be))}${tgtPress ? ` · pressure ${tgtPress}` : ''}`);
   }
 
   if (BRIEF) {

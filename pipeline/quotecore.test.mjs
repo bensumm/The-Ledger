@@ -22,6 +22,7 @@ import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEv
 import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../js/quotecore.js';   // S2 posture helpers
 import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
 import { phase, regimeDrift } from '../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
+import { pressureText } from '../js/quotecore.js';   // 24h buy/sell flow-imbalance display formatter
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
 const NOW_MS  = NOW_SEC * 1000;
@@ -579,6 +580,51 @@ ok('regimeDrift/regimeLabel unchanged (falling fixture still labels falling)', (
   assert.equal(rl.falling, true);
   assert.equal(regimeLabel(regimeDrift(mk6h(1100, 1000))).label, 'rising');   // +10%
   assert.equal(regimeLabel(regimeDrift(mk6h(1000, 1000))).label, 'flat');     // 0%
+});
+
+// ============================================================================================
+// PRESSURE — realized 24h buy/sell volume-imbalance ratio (row.pressure) + the ONE display
+// formatter (pressureText). Display-only enrichment off the vol24 fetch computeQuote already
+// receives (zero new network); NOT a gate/verdict/rating input — pinned here by re-asserting a
+// verdict fixture is untouched. Shortcomings documented at the derivation (flow proxy, not an
+// order book; trailing window lags intraday; flip-heavy items trend to 1.0×).
+// ============================================================================================
+console.log('\npressure (24h flow imbalance) acceptance:');
+
+ok('two-sided vol24 → ratio hpv/lpv on the row; volDay still the limiting side', () => {
+  const ts5m = mk5m(() => ({ low: 990, high: 1010, vol: 500 }));
+  const latest = { low: 990, high: 1010, lowTime: FRESH, highTime: FRESH };
+  const row = rowOf(latest, ts5m, { vol24: { highPriceVolume: 3200, lowPriceVolume: 2300 } });
+  assert.equal(row.pressure.hpv, 3200);
+  assert.equal(row.pressure.lpv, 2300);
+  assert.ok(Math.abs(row.pressure.ratio - 3200 / 2300) < 1e-12);
+  assert.equal(row.volDay, 2300);                       // limiting side unchanged
+});
+
+ok('one-sided or missing vol24 → ratio null (no meaningful imbalance)', () => {
+  const ts5m = mk5m(() => ({ low: 990, high: 1010, vol: 500 }));
+  const latest = { low: 990, high: 1010, lowTime: FRESH, highTime: FRESH };
+  assert.equal(rowOf(latest, ts5m, { vol24: { highPriceVolume: 3200, lowPriceVolume: 0 } }).pressure.ratio, null);
+  assert.equal(rowOf(latest, ts5m).pressure.ratio, null);   // vol24:null
+});
+
+ok('pressureText — dominant side + magnitude, full and compact forms, null passthrough', () => {
+  assert.equal(pressureText({ hpv: 3200, lpv: 2300, ratio: 3200 / 2300 }, { compact: true }), 'buy 1.4×');
+  assert.equal(pressureText({ hpv: 3200, lpv: 2300, ratio: 3200 / 2300 }), 'buy 1.4× (hpv 3.2k / lpv 2.3k)');
+  // sell-dominant: ratio < 1 reads as the INVERSE on the sell side
+  assert.equal(pressureText({ hpv: 1000, lpv: 1300, ratio: 1000 / 1300 }, { compact: true }), 'sell 1.3×');
+  assert.equal(pressureText({ hpv: 1000, lpv: 0, ratio: null }), null);
+  assert.equal(pressureText(null), null);
+});
+
+ok('pressure is display-only — a verdict fixture with vol24 attached is unchanged', () => {
+  // the bludgeon-style breakdown CUT must be byte-identical with/without a pressure-bearing vol24
+  const ts5m = mk5m(ha => ha < 0.5 ? { low: 900, high: 920, vol: 500 } : { low: 990, high: 1010, vol: 500 });
+  const latest = { low: 900, high: 920, lowTime: FRESH, highTime: FRESH };
+  const be = breakEven(1000);
+  const a = momVerdict(rowOf(latest, ts5m), be, 5000, ts5m, NOW_MS);
+  const b = momVerdict(rowOf(latest, ts5m, { vol24: { highPriceVolume: 9000, lowPriceVolume: 100 } }), be, 5000, ts5m, NOW_MS);
+  assert.deepEqual(a, b);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

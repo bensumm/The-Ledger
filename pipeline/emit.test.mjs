@@ -85,6 +85,19 @@ ok('window + reliability flag ride the header line; a null fillProgress drops fr
   assert.equal(lines[1], '    sell: list @ 2,500 · break-even 2,450');   // no trailing fill-progress
 });
 
+ok('optional pressure rides the header line between window and the reliability flag; omitted when null', () => {
+  const base = {
+    name: 'Dragon bones', verdict: 'HOLD — list @ 2.5k.',
+    window: 'ask 2.6k reached 5/7d', reliableReason: 'feed-inversion',
+    conviction: null, delta: null, tripwire: null,
+    listAt: 2500, breakEven: 2450, fillProgress: null,
+  };
+  const withPress = heldNoteBlock({ ...base, pressure: 'buy 1.4×' });
+  assert.ok(withPress[0].includes('· window ask 2.6k reached 5/7d · pressure buy 1.4× · ⚠ feed-inversion'));
+  // no pressure → byte-identical to the pre-pressure block
+  assert.deepEqual(heldNoteBlock(base), heldNoteBlock({ ...base, pressure: null }));
+});
+
 /* --- heldListAt precedence ------------------------------------------------------------------- */
 ok('heldListAt prefers the momVerdict listAt when present', () => {
   const mv = { listAt: 18_550_000 };

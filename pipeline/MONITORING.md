@@ -296,7 +296,11 @@ selection change). The header line is `- <name>: …`; every other field is a ne
 sub-line. Field order, always the same:
 
 1. **verdict** — the momVerdict/offerVerdict action's first sentence (+ the window read's key
-   number, + a `⚠ <reason>` reliability flag when the quote is soft), on the header line.
+   number, + an optional compact `pressure buy 1.4×` — the trailing-24h hpv/lpv flow imbalance,
+   `pressureText` off `row.pressure` in `js/quotecore.js`; display-only context, never a
+   verdict/gate input, shortcomings documented at the derivation in `computeQuote` — + a
+   `⚠ <reason>` reliability flag when the quote is soft), on the header line. Bid and target
+   note lines carry the same compact pressure token.
 2. **conviction-state** (V4/V7 + TG1) — the arm-then-confirm note, when armed. Omitted when not
    armed. (Confirmed escalations appear in the HEADLINE, not here; this field surfaces the ARMED
    state.) A **TG1 thesis-armed** lot surfaces `per thesis (<horizon>): expected-underwater — silent

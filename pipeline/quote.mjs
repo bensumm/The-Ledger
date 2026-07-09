@@ -19,7 +19,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -50,8 +50,12 @@ function regimeLine(name, row, limit) {
   const drift = (r && r.ok) ? `${r.driftPct >= 0 ? '+' : ''}${r.driftPct.toFixed(1)}% (3d vs prior ~2wk median)` : 'insufficient history';
   // buy limit per ~4h window — already fetched (loadMapping); /overnight sizing reads it here
   const lim = limit != null ? ` · buy limit ${limit.toLocaleString()}/4h` : '';
+  // buy/sell pressure — realized trailing-24h flow imbalance (zero extra fetch; see the
+  // SHORTCOMINGS comment in computeQuote — flow proxy, not an order book, lags intraday shifts)
+  const pt = pressureText(row.pressure);
+  const press = pt ? ` · pressure ${pt}` : '';
   const inv = row.ordered ? '' : '  ⚠ feed inversion — quote basis unreliable';
-  return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${inv}`;
+  return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${press}${inv}`;
 }
 
 async function runItems() {
