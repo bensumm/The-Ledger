@@ -177,7 +177,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V2-P5 | scalp/value specs + path-aware bids + falling doctrine | `js/strategies.mjs`, `js/valuescreen.mjs`, `js/quotecore.js` | ✅ `fe46f2e` (value-niche spec full text: `git show fe46f2e:PLAN-VALUE.md`) |
 | V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | `pipeline/lib/retrojoin.mjs`, `pipeline/retrojoin.mjs` | ✅ `6c3f1b5` |
 | V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/strategies.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
-| V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | OPEN (Ben's ruling: never silently lower the bar — re-run beneath the floor and label rows "sub-floor — shown because nothing cleared <floor>") |
+| V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | ✅ `6432a05` (two-sided gate + thesis edge NEVER relaxed; sub-floor rows stdout-only, never screen.json; ledger rows carry a lean `subFloor` marker) |
 | V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/skill-lint.mjs`, `docs/LORE.md` | OPEN |
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
 
@@ -280,15 +280,10 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
 
 ### Chunks (each carries its own reconciling docs pass + README inventory in the same commit)
 
-**D0, P0–P5, P6a, P6b — SHIPPED.** Specs pruned per the fold-out discipline; shas in Status,
+**D0, P0–P5, P6a, P6b, P6c — SHIPPED.** Specs pruned per the fold-out discipline; shas in Status,
 full spec text via `git show 4753e44:PLAN.md` (the last revision before this compaction), and
 each chunk's landing commit message is the authoritative "what shipped" record.
 
-- **P6c — Empty-result sub-floor fallback (Ben, 2026-07-09).** When a niche's floors leave ZERO
-  candidates, the screen must not print an empty table and stop — it re-runs beneath the floor
-  and shows the best sub-floor rows HONESTLY LABELED (`sub-floor — shown because nothing cleared
-  <floor>`), never silently lowering the bar. Cheap: thresholds are already parameterized per
-  run.
 - **P7 — Docs/skills triage + skill-lint + CLAUDE.md diet.** Three-way triage
   (encode/keep-as-judgment/retire) of EVERY prose rule in the four market skills + the memory
   index, disposition table in the PR; new `pipeline/skill-lint.mjs` in CI (rule-blocks need a
