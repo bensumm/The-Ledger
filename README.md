@@ -62,16 +62,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pipeline/watch.mjs` and `js/validate.mjs` — NOT yet app-imported),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
-  reach evidence, degrades to pass on missing data and never throws; `runValidators`/`worstStatus`/
-  `flags`/`leanValidators`. Screens DROP reject + FLAG caution; explicit asks/held/watchlist are never
-  hidden. `floorValidator` (P3, BUY-side only) rejects/cautions a buy parked well above the durable
-  multi-week floor; a HELD lot degrades. NOT yet app-imported → adding it does not bump APP_VERSION),
+  reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
+  `trajectoryValidator` (TV1 2026-07-09, BUY-side) is the SHAPE policy over `termstructure`'s
+  `classifyTrajectory` — knife/oscillating/based/elevated; `valueAmplitudeValidator` (TV1) the recent-week
+  amplitude+proximity for value; `limitValidator` (LM1) the rolling-4h buy-limit. All degrade to pass on
+  missing data and never throw. `runValidators(ctx,{specs})` drives a PER-THESIS plan (`{key,mode,window}`
+  from `js/strategies.mjs`) — `gate` (verdict stands) vs `inform` (`informFlags`: annotate-only, clamped to
+  pass, would-have verdict logged via `leanValidators`). `worstStatus`/`flags`. Screens DROP reject + FLAG
+  caution + SHOW inform notes; explicit asks/held/watchlist never hidden. NOT app-imported → no APP_VERSION),
   `termstructure.mjs` (P3 — pure DOM-free multi-day term structure over a daily-mid `[{ts,mid}]` series:
   the 1/3/7/14/28d `termStructure` (median/low/high/pctInRange per lookback), a durable **floor** (low
   quantile of the longest multi-week lookback), a robust **ceiling** (P5 — the symmetric high quantile
-  q85, so a lone spike can't inflate a range) + a **typical fluctuation** (IQR); degrades to
-  `hasData:false` on a short series. Consumed by `js/validate.mjs`'s floorValidator + `pipeline/screen.mjs`/
-  `pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
+  q85, so a lone spike can't inflate a range), a **typical fluctuation** (IQR), and a **trajectory** SHAPE
+  (TV1 — `classifyTrajectory`: knife/oscillating/based/rising/elevated/flat, attached as `ts.trajectory`);
+  degrades to `hasData:false`/`unknown` on a short series. Consumed by `js/validate.mjs`'s floor+trajectory
+  validators + `pipeline/screen.mjs`/`pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
   `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold niche
   (PLAN-VALUE): `valueRanges(ts,live)` derives the shape features (after-tax cycle amplitude off the
   robust floor→ceiling, proximity-to-low, floor-stability, knife delta) from a termStructure; `valueScore`

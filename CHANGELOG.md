@@ -10,6 +10,37 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### TV1 — per-thesis validators + trajectory (knife/oscillating) + in-script windowrange (2026-07-09, pipeline-only — NO APP_VERSION)
+Ben's design session: (1) "does it always make sense to run every validator for every thesis?" and
+(2) "any suggested item should have the windowrange analysis done in script." The resolution separates
+a validator's COMPUTATION (thesis-agnostic — the swing/local-min/knife/reach analysis helps every buy)
+from its ACTION (thesis-specific). `spec.validators` (`js/strategies.mjs`) becomes an authoritative
+per-thesis plan of `{key,mode,window}` — `gate` (verdict stands) vs `inform` (computed + annotated,
+never drops, would-have verdict logged for the track record) — and `screen.mjs` drives
+`runValidators(ctx,{specs})` off it (was: the whole registry on every surface). This is the noise
+reconciliation: only a thesis that GATES on a key lets it hide a row, so `scalp` INFORMS on trajectory
+(it accepts a falling wide band by thesis) while band could gate.
+
+Two new validators + the classifier: `js/termstructure.mjs` `classifyTrajectory` labels the multi-week
+SHAPE — **knife** (spike + monotone-down lows → the Nightmare-staff catch), **oscillating** (repeating
+local minima around a flat/declining mean → a falling-BUT-buyable rhythm, the Hydra-leather case, checked
+BEFORE knife so it isn't mislabeled), **based** (flat value-low), **elevated** (bought high). `js/validate.mjs`
+gains `trajectoryValidator` (the buy-side SHAPE policy, distinct from floor's LEVEL check) and
+`valueAmplitudeValidator` (value's recent-week amplitude + proximity-to-low). `screen.mjs` **Leg B**
+fetches the 1h series for surfaced SURVIVORS only (`TS_TTL_1H`, ~one fetch per surfaced row) so
+`reachValidator` FIRES on the screen (was dormant — degraded to no-data), and derives the trajectory off
+that same 1h series (`trajectoryFrom1h`) so it fires NOW while the `loadDaily` archive is still cold.
+`valueAmplitudeValidator` reads the recent-WEEK amplitude off that same warm 1h-derived term structure
+(`richFrom1h`, `current` set to the live price) so it, too, fires now instead of degrading on the cold
+`loadDaily` 7d slice (`valueRanges`/`valueGate`/floor keep the `loadDaily` proxy). All
+surfaced rows carry `ℹ trajectory/reach` inform notes. ROLLOUT (rule 4, n≈0): reach/trajectory/value-amplitude
+start **inform everywhere**; only the already-live floor+limit gate — flipping a cell to gate is a one-word
+change once the notes prove out. Tests: `validate.test.mjs` (+9: the two validators, gate/inform clamp,
+informFlags, ledger track-record logging, reach-window injection), `termstructure.test.mjs` (+4: the
+classifier's knife/oscillating/based/degrade shapes), registry-key assertions updated; replay goldens
+UNTOUCHED (the validator surface runs after the pinned gate funnel). No app module imports the changed
+modules → no APP_VERSION.
+
 ### LM1 — buy-limit awareness on every suggesting flow (2026-07-09, pipeline-only — NO APP_VERSION)
 Ben's ruling: "limits.mjs ... should be a part of every flow that suggests items ie we can flag as
 profitable but disqualify on limits and state when the limit should reset." New pure

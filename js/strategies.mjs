@@ -133,8 +133,21 @@ function churnEdge(inp, t) {
                                    value-low (handled in the term-structure valueGate, not surviveMode).
      gate        'band' (default — the shared liquidity+edge pre-fetch stack) | 'value' (the
                  term-structure valueGate in js/valuescreen.mjs; gateCandidates routes on this).
-     validators  validator keys this niche EXPECTS to run (metadata; screen.mjs still runs the full
-                 js/validate.mjs registry on every surface — [] = the shared default stack).
+     validators  the PER-THESIS validator PLAN (Ben 2026-07-09 — no longer dormant metadata; screen.mjs
+                 now drives runValidators off THIS instead of the full registry). Each entry is either a
+                 bare key string (gate mode) or { key, mode:'gate'|'inform', window? }:
+                   gate   — the validator's verdict stands (caution flags, reject drops the row).
+                   inform — COMPUTED + annotated but never downgrades (status clamped to pass, the
+                            would-have verdict logged for the track record). The noise reconciliation:
+                            the swing/local-min/knife/reach ANALYSIS is useful to every thesis, but only
+                            a thesis that GATES on a key lets it hide a row — so scalp INFORMS on
+                            trajectory (it accepts a falling wide band by thesis) while band could gate.
+                   window — reach-only { windowHours, nights }: the thesis's reach HORIZON (a band/scalp
+                            8h flip window vs value's full-day week+ daily-min TIMING read). Omitted ⇒
+                            reachValidator's default 8h/14-night.
+                 ROLLOUT (rule 4 — n≈0): the newly-activated validators (reach, trajectory,
+                 value-amplitude) start INFORM everywhere; only the already-live floor + limit gates gate.
+                 Flipping a cell to gate is a one-word change once its notes prove out against live data.
      defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header).
      estimator   (P6b) the per-thesis P(fill)+TTF estimator FAMILY key — one of pipeline/lib/
                  estimators.mjs's ESTIMATOR_FAMILIES ('intraday' | 'value' | 'rising'). The niche's
@@ -149,38 +162,55 @@ export const STRATEGY_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,
     pool: { risingFloor: false }, edge: bandEdge, rank: 'velocity', confirm: null,
-    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
-    estimator: 'intraday', priceBasis: 'opt',
+    falling: 'exclude', gate: 'band',
+    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'spread', label: 'Spread', inAll: true,
     pool: { risingFloor: false }, edge: spreadEdge, rank: 'velocity', confirm: null,
-    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
-    estimator: 'intraday', priceBasis: 'quick',
+    falling: 'exclude', gate: 'band',
+    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'quick',
   },
   {
     key: 'rising', label: 'Rising', inAll: true,
     pool: { risingFloor: true }, edge: bandEdge, rank: 'proxy', confirm: 'rising',
-    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.VALUE_HOLD,
-    estimator: 'rising', priceBasis: 'opt',
+    falling: 'exclude', gate: 'band',
+    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'rising', priceBasis: 'opt',
   },
   {
     key: 'churn', label: 'Churn', inAll: false,   // NY2.2 — off-by-default; reach with explicit --mode churn
     pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
-    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
-    estimator: 'intraday', priceBasis: 'opt',
+    falling: 'exclude', gate: 'band',
+    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
     pool: { risingFloor: false }, edge: scalpEdge, rank: 'velocity', confirm: null,
-    falling: 'accept', gate: 'band', validators: ['reach'], defaultPath: PATH_KEYS.SCALP,
-    estimator: 'intraday', priceBasis: 'opt',
+    // scalp accepts a falling wide band by thesis → trajectory + floor INFORM only (never veto a scalp for
+    // being a faller; its stop lives in the path engine / offerVerdict, not a screen gate).
+    falling: 'accept', gate: 'band',
+    validators: [{ key: 'floor', mode: 'inform' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'value', label: 'Value', inAll: false,   // P5 — off-by-default; explicit --mode value only (provisional, n≈0)
     pool: { risingFloor: false }, edge: valueEdge, rank: 'value', confirm: null,
-    falling: 'knife-guard', gate: 'value', validators: ['floor'], defaultPath: PATH_KEYS.VALUE_HOLD,
-    estimator: 'value', priceBasis: 'term',
+    // value KEEPS reach — as a full-day week+ daily-min TIMING read (windowHours 24 / 14 nights), not an
+    // 8h flip check: it finds WHEN the recent-week low prints so the entry is timed (Hydra/Berserker).
+    // value-amplitude is value's own recent-week cycle+proximity check. All inform in the n≈0 rollout.
+    falling: 'knife-guard', gate: 'value',
+    validators: [
+      { key: 'floor', mode: 'gate' },
+      { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
+      { key: 'trajectory', mode: 'inform' },
+      { key: 'value-amplitude', mode: 'inform' },
+      { key: 'limit', mode: 'gate' },
+    ],
+    defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term',
   },
 ]);
 
@@ -204,6 +234,25 @@ const VALID_GATE = new Set(['band', 'value']);                          // P5 ga
 // typo'd family name is caught by conformance instead of silently defaulting to intraday in production).
 const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising']);
 const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term']);
+// The validator KEYS a spec may name + the gate/inform modes. Kept as a local literal (NOT imported
+// from js/validate.mjs) so this registry stays near-dependency-free / app-bundle-light; the SOURCE OF
+// TRUTH is validate.mjs's REGISTRY_ORDER — the conformance test cross-checks the two so drift bites.
+const VALID_VALIDATOR_KEYS = new Set(['reach', 'floor', 'trajectory', 'value-amplitude', 'limit']);
+const VALID_VALIDATOR_MODES = new Set(['gate', 'inform']);
+
+/* a validators[] entry is a bare key string OR { key, mode?, window? }. Returns a violation string or null. */
+function validatorEntryError(v) {
+  const key = typeof v === 'string' ? v : (v && v.key);
+  if (!key || !VALID_VALIDATOR_KEYS.has(key)) return `validators entry has invalid key ${JSON.stringify(key)}`;
+  if (typeof v === 'string') return null;
+  if (v.mode != null && !VALID_VALIDATOR_MODES.has(v.mode)) return `validators[${key}].mode must be gate/inform`;
+  if (v.window != null) {
+    if (typeof v.window !== 'object') return `validators[${key}].window must be an object`;
+    for (const f of ['windowHours', 'nights'])
+      if (v.window[f] != null && typeof v.window[f] !== 'number') return `validators[${key}].window.${f} must be a number`;
+  }
+  return null;
+}
 
 export function validateStrategySpec(spec) {
   const errs = [];
@@ -220,6 +269,7 @@ export function validateStrategySpec(spec) {
   if (!VALID_GATE.has(spec.gate)) errs.push(`gate must be one of ${[...VALID_GATE].join('/')}`);
   if (!(spec.confirm === null || typeof spec.confirm === 'string')) errs.push('confirm must be a string or null');
   if (!Array.isArray(spec.validators)) errs.push('validators must be an array');
+  else for (const v of spec.validators) { const e = validatorEntryError(v); if (e) errs.push(e); }
   if (typeof spec.defaultPath !== 'string' || !VALID_PATH_KEYS.has(spec.defaultPath))
     errs.push('defaultPath must be a key in paths.mjs PATH_KEYS');
   else if (!ENTRY_PATH_KEYS.includes(spec.defaultPath))

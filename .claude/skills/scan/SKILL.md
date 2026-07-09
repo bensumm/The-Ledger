@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.28
+version: 1.29
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -165,6 +165,17 @@ This is the tribal layer the script can't do — apply ALL of these:
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
   recommend off one print. Check `--min-active` traded-windows plausibility when a band
   ROI looks too good.
+- **The screen now DOES the windowrange analysis in-script (2026-07-09) — read its `ℹ trajectory/reach`
+  notes first.** _(enforced: `js/validate.mjs` trajectory + reach validators, `pipeline/screen.mjs` Leg B)_
+  Each surfaced row now carries auto-computed INFORM notes (never a drop, n≈0 rollout): a **reach** note
+  (the sell-leg `--ask` reachability + RC1 stale bump, off the 1h series fetched per survivor) and a
+  **trajectory** note classifying the buy-leg shape — **knife** (spike + monotone-down lows → "not a dip",
+  the Nightmare-staff catch), **oscillating** (repeating local minima → "buyable at the local min", the
+  Hydra case), **based** (flat value-low), **elevated** (bought high). This is the encoded form of the
+  manual `windowrange` reads below — so the manual `--ask`/`--window 0-23 --nights 21` step is now a
+  CONFIRMATION on the handful you actually pitch, not the primary detector (a `would reject`/`would caution`
+  note is the screen telling you what a stricter thesis would have done). Still verify by hand before
+  quoting a profit — the notes are inform-only and thresholds are placeholders.
 - **Asymmetric ask-reach read — the verification gate (2026-07-07, method).** _(judgment: method; tool `pipeline/windowrange.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
   pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the

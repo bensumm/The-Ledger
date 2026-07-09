@@ -33,6 +33,7 @@
  */
 import { windowStats, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from './windowread.mjs';
 import { termStructure } from './termstructure.mjs';
+import { tax } from './format.js';
 
 // --- status algebra ---------------------------------------------------------------------------
 export const STATUS = { PASS: 'pass', CAUTION: 'caution', REJECT: 'reject' };
@@ -178,6 +179,68 @@ export function floorValidator(ctx) {
   return { key, status, reason, evidence };
 }
 
+// --- trajectoryValidator ----------------------------------------------------------------------
+// The SHAPE check (the encoded windowrange trajectory read) — DISTINCT from floorValidator's LEVEL
+// check. floorValidator asks "is the buy elevated ABOVE durable support?"; this asks "what SHAPE is the
+// recent multi-week path?" — a knife still stepping down (Nightmare staff), an OSCILLATING faller you buy
+// at the local min (Hydra leather), a flat base at the floor (Berserker ring), or bought high. The
+// classification math lives in js/termstructure.mjs (classifyTrajectory, attached as ts.trajectory);
+// this validator is only the buy-side POLICY over the shape. Ben 2026-07-09: it runs on EVERY thesis
+// (the analysis is universally useful for entry timing) but its GATE-vs-INFORM action is per-thesis —
+// on scalp it INFORMS (scalp accepts a falling wide band by thesis), on band/value it can gate. Started
+// INFORM-ONLY everywhere (rule 4 — n≈0) until the suggestions accrual gives the knife/oscillating split
+// a track record; the ledger logs the WOULD-HAVE status so that record accrues (see leanValidators).
+export function trajectoryValidator(ctx) {
+  const key = 'trajectory';
+  const pos = ctx && ctx.position;
+  if (pos && pos.held) return degrade(key, 'held-lot-sell-side');   // BUY-side only — a held lot is a sell decision
+  const ts = ctx && ctx.history && ctx.history.termStructure;
+  const traj = ts && ts.trajectory;
+  if (!traj || !traj.shape || traj.shape === 'unknown') return degrade(key, 'no-trajectory');
+  const shape = traj.shape, ev = traj.evidence || {};
+  const status = shape === 'knife' ? 'reject' : shape === 'elevated' ? 'caution' : 'pass';
+  const declTail = ev.declPct != null ? `${(ev.declPct * 100).toFixed(1)}% below the 7d median` : 'declining';
+  // reason omits a leading "trajectory" — the surface prefixes the validator key ("trajectory <reason>").
+  const reason =
+    shape === 'knife'    ? `knife — ${ev.spiked ? 'spike unwinding, ' : ''}lows stepping down (${declTail}) — not a dip` :
+    shape === 'elevated' ? `elevated — current in the top of the 14d range — bought high, not a dip` :
+    shape === 'oscillating' ? `oscillating (${ev.reversals} reversals) — buyable at the local min` :
+    shape === 'based'    ? `based — flat near the durable floor (value-low)` :
+    shape === 'rising'   ? `rising — recovering off the recent low` :
+                           `${shape}`;
+  return { key, status, reason, evidence: { shape, ...ev } };
+}
+
+// --- valueAmplitudeValidator ------------------------------------------------------------------
+// Value's "intraday swings against the recent WEEK" check (Ben 2026-07-09). Value buys a good ENTRY
+// TIME near a recent-week low and holds for the cycle — so the question is: is there a real week cycle
+// to harvest AND is live near its low right now? Reads the 7d lookback of the SAME term structure
+// floorValidator/trajectoryValidator read (no new fetch). Complementary to valuescreen.mjs's valueGate
+// (that is the MULTI-WEEK 14/28d cycle gate; this is the recent-WEEK amplitude + proximity read). BUY-side.
+export const VALAMP_MIN_PCT  = 0.04;   // PLACEHOLDER (rule 4): after-tax week amplitude below this ⇒ no cycle to harvest → reject
+export const VALAMP_NEAR_LOW = 0.40;   // PLACEHOLDER: live above this fraction up the week range ⇒ not at the low yet → caution (wait for the dip)
+//   VALIDATE (F1/P6): the week amplitude that actually predicts a profitable timed entry, and the
+//   proximity band within which "near the week low" fills at a good price rather than mid-range.
+const afterTax = p => p - tax(p);
+
+export function valueAmplitudeValidator(ctx) {
+  const key = 'value-amplitude';
+  const pos = ctx && ctx.position;
+  if (pos && pos.held) return degrade(key, 'held-lot-sell-side');
+  const ts = ctx && ctx.history && ctx.history.termStructure;
+  const lk7 = ts && ts.lookbacks && ts.lookbacks[7];
+  if (!lk7 || lk7.low == null || lk7.high == null || !(lk7.high > lk7.low)) return degrade(key, 'no-week-range');
+  const cur = ts.current;
+  const proximity = cur != null ? (cur - lk7.low) / (lk7.high - lk7.low) : null;   // 0 = at the week low, 1 = at the week high
+  const ampPct = (afterTax(lk7.high) - lk7.low) / lk7.low;
+  const evidence = { weekLow: lk7.low, weekHigh: lk7.high, current: cur, proximity: round2(proximity), ampPct: round2(ampPct) };
+  if (!(ampPct >= VALAMP_MIN_PCT))
+    return { key, status: 'reject', reason: `week after-tax amplitude ${(ampPct * 100).toFixed(1)}% < ${VALAMP_MIN_PCT * 100}% — no cycle to harvest`, evidence };
+  if (proximity != null && proximity > VALAMP_NEAR_LOW)
+    return { key, status: 'caution', reason: `${(ampPct * 100).toFixed(1)}% week cycle but live is ${Math.round(proximity * 100)}% up the week range — wait for the dip`, evidence };
+  return { key, status: 'pass', reason: `at the week low (${Math.round((proximity ?? 0) * 100)}% up range) with a ${(ampPct * 100).toFixed(1)}% after-tax week cycle`, evidence };
+}
+
 // --- limitValidator ---------------------------------------------------------------------------
 // LM1 (Ben 2026-07-09: "limits.mjs ... a part of every flow that suggests items ie we can flag as
 // profitable but disqualify on limits and state when the limit should reset"). BUY-SIDE. Reads a
@@ -223,23 +286,58 @@ export function limitValidator(ctx) {
 // --- the registry -----------------------------------------------------------------------------
 // keyed so a declarative strategy spec (P4c) can name the validators it runs by key. REGISTRY_ORDER
 // is the display/priority order (worst-first is computed via worstStatus, not the array order).
-export const VALIDATORS = { reach: reachValidator, floor: floorValidator, limit: limitValidator };
-export const REGISTRY_ORDER = ['reach', 'floor', 'limit'];
+export const VALIDATORS = {
+  reach: reachValidator, floor: floorValidator, trajectory: trajectoryValidator,
+  'value-amplitude': valueAmplitudeValidator, limit: limitValidator,
+};
+export const REGISTRY_ORDER = ['reach', 'floor', 'trajectory', 'value-amplitude', 'limit'];
 
-/* runValidators(ctx, {only}) — run the registry (or the named subset) over one ctx. Each call is
-   try/caught so a throwing validator degrades to pass (never breaks a market read). Returns an array
-   of { key, status, reason, evidence }. */
-export function runValidators(ctx, { only = null } = {}) {
-  const keys = only || REGISTRY_ORDER;
+/* GATE vs INFORM (Ben 2026-07-09). A validator's COMPUTATION is thesis-agnostic (the swing/local-min/
+   knife/reach analysis is useful to every buy); what differs per thesis is the ACTION. A spec entry is
+   either a bare key string (defaults to gate mode) or an object { key, mode:'gate'|'inform', window }:
+     gate   — the validator's natural status stands (a caution/reject downgrades/drops the row).
+     inform — the finding is COMPUTED and annotated but NEVER downgrades: status is clamped to pass and
+              the natural verdict is preserved as `gatedStatus` (so a surface can still SHOW the note and
+              the ledger can log the would-have status — the track record that later justifies a gate).
+     window — reach-only: the thesis's reach horizon { windowHours, nights }, merged into the reach
+              candidate before scoring (a band/scalp 8h flip window vs value's full-day week+ timing read).
+   This is the noise reconciliation: inform-mode validators add intelligence everywhere with ZERO
+   spurious drops; only a thesis that explicitly gates on a key can have that key hide a row. */
+function normalizePlan(only, specs) {
+  if (specs && specs.length) return specs.map(s => (typeof s === 'string' ? { key: s, mode: 'gate' } : { mode: 'gate', ...s }));
+  return (only || REGISTRY_ORDER).map(k => ({ key: k, mode: 'gate' }));
+}
+
+/* runValidators(ctx, {only|specs}) — run the registry (or a per-thesis plan) over one ctx. `specs` is
+   the P4c strategy's validator plan ({key,mode,window}); `only` is the legacy string-subset (all gate).
+   Each call is try/caught so a throwing validator degrades to pass. Returns { key, status, reason,
+   evidence, mode, gatedStatus? } — gatedStatus is set only when inform mode suppressed a non-pass. */
+export function runValidators(ctx, { only = null, specs = null } = {}) {
+  const plan = normalizePlan(only, specs);
   const out = [];
-  for (const k of keys) {
-    const v = VALIDATORS[k];
+  for (const p of plan) {
+    const v = VALIDATORS[p.key];
     if (!v) continue;
-    try { out.push(v(ctx)); }
-    catch (err) { out.push({ key: k, status: 'pass', reason: 'validator-error', evidence: { note: String((err && err.message) || err) } }); }
+    // reach-window injection: merge the thesis's horizon into the reach candidate for this call only.
+    let useCtx = ctx;
+    if (p.key === 'reach' && p.window && ctx && ctx.intraday && ctx.intraday.reach)
+      useCtx = { ...ctx, intraday: { ...ctx.intraday, reach: { ...ctx.intraday.reach, ...p.window } } };
+    let res;
+    try { res = v(useCtx); }
+    catch (err) { res = { key: p.key, status: 'pass', reason: 'validator-error', evidence: { note: String((err && err.message) || err) } }; }
+    const mode = p.mode === 'inform' ? 'inform' : 'gate';
+    if (mode === 'inform' && res.status !== 'pass')
+      res = { ...res, status: 'pass', gatedStatus: res.status, mode };   // clamp to pass; keep the would-have verdict
+    else
+      res = { ...res, mode };
+    out.push(res);
   }
   return out;
 }
+
+/* informFlags(results) — the inform-mode findings that WOULD have gated (status clamped to pass but a
+   gatedStatus recorded). A surface shows these as decision-support notes; they never drop a row. */
+export function informFlags(results) { return (results || []).filter(r => r.mode === 'inform' && r.gatedStatus); }
 
 /* worstStatus(results) — the most severe status across a row's validator results. */
 export function worstStatus(results) {
@@ -251,9 +349,16 @@ export function worstStatus(results) {
 /* flags(results) — the non-pass results only (what a surface annotates / drops on). */
 export function flags(results) { return (results || []).filter(r => r.status !== 'pass'); }
 
-/* leanValidators(results) — the compact {key,status,reason} list for the suggestions ledger (YS2
-   lean-include: returns undefined when nothing fired, so a clean row's logged shape is unchanged). */
+/* leanValidators(results) — the compact list for the suggestions ledger (YS2 lean-include: returns
+   undefined when nothing fired, so a clean row's logged shape is unchanged). Includes both GATE flags
+   (status !== pass) AND INFORM findings that would-have gated (gatedStatus set, mode:'inform') — the
+   latter is the track record that later justifies promoting an inform validator (e.g. trajectory) to
+   gate; a plain inform pass with no gatedStatus is not logged (nothing to learn from). */
 export function leanValidators(results) {
-  const f = flags(results);
-  return f.length ? f.map(r => ({ key: r.key, status: r.status, reason: r.reason })) : undefined;
+  const out = [];
+  for (const r of results || []) {
+    if (r.status !== 'pass') out.push({ key: r.key, status: r.status, reason: r.reason });
+    else if (r.mode === 'inform' && r.gatedStatus) out.push({ key: r.key, status: r.gatedStatus, reason: r.reason, mode: 'inform' });
+  }
+  return out.length ? out : undefined;
 }

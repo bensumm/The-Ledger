@@ -88,9 +88,37 @@ import { STRATEGIES, MODE_KEYS, ALL_MODE_KEYS } from '../js/strategies.mjs';
 import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
-import { runValidators, flags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution
+import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
+import { windowStats } from '../js/windowread.mjs';   // 2026-07-09 — aggregate the fetched 1h series into daily mids so trajectory fires on a still-cold loadDaily archive
+
+// 2026-07-09: derive a daily-mid series from the freshly-fetched 1h series (Leg B) and compute a WARM
+// term structure off it NOW — the loadDaily regime-proxy archive only began accruing 2026-07-08 (cold →
+// classifyTrajectory 'unknown', lookbacks[7] thin), but the 1h /timeseries spans weeks. Full-day window
+// (0–0) over `nights` daily buckets → { ts, mid=(low+hi)/2 } → termStructure. Returns the full structure
+// (or null if thin) so callers can take BOTH the warm .trajectory AND the warm recent-week .lookbacks
+// (value-amplitude's basis). floorValidator keeps the loadDaily source (its documented, thresholds-tuned
+// durable-floor proxy — a LEVEL read that wants the archive's regime-proxy spacing, not the 1h shape).
+function richFrom1h(ts1h, nights = 28) {
+  if (!ts1h || !ts1h.length) return null;
+  const now = new Date();
+  const ws = windowStats(ts1h, { nights, wStart: 0, wEnd: 0, now });
+  if (!ws || !ws.days || ws.days.length < 6) return null;
+  const N = ws.days.length, DAY = 86400, nowSec = Math.floor(now.getTime() / 1000);
+  const series = ws.days.map(([, n], i) => ({
+    ts: nowSec - (N - 1 - i) * DAY,
+    mid: (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low != null ? n.low : n.hi),
+  }));
+  const rich = termStructure(series, { now: nowSec });
+  return rich && rich.hasData !== false ? rich : null;
+}
+// convenience: the warm .trajectory (or null when thin/unknown) — the shape override renderMode applies
+// to the loadDaily-based ts so trajectory FIRES on the screen while the archive is still cold.
+function trajectoryFrom1h(ts1h, nights = 28) {
+  const rich = richFrom1h(ts1h, nights);
+  return rich && rich.trajectory && rich.trajectory.shape !== 'unknown' ? rich.trajectory : null;
+}
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
@@ -203,6 +231,7 @@ const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows i
 const DAILY_DAYS = IS_VALUE ? 28 : 17, DAILY_STEP_H = 6;
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
+const TS_TTL_1H = 15 * 60 * 1000;                                // Leg B (2026-07-09): the 1h series reachValidator scores — fetched for SURVIVORS only
 
 // P1: the gate stack (`gateCandidates`), the fetch-pool ranker (`rankAndSlice` + `proxyDrift` +
 // `softFactor`), the `risingPoolFloor` predicate, and `expUnits` all live in lib/gatecandidates.mjs
@@ -281,12 +310,13 @@ function pathLine(name, weighed, defaultPath) {
 // (the app contract stays byte-identical — a previously-empty niche still publishes []). Everything else
 // — validators (reject still DROPS), per-spec falling doctrine, posture — runs UNCHANGED on the fallback
 // rows: a sub-floor pass relaxes floors, never doctrine. subFloor==null ⇒ byte-identical to pre-P6c.
-function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, v24, daily) {
+function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily) {
   const rows = [];
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0 };  // post-fetch discard reasons (--stats)
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
+  const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -317,17 +347,23 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // A cold/absent daily series degrades to pass (the common case until the archive warms). Explicit
     // asks/held/watchlist are handled on their own surfaces where nothing is ever hidden.
     const ts = termStructure(daily && daily[s.id]);
+    const richTraj = trajectoryFrom1h(series1h && series1h.get(s.id));   // warm trajectory off the 1h series while loadDaily is cold
+    if (richTraj) ts.trajectory = richTraj;
     // LM1: the buy-limit window for this candidate — limitValidator DISQUALIFIES a suggested buy with
     // no room left in the rolling 4h window (reject → dropped + counted) and CAUTIONs a nearly-spent
     // one. Zero in-window buys ⇒ remaining==limit ⇒ pass (byte-identical). Absent limit ⇒ degrade.
     const limWin = limitWindow({ buys: BUYS_BY_ITEM.get(s.id) || [], limit: map.byId[s.id]?.limit ?? null });
+    // Ben 2026-07-09: drive the registry off the THESIS's own validator PLAN (spec.validators — modes +
+    // reach horizon), not the whole registry. Leg B feeds the real 1h series now (was null → reach
+    // degraded); trajectory reads the term structure's shape classification (no new fetch). Inform-mode
+    // validators annotate but never drop (informFlags); only gate-mode caution/reject flag/drop the row.
     const vres = runValidators({
       market: { row },
       history: { termStructure: ts },
-      intraday: { ts1h: null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
+      intraday: { ts1h: series1h && series1h.get(s.id), reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
       floor: { level: row.optBuy != null ? row.optBuy : null },
       limits: { window: limWin },
-    });
+    }, { specs: STRATEGIES[mode].validators });
     const vworst = worstStatus(vres);
     if (vworst === 'reject') {
       disc.reject++;
@@ -338,6 +374,11 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       disc.caution++;
       cautionNotes.push(`${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '));
     }
+    // inform-mode findings (the analysis that WOULD have gated under a stricter thesis) — surfaced as a
+    // decision-support note, never a drop. This is where the trajectory/reach read lands on a surfaced row.
+    const informed = informFlags(vres);
+    if (informed.length)
+      informNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF
     // all evaluated at that same pair. Extra data (reach/velocity) is null at the screen surface today
     // (no 1h fetch), so the estimators degrade honestly to their band-depth / volume-velocity priors.
@@ -447,6 +488,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     console.log(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
   }
   for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
+  for (const n of informNotes) console.log(`ℹ trajectory/reach — ${n}`);
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
   // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
   // STDOUT-ONLY — deliberately NOT in the published cells, so the canonical table + screen.json/app
@@ -493,9 +535,13 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
 // is flagged PROVISIONAL (unproven theory, n≈0). Picks accrue via the O1 suggestions ledger (mode
 // 'value', path value-hold) — the firing-log convention for surfaced picks. OFF by default (--mode value).
 const VALUE_HEADERS = ['Item', 'Guide', 'Live', 'Multi-wk range (low→high)', 'Live vs low', 'Cycle net/u (after-tax)', 'Floor (phase · stability)', 'Hold horizon'];
-function renderValueMode({ cand, survivors }, qcache, map, series6h, guide, daily) {
+function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, guide, daily) {
   const buyNow = [], watch = [];
   const sugg = [];
+  const valueInformNotes = [];   // 2026-07-09: value's reach-TIMING + trajectory/amplitude inform notes (never a drop — valueGate still selects)
+  // value KEEPS reach as a daily-min TIMING read (Ben 2026-07-09): run ONLY the spec's inform validators
+  // here so the note is added WITHOUT re-gating the value table (valueGate already selected these rows).
+  const valueInformSpecs = STRATEGIES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
   let droppedKnife = 0;   // post-fetch phase() decay-knife drops
   for (const s of survivors) {
     const row = qcache.get(s.id);
@@ -506,11 +552,29 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, guide, dail
     // re-run the value gate WITH the fetched phase() — a decay shape is the knife the pre-fetch
     // term-structure delta may miss (§A "buy the base, never the knife").
     const ts = termStructure(daily && daily[s.id]);
+    // value-amplitude ("intraday swings against the recent WEEK") + trajectory read the WARM 1h-derived
+    // term structure (Leg B) so BOTH fire NOW while the loadDaily archive is cold — value-amplitude was
+    // degrading to no-week-range off the cold lookbacks[7]. `current := live` so its proximity is measured
+    // against the live price ("is live near the week low right now?"), not a stale daily mid. valueRanges/
+    // valueGate keep the loadDaily proxy (their tuned multi-week basis); this warm structure only feeds the
+    // INFORM validators below. Falls back to the loadDaily ts when the 1h series is thin.
+    const rich1h = richFrom1h(series1h && series1h.get(s.id));
+    const informTs = rich1h ? { ...rich1h, current: live } : ts;
     const vr = valueRanges(ts, live);
     const ph = phase(series6h && series6h.get(s.id));
     const g = valueGate(vr, { phase: ph && ph.phase });
     if (!g.pass) { if (g.reason === 'decay') droppedKnife++; continue; }
     const tier = valueTier(vr);
+    // value's reach as a daily-min TIMING read: is the buy-low actually TOUCHED in the recent week+ (a
+    // full-day window over 14 nights, from the spec)? Plus trajectory (oscillating/based/knife) + the
+    // recent-week amplitude — all inform, so they annotate the value pick, never re-gate it.
+    const vres = runValidators({
+      market: { row },
+      history: { termStructure: informTs },
+      intraday: { ts1h: series1h && series1h.get(s.id), reach: vr.buyLow != null ? { side: 'bid', level: vr.buyLow } : null },
+    }, { specs: valueInformSpecs });
+    const informed = informFlags(vres);
+    if (informed.length) valueInformNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
     const netU = Math.round((vr.durableHigh - tax(vr.durableHigh)) - vr.buyLow);
     const ampPct = (vr.afterTaxAmpPct * 100);
     const stabPct = vr.stability != null ? Math.round(vr.stability * 100) : null;
@@ -551,6 +615,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, guide, dail
     console.log(mdTable(VALUE_HEADERS, watch.map(r => r.cells)));
   }
   if (!shown) console.log('_none_');
+  for (const n of valueInformNotes) console.log(`ℹ timing/trajectory — ${n}`);
   // §F admitted-vs-shown footer — never dump the full pool; say how many the gate admitted.
   console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}`);
   console.log('');
@@ -687,15 +752,20 @@ async function main() {
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it
   const ids = new Set();
   for (const m of RUN_MODES) for (const s of gated[m].survivors) ids.add(s.id);
-  const qcache = new Map(), series5m = new Map(), series6h = new Map();
+  const qcache = new Map(), series5m = new Map(), series6h = new Map(), series1h = new Map();
   for (const id of ids) {
     const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
     const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
+    // Leg B (2026-07-09): the 1h series for reachValidator — the sell-leg "windowrange --ask" reach + the
+    // value niche's daily-min TIMING read. SURVIVOR-ONLY (this loop is the union of mode survivors, not
+    // the top-40 gated pool), so a scan adds ~one 1h fetch per surfaced row, never per candidate.
+    const ts1h = await fetchTsCached(id, '1h', TS_TTL_1H); await sleep(30);
     const lt = latest[id] || latest[String(id)] || null;
     const limit = map.byId[id]?.limit ?? null;
     qcache.set(id, computeQuote({ latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
     series5m.set(id, ts5m);   // kept raw for the overnight-posture staleness read (overnightStaleRisk)
     series6h.set(id, ts6h);   // kept raw for the Part A phase() trajectory read (same ts6h as the quote)
+    series1h.set(id, ts1h);   // Leg B — reachValidator's window series (was null → reach degraded to pass)
   }
 
   console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
@@ -705,8 +775,8 @@ async function main() {
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   const niches = {};
   for (const m of RUN_MODES) niches[m] = STRATEGIES[m].gate === 'value'
-    ? renderValueMode(gated[m], qcache, map, series6h, guide, daily)   // P5 — the value niche's own term-structure table
-    : renderMode(m, gated[m], qcache, map, series5m, series6h, v24, daily);
+    ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
+    : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily);
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).

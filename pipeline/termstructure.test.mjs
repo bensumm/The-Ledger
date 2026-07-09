@@ -20,7 +20,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  termStructure, quantile, FLOOR_QUANTILE, FLOOR_MIN_POINTS, MIN_SWING_FRAC,
+  termStructure, classifyTrajectory, quantile, FLOOR_QUANTILE, FLOOR_MIN_POINTS, MIN_SWING_FRAC,
 } from '../js/termstructure.mjs';
 import {
   floorValidator, runValidators, worstStatus, flags,
@@ -184,8 +184,26 @@ ok('a HELD lot is a SELL decision → PASS (held-lot-sell-side), even parked abo
 ok('runValidators runs reach + floor + limit (registry has all keys)', () => {
   const res = runValidators({ intraday: { ts1h: null } });   // all degrade with no inputs
   const keys = res.map(r => r.key).sort();
-  assert.deepEqual(keys, ['floor', 'limit', 'reach']);
+  assert.deepEqual(keys, ['floor', 'limit', 'reach', 'trajectory', 'value-amplitude']);
   assert.ok(res.every(r => r.status === 'pass'), 'no inputs → all degrade to pass');
+});
+
+// --- 6. classifyTrajectory (2026-07-09) — the SHAPE read attached as ts.trajectory ---------------
+const shapeOf = mids => termStructure(seriesFrom(mids)).trajectory.shape;
+ok('classifyTrajectory: spike then monotone decline → knife (the Nightmare-staff shape)', () => {
+  // a base, a spike, then lows stepping down every day (few reversals) → a knife.
+  assert.equal(shapeOf([100, 100, 100, 100, 150, 146, 142, 138, 134, 130, 126, 122, 118, 114, 110]), 'knife');
+});
+ok('classifyTrajectory: falling BUT oscillating → oscillating, NOT knife (the Hydra distinction)', () => {
+  // a declining MEAN with large repeating zigzags — checked BEFORE knife so a rhythmic faller is buyable
+  // at the local min rather than mislabeled a knife (Ben 2026-07-09).
+  assert.equal(shapeOf([130, 120, 128, 118, 126, 116, 124, 114, 122, 112, 120, 110, 118, 108]), 'oscillating');
+});
+ok('classifyTrajectory: older-high then a flat low plateau → based (the value-low shape)', () => {
+  assert.equal(shapeOf([112, 110, 108, 106, 104, 102, 101, 100, 100, 101, 100, 100, 101, 100]), 'based');
+});
+ok('classifyTrajectory: a thin series degrades to shape "unknown" (never asserts off too few points)', () => {
+  assert.equal(classifyTrajectory([{ ts: NOW, mid: 100 }, { ts: NOW - DAY, mid: 101 }]).shape, 'unknown');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

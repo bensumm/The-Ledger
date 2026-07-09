@@ -188,10 +188,31 @@ Script facts the skills rely on (current behavior, not doctrine):
   `(ctx)→{status:pass|caution|reject,reason,evidence}` validators. Screens DROP `reject` rows (counted
   in `--stats` + a `rejected: N (top reasons)` footer) and FLAG `caution`; explicit asks / held /
   watchlist rows are NEVER hidden (a fired flag is a NOTE + a lean `validators` field on the
-  suggestions ledger). `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a
-  rarely-reached level → caution, never-reached → reject, stale-optimistic bumps one step); it needs
-  the 1h series, which **`screen.mjs`/`quote.mjs` don't fetch** (no fetch-semantics change), so it
-  DEGRADES to `pass`/no-data on both today. `floorValidator` (P3, BUY-side only) wraps
+  suggestions ledger). **Per-thesis GATE vs INFORM (2026-07-09):** a validator's COMPUTATION is
+  thesis-agnostic (the swing/local-min/knife/reach analysis is useful to every buy) but its ACTION is
+  declared per-thesis in `spec.validators` (`js/strategies.mjs`) as `{key,mode,window}` — `gate` (the
+  verdict stands: caution flags, reject drops) or `inform` (COMPUTED + annotated as a `ℹ trajectory/reach`
+  note, status clamped to pass, the would-have verdict logged for the track record; **never drops a row**).
+  `screen.mjs` drives `runValidators(ctx,{specs})` off that plan (was: the whole registry). This is the
+  noise reconciliation — only a thesis that GATES on a key lets it hide a row (so `scalp` INFORMS on
+  trajectory: it accepts a falling wide band by thesis). ROLLOUT (rule 4, n≈0): the newly-activated
+  `reach`/`trajectory`/`value-amplitude` start **inform everywhere**; only the already-live `floor`+`limit`
+  gate. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
+  level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
+  **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
+  ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; `quote.mjs` still
+  doesn't fetch it, so reach degrades there. `trajectoryValidator` (2026-07-09, BUY-side) is the SHAPE
+  read (distinct from floor's LEVEL read): `js/termstructure.mjs`'s `classifyTrajectory` off the daily-mid
+  series labels **knife** (spike + monotone-down lows — the Nightmare-staff catch → reject), **oscillating**
+  (repeating local minima around a flat/declining mean — a falling-BUT-buyable rhythm like Hydra leather →
+  pass, buy the local min), **based** (flat at the floor → pass), **elevated** (bought high → caution).
+  `screen.mjs` feeds it a trajectory derived from the fetched **1h series** (`trajectoryFrom1h`, off the
+  shared `richFrom1h` helper) so it fires NOW while the `loadDaily` archive is still cold.
+  `valueAmplitudeValidator` (2026-07-09, value niche, BUY-side) reads the recent-WEEK (7d) after-tax
+  amplitude + proximity-to-low off that **same warm 1h-derived term structure** (`richFrom1h`, `current`
+  overridden to the live price so proximity is "is live near the week low right now?") — so it, too, fires
+  now instead of degrading on the cold `loadDaily` 7d slice; `valueRanges`/`valueGate`/`floor` keep the
+  `loadDaily` proxy (their tuned multi-week basis). `floorValidator` (P3, BUY-side only) wraps
   `js/termstructure.mjs`'s durable multi-week **floor** + **typical fluctuation** (the 1/3/7/14/28d term
   structure over the daily-mid series): a buy parked well above where the 14/28d structure says support
   durably prints (the decay-knife shape) → reject, marginally-elevated → caution, at/below the floor → pass.

@@ -22,7 +22,8 @@
  */
 import assert from 'node:assert/strict';
 import {
-  reachValidator, runValidators, worstStatus, flags, leanValidators, worseOf,
+  reachValidator, trajectoryValidator, valueAmplitudeValidator,
+  runValidators, worstStatus, flags, informFlags, leanValidators, worseOf,
   REACH_MIN_DAYS,
 } from '../js/validate.mjs';
 
@@ -52,7 +53,7 @@ ok('worseOf orders reject > caution > pass', () => {
 });
 ok('runValidators returns the registry results; worstStatus/flags/leanValidators summarize', () => {
   const res = runValidators({ intraday: { ts1h: null } });   // no data → all validators degrade to pass
-  assert.deepEqual(res.map(r => r.key).sort(), ['floor', 'limit', 'reach'], 'registry runs reach + floor (P3) + limit (LM1)');
+  assert.deepEqual(res.map(r => r.key).sort(), ['floor', 'limit', 'reach', 'trajectory', 'value-amplitude'], 'registry runs reach + floor (P3) + trajectory + value-amplitude + limit (LM1)');
   assert.ok(res.every(r => r.status === 'pass'), 'no data → every validator degrades to pass');
   assert.equal(worstStatus(res), 'pass');
   assert.equal(flags(res).length, 0);
@@ -159,6 +160,71 @@ ok('leanValidators returns a compact flag list when a validator fired', () => {
   assert.equal(lean[0].key, 'reach');
   assert.equal(lean[0].status, 'reject');
   assert.ok(lean[0].reason && !('evidence' in lean[0]), 'lean list drops the heavy evidence blob');
+});
+
+// --- trajectoryValidator (2026-07-09) — SHAPE policy over ts.trajectory --------------------------
+const ctxTraj = (shape, evidence = {}, extra = {}) => ({ history: { termStructure: { trajectory: { shape, evidence } } }, ...extra });
+ok('trajectoryValidator: knife → reject (the Nightmare-staff shape)', () => {
+  const r = trajectoryValidator(ctxTraj('knife', { spiked: true, declPct: 0.05 }));
+  assert.equal(r.status, 'reject');
+  assert.equal(r.evidence.shape, 'knife');
+  assert.ok(/knife/.test(r.reason));
+});
+ok('trajectoryValidator: oscillating → pass (the Hydra "buy the local min" shape)', () => {
+  const r = trajectoryValidator(ctxTraj('oscillating', { reversals: 4 }));
+  assert.equal(r.status, 'pass');
+  assert.ok(/local min/.test(r.reason));
+});
+ok('trajectoryValidator: elevated → caution; based/rising/flat/unknown/held/no-data → pass (degrade)', () => {
+  assert.equal(trajectoryValidator(ctxTraj('elevated')).status, 'caution');
+  assert.equal(trajectoryValidator(ctxTraj('based')).status, 'pass');
+  assert.equal(trajectoryValidator(ctxTraj('unknown')).status, 'pass');       // degrade: no shape
+  assert.equal(trajectoryValidator({ history: {} }).status, 'pass');           // degrade: no term structure
+  assert.equal(trajectoryValidator(ctxTraj('knife', {}, { position: { held: true } })).status, 'pass'); // held = sell-side degrade
+});
+
+// --- valueAmplitudeValidator (2026-07-09) — recent-WEEK amplitude + proximity-to-low --------------
+const ctxAmp = (low, high, current, extra = {}) => ({ history: { termStructure: { current, lookbacks: { 7: { low, high } } } }, ...extra });
+ok('valueAmplitudeValidator: near the week low with a real cycle → pass', () => {
+  const r = valueAmplitudeValidator(ctxAmp(100, 130, 104));   // proximity ~0.13, amp ~27% after tax
+  assert.equal(r.status, 'pass');
+  assert.ok(r.evidence.proximity <= 0.4);
+});
+ok('valueAmplitudeValidator: good cycle but live mid/high in the week range → caution (wait for the dip)', () => {
+  assert.equal(valueAmplitudeValidator(ctxAmp(100, 130, 127)).status, 'caution');   // proximity ~0.9
+});
+ok('valueAmplitudeValidator: too-thin week amplitude → reject; no week range / held → degrade', () => {
+  assert.equal(valueAmplitudeValidator(ctxAmp(100, 101, 100)).status, 'reject');     // ~0% after-tax amp
+  assert.equal(valueAmplitudeValidator({ history: {} }).status, 'pass');             // no 7d range → degrade
+  assert.equal(valueAmplitudeValidator(ctxAmp(100, 130, 104, { position: { held: true } })).status, 'pass'); // held degrade
+});
+
+// --- gate vs inform (2026-07-09) — inform clamps a non-pass to pass but keeps the would-have verdict --
+ok('inform mode: a knife runs but is CLAMPED to pass, records gatedStatus, and does NOT drop the row', () => {
+  const ctx = ctxTraj('knife', { declPct: 0.05 });
+  const gated = runValidators(ctx, { specs: [{ key: 'trajectory', mode: 'gate' }] });
+  assert.equal(worstStatus(gated), 'reject', 'gate mode: the knife rejects');
+
+  const informed = runValidators(ctx, { specs: [{ key: 'trajectory', mode: 'inform' }] });
+  assert.equal(worstStatus(informed), 'pass', 'inform mode: never downgrades the row');
+  assert.equal(informed[0].gatedStatus, 'reject', 'inform mode: the would-have verdict is preserved');
+  assert.equal(informFlags(informed).length, 1, 'informFlags surfaces the annotate-only finding');
+  assert.equal(flags(informed).length, 0, 'flags (drop set) excludes an inform finding');
+});
+ok('inform mode: the would-have verdict IS logged to the ledger (the track record to later justify a gate)', () => {
+  const informed = runValidators(ctxTraj('knife', { declPct: 0.05 }), { specs: [{ key: 'trajectory', mode: 'inform' }] });
+  const lean = leanValidators(informed);
+  assert.equal(lean.length, 1);
+  assert.equal(lean[0].status, 'reject');
+  assert.equal(lean[0].mode, 'inform');
+});
+ok('reach window injection: a spec window overrides the reach candidate horizon', () => {
+  // no 1h series → reach degrades, but the plan still normalizes + carries the window without throwing.
+  const res = runValidators({ intraday: { ts1h: null, reach: { side: 'ask', level: 100 } } },
+    { specs: [{ key: 'reach', mode: 'gate', window: { windowHours: 24, nights: 14 } }] });
+  assert.equal(res.length, 1);
+  assert.equal(res[0].key, 'reach');
+  assert.equal(res[0].status, 'pass');   // degrade (no series), never throws
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

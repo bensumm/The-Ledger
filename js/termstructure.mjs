@@ -51,6 +51,23 @@ export const TYPICAL_LO_Q = 0.25, TYPICAL_HI_Q = 0.75;
 // counts as "one normal swing" at minimum). VALIDATE: the smallest swing that is economically real.
 export const MIN_SWING_FRAC = 0.02;
 
+// --- TRAJECTORY (shape) PLACEHOLDER constants (rule 4 — none validated; inform-only until F1/P6 tunes) --
+// The trajectory classifier answers a DIFFERENT question from the durable floor: not "how far ABOVE
+// support is the buy" (a LEVEL check — floorValidator) but "what SHAPE is the recent path" — is it a
+// knife still stepping down, an OSCILLATING faller you can buy at the local min (Hydra leather), a
+// flat base at the floor (Berserker ring), or elevated. This is the encoded form of the phase()
+// spike/decay/basing read, promoted from the 6h display-only tag to a MULTI-WEEK daily-series read
+// (the 3-day regime window is exactly what let Nightmare staff read "Flat" while it decayed for a week).
+export const TRAJ_MIN_POINTS   = 6;     // fewer daily-mid points than this ⇒ shape 'unknown' (degrade)
+export const TRAJ_SPIKE_FRAC   = 0.10;  // a durable-window high > current×(1+this) ⇒ a spike happened above current
+export const TRAJ_DECLINE_FRAC = 0.03;  // short-median this far BELOW the longer-median ⇒ a decline in progress
+export const TRAJ_RECOVER_FRAC = 0.02;  // short-median this far ABOVE the longer-median ⇒ recovering
+export const TRAJ_OSC_REVERSALS = 3;    // ≥ this many direction reversals in the recent leg ⇒ oscillating (not a monotone knife)
+export const TRAJ_OSC_MIN_AMP  = 0.02;  // …AND the recent peak-to-trough span ≥ this fraction (a real tradeable rhythm, not noise)
+export const TRAJ_RECENT_DAYS  = 7;     // the recent leg the reversal/oscillation read is scored over
+export const TRAJ_ELEVATED_PIR = 0.70;  // current in the top (1-this) of the 14d range, no spike ⇒ 'elevated'
+export const TRAJ_BASED_PIR    = 0.35;  // current in the bottom this of the 14d range + flat ⇒ 'based'
+
 /* quantile(sortedAsc, q) — linear-interpolated quantile of an ASCENDING numeric array. */
 export function quantile(sortedAsc, q) {
   const n = sortedAsc.length;
@@ -126,10 +143,93 @@ export function termStructure(series, { now = null, lookbacks = DEFAULT_LOOKBACK
     typicalSwingFrac = floor ? typicalSwing / floor : null;
   }
 
+  const trajectory = classifyTrajectory(s, { lookbacks: lk, floor, ceiling, current, nowSec });
+
   return {
     hasData: true, now: nowSec, current, coverageDays,
     lookbacks: lk,
     floor, ceiling, floorLookback: floorDays, floorQuantile: FLOOR_QUANTILE,
     typicalSwing, typicalSwingFrac,
+    trajectory,
+  };
+}
+
+/**
+ * classifyTrajectory(series, ctx) → { shape, evidence } — the SHAPE of the recent multi-week path.
+ *   series  ascending, already-filtered `[{ts, mid}]` (termStructure's own `s`).
+ *   ctx     { lookbacks, floor, ceiling, current, nowSec } — the per-lookback stats + current level.
+ *
+ * shape ∈ 'knife' | 'oscillating' | 'based' | 'rising' | 'elevated' | 'flat' | 'unknown'
+ *   knife       — a monotone decline (few reversals), stepping down; if a prior spike sits above, it's
+ *                 the spike unwinding (Nightmare staff), else a plain downtrend. The "don't catch it" case.
+ *   oscillating — the recent leg REVERSES direction ≥ TRAJ_OSC_REVERSALS times with a real span: the
+ *                 lows REPEAT (a tradeable rhythm) rather than stepping monotonically down. Buy the local
+ *                 min even when the mean drifts down (Ben's Hydra-leather case — checked BEFORE knife so a
+ *                 falling-but-oscillating item is not mislabeled a knife).
+ *   based       — current near the bottom of the 14d range AND flat (short≈long median): a value-low floor.
+ *   rising      — short median above the longer median: recovering / a healthy reprice leg.
+ *   elevated    — current in the top of the 14d range with no spike below: bought high, not a dip.
+ *   flat        — none of the above (ranging mid-band).
+ *   unknown     — too few points (degrade; never asserts a shape off a thin series).
+ *
+ * PURE, never throws. THRESHOLDS ARE PLACEHOLDERS (rule 4). This is descriptive shape math ONLY — the
+ * gate/inform POLICY (does a 'knife' downgrade a buy) lives in js/validate.mjs's trajectoryValidator,
+ * per the thesis's declared mode. Kept here because termstructure.mjs is the ONE home for the
+ * multi-week structure read and already holds the series.
+ */
+export function classifyTrajectory(series, { lookbacks = {}, floor = null, ceiling = null, current = null, nowSec = null } = {}) {
+  const s = Array.isArray(series) ? series.filter(p => p && p.ts != null && p.mid != null) : [];
+  if (s.length < TRAJ_MIN_POINTS) return { shape: 'unknown', evidence: { note: 'thin-series', n: s.length } };
+  const now = nowSec != null ? nowSec : s[s.length - 1].ts;
+  const cur = current != null ? current : s[s.length - 1].mid;
+  const denom = (floor && floor > 0) ? floor : (cur || 1);
+  const med = d => (lookbacks[d] && lookbacks[d].median != null) ? lookbacks[d].median : null;
+  const m1 = med(1), m3 = med(3), m7 = med(7), m14 = med(14);
+
+  // spike above current: the durable-window high sits well over the current level.
+  const hi = (lookbacks[14] && lookbacks[14].high != null) ? lookbacks[14].high
+           : (lookbacks[7] && lookbacks[7].high != null) ? lookbacks[7].high : null;
+  const spiked = hi != null && cur != null && hi > cur * (1 + TRAJ_SPIKE_FRAC);
+
+  // trend from short-vs-longer medians: declPct > 0 ⇒ the recent median sits below the older one.
+  const shortMed = m1 != null ? m1 : m3;
+  const longMed = m7 != null ? m7 : m14;
+  const declPct = (shortMed != null && longMed != null && longMed > 0) ? (longMed - shortMed) / longMed : null;
+  const declining = declPct != null && declPct > TRAJ_DECLINE_FRAC;
+  const recovering = declPct != null && declPct < -TRAJ_RECOVER_FRAC;
+
+  // oscillation over the recent leg: count direction reversals in the mid subsequence + its span.
+  const from = now - TRAJ_RECENT_DAYS * 86400;
+  const recent = s.filter(p => p.ts >= from).map(p => p.mid);
+  let reversals = 0, lastDir = 0, rHi = -Infinity, rLo = Infinity;
+  for (let i = 0; i < recent.length; i++) {
+    if (recent[i] > rHi) rHi = recent[i];
+    if (recent[i] < rLo) rLo = recent[i];
+    if (i > 0) {
+      const dir = Math.sign(recent[i] - recent[i - 1]);
+      if (dir !== 0 && lastDir !== 0 && dir !== lastDir) reversals++;
+      if (dir !== 0) lastDir = dir;
+    }
+  }
+  const span = (rHi > rLo && denom > 0) ? (rHi - rLo) / denom : 0;
+  const oscillating = reversals >= TRAJ_OSC_REVERSALS && span >= TRAJ_OSC_MIN_AMP;
+
+  const pir = (lookbacks[14] && lookbacks[14].pctInRange != null) ? lookbacks[14].pctInRange : null;
+
+  let shape;
+  if (oscillating) shape = 'oscillating';                              // rhythm first — a falling-but-oscillating item is buyable at the min
+  else if (declining) shape = 'knife';                                 // monotone decline (spike-unwind or downtrend) — don't catch it
+  else if (recovering) shape = 'rising';
+  else if (pir != null && pir >= TRAJ_ELEVATED_PIR && !spiked) shape = 'elevated';
+  else if (pir != null && pir <= TRAJ_BASED_PIR) shape = 'based';
+  else shape = 'flat';
+
+  return {
+    shape,
+    evidence: {
+      spiked, declPct: declPct == null ? null : Math.round(declPct * 1000) / 1000,
+      reversals, span: Math.round(span * 1000) / 1000, pctInRange14: pir,
+      current: cur, floor, ceiling, recentPoints: recent.length,
+    },
   };
 }
