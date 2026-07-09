@@ -117,7 +117,11 @@ function churnEdge(inp, t) {
    Each spec's SHAPE (validated by validateStrategySpec + the conformance suite):
      key         stable niche id (the --mode value)
      label       display name
-     inAll       part of `--mode all` (NY2.2: churn is off-by-default → false)
+     inAll       part of `--mode all` (NY3, Ben 2026-07-09: churn IN, spread OUT — reverses NY2.2/NY2.3.
+                 Rationale from the one-thesis-at-a-time scan: spread's 24h-average edge is structurally
+                 narrower than the intraday band + kept surfacing mis-shelved risers with ~0 clean flips;
+                 churn's high-volume commodity lane (the rune staples) deserves default visibility. So
+                 --mode all is now band/rising/churn.)
      pool        pre-fetch pool rule: { risingFloor } — apply risingPoolFloor (NY2.1) before fetch
      edge        (inputs, thresholds) → { modeNet, modeRoi, activeWin } | null  (the step-3 edge)
      rank        fetch-pool ordering: 'proxy' (rising — proxy-drift-first) | 'velocity' (default)
@@ -167,7 +171,7 @@ export const STRATEGY_LIST = Object.freeze([
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
-    key: 'spread', label: 'Spread', inAll: true,
+    key: 'spread', label: 'Spread', inAll: false,   // NY3 (Ben 2026-07-09) — off-by-default; reach with explicit --mode spread
     pool: { risingFloor: false }, edge: spreadEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
@@ -181,7 +185,7 @@ export const STRATEGY_LIST = Object.freeze([
     defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'rising', priceBasis: 'opt',
   },
   {
-    key: 'churn', label: 'Churn', inAll: false,   // NY2.2 — off-by-default; reach with explicit --mode churn
+    key: 'churn', label: 'Churn', inAll: true,   // NY3 (Ben 2026-07-09) — default-on again (reverses NY2.2); the high-volume commodity lane
     pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
@@ -218,7 +222,7 @@ export const STRATEGY_LIST = Object.freeze([
 // live in ONE place — the registry — not as a magic-string array in screen.mjs).
 export const STRATEGIES = Object.freeze(Object.fromEntries(STRATEGY_LIST.map(s => [s.key, s])));
 export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','spread','rising','churn','scalp','value']
-export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // NY2.2 + P5: only band/spread/rising in --mode all
+export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // NY3 (Ben 2026-07-09): band/rising/churn in --mode all (spread + P5 scalp/value explicit-only)
 
 /* --- conformance ----------------------------------------------------------------------------------
    validateStrategySpec(spec) → string[] of structural violations (empty = conformant). The conformance

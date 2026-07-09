@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import { termStructure } from '../js/termstructure.mjs';
 import {
   valueRanges, valueScore, valueGate, valueTier,
-  VALUE_MIN_CYCLE_PCT, VALUE_KNIFE_PCT, VALUE_BUYNOW_PROX,
+  VALUE_MIN_CYCLE_PCT, VALUE_KNIFE_PCT, VALUE_BUYNOW_PROX, VALUE_MAX_BELOW_LOW_PCT,
 } from '../js/valuescreen.mjs';
 
 let pass = 0;
@@ -68,6 +68,19 @@ ok('a post-fetch decay PHASE is rejected even if the term-structure delta didn\'
   assert.equal(valueGate(vr, {}).pass, true);
   assert.deepEqual(valueGate(vr, { phase: 'decay' }), { pass: false, reason: 'decay' });   // phase confirm
   assert.equal(valueGate(vr, { phase: 'basing' }).pass, true, 'basing is a valid value-low');
+});
+
+ok('an ARTIFACT low (live implausibly below the durable floor) is REJECTED, not ranked #1', () => {
+  // Gloves-of-silence shape: a real ~1000/1100 multi-week floor, but the live instasell prints a lone
+  // off-market 201 — proximity would clamp to 1 and rocket valueScore. The proximity-sanity guard rejects.
+  const structure = ts(FLAT);
+  const vr = valueRanges(structure, 201);           // live 80% below the ~1000 floor
+  assert.ok(vr.liveVsLowPct < -VALUE_MAX_BELOW_LOW_PCT, `live is far below the floor (${vr.liveVsLowPct})`);
+  assert.deepEqual(valueGate(vr, {}), { pass: false, reason: 'artifact-low' });
+  // a REAL dip — live at/just under the q15 floor — still PASSES (the guard is generous, not a floor-hugger).
+  const atFloor = valueRanges(structure, 990);      // ~1% under the floor: a genuine dip
+  assert.ok(atFloor.liveVsLowPct >= -VALUE_MAX_BELOW_LOW_PCT, 'a shallow dip is within tolerance');
+  assert.equal(valueGate(atFloor, {}).pass, true, 'a real at-the-floor dip is not an artifact');
 });
 
 ok('an item whose cycle amplitude can\'t clear the after-tax floor is REJECTED', () => {

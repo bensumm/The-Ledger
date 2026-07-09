@@ -39,9 +39,9 @@ ok('the registry holds the six niches (P5 added scalp/value), in order, keyed co
   for (const s of STRATEGY_LIST) assert.equal(STRATEGIES[s.key], s, `${s.key} indexed by key`);
 });
 
-ok('--mode all is the inAll specs (band/spread/rising) — churn + P5 scalp/value are off-by-default', () => {
-  assert.deepEqual(ALL_MODE_KEYS, ['band', 'spread', 'rising']);
-  for (const k of ['churn', 'scalp', 'value']) assert.equal(STRATEGIES[k].inAll, false, `${k} is off-by-default`);
+ok('--mode all is the inAll specs (band/rising/churn) — spread + P5 scalp/value are off-by-default (NY3, Ben 2026-07-09)', () => {
+  assert.deepEqual(ALL_MODE_KEYS, ['band', 'rising', 'churn']);
+  for (const k of ['spread', 'scalp', 'value']) assert.equal(STRATEGIES[k].inAll, false, `${k} is off-by-default`);
   assert.deepEqual(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key), ALL_MODE_KEYS);
 });
 

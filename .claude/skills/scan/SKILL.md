@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.31
+version: 1.33
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -26,19 +26,28 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
   faller isn't auto-bad). It INCLUDES fallers other niches exclude. Flip-only/no-hold, HARD intraday
   stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
   never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
-- **`--mode value`** — buy-hold near a multi-week low, hold for the cycle (ONE tax-paid sell of a big
-  move). Its own term-structure table (buy-now vs watch tiers, hold horizon stated). CONSOLE-ONLY (no
-  app tab). Every pick is provisional; state the multi-week hold horizon at entry. The gate needs a WARM
-  daily archive — on a cold archive it correctly surfaces little/nothing.
+- **`--mode value`** _(judgment: still PROVISIONAL — don't trade on it yet)_ — buy-hold near a multi-week
+  low, hold for the cycle (ONE tax-paid sell of a big move). Its own term-structure table (buy-now vs watch
+  tiers, hold horizon stated). CONSOLE-ONLY (no app tab). Every pick is provisional; state the multi-week
+  hold horizon at entry. The gate needs a WARM daily archive — on a cold archive it correctly surfaces
+  little/nothing. **Artifact/liquidity hardening (Ben 2026-07-09):** `valueGate` now rejects an
+  **artifact-low** (live >15% below the durable q15 floor — a broken instasell print or a crash mid-fall,
+  the low-side analog of the band artifact-bid; the §F footer counts the drops), and the unit-liquidity
+  floor was raised 20→50 (a value hold you can't exit isn't a hold). Still: DON'T pitch a value buy off
+  this table until the archive has warmed for weeks and the amplitude/reach validators (currently inform-
+  only) have a track record — read the `ℹ timing/trajectory` "would reject/caution" notes as the real
+  signal and verify by hand.
 
-**Niche set (NY2, 2026-07-05 — Ben's ruling on NY1's evidence).** `--mode all` runs **band,
-spread, rising** — NOT churn. **Churn is off-by-default** (its 14 band-exclusive names are
-low-margin commodity staples that never beat band's edge); reach it only with an explicit
-`--mode churn`. **Rising** is kept but its candidate pool now carries a noise floor (big-ticket
-OR liquid), so its old cheap teleport-tab D-flood no longer shows. **Spread** is kept, unchanged
-— it surfaced the one niche-exclusive real flip (Hydra leather), so it stays pending genuine
-multi-day `--mode all` data. Evidence base: one evening of `suggestions.jsonl` — small sample,
-rising re-judged on a trending day.
+**Niche set (NY3, 2026-07-09 — Ben's ruling, reverses NY2.2/NY2.3).** `--mode all` runs **band,
+rising, churn** — NOT spread. **Spread is now off-by-default** — the one-thesis-at-a-time scan
+showed its 24h-*average* edge is structurally narrower than the intraday band, and it kept
+surfacing mis-shelved risers (a repricing item whose run-up widens the daily-average gap) with ≈0
+clean flips; reach it only with an explicit `--mode spread`. **Churn is default-on again** — the
+high-volume commodity lane (the rune staples: soul/blood/death) earns default visibility even
+though its per-cycle edge is thin and buy-limit-throttled; judge each rune against its weekly
+range (buy the dip, not near the weekly high). **Rising** keeps its NY2.1 noise floor (big-ticket
+OR liquid). Prior NY2 (2026-07-05) had it the other way (churn out, spread in) off one evening of
+`suggestions.jsonl`; NY3 supersedes it on the multi-niche scan evidence.
 
 **Sync first (SY1).** The §5 position-context pass reads Ben's current book, and there is no
 scheduled sync (on-demand only since the `CofferFillsSync` job was eliminated — FILLS-PIPELINE

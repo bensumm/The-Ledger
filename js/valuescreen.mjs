@@ -20,9 +20,11 @@
  *                             ranking IS the central design problem — the gated pool is expected LARGE
  *                             (§F), so a usable score + a hard top-N is non-optional.
  *   valueGate(vr, {phase})  → { pass, reason }: two-sided liquidity is the caller's (shared, kept); this
- *                             gate is the cycle-amplitude floor + the phase/term-structure KNIFE guard
- *                             ("buy the base, never the knife" — accept basing/flat/rising; reject a
- *                             decay/downtrend that is still stepping down).
+ *                             gate is the cycle-amplitude floor + the ARTIFACT/proximity-sanity guard
+ *                             (live implausibly below the durable floor = a broken instasell print or a
+ *                             crash, not a dip — the low-side analog of the band/rising artifact-bid) +
+ *                             the phase/term-structure KNIFE guard ("buy the base, never the knife" —
+ *                             accept basing/flat/rising; reject a decay/downtrend that is still stepping down).
  *   valueTier(vr)           → 'buy-now' (live at/near the multi-week low) | 'watch' (good range, wait
  *                             for the dip) — falls out of PROXIMITY (rank, don't gate — decision 1).
  *
@@ -48,6 +50,14 @@ export const VALUE_MIN_PRICE     = 1000;
 // value mode correctly surface (almost) NOTHING — the honest degrade until the archive warms (rule 4).
 export const VALUE_MIN_COVERAGE_DAYS = 10;
 export const VALUE_KNIFE_PCT     = 0.06;   // a 1d/3d low ≥6% BELOW the 14d low ⇒ still making fresh lows ⇒ a knife → reject
+// PROXIMITY-SANITY / ARTIFACT guard (Ben 2026-07-09). The durable low is the ROBUST q15 multi-week floor.
+// A live price sitting WELL BELOW it is NOT a value dip — it's either a broken/thin instasell print (one
+// lone off-market trade — Gloves of silence live 201 vs a 1,248 floor) or a crash-in-progress (a knife
+// mid-fall). Both corrupt proximity (→1) and rocket the row to the top of valueScore on a FAKE dip. This
+// is the low-side analog of the band/rising artifact-bid: reject when live is more than this fraction
+// below the durable floor. Tolerance is generous (a REAL dip buys at/just under q15) — past it, it's not a
+// dip. PLACEHOLDER (rule 4). Applied in valueGate (fires at gate-time on mid AND post-fetch on live).
+export const VALUE_MAX_BELOW_LOW_PCT = 0.15;
 export const VALUE_BUYNOW_PROX   = 0.75;   // proximity ≥ this (live in the bottom ~25% of the 14d range) ⇒ the buy-now tier
 export const VALUE_STAB_K        = 4;      // dispersion→stability sharpness: stability = 1/(1+K·dispersion)
 export const VALUE_PROX_FLOOR_W  = 0.5;    // proximity multiplier floor (a mid-range candidate still scores, at half weight)
@@ -125,14 +135,21 @@ export function valueScore(vr) {
 }
 
 /* valueGate(vr, { phase }) → { pass, reason }. Two-sided liquidity + the lowered liquidity floor are
-   the CALLER's (shared stack); this owns the value-specific gate: the after-tax cycle-amplitude floor
-   and the KNIFE guard. `phase` (optional, from js/quotecore.js phase() over ts6h post-fetch) rejects a
-   `decay` shape; pre-fetch the term-structure knifeDelta does the work. reason is null when it passes. */
+   the CALLER's (shared stack); this owns the value-specific gate: the after-tax cycle-amplitude floor,
+   the ARTIFACT/proximity-sanity guard (live implausibly below the durable floor = a broken print or a
+   knife, not a dip), and the KNIFE guard. `phase` (optional, from js/quotecore.js phase() over ts6h
+   post-fetch) rejects a `decay` shape; pre-fetch the term-structure knifeDelta does the work. reason is
+   null when it passes; the reject reasons are no-history / amp-below-floor / amp-noise / artifact-low /
+   knife / decay. */
 export function valueGate(vr, { phase = null } = {}) {
   if (!vr || !vr.hasData) return { pass: false, reason: 'no-history' };   // can't assert a value floor
   const amp = vr.afterTaxAmpPct || 0;
   if (amp < VALUE_MIN_CYCLE_PCT) return { pass: false, reason: 'amp-below-floor' };
   if (amp > VALUE_MAX_CYCLE_PCT) return { pass: false, reason: 'amp-noise' };   // 100x "range" = regime-change/noise
+  // ARTIFACT / proximity-sanity guard: live implausibly BELOW the durable q15 floor ⇒ a broken instasell
+  // print or a crash-in-progress, not a dip (§ VALUE_MAX_BELOW_LOW_PCT). Fires post-fetch (live = the real
+  // instasell) where it catches the top-of-valueScore artifacts (Gloves 201/1,248, Black pickaxe).
+  if (vr.liveVsLowPct != null && vr.liveVsLowPct < -VALUE_MAX_BELOW_LOW_PCT) return { pass: false, reason: 'artifact-low' };
   if ((vr.knifeDelta || 0) > VALUE_KNIFE_PCT) return { pass: false, reason: 'knife' };   // fresh lows now
   if (phase === 'decay') return { pass: false, reason: 'decay' };        // post-fetch phase confirm (the knife)
   return { pass: true, reason: null };

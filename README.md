@@ -87,9 +87,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (PLAN-VALUE): `valueRanges(ts,live)` derives the shape features (after-tax cycle amplitude off the
   robust floor→ceiling, proximity-to-low, floor-stability, knife delta) from a termStructure; `valueScore`
   is the composite rank (amplitude × proximity × stability — §F flood control); `valueGate` is the
-  amplitude floor + noise cap + decay/downtrend knife guard + multi-week-coverage guard (a COLD archive
-  surfaces nothing — honest degrade); `valueTier` splits buy-now vs watch by proximity. Imports only `tax`
-  from format.js. ALL thresholds/weights are NAMED PLACEHOLDERS (n≈0). NOT yet app-imported → no
+  amplitude floor + noise cap + **artifact-low guard** (Ben 2026-07-09 — rejects a live price >15%
+  `VALUE_MAX_BELOW_LOW_PCT` below the durable q15 floor: a broken instasell print or a crash mid-fall, the
+  low-side analog of the band/rising artifact-bid) + decay/downtrend knife guard + multi-week-coverage
+  guard (a COLD archive surfaces nothing — honest degrade); `valueTier` splits buy-now vs watch by
+  proximity. The caller's two-sided unit-liquidity floor (`VALUE_LIQ_FLOOR` in `gatecandidates.mjs`) was
+  raised 20→50 the same day (value relaxes the gp/day throughput bar, not the unit-exitability bar).
+  Imports only `tax` from format.js. ALL thresholds/weights are NAMED PLACEHOLDERS (n≈0). NOT yet app-imported → no
   APP_VERSION bump. Fixture-pinned `pipeline/valuescreen.test.mjs`),
   `paths.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/

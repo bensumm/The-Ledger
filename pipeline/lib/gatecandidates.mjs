@@ -53,10 +53,13 @@ export const DEFAULT_THRESHOLDS = {
   MIN_ACTIVE: 6, MIN_ACTIVE_THIN: 1, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
   // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
-  // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation), and the
-  // liquidity floor is LOWERED (you hold days–weeks → need eventual exitability, not fast churn).
-  // PLACEHOLDER (rule 4). Two-sided liquidity stays non-negotiable.
-  VALUE_LIQ_FLOOR: 20,
+  // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value
+  // relaxes is the gp/day THROUGHPUT bar, NOT the two-sided UNIT-liquidity bar: you still have to exit a
+  // (large-ish) held position at the cycle top, so the item needs a genuine two-sided market. Ben 2026-
+  // 07-09: raised 20 → 50 (= the base FLOOR) after the value scan surfaced 1/d–6/d untradeable rows
+  // (Adamant halberd 6/d, Gloves of silence 1/d) — a hold you can't exit isn't a hold. PLACEHOLDER
+  // (rule 4). Two-sided liquidity (hpv>0 && lpv>0) stays non-negotiable.
+  VALUE_LIQ_FLOOR: 50,
 };
 // Default rank/slice sizing (screen.mjs's --thin-reserve / --top defaults).
 export const THIN_RESERVE_DEFAULT = 6;

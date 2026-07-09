@@ -179,8 +179,11 @@ Script facts the skills rely on (current behavior, not doctrine):
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, per-spec falling doctrine); `--mode` swaps the step-3 edge (+ the
   gate stack for value). **Six niches** — `band` / `spread` / `rising` / `churn` / `scalp` / `value` —
-  but per Ben's **NY2** ruling (2026-07-05) + **P5** **`--mode all` runs band/spread/rising only;
-  churn/scalp/value are off-by-default** (reach each with an explicit `--mode <name>`). `rising`'s
+  but per Ben's **NY3** ruling (2026-07-09, reversing NY2.2/NY2.3) + **P5** **`--mode all` runs
+  band/rising/churn; spread/scalp/value are off-by-default** (reach each with an explicit `--mode <name>`).
+  Why NY3 flipped it: the one-thesis-at-a-time scan showed spread's 24h-average edge is structurally
+  narrower than the intraday band and kept surfacing mis-shelved risers (≈0 clean flips), while churn's
+  high-volume commodity lane (the rune staples) earns default visibility. `rising`'s
   candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid, `risingPoolFloor`) that drops the
   cheap teleport-tab flood while keeping cheap-but-liquid risers. Thin gp-flow big tickets ride a bounded
   `--thin-reserve`. **P5 scalp** (provisional, n≈0): a DELIBERATE intraday flip on a FALLING market
@@ -188,9 +191,19 @@ Script facts the skills rely on (current behavior, not doctrine):
   validated on today's high, flip-only/no-hold (an unsold lap migrates to `cut`, never `hold-recovery` —
   encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold niche with its OWN
   term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
-  replaces the 500k gp/day throughput floor, lowered liquidity, decay/downtrend knife-guard), ranked by
+  replaces the 500k gp/day throughput floor, decay/downtrend knife-guard), ranked by
   `valueScore` (amplitude × proximity-to-low × floor-stability) with a HARD top-N + buy-now/watch tiers
   (§F flood control); console-only, its own table, NOT in `screen.json` (no app tab yet → no APP_VERSION).
+  **Value artifact/liquidity hardening (Ben 2026-07-09)** — the value scan surfaced broken-low quotes and
+  untradeable rows ranking #1, the low-side analog of the band/rising artifact-bid. Two gates fixed it:
+  (1) `valueGate`'s **artifact-low guard** rejects a live price >`VALUE_MAX_BELOW_LOW_PCT` (15%) below the
+  durable q15 floor (a lone off-market instasell or a crash mid-fall corrupts proximity → a FAKE dip at the
+  top of `valueScore`); it fires post-fetch on the real live instasell (screen counts the drops in the §F
+  footer). (2) The value **unit-liquidity floor was raised 20→50** (`VALUE_LIQ_FLOOR`, = the base `FLOOR`):
+  value relaxes the gp/day *throughput* bar, NOT the two-sided *unit* bar — a hold you can't exit isn't a
+  hold (dropped Adamant halberd 6/d, Gloves of silence 1/d). Two-sided (`hpv>0 && lpv>0`) stays
+  non-negotiable. Still provisional/off-by-default — the archive needs weeks to warm before the multi-week
+  term structure is trustworthy.
   **P4c**: the niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the

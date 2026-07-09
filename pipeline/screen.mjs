@@ -53,9 +53,10 @@
  *                     AND the cheap-but-liquid risers (Dragon arrowtips / Cake) while dropping the
  *                     cheap thin/mid teleport-tab D-flood that used to burn the fetch budget.
  *   churn           — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted
- *                     (no --min-roi gate), the high-frequency small-margin niche. NY2.2: DEMOTED to
- *                     off-by-default — run `--mode churn` explicitly; `--mode all` no longer includes it.
- *   all             — run band, spread, rising in sequence (shared fetch cache). Churn excluded (NY2.2).
+ *                     (no --min-roi gate), the high-frequency small-margin niche. NY3 (Ben 2026-07-09):
+ *                     PROMOTED back to default-on (reverses NY2.2) — `--mode all` includes it again.
+ *   all             — run band, rising, churn in sequence (shared fetch cache). Spread excluded (NY3,
+ *                     Ben 2026-07-09 — explicit `--mode spread` only).
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
@@ -129,8 +130,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
-const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/spread/rising/churn)
-const ALL_MODES = ALL_MODE_KEYS; // P4c: --mode all runs the inAll specs — NY2.2 keeps churn DEMOTED off-by-default
+const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/spread/rising/churn/scalp/value)
+const ALL_MODES = ALL_MODE_KEYS; // P4c: --mode all runs the inAll specs — NY3 (Ben 2026-07-09): band/rising/churn (spread off-by-default)
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 50;
@@ -223,7 +224,7 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
 
-const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // NY2.2: churn omitted from `all`; P5: scalp/value explicit-only
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // NY3 (Ben 2026-07-09): spread omitted from `all`; P5: scalp/value explicit-only
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
 const IS_VALUE = RUN_MODES.includes('value');                    // P5 — the value niche needs the 28d term structure
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
@@ -591,6 +592,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   // here so the note is added WITHOUT re-gating the value table (valueGate already selected these rows).
   const valueInformSpecs = STRATEGIES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
   let droppedKnife = 0;   // post-fetch phase() decay-knife drops
+  let droppedArtifact = 0;   // post-fetch artifact-low drops (live implausibly below the durable floor)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -611,7 +613,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vr = valueRanges(ts, live);
     const ph = phase(series6h && series6h.get(s.id));
     const g = valueGate(vr, { phase: ph && ph.phase });
-    if (!g.pass) { if (g.reason === 'decay') droppedKnife++; continue; }
+    if (!g.pass) { if (g.reason === 'decay') droppedKnife++; else if (g.reason === 'artifact-low') droppedArtifact++; continue; }
     const tier = valueTier(vr);
     // value's reach as a daily-min TIMING read: is the buy-low actually TOUCHED in the recent week+ (a
     // full-day window over 14 nights, from the spec)? Plus trajectory (oscillating/based/knife) + the
@@ -665,7 +667,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   if (!shown) console.log('_none_');
   for (const n of valueInformNotes) console.log(`ℹ timing/trajectory — ${n}`);
   // §F admitted-vs-shown footer — never dump the full pool; say how many the gate admitted.
-  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}`);
+  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}`);
   console.log('');
   // publishable rows: buy-now first, then watch (isolated; the app has no VALUE tab yet → console-only)
   return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));
