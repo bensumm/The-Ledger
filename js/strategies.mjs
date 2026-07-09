@@ -135,37 +135,52 @@ function churnEdge(inp, t) {
                  term-structure valueGate in js/valuescreen.mjs; gateCandidates routes on this).
      validators  validator keys this niche EXPECTS to run (metadata; screen.mjs still runs the full
                  js/validate.mjs registry on every surface — [] = the shared default stack).
-     defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header). */
+     defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header).
+     estimator   (P6b) the per-thesis P(fill)+TTF estimator FAMILY key — one of pipeline/lib/
+                 estimators.mjs's ESTIMATOR_FAMILIES ('intraday' | 'value' | 'rising'). The niche's
+                 rank = net × P(fill) ÷ TTF is computed by that family's estimators (the demoted
+                 expGpDay is no longer the ranked/displayed "best" — Ben, 2026-07-09). Just a family
+                 STRING here (data); the estimator functions + registry live in pipeline/lib.
+     priceBasis  (P6b) the ONE price pair the thesis posts — the price-basis principle: net, P(fill),
+                 TTF are ALL evaluated at this pair. 'quick' = the live quick pair (transact-now,
+                 spread); 'opt' = the patient 2h band edges (band/rising/churn/scalp); 'term' = the
+                 term-structure floor→recovery pair the value surface computes itself (valuescreen). */
 export const STRATEGY_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,
     pool: { risingFloor: false }, edge: bandEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
+    estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'spread', label: 'Spread', inAll: true,
     pool: { risingFloor: false }, edge: spreadEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
+    estimator: 'intraday', priceBasis: 'quick',
   },
   {
     key: 'rising', label: 'Rising', inAll: true,
     pool: { risingFloor: true }, edge: bandEdge, rank: 'proxy', confirm: 'rising',
     falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.VALUE_HOLD,
+    estimator: 'rising', priceBasis: 'opt',
   },
   {
     key: 'churn', label: 'Churn', inAll: false,   // NY2.2 — off-by-default; reach with explicit --mode churn
     pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
+    estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
     pool: { risingFloor: false }, edge: scalpEdge, rank: 'velocity', confirm: null,
     falling: 'accept', gate: 'band', validators: ['reach'], defaultPath: PATH_KEYS.SCALP,
+    estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'value', label: 'Value', inAll: false,   // P5 — off-by-default; explicit --mode value only (provisional, n≈0)
     pool: { risingFloor: false }, edge: valueEdge, rank: 'value', confirm: null,
     falling: 'knife-guard', gate: 'value', validators: ['floor'], defaultPath: PATH_KEYS.VALUE_HOLD,
+    estimator: 'value', priceBasis: 'term',
   },
 ]);
 
@@ -184,6 +199,11 @@ const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
 const VALID_RANKS = new Set(['velocity', 'proxy', 'value']);
 const VALID_FALLING = new Set(['exclude', 'accept', 'knife-guard']);   // P5 per-spec falling doctrine
 const VALID_GATE = new Set(['band', 'value']);                          // P5 gate-stack selector
+// P6b — the estimator family + price-basis vocabularies. VALID_ESTIMATORS mirrors pipeline/lib/
+// estimators.mjs's ESTIMATOR_FAMILIES (the runtime registry there is the home; this Set exists so a
+// typo'd family name is caught by conformance instead of silently defaulting to intraday in production).
+const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising']);
+const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term']);
 
 export function validateStrategySpec(spec) {
   const errs = [];
@@ -204,5 +224,7 @@ export function validateStrategySpec(spec) {
     errs.push('defaultPath must be a key in paths.mjs PATH_KEYS');
   else if (!ENTRY_PATH_KEYS.includes(spec.defaultPath))
     errs.push('defaultPath must be an ENTRY (unheld-enumerable) path key: ' + ENTRY_PATH_KEYS.join('/'));
+  if (!VALID_ESTIMATORS.has(spec.estimator)) errs.push(`estimator must be one of ${[...VALID_ESTIMATORS].join('/')}`);
+  if (!VALID_PRICE_BASIS.has(spec.priceBasis)) errs.push(`priceBasis must be one of ${[...VALID_PRICE_BASIS].join('/')}`);
   return errs;
 }

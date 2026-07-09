@@ -28,13 +28,16 @@
  *
  * Output (chunk 0 rework): ONE table PER niche (no more Tier A / Tier B split), each sorted by a
  * letter GRADE. The grade is a desirability heuristic — "which of these do I actually put offers in
- * for?" — that blends the realistic expected gp/day with a risk-quality multiplier (regime, momentum,
- * liquidity, capital, band confidence). See rating.mjs for the full rationale; the grade cutoffs +
- * factor weights there are PLACEHOLDERS pending the validation study. `Score gp/d` = the risk-adjusted
- * gp/day the grade is read off. `--mode all` runs all four niches and shares one per-item fetch cache
- * (items common to several niches are fetched once). A grade-distribution footer per table lets us
- * SEE whether the score separates best-from-good (if a batch clumps at one grade, the factors — not
- * the letter scale — need work).
+ * for?" — that blends the PER-THESIS RANK with a risk-quality multiplier (regime, momentum, liquidity,
+ * capital, band confidence). See rating.mjs for the full rationale; the grade cutoffs + factor weights
+ * there are PLACEHOLDERS pending calibration. P6b (Ben 2026-07-09: "gp/d is out as the ranking metric"):
+ * the last column is `Rank net·P/ttf` — the risk-adjusted `net after tax × P(fill at the quoted pair) ÷
+ * TTF` (pipeline/lib/estimators.mjs), rendered with its components (net · P~ · ttf~) so the honesty
+ * travels with the number. expGpDay survives ONLY as the cheap pre-fetch pool orderer (rankAndSlice) +
+ * the 500k --min-gpd attention pre-filter — never again the displayed "best" number or the grade basis.
+ * `--mode all` runs all four niches and shares one per-item fetch cache (items common to several niches
+ * are fetched once). A grade-distribution footer per table lets us SEE whether the score separates
+ * best-from-good (if a batch clumps at one grade, the factors — not the letter scale — need work).
  *
  * Modes (step-3 edge):
  *   band  (DEFAULT) — the crystal-teleport-seed niche: a liquid, regime-stable item with a wide
@@ -55,15 +58,20 @@
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
- * Ranking: the fetch pool is still picked by realistic expected gp/day (expUnits/day = min(limit×6,
- * 10% × volDay); expGpDay = expUnits × the mode's net/u). The DISPLAYED table is then sorted by the
- * risk-adjusted grade/score from rating.mjs.
+ * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×6,
+ * 10% × volDay); expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
+ * cheap pre-fetch orderer + the 500k --min-gpd pre-filter (P6b demotion). The DISPLAYED table is then
+ * sorted by the risk-adjusted per-thesis RANK (net × P(fill) ÷ TTF) from rating.mjs/estimators.mjs.
  *
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
-import { tax, fmtP } from '../js/format.js';
+import { tax, fmt, fmtP } from '../js/format.js';
+// P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
+// (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
+// the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf } from './lib/estimators.mjs';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
@@ -207,7 +215,22 @@ const PLAYBOOK = {
   churn:  'Playbook: high-frequency buy-limit-cycle commodities. Thin per-unit, volume does the work — buy every limit, flip fast.',
   scalp:  'Playbook (PROVISIONAL, n≈0): a DELIBERATE intraday flip on a falling market — buy a wide FRESH band edge, sell at today\'s high, HARD intraday stop. Flip-only/no-hold: an unsold lap is a CUT, not a hold. Falling is the thesis, not a veto.',
 };
-const HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Score gp/d'];
+// P6b: the last column is the per-thesis RANK (net × P(fill) ÷ TTF), NOT the demoted `Score gp/d`.
+// The app renders screen.json headers generically (only 'Grade' is special-cased in js/ui.js), and
+// the headers TRAVEL with the payload, so renaming is app-safe (no APP_VERSION bump).
+const HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Rank net·P/ttf'];
+
+const round2 = x => Math.round(x * 100) / 100;   // P6b: pFill logged to 2dp (lean ledger)
+// P6b: the compact honest lean fields for a rank estimate `er` (estimateRank result) — the quoted pair
+// the thesis posts + the rank components + n/basis so the retro-join can later calibrate estimate-vs-
+// realized. Lean-included by suggestionEntry (absent-field rows stay byte-identical — the YS2 pattern).
+function estFields(er) {
+  return {
+    bid: er.pair.bid, ask: er.pair.ask,
+    pFill: round2(er.pFill.value), ttfSec: er.ttf.value, rank: Math.round(er.rank),
+    estBasis: `${er.pFill.basis}/${er.ttf.basis}`, estN: Math.min(er.pFill.n, er.ttf.n),
+  };
+}
 
 // grade-distribution footer, in GRADE_CUTOFFS (best→worst) order, present grades only
 function gradeDist(dist) {
@@ -301,7 +324,11 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
       disc.caution++;
       cautionNotes.push(`${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '));
     }
-    const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
+    // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF
+    // all evaluated at that same pair. Extra data (reach/velocity) is null at the screen surface today
+    // (no 1h fetch), so the estimators degrade honestly to their band-depth / volume-velocity priors.
+    const er = estimateRank(STRATEGIES[mode], row);
+    const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
     const grade = rescued ? capGrade(r.grade, PHASE_BASING_GRADE_CAP) : r.grade;
@@ -313,7 +340,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     const rc = std[std.length - 1];
     if (rescued) rc.t = rc.t + ' · basing after decay — provisional';
     else if (ph.phase === 'spike' || ph.phase === 'decay' || ph.phase === 'basing') rc.t = rc.t + ' · ' + ph.phase;
-    // insert Grade after Item, append Score gp/d — both structured {t} so the app publish path is
+    // insert Grade after Item, append the Rank net·P/ttf cell — both structured {t} so the app publish path is
     // uniform (Grade rendered as a pill app-side by header name; Score right-aligned num). A thin
     // (gp-flow-only) row carries a `title` on the Grade cell — the honesty tooltip (rendered app-side;
     // cellText ignores it so stdout stays clean). `row`/`grade` kept on the pushed object — the O1
@@ -323,7 +350,10 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
       : s.thin
         ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — size in units, expect slow fills` }
         : { t: grade };
-    const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }];
+    // P6b: the last cell is the risk-adjusted per-thesis rank + its honest components (net · P~ · ttf~)
+    // instead of the demoted `Score gp/d`. The numeric r.score (risk-adjusted rank) is the sort key.
+    const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
+    const cells = [std[0], gradeCell, ...std.slice(1), rankCell];
     // PM1: run the loaded probes over this row. OUTPUT-ONLY — a probe reads the row/ctx and returns a
     // display tag (observe) or an advisory price nudge (price); it NEVER touched `grade`/`r`/the cells
     // above (all already computed). ctx carries the 24h avg (dip), the phase trajectory (froth), the
@@ -343,7 +373,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr, validators: leanValidators(vres), pathWeighed });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, probeStr, validators: leanValidators(vres), pathWeighed });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -357,7 +387,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   // thesis a position was entered under when no explicit thesis.mjs --path was declared.
   const defaultPath = STRATEGIES[mode].defaultPath;
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath })));
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, ...estFields(r.er) })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -458,7 +488,14 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, guide, dail
       { t: 'multi-wk hold', c: 'mini' },
     ];
     (tier === 'buy-now' ? buyNow : watch).push({ id: s.id, cells, score: s.valueScore });
-    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold' }));
+    // P6b: the value niche's own rank estimate — pair = the durable floor→recovery pair (NOT the raw
+    // ceiling); P(fill) = floor-proximity, TTF = the multi-day trough→recovery prior. Logged to the
+    // suggestions ledger (the value table already SHOWS cycle net/u + hold horizon, so no column change).
+    const vpFill = ESTIMATORS.value.pFill({ valueRanges: vr });
+    const vttf = ESTIMATORS.value.ttf({ valueRanges: vr });
+    const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
+    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',
+      bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n) }));
   }
   buyNow.sort((a, b) => b.score - a.score); watch.sort((a, b) => b.score - a.score);
   // §E — value picks are logged in ISOLATION (mode 'value'); they never touch the fast-flip ledger rows.
@@ -550,12 +587,16 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const d = v24[id], limit = map.byId[id]?.limit ?? null;
     const limitVol = d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : 0;
     const thin = d ? (limitVol > 0 && limitVol < FLOOR) : false;
-    const r = rateItem({ row, expGpDay: roughExpGpDay(d, bands, id, limit), thin });
+    // P6b: a watchlist row has no niche context, so rank it under the neutral band thesis (intraday
+    // estimator, patient 2h-band pair) — a standard flip read. Same rank basis as the niche tables.
+    const er = estimateRank(STRATEGIES.band, row);
+    const r = rateItem({ row, rank: er.rank, thin });
     const std = stdCells(name, row);
     const gradeCell = thin ? { t: r.grade, title: `thin: ~${limitVol}/day two-sided — size in units, expect slow fills` } : { t: r.grade };
-    const cells = [std[0], gradeCell, ...std.slice(1), { t: fmtP(r.score), c: 'num' }, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
+    const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
+    const cells = [std[0], gradeCell, ...std.slice(1), rankCell, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
     rows.push({ id, cells });
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: r.grade, posture: POSTURE }));
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: r.grade, posture: POSTURE, ...estFields(er) }));
   }
   logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
   const headers = [...HEADERS, 'Note'];

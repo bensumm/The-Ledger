@@ -42,7 +42,7 @@ export const median = a => { if (!a || !a.length) return null; const s = [...a].
 
 /* --- mdTable(headers, rows): generic markdown table (rows = array of cells).
    Generic on purpose — both consumers APPEND columns to the standard set (quote.mjs
-   --positions adds Held@/Break-even/Verdict; screen.mjs adds Grade + Score gp/d), which is
+   --positions adds Held@/Break-even/Verdict; screen.mjs adds Grade + the per-thesis Rank net·P/ttf), which is
    why quotecore's fixed-column quoteMarkdown() can't serve them. A cell may be a plain
    string OR a T1 structured `{t, c}` cell — cellText() renders the plain markdown text for
    either, so stdout stays colorless while the app keeps the class. --- */

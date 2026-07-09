@@ -131,8 +131,11 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   quoting every watchlisted item as a full standard row — exempt from every floor/gate, graded, with
   the reason a gate *would* have hidden it as a Note (below-floor / thin / one-sided / falling).
   Falling watchlist items ARE shown there, with the falling warning.
-- Screens: `screen.mjs` prints one table per niche, adding a Grade + `Score gp/d` column to
-  the canonical layout (grade cutoffs in `rating.mjs` are placeholders pending validation).
+- Screens: `screen.mjs` prints one table per niche, adding a Grade + a per-thesis `Rank net·P/ttf`
+  column to the canonical layout (P6b — Ben 2026-07-09: gp/d is OUT as the ranking metric; rank =
+  `net after tax × P(fill at the quoted pair) ÷ TTF` from `pipeline/lib/estimators.mjs`, evaluated at
+  the ONE price pair the thesis posts. `expGpDay` survives ONLY as the cheap pre-fetch pool orderer +
+  the 500k `--min-gpd` pre-filter. Grade cutoffs in `rating.mjs` are placeholders pending validation).
 - **Time-of-day context on every price recommendation (Ben, 2026-07-05).** Whenever a specific buy/sell
   price is suggested, run a `windowrange.mjs` read for the relevant local-hours window and read the level
   against the last ~14 same-window lows/highs (the NARROW-WINDOW *timing* check — "touched ≠ filled",

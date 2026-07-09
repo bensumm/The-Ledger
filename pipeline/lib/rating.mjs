@@ -7,17 +7,19 @@
  * overall desirability nets out similar. If a whole batch clumps at one grade, that is a signal the
  * SCORE lacks dynamic range (fix the factors), not that the letter scale is wrong.
  *
- * The score blends ONE reward magnitude (expGpDay — realistic expected gp/day, which already folds in
- * liquidity via its volume-share cap) with a risk-quality MULTIPLIER ∈ (0,1] built from real
- * computeQuote fields: regime stability, last-2h momentum, two-sided liquidity / exit-ease, capital
- * commitment (per-unit ticket size), and — for band-based modes — how consistently the intraday band
- * actually traded. score = expGpDay × Π(factors). All inputs are REAL computeQuote output (never a
- * proxy) — the pre-filter may approximate to pick the fetch pool, but a displayed grade is always
- * built from a real quote.
+ * REWARD BASIS (P6b — Ben's 2026-07-09 ruling: gp/d is OUT as the ranking metric). The reward
+ * magnitude is now the PER-THESIS RANK — `net after tax × P(fill at the quoted pair) ÷ TTF` from
+ * pipeline/lib/estimators.mjs — NOT the demoted `expGpDay` (which folded three unmeasured throughput
+ * assumptions: limit×6 windows/day, a 10% volume share, a noisy modeNet). The score still layers the
+ * same risk-quality MULTIPLIER ∈ (0,1] built from real computeQuote fields (regime stability, last-2h
+ * momentum, two-sided liquidity / exit-ease, capital commitment, and — for band modes — band-trade
+ * consistency): score = rank × Π(factors). MILD OVERLAP NOTE: pFill/TTF and the liq factor both touch
+ * fill-ease; the risk multiplier is kept because regime/momentum/capital/confidence still carry quality
+ * signal the rank alone doesn't, and every cutoff here is a placeholder anyway (Ben-vetoable).
  *
- * STATUS: weights + grade cutoffs below are PLACEHOLDERS. They are deliberately un-tuned — the
- * Chunk-C validation study (see the pre-filter plan) sets them from multi-day evidence, same
- * discipline as everywhere in this repo. Don't cite these numbers as calibrated.
+ * STATUS: weights + grade cutoffs below are PLACEHOLDERS on the NEW rank basis (a per-unit/day rate,
+ * so the cutoff NUMBERS differ in scale from the old gp/day ones). Deliberately un-tuned — the retro-
+ * join (pipeline/lib/retrojoin.mjs) + F1 calibrate them from realized fills. Don't cite as calibrated.
  */
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -65,12 +67,14 @@ export function confidenceFactor(activeWin, nWin) {
   return clamp(0.6 + 0.4 * activeWin / nWin, 0.6, 1);
 }
 
-/* --- letter grade from the risk-adjusted score (PLACEHOLDER cutoffs, in risk-adjusted gp/day) --- */
+/* --- letter grade from the risk-adjusted RANK (P6b — the rank basis is net × P(fill) ÷ TTF, a
+   per-unit/day rate; these cutoffs are on THAT scale, NOT the old gp/day throughput scale, and are
+   NAMED PLACEHOLDERS pending calibration from the retro-join). --- */
 export const GRADE_CUTOFFS = [
-  ['S+', 2_000_000], ['S', 1_000_000], ['S-', 600_000],
-  ['A+', 350_000], ['A', 200_000], ['A-', 120_000],
-  ['B+', 70_000], ['B', 40_000], ['B-', 20_000],
-  ['C', 8_000], ['D', 0],
+  ['S+', 150_000], ['S', 80_000], ['S-', 40_000],
+  ['A+', 20_000], ['A', 10_000], ['A-', 5_000],
+  ['B+', 2_500], ['B', 1_200], ['B-', 500],
+  ['C', 100], ['D', 0],
 ];
 export function gradeFor(score) {
   for (const [g, t] of GRADE_CUTOFFS) if (score >= t) return g;
@@ -104,9 +108,10 @@ export function capGrade(grade, cap) {
 
 /* rateItem — combine everything into { score, grade, riskMult, factors }.
    row      : a computeQuote row (regime, rising, mom, volDay, mid)
-   expGpDay : the screen's realistic expected gp/day for this item (the reward magnitude)
+   rank     : the PER-THESIS rank (net × P(fill) ÷ TTF from estimators.mjs) — the reward magnitude
+              (P6b; REPLACED the demoted expGpDay). Missing/0 → a D-grade floor, honestly.
    activeWin / nWin : traded-window count and total windows for the band (null for spread mode) */
-export function rateItem({ row, expGpDay, activeWin = null, nWin = null, thin = false }) {
+export function rateItem({ row, rank, activeWin = null, nWin = null, thin = false }) {
   const factors = {
     regime: regimeFactor(row),
     mom: momFactor(row),
@@ -115,7 +120,7 @@ export function rateItem({ row, expGpDay, activeWin = null, nWin = null, thin = 
     confidence: confidenceFactor(activeWin, nWin),
   };
   const riskMult = factors.regime * factors.mom * factors.liq * factors.capital * factors.confidence;
-  const score = Math.round((expGpDay || 0) * riskMult);
+  const score = Math.round((rank || 0) * riskMult);
   const grade = thin ? capGrade(gradeFor(score), THIN_GRADE_CAP) : gradeFor(score);
   return { score, grade, riskMult, factors, thin: !!thin };
 }

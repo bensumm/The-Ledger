@@ -10,7 +10,9 @@
  *
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
- *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path? }
+ *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
+ *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN? }   (P6b rank estimate — the quoted pair +
+ *     net×P÷TTF components; lean-included, absent on older rows)
  *     ts      — unix SECONDS at emit time
  *     script  — 'quote' | 'screen' | 'watch'
  *     mode    — the mode/niche as computed then (screen niche name, or null)
@@ -158,7 +160,7 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -182,6 +184,17 @@ export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, 
   // byte-identical shape. It lets a later fill attribute a position to a thesis when no explicit
   // `thesis.mjs set --path` was declared (the P4b fallback: explicit hold-thesis > inferred > null).
   if (path != null)          e.path = path;
+  // P6b — the per-thesis rank estimate: the ONE quoted pair the thesis posts (bid/ask) + the rank
+  // components (pFill, TTF seconds, the composite rank = net×P÷TTF) + n/basis so the retro-join can
+  // calibrate estimate-vs-realized. Lean-included exactly like the YS2 fields: written ONLY when
+  // supplied, so a caller that logs no rank estimate (older callers) stays byte-for-byte unchanged.
+  if (bid != null)           e.bid = bid;
+  if (ask != null)           e.ask = ask;
+  if (pFill != null)         e.pFill = pFill;
+  if (ttfSec != null)        e.ttfSec = ttfSec;
+  if (rank != null)          e.rank = rank;
+  if (estBasis != null)      e.estBasis = estBasis;
+  if (estN != null)          e.estN = estN;
   return e;
 }
 

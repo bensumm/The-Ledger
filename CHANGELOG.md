@@ -10,6 +10,50 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P6b — per-thesis TTF estimators + rank replaces gp/d (2026-07-09, pipeline-only — NO APP_VERSION)
+Ben's 2026-07-09 ruling: "I despise gp/d as a metric; it makes so many assumptions about fill speed and
+fill price… let's get something that's more accurate per thesis and less hand wavey." `expGpDay`
+(min(limit×6, 10%×volDay) × modeNet — three compounding unmeasured throughput assumptions) is
+**DEMOTED**: it survives ONLY as the cheap pre-fetch pool orderer inside `rankAndSlice` and as the 500k
+`--min-gpd` attention pre-filter — never again the displayed "best" number or the grade basis. The
+replacement, per thesis: **rank = net after tax × P(fill at the quoted prices) ÷ TTF**.
+
+**The price-basis principle (coordinator-ruled, Ben-vetoable).** Every suggestion commits to ONE price
+pair — the bid/ask the thesis itself would post — and net, P(fill) and TTF are ALL evaluated at that
+same pair (declared per spec as `priceBasis`): spread = live quick pair; band/churn/scalp = 2h band
+edges; rising = near-current entry → forecast target; value = durable floor → term-structure recovery
+level (NOT the raw ceiling). The net is always the ONE shared `netMargin`/`tax` — no new tax logic.
+
+**The estimator seam.** New PURE `pipeline/lib/estimators.mjs`: three estimator families (registry keyed
+by a spec's new `estimator` field — `intraday` / `value` / `rising`), each a `pFill(ctx)` + `ttf(ctx)`
+returning `{value, n, basis}` so the honesty (what data, how many observations) travels WITH the number.
+intraday P(fill) = band-depth (or a real windowread reach read when a surface fetches the 1h series —
+degrades honestly on screen/quote, which don't, exactly like reachValidator), TTF = volume-velocity
+around the intraday prior; value P(fill) = floor-proximity (the P5 valueScore component), TTF =
+trough→recovery prior; rising = regime/forecast horizon. `rankScore` = net × P(fill) ÷ TTF(days),
+PER-UNIT (not per-slot — volume/slot-count is exactly the throughput assumption Ben rejected), with a
+1h TTF floor. `estimateRank(spec,row,extra)` bundles pair/net/pFill/ttf/rank.
+
+**Wiring.** `screen.mjs`'s last column is now `Rank net·P/ttf` (risk-adjusted rank + honest components
+`net · P~ · ttf~`) instead of `Score gp/d`; `rating.mjs`'s grade reward moved from expGpDay to the rank
+(cutoffs re-scaled, still NAMED PLACEHOLDERS); niche/watchlist/value all rank on the same basis. The
+suggestions ledger gains lean fields `bid/ask/pFill/ttfSec/rank/estBasis/estN` (YS2 lean pattern — absent
+on older rows, byte-identical) so the retro-join can later calibrate estimate-vs-realized.
+
+**HONESTY (rule 4).** n≈0 on EVERYTHING estimator-shaped today — every constant is a named placeholder
+encoding SHAPE, not magnitude; the archive began accruing 2026-07-08 and `retrojoin.mjs` is the
+calibrator that will replace the guesses. The intraday/multiday TTF priors mirror retrojoin's horizons
+in magnitude but are declared apart (a JOIN CLAIM WINDOW vs an EXPECTED-LATENCY prior — distinct concepts).
+
+**App-safe / goldens.** No app module imports `strategies.mjs`/`estimators.mjs`, and the app renders
+screen.json headers generically (only 'Grade' is special-cased) with headers travelling in the payload —
+so renaming the column is safe with NO APP_VERSION bump. The P1 replay goldens are UNCHANGED (verified
+via `--update`: zero diff) — the funnel golden captures gated/ranked/kept/dropped, and `rankAndSlice`'s
+pre-fetch ordering deliberately still uses expGpDay (the demotion ruling); the displayed rank is a
+renderMode concern the funnel golden doesn't capture. Tests: new `estimators.test.mjs` (14 checks:
+conformance no-throw/degrade/determinism over the replay archetypes + per-family math + rankScore/
+quotedPair/estimateRank), `strategies.test.mjs` + `rating.test.mjs` extended; 45 suites green.
+
 ### V2-P6a — the retro-join calibrator (2026-07-09, pipeline-only — NO APP_VERSION)
 The FOUNDATION slice of P6 (evidence-based viability + TTF). A new **suggestion→fill retro-join**:
 for every suggestion row the tool ever logged (active `suggestions.jsonl` + the monthly archives,

@@ -22,6 +22,7 @@ import {
   validateStrategySpec, CHURN_MIN_VOL,
 } from '../js/strategies.mjs';
 import { PATH_KEYS } from '../js/paths.mjs';
+import { ESTIMATOR_FAMILIES } from './lib/estimators.mjs';
 import { DEFAULT_THRESHOLDS } from './lib/gatecandidates.mjs';
 import { buildSnapshot } from './lib/replay.mjs';
 
@@ -53,6 +54,20 @@ ok('P5 per-spec falling doctrine + gate selector are registered as designed', ()
   assert.equal(STRATEGIES.scalp.defaultPath, PATH_KEYS.SCALP);
   assert.equal(STRATEGIES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
   assert.equal(STRATEGIES.value.rank, 'value', 'value ranks by valueScore');
+});
+
+ok('P6b per-thesis estimator family + price-basis fields are registered as designed', () => {
+  // estimator family: the four fast niches share the intraday family; rising + value have their own.
+  for (const k of ['band', 'spread', 'churn', 'scalp']) assert.equal(STRATEGIES[k].estimator, 'intraday', `${k} → intraday estimator`);
+  assert.equal(STRATEGIES.rising.estimator, 'rising', 'rising → rising estimator');
+  assert.equal(STRATEGIES.value.estimator, 'value', 'value → value estimator');
+  // price basis: spread posts the live quick pair; band/rising/churn/scalp the 2h band edges; value
+  // computes its own term-structure floor→recovery pair.
+  assert.equal(STRATEGIES.spread.priceBasis, 'quick', 'spread = transact-now quick pair');
+  for (const k of ['band', 'rising', 'churn', 'scalp']) assert.equal(STRATEGIES[k].priceBasis, 'opt', `${k} = patient 2h band edges`);
+  assert.equal(STRATEGIES.value.priceBasis, 'term', 'value = term-structure pair');
+  // and every declared family is one the estimators registry actually serves (no typo).
+  for (const s of STRATEGY_LIST) assert.ok(ESTIMATOR_FAMILIES.includes(s.estimator), `${s.key} family in the registry`);
 });
 
 /* --- every registered spec is structurally conformant --------------------------------------------- */

@@ -14,8 +14,11 @@
  *   - A gp-flow-thin item never grades above A- no matter how high its score (the S1 honesty cap).
  *   - capGrade only ever clamps a grade DOWN toward the cap; it never promotes a worse grade up.
  *   - gradeFor is monotonic: a higher score is never assigned a worse letter.
- *   - riskMult is the product of the five sub-factors, and score = round(expGpDay × riskMult).
+ *   - riskMult is the product of the five sub-factors, and score = round(rank × riskMult).
  *   - momFactor punishes a breakdown (0.45) harder than a breakup (0.9); clean is unpenalized (1.0).
+ *
+ * P6b: the reward magnitude is the PER-THESIS RANK (net × P(fill) ÷ TTF), NOT the demoted expGpDay.
+ * These fixtures pin STRUCTURE/ORDERING on the new basis; the cutoff numbers stay placeholders.
  */
 import assert from 'node:assert/strict';
 import {
@@ -37,12 +40,12 @@ console.log('rating.js grade/score acceptance:');
 
 // --- 1. gp-flow-thin never grades above the A- cap ----------------------------------------
 ok('a gp-flow-thin item never grades above A- regardless of score (THIN_GRADE_CAP)', () => {
-  const huge = rateItem({ row: idealRow, expGpDay: 50_000_000, thin: true });   // would be S+ on merit
+  const huge = rateItem({ row: idealRow, rank: 50_000_000, thin: true });   // would be S+ on merit
   assert.equal(gradeFor(huge.score), 'S+', 'un-capped this score is top tier');
   assert.equal(huge.grade, THIN_GRADE_CAP, 'the thin cap clamps the displayed grade to A-');
   assert.ok(rank(huge.grade) >= rank(THIN_GRADE_CAP), 'never better than the cap');
-  // a thin item that would already grade BELOW the cap is untouched.
-  const small = rateItem({ row: idealRow, expGpDay: 30_000, thin: true });
+  // a thin item that would already grade BELOW the cap is untouched (rank well under the A- cutoff).
+  const small = rateItem({ row: idealRow, rank: 2_000, thin: true });
   assert.equal(small.grade, gradeFor(small.score), 'thin cap only clamps, never lifts a sub-cap grade');
 });
 
@@ -67,14 +70,14 @@ ok('gradeFor is monotonic: a higher score is never a worse letter', () => {
 });
 
 // --- 4. riskMult = Π(factors) and score = round(expGpDay × riskMult) ----------------------
-ok('riskMult is the product of the five sub-factors; score = round(expGpDay × riskMult)', () => {
+ok('riskMult is the product of the five sub-factors; score = round(rank × riskMult)', () => {
   const row = { regime: { ok: true, driftPct: 0 }, rising: false, mom: 'breakup', volDay: 200, mid: 8_000_000 };
-  const expGpDay = 1_234_567;
-  const r = rateItem({ row, expGpDay, activeWin: 6, nWin: 12 });
+  const rankIn = 1_234_567;
+  const r = rateItem({ row, rank: rankIn, activeWin: 6, nWin: 12 });
   const expected = regimeFactor(row) * momFactor(row) * liqFactor(row.volDay)
     * capitalFactor(row.mid) * confidenceFactor(6, 12);
   assert.equal(r.riskMult, expected, 'riskMult is exactly the product of the five factors');
-  assert.equal(r.score, Math.round(expGpDay * expected), 'score is round(expGpDay × riskMult)');
+  assert.equal(r.score, Math.round(rankIn * expected), 'score is round(rank × riskMult)');
   // and each factor ∈ (0,1] so the multiplier can only ever discount the reward.
   assert.ok(r.riskMult > 0 && r.riskMult <= 1);
 });

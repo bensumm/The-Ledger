@@ -198,7 +198,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
   `windowrange.mjs --ask <sell target>` and quote the REACHABLE sell (the ~50–75%-day reach level),
-  NEVER the raw 2h band top** — the screen's `Optimistic`/`Score gp/d` price the sell at the band top,
+  NEVER the raw 2h band top** — the screen's `Optimistic`/`Rank` column price the sell at the band top,
   which on a thin + wide-band item is an artifact that never reaches. No pitch without the sell leg
   verified. Anchor: DHCB surfaced top-of-board (score 2.24m/d) and I verified the BUY (21-night
   trajectory = a healthy recovery) but carried the band-top sell 36.21m forward UNVERIFIED and quoted
