@@ -284,8 +284,10 @@ metadata, not a leak; the concern is content, not commit authorship.
    undocumented by definition — don't leave one behind.
 9. **Post-wave cleanup.** When a wave's chunks are all shipped: `git branch -D` the
    squash-landed lane branches — they read as "unmerged" to git (squash rewrites history), so
-   verify each landed against **PLAN.md's Status table**, NOT `git branch --merged`. Ask Ben
-   before deleting any *remote* branch (`git push origin --delete …`). Check `git status` for
+   verify each landed against **PLAN.md's Status table**, NOT `git branch --merged`. A
+   CONFIRMED-stale branch (tip is an ancestor of `origin/main`, or squash-landed per PLAN.md's
+   Status table) may be deleted without asking, local or remote (Ben, 2026-07-08); if staleness
+   can't be confirmed, still ask before `git push origin --delete …`. Check `git status` for
    orphan untracked artifacts a chunk left behind. Multi-lane dispatch mechanics are `/ship` §7.
 
 ## GitHub CLI (`gh`), Actions CI, and shipping — mechanics live in `/ship`
