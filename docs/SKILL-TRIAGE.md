@@ -23,7 +23,9 @@ a cited script actually enforces the rule) — this table is the semantic record
 When a rule is added to a skill, add its row here and tag it, or CI goes red.
 
 Counts (2026-07-09): 56 rule-blocks across the four skills — 8 ENCODE (enforced today),
-45 KEEP-AS-JUDGMENT, 3 RETIRE-proposals. All 30 memory entries triaged below.
+45 KEEP-AS-JUDGMENT, 1 RETIRE-proposal, 2 F1-gated HYPOTHESIS blocks (flagged for revisit at
+F1, NOT retires — see the notable list at the bottom). All 30 memory entries triaged below.
+(Corrected from "3 RETIRE-proposals" — only one table row actually proposes a retirement.)
 
 ---
 
