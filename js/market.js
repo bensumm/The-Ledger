@@ -1,6 +1,6 @@
-import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, BOND_ID, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
+import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
 import { jget, cached } from './marketfetch.js';
-import { netMargin, clamp, now } from './format.js';
+import { netMargin, clamp, now, isBond } from './format.js';
 import { showFinderError, renderAll } from './ui.js';
 import { syncFills } from './ledger.js';   // A3: positions.json auto-populate now lives with the Ledger
 import { archiveWatchlist, computeSignals } from './trends.js';
@@ -9,9 +9,15 @@ import { archiveWatchlist, computeSignals } from './trends.js';
 export async function getMapping(force){
   if(!force){ const c=await sGet('mapping'), ts=await sGet('mapping_ts'); if(c&&ts&&(Date.now()-ts<7*864e5)){ STATE.MAP=c; return false; } }
   const full=await fetch(API+'/mapping').then(r=>r.json());
-  STATE.MAP=full.filter(m=>m.id!==BOND_ID).map(m=>({id:m.id,name:m.name,members:!!m.members,limit:m.limit||null}));
+  // Bonds ARE kept in the catalog now (searchable) — their flip margin is computed correctly (tax-exempt
+  // minus the 10%-guide retrade fee, via bondMarginOpts below), so they no longer read as false profit.
+  STATE.MAP=full.map(m=>({id:m.id,name:m.name,members:!!m.members,limit:m.limit||null}));
   await sSet('mapping',STATE.MAP); await sSet('mapping_ts',Date.now()); return true;
 }
+// BOND: the ONE tax exception (format.js). A bond flip's margin is sell − (buy + 10%×guide), tax-free.
+// The Finder builds margin from live low/high, so hand netMargin the bond opts (guide from STATE.GUIDE)
+// for the bond ONLY; every other item gets undefined → the normal after-tax margin (byte-identical).
+const bondMarginOpts = id => isBond(id) ? { bond: true, guide: (STATE.GUIDE[id] && STATE.GUIDE[id].price) || 0 } : undefined;
 
 export async function loadMarket(force){
   if(!force){
@@ -107,7 +113,7 @@ export function rawItem(m){
   const v=STATE.VOL[m.id]||{}; const vol=(v.highPriceVolume||0)+(v.lowPriceVolume||0);
   const it={id:m.id,name:m.name,members:m.members,limit:m.limit||null,low:l.low,high:l.high,
     lowTime:l.lowTime||0,highTime:l.highTime||0,volume:vol,liquid:vol>=MIN_VOL,offscreen:true};
-  it.margin=netMargin(it.low,it.high); it.roi=it.low?it.margin/it.low*100:null;
+  it.margin=netMargin(it.low,it.high,bondMarginOpts(it.id)); it.roi=it.low?it.margin/it.low*100:null;
   return it;
 }
 export function resolveItem(name){
@@ -138,7 +144,7 @@ export function buildItems(){
     const l=STATE.LATEST[m.id]; if(!l||!l.low||!l.high) continue; if(l.high<MIN_PRICE) continue;
     const v=STATE.VOL[m.id]||{}; const vol=(v.highPriceVolume||0)+(v.lowPriceVolume||0);
     const it={id:m.id,name:m.name,members:m.members,limit:m.limit,low:l.low,high:l.high,lowTime:l.lowTime||0,highTime:l.highTime||0,volume:vol,liquid:vol>=MIN_VOL};
-    it.margin=netMargin(it.low,it.high); it.roi=it.margin/it.low*100;
+    it.margin=netMargin(it.low,it.high,bondMarginOpts(it.id)); it.roi=it.margin/it.low*100;
     STATE.ITEMS.push(it); STATE.byId[it.id]=it; STATE.byName[it.name.toLowerCase()]=it;
   }
   rebuildDatalist();

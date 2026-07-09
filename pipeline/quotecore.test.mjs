@@ -410,6 +410,34 @@ ok('breakEven: brute-force smallest-s at every region boundary', () => {
   assert.equal(bruteMin(245_000_001), 250_000_001);
 });
 
+// --- 13. BOND break-even exception: buy + 10%-guide retrade fee, NO 2% sell tax -----------
+ok('breakEven BOND opts: buy + 10%-guide fee, tax-free (never the 2% inverse)', () => {
+  // guide 15m → fee 1.5m. Bond BE recovers buy + fee, with no sell tax.
+  assert.equal(breakEven(15_000_000, { bond: true, guide: 15_000_000 }), 15_000_000 + 1_500_000);
+  // contrast: the SAME buy without bond opts takes the tax-capped inverse (buy+TAXCAP here) — proves
+  // the bond branch is a genuine exception, not incidentally equal.
+  assert.notEqual(breakEven(15_000_000, { bond: true, guide: 15_000_000 }), breakEven(15_000_000));
+  assert.equal(breakEven(15_000_000), Math.ceil(15_000_000 / 0.98));   // default path unchanged
+  // no guide → fee 0 → bond BE is just buy (still tax-free, no phantom 2%).
+  assert.equal(breakEven(200, { bond: true, guide: 0 }), 200);
+});
+
+// --- 14. computeQuote BOND net: sell − (buy + 10%-guide fee), tax-free, row flags set ------
+ok('computeQuote BOND: net reflects the 10%-guide fee + tax exemption; non-bond id unchanged', () => {
+  const latest = { low: 15_000_000, high: 15_100_000, lowTime: FRESH, highTime: FRESH };
+  const bond = computeQuote({ id: 13190, latest, ts5m: [], ts6h: [], vol24: null, guide: 15_000_000, now: NOW_MS });
+  assert.equal(bond.bond, true);
+  assert.equal(bond.retradeFee, 1_500_000);
+  // quickNet = sell − buy − fee = 15.1m − 15.0m − 1.5m = −1.4m (the fee dwarfs the spread → a loss)
+  assert.equal(bond.quickNet, 15_100_000 - 15_000_000 - 1_500_000);
+  // same prices, a NON-bond id: the default after-tax path, and no bond flags leak in.
+  const norm = computeQuote({ id: 4151, latest, ts5m: [], ts6h: [], vol24: null, guide: 15_000_000, now: NOW_MS });
+  assert.equal(norm.bond, false);
+  assert.equal(norm.retradeFee, null);
+  assert.equal(norm.quickNet, (15_100_000 - taxRef(15_100_000)) - 15_000_000);
+  assert.notEqual(bond.quickNet, norm.quickNet);
+});
+
 // ============================================================================================
 // TD3.1 — computeQuote DERIVATION + display helpers (ordering clamp, mom, falling cap, labels).
 // Pins the row-model derivation the app tables + scripts all read, independent of the momVerdict

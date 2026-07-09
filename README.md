@@ -45,10 +45,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `styles.css` — all styles
 - `js/` — app logic as ES modules: `state.js` (shared mutable state as one `STATE`
   object + constants + persistence + diagnostics), `format.js` (formatting/tax —
-  the canonical `tax()`/`breakEven()`/`netMargin`/`netMarginQty` helpers), `charts.js`
+  the canonical `tax()`/`netMargin`/`netMarginQty` helpers + the ONE **BOND tax exception**
+  `BOND_ID`/`isBond`/`bondFee`: a bond is tax-exempt but pays a 10%-of-guide retrade fee, so
+  `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free), `charts.js`
   (inline SVG), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
   + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
-  (price/guide fetch + scoring), `trends.js` (archive + seasonal analysis +
+  (price/guide fetch + scoring; keeps the bond in the catalog — searchable — with a
+  bond-aware Finder margin via `bondMarginOpts`), `trends.js` (archive + seasonal analysis +
   regime/patient/backtest — renders the Trends view; pure analytics live in
   `trendcore.js`), `trendcore.js` (TC1 — pure DOM-free Trends analytics:
   hourly/seasonal decomposition, the walk-forward `backtestPlan` gate, `patientTargets`

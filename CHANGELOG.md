@@ -10,6 +10,31 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### BOND1 — bond tax exception + searchable in the app (2026-07-09, APP_VERSION 0.54.0)
+Ben: "encode the bond mechanic … as an exception in the tax calculation. i.e. buy price + 10% guide just
+for bonds to compare against the sell." The Old School Bond is EXEMPT from the 2% GE tax, but a GP-bought
+bond is untradeable and costs 10% of its guide value to make re-tradeable — so a bond flip's net =
+`sell − (buy + 10%×guide)`, tax-free. Encoded as the ONE exception in the tax math: `netMargin(low,high,
+{bond,guide})` and `breakEven(buy,{bond,guide})` in `js/format.js`/`js/quotecore.js` (opts absent ⇒
+byte-identical normal path — every existing caller unchanged). `computeQuote` applies it when passed the
+item `id` (sets `row.bond`/`row.retradeFee`); `estimateRank` reads those so a ~0-spread bond can't grade
+off a phantom tax-only spread. Result: `quote.mjs "Old School Bond"` now reads Quick −1.22m (−10%) /
+Optimistic −444k (−3.7%) with a `bond: TAX-EXEMPT, but +1.22m retrade fee` note — where it previously
+showed a false tax-only profit.
+
+APP: the bond used to be filtered out of the catalog entirely (unsearchable); it is now KEPT (searchable)
+with a bond-aware Finder margin (`market.js` `bondMarginOpts`), so it shows an honest loss instead of
+being hidden. `BOND_ID` moved to its canonical home in `format.js` (state.js's copy removed).
+
+SCOPE (deliberately minimal — Ben flagged overengineering mid-build): the exception lives in the tax
+primitives + the ONE quote builder (`computeQuote`) + the rank net (`estimateRank`); the pre-fetch band
+GATE (`strategies.mjs`/`gatecandidates.mjs`) was NOT made bond-aware (it would have threaded a fee through
+5 edge functions + risked the replay goldens) — unnecessary, because the DISPLAYED net/grade already come
+from the bond-aware `computeQuote`/`estimateRank`, so a surfaced bond reads honestly unprofitable. Held-lot
+break-even plumbing (watch/alerts/positions) was left on the normal path (a held bond is out of scope).
+Tests: `format.test.mjs`/`quotecore.test.mjs` bond fixtures (netMargin/breakEven/computeQuote); all
+pipeline suites green; replay goldens untouched.
+
 ### TV1 — per-thesis validators + trajectory (knife/oscillating) + in-script windowrange (2026-07-09, pipeline-only — NO APP_VERSION)
 Ben's design session: (1) "does it always make sense to run every validator for every thesis?" and
 (2) "any suggested item should have the windowrange analysis done in script." The resolution separates

@@ -18,7 +18,7 @@ const limitOf =id=>{ const m=(STATE.byId&&STATE.byId[id])||(STATE.catById&&STATE
 /* fetch + model in one call (Finder expander). opts.asked defaults true (user clicked/loaded it). */
 export async function fetchQuote(id, opts={}){
   const [latest, ts5m, ts6h, vol24]=await Promise.all([fetchLatest(id), fetchTs(id,'5m'), fetchTs(id,'6h'), fetch24h(id)]);
-  return computeQuote({ latest, ts5m, ts6h, vol24, guide:guideOf(id), limit:limitOf(id),
+  return computeQuote({ id, latest, ts5m, ts6h, vol24, guide:guideOf(id), limit:limitOf(id),
     held:heldOpen(id)||!!opts.held, asked:opts.asked!==false });
 }
 

@@ -12,7 +12,7 @@
    live quotes). Here the optimistic edges are CLAMPED against the SAME live quote, so the
    optimistic side can never be worse than the quick side — the mixing can't happen. */
 
-import { tax, netMargin, fmtP, fmt, TAXCAP } from './format.js';
+import { tax, netMargin, fmtP, fmt, TAXCAP, isBond, bondFee } from './format.js';
 export { tax, netMargin } from './format.js';   // re-export so node consumers (chunk 4.1) get the ONE tax impl
 // Break-even list price: the smallest sell price `s` that still nets ≥ `buy` after the GE tax —
 // i.e. the smallest integer s with s - tax(s) ≥ buy. The ONE definition shared by the app, the
@@ -27,7 +27,11 @@ export { tax, netMargin } from './format.js';   // re-export so node consumers (
 //   • otherwise           → ceil(buy/0.98)   (uncapped region — unchanged legacy formula)
 // The crossover (buy > TAXCAP/0.02 − TAXCAP = 245m) and smallest-s correctness at every region
 // boundary are brute-force-proven in pipeline/quotecore.test.mjs (BE1 fixtures).
-export const breakEven = buy => {
+// BOND exception (opts.bond, with opts.guide): bonds pay NO 2% sell tax, so the smallest sell that
+// recovers the flip's cost is just buy + the 10%-of-guide retrade fee (shared bondFee). Non-bond callers
+// pass no opts → the legacy tax-capped piecewise below (byte-identical).
+export const breakEven = (buy, opts) => {
+  if (opts && opts.bond) return buy + bondFee(opts.guide);
   if (buy < 50) return buy;
   if (buy > TAXCAP/0.02 - TAXCAP) return buy + TAXCAP;
   return Math.ceil(buy/0.98);
@@ -177,7 +181,7 @@ export function phase(points){
      limit  : buy limit or null
      held   : Ben holds an open lot (falling-exclusion exception — always shown w/ clear guidance)
      asked  : Ben explicitly loaded/asked this item (same exception) */
-export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, asked, now}={}){
+export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, asked, now, id}={}){
   const quickBuy  = (latest && latest.low)  || null;   // your BUY fills at the instasell
   const quickSell = (latest && latest.high) || null;   // your SELL fills at the instabuy
   // patient 2h band: last 24×5m points
@@ -262,12 +266,17 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   // Display-only (quote/watch regime+note lines); NOT a gate, verdict, or rating input.
   const hpv=vol24?(vol24.highPriceVolume||0):null, lpv=vol24?(vol24.lowPriceVolume||0):null;
   const pressure={hpv, lpv, ratio:(hpv>0 && lpv>0)?hpv/lpv:null};
-  const quickNet=(quickSell!=null&&quickBuy!=null)?netMargin(quickBuy,quickSell):null;
-  const optNet  =(optSell!=null&&optBuy!=null)?netMargin(optBuy,optSell):null;
+  // BOND cost model (the ONE tax exception — see format.js): a bond flip's net = sell − (buy + 10%×guide),
+  // tax-free. bopt carries that through netMargin for BOTH the quick and optimistic legs; retradeFee is
+  // surfaced on the row so downstream (estimators rank, quote note) don't re-derive it. Non-bond → null.
+  const bond=isBond(id), retradeFee=bond?bondFee(guide):null;
+  const bopt=bond?{bond:true, guide:guide??null}:null;
+  const quickNet=(quickSell!=null&&quickBuy!=null)?netMargin(quickBuy,quickSell,bopt):null;
+  const optNet  =(optSell!=null&&optBuy!=null)?netMargin(optBuy,optSell,bopt):null;
   const quickRoi=(quickNet!=null&&quickBuy)?quickNet/quickBuy*100:null;
   const optRoi  =(optNet!=null&&optBuy)?optNet/optBuy*100:null;
   const row={ quickBuy, quickSell, optBuy, optSell, mid, guide:guide??null, volDay, pressure,
-    quickNet, optNet, quickRoi, optRoi, limit:limit??null,
+    quickNet, optNet, quickRoi, optRoi, limit:limit??null, bond, retradeFee,
     regime, regimeLabel:rl.label, falling, rising:rl.rising, held:!!held, asked:!!asked,
     mom, momPct, rawBandLo, rawBandHi,
     reliable, reliableReason, quoteAgeMin:{buy:buyAgeMin, sell:sellAgeMin},

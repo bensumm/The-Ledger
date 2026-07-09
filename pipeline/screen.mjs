@@ -684,7 +684,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     if (!row) {                                           // not in any niche fetch pool → fetch it now
       const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
       const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
-      row = computeQuote({ latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true });
+      row = computeQuote({ id, latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true });
     }
     const d = v24[id], limit = map.byId[id]?.limit ?? null;
     const limitVol = d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : 0;
@@ -762,7 +762,7 @@ async function main() {
     const ts1h = await fetchTsCached(id, '1h', TS_TTL_1H); await sleep(30);
     const lt = latest[id] || latest[String(id)] || null;
     const limit = map.byId[id]?.limit ?? null;
-    qcache.set(id, computeQuote({ latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
+    qcache.set(id, computeQuote({ id, latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
     series5m.set(id, ts5m);   // kept raw for the overnight-posture staleness read (overnightStaleRisk)
     series6h.set(id, ts6h);   // kept raw for the Part A phase() trajectory read (same ts6h as the quote)
     series1h.set(id, ts1h);   // Leg B — reachValidator's window series (was null → reach degraded to pass)

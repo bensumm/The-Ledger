@@ -180,7 +180,10 @@ export function rankScore({ net, pFill, ttfSec } = {}) {
    screen/quote today, wired for when a surface fetches them). PURE; degrade-not-throw. */
 export function estimateRank(spec, row = {}, extra = {}) {
   const pair = quotedPair(spec, row);
-  const net = netMargin(pair.bid, pair.ask);   // the ONE shared tax(); null when a price is missing
+  // the ONE shared tax(); null when a price is missing. BOND exception rides through row.bond/row.guide
+  // (computeQuote set them) so a bond's rank reflects the 10%-guide retrade fee + tax exemption, not a
+  // phantom tax-only spread — else a ~0-spread bond could still rank/grade positive.
+  const net = netMargin(pair.bid, pair.ask, row.bond ? { bond: true, guide: row.guide } : null);
   const est = estimatorFor(spec);
   const ctx = {
     bid: pair.bid, ask: pair.ask,

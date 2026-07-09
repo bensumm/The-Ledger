@@ -19,7 +19,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.53.0';
+export const APP_VERSION='0.54.0';
 // LW2: true only when the app is served from a local dev host (serve.cmd → localhost). Used to
 // gate the local live-refresh poll + freshness stamp; on the deployed origin (bensumm.github.io)
 // it's false and every LW2 behavior stays off (M1 banner + Refresh button remain the mechanism).
@@ -37,7 +37,6 @@ export const MAXPART=0.15;          // market-impact guardrail: capture ≤15% o
 export const DIV_FULL=0.08;         // divergence (8%) that maps trend intensity → 1.0
 export const Z_BAND=1.0;            // |z| under this = within normal noise (no edge)
 export const UP_RISK=0.30;          // uptrend contributes less to risk than a downtrend (reversion only)
-export const BOND_ID=13190;
 export const MIN_PRICE=1000, MIN_VOL=30;
 export const FRESH_S=900, STALE_S=21600;
 export const STRAT={conservative:{damp:0.85}, balanced:{damp:0.6}, aggressive:{damp:0.35}};

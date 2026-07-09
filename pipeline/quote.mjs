@@ -72,7 +72,10 @@ function regimeLine(name, row, limit, win) {
   const pt = pressureText(row.pressure);
   const press = pt ? ` · pressure ${pt}` : '';
   const inv = row.ordered ? '' : '  ⚠ feed inversion — quote basis unreliable';
-  return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${press}${inv}`;
+  // BOND note: bonds are tax-exempt but cost 10% of guide to make re-tradeable, so the net already
+  // shown reflects sell − (buy + fee). Surface the fee so the tax-free-but-fee'd basis is explicit.
+  const bnd = row.bond ? `  · bond: TAX-EXEMPT, but +${fmtP(row.retradeFee || 0)} retrade fee (10% guide) on buy — net = sell − (buy + fee)` : '';
+  return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${press}${bnd}${inv}`;
 }
 
 async function runItems() {
@@ -96,7 +99,7 @@ async function runItems() {
   const rows = [], lines = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
     const inp = await fetchItemInputs(id);
-    const row = computeQuote({ ...inp, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
+    const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null, limWin));

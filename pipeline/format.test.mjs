@@ -18,7 +18,7 @@
  *     returns NaN for garbage (never a silent 0).
  */
 import assert from 'node:assert/strict';
-import { tax, netMargin, netMarginQty, parseGp, TAXCAP } from '../js/format.js';
+import { tax, netMargin, netMarginQty, parseGp, TAXCAP, BOND_ID, isBond, bondFee, BOND_RETRADE_PCT } from '../js/format.js';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -81,6 +81,30 @@ ok('parseGp honors k/m/b + commas, passes numbers through, garbage → NaN', () 
   assert.ok(Number.isNaN(parseGp('abc')), 'garbage → NaN, never a silent 0');
   assert.ok(Number.isNaN(parseGp('')), 'empty → NaN');
   assert.ok(Number.isNaN(parseGp(null)), 'null → NaN');
+});
+
+// --- 7. BOND tax exception: tax-free sell, but a 10%-of-guide retrade fee on the buy ------
+// A bond flip's net = sell − (buy + 10%×guide), NO 2% GE tax. This is the exception the pipeline
+// quote/screen rely on so a ~0-spread bond can't read as a phantom tax-only flip.
+ok('bondFee is 10% of guide (floored); isBond only matches the bond id', () => {
+  assert.equal(BOND_ID, 13190);
+  assert.equal(BOND_RETRADE_PCT, 0.10);
+  assert.equal(isBond(13190), true);
+  assert.equal(isBond(4151), false);
+  assert.equal(bondFee(15_000_000), 1_500_000);      // 10% of a 15m guide
+  assert.equal(bondFee(2_449), Math.floor(2_449 * 0.10)); // floored (244)
+  assert.equal(bondFee(0), 0);
+  assert.equal(bondFee(null), 0, 'no guide → no fee (never negative/NaN)');
+});
+ok('netMargin BOND opts: tax-free sell minus buy minus 10%-guide fee', () => {
+  // guide 15m, buy 15.0m, sell 15.1m: normal-tax net would be (15.1m − tax(15.1m)) − 15.0m ≈ −202k;
+  // BOND net = 15.1m − 15.0m − 1.5m(fee) = −1.4m (the fee dwarfs the razor spread → a real loss).
+  assert.equal(netMargin(15_000_000, 15_100_000, { bond: true, guide: 15_000_000 }), 15_100_000 - 15_000_000 - 1_500_000);
+  // NO tax is applied on the sell in the bond branch (contrast the default path).
+  assert.equal(netMargin(100, 200, { bond: true, guide: 0 }), 100, 'bond, no guide → sell−buy, tax-free (200−100)');
+  assert.notEqual(netMargin(100, 200, { bond: true, guide: 0 }), netMargin(100, 200), 'bond path skips the 2% tax the default applies');
+  assert.equal(netMargin(100, 200), 96, 'the default (no opts) is byte-identical — after-tax');
+  assert.equal(netMarginQty(15_000_000, 15_100_000, 5, { bond: true, guide: 15_000_000 }), (15_100_000 - 15_000_000 - 1_500_000) * 5);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

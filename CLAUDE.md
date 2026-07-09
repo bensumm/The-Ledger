@@ -88,6 +88,14 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   (sub-50gp sells are tax-exempt), `buy + TAXCAP` (5m) once the cap binds at `buy > 245m` (`ceil(buy/0.98)`
   overstates a big-ticket break-even by up to 5m), else the uncapped `ceil(buy/0.98)`. Never list a held
   item below it. This is the ONE definition — every other doc/skill points here.
+  - **BOND exception (Ben 2026-07-09).** The Old School Bond (`BOND_ID`, `js/format.js`) is EXEMPT from the
+    2% GE tax, but a GP-bought bond is untradeable and costs **10% of guide** (`BOND_RETRADE_PCT`) to make
+    re-tradeable — so a bond flip's net = `sell − (buy + bondFee(guide))`, tax-free, and its break-even =
+    `buy + bondFee(guide)`. Encoded as the ONE exception in the tax math: `netMargin(low,high,{bond,guide})`
+    + `breakEven(buy,{bond,guide})` (opts absent ⇒ byte-identical normal path). `computeQuote` applies it
+    when passed the item `id` (sets `row.bond`/`row.retradeFee`); `estimateRank` reads those so a bond can't
+    grade off a phantom tax-only spread. The **app now keeps the bond in its catalog** (searchable) with the
+    Finder margin bond-aware (`market.js` `bondMarginOpts`) — it used to filter it out entirely.
 - **Falling-regime handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5).** A faller is
   not necessarily a poor buy — "we cannot judge falling without its history and typical fluctuations."
   Each niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/spread/rising/churn EXCLUDE
