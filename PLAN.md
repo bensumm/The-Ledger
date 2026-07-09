@@ -315,10 +315,20 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
   `cut`, never `hold-recovery`); value spec (multi-week floor hold, P3 term structure);
   falling-exclusion becomes per-spec. Ships provisional + off-by-default (`--mode scalp`).
   Acceptance: path-less bid on a faller still CANCEL-BIDs; a scalp-path bid doesn't.
-- **P6 — Evidence-based viability.** Walk-forward replay per (item, path) over the archive
+- **P6 — Evidence-based viability + TTF.** Walk-forward replay per (item, path) over the archive
   (`backtestPlan` precedent) feeding `weighPaths` as `{score, n, span}` with small-n honesty +
   placeholder fallback; retro-join script scoring `suggestions.jsonl` (+archives) × `fills.json`
   outcomes by path type; greenlist→suggestion-emit pointer. Feeds F1.
+  **TTF ruling (Ben, 2026-07-09):** every suggestion should carry an estimated **Time-to-Flip**
+  (minutes/hours/days) justified from past data — the niches are one buy-low-sell-high formula
+  differing mainly in lookback horizon, so the time-analysis/forecasting layer must be SHARED
+  across all specs, not rising-only; a missed TTF deadline ("bounce predicted by X didn't come")
+  is the path-invalidation attention trigger, replacing placeholder persistence constants with a
+  data-backed deadline. Ground truth = realized suggestion→fill latency from the retro-join (our
+  own fills), NOT touch-proxies (touched ≠ filled — queue position is invisible); windowread's
+  per-day timing data is the estimator input, the retro-join is the calibrator. Rising/value are
+  the priority strategies to improve (Ben); archive is cold (accruing since 2026-07-08) so early
+  TTF estimates must state their sample honestly.
 - **P7 — Docs/skills triage + skill-lint + CLAUDE.md diet.** Three-way triage
   (encode/keep-as-judgment/retire) of EVERY prose rule in the four market skills + the memory
   index, disposition table in the PR; new `pipeline/skill-lint.mjs` in CI (rule-blocks need a
@@ -427,6 +437,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 ## Discovered
 
 **Open:**
+- **Spread/band/churn consolidation — evidence-gated (Ben, 2026-07-09):** Ben reads the three as
+  one scalp family (lookback ~0 / 2h / 2h-on-liquid) and doubts spread earns its keep ("fleeting,
+  small flips"). Ruling: do NOT consolidate by judgment now — P4c made each niche a cheap data
+  spec; let P6's retro-join (realized profit per unit of attention, per niche) kill or merge them
+  with evidence. If spread's outcomes are noise, retire the spec then.
 - **PM1 follow-ons (deliberate, not scope-cut — PM1 `6aba80b`, 2026-07-08):** (1) the **watch
   surface** for probes — dip inverts to "average-down window" on an owned lot (the framing is
   already coded in `modules/dip.mjs` behind `ctx.owned`; wiring watch.mjs to run probes is the
