@@ -7,11 +7,12 @@ self-sufficient for an executor; the git-show pointers are backstory, not requir
 When a chunk ships, mark it ✅ in the Status table **in this file** with the commit sha —
 single-file discipline: this doc is both the plan and the scoreboard.
 
-**Shipped-chunk detail has been folded out (2026-07-06).** Waves 1–7's per-chunk executor
-briefs were pruned once every chunk in them landed — the Status table below keeps the
-one-line "don't-rebuild" summary + sha for each, `CHANGELOG.md` and CLAUDE.md's "Done"
-section hold the "why", and the full original spec is recoverable via `git show <sha>:PLAN.md`
-(any pre-2026-07-06 commit). Only still-open work keeps its detailed spec here.
+**Shipped-chunk detail lives in the commits, not here (Ben, 2026-07-09).** A ✅ Status row is
+just the sha (+ APP_VERSION where one shipped): the full "what/why/don't-rebuild" story is the
+landing commit's message (`git show <sha>`) and `CHANGELOG.md`; load-bearing invariants live in
+the headers of the modules/tests that govern them (CLAUDE.md "Where shipped work is
+documented"). The last PLAN.md revision carrying the long per-row summaries is
+`git show 4753e44:PLAN.md`. Only still-open work keeps its detailed spec here.
 
 ## Executor rules (apply to every chunk, verbatim)
 
@@ -95,85 +96,87 @@ Needs-a-Ben-decision lists. The planning process itself is documented in `docs/P
 
 ## Status
 
+Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.md`.
+
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
-| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | new `pipeline/modules/*` + `pipeline/lib/modules.mjs`, `screen.mjs`/`quote.mjs` render taps, `modules.test.mjs` | ✅ `6aba80b` (pipeline-only, no APP_VERSION; stage-keyed loader, `Probes` column appended ONLY when a probe fires — no-modules output byte-identical, diff-proven. `⬇DIP` prototype migrated out of screen.mjs; decant reads dose siblings off `ctx.v24all` zero-fetch, `needs()`/`collectNeeds()` define the multi-item pre-fetch contract for future surfaces. Follow-ons in Discovered: watch surface w/ owned dip→avg-down inversion, app Probes column (APP_VERSION), `<name>.log` hit/miss scoring) |
-| TG1 | Thesis-gated hold alerts (silence expected-underwater; alert on tripwire, not break-even) | new tracked `hold-thesis.json` + `pipeline/lib/holdthesis.mjs`, `convictionGate` thesis branch, `watch.mjs`, tests | ✅ `b2634a1` (pipeline-only, no APP_VERSION; `momVerdict` UNTOUCHED — headline-only gate. Dedicated agent-written store (greenlist pattern, 14-day TTL), NOT an extension of YT1's display-only sessionthesis. Invariants pinned: Gate-2 breakdown CUT checked BEFORE the thesis branch (never silenced), LIST-TO-CLEAR excluded, no-thesis byte-identical; also gates the plain instabuy<BE UNDERWATER headline via the thesis-armed fall-through guard. Live-verified on the crushed-nest lot) |
-| T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, `js/quote.js`, `js/ui.js`, `styles.css`, `index.html` | ✅ `c7b53e7` (0.34.0) |
+| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/modules.mjs` | ✅ `6aba80b` |
+| TG1 | Thesis-gated hold alerts | `hold-thesis.json`, `pipeline/lib/holdthesis.mjs`, `watch.mjs` | ✅ `b2634a1` |
+| T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, app | ✅ `c7b53e7` (0.34.0) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | ✅ `70633f6` (0.35.0) |
-| O1 | Outcomes dataset | `pipeline/quote.mjs`, `screen.mjs`, `watch.mjs`, new `outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate documented: n≥30 per side×pctl×class×regime cell, ≥5 cells — currently 1, stays GATED) |
+| O1 | Outcomes dataset | `pipeline/outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate: n≥30 per side×pctl×class×regime cell, ≥5 cells — stays GATED) |
 | K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | ✅ `283e12a` |
-| K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit; 5 memories → skill pointers, `execute-plans-off-main` updated) |
-| K3 | CLAUDE.md slimming round 2 (reference material → code headers/docs) | `CLAUDE.md`, `js/state.js`, `js/trends.js`, `pipeline/FILLS-PIPELINE.md`, `CHANGELOG.md` (new) | ✅ `ec02495` |
-| S1 | Screening economics (gp-flow, 500k floor, spread verdict) | `pipeline/screen.mjs`, `rating.mjs` | ✅ `5ad72a9` (S1.3 spread-drop **STAYS DEFERRED** — NY2.3, Ben 2026-07-05: spread KEEPS, it surfaced the one niche-exclusive real flip (Hydra leather, +147k); revisit only on genuine multi-day `--mode all` data) |
-| S2 | Overnight vs active posture | `pipeline/screen.mjs`, `js/quotecore.js` (fixtures) | ✅ `12e8a86` (22:00–06:00 local; 4 posture fixtures, 14 total) |
-| S3 | Watchlist always scanned | `watchlist.json` (new), `screen.mjs`, `js/ui.js`, `/scan` skill | ✅ `3a38018` (0.37.0 at merge — S-lane authored as 0.36.0 in parallel with Q1) |
-| Q1 | Gate-0 reliability gap | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, `/positions` skill | ✅ `23deba0` (0.36.0 — inversion → `reliable:false` at the source; interim `/positions` override removed) |
-| E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only: no UTC leaks found; `periodKey` midnight/week fixtures pass; convention rule added to CLAUDE.md — no code change, no APP_VERSION bump) |
-| L1 | Action logging pass | `js/main.js`, `ui.js`, `trends.js`, `backup.js`, `state.js` | ✅ `3404681` (0.38.0) |
-| G1 | PR flow + merge queue migration (sync-cadence investigation first; before M1/N1) | Task Scheduler job, GitHub ruleset/queue config, `.github/workflows/checks.yml`, `.claude/skills/ship/SKILL.md`, `pipeline/sync-fills.mjs` | ✅ `553c3a6`+`b57fbe8` (scheduler DELETED; ruleset id 18520289 active: PR+`checks` required, admin-always bypass verified. Two limits: **no merge queue** — user-owned repo; **PR creation token-blocked** until Ben runs `gh auth refresh -s repo`, then merge staged branch `g1-readme-inventory` as the acceptance PR) |
-| M1 | Mobile parity — GitHub-as-backend writes | `pipeline/sync-fills.mjs`, `mobile-fills.log` (new), app settings/UI | ✅ `6789859`+`d3df7fe` (0.39.0; M1.5 in-cloud Action deliberately NOT built — designed follow-up in FILLS-PIPELINE.md §13.5, Ben's call if PC-off staleness bites) |
-| N1 | Push notifications on price movement | new `pipeline/alerts.mjs` + design doc section | ✅ `033318e` (trigger engine + MONITORING.md design section; delivery mechanism = Ben decision pending a live trial of the scheduled-Claude-session option) |
-| P1 | Snapshot-re-emission dedupe in reconstruct.mjs | `pipeline/reconstruct.mjs`, fixtures, `pipeline/FILLS-PIPELINE.md` | ✅ `5015a5c` (dedupeSnapshots in reconstruct(); real-data check dropped 12 phantom terminals, unmatched 23→12) |
-| D1 | Doc reconciliation pass (stale "open followups", FILLS-PIPELINE handoff frame, MONITORING lag/held-source, README inventory) | `CLAUDE.md`, `README.md`, `pipeline/MONITORING.md`, `pipeline/FILLS-PIPELINE.md`, `.claude/skills/positions/SKILL.md` | ✅ `2135d49` (ran last — absorbed the wave's own drift; supersedes the `g1-readme-inventory` staged branch) |
-| R1 | Reconstruction test harness + CI wiring | new `pipeline/reconstruct.test.mjs`, `.github/workflows/checks.yml` | ✅ `c79dcc5` (9 fixtures incl. eventId golden value) |
-| X1 | Pipeline dedup (fetchInputs ×3, open-lot grouping ×3, mapping loaders, liqClass ×2) | `pipeline/marketfetch.mjs`, `quote.mjs`, `watch.mjs`, `alerts.mjs`, `monitor.mjs`, `add-manual-fill.mjs`, `outcomes.mjs`, `suggestlog.mjs`, new `positions.mjs` | ✅ `e7e62f5` (quote.mjs output byte-identical pre/post) |
-| X2 | Dead-scheduler excision (+ ff-merge abort guard) | `pipeline/sync-fills.mjs`, delete `run-fills-sync.cmd`/`.vbs` | ✅ `fb9344e` |
-| A1 | App dead-code sweep (write-only STATE props, dead chart/CSS/trends fields) | `js/state.js`, `market.js`, `charts.js`, `trends.js`, `quotecore.js`, `styles.css`, `index.html` | ✅ `a2e8318` (0.41.0) |
-| A2 | App fetch/helper unification (`js/marketfetch.js`, netMargin routing) | new `js/marketfetch.js`, `js/trends.js`, `market.js`, `quote.js`, `ui.js`, `format.js` | ✅ `1aa43ec` (0.42.0) |
-| A3 | Split `js/ledger.js` out of `ui.js` | `js/ui.js`, new `js/ledger.js`, `main.js`, `index.html` | ✅ `7ef1db1` (0.43.0; full chromium DOM smoke on the moved surfaces) |
-| BE1 | Break-even ignores the 5m tax cap | `js/quotecore.js`, `js/trends.js`, `pipeline/add-manual-fill.mjs`, `quotecore.test.mjs`, docs sweep | ✅ `82340d5` (0.40.0; brute-force boundary proof — no-op below the 245m cap crossover) |
-| W1 | Trade-analysis cadence (weekly descriptive outcomes read) | `.claude/skills/morning/SKILL.md` or new skill, `pipeline/outcomes.mjs` | ✅ `5666eac` (/morning v1.3; pipeline-stdout only, no APP_VERSION) |
-| CI1 | Browser smoke test in CI | `.github/workflows/checks.yml`, new smoke script | ✅ `69bf79d` (new `pipeline/smoke.mjs`; validated locally — CI-side run unverified until the branch hits Actions) |
-| TB1 | Reusable sortable-table component | new `js/table.js`, `js/ui.js` (Finder + Watchlist adopt), `styles.css` | ✅ `3e40cbe` (0.44.0; chromium sort/reverse/persist interactive test + full smoke green) |
-| LU1 | Ledger UX rework (click→Trends, expand button, P&L filter placement, period-bucket filter, collapsible entry, sortable closed table) | `js/ledger.js`, `index.html`, `styles.css`, `js/state.js`, `js/main.js` | ✅ `c88df30` (0.45.0; all 5 behaviors chromium-verified) |
-| FX1 | Finder full-catalog search (soul-rune class) + Signals badge count | `js/ui.js`, `js/market.js` | ✅ `c12bf4b` (0.46.0; search unions catalog matches below MIN_PRICE — browse view byte-identical; badge `firing/total`) |
-| NY1 | Scan niche-yield audit (spread/rising value; S1.3 spread-drop decision) | `suggestions.jsonl` (read), analysis only | ✅ report delivered 2026-07-05 (analysis-only, no repo change; evidence fed NY2. Ben decides drops — nothing changed in `screen.mjs`/`/scan`) |
-| SY1 | Strategic sync-fills points in workflow skills | `.claude/skills/{morning,positions,overnight,scan}/SKILL.md` | ✅ `563da75` (positions 1.9 / morning 1.4 / scan 1.5 / overnight 1.7 — sync-first everywhere + MAIN-checkout caveat) |
-| NY2 | Niche ruling: rising pool floor, churn off-by-default, spread stays, thin-cap anomaly | `pipeline/screen.mjs`, `rating.mjs` (maybe), `/scan` skill, docs | ✅ `f982a31` (pipeline+skills only, no APP_VERSION; /scan 1.6). NY2.1 `risingPoolFloor`; NY2.2 `--mode all`=band/spread/rising (churn explicit-only); NY2.3 spread keeps (S1.3 deferred); NY2.4 = DOC bug documented in rating.mjs/suggestlog.mjs |
-| OR1 | Org map docs (nightlows drift, root-artifact/shared-module tables, test convention) | `README.md`, `CLAUDE.md` | ✅ `1822ad9` (docs only; also fixed pre-existing "app fetches fills.json" inaccuracy — it fetches positions.json) |
-| OR2 | pipeline/lib/ split (8 imported-only libs out of the CLI bag) | `pipeline/lib/*` (moved), ~11 importing files, `.github/workflows/checks.yml`, docs | ✅ `94781cc` (git-mv ×8, 32 import rewrites, checks.yml glob extended, caches → `pipeline/.cache/`; 45/45 specifiers resolve) |
-| TD1 | Glob test runner + must-have money tests (format, rating, reconstruct tax-cap/partial-fill) | new `pipeline/run-tests.mjs`, `format.test.mjs`, `lib/rating.test.mjs`, `reconstruct.test.mjs` (extend), `checks.yml`, `/ship` skill | ✅ `d147bab` (runner: recursive discovery, per-file ✓/✗, fails on any suite AND on zero discovery; 4 suites/38 checks at landing) |
-| TD2 | Testability extractions + unlocked tests (ledgercore, table comparator, alerts guard) | new `js/ledgercore.js`, `js/ledger.js`, `js/table.js`, `pipeline/alerts.mjs`, new tests | ✅ `e442367` (0.47.0; pure moves chromium-proven byte-identical; alerts no longer fetches on import; ledgercore 7 / table 7 / alerts 8 checks) |
-| TD3 | Nice-to-have test sweep (computeQuote derivation, windowread, offers, cli/suggestlog) | `pipeline/quotecore.test.mjs` (extend), new `pipeline/lib/{windowread,offers,cli}.test.mjs` | ✅ `a1110c7` (pipeline-only, no APP_VERSION; quotecore +5 → 21 checks, windowread 6, offers 3, cli/suggestlog 4; 10 suites green. TD3.5 gateCandidates extraction → GC1) |
-| LW1 | Local log-watcher — git-free `regenerate()` core (`sync-fills.mjs --local`) + `offers.json` emitter + `watch-log.mjs` daemon + tests | `pipeline/sync-fills.mjs`, new `offers.json`/`watch-log.mjs`/`watch-log.cmd`, `sync-fills.test.mjs` | ✅ `b97c87b` (offers.json `d395864`; pipeline-only. Load-bearing: the daemon does **ZERO git** — desk freshness without breaching the §12 no-unattended-writer-**to-`main`** invariant) |
-| LW2 | App localhost live-refresh (poll `positions.json`/`offers.json`, "book synced" stamp) | `js/ledger.js`, `js/state.js` | ✅ `9da9910` (0.48.0; Pages behavior byte-identical) |
-| LW3 | Local-watcher docs reconciliation | docs | ✅ `8ad3a45` (folded `PLAN-LOCAL-WATCH.md` → this file, then deleted) |
-| LH1 | Exchange-log hardening — `validateSlotTransitions()` loud ingest-drop of impossible same-slot re-emit terminals (BEFORE the `fills.json` merge); `dedupeSnapshots` stays the silent backstop | `pipeline/lib/reconstruct.mjs`, `validateslots.test.mjs` | ✅ `c0fc711` (pipeline-only; 17 historical re-emits dropped incl. the 13:29 double-buy, positions byte-identical. Do NOT resurrect the deleted cancel-to-EMPTY inference — EMPTY stays non-evidence) |
-| LH2 | `blindWarningLine()` restart-blindness header in `monitor.mjs`/`watch.mjs` | new `pipeline/lib/logblind.mjs`, `logblind.test.mjs` | ✅ `f7bd006` (pipeline-only; display-only line, no verdict change) |
-| LH3 | Log-hardening docs reconciliation | docs | ✅ `05ccea6` (folded `PLAN-LOG-HARDENING.md` → this file, then deleted) |
-| TC1 | trendcore extraction — pure analytics out of `js/trends.js` → `js/trendcore.js` + fixtures | `js/trends.js`, new `js/trendcore.js`, new `pipeline/trendcore.test.mjs` | ✅ `eaa5414` (0.50.0; pure MOVE, byte-identical; `trendcore.test.mjs` 19 checks) |
-| GC1 | gateCandidates extraction — thresholds-as-argument so `screen.mjs`'s gate stack is fixture-testable (absorbs TD3.5) | `pipeline/screen.mjs`, new test | ✅ `cb3eb67` (pipeline-only, no APP_VERSION; byte-identical stdout via `THRESHOLDS`; `gatecandidates.test.mjs` 8 checks; runner 16 suites) |
-| SL1 | suggestlog path regression — OR2 moved `suggestlog.mjs` into `lib/` leaving `HERE/'..'` pointing at `pipeline/`, silently forking the O1 ledger into untracked `pipeline/suggestions.jsonl`. Path fixed (two levels up), 351 stranded rows folded back, resolved path pinned by test | `pipeline/lib/suggestlog.mjs`, new `pipeline/lib/suggestlog.test.mjs`, `suggestions.jsonl` | ✅ `1702126` (pipeline-only, no APP_VERSION; runner 17 suites) |
-| V1+V2 | Verdict-layer temporal memory — watch-loop cross-pass state store + per-pass deltas (`computeDeltas`/`advanceState`, `passesUnderwater`, band-top drift) + structural-support/cut-trigger tripwire, OUTPUT-ONLY | new `pipeline/lib/watchstate.mjs`/`levels.mjs` + tests, `pipeline/watch.mjs`, `.cache/watch-state.json` | ✅ `8a5d160` (pipeline-only, no APP_VERSION; adds context lines, changes no verdict/alert. Don't-rebuild: temporal memory lives OUTSIDE pure `momVerdict`) |
-| V3 | Gate-D lot-context softening — `momVerdict` OPTIONAL `lotCtx={buyTs,askFilling}` softens ONLY the clean-momentum CUT-CANDIDATE (WATCH — fresh entry / HOLD — ask filling), NEVER the Gate-2 breakdown CUT | `js/quotecore.js`, `pipeline/quotecore.test.mjs`, callers, `js/trends.js`/`watch.js`/`watchcore.js`, `pipeline/lib/positions.mjs`, docs | ✅ `692baee` (0.52.0 — the one APP_VERSION bump; app inherits via `reviewPositions`. Invariant fixture: breakdown CUT byte-identical with/without lotCtx) |
-| V4 | Conviction gating — arm-then-confirm alerts via pure `convictionGate()` (+ `passesBelowSupport`); gates only ESCALATION to a headline, verdict strings unchanged | `pipeline/lib/watchstate.mjs`, `pipeline/watch.mjs`, tests, docs | ✅ `2a87269` (pipeline-only, no APP_VERSION; `js/quotecore.js` untouched. Invariant: Gate-2 breakdown CUT EXEMPT — immediate regardless of pass count) |
-| V5 | Emit-contract standardization — one stable, ordered per-held note block via pure `heldNoteBlock`/`heldListAt`; the sell/list-at + break-even line GUARANTEED on every held lot | new `pipeline/lib/emit.mjs` + test, `pipeline/watch.mjs`, docs | ✅ `825469f` (pipeline+docs, no APP_VERSION; output-format-only — no verdict/alert/row-selection change) |
-| V6 | Recovery-read forecast (ADVISORY recover-vs-drop LEAN composing momVerdict's signals) + capital-awareness Companion (freed-capital redeploy prompt) — both OUTPUT-ONLY, surfaced only when the naive action isn't obviously right | new `pipeline/lib/recovery.mjs`/`capital.mjs` + tests, `pipeline/watch.mjs`, `pipeline/lib/emit.mjs`, docs, `.claude/skills/positions/SKILL.md` (1.15) | ✅ (this commit; pipeline+docs, no APP_VERSION; pure core untouched, breakdown-cut invariant trivially held. Don't-rebuild: a LEAN not a probability — `spike` caps to `uncertain`; never a verdict/alert input. Companion is surface-only — never auto-places/runs the scan. Folded + deleted `PLAN-VERDICT.md`) |
-| FC1 | Opt-in cross-invocation fetch cache (OFF by default → decision paths byte-identical) | `pipeline/lib/marketfetch.mjs`, `fetchcache.test.mjs` | ✅ `0e48b2c` (pipeline-only) |
-| YF1 | Shared historical market-state helper (`loadHistDaily` + pure `deriveState` → band-pctl+regime+phase AS OF a past ts) | `pipeline/lib/marketfetch.mjs`, new `lib/histstate.mjs`, test | ✅ `2ab0139` (pipeline-only) |
-| YS1 | outcomes.mjs → schema v2 (`stateAtFill` every fill, `holdTimeSec`/`parkedSec`/`velocityClass`, `predicted`; dedupe routed) | `pipeline/outcomes.mjs`, new `lib/velocity.mjs`, test | ✅ `92ffa1c` (pipeline-only) |
-| YS2 | Forward prediction-field logging (`posture` wired; tripwire/fillWindow/velocity/thesis plumbing, lean-included) | `lib/suggestlog.mjs`, `quote.mjs`, `screen.mjs`, `watch.mjs` | ✅ `27f0baa` (pipeline-only) |
-| YV1 | Velocity + capital-utilization analytics (#3) — `lib/capitalutil.mjs`; watch footer + outcomes `--report` section | new `lib/capitalutil.mjs`, `watch.mjs`, `outcomes.mjs`, test | ✅ `1ea914d` (pipeline-only). Follow-ups shipped: scan velocity FOOTNOTE `7502889` (`lib/velocitytag.mjs`); total-capital view `2fdae81` (`totalCapital`+`lib/cashstate.mjs`+`cash.mjs`) |
-| YT1 | Session-thesis memory (#4) — `lib/sessionthesis.mjs` + `thesis.mjs` CLI (sole writer) + read-only watch reminder | new `lib/sessionthesis.mjs`/`thesis.mjs`, `watch.mjs`, test | ✅ `5439fed` (pipeline-only) |
-| YP2 | State-transition scan (#2) — `lib/statetransition.mjs` off `phase()`; screen stdout "WATCH CLOSELY" (captures basing fallers) | new `lib/statetransition.mjs`, `screen.mjs`, test | ✅ `9f60c15` (pipeline-only) |
-| YP1 | Guide re-anchor prediction (#2, HONESTY-GATED — ships silent, 0/16 rows clear the gate) + `.guide-history.jsonl` gitignored→tracked doc fix | new `lib/guideanchor.mjs`, `quote.mjs`, `watch.mjs`, `PLAN.md`, test | ✅ `a93da6a` (pipeline-only) |
-| YA1 | In-app capital-utilization line — Watch tab (#5); pure `capitalSplit`. Fill-probability + Trends recommend-price button DEFERRED (F1-gated) | `js/watchcore.js`, `watch.js`, `state.js`, `styles.css`, `watchcore.test.mjs` | ✅ `a7fd785` (0.53.0; CI smoke + Pages green) |
-| PM2 | Probe firing logs — wire the hit/miss ledger | `pipeline/lib/modules.mjs` (`logFirings`), `screen.mjs`, `quote.mjs`, `modules.test.mjs` | ✅ `5ca4f95` (pipeline-only, no APP_VERSION; one JSONL line per firing to gitignored `pipeline/modules/<name>.log` — `{ts,module,version,stage,surface,id,name,tag,price?,quickBuy,quickSell,guide,regimeLabel,phase}`, enough to score without re-fetching. `runProbes` stays PURE — surfaces call `logFirings` explicitly after it; writes individually swallowed, no firing ⇒ no file; stdout byte-identical, live-diffed. SCORING is a later chunk — this only accrues data) |
-| SR1 | `suggestions.jsonl` rotation/compaction | `pipeline/lib/suggestlog.mjs` (+`ARCHIVE_DIR`/`rotateLedger`/`readSuggestionLines`), `outcomes.mjs`, `sync-fills.mjs`, tests | ✅ `457a7bd` (pipeline-only, no APP_VERSION; completed months roll to tracked `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` OUT of the deploy root, triggered inside `logSuggestions` by a cheap first-line month check. Crash-safe archive-before-truncate, exact-line dedup ⇒ idempotent, unparseable rows never dropped; `outcomes.mjs` reads active+archives via `readSuggestionLines` so F1's calibration set never shrinks; active-path pin (SL1) intact. First real archive fires at the 2026-08 boundary — all current rows are 2026-07) |
-| GA1 | `.gitattributes` LF/CRLF normalization | new `.gitattributes` | ✅ `3a7f68f` (repo-config only; deliberate per-type `text eol=lf` (js/mjs/json/jsonl/md/yml/css/html/log), `*.cmd eol=crlf`, `*.png binary` — NO blanket `text=auto`. The renormalize commit was EMPTY: the index already stored LF everywhere, so the warnings were autocrlf noise, not churn; the single-line `fills/positions/offers.json` blobs have no EOL bytes and stay untouched) |
+| K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit) |
+| K3 | CLAUDE.md slimming round 2 | `CLAUDE.md`, code headers | ✅ `ec02495` |
+| S1 | Screening economics (gp-flow, 500k floor) | `pipeline/screen.mjs`, `rating.mjs` | ✅ `5ad72a9` (S1.3 spread-drop STAYS DEFERRED — NY2.3) |
+| S2 | Overnight vs active posture | `pipeline/screen.mjs` | ✅ `12e8a86` |
+| S3 | Watchlist always scanned | `watchlist.json`, `screen.mjs` | ✅ `3a38018` (0.37.0) |
+| Q1 | Gate-0 reliability gap | `js/quotecore.js` | ✅ `23deba0` (0.36.0) |
+| E1 | Local-time audit | `js/ui.js` (+sweep) | ✅ `4c433d0` (audit-only, no code change) |
+| L1 | Action logging pass | `js/main.js` et al. | ✅ `3404681` (0.38.0) |
+| G1 | PR flow + ruleset migration | GitHub ruleset, `checks.yml`, `/ship` | ✅ `553c3a6`+`b57fbe8` |
+| M1 | Mobile parity — GitHub-as-backend writes | `sync-fills.mjs`, `mobile-fills.log`, app | ✅ `6789859`+`d3df7fe` (0.39.0) |
+| N1 | Push notifications on price movement | `pipeline/alerts.mjs` | ✅ `033318e` (delivery mechanism = pending Ben decision) |
+| P1 | Snapshot-re-emission dedupe in reconstruct | `pipeline/reconstruct.mjs` | ✅ `5015a5c` |
+| D1 | Doc reconciliation pass | docs | ✅ `2135d49` |
+| R1 | Reconstruction test harness + CI wiring | `reconstruct.test.mjs`, `checks.yml` | ✅ `c79dcc5` |
+| X1 | Pipeline dedup | `pipeline/*` | ✅ `e7e62f5` |
+| X2 | Dead-scheduler excision | `sync-fills.mjs` | ✅ `fb9344e` |
+| A1 | App dead-code sweep | app | ✅ `a2e8318` (0.41.0) |
+| A2 | App fetch/helper unification | `js/marketfetch.js` et al. | ✅ `1aa43ec` (0.42.0) |
+| A3 | Split `js/ledger.js` out of `ui.js` | `js/ledger.js` | ✅ `7ef1db1` (0.43.0) |
+| BE1 | Break-even 5m tax-cap fix | `js/quotecore.js` | ✅ `82340d5` (0.40.0) |
+| W1 | Trade-analysis cadence | `/morning` skill | ✅ `5666eac` |
+| CI1 | Browser smoke test in CI | `checks.yml`, `pipeline/smoke.mjs` | ✅ `69bf79d` |
+| TB1 | Reusable sortable-table component | `js/table.js` | ✅ `3e40cbe` (0.44.0) |
+| LU1 | Ledger UX rework | `js/ledger.js`, app | ✅ `c88df30` (0.45.0) |
+| FX1 | Finder full-catalog search + Signals badge | `js/ui.js`, `js/market.js` | ✅ `c12bf4b` (0.46.0) |
+| NY1 | Scan niche-yield audit | analysis only | ✅ report delivered 2026-07-05 (no repo change) |
+| SY1 | Strategic sync-fills points in skills | workflow skills | ✅ `563da75` |
+| NY2 | Niche ruling (rising floor, churn off-by-default, spread stays) | `screen.mjs`, `/scan` | ✅ `f982a31` |
+| OR1 | Org map docs | `README.md`, `CLAUDE.md` | ✅ `1822ad9` |
+| OR2 | pipeline/lib/ split | `pipeline/lib/*` | ✅ `94781cc` |
+| TD1 | Glob test runner + money tests | `pipeline/run-tests.mjs`, tests | ✅ `d147bab` |
+| TD2 | Testability extractions | `js/ledgercore.js` et al. | ✅ `e442367` (0.47.0) |
+| TD3 | Nice-to-have test sweep | tests | ✅ `a1110c7` |
+| LW1 | Local log-watcher core + `offers.json` + daemon | `sync-fills.mjs`, `watch-log.mjs` | ✅ `b97c87b` (offers.json `d395864`; the daemon does ZERO git — load-bearing) |
+| LW2 | App localhost live-refresh | `js/ledger.js`, `js/state.js` | ✅ `9da9910` (0.48.0) |
+| LW3 | Local-watcher docs reconciliation | docs | ✅ `8ad3a45` |
+| LH1 | Exchange-log hardening (`validateSlotTransitions`) | `lib/reconstruct.mjs` | ✅ `c0fc711` (EMPTY stays non-evidence — don't resurrect cancel-to-EMPTY inference) |
+| LH2 | Restart-blindness header | `lib/logblind.mjs` | ✅ `f7bd006` |
+| LH3 | Log-hardening docs reconciliation | docs | ✅ `05ccea6` |
+| TC1 | trendcore extraction | `js/trendcore.js` | ✅ `eaa5414` (0.50.0) |
+| GC1 | gateCandidates extraction | `lib/gatecandidates.mjs` (precursor) | ✅ `cb3eb67` |
+| SL1 | suggestlog path regression fix | `lib/suggestlog.mjs` | ✅ `1702126` |
+| V1+V2 | Verdict-layer temporal memory | `lib/watchstate.mjs`/`levels.mjs`, `watch.mjs` | ✅ `8a5d160` (temporal memory lives OUTSIDE pure `momVerdict`) |
+| V3 | Gate-D lot-context softening | `js/quotecore.js` | ✅ `692baee` (0.52.0) |
+| V4 | Conviction gating (arm-then-confirm) | `lib/watchstate.mjs` | ✅ `2a87269` (Gate-2 breakdown CUT EXEMPT — immediate) |
+| V5 | Emit-contract standardization | `lib/emit.mjs`, `watch.mjs` | ✅ `825469f` |
+| V6 | Recovery-read + capital companion (advisory) | `lib/recovery.mjs`/`capital.mjs` | ✅ (the PLAN-VERDICT.md fold commit, 2026-07-06) |
+| FC1 | Opt-in cross-invocation fetch cache | `lib/marketfetch.mjs` | ✅ `0e48b2c` (OFF by default — decision paths byte-identical) |
+| YF1 | Historical market-state helper | `lib/histstate.mjs` | ✅ `2ab0139` |
+| YS1 | outcomes.mjs schema v2 | `outcomes.mjs`, `lib/velocity.mjs` | ✅ `92ffa1c` |
+| YS2 | Forward prediction-field logging | `lib/suggestlog.mjs` + surfaces | ✅ `27f0baa` |
+| YV1 | Velocity + capital-utilization analytics | `lib/capitalutil.mjs` | ✅ `1ea914d` (+ velocity footnote `7502889`, total-capital `2fdae81`) |
+| YT1 | Session-thesis memory | `lib/sessionthesis.mjs`, `thesis.mjs` | ✅ `5439fed` |
+| YP2 | State-transition scan | `lib/statetransition.mjs` | ✅ `9f60c15` |
+| YP1 | Guide re-anchor prediction (honesty-gated, ships silent) | `lib/guideanchor.mjs` | ✅ `a93da6a` |
+| YA1 | In-app capital-utilization line | `js/watchcore.js`, app | ✅ `a7fd785` (0.53.0) |
+| PM2 | Probe firing logs | `lib/modules.mjs` | ✅ `5ca4f95` |
+| SR1 | `suggestions.jsonl` rotation/compaction | `lib/suggestlog.mjs` | ✅ `457a7bd` |
+| GA1 | `.gitattributes` LF/CRLF normalization | `.gitattributes` | ✅ `3a7f68f` |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED (spec below) |
-| D0 | Snapshot + SQLite archive (tiers 0/1/2, dedup-by-construction) | new `pipeline/lib/archive.mjs`, `lib/marketfetch.mjs`, `.gitignore`, README | ✅ `7e0e962` (pipeline-only; `node:sqlite` w/ surgical ExperimentalWarning filter; PK (grain,ts,itemId) + INSERT OR IGNORE + `buckets` check-before-fetch; archives ONLY /1h+/5m (append throws on /latest); DB `pipeline/.market-archive.sqlite` outside `.cache/`; `loadSnapshot()` per-pass context (no consumer until P0 — /5m accrual starts there); loadDaily re-point proven byte-identical over 235k mids; pre-D0 mids live in a one-time `daily_seed` bridge table, observations stay raw-only) |
-| V2-P0 | Context chain + unified held verdict | new `pipeline/lib/context.mjs`, `quote.mjs`, `watch.mjs`, tests | ✅ `a6dc7d1` (pipeline-only; pure staged enrichers `identity→market→history→intraday→position` + `buildItemContext` (no fetch/fs — caller feeds data; missing inputs degrade, never throw; `termStructure`/reach left as null extension points for P3/P2). Position stage folds offers book + watch-state prior + `convictionGate` + hold thesis → ONE `momVerdict`; `renderHeldVerdict(ctx,{mode})` compact/verbose is the shared renderer, byte-identical to the pre-P0 inlines across all 9 branches (diff-proven) except the intended gain: quote `--positions` now reads offers.json so `HOLD — ask filling` prints there (THE PIN, both surfaces). quote+watch each run `loadSnapshot()` per pass — /5m archive accrual live. Sound deviations: position stage is source-agnostic (watch keeps its ~0-lag exchange-log book, feeds normalized offers to the same derivation); watch's snapshot is archive-append-only (`budgetIds:[]`, fetch semantics unchanged); quote's conviction runs without structural-support arm (no ts1h on booked-lots view — see Discovered); watch `main()` not re-sliced (identical `mv` via existing inline logic; re-slice risked V5 EMIT/single-alert/Gate-2 contracts) |
-| V2-P1 | Surface extraction + replay harness | `screen.mjs`, new `lib/gatecandidates.mjs`, `surviveMode`, fixtures | ✅ mechanical `f02fbf5` + harness `8db97bf` (gateCandidates/rankAndSlice/surviveMode → `lib/gatecandidates.mjs`, live-diff byte-identical, `survivemode.test.mjs` pins PRE-amendment falling behavior for the P5 re-pin. Harness: `lib/replay.mjs` — 5 synthetic archetypes → `coffer-replay-snapshot/1` (documented superset of D0's fixture format) → full gate/rank/quote/survive funnel per niche; committed `fixtures/replay/{snapshot,golden}.json` w/ `--update` regen; `replay.test.mjs` drift+golden guards, all offline/deterministic. `surviveMode`'s `breakdown` branch stays unit-pinned only (unreachable integrated — falling drops first); P5's doctrine re-pin flows through `--update` + hand-review) |
-| V2-P2 | Validate stage + reachValidator (every surface) | new `js/validate.mjs`, `js/windowread.mjs` (move), `screen.mjs`, `quote.mjs` | ✅ `910bea1` (pipeline-only, no APP_VERSION — app imports nothing new yet; `js/validate.mjs` registry of PURE validators `(ctx)→{key,status,reason,evidence}`, throwers/missing inputs degrade to pass, never reject-on-no-data. `reachValidator` = windowread reach + RC1 recencySplit in validator shape (rarely-reached→caution, never-reached→reject, stale-optimistic bumps one step — reuses existing semantics). windowread.mjs moved lib→`js/` byte-identical (`git mv`, 0 changed lines), imports/test re-pointed. Screens DROP reject + FLAG caution, `rejected: N (top-3 reasons)` footer when N>0 + `--stats` counters (coordinator-ruled footer default, Ben-vetoable); held/asked never hidden (⚠ note); `suggestionEntry` gains lean `validators` field (YS2 pattern, clean rows byte-identical). PLACEHOLDER thresholds: REACH_CAUTION_FRAC 0.5, REACH_MIN_DAYS 5, window 8h/14n (REACH_REJECT_FRAC 0 is definitional). HONEST: reach degrades to pass on BOTH wired surfaces today — neither fetches ts1h (no-fetch-change constraint); framework is live for P3's floorValidator, activation gap in Discovered) |
-| V2-P3 | floorValidator + term structure off the archive | `js/validate.mjs`, new term-structure module | ✅ `b55f895` (pipeline-only, no APP_VERSION; new PURE `js/termstructure.mjs` — 1/3/7/14/28d structure over daily mids, durable floor = 0.15-quantile of the longest ≥6-point multi-week lookback, typical fluctuation = its IQR (spike-robust); lives in `js/` because `js/validate.mjs` imports it (same layering rule as windowread). `floorValidator` (registry now `['reach','floor']`) is BUY-side only: buy > 2.0× typical swings above floor → reject, > 1.0× → caution; held lots degrade immediately (`held-lot-sell-side`) so positions reviews are untouched. No fetch change: screen feeds the daily series already loaded at gate time; quote reads archived mids via `loadDaily({noFetch:true})`. 17-check `termstructure.test.mjs` pins decay-knife reject + genuine-dip pass on both surface shapes; 39/39 suites. Live: drew a real caution on Masori body — first validator to actually fire (P2's activation gap partly closed on the buy side). Replay goldens unchanged — replay drives only the gate funnel, not the renderMode validator drop. PLACEHOLDERS: lookback 28/14d, min-points 6, floor-q 0.15, IQR 0.25/0.75, min-swing 2%, caution/reject 1.0/2.0 ranges (F1/P6 tune). HONEST: archive accrual started 2026-07-08 — thin-history items degrade to pass until the series warms (daily_seed bridges ~17d for established items). Deliberately direction-agnostic (floor-proximity only; regime handles direction) — a mid-range buy on a risen item can draw caution, intended conservatism, Ben-vetoable |
-| V2-P4a | Path engine core (pure) | new `js/paths.mjs`, `lib/holdthesis.mjs`, `thesis.mjs`, `js/quotecore.js` (lotCtx) | ✅ `e2eed20` (pipeline-only, no APP_VERSION; PURE dependency-free `js/paths.mjs` — `enumeratePaths(ctx)` (held → hold-recovery/value-hold/be-escape/list-to-clear/cut; unheld → scalp/value-hold/avoid; scalp deliberately NOT enumerated on an existing lot — it's a fresh-capital thesis) + `weighPaths` → `{dominant,weighed,enteredUnder,migration}`, migration = raw dominant≠enteredUnder (arm-then-confirm is P4b). Path shape per spec `{key,thesis,action,levels,tripwire,horizon,economics,viability,evidence}`; levels pulled from ctx, never recomputed; degrade-not-throw with never-zero no-data floors. ALL viability weights are NAMED PLACEHOLDERS encoding shape only (decay-knife: cut 0.89 > list-to-clear 0.74 > be-escape 0.20 > holds 0; genuine-dip counter-fixture holds > cut) — P6 replaces with evidence. holdthesis entries grow additive `path`/`enteredUnder` w/ legacy byte-for-byte back-compat fixture; `thesis.mjs set --path` writes the TRACKED hold-thesis.json (spec said thesis.mjs was "sole writer" — it wasn't; it writes session-thesis.json, and hold-thesis.json had NO CLI writer — sound deviation, --path targets the path-carrying tracked store, enteredUnder defaults on first declaration + preserved across migration, verified live). `momVerdict` lotCtx widened w/ optional `path`, plumbing-only — P4a INVARIANT fixture pins byte-identical verdicts with/without it, Gate-2-CUT-exempt untouched. 9-check `paths.test.mjs`; 40/40 suites post-P3-rebase (README/CHANGELOG lane collisions hand-resolved at landing) |
-| V2-P4b | Path persistence + migration (whiplash guard) | `lib/watchstate.mjs`, `watch.mjs`, `quote.mjs` | ✅ `ec425f7` (pipeline-only, no APP_VERSION; pure `pathPersistence()` in watchstate.mjs beside `convictionGate` — same species of cross-pass memory, takes path KEYS so watchstate never imports js/paths.mjs. No prior → adopt dominant; re-affirmed incumbent disarms challengers (flap guard); a flip must beat incumbent viability by `PATH_HYSTERESIS_MARGIN` 0.05 to ARM, hold dominant `PATH_PERSIST_MS` 8min wall-clock (2× ALERT_PERSIST_MS — deliberate) to CONFIRM; different challenger restarts the clock; migration = confirmed current≠enteredUnder. `pathsStage()`+`renderPathLine()` in context.mjs — the chain's paths slice + ONE shared renderer; `currentPath`/`pathArmedKey`/`pathArmedSince`/`enteredUnder` fold ADDITIVELY into `newStateEntry` (legacy entries byte-identical, pinned); enteredUnder only from tracked hold-thesis, null when undeclared, declared path seeds the incumbent. watch V5 note block gains field 4b (dominant path) between recovery-read and the always-last sell line; quote --positions prints a Paths block READ-ONLY (watch stays the ONE writer); confirmed migration = `path MIGRATED a → b` prose only, NO new alert class (P5 owns path-aware CANCEL-BID). 13-check `pathpersist.test.mjs` (flap-never-flips pure AND end-to-end, arm→confirm→MIGRATED, decay-knife exits hold-recovery, hysteresis near-tie, legacy no-throw); P4a byte-identity + Gate-2-CUT-exempt untouched; 41/41 suites. Sound deviation: renderHeldVerdict strings untouched (P0/P4a pins stand) — path renderer is a sibling export in the same module, one home no fork. Live-smoked both surfaces, identical path line off the same state) |
-| V2-P4c | Declarative strategy specs (niches re-expressed, byte-identical) | new `js/strategies.mjs`, `screen.mjs` | ✅ `cfcc624` (pipeline-only, no APP_VERSION; frozen data specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,validators,defaultPath}` per niche in pure app+node-importable `js/strategies.mjs`; `edge()` is the MECHANICAL re-expression of the old inline gateCandidates branches; NY2 `--mode all`=band/spread/rising + NY2.1 risingPoolFloor preserved via `ALL_MODE_KEYS`/`pool.risingFloor`. screen derives MODES from the registry; gatecandidates does `STRATEGIES[mode]` lookups instead of if-chains. Per surfaced row: compact stdout `↳ scalp* 0.60 · value-hold 0.30 · avoid 0.30` annotation from weighPaths on the derived row ctx — display-only, NOT in screen.json, never hides/reorders; watchlist rows excluded (no surfacing spec). `suggestionEntry` gains lean `path` = the spec's defaultPath (absent-path rows byte-identical, pinned). DEFAULT-ENTRY-PATH TABLE (coordinator-accepted, Ben-vetoable): band/spread/churn → `scalp`, rising → `value-hold`. BYTE-IDENTITY: P1 replay goldens pass UNCHANGED (no --update); gatecandidates(16)+survivemode(18) tests green AND unedited (falling pin intact — P5 owns the re-pin); live `--mode band` pre-vs-post with annotation stripped = zero diff (same fetch cache; harness is the deterministic proof). 14-check conformance suite iterates the registry (structural contract, defaultPath ∈ ENTRY_PATH_KEYS, bites on malformed/held-only-path specs, edges no-throw over replay archetypes) — P5's scalp/value specs get checked for free; `surviveMode` deliberately stays mode-keyed with a `confirm`/`validators:[]` seam left for P5's per-spec falling gates. 42/42 suites) |
-| V2-P5 | scalp/value specs + path-aware bids + falling doctrine | `js/strategies.mjs`, `js/quotecore.js` (offerVerdict), `watch.mjs`, skills | ✅ `fe46f2e` (pipeline-only, no APP_VERSION — `offerVerdict(row,price,pathCtx?)` absent-path branch is byte-identical pre-P5 (state×price matrix pinned in watchcore.test.mjs; app calls it 2-arg → inert, the P4a precedent). Per-spec falling doctrine: specs declare `falling: exclude|accept|knife-guard`; band/spread/rising/churn = `exclude` (byte-identical, golden diff = note + ONE new scalp scenario, hand-reviewed — 2004 decay-knife + 2005 falling-wide-band survive ONLY there). `--mode scalp` (off-by-default, provisional): falling ACCEPTED, wide fresh band ≥ tax+SCALP_MIN_ROI 2.0%, flip-only via SCALP_NO_HOLD_PENALTY (unsold lap → `cut`, never `hold-recovery`); tripwire = live reliable 2h breakdown. `--mode value` (console-only, excluded from screen.json): own `gateValueCandidates` in new `js/valuescreen.mjs` — term-structure selection (NOT the band-edge funnel; registry `edge` is a conformance proxy only), cycle-amplitude floor replaces the gp/d floor, knife-guard, valueScore rank + hard top-25 + buy-now/watch tiers + hold horizon. Sound deviations: termStructure gained a robust q85 `ceiling` (raw-max let single spikes print 408233% amplitudes — Raw cave eel); `gate:'value'` routing field; DAILY_DAYS 28 only when value requested (`--mode all` byte-identical at 17d). value-hold bid tripwire = declared floor break only. ALL scalp/value thresholds provisional n≈0 (SCALP_MIN_ROI, VALUE_MIN/MAX_CYCLE_PCT 6/150%, VALUE_KNIFE_PCT, VALUE_BUYNOW_PROX 0.75, valueScore weights — P6 tunes); accrual via suggestions ledger. 43/43 suites; /scan SKILL.md routes scalp/value) |
-| V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | new `pipeline/lib/retrojoin.mjs` (pure), `pipeline/retrojoin.mjs` (read-only report), tests | ✅ `6c3f1b5` (pipeline-only, no APP_VERSION. Suggestion-keyed FORWARD join — deliberate SIBLING to campaign-keyed backward-joining `outcomes.mjs` (different primary key/direction/output); reuses the canonical FIFO helpers (`collapseOffers`/`matchTrades`/`dedupeSnapshots`) + the ONE `readSuggestionLines` (no second reader). Outcomes filled / filled-worse / not-taken; nearest-prior one-fill-one-suggestion dedup; TTF ground truth = suggestion→first-fill latency; realized after-tax net + hold time where a FIFO round-trip closed; ref buy = `optBuy ?? quickBuy` (the patient recommended bid). NAMED-PLACEHOLDER horizons (12h intraday / 7d multi-day / 24h default) — the join MEASURES real latency so a later chunk replaces them. First real run: 11,356 rows × 115 buy offers → 18 filled / 55 filled-worse / 99% not-taken (expected — archive accrual began 2026-07-08); `filled-worse` dominance is a REAL early signal (fills execute near live instasell vs the patient optBuy reference), and spread/churn have ZERO claimed fills so far — early evidence for the consolidation question, far too thin to act on. n on every aggregate, no grades. 44/44 suites) |
-| V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | new `pipeline/lib/estimators.mjs`, `js/strategies.mjs`, `screen.mjs`, `rating.mjs`, `suggestlog.mjs` | ✅ `a21f1bc` (pipeline-only, no APP_VERSION — strategies.mjs gains data-only `estimator`+`priceBasis` fields, no app import. Ben's 2026-07-09 ruling encoded: `expGpDay` DEMOTED to the cheap pre-fetch pool orderer + the 500k `--min-gpd` pre-filter; displayed/graded metric is now rank = net×P(fill)÷TTF per thesis. Pure `pipeline/lib/estimators.mjs`: three families (intraday/value/rising), each pFill/ttf returns `{value,n,basis}` so honesty travels with the number; rankScore PER-UNIT (per-slot = the rejected throughput assumption) with 1h TTF floor; `quotedPair` implements the price-basis principle (spread=quick, band/rising/churn/scalp=2h band edges, value=term floor→recovery). rating.mjs grade reward expGpDay→rank (cutoffs re-scaled, placeholders); `suggestionEntry` gains lean `bid/ask/pFill/ttfSec/rank/estBasis/estN` (YS2 pattern, old rows byte-identical, pinned). Replay goldens UNCHANGED (verified `--update` → zero diff; funnel golden captures gated/kept only, rankAndSlice deliberately keeps expGpDay pre-fetch ordering). TTF priors deliberately SIBLING to retrojoin horizons (claim window ≠ expected-latency prior). ALL constants NAMED PLACEHOLDERS n≈0 — retrojoin.mjs is the calibrator. 14-check estimators.test.mjs; 45/45 suites. Coordinator-ruled, Ben-vetoable: price-basis principle + per-unit rank) |
+| D0 | Snapshot + SQLite archive | `pipeline/lib/archive.mjs` | ✅ `7e0e962` |
+| V2-P0 | Context chain + unified held verdict | `pipeline/lib/context.mjs` | ✅ `a6dc7d1` |
+| V2-P1 | Surface extraction + replay harness | `lib/gatecandidates.mjs`, `lib/replay.mjs` | ✅ `f02fbf5`+`8db97bf` |
+| V2-P2 | Validate stage + reachValidator (every surface) | `js/validate.mjs`, `js/windowread.mjs` | ✅ `910bea1` |
+| V2-P3 | floorValidator + term structure | `js/termstructure.mjs` | ✅ `b55f895` |
+| V2-P4a | Path engine core (pure) | `js/paths.mjs` | ✅ `e2eed20` |
+| V2-P4b | Path persistence + migration | `lib/watchstate.mjs`, `watch.mjs`, `quote.mjs` | ✅ `ec425f7` |
+| V2-P4c | Declarative strategy specs | `js/strategies.mjs` | ✅ `cfcc624` |
+| V2-P5 | scalp/value specs + path-aware bids + falling doctrine | `js/strategies.mjs`, `js/valuescreen.mjs`, `js/quotecore.js` | ✅ `fe46f2e` (value-niche spec full text: `git show fe46f2e:PLAN-VALUE.md`) |
+| V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | `pipeline/lib/retrojoin.mjs`, `pipeline/retrojoin.mjs` | ✅ `6c3f1b5` |
+| V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/strategies.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
 | V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | OPEN (Ben's ruling: never silently lower the bar — re-run beneath the floor and label rows "sub-floor — shown because nothing cleared <floor>") |
 | V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/skill-lint.mjs`, `docs/LORE.md` | OPEN |
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
@@ -212,6 +215,17 @@ verdict home (`js/`); declarative strategy specs; every single-item analysis run
 encode-in-scripts wherever mechanical; SQLite archive may grow ~100GB; app work DEFERRED (Ben
 isn't using it; stale tabs may be archived) — no APP_VERSION bumps in this wave.
 
+**Ben's rulings (2026-07-09) — ENCODED at P6a/P6b, kept here only as pointers:** the TTF ruling
+(every suggestion carries a data-justified Time-to-Flip; shared time-analysis layer; missed
+deadline = adaptation trigger; ground truth = retro-join latency, never touch-proxies) and the
+ranking ruling ("I despise gp/d…" → rank = net after tax × P(fill at the quoted pair) ÷ TTF,
+per thesis; the price-basis principle: ONE pair per suggestion, all three factors evaluated at
+it) live in `pipeline/lib/estimators.mjs`'s header + the `6c3f1b5`/`a21f1bc` commit messages;
+`pipeline/retrojoin.mjs` is the calibrator. Archive-gap note (verified 2026-07-09): whole-market
+daily/1h history is server-backfillable (`loadDaily`'s `?timestamp=` reaches past windows;
+per-item `/timeseries?timestep=1h` ~15d) — the local SQLite archive is an accelerator + the only
+home for sub-hour history, not the source of truth the TTF work depends on.
+
 ### Architecture
 
 ```
@@ -238,8 +252,7 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
 - **Validate:** registry of pure validators `(ctx) → {status: pass|caution|reject, reason,
   evidence}` in `js/validate.mjs`, run on EVERY surface. Reject semantics (default, Ben-vetoable):
   screens DROP reject (counted in `--stats`) and FLAG caution; explicit asks/held/watchlist are
-  NEVER hidden — full results printed. Open Ben question at P2: a "rejected: N (top 3 + reasons)"
-  screen footer, or is `--stats` enough?
+  NEVER hidden — full results printed.
 - **Path engine (`js/paths.mjs`):** Path = `{key, thesis, action∈BUY/HOLD/LIST/CUT/AVOID, levels,
   tripwire, horizon, economics, viability, evidence}`; `enumeratePaths` + `weighPaths`; headline
   dominant + weighed alternatives (alternatives are decision support, NEVER alert inputs);
@@ -250,13 +263,11 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
   path?"). A resting bid IS a position → the path engine runs on bids; **CANCEL-BID becomes
   emergent** (no enumerated path validates the capital); falling→CANCEL-BID survives only as the
   path-less default.
-- **Strategy = declarative spec** (`js/strategies.mjs`): `{key, surface:{gates,edge},
-  validators:[keys], entry/exit/tripwire, holdDiscipline, migrateTo}` — scripts iterate the
-  registry, never name niches. Four module kinds with registries + a CONFORMANCE suite (every
-  registered validator/path/spec auto-run against the shared archetype fixtures — decay-knife,
-  genuine dip, stable band, thin big ticket, falling wide-band; contract shape + no-throw +
-  determinism, or CI fails): validators, paths, specs, probes (PM1 — stays output-only, never a
-  gate).
+- **Strategy = declarative spec** (`js/strategies.mjs`): scripts iterate the registry, never name
+  niches. Four module kinds with registries + a CONFORMANCE suite (every registered
+  validator/path/spec auto-run against the shared archetype fixtures — decay-knife, genuine dip,
+  stable band, thin big ticket, falling wide-band; contract shape + no-throw + determinism, or CI
+  fails): validators, paths, specs, probes (PM1 — stays output-only, never a gate).
 - **Quarantine (`ignored-items.json`) unchanged:** it solves intent-not-in-the-log, which
   validators can't; its v2 home is the position stage (filters merch VIEWS only — archive stores
   the whole market, screens may surface ignored items, pricing on asks ungated). P6 enhancement:
@@ -269,95 +280,15 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
 
 ### Chunks (each carries its own reconciling docs pass + README inventory in the same commit)
 
-- **D0 — Snapshot + SQLite archive.** New `pipeline/lib/archive.mjs` (open/append/seriesFor/
-  marketAt/exportFixture; WAL; gitignored DB + sidecars); `loadSnapshot()` in `marketfetch.mjs`
-  (one immutable per-pass ctx: ts, bulk maps, archive handle, budgeted series); appender with the
-  bucket-already-stored pre-check; `loadDaily` re-pointed at the DB (existing `.cache` daily JSON
-  = the seed import); decide the ExperimentalWarning suppression. Fixtures: append idempotency,
-  seriesFor/marketAt vs hand-computed slices, fixture export; CI never opens the DB.
-- **P0 — Context chain + unified held verdict.** `buildItemContext` staged enrichers (pure,
-  per-stage fixtures); `quote.mjs --positions` + `watch.mjs` consume it (position stage loads
-  offers.json + watch-state for ALL consumers); one shared held-verdict renderer. Pin: a
-  `HOLD — ask filling` fixture lot prints identically on both surfaces (today quote.mjs can't —
-  no offers read, no conviction timers).
-- **P1 — Surface extraction + replay harness.** `gateCandidates` → `pipeline/lib/
-  gatecandidates.mjs` (mechanical, re-point test); extract renderMode's post-fetch doctrine into
-  pure exported `surviveMode(mode, ctx) → {keep, discardReason}` (falling/rising-confirm/posture/
-  phase-rescue — currently untested inline; reuse the existing `--stats` discard counters as the
-  return shape); fixture `rankAndSlice`/`proxyDrift`; snapshot-replay acceptance harness off D0's
-  fixture format (archetype snapshots → full per-niche funnel → golden outputs) + CI
-  `screen-fixtures` step. Pre-amendment falling behavior pinned, re-pinned at P5 (the diff IS the
-  doctrine change).
-- **P2 — Validate + `reachValidator`, every surface.** `js/validate.mjs` registry; move
-  `windowread.mjs` → `js/` (update `windowrange.mjs`/`watch.mjs` imports same commit);
-  reachValidator wraps windowread reach + RC1; wire into `screen.mjs` AND `quote.mjs`; reject
-  semantics per default above (ask Ben the footer question); widen `suggestionEntry` with
-  validator results (lean-included, `?? null`-compatible).
-- **P3 — `floorValidator` + term structure.** 1/3/7/14/28d term-structure + typical-fluctuation
-  read as pure functions over the Tier-1 archive (PLAN-VALUE §C was spec-only — this BUILDS it);
-  runs at gate time whole-market. Reject/caution a BUY not near a durable multi-week floor.
-  Acceptance: synthetic decay-knife (band-top reach 0/7, live above the multi-week floor) →
-  reject/caution on BOTH surfaces; genuine dip (live below window floor, reach 7/7) → pass.
-- **P4a — Path engine core (pure).** `js/paths.mjs` enumerate/weigh; generalize `holdthesis.mjs`
-  (entries grow `path`/`enteredUnder`; legacy entries valid; `thesis.mjs --path`); widen `lotCtx`
-  with `path`. Acceptance: decay-knife held → value-hold/hold-recovery LOW, scalp/be-escape
-  higher; Gate-2-CUT-exempt unchanged.
-- **P4b — Persistence + migration + held wiring.** `currentPath`/`enteredUnder` on watch-state
-  `held:<id>`; arm-then-confirm + hysteresis on dominance/migration; wire into `watch.mjs` +
-  `quote.mjs --positions` (P0's renderer becomes the dominant-path renderer). Acceptance:
-  flapping weights never flip a headline inside persistMs; a real migration arms → headlines;
-  entered-under-`hold-recovery` decay-knife raises migration toward be-escape/cut.
-- **P4c — Declarative specs + surfacing-side paths.** `js/strategies.mjs`; band/spread/rising/
-  churn re-expressed as specs, output byte-identical to the P1 goldens (the refactor-proof);
-  screen shows the weighed path set per candidate; inferred-default entry path from the surfacing
-  spec via the suggestions ledger; conformance suite lands here.
-- **P5 — scalp/value specs + path-aware bids + falling doctrine.** `offerVerdict` takes path
-  context; CANCEL-BID emergent; scalp spec (falling + wide fresh intraday band ≥ tax+margin,
-  reach-validated on today's high, flip-only/no-hold, hard intraday stop — unsold lap migrates to
-  `cut`, never `hold-recovery`); value spec (multi-week floor hold, P3 term structure);
-  falling-exclusion becomes per-spec. Ships provisional + off-by-default (`--mode scalp`).
-  Acceptance: path-less bid on a faller still CANCEL-BIDs; a scalp-path bid doesn't.
-  *(SHIPPED `fe46f2e` — see Status. The value-niche spec (`PLAN-VALUE.md`: cycle-amplitude floor,
-  knife-rejection, valueScore, §F ranking-at-scale hard top-N + tiers, hold horizon, PM2 firing
-  log) is FOLDED here per the plan-file rule and the file deleted in the landing commit — full
-  locked text via `git show fe46f2e:PLAN-VALUE.md`.)*
-- **P6 — Evidence-based viability + TTF.** Walk-forward replay per (item, path) over the archive
-  (`backtestPlan` precedent) feeding `weighPaths` as `{score, n, span}` with small-n honesty +
-  placeholder fallback; retro-join script scoring `suggestions.jsonl` (+archives) × `fills.json`
-  outcomes by path type; greenlist→suggestion-emit pointer. Feeds F1.
-  **TTF ruling (Ben, 2026-07-09):** every suggestion should carry an estimated **Time-to-Flip**
-  (minutes/hours/days) justified from past data — the niches are one buy-low-sell-high formula
-  differing mainly in lookback horizon, so the time-analysis/forecasting layer must be SHARED
-  across all specs, not rising-only; a missed TTF deadline ("bounce predicted by X didn't come")
-  is the path-invalidation attention trigger, replacing placeholder persistence constants with a
-  data-backed deadline. Ground truth = realized suggestion→fill latency from the retro-join (our
-  own fills), NOT touch-proxies (touched ≠ filled — queue position is invisible); windowread's
-  per-day timing data is the estimator input, the retro-join is the calibrator. Rising/value are
-  the priority strategies to improve (Ben); archive is cold (accruing since 2026-07-08) so early
-  TTF estimates must state their sample honestly.
-  **Ranking ruling (Ben, 2026-07-09): gp/d is out as the ranking metric.** "I despise gp/d as a
-  metric; it makes so many assumptions about fill speed and fill price… let's get something that's
-  more accurate per thesis and less hand wavey." `expGpDay` (limit×6 windows/day, capped at a 10%
-  volume share, × a noisy modeNet) survives only as a cheap PRE-FETCH pool orderer if nothing
-  better exists at bulk stage — it must never again be the displayed/ranked "best" metric. The
-  replacement is per-thesis and TTF-native: **rank = net after tax × P(fill at the quoted prices)
-  ÷ TTF**, where each thesis defines its own P(fill) and TTF estimator (scalp/band/spread: today's
-  band reach + intraday velocity; value: cycle amplitude × floor proximity × historical
-  trough→recovery duration from the term structure — valueScore is the P5 prototype of exactly
-  this shape; rising: forecast horizon). Calibrated against realized suggestion→fill latency from
-  the retro-join; early estimates state their n. The top-N fetch-slice worry (Ben: ordering can
-  hide viable candidates before the real read happens) is part of the same fix: per-thesis pool
-  heuristics replace the one-size expGpDay sort, and value already bypasses it (own gate, own
-  rank, hard top-25 on valueScore not throughput).
-  **Empty-result fallback (Ben, 2026-07-09):** when a niche's floors leave ZERO candidates, the
-  screen must not print an empty table and stop — it re-runs beneath the floor and shows the
-  best sub-floor rows HONESTLY LABELED (`sub-floor — shown because nothing cleared <floor>`),
-  never silently lowering the bar. Cheap: thresholds are already parameterized per run.
-  **Archive-gap note (verified in code, 2026-07-09):** whole-market history does NOT depend on
-  Ben's play sessions — `loadDaily` hits the bulk `/1h` endpoint whose `?timestamp=` param serves
-  PAST windows server-side, so gaps from idle days are backfillable on demand; per-item
-  `/timeseries?timestep=1h` reaches ~15 days back. The local SQLite archive is an accelerator +
-  the only home for sub-hour history, not the source of truth for the daily/1h series TTF needs.
+**D0, P0–P5, P6a, P6b — SHIPPED.** Specs pruned per the fold-out discipline; shas in Status,
+full spec text via `git show 4753e44:PLAN.md` (the last revision before this compaction), and
+each chunk's landing commit message is the authoritative "what shipped" record.
+
+- **P6c — Empty-result sub-floor fallback (Ben, 2026-07-09).** When a niche's floors leave ZERO
+  candidates, the screen must not print an empty table and stop — it re-runs beneath the floor
+  and shows the best sub-floor rows HONESTLY LABELED (`sub-floor — shown because nothing cleared
+  <floor>`), never silently lowering the bar. Cheap: thresholds are already parameterized per
+  run.
 - **P7 — Docs/skills triage + skill-lint + CLAUDE.md diet.** Three-way triage
   (encode/keep-as-judgment/retire) of EVERY prose rule in the four market skills + the memory
   index, disposition table in the PR; new `pipeline/skill-lint.mjs` in CI (rule-blocks need a
@@ -390,13 +321,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Other unscheduled notes
 
-- **Verdict-layer temporal memory (V1–V6) — DONE, `PLAN-VERDICT.md` folded + deleted.** The whole
-  series gave the watch loop cross-pass memory, conviction gating, a standard emit contract, and an
-  advisory recovery-read + capital companion WITHOUT touching pure `momVerdict`/`offerVerdict` (the
-  temporal + advisory layers live OUTSIDE the pure core; only V3's optional `lotCtx` arg touched it,
-  and that's a no-op when omitted). Shas in the Status table (V1+V2 `8a5d160`, V3 `692baee`, V4
-  `2a87269`, V5 `825469f`, V6 this commit). Documented follow-on (NOT built): app Watch-tab adoption
-  of the same context lines (the app has no per-pass store — console-first was deliberate).
+- **Verdict-layer temporal memory (V1–V6) — DONE, `PLAN-VERDICT.md` folded + deleted.** Cross-pass
+  memory, conviction gating, standard emit contract, advisory recovery-read + capital companion —
+  all OUTSIDE pure `momVerdict`/`offerVerdict` (only V3's optional `lotCtx` touched it, no-op when
+  omitted). Shas in Status. Documented follow-on (NOT built): app Watch-tab adoption of the same
+  context lines.
 - **Screen pre-filter heuristic from a pattern study:** the niche screens do a blind
   fetch-and-check (esp. `rising`: ~30 of 40 top candidates discarded after the expensive
   per-item confirm). Study: dump cheap 24h/band features + survive/discard labels for a
@@ -415,21 +344,12 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   into `fills.json`. Full rationale: `git show 39e5d23:PLAN.md` (chunk 5 section).
 
 ### Needs a Ben decision (not scheduled — list only, don't action unprompted)
-- ~~**Stale remote branches** `wave4-repo-review-plan` + `g1-readme-inventory`~~ — RESOLVED
-  2026-07-08: Ben confirmed, both deleted from origin (only `main` remains). The first PR-path
-  smoke once `gh auth refresh -s repo` runs will use a fresh branch.
-- ~~**`pipeline/held-override.json`** (desk, untracked)~~ — RESOLVED 2026-07-06: `rm`'d. It was
-  inert (`monitor.mjs` reads `.cache/held-override.json`, not this root copy — it forked at OR2) AND
-  redundant (its one entry, `23959` @ 2026-07-03, already reconciles to 0 open in `positions.json`
-  via the coffer-manual.log tombstones). Nothing read it. (The other two desk orphans —
-  `pipeline/mapping.cache.json` and the SL1-forked `pipeline/suggestions.jsonl` — were cleaned +
-  folded 2026-07-05.)
-- ~~**Orphan `yield-improvement-brief.md`**~~ — RESOLVED 2026-07-08: Ben OK'd, `rm`'d (it was
-  untracked; the YIELD program's content lives in PLAN.md/CHANGELOG).
 - **N1 delivery-mechanism trial** — pick option a/b/c after the live scheduled-Claude-session trial.
 - **Smaller product calls (from Discovered):** side-specific price-alert semantics; a mobile
   REMOVE editor for already-synced fills; a `--niche` keyword flag on `screen.mjs`; the
   `--max-price` default vs big tickets; a churn-niche `--min-gpd` exemption.
+- (Resolved 2026-07-06…08: stale remote branches deleted; `pipeline/held-override.json` +
+  `yield-improvement-brief.md` orphans removed — detail in `git show 4753e44:PLAN.md`.)
 
 ## Out of scope (standing decisions — don't re-open without Ben)
 
@@ -511,6 +431,12 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   them in, or quote could add a ts1h fetch. (2) the position stage computes `newStateEntry` but
   only watch persists it — a P8 desk orchestrator owning the single writer could let quote
   contribute observations to the shared watch-state too.
+- **Guide re-anchor prediction model (follow-on to YP1 `a93da6a`, Ben wants this edge):** capture
+  is live (`.guide-history.jsonl`, change-only lines at watch cadence). The chunk to build once
+  samples accrue: per-item update-time estimate + magnitude model (yesterday's realtime drift ≈
+  today's guide step), surfaced as a line on `quote.mjs`/`watch.mjs` rows and folded into the
+  ask-pricing doctrine (price asks against the POST-update guide when the update lands before
+  the sell window). Honesty: needs days of history before the timing claim is real.
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
 - `quote.mjs` and `screen.mjs` can log a different liquidity `class` for the same item in
@@ -570,53 +496,16 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   the immediately-prior log state). Display-only warning like LH2, same header channel —
   never verdict input, and EMPTY stays non-evidence for fills (don't resurrect the deleted
   cancel-to-EMPTY inference). Watch-loop session, 2026-07-05.
-- **[✅ SHIPPED as YP1 `a93da6a`]** **Guide-price update tracking → predict the re-anchor (Ben, 2026-07-06 — wants this as an
-  edge for single-item lane flipping).** The GE guide price updates ~once/day per item at an
-  item-specific time; the update instantly re-anchors guide-price buyers, compressing (or
-  lifting) the realtime ceiling — observed live: bludgeon guide 17.61m→17.43m between 21:48
-  and 00:03, fury 2.80m→2.72m the same evening, and both of the day's above-average bludgeon
-  ask fills printed while the ask sat UNDER the pre-update guide. Capture already shipped
-  (watch.mjs `logGuideChanges` → TRACKED `pipeline/.guide-history.jsonl`, change-only
-  lines `{ts,id,name,guide,prev}` at watch cadence, so update time pins to ~15 min). The
-  chunk to build once samples accrue: per-item update-time estimate + magnitude model
-  (yesterday's realtime drift ≈ today's guide step), surfaced as a line on `quote.mjs`/
-  `watch.mjs` rows ("guide update expected ~23:00, projected ≈17.2m") and folded into the
-  ask-pricing doctrine (price asks against the POST-update guide when the update lands
-  before the sell window). Honesty: 2 observed updates so far — needs days of history
-  before the timing claim is real. Watch-loop session, 2026-07-06.
 - P1's `dedupeSnapshots()` runs inside `reconstruct()` (positions.json + `monitor.mjs`), but
   `outcomes.mjs` calls `collapseOffers`/`matchTrades` directly for campaign boundaries, so its
   campaigns can still see a snapshot-duplicate terminal as a phantom offer. Low impact (outcomes
   is derived/gitignored), but adopt `dedupeSnapshots` there if campaign counts ever look off
   (P1, 2026-07-05).
-- **[✅ SHIPPED as FC1 `0e48b2c` — opt-in, OFF by default so decision paths stay byte-identical]**
-  **Cross-invocation fetch cache for the CLI scripts → chunk FC1 (Ben, 2026-07-06 — cut
-  redundant GE API pulls).** Each pipeline script (`watch.mjs`, `screen.mjs`, `quote.mjs`,
-  `windowrange.mjs`) spawns a cold `node` process with no shared fetch state, so running a
-  `windowrange` right after a `screen` re-pulls `/latest` + `/5m` + `/24h` rows the screen
-  already fetched seconds earlier — and a tight watch loop re-pulls the full quote stack per
-  item every pass even on a quiet, unchanged book. The browser app already dedupes within a
-  session (`js/marketfetch.js` `fetchTs`/`fetch24h` in-memory store) but the CLI has no
-  equivalent across processes. **Spec:** a small file-backed TTL cache in `$TMPDIR` (or a
-  gitignored `pipeline/.fetch-cache/`) wrapping the shared CLI fetch layer — key on
-  endpoint+item, store the JSON with a fetched-at stamp, serve from cache when age < TTL
-  (~60s for `/latest`/`/5m`; longer, ~10–15 min, for `/24h` and the 1h timeseries which move
-  slowly), bypass on a `--no-cache`/`--fresh` flag and for any write-committing path. Must be
-  a pure wrapper: **byte-identical numbers** (a cache hit returns the same payload a live
-  fetch would have within the TTL), gitignored, and inventory-registered in README at
-  creation. Measure first — confirm the endpoint layer is genuinely shared before building, and
-  size the TTLs so a stale cache can never feed a *decision* (a held/bid quote a verdict runs
-  on should stay short-TTL or bypass). Honesty: the win is real on back-to-back reads and quiet
-  loops; it does nothing for a book that's actually moving (cache correctly misses on fresh
-  data). Behavioral mitigations already in place (loop at 3m not 1m; don't double-run
-  `windowrange` when watch's window line answers it) capture most of the idle savings without
-  this — FC1 is the structural fix for the screen→windowrange→watch same-item overlap. Watch-loop
-  session, 2026-07-06.
 
 **Resolved / promoted:** `gateCandidates` testability → chunk **GC1**; LF/CRLF warnings →
 chunk **GA1**; `fetchInputs` triplication → chunk **X1**; `suggestions.jsonl` unbounded growth
 → chunk **SR1**; README pipeline-inventory gap → shipped in **D1**; cross-invocation fetch cache →
-shipped as **FC1**; guide re-anchor prediction → shipped as **YP1** (both in the YIELD wave).
+shipped as **FC1**; guide re-anchor capture → shipped as **YP1** (prediction model stays Open above).
 The YIELD wave also left these DEFERRED (honesty-gated, not dropped): in-app fill-probability + the
 Trends "recommend price adjustment" button (both need **F1** open + a published outcomes artifact);
 `outcomes.mjs` `dedupeSnapshots` gap is now CLOSED (YS1). The scan per-row velocity tag deferral is
