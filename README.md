@@ -215,7 +215,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`), and the extracted
     post-fetch `surviveMode(mode,row,phase,opts)` — falling-exclusion/`--phase-rescue`/rising-confirm/
     overnight-posture, returning `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc`
-    counters; logic byte-identical to the old inline code, diff-proven), `suggestlog.mjs` (shared `suggestions.jsonl` appender + SR1
+    counters; logic byte-identical to the old inline code, diff-proven), `replay.mjs` (P1 — the
+    snapshot-replay acceptance ENGINE: `buildSnapshot()` expands five synthetic ARCHETYPES into a full
+    raw market snapshot (`coffer-replay-snapshot/1`, a documented superset of D0's archive fixture —
+    it also carries v24/band/latest/timeseries/daily so the whole funnel runs offline) anchored to a
+    fixed `ANCHOR_TS`; `runReplay(snapshot,opts)` drives the WHOLE per-niche funnel — `gateCandidates`
+    → `rankAndSlice` → `computeQuote`/`phase` → `surviveMode` — and returns the per-niche stage
+    outputs (`gated`/`ranked`/`survivors`/`kept`/`dropped`) the golden pins. Pure/offline, no live API,
+    no real SQLite), `suggestlog.mjs` (shared `suggestions.jsonl` appender + SR1
     rotation: `logSuggestions` rolls completed months into `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`
     on append via `rotateLedger` — no-row-loss archive-then-truncate, idempotent — and `readSuggestionLines`
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
@@ -311,7 +318,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     ordering: thin-reserve slots, rising proxy-first ordering, soft-factor deprioritization, TOP
     slice), `survivemode.test.mjs` (P1 — the post-fetch `surviveMode` doctrine: falling-exclusion +
     `--phase-rescue` basing rescue, rising-confirm, overnight-posture, and the load-bearing
-    rescued-carries-through-a-later-posture-drop dual-counter invariant), `watchstate.test.mjs` (V1 — cross-pass deltas + the
+    rescued-carries-through-a-later-posture-drop dual-counter invariant), `replay.test.mjs` (P1 — the
+    snapshot-replay ACCEPTANCE harness: feeds the committed `fixtures/replay/snapshot.json` through the
+    full per-niche funnel (`lib/replay.mjs` `runReplay`) for band/spread/rising/churn (active) + band
+    (overnight posture) and compares each stage to `fixtures/replay/golden.json` — a DRIFT guard
+    (`buildSnapshot()` still reproduces the fixture) + a GOLDEN guard (funnel output matches) + readable
+    per-archetype path assertions; `--update` regenerates both fixtures for hand-review. Pins the CURRENT
+    pre-amendment falling-exclusion, re-pinned at P5), `watchstate.test.mjs` (V1 — cross-pass deltas + the
     consecutive-underwater/below-support counters' reset policy + V4 `convictionGate` arm-then-confirm
     escalation incl. the breakdown-exempt invariant), `levels.test.mjs` (V2 — higher-low support /
     cut-trigger + graceful degradation), `emit.test.mjs` (V5 — the per-held emit contract: the
@@ -340,6 +353,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     round-trip, `pruneBefore`, the never-`/latest` grain guard, and the `dailyMidsAt`+`daily_seed`
     loadDaily bridge — all on `:memory:`/tmp DBs, NEVER the real archive) — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
+  - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +
+    expected outputs for `replay.test.mjs`. `snapshot.json` is a `coffer-replay-snapshot/1` synthetic
+    market state (five archetypes — stable band, genuine dip, thin big ticket, decay-knife, falling
+    wide-band; no PII, no live data), produced by `lib/replay.mjs` `buildSnapshot()`; `golden.json`
+    (`coffer-replay-golden/1`) is the per-niche funnel result `runReplay` must reproduce. Regenerate
+    both with `node pipeline/replay.test.mjs --update` (hand-review the diff). Consumer: `replay.test.mjs`.
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1
     `fetch/` per-URL cache (opt-in cross-invocation fetch cache — one `{ts,url,data}` file per

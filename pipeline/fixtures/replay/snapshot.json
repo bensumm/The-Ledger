@@ -1,0 +1,1427 @@
+{
+  "schema": "coffer-replay-snapshot/1",
+  "anchorTs": 1783560000,
+  "note": "synthetic archetypes for the P1 replay harness (no PII, no live data)",
+  "items": {
+    "2001": {
+      "name": "Stable band commodity",
+      "behavior": "stable band",
+      "limit": 1500,
+      "guide": 100000,
+      "v24": {
+        "avgLowPrice": 98000,
+        "avgHighPrice": 102000,
+        "highPriceVolume": 8000,
+        "lowPriceVolume": 7000
+      },
+      "band": {
+        "bandLo": 98000,
+        "bandHi": 102000,
+        "active5m": 20
+      },
+      "latest": {
+        "low": 98000,
+        "high": 102000,
+        "lowTime": 1783560000,
+        "highTime": 1783560000
+      },
+      "ts5m": [
+        {
+          "timestamp": 1783553400,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783553700,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783554000,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783554300,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783554600,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783554900,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783555200,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783555500,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783555800,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783556100,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783556400,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783556700,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783557000,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783557300,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783557600,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783557900,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783558200,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783558500,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783558800,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783559100,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        },
+        {
+          "timestamp": 1783559400,
+          "avgLowPrice": 98002,
+          "avgHighPrice": 101998
+        },
+        {
+          "timestamp": 1783559700,
+          "avgLowPrice": 98001,
+          "avgHighPrice": 101999
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 98000,
+          "avgHighPrice": 102000
+        }
+      ],
+      "ts6h": [
+        {
+          "timestamp": 1782281280,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782384960,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782488640,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782592320,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782696000,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782799680,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782903360,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783007040,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783110720,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783214400,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783365600,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783387200,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783408800,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783430400,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783452000,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783473600,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783495200,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783516800,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783538400,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        }
+      ],
+      "daily": [
+        {
+          "ts": 1782782400,
+          "mid": 100000
+        },
+        {
+          "ts": 1782868800,
+          "mid": 100000
+        },
+        {
+          "ts": 1782955200,
+          "mid": 100000
+        },
+        {
+          "ts": 1783041600,
+          "mid": 100000
+        },
+        {
+          "ts": 1783128000,
+          "mid": 100000
+        },
+        {
+          "ts": 1783214400,
+          "mid": 100000
+        },
+        {
+          "ts": 1783344000,
+          "mid": 100000
+        },
+        {
+          "ts": 1783387200,
+          "mid": 100000
+        },
+        {
+          "ts": 1783473600,
+          "mid": 100000
+        },
+        {
+          "ts": 1783560000,
+          "mid": 100000
+        }
+      ]
+    },
+    "2002": {
+      "name": "Genuine dip riser",
+      "behavior": "genuine dip",
+      "limit": 800,
+      "guide": 106000,
+      "v24": {
+        "avgLowPrice": 104000,
+        "avgHighPrice": 109000,
+        "highPriceVolume": 6000,
+        "lowPriceVolume": 5000
+      },
+      "band": {
+        "bandLo": 104000,
+        "bandHi": 109000,
+        "active5m": 20
+      },
+      "latest": {
+        "low": 104000,
+        "high": 109000,
+        "lowTime": 1783560000,
+        "highTime": 1783560000
+      },
+      "ts5m": [
+        {
+          "timestamp": 1783553400,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783553700,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783554000,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783554300,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783554600,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783554900,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783555200,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783555500,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783555800,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783556100,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783556400,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783556700,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783557000,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783557300,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783557600,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783557900,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783558200,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783558500,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783558800,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783559100,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        },
+        {
+          "timestamp": 1783559400,
+          "avgLowPrice": 104002,
+          "avgHighPrice": 108998
+        },
+        {
+          "timestamp": 1783559700,
+          "avgLowPrice": 104001,
+          "avgHighPrice": 108999
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 104000,
+          "avgHighPrice": 109000
+        }
+      ],
+      "ts6h": [
+        {
+          "timestamp": 1782281280,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782384960,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782488640,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782592320,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782696000,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782799680,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1782903360,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783007040,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783110720,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783214400,
+          "avgLowPrice": 99000,
+          "avgHighPrice": 101000
+        },
+        {
+          "timestamp": 1783365600,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783387200,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783408800,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783430400,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783452000,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783473600,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783495200,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783516800,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783538400,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 105930,
+          "avgHighPrice": 108070
+        }
+      ],
+      "daily": [
+        {
+          "ts": 1782782400,
+          "mid": 100000
+        },
+        {
+          "ts": 1782868800,
+          "mid": 100000
+        },
+        {
+          "ts": 1782955200,
+          "mid": 100000
+        },
+        {
+          "ts": 1783041600,
+          "mid": 100000
+        },
+        {
+          "ts": 1783128000,
+          "mid": 100000
+        },
+        {
+          "ts": 1783214400,
+          "mid": 100000
+        },
+        {
+          "ts": 1783344000,
+          "mid": 107000
+        },
+        {
+          "ts": 1783387200,
+          "mid": 107000
+        },
+        {
+          "ts": 1783473600,
+          "mid": 107000
+        },
+        {
+          "ts": 1783560000,
+          "mid": 107000
+        }
+      ]
+    },
+    "2003": {
+      "name": "Thin big ticket",
+      "behavior": "thin big ticket",
+      "limit": 8,
+      "guide": 15000000,
+      "v24": {
+        "avgLowPrice": 14700000,
+        "avgHighPrice": 15400000,
+        "highPriceVolume": 22,
+        "lowPriceVolume": 20
+      },
+      "band": {
+        "bandLo": 14700000,
+        "bandHi": 15400000,
+        "active5m": 3
+      },
+      "latest": {
+        "low": 14700000,
+        "high": 15400000,
+        "lowTime": 1783560000,
+        "highTime": 1783560000
+      },
+      "ts5m": [
+        {
+          "timestamp": 1783553400,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783553700,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783554000,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783554300,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783554600,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783554900,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783555200,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783555500,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783555800,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783556100,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783556400,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783556700,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783557000,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783557300,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783557600,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783557900,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783558200,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783558500,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783558800,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783559100,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        },
+        {
+          "timestamp": 1783559400,
+          "avgLowPrice": 14700002,
+          "avgHighPrice": 15399998
+        },
+        {
+          "timestamp": 1783559700,
+          "avgLowPrice": 14700001,
+          "avgHighPrice": 15399999
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 14700000,
+          "avgHighPrice": 15400000
+        }
+      ],
+      "ts6h": [
+        {
+          "timestamp": 1782281280,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1782384960,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1782488640,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1782592320,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1782696000,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1782799680,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1782903360,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783007040,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783110720,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783214400,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783365600,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783387200,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783408800,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783430400,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783452000,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783473600,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783495200,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783516800,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783538400,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 14899500,
+          "avgHighPrice": 15200500
+        }
+      ],
+      "daily": [
+        {
+          "ts": 1782782400,
+          "mid": 15050000
+        },
+        {
+          "ts": 1782868800,
+          "mid": 15050000
+        },
+        {
+          "ts": 1782955200,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783041600,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783128000,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783214400,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783344000,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783387200,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783473600,
+          "mid": 15050000
+        },
+        {
+          "ts": 1783560000,
+          "mid": 15050000
+        }
+      ]
+    },
+    "2004": {
+      "name": "Decay knife",
+      "behavior": "decay-knife",
+      "limit": 1000,
+      "guide": 41000,
+      "v24": {
+        "avgLowPrice": 39000,
+        "avgHighPrice": 41000,
+        "highPriceVolume": 6000,
+        "lowPriceVolume": 5000
+      },
+      "band": {
+        "bandLo": 39000,
+        "bandHi": 41000,
+        "active5m": 15
+      },
+      "latest": {
+        "low": 39000,
+        "high": 41000,
+        "lowTime": 1783560000,
+        "highTime": 1783560000
+      },
+      "ts5m": [
+        {
+          "timestamp": 1783553400,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783553700,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783554000,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783554300,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783554600,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783554900,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783555200,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783555500,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783555800,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783556100,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783556400,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783556700,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783557000,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783557300,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783557600,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783557900,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783558200,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783558500,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783558800,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783559100,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        },
+        {
+          "timestamp": 1783559400,
+          "avgLowPrice": 39002,
+          "avgHighPrice": 40998
+        },
+        {
+          "timestamp": 1783559700,
+          "avgLowPrice": 39001,
+          "avgHighPrice": 40999
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 39000,
+          "avgHighPrice": 41000
+        }
+      ],
+      "ts6h": [
+        {
+          "timestamp": 1782281280,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1782384960,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1782488640,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1782592320,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1782696000,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1782799680,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1782903360,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1783007040,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1783110720,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1783214400,
+          "avgLowPrice": 44550,
+          "avgHighPrice": 45450
+        },
+        {
+          "timestamp": 1783365600,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783387200,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783408800,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783430400,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783452000,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783473600,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783495200,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783516800,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783538400,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 39600,
+          "avgHighPrice": 40400
+        }
+      ],
+      "daily": [
+        {
+          "ts": 1782782400,
+          "mid": 45000
+        },
+        {
+          "ts": 1782868800,
+          "mid": 45000
+        },
+        {
+          "ts": 1782955200,
+          "mid": 45000
+        },
+        {
+          "ts": 1783041600,
+          "mid": 45000
+        },
+        {
+          "ts": 1783128000,
+          "mid": 45000
+        },
+        {
+          "ts": 1783214400,
+          "mid": 45000
+        },
+        {
+          "ts": 1783344000,
+          "mid": 40000
+        },
+        {
+          "ts": 1783387200,
+          "mid": 40000
+        },
+        {
+          "ts": 1783473600,
+          "mid": 40000
+        },
+        {
+          "ts": 1783560000,
+          "mid": 40000
+        }
+      ]
+    },
+    "2005": {
+      "name": "Falling wide band",
+      "behavior": "falling wide-band",
+      "limit": 400,
+      "guide": 205000,
+      "v24": {
+        "avgLowPrice": 190000,
+        "avgHighPrice": 210000,
+        "highPriceVolume": 4000,
+        "lowPriceVolume": 3500
+      },
+      "band": {
+        "bandLo": 188000,
+        "bandHi": 214000,
+        "active5m": 12
+      },
+      "latest": {
+        "low": 188000,
+        "high": 214000,
+        "lowTime": 1783560000,
+        "highTime": 1783560000
+      },
+      "ts5m": [
+        {
+          "timestamp": 1783553400,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783553700,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783554000,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783554300,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783554600,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783554900,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783555200,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783555500,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783555800,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783556100,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783556400,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783556700,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783557000,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783557300,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783557600,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783557900,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783558200,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783558500,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783558800,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783559100,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        },
+        {
+          "timestamp": 1783559400,
+          "avgLowPrice": 188002,
+          "avgHighPrice": 213998
+        },
+        {
+          "timestamp": 1783559700,
+          "avgLowPrice": 188001,
+          "avgHighPrice": 213999
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 188000,
+          "avgHighPrice": 214000
+        }
+      ],
+      "ts6h": [
+        {
+          "timestamp": 1782281280,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1782384960,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1782488640,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1782592320,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1782696000,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1782799680,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1782903360,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1783007040,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1783110720,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1783214400,
+          "avgLowPrice": 232650,
+          "avgHighPrice": 237350
+        },
+        {
+          "timestamp": 1783365600,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783387200,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783408800,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783430400,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783452000,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783473600,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783495200,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783516800,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783538400,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        },
+        {
+          "timestamp": 1783560000,
+          "avgLowPrice": 198000,
+          "avgHighPrice": 202000
+        }
+      ],
+      "daily": [
+        {
+          "ts": 1782782400,
+          "mid": 235000
+        },
+        {
+          "ts": 1782868800,
+          "mid": 235000
+        },
+        {
+          "ts": 1782955200,
+          "mid": 235000
+        },
+        {
+          "ts": 1783041600,
+          "mid": 235000
+        },
+        {
+          "ts": 1783128000,
+          "mid": 235000
+        },
+        {
+          "ts": 1783214400,
+          "mid": 235000
+        },
+        {
+          "ts": 1783344000,
+          "mid": 200000
+        },
+        {
+          "ts": 1783387200,
+          "mid": 200000
+        },
+        {
+          "ts": 1783473600,
+          "mid": 200000
+        },
+        {
+          "ts": 1783560000,
+          "mid": 200000
+        }
+      ]
+    }
+  }
+}
