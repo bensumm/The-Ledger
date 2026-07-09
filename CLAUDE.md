@@ -192,8 +192,22 @@ Script facts the skills rely on (current behavior, not doctrine):
   encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold niche with its OWN
   term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
   replaces the 500k gp/day throughput floor, decay/downtrend knife-guard), ranked by
-  `valueScore` (amplitude × proximity-to-low × floor-stability) with a HARD top-N + buy-now/watch tiers
-  (§F flood control); console-only, its own table, NOT in `screen.json` (no app tab yet → no APP_VERSION).
+  `valueScore` (amplitude × proximity-to-low × floor-stability × absolute-gp/unit boost) with a HARD top-N
+  + buy-now/watch tiers (§F flood control); console-only, its own table, NOT in `screen.json` (no app tab
+  yet → no APP_VERSION).
+  **Value abs-gp rank blend (Ben 2026-07-09)** — `valueScore`'s amplitude term is a scale-free PERCENTAGE,
+  so cheap high-volatility teleport tabs (cycling 30–100%) swept the HARD top-N fetch cut and liquid
+  big-ticket HOLDS (cycling a steadier 6–14% but a MILLIONS-per-unit absolute swing) never got quoted at all
+  — the opposite of a value-hold's point (park real capital in a big absolute cycle). Confirmed structural,
+  not liquidity: 15 big-ticket holds (Nightmare staff, Bellator ring, Virtus, Dinh's, Sanguinesti…) pass the
+  gate under `--min-price 1m` but the pure-% ranker cut every one. Fix: `valueScore` multiplies in a
+  SATURATING absolute-gp factor `gpMult = 1 + VALUE_ABSGP_W·min(log10(1 + absGp/VALUE_ABSGP_REF),
+  VALUE_ABSGP_CAP)` where `absGp = afterTaxAmpPct × buyLow` (after-tax gp captured per unit). log-saturated +
+  capped so a big ticket COMPETES with the tabs without the score collapsing into a raw price sort (a
+  far-higher-% cheap item still leads — amplitude isn't overridden; pinned in `valuescreen.test.mjs`). Effect:
+  the default value scan now surfaces a healthy MIX (big tickets + tabs) instead of tabs-only. Honesty: per-
+  UNIT gp, not deployable gp (units × buy-limit throughput) — a truer capital-parking measure is a later
+  refinement; `VALUE_ABSGP_*` are NAMED PLACEHOLDERS (rule 4), tuned only to make big tickets compete.
   **Value artifact/liquidity hardening (Ben 2026-07-09)** — the value scan surfaced broken-low quotes and
   untradeable rows ranking #1, the low-side analog of the band/rising artifact-bid. Two gates fixed it:
   (1) `valueGate`'s **artifact-low guard** rejects a live price >`VALUE_MAX_BELOW_LOW_PCT` (15%) below the

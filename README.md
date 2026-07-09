@@ -89,7 +89,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   range is **RC1 recency-anchored** (`VALUE_RECENT_DAYS`=7, Ben 2026-07-09: a stale prior-regime high/low
   from the full 28d window can't inflate amplitude or fake proximity; returns anchored durableLow/High +
   raw values + a `ceilingStale`/`floorStale` flag); `valueScore`
-  is the composite rank (amplitude × proximity × stability — §F flood control); `valueGate` is the
+  is the composite rank (amplitude × proximity × stability × a SATURATING **absolute-gp/unit boost**
+  `VALUE_ABSGP_*`, Ben 2026-07-09 — so a big-ticket item cycling a smaller % but a large absolute gp/unit
+  competes for the HARD top-N fetch slots instead of being swept out by high-% cheap tabs; §F flood
+  control); `valueGate` is the
   amplitude floor + noise cap + **artifact-low guard** (Ben 2026-07-09 — rejects a live price >15%
   `VALUE_MAX_BELOW_LOW_PCT` below the durable q15 floor: a broken instasell print or a crash mid-fall, the
   low-side analog of the band/rising artifact-bid) + decay/downtrend knife guard + multi-week-coverage

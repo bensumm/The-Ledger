@@ -658,7 +658,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   const shown = buyNow.length + watch.length;
   console.log(`## VALUE — ${shown} buy-hold candidate(s) near a multi-week low (PROVISIONAL — unproven theory, n≈0)`);
   console.log('Playbook: buy near the multi-week low, HOLD for the range to cycle up; the edge is ONE tax-paid sell of a big move, not fast churn. State the hold horizon at entry — this is a multi-day/week HOLD, not a flip.');
-  console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability — PLACEHOLDER weights, n≈0)`);
+  console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability × absolute-gp/unit boost — PLACEHOLDER weights, n≈0)`);
   if (buyNow.length) {
     console.log(`\n### BUY-NOW — live at/near the multi-week low (${buyNow.length})`);
     console.log(mdTable(VALUE_HEADERS, buyNow.map(r => r.cells)));

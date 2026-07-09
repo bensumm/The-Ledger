@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.34
+version: 1.35
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -37,7 +37,12 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
   **RC1 recency anchor (same day):** the cycle range is now anchored to the recent 7d, so a stale HIGH from
   a prior regime the item LEFT can't inflate amplitude or make a mid-recovery item read "near the low →
   BUY-NOW" (Contract-of-sensory-clouding was #3 BUY-NOW off a month-old 365k ceiling → correctly WATCH now).
-  A `range recency-anchored — durable A→B … recent C→D` note flags it. Still: DON'T pitch a value buy off
+  A `range recency-anchored — durable A→B … recent C→D` note flags it. **Abs-gp rank blend (same day):**
+  `valueScore` now multiplies in a saturating **absolute-gp/unit boost**, because the pure-% amplitude score
+  was sweeping the HARD top-N fetch cut with cheap high-% teleport tabs and hiding every liquid big-ticket
+  HOLD (15 — Nightmare staff, Bellator ring, Virtus, Dinh's… — passed the gate but got cut pre-quote). The
+  default scan now surfaces a healthy MIX (big tickets + tabs); if you still expect a specific big ticket
+  and don't see it, it's genuinely gated (illiquid <50/d, or a knife), not rank-buried. Still: DON'T pitch a value buy off
   this table yet — the trajectory/value-amplitude validators are inform-ONLY, so a **knife can still sit in
   BUY-NOW flagged-but-not-dropped** (e.g. Inoculation bracelet). Read the `ℹ timing/trajectory` "would
   reject/caution" notes as the real signal and verify by hand.

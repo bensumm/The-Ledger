@@ -36,6 +36,10 @@ const FLAT = [...alt(19, 1000, 1100), 1000];
 const KNIFE = [...alt(15, 1000, 1100), 950, 920, 900, 880, 860];
 // a razor-thin range: lows ~1000, highs ~1030 (<6% after-tax amplitude).
 const THIN_AMP = [...alt(19, 1000, 1030), 1000];
+// a BIG-TICKET item cycling the SAME ~8% amplitude as FLAT but at 20m/22m — the absolute after-tax gp/unit
+// is millions vs FLAT's ~78gp. The abs-gp blend must lift it ABOVE the equal-% cheap item (Ben 2026-07-09:
+// a value-HOLD parks capital in a big absolute cycle; a scale-free %-score buried it under high-% tabs).
+const BIG = [...alt(19, 20_000_000, 22_000_000), 20_000_000];
 // a REGIME SHIFT (Contract-of-sensory-clouding shape): an established HIGH band (~3000/3600) that
 // crashed to a LOW band (~1300/2000) over the window and is now recovering. The full-window q85 ceiling
 // (~3600) is a DEAD regime the item left; a mid-recovery live must NOT read as "near the low → buy-now".
@@ -125,6 +129,16 @@ ok('valueScore ranks a bigger-amplitude, nearer-the-low item ABOVE a weaker one 
   const weakerProx = valueScore(valueRanges(ts(FLAT), 1090));     // same item, mid-range (lower proximity)
   assert.ok(strong > weakerProx, `nearer-the-low outranks mid-range (${strong} > ${weakerProx})`);
   assert.ok(strong > 0);
+});
+
+ok('the ABS-GP blend lifts a big-ticket modest-% cycler ABOVE an equal-% cheap item (Ben 2026-07-09)', () => {
+  const bigTicket = valueScore(valueRanges(ts(BIG), 20_000_000));   // ~8% cycle, but millions of gp/unit
+  const cheap = valueScore(valueRanges(ts(FLAT), 1000));            // SAME ~8% cycle, ~78gp/unit, same proximity
+  assert.ok(bigTicket > cheap, `big-ticket outranks the equal-% tab on absolute gp (${bigTicket} > ${cheap})`);
+  // the boost is SATURATING, not a raw price sort: a cheap item with a MUCH bigger % can still out-score the
+  // big ticket (amplitude still leads) — a 73% Inoculation-shape tab beats the 8% big ticket.
+  const bigCheapPct = valueScore(valueRanges(ts([...alt(19, 1000, 1900), 1000]), 1000));  // ~86% cycle at ~1000gp
+  assert.ok(bigCheapPct > bigTicket, `a far-higher-% cheap item still leads (amp is not overridden) (${bigCheapPct} > ${bigTicket})`);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
