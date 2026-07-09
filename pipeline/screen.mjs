@@ -18,7 +18,7 @@
  *
  * Fetch-pool ordering (the pre-filter rework): the expensive step is the per-item timeseries fetch,
  * so WHICH gated items make the top-N fetch pool matters. loadDaily() builds a BULK multi-day
- * mid-price archive (whole-market /1h @6h spacing, cached on disk) → a regime PROXY (proxyDrift, same
+ * mid-price archive (whole-market /1h @6h spacing, backed by the D0 Tier-1 SQLite archive) → a regime PROXY (proxyDrift, same
  * 3d-vs-~2wk shape as computeQuote's regimeDrift) that is NEVER displayed and only ORDERS the pool:
  * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and rising mode
  * pre-ranks by the proxy so its budget isn't spent on flats (rising fill went ~25% → ~100%). The real

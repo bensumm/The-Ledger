@@ -191,9 +191,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
-    semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `marketfetch.mjs`
+    semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `archive.mjs`
+    (D0 — the Tier-1 SQLite market archive: a thin `node:sqlite` (`DatabaseSync`) wrapper storing
+    RAW `/1h`+`/5m` bulk observations keyed `(grain, ts, itemId)` with `INSERT OR IGNORE` + WAL/
+    busy_timeout. `open`/`append`/`seriesFor`/`marketAt`/`exportFixture`/`pruneBefore`; NEVER archives
+    `/latest` (no idempotent bucket); stores only raw fields — every derived value is recomputed by
+    pure functions, never cached; `hasBucket` is the check-before-fetch predicate. Backs `loadDaily`
+    (with a one-time `daily_seed` import of the pre-D0 `.cache/daily` mids). Surgically suppresses the
+    one `node:sqlite` ExperimentalWarning via a `process.emitWarning` filter installed before a
+    `createRequire` load — no global `--no-warnings` flag on any script. CLI: `node
+    pipeline/lib/archive.mjs [--prune-before <ts>]` (prune shipped, unused by default)), `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
-    `loadHistDaily` (YF1) + the FC1 opt-in cross-invocation fetch
+    `loadHistDaily` (YF1) + `loadDaily` re-pointed at the D0 archive (byte-identical `{ts,mid}` output,
+    proven vs the old cache) + `loadSnapshot()` — the D0 per-pass immutable context `{ts, latest, v24,
+    mapping, guide, archive, series(id)}` composed from the existing loaders, passively accruing the
+    archive (appends the current bulk `/1h`+`/5m` buckets, check-before-fetch) + the FC1 opt-in cross-invocation fetch
     cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
     within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
     helpers), `rating.mjs` (grade/score model), `gatecandidates.mjs` (P1 — screen.mjs's PURE
@@ -322,7 +334,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     and price-only-when-ctx.price invariants, and each seed probe's gates: dip fire/silence + owned framing,
     froth healthy-vs-knife, anchor's `{price}` nudge, decant's `bestDecant` dose math + `needs()` declaration;
     PM2 — `logFirings` writes a well-formed line to the right `<module>.log`, appends not overwrites, no
-    firing ⇒ no file, and a write failure is swallowed) — all auto-discovered by
+    firing ⇒ no file, and a write failure is swallowed),
+    `archive.test.mjs` (D0 — append idempotency (same bucket twice = one row per item), `hasBucket`
+    check-before-fetch, `seriesFor`/`marketAt` vs hand-computed slices on `:memory:` DBs, `exportFixture`
+    round-trip, `pruneBefore`, the never-`/latest` grain guard, and the `dailyMidsAt`+`daily_seed`
+    loadDaily bridge — all on `:memory:`/tmp DBs, NEVER the real archive) — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1
@@ -345,6 +361,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     2026-07-06). Consumer: `pipeline/lib/guideanchor.mjs` (YP1 — the guide re-anchor model, honesty-gated
     on accrual; quote.mjs/watch.mjs surface its advisory line, silent until enough real updates accrue). (Not auto-committed by
     `sync-fills.mjs`; commit it periodically so the record on `origin` stays current.)
+  - `pipeline/.market-archive.sqlite` (+ `-wal`/`-shm` sidecars) — **gitignored, machine-local, D0**:
+    the Tier-1 SQLite market archive. Append-forever RAW `/1h`+`/5m` whole-market observations
+    (~30–35GB/yr, Ben-approved) that the wiki API only serves ~30h/item live — the ONLY route to broad
+    intraday history, feeding P3's term structure + P6's backtests. Deliberately OUTSIDE `pipeline/.cache/`
+    (that tree is disposable/pruned; the archive must survive). Producer: `pipeline/lib/archive.mjs`
+    (`append`, via `loadDaily`/`loadSnapshot`). Consumers: `loadDaily`'s regime proxy today; the Pipeline-v2
+    context chain (P0+) as it lands. NEVER committed (huge, machine-local, reproducible-by-accrual).
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
     `js/format.js` so their tables match the app exactly.

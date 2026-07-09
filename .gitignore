@@ -10,3 +10,10 @@ heartbeat.json
 
 # PM1 probe firing logs (optional per-probe hit/miss ledgers) — desk-side scoring data, never committed
 pipeline/modules/*.log
+
+# D0: the Tier-1 SQLite market archive (append-forever raw /1h + /5m observations, ~30-35GB/yr) and
+# its WAL/SHM sidecars. Desk-side, machine-local, huge — NEVER committed. Lives OUTSIDE .cache/ so
+# cache pruning never touches it.
+pipeline/.market-archive.sqlite
+pipeline/.market-archive.sqlite-wal
+pipeline/.market-archive.sqlite-shm

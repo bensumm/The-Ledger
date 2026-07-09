@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { open as openArchive } from './archive.mjs';   // D0: Tier-1 SQLite market archive
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(HERE, '..', '.cache'); // pipeline/.cache/ — this file lives in pipeline/lib/ (OR2)
@@ -305,75 +306,60 @@ export async function loadBands(hours = 2) {
    bulk whole-market snapshot that ALSO accepts ?timestamp=<unix divisible by 3600> for a past 1h
    window (verified live 2026-07-04 against id 560: a 6h-sampled /1h mid series tracks the real
    per-item /timeseries?timestep=6h mids within ~0.5%, well inside the noise a 3d-vs-14d MEDIAN
-   proxy tolerates). We sample one window every `stepHours` over the last `days`, reducing each
-   whole-market snapshot to {id: mid} (regime only needs the level), archived per-UTC-day under
-   .cache/daily/ exactly like loadBands. Cold ~= days*24/stepHours bulk calls (17d@6h ≈ 68, ~70ms
-   apart); later runs only backfill windows minted since. Past windows are immutable → cached
-   forever until pruned (files older than days+2 dropped).
+   proxy tolerates). We sample one window every `stepHours` over the last `days`.
+
+   D0 RE-POINT: the window store is now the Tier-1 SQLite archive (pipeline/lib/archive.mjs), not the
+   old per-UTC-day .cache/daily/*.json files. The archive holds ONLY the RAW /1h observations; the
+   {ts, mid} regime-proxy series is DERIVED here via mid1h — byte-identical to the pre-D0 output for
+   the same windows, because mid1h is the same reduction over the same inputs (proven: the old cache
+   stored mid1h(entry); the DB stores the raw entry and we mid1h it at read time). The pre-D0 reduced
+   mids are imported ONCE into the archive's `daily_seed` table (seedDailyFromCache) so the switchover
+   keeps ~17d of history. Check-before-fetch (hasDailyWindow) means a fast re-run does ZERO network for
+   windows already stored; a fetched window is appended keyed by the API-supplied bucket timestamp.
+   Pass { db } to reuse an already-open archive handle (loadSnapshot does); otherwise a handle is
+   opened + closed here.
 
    Returns { [id]: [{ ts, mid }] } ascending by ts — the input shape a regime-drift proxy consumes.
    This is a PROXY for picking the fetch pool; the DISPLAYED regime is still the real per-item
    computeQuote/regimeDrift, and the falling-exclusion + rising-confirm remain post-fetch. --- */
-const mid1h = e => (e && e.avgLowPrice && e.avgHighPrice) ? (e.avgLowPrice + e.avgHighPrice) / 2 : (e && (e.avgLowPrice || e.avgHighPrice)) || null;
-export async function loadDaily(days = 17, stepHours = 6) {
-  ensureCacheDir();
-  try { fs.mkdirSync(DAILY_DIR, { recursive: true }); } catch {}
-  const HOUR = 3600, step = stepHours * HOUR;
-  const now = Math.floor(Date.now() / 1000);
-  const lastHour = Math.floor(now / HOUR) * HOUR - HOUR;      // last complete 1h window
-  const latest = Math.floor(lastHour / step) * step;         // align to the step grid (stable windows across runs)
-  const nWin = Math.max(1, Math.ceil(days * 24 / stepHours));
-  const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
+export async function loadDaily(days = 17, stepHours = 6, { db } = {}) {
+  const archive = db || openArchive();
+  const ownArchive = !db;
+  try {
+    try { archive.seedDailyFromCache(DAILY_DIR); } catch {}   // one-time migration of the pre-D0 mids
+    const HOUR = 3600, step = stepHours * HOUR;
+    const now = Math.floor(Date.now() / 1000);
+    const lastHour = Math.floor(now / HOUR) * HOUR - HOUR;      // last complete 1h window
+    const latest = Math.floor(lastHour / step) * step;         // align to the step grid (stable windows across runs)
+    const nWin = Math.max(1, Math.ceil(days * 24 / stepHours));
+    const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
 
-  // load per-day archive, pruning files entirely older than days+2
-  const cutoff = now - (days + 2) * 86400;
-  const archive = new Map();                                  // windowUnix -> {id: mid}
-  let files = []; try { files = fs.readdirSync(DAILY_DIR); } catch {}
-  for (const f of files) {
-    if (!f.endsWith('.json')) continue;
-    const dayStart = Date.parse(f.slice(0, 10) + 'T00:00:00Z') / 1000;
-    if (Number.isFinite(dayStart) && dayStart + 86400 < cutoff) {
-      try { fs.unlinkSync(path.join(DAILY_DIR, f)); } catch {}
-      continue;
+    // backfill only the windows the archive lacks (raw obs OR seed); bulk /1h once each, append RAW.
+    for (const w of windows) {
+      if (archive.hasDailyWindow(w)) continue;                  // check-before-fetch ⇒ no wasted network
+      let resp = null;
+      try { resp = await jget(API + '/1h?timestamp=' + w); } catch { resp = null; }
+      await sleep(70);
+      if (!resp || !resp.data) continue;
+      const bts = Number.isFinite(resp.timestamp) ? resp.timestamp : w;  // grid-aligned past window ⇒ bts === w
+      try { archive.append('1h', bts, resp.data); } catch {}
     }
-    try {
-      const obj = JSON.parse(fs.readFileSync(path.join(DAILY_DIR, f), 'utf8'));
-      for (const w in obj) archive.set(+w, obj[w]);
-    } catch {}
-  }
 
-  // backfill only missing windows (bulk /1h each once, reduced to {id: mid}, appended to its day file)
-  const touched = new Map();                                  // dayKey -> {window: {id:mid}}
-  for (const w of windows) {
-    if (archive.has(w)) continue;
-    let data = null;
-    try { data = (await jget(API + '/1h?timestamp=' + w)).data || {}; } catch { data = null; }
-    await sleep(70);
-    if (!data) continue;
-    const red = {}; for (const id in data) { const m = mid1h(data[id]); if (m != null) red[id] = m; }
-    archive.set(w, red);
-    const dk = dayKey(w);
-    if (!touched.has(dk)) {
-      let cur = {}; try { cur = JSON.parse(fs.readFileSync(path.join(DAILY_DIR, dk + '.json'), 'utf8')); } catch {}
-      touched.set(dk, cur);
+    // assemble per-item ascending {ts, mid} series from the archive (raw-derived + seed union)
+    const series = {};
+    const asc = [...windows].sort((a, b) => a - b);
+    let coverageWindows = 0;
+    for (const w of asc) {
+      const mids = archive.dailyMidsAt(w);
+      if (!mids || Object.keys(mids).length === 0) continue;
+      coverageWindows++;
+      for (const id in mids) (series[id] || (series[id] = [])).push({ ts: w, mid: mids[id] });
     }
-    touched.get(dk)[w] = red;
+    // coverageWindows (distinct requested windows present) lets the caller detect a cold archive
+    return { series, coverageWindows };
+  } finally {
+    if (ownArchive) archive.close();
   }
-  for (const [dk, obj] of touched) {
-    try { fs.writeFileSync(path.join(DAILY_DIR, dk + '.json'), JSON.stringify(obj)); } catch {}
-  }
-
-  // assemble per-item ascending {ts, mid} series
-  const series = {};
-  const asc = [...windows].sort((a, b) => a - b);
-  let coverageWindows = 0;
-  for (const w of asc) {
-    const snap = archive.get(w); if (!snap) continue;
-    coverageWindows++;
-    for (const id in snap) (series[id] || (series[id] = [])).push({ ts: w, mid: snap[id] });
-  }
-  // coverageWindows (distinct requested windows present) lets the caller detect a cold archive
-  return { series, coverageWindows };
 }
 
 /* --- loadHistBands(reqs, hours): the trailing `hours` 5m band for a SET of (item, endUnix)
@@ -500,4 +486,59 @@ export async function loadHistDaily(reqs, days = 17, stepHours = 6) {
     }
     return pts;
   });
+}
+
+/* --- loadSnapshot({ db, budgetIds, ts1h }): the Pipeline-v2 (D0) per-pass CONTEXT. ONE immutable
+   object describing the whole market AS OF one instant, composed ENTIRELY from the existing loaders
+   (loadMapping / loadGuide / loadAll24h / loadAllLatest) — this function changes NO loader behavior,
+   it just gathers them into a frozen context and, as a side effect, PASSIVELY ACCRUES the Tier-1
+   archive: it appends the current bulk /1h and /5m buckets (the only endpoints we archive; keyed by
+   the API-supplied bucket timestamp) using check-before-fetch, so a running watch loop that calls
+   loadSnapshot each tick grows P6's backtest history at zero marginal fetch on an already-stored
+   bucket. /latest is Tier-0 only and is NEVER archived (no idempotent bucket key).
+
+   Shape (P0 will consume it — D0 only BUILDS it):
+     { ts, latest, v24, mapping, guide, archive, series(id) }
+   - ts        : Date.now() at pass start (the pass instant every derivation anchors to)
+   - latest    : whole-market /latest map { id: {high,low,highTime,lowTime} } (loadAllLatest)
+   - v24       : whole-market /24h map (loadAll24h)
+   - mapping   : the id<->name/limit mapping (loadMapping)
+   - guide     : id -> GE guide price (loadGuide)
+   - archive   : the open Tier-1 handle (Tier-1 term structure / seriesFor reads)
+   - series(id): memoized Tier-2 per-item read (fetchItemInputs) — BUDGETED to `budgetIds`; an id not
+                 in the budget returns null so a caller can't accidentally fan out a whole-market
+                 per-item fetch through the context. Pass ts1h to include the 1h window series.
+   The caller owns the archive lifecycle when it passes `db`; otherwise loadSnapshot opens one and
+   leaves it open (a per-pass context is short-lived; close via ctx.archive.close() when done). --- */
+export async function loadSnapshot({ db, budgetIds = [], ts1h = false } = {}) {
+  const ts = Date.now();
+  const mapping = await loadMapping();
+  const guide = await loadGuide();
+  const v24 = await loadAll24h();
+  const latest = await loadAllLatest();
+  const archive = db || openArchive();
+
+  // passively accrue Tier-1: append the current COMPLETE bulk /1h and /5m buckets (check-before-fetch).
+  // These are cheap whole-market reads; each distinct bucket is stored once (INSERT OR IGNORE), so a
+  // fast loop that re-enters the same 5m window does zero extra network.
+  for (const grain of ['5m', '1h']) {
+    try {
+      const probe = await jget(API + '/' + grain);            // latest complete bucket + its API timestamp
+      const bts = Number.isFinite(probe && probe.timestamp) ? probe.timestamp : null;
+      if (bts != null && probe.data && !archive.hasBucket(grain, bts)) archive.append(grain, bts, probe.data);
+    } catch {}
+  }
+
+  const budget = new Set((budgetIds || []).map(Number));
+  const seriesCache = new Map();
+  async function series(id) {
+    const n = Number(id);
+    if (!budget.has(n)) return null;                           // Tier-2 is budgeted — never a blind fan-out
+    if (seriesCache.has(n)) return seriesCache.get(n);
+    const inp = await fetchItemInputs(n, { ts1h });
+    seriesCache.set(n, inp);
+    return inp;
+  }
+
+  return Object.freeze({ ts, latest, v24, mapping, guide, archive, series });
 }
