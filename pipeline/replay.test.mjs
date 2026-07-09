@@ -41,6 +41,12 @@ const GOLD_PATH = path.join(FX_DIR, 'golden.json');
 const SCENARIOS = {
   'active': { posture: 'active' },
   'overnight-band': { modes: ['band'], posture: 'overnight' },
+  // P5 — the falling-doctrine amendment made concrete: the `scalp` niche's spec.falling === 'accept',
+  // so surviveMode does NOT drop the decay-knife (2004) / falling-wide-band (2005) fallers it drops in
+  // every 'exclude' niche. This scenario is the golden-visible doctrine change (the existing four-niche
+  // scenarios above stay byte-identical). Scalp still surfaces the flat/rising rows too — falling is a
+  // valid candidate, not the only one.
+  'scalp': { modes: ['scalp'], posture: 'active' },
 };
 
 function computeGolden(snap) {
@@ -48,7 +54,7 @@ function computeGolden(snap) {
   for (const [name, opts] of Object.entries(SCENARIOS)) scenarios[name] = { opts, niches: runReplay(snap, opts) };
   return {
     schema: 'coffer-replay-golden/1',
-    note: 'Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. PIN: current pre-amendment falling-exclusion (re-pinned at P5).',
+    note: 'Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. P5: falling-exclusion is now PER-SPEC — band/spread/rising/churn keep it (exclude); the scalp scenario ACCEPTS fallers (spec.falling=accept), so 2004/2005 survive there.',
     scenarios,
   };
 }

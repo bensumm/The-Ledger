@@ -39,6 +39,11 @@ export const FLOOR_MIN_POINTS = 6;
 // The durable-support quantile: the level price sits AT-OR-ABOVE ~85% of the time over the durable
 // lookback. VALIDATE (F1/P6): which quantile best separates "returns to but rarely breaks" from noise.
 export const FLOOR_QUANTILE = 0.15;
+// The durable-CEILING quantile (symmetric to the floor): the robust upper level the cycle returns to
+// but rarely exceeds. Used spike-resistantly (P5 value niche) as the cycle's sell ceiling — a lone
+// spike lives in the top tail BEYOND this quantile, so it can't inflate the amplitude the way the raw
+// max would. VALIDATE (F1/P6): the same question as the floor, from the top.
+export const CEIL_QUANTILE = 1 - FLOOR_QUANTILE;   // 0.85
 // "Typical swing" is the inter-quartile range over the durable lookback (q25→q75). VALIDATE: whether
 // IQR, MAD, or a decile band best captures the NORMAL (non-spike) fluctuation an item shows.
 export const TYPICAL_LO_Q = 0.25, TYPICAL_HI_Q = 0.75;
@@ -111,10 +116,11 @@ export function termStructure(series, { now = null, lookbacks = DEFAULT_LOOKBACK
   for (const d of [FLOOR_LOOKBACK_DAYS, FLOOR_FALLBACK_DAYS]) {
     if (lk[d] && lk[d].n >= FLOOR_MIN_POINTS) { floorDays = d; break; }
   }
-  let floor = null, typicalSwing = null, typicalSwingFrac = null;
+  let floor = null, ceiling = null, typicalSwing = null, typicalSwingFrac = null;
   if (floorDays != null) {
     const vals = midsWithin(s, floorDays, nowSec);   // ascending
     floor = quantile(vals, FLOOR_QUANTILE);
+    ceiling = quantile(vals, CEIL_QUANTILE);         // robust high (spike-resistant), symmetric to floor
     const iqr = quantile(vals, TYPICAL_HI_Q) - quantile(vals, TYPICAL_LO_Q);
     typicalSwing = floor != null ? Math.max(iqr, floor * MIN_SWING_FRAC) : iqr;
     typicalSwingFrac = floor ? typicalSwing / floor : null;
@@ -123,7 +129,7 @@ export function termStructure(series, { now = null, lookbacks = DEFAULT_LOOKBACK
   return {
     hasData: true, now: nowSec, current, coverageDays,
     lookbacks: lk,
-    floor, floorLookback: floorDays, floorQuantile: FLOOR_QUANTILE,
+    floor, ceiling, floorLookback: floorDays, floorQuantile: FLOOR_QUANTILE,
     typicalSwing, typicalSwingFrac,
   };
 }

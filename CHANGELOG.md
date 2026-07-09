@@ -10,6 +10,50 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P5 — scalp/value niches + path-aware bids + per-strategy falling doctrine (2026-07-09, pipeline-only + inert quotecore/paths/termstructure widening — NO APP_VERSION)
+The DOCTRINE chunk of the Pipeline-v2 wave: Ben's 2026-07-08 amendment — "a falling item is not
+necessarily a poor purchase; we cannot judge falling without its history and typical fluctuations" —
+turns the global falling-exclusion into a PER-STRATEGY rule, and adds two provisional off-by-default
+niches that exploit it. **Every scalp/value threshold + weight is a NAMED PLACEHOLDER (n≈0);** the
+suggestions ledger (mode `scalp`/`value`) is the accrual that would tune them — nothing here is validated.
+- **Per-spec falling doctrine.** Each strategy spec now declares `falling` (`js/strategies.mjs`):
+  `exclude` (band/spread/rising/churn — unchanged; the replay goldens pin byte-identity), `accept`
+  (scalp EXPECTS a falling wide band), `knife-guard` (value — reject a decay/downtrend, accept a
+  flat/basing value-low). `surviveMode` reads `spec.falling` instead of a hardcoded exclusion. The
+  replay golden re-pin (`--update`, hand-reviewed) adds ONLY a new `scalp` scenario where the fallers
+  2004/2005 SURVIVE — the existing four-niche scenarios are byte-identical.
+- **`scalp` niche** (`--mode scalp`, off-by-default): a deliberate intraday flip on a falling market —
+  a wide fresh band clearing tax + a scalp margin (`SCALP_MIN_ROI`=2.0%, placeholder, > band's 1.5%),
+  reach-validated on today's high (the P2 reachValidator, which degrades to pass on the screen — no 1h
+  fetch, same as every surface). Flip-only/no-hold with a hard intraday stop: the path engine
+  (`js/paths.mjs` `SCALP_NO_HOLD_PENALTY`) sinks BOTH hold-family theses when `enteredUnder==='scalp'`,
+  so an unsold scalp lap migrates to `cut`, NEVER `hold-recovery` (pinned in paths.test.mjs).
+- **`value` niche** (`--mode value`, off-by-default, console-only — PLAN-VALUE): buy near a multi-week
+  low and HOLD for the cycle; the edge is ONE tax-paid sell of a big move, not fast churn. Its own gate
+  (`js/valuescreen.mjs` + `js/termstructure.mjs`): two-sided liquidity KEPT, the 500k gp/day THROUGHPUT
+  floor REPLACED by an after-tax cycle-amplitude floor (`VALUE_MIN_CYCLE_PCT`=6%), liquidity floor
+  LOWERED (`VALUE_LIQ_FLOOR`=20 — hold for days/weeks needs eventual exitability, not churn), and a
+  decay/downtrend KNIFE guard (recent-3d median below the 14d median). Amplitude is computed off the
+  ROBUST floor→ceiling quantiles (new `termStructure.ceiling` = q85, symmetric to the q15 floor) so a
+  lone spike can't inflate a range, with a noise cap (`VALUE_MAX_CYCLE_PCT`=150%), a capital-deployment
+  min price (`VALUE_MIN_PRICE`=1000), and a MULTI-WEEK coverage guard (a cold archive surfaces nothing —
+  the honest degrade). Ranked by `valueScore` (amplitude × proximity-to-low × floor-stability — §F), a
+  HARD top-N (`VALUE_TOP_DEFAULT`=25), buy-now/watch tiers by proximity, its own §D table with the hold
+  horizon stated + a provisional banner + an admitted-vs-shown footer. Value picks are ISOLATED (§E) —
+  they never feed the fast-flip verdicts and are excluded from `screen.json` (no app tab yet).
+- **Path-aware bids — CANCEL-BID emergent.** `offerVerdict(row, price, pathCtx?)` gains an OPTIONAL
+  third arg (a declared scalp/value-hold thesis key or `{path,tripwire}`). A bid under a deliberate
+  thesis no longer CANCEL-BIDs off the falling REGIME alone — only its own tripwire (scalp: a live
+  reliable 2h breakdown; value-hold: a floor break). **App-inertness proof:** absent the third arg the
+  verdict is BYTE-IDENTICAL to pre-P5 across the full state×price matrix (pinned in watchcore.test.mjs),
+  and the deployed app Watch tab calls `offerVerdict(row, price)` with no path arg → app behavior
+  unchanged → NO APP_VERSION bump (the P4a "inert quotecore widening" precedent). `watch.mjs` threads
+  the declared path (from the hold-thesis store) into its bid rows/alerts.
+- **Docs + tests.** Six-spec conformance suite green; new `pipeline/valuescreen.test.mjs`; value gate +
+  §F flood-control regression in `gatecandidates.test.mjs`; scalp accept in `survivemode.test.mjs`;
+  path-aware + app-inertness in `watchcore.test.mjs`; scalp-lap in `paths.test.mjs`. CLAUDE.md's falling
+  rule + niche list, README inventory, and MONITORING.md's bid-verdict matrix reconciled in place.
+
 ### V2-P4c — Declarative strategy specs + surfacing-side paths (2026-07-08, pipeline-only — NO APP_VERSION)
 Before P4c the screen's four niches lived as imperative `if (mode === 'spread') … else …` branches
 inside `pipeline/lib/gatecandidates.mjs` — the niche name was a magic string threaded through the gate

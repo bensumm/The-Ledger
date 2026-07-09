@@ -62,6 +62,20 @@ ok('--phase-rescue with a null phase drops the faller (no basing to read)', () =
   assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
 });
 
+/* --- P5: the falling doctrine is PER-SPEC (Ben's 2026-07-08 amendment) --------------------- */
+ok('scalp (spec.falling="accept") KEEPS a falling row — falling is the scalp thesis, not a veto', () => {
+  const sv = surviveMode('scalp', row({ falling: true }), { phase: 'decay' }, {});
+  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false });
+});
+ok('band still EXCLUDES the same falling row (existing niches unchanged — byte-identical)', () => {
+  const sv = surviveMode('band', row({ falling: true }), { phase: 'decay' }, {});
+  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
+});
+ok('scalp still applies overnight posture (accept ≠ bypass every gate) — a thin scalp drops overnight', () => {
+  const sv = surviveMode('scalp', row({ falling: true, thin: true }), { phase: 'decay' }, { posture: 'overnight', thin: true });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+});
+
 /* --- rising-mode confirm ------------------------------------------------------------------ */
 ok('rising mode drops a non-rising row (discardReason "notRising")', () => {
   const sv = surviveMode('rising', row({ rising: false }), { phase: 'base' }, {});

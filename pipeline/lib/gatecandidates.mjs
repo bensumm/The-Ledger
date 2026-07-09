@@ -34,6 +34,10 @@
  */
 import { overnightStaleRisk } from '../../js/quotecore.js';
 import { median } from './cli.mjs';
+// P5 — the value niche's term-structure gate + rank (js/valuescreen.mjs, pure). gateCandidates routes
+// a `gate:'value'` spec here instead of the shared band/spread liquidity+edge stack.
+import { termStructure } from '../../js/termstructure.mjs';
+import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '../../js/valuescreen.mjs';
 // P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
 // js/strategies.mjs. gateCandidates/rankAndSlice look up STRATEGIES[mode] and call spec.edge / read
 // spec.pool.risingFloor / spec.rank instead of branching on the niche name — byte-identical behavior
@@ -48,10 +52,17 @@ export const DEFAULT_THRESHOLDS = {
   FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
   MIN_ACTIVE: 6, MIN_ACTIVE_THIN: 1, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
+  // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
+  // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation), and the
+  // liquidity floor is LOWERED (you hold days–weeks → need eventual exitability, not fast churn).
+  // PLACEHOLDER (rule 4). Two-sided liquidity stays non-negotiable.
+  VALUE_LIQ_FLOOR: 20,
 };
 // Default rank/slice sizing (screen.mjs's --thin-reserve / --top defaults).
 export const THIN_RESERVE_DEFAULT = 6;
 export const TOP_DEFAULT = 40;
+// P5 — the value niche's HARD top-N (§F flood control: the gated pool WILL be large; never dump it).
+export const VALUE_TOP_DEFAULT = 25;
 
 // realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
 // of the limiting-side daily volume. Null limit → volume share only.
@@ -87,9 +98,11 @@ export const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : dri
 // used to close over is now a named field of the `t` thresholds object (default DEFAULT_THRESHOLDS),
 // so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window, rising-pool
 // floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and `tax` are pure.
-export function gateCandidates(mode, { v24, map, bands }, t = DEFAULT_THRESHOLDS) {
+export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
   const spec = STRATEGIES[mode];
   if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
+  if (spec.gate === 'value') return gateValueCandidates(ctx, t);   // P5 — the term-structure value gate
+  const { v24, map, bands } = ctx;
   const cand = [];
   for (const idStr in v24) {
     const id = +idStr; const d = v24[idStr]; if (!d) continue;
@@ -123,12 +136,48 @@ export function gateCandidates(mode, { v24, map, bands }, t = DEFAULT_THRESHOLDS
   return cand;
 }
 
+/* P5 — the VALUE niche's own candidate gate (PLAN-VALUE §A). Keeps the two-sided liquidity gate + the
+   price window; REPLACES the 500k gp/day throughput floor with valuescreen's after-tax cycle-amplitude
+   floor, LOWERS the liquidity floor (VALUE_LIQ_FLOOR — hold for days–weeks needs eventual exitability,
+   not fast churn), and rejects a decay/downtrend KNIFE via the term structure. `ctx.daily` is the bulk
+   daily-mid archive (screen.mjs's loadDaily) already loaded at gate time — the term structure is
+   computed from it with NO per-item fetch. Each survivor carries its valueScore + valueRanges + tier so
+   rankAndSlice can hard top-N by score (§F) and renderMode can print the term-structure row. */
+function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS) {
+  const floorVol = t.VALUE_LIQ_FLOOR ?? DEFAULT_THRESHOLDS.VALUE_LIQ_FLOOR;
+  const cand = [];
+  for (const idStr in v24) {
+    const id = +idStr; const d = v24[idStr]; if (!d) continue;
+    const hpv = d.highPriceVolume || 0, lpv = d.lowPriceVolume || 0;
+    if (hpv <= 0 || lpv <= 0) continue;                 // two-sided liquidity (KEPT — must be exitable)
+    const limitVol = Math.min(hpv, lpv);
+    const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
+    if (!avgHigh || !avgLow) continue;
+    const mid = (avgHigh + avgLow) / 2;
+    if (mid < Math.max(t.MIN_PRICE, VALUE_MIN_PRICE) || mid > t.MAX_PRICE) continue;   // price window + value capital-deployment floor
+    const thin = limitVol < floorVol;                       // LOWERED value liquidity floor OR gp-flow
+    if (thin && limitVol * mid < t.GP_FLOOR) continue;
+    const ts = termStructure(daily && daily[id]);            // 1/3/7/14/28d structure (no per-item fetch)
+    const vr = valueRanges(ts, mid);                        // mid = live proxy pre-fetch
+    const g = valueGate(vr, {});                            // amplitude floor + term-structure knife guard
+    if (!g.pass) continue;
+    const limit = map.byId[id]?.limit ?? null;
+    cand.push({ id, limitVol, mid, limit, thin, valueScore: valueScore(vr), valueRanges: vr, tier: valueTier(vr) });
+  }
+  return cand;
+}
+
 // Rank the gated pool and take the top-N to fetch. The proxy (from the bulk daily archive) orders
 // WHICH items we spend the expensive per-item fetch on — deprioritizing probable fallers, and for
 // rising mode pushing likely-rising items to the front so its fetch budget isn't wasted on flats.
 // `opts.thinReserve`/`opts.top` default to screen.mjs's --thin-reserve/--top defaults (screen passes
 // the CLI values explicitly); fixtures can drive them.
 export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, top = TOP_DEFAULT } = {}) {
+  // P5 value niche (§F): rank the WHOLE gated pool by the composite valueScore and take a HARD top-N.
+  // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).
+  if (STRATEGIES[mode] && STRATEGIES[mode].gate === 'value') {
+    return cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id)).slice(0, top);
+  }
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   // Thin gp-flow qualifiers are held OUT of the main ranking and given a bounded RESERVE instead.
   // Two reasons: (1) their intraday band is priced off a thinly-traded 2h window, so bandNet is noisy
@@ -159,11 +208,19 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
 //     is ultimately kept or dropped by a later gate. The caller: `if (rescued) disc.rescued++`.
 // opts: { phaseRescue, posture, thin, series5m } — series5m is THIS item's raw 5m series (for the
 // overnight staleness read), i.e. renderMode's `series5m && series5m.get(id)`.
-// PIN: this is the CURRENT (pre-amendment) falling-exclusion — re-pinned at P5 when the doctrine changes.
+// P5 — the falling doctrine is now PER-SPEC (Ben's 2026-07-08 amendment: a faller is not necessarily a
+// poor buy — "we cannot judge falling without its history and typical fluctuations"). surviveMode reads
+// spec.falling instead of a hardcoded global exclusion:
+//   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing). The four original niches keep
+//                   this → byte-identical (the replay goldens pin it). 'knife-guard' (value) also lands
+//                   here defensively, but value never reaches surviveMode — its knife guard is valueGate.
+//   'accept'      — falling is a VALID candidate (scalp EXPECTS a falling wide band); not dropped for
+//                   the regime alone. Its intraday tripwire lives in offerVerdict/the path engine.
 export function surviveMode(mode, row, phase, opts = {}) {
   const { phaseRescue = false, posture = 'active', thin = false, series5m = null } = opts;
+  const fallingDoctrine = STRATEGIES[mode] ? STRATEGIES[mode].falling : 'exclude';
   let rescued = false;
-  if (row.falling) {
+  if (row.falling && fallingDoctrine !== 'accept') {
     if (phaseRescue && phase && phase.phase === 'basing') rescued = true;   // decayed off a spike, lows flattened
     else return { keep: false, discardReason: 'falling', rescued: false };  // screen rule: never surface fallers
   }

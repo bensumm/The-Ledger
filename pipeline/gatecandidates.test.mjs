@@ -30,7 +30,7 @@
  * gateCandidates is the thin-gp-flow exemption from the attention floor, pinned below.
  */
 import assert from 'node:assert/strict';
-import { gateCandidates, risingPoolFloor, rankAndSlice, proxyDrift, softFactor } from './lib/gatecandidates.mjs';
+import { gateCandidates, risingPoolFloor, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT } from './lib/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -208,6 +208,61 @@ ok('top slices the combined reserve+pool list', () => {
   const cand = [c(1, 300), c(2, 200), c(3, 100)];               // no series → all softFactor 0.7 → expGpDay order
   const out = rankAndSlice('band', cand, {}, { top: 2, thinReserve: 6 });
   assert.deepEqual(out.map(x => x.id), [1, 2]);
+});
+
+/* === P5 VALUE niche: the term-structure gate + the §F flood-control rank/cutoff ================= *
+ * value's gate is term-structure-driven (js/valuescreen.mjs), routed via spec.gate==='value'. The
+ * daily-mid archive rides ctx.daily. These pin: the knife rejection, the amplitude floor, and — the
+ * §F flood-control regression guard — that a LARGE gated pool is ranked by valueScore and HARD-capped. */
+console.log('\ngatecandidates.mjs VALUE niche (P5):');
+
+const DAY = 86400, TEND = 1_700_000_000;
+// a daily {ts,mid} archive from mids (oldest→newest, 1 day apart ending at TEND).
+const dseriesV = mids => mids.map((m, i) => ({ ts: TEND - (mids.length - 1 - i) * DAY, mid: m }));
+const altV = (n, lo, hi) => Array.from({ length: n }, (_, i) => (i % 2 === 0 ? lo : hi));
+const FLAT_V = [...altV(19, 1000, 1100), 1000];        // flat floor, ~7.8% after-tax amplitude
+const KNIFE_V = [...altV(15, 1000, 1100), 950, 920, 900, 880, 860];  // decayed off the base
+// a value ctx: v24 record + the daily archive, keyed by id.
+const vctx = (v24, daily, byId = {}) => ({ v24, map: { byId }, bands: {}, daily });
+
+ok('value gate: a flat-floor two-sided item with ≥6% amplitude near the low PASSES; a knife is dropped', () => {
+  const v24 = { 500: rec(1000, 1010, 200), 600: rec(1000, 1010, 200) };   // both liquid + two-sided
+  const daily = { 500: dseriesV(FLAT_V), 600: dseriesV(KNIFE_V) };
+  const cand = gateCandidates('value', vctx(v24, daily), baseT);
+  assert.deepEqual(cand.map(c => c.id), [500], 'the flat-floor item passes; the knife is rejected');
+  assert.ok(cand[0].valueScore > 0 && cand[0].tier === 'buy-now', 'carries a score + a buy-now tier (live near the low)');
+});
+
+ok('value gate keeps the two-sided liquidity gate (a one-sided book is dropped even with a great range)', () => {
+  const v24 = { 500: rec(1000, 1010, 200, 0) };   // lpv=0 → one-sided
+  const cand = gateCandidates('value', vctx(v24, { 500: dseriesV(FLAT_V) }), baseT);
+  assert.equal(cand.length, 0, 'one-sided → uncrossable → dropped (non-negotiable)');
+});
+
+ok('value gate drops an item with NO daily history (can\'t assert a value floor)', () => {
+  const v24 = { 500: rec(1000, 1010, 200) };
+  const cand = gateCandidates('value', vctx(v24, { 500: [{ ts: TEND, mid: 1000 }] }), baseT);
+  assert.equal(cand.length, 0, 'a one-point series → no term structure → skipped');
+});
+
+ok('§F FLOOD CONTROL: a large gated pool ranks by valueScore and is HARD-capped to the top-N', () => {
+  // 40 flat-floor value items (a realistically LARGE pool — the whole point of §F). Vary the live-vs-low
+  // proximity via the 24h mid so valueScore separates them, then assert the cutoff + the ordering.
+  const v24 = {}, daily = {};
+  for (let i = 0; i < 40; i++) {
+    const id = 1000 + i;
+    // spread avgLow from 1000 (at the floor → high proximity/score) up to ~1080 (mid-range → lower).
+    const lo = 1000 + i * 2;
+    v24[id] = rec(lo, lo + 10, 200);
+    daily[id] = dseriesV(FLAT_V);
+  }
+  const cand = gateCandidates('value', vctx(v24, daily), baseT);
+  assert.ok(cand.length > VALUE_TOP_DEFAULT, `the pool is large (${cand.length} admitted > ${VALUE_TOP_DEFAULT})`);
+  const sliced = rankAndSlice('value', cand, daily, { top: VALUE_TOP_DEFAULT });
+  assert.equal(sliced.length, VALUE_TOP_DEFAULT, 'HARD top-N cutoff — never dump the full pool');
+  // sorted by valueScore DESC — the nearest-the-low (id 1000) leads, and scores are monotonic non-increasing.
+  for (let i = 1; i < sliced.length; i++) assert.ok(sliced[i - 1].valueScore >= sliced[i].valueScore, 'ranked by valueScore desc');
+  assert.equal(sliced[0].id, 1000, 'the item at the floor (best proximity) ranks first');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

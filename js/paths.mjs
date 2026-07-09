@@ -74,6 +74,12 @@ export const BE_UNREACHABLE_PENALTY  = 0.25;  // underwater AND falling → the 
 export const SCALP_WIDE_BAND_BONUS   = 0.30;  // a fresh intraday band wide enough to clear tax+margin
 export const SCALP_FALLING_PENALTY   = 0.20;  // scalping a faller is the adverse-selection knife (P5)
 export const SCALP_MIN_BAND_PCT      = 0.03;  // band width ≥ this fraction ⇒ "wide enough" (placeholder)
+// P5 scalp path SEMANTICS (the "unsold scalp lap → cut, never hold-recovery" rule): a lot ENTERED
+// under scalp is flip-only/no-hold by construction — a lap that failed to sell is a cut, not a
+// retroactive hold thesis. When ctx.enteredUnder === scalp, BOTH hold-family theses (value-hold and
+// hold-recovery) take this penalty so an exit-family path (cut, on the falling tape a scalp lives on)
+// dominates. PLACEHOLDER magnitude (n≈0), large enough to sink both holds below the exit family.
+export const SCALP_NO_HOLD_PENALTY   = 0.40;
 
 const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -149,6 +155,7 @@ function scorePath(key, ctx) {
   const breakdown = ctx.mom === 'breakdown';
   const haveRegime = regime != null && regime !== 'unknown';
   const havePhase  = phase != null && phase !== 'unknown';
+  const scalpEntry = ctx.enteredUnder === PATH_KEYS.SCALP;   // P5: a lot entered as a scalp is flip-only/no-hold
 
   switch (key) {
     case PATH_KEYS.VALUE_HOLD: {
@@ -158,6 +165,7 @@ function scorePath(key, ctx) {
       if (falling) add(-FALLING_HOLD_PENALTY, 'falling', 'falling regime erodes the floor the value thesis rests on');
       else if (rising) add(+RISING_HOLD_BONUS, 'rising', 'confirmed uptrend rewards holding');
       if (decay) add(-DECAY_HOLD_PENALTY, 'decay', 'decay phase — the floor is still stepping down');
+      if (scalpEntry) add(-SCALP_NO_HOLD_PENALTY, 'scalp-no-hold', 'entered as a scalp (flip-only) — an unsold lap is a cut, not a value hold');
       if (!haveRegime) nodata('no regime read');
       break;
     }
@@ -166,6 +174,7 @@ function scorePath(key, ctx) {
       else if (rising) add(+RISING_HOLD_BONUS, 'rising', 'uptrend supports a recovery hold');
       if (decay) add(-DECAY_HOLD_PENALTY, 'decay', 'decay phase — lows still stepping down, not recovering');
       else if (basing) add(+BASING_RECOVERY_BONUS, 'basing', 'basing phase — lows flattened, a recovery is plausible');
+      if (scalpEntry) add(-SCALP_NO_HOLD_PENALTY, 'scalp-no-hold', 'entered as a scalp (flip-only) — an unsold lap migrates to cut, never a recovery hold');
       if (!underwater) nodata('lot is not underwater — a recovery hold has little to recover');
       if (!haveRegime && !havePhase) nodata('no regime/phase read');
       break;

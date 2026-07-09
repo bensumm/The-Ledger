@@ -1,6 +1,6 @@
 {
   "schema": "coffer-replay-golden/1",
-  "note": "Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. PIN: current pre-amendment falling-exclusion (re-pinned at P5).",
+  "note": "Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. P5: falling-exclusion is now PER-SPEC — band/spread/rising/churn keep it (exclude); the scalp scenario ACCEPTS fallers (spec.falling=accept), so 2004/2005 survive there.",
   "scenarios": {
     "active": {
       "opts": {
@@ -364,6 +364,87 @@
             "2004": "falling",
             "2005": "falling"
           }
+        }
+      }
+    },
+    "scalp": {
+      "opts": {
+        "modes": [
+          "scalp"
+        ],
+        "posture": "active"
+      },
+      "niches": {
+        "scalp": {
+          "gated": [
+            {
+              "id": 2001,
+              "thin": false
+            },
+            {
+              "id": 2002,
+              "thin": false
+            },
+            {
+              "id": 2003,
+              "thin": true
+            },
+            {
+              "id": 2004,
+              "thin": false
+            },
+            {
+              "id": 2005,
+              "thin": false
+            }
+          ],
+          "ranked": [
+            2003,
+            2002,
+            2001,
+            2005,
+            2004
+          ],
+          "survivors": [
+            {
+              "id": 2003,
+              "keep": true,
+              "discardReason": null,
+              "rescued": false
+            },
+            {
+              "id": 2002,
+              "keep": true,
+              "discardReason": null,
+              "rescued": false
+            },
+            {
+              "id": 2001,
+              "keep": true,
+              "discardReason": null,
+              "rescued": false
+            },
+            {
+              "id": 2005,
+              "keep": true,
+              "discardReason": null,
+              "rescued": false
+            },
+            {
+              "id": 2004,
+              "keep": true,
+              "discardReason": null,
+              "rescued": false
+            }
+          ],
+          "kept": [
+            2001,
+            2002,
+            2003,
+            2004,
+            2005
+          ],
+          "dropped": {}
         }
       }
     }

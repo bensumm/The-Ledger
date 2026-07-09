@@ -108,6 +108,26 @@ ok('migration flag: entered-under the dominant path → migration false; absent 
   assert.equal(r2.migration, false, 'no declared entry path ⇒ no migration signal');
 });
 
+// --- 4b. P5: an UNSOLD SCALP LAP migrates to cut, NEVER hold-recovery --------------------------
+ok('scalp lap: a held lot entered under scalp (unsold, falling, underwater) → dominant is CUT, never a hold', () => {
+  // ACCEPTANCE #3 — a scalp is flip-only; a lap that failed to sell is a cut, not a recovery hold.
+  const ctx = decayKnifeCtx({ enteredUnder: PATH_KEYS.SCALP });
+  const { dominant, weighed } = weighPaths(enumeratePaths(ctx), ctx);
+  const vRec = via(weighed, PATH_KEYS.HOLD_RECOVERY);
+  const vHold = via(weighed, PATH_KEYS.VALUE_HOLD);
+  const exitFamily = [via(weighed, PATH_KEYS.CUT), via(weighed, PATH_KEYS.LIST_TO_CLEAR), via(weighed, PATH_KEYS.BE_ESCAPE)];
+  for (const e of exitFamily) { assert.ok(e > vRec, `exit ${e} > hold-recovery ${vRec}`); assert.ok(e > vHold, `exit ${e} > value-hold ${vHold}`); }
+  assert.notEqual(dominant.key, PATH_KEYS.HOLD_RECOVERY, 'never hold-recovery');
+  assert.notEqual(dominant.key, PATH_KEYS.VALUE_HOLD, 'never a value hold either');
+  assert.equal(dominant.key, PATH_KEYS.CUT, 'the failed scalp lap cuts on the falling tape');
+  // the penalty is EVIDENCED (transparency): the scalp-no-hold signal is recorded on both holds.
+  assert.ok(weighed.find(p => p.key === PATH_KEYS.HOLD_RECOVERY).evidence.some(e => e.signal === 'scalp-no-hold'));
+});
+ok('scalp-no-hold penalty is inert when the lot was NOT entered under scalp (no enteredUnder)', () => {
+  const { weighed } = weighPaths(enumeratePaths(decayKnifeCtx()), decayKnifeCtx());
+  assert.ok(!weighed.find(p => p.key === PATH_KEYS.HOLD_RECOVERY).evidence.some(e => e.signal === 'scalp-no-hold'));
+});
+
 // --- 5. unheld candidate enumeration (scalp / value-hold / avoid) ------------------------------
 ok('an UNHELD candidate enumerates scalp + value-hold + avoid (entry theses)', () => {
   const paths = enumeratePaths({ id: 1, held: false, quickBuy: 100, quickSell: 105, reliable: true });

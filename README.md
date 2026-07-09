@@ -68,9 +68,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   multi-week floor; a HELD lot degrades. NOT yet app-imported → adding it does not bump APP_VERSION),
   `termstructure.mjs` (P3 — pure DOM-free multi-day term structure over a daily-mid `[{ts,mid}]` series:
   the 1/3/7/14/28d `termStructure` (median/low/high/pctInRange per lookback), a durable **floor** (low
-  quantile of the longest multi-week lookback) + a **typical fluctuation** (IQR); degrades to
+  quantile of the longest multi-week lookback), a robust **ceiling** (P5 — the symmetric high quantile
+  q85, so a lone spike can't inflate a range) + a **typical fluctuation** (IQR); degrades to
   `hasData:false` on a short series. Consumed by `js/validate.mjs`'s floorValidator + `pipeline/screen.mjs`/
-  `pipeline/quote.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
+  `pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
+  `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold niche
+  (PLAN-VALUE): `valueRanges(ts,live)` derives the shape features (after-tax cycle amplitude off the
+  robust floor→ceiling, proximity-to-low, floor-stability, knife delta) from a termStructure; `valueScore`
+  is the composite rank (amplitude × proximity × stability — §F flood control); `valueGate` is the
+  amplitude floor + noise cap + decay/downtrend knife guard + multi-week-coverage guard (a COLD archive
+  surfaces nothing — honest degrade); `valueTier` splits buy-now vs watch by proximity. Imports only `tax`
+  from format.js. ALL thresholds/weights are NAMED PLACEHOLDERS (n≈0). NOT yet app-imported → no
+  APP_VERSION bump. Fixture-pinned `pipeline/valuescreen.test.mjs`),
   `paths.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
   list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
@@ -82,17 +91,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`),
-  `strategies.mjs` (P4c — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's four niches
-  (band/spread/rising/churn) as data-shaped specs `{key,label,inAll,pool:{risingFloor},edge,rank,
-  confirm,validators,defaultPath}`. `pipeline/lib/gatecandidates.mjs` looks up `STRATEGIES[mode]` and
-  calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` instead of branching on the niche
-  name — byte-identical to the old inline logic (pinned by the P1 replay goldens), so P5 registers the
-  scalp/value specs WITHOUT editing gatecandidates.mjs or screen.mjs again. `defaultPath` = the inferred
-  DEFAULT ENTRY PATH the surfacing implies (band/spread/churn → `scalp`, rising → `value-hold` — a
-  Ben-vetoable judgment proposal), written to `suggestions.jsonl` (lean `path` field) + shown as the
-  screen's per-row entry-path annotation. `validateStrategySpec` + `pipeline/strategies.test.mjs` are the
-  CONFORMANCE suite (structural contract + no-throw + determinism over the replay archetypes). Imports
-  only `tax` from format.js + `PATH_KEYS` from paths.mjs. NOT yet app-imported → no APP_VERSION bump),
+  `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's SIX niches
+  (band/spread/rising/churn + P5 scalp/value) as data-shaped specs `{key,label,inAll,pool:{risingFloor},
+  edge,rank,confirm,falling,gate,validators,defaultPath}`. `pipeline/lib/gatecandidates.mjs` looks up
+  `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
+  / `spec.gate` instead of branching on the niche name — byte-identical to the old inline logic for the
+  four originals (pinned by the P1 replay goldens). P5 adds: the per-spec `falling` doctrine
+  (`exclude`|`accept`|`knife-guard` — the amended, no-longer-global falling rule), a `gate` selector
+  (`band`|`value` — value routes to the term-structure `valueGate`), and the `scalp`/`value` specs (both
+  off-by-default). `defaultPath` = the inferred DEFAULT ENTRY PATH the surfacing implies (band/spread/churn/
+  scalp → `scalp`, rising/value → `value-hold` — a Ben-vetoable judgment proposal), written to
+  `suggestions.jsonl` (lean `path` field) + shown as the screen's per-row entry-path annotation.
+  `validateStrategySpec` + `pipeline/strategies.test.mjs` are the CONFORMANCE suite (structural contract +
+  no-throw + determinism over the replay archetypes). Imports only `tax` from format.js + `PATH_KEYS` from
+  paths.mjs. NOT yet app-imported → no APP_VERSION bump),
   `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
@@ -275,9 +287,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the
     `risingPoolFloor` predicate (GC1's threshold-driven form, default `DEFAULT_THRESHOLDS`), the
     fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`), and the extracted
-    post-fetch `surviveMode(mode,row,phase,opts)` — falling-exclusion/`--phase-rescue`/rising-confirm/
+    post-fetch `surviveMode(mode,row,phase,opts)` — falling doctrine/`--phase-rescue`/rising-confirm/
     overnight-posture, returning `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc`
-    counters; logic byte-identical to the old inline code, diff-proven), `replay.mjs` (P1 — the
+    counters; logic byte-identical to the old inline code for the four originals, diff-proven. **P5**:
+    `surviveMode` now reads the PER-SPEC `spec.falling` (band/spread/rising/churn keep `exclude`; scalp
+    `accept`s fallers), and `gateCandidates` routes a `gate:'value'` spec to `gateValueCandidates` (the
+    term-structure value gate off `ctx.daily` + `js/valuescreen.mjs`) with `rankAndSlice` hard-top-N'ing
+    the value pool by `valueScore`), `replay.mjs` (P1 — the
     snapshot-replay acceptance ENGINE: `buildSnapshot()` expands five synthetic ARCHETYPES into a full
     raw market snapshot (`coffer-replay-snapshot/1`, a documented superset of D0's archive fixture —
     it also carries v24/band/latest/timeseries/daily so the whole funnel runs offline) anchored to a

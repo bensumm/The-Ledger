@@ -142,6 +142,42 @@ ok('offerVerdict: NO-QUOTE / CROSSING / BID-BEHIND / BID-OK by band position', (
   assert.equal(offerVerdict(null, 90), 'NO-QUOTE');
 });
 
+/* --- P5: PATH-AWARE offerVerdict (the third arg). The app Watch tab calls offerVerdict(row, price)
+   with NO path arg, so absent-path MUST be byte-identical to pre-P5 (the app-inertness proof). --- */
+ok('P5 app-inertness: absent path context (undefined/null/{}) is byte-identical to the 2-arg call', () => {
+  // sweep the full state matrix WITHOUT a path arg, then again with undefined/null/{} — all identical.
+  const cases = [
+    orow({ falling: true }), orow({ mom: 'breakdown', reliable: true }),
+    orow({ mom: 'breakdown', reliable: false }), orow({ quickBuy: null }), orow(),
+  ];
+  const prices = [90, 97, 100, 101];
+  for (const r of cases) for (const p of prices) {
+    const base = offerVerdict(r, p);
+    assert.equal(offerVerdict(r, p, undefined), base, 'undefined path ≡ 2-arg');
+    assert.equal(offerVerdict(r, p, null), base, 'null path ≡ 2-arg');
+    assert.equal(offerVerdict(r, p, {}), base, 'empty-object path (no .path) ≡ 2-arg');
+  }
+});
+ok('P5 scalp path: a faller does NOT CANCEL-BID off falling alone; its 2h-breakdown tripwire DOES', () => {
+  // ACCEPTANCE #1 — a path-less bid on the same faller still cancels; the scalp-path bid does not.
+  const faller = orow({ falling: true });
+  assert.equal(offerVerdict(faller, 90), CANCEL_BID, 'path-less faller → CANCEL-BID (pinned)');
+  assert.notEqual(offerVerdict(faller, 90, 'scalp'), CANCEL_BID, 'scalp expects falling → not a cancel');
+  assert.equal(offerVerdict(faller, 90, 'scalp'), 'BID-BEHIND', 'falls through to placement feedback');
+  // scalp STILL cancels on its own tripwire: a live reliable 2h breakdown (the intraday band collapse).
+  assert.equal(offerVerdict(orow({ mom: 'breakdown', reliable: true }), 90, 'scalp'), CANCEL_BID, 'scalp tripwire fires');
+  // a bare key and a { path } object behave the same.
+  assert.equal(offerVerdict(faller, 90, { path: 'scalp' }), 'BID-BEHIND');
+});
+ok('P5 value-hold path: falling & 2h-breakdown do NOT cancel; only a floor-break tripwire does', () => {
+  const faller = orow({ falling: true });
+  assert.notEqual(offerVerdict(faller, 90, 'value-hold'), CANCEL_BID, 'value holds through a soft tape');
+  assert.notEqual(offerVerdict(orow({ mom: 'breakdown', reliable: true }), 90, 'value-hold'), CANCEL_BID, 'holds through froth');
+  // floor break (live instasell below the declared floor tripwire) → cancel, the value thesis is dead.
+  assert.equal(offerVerdict(orow({ quickBuy: 100 }), 90, { path: 'value-hold', tripwire: 105 }), CANCEL_BID);
+  assert.notEqual(offerVerdict(orow({ quickBuy: 100 }), 90, { path: 'value-hold', tripwire: 95 }), CANCEL_BID, 'above the floor → no cancel');
+});
+
 /* --- --brief compact book (the SCRIPT-OWNED loop format) ----------------------------------- */
 ok('briefDot maps verdicts to the right severity dot', () => {
   assert.equal(briefDot('CUT'), '🔴');

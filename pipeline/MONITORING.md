@@ -170,6 +170,14 @@ The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
   **`CANCEL-BID`** (item falling or in a *reliable* 2h breakdown — a fill would be adverse
   selection: the market dropped to meet you). Only `CANCEL-BID` joins the alerts section;
   placement feedback never alerts.
+  - **P5 path-aware CANCEL-BID.** `offerVerdict` now takes an optional declared-thesis path (from
+    `thesis.mjs set --path`, read off the hold-thesis store). A bid placed under a DELIBERATE thesis
+    EXPECTS a soft/declining tape (Ben's 2026-07-08 falling amendment), so the falling REGIME alone no
+    longer cancels it — only the thesis's OWN tripwire does: **scalp** cancels on a live *reliable* 2h
+    breakdown (the intraday band collapsing under the entry = the hard stop); **value-hold** cancels only
+    on a floor break (live below the declared floor tripwire), never on falling/breakdown alone. With NO
+    declared thesis the gate is UNCHANGED (falling OR reliable breakdown → CANCEL-BID) — and the deployed
+    app Watch tab, which calls `offerVerdict(row, price)` with no path arg, is byte-identical to before.
 - **Noise guard:** offers under `NOISE_OFFER_GP` (100k) total value are collapsed to one
   ignored line — a stray supply order never earns a verdict.
 - **Window-context line (2026-07-05, the berserker-ring lesson):** every bid row (and every
@@ -310,8 +318,9 @@ sub-line. Field order, always the same:
    challenger is arming DISARMS it, so flapping weights never whiplash the headline path. A
    challenger inside the window shows as `<key> challenging (arming ~Nm/Pm)`; a CONFIRMED migration
    (current ≠ the hold-thesis `enteredUnder`) headlines the line as
-   `path MIGRATED <enteredUnder> → <current>`. It is NEVER an alert input (no path-driven alert
-   class exists; path-aware CANCEL-BID semantics are P5) and the verdict string is untouched. The
+   `path MIGRATED <enteredUnder> → <current>`. The held-lot path line is NEVER an alert input (no
+   path-driven HELD alert class exists) and the verdict string is untouched. (P5 wired path-awareness
+   into the separate BID gate — `offerVerdict`'s per-thesis CANCEL-BID above — not into the held verdict.) The
    same line prints on `quote.mjs --positions` (a `Paths` block) off the SAME shared state —
    read-only there; only the watch loop persists the `currentPath`/`pathArmedKey`/`pathArmedSince`/
    `enteredUnder` fields on the `held:<id>` state entry (additive; legacy entries unaffected). The

@@ -40,6 +40,35 @@ export const ENTRY_PATH_KEYS = Object.freeze([PATH_KEYS.SCALP, PATH_KEYS.VALUE_H
 // churn branch ran; named here so the number has one home.
 export const CHURN_MIN_VOL = 2000;
 
+// P5 scalp niche — a DELIBERATE intraday flip on a falling market (Ben's 2026-07-08 amendment: a
+// faller is not necessarily a poor buy). The scalp edge wants a WIDER fresh band than the base `band`
+// niche: after-tax ROI ≥ SCALP_MIN_ROI (above band's MIN_ROI 1.5%), clearing tax + a real scalp
+// margin. Reach-validation against TODAY's high (is the sell level actually printing today?) is the
+// P2 reachValidator, which degrades to pass on the screen (no 1h fetch) exactly like every other
+// surface. Flip-only / no-hold / hard intraday stop — encoded in the path engine (SCALP_NO_HOLD_PENALTY
+// in js/paths.mjs) + offerVerdict's scalp tripwire. PLACEHOLDER (n≈0; the PM2/suggestions accrual tunes it).
+export const SCALP_MIN_ROI = 2.0;
+
+// scalp: a TRADED intraday band whose after-tax ROI clears the (wider) scalp margin. Unlike band it
+// takes no thin abs-gp fallback — a scalp is a margin play, not a big-ticket gp-flow play.
+function scalpEdge(inp, t) {
+  const e = bandCore(inp, t);
+  if (!e) return null;
+  if (e.modeRoi < SCALP_MIN_ROI) return null;   // wide enough to clear tax + a scalp margin
+  return e;
+}
+
+// value: an after-tax 24h-average amplitude proxy — a conformance-valid, deterministic edge so the
+// spec passes the strategies.test.mjs edge sweep. NOTE: the value NICHE does NOT select on this edge;
+// its selection is the term-structure `valueGate` (js/valuescreen.mjs), routed by `gate: 'value'` in
+// pipeline/lib/gatecandidates.mjs. This function is the "cheap cycle-amplitude proxy" kept only so the
+// registry contract (every spec has a callable edge) holds uniformly. Never gates.
+function valueEdge({ avgHigh, avgLow }, t) {
+  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
+  const modeRoi = avgLow ? modeNet / avgLow * 100 : 0;
+  return { modeNet, modeRoi, activeWin: null };
+}
+
 /* --- edge functions (pure; the spec's step-3 edge, re-expressed verbatim from gatecandidates.mjs) ---
    Each takes ({ avgHigh, avgLow, band, limitVol, limit, thin }, thresholds) and returns either
      { modeNet, modeRoi, activeWin }   (the row's after-tax edge + traded-window count, or null win)
@@ -92,40 +121,59 @@ function churnEdge(inp, t) {
      pool        pre-fetch pool rule: { risingFloor } — apply risingPoolFloor (NY2.1) before fetch
      edge        (inputs, thresholds) → { modeNet, modeRoi, activeWin } | null  (the step-3 edge)
      rank        fetch-pool ordering: 'proxy' (rising — proxy-drift-first) | 'velocity' (default)
-     confirm     post-fetch survival note ('rising' | null) — DESCRIPTIVE. The survival doctrine
-                 (falling-exclusion / rising-confirm / posture) still lives in surviveMode keyed on
-                 mode; this field documents the coupling and is the P5 seam for per-spec gates.
-     validators  validator keys this niche EXPECTS to run (metadata for P5 — screen.mjs still runs the
-                 full js/validate.mjs registry on every surface today; [] = the shared default stack).
+     confirm     post-fetch survival note ('rising' | null) — DESCRIPTIVE. The rising-confirm/posture
+                 doctrine still lives in surviveMode keyed on mode; this field documents the coupling.
+     falling     the PER-SPEC falling doctrine (P5 — the amended, no-longer-global rule). surviveMode
+                 reads THIS instead of a hardcoded exclusion:
+                   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing). The four original
+                                   niches keep this → byte-identical behavior (the replay goldens pin it).
+                   'accept'      — falling is a valid candidate (scalp EXPECTS a falling wide band; Ben's
+                                   2026-07-08 amendment). Not dropped for the regime alone.
+                   'knife-guard' — value: reject a real decay/downtrend knife but ACCEPT a flat/basing
+                                   value-low (handled in the term-structure valueGate, not surviveMode).
+     gate        'band' (default — the shared liquidity+edge pre-fetch stack) | 'value' (the
+                 term-structure valueGate in js/valuescreen.mjs; gateCandidates routes on this).
+     validators  validator keys this niche EXPECTS to run (metadata; screen.mjs still runs the full
+                 js/validate.mjs registry on every surface — [] = the shared default stack).
      defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header). */
 export const STRATEGY_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,
     pool: { risingFloor: false }, edge: bandEdge, rank: 'velocity', confirm: null,
-    validators: [], defaultPath: PATH_KEYS.SCALP,
+    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
   },
   {
     key: 'spread', label: 'Spread', inAll: true,
     pool: { risingFloor: false }, edge: spreadEdge, rank: 'velocity', confirm: null,
-    validators: [], defaultPath: PATH_KEYS.SCALP,
+    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
   },
   {
     key: 'rising', label: 'Rising', inAll: true,
     pool: { risingFloor: true }, edge: bandEdge, rank: 'proxy', confirm: 'rising',
-    validators: [], defaultPath: PATH_KEYS.VALUE_HOLD,
+    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.VALUE_HOLD,
   },
   {
     key: 'churn', label: 'Churn', inAll: false,   // NY2.2 — off-by-default; reach with explicit --mode churn
     pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
-    validators: [], defaultPath: PATH_KEYS.SCALP,
+    falling: 'exclude', gate: 'band', validators: [], defaultPath: PATH_KEYS.SCALP,
+  },
+  {
+    key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
+    pool: { risingFloor: false }, edge: scalpEdge, rank: 'velocity', confirm: null,
+    falling: 'accept', gate: 'band', validators: ['reach'], defaultPath: PATH_KEYS.SCALP,
+  },
+  {
+    key: 'value', label: 'Value', inAll: false,   // P5 — off-by-default; explicit --mode value only (provisional, n≈0)
+    pool: { risingFloor: false }, edge: valueEdge, rank: 'value', confirm: null,
+    falling: 'knife-guard', gate: 'value', validators: ['floor'], defaultPath: PATH_KEYS.VALUE_HOLD,
   },
 ]);
 
 // by-key map + the ordered mode-name lists screen.mjs derives from the registry (so the niche names
 // live in ONE place — the registry — not as a magic-string array in screen.mjs).
 export const STRATEGIES = Object.freeze(Object.fromEntries(STRATEGY_LIST.map(s => [s.key, s])));
-export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','spread','rising','churn']
-export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // NY2.2: churn excluded
+export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','spread','rising','churn','scalp','value']
+export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // NY2.2 + P5: only band/spread/rising in --mode all
 
 /* --- conformance ----------------------------------------------------------------------------------
    validateStrategySpec(spec) → string[] of structural violations (empty = conformant). The conformance
@@ -133,7 +181,9 @@ export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).ma
    malformed spec to prove the checker BITES, and runs each edge over the replay archetypes for
    no-throw + determinism — so P5 registering scalp/value gets conformance-checked for free. */
 const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
-const VALID_RANKS = new Set(['velocity', 'proxy']);
+const VALID_RANKS = new Set(['velocity', 'proxy', 'value']);
+const VALID_FALLING = new Set(['exclude', 'accept', 'knife-guard']);   // P5 per-spec falling doctrine
+const VALID_GATE = new Set(['band', 'value']);                          // P5 gate-stack selector
 
 export function validateStrategySpec(spec) {
   const errs = [];
@@ -146,6 +196,8 @@ export function validateStrategySpec(spec) {
   if (typeof spec.edge !== 'function') errs.push('edge must be a function');
   else if (spec.edge.length < 1) errs.push('edge must take (inputs, thresholds)');
   if (!VALID_RANKS.has(spec.rank)) errs.push(`rank must be one of ${[...VALID_RANKS].join('/')}`);
+  if (!VALID_FALLING.has(spec.falling)) errs.push(`falling must be one of ${[...VALID_FALLING].join('/')}`);
+  if (!VALID_GATE.has(spec.gate)) errs.push(`gate must be one of ${[...VALID_GATE].join('/')}`);
   if (!(spec.confirm === null || typeof spec.confirm === 'string')) errs.push('confirm must be a string or null');
   if (!Array.isArray(spec.validators)) errs.push('validators must be an array');
   if (typeof spec.defaultPath !== 'string' || !VALID_PATH_KEYS.has(spec.defaultPath))

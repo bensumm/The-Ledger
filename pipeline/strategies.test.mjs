@@ -32,16 +32,27 @@ const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
 console.log('strategies.mjs conformance:');
 
 /* --- registry shape ------------------------------------------------------------------------------- */
-ok('the registry holds exactly the four niches, in order, keyed correctly', () => {
-  assert.deepEqual(MODE_KEYS, ['band', 'spread', 'rising', 'churn']);
+ok('the registry holds the six niches (P5 added scalp/value), in order, keyed correctly', () => {
+  assert.deepEqual(MODE_KEYS, ['band', 'spread', 'rising', 'churn', 'scalp', 'value']);
   assert.deepEqual(STRATEGY_LIST.map(s => s.key), MODE_KEYS);
   for (const s of STRATEGY_LIST) assert.equal(STRATEGIES[s.key], s, `${s.key} indexed by key`);
 });
 
-ok('--mode all is the inAll specs (band/spread/rising) — churn DEMOTED off-by-default (NY2.2)', () => {
+ok('--mode all is the inAll specs (band/spread/rising) — churn + P5 scalp/value are off-by-default', () => {
   assert.deepEqual(ALL_MODE_KEYS, ['band', 'spread', 'rising']);
-  assert.equal(STRATEGIES.churn.inAll, false, 'churn is off-by-default');
+  for (const k of ['churn', 'scalp', 'value']) assert.equal(STRATEGIES[k].inAll, false, `${k} is off-by-default`);
   assert.deepEqual(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key), ALL_MODE_KEYS);
+});
+
+ok('P5 per-spec falling doctrine + gate selector are registered as designed', () => {
+  for (const k of ['band', 'spread', 'rising', 'churn']) assert.equal(STRATEGIES[k].falling, 'exclude', `${k} keeps the falling exclusion`);
+  assert.equal(STRATEGIES.scalp.falling, 'accept', 'scalp EXPECTS a falling wide band');
+  assert.equal(STRATEGIES.value.falling, 'knife-guard', 'value rejects the knife but accepts a value-low');
+  for (const k of ['band', 'spread', 'rising', 'churn', 'scalp']) assert.equal(STRATEGIES[k].gate, 'band', `${k} uses the shared gate stack`);
+  assert.equal(STRATEGIES.value.gate, 'value', 'value routes to the term-structure gate');
+  assert.equal(STRATEGIES.scalp.defaultPath, PATH_KEYS.SCALP);
+  assert.equal(STRATEGIES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
+  assert.equal(STRATEGIES.value.rank, 'value', 'value ranks by valueScore');
 });
 
 /* --- every registered spec is structurally conformant --------------------------------------------- */

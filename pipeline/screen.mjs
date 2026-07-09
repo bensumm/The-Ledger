@@ -70,7 +70,8 @@ import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // here: gateCandidates/risingPoolFloor/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
-import { gateCandidates, rankAndSlice, surviveMode, expUnits } from './lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, surviveMode, expUnits, VALUE_TOP_DEFAULT } from './lib/gatecandidates.mjs';
+import { valueRanges, valueScore, valueGate, valueTier } from '../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
 // P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — strategies.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
@@ -183,10 +184,13 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
 
-const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // NY2.2: churn omitted from `all`
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // NY2.2: churn omitted from `all`; P5: scalp/value explicit-only
 const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
+const IS_VALUE = RUN_MODES.includes('value');                    // P5 — the value niche needs the 28d term structure
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
-const DAILY_DAYS = 17, DAILY_STEP_H = 6;                         // regime-proxy archive lookback / spacing
+// regime-proxy archive lookback / spacing. P5: value's term structure needs ~28d (§C); extend ONLY when
+// value is requested so every other mode (incl. --mode all) keeps the 17d archive byte-identical.
+const DAILY_DAYS = IS_VALUE ? 28 : 17, DAILY_STEP_H = 6;
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
 
@@ -201,6 +205,7 @@ const PLAYBOOK = {
   spread: 'Playbook: mid-liquidity wide-spread flips (bludgeon-style). Buy the 24h avg low, sell the avg high.',
   rising: 'Playbook: rising + not-breaking-down; enter at the band low. FROTHY — size small, these are mid-reprice moves.',
   churn:  'Playbook: high-frequency buy-limit-cycle commodities. Thin per-unit, volume does the work — buy every limit, flip fast.',
+  scalp:  'Playbook (PROVISIONAL, n≈0): a DELIBERATE intraday flip on a falling market — buy a wide FRESH band edge, sell at today\'s high, HARD intraday stop. Flip-only/no-hold: an unsold lap is a CUT, not a hold. Falling is the thesis, not a veto.',
 };
 const HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Score gp/d'];
 
@@ -354,7 +359,9 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
     rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath })));
 
-  console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; fallers excluded)`);
+  // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
+  const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
+  console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
   console.log(PLAYBOOK[mode]);
   console.log(mode !== 'spread' ? `(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)` : '(basis: 24h-average spread)');
   // PM1: the dedicated `Probes` column is appended to the PRINTED table ONLY when at least one row
@@ -409,6 +416,72 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   console.log('');
   // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link)
   return rows.map(r => ({ id: r.id, cells: r.cells }));
+}
+
+// --- P5 VALUE niche render (PLAN-VALUE §D) -----------------------------------------------------
+// A dedicated table: the value niche does NOT use the fast-flip grade/verdict/rating stack (§E — value
+// picks are ISOLATED, never feed another niche's verdicts/alerts). It prints the term-structure read
+// (multi-week range, live-vs-low, after-tax cycle amplitude, floor phase·stability) split into buy-now
+// vs watch tiers, with the hold horizon stated at entry and an admitted-vs-shown footer (§F). Every row
+// is flagged PROVISIONAL (unproven theory, n≈0). Picks accrue via the O1 suggestions ledger (mode
+// 'value', path value-hold) — the firing-log convention for surfaced picks. OFF by default (--mode value).
+const VALUE_HEADERS = ['Item', 'Guide', 'Live', 'Multi-wk range (low→high)', 'Live vs low', 'Cycle net/u (after-tax)', 'Floor (phase · stability)', 'Hold horizon'];
+function renderValueMode({ cand, survivors }, qcache, map, series6h, guide, daily) {
+  const buyNow = [], watch = [];
+  const sugg = [];
+  let droppedKnife = 0;   // post-fetch phase() decay-knife drops
+  for (const s of survivors) {
+    const row = qcache.get(s.id);
+    if (!row) continue;
+    const name = map.byId[s.id]?.name || ('#' + s.id);
+    const live = row.quickBuy ?? row.mid ?? s.mid;
+    // recompute the term structure off the LIVE price (better proximity than the pre-fetch mid) and
+    // re-run the value gate WITH the fetched phase() — a decay shape is the knife the pre-fetch
+    // term-structure delta may miss (§A "buy the base, never the knife").
+    const ts = termStructure(daily && daily[s.id]);
+    const vr = valueRanges(ts, live);
+    const ph = phase(series6h && series6h.get(s.id));
+    const g = valueGate(vr, { phase: ph && ph.phase });
+    if (!g.pass) { if (g.reason === 'decay') droppedKnife++; continue; }
+    const tier = valueTier(vr);
+    const netU = Math.round((vr.durableHigh - tax(vr.durableHigh)) - vr.buyLow);
+    const ampPct = (vr.afterTaxAmpPct * 100);
+    const stabPct = vr.stability != null ? Math.round(vr.stability * 100) : null;
+    const phaseTag = (ph && (ph.phase === 'basing' || ph.phase === 'base' || ph.phase === 'spike' || ph.phase === 'decay')) ? ph.phase : 'flat';
+    const rangeCell = `${fmtP(vr.durableLow)} → ${fmtP(vr.durableHigh)}`;
+    const liveVsLow = vr.liveVsLowPct != null ? `+${(vr.liveVsLowPct * 100).toFixed(1)}%` : '—';
+    const cells = [
+      { t: name }, { t: guide && guide[s.id] != null ? fmtP(guide[s.id]) : '—' }, { t: fmtP(live) },
+      { t: rangeCell }, { t: liveVsLow, c: 'mini' },
+      { t: `+${fmtP(netU)} (${ampPct.toFixed(1)}%)`, c: 'gain' },
+      { t: `${phaseTag} · ${stabPct != null ? stabPct + '% stable' : 'n/a'}`, c: 'mini' },
+      { t: 'multi-wk hold', c: 'mini' },
+    ];
+    (tier === 'buy-now' ? buyNow : watch).push({ id: s.id, cells, score: s.valueScore });
+    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold' }));
+  }
+  buyNow.sort((a, b) => b.score - a.score); watch.sort((a, b) => b.score - a.score);
+  // §E — value picks are logged in ISOLATION (mode 'value'); they never touch the fast-flip ledger rows.
+  logSuggestions('screen', { mode: 'value', params: SCREEN_PARAMS }, sugg);
+
+  const shown = buyNow.length + watch.length;
+  console.log(`## VALUE — ${shown} buy-hold candidate(s) near a multi-week low (PROVISIONAL — unproven theory, n≈0)`);
+  console.log('Playbook: buy near the multi-week low, HOLD for the range to cycle up; the edge is ONE tax-paid sell of a big move, not fast churn. State the hold horizon at entry — this is a multi-day/week HOLD, not a flip.');
+  console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability — PLACEHOLDER weights, n≈0)`);
+  if (buyNow.length) {
+    console.log(`\n### BUY-NOW — live at/near the multi-week low (${buyNow.length})`);
+    console.log(mdTable(VALUE_HEADERS, buyNow.map(r => r.cells)));
+  }
+  if (watch.length) {
+    console.log(`\n### WATCH — good range, mid-cycle; wait for the dip (${watch.length})`);
+    console.log(mdTable(VALUE_HEADERS, watch.map(r => r.cells)));
+  }
+  if (!shown) console.log('_none_');
+  // §F admitted-vs-shown footer — never dump the full pool; say how many the gate admitted.
+  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}`);
+  console.log('');
+  // publishable rows: buy-now first, then watch (isolated; the app has no VALUE tab yet → console-only)
+  return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));
 }
 
 // --- S3: watchlist always scanned -------------------------------------------------------------
@@ -498,13 +571,15 @@ async function main() {
   const [v24, latest, guide] = [await loadAll24h(), await loadAllLatest(), await loadGuide()];
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
-  const ctx = { v24, map, bands };
+  const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure
 
-  // gate every mode, then proxy-rank its gated pool and take the top-N fetch pool
+  // gate every mode, then proxy-rank its gated pool and take the top-N fetch pool. P5 value ranks by
+  // valueScore and takes a HARD top-N (VALUE_TOP_DEFAULT §F) — a bounded shortlist off a large pool.
   const gated = {};
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx, THRESHOLDS);
-    gated[m] = { cand, survivors: rankAndSlice(m, cand, daily, { thinReserve: THIN_RESERVE, top: TOP }) };
+    const top = STRATEGIES[m].gate === 'value' ? VALUE_TOP_DEFAULT : TOP;
+    gated[m] = { cand, survivors: rankAndSlice(m, cand, daily, { thinReserve: THIN_RESERVE, top }) };
   }
 
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it
@@ -527,7 +602,9 @@ async function main() {
   console.log('');
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   const niches = {};
-  for (const m of RUN_MODES) niches[m] = renderMode(m, gated[m], qcache, map, series5m, series6h, v24, daily);
+  for (const m of RUN_MODES) niches[m] = STRATEGIES[m].gate === 'value'
+    ? renderValueMode(gated[m], qcache, map, series6h, guide, daily)   // P5 — the value niche's own term-structure table
+    : renderMode(m, gated[m], qcache, map, series5m, series6h, v24, daily);
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).
@@ -543,6 +620,11 @@ async function main() {
   // to the tables above (same stdCells / rating path) so the app renders exactly what the scan said.
   if (PUBLISH) {
     const outPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'screen.json');
+    // P5: the VALUE niche has its OWN column set (VALUE_HEADERS) + is console-only (PLAN-VALUE decision
+    // 4 — no app tab yet), so it is EXCLUDED from screen.json (which carries a single HEADERS set). An
+    // app VALUE surface is a later, APP_VERSION-bumping step.
+    const pubNiches = {};
+    for (const m of RUN_MODES) if (STRATEGIES[m].gate !== 'value') pubNiches[m] = niches[m];
     const payload = {
       app: 'the-coffer-screen',
       schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)
@@ -551,13 +633,13 @@ async function main() {
       posture: POSTURE,                // S2: the Scan banner reads this to say which posture it shows
       params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE },
       headers: HEADERS,
-      niches,
+      niches: pubNiches,
       // S3 watchlist section — its own headers (adds a Note column) travel with it so the app renders
       // it as a distinct always-shown section; null when watchlist.json is empty/absent.
       watchlist: watchlist ? { headers: watchlist.headers, rows: watchlist.rows } : null,
     };
     writeFileSync(outPath, JSON.stringify(payload, null, 2) + '\n');
-    console.log(`(published → screen.json: ${RUN_MODES.map(m => `${m} ${niches[m].length}`).join(', ')}${watchlist ? `, watchlist ${watchlist.rows.length}` : ''})`);
+    console.log(`(published → screen.json: ${Object.keys(pubNiches).map(m => `${m} ${pubNiches[m].length}`).join(', ') || 'none'}${IS_VALUE ? ' — value niche is console-only, excluded from screen.json' : ''}${watchlist ? `, watchlist ${watchlist.rows.length}` : ''})`);
   }
 }
 

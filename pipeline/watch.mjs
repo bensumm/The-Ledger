@@ -288,13 +288,15 @@ function targetAction(row, cls, be) {
 // --- ACTION line for an ACTIVE BID (resting buy offer). The hazard case is a fill you no
 // longer want: a bid filling into a breakdown/falling market IS adverse selection — the market
 // dropped to meet you. Everything else is placement feedback (behind the band / inside / crossing).
-function bidAction(row, off) {
+function bidAction(row, off, pathCtx) {
   const filled = `${off.qty}/${fmt(off.max)} filled`;
   // decision via the SHARED offerVerdict (js/quotecore.js) so the console and the app Watch tab
   // can never disagree on a bid's state; the strings below are watch.mjs's own (byte-identical).
-  switch (offerVerdict(row, off.offer)) {
+  // P5: pathCtx (a declared scalp/value-hold thesis, or null) makes CANCEL-BID PATH-AWARE — a
+  // deliberate thesis expects a soft tape, so falling alone no longer cancels its bid.
+  switch (offerVerdict(row, off.offer, pathCtx)) {
     case 'CANCEL-BID':
-      return `CANCEL-BID — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill at ${fmtP(off.offer)} means the market dropped to meet you. Cancel unless you are deliberately pricing the fall.`;
+      return `CANCEL-BID — ${pathCtx ? `${(typeof pathCtx==='object'?pathCtx.path:pathCtx)} tripwire hit (${row.mom==='breakdown'?'2h breakdown':'floor break'})` : row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill at ${fmtP(off.offer)} means the market dropped to meet you. Cancel unless you are deliberately pricing the fall.`;
     case 'NO-QUOTE':
       return `NO QUOTE — can't judge the bid; leave it and re-check at a liquid window.`;
     case 'CROSSING':
@@ -310,8 +312,10 @@ function bidAction(row, off) {
 // where a RESTING order needs action. Placement feedback never alerts.
 function bidAlert(it) {
   const { row, name, bid } = it;
-  if (offerVerdict(row, bid.offer) === 'CANCEL-BID')
-    return { level: 'CANCEL-BID', msg: `CANCEL-BID ${name} @ ${fmtP(bid.offer)} — ${row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill here is adverse selection. Cancel unless you want the falling price.` };
+  // P5: path-aware — a bid declared under a scalp/value-hold thesis only CANCEL-BIDs on its OWN
+  // tripwire (scalp: a live 2h breakdown; value-hold: a floor break), never on the falling regime alone.
+  if (offerVerdict(row, bid.offer, it._bidPathCtx) === 'CANCEL-BID')
+    return { level: 'CANCEL-BID', msg: `CANCEL-BID ${name} @ ${fmtP(bid.offer)} — ${it._bidPathCtx ? `${(typeof it._bidPathCtx==='object'?it._bidPathCtx.path:it._bidPathCtx)} tripwire hit` : row.falling ? `falling regime (${row.regimeLabel})` : '2h breakdown'}; a fill here is adverse selection. Cancel unless you want the falling price.` };
   return null;
 }
 
@@ -517,6 +521,11 @@ async function main() {
   for (const s of bidSpecs) {
     const it = await buildItem({ id: s.id, name: s.name }, map, guide);
     it.bid = s.offers[0]; it.bids = s.offers; // primary + all (multi-slot same-item bids)
+    // P5: the DECLARED thesis for this bid (thesis.mjs set --path), read-only. When present, its path
+    // key + floor tripwire make the shared offerVerdict PATH-AWARE — a scalp/value-hold bid no longer
+    // CANCEL-BIDs off the falling regime alone (Ben's 2026-07-08 amendment). null when undeclared.
+    const th = thesisFor(holdThesisStore, s.id);
+    it._bidPathCtx = (th && th.path) ? { path: th.path, tripwire: th.tripwire ?? null } : null;
     bidItems.push(it);
   }
 
@@ -536,7 +545,7 @@ async function main() {
   const targetVerdict = it => it.cls === 'FALLING' ? 'SKIP'
     : it.row.quickBuy == null ? 'NO-QUOTE'
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
-  const bidVerdict = it => offerVerdict(it.row, it.bid.offer);   // SHARED with the app Watch tab (js/quotecore.js)
+  const bidVerdict = it => offerVerdict(it.row, it.bid.offer, it._bidPathCtx);   // SHARED with the app Watch tab (js/quotecore.js); P5 path-aware
   const wPosture = isOvernightNow() ? 'overnight' : 'active';   // YS2: the posture this live read was made under
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture })),
@@ -693,7 +702,7 @@ async function main() {
   for (const it of bidItems) {
     const { row, name } = it;
     for (const off of it.bids) {
-      const bidVer = offerVerdict(row, off.offer);
+      const bidVer = offerVerdict(row, off.offer, it._bidPathCtx);   // P5 path-aware
       const bidPos = `bid ${off.qty}/${fmt(off.max)} @ ${fmtP(off.offer)}`;
       const bidBe = row.quickBuy != null ? breakEven(off.offer) : null;
       // intended sell if the bid fills: the band top, floored at the fill's own break-even (state-sell-price-in-loop)
@@ -703,12 +712,12 @@ async function main() {
         bidBe != null ? fmtP(bidBe) : '—']);
       briefRows.push({ verdict: bidVer, name, position: bidPos, listAt: bidListAt, breakEven: bidBe });
       const wl = windowLine(it.ts1h, { bid: off.offer, compact: true });
-      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
+      notes.push(`- ${name} bid @ ${fmtP(off.offer)}: ${firstSentence(bidAction(row, off, it._bidPathCtx))}${wl ? ` · window ${wl}` : ''}${row.reliable ? '' : ` · ⚠ ${row.reliableReason}`}`);
       // V6 recovery-read on a resting bid — surfaced only when the fill hinges on direction
       // (BID-BEHIND: below the band, it fills only if the price drops to it). ADVISORY context:
       // a drop-lean means it's likely to fill, a recover-lean that it drifts away. No verdict input.
       try {
-        const bidDirectional = offerVerdict(row, off.offer) === 'BID-BEHIND';
+        const bidDirectional = offerVerdict(row, off.offer, it._bidPathCtx) === 'BID-BEHIND';
         if (recoveryTrigger({ kind: 'bid', bidDirectional }).surface) {
           const line = recoveryLine(recoveryReadFor(it));
           if (line) notes.push(`    ${line}`);

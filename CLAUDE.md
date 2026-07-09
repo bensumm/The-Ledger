@@ -117,8 +117,16 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   (sub-50gp sells are tax-exempt), `buy + TAXCAP` (5m) once the cap binds at `buy > 245m` (`ceil(buy/0.98)`
   overstates a big-ticket break-even by up to 5m), else the uncapped `ceil(buy/0.98)`. Never list a held
   item below it. This is the ONE definition — every other doc/skill points here.
-- **Falling-regime items are excluded from screens entirely — don't show or mention them.**
-  Exception: items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
+- **Falling-regime handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5).** A faller is
+  not necessarily a poor buy — "we cannot judge falling without its history and typical fluctuations."
+  Each niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/spread/rising/churn EXCLUDE
+  fallers** (the default — don't show or mention them; the exception below still applies); **scalp ACCEPTS
+  them** (a deliberate intraday flip EXPECTS a falling wide band — its stop lives in the path
+  engine/offerVerdict, not a blanket exclusion); **value KNIFE-GUARDS** (reject a decay/downtrend knife,
+  accept a flat/basing value-low — the term-structure `valueGate`). Likewise resting bids: `offerVerdict`
+  is path-aware — a bid declared under a scalp/value-hold thesis no longer CANCEL-BIDs off the falling
+  regime alone, only its own tripwire (scalp: a live 2h breakdown; value-hold: a floor break).
+  Exception (for the EXCLUDE niches): items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
   guidance. `screen.mjs` appends a **Watchlist** section (from tracked repo-root `watchlist.json`)
   quoting every watchlisted item as a full standard row — exempt from every floor/gate, graded, with
   the reason a gate *would* have hidden it as a Note (below-floor / thin / one-sided / falling).
@@ -143,7 +151,7 @@ deliberate):**
 | When Ben says something like… | Run |
 | --- | --- |
 | "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|spread\|rising\|churn\|all]` + the judgment pass |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|spread\|rising\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional) |
 | "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
@@ -167,13 +175,22 @@ Script facts the skills rely on (current behavior, not doctrine):
   read-only off the shared watch-state (only watch.mjs persists it). Interpretation of those
   verdicts lives in `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
-  `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge. Four
-  niches exist — `band` / `spread` / `rising` / `churn` — but per Ben's **NY2** ruling (2026-07-05)
-  **`--mode all` runs band/spread/rising only; churn is off-by-default** (reach it with an explicit
-  `--mode churn`). `rising`'s candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid,
-  `risingPoolFloor`) that drops the cheap teleport-tab flood while keeping cheap-but-liquid risers.
-  Thin gp-flow big tickets ride a bounded `--thin-reserve`. **P4c**: the four niches are now DECLARATIVE
-  strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,validators,defaultPath}`) that
+  `--min-gpd` 500k attention floor, per-spec falling doctrine); `--mode` swaps the step-3 edge (+ the
+  gate stack for value). **Six niches** — `band` / `spread` / `rising` / `churn` / `scalp` / `value` —
+  but per Ben's **NY2** ruling (2026-07-05) + **P5** **`--mode all` runs band/spread/rising only;
+  churn/scalp/value are off-by-default** (reach each with an explicit `--mode <name>`). `rising`'s
+  candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid, `risingPoolFloor`) that drops the
+  cheap teleport-tab flood while keeping cheap-but-liquid risers. Thin gp-flow big tickets ride a bounded
+  `--thin-reserve`. **P5 scalp** (provisional, n≈0): a DELIBERATE intraday flip on a FALLING market
+  (`spec.falling='accept'`) — a wide fresh band clearing tax+scalp-margin (`SCALP_MIN_ROI`), reach-
+  validated on today's high, flip-only/no-hold (an unsold lap migrates to `cut`, never `hold-recovery` —
+  encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold niche with its OWN
+  term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
+  replaces the 500k gp/day throughput floor, lowered liquidity, decay/downtrend knife-guard), ranked by
+  `valueScore` (amplitude × proximity-to-low × floor-stability) with a HARD top-N + buy-now/watch tiers
+  (§F flood control); console-only, its own table, NOT in `screen.json` (no app tab yet → no APP_VERSION).
+  **P4c**: the niches are DECLARATIVE
+  strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the
   P1 replay goldens pin it; a new niche registers a spec, no gatecandidates/screen edit). Each surfaced
   row gains a compact stdout entry-path annotation (`↳ <item> — scalp* 0.60 · …`: the spec's inferred
@@ -212,6 +229,11 @@ Script facts the skills rely on (current behavior, not doctrine):
   lot** (a fill you didn't see may have happened); the V6 advisories are decision SUPPORT, never a
   verdict/alert input. Bids get their own rows (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID — only
   CANCEL-BID alerts); sub-100k offers collapse to one line; bid/listed rows print a `window` context line.
+  **P5**: the bid verdict (`offerVerdict`) is PATH-AWARE — a bid on an item with a declared scalp/value-hold
+  thesis (via `thesis.mjs set --path`) no longer CANCEL-BIDs off the falling regime alone; it cancels only
+  on its own tripwire (scalp: a live 2h breakdown; value-hold: a floor break). Absent a declared thesis
+  (and in the deployed app Watch tab, which calls `offerVerdict(row, price)` with no path arg), the verdict
+  is byte-identical to before — so no app behavior changed and APP_VERSION did not bump.
   **P0**: the held verdict prose is now the SHARED `renderHeldVerdict` (verbose) from
   `pipeline/lib/context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
   the old inline `heldAction`, diff-verified) — and each pass runs one `loadSnapshot()` for the passive

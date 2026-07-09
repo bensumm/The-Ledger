@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.24
+version: 1.25
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -12,14 +12,24 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/screen.mjs [--mode band|spread|rising|churn|all] [--max-price …] [--publish]
+node pipeline/screen.mjs [--mode band|spread|rising|churn|scalp|value|all] [--max-price …] [--publish]
 ```
 
 Map Ben's ask to args: niche mode → `--mode` (default `band`); a price cap → `--max-price`;
 a keyword/niche ("anything in herbs?") → **no script flag exists** — run the screen and
 filter the output rows by niche yourself; `--publish` only if Ben wants the app's Scan tab
-updated. The script already gates (two-sided liquidity, price window, falling-exclusion)
+updated. The script already gates (two-sided liquidity, price window, per-spec falling doctrine)
 and grades (`rating.mjs`); your job is the judgment pass over what it prints.
+
+**P5 niches — scalp / value (both PROVISIONAL, n≈0, OFF-by-default; explicit `--mode` only).**
+- **`--mode scalp`** — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
+  faller isn't auto-bad). It INCLUDES fallers other niches exclude. Flip-only/no-hold, HARD intraday
+  stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
+  never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
+- **`--mode value`** — buy-hold near a multi-week low, hold for the cycle (ONE tax-paid sell of a big
+  move). Its own term-structure table (buy-now vs watch tiers, hold horizon stated). CONSOLE-ONLY (no
+  app tab). Every pick is provisional; state the multi-week hold horizon at entry. The gate needs a WARM
+  daily archive — on a cold archive it correctly surfaces little/nothing.
 
 **Niche set (NY2, 2026-07-05 — Ben's ruling on NY1's evidence).** `--mode all` runs **band,
 spread, rising** — NOT churn. **Churn is off-by-default** (its 14 band-exclusive names are

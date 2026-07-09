@@ -463,10 +463,36 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
      BID-BEHIND  bid below the 2h band low → unlikely to fill soon
      BID-OK      resting inside the band
    Only CANCEL-BID is an ALERT (the sole state where a resting order needs action); the rest are
-   placement feedback. Fixture-pinned in pipeline/watchcore.test.mjs. */
-export function offerVerdict(row, offerPrice){
+   placement feedback. Fixture-pinned in pipeline/watchcore.test.mjs.
+
+   P5 — PATH-AWARE (OPTIONAL third arg). `pathCtx` is the DECLARED thesis this resting bid was placed
+   under: a bare path key ('scalp' / 'value-hold', the js/paths.mjs PATH_KEYS values) OR an object
+   { path, tripwire }. It is OPTIONAL and DEGRADES: when omitted (undefined/null), offerVerdict is
+   BYTE-IDENTICAL to the pre-P5 gate — so the deployed app Watch tab, which calls
+   offerVerdict(row, offerPrice), is unaffected (the ts5m/now optional-degradation precedent; pinned
+   in watchcore.test.mjs). Path-awareness encodes Ben's 2026-07-08 falling amendment: a bid placed
+   under a DELIBERATE thesis EXPECTS a soft/declining tape, so the falling REGIME alone no longer
+   auto-cancels it — only the thesis's OWN structural tripwire does:
+     scalp       — flip-only intraday: falling is the thesis (not a cancel); it still CANCEL-BIDs on
+                   its own tripwire, a live reliable 2h breakdown (the intraday band collapsing under
+                   the entry = the hard-stop trigger).
+     value-hold  — buy near a durable multi-week floor and hold through froth: neither a falling
+                   regime nor a 2h breakdown cancels; ONLY price breaking below the declared floor
+                   `tripwire` (when supplied) does.
+   Ben's memory anchor (patience-on-cancel-and-cut / falling-exclusion-amended): "no CANCEL-BID off
+   falling regime alone for a deliberate scalp/value thesis." Every scalp/value threshold here is
+   provisional (n≈0). NOTE: quotecore.js imports only format.js — the path keys are compared as string
+   literals (the frozen js/paths.mjs PATH_KEYS values) to keep that single-import invariant. */
+export function offerVerdict(row, offerPrice, pathCtx){
   if(!row) return 'NO-QUOTE';
-  if(row.falling || (row.mom==='breakdown' && row.reliable)) return 'CANCEL-BID';
+  const path = (pathCtx && typeof pathCtx==='object') ? pathCtx.path : pathCtx;
+  const liveBreak = row.mom==='breakdown' && row.reliable;   // the live 2h break — the intraday tripwire
+  if(path==='scalp'){
+    if(liveBreak) return 'CANCEL-BID';                       // band collapsing NOW → the scalp hard stop
+  } else if(path==='value-hold'){
+    const tw = (pathCtx && typeof pathCtx==='object') ? pathCtx.tripwire : null;
+    if(tw!=null && row.quickBuy!=null && row.quickBuy < tw) return 'CANCEL-BID';   // floor broken → thesis dead
+  } else if(row.falling || liveBreak) return 'CANCEL-BID';   // path-less: the pre-P5 behavior (pinned byte-identical)
   if(row.quickBuy==null) return 'NO-QUOTE';
   if(offerPrice>=row.quickBuy) return 'CROSSING';
   if(row.optBuy!=null && offerPrice<row.optBuy) return 'BID-BEHIND';
