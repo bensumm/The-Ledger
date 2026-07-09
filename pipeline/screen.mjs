@@ -625,12 +625,15 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     }, { specs: valueInformSpecs });
     const informed = informFlags(vres);
     if (informed.length) valueInformNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
+    // RC1 recency anchor: when the durable q15/q85 range spans a prior regime, the cycle was scored on the
+    // recent window instead — say so, so the anchored range isn't mistaken for the full multi-week one.
+    if (vr.ceilingStale || vr.floorStale) valueInformNotes.push(`${name}: range recency-anchored — durable ${fmtP(vr.rawDurableLow)}→${fmtP(vr.rawDurableHigh)} spans a prior regime; cycle scored on the recent ${fmtP(vr.durableLow)}→${fmtP(vr.durableHigh)}`);
     const netU = Math.round((vr.durableHigh - tax(vr.durableHigh)) - vr.buyLow);
     const ampPct = (vr.afterTaxAmpPct * 100);
     const stabPct = vr.stability != null ? Math.round(vr.stability * 100) : null;
     const phaseTag = (ph && (ph.phase === 'basing' || ph.phase === 'base' || ph.phase === 'spike' || ph.phase === 'decay')) ? ph.phase : 'flat';
     const rangeCell = `${fmtP(vr.durableLow)} → ${fmtP(vr.durableHigh)}`;
-    const liveVsLow = vr.liveVsLowPct != null ? `+${(vr.liveVsLowPct * 100).toFixed(1)}%` : '—';
+    const liveVsLow = vr.liveVsLowPct != null ? `${vr.liveVsLowPct >= 0 ? '+' : ''}${(vr.liveVsLowPct * 100).toFixed(1)}%` : '—';
     const cells = [
       { t: name }, { t: guide && guide[s.id] != null ? fmtP(guide[s.id]) : '—' }, { t: fmtP(live) },
       { t: rangeCell }, { t: liveVsLow, c: 'mini' },

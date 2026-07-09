@@ -15,7 +15,9 @@
  *   valueRanges(ts, live)   → the scalar SHAPE features: after-tax cycle amplitude, proximity-to-low,
  *                             floor-stability (low dispersion across ranges), and the knife delta (the
  *                             recent-3d median below the 14d median = a DECLINE in progress; see the
- *                             note at the knifeDelta computation for why medians, not lows).
+ *                             note at the knifeDelta computation for why medians, not lows). The cycle
+ *                             range is RECENCY-ANCHORED (§ VALUE_RECENT_DAYS) so a stale prior-regime
+ *                             high/low can't inflate amplitude or fake proximity (RC1's disease).
  *   valueScore(vr)          → the composite rank (§B/§F): amplitude × proximity × stability. The
  *                             ranking IS the central design problem — the gated pool is expected LARGE
  *                             (§F), so a usable score + a hard top-N is non-optional.
@@ -46,8 +48,8 @@ export const VALUE_MAX_CYCLE_PCT = 1.5;    // > 150% floor→ceiling ⇒ regime-
 export const VALUE_MIN_PRICE     = 1000;
 // A value floor is a MULTI-WEEK claim — asserting one off a day of intraday points is dishonest. The
 // durable lookback must span at least this many CALENDAR days (not just FLOOR_MIN_POINTS, which a cold
-// intraday archive satisfies). The daily archive only began accruing 2026-07-08, so TODAY this makes
-// value mode correctly surface (almost) NOTHING — the honest degrade until the archive warms (rule 4).
+// intraday archive satisfies). The daily archive is backfilled to ~2026-06-19 (~20d), so this clears on
+// most items now; on an item with a thin/cold slice it still degrades to no-data (the honest degrade, rule 4).
 export const VALUE_MIN_COVERAGE_DAYS = 10;
 export const VALUE_KNIFE_PCT     = 0.06;   // a 1d/3d low ≥6% BELOW the 14d low ⇒ still making fresh lows ⇒ a knife → reject
 // PROXIMITY-SANITY / ARTIFACT guard (Ben 2026-07-09). The durable low is the ROBUST q15 multi-week floor.
@@ -59,6 +61,14 @@ export const VALUE_KNIFE_PCT     = 0.06;   // a 1d/3d low ≥6% BELOW the 14d lo
 // dip. PLACEHOLDER (rule 4). Applied in valueGate (fires at gate-time on mid AND post-fetch on live).
 export const VALUE_MAX_BELOW_LOW_PCT = 0.15;
 export const VALUE_BUYNOW_PROX   = 0.75;   // proximity ≥ this (live in the bottom ~25% of the 14d range) ⇒ the buy-now tier
+// RC1 RECENCY ANCHOR (Ben 2026-07-09). The durable q15/q85 floor+ceiling span the FULL 28d window, so a
+// stale high/low from a PRIOR regime the item has LEFT inflates the cycle amplitude AND fakes proximity —
+// RC1's reach-contamination disease, in the value range. The cycle range is re-anchored to the last
+// VALUE_RECENT_DAYS: the recovery ceiling can't exceed the recent regime's top, and the buy floor can't
+// sit below where the item recently floors. VALUE_STALE_MARGIN is the min durable-vs-effective gap that
+// flags a range as recency-anchored (for the note). Both PLACEHOLDERS (rule 4).
+export const VALUE_RECENT_DAYS   = 7;
+export const VALUE_STALE_MARGIN  = 0.05;
 export const VALUE_STAB_K        = 4;      // dispersion→stability sharpness: stability = 1/(1+K·dispersion)
 export const VALUE_PROX_FLOOR_W  = 0.5;    // proximity multiplier floor (a mid-range candidate still scores, at half weight)
 export const VALUE_STAB_FLOOR_W  = 0.5;    // stability multiplier floor (an unstable-floor candidate still scores, at half weight)
@@ -80,19 +90,38 @@ export function valueRanges(ts, live) {
   for (const d of [1, 3, 7, 14, 28]) { if (lk[d]) { lowByRange[d] = lk[d].low; highByRange[d] = lk[d].high; } }
   // The durable low/high are the ROBUST term-structure quantiles (floor = q15, ceiling = q85) over the
   // durable multi-week lookback — NOT the raw min/max, so a single spike/decay can't inflate the cycle
-  // (the whole point of §C). Both REQUIRE FLOOR_MIN_POINTS in a 14/28d window — a COLD archive (the
-  // common early case: the daily archive only began accruing 2026-07-08) yields a null floor → hasData
-  // false → the value gate surfaces NOTHING until the archive warms (the honest degrade, rule 4).
-  const durableLow = num(ts.floor), durableHigh = num(ts.ceiling);
-  if (durableLow == null || durableHigh == null || durableLow <= 0 || durableHigh <= durableLow) return { hasData: false };
+  // (the whole point of §C). Both REQUIRE FLOOR_MIN_POINTS in a 14/28d window — an item with a thin/cold
+  // slice (the archive is backfilled to ~20d, but a newly-tracked item can still be short) yields a null
+  // floor → hasData false → the value gate surfaces NOTHING for it (the honest degrade, rule 4).
+  const rawDurableLow = num(ts.floor), rawDurableHigh = num(ts.ceiling);
+  if (rawDurableLow == null || rawDurableHigh == null || rawDurableLow <= 0 || rawDurableHigh <= rawDurableLow) return { hasData: false };
 
-  const buyLow = durableLow;   // enter at the robust floor
+  // RC1 RECENCY ANCHOR (§ VALUE_RECENT_DAYS). Re-anchor the cycle range to the recent window so a stale
+  // prior-regime high/low can't inflate amplitude or fake proximity (Contract-of-sensory-clouding: a
+  // month-old 365k q85 ceiling the item crashed away from made a mid-recovery 200k live read as "near the
+  // low → BUY-NOW", while the warm 7d layer said "52% up the week range"). Uses the RAW recent high/low —
+  // the min/max DIRECTION makes it robust to a single recent spike (anchoring fires only when the WHOLE
+  // recent window has shifted, never off one outlier). The buy floor is kept at the durable q15 unless the
+  // recent floor sits ABOVE it (repriced up ⇒ the durable low is unreachable); a fresh recent LOW does not
+  // lower the buy (that's the knife guard's job, not a cheaper entry).
+  const recentHi = num(highByRange[VALUE_RECENT_DAYS]);
+  const recentLo = num(lowByRange[VALUE_RECENT_DAYS]);
+  let durableLow = rawDurableLow, durableHigh = rawDurableHigh;
+  if (recentHi != null && recentHi < durableHigh) durableHigh = recentHi;   // durable ceiling is a stale prior-regime high
+  if (recentLo != null && recentLo > durableLow) durableLow = recentLo;     // durable floor is a stale prior-regime low (repriced up)
+  if (durableHigh < durableLow) durableHigh = durableLow;                   // fully repriced above the window ⇒ no cycle (amp ⇒ reject)
+  const ceilingStale = durableHigh < rawDurableHigh * (1 - VALUE_STALE_MARGIN);
+  const floorStale = durableLow > rawDurableLow * (1 + VALUE_STALE_MARGIN);
+
+  const buyLow = durableLow;   // enter at the (recency-anchored) robust floor
   // after-tax cycle amplitude: profit % if you catch the full cycle (buy the floor, sell the ceiling once).
-  const afterTaxAmpPct = (afterTax(durableHigh) - buyLow) / buyLow;
+  const afterTaxAmpPct = durableHigh > durableLow ? (afterTax(durableHigh) - buyLow) / buyLow : 0;
 
-  // proximity-to-low over the robust floor→ceiling range: 1 at/below the floor, 0 at the ceiling (live
-  // near the floor = buyable NOW).
-  const proximity = (live != null) ? clamp01(1 - (live - durableLow) / (durableHigh - durableLow)) : null;
+  // proximity-to-low over the (recency-anchored) floor→ceiling range: 1 at/below the floor, 0 at the
+  // ceiling (live near the floor = buyable NOW). A collapsed range (fully repriced) ⇒ proximity 0.
+  const proximity = (live != null)
+    ? (durableHigh > durableLow ? clamp01(1 - (live - durableLow) / (durableHigh - durableLow)) : 0)
+    : null;
 
   // floor stability: how FLAT the lows are across the ranges (small dispersion = a durable, defended
   // floor). dispersion = (max low − min low) / median low; stability = 1/(1+K·dispersion) ∈ (0,1].
@@ -117,6 +146,7 @@ export function valueRanges(ts, live) {
 
   return {
     hasData: true, live: num(live), durableLow, durableHigh, buyLow,
+    rawDurableLow, rawDurableHigh, ceilingStale, floorStale,
     lowByRange, highByRange, afterTaxAmpPct, proximity, stability, knifeDelta,
     liveVsLowPct: (num(live) != null) ? (live - durableLow) / durableLow : null,
   };

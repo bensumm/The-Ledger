@@ -19,8 +19,8 @@
  *
  * DEGRADE CONTRACT (mirrors validate.mjs). An empty / too-short series returns `{ hasData: false }`
  * and a null floor — NEVER throws. floorValidator turns a `hasData:false` structure into a
- * degrade-to-pass, so the common early case (the archive only began accruing 2026-07-08; many items
- * have little or no daily history yet) is a PASS, never a reject.
+ * degrade-to-pass, so a newly-tracked item with little/no daily history yet (the archive is backfilled
+ * to ~2026-06-19, but not every item has a deep slice) is a PASS, never a reject.
  *
  * THRESHOLDS ARE PLACEHOLDERS (process rule 4 — none validated; the study that would tune them is
  * F1/P6's walk-forward calibration). Each is named + commented with what would validate it.

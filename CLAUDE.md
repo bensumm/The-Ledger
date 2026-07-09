@@ -202,8 +202,24 @@ Script facts the skills rely on (current behavior, not doctrine):
   footer). (2) The value **unit-liquidity floor was raised 20→50** (`VALUE_LIQ_FLOOR`, = the base `FLOOR`):
   value relaxes the gp/day *throughput* bar, NOT the two-sided *unit* bar — a hold you can't exit isn't a
   hold (dropped Adamant halberd 6/d, Gloves of silence 1/d). Two-sided (`hpv>0 && lpv>0`) stays
-  non-negotiable. Still provisional/off-by-default — the archive needs weeks to warm before the multi-week
-  term structure is trustworthy.
+  non-negotiable.
+  **Value RC1 recency anchor (Ben 2026-07-09)** — the value BUY-NOW tier was contaminated the OTHER way:
+  the durable q15/q85 range spans the FULL 28d window, so a stale HIGH from a prior regime the item has
+  LEFT inflated the cycle amplitude AND faked proximity — a mid-recovery item read as "near the low →
+  BUY-NOW" (Contract-of-sensory-clouding: a month-old 365k q85 ceiling it crashed away from vs a live 200k
+  that's actually +50% up the recent week; ~18/21 BUY-NOW rows carried a warm-7d "would caution/reject").
+  This is RC1's reach-contamination disease, in the value range. Fix: `valueRanges` **recency-anchors the
+  cycle range** (`VALUE_RECENT_DAYS`=7) — the recovery ceiling can't exceed the recent regime's top and the
+  buy floor can't sit below where the item recently floors, using the RAW recent high/low (min/max direction
+  ⇒ robust to a single recent spike; anchoring fires only when the WHOLE recent window shifted). It returns
+  the anchored `durableLow/durableHigh` (the table now shows the credible range) + the raw values + a
+  `ceilingStale`/`floorStale` flag; `screen.mjs` prints a `range recency-anchored — durable A→B spans a prior
+  regime; cycle scored on the recent C→D` note. Effect: Contract → WATCH, BUY-NOW 21→11. Also fixed the
+  `Live vs low` `+-1.4%` doubled-sign display bug. The daily archive is **backfilled to ~2026-06-19 (~20d)**
+  — the old "began accruing 2026-07-08 / needs weeks to warm" notes are superseded (a newly-tracked item can
+  still be short → the honest no-data degrade). Still provisional/off-by-default (n≈0, PLACEHOLDER thresholds;
+  the trajectory/value-amplitude validators still INFORM, not gate — a remaining knife like Inoculation
+  bracelet can still sit in BUY-NOW flagged-but-not-dropped until that rollout flips).
   **P4c**: the niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the

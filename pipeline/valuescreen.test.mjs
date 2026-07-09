@@ -36,6 +36,14 @@ const FLAT = [...alt(19, 1000, 1100), 1000];
 const KNIFE = [...alt(15, 1000, 1100), 950, 920, 900, 880, 860];
 // a razor-thin range: lows ~1000, highs ~1030 (<6% after-tax amplitude).
 const THIN_AMP = [...alt(19, 1000, 1030), 1000];
+// a REGIME SHIFT (Contract-of-sensory-clouding shape): an established HIGH band (~3000/3600) that
+// crashed to a LOW band (~1300/2000) over the window and is now recovering. The full-window q85 ceiling
+// (~3600) is a DEAD regime the item left; a mid-recovery live must NOT read as "near the low → buy-now".
+const SHIFT = [
+  ...alt(6, 3000, 3600),                     // old high regime (~28d ago)
+  2600, 2200, 1900, 1600, 1400, 1300,        // the crash
+  ...alt(8, 1350, 2000),                      // the recent low regime it now oscillates in (last ~8d)
+];
 
 console.log('valuescreen.mjs acceptance:');
 
@@ -81,6 +89,21 @@ ok('an ARTIFACT low (live implausibly below the durable floor) is REJECTED, not 
   const atFloor = valueRanges(structure, 990);      // ~1% under the floor: a genuine dip
   assert.ok(atFloor.liveVsLowPct >= -VALUE_MAX_BELOW_LOW_PCT, 'a shallow dip is within tolerance');
   assert.equal(valueGate(atFloor, {}).pass, true, 'a real at-the-floor dip is not an artifact');
+});
+
+ok('a REGIME SHIFT range is RECENCY-ANCHORED — a stale prior-regime high can\'t fake a buy-now (RC1)', () => {
+  // live ~1700, mid-recovery in the RECENT ~1350→2000 band. The full 28d q85 ceiling sits up near the
+  // dead ~3000+ regime; without anchoring, proximity vs that stale top would read "near the low → buy-now".
+  const vr = valueRanges(ts(SHIFT), 1700);
+  assert.equal(vr.ceilingStale, true, 'the durable ceiling is flagged as a prior regime');
+  assert.ok(vr.durableHigh < vr.rawDurableHigh, `effective ceiling ${vr.durableHigh} anchored below the durable ${vr.rawDurableHigh}`);
+  // scored on the recent band, a mid-recovery live is NOT near the low → WATCH, not buy-now.
+  assert.ok(vr.proximity < VALUE_BUYNOW_PROX, `mid-recovery → not near the recent low (${vr.proximity})`);
+  assert.equal(valueTier(vr), 'watch');
+  // a live down AT the recent floor IS a buy-now (the anchor didn't just blanket-demote the item).
+  const atLow = valueRanges(ts(SHIFT), 1350);
+  assert.ok(atLow.proximity >= VALUE_BUYNOW_PROX, `at the recent floor → near the low (${atLow.proximity})`);
+  assert.equal(valueTier(atLow), 'buy-now');
 });
 
 ok('an item whose cycle amplitude can\'t clear the after-tax floor is REJECTED', () => {

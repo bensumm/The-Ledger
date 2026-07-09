@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.33
+version: 1.34
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -29,14 +29,18 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
 - **`--mode value`** _(judgment: still PROVISIONAL — don't trade on it yet)_ — buy-hold near a multi-week
   low, hold for the cycle (ONE tax-paid sell of a big move). Its own term-structure table (buy-now vs watch
   tiers, hold horizon stated). CONSOLE-ONLY (no app tab). Every pick is provisional; state the multi-week
-  hold horizon at entry. The gate needs a WARM daily archive — on a cold archive it correctly surfaces
-  little/nothing. **Artifact/liquidity hardening (Ben 2026-07-09):** `valueGate` now rejects an
-  **artifact-low** (live >15% below the durable q15 floor — a broken instasell print or a crash mid-fall,
-  the low-side analog of the band artifact-bid; the §F footer counts the drops), and the unit-liquidity
-  floor was raised 20→50 (a value hold you can't exit isn't a hold). Still: DON'T pitch a value buy off
-  this table until the archive has warmed for weeks and the amplitude/reach validators (currently inform-
-  only) have a track record — read the `ℹ timing/trajectory` "would reject/caution" notes as the real
-  signal and verify by hand.
+  hold horizon at entry. The daily archive is backfilled to ~20d, so this surfaces items now; a
+  newly-tracked item with a thin slice still degrades to no-data. **Artifact/liquidity hardening (Ben
+  2026-07-09):** `valueGate` rejects an **artifact-low** (live >15% below the durable q15 floor — a broken
+  instasell print or a crash mid-fall, the low-side analog of the band artifact-bid; the §F footer counts
+  the drops), and the unit-liquidity floor was raised 20→50 (a value hold you can't exit isn't a hold).
+  **RC1 recency anchor (same day):** the cycle range is now anchored to the recent 7d, so a stale HIGH from
+  a prior regime the item LEFT can't inflate amplitude or make a mid-recovery item read "near the low →
+  BUY-NOW" (Contract-of-sensory-clouding was #3 BUY-NOW off a month-old 365k ceiling → correctly WATCH now).
+  A `range recency-anchored — durable A→B … recent C→D` note flags it. Still: DON'T pitch a value buy off
+  this table yet — the trajectory/value-amplitude validators are inform-ONLY, so a **knife can still sit in
+  BUY-NOW flagged-but-not-dropped** (e.g. Inoculation bracelet). Read the `ℹ timing/trajectory` "would
+  reject/caution" notes as the real signal and verify by hand.
 
 **Niche set (NY3, 2026-07-09 — Ben's ruling, reverses NY2.2/NY2.3).** `--mode all` runs **band,
 rising, churn** — NOT spread. **Spread is now off-by-default** — the one-thesis-at-a-time scan

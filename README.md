@@ -85,7 +85,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   validators + `pipeline/screen.mjs`/`pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
   `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold niche
   (PLAN-VALUE): `valueRanges(ts,live)` derives the shape features (after-tax cycle amplitude off the
-  robust floor→ceiling, proximity-to-low, floor-stability, knife delta) from a termStructure; `valueScore`
+  robust floor→ceiling, proximity-to-low, floor-stability, knife delta) from a termStructure — the cycle
+  range is **RC1 recency-anchored** (`VALUE_RECENT_DAYS`=7, Ben 2026-07-09: a stale prior-regime high/low
+  from the full 28d window can't inflate amplitude or fake proximity; returns anchored durableLow/High +
+  raw values + a `ceilingStale`/`floorStale` flag); `valueScore`
   is the composite rank (amplitude × proximity × stability — §F flood control); `valueGate` is the
   amplitude floor + noise cap + **artifact-low guard** (Ben 2026-07-09 — rejects a live price >15%
   `VALUE_MAX_BELOW_LOW_PCT` below the durable q15 floor: a broken instasell print or a crash mid-fall, the
