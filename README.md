@@ -144,6 +144,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen.mjs --publish`)
+- `docs/` — repo docs that aren't app/pipeline reference: `PLANNING.md` (the planning process
+  itself — required plan sections, chunk design rules, the skills improvement loop, anti-patterns;
+  written 2026-07-08, follow it when producing any improvement plan; `docs/LORE.md` will join it
+  at Pipeline-v2 P7)
 - `.gitattributes` — repo EOL normalization (GA1): text sources (`*.js`/`*.mjs`/`*.json`/
   `*.jsonl`/`*.md`/`*.yml`/`*.css`/`*.html`/`*.log` + `.gitignore`/`LICENSE`) are `text eol=lf`,
   the Windows batch launchers (`serve.cmd`/`watch-log.cmd`/`*.cmd`) are `text eol=crlf`, and

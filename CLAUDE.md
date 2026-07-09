@@ -194,9 +194,11 @@ Script facts the skills rely on (current behavior, not doctrine):
 - **The master plan: `PLAN.md`** (single plan file since 2026-07-04) — the plan + the
   scoreboard. Waves 1–4 have **all shipped** (T1/T2, O1, K1–K3, S1–S3, Q1, E1, L1, G1, M1, N1,
   and the Wave-4 cleanup D1/R1/P1/X1/X2/A1–A3/BE1/W1/CI1) — see PLAN.md's Status table for the
-  per-chunk shas. The only work still open is **F1** (algorithm feedback — GATED on O1's sample
-  thresholds, realistically weeks of accrual away) plus whatever sits in PLAN.md's **Discovered**
-  list. `main` is protected by a PR+`checks` ruleset (G1, 2026-07-04); no merge queue on this
+  per-chunk shas. **The active program is the Pipeline-v2 wave (D0→P8)** — snapshot+SQLite
+  archive, context chain, validators on every surface, path engine (verdict = item × thesis),
+  declarative strategy specs — specs in PLAN.md "Pipeline v2"; note the **falling-exclusion
+  doctrine is AMENDED** (per-strategy, not global — encoded at P5). Also open: **F1** (GATED on
+  O1's sample thresholds) plus PLAN.md's **Discovered** list. Planning process: `docs/PLANNING.md`. `main` is protected by a PR+`checks` ruleset (G1, 2026-07-04); no merge queue on this
   user-owned repo and PR creation is token-blocked for now, so chunks land via attended
   direct-push under the admin bypass (parallel lanes still use worktree subagents,
   hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
