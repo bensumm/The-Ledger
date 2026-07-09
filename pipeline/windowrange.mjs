@@ -32,7 +32,7 @@
  */
 import { loadMapping, fetchTs, fetchLatest } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp } from './lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS } from './lib/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS } from '../js/windowread.mjs';
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);

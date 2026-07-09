@@ -58,7 +58,7 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/mar
 import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from './lib/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from '../js/windowread.mjs';
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger

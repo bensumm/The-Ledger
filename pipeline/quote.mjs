@@ -27,6 +27,7 @@ import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offe
 import { mdTable, stdCells } from './lib/cli.mjs';
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
+import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer
 import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
@@ -72,7 +73,13 @@ async function runItems() {
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) lines.push('  ' + gl);
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active' }));  // per-item read has no verdict
+    // P2 validators — score the patient ask (optSell) against the reach window. quote does NOT fetch
+    // the 1h series (fetchItemInputs default ts1h:false), so reachValidator DEGRADES to pass/no-data
+    // here; the wiring is real (it fires the moment a caller carries ts1h). An explicit ask is NEVER
+    // hidden — a fired flag is a NOTE + logged; the table row is untouched.
+    const vres = runValidators({ intraday: { ts1h: inp.ts1h ?? null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null } });
+    for (const f of flags(vres)) lines.push(`  ⚠ ${f.key}: ${f.reason}`);
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).
@@ -131,7 +138,7 @@ async function runPositions() {
       identity: { id: itemId, name },
       market: { inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true },
       history: { ts6h: inp.ts6h },
-      intraday: { ts5m: inp.ts5m, ts6h: inp.ts6h },
+      intraday: { ts5m: inp.ts5m, ts6h: inp.ts6h, ts1h: inp.ts1h ?? null },
       position: {
         held: true, qty, avgCost, buyTs,
         ask: askFromSnapshot(offers, itemId), bid: bidFromSnapshot(offers, itemId),
@@ -143,11 +150,17 @@ async function runPositions() {
     const row = ctx.market.row;
     const be = ctx.position.be;
     const v = renderHeldVerdict(ctx, { mode: 'compact' });   // the shared held-verdict renderer (P0)
+    // P2 validators — the level we'd list the held lot at (patient band top). Set the reach candidate
+    // on the built ctx (row now available) and run the registry. ts1h is NOT fetched here → degrade to
+    // pass/no-data; a held lot is NEVER hidden, a fired flag is a NOTE + logged (verdict unchanged).
+    ctx.intraday.reach = row.optSell != null ? { side: 'ask', level: row.optSell } : null;
+    const vres = runValidators(ctx);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) lines.push('  ' + gl);
-    sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v, posture: isOvernightNow() ? 'overnight' : 'active' }));  // the emitted per-position verdict string
+    for (const f of flags(vres)) lines.push(`  ⚠ ${name} ${f.key}: ${f.reason}`);
+    sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // the emitted per-position verdict string
     // P0: conviction timers — surfaced as an informational line (the table's Verdict column is
     // unchanged). Mirrors watch.mjs's armed/escalated read off the SAME shared watch-state, so the
     // two surfaces agree on how long a lot has been underwater / whether an escalation has confirmed.

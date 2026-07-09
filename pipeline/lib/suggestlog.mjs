@@ -10,7 +10,7 @@
  *
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
- *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis? }
+ *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators? }
  *     ts      — unix SECONDS at emit time
  *     script  — 'quote' | 'screen' | 'watch'
  *     mode    — the mode/niche as computed then (screen niche name, or null)
@@ -156,7 +156,9 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // byte-for-byte the shape it had before (keeps suggestions.jsonl from ballooning — SR1). Honesty:
 // a script logs only what it can HONESTLY compute (e.g. posture from the clock/flag); it never
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
-export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis } = {}) {
+// P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
+// lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
+export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -173,6 +175,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, 
   if (fillWindowHrs != null) e.fillWindowHrs = fillWindowHrs;
   if (velocityClass != null) e.velocityClass = velocityClass;
   if (thesis != null)        e.thesis = thesis;
+  if (validators != null)    e.validators = validators;
   return e;
 }
 

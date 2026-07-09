@@ -17,7 +17,7 @@
  *   identity  { id, name }
  *   market    { row }                     Tier-0 computeQuote row (js/quotecore.js) — the live read
  *   history   { phase, termStructure }    multi-day trajectory; termStructure is a P3 extension point
- *   intraday  { ts5m, ts6h, ts1h }        Tier-2 per-item series (bands/reach are a P2 extension point)
+ *   intraday  { ts5m, ts6h, ts1h, reach } Tier-2 per-item series (+ P2 reach candidate for validate)
  *   position  { held, qty, avgCost, be, lotValue, ask, bid, askFilling, lotCtx, mv,
  *               support, cutTrigger, deltas, gate, newStateEntry, thesis }
  *
@@ -70,9 +70,13 @@ export function historyStage(ctx, { ts6h = null, termStructure = null } = {}) {
 }
 
 /* intraday — the Tier-2 per-item series the position/verdict stages read (ts5m drives momVerdict's
-   Gates 1/2/D; ts1h feeds the window/support context). Bands + reach are a P2 extension point. */
-export function intradayStage(ctx, { ts5m = null, ts6h = null, ts1h = null } = {}) {
-  ctx.intraday = { ts5m, ts6h, ts1h };
+   Gates 1/2/D; ts1h feeds the window/support context). P2 wired the reach extension point: an
+   optional `reach` candidate `{ side:'ask'|'bid', level, windowHours?, nights?, now? }` rides this
+   namespace so js/validate.mjs's reachValidator can score a would-be bid/ask against the ts1h window
+   read WITHOUT this module (or the validator) fetching anything — the caller sets both series + level.
+   Bands are still a later extension point; `reach` defaults to null so existing callers are unchanged. */
+export function intradayStage(ctx, { ts5m = null, ts6h = null, ts1h = null, reach = null } = {}) {
+  ctx.intraday = { ts5m, ts6h, ts1h, reach };
   return ctx;
 }
 

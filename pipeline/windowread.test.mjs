@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * windowread.test.mjs — acceptance fixtures for the pure window-range math (pipeline/lib/windowread.mjs).
+ * windowread.test.mjs — acceptance fixtures for the pure window-range math (js/windowread.mjs).
  *
- * Colocated NEXT TO its subject in pipeline/lib/. windowread is PURE over an already-fetched 1h
- * /timeseries array — fixtures are synthetic points, no live data (CLAUDE.md rule 4).
- * Run: `node pipeline/lib/windowread.test.mjs`  (exits non-zero on any failure).
+ * windowread moved js/ (P2) so it is node- AND app-importable, like js/quotecore.js; this test lives
+ * in pipeline/ next to quotecore.test.mjs (the convention for js/-module tests). windowread is PURE
+ * over an already-fetched 1h /timeseries array — fixtures are synthetic points, no live data (rule 4).
+ * Run: `node pipeline/windowread.test.mjs`  (exits non-zero on any failure).
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - quantLow returns the bid level touched on ≥p of nights (a bid ≥ the p-quantile of window
@@ -15,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant } from './windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant } from '../js/windowread.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

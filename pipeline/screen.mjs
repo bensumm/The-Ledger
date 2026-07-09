@@ -73,6 +73,7 @@ import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 import { gateCandidates, rankAndSlice, surviveMode, expUnits } from './lib/gatecandidates.mjs';
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
+import { runValidators, flags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
@@ -213,7 +214,9 @@ const watchClosely = new Map();   // id -> { name, state, note }
 function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, v24) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0 };  // post-fetch discard reasons (--stats)
+  const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
+  const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -235,6 +238,22 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     if (!sv.keep) { disc[sv.discardReason]++; continue; }
     const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
+    // P2 validators — score the patient ask (optSell, the band playbook's list-at) against the reach
+    // window. screen does NOT fetch the 1h series (only ts5m/ts6h), so reachValidator DEGRADES to
+    // pass/no-data here (documented — the wiring is live so P3's floorValidator populates it). Reject
+    // DROPS the row (counted + a footer); caution keeps the row but is counted/flagged. Explicit
+    // asks/held/watchlist are handled on their own surfaces where nothing is ever hidden.
+    const vres = runValidators({ intraday: { ts1h: null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null } });
+    const vworst = worstStatus(vres);
+    if (vworst === 'reject') {
+      disc.reject++;
+      for (const f of flags(vres)) if (f.status === 'reject') rejReasons[f.reason] = (rejReasons[f.reason] || 0) + 1;
+      continue;
+    }
+    if (vworst === 'caution') {
+      disc.caution++;
+      cautionNotes.push(`${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '));
+    }
     const r = rateItem({ row, expGpDay: s.expGpDay, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
@@ -273,7 +292,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
     // PM2: record every firing to pipeline/modules/<module>.log (failure-safe, stdout-untouched).
     logFirings(fired, { surface: 'screen', id: s.id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
     const probeStr = fired.map(f => f.tag).join(' · ');
-    rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, probeStr, validators: leanValidators(vres) });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -284,7 +303,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE })));
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators })));
 
   console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; fallers excluded)`);
   console.log(PLAYBOOK[mode]);
@@ -298,6 +317,15 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   const printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
   console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
   console.log(`Grades: ${gradeDist(dist)}`);
+  // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
+  // the count + the top-3 reasons. N==0 (the current reality on this surface: reachValidator degrades
+  // to pass because screen doesn't fetch the 1h series) → NO line → default output byte-identical.
+  // Caution rows still show; each is flagged on its own line here (never a per-item `·`-join).
+  if (disc.reject > 0) {
+    const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
+    console.log(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
+  }
+  for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
   // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
   // STDOUT-ONLY — deliberately NOT in the published cells, so the canonical table + screen.json/app
@@ -316,7 +344,7 @@ function renderMode(mode, { cand, survivors }, qcache, map, series5m, series6h, 
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '');
+    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}`;
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');

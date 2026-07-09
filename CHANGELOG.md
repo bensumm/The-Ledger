@@ -10,6 +10,33 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### V2-P2 — Validate stage + reachValidator, every surface (2026-07-08, pipeline-only — NO APP_VERSION)
+The Pipeline-v2 wave's per-surface gate differences (the quote-vs-watch verdict fork's third root) get
+their shared home: a registry of PURE validators in **`js/validate.mjs`** — `(ctx) → {status:
+pass|caution|reject, reason, evidence}` — run on EVERY surface so a screen, a per-item quote and a
+positions review can't disagree on the same gate. Validators are PURE (no fetch/fs; pure math over a
+caller-fed series is fine), NEVER throw, and DEGRADE to `pass` with a `no-data` note on missing input —
+they only downgrade on affirmative evidence, never on the absence of data (the momVerdict precedent).
+- **`reachValidator`** wraps `windowread`'s reach/touch scoring + the RC1 recency split: a candidate
+  bid/ask the last ~14 same-window nights say is rarely reached → `caution`, never reached → `reject`
+  (definitional out-of-range), and the RC1 stale-optimistic flag (full reach concentrated in an OLDER
+  price regime the recent nights don't confirm) bumps severity one step — reusing `recencySplit`'s
+  existing semantics, no new thresholds beyond named PLACEHOLDERS (`REACH_CAUTION_FRAC` 0.5, etc.).
+- **`windowread.mjs` MOVED `pipeline/lib/` → `js/`** (byte-identical — proven by a same-sha `git mv`;
+  the test suite re-pointed and green is the behavior proof) so it's node- AND app-importable like
+  `quotecore.js`; imports updated in `windowrange.mjs`/`watch.mjs`/`lib/context.mjs` + the moved test
+  (`pipeline/windowread.test.mjs`, now beside `quotecore.test.mjs`).
+- **Wired into `screen.mjs` + `quote.mjs`** via the P0 context chain's intraday-stage reach extension
+  point. Reject semantics (Ben-vetoable default): screens DROP `reject` (folded into `--stats` + a new
+  `rejected: N (top-3 reasons)` footer, printed only when N>0) and FLAG `caution`; explicit asks / held
+  / watchlist rows are NEVER hidden (a fired flag is a NOTE + a lean `validators` field on the
+  suggestions ledger). **HONEST LIMIT:** `screen.mjs`/`quote.mjs` don't fetch the 1h series (no
+  fetch-semantics change was allowed), so `reachValidator` DEGRADES to `pass`/no-data on both today —
+  default output is byte-identical; the framework is live for P3's whole-market `floorValidator`.
+- `suggestionEntry` widened with a lean-included `validators` field (YS2 pattern — present only when a
+  flag fired, so clean rows log byte-identically). New `pipeline/validate.test.mjs` pins registry
+  semantics + the reachValidator fixtures (rarely-reached, never-reached, RC1 stale→reject, degrade).
+
 ### RC1 — recency split, the reach-contamination guard (2026-07-08, pipeline-only — NO APP_VERSION)
 `windowrange.mjs`/`watch.mjs`'s flat full-window touched/reached COUNT lies on an item that changed price
 REGIME inside the window — the count is dominated by stale, older-priced days. Two-sided, one bug (in both,

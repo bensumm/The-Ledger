@@ -170,6 +170,15 @@ Script facts the skills rely on (current behavior, not doctrine):
   `--mode churn`). `rising`'s candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid,
   `risingPoolFloor`) that drops the cheap teleport-tab flood while keeping cheap-but-liquid risers.
   Thin gp-flow big tickets ride a bounded `--thin-reserve`.
+- **P2 validators (`js/validate.mjs`, run on EVERY surface):** a registry of PURE
+  `(ctx)→{status:pass|caution|reject,reason,evidence}` validators. Screens DROP `reject` rows (counted
+  in `--stats` + a `rejected: N (top reasons)` footer) and FLAG `caution`; explicit asks / held /
+  watchlist rows are NEVER hidden (a fired flag is a NOTE + a lean `validators` field on the
+  suggestions ledger). `reachValidator` wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a
+  rarely-reached level → caution, never-reached → reject, stale-optimistic bumps one step). It needs
+  the 1h series, which **`screen.mjs`/`quote.mjs` don't fetch** (no fetch-semantics change), so it
+  DEGRADES to `pass`/no-data on both today — the framework is live for P3's whole-market
+  `floorValidator`. Thresholds are named PLACEHOLDERS.
 - `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**
   keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
   velocity, and drops items whose *yesterday overnight window* printed below the current bid
@@ -192,7 +201,8 @@ Script facts the skills rely on (current behavior, not doctrine):
   `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
   for askFilling + conviction; the booked FIFO lots are still the basis).
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]` (bucketing/quantile
-  math in `pipeline/lib/windowread.mjs`, shared with `watch.mjs`'s window line) scores the last ~14 local
+  math in `js/windowread.mjs` — moved out of `pipeline/lib/` by P2 so it's node- AND app-importable,
+  shared with `watch.mjs`'s window line + `js/validate.mjs`'s `reachValidator`) scores the last ~14 local
   days: per-day window low/high + volume, bid/ask levels touched/reached on ~50%/~75%/all days, `--bid`/
   `--ask` candidate scoring, and the **RC1 recency split** — the recent-3-night hit rate + a `recent-3
   ~50%` quantile beside the full-window ones, with a `⚠ stale` flag when the full count is concentrated

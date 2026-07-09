@@ -55,7 +55,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   offer sizing, `bestWindow`/`median`; moved out of `trends.js` for
   `pipeline/trendcore.test.mjs`), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
-  with the node analysis scripts), `quote.js` (browser orchestrator that fetches one
+  with the node analysis scripts), `windowread.mjs` (P2 — pure window-range/reach math:
+  `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
+  `recencySplit`/`recentQuant` reach-contamination guard; MOVED here from `pipeline/lib/`
+  so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/windowrange.mjs`,
+  `pipeline/watch.mjs` and `js/validate.mjs` — NOT yet app-imported),
+  `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
+  run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
+  reach evidence, degrades to pass on missing data and never throws; `runValidators`/`worstStatus`/
+  `flags`/`leanValidators`. Screens DROP reject + FLAG caution; explicit asks/held/watchlist are never
+  hidden. NOT yet app-imported → adding it does not bump APP_VERSION), `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
   GitHub-as-backend writes: fine-grained PAT in localStorage, `mobile-fills.log` /
@@ -239,7 +248,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     on append via `rotateLedger` — no-row-loss archive-then-truncate, idempotent — and `readSuggestionLines`
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
     forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
-    written only when a caller honestly supplies them, so legacy rows stay byte-identical), `windowread.mjs` (pure window-range math, shared with `windowrange.mjs`/`watch.mjs`; incl. the RC1 `recencySplit`/`recentQuant` reach-contamination guard that flags a `⚠ stale` full touched/reached count concentrated in an older price regime),
+    written only when a caller honestly supplies them, so legacy rows stay byte-identical; P2 also
+    lean-includes a `validators` flag list). **`windowread.mjs` MOVED to `js/`** (P2 — see the `js/`
+    inventory above; consumed here by `windowrange.mjs`/`watch.mjs`),
     `watchstate.mjs` (V1/V4/V7 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
     `advanceState` compute Δ instabuy, mom transitions, `passesUnderwater`/`passesBelowSupport` counters
     (display), the `underwaterSince`/`belowSupportSince`/`breakdownSince` streak timestamps, and band-top
@@ -332,7 +343,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract), `sync-fills.test.mjs`
     (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
     emitter), `watchcore.test.mjs` (Watch-tab derivations + `offerVerdict`), `lib/cli.test.mjs`
-    (arg/`parseGp`/`median`), `lib/windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard),
+    (arg/`parseGp`/`median`), `windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard; moved to `pipeline/` beside the other `js/`-module tests when P2 moved windowread to `js/`), `validate.test.mjs` (P2 — the validator registry semantics + reachValidator fixtures: rarely-reached→caution, never-reached→reject, RC1 stale-optimistic→bumped reject, and the no-data/thin-sample degrade-to-pass contract),
     `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
@@ -459,6 +470,8 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | --- | --- |
 | `js/quotecore.js` | 10 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
 | `js/format.js` | 5 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs` |
+| `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
+| `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs` (P2 — the validator registry; not yet app-imported) |
 
 ### Test-location convention
 
