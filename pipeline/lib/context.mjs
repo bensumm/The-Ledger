@@ -1,0 +1,243 @@
+/**
+ * context.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer (chunk P0).
+ *
+ * WHY THIS EXISTS. Before P0 the two single-item surfaces disagreed by construction: `quote.mjs
+ * --positions` and `watch.mjs` each re-derived a held lot's verdict inline, from DIFFERENT inputs.
+ * quote.mjs never read the live offer book or the watch loop's cross-pass memory, so it could not
+ * print the `HOLD — ask filling` (V3 Gate-D) softening or any conviction-timer state — watch.mjs
+ * could. Same lot, two answers. This module is the single home that ends the fork: one staged
+ * enricher chain builds an `ItemContext`, and one parameterized renderer turns it into either
+ * surface's verdict string. Both surfaces call the SAME functions here, so the matrix cannot drift.
+ *
+ * THE CHAIN (staged, PURE enrichers — the momVerdict optional-degradation precedent: a missing
+ * stage input degrades downstream, it never throws):
+ *
+ *   identity → market → history → intraday → position → (validate / paths: LATER chunks)
+ *
+ *   identity  { id, name }
+ *   market    { row }                     Tier-0 computeQuote row (js/quotecore.js) — the live read
+ *   history   { phase, termStructure }    multi-day trajectory; termStructure is a P3 extension point
+ *   intraday  { ts5m, ts6h, ts1h }        Tier-2 per-item series (bands/reach are a P2 extension point)
+ *   position  { held, qty, avgCost, be, lotValue, ask, bid, askFilling, lotCtx, mv,
+ *               support, cutTrigger, deltas, gate, newStateEntry, thesis }
+ *
+ * PURITY / IO BOUNDARY. NOTHING here fetches or touches fs. The CALLER loads the data (loadSnapshot /
+ * fetchItemInputs for market+intraday, offers.json via lib/offers.mjs for the book, the watch-state
+ * entry via lib/watchstate.mjs, the hold-thesis entry via lib/holdthesis.mjs, and the structural
+ * support/cut-trigger from the already-fetched ts1h) and feeds it in. That keeps every stage
+ * node-importable + fixture-tested with no network. The position stage's conviction math is the pure
+ * computeDeltas / advanceState / convictionGate from watchstate.mjs — quote.mjs gains the same
+ * arm-then-confirm read watch.mjs has, off the SAME shared state file.
+ *
+ * THE POSITION STAGE loads (via its caller) offers.json + watch-state for ALL consumers — that is
+ * precisely what gives `quote.mjs --positions` the askFilling softening + conviction timers it
+ * previously lacked. `ask`/`bid` are NORMALIZED offers `{ price, filled, total }` so a caller can
+ * source them from offers.json (quote) OR the live exchange log (watch) without this module caring.
+ *
+ * THE RENDERER is shared and PARAMETERIZED, not forked: `renderHeldVerdict(ctx, { mode })` emits
+ * `compact` (the quote.mjs table Verdict cell) or `verbose` (the watch.mjs heldAction line) off the
+ * SAME `heldMomVerdict(ctx)` decision. Both strings are reproduced VERBATIM from the pre-P0 inline
+ * functions so existing output stays byte-identical; only the shared source of `mv` changed.
+ */
+import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../js/quotecore.js';
+import { fmtP } from '../../js/format.js';
+import { computeDeltas, advanceState, convictionGate } from './watchstate.mjs';
+
+// ---------------------------------------------------------------------------
+// STAGE ENRICHERS — each (ctx, input) → ctx, mutating exactly one namespace and returning ctx so
+// they chain. A fresh ctx is `{}`. Nulls in / missing prior namespaces degrade gracefully.
+// ---------------------------------------------------------------------------
+
+/* identity — the item's id + display name (the only always-present namespace). */
+export function identityStage(ctx, { id, name } = {}) {
+  ctx.identity = { id: id ?? null, name: name ?? (id != null ? '#' + id : null) };
+  return ctx;
+}
+
+/* market — the Tier-0 live read. `inp` is fetchItemInputs()'s output (latest/ts5m/ts6h/vol24[/ts1h]);
+   held/asked/limit/guide match computeQuote's existing call sites. Row is null only if computeQuote
+   is handed nothing usable (it tolerates missing feeds itself). */
+export function marketStage(ctx, { inp = {}, guide = null, limit = null, held = false, asked = true } = {}) {
+  ctx.market = { row: computeQuote({ ...inp, guide, limit, held, asked }) };
+  return ctx;
+}
+
+/* history — multi-day trajectory. phase() over the 6h series (spike/decay/basing); termStructure is
+   the P3 Tier-1 extension point (1/3/7/14/28d), left null here so downstream `?? null`-degrades. */
+export function historyStage(ctx, { ts6h = null, termStructure = null } = {}) {
+  ctx.history = { phase: ts6h ? phase(ts6h) : null, termStructure };
+  return ctx;
+}
+
+/* intraday — the Tier-2 per-item series the position/verdict stages read (ts5m drives momVerdict's
+   Gates 1/2/D; ts1h feeds the window/support context). Bands + reach are a P2 extension point. */
+export function intradayStage(ctx, { ts5m = null, ts6h = null, ts1h = null } = {}) {
+  ctx.intraday = { ts5m, ts6h, ts1h };
+  return ctx;
+}
+
+// Is the held lot's OWN ask actively transacting ABOVE the clear price? The V3 Gate-D fill-progress
+// heuristic, byte-identical to watch.mjs's inline test — an active sell with filled units priced
+// above the live instabuy. Normalized offer shape `{ price, filled, total }`; null ask → false.
+function askIsFilling(row, ask) {
+  return !!(ask && ask.filled > 0 && row && row.quickSell != null && ask.price > row.quickSell);
+}
+
+/* position — THE load-bearing stage. Reads ctx.market.row + ctx.intraday.ts5m and folds in the lot,
+   the live book (ask/bid), the structural support/cut-trigger, the watch-state prior + the declared
+   hold thesis. Produces the ONE lotCtx + momVerdict `mv` both surfaces render, plus the conviction
+   gate (arm-then-confirm) and the next-pass state entry (the caller persists it — watch does; quote
+   reads-only). Every conviction input is optional: absent a watch-state prior / support / nowMs the
+   gate degrades to no-escalation and the verdict is unchanged (the pre-P0 quote.mjs behavior).
+
+   inputs:
+     held, qty, avgCost, buyTs   the lot (buyTs = oldest lot's unix seconds; feeds the fresh-entry gate)
+     ask, bid                    normalized live offers { price, filled, total } | null
+     support, cutTrigger         structuralSupport(dayLows) + its tripwire (from ts1h) | null
+     watchStatePrior             the prior `held:<id>` watch-state entry | null (→ first-seen)
+     nowMs                       ms clock for the conviction streak durations
+     thesisEntry                 the declared hold-thesis entry { exitPrice, tripwire, horizon } | null */
+export function positionStage(ctx, {
+  held = false, qty = null, avgCost = null, buyTs = null,
+  ask = null, bid = null, support = null, cutTrigger = null,
+  watchStatePrior = null, nowMs = Date.now(), thesisEntry = null,
+} = {}) {
+  const row = ctx.market ? ctx.market.row : null;
+  const ts5m = ctx.intraday ? ctx.intraday.ts5m : null;
+  const be = held
+    ? (avgCost != null ? breakEven(avgCost) : null)
+    : (row && row.quickBuy != null ? breakEven(row.quickBuy) : null);
+  const lotValue = (held && qty != null && avgCost != null) ? qty * avgCost : null;
+  const askFilling = askIsFilling(row, ask);
+  const lotCtx = { buyTs: buyTs ?? null, askFilling };
+  // The ONE momVerdict both surfaces render — computed once, off the full lotCtx (the fork's cure).
+  const mv = held ? momVerdict(row, be, lotValue, ts5m, undefined, lotCtx) : null;
+
+  // Conviction (arm-then-confirm) — the timers quote.mjs previously lacked. Pure watchstate math over
+  // the shared state file. Guarded shape: any missing input degrades to a no-escalation gate.
+  let deltas = null, gate = { escalate: false, armed: false, reason: null }, newStateEntry = null;
+  if (held && row) {
+    const cur = {
+      identity: `hld:${qty}:${avgCost != null ? Math.round(avgCost) : ''}`,
+      instabuy: row.quickSell, mom: row.mom, bandTop: row.rawBandHi, breakEven: be, support,
+    };
+    deltas = computeDeltas(watchStatePrior, cur, nowMs);
+    newStateEntry = advanceState(watchStatePrior, cur, nowMs);
+    gate = convictionGate({
+      verdict: mv && mv.verdict, gate: mv && mv.gate,
+      price: row.quickSell, support, cutTrigger,
+      underwaterMs: deltas.underwaterMs, belowSupportMs: deltas.belowSupportMs, breakdownMs: deltas.breakdownMs,
+      thesis: thesisEntry, underwater: deltas.underwater,
+    });
+  }
+
+  ctx.position = {
+    held, qty, avgCost, buyTs: buyTs ?? null, be, lotValue,
+    ask, bid, askFilling, lotCtx, mv,
+    support, cutTrigger, deltas, gate, newStateEntry, thesis: thesisEntry ?? null,
+  };
+  return ctx;
+}
+
+/* buildItemContext — compose the whole chain from per-stage inputs. Any stage's input may be omitted
+   (that namespace still initialises, degrading downstream). Returns the ctx object. */
+export function buildItemContext({ identity = {}, market = {}, history = {}, intraday = {}, position = null } = {}) {
+  const ctx = {};
+  identityStage(ctx, identity);
+  marketStage(ctx, market);
+  historyStage(ctx, history);
+  intradayStage(ctx, intraday);
+  if (position) positionStage(ctx, position);
+  return ctx;
+}
+
+// ---------------------------------------------------------------------------
+// SHARED HELD-VERDICT RENDERER — one home, two parameterized outputs. Both read ctx.position.mv
+// (the single momVerdict decision) so the two surfaces can never disagree on the verdict.
+// ---------------------------------------------------------------------------
+
+/* The ONE held-verdict decision. Returns the position stage's momVerdict (or null when not held /
+   not escalated). Both render modes and both surfaces consume this. */
+export function heldMomVerdict(ctx) {
+  return ctx && ctx.position ? ctx.position.mv : null;
+}
+
+/* COMPACT — the quote.mjs `--positions` table Verdict cell. Body reproduced VERBATIM from the pre-P0
+   quote.mjs verdict() so booked-lots output stays byte-identical; the only change is that `mv` now
+   carries the askFilling softening (the HOLD — ask filling case quote could not previously reach). */
+function heldVerdictCompact(row, be, mv) {
+  const instabuy = row ? row.quickSell : null;
+  if (mv) {
+    const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
+    const tag = mv.action === 'NO_READ'       ? ` (unreliable: ${row.reliableReason} — no action, keep ask ≥ break-even)`
+              : mv.action === 'DIURNAL_WATCH' ? ' (quiet-hour trough; dipped+recovered yesterday — hold ≥ break-even, re-check at a liquid hour)'
+              : mv.action === 'SHOCK_WATCH'   ? ' (one-off shock not a bleed — hold one more cycle; cut on a fresh low)'
+              : mv.gate === 'D'               ? ' (underwater through a liquid window — persistence, not the clock)'
+              : mv.action === 'CUT'           ? ' (2h breakdown & underwater — free capital)'
+              : mv.action === 'CLEAR'         ? (row.rising ? ` (2h breakdown vs uptrend; big-ticket ≥ ${BIG_TICKET_GP / 1e6}m → clearing)` : ' (2h breakdown — bank it, don’t hold for the premium)')
+              : mv.action === 'HOLD_WATCH'    ? ` (2h pullback vs uptrend on a sub-${BIG_TICKET_GP / 1e6}m lot — may reabsorb)`
+              : ' (2h breakup — patient on the sell, don’t sell into strength)';
+    return `${mv.verdict}${at}${tag}`;
+  }
+  if (instabuy == null) return 'NO QUOTE';
+  if (row.falling) {
+    return instabuy >= be
+      ? `SELL @ ${fmtP(instabuy)} (falling — clear in profit)`
+      : `CUT @ ${fmtP(instabuy)} (falling & underwater — free capital)`;
+  }
+  const listAt = (row.optSell != null && row.optSell >= be) ? row.optSell
+               : (instabuy >= be ? instabuy : be);
+  if (listAt >= be && (row.optSell != null && row.optSell >= be)) return `HOLD — list @ ${fmtP(listAt)}`;
+  if (instabuy >= be) return `HOLD — list @ ${fmtP(instabuy)}`;
+  return `HOLD — underwater, list ≥ ${fmtP(be)} (break-even)`;
+}
+
+/* VERBOSE — the watch.mjs per-held action line. Body reproduced VERBATIM from the pre-P0 watch.mjs
+   heldAction() (it now takes the shared `mv` rather than recomputing it — same inputs, same result). */
+function heldActionVerbose(row, be, lotValue, ts5m, mv) {
+  const instabuy = row ? row.quickSell : null;
+  if (mv) {
+    if (mv.action === 'NO_READ')
+      return `NO-READ (${row.reliableReason}) — the quote isn't a reliable price right now (Gate 0). No price action; keep any ask ≥ break-even ${fmtP(be)} and re-check at the next liquid window.`;
+    if (mv.action === 'DIURNAL_WATCH')
+      return `DIURNAL-WATCH @ ${fmtP(mv.listAt)} — underwater at a quiet hour that dipped & recovered yesterday (Gate 1). Hold ≥ break-even; do NOT cut into the trough. If still underwater at a liquid hour, the defense is spent → re-assess.`;
+    if (mv.action === 'SHOCK_WATCH')
+      return `SHOCK-WATCH @ ${fmtP(mv.listAt)} — a one-off volume-spike shock that stabilized, not a bleed, on a small lot with an intact regime (Gate 2). Hold one more cycle; a fresh low next tick = bleed → cut.`;
+    if (mv.action === 'HOLD_FILLING')
+      return `HOLD — ask filling @ ${fmtP(mv.listAt)} — your own ask is filling above the clear price (Gate D, V3); an ask transacting above the clear beats repricing down. Hold it; let it keep filling.`;
+    if (mv.action === 'HOLD_FRESH')
+      return `WATCH — fresh entry @ ${fmtP(mv.listAt)} — a fresh (<${FRESH_HOURS}h) patient fill is definitionally underwater on the instant read (Gate D, V3). Hold the ask ≥ break-even and give the thesis its window; don't cut a brand-new lot.`;
+    if (mv.action === 'CUT')
+      return `${mv.verdict} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window: persistence, not the clock' : 'controlled loss-taking: stop the bleed, free the capital'}. This is NOT out-running the drop; chasing the ask lower just sells cheaper.`;
+    if (mv.action === 'CLEAR')
+      return `LIST-TO-CLEAR @ ${fmtP(mv.listAt)} — bank it; a softening market won't pay the patient premium. Repricing down realizes the current price, it does not beat the market.`;
+    if (mv.action === 'HOLD_STRONG')
+      return `HOLD — list high @ ${fmtP(mv.listAt)} (2h top); don't sell into strength.`;
+    if (mv.action === 'HOLD_WATCH')
+      return `HOLD — watch; a lone 2h dip vs an uptrend on a small lot is usually noise.`;
+  }
+  if (instabuy == null) return 'NO QUOTE — cannot price; do not act blind.';
+  if (row.falling) {
+    return instabuy >= be
+      ? `SELL @ ${fmtP(instabuy)} — falling regime, clear in profit. Not out-running the drop; taking the exit while it's still green.`
+      : `CUT @ ${fmtP(instabuy)} — falling & underwater; take the small loss to free capital before a bigger one.`;
+  }
+  const listAt = (row.optSell != null && row.optSell >= be) ? row.optSell : Math.max(instabuy, be);
+  const banded = row.optSell != null && row.optSell > instabuy;
+  return `HOLD — list @ ${fmtP(listAt)} (break-even-floored${banded ? ', band top' : ''}). ` +
+    `Only in THIS ranging case does listing at the band top earn a premium; if it flips to breakdown, momVerdict switches to clear-vs-hold — don't defend the ask down.`;
+}
+
+/* renderHeldVerdict(ctx, { mode }) — the ONE entry point both surfaces call.
+     mode 'compact'  → quote.mjs `--positions` Verdict cell (byte-identical to pre-P0 verdict()).
+     mode 'verbose'  → watch.mjs heldAction line (byte-identical to pre-P0 heldAction()).
+   Both derive from ctx.position.mv, so the two surfaces render the SAME verdict for the SAME lot. */
+export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
+  const row = ctx && ctx.market ? ctx.market.row : null;
+  const p = (ctx && ctx.position) || {};
+  const mv = heldMomVerdict(ctx);
+  const ts5m = ctx && ctx.intraday ? ctx.intraday.ts5m : null;
+  return mode === 'verbose'
+    ? heldActionVerbose(row, p.be, p.lotValue, ts5m, mv)
+    : heldVerdictCompact(row, p.be, mv);
+}

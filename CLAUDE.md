@@ -157,8 +157,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
   NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE, plus the
   V3 Gate-D softenings WATCH — fresh entry (fresh lot) / HOLD — ask filling (own ask filling
-  above the clear).
-  Interpretation of those verdicts lives in `/positions`.
+  above the clear). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
+  reads the root `offers.json` book (so `HOLD — ask filling` actually prints — quote lacked an
+  offer read before), reads the watch loop's `.cache/watch-state.json` READ-ONLY for a conviction
+  line, renders the verdict via the ONE shared `renderHeldVerdict`, and runs one `loadSnapshot()`
+  per pass for the passive Tier-1 archive append. Interpretation of those verdicts lives in
+  `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, falling-exclusion); `--mode` swaps only the step-3 edge. Four
   niches exist — `band` / `spread` / `rising` / `churn` — but per Ben's **NY2** ruling (2026-07-05)
@@ -181,7 +185,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   lot** (a fill you didn't see may have happened); the V6 advisories are decision SUPPORT, never a
   verdict/alert input. Bids get their own rows (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID — only
   CANCEL-BID alerts); sub-100k offers collapse to one line; bid/listed rows print a `window` context line.
-  `quote.mjs --positions` remains the booked-lots view.
+  **P0**: the held verdict prose is now the SHARED `renderHeldVerdict` (verbose) from
+  `pipeline/lib/context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
+  the old inline `heldAction`, diff-verified) — and each pass runs one `loadSnapshot()` for the passive
+  Tier-1 archive append (per-item live fetch semantics unchanged).
+  `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
+  for askFilling + conviction; the booked FIFO lots are still the basis).
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]` (bucketing/quantile
   math in `pipeline/lib/windowread.mjs`, shared with `watch.mjs`'s window line) scores the last ~14 local
   days: per-day window low/high + volume, bid/ask levels touched/reached on ~50%/~75%/all days, `--bid`/

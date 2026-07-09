@@ -109,7 +109,12 @@ Print-only — it never writes trade data. Each run emits:
      **bought under `FRESH_HOURS` (1h, placeholder) ago** → **WATCH — fresh entry** (a fresh
      patient fill is definitionally underwater on the instant-clear price and hasn't had its
      thesis window). Both hold the ask ≥ break-even; neither is an alert. A fresh lot that
-     *genuinely breaks down* still CUTs immediately (Gate 2 is untouched).
+     *genuinely breaks down* still CUTs immediately (Gate 2 is untouched). **P0 closed the source
+     gap that made the "identical on both surfaces" claim above aspirational for this one verdict:**
+     the lot context (askFilling) + the verdict rendering now live in the shared `lib/context.mjs`
+     chain — `watch.mjs` sources the ask from the live exchange log, `quote.mjs --positions` from the
+     root `offers.json` — so **`HOLD — ask filling` prints on BOTH** (previously only watch could, as
+     quote.mjs had no offer read). Both surfaces render via the one `renderHeldVerdict`.
    - **regime falling** (drift ≤ −5%) with no live break still lands **CUT-CANDIDATE** (list
      to clear at the instabuy — take the small loss before a bigger one; the 0.20.0
      falling-item rule).

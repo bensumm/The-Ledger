@@ -79,6 +79,34 @@ export function offersSnapshot(rows, nameFor = () => undefined, ignoredCfg = nul
   return { app: 'the-coffer-offers', version: 1, generatedAt: new Date().toISOString(), offers };
 }
 
+/** Read the flat repo-root offers.json snapshot (the app-fetched LW1 file written by
+ *  sync-fills.mjs / watch-log.mjs from THIS same reader). Returns the `offers` array
+ *  ([{ slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs }]) or [] on
+ *  ANY failure (missing / stale / corrupt) — a bad snapshot must never break a caller (the
+ *  loadState degrade-not-throw precedent). This is the OTHER-machine-safe book source: unlike
+ *  readExchangeLog (which needs the local ~/.runelite log dir), quote.mjs reads offers.json so
+ *  its position stage can see live asks/bids anywhere the file is present. */
+export function readOffersSnapshot(offersPath) {
+  try {
+    const o = JSON.parse(fs.readFileSync(offersPath, 'utf8'));
+    return Array.isArray(o && o.offers) ? o.offers : [];
+  } catch { return []; }
+}
+
+/** The active ask (side 'sell') / bid (side 'buy') for one item id in an offers.json `offers`
+ *  array, NORMALIZED to the position-stage shape `{ price, filled, total }` (or null). This is the
+ *  shape context.positionStage's `ask`/`bid` want, so a caller sourcing the book from offers.json
+ *  and one sourcing it from the live exchange log feed the position stage identically. */
+export function normalizeSnapshotOffer(offer) {
+  return offer ? { price: offer.price, filled: offer.filled, total: offer.qty } : null;
+}
+export function askFromSnapshot(offers, itemId) {
+  return normalizeSnapshotOffer((offers || []).find(o => o && o.itemId === itemId && o.side === 'sell') || null);
+}
+export function bidFromSnapshot(offers, itemId) {
+  return normalizeSnapshotOffer((offers || []).find(o => o && o.itemId === itemId && o.side === 'buy') || null);
+}
+
 /** Latest line per slot = that slot's current state; BUYING/SELLING = an open offer.
  *  Returns [{ slot, state, item, qty, max, offer, ts }] (qty = filled so far). */
 export function activeOffers(rows, ignoredCfg = null) {

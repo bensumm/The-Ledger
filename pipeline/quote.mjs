@@ -19,18 +19,25 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, QUOTE_HEADERS, breakEven, momVerdict, BIG_TICKET_GP, isOvernightNow, phase } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
-import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
+import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { mdTable, stdCells } from './lib/cli.mjs';
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
+import { buildItemContext, renderHeldVerdict } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer
+import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
+import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
+const OFFERS = path.join(HERE, '..', 'offers.json');   // P0: flat live-offer snapshot (LW1); the book for askFilling
 const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl');   // YP1: watch.mjs writes it, we read it advisory
+const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch.mjs (read-only here)
+const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
@@ -93,62 +100,66 @@ async function runItems() {
   console.log(lines.join('\n'));
 }
 
-/* verdict reuses the quotecore regime/trend flags on the row (no separate trend math).
-   The precise 2h `mom` cut-trigger (chunk 6) runs FIRST via the SHARED momVerdict() — identical
-   matrix to the app's reviewPositions — so a held breakdown escalates toward CUT / clear before
-   the regime-only branches. lotValue = qty × avgCost (capital at risk). mom clean → fall through. */
-function verdict(row, breakEven, lotValue, ts5m, buyTs) {
-  const instabuy = row.quickSell;         // what you'd clear at right now
-  // V3: pass the lot's buy timestamp so a fresh (<FRESH_HOURS) underwater lot isn't cut on the
-  // instant read. askFilling is undefined here — quote.mjs has no live offer view (degrades fine).
-  const mv = momVerdict(row, breakEven, lotValue, ts5m, undefined, { buyTs });
-  if (mv) {
-    const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
-    // PLAN-3 gate-tree tags (each names the gate/evidence in one line).
-    const tag = mv.action === 'NO_READ'       ? ` (unreliable: ${row.reliableReason} — no action, keep ask ≥ break-even)`
-              : mv.action === 'DIURNAL_WATCH' ? ' (quiet-hour trough; dipped+recovered yesterday — hold ≥ break-even, re-check at a liquid hour)'
-              : mv.action === 'SHOCK_WATCH'   ? ' (one-off shock not a bleed — hold one more cycle; cut on a fresh low)'
-              : mv.gate === 'D'               ? ' (underwater through a liquid window — persistence, not the clock)'
-              : mv.action === 'CUT'           ? ' (2h breakdown & underwater — free capital)'
-              : mv.action === 'CLEAR'         ? (row.rising ? ` (2h breakdown vs uptrend; big-ticket ≥ ${BIG_TICKET_GP/1e6}m → clearing)` : ' (2h breakdown — bank it, don’t hold for the premium)')
-              : mv.action === 'HOLD_WATCH'    ? ` (2h pullback vs uptrend on a sub-${BIG_TICKET_GP/1e6}m lot — may reabsorb)`
-              : ' (2h breakup — patient on the sell, don’t sell into strength)';
-    return `${mv.verdict}${at}${tag}`;
-  }
-  if (instabuy == null) return 'NO QUOTE';
-  if (row.falling) {
-    return instabuy >= breakEven
-      ? `SELL @ ${fmtP(instabuy)} (falling — clear in profit)`
-      : `CUT @ ${fmtP(instabuy)} (falling & underwater — free capital)`;
-  }
-  // stable / rising: hold and list at the patient optimistic sell if it clears break-even
-  const listAt = (row.optSell != null && row.optSell >= breakEven) ? row.optSell
-               : (instabuy >= breakEven ? instabuy : breakEven);
-  if (listAt >= breakEven && (row.optSell != null && row.optSell >= breakEven)) return `HOLD — list @ ${fmtP(listAt)}`;
-  if (instabuy >= breakEven) return `HOLD — list @ ${fmtP(instabuy)}`;
-  return `HOLD — underwater, list ≥ ${fmtP(breakEven)} (break-even)`;
-}
-
 async function runPositions() {
   const { err, groups, openLots } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
   if (!groups.length) { console.log('No open positions in positions.json.'); return; }
-  const map = await loadMapping();
-  const guide = await loadGuide();
+  // P0: one loadSnapshot() per pass — the position surface's mapping/guide + the passive Tier-1
+  // archive append (quote.mjs is, with watch.mjs, loadSnapshot's first consumer). Robust fallback:
+  // if the archive/snapshot can't open, degrade to the plain loaders so the read never breaks.
+  const ids = groups.map(g => g.itemId);
+  let snap = null;
+  try { snap = await loadSnapshot({ budgetIds: ids }); } catch { snap = null; }
+  const map = snap ? snap.mapping : await loadMapping();
+  const guide = snap ? snap.guide : await loadGuide();
+  const getInputs = async id => (snap ? (await snap.series(id)) : null) ?? await fetchItemInputs(id);
+  // P0: the live book (offers.json) + the watch loop's cross-pass state + declared hold theses —
+  // the inputs quote.mjs never read before, so it can now print HOLD — ask filling + conviction.
+  const offers = readOffersSnapshot(OFFERS);
+  const nowMs = Date.now();
+  const priorState = loadState(WATCH_STATE);   // READ-ONLY: quote never persists (only the watch loop owns the write)
+  const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
-  const rows = [], lines = [], sugg = [], staleRisk = [];
+  const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [];
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
-    const be = breakEven(avgCost);
-    const inp = await fetchItemInputs(itemId);
-    const row = computeQuote({ ...inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true });
-    const v = verdict(row, be, cost, inp.ts5m, buyTs);
+    const inp = await getInputs(itemId);
+    // Build the shared item context: identity → market → history → intraday → position. The position
+    // stage folds in the live ask (askFilling), the cross-pass state (conviction), and any hold thesis.
+    const ctx = buildItemContext({
+      identity: { id: itemId, name },
+      market: { inp, guide: guide[itemId] ?? null, limit: map.byId[itemId]?.limit ?? null, held: true, asked: true },
+      history: { ts6h: inp.ts6h },
+      intraday: { ts5m: inp.ts5m, ts6h: inp.ts6h },
+      position: {
+        held: true, qty, avgCost, buyTs,
+        ask: askFromSnapshot(offers, itemId), bid: bidFromSnapshot(offers, itemId),
+        // support/cutTrigger need the 1h window series (not fetched on this booked-lots view) → null;
+        // conviction still covers underwater/breakdown/thesis persistence off the shared state.
+        watchStatePrior: priorState['held:' + itemId] || null, nowMs, thesisEntry: thesisFor(holdThesisStore, itemId),
+      },
+    });
+    const row = ctx.market.row;
+    const be = ctx.position.be;
+    const v = renderHeldVerdict(ctx, { mode: 'compact' });   // the shared held-verdict renderer (P0)
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) lines.push('  ' + gl);
     sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v, posture: isOvernightNow() ? 'overnight' : 'active' }));  // the emitted per-position verdict string
+    // P0: conviction timers — surfaced as an informational line (the table's Verdict column is
+    // unchanged). Mirrors watch.mjs's armed/escalated read off the SAME shared watch-state, so the
+    // two surfaces agree on how long a lot has been underwater / whether an escalation has confirmed.
+    const g = ctx.position.gate, d = ctx.position.deltas;
+    const persistMin = Math.round(ALERT_PERSIST_MS / 60000);
+    const heldMin = ms => Math.max(0, Math.round((ms || 0) / 60000));
+    if (g && g.armed && g.reason === 'cut-candidate-armed')
+      convLines.push(`  ${name}: CUT-CANDIDATE armed — underwater ~${heldMin(d && d.underwaterMs)}m through a liquid window; confirms once it persists ~${persistMin}m (per shared watch-state).`);
+    else if (g && g.armed && g.reason === 'thesis-armed')
+      convLines.push(`  ${name}: expected-underwater — silenced above declared tripwire ${fmtP(ctx.position.thesis?.tripwire)} (per hold thesis).`);
+    else if (g && g.escalate && g.reason === 'cut-candidate')
+      convLines.push(`  ${name}: CUT-CANDIDATE confirmed — underwater sustained ~${heldMin(d && d.underwaterMs)}m (≥ ${persistMin}m) through a liquid window.`);
     // S2 morning-staleness watch (informational only — the Verdict column above is UNCHANGED). A resting
     // SELL is at risk of being stale/underwater by morning if it can't clear at profit now (instabuy <
     // break-even) or the market is weakening (falling regime / live 2h breakdown).
@@ -156,10 +167,16 @@ async function runPositions() {
   }
   // O1 suggestions ledger: log the position verdicts at emit time, unconditionally.
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
+  if (snap) { try { snap.archive.close(); } catch {} }   // P0: loadSnapshot leaves the archive open when it owns it
   console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
   console.log(mdTable(headers, rows));
   console.log('');
   console.log(lines.join('\n'));
+  if (convLines.length) {
+    console.log('');
+    console.log('Conviction (shared watch-state):');
+    console.log(convLines.join('\n'));
+  }
   if (isOvernightNow() && staleRisk.length) {
     console.log('');
     console.log(`ℹ Late-night: ${staleRisk.length} held position(s) may be stale/underwater by morning — re-verdict at the morning liquid window (${staleRisk.join(', ')}).`);

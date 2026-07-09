@@ -48,12 +48,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP, FRESH_HOURS,
+import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
   diurnalRead, phase, underwaterHours, isOvernightNow } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
+import { renderHeldVerdict } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface)
 import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
-import { loadMapping, loadGuide, fetchItemInputs } from './lib/marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
@@ -263,41 +264,12 @@ function recoveryReadFor(it) {
 // --- ACTION line for a HELD lot. Sell-side framing is HONEST (clear-vs-hold), never
 // "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
 // 2h breakdown escalates before the lagging multi-day regime confirms.
-function heldAction(row, be, lotValue, ts5m, lotCtx) {
-  const instabuy = row.quickSell;
-  const mv = momVerdict(row, be, lotValue, ts5m, undefined, lotCtx);
-  if (mv) {
-    // PLAN-3 gate-tree verdicts (each says WHICH gate fired + the evidence, in one line).
-    if (mv.action === 'NO_READ')
-      return `NO-READ (${row.reliableReason}) — the quote isn't a reliable price right now (Gate 0). No price action; keep any ask ≥ break-even ${fmtP(be)} and re-check at the next liquid window.`;
-    if (mv.action === 'DIURNAL_WATCH')
-      return `DIURNAL-WATCH @ ${fmtP(mv.listAt)} — underwater at a quiet hour that dipped & recovered yesterday (Gate 1). Hold ≥ break-even; do NOT cut into the trough. If still underwater at a liquid hour, the defense is spent → re-assess.`;
-    if (mv.action === 'SHOCK_WATCH')
-      return `SHOCK-WATCH @ ${fmtP(mv.listAt)} — a one-off volume-spike shock that stabilized, not a bleed, on a small lot with an intact regime (Gate 2). Hold one more cycle; a fresh low next tick = bleed → cut.`;
-    if (mv.action === 'HOLD_FILLING')
-      return `HOLD — ask filling @ ${fmtP(mv.listAt)} — your own ask is filling above the clear price (Gate D, V3); an ask transacting above the clear beats repricing down. Hold it; let it keep filling.`;
-    if (mv.action === 'HOLD_FRESH')
-      return `WATCH — fresh entry @ ${fmtP(mv.listAt)} — a fresh (<${FRESH_HOURS}h) patient fill is definitionally underwater on the instant read (Gate D, V3). Hold the ask ≥ break-even and give the thesis its window; don't cut a brand-new lot.`;
-    if (mv.action === 'CUT')
-      return `${mv.verdict} @ ${fmtP(mv.listAt)} — ${mv.gate === 'D' ? 'underwater through a liquid window: persistence, not the clock' : 'controlled loss-taking: stop the bleed, free the capital'}. This is NOT out-running the drop; chasing the ask lower just sells cheaper.`;
-    if (mv.action === 'CLEAR')
-      return `LIST-TO-CLEAR @ ${fmtP(mv.listAt)} — bank it; a softening market won't pay the patient premium. Repricing down realizes the current price, it does not beat the market.`;
-    if (mv.action === 'HOLD_STRONG')
-      return `HOLD — list high @ ${fmtP(mv.listAt)} (2h top); don't sell into strength.`;
-    if (mv.action === 'HOLD_WATCH')
-      return `HOLD — watch; a lone 2h dip vs an uptrend on a small lot is usually noise.`;
-  }
-  if (instabuy == null) return 'NO QUOTE — cannot price; do not act blind.';
-  if (row.falling) {
-    return instabuy >= be
-      ? `SELL @ ${fmtP(instabuy)} — falling regime, clear in profit. Not out-running the drop; taking the exit while it's still green.`
-      : `CUT @ ${fmtP(instabuy)} — falling & underwater; take the small loss to free capital before a bigger one.`;
-  }
-  // stable / rising: patient list at the band top if it clears break-even, else floor at break-even
-  const listAt = (row.optSell != null && row.optSell >= be) ? row.optSell : Math.max(instabuy, be);
-  const banded = row.optSell != null && row.optSell > instabuy;
-  return `HOLD — list @ ${fmtP(listAt)} (break-even-floored${banded ? ', band top' : ''}). ` +
-    `Only in THIS ranging case does listing at the band top earn a premium; if it flips to breakdown, momVerdict switches to clear-vs-hold — don't defend the ask down.`;
+// P0: the prose is now the SHARED renderer (renderHeldVerdict verbose) in pipeline/lib/context.mjs —
+// the ONE home quote.mjs --positions renders from too, so the two surfaces can't disagree on a held
+// verdict. Output is byte-identical to the pre-P0 inline heldAction() (same mv, same strings). The
+// caller passes the ALREADY-computed mv (off lotCtxOf(it)) via a minimal ctx so nothing recomputes.
+function heldAction(row, be, lotValue, ts5m, mv) {
+  return renderHeldVerdict({ market: { row }, intraday: { ts5m }, position: { be, lotValue, mv } }, { mode: 'verbose' });
 }
 
 // --- ACTION line for a WATCHED (not held) target. Buy-side, with the scalp entry gated.
@@ -423,6 +395,14 @@ async function main() {
 
   const map = await loadMapping();
   const guide = await loadGuide();
+
+  // P0: passive Tier-1 accrual — one loadSnapshot() per pass appends the current complete bulk /5m
+  // and /1h buckets to the SQLite archive (check-before-fetch, so a fast loop re-entering the same 5m
+  // window does zero extra network). watch.mjs + quote.mjs are loadSnapshot's first consumers; the
+  // running loop is how P6's broad intraday history accrues. budgetIds:[] → NO per-item fan-out: the
+  // per-item reads below keep their exact live fetch semantics (fetchItemInputs). Guarded so an
+  // archive/sqlite failure can never break a watch pass.
+  try { const snap = await loadSnapshot({ budgetIds: [] }); snap.archive.close(); } catch { /* archive accrual is best-effort — never block a pass */ }
 
   // held items from positions.json (grouped at weighted-avg cost) unless --targets-only
   const heldSpecs = [];
@@ -635,7 +615,7 @@ async function main() {
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
-    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, lotCtxOf(it)));
+    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld));
     let conviction = null, delta = null, tripwire = null, recovery = null;
     try {
       delta = it._deltas ? deltaLine(it._deltas) : null;

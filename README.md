@@ -90,7 +90,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
   freshness and stashes it on `STATE.offers`, which the **Watch tab** (0.49.0, `js/watch.js`)
-  renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14)
+  renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14). P0: `quote.mjs --positions` also
+  reads it (via `lib/offers.mjs`'s `readOffersSnapshot`) as the held-book source for the askFilling
+  softening — the OTHER-machine-safe path that needs no local `~/.runelite` log dir
 - `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's STATED idle-cash
   balance (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `watch.mjs`'s SUMMARY
   total-capital line. The GE cash stack is in no log, so idle GP is a stated snapshot: it ages the
@@ -168,14 +170,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 appends a stdout-only
-    `Probes` column on the per-item read when a probe fires), `screen.mjs`
+    `Probes` column on the per-item read when a probe fires. P0: `--positions` now builds the shared
+    `context.mjs` chain per lot — reads the root `offers.json` book (→ `HOLD — ask filling`) + the
+    watch loop's `.cache/watch-state.json` READ-ONLY (→ a conviction line, never written here) + any
+    declared hold thesis, renders the verdict via the shared `renderHeldVerdict`, and runs one
+    `loadSnapshot()` per pass for the passive Tier-1 archive append), `screen.mjs`
     (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 appends a
     stdout-only `Probes` column per niche when a probe fires — never in the published `screen.json`),
     `watch.mjs` (adaptive live position/offer monitor; also appends
     change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
     the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
     `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`; each held
-    lot's note block follows the V5 EMIT CONTRACT built by `lib/emit.mjs`),
+    lot's note block follows the V5 EMIT CONTRACT built by `lib/emit.mjs`. P0: the held verdict prose
+    is now the SHARED `renderHeldVerdict` (verbose mode) from `lib/context.mjs` — the ONE home
+    quote.mjs renders from too — and each pass runs one `loadSnapshot()` for the passive Tier-1
+    archive append (per-item live fetch semantics unchanged)),
     `monitor.mjs`
     (live read-only log-state snapshot), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
@@ -191,7 +200,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
-    semantics), `positions.mjs` (shared `readOpenPositions` open-lot grouping), `archive.mjs`
+    semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
+    reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
+    position stage wants, so quote.mjs can see the live book without the `~/.runelite` log dir),
+    `positions.mjs` (shared `readOpenPositions` open-lot grouping), `archive.mjs`
     (D0 — the Tier-1 SQLite market archive: a thin `node:sqlite` (`DatabaseSync`) wrapper storing
     RAW `/1h`+`/5m` bulk observations keyed `(grain, ts, itemId)` with `INSERT OR IGNORE` + WAL/
     busy_timeout. `open`/`append`/`seriesFor`/`marketAt`/`exportFixture`/`pruneBefore`; NEVER archives
@@ -273,7 +285,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `thesisFor`/`upsertThesis`/`clearThesis`/`pruneHoldThesis` over the TRACKED root `hold-thesis.json`
     array of `{id,exitPrice,tripwire,horizon,ts}`; watch.mjs reads it read-only and feeds it to
     `convictionGate` to SILENCE the expected-underwater headline while live holds above the declared
-    tripwire — never touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    tripwire — never touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
+    `context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer: staged PURE
+    enrichers `identityStage`/`marketStage`/`historyStage`/`intradayStage`/`positionStage` +
+    `buildItemContext` build an `ItemContext` (identity → market row → history/phase → intraday series
+    → position: lot/break-even/lotValue/askFilling/lotCtx + the ONE `momVerdict` + the `convictionGate`
+    arm-then-confirm, off the caller-loaded offers.json book + watch-state + hold thesis). The position
+    stage is the home that ENDS the quote-vs-watch verdict fork — `renderHeldVerdict(ctx,{mode})` emits
+    `compact` (quote.mjs `--positions` cell) or `verbose` (watch.mjs heldAction line) off the SAME
+    `heldMomVerdict(ctx)`, byte-identical to the pre-P0 inline functions (verified diff), so the two
+    surfaces can't disagree; `HOLD — ask filling` now prints on BOTH (quote lacked the offer read).
+    No fetch/fs — every stage is node-importable + fixture-pinned in `context.test.mjs`), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
@@ -351,7 +373,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `archive.test.mjs` (D0 — append idempotency (same bucket twice = one row per item), `hasBucket`
     check-before-fetch, `seriesFor`/`marketAt` vs hand-computed slices on `:memory:` DBs, `exportFixture`
     round-trip, `pruneBefore`, the never-`/latest` grain guard, and the `dailyMidsAt`+`daily_seed`
-    loadDaily bridge — all on `:memory:`/tmp DBs, NEVER the real archive) — all auto-discovered by
+    loadDaily bridge — all on `:memory:`/tmp DBs, NEVER the real archive),
+    `context.test.mjs` (P0 — the context chain's per-stage enrichers (identity/market/history/intraday/
+    position), THE PIN (`HOLD — ask filling` renders the same verdict on compact + verbose off one
+    `ctx.position.mv`), and the CONVICTION PIN (an armed-not-escalated Gate-D CUT-CANDIDATE is
+    consistent on both surfaces, then escalates once the underwater streak persists ≥ `ALERT_PERSIST_MS`))
+    — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +
     expected outputs for `replay.test.mjs`. `snapshot.json` is a `coffer-replay-snapshot/1` synthetic
