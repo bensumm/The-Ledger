@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.18
+version: 1.19
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -169,12 +169,21 @@ down rather than binary hold-vs-cut. When the tripwire prints, EXECUTE without r
 the jaw 16.49m print (7-day floor break) is the anchor; the discipline only protects you if
 the named level is obeyed both ways.
 
-**Cut-and-rebid friction bar (2026-07-05, Ben-endorsed):** a cut paired with a deeper
-re-entry bid is a legitimate two-leg (the jaw anchor: cut 16.87m, rebid 16.42m) — but each
-sell pays 2% tax, so the pair only beats holding if the rebid sits **more than tax + half
-the spread below the clear price** (~2.5%+). Below that bar the "rebid" is tax bleed: the
-cut stands alone and the freed capital goes to a better home instead. State the discount vs
-friction numbers explicitly when recommending the pair.
+**Cut-and-rebid friction bar (2026-07-05, Ben-endorsed; ENCODED COD-3, 2026-07-10):** a cut
+paired with a deeper re-entry bid is a legitimate two-leg (the jaw anchor: cut 16.87m, rebid
+16.42m) — but each sell pays 2% tax, so the pair only beats holding if the rebid sits **more
+than tax + half the spread below the clear price** (~2.5%+). This arithmetic is now the shared
+`rebidBar(clear, spread)` in `js/quotecore.js` (friction = tax + half the spread; threshold =
+the price the rebid must sit at/below), and `quote.mjs --positions` prints a **Rebid advisory**
+line on every CUT / CUT-CANDIDATE / LIST-TO-CLEAR verdict — don't re-derive the numbers, read
+that line. It is TRAJECTORY-AWARE (`rebidAdvice`): a **knife** (still falling) → advises AGAINST
+the rebid (the bar is moot, cut and redeploy); an **oscillating** faller (bounces back at the
+daily high) → rebid at the projected trough & sell the daily peak; else the friction bar governs.
+Honesty: the bar arithmetic is solid; the trajectory/diurnal awareness is inform-grade
+(placeholder classifier, n≈0) — it SUPPORTS the call, never auto-cancels/auto-rebids. (The
+trajectory reads the read-only daily archive on this surface, so it's `unknown` → friction-bar
+until the archive warms; the forecast upgrade to a quantitative projected-peak is PLAN-FORECAST
+PF1.) State the discount-vs-friction numbers explicitly when recommending the pair.
 
 **Tripwire conviction (2026-07-05, one-sample refinement — honesty rule applies):** the jaw
 tripwire fired on a 1-in-1000 overshoot (16.49m against a 16.50m line) that stabilized

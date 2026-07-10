@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, rebidAdvice } from '../js/quotecore.js';
 import { fmtP } from '../js/format.js';
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -168,7 +168,12 @@ async function runPositions() {
   const headers = [...QUOTE_HEADERS, 'Held@', 'Break-even', 'Verdict'];
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
   const buysByItemMap = loadBuysByItem();   // LM1: per-item 4h buy-limit windows (regime-line + limitValidator — accumulation awareness on a held lot)
-  const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [], pathLines = [];
+  // COD-3: read-only daily mids (noFetch — zero network) → the multi-week trajectory SHAPE the rebid
+  // advisory reads. Cold archive → { hasData:false } → trajectory 'unknown' → the friction-bar branch
+  // (the arithmetic still governs). Best-effort: any archive error leaves it empty.
+  let dailyPos = {};
+  try { ({ series: dailyPos } = await loadDaily(28, 6, { noFetch: true })); } catch { dailyPos = {}; }
+  const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [], pathLines = [], rebidLines = [];
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const inp = await getInputs(itemId);
@@ -225,6 +230,19 @@ async function runPositions() {
     // persistence-gated path read off the SAME state, so the two surfaces agree on the current path.
     const pl = renderPathLine(ctx);
     if (pl) pathLines.push(`  ${name}: ${pl}`);
+    // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
+    // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
+    // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid
+    // at the diurnal trough & sell the daily peak; else the friction bar (tax + ½-spread below the clear)
+    // governs. diurnal is null here (this booked-lots view doesn't fetch the 1h series) → the oscillating
+    // branch names the diurnal dip/peak qualitatively; the friction bar (the SOLID half) is always exact.
+    // Inform-grade decision SUPPORT — it never overrides momVerdict.
+    if (/^(CUT|LIST-TO-CLEAR)/.test(v) && row.quickSell != null) {
+      const trajectory = (termStructure(dailyPos[itemId]) || {}).trajectory || null;
+      const spread = (row.quickSell != null && row.quickBuy != null) ? row.quickSell - row.quickBuy : 0;
+      const adv = rebidAdvice({ clear: row.quickSell, spread, trajectory, diurnal: null });
+      rebidLines.push(`  ${name}: ${adv.why}`);
+    }
     // S2 morning-staleness watch (informational only — the Verdict column above is UNCHANGED). A resting
     // SELL is at risk of being stale/underwater by morning if it can't clear at profit now (instabuy <
     // break-even) or the market is weakening (falling regime / live 2h breakdown).
@@ -246,6 +264,11 @@ async function runPositions() {
     console.log('');
     console.log('Paths (persistence-gated dominant per held lot — decision support, placeholder weights):');
     console.log(pathLines.join('\n'));
+  }
+  if (rebidLines.length) {
+    console.log('');
+    console.log('Rebid advisory (cut-and-rebid friction bar + multi-week trajectory — support, never overrides the verdict):');
+    console.log(rebidLines.join('\n'));
   }
   if (isOvernightNow() && staleRisk.length) {
     console.log('');

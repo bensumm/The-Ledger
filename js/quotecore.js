@@ -671,3 +671,64 @@ export function overnightStaleRisk(ts5m, bid, now, marginPct=DIURNAL_DIP_MARGIN)
   if(!lows.length) return false;
   return Math.min(...lows) <= bid*(1-marginPct);
 }
+
+/* ============================================================================================
+   COD-3 (2026-07-10) — CUT-AND-REBID advisory. A SEPARATE appended block of pure, DOM-free helpers
+   (quotecore.js imports only format.js — kept that way): they do NOT touch momVerdict / the gate tree.
+   Fixture-pinned in pipeline/rebid.test.mjs.
+   ============================================================================================ */
+
+/* rebidBar(clear, spread) — the cut-and-rebid FRICTION BAR (was prose arithmetic in /positions §3).
+   A cut paired with a deeper re-entry bid is a legit two-leg, BUT each sell pays the 2% GE tax, so the
+   rebid only BEATS holding if it sits more than (tax + half the spread) below the clear price (~2.5%+).
+   This is the ONE encoded home for that math so the agent stops re-deriving it.
+     clear   the price you'd clear at now (the live instabuy).
+     spread  the live bid/ask spread (instabuy − instasell); 0 if unknown.
+   Returns { threshold, friction, marginPct } — `threshold` = the price a rebid must sit AT OR BELOW to
+   clear the bar; `friction` = the gp it must beat (tax re-paid on the eventual resale at the clear + half
+   the crossed spread); `marginPct` = friction as a % of the clear (the ~2.5% figure). clear==null → null.
+   PURE arithmetic — this half is SOLID (not placeholder); it's the trajectory/diurnal awareness in
+   rebidAdvice that is inform-grade. */
+export function rebidBar(clear, spread=0){
+  if(clear==null) return null;
+  const halfSpread=Math.max(0, spread||0)/2;
+  const friction=tax(clear)+halfSpread;                 // re-paid tax at the clear + half the crossed spread
+  const threshold=clear-friction;
+  return { threshold, friction, marginPct: clear>0 ? friction/clear*100 : null };
+}
+
+/* rebidAdvice({ clear, spread, trajectory, diurnal }) — the TRAJECTORY/PROJECTION-AWARE rebid advisory
+   (Ben 2026-07-10). "Should I rebid?" is not just the friction bar — it depends on whether the item
+   turned into a KNIFE (keeps falling) or is FALLING-BUT-OSCILLATING (bounces back at the daily high).
+   Wires the EXISTING read tools (NO forecast is built here — that's PLAN-FORECAST.md PF1):
+     trajectory   a classifyTrajectory result (js/termstructure.mjs — { shape, … }); null → unknown.
+     diurnal      a deriveDiurnalRange result (js/windowread.mjs — { bid, ask, … }); null → no levels.
+   INFORM-GRADE (rule 4): the classifier + diurnal read are PLACEHOLDER / n≈0, so this SUPPORTS the
+   decision — it NEVER auto-cancels or auto-rebids. Branches:
+     knife       → advise AGAINST a rebid (it keeps falling; the friction bar is moot). rebid=false.
+     oscillating → a rebid is viable: target the projected TROUGH (diurnal dip) and sell the daily PEAK
+                   (diurnal peak) — the "falling but bounces back at the daily high" case. rebid=true.
+     else        → the friction-bar arithmetic governs. rebid=null (the bar decides per the numbers).
+   FORWARD HOOK (PF1): when the forecast module lands, upgrade the qualitative "bounces back at the daily
+   high" to a QUANTITATIVE projected-peak { level, eta } + a projected-trough rebid level. Build the
+   qualitative version now; do NOT block on the forecast.
+   Returns { rebid, kind, bar, troughTarget, peakTarget, why }. PURE. */
+export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=null }={}){
+  const bar=rebidBar(clear, spread);
+  const shape=trajectory && trajectory.shape;
+  const barTxt=bar
+    ? `sit at/below ${fmtP(bar.threshold)} (${bar.marginPct!=null?bar.marginPct.toFixed(1)+'%':'tax+½-spread'} below the clear${clear!=null?' '+fmtP(clear):''})`
+    : 'have a clear price to bar against';
+  if(shape==='knife'){
+    return { rebid:false, kind:'knife', bar, troughTarget:null, peakTarget:null,
+      why:`trajectory is a KNIFE (spike + monotone-down lows) — it keeps falling, so the friction bar is moot: do NOT rebid; clear and redeploy the freed capital.` };
+  }
+  if(shape==='oscillating'){
+    const trough=diurnal && diurnal.bid!=null ? diurnal.bid : null;
+    const peak=diurnal && diurnal.ask!=null ? diurnal.ask : null;
+    return { rebid:true, kind:'oscillating', bar, troughTarget:trough, peakTarget:peak,
+      why:`trajectory OSCILLATES (falling but bounces back at the daily high) — a rebid is viable: target the projected trough${trough!=null?' '+fmtP(trough):' (diurnal dip)'} and sell the daily peak${peak!=null?' '+fmtP(peak):' (diurnal peak)'}. PF1 will later replace this qualitative peak with a projected {level, eta}.` };
+  }
+  return { rebid:null, kind:'friction', bar, troughTarget:null, peakTarget:null,
+    why: bar ? `friction bar governs: a rebid only beats holding if it ${barTxt}.` : `no clear price to bar a rebid against.` };
+}

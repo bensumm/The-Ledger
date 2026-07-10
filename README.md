@@ -317,7 +317,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `outcomes.mjs` (derived campaign/outcomes join — gitignored output; schema v2 (YS1) adds per-campaign
     `stateAtFill` (band-pctl+regime+phase AS OF the fill via `lib/histstate.mjs`, for EVERY fill),
     measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the joined
-    suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`),
+    suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`
+    stamps `.cache/last-weekly-report` and the cheap standalone `--weekly-due` prints `weekly-due: yes|no`
+    off the local Mon–Sun week so `/morning`'s weekly-read cadence is mechanical, not "ask Ben"),
     `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-niche +
     per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
@@ -607,7 +609,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     CLAUDE.md ⇆ README axis is clean),
     `expunitsovernight.test.mjs` (COD-2 — pins `expUnitsOvernight` = `expUnits × 8/24`: the alignment
     identity so the accumulation-sizing constants can't drift from the day figure, the documented
-    closed form `min(limit×2, 8/24×0.10×volDay)`, and the limit-bound/volume-bound/null-limit/zero-vol edges)
+    closed form `min(limit×2, 8/24×0.10×volDay)`, and the limit-bound/volume-bound/null-limit/zero-vol edges),
+    `rebid.test.mjs` (COD-3 — the cut-and-rebid helpers in `js/quotecore.js`: `rebidBar`'s friction
+    arithmetic (tax + half-spread below the clear) + `rebidAdvice`'s trajectory-branch selection — knife→against,
+    oscillating→rebid-at-trough/sell-peak with diurnal level carry-through, else→friction-bar governs)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +
@@ -621,7 +626,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `fetch/` per-URL cache (opt-in cross-invocation fetch cache — one `{ts,url,data}` file per
     cached GET, disposable), the YF1 `outcomes-daily/` per-item reduced past 1h@6h series (sibling
     of `outcomes-bands/`), the YT1 `session-thesis.json` (intent-per-lane store; `thesis.mjs` writes,
-    watch.mjs reads), and
+    watch.mjs reads), the COD-3 `last-weekly-report` stamp (an ISO timestamp `outcomes.mjs --report` writes
+    and `--weekly-due` reads — the `/morning` weekly-read cadence memory), and
     `watch-state.json` (V1 — the watch loop's cross-pass memory: a keyed map
     `held:<id>`/`bid:<id>:<offer>` → `{ts, identity, instabuy, mom, bandTop, breakEven, support,
     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh

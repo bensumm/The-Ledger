@@ -49,6 +49,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
 const FILLS = path.join(ROOT, 'fills.json');
 const OUT = path.join(ROOT, 'outcomes.json');
+// COD-3 — the /morning weekly descriptive-outcomes marker. `--report` stamps it; `--weekly-due` reads it
+// so /morning can mechanically tell whether this week's weekly read already ran instead of asking Ben.
+// Gitignored (under pipeline/.cache/, sibling of the market caches).
+const WEEKLY_STAMP = path.join(HERE, '.cache', 'last-weekly-report');
 
 // --- tunable named constants (NOT magic numbers) ---------------------------------------------
 const REPRICE_GAP = 20 * 60;        // s: a re-place within this of a cancel = same campaign (a reprice)
@@ -61,8 +65,29 @@ const MIN_CELLS_F1 = 5;            // and at least this many cells must clear MI
 
 const A = parseArgs(process.argv.slice(2));
 const REPORT = !!A.report, NO_BANDS = !!A['no-bands'], JSON_OUT = !!A.json;
+const WEEKLY_DUE = !!A['weekly-due'];   // COD-3: cheap check — is this week's weekly read due? (no rebuild)
 const MIN_N = A['min-n'] != null ? +A['min-n'] : MIN_N_REPORT;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
+
+// COD-3 — the LOCAL Mon–Sun week key (that week's Monday date), so the weekly-read cadence is a mechanical
+// same-week check, not "ask Ben if unsure". Local getters (the repo's rendered-times-are-local rule).
+function weekKey(d = new Date()) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());   // local midnight of that day
+  const dow = (x.getDay() + 6) % 7;                                 // 0=Mon … 6=Sun
+  x.setDate(x.getDate() - dow);                                     // step back to Monday
+  const p2 = n => String(n).padStart(2, '0');
+  return `${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`;
+}
+// --weekly-due — a cheap standalone check (NO rebuild): compares the last-report stamp's week to this
+// week and prints `weekly-due: yes|no`. /morning §6 runs this instead of asking Ben whether it already ran.
+if (WEEKLY_DUE) {
+  let last = null;
+  try { last = fs.readFileSync(WEEKLY_STAMP, 'utf8').trim() || null; } catch {}
+  const cur = weekKey();
+  const due = !last || weekKey(new Date(last)) !== cur;
+  console.log(`weekly-due: ${due ? 'yes' : 'no'}${last ? ` (last weekly report ran ${last}${due ? '' : ' — same Mon–Sun week'})` : ' (no weekly report has ever run)'}`);
+  process.exit(0);
+}
 
 
 // -------------------------------------------------------------------------------------------
@@ -357,6 +382,11 @@ if (JSON_OUT) { console.log(JSON.stringify(o.campaigns, null, 2)); }
 else {
   fs.writeFileSync(OUT, JSON.stringify(o, null, 2) + '\n');
   summarize(o);
-  if (REPORT) report(o);
+  if (REPORT) {
+    report(o);
+    // COD-3: stamp the weekly-read marker so `--weekly-due` (and /morning §6) knows this week ran. The
+    // stamp is the descriptive-outcomes read's cadence memory — write is best-effort (never breaks --report).
+    try { fs.mkdirSync(path.dirname(WEEKLY_STAMP), { recursive: true }); fs.writeFileSync(WEEKLY_STAMP, new Date().toISOString() + '\n'); } catch {}
+  }
   console.log(`\n(wrote ${path.relative(ROOT, OUT)} â€” derived + gitignored; rebuild any time)`);
 }

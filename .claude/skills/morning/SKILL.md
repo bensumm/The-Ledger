@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.6
+version: 1.7
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -83,12 +83,14 @@ achieved vs the plan Ben recalls, and what to redeploy freed capital into — **
 
 ## 6. Weekly descriptive-outcomes read (once a week, not every morning)
 
-**Cadence (W1, 2026-07-05):** descriptive trade analysis starts NOW and runs **weekly** —
-calibration (F1) stays gated. Run this section on the **first `/morning` of each calendar
-week**. Concrete trigger a stateless session can apply: run it when **today is Monday
-(local)**; if Ben skipped Monday, run it on the next `/morning` that week (the weekly read
-should land once per Mon–Sun week — if unsure whether it already ran this week, ask Ben in
-one line rather than double-running). Every other morning, skip straight past this section.
+**Cadence (W1, 2026-07-05; mechanized COD-3, 2026-07-10):** descriptive trade analysis starts
+NOW and runs **weekly** — calibration (F1) stays gated. Run this section once per **Mon–Sun
+week**. The "did it already run this week?" question is now a MECHANICAL check, not "ask Ben if
+unsure": run `node pipeline/outcomes.mjs --weekly-due` (a cheap standalone check — no rebuild).
+It prints `weekly-due: yes` (run the section below) or `weekly-due: no` (skip it — a `--report`
+this week already stamped `.cache/last-weekly-report`). Running §6's `outcomes.mjs --report`
+re-stamps the marker, so the next `--weekly-due` reads `no` for the rest of the week. Every
+other morning, this check reads `no` — skip straight past this section.
 
 **What to run** — after the overnight review above is delivered (market work first, always):
 1. `node pipeline/outcomes.mjs --report` — fill-time distributions by band-percentile ×

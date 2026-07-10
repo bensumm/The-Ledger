@@ -390,6 +390,17 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   running subtotal · net/u · total). `/overnight` §6 shrank to prioritization + fill-realism judgment +
   a pointer (v1.16). Pinned by `pipeline/expunitsovernight.test.mjs`. Pipeline stdout + skills only → no
   APP_VERSION.
+- **COD-3 — DONE (2026-07-10):** the `/positions` cut-and-rebid friction bar is CODE — pure `rebidBar(clear,
+  spread)` + a TRAJECTORY/PROJECTION-AWARE `rebidAdvice({clear,spread,trajectory,diurnal})` in
+  `js/quotecore.js` (knife → against; oscillating → rebid at the diurnal trough / sell the daily peak; else
+  the friction bar governs — inform-grade, wires the EXISTING classifyTrajectory + deriveDiurnalRange, does
+  NOT build a forecast). `quote.mjs --positions` prints a **Rebid advisory** line on every CUT-family verdict
+  (trajectory off the read-only daily archive; diurnal null on that no-1h surface). Weekly-read cadence
+  mechanized: `outcomes.mjs --report` stamps `.cache/last-weekly-report` and `--weekly-due` reports it, so
+  `/morning` §6 stops asking Ben. Skills bumped (`/positions` 1.19, `/morning` 1.7). Pinned by
+  `pipeline/rebid.test.mjs`. FORWARD HOOK: PF1 (PLAN-FORECAST.md) upgrades the qualitative peak to a
+  quantitative projected {level, eta}. `js/quotecore.js` is app-imported, but `rebidBar`/`rebidAdvice` are
+  NEW exports — computeQuote/replay golden byte-unchanged → no APP_VERSION.
 
 **Open:**
 - **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day
