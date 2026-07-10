@@ -103,10 +103,9 @@ export const DENYLIST = [
     // deployable-capital multiplier folded into `valueScore` (js/valuescreen.mjs). abs-gp just rewarded
     // "expensive" over the deployable mid-ticket class it was meant to surface. Resurrecting the constant
     // as a live ranking term in an operating doc is the drift. The concept-level history is narrated in
-    // docs/LORE.md (not in `files`, so it doesn't self-trip). DOC-3 extends this to README.md once its
-    // valuescreen.mjs entry drops the `VALUE_ABSGP_*` mention.
+    // docs/LORE.md (not in `files`, so it doesn't self-trip).
     pattern: /VALUE_ABSGP/,
-    files: ['CLAUDE.md'],
+    files: ['CLAUDE.md', 'README.md'],
     reason: '`VALUE_ABSGP_*` is a DELETED value-rank constant — value ranks by the deployable-capital multiplier (js/valuescreen.mjs); history lives in docs/LORE.md',
   },
 ];
@@ -140,23 +139,11 @@ export const DUP_ALLOWLIST = [
   // --- legitimately shared boilerplate ---
   'co authored by claude',
   'claude session https claude ai code',
-  // --- KNOWN pre-existing duplications (owned by DOC-2/DOC-3 — the CLAUDE.md diet + README compaction) ---
-  // Bar D — CLAUDE.md ⇆ README/module header
-  'bar d decouples the two jobs',
-  'windows with any trade one sided ok a lone spike is 1',
-  // Bar E — CLAUDE.md ⇆ README/module header
-  'the raw min max over the 2h of 5m prints let one flier',
-  'p90 high p10 low on a dense side',
-  // value rulings (deployable-capital / RC1 / artifact-liquidity / trajectory-gate) — CLAUDE.md ⇆ README
-  'deployable capital measure',
-  'recency anchors the cycle range',
-  'artifact low guard',
-  'buy the base not the knife',
-  // P0/P4b + P6c prose that currently lives in BOTH CLAUDE.md and README (found live by this check,
-  // 2026-07-10) — real copy-not-move, owned by DOC-2 (CLAUDE.md diet) / DOC-3 (README compaction).
-  // Allowlisted with this pointer so CI passes now while the check stays LIVE for any NEW duplication.
-  'passive tier 1 archive append',                              // P0/P4b snapshot-archive passage
-  'niche whose gate is empty at the configured floors',       // P6c sub-floor fallback passage
+  // NOTE: the KNOWN pre-existing Bar D/E + value-ruling + P0/P4b/P6c duplications that used to live here
+  // were RESOLVED by DOC-2 (CLAUDE.md diet round 3) + DOC-3 (README compaction) — CLAUDE.md now points to
+  // the module headers instead of restating them, so those shingles no longer appear in >1 pointer doc and
+  // their allowlist entries were removed. If a future copy-not-move re-introduces one, fix it in place
+  // (point, don't restate) rather than re-allowlisting.
 ];
 
 // Lowercase, strip markdown/backticks/punctuation, collapse whitespace → a flat word array.

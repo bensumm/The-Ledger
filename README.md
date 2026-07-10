@@ -96,25 +96,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (TV1 — `classifyTrajectory`: knife/oscillating/based/rising/elevated/flat, attached as `ts.trajectory`);
   degrades to `hasData:false`/`unknown` on a short series. Consumed by `js/validate.mjs`'s floor+trajectory
   validators + `pipeline/screen.mjs`/`pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
-  `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold niche
-  (PLAN-VALUE): `valueRanges(ts,live)` derives the shape features (after-tax cycle amplitude off the
-  robust floor→ceiling, proximity-to-low, floor-stability, knife delta) from a termStructure — the cycle
-  range is **RC1 recency-anchored** (`VALUE_RECENT_DAYS`=7, Ben 2026-07-09: a stale prior-regime high/low
-  from the full 28d window can't inflate amplitude or fake proximity; returns anchored durableLow/High +
-  raw values + a `ceilingStale`/`floorStale` flag); `valueScore(vr, {limitVol, limit, capGp})`
-  is the composite rank (amplitude × proximity × stability × a two-sided clamped **deployable-capital
-  multiplier** `VALUE_DEPLOY_*`, Ben 2026-07-09 — scores REALIZABLE after-tax gp/cycle on the capital you
-  can park+exit `min(capGp/buyLow, VOL_SHARE·limitVol·DAYS, limit·windows·DAYS)`, so a mid-amp DEPLOYABLE
-  item outranks a high-% one you can barely fill; `capGp` is threaded from `screen.mjs` `--capital`÷`--slots`;
-  supersedes the same-day `VALUE_ABSGP_*` per-unit boost; §F flood control); `valueGate` is the
-  amplitude floor + noise cap + **artifact-low guard** (Ben 2026-07-09 — rejects a live price >15%
-  `VALUE_MAX_BELOW_LOW_PCT` below the durable q15 floor: a broken instasell print or a crash mid-fall, the
-  low-side analog of the band/rising artifact-bid) + decay/downtrend knife guard + multi-week-coverage
-  guard (a COLD archive surfaces nothing — honest degrade); `valueTier` splits buy-now vs watch by
-  proximity. The caller's two-sided unit-liquidity floor (`VALUE_LIQ_FLOOR` in `gatecandidates.mjs`) was
-  raised 20→50 the same day (value relaxes the gp/day throughput bar, not the unit-exitability bar).
-  Imports only `tax` from format.js. ALL thresholds/weights are NAMED PLACEHOLDERS (n≈0). NOT yet app-imported → no
-  APP_VERSION bump. Fixture-pinned `pipeline/valuescreen.test.mjs`),
+  `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold niche:
+  `valueRanges` (recency-anchored shape features) / `valueScore` (composite rank with a deployable-capital
+  multiplier; `capGp` threaded from `screen.mjs --capital÷--slots`) / `valueGate` (amplitude floor +
+  artifact-low guard + knife guard + coverage guard) / `valueTier` (buy-now vs watch). Consumed by
+  `screen.mjs`/`gatecandidates.mjs`; imports only `tax`. Full spec + all NAMED-PLACEHOLDER thresholds (n≈0)
+  live in the module header; resolved rank-metric history in `docs/LORE.md`. NOT app-imported → no
+  APP_VERSION. Fixture-pinned `pipeline/valuescreen.test.mjs`),
   `paths.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
   list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
@@ -267,34 +255,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     "watcher live" independent of book changes; started manually via
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
     `add-manual-fill.mjs` (inject/tombstone
-    manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 appends a stdout-only
-    `Probes` column on the per-item read when a probe fires. P0: `--positions` now builds the shared
-    `context.mjs` chain per lot — reads the root `offers.json` book (→ `HOLD — ask filling`) + the
-    watch loop's `.cache/watch-state.json` READ-ONLY (→ a conviction line, never written here) + any
-    declared hold thesis, renders the verdict via the shared `renderHeldVerdict`, and runs one
-    `loadSnapshot()` per pass for the passive Tier-1 archive append. P4b: also runs the shared
-    `pathsStage` per lot off the SAME watch-state entry — READ-ONLY, never persisted here — and
-    prints a `Paths (persistence-gated dominant per held lot)` block via the shared `renderPathLine`), `screen.mjs`
-    (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 appends a
-    stdout-only `Probes` column per niche when a probe fires — never in the published `screen.json`;
-    P6c: a niche whose gate is EMPTY at the configured floors re-runs beneath the floor
-    (`subFloorFallback` in `lib/gatecandidates.mjs` — a min-gpd → liquidity relaxation ladder; the
-    two-sided gate and the thesis edge are never relaxed) and prints the best ≤`SUBFLOOR_TOP` rows
-    honestly labeled `sub-floor — shown because nothing cleared <floor>`, grades capped at
-    `SUBFLOOR_GRADE_CAP`; stdout-only — never published to `screen.json`, ledger rows carry a lean
-    `subFloor` marker),
-    `watch.mjs` (adaptive live position/offer monitor; also appends
-    change-only guide-price observations to `pipeline/.guide-history.jsonl` — below, and holds
-    the V1/V2 cross-pass memory: it emits per-pass Δ context + structural-support lines via
-    `lib/watchstate.mjs`/`lib/levels.mjs`, persisting `pipeline/.cache/watch-state.json`; each held
-    lot's note block follows the V5 EMIT CONTRACT built by `lib/emit.mjs`. P0: the held verdict prose
-    is now the SHARED `renderHeldVerdict` (verbose mode) from `lib/context.mjs` — the ONE home
-    quote.mjs renders from too — and each pass runs one `loadSnapshot()` for the passive Tier-1
-    archive append (per-item live fetch semantics unchanged). P4b: each held pass also runs the
-    shared `pathsStage` (weigh thesis-paths + the `pathPersistence` arm-then-confirm/hysteresis gate)
-    and persists the additive `currentPath`/`pathArmedKey`/`pathArmedSince`/`enteredUnder` fields on
-    the `held:<id>` watch-state entry — watch.mjs is the ONE writer; the note block gains the
-    `renderPathLine` dominant-path field (decision support, never an alert)),
+    manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
+    column when a probe fires. `--positions` builds the shared `context.mjs` chain per lot — offers.json
+    book, read-only watch-state + hold thesis, the shared `renderHeldVerdict`, and a read-only `pathsStage`
+    `Paths` block — so it can't disagree with watch.mjs; behavior detail in CLAUDE.md "Script facts"), `screen.mjs`
+    (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 a stdout-only
+    `Probes` column per niche; P6c re-runs an empty niche beneath the floor (`subFloorFallback` in
+    `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
+    two-sided gate and thesis edge are never relaxed)),
+    `watch.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
+    Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
+    the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
+    (`renderHeldVerdict`/`pathsStage`, `lib/context.mjs`). The ONE WRITER of the watch-state path fields
+    and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
+    contract: `pipeline/MONITORING.md`),
     `monitor.mjs`
     (live read-only log-state snapshot; ARCH-1 — its in-memory held book now applies coffer-manual.log
     REMOVE tombstones via `reconstruct.buildTombstonedEvents`, the same purge sync/positions.json honor,
@@ -458,26 +432,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fully valid, both default null); watch.mjs reads it read-only and feeds it to `convictionGate` to
     SILENCE the expected-underwater headline while live holds above the declared tripwire — never
     touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
-    `context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer: staged PURE
-    enrichers `identityStage`/`marketStage`/`historyStage`/`intradayStage`/`positionStage` +
-    `buildItemContext` build an `ItemContext` (identity → market row → history/phase → intraday series
-    → position: lot/break-even/lotValue/askFilling/lotCtx + the ONE `momVerdict` + the `convictionGate`
-    arm-then-confirm, off the caller-loaded offers.json book + watch-state + hold thesis). The position
-    stage is the home that ENDS the quote-vs-watch verdict fork — `renderHeldVerdict(ctx,{mode})` emits
-    `compact` (quote.mjs `--positions` cell) or `verbose` (watch.mjs heldAction line) off the SAME
-    `heldMomVerdict(ctx)`, byte-identical to the pre-P0 inline functions (verified diff), so the two
-    surfaces can't disagree; `HOLD — ask filling` now prints on BOTH (quote lacked the offer read).
-    **P4b** adds the `pathsStage` chain slice (derives the js/paths.mjs scoring ctx from the built
-    namespaces, weighs the lot's thesis-paths, runs the `pathPersistence` gate off the shared
-    watch-state entry, and folds the path fields ADDITIVELY into `newStateEntry`; `enteredUnder`
-    comes from the hold-thesis entry — never fabricated — and the declared `path` seeds the incumbent
-    on a path-less state file) + `renderPathLine(ctx)` — the ONE shared dominant-path line both
-    surfaces print beside the verdict (a CONFIRMED migration headlines as `path MIGRATED a → b`;
-    decision support, never an alert input; the verdict strings stay byte-identical).
-    **COD-4** adds the shared `staleBookBanner(ageMin)` (+ `STALE_BOOK_MIN`) — the positions.json-age line
-    watch.mjs already prints, now the ONE home both surfaces word identically, so `quote.mjs --positions`
-    warns on a stale book too (was silent — the A4 inversion). No fetch/fs — every stage is
-    node-importable + fixture-pinned in `context.test.mjs`), `richterm.mjs` (COD-4 — `richFrom1h`/
+    `context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer, the home that ENDS
+    the quote-vs-watch verdict fork: staged PURE enrichers (identity→market→history→intraday→position)
+    build an `ItemContext`; `renderHeldVerdict(ctx,{mode})` emits the compact (quote `--positions`) or
+    verbose (watch heldAction) form off ONE `heldMomVerdict`, byte-identical to the pre-P0 inline
+    functions, so the two surfaces can't disagree. **P4b** adds `pathsStage` + `renderPathLine` (the
+    shared dominant-path line, ADDITIVE watch-state fields); **COD-4** adds `staleBookBanner` (the
+    positions.json-age warning both surfaces now share). No fetch/fs — every stage is node-importable +
+    fixture-pinned in `context.test.mjs`), `richterm.mjs` (COD-4 — `richFrom1h`/
     `trajectoryFrom1h`: aggregate a fetched 1h /timeseries into a WARM multi-week term structure so
     reach/trajectory FIRE while the `loadDaily` archive is still young; EXTRACTED from screen.mjs so
     `quote.mjs`'s budgeted-`ts1h` read shares the identical aggregation — one home, no drift), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
