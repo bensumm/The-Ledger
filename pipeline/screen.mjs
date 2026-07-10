@@ -142,6 +142,15 @@ const TOP = A.top != null ? +A.top : 40;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 const MIN_ACTIVE = A['min-active'] != null ? +A['min-active'] : 6;
 const STATS = !!A.stats;
+// --- value niche: deployable-capital inputs (Ben 2026-07-09). The per-position capital cap that bounds
+// valueScore's deployable-units is NOT a fixed constant — it's Ben's current capital ÷ how many positions
+// (slots) we'd spread it across. --capital <gp> is the input (his real bankroll); --slots N is how many
+// concurrent value holds to size for (≈ the count of quality candidates). VALUE_CAP_GP = capital ÷ slots.
+// Defaults are PLACEHOLDERS so a bare `--mode value` still ranks sanely; pass --capital for the real figure.
+const VALUE_CAPITAL = A.capital != null ? parseGp(A.capital) : 100_000_000;
+const VALUE_SLOTS = A.slots != null ? Math.max(1, +A.slots) : 5;
+const VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
+const VALUE_CAPITAL_EXPLICIT = A.capital != null;   // for the footer note (placeholder vs real)
 // --- S1 screening economics (gp-flow gate + 500k attention floor) ------------------------------
 // GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
 // lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
@@ -194,7 +203,7 @@ const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
 const THRESHOLDS = {
   FLOOR, MIN_ROI, MIN_PRICE, MAX_PRICE, MIN_NET_GP, MIN_ACTIVE, MIN_ACTIVE_THIN, MIN_GPD, GP_FLOOR,
-  RISE_MID_FLOOR, RISE_LIQUID_VOL,
+  RISE_MID_FLOOR, RISE_LIQUID_VOL, VALUE_CAP_GP,
 };
 // --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
 //   active   (default) — current behavior.
@@ -591,8 +600,14 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   // value KEEPS reach as a daily-min TIMING read (Ben 2026-07-09): run ONLY the spec's inform validators
   // here so the note is added WITHOUT re-gating the value table (valueGate already selected these rows).
   const valueInformSpecs = STRATEGIES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
+  // trajectory GATES in value (Ben 2026-07-09): a knife DROPS (named in the footer), elevated FLAGS. Scoped
+  // to trajectory — the value spec's floor/limit are mode:'gate' too but stay dormant in this console path
+  // (their gate home is valueGate + the absent 4h-limit window), so only trajectory is promoted to an
+  // active drop here. Spec-driven: the gate fires only because the spec now says trajectory is 'gate'.
+  const valueTrajGate = STRATEGIES.value.validators.find(v => typeof v === 'object' && v.key === 'trajectory' && v.mode === 'gate') || null;
   let droppedKnife = 0;   // post-fetch phase() decay-knife drops
   let droppedArtifact = 0;   // post-fetch artifact-low drops (live implausibly below the durable floor)
+  const droppedTrajKnife = [];   // trajectory-classified knife drops (named in the §F footer for auditability)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -614,6 +629,17 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const ph = phase(series6h && series6h.get(s.id));
     const g = valueGate(vr, { phase: ph && ph.phase });
     if (!g.pass) { if (g.reason === 'decay') droppedKnife++; else if (g.reason === 'artifact-low') droppedArtifact++; continue; }
+    // trajectory GATE (value only): a KNIFE drops here (named in the footer) before it can rank in buy-now
+    // — the encoded "buy the base, not the knife" gate, catching the shapes valueGate's knifeDelta misses.
+    // Runs on the SAME warm 1h-derived informTs the inform validators use. `elevated` → a caution flag note
+    // (timing, not a thesis break); oscillating/based/rising pass through.
+    if (valueTrajGate) {
+      const tg = runValidators({ market: { row }, history: { termStructure: informTs }, intraday: { ts1h: series1h && series1h.get(s.id) } }, { specs: [valueTrajGate] });
+      const rej = tg.find(r => r.status === 'reject');
+      if (rej) { droppedTrajKnife.push(name); continue; }
+      const caut = tg.find(r => r.status === 'caution');
+      if (caut) valueInformNotes.push(`${name}: trajectory ${caut.reason} (flagged)`);
+    }
     const tier = valueTier(vr);
     // value's reach as a daily-min TIMING read: is the buy-low actually TOUCHED in the recent week+ (a
     // full-day window over 14 nights, from the spec)? Plus trajectory (oscillating/based/knife) + the
@@ -658,7 +684,8 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   const shown = buyNow.length + watch.length;
   console.log(`## VALUE — ${shown} buy-hold candidate(s) near a multi-week low (PROVISIONAL — unproven theory, n≈0)`);
   console.log('Playbook: buy near the multi-week low, HOLD for the range to cycle up; the edge is ONE tax-paid sell of a big move, not fast churn. State the hold horizon at entry — this is a multi-day/week HOLD, not a flip.');
-  console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability × absolute-gp/unit boost — PLACEHOLDER weights, n≈0)`);
+  console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability × deployable-capital multiplier — PLACEHOLDER weights, n≈0)`);
+  console.log(`(deployable-capital cap ${fmtP(VALUE_CAP_GP)}/position = ${fmtP(VALUE_CAPITAL)} capital ÷ ${VALUE_SLOTS} slots${VALUE_CAPITAL_EXPLICIT ? '' : ' — PLACEHOLDER capital; pass --capital <gp> [--slots N] for your real figure'}. ${buyNow.length} buy-now surfaced — re-run --slots ${buyNow.length || 1} to size the cap to that.)`);
   if (buyNow.length) {
     console.log(`\n### BUY-NOW — live at/near the multi-week low (${buyNow.length})`);
     console.log(mdTable(VALUE_HEADERS, buyNow.map(r => r.cells)));
@@ -670,7 +697,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   if (!shown) console.log('_none_');
   for (const n of valueInformNotes) console.log(`ℹ timing/trajectory — ${n}`);
   // §F admitted-vs-shown footer — never dump the full pool; say how many the gate admitted.
-  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}`);
+  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}${droppedTrajKnife.length ? ` · dropped ${droppedTrajKnife.length} trajectory-knife: ${droppedTrajKnife.join(', ')}` : ''}`);
   console.log('');
   // publishable rows: buy-now first, then watch (isolated; the app has no VALUE tab yet → console-only)
   return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));

@@ -192,22 +192,31 @@ Script facts the skills rely on (current behavior, not doctrine):
   encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold niche with its OWN
   term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
   replaces the 500k gp/day throughput floor, decay/downtrend knife-guard), ranked by
-  `valueScore` (amplitude × proximity-to-low × floor-stability × absolute-gp/unit boost) with a HARD top-N
-  + buy-now/watch tiers (§F flood control); console-only, its own table, NOT in `screen.json` (no app tab
-  yet → no APP_VERSION).
-  **Value abs-gp rank blend (Ben 2026-07-09)** — `valueScore`'s amplitude term is a scale-free PERCENTAGE,
-  so cheap high-volatility teleport tabs (cycling 30–100%) swept the HARD top-N fetch cut and liquid
-  big-ticket HOLDS (cycling a steadier 6–14% but a MILLIONS-per-unit absolute swing) never got quoted at all
-  — the opposite of a value-hold's point (park real capital in a big absolute cycle). Confirmed structural,
-  not liquidity: 15 big-ticket holds (Nightmare staff, Bellator ring, Virtus, Dinh's, Sanguinesti…) pass the
-  gate under `--min-price 1m` but the pure-% ranker cut every one. Fix: `valueScore` multiplies in a
-  SATURATING absolute-gp factor `gpMult = 1 + VALUE_ABSGP_W·min(log10(1 + absGp/VALUE_ABSGP_REF),
-  VALUE_ABSGP_CAP)` where `absGp = afterTaxAmpPct × buyLow` (after-tax gp captured per unit). log-saturated +
-  capped so a big ticket COMPETES with the tabs without the score collapsing into a raw price sort (a
-  far-higher-% cheap item still leads — amplitude isn't overridden; pinned in `valuescreen.test.mjs`). Effect:
-  the default value scan now surfaces a healthy MIX (big tickets + tabs) instead of tabs-only. Honesty: per-
-  UNIT gp, not deployable gp (units × buy-limit throughput) — a truer capital-parking measure is a later
-  refinement; `VALUE_ABSGP_*` are NAMED PLACEHOLDERS (rule 4), tuned only to make big tickets compete.
+  `valueScore` (amplitude × proximity-to-low × floor-stability × deployable-capital multiplier) with a HARD
+  top-N + buy-now/watch tiers (§F flood control); console-only, its own table, NOT in `screen.json` (no app
+  tab yet → no APP_VERSION).
+  **Value DEPLOYABLE-CAPITAL rank (Ben 2026-07-09)** — `valueScore`'s amplitude term is a scale-free
+  PERCENTAGE, so cheap high-volatility teleport tabs (cycling 30–100%) swept the HARD top-N fetch cut and
+  the genuinely viable class never got quoted. A first patch boosted ABSOLUTE gp/unit (`VALUE_ABSGP_*`) —
+  but a Fable investigation of the full 235-item gated pool showed that just rewards "expensive" and there
+  are **zero big-liquid items** (nothing >1m trades 500+/d); the class it buried was **mid-amp DEPLOYABLE
+  sub-1m** items (Soiled page, Snape grass seed, Awakener's orb). So abs-gp is SUPERSEDED (same day) by a
+  deployable-capital measure = REALIZABLE after-tax gp/cycle on the capital you can actually PARK+EXIT:
+  `deployUnits = min(capGp/buyLow, VALUE_VOL_SHARE·limitVol·VALUE_ACCUM_DAYS, limit·VALUE_WINDOWS_PER_DAY·
+  VALUE_ACCUM_DAYS)`; `realProfit = afterTaxAmpPct·deployUnits·buyLow`; `deployMult = clamp(1 +
+  VALUE_DEPLOY_W·log10(realProfit/VALUE_DEPLOY_REF_GP), VALUE_DEPLOY_MULT_MIN, VALUE_DEPLOY_MULT_MAX)`, folded
+  into `valueScore = amp·prox·stab·deployMult·100`. Two-sided + clamped (unlike the one-sided abs-gp boost it
+  can DISCOUNT a near-undeployable %-monster to ×0.2, boost a large realizable cycle to ×2), range ~10× so
+  the shape features stay primary. **`capGp` is an INPUT, not a constant** (Ben's steer): `screen.mjs`
+  `--capital <gp>` ÷ `--slots N` = the per-position cap (his current capital spread across the positions
+  we'd hold; defaults to a 100m/5 PLACEHOLDER, and the footer prints `N buy-now surfaced — re-run --slots
+  N`). `valueScore(vr, {limitVol, limit, capGp})`; absent liquidity opts degrade to `deployMult=1`
+  (shape-only). Effect: the default scan now surfaces a real MIX — big tickets (Nightmare, Bellator, Blood
+  moon chestplate) + mid-deployable sub-1m (Awakener's orb, Bloodbark helm, Mokhaiotl waystone) + deployable
+  cheap items — and the %-monster tabs no longer sweep. Honesty (rule 4): `realProfit` is an UPPER bound
+  (assumes the full anchored cycle + your whole volume share both sides; `limitVol` is a 24h snapshot); every
+  `VALUE_DEPLOY_*`/`VALUE_VOL_SHARE`/`VALUE_ACCUM_DAYS` constant is a NAMED PLACEHOLDER — the three-way min is
+  principled (real GE physics, mirrors `expUnits`), the magnitudes need the validation study.
   **Value artifact/liquidity hardening (Ben 2026-07-09)** — the value scan surfaced broken-low quotes and
   untradeable rows ranking #1, the low-side analog of the band/rising artifact-bid. Two gates fixed it:
   (1) `valueGate`'s **artifact-low guard** rejects a live price >`VALUE_MAX_BELOW_LOW_PCT` (15%) below the
@@ -231,9 +240,17 @@ Script facts the skills rely on (current behavior, not doctrine):
   regime; cycle scored on the recent C→D` note. Effect: Contract → WATCH, BUY-NOW 21→11. Also fixed the
   `Live vs low` `+-1.4%` doubled-sign display bug. The daily archive is **backfilled to ~2026-06-19 (~20d)**
   — the old "began accruing 2026-07-08 / needs weeks to warm" notes are superseded (a newly-tracked item can
-  still be short → the honest no-data degrade). Still provisional/off-by-default (n≈0, PLACEHOLDER thresholds;
-  the trajectory/value-amplitude validators still INFORM, not gate — a remaining knife like Inoculation
-  bracelet can still sit in BUY-NOW flagged-but-not-dropped until that rollout flips).
+  still be short → the honest no-data degrade). Still provisional/off-by-default (n≈0, PLACEHOLDER thresholds).
+  **Value trajectory-GATE (Ben 2026-07-09)** — trajectory graduates from inform→**gate in the value niche
+  only**: a KNIFE now DROPS (was a "would reject" note that let Inoculation bracelet / Zombie axe sit atop
+  BUY-NOW). Rationale: the knife is value's defining anti-pattern ("buy the base, never the knife") AND the
+  multi-week HOLD makes buying a knife cost far more than missing one (asymmetry) — so value graduates ahead
+  of the other niches, and it catches the shapes `valueGate`'s weaker term-structure `knifeDelta` misses.
+  `elevated` stays a caution flag (timing, not a thesis break); oscillating/based/rising pass. A dropped
+  knife is COUNTED + NAMED in the §F footer (`dropped N trajectory-knife: …`), so it leaves BUY-NOW but
+  stays auditable. Value-SCOPED (`js/strategies.mjs` value `{key:'trajectory', mode:'gate'}`, applied in
+  `renderValueMode`): band/rising/churn already exclude fallers, scalp accepts them by thesis, so trajectory
+  stays INFORM there. value-amplitude stays inform (still n≈0). No app import → no APP_VERSION.
   **P4c**: the niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the
@@ -259,8 +276,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   `screen.mjs` drives `runValidators(ctx,{specs})` off that plan (was: the whole registry). This is the
   noise reconciliation — only a thesis that GATES on a key lets it hide a row (so `scalp` INFORMS on
   trajectory: it accepts a falling wide band by thesis). ROLLOUT (rule 4, n≈0): the newly-activated
-  `reach`/`trajectory`/`value-amplitude` start **inform everywhere**; only the already-live `floor`+`limit`
-  gate. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
+  `reach`/`value-amplitude` start **inform everywhere**; `floor`+`limit` gate; and **`trajectory` now GATES
+  in the `value` niche** (Ben 2026-07-09 — knife drops, the "buy the base, not the knife" + hold-asymmetry
+  case, see the Value trajectory-GATE note above) while staying **inform** on band/rising/churn/scalp. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
   level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
   **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
   ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; `quote.mjs` still

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.35
+version: 1.37
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -37,15 +37,22 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
   **RC1 recency anchor (same day):** the cycle range is now anchored to the recent 7d, so a stale HIGH from
   a prior regime the item LEFT can't inflate amplitude or make a mid-recovery item read "near the low →
   BUY-NOW" (Contract-of-sensory-clouding was #3 BUY-NOW off a month-old 365k ceiling → correctly WATCH now).
-  A `range recency-anchored — durable A→B … recent C→D` note flags it. **Abs-gp rank blend (same day):**
-  `valueScore` now multiplies in a saturating **absolute-gp/unit boost**, because the pure-% amplitude score
-  was sweeping the HARD top-N fetch cut with cheap high-% teleport tabs and hiding every liquid big-ticket
-  HOLD (15 — Nightmare staff, Bellator ring, Virtus, Dinh's… — passed the gate but got cut pre-quote). The
-  default scan now surfaces a healthy MIX (big tickets + tabs); if you still expect a specific big ticket
-  and don't see it, it's genuinely gated (illiquid <50/d, or a knife), not rank-buried. Still: DON'T pitch a value buy off
-  this table yet — the trajectory/value-amplitude validators are inform-ONLY, so a **knife can still sit in
-  BUY-NOW flagged-but-not-dropped** (e.g. Inoculation bracelet). Read the `ℹ timing/trajectory` "would
-  reject/caution" notes as the real signal and verify by hand.
+  A `range recency-anchored — durable A→B … recent C→D` note flags it. **Deployable-capital rank (same
+  day):** `valueScore` now multiplies in a two-sided **deployable-capital multiplier** — REALIZABLE after-tax
+  gp/cycle on the capital you can actually park+exit (`min(capGp/buyLow, vol-share, buy-limit accumulation)`)
+  — because the pure-% amplitude score was sweeping the top-N with cheap high-% tabs and hiding the viable
+  class (which, per a Fable pool audit, is **mid-amp DEPLOYABLE sub-1m** items like Soiled page / Awakener's
+  orb, NOT the illiquid big tickets — there are no big-LIQUID items). The per-position cap is an INPUT: pass
+  **`--capital <gp>`** (your current bankroll) **`--slots N`** (concurrent value holds; cap = capital÷slots;
+  defaults to a 100m/5 placeholder, and the footer prints `N buy-now surfaced — re-run --slots N`). The
+  default scan now surfaces a real MIX (big tickets + mid-deployable sub-1m + deployable cheap); if you
+  expect a specific item and don't see it, it's genuinely gated (illiquid, or a knife) or out-deployed, not
+  blindly rank-buried. **Trajectory now GATES in value (Ben 2026-07-09):** a KNIFE is DROPPED (named in the
+  §F footer, `dropped N trajectory-knife: …`) — so a falling knife like Inoculation bracelet / Zombie axe no
+  longer sits atop BUY-NOW; `elevated` still flags (timing), oscillating/based/rising pass. Still: DON'T pitch
+  a value buy off this table blind — **value-amplitude stays inform-only** (a would-caution "live is N% up the
+  week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
+  timing/trajectory` notes + the footer drops, and verify the sell-leg reach by hand before quoting profit.
 
 **Niche set (NY3, 2026-07-09 — Ben's ruling, reverses NY2.2/NY2.3).** `--mode all` runs **band,
 rising, churn** — NOT spread. **Spread is now off-by-default** — the one-thesis-at-a-time scan

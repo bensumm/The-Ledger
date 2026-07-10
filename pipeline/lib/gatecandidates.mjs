@@ -60,6 +60,11 @@ export const DEFAULT_THRESHOLDS = {
   // (Adamant halberd 6/d, Gloves of silence 1/d) — a hold you can't exit isn't a hold. PLACEHOLDER
   // (rule 4). Two-sided liquidity (hpv>0 && lpv>0) stays non-negotiable.
   VALUE_LIQ_FLOOR: 50,
+  // VALUE_CAP_GP: the per-position capital cap that bounds valueScore's deployable-units (bankroll leg). NOT
+  // a fixed doctrine number — screen.mjs derives it from --capital ÷ --slots (Ben's current capital spread
+  // across the positions we'd hold). This default (≈ 100m ÷ 5 slots) serves fixtures / import callers that
+  // don't supply one. PLACEHOLDER (rule 4).
+  VALUE_CAP_GP: 20_000_000,
 };
 // Default rank/slice sizing (screen.mjs's --thin-reserve / --top defaults).
 export const THIN_RESERVE_DEFAULT = 6;
@@ -173,7 +178,7 @@ function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS)
     const g = valueGate(vr, {});                            // amplitude floor + term-structure knife guard
     if (!g.pass) continue;
     const limit = map.byId[id]?.limit ?? null;
-    cand.push({ id, limitVol, mid, limit, thin, valueScore: valueScore(vr), valueRanges: vr, tier: valueTier(vr) });
+    cand.push({ id, limitVol, mid, limit, thin, valueScore: valueScore(vr, { limitVol, limit, capGp: t.VALUE_CAP_GP ?? null }), valueRanges: vr, tier: valueTier(vr) });
   }
   return cand;
 }

@@ -56,6 +56,12 @@ ok('P5 per-spec falling doctrine + gate selector are registered as designed', ()
   assert.equal(STRATEGIES.value.rank, 'value', 'value ranks by valueScore');
 });
 
+ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/rising/scalp keep it inform', () => {
+  const trajMode = k => STRATEGIES[k].validators.find(v => v.key === 'trajectory')?.mode;
+  assert.equal(trajMode('value'), 'gate', 'value drops a knife — "buy the base, never the knife" + the hold asymmetry');
+  for (const k of ['band', 'rising', 'churn', 'scalp']) assert.equal(trajMode(k), 'inform', `${k} keeps trajectory inform (already excludes fallers, or accepts by thesis)`);
+});
+
 ok('P6b per-thesis estimator family + price-basis fields are registered as designed', () => {
   // estimator family: the four fast niches share the intraday family; rising + value have their own.
   for (const k of ['band', 'spread', 'churn', 'scalp']) assert.equal(STRATEGIES[k].estimator, 'intraday', `${k} → intraday estimator`);

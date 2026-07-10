@@ -72,22 +72,37 @@ export const VALUE_STALE_MARGIN  = 0.05;
 export const VALUE_STAB_K        = 4;      // dispersion→stability sharpness: stability = 1/(1+K·dispersion)
 export const VALUE_PROX_FLOOR_W  = 0.5;    // proximity multiplier floor (a mid-range candidate still scores, at half weight)
 export const VALUE_STAB_FLOOR_W  = 0.5;    // stability multiplier floor (an unstable-floor candidate still scores, at half weight)
-// ABSOLUTE-GP BLEND (Ben 2026-07-09). valueScore's amplitude term is a scale-free PERCENTAGE, so a cheap
-// teleport tab cycling 40% out-ranks a big-ticket item cycling 10% even though the tab's absolute swing is
-// a few hundred gp and the big ticket's is millions. With a HARD top-N fetch cut (VALUE_TOP_DEFAULT) the
-// tabs swept every slot and liquid big-ticket HOLDS never got quoted (the whole point of a value-HOLD is
-// parking real capital in a big absolute cycle). This blends the ABSOLUTE after-tax gp captured per unit
-// (= afterTaxAmpPct × buyLow) into the score as a SATURATING multiplier: ~1× for a sub-REF cheap item,
-// growing with log10 so a millions-per-unit cycle earns a real boost, CAPPED so the score never collapses
-// into "rank by raw price". gpMult = 1 + W · min(log10(1 + absGp/REF), CAP). Honesty (rule 4): per-UNIT gp,
-// not deployable gp (units × limit) — a truer capital-parking measure would weigh buy-limit throughput, a
-// later refinement; and W/REF/CAP are NAMED PLACEHOLDERS, tuned only to make big tickets COMPETE with (not
-// dominate, not vanish beneath) the tabs, pending the validation study.
-export const VALUE_ABSGP_W    = 1.5;       // strength of the absolute-gp boost
-export const VALUE_ABSGP_REF  = 50_000;    // after-tax gp/unit where the boost starts mattering (below ≈ 1×)
-export const VALUE_ABSGP_CAP  = 2.5;       // cap the log term so a 40m cycle can't run away into a price sort
+// DEPLOYABLE-CAPITAL BLEND (Ben 2026-07-09, superseding the per-unit abs-gp boost). valueScore's amplitude
+// term is a scale-free PERCENTAGE, so a cheap teleport tab cycling 40% out-ranks everything even though the
+// tab's absolute swing is a few hundred gp on gp you can barely deploy (thin volume + a small buy limit). A
+// first patch boosted ABSOLUTE gp/unit — but that just rewards "expensive", and the pool has NO big-liquid
+// items (nothing >1m trades 500+/d), so it buried the genuinely viable class: MID-amp DEPLOYABLE sub-1m
+// items (Soiled page, Snape grass seed, Awakener's orb). The honest capital-parking measure is REALIZABLE
+// after-tax profit per cycle on the capital you can actually PARK and EXIT:
+//   deployUnits = min( capGp/buyLow,                        // bankroll cap per position (an INPUT — Ben's
+//                                                           //   current capital ÷ how many slots to spread)
+//                      VALUE_VOL_SHARE × limitVol × DAYS,   // market-share / exit bound (mirrors expUnits' 10%)
+//                      limit × WINDOWS/day × DAYS )         // buy-limit accumulation over a realistic dip
+//   realProfit  = afterTaxAmpPct × deployUnits × buyLow     // realizable after-tax gp per cycle
+//   deployMult  = clamp( 1 + W·log10(realProfit/REF), MIN, MAX )   // TWO-SIDED: discounts AND boosts
+// It enters valueScore as deployMult (replacing gpMult). Two-sided + clamped (unlike the one-sided abs-gp
+// boost, which couldn't PENALISE a near-undeployable %-monster) so a nothing-deployment item is discounted
+// to MIN, a large realizable cycle boosted to MAX, total range ~10× so the shape features (amp×prox×stab)
+// stay the primary signal — a raw-gp term with unbounded range collapses into a price/volume sort. Honesty
+// (rule 4): every constant is a NAMED PLACEHOLDER; realProfit is an UPPER bound (assumes you catch the full
+// anchored cycle + transact your whole volume share both sides); limitVol is a 24h snapshot. capGp is not a
+// constant here — it is threaded in as an input (see screen.mjs --capital/--slots). Missing liquidity opts
+// degrade to deployMult = 1 (shape-only), so a bare valueScore(vr) still returns a sane score.
+export const VALUE_DEPLOY_W        = 1.0;        // strength of the deployable-capital multiplier
+export const VALUE_DEPLOY_REF_GP   = 300_000;    // realizable after-tax gp/cycle at which deployMult crosses 1×
+export const VALUE_DEPLOY_MULT_MIN = 0.2;        // floor: a near-undeployable item is discounted, not zeroed
+export const VALUE_DEPLOY_MULT_MAX = 2.0;        // cap: keeps the multiplier from becoming a price/size sort
+export const VALUE_VOL_SHARE       = 0.10;       // fraction of limiting-side daily volume you can transact (mirrors expUnits)
+export const VALUE_ACCUM_DAYS      = 2;          // days a dip realistically lasts to accumulate into / exit over
+export const VALUE_WINDOWS_PER_DAY = 6;          // GE 4h buy-limit windows per day (mirrors expUnits)
 
 const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 const afterTax = p => p - tax(p);
 
@@ -169,19 +184,38 @@ export function valueRanges(ts, live) {
 /* valueScore(vr) → a composite rank (§B/§F). Multiplicative blend of the shape features so a candidate
    wins by being amplitude-rich AND near the low AND on a durable floor — none alone carries it.
    Proximity/stability enter as multipliers floored at ½ so a mid-range or noisier-floor candidate still
-   ranks (rank, don't gate). The ABSOLUTE-gp term (Ben 2026-07-09) is the SATURATING gpMult above: it lifts
-   a big-ticket item cycling a smaller % but a large absolute gp/unit so it competes for the hard top-N
-   fetch slots instead of being swept out by high-% cheap tabs (§ VALUE_ABSGP_*). Returns 0 when there's no
-   amplitude. PLACEHOLDER weights (§F). */
-export function valueScore(vr) {
+   ranks (rank, don't gate). The DEPLOYABLE-CAPITAL term (Ben 2026-07-09) is the two-sided clamped deployMult
+   above (§ VALUE_DEPLOY_*): it scores REALIZABLE after-tax gp/cycle on the capital you can park+exit, so a
+   mid-amp item you can deploy real capital into outranks a high-% item you can barely fill, and a
+   near-undeployable %-monster is discounted — the capital-parking objective, not "prefer expensive". Takes
+   the per-candidate liquidity inputs { limitVol, limit, capGp }; absent them it degrades to shape-only.
+   Returns 0 when there's no amplitude. PLACEHOLDER weights (§F). */
+export function valueScore(vr, { limitVol = null, limit = null, capGp = null } = {}) {
   if (!vr || !vr.hasData) return 0;
   const amp = Math.max(0, vr.afterTaxAmpPct || 0);
   const proxMult = VALUE_PROX_FLOOR_W + (1 - VALUE_PROX_FLOOR_W) * (vr.proximity ?? 0);
   const stabMult = VALUE_STAB_FLOOR_W + (1 - VALUE_STAB_FLOOR_W) * (vr.stability ?? 0);
-  // absolute after-tax gp captured per unit = amplitude% × the buy price (capital deployed per unit).
-  const absGp = amp * (num(vr.buyLow) ?? 0);
-  const gpMult = 1 + VALUE_ABSGP_W * Math.min(Math.log10(1 + absGp / VALUE_ABSGP_REF), VALUE_ABSGP_CAP);
-  return amp * proxMult * stabMult * gpMult * 100;   // ×100 → a readable score
+  // DEPLOYABLE-CAPITAL multiplier: realizable after-tax gp/cycle on the capital you can PARK and EXIT. The
+  // three-way min is the real GE physics — bankroll (capGp/buyLow), market share (VALUE_VOL_SHARE of the
+  // limiting-side daily volume, over VALUE_ACCUM_DAYS), and buy-limit accumulation (limit × windows/day ×
+  // days). Any bound whose input is missing is skipped; if NONE are known (a bare score call), deployMult
+  // degrades to 1 (shape-only). A null limit ≠ zero units — it just drops that bound (a null limit is not
+  // "no accumulation"), mirroring expUnits.
+  const buyLow = num(vr.buyLow);
+  let deployMult = 1;
+  if (buyLow && buyLow > 0) {
+    const bounds = [];
+    if (capGp != null)    bounds.push(capGp / buyLow);                                  // bankroll cap per position
+    if (limitVol != null) bounds.push(VALUE_VOL_SHARE * limitVol * VALUE_ACCUM_DAYS);   // market-share / exit bound
+    if (limit != null)    bounds.push(limit * VALUE_WINDOWS_PER_DAY * VALUE_ACCUM_DAYS); // buy-limit accumulation
+    if (bounds.length) {
+      const deployUnits = Math.min(...bounds);
+      const realProfit = amp * deployUnits * buyLow;   // realizable after-tax gp per cycle
+      deployMult = clamp(1 + VALUE_DEPLOY_W * Math.log10(Math.max(realProfit, 1) / VALUE_DEPLOY_REF_GP),
+                         VALUE_DEPLOY_MULT_MIN, VALUE_DEPLOY_MULT_MAX);
+    }
+  }
+  return amp * proxMult * stabMult * deployMult * 100;   // ×100 → a readable score
 }
 
 /* valueGate(vr, { phase }) → { pass, reason }. Two-sided liquidity + the lowered liquidity floor are

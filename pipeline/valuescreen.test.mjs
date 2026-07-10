@@ -18,6 +18,7 @@ import { termStructure } from '../js/termstructure.mjs';
 import {
   valueRanges, valueScore, valueGate, valueTier,
   VALUE_MIN_CYCLE_PCT, VALUE_KNIFE_PCT, VALUE_BUYNOW_PROX, VALUE_MAX_BELOW_LOW_PCT,
+  VALUE_DEPLOY_MULT_MIN, VALUE_DEPLOY_MULT_MAX,
 } from '../js/valuescreen.mjs';
 
 let pass = 0;
@@ -36,10 +37,6 @@ const FLAT = [...alt(19, 1000, 1100), 1000];
 const KNIFE = [...alt(15, 1000, 1100), 950, 920, 900, 880, 860];
 // a razor-thin range: lows ~1000, highs ~1030 (<6% after-tax amplitude).
 const THIN_AMP = [...alt(19, 1000, 1030), 1000];
-// a BIG-TICKET item cycling the SAME ~8% amplitude as FLAT but at 20m/22m — the absolute after-tax gp/unit
-// is millions vs FLAT's ~78gp. The abs-gp blend must lift it ABOVE the equal-% cheap item (Ben 2026-07-09:
-// a value-HOLD parks capital in a big absolute cycle; a scale-free %-score buried it under high-% tabs).
-const BIG = [...alt(19, 20_000_000, 22_000_000), 20_000_000];
 // a REGIME SHIFT (Contract-of-sensory-clouding shape): an established HIGH band (~3000/3600) that
 // crashed to a LOW band (~1300/2000) over the window and is now recovering. The full-window q85 ceiling
 // (~3600) is a DEAD regime the item left; a mid-recovery live must NOT read as "near the low → buy-now".
@@ -131,14 +128,25 @@ ok('valueScore ranks a bigger-amplitude, nearer-the-low item ABOVE a weaker one 
   assert.ok(strong > 0);
 });
 
-ok('the ABS-GP blend lifts a big-ticket modest-% cycler ABOVE an equal-% cheap item (Ben 2026-07-09)', () => {
-  const bigTicket = valueScore(valueRanges(ts(BIG), 20_000_000));   // ~8% cycle, but millions of gp/unit
-  const cheap = valueScore(valueRanges(ts(FLAT), 1000));            // SAME ~8% cycle, ~78gp/unit, same proximity
-  assert.ok(bigTicket > cheap, `big-ticket outranks the equal-% tab on absolute gp (${bigTicket} > ${cheap})`);
-  // the boost is SATURATING, not a raw price sort: a cheap item with a MUCH bigger % can still out-score the
-  // big ticket (amplitude still leads) — a 73% Inoculation-shape tab beats the 8% big ticket.
-  const bigCheapPct = valueScore(valueRanges(ts([...alt(19, 1000, 1900), 1000]), 1000));  // ~86% cycle at ~1000gp
-  assert.ok(bigCheapPct > bigTicket, `a far-higher-% cheap item still leads (amp is not overridden) (${bigCheapPct} > ${bigTicket})`);
+ok('the DEPLOYABLE-CAPITAL blend ranks by realizable gp, not raw price (Ben 2026-07-09)', () => {
+  const vr = valueRanges(ts(FLAT), 1000);          // ~8% cycle at ~1000gp, live at the low
+  const shape = valueScore(vr);                    // no liquidity opts → deployMult = 1 (shape-only degrade)
+  assert.ok(shape > 0, 'a bare score degrades to a sane shape-only value');
+  // SAME-shape items: one you can deploy real capital into (deep volume, ample limit, bankroll) must beat
+  // one you can barely fill — deployability, not price, orders them.
+  const deployable = valueScore(vr, { limitVol: 100_000, limit: 10_000, capGp: 20_000_000 });
+  const undeployable = valueScore(vr, { limitVol: 40, limit: 10, capGp: 20_000_000 });
+  assert.ok(deployable > shape, `a large realizable cycle is boosted above shape-only (${deployable} > ${shape})`);
+  assert.ok(undeployable < shape, `a near-undeployable item is DISCOUNTED below shape-only (${undeployable} < ${shape})`);
+  assert.ok(deployable > undeployable, 'deployability, not price, orders the two');
+  // the multiplier is CLAMPED to [MIN, MAX] — the score can't run away into a raw size/price sort.
+  const huge = valueScore(vr, { limitVol: 1e12, limit: 1e12, capGp: 1e15 });
+  const tiny = valueScore(vr, { limitVol: 1, limit: 1, capGp: 1 });
+  assert.ok(huge <= shape * VALUE_DEPLOY_MULT_MAX + 1e-6, `boost capped at ×${VALUE_DEPLOY_MULT_MAX}`);
+  assert.ok(tiny >= shape * VALUE_DEPLOY_MULT_MIN - 1e-6, `discount floored at ×${VALUE_DEPLOY_MULT_MIN}`);
+  // a null buy-limit is NOT zero units — the bound is skipped, not set to 0 (still deployable via vol+bankroll).
+  const nullLimit = valueScore(vr, { limitVol: 100_000, limit: null, capGp: 20_000_000 });
+  assert.ok(nullLimit > undeployable, 'a null limit degrades gracefully, never zeroes the item');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

@@ -210,7 +210,15 @@ export const STRATEGY_LIST = Object.freeze([
     validators: [
       { key: 'floor', mode: 'gate' },
       { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
-      { key: 'trajectory', mode: 'inform' },
+      // trajectory GATES in value (Ben 2026-07-09): a KNIFE drops. Value's defining thesis is "buy the
+      // base, never the knife", and a multi-week HOLD makes buying a knife cost far more than missing one
+      // (asymmetry) — so this is the one niche where the knife verdict is a thesis violation, not a nuance,
+      // and it graduates from inform→gate ahead of the others. It catches the knives valueGate's weaker
+      // term-structure knifeDelta misses (Inoculation bracelet, Zombie axe). `elevated` stays a caution
+      // flag (a timing note, not a drop); oscillating/based/rising pass. A dropped knife is NAMED in the
+      // §F footer (renderValueMode), so it leaves buy-now but stays auditable. Value-scoped: band/rising
+      // already exclude fallers, scalp accepts them — trajectory stays inform there.
+      { key: 'trajectory', mode: 'gate' },
       { key: 'value-amplitude', mode: 'inform' },
       { key: 'limit', mode: 'gate' },
     ],
