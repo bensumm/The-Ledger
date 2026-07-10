@@ -534,6 +534,11 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   `reconstruct.buildTombstonedEvents()` (the same event id + REMOVE-target filter sync-fills.mjs applies
   inline) + relabeling the section "REMOVE tombstones applied". Pinned by `pipeline/monitor.test.mjs`
   (a REMOVE tombstone purges a would-be phantom lot). PLAN-ARCH-DOCS-AUDIT A1.
+- ✅ **COD-1** (2026-07-10) — the quote-basis ordering invariant (CLAUDE.md prose: on a consistent
+  basis `optBuy ≤ quickBuy ≤ quickSell ≤ optSell`; a break on mixed bases is a bug) is now PINNED as a
+  `quotecore.test.mjs` fixture asserting `quoteOrdered(row)` across a spread of realistic consistent-basis
+  shapes (ranging / tight / wide / big-ticket / breakup / breakdown / low-priced). Test-only; a future edit
+  that reintroduces base-mixing fails loudly. PLAN-ARCH-DOCS-AUDIT Q3-2.
 - LH2's blind-warning heuristic can't catch the *false-EMPTY snapshot* restart variant: a
   client bounce made the plugin write a fresh all-slots `EMPTY` snapshot (16:10:02
   2026-07-05) while real offers stood in-game — log is FRESH (so the staleness gate never

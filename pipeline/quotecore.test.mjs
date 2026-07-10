@@ -672,4 +672,37 @@ ok('Bar E Scope B — a high-side flier trims optSell but leaves rawBandHi/momen
   assert.equal(breakup.mom, 'breakup', 'momentum fires off the raw band max (120k > raw 100k), not the robust p90');
 });
 
+// --- COD-1: the quote-basis ordering invariant (prose → test) -----------------------------
+// CLAUDE.md asserts it in prose: on a CONSISTENT basis (live /latest + the 2h 5m-band from the SAME
+// fetch) the four prices nest — optBuy ≤ quickBuy ≤ quickSell ≤ optSell — and a break is a
+// base-mixing BUG (fix the script). computeQuote never mixes bases, so quoteOrdered(row) MUST hold
+// for every reliable two-sided reading. This pins that guarantee across a spread of realistic
+// consistent-basis shapes so a future edit that reintroduces mixing (e.g. sourcing opt from a
+// different series than quick) fails loudly here. Each case: an in-basis latest (low ≤ high) + a 5m
+// band, asserting row.ordered AND each pairwise inequality.
+ok('COD-1 — quoteOrdered holds across consistent-basis fixtures (optBuy ≤ quickBuy ≤ quickSell ≤ optSell)', () => {
+  const cases = [
+    // [name, latest.low, latest.high, bandLow, bandHigh]
+    ['normal ranging (live inside a wider band)',      990,      1010,      985,      1015],
+    ['tight band, live == edges',                      1000,     1010,      1000,     1010],
+    ['wide band, live near the middle',                4800,     5200,      4600,     5400],
+    ['big-ticket, live inside band',                   3_300_000, 3_360_000, 3_280_000, 3_380_000],
+    ['breakup — live instabuy ABOVE the 2h top',       59_000,   72_000,    58_000,   60_000],   // optSell=max(quickSell,bandHi)=quickSell
+    ['breakdown — live instasell BELOW the 2h floor',  47_000,   61_000,    58_000,   62_000],   // optBuy=min(quickBuy,bandLo)=quickBuy
+    ['low-priced dense item',                          140,      152,       138,      155],
+  ];
+  for (const [name, lo, hi, bl, bh] of cases) {
+    // A dense band bracketed by [bl, bh] with the live quote [lo, hi] on the SAME basis. Alternate the
+    // 5m prints between the band edges so both sides are dense (robustBand ⇒ real p10/p90 ~ edges).
+    const ts5m = mk5m((ha, idx) => ({ low: idx % 2 ? bl : Math.round((bl + bh) / 2),
+                                      high: idx % 2 ? bh : Math.round((bl + bh) / 2), vol: 500 }));
+    const row = rowOf({ low: lo, high: hi, lowTime: FRESH, highTime: FRESH }, ts5m);
+    assert.equal(row.reliable, true, `${name}: reading is a reliable two-sided quote`);
+    assert.equal(row.ordered, true, `${name}: row.ordered (quoteOrdered) must hold on a consistent basis`);
+    assert.ok(row.optBuy <= row.quickBuy, `${name}: optBuy ≤ quickBuy`);
+    assert.ok(row.quickBuy <= row.quickSell, `${name}: quickBuy ≤ quickSell`);
+    assert.ok(row.quickSell <= row.optSell, `${name}: quickSell ≤ optSell`);
+  }
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);
