@@ -285,7 +285,19 @@ ready-to-paste `/loop` command:
 
 `/loop <interval> <command>` (the `/loop` skill) re-runs on that fixed interval; report only
 what changed vs the prior tick. 1–3 min matches GE fill dynamics — offers fill over minutes to
-hours, so a sub-minute loop just burns API calls.
+hours, so a sub-minute loop just burns API calls. **Operating default cadence is 5m** (Ben,
+2026-07-10 — bounds the git churn `--sync` adds while staying inside GE fill dynamics); use a
+looser 10–15m for a book of only patient standing offers, tighter 1–3m only for an active chase.
+
+**`--sync` each pass (attended /loop, Ben 2026-07-10).** `node pipeline/watch.mjs --sync` runs
+`sync-fills.mjs` before the pass so the booked view (positions.json + realised P&L) and any
+mobile trades are current every tick — offers already read live off the log, so this refreshes
+the *held* basis and kills the stale-book banner mid-session. It NEVER blocks the pass on a
+sync failure (network/git hiccup → `sync · ⚠ skipped`, watch still runs off the current book).
+**ATTENDED-ONLY by contract:** the sync pushes to `main` on every filled pass, so a `--sync`
+loop must not be left running unattended — that would recreate the deliberately-eliminated
+auto-writer (FILLS-PIPELINE §12). Stop the loop when you step away (which you should do anyway —
+never leave near-live offers unwatched).
 
 ### What each tick surfaces
 

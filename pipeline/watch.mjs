@@ -44,10 +44,12 @@
  *   node pipeline/watch.mjs                       # every position: held lots + active offers
  *   node pipeline/watch.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
  *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
+ *   node pipeline/watch.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
   diurnalRead, phase, underwaterHours, isOvernightNow, pressureText } from '../js/quotecore.js';
 import { fmtP, fmt } from '../js/format.js';
@@ -396,6 +398,21 @@ async function main() {
   const TARGETS_ONLY = args.includes('--targets-only');
   const BRIEF = args.includes('--brief');   // compact one-line-per-item book (stable, script-owned format)
   const tokens = args.filter(a => !a.startsWith('--'));
+
+  // --sync (LW-loop): refresh the booked view before this pass so held-basis/realised-P&L are current
+  // (the /loop attended-session convenience — offers already read live off the log, this refreshes
+  // positions.json + ff-pulls mobile trades). Runs sync-fills.mjs as a child; NEVER blocks the watch
+  // pass on failure (a network/git hiccup must not stop monitoring). ATTENDED-ONLY by contract — the
+  // on-demand-only rule (FILLS-PIPELINE §12) means this must not be left looping unattended, since it
+  // pushes to main on every filled pass. Quiet: only the sync's summary line is surfaced.
+  if (args.includes('--sync')) {
+    try {
+      const out = execFileSync(process.execPath, [path.join(HERE, 'sync-fills.mjs')],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      const summary = out.trim().split('\n').filter(l => /^positions:|^Pushed|nothing to/.test(l));
+      if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
+    } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — watching off the current book\n'); }
+  }
 
   const map = await loadMapping();
   const guide = await loadGuide();
