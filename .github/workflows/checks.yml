@@ -35,6 +35,9 @@ jobs:
       - name: skill-lint (every SKILL.md rule-block tagged, P7)
         run: node pipeline/skill-lint.mjs
 
+      - name: doc-lint (denylist of superseded terms + single-source duplicate-phrase, DL1)
+        run: node pipeline/doclint.mjs
+
       - name: fills.json / positions.json parse
         run: |
           node -e "

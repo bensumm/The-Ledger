@@ -539,6 +539,17 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   `quotecore.test.mjs` fixture asserting `quoteOrdered(row)` across a spread of realistic consistent-basis
   shapes (ranging / tight / wide / big-ticket / breakup / breakdown / low-priced). Test-only; a future edit
   that reintroduces base-mixing fails loudly. PLAN-ARCH-DOCS-AUDIT Q3-2.
+- ✅ **DL1** (2026-07-10) — `pipeline/doclint.mjs`: a STRUCTURAL, offline doc-drift linter (CI cheap
+  `checks` job + auto-discovered `doclint.test.mjs`), the CI-encoded half of process rule 8. CHECK 1 =
+  a maintained DENYLIST of superseded terms/commands × operating docs (`Spread`/`Rising` as live niches,
+  unqualified "Falling items are excluded", `--mode spread`/`--mode rising`), with `xfail` for
+  known-owned live violations. CHECK 2 = a single-source / duplicate-phrase fingerprint (a 14-word
+  shingle appearing verbatim in >1 doc on the CLAUDE.md ⇆ README axis = the copy-not-move failure),
+  allowlist for legit boilerplate + known DOC-2/DOC-3 dups. Must stay denylist + structural, never
+  semantic (skill-lint honesty note applies). REAL DRIFT FOUND + reported: (a) index.html's stale
+  Scan-intro carries BOTH the deleted-niche list AND the unqualified falling-exclusion — xfailed to
+  PLAN-APP-PARITY AP1 (deployed markup, not fixed here); (b) three CLAUDE.md⇆README verbatim passages
+  (P0/P4b archive-append, P6c sub-floor) — allowlisted to DOC-2/DOC-3. PLAN-ARCH-DOCS-AUDIT Q3-1.
 - LH2's blind-warning heuristic can't catch the *false-EMPTY snapshot* restart variant: a
   client bounce made the plugin write a fresh all-slots `EMPTY` snapshot (16:10:02
   2026-07-05) while real offers stood in-game — log is FRESH (so the staleness gate never

@@ -507,6 +507,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     untagged blocks and prints per-file + total counts so untagged-prose GROWTH is visible. Exports
     `lintText`/`lintFile`/`SKILL_FILES` for the test. Deliberately NOT a Markdown parser — a
     growth-visibility guard; the semantic dispositions live in `docs/SKILL-TRIAGE.md`),
+  - `doclint.mjs` (DL1 — a STRUCTURAL, offline doc-drift linter run in CI's cheap `checks` job +
+    auto-discovered via `doclint.test.mjs`; the CI-encoded half of process rule 8. TWO checks:
+    (1) a maintained **DENYLIST** of superseded terms/commands × the operating docs they'd mislead
+    (seeded: the deleted spread/rising niches listed as live, an unqualified global falling-exclusion,
+    and the removed per-niche mode flags — see the `DENYLIST` table in the source for the exact patterns)
+    — a ruling that deletes a concept adds a line, CI then catches every future doc
+    that resurrects it; an `xfail` records a KNOWN live violation owned elsewhere (index.html's stale
+    Scan-intro = PLAN-APP-PARITY AP1) so CI stays green while the finding stays reported; and
+    (2) a **single-source / duplicate-phrase** check that flags a distinctive 14-word shingle appearing
+    verbatim in >1 doc on the CLAUDE.md ⇆ README.md axis (the copy-not-move failure), with a `DUP_ALLOWLIST`
+    for legit shared boilerplate + known pre-existing dups owned by DOC-2/DOC-3. **MUST stay a
+    denylist + structural checker — never a semantic/LLM checker** (the skill-lint honesty note applies
+    verbatim: it catches recurrence of NAMED drift + novel COPY, NOT novel contradiction; the wave-start
+    semantic drift scan stays necessary). Exports `DENYLIST`/`runDenylist`/`normalizeWords`/
+    `findDuplicateShingles`/`runDuplicatePhrase` for the test),
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
@@ -584,7 +599,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `subFloor` suggestions-ledger marker's absent-field byte-identity),
     `skill-lint.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
     detection, the two tag forms (code-pointer vs `judgment:`), frontmatter/fence exclusions, the
-    counting, and the LIVE regression guard that all four committed SKILL.md files lint clean)
+    counting, and the LIVE regression guard that all four committed SKILL.md files lint clean),
+    `doclint.test.mjs` (DL1 — the doc-drift linter's two checks: denylist pattern precision (live-niche
+    form hits, deletion prose does NOT), the live corpus has no hard denylist violations + STILL catches
+    the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs
+    (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), and the live
+    CLAUDE.md ⇆ README axis is clean)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +

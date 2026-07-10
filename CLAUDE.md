@@ -553,7 +553,10 @@ metadata, not a leak; the concern is content, not commit authorship.
   (pipeline-owned artifacts; clobber-guard reconciles). No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
 - **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
-  + reconstruct acceptance fixtures, `fills.json`/`positions.json` parse) plus a separate
+  + reconstruct acceptance fixtures, `fills.json`/`positions.json` parse, `skill-lint.mjs`, and
+  `doclint.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
+  a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis; **must stay a denylist +
+  structural checker, never a semantic/LLM one**) plus a separate
   **`smoke` job** (CI1) that loads `index.html` in headless Playwright chromium with all
   external network stubbed and fails on any page error / app console error / empty pane —
   the "syntax passed but the app broke" class the process rules warn about (`pipeline/smoke.mjs`).
