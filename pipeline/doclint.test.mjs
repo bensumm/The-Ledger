@@ -33,17 +33,21 @@ ok('the --mode {spread,rising} patterns catch the deleted commands', () => {
   assert.ok(DENYLIST.find(x => x.id === 'mode-rising-cmd').pattern.test('screen.mjs --mode rising --floor 50'));
 });
 
-/* ---- CHECK 1: live corpus + the AP1-owned catch ------------------------------------------ */
+/* ---- CHECK 1: live corpus is clean (AP1 fixed the last outstanding drift) ----------------- */
 ok('the real corpus has NO hard (non-xfail) denylist violations', () => {
   const hard = runDenylist().filter(h => !h.xfail);
   assert.deepEqual(hard, [], `unexpected live denylist drift: ${hard.map(h => `${h.file}[${h.id}]`).join(', ')}`);
 });
-ok('the denylist STILL catches index.html AP1 drift as xfail (CHECK 1 is not a no-op)', () => {
-  const xfails = runDenylist().filter(h => h.xfail && h.file === 'index.html');
-  const ids = xfails.map(h => h.id).sort();
-  assert.deepEqual(ids, ['falling-excluded-unqualified', 'niche-spread-rising-live'],
-    'both known index.html drifts are caught + owned by AP1');
-  for (const h of xfails) assert.match(h.xfail, /AP1/, 'the xfail names its owner');
+ok('there are NO outstanding xfails (AP1 fixed the index.html Scan-intro drift; a dead xfail is drift)', () => {
+  // The niche-spread-rising-live + falling-excluded-unqualified rules stay LIVE (they now actively
+  // guard index.html), but their AP1 xfails were retired once the deployed copy was fixed. Every
+  // denylist match must now be a REAL hard violation — no rule may carry an xfail exemption.
+  const xfails = runDenylist().filter(h => h.xfail);
+  assert.deepEqual(xfails, [], `stale xfail(s) still present: ${xfails.map(h => `${h.file}[${h.id}]`).join(', ')}`);
+});
+ok('index.html no longer trips either deleted-niche / falling-exclusion rule (AP1 verified in-corpus)', () => {
+  const idx = runDenylist().filter(h => h.file === 'index.html');
+  assert.deepEqual(idx, [], `index.html still drifts: ${idx.map(h => h.id).join(', ')}`);
 });
 
 /* ---- CHECK 2: normalization + duplicate detection (pure, synthetic) ---------------------- */

@@ -19,7 +19,7 @@
 <body>
 <header>
   <div class="wrap bar">
-    <div class="brand"><div class="mark">THE COFFER</div><div class="sub">Grand Exchange flip ledger <span class="ver" id="appVer"></span></div></div>
+    <div class="brand"><div class="mark">THE COFFER</div><div class="sub">Grand Exchange flip ledger <span class="ver" id="appVer"></span><span class="ver" id="pipeVer"></span></div></div>
     <div class="spacer"></div>
     <label class="bankfield"><span>Bankroll</span><input id="bankInput" class="num" value="300m" inputmode="text" /></label>
     <button id="exportBtn" class="hbtn">Export</button>
@@ -51,7 +51,6 @@
     <button data-tab="scan">Scan</button>
     <button data-tab="trends">Trends</button>
     <button data-tab="watchlist">Watchlist <span class="badge" id="watchBadge">0</span></button>
-    <button data-tab="signals">Signals <span class="badge" id="sigBadge">0</span></button>
     <button data-tab="watch">Watch <span class="badge" id="watchTabBadge">0</span></button>
     <button data-tab="ledger">Ledger <span class="badge" id="ledgerBadge">0</span></button>
     <button data-tab="logs">Logs</button>
@@ -100,7 +99,7 @@
 
   <!-- SCAN (Finder v2 — the screen.mjs opportunity scan, in the app) -->
   <section class="panel hidden" id="panel-scan">
-    <div class="scanintro mini">The same opportunity scan a Claude session runs (<code>screen.mjs</code>) — identical gates and numbers, one table per <b>niche</b> (Band / Spread / Rising / Churn), each ranked by a letter <b>Grade</b> so the best flips sort to the top. Falling items are excluded. This is a <b>published snapshot</b>, not a live quote; click any item for its live Trends.</div>
+    <div class="scanintro mini">The same opportunity scan a Claude session runs (<code>screen.mjs</code>) — identical gates and numbers, one table per <b>niche</b> (<b>Band</b> · <b>Churn</b>), each ranked by a letter <b>Grade</b> so the best flips sort to the top. Falling handling is per-strategy — band/churn skip fallers, but anything you hold, ask about, or watchlist still shows with price-to-clear guidance. This is a <b>published snapshot</b>, not a live quote; click any item for its live Trends.</div>
     <div class="scanhead">
       <div class="scanmeta" id="scanMeta"></div>
       <button id="scanRefresh" class="ghostbtn sm" type="button">Refresh scan</button>
@@ -146,17 +145,6 @@
     <div id="watchEmpty" class="empty hidden"></div>
   </section>
 
-  <!-- SIGNALS -->
-  <section class="panel hidden" id="panel-signals">
-    <div class="mini" style="margin-bottom:12px; color:var(--parch2)">Live buy signals for your starred items. <b>BUY</b> fires when there's a positive after-tax spread <b>right now</b> during the item's historically-cheap hour window. Falling / volatile items aren't hidden — they still fire, but the Trend column flags the risk (↓ falling, ~ dip?, ⚡) so you can judge it yourself.</div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th class="left">Item</th><th>Buy</th><th>Sell</th><th>Margin</th><th>Cheapest window</th><th>Trend</th><th>Signal</th></tr></thead>
-        <tbody id="sigBody"></tbody>
-      </table>
-    </div>
-    <div id="sigEmpty" class="empty hidden"></div>
-  </section>
 
   <!-- WATCH (the at-a-glance flipping desk — verdicts from the shared momVerdict/offerVerdict) -->
   <section class="panel hidden" id="panel-watch">
@@ -252,7 +240,7 @@
   <footer>
     Prices: OSRS Wiki real-time API. Catalog cached locally 7 days; only live prices pulled each launch — <span id="universeNote"></span>.
     Margins are <strong>after the 2% GE sell tax</strong> (floored per item, capped at 5m, none under 50gp).
-    <strong>Rating</strong> = budget-aware profit/hr × a quality dampener blending <strong>ROI</strong>, <strong>liquidity</strong>, <strong>stability</strong> (live price vs guide), and <strong>turnaround</strong> — hover the Risk grade for the breakdown. <strong>Trends</strong> and <strong>Signals</strong> read the official GE guide to flag downtrends — tendencies, not guarantees. Watchlist and ledger save to this device only.
+    <strong>Rating</strong> = budget-aware profit/hr × a quality dampener blending <strong>ROI</strong>, <strong>liquidity</strong>, <strong>stability</strong> (live price vs guide), and <strong>turnaround</strong> — hover the Risk grade for the breakdown. <strong>Trends</strong> reads the official GE guide to flag downtrends — tendencies, not guarantees. Watchlist and ledger save to this device only.
   </footer>
 </div>
 

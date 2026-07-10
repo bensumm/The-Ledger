@@ -98,7 +98,7 @@ async function run() {
     return s && !/fetching/i.test(s.textContent || '');
   }, { timeout: 20000 }).catch(() => failures.push('init: #stamp never left "fetching…" (loadAll did not resolve)'));
 
-  const TABS = ['finder', 'scan', 'trends', 'watchlist', 'watch', 'signals', 'ledger', 'logs'];
+  const TABS = ['finder', 'scan', 'trends', 'watchlist', 'watch', 'ledger', 'logs'];   // Signals tab removed (SIG-DEL)
   for (const t of TABS) {
     // click the real tab button (exercises the wired onclick → switchTab)
     await page.click(`nav.tabs button[data-tab="${t}"]`);
@@ -122,5 +122,5 @@ if (failures.length) {
   console.error('SMOKE FAILED:\n  - ' + failures.join('\n  - '));
   process.exit(1);
 }
-console.log('smoke OK — index.html initialized offline; all 8 tab panes render and switch.');
+console.log('smoke OK — index.html initialized offline; all 7 tab panes render and switch.');
 process.exit(0);

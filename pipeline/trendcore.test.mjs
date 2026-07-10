@@ -27,7 +27,7 @@
 import assert from 'node:assert/strict';
 import {
   median, bestWindow, seasonalFactors, hourFactors, factorStats,
-  patientTargets, backtestPlan, planSignal, analyseBroad, analyseHourly, localDayKey,
+  patientTargets, backtestPlan, analyseBroad, analyseHourly, localDayKey,
 } from '../js/trendcore.js';
 
 let pass = 0;
@@ -190,19 +190,6 @@ ok('backtestPlan (10 clean diurnal days): timing beats naive spread every out-of
   assert.ok(bt.stratRoi > bt.spreadRoi);
   assert.equal(bt.winRate, 100);                  // every held-out day is profitable (positive spread)
   assert.equal(bt.beatRate, 100);                 // timing beat naive on every held-out day
-});
-
-/* --- planSignal: hourly-archive-only buy-window + confidence -------------------------------- */
-ok('planSignal: <24 points ⇒ null (needs a day of hourly archive)', () => {
-  assert.equal(planSignal(diurnal(1).slice(0, 23)), null);
-});
-
-ok('planSignal: 10 clean days ⇒ good confidence, cheap window around h3–5', () => {
-  const s = planSignal(diurnal(10));
-  assert.ok(s);
-  assert.equal(s.conf, 'good');                   // days≥10 && medCount≥5
-  assert.equal(s.archDays, 10);
-  assert.equal(s.buyWin.start, 3);                // cheapest 3h window {3,4,5}
 });
 
 /* --- analyseBroad / analyseHourly: light shape coverage ------------------------------------ */

@@ -3,7 +3,7 @@
    optimistic pending rows, the positions.json auto-populate (syncFills), the Ledger render
    (open/closed groups, period P&L, pending, legacy banner), fills freshness/meta, the
    GitHub-sync + fills-log link panels, and the Ledger view controls (watchlist-only filter,
-   period, group drill-in). ui.js keeps Finder/Watchlist/Signals/Coffer/Scan; renderAll (ui.js)
+   period, group drill-in). ui.js keeps Finder/Watchlist/Coffer/Scan; renderAll (ui.js)
    stays the single coordination point and calls renderLedger here. A3 was a PURE MOVE — no
    logic changed. `realised`, `renderCoffer`, `FILLS_STALE_MS` and `fmtAge` stay in ui.js
    (shared with the Coffer/Scan surfaces) and are imported back here. */
@@ -451,7 +451,7 @@ export function renderLedger(){
   const btag='<span class="srctag" title="pre-owned inventory that entered the flip flow at a declared basis (not cash out of pocket)">banked</span>';
   const wtag='<span class="srctag" title="taken from inventory for personal use — no sale; excluded from realised">withdrawn</span>';
   // LU1.1: expansion is an explicit chevron BUTTON (only on multi-lot groups), and the item
-  // name is a Trends link (linkname/data-trend) — the same affordance Finder/Signals rows use.
+  // name is a Trends link (linkname/data-trend) — the same affordance Finder rows use.
   // Row-click-to-expand (the old data-grp handler) is gone, so name-click can own the click.
   const chev=k=>'<button class="expbtn" type="button" data-exp="'+k+'" title="Expand / collapse lots">'+(STATE.ledgerExpanded[k]?'▾':'▸')+'</button>';
   const nameCell=g=>g.itemId!=null?'<span class="linkname" data-trend="'+g.itemId+'">'+g.name+'</span>':'<span class="itemname">'+g.name+'</span>';
@@ -541,7 +541,7 @@ export function renderLedger(){
       return head+det;
     }).join('')+pendClosedRows;
   }
-  // LU1.1: expansion via the chevron button; item name links to Trends (same as Finder/Signals)
+  // LU1.1: expansion via the chevron button; item name links to Trends (same as Finder)
   document.querySelectorAll('#openBody [data-exp],#closedBody [data-exp]').forEach(b=>b.onclick=()=>toggleLedgerGroup(b.dataset.exp));
   document.querySelectorAll('#openBody [data-trend],#closedBody [data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delTrade(b.dataset.del));

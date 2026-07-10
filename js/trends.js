@@ -3,15 +3,15 @@ import { fetchTs } from './marketfetch.js';
 import { tax, netMargin, netMarginQty, fmt, fmtP, now, pad2, fmtHour, sgn, clamp } from './format.js';
 import { svgLine, svgBars } from './charts.js';
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
-import { toggleWatch, renderSignals } from './ui.js';
+import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
 import { regimeDrift, momVerdict, momCell, breakEven } from './quotecore.js';   // shared impls (regime + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 // TC1: the pure DOM-free analytics moved to js/trendcore.js (node-importable + fixture-tested in
-// pipeline/trendcore.test.mjs). trends.js re-imports what runTrends/renderPositionCard/computeSignals
+// pipeline/trendcore.test.mjs). trends.js re-imports what runTrends/renderPositionCard
 // render; the rest of trendcore's exports (bestWindow/median/seasonalFactors/factorStats/dayGroups/…)
 // stay pure helpers there. This was a straight MOVE — behavior is byte-identical.
-import { analyseHourly, analyseBroad, buildPlan, patientTargets, backtestPlan, planSignal } from './trendcore.js';
+import { analyseHourly, analyseBroad, buildPlan, patientTargets, backtestPlan } from './trendcore.js';
 
 /*
  * TRENDS TAB STRUCTURE (as of 0.35.0) — read before editing runTrends.
@@ -74,19 +74,8 @@ export async function archiveWatchlist(force){
   await sSet('tsa_last', now()); return true;
 }
 /* The pure analytics (bestWindow, analyseBroad/analyseHourly, median/sideVal/localDayKey/hourOf,
-   seasonalFactors/hourFactors/factorStats, buildPlan, patientTargets, dayGroups/backtestPlan,
-   planSignal) MOVED to js/trendcore.js (TC1) — node-importable + fixture-tested. Imported at top. */
-export async function computeSignals(){
-  const cache={};
-  for(const id of STATE.watchlist){ try{
-    const pts=archToPoints(await archGet(id)); const s=planSignal(pts); if(!s) continue;
-    const it=STATE.byId[id];
-    if(it){ const series=pts.map(p=>({t:p.timestamp, price:(p.avgHighPrice&&p.avgLowPrice)?(p.avgHighPrice+p.avgLowPrice)/2:(p.avgHighPrice||p.avgLowPrice)})).filter(p=>p.price);
-      s.trend=refineTrend(it, series); }
-    cache[id]=s;
-  }catch(e){} }
-  STATE.signalCache=cache; renderSignals();
-}
+   seasonalFactors/hourFactors/factorStats, buildPlan, patientTargets, dayGroups/backtestPlan)
+   MOVED to js/trendcore.js (TC1) — node-importable + fixture-tested. Imported at top. */
 export function renderMatches(query){
   const status=document.getElementById('trStatus'), box=document.getElementById('trMatches');
   document.getElementById('trResult').classList.add('hidden');

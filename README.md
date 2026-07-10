@@ -28,8 +28,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   ("Why this trend?"), 3-month price history, and a collapsible **timing &
   seasonality** section gated on a walk-forward backtest (hourly charts only appear
   when the timing edge is actually proven out-of-sample).
-- **Watchlist / Signals** — star items to track; live buy signals fire when a
-  watched item has an after-tax spread during its historically-cheap window.
+- **Watchlist** — star items to track their live margins each refresh; the same
+  starred set is the repo-shared watchlist the pipeline scans. (The old **Signals**
+  tab — live cheap-window buy signals — was removed in 0.57.0; Ben didn't use it.)
 - **Ledger** — per-item grouped open/closed positions with after-tax realized/unrealized P/L,
   summarized in the "Coffer" header tiles. Item names link to Trends; multi-lot groups expand via a
   chevron; a "P&L by" Day/Week/Month control on the Closed-flips header drives a period strip whose
@@ -139,7 +140,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `watchlist.json` via the contents API), `table.js` (TB1 — reusable sortable-table
   helper: click-to-sort headers, direction toggle, arrow decoration, per-table sort
   state persisted under `sort:<name>`; the Finder and Watchlist adopt it), `ui.js`
-  (Finder/Watchlist/Signals/Coffer/Scan rendering + the `renderAll` coordinator),
+  (Finder/Watchlist/Coffer/Scan rendering + the `renderAll` coordinator; also stamps
+  the published pipeline version + scan time next to the app version — PV),
   `ledger.js` (Ledger view + fills-write cluster — manual-entry writes, positions.json
   auto-populate, Ledger render/controls, freshness + GitHub-sync panels; split out of
   `ui.js` by A3), `ledgercore.js` (TD2 — pure `periodKey`/`groupTrades` day-boundary

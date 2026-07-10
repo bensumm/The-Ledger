@@ -11,7 +11,7 @@ import './backup.js'; // side-effect import: wires up the Export/Import buttons'
 /* tabs + events */
 export function switchTab(name){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  ['finder','scan','trends','watchlist','watch','signals','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  ['finder','scan','trends','watchlist','watch','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
   if(name==='scan') renderScan();   // lazy: fetch the published screen.json on first open (cached after)
   if(name==='watch') enterWatch(); else leaveWatch();   // WATCH: re-quote loop runs only while the tab is visible
 }
@@ -69,7 +69,7 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
 (async function init(){
   const lg=await sGet('logring'); if(Array.isArray(lg)) STATE.LOG=lg;
   if(!hasStore && !ls) setHealth('storage','error','This browser is blocking storage (Private Browsing?) — your ledger and watchlist won\u2019t be saved. Export before closing.');
-  else if(!hasStore && !idb) setHealth('storage','warn','Price history can\u2019t be cached on this device — flipping works, but Trends/Signals won\u2019t accumulate.');
+  else if(!hasStore && !idb) setHealth('storage','warn','Price history can\u2019t be cached on this device — flipping works, but Trends won\u2019t accumulate.');
   logEvent('info','storage','state\u2192'+(hasStore?'artifact':(ls?'localStorage':'memory'))+', archives\u2192'+(hasStore?'artifact':(idb?'IndexedDB':'memory')));
   const wl=await sGet('watchlist'); if(Array.isArray(wl)) STATE.watchlist=wl;
   const tr=await sGet('trades'); if(Array.isArray(tr)) STATE.trades=tr;

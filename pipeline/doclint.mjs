@@ -8,8 +8,9 @@
  *     superseded terms/commands banned in the operating docs where they'd mislead. When a ruling
  *     DELETES a concept, the executor adds a line here and CI then catches every future doc that
  *     resurrects it. `xfail` records a KNOWN live violation owned by another plan chunk (so CI stays
- *     green while the finding stays visible) — currently index.html's stale Scan-intro copy (owned by
- *     PLAN-APP-PARITY AP1), NOT fixed here because it's deployed app markup.
+ *     green while the finding stays visible) — none currently outstanding (the index.html Scan-intro
+ *     copy that PLAN-APP-PARITY AP1 owned has been fixed, so its xfails were retired; index.html now
+ *     sits in the `files` list as an actively-guarded home, not an exception).
  *
  *   CHECK 2 — SINGLE-SOURCE / DUPLICATE-PHRASE (the copy-not-move failure on NOVEL rulings). Flags a
  *     distinctive normalized word-shingle that appears VERBATIM in more than one doc on the
@@ -68,7 +69,6 @@ export const DENYLIST = [
             '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
             '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
     reason: 'spread + rising niches were DELETED (Steps 3+4, 2026-07-09) — do not list them as live niches',
-    xfail: { 'index.html': 'PLAN-APP-PARITY AP1 — deployed Scan-intro markup, fixed with the app parity pass' },
   },
   {
     id: 'falling-excluded-unqualified',
@@ -79,7 +79,6 @@ export const DENYLIST = [
             '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
             '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
     reason: 'falling-exclusion is PER-STRATEGY now (P5), not global — an unqualified "excluded" is stale',
-    xfail: { 'index.html': 'PLAN-APP-PARITY AP1 — deployed Scan-intro markup, fixed with the app parity pass' },
   },
   // The --mode {spread,rising} bans are scoped to the ROUTING/operating docs + the deployed page —
   // NOT the skills. The scan skill's ONE mention ("`--mode spread` / `--mode rising` now error

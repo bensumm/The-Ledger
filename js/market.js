@@ -3,7 +3,7 @@ import { jget, cached } from './marketfetch.js';
 import { netMargin, clamp, now, isBond } from './format.js';
 import { showFinderError, renderAll } from './ui.js';
 import { syncFills } from './ledger.js';   // A3: positions.json auto-populate now lives with the Ledger
-import { archiveWatchlist, computeSignals } from './trends.js';
+import { archiveWatchlist } from './trends.js';
 
 /* catalog */
 export async function getMapping(force){
@@ -92,9 +92,8 @@ export async function loadAll(forceMap, forceMarket){
     const liq=STATE.ITEMS.filter(i=>i.liquid).length;
     document.getElementById('universeNote').textContent=STATE.ITEMS.length+' tradeable items tracked · '+liq+' liquid enough to rank by default; search reveals the rest (3rd age, staples, thin items)';
     renderAll();
-    computeSignals();
     syncFills();   // auto-populate Ledger/Coffer from positions.json (mapping is built now, so names resolve)
-    archiveWatchlist().then(computeSignals);
+    archiveWatchlist();
     setHealth('market','ok','');
     logEvent('info','market',(m.fresh?'live prices loaded':'served cached snapshot')+' · '+STATE.ITEMS.length+' items'+(STATE.ITEMS.filter(i=>i.liquid).length?' ('+STATE.ITEMS.filter(i=>i.liquid).length+' liquid)':''));
     loadGuide(forceMarket).then(()=>{ if(STATE.ITEMS.length){ computeScores(); renderAll(); } }).catch(e=>logEvent('error','guide','unexpected: '+(((e&&e.message)||e))));

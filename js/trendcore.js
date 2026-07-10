@@ -150,12 +150,3 @@ export function backtestPlan(points){
   const stratRoi=mean(sR), spreadRoi=mean(bR);
   return { n, stratRoi, spreadRoi, edge:stratRoi-spreadRoi, winRate:wins/n*100, beatRate:beat/n*100 };
 }
-/* --- lightweight buy-target for live signals (hourly archive only, no network) --- */
-export function planSignal(points){
-  if(points.length<24) return null;
-  const days=points.length>1?Math.max(1,Math.round((points[points.length-1].timestamp-points[0].timestamp)/86400)):0;
-  const hf=hourFactors(points,'low'), medCount=median(hf.counts.filter(c=>c>0))||0;
-  const wb=bestWindow(hf.factor.map(v=>v==null?1:v),3,'min');
-  const conf=(days>=10&&medCount>=5)?'good':(days>=4&&medCount>=2)?'moderate':'low';
-  return { buyWin:wb, conf, archDays:days };   // hour timing + confidence only; the flip decision is live-spread native
-}

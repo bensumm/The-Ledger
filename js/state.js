@@ -19,7 +19,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.56.0';
+export const APP_VERSION='0.57.0';
 // LW2: true only when the app is served from a local dev host (serve.cmd → localhost). Used to
 // gate the local live-refresh poll + freshness stamp; on the deployed origin (bensumm.github.io)
 // it's false and every LW2 behavior stays off (M1 banner + Refresh button remain the mechanism).
@@ -59,7 +59,6 @@ export const STATE = {
   catById: {}, catByName: {},   // full-catalog indices (every mapped item, no flip floor)
   cofferCollapsed: false,
   ledgerWatchOnly: true, ledgerPeriod: 'all', ledgerExpanded: {}, ledgerBucket: null,  // Ledger view: filter to watchlist, P&L bucket size (by sell date), drilled-in item groups, active period-bucket filter (LU1.3 — session-only, not persisted)
-  signalCache: {},
   LOG: [],                     // {t, level, scope, msg}
   logFilter: 'all'             // Logs view scope filter (L1): all | action | system
 };

@@ -10,6 +10,39 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.57.0 — app↔console parity, app shell: stale-copy fix · Signals removed · pipeline-version display (2026-07-10)
+Lane B of the app↔console parity program (`PLAN-APP-PARITY.md`). Three cohesive app-shell changes, one bump:
+
+- **AP1 — deployed surface stale-copy fix.** The Scan tab still advertised "one table per niche (Band /
+  Spread / Rising / Churn)" and "Falling items are excluded" — both stale: the `spread` + `rising` niches
+  were DELETED (Steps 3+4, 2026-07-09), the default niches are now **Band · Churn**, and falling handling
+  is **per-strategy** (band/churn skip fallers EXCEPT items you hold, ask about, or watchlist, which show
+  with price-to-clear guidance). Rewrote the Scan intro accordingly; pruned `NICHE_META`/`NICHE_ORDER` in
+  `js/ui.js` to the shipped niches (the unknown-key fallback is kept AND hardened — a published
+  `screen.json` niche absent from `NICHE_ORDER` now still renders, labeled by its raw key, appended after
+  the known ones); relabeled the Scan params line's "≥N windows" → "≥N traded windows" (the console's
+  `--min-traded` / Bar D naming; `screen.json` still publishes the key as `minActive` for back-compat, so
+  the app reads the same key and only the display label changed). Also dropped the stale "Signals" mention
+  from the footer copy.
+- **SIG-DEL — Signals tab removed** (Ben: "I don't use it"). Deleted the nav button + `sigBadge`, the
+  `#panel-signals` section, `renderSignals` (`js/ui.js`), `computeSignals` (`js/trends.js`) and its two
+  callers in `js/market.js`'s loadAll path, `STATE.signalCache`, and — since nothing else imported it —
+  the `planSignal` export from `js/trendcore.js` plus its two `pipeline/trendcore.test.mjs` cases. The
+  other trendcore exports (analyseHourly/analyseBroad/buildPlan/patientTargets/backtestPlan) stay. The
+  browser smoke's tab list (`pipeline/smoke.mjs`) dropped `signals` (8 → 7 panes).
+- **PV render — pipeline version in-app.** The header now shows `app v0.57.0 · pipeline vX.Y.Z (scan HH:MM)`
+  next to the app version (new `#pipeVer` span). The pipeline version + scan time are read from the
+  published `screen.json` (`payload.pipeline` + `payload.generatedAt`, rendered as LOCAL time) when
+  `renderScan` loads it; an older artifact without the `pipeline` field degrades to `pipeline v?` and
+  never crashes. This is the LAST-PUBLISHED artifact's version, not a live import — a static page can't do
+  better (the label is honest about it). Lane A (separate) stamps the field into `screen.json`/
+  `positions.json` at publish; the currently-committed `screen.json` has no field yet, so `v?` is the
+  expected default until the next scan.
+
+Not the 1.0.0 parity milestone — that lands at the end of the program. Docs reconciled: `README.md` (tab
+inventory, `ui.js` role), `CLAUDE.md`, and `pipeline/doclint.mjs` (the two AP1 xfails were retired now that
+index.html is fixed; the denylist rules stay live and now actively guard index.html).
+
 ### value-default — value niche runs in `--mode all` (2026-07-10, pipeline-only, no APP_VERSION)
 Ben's ruling: the `value` niche graduates from explicit-`--mode value`-only to running in the default
 `--mode all` scan alongside band + churn. Mechanism: `inAll: false → true` on the value spec in

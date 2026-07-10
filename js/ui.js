@@ -1,7 +1,7 @@
 import { API, STATE, sSet, logEvent, setHealth } from './state.js';
 import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
 import { loadAll, resolveId, computeScores, TREND_BADGE, rawItem } from './market.js';
-import { openTrends, computeSignals } from './trends.js';
+import { openTrends } from './trends.js';
 import { switchTab } from './main.js';
 import { fetchQuote, quoteTableHtml } from './quote.js';
 import { renderLedger } from './ledger.js';   // A3: Ledger + fills-write cluster split out; renderAll still coordinates
@@ -122,8 +122,8 @@ export function showFinderError(){
 
 /* watchlist */
 export async function toggleWatch(id){ const i=STATE.watchlist.indexOf(id), it=resolveId(id), nm=(it&&it.name)||('#'+id);
-  if(i>=0){ STATE.watchlist.splice(i,1); delete STATE.signalCache[id]; logEvent('info','action','unwatch '+nm); } else { STATE.watchlist.push(id); logEvent('info','action','watch '+nm); }
-  await sSet('watchlist',STATE.watchlist); renderAll(); computeSignals();
+  if(i>=0){ STATE.watchlist.splice(i,1); logEvent('info','action','unwatch '+nm); } else { STATE.watchlist.push(id); logEvent('info','action','watch '+nm); }
+  await sSet('watchlist',STATE.watchlist); renderAll();
   pushWatchlist(); }   // M1.4: best-effort write-back to repo watchlist.json (only when a GitHub token is set)
 /* M1.4: write STATE.watchlist (the local+repo union, as ids) back to the tracked repo-root
    watchlist.json through the same contents-API path, so a phone's add/remove persists to the
@@ -135,45 +135,6 @@ export async function pushWatchlist(){
   const res=await putJsonFile(WATCHLIST_PATH, STATE.watchlist, 'mobile: watchlist ('+STATE.watchlist.length+' items)');
   if(res.ok){ if(!res.noop) logEvent('info','action','watchlist synced to repo ('+STATE.watchlist.length+')'); }
   else logEvent('warn','watchlist','repo write-back failed: '+res.reason);
-}
-export function renderSignals(){
-  const hr=new Date().getHours();
-  const inCheap=w=>{ if(!w) return false; for(let k=0;k<3;k++) if((w.start+k)%24===hr) return true; return false; };
-  const rows=STATE.watchlist.filter(id=>STATE.signalCache[id]&&STATE.byId[id]).map(id=>{
-    const it=STATE.byId[id], s=STATE.signalCache[id];
-    const gross=netMargin(it.low,it.high), roi=it.low?gross/it.low*100:0, profitable=gross>0;
-    const cheapNow=inCheap(s.buyWin);
-    const buy = profitable && cheapNow && s.conf!=='low';   // cheap-hour window + live margin; falling knives NOT excluded (flagged in Trend)
-    return {it,s,gross,roi,profitable,cheapNow,buy};
-  }).sort((a,b)=>b.gross-a.gross);
-  const firing=rows.filter(r=>r.buy).length;
-  // FX1.2: show firing/total (e.g. 0/6) so a live-but-quiet tab no longer misreads as empty;
-  // plain 0 when there are no watched signal rows at all.
-  document.getElementById('sigBadge').textContent=rows.length?firing+'/'+rows.length:'0';
-  const body=document.getElementById('sigBody'), empty=document.getElementById('sigEmpty');
-  if(!rows.length){
-    body.innerHTML=''; empty.classList.remove('hidden');
-    empty.innerHTML='<div class="big">No signals yet</div><div class="sm">Star items in the Finder and refresh prices a few times — once an item has banked enough hourly history, its live buy signal shows up here.</div>';
-    return;
-  }
-  empty.classList.add('hidden');
-  const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
-  body.innerHTML=rows.map(({it,s,gross,roi,profitable,cheapNow,buy})=>{
-    const tr=s.trend, volatile = tr && tr.ok && (tr.state==='down-confirmed'||tr.state==='reversion');
-    const trendCell = (!tr||!tr.ok) ? '<span class="mini">—</span>'
-      : (tr.state==='down-confirmed' ? '<span class="grade rD" title="'+tr.zGuide.toFixed(1)+'σ under guide, momentum down">↓ falling</span>'
-      : tr.state==='reversion' ? '<span class="grade rC" title="dislocated low, momentum flattening">~ dip?</span>'
-      : tr.state==='up' ? '<span class="grade rB" title="above guide">↑ up</span>'
-      : '<span class="grade rA" title="straddles guide">✓ stable</span>');
-    const state = buy ? '<span class="grade rA" title="'+(volatile?'cheap hour + live margin, but volatile — size down':'cheap hour + live margin')+'">BUY'+(volatile?' ⚡':'')+'</span>'
-      : profitable ? '<span class="grade rB" title="live margin available, outside the cheap-hour window">flip'+(volatile?' ⚡':'')+'</span>'
-      : (s.conf==='low' ? '<span class="grade rC" title="needs more banked history">low data</span>' : '<span class="grade rB" title="spread doesn’t clear tax right now">no spread</span>');
-    return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span></td>'+
-      '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
-      '<td class="num '+sgn(gross)+'">'+(gross>=0?'+':'')+fmtP(gross)+'</td>'+
-      '<td class="num mini">'+(s.buyWin?winStr(s.buyWin):'—')+(cheapNow?' <span class="gain">• now</span>':'')+'</td><td>'+trendCell+'</td><td>'+state+'</td></tr>';
-  }).join('');
-  body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
 }
 /* watchlist — sortable via the shared helper (TB1); default UNSORTED (insertion order) until
    a header is clicked. Rows are {id,it} wrappers so the getters read the resolved item. */
@@ -276,13 +237,15 @@ function scanTableHtml(headers, rows){
 }
 // per-niche display metadata — one table per niche, each already sorted by Grade (screen.mjs sorts
 // by the risk-adjusted score, and Grade is column 2). Rendered in this canonical order when present.
+// Only the SHIPPED niches carry display metadata (spread + rising were DELETED — Steps 3+4). An
+// unknown/future niche key still renders: the `NICHE_META[n]||{label:n,hint:''}` fallback in
+// renderScan falls back to the raw key as its label, and any niche present in a published
+// screen.json but absent from NICHE_ORDER is appended after the known ones (see present[] below).
 const NICHE_META={
   band:{label:'Band', hint:'wide traded intraday range — ladder the low, sell the top'},
-  spread:{label:'Spread', hint:'24h-average spread flips'},
-  rising:{label:'Rising', hint:'frothy momentum — size small'},
   churn:{label:'Churn', hint:'high-volume commodities — volume does the work'}
 };
-const NICHE_ORDER=['band','spread','rising','churn'];
+const NICHE_ORDER=['band','churn'];
 export async function renderScan(force){
   const tablesEl=document.getElementById('scanTables'), emptyEl=document.getElementById('scanEmpty');
   const metaEl=document.getElementById('scanMeta'), staleEl=document.getElementById('scanStale');
@@ -309,7 +272,7 @@ export async function renderScan(force){
   const priceWin=(p.minPrice?fmt(p.minPrice):'0')+'–'+(p.maxPrice?fmt(p.maxPrice):'∞');
   if(metaEl) metaEl.innerHTML='<b>'+mode.toUpperCase()+'</b> scan · <b>'+posture.toUpperCase()+'</b> posture · floor '+(p.floor??'—')+'/d'+
     (p.gpFloor?(' or '+fmt(p.gpFloor)+' gp-flow'):'')+' · min ROI '+(p.minRoi??'—')+'% · attn '+(p.minGpd?fmt(p.minGpd):'—')+'/d · '+priceWin+' gp · top '+(p.top??'—')+
-    (['band','rising','churn'].includes(mode)?(' · band '+(p.bandHours??'—')+'h ≥'+(p.minActive??'—')+' windows'):'');
+    (['band','churn'].includes(mode)?(' · band '+(p.bandHours??'—')+'h ≥'+(p.minActive??'—')+' traded windows'):'');
   // staleness — always surface the age (an hours-old scan is CONTEXT, not a live quote)
   const genMs=Date.parse(scan.generatedAt), ageMs=isNaN(genMs)?null:(Date.now()-genMs);
   if(staleEl){
@@ -320,8 +283,20 @@ export async function renderScan(force){
       ? 'Scan timestamp unknown — treat as context, not a live quote.'
       : 'Scan generated <b>'+fmtAge(ageMs)+' ago</b> — a snapshot for context, not a live quote. Open an item’s Trends for the current market.';
   }
+  // PV: stamp the published pipeline version + scan time next to the app version. Read from the
+  // freshest artifact the app already fetched (screen.json carries a top-level `pipeline` string
+  // + `generatedAt`). Absent (an older artifact) → degrade to `pipeline v?`, never crash. Scan time
+  // is LOCAL (toLocaleTimeString) per the app's time-display convention.
+  const pv=document.getElementById('pipeVer');
+  if(pv){ const pipe=(typeof scan.pipeline==='string' && scan.pipeline)?('v'+scan.pipeline):'v?';
+    const stamp=isNaN(genMs)?'':(' (scan '+new Date(genMs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+')');
+    pv.textContent=' · pipeline '+pipe+stamp; }
   const headers=scan.headers||[], niches=scan.niches||{};
-  const present=NICHE_ORDER.filter(n=>Array.isArray(niches[n]));
+  // present = the known niches in canonical order, then any unknown/future niche key in the payload
+  // (tolerant rendering — a screen.json niche absent from NICHE_ORDER still renders, labeled by its
+  // raw key via the NICHE_META fallback below).
+  const present=[...NICHE_ORDER.filter(n=>Array.isArray(niches[n])),
+                 ...Object.keys(niches).filter(n=>!NICHE_ORDER.includes(n) && Array.isArray(niches[n]))];
   let html = present.length
     ? present.map(n=>{ const m=NICHE_META[n]||{label:n,hint:''};
         return '<div class="scantier">'+m.label+(m.hint?' <span class="scanhint">— '+m.hint+'</span>':'')+'</div>'+scanTableHtml(headers, niches[n]); }).join('')
@@ -357,8 +332,8 @@ export async function loadRepoWatchlist(){
   };
   let added=0;
   for(const e of arr){ const id=resolve(e); if(id!=null && !STATE.watchlist.includes(id)){ STATE.watchlist.push(id); added++; } }
-  if(added){ logEvent('info','watchlist','union +'+added+' from repo watchlist.json'); renderWatch(); computeSignals(); }
+  if(added){ logEvent('info','watchlist','union +'+added+' from repo watchlist.json'); renderWatch(); }
 }
 
-export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderSignals(); renderLedger(); renderWatchTab(); }
+export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderLedger(); renderWatchTab(); }
 export function recompute(){ computeScores(); renderAll(); }
