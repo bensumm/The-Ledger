@@ -22,7 +22,10 @@
  *   intraday (band/spread/churn/scalp) — P(fill) from where the quoted bid sits in the live→2h-band
  *     span (reuses a real windowread reach read WHEN one is fetched; degrades to a band-depth heuristic
  *     on screen/quote, which do NOT fetch the 1h series — same discipline as reachValidator). TTF from
- *     intraday velocity (quoted size vs daily volume) around the intraday prior.
+ *     intraday velocity (quoted size vs daily volume) around the intraday prior. NOTE (2026-07-09, Step 1):
+ *     screen.mjs NOW fetches the 1h series for surfaced SURVIVORS, so it passes a REAL bid-side reach read
+ *     via `extra.reach` on the screen surface — P(fill) there is the reach fraction, not the band-depth
+ *     prior. quote.mjs still fetches no 1h series → it keeps the honest band-depth/prior degrade.
  *   value — P(fill at the floor bid) reuses the P5 valueScore components (proximity-to-low × floor
  *     stability); TTF is the historical trough→recovery duration proxy around the multi-day prior.
  *   rising — P(fill)/TTF off the regime-drift/forecast horizon.

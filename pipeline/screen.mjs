@@ -398,20 +398,33 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // optBuy→optSell). Score the bid leg the same INFORM way (mirrors renderValueMode's side:'bid' call),
     // reusing the 1h series already fetched for the ask reach — zero new fetch, never drops a row.
     let bidReach = [];
+    // Step 1 (2026-07-09): the BID-side reach also FEEDS the rank estimate's P(fill). estimateRank's
+    // intraday estimator prefers a real reach read (reach.reachedDays/nDays) over the band-depth prior;
+    // before this it was called with no extra, so P(fill) fell to a ~uniform 0.50 band-depth number.
+    // P(fill) here is a BID-FILL probability → it MUST use the bid-side reach (bidRes, optBuy), NOT the
+    // ask-side spec-plan reach (vres, optSell). NOTE the field remap: estimators reads reach.nDays /
+    // reach.reachedDays; the validator emits evidence.days / evidence.hit.
+    let reachExtra = null;
     if (row.optBuy != null && series1h && series1h.get(s.id)) {
       const bidRes = runValidators(
         { intraday: { ts1h: series1h.get(s.id), reach: { side: 'bid', level: row.optBuy } } },
         { specs: [{ key: 'reach', mode: 'inform' }] },
       );
       bidReach = informFlags(bidRes);
+      const reachRes = bidRes.find(r => r.key === 'reach');
+      const ev = reachRes && reachRes.evidence;
+      reachExtra = (ev && ev.days >= 1) ? { reachedDays: ev.hit, nDays: ev.days } : null;
     }
+    // reachExtra stays null when the 1h series is absent (the block above is skipped) → estimateRank
+    // keeps its honest band-depth/prior degrade (the existing no-fetch contract). Only the ASK-side reach
+    // feeds renderValueMode's estimate (proximity-based), so this bid wiring is renderMode-local.
     const informed = [...informFlags(vres), ...bidReach];
     if (informed.length)
       informNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF
     // all evaluated at that same pair. Extra data (reach/velocity) is null at the screen surface today
     // (no 1h fetch), so the estimators degrade honestly to their band-depth / volume-velocity priors.
-    const er = estimateRank(STRATEGIES[mode], row);
+    const er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra });
     const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
