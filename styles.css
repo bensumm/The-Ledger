@@ -4,6 +4,8 @@
     --parch:#ece0c4; --parch2:#b8a981; --muted:#86765a;
     --gold:#e6b54a; --gold2:#f6d27a; --goldink:#3a2c0d;
     --gain:#7ec56f; --loss:#d4694b; --amber:#e0a23c;
+    /* diurnal dip/peak are TIMING, not good/bad — a neutral cool(cheap-hours)/warm(pricey-hours) pair, NOT gain/loss green/red (Ben 2026-07-10) */
+    --cool:#5f97b8; --warm:#cf8a4f;
     --shadow:0 1px 0 rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
   }
   *{box-sizing:border-box}
@@ -213,13 +215,16 @@
   .chartspan:disabled{opacity:.35; cursor:default}
   .cgrid{stroke:var(--line); stroke-width:.5; opacity:.5}
   .cband{fill:rgba(230,181,74,.07)}
-  .cband.dipband{fill:rgba(126,197,111,.10)} .cband.peakband{fill:rgba(212,105,75,.10)}
+  .cband.dipband{fill:rgba(95,151,184,.12)} .cband.peakband{fill:rgba(207,138,79,.12)}
   .cxhair{stroke:var(--gold); stroke-width:.75; stroke-dasharray:2 2; opacity:.6; pointer-events:none}
   .cxdot{fill:var(--gold); pointer-events:none}
   .charttip{position:absolute; z-index:5; pointer-events:none; background:var(--oak3); border:1px solid var(--line2); border-radius:7px; padding:5px 8px; font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--parch); box-shadow:var(--shadow); max-width:150px; line-height:1.4}
   .charttip b{color:var(--gold)}
   /* diurnal bars: dip hours (green low) vs peak hours (red high) */
-  .vbar.dip{fill:var(--gain)} .vbar.peak2{fill:var(--loss)}
+  .vbar.dip{fill:var(--cool)} .vbar.peak2{fill:var(--warm)}
+  .dpleg{display:inline-flex; gap:12px; align-items:center; font-size:10px; color:var(--parch2); margin-left:2px}
+  .dpleg i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px}
+  .dpleg .sw-dip{background:var(--cool)} .dpleg .sw-peak{background:var(--warm)}
 
   /* collapsible disclosures (Why this trend? · Timing & seasonality) */
   details.disc{background:var(--oak2); border:1px solid var(--line); border-radius:12px; margin-bottom:16px}

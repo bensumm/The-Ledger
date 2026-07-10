@@ -234,7 +234,11 @@ function renderRecent(it, s5m, qrow, showAnalysis){
   if(lo!=null) refs.push({v:lo, cls:'refband', label:'2h lo'});
   if(qrow.quickSell!=null) refs.push({v:qrow.quickSell, cls:'reflive', label:'sell'});
   if(qrow.quickBuy!=null)  refs.push({v:qrow.quickBuy,  cls:'reflive', label:'buy'});
-  chart.innerHTML=svgLine(mids,{refs, markExtremes:false});
+  // interactive chart (chartlib): y-axis price labels + hover tooltip; 2h window is fixed (spans off).
+  if(recentChart){ try{ recentChart.destroy(); }catch(_){ } recentChart=null; }
+  const rseries=recent.map((p,i)=>({t:p.timestamp, v:mids[i]})).filter(p=>p.v!=null);
+  recentChart=createChart(chart, {series:rseries, refs, kind:'line', spans:false,
+    xFmt:t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), yFmt:fmt});
   const liveMid=qrow.mid!=null?qrow.mid:mids[mids.length-1];
   const pctl=(lo!=null && hi!=null && hi>lo)?clamp(Math.round((liveMid-lo)/(hi-lo)*100),0,100):null;
   const traded=recent.filter(p=>p.avgLowPrice&&p.avgHighPrice).length;
@@ -259,67 +263,85 @@ function renderRecent(it, s5m, qrow, showAnalysis){
    placeholders (n≈0) — the section is labeled guidance, matching the console framing.
    Degrades to a "not enough history yet" line when hourProfile returns null (never a broken chart). */
 const DIURNAL_MIN_ROI=1;   // PLACEHOLDER (rule 4): after-tax ROI a clean ★ diurnal candidate must clear
-let diurnalChart=null;
+// interactive-chart handles (chartlib) — destroyed + recreated each runTrends so listeners don't leak.
+let diurnalChart=null, recentChart=null, histChart=null;
 function renderDiurnal(profSeries, qrow, it, showAnalysis){
   const el=document.getElementById('trDiurnal'); if(!el) return;
-  const chartEl=document.getElementById('trDiurnalChart'), cap=document.getElementById('trDiurnalCap'), reachEl=document.getElementById('trDiurnalReach');
+  const chartEl=document.getElementById('trDiurnalChart'), cap=document.getElementById('trDiurnalCap'),
+        reachEl=document.getElementById('trDiurnalReach'), togEl=document.getElementById('trDiurnalToggle');
   if(diurnalChart){ try{ diurnalChart.destroy(); }catch(_){ } diurnalChart=null; }
   if(reachEl) reachEl.textContent='';
+  if(togEl) togEl.innerHTML='';
   if(!showAnalysis){ el.classList.add('hidden'); return; }
-  let prof=null; try{ prof=hourProfile(profSeries||[], {nights:7}); }catch(_){ prof=null; }
-  if(!prof){
-    el.classList.remove('hidden');
-    if(chartEl) chartEl.innerHTML='';
-    if(cap) cap.innerHTML='<span class="mini">Not enough hourly history yet to read a daily rhythm — keep this item starred and re-check in a few days.</span>';
-    return;
-  }
+  el.classList.remove('hidden');
   const liveLo=(qrow&&qrow.quickBuy!=null)?qrow.quickBuy:it.low;
   const liveHi=(qrow&&qrow.quickSell!=null)?qrow.quickSell:it.high;
-  const dr=deriveDiurnalRange(prof, {liveLo, liveHi});
-  el.classList.remove('hidden');
-  // bar series: one bar per profiled hour, height = the hour's recent mid; dip hours green, peak hours red.
-  const dipSet=new Set(prof.dip.hours||[]), peakSet=new Set(prof.peak.hours||[]);
-  const series=(prof.hours||[]).map(h=>{
-    const mid=(h.lowRecent!=null&&h.hiRecent!=null)?(h.lowRecent+h.hiRecent)/2:(h.lowRecent!=null?h.lowRecent:h.hiRecent);
-    return {t:h.h, v:mid, cls:dipSet.has(h.h)?'dip':(peakSet.has(h.h)?'peak2':null)};
-  }).filter(p=>p.v!=null);
-  const refs=[];
-  if(dr&&dr.ask!=null) refs.push({v:dr.ask, cls:'reflive', label:'ask'});
-  if(dr&&dr.bid!=null) refs.push({v:dr.bid, cls:'reflive', label:'bid'});
-  const nowHr=new Date().getHours();
-  const markers=[{t:nowHr, cls:'nowmark', label:'now'}];
-  diurnalChart=createChart(chartEl, {series, refs, markers, kind:'bars', spans:false,
-    xFmt:h=>fmtHour(((Math.round(h)%24)+24)%24), yFmt:fmt});
-  // readout — the SAME framing as the console's Diurnal block (deriveDiurnalRange + the ★ formula)
-  if(dr&&dr.bid!=null&&dr.ask!=null){
-    const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
-    const net=Math.round(dr.ask-tax(dr.ask)-dr.bid);
-    const roi=dr.bid?net/dr.bid*100:null;
-    const concentrated=dr.dipWindow.startH!==dr.dipWindow.endH && dr.peakWindow.startH!==dr.peakWindow.endH;
-    const clean=net>0 && !prof.trendDominates && concentrated && roi!=null && roi>=DIURNAL_MIN_ROI;
-    let s='';
-    if(clean) s+='<b class="gain" title="clean diurnal candidate — concentrated dip &amp; peak, trend-quiet, positive after-tax swing">★</b> ';
-    s+='<b>BID '+fmtP(dr.bid)+'</b> <span class="mini">('+dr.bidBasis+', dip '+win(dr.dipWindow)+')</span> → <b>ASK '+fmtP(dr.ask)+'</b> <span class="mini">(peak '+win(dr.peakWindow)+')</span>';
-    if(net!=null) s+=' · <b class="'+sgn(net)+'">'+(net>=0?'+':'')+fmtP(net)+'</b>/u after tax'+(roi!=null?' ('+roi.toFixed(1)+'%)':'');
-    if(prof.trendDominates) s+=' · <span class="loss">⚠ trend-dominates — the moving floor erases the intraday dip; bid priced to live.</span>';
-    s+=' <span class="ccap">Guidance from the recent daily rhythm — timing support, not a price target; thresholds are placeholder (n≈0).</span>';
-    cap.innerHTML=s;
-  } else {
-    cap.innerHTML='<span class="mini">Diurnal shape read, but the derived bid/ask is degenerate (flat or thin window) — no timing edge to quote.</span>';
-  }
-  // reach note (inform-only): does the recent same-window history actually TOUCH the bid / REACH the ask?
-  if(reachEl && dr){
-    const notes=[];
-    for(const side of ['bid','ask']){
-      const level=side==='bid'?dr.bid:dr.ask; if(level==null) continue;
-      try{
-        const r=reachValidator({intraday:{ts1h:profSeries, reach:{side, level}}});
-        if(r && r.reason && r.status!=='pass') notes.push(r.reason);
-        else if(r && r.reason && /d$/.test(r.reason)) notes.push(r.reason);   // a scored pass ("ask N reached X/Yd")
-      }catch(_){ }
+  // Dip/peak hours colored with a NEUTRAL cool/warm pair (timing, not good/bad — Ben 2026-07-10),
+  // keyed by this legend.
+  const dpleg='<span class="dpleg"><span><i class="sw-dip"></i>dip hours (cheap)</span><span><i class="sw-peak"></i>peak hours (pricey)</span></span>';
+  // draw the hour-of-day profile averaged over `nights` of history — the lookback toggle: a short
+  // window is reactive, a long one is steadier. SAME shared windowread math either way (parity).
+  function draw(nights){
+    if(diurnalChart){ try{ diurnalChart.destroy(); }catch(_){ } diurnalChart=null; }
+    if(reachEl) reachEl.textContent='';
+    let prof=null; try{ prof=hourProfile(profSeries||[], {nights}); }catch(_){ prof=null; }
+    if(!prof){
+      if(chartEl) chartEl.innerHTML='';
+      if(cap) cap.innerHTML='<span class="mini">Not enough hourly history yet to read a daily rhythm at this window — try a longer one, or re-check in a few days.</span>';
+      return;
     }
-    if(notes.length) reachEl.innerHTML='<b>Reach</b> <span class="mini">(inform-only)</span> — '+notes.map(n=>'<span class="mini">'+n+'</span>').join(' · ');
+    const dr=deriveDiurnalRange(prof, {liveLo, liveHi});
+    const dipSet=new Set(prof.dip.hours||[]), peakSet=new Set(prof.peak.hours||[]);
+    const series=(prof.hours||[]).map(h=>{
+      const mid=(h.lowRecent!=null&&h.hiRecent!=null)?(h.lowRecent+h.hiRecent)/2:(h.lowRecent!=null?h.lowRecent:h.hiRecent);
+      return {t:h.h, v:mid, cls:dipSet.has(h.h)?'dip':(peakSet.has(h.h)?'peak2':null)};
+    }).filter(p=>p.v!=null);
+    const refs=[];
+    if(dr&&dr.ask!=null) refs.push({v:dr.ask, cls:'reflive', label:'ask'});
+    if(dr&&dr.bid!=null) refs.push({v:dr.bid, cls:'reflive', label:'bid'});
+    const markers=[{t:new Date().getHours(), cls:'nowmark', label:'now'}];
+    diurnalChart=createChart(chartEl, {series, refs, markers, kind:'bars', spans:false,
+      xFmt:h=>fmtHour(((Math.round(h)%24)+24)%24), yFmt:fmt});
+    // readout — the SAME framing as the console's Diurnal block (deriveDiurnalRange + the ★ formula)
+    if(dr&&dr.bid!=null&&dr.ask!=null){
+      const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
+      const net=Math.round(dr.ask-tax(dr.ask)-dr.bid), roi=dr.bid?net/dr.bid*100:null;
+      const concentrated=dr.dipWindow.startH!==dr.dipWindow.endH && dr.peakWindow.startH!==dr.peakWindow.endH;
+      const clean=net>0 && !prof.trendDominates && concentrated && roi!=null && roi>=DIURNAL_MIN_ROI;
+      let s='';
+      if(clean) s+='<b class="gain" title="clean diurnal candidate — concentrated dip &amp; peak, trend-quiet, positive after-tax swing">★</b> ';
+      s+='<b>BID '+fmtP(dr.bid)+'</b> <span class="mini">('+dr.bidBasis+', dip '+win(dr.dipWindow)+')</span> → <b>ASK '+fmtP(dr.ask)+'</b> <span class="mini">(peak '+win(dr.peakWindow)+')</span>';
+      if(net!=null) s+=' · <b class="'+sgn(net)+'">'+(net>=0?'+':'')+fmtP(net)+'</b>/u after tax'+(roi!=null?' ('+roi.toFixed(1)+'%)':'');
+      if(prof.trendDominates) s+=' · <span class="loss">⚠ trend-dominates — the moving floor erases the intraday dip; bid priced to live.</span>';
+      s+=' <span class="ccap">Guidance from the recent daily rhythm — timing support, not a price target; thresholds are placeholder (n≈0).</span>';
+      cap.innerHTML=dpleg+'<br>'+s;
+    } else {
+      cap.innerHTML=dpleg+'<br><span class="mini">Diurnal shape read, but the derived bid/ask is degenerate (flat or thin window) — no timing edge to quote.</span>';
+    }
+    // reach note (inform-only): does the recent same-window history actually TOUCH the bid / REACH the ask?
+    if(reachEl && dr){
+      const notes=[];
+      for(const side of ['bid','ask']){
+        const level=side==='bid'?dr.bid:dr.ask; if(level==null) continue;
+        try{
+          const r=reachValidator({intraday:{ts1h:profSeries, reach:{side, level}}});
+          if(r && r.reason && r.status!=='pass') notes.push(r.reason);
+          else if(r && r.reason && /d$/.test(r.reason)) notes.push(r.reason);   // a scored pass ("ask N reached X/Yd")
+        }catch(_){ }
+      }
+      if(notes.length) reachEl.innerHTML='<b>Reach</b> <span class="mini">(inform-only)</span> — '+notes.map(n=>'<span class="mini">'+n+'</span>').join(' · ');
+    }
   }
+  // lookback toggle: average the hour-of-day shape over a short (reactive) or long (steadier) window.
+  const LOOKBACKS=[{label:'7d',n:7},{label:'28d',n:28}];
+  if(togEl){
+    const lab=document.createElement('span'); lab.className='mini'; lab.style.marginRight='2px'; lab.textContent='avg over';
+    togEl.appendChild(lab);
+    LOOKBACKS.forEach(lb=>{ const b=document.createElement('button'); b.className='chartspan'; b.dataset.n=String(lb.n); b.textContent=lb.label;
+      b.title='average the hour-of-day shape over the last '+lb.label+' of history'; b.onclick=()=>setN(lb.n); togEl.appendChild(b); });
+  }
+  function setN(n){ if(togEl) togEl.querySelectorAll('.chartspan').forEach(b=>b.classList.toggle('on', +b.dataset.n===n)); draw(n); }
+  setN(7);
 }
 export async function runTrends(){
   const name=document.getElementById('trItem').value.trim();
@@ -348,11 +370,16 @@ export async function runTrends(){
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
     const winStr=w=>fmtHour(w.start)+'–'+fmtHour((w.end+1)%24);
     // price history (6h) with the live buy price as the reference line — promoted context, right under the plan
-    if(showAnalysis && b && b.trend.length>2){
+    const hseries=(s6h||[]).map(p=>({t:p.timestamp, v:(p.avgHighPrice&&p.avgLowPrice)?(p.avgHighPrice+p.avgLowPrice)/2:(p.avgHighPrice||p.avgLowPrice)})).filter(p=>p.v!=null);
+    if(showAnalysis && b && hseries.length>2){
       document.getElementById('trHistWrap').classList.remove('hidden');
-      document.getElementById('trHist').innerHTML=svgLine(b.trend,{baseline:it.low, markExtremes:false});
-      let hc='~'+b.days+' days at 6h steps · dashed line = live buy ('+fmtP(it.low)+').';
-      if(P.trendPct!=null && Math.abs(P.trendPct)>=2) hc+=' Over this window it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
+      // interactive chart (chartlib): axis labels + hover tooltip + selectable 1/7/30/90-day windows.
+      if(histChart){ try{ histChart.destroy(); }catch(_){ } histChart=null; }
+      const HSPANS=[{label:'1d',s:86400},{label:'7d',s:7*86400},{label:'30d',s:30*86400},{label:'90d',s:90*86400},{label:'All',s:null}];
+      histChart=createChart(document.getElementById('trHist'), {series:hseries, refs:[{v:it.low, cls:'reflive', label:'buy'}], kind:'line', spans:HSPANS, span:'All',
+        xFmt:t=>new Date(t*1000).toLocaleDateString([], {month:'short',day:'numeric'}), yFmt:fmt});
+      let hc='6h steps · dashed line = live buy ('+fmtP(it.low)+') · drag to pan, wheel to zoom, or pick a window.';
+      if(P.trendPct!=null && Math.abs(P.trendPct)>=2) hc+=' Over ~'+b.days+' days it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
       document.getElementById('trHistCap').innerHTML=hc;
     } else { document.getElementById('trHistWrap').classList.add('hidden'); }
     // ---- plan card: the live spread IS the plan (median targets removed); trend box + warnings ----

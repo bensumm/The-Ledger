@@ -85,12 +85,14 @@ export function createChart(container, config = {}) {
 
   const tMin = series[0].t, tMax = series[series.length - 1].t;
   const fullSpan = Math.max(tMax - tMin, 1e-9);
-  // minSpan: at least ~2 sample spacings, so you can't zoom past all detail into an empty window.
+  // minSpan = the max ZOOM-IN limit: keep ~4 sample points in view so you can't zoom into empty
+  // space between prints (the "wayyy too deep" bug). Density-based off the median sample gap — NOT a
+  // fraction of fullSpan, which on a long sparse series (90d of 6h points) allowed a sub-sample window.
   const gaps = [];
   for (let i = 1; i < series.length; i++) gaps.push(series[i].t - series[i - 1].t);
   gaps.sort((a, b) => a - b);
   const medGap = gaps[Math.floor(gaps.length / 2)] || fullSpan / 20;
-  const minSpan = Math.min(fullSpan, Math.max(medGap * 2, fullSpan / 500));
+  const minSpan = Math.min(fullSpan, Math.max(medGap * 4, 1));
 
   let vLo = tMin, vHi = tMax;   // visible data window
 
@@ -208,10 +210,13 @@ export function createChart(container, config = {}) {
   }
 
   // --- interaction ----------------------------------------------------------------------------
-  function clampWindow(lo, hi) {
+  // enforceMin=true for pan/wheel/pinch (respect the max-zoom-in floor); false for an explicit span
+  // button, so "1d" lands exactly on 1 day even if that's tighter than the density floor.
+  function clampWindow(lo, hi, enforceMin = true) {
     let span = hi - lo;
     if (span > fullSpan) span = fullSpan;
-    if (span < minSpan) span = minSpan;
+    if (enforceMin && span < minSpan) span = minSpan;
+    if (span < 1e-9) span = 1e-9;
     if (lo < tMin) { lo = tMin; hi = lo + span; }
     if (hi > tMax) { hi = tMax; lo = hi - span; }
     if (lo < tMin) lo = tMin;
@@ -327,7 +332,7 @@ export function createChart(container, config = {}) {
     else {
       const secs = typeof span === 'number' ? span : (DEFAULT_SPANS.find(s => s.label === span) || {}).s;
       if (secs == null) { vLo = tMin; vHi = tMax; }
-      else [vLo, vHi] = clampWindow(tMax - secs, tMax);
+      else [vLo, vHi] = clampWindow(tMax - secs, tMax, false);   // explicit span: exact duration, bypass the zoom floor
     }
     render();
   }

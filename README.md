@@ -50,13 +50,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `BOND_ID`/`isBond`/`bondFee`: a bond is tax-exempt but pays a 10%-of-guide retrade fee, so
   `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free), `charts.js`
   (static inline SVG — `svgLine`/`svgBars`, fixed-size, no interaction; still used by the
-  Trends recent/history/hourly charts + the quote sparkline), `chartlib.js` (CL — the reusable
+  Trends hourly seasonality charts + the quote sparkline), `chartlib.js` (CL — the reusable
   **interactive** SVG chart: `createChart(container,{series,refs,bands,markers,kind,yFmt,xFmt,
   spans,span})` → `{setSpan,destroy}` handle, with pointer-drag PAN, wheel/pinch ZOOM about the
-  cursor, a 2h/1d/1w/3mo/All span selector, y-axis auto-rescale to the visible window, a hover
-  tooltip + crosshair, and a `DEFAULT_SPANS` export; degrades to a no-op on a missing container or
-  empty series. Consumed by `trends.js` (the diurnal chart); more surfaces adopt it over time.
-  ADDITIVE — `charts.js` stays intact), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
+  cursor, a span selector, y-axis auto-rescale to the visible window, a hover tooltip + crosshair,
+  and a `DEFAULT_SPANS` export. Max zoom-in is density-floored (~4 sample points, `medGap*4`) so you
+  can't zoom into empty space; explicit span buttons bypass that floor to hit their exact duration.
+  Degrades to a no-op on a missing container or empty series. Consumed by `trends.js` — the
+  **Recent movement** (2h), **Price history** (1/7/30/90d windows), and **Diurnal timing** (7d/28d
+  lookback toggle) charts (0.59.0); more surfaces adopt it over time. ADDITIVE — `charts.js` stays intact), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
   + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
   (price/guide fetch + scoring; keeps the bond in the catalog — searchable — with a
   bond-aware Finder margin via `bondMarginOpts`), `trends.js` (archive + seasonal analysis +

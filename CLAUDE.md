@@ -160,10 +160,13 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     budgeted `ts1h` fetch put the series in hand there too). This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
     manual `--window`/`--profile` read is now a CONFIRMATION on what you actually pitch (thresholds are
     placeholders; ★ doesn't know froth, so a spike item's amplitude can flatter it — support, not a gate).
-    **The APP renders this too (TV, 0.58.0):** the Trends item page has a **Diurnal timing** section
-    (timing tier, below Price history) — a per-hour-of-day bar chart (dip green / peak red) via the new
-    interactive `js/chartlib.js`, the same shared `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`
-    BID→ASK + ★ the console prints (parity, not a fork), and an inform-only `reachValidator` note.
+    **The APP renders this too (TV, 0.58.0+):** the Trends item page has a **Diurnal timing** section
+    (timing tier, below Price history) — a per-hour-of-day bar chart (dip/peak hours in a NEUTRAL
+    cool/warm pair — timing, not good/bad — with a 7d/28d lookback toggle) via the interactive
+    `js/chartlib.js`, the same shared `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange` BID→ASK + ★
+    the console prints (parity, not a fork), and an inform-only `reachValidator` note. `chartlib.js`
+    also now backs the Trends **Recent movement** + **Price history** charts (pan/zoom, hover tooltip,
+    axis labels, selectable 1/7/30/90d windows — 0.59.0).
   - **Forward FORECAST (PF1, 2026-07-10 — the pure model only; no surface wired yet).** `js/forecast.mjs`
     CONSUMES `hourProfile` and projects the next 12h/24h — `diurnalForecast(profile, ctx)` →
     `nextTrough`/`nextPeak` `{level, band, etaH, window, confidence}` + `whenBuyable`/`whenSellable`, the

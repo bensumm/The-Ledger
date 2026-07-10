@@ -10,6 +10,26 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.59.0 — Trends charts on `chartlib`: labels, tooltips, timespan windows, neutral diurnal (2026-07-10)
+First visual-review pass on the item-page charts (Ben, on localhost). All in `js/trends.js` +
+`js/chartlib.js` + `styles.css` + `index.html`; no shared-module or pipeline change.
+
+- **Recent movement + Price history retrofit to `chartlib`.** Both were static `svgLine`. Now
+  interactive: y-axis **price labels** and a **hover tooltip** (crosshair + nearest-point readout) on
+  both; Price history additionally gets **selectable 1d / 7d / 30d / 90d / All** windows off the 6h
+  series (drag-to-pan / wheel-zoom too). The hourly seasonality charts + quote sparkline stay on
+  `charts.js` (unchanged).
+- **Max-zoom floor (`chartlib`).** The old min-span allowed `fullSpan/500`, which on a 90d/6h series
+  let you zoom into a window with zero points. Replaced with a density floor (`medGap*4`, ~4 points),
+  so wheel/pinch can't zoom into empty space; explicit span buttons bypass the floor to land on their
+  exact duration (a "1d" button still shows exactly one day).
+- **Diurnal timing — neutral colors + lookback toggle.** Dropped the green/red dip/peak (they implied
+  good/bad, but dip and peak are both deliberately targeted) for a neutral **cool = cheap-hours /
+  warm = pricey-hours** pair with a legend. Added an **avg over 7d / 28d** lookback toggle (7d
+  reactive, 28d steadier) — hour-of-day either way, via the same shared `windowread` math. (A
+  day-of-week view was considered and set aside — day labels weren't useful enough.)
+- Further chart polish is deferred to a later pass (Ben: "we'll take another pass later").
+
 ### 0.58.0 — app↔console parity: interactive chart library (CL) + Trends Diurnal timing (TV) (2026-07-10)
 The CL + first TV sub-chunk of `PLAN-APP-PARITY.md`. Two additive pieces, one bump.
 
