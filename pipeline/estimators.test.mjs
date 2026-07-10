@@ -20,7 +20,7 @@ import { STRATEGY_LIST, STRATEGIES } from '../js/strategies.mjs';
 import { buildSnapshot } from './lib/replay.mjs';
 import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,
-  pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising,
+  pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
   quotedPair, rankScore, estimateRank, fmtTtf,
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
@@ -53,8 +53,8 @@ ok('estimatorFor returns a { pFill, ttf } pair for every registered spec', () =>
   assert.equal(estimatorFor(null), ESTIMATORS.intraday);
 });
 
-ok('the registry families are exactly {intraday, value, rising}', () => {
-  assert.deepEqual([...ESTIMATOR_FAMILIES].sort(), ['intraday', 'rising', 'value']);
+ok('the registry families are exactly {intraday, value, rising, churn}', () => {
+  assert.deepEqual([...ESTIMATOR_FAMILIES].sort(), ['churn', 'intraday', 'rising', 'value']);
 });
 
 ok('every spec estimator runs over every archetype WITHOUT throwing + returns the {value,n,basis} shape', () => {
@@ -149,6 +149,23 @@ ok('rising pFill: confirmed uptrend (not breaking down) > unconfirmed; ttf is th
   assert.equal(pFillRising({ regime: 'flat' }).value, RISING_PFILL_UNCONFIRMED);
   assert.ok(RISING_PFILL_CONFIRMED > RISING_PFILL_UNCONFIRMED);
   assert.equal(ttfRising().value, TTF_MULTIDAY_PRIOR_SEC);
+});
+
+/* --- churn family math (Step 6, decision A) -------------------------------------------------------- */
+ok('churn lapUnits = min(limit, volDay); estimateRank ranks the LAP (net × lapUnits), net stays per-unit', () => {
+  assert.equal(churnLapUnits({ limit: 25_000, volDay: 2_000_000 }), 25_000, 'limit ≤ volDay → the exact limit');
+  assert.equal(churnLapUnits({ limit: 5_000_000, volDay: 1_000 }), 1_000, 'limit > volDay → capped at feasible depth');
+  assert.equal(churnLapUnits({ volDay: 3_000 }), 3_000, 'no limit → a single volume-bounded lap');
+  assert.equal(churnLapUnits({}), 1, 'no data → 1 (honest floor)');
+  // estimateRank on the churn spec multiplies the per-unit net by lapUnits: a churn row ranks the LAP.
+  const row = { optBuy: 100, optSell: 110, volDay: 100_000, limit: 20_000, mid: 105 };
+  const erChurn = estimateRank(STRATEGIES.churn, row);
+  const erBand = estimateRank(STRATEGIES.band, row);   // same inputs, per-unit rank (lapUnits ≡ 1)
+  assert.equal(erChurn.pair.basis, 'opt');
+  assert.equal(erChurn.lapUnits, Math.min(20_000, 100_000));
+  assert.equal(erBand.lapUnits, 1, 'band ranks per-unit');
+  assert.ok(Math.abs(erChurn.rank - erBand.rank * erChurn.lapUnits) < 1e-6, 'churn rank = per-unit rank × lapUnits');
+  assert.equal(erChurn.net, erBand.net, 'er.net stays PER-UNIT (only the rank is per-lap)');
 });
 
 /* --- rankScore + quotedPair + estimateRank -------------------------------------------------------- */

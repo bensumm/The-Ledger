@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.39
+version: 1.40
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -64,7 +64,11 @@ big-tickets with an untraded 2h band — is already caught by band's thin path);
 screen's small **rising reserve** so risers still aren't buried below flats. **Churn** — the
 high-volume commodity lane (the rune staples: soul/blood/death) earns default visibility even
 though its per-cycle edge is thin and buy-limit-throttled; judge each rune against its weekly
-range (buy the dip, not near the weekly high). `--mode spread` / `--mode rising` now error cleanly.
+range (buy the dip, not near the weekly high). Churn ranks the **LAP** (net/u × the exact buy
+limit × P ÷ TTF), not the unit — so its rank reflects "buy a whole limit's worth and flip it";
+the RANK number separates the runes even though the placeholder letter-cutoffs clump them at S+.
+In `--mode all`, churn is disjoint from band by margin (band shows the ROI ≥ min-roi rows; churn
+keeps the sub-min-roi high-volume ones). `--mode spread` / `--mode rising` now error cleanly.
 
 **Sync first (SY1).** The §5 position-context pass reads Ben's current book, and there is no
 scheduled sync (on-demand only since the `CofferFillsSync` job was eliminated — FILLS-PIPELINE

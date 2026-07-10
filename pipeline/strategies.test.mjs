@@ -66,8 +66,9 @@ ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/churn/sc
 });
 
 ok('P6b per-thesis estimator family + price-basis fields are registered as designed', () => {
-  // estimator family: the fast niches share the intraday family; value has its own.
-  for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].estimator, 'intraday', `${k} → intraday estimator`);
+  // estimator family: band/scalp share the intraday family; churn ranks the LAP (Step 6); value has its own.
+  for (const k of ['band', 'scalp']) assert.equal(STRATEGIES[k].estimator, 'intraday', `${k} → intraday estimator`);
+  assert.equal(STRATEGIES.churn.estimator, 'churn', 'churn → churn estimator (per-lap rank, Step 6)');
   assert.equal(STRATEGIES.value.estimator, 'value', 'value → value estimator');
   // price basis: band/churn/scalp post the 2h band edges; value computes its own term-structure pair.
   for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].priceBasis, 'opt', `${k} = patient 2h band edges`);

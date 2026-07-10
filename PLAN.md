@@ -406,6 +406,13 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   the traded ones, and an item with ZERO traded 5m windows in the scan's 2h is deliberately excluded (an
   untraded band can't be trusted — the band-top-artifact lesson; spread's 24h-avg basis for those was the
   weaker read). `risingPoolFloor` + `RISE_MID_FLOOR`/`RISE_LIQUID_VOL` kept but vestigial (one-flag re-add).
+- **Churn per-lap rank + band partition — DONE (Step 6, Ben 2026-07-09, decision A):** churn ranks the
+  LAP (`net/u × min(limit, feasibleDepth) × P ÷ TTF`) via its own `churn` estimator family (we always max
+  the buy limit → the exact limit is a fact, NOT the demoted ×windows/day `expGpDay`); Death/Blood/Soul
+  rune now grade non-D (the rank NUMBER separates them — Blood 1.4m > Soul 400k > Death 286k — though the
+  per-unit `rating.mjs` letter-cutoffs currently clump per-lap churn at S+ until calibrated). And in
+  `--mode all` churn is partitioned disjoint from band by margin (churn = the sub-`--min-roi` volume lane,
+  band = the per-unit lane) — render-stage, so the replay goldens are untouched.
 - **PM1 follow-ons (deliberate, not scope-cut — PM1 `6aba80b`, 2026-07-08):** (1) the **watch
   surface** for probes — dip inverts to "average-down window" on an owned lot (the framing is
   already coded in `modules/dip.mjs` behind `ctx.owned`; wiring watch.mjs to run probes is the

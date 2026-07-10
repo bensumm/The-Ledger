@@ -342,10 +342,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `net × P(fill) ÷ TTF` from `estimators.mjs`, NOT the demoted expGpDay; cutoffs are on that rank
     scale, still PLACEHOLDERS), `estimators.mjs` (P6b — the PURE per-thesis P(fill)+TTF estimators +
     the `rankScore` composite that REPLACED expGpDay as the displayed/graded metric (Ben 2026-07-09:
-    "gp/d is out"). Three families keyed by a spec's `estimator` field — `intraday` (band/churn/
-    scalp: P(fill) from band-depth / a real windowread reach when fetched, TTF from volume velocity),
-    `value` (P(fill)=floor-proximity, TTF=trough→recovery prior), and `rising` (regime/forecast horizon —
-    retained but no shipped spec uses it since the rising niche was deleted, Steps 3+4);
+    "gp/d is out"). Families keyed by a spec's `estimator` field — `intraday` (band/scalp: P(fill) from
+    band-depth / a real windowread reach when fetched, TTF from volume velocity), `churn` (Step 6,
+    decision A — reuses intraday P(fill)/TTF but ranks the LAP via `churnLapUnits` = min(limit, feasible
+    depth), so estimateRank multiplies net × lapUnits: on buy-limit-cycle commodities we always max the
+    limit), `value` (P(fill)=floor-proximity, TTF=trough→recovery prior), and `rising` (regime/forecast
+    horizon — retained but no shipped spec uses it since the rising niche was deleted, Steps 3+4);
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
     bundles pair/net/pFill/ttf/rank. ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the

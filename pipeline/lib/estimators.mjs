@@ -18,8 +18,11 @@
  *   floor entry → a recovery level the term structure says durably prints (NOT the raw ceiling).
  * The net is ALWAYS the ONE shared js/format.js `netMargin` (= (ask − tax(ask)) − bid) — no new tax.
  *
- * THREE ESTIMATOR FAMILIES (registry keyed by a spec's `estimator` field):
- *   intraday (band/spread/churn/scalp) — P(fill) from where the quoted bid sits in the live→2h-band
+ * ESTIMATOR FAMILIES (registry keyed by a spec's `estimator` field):
+ *   churn — P(fill)/TTF reuse the intraday family, but the rank is PER LAP: `lapUnits` (the exact buy
+ *     limit, bounded by feasible depth) multiplies the per-unit net, because on a buy-limit-cycle
+ *     commodity we always max the limit so the lap size is a fact (Step 6, Ben 2026-07-09, decision A).
+ *   intraday (band/scalp) — P(fill) from where the quoted bid sits in the live→2h-band
  *     span (reuses a real windowread reach read WHEN one is fetched; degrades to a band-depth heuristic
  *     on screen/quote, which do NOT fetch the 1h series — same discipline as reachValidator). TTF from
  *     intraday velocity (quoted size vs daily volume) around the intraday prior. NOTE (2026-07-09, Step 1):
@@ -138,11 +141,31 @@ export function ttfRising() {
   return estR(TTF_MULTIDAY_PRIOR_SEC, 0, 'regime-horizon-prior');
 }
 
+/* --- churn family (Step 6, decision A — Ben 2026-07-09) -------------------------------------------
+   A buy-limit-cycle commodity is ranked PER LAP, not per unit: on these high-volume/low-price staples
+   we ALWAYS max the buy limit, so the exact `limit` is a FACT (not the demoted ×windows/day gp/d
+   extrapolation). P(fill) + TTF reuse the intraday family (same band-depth fill + volume-velocity TTF);
+   the churn-specific part is `lapUnits` — the size of ONE lap — which estimateRank multiplies into the
+   per-unit net so the rank reflects the LAP's after-tax net. lapUnits = min(limit, feasibleDepth):
+   the buy limit, bounded by a feasible single-lap depth (volDay, so a `limit` bigger than the market
+   trades in a day can't inflate it). NAMED PLACEHOLDER (rule 4): only ONE lap's limit sizing enters —
+   the multi-window/day gp/d extrapolation stays DEAD. Missing limit → volume-bounded single lap. */
+export function churnLapUnits(ctx = {}) {
+  const c = ctx || {};
+  const limit = num(c.limit), volDay = num(c.volDay);
+  const feasible = (volDay != null && volDay > 0) ? volDay : Infinity;
+  if (limit != null && limit > 0) return Math.max(1, Math.min(limit, feasible));
+  return (volDay != null && volDay > 0) ? volDay : 1;   // no known limit → a single volume-bounded lap
+}
+
 /* --- the registry (keyed by a spec's `estimator` family field) ------------------------------------ */
+// `lapUnits` is OPTIONAL — only churn declares it; estimateRank multiplies the per-unit net by
+// lapUnits(ctx) for the rank (families without it rank per unit, i.e. lapUnits ≡ 1 → byte-identical).
 export const ESTIMATORS = Object.freeze({
   intraday: { pFill: pFillIntraday, ttf: ttfIntraday },
   value:    { pFill: pFillValue,    ttf: ttfValue },
   rising:   { pFill: pFillRising,   ttf: ttfRising },
+  churn:    { pFill: pFillIntraday, ttf: ttfIntraday, lapUnits: churnLapUnits },
 });
 export const ESTIMATOR_FAMILIES = Object.freeze(Object.keys(ESTIMATORS));
 
@@ -200,8 +223,12 @@ export function estimateRank(spec, row = {}, extra = {}) {
   };
   const pFill = est.pFill(ctx);
   const ttf = est.ttf(ctx);
-  const rank = rankScore({ net, pFill: pFill.value, ttfSec: ttf.value });
-  return { pair, net, pFill, ttf, rank };
+  // Step 6 (churn): rank the LAP, not the unit — multiply the per-unit net by the family's lapUnits
+  // (the exact buy limit, bounded by feasible depth). Families without lapUnits rank per unit (≡ 1), so
+  // band/scalp/value/intraday are byte-identical. er.net stays PER-UNIT (the honest displayed margin).
+  const lapUnits = est.lapUnits ? est.lapUnits(ctx) : 1;
+  const rank = rankScore({ net: net * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
+  return { pair, net, pFill, ttf, rank, lapUnits };
 }
 
 /* fmtTtf(sec) → compact "45m" / "2.5h" / "3d" for the honest rank rendering. */

@@ -154,7 +154,8 @@ function churnEdge(inp, t) {
                  Flipping a cell to gate is a one-word change once its notes prove out against live data.
      defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header).
      estimator   (P6b) the per-thesis P(fill)+TTF estimator FAMILY key — one of pipeline/lib/
-                 estimators.mjs's ESTIMATOR_FAMILIES ('intraday' | 'value' | 'rising'). The niche's
+                 estimators.mjs's ESTIMATOR_FAMILIES ('intraday' | 'value' | 'rising' | 'churn' — Step 6:
+                 churn ranks the LAP via its own family, not the unit). The niche's
                  rank = net × P(fill) ÷ TTF is computed by that family's estimators (the demoted
                  expGpDay is no longer the ranked/displayed "best" — Ben, 2026-07-09). Just a family
                  STRING here (data); the estimator functions + registry live in pipeline/lib.
@@ -171,11 +172,13 @@ export const STRATEGY_LIST = Object.freeze([
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
-    key: 'churn', label: 'Churn', inAll: true,   // NY3 (Ben 2026-07-09) — default-on again (reverses NY2.2); the high-volume commodity lane
+    key: 'churn', label: 'Churn', inAll: true,   // the high-volume buy-limit-cycle commodity lane
     pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
-    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
+    // Step 6 (Ben 2026-07-09, decision A): churn ranks the LAP (net/u × min(limit, feasibleDepth) × P ÷
+    // TTF) via its own estimator family — we always max the buy limit on these, so the exact limit is a fact.
+    defaultPath: PATH_KEYS.SCALP, estimator: 'churn', priceBasis: 'opt',
   },
   {
     key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
@@ -232,7 +235,7 @@ const VALID_GATE = new Set(['band', 'value']);                          // P5 ga
 // P6b — the estimator family + price-basis vocabularies. VALID_ESTIMATORS mirrors pipeline/lib/
 // estimators.mjs's ESTIMATOR_FAMILIES (the runtime registry there is the home; this Set exists so a
 // typo'd family name is caught by conformance instead of silently defaulting to intraday in production).
-const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising']);
+const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising', 'churn']);   // Step 6 — churn per-lap rank
 const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term']);
 // The validator KEYS a spec may name + the gate/inform modes. Kept as a local literal (NOT imported
 // from js/validate.mjs) so this registry stays near-dependency-free / app-bundle-light; the SOURCE OF

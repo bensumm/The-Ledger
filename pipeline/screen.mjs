@@ -322,10 +322,10 @@ function pathLine(name, weighed, defaultPath) {
 // (the app contract stays byte-identical — a previously-empty niche still publishes []). Everything else
 // — validators (reject still DROPS), per-spec falling doctrine, posture — runs UNCHANGED on the fallback
 // rows: a sub-floor pass relaxes floors, never doctrine. subFloor==null ⇒ byte-identical to pre-P6c.
-function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily) {
+function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily, { partition = false } = {}) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
@@ -431,6 +431,14 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // the pinned gateCandidates→rankAndSlice→surviveMode funnel + the replay goldens are unaffected.
     // Held/asked/watchlist rows never reach renderMode (their surfaces never hide), so they're auto-exempt.
     if (er.net <= 0) { disc.negNet++; continue; }
+    // Step 6a (Ben 2026-07-09): partition churn from band in --mode all so they don't show identical
+    // rows. band is the PER-UNIT lane — its gate already requires ROI ≥ MIN_ROI; churn is the VOLUME /
+    // low-margin lane. When BOTH run, drop from churn any row whose after-tax per-unit ROI (at the same
+    // opt pair the rank uses) clears MIN_ROI — band surfaces those, so churn keeps only the sub-MIN_ROI
+    // high-volume commodities. Disjoint by margin, ZERO loss (band's gate never showed a sub-MIN_ROI row).
+    // Render-stage + --mode-all-only (the `partition` flag) → standalone --mode churn is unchanged and the
+    // gate-stage replay goldens are unaffected.
+    if (partition && er.pair.bid > 0 && (er.net / er.pair.bid * 100) >= MIN_ROI) { disc.partition++; continue; }
     const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
@@ -593,7 +601,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
+    const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (partition ? `, band-lane partition ${disc.partition}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');
@@ -872,10 +880,13 @@ async function main() {
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
+  // Step 6a: churn is partitioned from band (drops the band-lane ROI ≥ MIN_ROI rows) ONLY when both
+  // niches run together (--mode all) — so the two tables are disjoint. Standalone --mode churn is unpartitioned.
+  const partitionChurn = RUN_MODES.includes('band') && RUN_MODES.includes('churn');
   const niches = {};
   for (const m of RUN_MODES) niches[m] = STRATEGIES[m].gate === 'value'
     ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
-    : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily);
+    : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn });
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).

@@ -116,6 +116,17 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `net after tax × P(fill at the quoted pair) ÷ TTF` from `pipeline/lib/estimators.mjs`, evaluated at
   the ONE price pair the thesis posts. `expGpDay` survives ONLY as the cheap pre-fetch pool orderer +
   the 500k `--min-gpd` pre-filter. Grade cutoffs in `rating.mjs` are placeholders pending validation).
+  **Churn per-lap EXCEPTION (Step 6, Ben 2026-07-09, decision A):** the per-thesis rank is PER-UNIT for
+  every niche EXCEPT `churn`, which ranks the **LAP** — `net/u × min(limit, feasibleDepth) × P(fill) ÷
+  TTF` via its own `churn` estimator family (we always max the buy limit on these commodities, so the
+  exact `limit` is a fact, not the demoted `expGpDay` ×windows/day extrapolation). This supersedes the
+  "rank is per-unit" rule above with a named churn carve-out. Honest limit: the `rating.mjs` grade cutoffs
+  are the per-unit scale, so per-lap churn ranks (~1000× larger) currently clump at S+ — the RANK NUMBER
+  separates them (e.g. Blood 1.4m > Soul 400k > Death 286k), the LETTER doesn't until the cutoffs are
+  calibrated (F1/retrojoin). **Churn↔band partition (Step 6a):** in `--mode all` churn is the volume/
+  low-margin lane and band the per-unit lane — churn drops any row whose after-tax per-unit ROI clears
+  `--min-roi` (band shows those), so the two tables are DISJOINT by margin, zero loss. Render-stage +
+  `--mode-all`-only; standalone `--mode churn` is unpartitioned.
 - **Time-of-day context on every price recommendation (Ben, 2026-07-05).** Whenever a specific buy/sell
   price is suggested, run a `windowrange.mjs` read for the relevant local-hours window and read the level
   against the last ~14 same-window lows/highs (the NARROW-WINDOW *timing* check — "touched ≠ filled",
