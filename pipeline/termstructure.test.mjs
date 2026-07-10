@@ -184,7 +184,7 @@ ok('a HELD lot is a SELL decision → PASS (held-lot-sell-side), even parked abo
 ok('runValidators runs reach + floor + limit (registry has all keys)', () => {
   const res = runValidators({ intraday: { ts1h: null } });   // all degrade with no inputs
   const keys = res.map(r => r.key).sort();
-  assert.deepEqual(keys, ['floor', 'limit', 'reach', 'trajectory', 'value-amplitude']);
+  assert.deepEqual(keys, ['dip-posture', 'floor', 'limit', 'reach', 'trajectory', 'value-amplitude']);
   assert.ok(res.every(r => r.status === 'pass'), 'no inputs → all degrade to pass');
 });
 

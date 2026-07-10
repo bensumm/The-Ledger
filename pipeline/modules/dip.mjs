@@ -16,6 +16,9 @@
  * follow-on is a one-line surfaces change, not a re-fork.
  */
 export const DIP_MIN_PCT = 1.0;   // ignore a sub-1% dip below the 24h avg low as noise
+// TWIN CONSTANT (DP1): js/validate.mjs's DIPPOST_MIN_PCT deliberately mirrors this (js/ cannot import
+// pipeline/). If this depth threshold moves, move that one too. This probe stays the DEPTH flag only;
+// the DIRECTION read (falling vs reverting) is dipPostureValidator + quotecore's recentDirection.
 
 export default {
   name: 'dip',

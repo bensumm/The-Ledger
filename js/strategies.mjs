@@ -187,14 +187,18 @@ export const STRATEGY_LIST = Object.freeze([
     key: 'band', label: 'Band', inAll: true,
     pool: { risingFloor: false }, edge: bandEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
-    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    // DP1 dip-posture is INFORM (never drops a row — the validator can't reject anyway). Wired on
+    // band + churn (both are resting-bid flip plays where a reverting dip means the bid misses); NOT
+    // on scalp (accepts fallers by thesis — direction is the point, not a caution) or value (a
+    // buy-hold-the-cycle move, not a bid-fill play).
+    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
     key: 'churn', label: 'Churn', inAll: true,   // the high-volume buy-limit-cycle commodity lane
     pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
-    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // Step 6 (Ben 2026-07-09, decision A): churn ranks the LAP (net/u × min(limit, feasibleDepth) × P ÷
     // TTF) via its own estimator family — we always max the buy limit on these, so the exact limit is a fact.
     defaultPath: PATH_KEYS.SCALP, estimator: 'churn', priceBasis: 'opt',
@@ -259,7 +263,7 @@ const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term']);
 // The validator KEYS a spec may name + the gate/inform modes. Kept as a local literal (NOT imported
 // from js/validate.mjs) so this registry stays near-dependency-free / app-bundle-light; the SOURCE OF
 // TRUTH is validate.mjs's REGISTRY_ORDER — the conformance test cross-checks the two so drift bites.
-const VALID_VALIDATOR_KEYS = new Set(['reach', 'floor', 'trajectory', 'value-amplitude', 'limit']);
+const VALID_VALIDATOR_KEYS = new Set(['reach', 'floor', 'trajectory', 'value-amplitude', 'limit', 'dip-posture']);
 const VALID_VALIDATOR_MODES = new Set(['gate', 'inform']);
 
 /* a validators[] entry is a bare key string OR { key, mode?, window? }. Returns a violation string or null. */

@@ -746,3 +746,67 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
   return { rebid:null, kind:'friction', bar, troughTarget:null, peakTarget:null,
     why: bar ? `friction bar governs: a rebid only beats holding if it ${barTxt}.` : `no clear price to bar a rebid against.` };
 }
+
+/* ============================================================================================
+   DP1 (2026-07-10) — recentDirection: dip DIRECTION, not just depth. A SEPARATE appended block of
+   pure, DOM-free 5m-shape math (quotecore.js imports only format.js — kept that way); it does NOT
+   touch momVerdict / the gate tree. Fixture-pinned in pipeline/dipposture.test.mjs.
+
+   WHY IT LIVES HERE. quotecore.js is the existing home for the 5m intraday-shape reads (bandCore,
+   diurnalRead, overnightStaleRisk) — its natural neighbours. The 1h series is too coarse for this
+   read (2–4 points over a ~3h lookback); the 5m /timeseries is the right resolution.
+
+   THE MECHANIC (this is the dipPostureValidator DOCTRINE HOME). A RESTING BID only fills while price
+   is still coming DOWN to it — a seller has to cross the spread down to your bid. Once a dip REVERTS
+   (bounces off its low and runs away up) no seller crosses down, so the bid just sits there MISSING.
+   A reverting dip is therefore a cross-the-spread-NOW-or-pass decision, not a rest-a-bid decision.
+   The ⬇DIP probe (pipeline/modules/dip.mjs) captures DEPTH (live under the 24h avg low); this
+   captures DIRECTION (is the dip still falling, or has it already bounced?). The two are orthogonal.
+   ANCHOR INCIDENTS (n=2 — be honest, this is NOT a validated edge): a Searing-page resting bid
+   @16,014 on a real dip that had ALREADY reverted (bounced to 16,249+ and ran away), and an
+   Abyssal-bludgeon bid @16.15m on a ~83/day item that never filled — a reverting dip means no
+   seller crosses down to you.
+
+   HONESTY (process rule 4). Every threshold below is a NAMED PLACEHOLDER pending data — n=2, none
+   validated. What WOULD validate them: retro-joining dip-posture firings against fills.json — does a
+   'reverting' read actually correlate with a resting bid MISSING, and 'falling' with a fill?
+
+   Reads the avgLowPrice side (the instasell side, where a resting bid fills). Pure over an
+   already-fetched 5m series; no fetch/fs/DOM. Returns null on a thin/absent series (degrade — never
+   guess a direction off too few prints), else { dir, minLow, minAgeMin, recentLevel, bouncePct, n }.
+   dir ∈ 'falling' | 'reverting' | 'flat':
+     falling   — the low is FRESH (≤ DIR_FRESH_MIN old) OR live sits within DIR_AT_LOW_PCT of the low
+                 (still coming down / at the low) → a resting bid fills as it drops.
+     reverting — bounced ≥ DIR_REVERT_PCT off the low AND the low is not fresh → the bid likely
+                 misses; cross or pass.
+     flat      — neither. */
+export const DIR_LOOKBACK_H  = 3;       // PLACEHOLDER (n=2): hours of 5m prints scored for direction
+export const DIR_MIN_POINTS  = 12;      // PLACEHOLDER (n=2): fewer non-null lows than this ⇒ null (too thin to call)
+export const DIR_FRESH_MIN   = 15;      // PLACEHOLDER (n=2): a low this many minutes old or newer is still "fresh"
+export const DIR_AT_LOW_PCT  = 0.002;   // PLACEHOLDER (n=2): recent level within this fraction of the low ⇒ still at the low → falling
+export const DIR_REVERT_PCT  = 0.004;   // PLACEHOLDER (n=2): recent level ≥ this fraction above the low ⇒ reverting
+export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Date() } = {}){
+  const nowMs = (now instanceof Date) ? now.getTime() : (now != null ? now : Date.now());
+  const cut = nowMs/1000 - lookbackH*3600;
+  const slice = (ts5m||[])
+    .filter(p => p && p.timestamp != null && p.timestamp >= cut && p.avgLowPrice != null)
+    .sort((a,b) => a.timestamp - b.timestamp);
+  if (slice.length < DIR_MIN_POINTS) return null;   // degrade — never guess a direction off a thin series
+  const lows = slice.map(p => p.avgLowPrice);
+  const minLow = Math.min(...lows);
+  // LAST occurrence of the min — a RETEST of the low counts as still-at-the-low, not a bounce.
+  let minIdx = 0;
+  for (let i = 0; i < lows.length; i++) if (lows[i] <= minLow) minIdx = i;
+  const minAgeMin = (nowMs/1000 - slice[minIdx].timestamp) / 60;
+  // recentLevel = MEDIAN of the last 3 non-null lows — ROBUST so a lone flier print can't fake a
+  // bounce (the Bar E discipline). Reuses the shared type-7 median() (SF-1), not a re-derived one.
+  const recentLevel = median(lows.slice(-3));
+  const bouncePct = minLow > 0 ? (recentLevel - minLow) / minLow : 0;
+  const fresh = minAgeMin <= DIR_FRESH_MIN;
+  const atLow = bouncePct <= DIR_AT_LOW_PCT;
+  let dir;
+  if (fresh || atLow)                 dir = 'falling';
+  else if (bouncePct >= DIR_REVERT_PCT) dir = 'reverting';
+  else                                dir = 'flat';
+  return { dir, minLow, minAgeMin, recentLevel, bouncePct, n: slice.length };
+}

@@ -339,7 +339,15 @@ Script facts the skills rely on (current behavior, not doctrine):
   naming when it next frees; quote/held/watchlist NOTE it), nearly-spent (`< LIMIT_CAUTION_FRAC` of the
   limit) → **caution**. Absent stage (the browser app supplies none) or a null/UNKNOWN limit → degrade
   to pass (a null limit is never "unlimited"). Honesty: logged fills only, so it can UNDER-count buys —
-  a pass is never a guarantee. **TV (0.58.0):** `js/trends.js` now imports `validate.mjs` (`reachValidator`,
+  a pass is never a guarantee. **`dipPostureValidator` (DP1, BUY-side, INFORM-only, NEVER-REJECT)** adds
+  dip DIRECTION to the ⬇DIP probe's DEPTH (the probe stays the depth flag; it does NOT read direction): on
+  a dip row (live under the 24h avg low by ≥ `DIPPOST_MIN_PCT`, a twin of dip.mjs's `DIP_MIN_PCT`) it reads
+  the last-3h 5m LOW shape via the shared `recentDirection` (`js/quotecore.js`) — a still-**falling**/**flat**
+  dip → pass (a resting bid fills as it drops); a **reverting** dip (bounced ≥ `DIR_REVERT_PCT` off an
+  un-fresh low, robust median of the last 3 lows) → **caution** "cross @ instabuy or pass" (a reverting dip
+  means no seller crosses down → the bid misses). Wired **inform** on band + churn only (not scalp/value);
+  it can never drop a row or re-price a bid. Placeholders, n=2 (Searing page / Abyssal bludgeon anchors).
+  **TV (0.58.0):** `js/trends.js` now imports `validate.mjs` (`reachValidator`,
   inform-only, beside the Trends Diurnal timing chart) — so `validate.mjs` IS app-imported now; edits to it
   ripple into the app, and an app-behavior change to it bumps `APP_VERSION`.
 - `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**

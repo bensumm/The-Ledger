@@ -353,6 +353,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // no room left in the rolling 4h window (reject → dropped + counted) and CAUTIONs a nearly-spent
     // one. Zero in-window buys ⇒ remaining==limit ⇒ pass (byte-identical). Absent limit ⇒ degrade.
     const limWin = limitWindow({ buys: BUYS_BY_ITEM.get(s.id) || [], limit: map.byId[s.id]?.limit ?? null });
+    // DP1: the 24h /24h record (avgLowPrice = the dip-depth reference) — HOISTED above runValidators so
+    // both the dip-posture validator ctx and the probe ctx below read the ONE lookup (not computed twice).
+    const d24 = v24 && (v24[s.id] || v24[String(s.id)]);
     // Ben 2026-07-09: drive the registry off the THESIS's own validator PLAN (spec.validators — modes +
     // reach horizon), not the whole registry. Leg B feeds the real 1h series now (was null → reach
     // degraded); trajectory reads the term structure's shape classification (no new fetch). Inform-mode
@@ -360,7 +363,12 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     const vres = runValidators({
       market: { row },
       history: { termStructure: ts },
-      intraday: { ts1h: series1h && series1h.get(s.id), reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
+      intraday: {
+        ts1h: series1h && series1h.get(s.id),
+        ts5m: series5m && series5m.get(s.id),                     // DP1: dip-posture reads the 5m direction shape
+        avgLow24: d24?.avgLowPrice ?? null,                       // DP1: dip-depth reference (from the hoisted d24)
+        reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null,
+      },
       floor: { level: row.optBuy != null ? row.optBuy : null },
       limits: { window: limWin },
     }, { specs: STRATEGIES[mode].validators });
@@ -462,7 +470,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // display tag (observe) or an advisory price nudge (price); it NEVER touched `grade`/`r`/the cells
     // above (all already computed). ctx carries the 24h avg (dip), the phase trajectory (froth), the
     // whole-market map (decant siblings) and an advisory ask price (anchor). Empty when no probe fired.
-    const d24 = v24 && (v24[s.id] || v24[String(s.id)]);
+    // (d24 was hoisted above the runValidators call so dip-posture + the probe share the one lookup.)
     const fired = runProbes(row, 'screen', {
       surface: 'screen', owned: false, id: s.id, name, thin: s.thin,
       phase: ph, avgLow24: d24?.avgLowPrice ?? null, avgHigh24: d24?.avgHighPrice ?? null,

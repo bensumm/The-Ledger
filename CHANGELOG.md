@@ -10,6 +10,41 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DP1 — dip DIRECTION, not just depth: the dip-posture entry classifier (2026-07-10, pipeline-only — NO APP_VERSION)
+A resting bid only fills while price is still coming DOWN to it — a seller has to cross the spread down.
+Once a dip REVERTS (bounces off its low and runs away up) no seller crosses down, so the bid just sits
+there missing. Two n=2 incidents motivated this: a Searing-page bid @16,014 on a dip that had ALREADY
+reverted (bounced to 16,249+ and ran away), and an Abyssal-bludgeon bid @16.15m on a ~83/day item that
+never filled. The existing ⬇DIP probe (`pipeline/modules/dip.mjs`) captured DEPTH (live under the 24h avg
+low); DP1 adds DIRECTION.
+
+- **`recentDirection(ts5m, opts)` — new pure export in `js/quotecore.js`** (its natural home beside the
+  other 5m intraday-shape reads `bandCore`/`diurnalRead`/`overnightStaleRisk`; the 1h series is too coarse
+  at 2–4 points over the ~3h lookback). Reads the `avgLowPrice` side (the instasell side, where a resting
+  bid fills) over an already-fetched 5m series → `null` (thin/absent) or `{ dir, minLow, minAgeMin,
+  recentLevel, bouncePct, n }`, `dir ∈ falling|reverting|flat`. `recentLevel` is the ROBUST **median** of
+  the last 3 lows (Bar-E discipline — a lone flier print can't fake a bounce; reuses the SF-1 shared
+  `median`). `falling` = fresh low OR still at the low; `reverting` = bounced ≥ `DIR_REVERT_PCT` off an
+  un-fresh low. All five constants (`DIR_LOOKBACK_H/MIN_POINTS/FRESH_MIN/AT_LOW_PCT/REVERT_PCT`) are named
+  PLACEHOLDERS (n=2); validation = retro-joining firings against fills (did 'reverting' correlate with a
+  miss, 'falling' with a fill).
+- **`dipPostureValidator(ctx)` — new validator in `js/validate.mjs`** (`'dip-posture'`, BUY-side,
+  **INFORM-only, NEVER-REJECT** by construction — it can never drop a row or re-price a bid). Speaks only
+  on a dip row (`DIPPOST_MIN_PCT`, a twin of dip.mjs's `DIP_MIN_PCT` — `js/` can't import `pipeline/`, so
+  it's redefined with a cross-pointer both places). falling/flat → pass ("a resting bid fills as it
+  drops"); reverting → caution ("cross @ instabuy … or pass", with the after-tax cross net, bond-aware via
+  `netMargin`; an unprofitable cross says so). Degrades to pass on held/no-quote/no-24h-avg/no-5m/no-dip/
+  thin-series.
+- **Wiring:** inform on the band + churn specs only (`js/strategies.mjs`) — NOT scalp (accepts fallers by
+  thesis) or value (a buy-hold, not a bid-fill play). `screen.mjs` hoists the existing 24h lookup and feeds
+  `intraday.ts5m`/`avgLow24`; `quote.mjs`'s per-item read feeds the same (so the note fires on the
+  explicit-ask surface too). The `--positions` path is untouched (held lots degrade anyway).
+- **NO APP_VERSION:** `js/trends.js` imports only `reachValidator`/`floorValidator`/`trajectoryValidator`
+  from `validate.mjs`, and `js/strategies.mjs` is not imported by any app module — the new
+  `recentDirection`/`dipPostureValidator` exports are unused by the deployed app, so this is not an
+  app-behavior change. Fixture-pinned in `pipeline/dipposture.test.mjs`; the full suite (incl. the P1
+  replay goldens) stays green — the change is render-stage/inform-only.
+
 ### 0.61.0 — Finder Desirability grade (AP4 partial) · forecast cone · searched-item charts (2026-07-10)
 Three Ben-requested items, all `js/` (+ `index.html`/`styles.css`); no pipeline change.
 

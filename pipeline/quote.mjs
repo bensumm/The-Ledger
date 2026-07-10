@@ -132,7 +132,12 @@ async function runItems() {
     const vres = runValidators({
       market: { row },
       history: { termStructure: ts },
-      intraday: { ts1h: inp.ts1h ?? null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
+      intraday: {
+        ts1h: inp.ts1h ?? null,
+        ts5m: inp.ts5m ?? null,                          // DP1: dip-posture reads the 5m direction shape
+        avgLow24: inp.vol24?.avgLowPrice ?? null,        // DP1: dip-depth reference (24h avg low)
+        reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null,
+      },
       floor: { level: row.optBuy != null ? row.optBuy : null },
       limits: { window: limWin },   // LM1: a buy read — limitValidator flags an exhausted/near buy limit as a NOTE (never hides the row)
     });

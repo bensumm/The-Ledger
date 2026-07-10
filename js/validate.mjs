@@ -33,7 +33,8 @@
  */
 import { windowStats, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from './windowread.mjs';
 import { termStructure } from './termstructure.mjs';
-import { tax } from './format.js';
+import { recentDirection, DIR_LOOKBACK_H } from './quotecore.js';
+import { tax, netMargin } from './format.js';
 
 // --- status algebra ---------------------------------------------------------------------------
 export const STATUS = { PASS: 'pass', CAUTION: 'caution', REJECT: 'reject' };
@@ -297,14 +298,76 @@ export function limitValidator(ctx) {
   return { key, status: 'pass', reason: `buy limit ok (bought ${boughtInWindow}/${limit} this 4h window, ${remaining} left)`, evidence };
 }
 
+// --- dipPostureValidator ----------------------------------------------------------------------
+// DP1 (2026-07-10) — dip DIRECTION, not just depth. BUY-SIDE · INFORM-ONLY · NEVER-REJECT.
+// The ⬇DIP probe (pipeline/modules/dip.mjs) says a row is a dip (live instasell under the 24h avg
+// low = DEPTH). This validator adds the missing question: is that dip still FALLING (a resting bid
+// fills as price drops to it) or has it already REVERTED (bounced off its low and run away — a
+// resting bid MISSES; cross the spread now or pass)? The direction read + the mechanic + the two
+// n=2 anchor incidents (Searing page, Abyssal bludgeon) live in the recentDirection header in
+// js/quotecore.js — this validator is only the buy-side POLICY over that read.
+//
+// NEVER-REJECT INVARIANT (load-bearing): by construction this validator returns ONLY pass or
+// caution — it can NEVER emit 'reject', so it can NEVER drop a row on any surface (quote runs the
+// full registry in gate mode; a caution there is a printed note, not a drop). INFORM-ONLY discipline:
+// it annotates the ENTRY POSTURE; it never auto-changes a recommended price (no graduation to
+// auto-repricing — a reverting-dip note says "cross or pass", it does not re-price the bid for you).
+export const DIPPOST_MIN_PCT = 1.0;   // PLACEHOLDER (n=2): dip DEPTH % below the 24h avg low to speak on.
+//   TWIN CONSTANT — deliberately mirrors pipeline/modules/dip.mjs's DIP_MIN_PCT (js/ cannot import
+//   pipeline/, so this is REDEFINED here, not shared). Keep the two in sync: if the ⬇DIP probe's depth
+//   threshold moves, move this too. VALIDATE (retro-join, n=2): the depth+bounce combination that
+//   actually predicts a resting bid missing vs filling.
+export function dipPostureValidator(ctx) {
+  const key = 'dip-posture';
+  const pos = ctx && ctx.position;
+  if (pos && pos.held) return degrade(key, 'held-lot-sell-side');   // BUY-side only (mirrors floor/trajectory)
+  const row = ctx && ctx.market && ctx.market.row;
+  if (!row || row.quickBuy == null) return degrade(key, 'no-quote');
+  const intra = ctx && ctx.intraday;
+  const avgLow24 = intra && intra.avgLow24;
+  if (avgLow24 == null) return degrade(key, 'no-24h-avg');
+  const ts5m = intra && intra.ts5m;
+  if (!ts5m) return degrade(key, 'no-5m-series');
+  // DEPTH gate — the validator only speaks on a dip row (mirrors the ⬇DIP probe's DIP_MIN_PCT).
+  const dipPct = (avgLow24 - row.quickBuy) / avgLow24 * 100;
+  if (!(dipPct >= DIPPOST_MIN_PCT)) return degrade(key, 'no-dip');
+  const rd = recentDirection(ts5m);
+  if (!rd) return degrade(key, 'thin-5m-series');
+  const { dir, minLow, minAgeMin, bouncePct } = rd;
+  const quickBuy = row.quickBuy, quickSell = row.quickSell;
+  const evidence = {
+    dir, minLow, minAgeMin: round2(minAgeMin), bouncePct: round2(bouncePct),
+    quickBuy, quickSell, crossNet: null, avgLow24, dipPct: round2(dipPct),
+  };
+  if (dir === 'falling')
+    return { key, status: 'pass', reason: `dip still falling — a resting bid @ ${quickBuy.toLocaleString()} fills as it drops`, evidence };
+  if (dir === 'flat')
+    return { key, status: 'pass', reason: `dip flat — resting bid @ ${quickBuy.toLocaleString()} viable`, evidence };
+  // dir === 'reverting' — the bid likely misses; it's a cross-or-pass call. Score the cross: buy at
+  // the live instabuy (quickSell) and patiently sell the 2h top (optSell), after tax (bond-aware).
+  const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
+  const crossNet = (quickSell != null && row.optSell != null) ? netMargin(quickSell, row.optSell, bopt) : null;
+  evidence.crossNet = crossNet;
+  const bounceTxt = `+${(bouncePct * 100).toFixed(1)}% off the ${DIR_LOOKBACK_H}h low ${minLow.toLocaleString()} ~${Math.round(minAgeMin)}min ago`;
+  const crossTxt = (crossNet != null && crossNet > 0 && row.optSell != null)
+    ? `cross @ ${quickSell.toLocaleString()} (net ~${Math.round(crossNet).toLocaleString()}/u after tax to ${row.optSell.toLocaleString()}) or pass`
+    : `cross unprofitable at the patient ask — pass`;
+  // reason omits a leading ⚠ — the surface prefixes it (the `⚠ ${key}: ${reason}` convention).
+  return {
+    key, status: 'caution',
+    reason: `reverting dip — bounced ${bounceTxt}; a resting bid @ ${quickBuy.toLocaleString()} likely misses — ${crossTxt}`,
+    evidence,
+  };
+}
+
 // --- the registry -----------------------------------------------------------------------------
 // keyed so a declarative strategy spec (P4c) can name the validators it runs by key. REGISTRY_ORDER
 // is the display/priority order (worst-first is computed via worstStatus, not the array order).
 export const VALIDATORS = {
   reach: reachValidator, floor: floorValidator, trajectory: trajectoryValidator,
-  'value-amplitude': valueAmplitudeValidator, limit: limitValidator,
+  'value-amplitude': valueAmplitudeValidator, limit: limitValidator, 'dip-posture': dipPostureValidator,
 };
-export const REGISTRY_ORDER = ['reach', 'floor', 'trajectory', 'value-amplitude', 'limit'];
+export const REGISTRY_ORDER = ['reach', 'floor', 'trajectory', 'value-amplitude', 'limit', 'dip-posture'];
 
 /* GATE vs INFORM (Ben 2026-07-09). A validator's COMPUTATION is thesis-agnostic (the swing/local-min/
    knife/reach analysis is useful to every buy); what differs per thesis is the ACTION. A spec entry is
