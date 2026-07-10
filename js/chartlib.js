@@ -76,6 +76,13 @@ export function createChart(container, config = {}) {
   const series = (config.series || [])
     .filter(p => p && finite(p.t) && finite(p.v))
     .sort((a, b) => a.t - b.t);
+  // optional SECOND line (line-kind only) — e.g. a forecast HIGH beside the LOW to draw a cone. Additive:
+  // absent config.overlay ⇒ [] ⇒ byte-identical to a single-series chart. `fillBetween` shades the region
+  // between series and overlay (the forecast uncertainty cone) instead of the default under-line area.
+  const overlay = (config.overlay || [])
+    .filter(p => p && finite(p.t) && finite(p.v))
+    .sort((a, b) => a.t - b.t);
+  const fillBetween = config.fillBetween === true && overlay.length >= 2;
 
   container.innerHTML = '';
   if (series.length < 2) {
@@ -131,6 +138,7 @@ export function createChart(container, config = {}) {
     const vis = series.filter(p => p.t >= vLo && p.t <= vHi);
     let mn = Infinity, mx = -Infinity;
     for (const p of vis) { if (p.v < mn) mn = p.v; if (p.v > mx) mx = p.v; }
+    for (const p of overlay) { if (p.t >= vLo && p.t <= vHi) { if (p.v < mn) mn = p.v; if (p.v > mx) mx = p.v; } }
     for (const r of refs) { if (r.v < mn) mn = r.v; if (r.v > mx) mx = r.v; }
     for (const b of bands) { if (b.lo < mn) mn = b.lo; if (b.hi > mx) mx = b.hi; }
     if (!isFinite(mn) || !isFinite(mx)) { mn = 0; mx = 1; }
@@ -169,9 +177,21 @@ export function createChart(container, config = {}) {
     } else {
       let d = '';
       vis.forEach((p, k) => { d += (k ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.v).toFixed(1) + ' '; });
+      const visOv = overlay.filter(p => p.t >= vLo && p.t <= vHi);
+      let dOv = '';
+      visOv.forEach((p, k) => { dOv += (k ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.v).toFixed(1) + ' '; });
       if (vis.length >= 2) {
-        const area = d + `L ${X(vis[vis.length - 1].t).toFixed(1)} ${(H - padB)} L ${X(vis[0].t).toFixed(1)} ${(H - padB)} Z`;
-        s += `<path class="parea" d="${area}"/><path class="pline" d="${d}"/>`;
+        if (fillBetween && visOv.length >= 2) {
+          // shade the cone BETWEEN the two lines: main forward, overlay backward → closed polygon.
+          let back = '';
+          for (let k = visOv.length - 1; k >= 0; k--) back += 'L' + X(visOv[k].t).toFixed(1) + ' ' + Y(visOv[k].v).toFixed(1) + ' ';
+          s += `<path class="fcone" d="${d + back} Z"/>`;
+        } else {
+          const area = d + `L ${X(vis[vis.length - 1].t).toFixed(1)} ${(H - padB)} L ${X(vis[0].t).toFixed(1)} ${(H - padB)} Z`;
+          s += `<path class="parea" d="${area}"/>`;
+        }
+        if (visOv.length >= 2) s += `<path class="pline overlay" d="${dOv}"/>`;
+        s += `<path class="pline" d="${d}"/>`;
       }
     }
     // reference lines

@@ -1,6 +1,8 @@
 import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
 import { jget, cached } from './marketfetch.js';
 import { netMargin, clamp, now, isBond } from './format.js';
+import { estimateRank } from './estimators.mjs';   // AP4: the SAME per-thesis rank the console uses
+import { rateItem } from './rating.mjs';            // AP4: the SAME desirability score + letter grade
 import { showFinderError, renderAll } from './ui.js';
 import { syncFills } from './ledger.js';   // A3: positions.json auto-populate now lives with the Ledger
 import { archiveWatchlist } from './trends.js';
@@ -183,21 +185,49 @@ export function ratingParts(it, staleRisk){
   const quality=RATE_W.roi*roiS + RATE_W.vol*volS + RATE_W.stab*stabS + RATE_W.turn*turnS;
   return {roiS,volS,stabS,turnS,quality};
 }
+/* AP4 — the Finder's DESIRABILITY, computed with the SAME shared modules the console uses
+   (js/estimators.mjs rank + js/rating.mjs grade), replacing the old profit/hr Risk grade. HONEST
+   DEGRADE: the Finder is coarse — it has NO per-item 2h band or momentum (it can't fetch a series per
+   universe item without hammering the rate limit), so it ranks the LIVE QUICK pair (`priceBasis:'quick'`)
+   rather than the console's 2h band pair. So a Finder rank is a COARSE pre-filter that differs from the
+   band-precise rank the per-item `quote`/Trends read produces; the UI labels it so and the quote button
+   is the precise read. volDay = the limiting side (min hpv/lpv), matching the console's liquidity basis.
+   No confirmable multi-day regime here ⇒ the uniform 0.85 regime haircut applies to every row (a constant
+   — it shifts all grades, not the ordering). Bond rides its tax-exempt retrade-fee opts so it can't grade
+   off a phantom spread. */
+const FINDER_SPEC = { estimator: 'intraday', priceBasis: 'quick' };
+export function desirabilityOf(it){
+  const v=STATE.VOL[it.id]||{}; const hpv=v.highPriceVolume||0, lpv=v.lowPriceVolume||0;
+  const volDay=Math.min(hpv,lpv)||it.volume||0;                             // limiting side (console basis)
+  const bo=bondMarginOpts(it.id);
+  const row={ quickBuy:it.low, quickSell:it.high, optBuy:null, optSell:null, band:null, mom:null,
+    regime:null, rising:false, falling:false, volDay, mid:(it.low+it.high)/2, limit:it.limit,
+    bond:!!(bo&&bo.bond), guide:bo?bo.guide:null };
+  const er=estimateRank(FINDER_SPEC, row);
+  // thin = below the practical two-sided exit floor (~50/day limiting side) — mirrors the console's
+  // THIN_GRADE_CAP so an illiquid big-ticket can't headline S+ off a fat per-unit net it can't move fast.
+  const thin=volDay>0 && volDay<50;
+  const rt=rateItem({ row, rank:er.rank, thin });
+  return { rank:er.rank, grade:rt.grade, score:rt.score, thin, ttfSec:er.ttf&&er.ttf.value };
+}
 export function computeScores(){
   const perSlot=STATE.bankroll/Math.max(STATE.slots,1), damp=STRAT[STATE.strategy].damp, t=now();
   for(const it of STATE.ITEMS){
     it.trend=coarseTrend(it);
-    if(it.margin<=0){ it.fill=0; it.turn=null; it.pph=0; it.rate=null; it.riskIndex=1; it.score=0; continue; }
+    if(it.margin<=0){ it.fill=0; it.turn=null; it.pph=0; it.rate=null; it.riskIndex=1; it.score=0; it.desir=null; continue; }
     const partCap=Math.max(1, Math.floor(MAXPART*it.volume));               // can't realistically grab more than this per fill
     const fill=Math.max(0, Math.min(it.limit, Math.floor(perSlot/it.low), partCap)); it.fill=fill;
-    if(fill<1){ it.turn=null; it.pph=0; it.rate=null; it.riskIndex=1; it.score=0; continue; }
+    if(fill<1){ it.turn=null; it.pph=0; it.rate=null; it.riskIndex=1; it.score=0; it.desir=null; continue; }
     const cycle=it.margin*fill;
     it.turn=clamp(2*fill/Math.max(it.volume,1),0.1,8); it.pph=cycle/it.turn;
     const age=t-Math.min(it.highTime||t,it.lowTime||t);
     const staleRisk=clamp((age-FRESH_S)/(STALE_S-FRESH_S),0,1);
     it.rate=ratingParts(it, staleRisk);
-    it.riskIndex=1-it.rate.quality;                                          // Risk grade now reflects the full quality model
-    it.score=it.pph*(1-damp*it.riskIndex);
+    it.riskIndex=1-it.rate.quality;
+    it.score=it.pph*(1-damp*it.riskIndex);   // VESTIGIAL: the old profit/hr Risk score — no longer rendered
+    // or sorted on (AP4 repointed Grade/Rating/sort to `desir`); kept only until RATE_W is fully torn out.
+    // `it.pph` still feeds the informational Profit/hr column.
+    it.desir=desirabilityOf(it);                                            // AP4: shared rank + desirability grade
   }
 }
 /* refined per-item trend from a price series (archive mids or weirdgloop guide series) — z-scores + momentum */

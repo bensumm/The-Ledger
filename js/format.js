@@ -52,4 +52,8 @@ export function parseGp(str){
 }
 export const sgn=n=>n>0?'gain':(n<0?'loss':'');
 export function grade(ri){ return ri<0.25?'A':ri<0.5?'B':ri<0.75?'C':'D'; }
+// gradeCls(g) — color tier CSS class for a DESIRABILITY letter grade (rating.mjs: S+ … D), used by the
+// Finder + Scan so 'S+'/'A-'/'B+' etc. get a color (the raw 'r'+g class can't match — '+'/'-' aren't
+// valid in a CSS class selector). Buckets by the leading letter: S→rS (best), A→rA, B→rB, C→rC, D→rD.
+export function gradeCls(g){ if(!g) return ''; const c=String(g)[0]; return c==='S'?'rS':c==='A'?'rA':c==='B'?'rB':c==='C'?'rC':'rD'; }
 

@@ -51,17 +51,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free), `charts.js`
   (static inline SVG — `svgLine`/`svgBars`, fixed-size, no interaction; still used by the
   Trends hourly seasonality charts + the quote sparkline), `chartlib.js` (CL — the reusable
-  **interactive** SVG chart: `createChart(container,{series,refs,bands,markers,kind,yFmt,xFmt,
-  spans,span})` → `{setSpan,destroy}` handle, with pointer-drag PAN, wheel/pinch ZOOM about the
+  **interactive** SVG chart: `createChart(container,{series,overlay,fillBetween,refs,bands,markers,
+  kind,yFmt,xFmt,spans,span})` → `{setSpan,destroy}` handle, with pointer-drag PAN, wheel/pinch ZOOM about the
   cursor, a span selector, y-axis auto-rescale to the visible window, a hover tooltip + crosshair,
   and a `DEFAULT_SPANS` export. Max zoom-in is density-floored (~4 sample points, `medGap*4`) so you
   can't zoom into empty space; explicit span buttons bypass that floor to hit their exact duration.
-  Degrades to a no-op on a missing container or empty series. Consumed by `trends.js` — the
-  **Recent movement** (2h), **Price history** (1/7/30/90d windows), and **Diurnal timing** (7d/28d
-  lookback toggle) charts (0.59.0); more surfaces adopt it over time. ADDITIVE — `charts.js` stays intact), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
+  Degrades to a no-op on a missing container or empty series. An optional `overlay` second line +
+  `fillBetween` shading draws the Forward-forecast low/high CONE (0.61.0; absent config ⇒ byte-identical
+  single-series). Consumed by `trends.js` — the **Recent movement** (2h), **Price history** (1/7/30/90d
+  windows), **Diurnal timing** (7d/28d toggle), and **Forward forecast** (cone) charts; more surfaces
+  adopt it over time. ADDITIVE — `charts.js` stays intact), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
   + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
   (price/guide fetch + scoring; keeps the bond in the catalog — searchable — with a
-  bond-aware Finder margin via `bondMarginOpts`), `trends.js` (archive + seasonal analysis +
+  bond-aware Finder margin via `bondMarginOpts`; AP4 `desirabilityOf` computes the Finder's shared
+  rank + Desirability grade off `js/estimators.mjs`+`js/rating.mjs`), `trends.js` (archive + seasonal analysis +
   regime/patient/backtest — renders the Trends view; pure analytics live in
   `trendcore.js`; TV — also renders the **Diurnal timing** section via the shared
   `windowread.mjs` `hourProfile`/`deriveDiurnalRange` + a `chartlib.js` bar chart + an
@@ -354,7 +357,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     letting `quote.mjs` converge its logged liquidity `class` on screen's bulk snapshot for free),
     `cli.mjs` (shared arg/format/table
     helpers). **`rating.mjs` and `estimators.mjs` MOVED to `js/` (2026-07-10, app-parity Wave 2a)** —
-    they are now app-importable shared modules (the Finder rank/grade wiring is AP4); `pipeline/lib/`
+    now **APP-IMPORTED by `js/market.js`** (AP4, 0.61.0 — the Finder Grade column + Rating bar + sort use
+    the shared `estimateRank` + `rateItem`, replacing the old `RATE_W` profit/hr Risk model; coarse
+    live-quick basis in the Finder — the per-item quote is the band-precise read); `pipeline/lib/`
     keeps a one-line re-export shim at each old path so every node importer resolves byte-identically.
     Their descriptions (retained here for the pipeline reader): `rating.mjs` (grade/score model — P6b:
     the reward basis is the per-thesis RANK
@@ -370,8 +375,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
     bundles pair/net/pFill/ttf/rank. ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
-    calibrator. Consumed by `screen.mjs`+`rating.mjs` today; now in `js/` (shared home) so the app can
-    import it once AP4 lands — no app file imports it yet, so no APP_VERSION bump on the move),
+    calibrator. Consumed by `screen.mjs`+`rating.mjs` and **app-imported by `js/market.js`** (AP4,
+    0.61.0 — the Finder desirability rank/grade; a behavior change to it now bumps APP_VERSION),
     `gatecandidates.mjs` (P1 — screen.mjs's PURE
     candidate-selection + survival doctrine, moved out of screen.mjs so it's node-importable +
     fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the

@@ -389,16 +389,21 @@ function renderForecast(profSeries, qrow, it, showAnalysis){
     return;
   }
   const f=fc.forecast, tr=f.nextTrough, pk=f.nextPeak;
-  // chart: the projected LOW over the next 24h (the "when does it get cheap" curve), trough marked.
+  // chart: the projected 24h CONE — the projected LOW (gold, "when does it get cheap") and projected
+  // HIGH (cool overlay, "when does it get dear") with the uncertainty band shaded between, trough &
+  // peak marked. Both paths come from the SAME forecast.series (parity with the readout below).
   const series=(f.series||[]).map(s=>({t:s.etaH, v:s.projLow})).filter(p=>p.v!=null);
-  const refs=[{v:liveLo, cls:'reflive', label:'live'}];
-  if(tr && tr.level!=null) refs.push({v:tr.level, cls:'reffloor', label:'trough'});
-  const markers=(tr && tr.etaH!=null)?[{t:tr.etaH, cls:'nowmark', label:fmtEta(tr.etaH)}]:[];
-  if(series.length>1) forecastChart=createChart(chartEl, {series, refs, markers, kind:'line', spans:false, xFmt:h=>'+'+fmtEta(h), yFmt:fmt});
+  const overlay=(f.series||[]).map(s=>({t:s.etaH, v:s.projHigh})).filter(p=>p.v!=null);
+  const refs=[{v:liveLo, cls:'reflive', label:'live buy'}, {v:liveHi, cls:'reflive', label:'live sell'}];
+  const markers=[];
+  if(tr && tr.etaH!=null) markers.push({t:tr.etaH, cls:'nowmark', label:'trough '+fmtEta(tr.etaH)});
+  if(pk && pk.etaH!=null && (!tr || pk.etaH!==tr.etaH)) markers.push({t:pk.etaH, cls:'nowmark', label:'peak '+fmtEta(pk.etaH)});
+  if(series.length>1) forecastChart=createChart(chartEl, {series, overlay, fillBetween:true, refs, markers, kind:'line', spans:false, xFmt:h=>'+'+fmtEta(h), yFmt:fmt});
   else if(chartEl) chartEl.innerHTML='';
   const lvl=x=>(x&&x.level!=null)?fmtP(Math.round(x.level)):'—';
   const eta=x=>(x&&x.etaH!=null)?('in ~'+fmtEta(x.etaH)+(x.window?' ('+x.window+')':'')):'(trend-only — no eta)';
-  let s='<b>Next trough</b> '+lvl(tr)+' '+eta(tr);
+  const fcleg='<span class="dpleg"><span><i class="sw-buy"></i>projected buy (low)</span><span><i class="sw-sell"></i>projected sell (high)</span></span>';
+  let s=fcleg+'<br><b>Next trough</b> '+lvl(tr)+' '+eta(tr);
   if(tr && tr.band && tr.band.lo!=null) s+=' <span class="mini">[band '+fmtP(Math.round(tr.band.lo))+'–'+fmtP(Math.round(tr.band.hi))+']</span>';
   s+=' <span class="mini">·</span> <b>Next peak</b> '+lvl(pk)+' '+eta(pk);
   s+=' <span class="mini">· confidence '+(f.confidence||'?')+'</span>';
@@ -427,7 +432,13 @@ export async function runTrends(){
     document.getElementById('trEmpty').classList.add('hidden');
     document.getElementById('trResult').classList.remove('hidden');
     renderTrendHead(it);
-    const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: plan card only
+    // Render the full analysis for EVERY resolved item, including a search-surfaced catalog item
+    // (offscreen — a sub-browse-floor id resolved by name/quote). The 5m/1h/6h series are fetched for
+    // any tradeable id, and each section self-guards on its own data (renderRecent/history/diurnal/
+    // forecast degrade cleanly), so a searched item now gets the SAME charts as an in-universe one
+    // (Ben 2026-07-10 — the old `!it.offscreen` gate hid them for no data reason). `a` already passed
+    // the analyseHourly guard above, so usable history is present here regardless of offscreen.
+    const showAnalysis=true;
     ['trWhy','trHistWrap','trTiming','trRecent','trDiurnal','trForecast'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
     const hourLabels=Array.from({length:24},(_,i)=>pad2(i));
     // seasonal plan (the reconciled buy/sell model)

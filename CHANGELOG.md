@@ -10,6 +10,30 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.61.0 — Finder Desirability grade (AP4 partial) · forecast cone · searched-item charts (2026-07-10)
+Three Ben-requested items, all `js/` (+ `index.html`/`styles.css`); no pipeline change.
+
+- **Finder grade: A–F Risk → Desirability (S+…D).** The Finder's Grade column + Rating bar + default
+  sort now come from the SAME shared modules the console uses — `js/estimators.mjs` rank
+  (`net × P(fill) ÷ TTF`) + `js/rating.mjs` letter grade — replacing the old profit/hr `RATE_W` Risk
+  model. **Honest coarse basis:** the Finder has no per-item 2h band/momentum (it can't fetch a series
+  per universe item without hammering the rate limit), so it ranks the LIVE QUICK pair
+  (`priceBasis:'quick'`), labeled coarse in the tooltip — the *quote* button remains the band-precise
+  read. `volDay` = limiting side (min hpv/lpv, the console basis); the console's thin-grade cap (A-)
+  is mirrored so an illiquid big-ticket can't headline S+. Provisional — cutoffs uncalibrated (n≈0).
+  New `gradeCls()` (js/format.js) buckets S+…D to a color tier (`.rS/.rA/.rB/.rC/.rD`), also applied to
+  the **Scan** tab's grades (they were previously uncolored — `r'S+'` can't match a CSS selector). The
+  Watchlist tab's Risk column becomes Grade too. Profit/hr stays as an informational column; the old
+  `RATE_W`/`riskIndex`/`score` are now vestigial (full teardown is a follow-up).
+- **Forecast cone.** The Trends Forward-forecast chart now draws BOTH projected paths — the projected
+  **low** (gold) and **high** (cool) over the next 24h with the uncertainty band shaded between + the
+  trough/peak marked — instead of a single low line. Via a small additive `overlay`+`fillBetween`
+  option on `js/chartlib.js` (absent config ⇒ byte-identical to every existing single-series chart).
+- **Searched items now get the full charts.** Opening Trends for a search-surfaced catalog item (a
+  sub-browse-floor / non-universe id) previously showed the plan card only — the `!it.offscreen` gate
+  hid Recent/History/Diurnal/Forecast/Why for no data reason (the 5m/1h/6h series fetch fine for any
+  id, and each section self-guards). Now a searched item renders the SAME charts as an in-universe one.
+
 ### 0.60.0 — Trends item page: Forward forecast + term-structure floor overlay (TV, app-parity) (2026-07-10)
 Two of the four Q3 item-page visualizations, both **strategy (C)** off shared `js/` modules the
 console already uses — the numbers are the SAME reads, not an app fork. `js/trends.js` +

@@ -1,5 +1,5 @@
 import { API, STATE, sSet, logEvent, setHealth } from './state.js';
-import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, grade, now, fmtHour, sgn, pad2 } from './format.js';
+import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, gradeCls, now, fmtHour, sgn, pad2 } from './format.js';
 import { loadAll, resolveId, computeScores, TREND_BADGE, rawItem } from './market.js';
 import { openTrends } from './trends.js';
 import { switchTab } from './main.js';
@@ -10,13 +10,14 @@ import { ghConfigured, putJsonFile, WATCHLIST_PATH } from './github.js';
 import { makeSortable } from './table.js';
 
 /* finder — sort owned by the shared sortable-table helper (TB1); columns mirror the
-   #finderTable header data-k set. riskIndex inverts (lower index = better grade). */
+   #finderTable header data-k set. AP4: Grade + Rating both sort by the shared DESIRABILITY rank
+   (higher = better), replacing the old profit/hr `score` + inverted `riskIndex`. */
 export const finderSort=makeSortable({
   tableId:'finderTable', name:'finder', defaultKey:'score',
   columns:[
     {key:'name', type:'str', get:r=>r.name},
-    {key:'riskIndex', type:'num', invert:true, get:r=>r.riskIndex},
-    {key:'score', type:'num', get:r=>r.score},
+    {key:'desir', type:'num', get:r=>r.desir?r.desir.rank:-1},
+    {key:'score', type:'num', get:r=>r.desir?r.desir.rank:-1},
     {key:'low', type:'num', get:r=>r.low},
     {key:'high', type:'num', get:r=>r.high},
     {key:'margin', type:'num', get:r=>r.margin},
@@ -72,21 +73,23 @@ export function renderFinder(){
   if(!rows.length){ body.innerHTML=''; empty.classList.remove('hidden');
     empty.innerHTML='<div class="big">No flips match</div><div class="sm">Loosen the price tier or turn off “Affordable”. Margins under 2% never clear the tax, so they’re hidden by design.</div>'; return; }
   empty.classList.add('hidden');
-  const maxScore=Math.max(...rows.map(r=>r.score||0),1), staleT=now()-3600;
+  const maxRank=Math.max(...rows.map(r=>r.desir?r.desir.rank:0),1), staleT=now()-3600;
   body.innerHTML=rows.map(it=>{
     const watched=STATE.watchlist.includes(it.id);
     const stale=(it.highTime<staleT||it.lowTime<staleT)?'<span class="stale">stale</span>':'';
-    const off=it.offscreen;   // FX1.1 search-only catalog row: no rating/score/fill/turn — render — and lean on the quote button
-    const rel=off?null:Math.round(it.score/maxScore*100), g=off?null:grade(it.riskIndex);
-    const rt=it.rate;
-    const gTitle=off?'below the browse price floor — search-surfaced; use quote for the live table':(rt?('Rating factors — ROI '+Math.round(rt.roiS*100)+'% · Liquidity '+Math.round(rt.volS*100)+'% · Stability '+Math.round(rt.stabS*100)+'% · Turnaround '+Math.round(rt.turnS*100)+'% (stability = live price vs guide; full regime check is on Trends)'):'insufficient data');
+    const off=it.offscreen;   // FX1.1 search-only catalog row: no rank/grade — render — and lean on the quote button
+    const rel=off?null:Math.round((it.desir?it.desir.rank:0)/maxRank*100), g=off?null:(it.desir?it.desir.grade:'—');
+    // AP4: the Grade is the DESIRABILITY letter (shared js/rating.mjs off the shared js/estimators.mjs
+    // rank); COARSE here (live-quick-pair basis, no per-item band) — the quote button is the band-precise
+    // read. Provisional: the rank/grade cutoffs are uncalibrated (n≈0).
+    const gTitle=off?'below the browse price floor — search-surfaced; use quote for the live table':(it.desir?('Desirability '+g+' — shared rank net×P(fill)÷TTF ≈ '+fmt(it.desir.rank)+'/day. COARSE (live-quick-pair basis; the quote button is the band-precise read). Provisional — cutoffs uncalibrated (n≈0).'):'insufficient data');
     const tb=TREND_BADGE[(it.trend&&it.trend.state)||'none']||TREND_BADGE.none;
     const badge=tb.g?' <span class="tbadge '+tb.c+'" title="'+tb.t+(it.trend&&it.trend.divPct!=null?' · '+(it.trend.divPct>=0?'+':'')+it.trend.divPct.toFixed(1)+'% vs guide':'')+'">'+tb.g+'</span>':'';
     // T1.4: Risk grade + Rating bar sit immediately after the item name (identity first),
     // then the price/margin columns — cell order must match the <th> order in index.html.
     return '<tr><td class="left"><span class="linkname" data-trend="'+it.id+'">'+it.name+'</span>'+badge+stale+(it.members?'':' <span class="mini">f2p</span>')+'</td>'+
       (off?'<td><span class="grade" title="'+gTitle+'">—</span></td>'
-          :'<td><span class="grade r'+g+'" title="'+gTitle+'">'+g+'</span></td>')+
+          :'<td><span class="grade '+gradeCls(g)+'" title="'+gTitle+'">'+g+'</span></td>')+
       (off?'<td class="num mini" title="'+gTitle+'">—</td>'
           :'<td><span class="scorebar" title="'+gTitle+'"><span class="track"><span class="fillb" style="width:'+rel+'%"></span></span><span class="n">'+rel+'</span></span></td>')+
       '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
@@ -148,7 +151,7 @@ export const watchSort=makeSortable({
     {key:'roi', type:'num', get:r=>r.it.roi},
     {key:'turn', type:'num', get:r=>r.it.turn},
     {key:'pph', type:'num', get:r=>r.it.pph},
-    {key:'riskIndex', type:'num', invert:true, get:r=>r.it.riskIndex}
+    {key:'desir', type:'num', get:r=>r.it.desir?r.it.desir.rank:-1}
   ],
   onSort:()=>renderWatch()
 });
@@ -161,7 +164,8 @@ export function renderWatch(){
   let rows=STATE.watchlist.map(id=>{ const it=resolveId(id); return it?{id,it}:null; }).filter(Boolean);
   rows=watchSort.sort(rows); watchSort.decorate();
   body.innerHTML=rows.map(({id,it})=>{ const off=!!it.offscreen;
-    const gradeCell=off?'<span class="mini">—</span>':'<span class="grade r'+grade(it.riskIndex??1)+'">'+grade(it.riskIndex??1)+'</span>';
+    const dg=it.desir?it.desir.grade:null;
+    const gradeCell=(off||!dg)?'<span class="mini">—</span>':'<span class="grade '+gradeCls(dg)+'" title="Desirability (shared rank/grade) — coarse live-quick basis; provisional (n≈0)">'+dg+'</span>';
     return '<tr><td class="left"><span class="linkname" data-trend="'+id+'">'+it.name+'</span>'+(off?' <span class="mini">quote</span>':'')+'</td>'+
       '<td class="num">'+fmtP(it.low)+'</td><td class="num">'+fmtP(it.high)+'</td>'+
       '<td class="num '+sgn(it.margin)+'">'+fmtP(it.margin)+'</td><td class="num">'+(it.roi!=null?it.roi.toFixed(1)+'%':'—')+'</td>'+
@@ -230,7 +234,7 @@ function scanTableHtml(headers, rows){
     return '<tr>'+cells.map((c,i)=>{
       const ttl=scTitle(c), t=ttl?' title="'+attr(ttl)+'"':'';
       if(i===0) return '<td class="left"><span class="linkname" data-trend="'+r.id+'">'+scText(c)+'</span></td>';
-      if(headers[i]==='Grade'){ const g=scText(c); return '<td'+t+'><span class="grade r'+g+'"'+(ttl?' title="'+attr(ttl)+'"':'')+'>'+g+'</span>'+(ttl?'<span class="thinflag" title="'+attr(ttl)+'">thin</span>':'')+'</td>'; }
+      if(headers[i]==='Grade'){ const g=scText(c); return '<td'+t+'><span class="grade '+gradeCls(g)+'"'+(ttl?' title="'+attr(ttl)+'"':'')+'>'+g+'</span>'+(ttl?'<span class="thinflag" title="'+attr(ttl)+'">thin</span>':'')+'</td>'; }
       return '<td class="'+scCls(c)+'"'+t+'>'+scText(c)+'</td>';
     }).join('')+'</tr>'; }).join('')+'</tbody>';
   return '<div class="tablewrap"><table class="scantable">'+head+body+'</table></div>';

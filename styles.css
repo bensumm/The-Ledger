@@ -143,6 +143,7 @@
   /* S3: watchlist section — always-shown items exempt from the scan floors/gates */
   .scanwatch{color:var(--gold)}
   .scanwatch .scanhint{color:var(--muted)}
+  .rS{color:var(--gold); background:rgba(230,181,74,.16)}
   .rA{color:var(--gain); background:rgba(126,197,111,.12)}
   .rB{color:var(--parch); background:rgba(236,224,196,.08)}
   .rC{color:var(--amber); background:rgba(224,162,60,.12)}
@@ -194,6 +195,9 @@
   .axislbl{fill:var(--muted); font-size:9px; font-family:'IBM Plex Mono',monospace}
   .pline{fill:none; stroke:var(--gold); stroke-width:2}
   .parea{fill:rgba(230,181,74,.08)}
+  /* TV forecast cone: a second (overlay) line + the shaded band between the two projected paths */
+  .pline.overlay{stroke:var(--cool); stroke-width:1.5; opacity:.85}
+  .fcone{fill:rgba(95,151,184,.14)}
   .baseln{stroke:var(--line2); stroke-width:1; stroke-dasharray:3 3}
   .dotmin{fill:var(--gain)} .dotmax{fill:var(--loss)}
   .vbar{fill:var(--line2)} .vbar.peak{fill:var(--gold)}
@@ -230,6 +234,7 @@
   .dpleg{display:inline-flex; gap:12px; align-items:center; font-size:10px; color:var(--parch2); margin-left:2px}
   .dpleg i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px}
   .dpleg .sw-dip{background:var(--cool)} .dpleg .sw-peak{background:var(--warm)}
+  .dpleg .sw-buy{background:var(--gold)} .dpleg .sw-sell{background:var(--cool)}
 
   /* collapsible disclosures (Why this trend? · Timing & seasonality) */
   details.disc{background:var(--oak2); border:1px solid var(--line); border-radius:12px; margin-bottom:16px}
