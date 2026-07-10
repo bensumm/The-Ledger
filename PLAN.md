@@ -182,6 +182,12 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
 | TV1 | Per-thesis validators (gate/inform) + trajectory (knife/oscillating/based) classifier + in-script windowrange (reach Leg B + 1h-derived trajectory) | `js/termstructure.mjs`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen.mjs`, tests | ✅ 2026-07-09 (Ben design session: separate validator COMPUTATION from per-thesis ACTION; `spec.validators`={key,mode,window}; reach/trajectory/value-amplitude start inform everywhere, floor+limit gate; trajectory off the fetched 1h series so it fires while loadDaily is cold — the Nightmare-staff knife catch; SKILL /scan v1.29; replay goldens untouched; no APP_VERSION) |
 | PF1 | Forecast: pure diurnal+trend 12h/24h projection module + `hourProfile` dispersion fields | `js/forecast.mjs` (new), `js/windowread.mjs` (additive), `pipeline/forecast.test.mjs` (new) | ✅ 2026-07-10 (`diurnalForecast`/`whenBuyable`/`whenSellable`; blood-rune golden pinned; loud degrades; band widens with horizon; INFORM-ONLY/console-only, n≈0 placeholders, no APP_VERSION. **PF2–PF8 remain OPEN** — surfaces (quote/screen/windowrange/watch), estimator/validator hooks, and the PF8 validation study that gates any graduation past inform-only; see `PLAN-FORECAST.md`) |
+| ARCH-1 | monitor.mjs applies REMOVE tombstones (no phantom holds) | `pipeline/monitor.mjs`, `lib/reconstruct.mjs`, `monitor.test.mjs` | ✅ `a24d456` (routes monitor's in-memory FIFO through shared `buildTombstonedEvents`; PLAN-ARCH-DOCS-AUDIT A1) |
+| COD-1 | Quote-basis ordering invariant fixture | `pipeline/quotecore.test.mjs` | ✅ `55861d1` (test-only; `quoteOrdered(row)` across consistent-basis shapes; Q3-2) |
+| DL1 | Structural doc-drift linter + CI wire | `pipeline/doclint.mjs`, `doclint.test.mjs`, `checks.yml` | ✅ `ef239dc` (denylist + duplicate-phrase; stays denylist/structural, never semantic; Q3-1) |
+| COD-2 | Overnight accumulation table → script | `lib/gatecandidates.mjs`, `screen.mjs`, `/overnight` SKILL | ✅ `81d9049` (`expUnitsOvernight`; `screen.mjs --posture overnight` prints the table; pinned by `expunitsovernight.test.mjs`; Q3-3) |
+| COD-3 | `rebidBar`/`rebidAdvice` helper + weekly-read marker | `js/quotecore.js`, `pipeline/outcomes.mjs`, skills | ✅ `5b91d10` (trajectory/diurnal-aware CUT-family advisory; `--weekly-due`; pinned by `rebid.test.mjs`; Q3-4/5) |
+| COD-4 | quote.mjs budgeted ts1h → reach/trajectory fire on explicit asks | `pipeline/quote.mjs`, `lib/richterm.mjs`, `lib/context.mjs` | ✅ `a923496` (fixes flaw A4; shared `staleBookBanner` + diurnal line on quote; Q3-6/7) |
 
 ---
 
@@ -382,35 +388,9 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
-**ARCH-DOCS-AUDIT codification (from `PLAN-ARCH-DOCS-AUDIT.md`, Q3 "prose → code"):**
-- **COD-2 — DONE (2026-07-10):** the `/overnight` accumulation formula is CODE, not prose. Added
-  `expUnitsOvernight` beside `expUnits` in `pipeline/lib/gatecandidates.mjs` (= `expUnits × 8/24`, so the
-  6-limits/day + 10%-share constants can't drift from the day figure); `screen.mjs --posture overnight`
-  now prints the **Overnight accumulation & capital** table itself (bid→sell · up-to units/8h · capital ·
-  running subtotal · net/u · total). `/overnight` §6 shrank to prioritization + fill-realism judgment +
-  a pointer (v1.16). Pinned by `pipeline/expunitsovernight.test.mjs`. Pipeline stdout + skills only → no
-  APP_VERSION.
-- **COD-3 — DONE (2026-07-10):** the `/positions` cut-and-rebid friction bar is CODE — pure `rebidBar(clear,
-  spread)` + a TRAJECTORY/PROJECTION-AWARE `rebidAdvice({clear,spread,trajectory,diurnal})` in
-  `js/quotecore.js` (knife → against; oscillating → rebid at the diurnal trough / sell the daily peak; else
-  the friction bar governs — inform-grade, wires the EXISTING classifyTrajectory + deriveDiurnalRange, does
-  NOT build a forecast). `quote.mjs --positions` prints a **Rebid advisory** line on every CUT-family verdict
-  (trajectory off the read-only daily archive; diurnal null on that no-1h surface). Weekly-read cadence
-  mechanized: `outcomes.mjs --report` stamps `.cache/last-weekly-report` and `--weekly-due` reports it, so
-  `/morning` §6 stops asking Ben. Skills bumped (`/positions` 1.19, `/morning` 1.7). Pinned by
-  `pipeline/rebid.test.mjs`. FORWARD HOOK: PF1 (PLAN-FORECAST.md) upgrades the qualitative peak to a
-  quantitative projected {level, eta}. `js/quotecore.js` is app-imported, but `rebidBar`/`rebidAdvice` are
-  NEW exports — computeQuote/replay golden byte-unchanged → no APP_VERSION.
-- **COD-4 — DONE (2026-07-10, fixes flaw A4):** validation on the explicit-ask surface. `quote.mjs`'s
-  per-item read now takes a BUDGETED `ts1h` fetch (1–2 items/invocation) so reach AND trajectory FIRE
-  there (verified live: Zaryte crossbow printed `⚠ reach: ask … reached only 0/14d` + `⚠ trajectory:
-  elevated`, both of which degraded to pass pre-COD-4). Warm 1h-derived trajectory via a NEW shared
-  `pipeline/lib/richterm.mjs` (`richFrom1h`/`trajectoryFrom1h` EXTRACTED from screen.mjs — one home, no
-  drift). Also: (a) `quote.mjs --positions` now prints the shared `staleBookBanner` (`lib/context.mjs`)
-  off positions.json's age — the same held-basis staleness line watch.mjs shows; (b) `quote.mjs`'s
-  per-item read prints the diurnal BID/ASK timing line (series now in hand). Fetch budget noted honestly.
-  Pinned by the `context.test.mjs` staleBookBanner block; validators verified firing live. Pipeline
-  stdout only → no APP_VERSION.
+**ARCH-DOCS-AUDIT codification (from `PLAN-ARCH-DOCS-AUDIT.md`, Q3 "prose → code") — ALL DONE, now in the Status table above:**
+COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL1 `ef239dc`, COD-1 `55861d1`).
+Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
 - **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day
@@ -425,48 +405,21 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 - **Value niche lacks the LM1 limit stage (LM1 `9517655`, 2026-07-09):** `--mode value` renders via
   `valueGate`, not `runValidators`, so `limitValidator` doesn't reach it. Provisional/off-by-default
   (n≈0) — wire the limits stage in when the value path grows a validator pass, not before.
-- ~~**Spread/band/churn consolidation — evidence-gated (Ben, 2026-07-09):**~~ **RESOLVED (Steps 3+4,
-  Ben 2026-07-09):** the `spread` AND `rising` specs are DELETED (`js/strategies.mjs`; git history is the
-  reference). Ben approved the cut directly rather than waiting on P6's retro-join. Rationale: spread's
-  24h-average edge is narrower than the intraday band and surfaced ≈0 clean flips once the render net>0
-  gate landed (live check: `--mode spread` rated 1 item, which band also surfaces); rising ⊆ band. This
-  SUPERSEDES NY2/NY3's "spread stays off-by-default" + "rising kept in `--mode all`" rulings. Rising's ONE
-  real mechanism (proxy-first fetch ordering) is absorbed into `rankAndSlice`'s **rising reserve**
-  (`RISING_RESERVE_DEFAULT`). **Residual (by-design, not a gap):** spread's only exclusive lane was thin
-  big-tickets with a sparse 2h band; band's thin path (`MIN_TRADED_THIN:2` + the gp-flow reserve) catches
-  them (spread's 24h-avg basis for those was the weaker read). `risingPoolFloor` + `RISE_MID_FLOOR`/
-  `RISE_LIQUID_VOL` kept but vestigial (one-flag re-add).
-- **Traded-band gate — Bar D — DONE (Ben 2026-07-09):** the residual note above USED to read "an item with
-  ZERO traded 5m windows in the 2h is deliberately excluded (untraded = artifact)" — that bit us on nearly
-  every genuinely-liquid big ticket, because the old `active5m` count required both sides to print *in the
-  same 5m bucket*, which a big ticket (a handful of scattered prints/hour) structurally never does. Bar D
-  DECOUPLES the two jobs the one count conflated: DENSITY = `tradedWin` (windows with ANY trade, one-sided
-  OK — a lone spike is 1, still rejected; `MIN_TRADED` 6 / `MIN_TRADED_THIN` 2) + TWO-SIDEDNESS =
-  `sawLow && sawHigh` once across the window (a one-sided ghost fails). Liquidity proper stays the 24h
-  gate's job. `marketfetch.mjs` emits the fields on both band paths; `bandCore` (js/strategies.mjs) gates on
-  them; `active5m` survives as a display signal + `activeWin`→confidence now reports `tradedWin`. Replay
-  archetype 2003 became the regression guard (active5m 0, survives on tradedWin 8 — golden byte-unchanged).
-- **Band EDGE robustness — Bar E — DONE (Ben 2026-07-10, Scope A + Scope B):** robustify the band EDGES so a lone
-  flier can't set `bandHi`/`bandLo` and inflate the surfaced ROI (the band-top artifact). `robustBand`
-  (home MOVED to `js/quotecore.js` by Scope B — the app+node shared module; `pipeline/lib/marketfetch.mjs`
-  re-exports it) takes p90 high / p10 low on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE` 8
-  prints), keeps the raw extremum on a SPARSE side (a quantile over a few points == the max or discards the
-  one real high — the thin big-ticket class Bar D just admitted; reach backstops it). SCOPE = both surfacing
-  paths: the pipeline (`loadBands` → `bandCore` edge/Rank) AND the app-facing `computeQuote` Optimistic
-  column (Scope B, 0.55.0). Stays raw: `loadHistBands` (O1 reconstructs the actual band a trade sat in) and
-  `computeQuote`'s MOMENTUM tell (`rawBandLo/rawBandHi` drive `mom` — a fresh 2h high fires off the true max,
-  not the p90; the Momentum column is byte-identical, the Optimistic column is what changed).
-  `bandCore`/replay-golden byte-unchanged (fixture bands near-flat ⇒ robust==raw); pinned by
-  `pipeline/bandedge.test.mjs` + the `quotecore.test.mjs` Scope-B split assertion. Thresholds are NAMED
-  PLACEHOLDERS; `rawBandLo/rawBandHi` kept for audit. **Scope B shipped 0.55.0** — completes the follow-up
-  that Scope A deferred (removes the artifact from the app's headline Optimistic column at source).
-- **Churn per-lap rank + band partition — DONE (Step 6, Ben 2026-07-09, decision A):** churn ranks the
-  LAP (`net/u × min(limit, feasibleDepth) × P ÷ TTF`) via its own `churn` estimator family (we always max
-  the buy limit → the exact limit is a fact, NOT the demoted ×windows/day `expGpDay`); Death/Blood/Soul
-  rune now grade non-D (the rank NUMBER separates them — Blood 1.4m > Soul 400k > Death 286k — though the
-  per-unit `rating.mjs` letter-cutoffs currently clump per-lap churn at S+ until calibrated). And in
-  `--mode all` churn is partitioned disjoint from band by margin (churn = the sub-`--min-roi` volume lane,
-  band = the per-unit lane) — render-stage, so the replay goldens are untouched.
+- **Spread/rising consolidation — RESOLVED (Steps 3+4, Ben 2026-07-09):** `spread` AND `rising` specs
+  DELETED (`js/strategies.mjs`; git history is the reference). SUPERSEDES NY2/NY3. Rising's proxy-first
+  fetch ordering absorbed into `rankAndSlice`'s rising reserve; residual thin-big-ticket lane caught by
+  band's thin path. Detail: `git show f982a31` + the deletion commits.
+- **Traded-band gate (Bar D) — DONE `0ed7aa1` (Ben 2026-07-09).** Decoupled DENSITY (`tradedWin`) from
+  TWO-SIDEDNESS (`sawLow && sawHigh`) so genuinely-liquid big tickets stop failing the old both-in-one-5m-
+  bucket `active5m` count. Invariant lives in the `bandCore` header (`js/strategies.mjs`); pinned by replay
+  archetype 2003.
+- **Band EDGE robustness (Bar E) — DONE `dba20b4` (Scope A) + `7056846` (Scope B, 0.55.0).** `robustBand`
+  (home in `js/quotecore.js`) takes p90/p10 on a DENSE side, raw extremum on a SPARSE side, killing the
+  band-top artifact in both the pipeline `bandCore` edge and the app's Optimistic column. Invariant lives in
+  the `robustBand` header; pinned by `pipeline/bandedge.test.mjs` + the `quotecore.test.mjs` Scope-B split.
+- **Churn per-lap rank + band partition — DONE `8c84fac` (Step 6, Ben 2026-07-09).** Churn ranks the LAP
+  (`net/u × min(limit, feasibleDepth) × P ÷ TTF`) via its own estimator family; `--mode all` partitions
+  churn disjoint from band by margin (render-stage, replay goldens untouched). Detail: the landing commit.
 - **PM1 follow-ons (deliberate, not scope-cut — PM1 `6aba80b`, 2026-07-08):** (1) the **watch
   surface** for probes — dip inverts to "average-down window" on an owned lot (the framing is
   already coded in `modules/dip.mjs` behind `ctx.owned`; wiring watch.mjs to run probes is the
@@ -555,31 +508,6 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   should know (lane M, 2026-07-04).
 - `mobile-fills.log` grows unbounded (append-only by design, like `coffer-manual.log`) — a
   future compaction of absorbed/tombstoned lines could trim it (lane M, 2026-07-04).
-- ✅ **ARCH-1** (2026-07-10) — `monitor.mjs`'s "HELD POSITIONS" view no longer diverges from the
-  canonical book on tombstones. It previously rebuilt a FIFO from the live exchange log(s) only,
-  DROPPING `coffer-manual.log` REMOVE tombstones, so already-purged lots reappeared as phantom holds
-  (observed live 2026-07-05: 2× enhanced crystal teleport seed @ 3.345m showed held in monitor while
-  `positions.json` correctly had 1 open lot — the agent read monitor as truth and gave wrong listing
-  advice). FIXED by routing monitor's in-memory reconstruction through the new shared
-  `reconstruct.buildTombstonedEvents()` (the same event id + REMOVE-target filter sync-fills.mjs applies
-  inline) + relabeling the section "REMOVE tombstones applied". Pinned by `pipeline/monitor.test.mjs`
-  (a REMOVE tombstone purges a would-be phantom lot). PLAN-ARCH-DOCS-AUDIT A1.
-- ✅ **COD-1** (2026-07-10) — the quote-basis ordering invariant (CLAUDE.md prose: on a consistent
-  basis `optBuy ≤ quickBuy ≤ quickSell ≤ optSell`; a break on mixed bases is a bug) is now PINNED as a
-  `quotecore.test.mjs` fixture asserting `quoteOrdered(row)` across a spread of realistic consistent-basis
-  shapes (ranging / tight / wide / big-ticket / breakup / breakdown / low-priced). Test-only; a future edit
-  that reintroduces base-mixing fails loudly. PLAN-ARCH-DOCS-AUDIT Q3-2.
-- ✅ **DL1** (2026-07-10) — `pipeline/doclint.mjs`: a STRUCTURAL, offline doc-drift linter (CI cheap
-  `checks` job + auto-discovered `doclint.test.mjs`), the CI-encoded half of process rule 8. CHECK 1 =
-  a maintained DENYLIST of superseded terms/commands × operating docs (`Spread`/`Rising` as live niches,
-  unqualified "Falling items are excluded", `--mode spread`/`--mode rising`), with `xfail` for
-  known-owned live violations. CHECK 2 = a single-source / duplicate-phrase fingerprint (a 14-word
-  shingle appearing verbatim in >1 doc on the CLAUDE.md ⇆ README axis = the copy-not-move failure),
-  allowlist for legit boilerplate + known DOC-2/DOC-3 dups. Must stay denylist + structural, never
-  semantic (skill-lint honesty note applies). REAL DRIFT FOUND + reported: (a) index.html's stale
-  Scan-intro carries BOTH the deleted-niche list AND the unqualified falling-exclusion — xfailed to
-  PLAN-APP-PARITY AP1 (deployed markup, not fixed here); (b) three CLAUDE.md⇆README verbatim passages
-  (P0/P4b archive-append, P6c sub-floor) — allowlisted to DOC-2/DOC-3. PLAN-ARCH-DOCS-AUDIT Q3-1.
 - LH2's blind-warning heuristic can't catch the *false-EMPTY snapshot* restart variant: a
   client bounce made the plugin write a fresh all-slots `EMPTY` snapshot (16:10:02
   2026-07-05) while real offers stood in-game — log is FRESH (so the staleness gate never
