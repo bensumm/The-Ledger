@@ -10,6 +10,40 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.58.0 — app↔console parity: interactive chart library (CL) + Trends Diurnal timing (TV) (2026-07-10)
+The CL + first TV sub-chunk of `PLAN-APP-PARITY.md`. Two additive pieces, one bump.
+
+- **CL — `js/chartlib.js`, a reusable interactive SVG chart.** `charts.js` (`svgLine`/`svgBars`) is a
+  static 480×150 snapshot — no pan, no zoom, no rescale. `chartlib.js` is the interactive successor the
+  whole app can adopt over time. `createChart(container, {series, refs, bands, markers, kind:'line'|'bars',
+  yFmt, xFmt, spans, span})` returns a `{setSpan, destroy}` handle. **Pan/zoom model** (decided — SVG with
+  viewBox semantics, JS-recomputed; NOT canvas, NOT a CSS transform): the SVG viewBox is fixed (crisp at
+  any device zoom) and what moves is the DATA WINDOW `[vLo,vHi]` — a slice of `[tMin,tMax]`. Every pan
+  (pointer-drag, shift the window) and zoom (wheel / trackpad ctrl-wheel / two-pointer touch pinch, about
+  the cursor) mutates the window and RE-RENDERS the SVG innerHTML from that slice, which is what lets the
+  **y-axis auto-rescale to the visible x-window** (zoom into a flat region and detail still shows) while
+  keeping stroke widths crisp. Listeners live on the persistent `<svg>` so re-rendering doesn't drop them.
+  A **span selector** (2h/1d/1w/3mo/All) snaps the window; spans with no more data than they'd show are
+  disabled. Hover shows a floating tooltip + crosshair (t + value via `xFmt`/`yFmt`). Clamps so you can't
+  pan/zoom outside the data. NEVER throws on a missing container or empty series — degrades to a "Not
+  enough data yet." note + a no-op handle. Theme-aware off the existing chart CSS classes + a few new
+  chartlib-only ones (`.ichart`/`.chartspans`/`.chartspan`/`.charttip`/`.cgrid`/`.cxhair`/`.cxdot`).
+  ADDITIVE — `charts.js` is untouched (Trends recent/history/hourly + the quote sparkline still use it).
+- **TV — Diurnal timing on the Trends item page.** A new **Diurnal timing** section (timing tier, below
+  Price history — per the `trends.js` header comment's decision-priority ordering; a timing tool, NOT above
+  the plan card). Off the ALREADY-fetched 1h series (no new request), it runs the shared
+  `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange` — the SAME computation the console's `screen.mjs`
+  + `quote.mjs` print (parity, not a fork) — and renders a 24-bar hour-of-day chart (dip hours green, peak
+  hours red) via `chartlib.js` with the derived stale-guarded BID/ASK overlaid as reference lines, plus a
+  one-line BID→ASK readout with the after-tax swing and the ★ clean-candidate flag (same formula as the
+  console). Degrades to a "not enough hourly history yet" line when `hourProfile` returns null (never a
+  broken chart). **Validator split (Ben's instruction):** the `reach` validator note — which scores whether
+  those diurnal levels are actually touched/reached — is rendered beside this chart, inform-only, via
+  `js/validate.mjs`'s `reachValidator` off the in-hand 1h series (floor/trajectory belong with the future
+  term-structure viz, not here). Honest: the diurnal thresholds are placeholders (n≈0); the section is
+  labeled guidance, matching the console framing. `js/windowread.mjs` + `js/validate.mjs` are now
+  APP-IMPORTED (first app consumers).
+
 ### 0.57.0 — app↔console parity, app shell: stale-copy fix · Signals removed · pipeline-version display (2026-07-10)
 Lane B of the app↔console parity program (`PLAN-APP-PARITY.md`). Three cohesive app-shell changes, one bump:
 

@@ -2,6 +2,9 @@ import { Z_BAND, ARCHIVE_MIN_GAP, STATE, sGet, sSet, logEvent } from './state.js
 import { fetchTs } from './marketfetch.js';
 import { tax, netMargin, netMarginQty, fmt, fmtP, now, pad2, fmtHour, sgn, clamp } from './format.js';
 import { svgLine, svgBars } from './charts.js';
+import { createChart } from './chartlib.js';                                  // CL: interactive chart (diurnal viz)
+import { hourProfile, deriveDiurnalRange } from './windowread.mjs';           // shared diurnal peak-timing math (same module the console uses)
+import { reachValidator } from './validate.mjs';                             // TV: reach note beside the diurnal timing (inform-only)
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
@@ -245,6 +248,79 @@ function renderRecent(it, s5m, qrow, showAnalysis){
   cap.innerHTML=s;
   el.classList.remove('hidden');
 }
+/* TV: the "Diurnal timing" section — the hour-of-day dip/peak profile, rendered via the shared
+   js/windowread.mjs hourProfile/deriveDiurnalRange (the SAME computation the console's screen +
+   quote print — parity, not a fork) off the ALREADY-fetched 1h series (no new request). A 24-bar
+   hour-of-day chart (dip hours green, peak hours red) with the derived stale-guarded BID/ASK
+   overlaid as reference lines, plus a one-line readout of BID→ASK + after-tax swing (★ = clean
+   candidate, matching the console's flag). The `reach` validator note is rendered beside it,
+   inform-only (it scores whether those diurnal levels are actually reached). It's a TIMING tool, so
+   it lives in the timing tier (below Price history), NOT above the plan card. Thresholds are
+   placeholders (n≈0) — the section is labeled guidance, matching the console framing.
+   Degrades to a "not enough history yet" line when hourProfile returns null (never a broken chart). */
+const DIURNAL_MIN_ROI=1;   // PLACEHOLDER (rule 4): after-tax ROI a clean ★ diurnal candidate must clear
+let diurnalChart=null;
+function renderDiurnal(profSeries, qrow, it, showAnalysis){
+  const el=document.getElementById('trDiurnal'); if(!el) return;
+  const chartEl=document.getElementById('trDiurnalChart'), cap=document.getElementById('trDiurnalCap'), reachEl=document.getElementById('trDiurnalReach');
+  if(diurnalChart){ try{ diurnalChart.destroy(); }catch(_){ } diurnalChart=null; }
+  if(reachEl) reachEl.textContent='';
+  if(!showAnalysis){ el.classList.add('hidden'); return; }
+  let prof=null; try{ prof=hourProfile(profSeries||[], {nights:7}); }catch(_){ prof=null; }
+  if(!prof){
+    el.classList.remove('hidden');
+    if(chartEl) chartEl.innerHTML='';
+    if(cap) cap.innerHTML='<span class="mini">Not enough hourly history yet to read a daily rhythm — keep this item starred and re-check in a few days.</span>';
+    return;
+  }
+  const liveLo=(qrow&&qrow.quickBuy!=null)?qrow.quickBuy:it.low;
+  const liveHi=(qrow&&qrow.quickSell!=null)?qrow.quickSell:it.high;
+  const dr=deriveDiurnalRange(prof, {liveLo, liveHi});
+  el.classList.remove('hidden');
+  // bar series: one bar per profiled hour, height = the hour's recent mid; dip hours green, peak hours red.
+  const dipSet=new Set(prof.dip.hours||[]), peakSet=new Set(prof.peak.hours||[]);
+  const series=(prof.hours||[]).map(h=>{
+    const mid=(h.lowRecent!=null&&h.hiRecent!=null)?(h.lowRecent+h.hiRecent)/2:(h.lowRecent!=null?h.lowRecent:h.hiRecent);
+    return {t:h.h, v:mid, cls:dipSet.has(h.h)?'dip':(peakSet.has(h.h)?'peak2':null)};
+  }).filter(p=>p.v!=null);
+  const refs=[];
+  if(dr&&dr.ask!=null) refs.push({v:dr.ask, cls:'reflive', label:'ask'});
+  if(dr&&dr.bid!=null) refs.push({v:dr.bid, cls:'reflive', label:'bid'});
+  const nowHr=new Date().getHours();
+  const markers=[{t:nowHr, cls:'nowmark', label:'now'}];
+  diurnalChart=createChart(chartEl, {series, refs, markers, kind:'bars', spans:false,
+    xFmt:h=>fmtHour(((Math.round(h)%24)+24)%24), yFmt:fmt});
+  // readout — the SAME framing as the console's Diurnal block (deriveDiurnalRange + the ★ formula)
+  if(dr&&dr.bid!=null&&dr.ask!=null){
+    const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
+    const net=Math.round(dr.ask-tax(dr.ask)-dr.bid);
+    const roi=dr.bid?net/dr.bid*100:null;
+    const concentrated=dr.dipWindow.startH!==dr.dipWindow.endH && dr.peakWindow.startH!==dr.peakWindow.endH;
+    const clean=net>0 && !prof.trendDominates && concentrated && roi!=null && roi>=DIURNAL_MIN_ROI;
+    let s='';
+    if(clean) s+='<b class="gain" title="clean diurnal candidate — concentrated dip &amp; peak, trend-quiet, positive after-tax swing">★</b> ';
+    s+='<b>BID '+fmtP(dr.bid)+'</b> <span class="mini">('+dr.bidBasis+', dip '+win(dr.dipWindow)+')</span> → <b>ASK '+fmtP(dr.ask)+'</b> <span class="mini">(peak '+win(dr.peakWindow)+')</span>';
+    if(net!=null) s+=' · <b class="'+sgn(net)+'">'+(net>=0?'+':'')+fmtP(net)+'</b>/u after tax'+(roi!=null?' ('+roi.toFixed(1)+'%)':'');
+    if(prof.trendDominates) s+=' · <span class="loss">⚠ trend-dominates — the moving floor erases the intraday dip; bid priced to live.</span>';
+    s+=' <span class="ccap">Guidance from the recent daily rhythm — timing support, not a price target; thresholds are placeholder (n≈0).</span>';
+    cap.innerHTML=s;
+  } else {
+    cap.innerHTML='<span class="mini">Diurnal shape read, but the derived bid/ask is degenerate (flat or thin window) — no timing edge to quote.</span>';
+  }
+  // reach note (inform-only): does the recent same-window history actually TOUCH the bid / REACH the ask?
+  if(reachEl && dr){
+    const notes=[];
+    for(const side of ['bid','ask']){
+      const level=side==='bid'?dr.bid:dr.ask; if(level==null) continue;
+      try{
+        const r=reachValidator({intraday:{ts1h:profSeries, reach:{side, level}}});
+        if(r && r.reason && r.status!=='pass') notes.push(r.reason);
+        else if(r && r.reason && /d$/.test(r.reason)) notes.push(r.reason);   // a scored pass ("ask N reached X/Yd")
+      }catch(_){ }
+    }
+    if(notes.length) reachEl.innerHTML='<b>Reach</b> <span class="mini">(inform-only)</span> — '+notes.map(n=>'<span class="mini">'+n+'</span>').join(' · ');
+  }
+}
 export async function runTrends(){
   const name=document.getElementById('trItem').value.trim();
   const status=document.getElementById('trStatus');
@@ -266,7 +342,7 @@ export async function runTrends(){
     document.getElementById('trResult').classList.remove('hidden');
     renderTrendHead(it);
     const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: plan card only
-    ['trWhy','trHistWrap','trTiming','trRecent'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
+    ['trWhy','trHistWrap','trTiming','trRecent','trDiurnal'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
     const hourLabels=Array.from({length:24},(_,i)=>pad2(i));
     // seasonal plan (the reconciled buy/sell model)
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
@@ -330,6 +406,9 @@ export async function runTrends(){
     // ---- T2: "Recent movement (last 2h)" block — the 5m series is already fetched; a small chart
     // with the 2h band edges + live buy/sell overlaid so an outside-the-band break is VISIBLE. ----
     renderRecent(it, s5m, qrowT, showAnalysis);
+    // ---- TV: "Diurnal timing" (timing tier) — hour-of-day dip/peak profile off the in-hand 1h series
+    // (the richer archive points when we have them, else the raw 1h) via shared windowread math. ----
+    renderDiurnal(pts.length>1?pts:s1h, qrowT, it, showAnalysis);
 
     // ---- "Why this trend?" expander (Tier 2): plain-language guide divergence, σ only in the detail ----
     if(showAnalysis){
