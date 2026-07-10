@@ -191,6 +191,8 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | DOC-1..4 | ARCH-docs cleanup: PLAN prune · CLAUDE diet r3 · README registry-grade · verdict single-home | docs, `.claude/skills/*` | ✅ `e45cd7b`/`560b28b`/`1619ff6`/`0c9ecca` (from `PLAN-ARCH-DOCS-AUDIT.md`; DOC-5+ARCH-2 stay Ben-gated there — see Discovered) |
 | ARCH-3 | `parseGp` cross-comments (the volume-source half is NOT mechanical → Discovered SF-3) | `js/format.js`, `pipeline/lib/cli.mjs` | ✅ `6808c58` (comment-only, no APP_VERSION) |
 | SWEEP | 2026-07-10 sweep innocuous fixes: `Promise.all` bulk loaders · shared `clamp` dedup · `bandPercentile` extraction | `screen.mjs`, `rating.mjs`, `estimators.mjs`, `histstate.mjs`, `outcomes.mjs` | ✅ `ef68792` (byte-identical dedups; the review verdict + parked residue = Discovered SF-1/2/4/5) |
+| SF-2 | Document quote.mjs's uncapped per-item ts1h fetch budget | `pipeline/quote.mjs` | ✅ `fe57a3b` (comment-only; soft-cap recipe if large batches ever routine) |
+| SF-1 | Quantile/median type-7 consolidated to one `js/quotecore.js` home (both sorted + sorting contracts) | `js/quotecore.js`, `js/termstructure.mjs`, `pipeline/lib/retrojoin.mjs` | ✅ `2cbca38` (0.56.0; byte-identical refactor, fixture-pinned; caller audit preserved each site's sorted/unsorted contract) |
 
 ---
 
@@ -525,12 +527,12 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   `pipeline/lib/cli.mjs` and `js/format.js` documenting the intentional app/pipeline behavior split.
 - **Arch-sweep followups (2026-07-10 review/sweep; the residue after the innocuous fixes landed in
   `ef68792`). None has a demonstrated live cost — hygiene/reuse, not bugs.**
-  - **SF-1 (MED) — quantile/median type-7 has THREE copies:** `js/quotecore.js` (`med`+
-    `quantileSorted`, requires pre-sorted input), `js/termstructure.mjs` (`quantile`+`median`), and
-    `pipeline/lib/retrojoin.mjs` (a `quantile` that ALSO sorts internally — a transplant-bug trap if
-    copied between the pre-sorted-input ones). Promote quotecore's (lowest in the import graph) to one
-    shared home, make the others thin re-exports; fixture-pin all three + audit every caller's
-    pre-sorted assumption FIRST. Bundle with the next `js/` shared-module pass.
+  - ~~**SF-1 (MED) — quantile/median type-7 has THREE copies**~~ — **DONE `2cbca38`** (0.56.0): one
+    shared home in `js/quotecore.js` exporting BOTH contracts — `quantileSorted(sortedAsc,q)` (pre-sorted,
+    no sort) and `quantileOf(arr,q)`/`median(arr)` (copy+sort, never mutate). termstructure re-exports
+    `quantileSorted`; retrojoin uses `quantileOf`. Caller audit preserved every site's sorted/unsorted
+    contract; byte-identical (type-7 at q=0.5 IS mean-of-two-middle median), fixture-pinned in
+    `quotecore.test.mjs`. APP_VERSION bumped (quotecore.js is app-served; TC1/TD2 precedent).
   - ~~**SF-2 (LOW) — `quote.mjs` per-item ts1h fetch (COD-4) is uncapped across a batch**~~ — **DONE**
     (2026-07-10, comment-only): the amplification (`quote A B C … J` = one 1h fetch per item, budget
     unenforced) is now documented at the fetch site with the soft-cap recipe for if large batches ever
