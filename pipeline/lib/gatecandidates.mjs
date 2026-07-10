@@ -52,7 +52,10 @@ import { STRATEGIES } from '../../js/strategies.mjs';
 // that don't supply one). Values mirror screen.mjs's `A.<flag> != null ? … : <default>` fallbacks.
 export const DEFAULT_THRESHOLDS = {
   FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
-  MIN_ACTIVE: 6, MIN_ACTIVE_THIN: 1, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
+  // Bar D (Ben 2026-07-09): the traded-band gate reads tradedWin (density) + sawLow/sawHigh (two-sided),
+  // NOT the same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
+  // MIN_TRADED_THIN = the relaxed floor for gp-flow big tickets (2 ⇒ a lone spike still fails).
+  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
   // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
   // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value

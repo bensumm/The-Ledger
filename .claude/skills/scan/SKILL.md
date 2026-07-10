@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.40
+version: 1.41
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -191,10 +191,13 @@ This is the tribal layer the script can't do — apply ALL of these:
   position size, not absolute. **Honesty (process rule 4):** this is a lean off a small, concentrated
   record (bludgeon ~21% of closed lots) — the crossover point is unmeasured; track it as sizes climb,
   don't treat it as a fixed rule. Companion to the parked-capital-leak hypothesis above.
-- **Band-top artifact detection.** _(judgment: artifact spotting; `--min-active` supports)_ A single outlier print inflating the band (one lone
+- **Band-top artifact detection.** _(judgment: artifact spotting; `--min-traded` supports)_ A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd — flag it and discount; never
-  recommend off one print. Check `--min-active` traded-windows plausibility when a band
-  ROI looks too good.
+  recommend off one print. Check `--min-traded` traded-windows plausibility when a band
+  ROI looks too good. (Bar D, 2026-07-09: the traded-band GATE now splits density = `tradedWin`
+  from two-sidedness = `sawLow && sawHigh`, so it no longer culls big tickets that trade a few
+  times an hour; `--min-active` still works as a back-compat alias for `--min-traded`. This is a
+  gate on the band's REALITY — the band-EDGE artifact above is still your judgment call.)
 - **The screen now DOES the windowrange analysis in-script (2026-07-09) — read its `ℹ trajectory/reach`
   notes first.** _(enforced: `js/validate.mjs` trajectory + reach validators, `pipeline/screen.mjs` Leg B)_
   Each surfaced row now carries auto-computed INFORM notes (never a drop, n≈0 rollout): a **reach** note

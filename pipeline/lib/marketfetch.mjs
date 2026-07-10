@@ -233,8 +233,10 @@ export async function loadAllLatest() {
    windows [latest, latest-300, …] are byte-identical to that series' slice(-24). So the edges
    below == computeQuote's bandLo/bandHi over the same item — that is the mandatory sanity gate.
 
-   Returns { [id]: { bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: #windows with
-   two-sided trades } } for every item seen in the windows. --- */
+   Returns { [id]: { bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: #windows two-sided
+   WITHIN one 5m bucket (display/quality signal), tradedWin: #windows with ANY trade (Bar D density),
+   sawLow / sawHigh: did each side print ≥1× across the window (Bar D two-sidedness) } } for every item
+   seen in the windows. bandCore (js/strategies.mjs) gates on tradedWin + sawLow/sawHigh, not active5m. --- */
 function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0, 10); } // UTC day
 // Band archive retention. Raised 7d→90d for O1: pipeline/outcomes.mjs reconstructs the trailing-2h
 // band at each historical trade PLACEMENT, so recent (weeks-old) windows must survive to be joinable.
@@ -292,10 +294,14 @@ export async function loadBands(hours = 2) {
     const snap = archive.get(w); if (!snap) continue;
     for (const id in snap) {
       const e = snap[id]; if (!e) continue;
-      let b = bands[id]; if (!b) b = bands[id] = { bandLo: null, bandHi: null, active5m: 0 };
+      let b = bands[id]; if (!b) b = bands[id] = { bandLo: null, bandHi: null, active5m: 0, tradedWin: 0, sawLow: false, sawHigh: false };
       if (e.avgLowPrice)  b.bandLo = b.bandLo == null ? e.avgLowPrice : Math.min(b.bandLo, e.avgLowPrice);
       if (e.avgHighPrice) b.bandHi = b.bandHi == null ? e.avgHighPrice : Math.max(b.bandHi, e.avgHighPrice);
-      if ((e.lowPriceVolume || 0) > 0 && (e.highPriceVolume || 0) > 0) b.active5m++;
+      const lv = e.lowPriceVolume || 0, hv = e.highPriceVolume || 0;
+      if (lv > 0 && hv > 0) b.active5m++;   // both sides in the SAME 5m window (a quality/display signal, no longer the gate)
+      if (lv > 0 || hv > 0) b.tradedWin++;  // Bar D DENSITY: any trade this window (one-sided OK)
+      if (lv > 0) b.sawLow = true;          // Bar D TWO-SIDEDNESS: each side printed ≥1× across the whole window
+      if (hv > 0) b.sawHigh = true;
     }
   }
   return bands;
@@ -381,7 +387,7 @@ export async function loadDaily(days = 17, stepHours = 6, { db, noFetch = false 
    no entry for an item is cached as null (item didn't trade) so it is never re-fetched for that item.
 
    reqs: [{ id, endUnix }]. Returns an array aligned to reqs:
-     { bandLo, bandHi, active5m, tradedWin, loVol, hiVol, nWin, covered }
+     { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh, loVol, hiVol, nWin, covered }
    covered = how many of the nWin windows were resolvable (present in the archive or fetched);
    covered < nWin ⇒ the /5m history for that window is gone (see FILLS-PIPELINE.md retention note). --- */
 export async function loadHistBands(reqs, hours = 2) {
@@ -423,7 +429,7 @@ export async function loadHistBands(reqs, hours = 2) {
   // aggregate the band per request (same min-low / max-high basis as computeQuote's 2h band)
   return reqs.map((r, idx) => {
     const s = store.get(r.id);
-    let bandLo = null, bandHi = null, active5m = 0, tradedWin = 0, loVol = 0, hiVol = 0, covered = 0;
+    let bandLo = null, bandHi = null, active5m = 0, tradedWin = 0, sawLow = false, sawHigh = false, loVol = 0, hiVol = 0, covered = 0;
     for (const w of reqWindows[idx]) {
       const d = s[w]; if (d === undefined) continue; covered++;
       if (!d) continue;
@@ -432,8 +438,10 @@ export async function loadHistBands(reqs, hours = 2) {
       loVol += d.lv; hiVol += d.hv;
       if (d.lv > 0 && d.hv > 0) active5m++;
       if (d.lv > 0 || d.hv > 0) tradedWin++;
+      if (d.lv > 0) sawLow = true;
+      if (d.hv > 0) sawHigh = true;
     }
-    return { bandLo, bandHi, active5m, tradedWin, loVol, hiVol, nWin, covered };
+    return { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh, loVol, hiVol, nWin, covered };
   });
 }
 

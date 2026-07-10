@@ -80,29 +80,33 @@ export const ARCHETYPES = [
   {
     id: 2001, name: 'Stable band commodity', behavior: 'stable band',
     // flat regime, wide 2h band, deeply liquid → the model surviving-and-surfaced band flip.
-    recentMid: 100_000, priorMid: 100_000, band: [98_000, 102_000], active5m: 20,
+    recentMid: 100_000, priorMid: 100_000, band: [98_000, 102_000], active5m: 20, tradedWin: 24, sawLow: true, sawHigh: true,
     v24: [98_000, 102_000, 8_000, 7_000], limit: 1_500, guide: 100_000,
     expect: 'kept in band + churn (flat, wide traded band, deeply liquid); dropped notFalling in scalp (not falling)',
   },
   {
     id: 2002, name: 'Genuine dip riser', behavior: 'genuine dip',
     // confirmed rising regime, clean in-band momentum → survives every niche incl. the rising confirm.
-    recentMid: 107_000, priorMid: 100_000, band: [104_000, 109_000], active5m: 20,
+    recentMid: 107_000, priorMid: 100_000, band: [104_000, 109_000], active5m: 20, tradedWin: 24, sawLow: true, sawHigh: true,
     v24: [104_000, 109_000, 6_000, 5_000], limit: 800, guide: 106_000,
     expect: 'kept in band + churn (a confirmed riser clears the band gates); dropped notFalling in scalp',
   },
   {
     id: 2003, name: 'Thin big ticket', behavior: 'thin big ticket',
     // flat, admitted via the gp-flow floor ONLY (limitVol 20 < unit floor; 20×~15m ≥ 250m) → thin.
-    recentMid: 15_050_000, priorMid: 15_050_000, band: [14_700_000, 15_400_000], active5m: 3,
+    // Bar D regression guard (Ben 2026-07-09): active5m 0 — this big ticket has ZERO 5m windows that were
+    // two-sided WITHIN one 5m bucket (its ~22/20 daily prints scatter across the hour), so the OLD gate
+    // (active5m ≥ MIN_ACTIVE_THIN 1) would have DROPPED it — the exact bug. Bar D admits it on tradedWin 8
+    // (8 windows saw a trade) + sawLow/sawHigh (both sides printed across the 2h). Kept, as before.
+    recentMid: 15_050_000, priorMid: 15_050_000, band: [14_700_000, 15_400_000], active5m: 0, tradedWin: 8, sawLow: true, sawHigh: true,
     v24: [14_700_000, 15_400_000, 22, 20], limit: 8, guide: 15_000_000,
-    expect: 'kept thin in band; dropped POSTURE overnight (no thin fast-lane); never in churn (limitVol<2000); dropped notFalling in scalp',
+    expect: 'kept thin in band via Bar D (tradedWin 8 + two-sided; active5m 0 would have failed the old gate); dropped POSTURE overnight (no thin fast-lane); never in churn (limitVol<2000); dropped notFalling in scalp',
   },
   {
     id: 2004, name: 'Decay knife', behavior: 'decay-knife',
     // liquid with a real band edge (PASSES the pre-fetch gate) but a falling regime → the classic
     // knife caught POST-fetch by the falling-exclusion, before any edge is offered.
-    recentMid: 40_000, priorMid: 45_000, band: [39_000, 41_000], active5m: 15,
+    recentMid: 40_000, priorMid: 45_000, band: [39_000, 41_000], active5m: 15, tradedWin: 20, sawLow: true, sawHigh: true,
     v24: [39_000, 41_000, 6_000, 5_000], limit: 1_000, guide: 41_000,
     expect: 'gated in band/churn, dropped FALLING there (falling check precedes all others); KEPT in scalp (falling is the thesis)',
   },
@@ -110,7 +114,7 @@ export const ARCHETYPES = [
     id: 2005, name: 'Falling wide band', behavior: 'falling wide-band',
     // an even wider, fatter-looking band edge — but STILL falling. Pins that band width never rescues a
     // faller (the edge is a trap): dropped falling despite the tempting spread.
-    recentMid: 200_000, priorMid: 235_000, band: [188_000, 214_000], active5m: 12,
+    recentMid: 200_000, priorMid: 235_000, band: [188_000, 214_000], active5m: 12, tradedWin: 18, sawLow: true, sawHigh: true,
     v24: [190_000, 210_000, 4_000, 3_500], limit: 400, guide: 205_000,
     expect: 'gated with a fat edge in band/churn, dropped FALLING there (width is not a rescue); KEPT in scalp',
   },
@@ -126,7 +130,7 @@ export function buildSnapshot(anchor = ANCHOR_TS) {
     items[a.id] = {
       name: a.name, behavior: a.behavior, limit: a.limit, guide: a.guide,
       v24: { avgLowPrice: avgLow, avgHighPrice: avgHigh, highPriceVolume: hpv, lowPriceVolume: lpv },
-      band: { bandLo, bandHi, active5m: a.active5m },
+      band: { bandLo, bandHi, active5m: a.active5m, tradedWin: a.tradedWin, sawLow: a.sawLow, sawHigh: a.sawHigh },
       // /latest: instasell = bandLo, instabuy = bandHi (in-band ⇒ clean momentum), stamped at the anchor.
       latest: { low: bandLo, high: bandHi, lowTime: anchor, highTime: anchor },
       ts5m: band5m(bandLo, bandHi, anchor),

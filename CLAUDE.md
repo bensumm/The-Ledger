@@ -77,6 +77,17 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `limitVol ≥ --floor` **OR** gp-flow `limitVol×mid ≥ --gp-floor` (250m). The gp-flow path admits big
   tickets, flagged `thin`, grade-capped **A-** (`THIN_GRADE_CAP`), bounded to `--thin-reserve`. Full
   rationale in `/scan`.
+- **Traded-band gate — Bar D (Ben 2026-07-09).** Separate from the 24h liquidity gate above, band/churn/
+  scalp price the edge off the 2h intraday band, which must be TRADED (not a one-spike artifact). The old
+  gate counted 5m windows two-sided *within the same 5 minutes* (`active5m`) — a coincidence a big ticket
+  (a few prints scattered across the hour) structurally fails, so it culled exactly the thin big-ticket
+  class it was meant to admit. **Bar D DECOUPLES the two jobs the one count conflated:** DENSITY =
+  `tradedWin` (windows with ANY trade, one-sided OK — a lone spike is 1, still rejected; `MIN_TRADED` 6
+  dense / `MIN_TRADED_THIN` 2 thin) and TWO-SIDEDNESS = `sawLow && sawHigh` asked ONCE across the whole
+  window (a one-sided ghost fails). Liquidity proper stays the 24h gate's job. `active5m` is kept as a
+  display/quality signal but no longer gates; `activeWin` (→ `rating.mjs` confidence) now reports
+  `tradedWin`. The ONE home for this is the `bandCore` header in `js/strategies.mjs`; the residual
+  band-EDGE artifact (a lone print setting `bandHi`) stays the reach validators' / band-top-artifact job.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a
@@ -198,8 +209,8 @@ Script facts the skills rely on (current behavior, not doctrine):
   **The `spread` and `rising` niches were DELETED (Steps 3+4, Ben 2026-07-09** — git history is the reference;
   this supersedes the NY2/NY3 off-by-default framing). Why: spread's 24h-average edge is structurally
   narrower than the intraday band and surfaced ≈0 clean flips once the net>0 gate landed — and its ONE
-  exclusive lane (thin big-tickets with an untraded 2h band) is already caught by band's thin path
-  (`MIN_ACTIVE_THIN:1` + the gp-flow reserve). `rising` ⊆ `band` (a rising item clears band's gates too);
+  exclusive lane (thin big-tickets with a sparse 2h band) is already caught by band's thin path
+  (`MIN_TRADED_THIN:2` + the gp-flow reserve). `rising` ⊆ `band` (a rising item clears band's gates too);
   its ONE real mechanism — proxy-first fetch-pool ordering so risers aren't buried below flats — is
   ABSORBED into `rankAndSlice`'s small **rising reserve** (`RISING_RESERVE_DEFAULT`, mirrors the thin
   reserve). The `risingPoolFloor` predicate + `RISE_MID_FLOOR`/`RISE_LIQUID_VOL` are kept but VESTIGIAL

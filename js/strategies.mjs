@@ -15,7 +15,7 @@
    NICHE SET (Steps 3+4, Ben 2026-07-09): the `spread` and `rising` specs are DELETED (git history is the
    reference). Why: spread's 24h-average edge is structurally narrower than the intraday band, and once the
    render net>0 gate landed it surfaced ≈0 clean flips (its thin big-ticket lane is already caught by
-   band's thin path, MIN_ACTIVE_THIN:1 + the gp-flow reserve); rising ⊆ band (a rising item clears band's
+   band's thin path, MIN_TRADED_THIN:2 + the gp-flow reserve); rising ⊆ band (a rising item clears band's
    gates too), and its ONE real mechanism — proxy-first fetch-pool ordering so risers aren't buried — is
    ABSORBED into rankAndSlice's small "rising reserve". Remaining niches: band / churn (both in --mode all)
    + the provisional off-by-default scalp / value.
@@ -79,19 +79,36 @@ function valueEdge({ avgHigh, avgLow }, t) {
    Each takes ({ avgHigh, avgLow, band, limitVol, limit, thin }, thresholds) and returns either
      { modeNet, modeRoi, activeWin }   (the row's after-tax edge + traded-window count, or null win)
    or null when the item fails this niche's edge/gate (the old `continue`). `band` is the aggregated
-   2h band record { bandLo, bandHi, active5m } or undefined (spread never reads it). ALL numeric math
+   2h band record { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh } or undefined. ALL numeric math
    is the shared `tax()` so the numbers stay byte-identical to screen.mjs / the app. */
 
 // the traded-band common core (band / churn / scalp all price the edge off the intraday band).
 // Returns the band edge + activeWin, or null when the band is missing/untraded. The per-spec gate
 // (ROI vs volume) is applied by the caller edge below.
+//
+// BAR D (Ben 2026-07-09) — DECOUPLE density from two-sidedness. The old gate (band.active5m < minActive)
+// counted only 5m windows that were two-sided WITHIN THE SAME 5 minutes. A big ticket prints a handful
+// of times an hour (a low at :05, a high at :35) and almost never has both sides inside one 5m bucket,
+// so active5m collapses to ~0 and the gate culled exactly the thin big-ticket class MIN_ACTIVE_THIN:1
+// was meant to admit ("zero traded 5m windows = artifact" bit us on every genuinely-liquid big item).
+// Liquidity proper is already the two-sided 24h gate's job (upstream, non-negotiable); this bar's ONLY
+// job is rejecting a single-spike / one-sided-ghost band. Split it into the two questions it conflated:
+//   DENSITY       — band.tradedWin (windows with ANY trade, one-sided OK). A lone spike is tradedWin 1,
+//                   still rejected; a big ticket trading ~6/hr has ~12 one-sided windows in 2h → admitted.
+//   TWO-SIDEDNESS — band.sawLow && band.sawHigh, asked ONCE across the whole window (not per-5m). A real
+//                   two-way market passes; an all-buys-no-sells ghost fails.
+// Legacy/synthetic band records without tradedWin fall back to active5m (and active5m>0 ⇒ a two-sided
+// window existed ⇒ the sawLow/sawHigh check, being undefined, is a no-op). activeWin now reports the
+// density (tradedWin) so rating.mjs's confidenceFactor stops penalising big tickets for low active5m.
 function bandCore({ band, thin }, t) {
   if (!band || band.bandLo == null || band.bandHi == null) return null;
-  const minActive = thin ? t.MIN_ACTIVE_THIN : t.MIN_ACTIVE;   // 6/2h is impossible at ~12/d — relax for thin
-  if (band.active5m < minActive) return null;                  // band must be TRADED, not one spike
+  const minTraded = thin ? t.MIN_TRADED_THIN : t.MIN_TRADED;
+  const density = band.tradedWin ?? band.active5m;                  // one-sided-inclusive; legacy → active5m
+  if (density < minTraded) return null;                             // band must be TRADED, not one spike
+  if (band.sawLow === false || band.sawHigh === false) return null; // both sides printed ≥1× (undefined ⇒ legacy no-op)
   const modeNet = (band.bandHi - tax(band.bandHi)) - band.bandLo;   // band low → band top, after tax
   const modeRoi = modeNet / band.bandLo * 100;
-  return { modeNet, modeRoi, activeWin: band.active5m };
+  return { modeNet, modeRoi, activeWin: density };
 }
 
 // band: the traded band + the %-ROI OR (thin & abs-gp) gate.

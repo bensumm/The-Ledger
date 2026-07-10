@@ -199,10 +199,32 @@ ok('churn edge requires a TRADED band + volume ≥ CHURN_MIN_VOL + a real buy li
   assert.ok(e && e.modeNet != null && e.activeWin === 20);
 });
 
-ok('an untraded band (active5m below MIN_ACTIVE) yields null for band mode', () => {
+ok('Bar D: a low-density band (tradedWin below MIN_TRADED) yields null for band mode', () => {
   const t = DEFAULT_THRESHOLDS;
-  const spike = { bandLo: 1000, bandHi: 1200, active5m: 2 };   // 2 < MIN_ACTIVE 6
+  const spike = { bandLo: 1000, bandHi: 1200, active5m: 2, tradedWin: 2, sawLow: true, sawHigh: true };   // 2 < MIN_TRADED 6
   assert.equal(STRATEGIES.band.edge({ avgHigh: 1200, avgLow: 1000, band: spike, limitVol: 500, limit: 100, thin: false }, t), null);
+});
+
+ok('Bar D: a thin big ticket with active5m 0 but tradedWin ≥ MIN_TRADED_THIN + two-sided PASSES', () => {
+  const t = DEFAULT_THRESHOLDS;
+  // the exact bug: never two-sided within one 5m bucket (active5m 0), but 8 windows traded + both sides seen.
+  const bigTicket = { bandLo: 14_700_000, bandHi: 15_400_000, active5m: 0, tradedWin: 8, sawLow: true, sawHigh: true };
+  const e = STRATEGIES.band.edge({ avgHigh: 15_400_000, avgLow: 14_700_000, band: bigTicket, limitVol: 20, limit: 8, thin: true }, t);
+  assert.ok(e && e.modeNet > 0, 'admitted on tradedWin+two-sided despite active5m 0');
+  assert.equal(e.activeWin, 8, 'activeWin now reports tradedWin (density), not active5m');
+});
+
+ok('Bar D: a one-sided ghost (sawHigh false) yields null even with high density', () => {
+  const t = DEFAULT_THRESHOLDS;
+  const ghost = { bandLo: 1000, bandHi: 1200, active5m: 0, tradedWin: 12, sawLow: true, sawHigh: false };
+  assert.equal(STRATEGIES.band.edge({ avgHigh: 1200, avgLow: 1000, band: ghost, limitVol: 500, limit: 100, thin: false }, t), null);
+});
+
+ok('Bar D: legacy band record without tradedWin falls back to active5m (back-compat)', () => {
+  const t = DEFAULT_THRESHOLDS;
+  const legacy = { bandLo: 1000, bandHi: 1200, active5m: 10 };   // no tradedWin/sawLow/sawHigh → density=10, two-sided no-op
+  const e = STRATEGIES.band.edge({ avgHigh: 1200, avgLow: 1000, band: legacy, limitVol: 500, limit: 100, thin: false }, t);
+  assert.ok(e && e.activeWin === 10, 'legacy record survives via the active5m fallback');
 });
 
 console.log(`\nAll ${pass} conformance checks passed.`);

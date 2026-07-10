@@ -402,10 +402,21 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   SUPERSEDES NY2/NY3's "spread stays off-by-default" + "rising kept in `--mode all`" rulings. Rising's ONE
   real mechanism (proxy-first fetch ordering) is absorbed into `rankAndSlice`'s **rising reserve**
   (`RISING_RESERVE_DEFAULT`). **Residual (by-design, not a gap):** spread's only exclusive lane was thin
-  big-tickets with an UNtraded 2h band; band's thin path (`MIN_ACTIVE_THIN:1` + the gp-flow reserve) catches
-  the traded ones, and an item with ZERO traded 5m windows in the scan's 2h is deliberately excluded (an
-  untraded band can't be trusted — the band-top-artifact lesson; spread's 24h-avg basis for those was the
-  weaker read). `risingPoolFloor` + `RISE_MID_FLOOR`/`RISE_LIQUID_VOL` kept but vestigial (one-flag re-add).
+  big-tickets with a sparse 2h band; band's thin path (`MIN_TRADED_THIN:2` + the gp-flow reserve) catches
+  them (spread's 24h-avg basis for those was the weaker read). `risingPoolFloor` + `RISE_MID_FLOOR`/
+  `RISE_LIQUID_VOL` kept but vestigial (one-flag re-add).
+- **Traded-band gate — Bar D — DONE (Ben 2026-07-09):** the residual note above USED to read "an item with
+  ZERO traded 5m windows in the 2h is deliberately excluded (untraded = artifact)" — that bit us on nearly
+  every genuinely-liquid big ticket, because the old `active5m` count required both sides to print *in the
+  same 5m bucket*, which a big ticket (a handful of scattered prints/hour) structurally never does. Bar D
+  DECOUPLES the two jobs the one count conflated: DENSITY = `tradedWin` (windows with ANY trade, one-sided
+  OK — a lone spike is 1, still rejected; `MIN_TRADED` 6 / `MIN_TRADED_THIN` 2) + TWO-SIDEDNESS =
+  `sawLow && sawHigh` once across the window (a one-sided ghost fails). Liquidity proper stays the 24h
+  gate's job. `marketfetch.mjs` emits the fields on both band paths; `bandCore` (js/strategies.mjs) gates on
+  them; `active5m` survives as a display signal + `activeWin`→confidence now reports `tradedWin`. Replay
+  archetype 2003 became the regression guard (active5m 0, survives on tradedWin 8 — golden byte-unchanged).
+  **Follow-up not taken (Bar E):** robustify the band EDGES themselves (p10/p90 instead of min/max) so a
+  lone print can't set `bandHi` — deferred; the reach validators backstop that residual today.
 - **Churn per-lap rank + band partition — DONE (Step 6, Ben 2026-07-09, decision A):** churn ranks the
   LAP (`net/u × min(limit, feasibleDepth) × P ÷ TTF`) via its own `churn` estimator family (we always max
   the buy limit → the exact limit is a fact, NOT the demoted ×windows/day `expGpDay`); Death/Blood/Soul

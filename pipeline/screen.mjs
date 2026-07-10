@@ -4,7 +4,7 @@
  *
  *   node pipeline/screen.mjs [--mode band|churn|scalp|value|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
- *     [--band-hours 2] [--min-active 6] [--stats] [--publish]
+ *     [--band-hours 2] [--min-traded 6] [--stats] [--publish]
  *
  *   --publish ALSO writes repo-root screen.json: a self-describing per-niche graded snapshot
  *   { app, generatedAt, mode, params, headers, niches:{band,churn} } that the app's
@@ -47,7 +47,8 @@
  *   band  (DEFAULT) — the crystal-teleport-seed niche: a liquid, regime-stable item with a wide
  *                     INTRADAY band. Edge = after-tax net of bandLo→bandHi from loadBands
  *                     (--band-hours, default 2); gate bandRoi ≥ --min-roi AND the band must be
- *                     TRADED (≥ --min-active two-sided 5m windows, not one spike).
+ *                     TRADED — Bar D: ≥ --min-traded windows with ANY trade (density) AND both sides
+ *                     printed ≥1× across the window (two-sided), NOT the old same-5m-window count.
  *   churn           — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted
  *                     (no --min-roi gate), the high-frequency small-margin niche.
  *   scalp / value   — provisional, OFF-by-default (explicit --mode only): scalp = a deliberate flip on a
@@ -136,7 +137,11 @@ const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
 const TOP = A.top != null ? +A.top : 40;
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
-const MIN_ACTIVE = A['min-active'] != null ? +A['min-active'] : 6;
+// Bar D (Ben 2026-07-09) DENSITY floor for dense (non-thin) bands — # of windows with ANY trade (one-
+// sided OK) the band must show; two-sidedness is a separate check (sawLow && sawHigh) in bandCore. This
+// replaces the old active5m (both-sided-in-the-same-5m) gate that structurally culled big tickets.
+// --min-traded is the flag; --min-active is kept as a back-compat alias for the same knob.
+const MIN_TRADED = A['min-traded'] != null ? +A['min-traded'] : (A['min-active'] != null ? +A['min-active'] : 6);
 const STATS = !!A.stats;
 // --- value niche: deployable-capital inputs (Ben 2026-07-09). The per-position capital cap that bounds
 // valueScore's deployable-units is NOT a fixed constant — it's Ben's current capital ÷ how many positions
@@ -158,10 +163,11 @@ const GP_FLOOR = A['gp-floor'] != null ? parseGp(A['gp-floor']) : 250_000_000;
 // percentage --min-roi bar (its spread is a small % of a huge price) but a six-figure net/u is still
 // worth one offer, so a thin item passes on modeRoi ≥ MIN_ROI OR modeNet ≥ MIN_NET_GP.
 const MIN_NET_GP = A['min-net-gp'] != null ? parseGp(A['min-net-gp']) : 100_000;
-// MIN_ACTIVE_THIN: the traded-window count a thin item's band must show. 6/2h is impossible at ~12/d
-// (≈1 traded window/2h), so gp-flow qualifiers get a relaxed floor of 1 window (still must have traded,
-// not a pure phantom band). Non-thin items keep the full --min-active gate.
-const MIN_ACTIVE_THIN = 1;
+// MIN_TRADED_THIN: the DENSITY floor a thin (gp-flow) item's band must show under Bar D — # of windows
+// with ANY trade. 2 rejects a literal single-spike band while admitting a big ticket that trades a
+// couple+ times in the 2h; the sawLow && sawHigh two-sided check (bandCore) does the rest. Non-thin
+// items keep the full MIN_TRADED gate.
+const MIN_TRADED_THIN = 2;
 // MIN_GPD: the 500k/day ATTENTION floor (was a /scan post-filter; now the structural --min-gpd flag,
 // applied PRE-RATING so grades never advertise sub-floor rows). Realistic expGpDay basis. THIN gp-flow
 // qualifiers are EXEMPT — the floor exists to drop sub-attention LIQUID churn, and a thin item is
@@ -202,7 +208,7 @@ const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1
 // takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
 const THRESHOLDS = {
-  FLOOR, MIN_ROI, MIN_PRICE, MAX_PRICE, MIN_NET_GP, MIN_ACTIVE, MIN_ACTIVE_THIN, MIN_GPD, GP_FLOOR,
+  FLOOR, MIN_ROI, MIN_PRICE, MAX_PRICE, MIN_NET_GP, MIN_TRADED, MIN_TRADED_THIN, MIN_GPD, GP_FLOOR,
   RISE_MID_FLOOR, RISE_LIQUID_VOL, VALUE_CAP_GP,
 };
 // --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
@@ -231,7 +237,7 @@ const PUBLISH = A.publish === true;
 const PHASE_RESCUE = A['phase-rescue'] === true;
 const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-rescue surface
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
-const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
+const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE };
 
 const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // Steps 3+4 (Ben 2026-07-09): `all` = band/churn; scalp/value explicit-only
 const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
@@ -524,7 +530,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
   }
   console.log(PLAYBOOK[mode]);
-  console.log(`(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)`);
+  console.log(`(band basis: ${BAND_HOURS}h, ≥${MIN_TRADED} traded windows any-side + two-sided; thin ≥${MIN_TRADED_THIN})`);
   // PM1: the dedicated `Probes` column is appended to the PRINTED table ONLY when at least one row
   // fired a probe — so with no module present (or none firing) the table is BYTE-IDENTICAL to pre-PM1
   // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
@@ -913,7 +919,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       mode: MODE,
       posture: POSTURE,                // S2: the Scan banner reads this to say which posture it shows
-      params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE },
+      params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE },
       headers: HEADERS,
       niches: pubNiches,
       // S3 watchlist section — its own headers (adds a Note column) travel with it so the app renders

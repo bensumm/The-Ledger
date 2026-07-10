@@ -38,14 +38,14 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 // Fixture helpers (same vocabulary as gatecandidates.test.mjs).
 const baseT = {
   FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
-  MIN_ACTIVE: 6, MIN_ACTIVE_THIN: 1, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
+  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
 };
 const rec = (avgLow, avgHigh, hpv, lpv = hpv) => ({ avgLowPrice: avgLow, avgHighPrice: avgHigh, highPriceVolume: hpv, lowPriceVolume: lpv });
-const band = (bandLo, bandHi, active5m) => ({ bandLo, bandHi, active5m });
+const band = (bandLo, bandHi, active5m, tradedWin = active5m, sawLow = true, sawHigh = true) => ({ bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh });
 const ctx = (v24, byId = {}, bands = {}) => ({ v24, map: { byId }, bands });
 // Steps 3+4: spread was deleted, so these tests use `band` as the generic vehicle — band requires a
-// TRADED band record, so each fixture below carries a matching band (active5m ≥ MIN_ACTIVE_THIN).
+// TRADED band record (Bar D: tradedWin ≥ MIN_TRADED[_THIN] + two-sided), so each fixture carries one.
 
 console.log('subfloor — P6c empty-result sub-floor fallback:');
 

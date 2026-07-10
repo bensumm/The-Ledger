@@ -17,7 +17,10 @@
       "band": {
         "bandLo": 98000,
         "bandHi": 102000,
-        "active5m": 20
+        "active5m": 20,
+        "tradedWin": 24,
+        "sawLow": true,
+        "sawHigh": true
       },
       "latest": {
         "low": 98000,
@@ -301,7 +304,10 @@
       "band": {
         "bandLo": 104000,
         "bandHi": 109000,
-        "active5m": 20
+        "active5m": 20,
+        "tradedWin": 24,
+        "sawLow": true,
+        "sawHigh": true
       },
       "latest": {
         "low": 104000,
@@ -585,7 +591,10 @@
       "band": {
         "bandLo": 14700000,
         "bandHi": 15400000,
-        "active5m": 3
+        "active5m": 0,
+        "tradedWin": 8,
+        "sawLow": true,
+        "sawHigh": true
       },
       "latest": {
         "low": 14700000,
@@ -869,7 +878,10 @@
       "band": {
         "bandLo": 39000,
         "bandHi": 41000,
-        "active5m": 15
+        "active5m": 15,
+        "tradedWin": 20,
+        "sawLow": true,
+        "sawHigh": true
       },
       "latest": {
         "low": 39000,
@@ -1153,7 +1165,10 @@
       "band": {
         "bandLo": 188000,
         "bandHi": 214000,
-        "active5m": 12
+        "active5m": 12,
+        "tradedWin": 18,
+        "sawLow": true,
+        "sawHigh": true
       },
       "latest": {
         "low": 188000,

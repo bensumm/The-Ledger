@@ -10,6 +10,32 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### BAR-D — traded-band gate: decouple density from two-sidedness (2026-07-09, pipeline-only)
+Ben: "This seems to bite us a bunch, how can we improve on this?" — the "residual" from the spread/rising
+deletion (an item with ZERO traded 5m windows in the 2h is deliberately excluded) was culling nearly every
+genuinely-liquid BIG TICKET. Root cause: the traded-band gate counted only 5m windows that were two-sided
+*within the same 5 minutes* (`active5m`). A big ticket prints a handful of times an hour (a low at :05, a
+high at :35) and almost never has both sides inside one 5m bucket, so `active5m ≈ 0` and even the relaxed
+thin bar (`MIN_ACTIVE_THIN:1`) dropped it — a coincidence bar masquerading as a liquidity bar.
+
+The one count was doing two unrelated jobs: (1) "is this liquid" — already the two-sided 24h gate's job,
+better; (2) "is this band real or one spike" — an artifact question. Bar D SPLITS them: DENSITY = `tradedWin`
+(windows with ANY trade, one-sided OK — a lone spike is `tradedWin 1`, still rejected; `MIN_TRADED` 6 dense /
+`MIN_TRADED_THIN` 2 thin) + TWO-SIDEDNESS = `sawLow && sawHigh` asked ONCE across the whole window (an
+all-buys-no-sells ghost fails). Liquidity proper stays the 24h gate. We compared four candidate bars
+(status-quo / 1h-bucket / wider-lookback / decouple) and picked D as the one that separates the jobs using
+data already computed; Bar E (robustify the band EDGES with p10/p90 so a lone print can't set `bandHi`) was
+deferred — the reach validators backstop that residual.
+
+RIPPLE: `marketfetch.mjs` emits `tradedWin`/`sawLow`/`sawHigh` on BOTH band paths (`loadBands` + the
+outcomes `loadHistBands`); `bandCore` (js/strategies.mjs — no app module imports it, so no APP_VERSION) gates
+on them with a legacy `active5m` fallback; `activeWin`→`rating.mjs` confidence now reports `tradedWin` so a
+big ticket is no longer grade-penalised for low `active5m`; `active5m` survives as a display/quality signal.
+`--min-active` → `--min-traded` (old flag kept as an alias). Replay archetype 2003 became the regression
+guard — `active5m 0` (would have failed the old gate) surviving on `tradedWin 8`; golden.json byte-UNCHANGED
+(every gate decision identical). Live smoke: `--mode band` now surfaces Avernic hilt / Masori body / Ghrazi
+rapier / Virtus robe top / Armadyl godsword — the class that was invisible. `/scan` 1.40→1.41.
+
 ### BOND1 — bond tax exception + searchable in the app (2026-07-09, APP_VERSION 0.54.0)
 Ben: "encode the bond mechanic … as an exception in the tax calculation. i.e. buy price + 10% guide just
 for bonds to compare against the sell." The Old School Bond is EXEMPT from the 2% GE tax, but a GP-bought

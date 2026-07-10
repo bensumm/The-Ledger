@@ -40,12 +40,14 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 // its own dedicated test that sets it explicitly.
 const baseT = {
   FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
-  MIN_ACTIVE: 6, MIN_ACTIVE_THIN: 1, MIN_GPD: 1000, GP_FLOOR: 250_000_000,
+  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 1000, GP_FLOOR: 250_000_000,
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
 };
-// build a 24h record and (optionally) a map limit / a band, keyed by id.
+// build a 24h record and (optionally) a map limit / a band, keyed by id. Bar D: a band carries tradedWin
+// (density) + sawLow/sawHigh (two-sided); default them off active5m so existing calls exercise the real
+// Bar-D path (density = tradedWin), not the legacy active5m fallback.
 const rec = (avgLow, avgHigh, hpv, lpv = hpv) => ({ avgLowPrice: avgLow, avgHighPrice: avgHigh, highPriceVolume: hpv, lowPriceVolume: lpv });
-const band = (bandLo, bandHi, active5m) => ({ bandLo, bandHi, active5m });
+const band = (bandLo, bandHi, active5m, tradedWin = active5m, sawLow = true, sawHigh = true) => ({ bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh });
 const ctx = (v24, byId = {}, bands = {}) => ({ v24, map: { byId }, bands });
 
 console.log('gatecandidates.mjs gateCandidates() acceptance:');
@@ -64,7 +66,7 @@ ok('two-sided liquidity: a one-sided book (lpv=0) is dropped; a two-sided one su
 ok('gp-flow path admits a big-ticket thin item (limitVol<FLOOR but limitVol×mid ≥ GP_FLOOR)', () => {
   // mid 17.5m, limitVol 20 (<50 → below the unit floor); 20×17.5m = 350m ≥ 250m GP_FLOOR.
   const v24 = { 7: rec(17_000_000, 18_000_000, 20) };
-  const bands = { 7: band(17_000_000, 18_000_000, 6) };   // a traded band (active5m ≥ MIN_ACTIVE_THIN)
+  const bands = { 7: band(17_000_000, 18_000_000, 6) };   // a traded band (tradedWin 6 ≥ MIN_TRADED_THIN)
   const cand = gateCandidates('band', ctx(v24, {}, bands), baseT);
   assert.equal(cand.length, 1);
   assert.equal(cand[0].thin, true, 'admitted via gp-flow only → flagged thin');
@@ -106,13 +108,29 @@ ok('no shipped spec triggers the rising pool floor — a cheap-and-thin-volume i
   assert.equal(bandMode.length, 1, 'band mode has no rising floor → the item survives');
 });
 
-/* --- band mode requires a TRADED band (active5m ≥ MIN_ACTIVE) ------------------------------ */
-ok('band mode: an untraded band (active5m below MIN_ACTIVE) is rejected', () => {
+/* --- band mode requires a TRADED band — Bar D: density (tradedWin) + two-sided (sawLow && sawHigh) --- */
+ok('band mode: a low-density band (tradedWin below MIN_TRADED) is rejected as a spike', () => {
   const v24 = { 4: rec(1000, 1100, 200) };
-  const traded = { 4: band(1000, 1100, 10) };     // 10 ≥ 6 → survives
-  const spike = { 4: band(1000, 1100, 2) };       // 2 < 6 → rejected (one spike, not a band)
+  const traded = { 4: band(1000, 1100, 10) };     // tradedWin 10 ≥ 6 → survives
+  const spike = { 4: band(1000, 1100, 2) };       // tradedWin 2 < 6 → rejected (one spike, not a band)
   assert.equal(gateCandidates('band', ctx(v24, {}, traded), baseT).length, 1);
   assert.equal(gateCandidates('band', ctx(v24, {}, spike), baseT).length, 0);
+});
+
+ok('Bar D: a big ticket with active5m 0 but real one-sided density + two-sided survives (the fix)', () => {
+  // limitVol 20 (<50 unit floor) but 20×17.5m ≥ GP_FLOOR → thin; active5m 0 (never two-sided in ONE 5m
+  // window) would have failed the old gate, but tradedWin 8 + sawLow/sawHigh admit it under Bar D.
+  const v24 = { 8: rec(17_000_000, 18_000_000, 20) };
+  const bigTicket = { 8: band(17_000_000, 18_000_000, 0, 8, true, true) };
+  const cand = gateCandidates('band', ctx(v24, {}, bigTicket), baseT);
+  assert.equal(cand.length, 1, 'admitted on tradedWin+two-sided despite active5m 0');
+  assert.equal(cand[0].thin, true);
+});
+
+ok('Bar D: a one-sided ghost band (sawHigh false) is rejected even with high density', () => {
+  const v24 = { 9: rec(1000, 1100, 200) };
+  const ghost = { 9: band(1000, 1100, 0, 12, true, false) };   // 12 traded windows but no high-side print ever
+  assert.equal(gateCandidates('band', ctx(v24, {}, ghost), baseT).length, 0, 'no two-sided print → dropped');
 });
 
 /* --- price window ------------------------------------------------------------------------- */
