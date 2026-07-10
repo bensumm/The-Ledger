@@ -178,7 +178,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   verdicts lives in `/positions`.
 - `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, per-spec falling doctrine); `--mode` swaps the step-3 edge (+ the
-  gate stack for value). **Six niches** — `band` / `spread` / `rising` / `churn` / `scalp` / `value` —
+  gate stack for value). A **render-stage net>0 surface gate** additionally drops any row whose after-tax
+  net at the thesis's OWN posted pair is ≤ 0 (the bond retrade-fee / ROI-bind leak — counted `neg-net` in
+  `--stats`; held/asked/watchlist rows never reach it, so they're exempt; it's a render drop, so the
+  replay goldens are unaffected). **Six niches** — `band` / `spread` / `rising` / `churn` / `scalp` / `value` —
   but per Ben's **NY3** ruling (2026-07-09, reversing NY2.2/NY2.3) + **P5** **`--mode all` runs
   band/rising/churn; spread/scalp/value are off-by-default** (reach each with an explicit `--mode <name>`).
   Why NY3 flipped it: the one-thesis-at-a-time scan showed spread's 24h-average edge is structurally

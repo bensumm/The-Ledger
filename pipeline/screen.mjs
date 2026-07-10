@@ -327,7 +327,7 @@ function pathLine(name, weighed, defaultPath) {
 function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0 };  // post-fetch discard reasons (--stats)
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
@@ -425,6 +425,14 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // all evaluated at that same pair. Extra data (reach/velocity) is null at the screen surface today
     // (no 1h fetch), so the estimators degrade honestly to their band-depth / volume-velocity priors.
     const er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra });
+    // Step 2 (2026-07-09): a RENDER-stage net>0 surface gate. er.net is the after-tax net at the thesis's
+    // OWN posted price pair (spec.priceBasis; the BOND 10%-guide-retrade exception rides through via
+    // netMargin). A non-positive net means the thesis can't make money at the pair it would post — a bond
+    // whose retrade fee eats the spread, a spread niche's 24h-avg pair underwater after tax, a ZGS-style
+    // ROI-bind. Drop it silently (counted in --stats). This is a RENDER drop, NOT a gate/survive stage, so
+    // the pinned gateCandidates→rankAndSlice→surviveMode funnel + the replay goldens are unaffected.
+    // Held/asked/watchlist rows never reach renderMode (their surfaces never hide), so they're auto-exempt.
+    if (er.net <= 0) { disc.negNet++; continue; }
     const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
     // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
@@ -587,7 +595,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}`;
+    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');
