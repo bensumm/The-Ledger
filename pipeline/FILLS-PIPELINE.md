@@ -175,7 +175,11 @@ positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**
 ```
 
 Reconstruction (in `reconstruct.mjs`, called by `sync-fills.mjs` and `monitor.mjs`),
-deliberate — don't undo casually:
+deliberate — don't undo casually. **REMOVE tombstones apply on BOTH paths:** `sync-fills.mjs`
+folds them into the merged `fills.json`+archive set (below), and `monitor.mjs` folds them into its
+in-memory live-log book via the shared `buildTombstonedEvents()` (ARCH-1, 2026-07-10) — so both
+answer "what do I hold?" the same way and a purged lot never reappears as a phantom monitor hold
+(the class of same-number-two-ways bug the shared reconstruction exists to kill):
 - **`validateSlotTransitions()`** (LH1, 2026-07-05) runs at INGEST — next to `buildEvents()`,
   BEFORE the `fills.json` merge — as the LOUD, conservative catch for RuneLite snapshot re-emissions
   (a completed-but-uncollected offer's terminal line re-logged on login/world-hop). It drops a

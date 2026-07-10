@@ -6,7 +6,10 @@
  * fills/cancels, and (c) HELD positions with cost basis + break-even — reconstructed
  * IN-MEMORY from the live log via the shared pipeline FIFO (reconstruct.mjs), so the
  * held count is real-time and correct (no positions.json ~20m lag, and no naive-log-sum
- * double-count of re-logged BOUGHT lines). Print-only — it never writes trade data.
+ * double-count of re-logged BOUGHT lines). REMOVE tombstones in coffer-manual.log ARE
+ * applied (ARCH-1) — the same correction sync-fills.mjs/positions.json honor — so a
+ * purged/mobile-corrected lot never reappears here as a phantom hold. Print-only — it
+ * never writes trade data.
  * It's the data source for the deterioration-watch polling routine documented in
  * pipeline/MONITORING.md (HOLD / WATCH / CUT with the evidence-gated 24h-cycle guard).
  *
@@ -15,7 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct } from './lib/reconstruct.mjs';
+import { reconstruct, buildTombstonedEvents } from './lib/reconstruct.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs'; // shared log discovery + open-offer semantics
 import { breakEven } from '../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
 import { loadMapping } from './lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
@@ -45,9 +48,13 @@ const gp = n => Number(n).toLocaleString('en-US');
 // LH2 restart-blindness heuristic (below) can weigh held inventory against visible offers in the
 // header. LH1: validate the slot state machine (drops impossible same-slot double-terminals loudly)
 // before the reconstruction, same as the pipeline does before its fills.json merge. parseJsonLine
-// emits { remove } markers for REMOVE tombstone lines; the monitor doesn't apply tombstones, so drop
-// those markers before sequencing.
-const { events } = validateSlotTransitions(buildEvents(logLines.map(parseJsonLine).filter(r => r && r.remove === undefined)), { warn: false });
+// emits { remove } markers for REMOVE tombstone lines; ARCH-1 now ROUTES those the same way
+// sync-fills.mjs does via the shared buildTombstonedEvents() helper — collect their targets, stamp
+// each surviving event's content-hash id, then drop any event whose id was tombstoned. Without this
+// the monitor's live-log FIFO re-materializes lots that positions.json has already purged → phantom
+// holds + wrong listing advice (observed live 2026-07-05). warn:false keeps the LH1 re-emit chatter
+// quiet on this frequently-re-run poll.
+const events = buildTombstonedEvents(logLines, { warn: false });
 const pos = reconstruct(events);
 let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) }));
 // Manual overrides. The Exchange Logger drops some SOLD events during fast same-second flipping, so
@@ -87,7 +94,7 @@ for (const r of terminal) {
 // --- held positions: reconstructed IN-MEMORY from the live log via the shared pipeline
 // FIFO (reconstruct.mjs). Real-time and correct — no positions.json lag, and collapseOffers
 // dedups re-logged/duplicate BOUGHT lines so the held count never phantoms. ---
-console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · break-even = shared tax-capped breakEven) ===');
+console.log('\n=== HELD POSITIONS (in-memory pipeline FIFO from live log · REMOVE tombstones applied · break-even = shared tax-capped breakEven) ===');
 // (held + held-override reconciliation are computed near the top so the LH2 blindness check can use
 // the held count in the header; see that block.)
 if (Object.keys(ov).length) console.log('(held-override active — reconciling: ' + Object.keys(ov).map(id=>nm(+id)).join(', ') + ')');

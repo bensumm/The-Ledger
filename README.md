@@ -296,7 +296,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the `held:<id>` watch-state entry — watch.mjs is the ONE writer; the note block gains the
     `renderPathLine` dominant-path field (decision support, never an alert)),
     `monitor.mjs`
-    (live read-only log-state snapshot), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
+    (live read-only log-state snapshot; ARCH-1 — its in-memory held book now applies coffer-manual.log
+    REMOVE tombstones via `reconstruct.buildTombstonedEvents`, the same purge sync/positions.json honor,
+    so a corrected/mobile lot never reappears as a phantom hold), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
     to print a per-held reminder. **P4a** — `set … --path <key> [--entered-under <key>]` ALSO declares
     the path-engine entry path into the TRACKED root `hold-thesis.json` via `holdthesis.upsertThesis`,
@@ -325,7 +327,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     n on every aggregate, deliberately NO grades/verdicts — the archive is weeks-cold and mostly
     not-taken)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
-    FIFO reconstruction + `dedupeSnapshots`), `offers.mjs` (exchange-log discovery + open-offer
+    FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →
+    tombstone-filtered event list monitor.mjs reconstructs from, mirroring sync's inline REMOVE-tombstone
+    filter), `offers.mjs` (exchange-log discovery + open-offer
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
     position stage wants, so quote.mjs can see the live book without the `~/.runelite` log dir),

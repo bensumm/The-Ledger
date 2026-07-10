@@ -317,3 +317,21 @@ export function eventId(e) {
     .update([e.ts, e.slot, e.itemId, e.type, e.state, e.filled, e.spent].join('|'))
     .digest('hex').slice(0, 16);
 }
+
+// buildTombstonedEvents (ARCH-1) — the LIVE-LOG → tombstone-filtered event list, the shared home
+// monitor.mjs reconstructs its held book from. Parses raw JSON log lines (or pre-parsed markers),
+// collects REMOVE tombstone targets, sequences via buildEvents, LH1-validates the slot machine,
+// stamps each surviving event's content-hash id, then DROPS any event whose id was tombstoned — the
+// same correction sync-fills.mjs applies inline (its ~lines 193-227) so both answer "what do I hold?"
+// the same way. This is the LIVE-log reconstruction ONLY: it does NOT merge the fills.json archive
+// (that + the age cutoff + the mobile source are sync's concern), so a tombstone targeting an event
+// that has already rotated out of the source logs is a harmless no-op here. `warn` gates the LH1
+// re-emit chatter (monitor passes false — a frequently-re-run poll shouldn't spam months-old dups).
+export function buildTombstonedEvents(rawLines, { warn = false } = {}) {
+  const parsed = rawLines.map(l => (typeof l === 'string' ? parseJsonLine(l) : l));
+  const removeTargets = new Set();
+  for (const r of parsed) if (r && r.remove) removeTargets.add(r.remove);
+  const { events } = validateSlotTransitions(buildEvents(parsed.filter(r => r && r.remove === undefined)), { warn });
+  for (const e of events) e.id = eventId(e);
+  return events.filter(e => !removeTargets.has(e.id));
+}
