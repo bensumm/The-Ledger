@@ -47,7 +47,7 @@
  */
 import { netMargin, clamp } from '../../js/format.js';
 
-const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
+const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 const estR = (value, n, basis) => ({ value, n, basis });
 

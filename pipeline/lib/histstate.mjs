@@ -17,14 +17,21 @@ import { regimeDrift, regimeLabel, phase } from '../../js/quotecore.js';
    band     : one loadHistBands result { bandLo, bandHi, covered, nWin, loVol, hiVol } (or null)
    series6h : one loadHistDaily result [{ avgLowPrice, avgHighPrice, timestamp }] (or null/[])
    price    : the fill/placement price (optional) -> band percentile within the trailing-2h band */
+// Where `price` sits within a 2h traded band, clamped to [0,100]. `null` when the band is absent
+// or degenerate (hi ≤ lo). `round` yields an integer percent (state-comparison callers); the raw
+// float is kept for logging callers. ONE home for the formula (was duplicated in outcomes.mjs).
+export function bandPercentile(price, lo, hi, { round = false } = {}) {
+  if (price == null || lo == null || hi == null || hi <= lo) return null;
+  const pct = Math.max(0, Math.min(100, (price - lo) / (hi - lo) * 100));
+  return round ? Math.round(pct) : pct;
+}
+
 export function deriveState({ band, series6h, price } = {}) {
   const bandLo = band && band.bandLo != null ? band.bandLo : null;
   const bandHi = band && band.bandHi != null ? band.bandHi : null;
   const bandCovered = band && band.covered ? band.covered : 0;
 
-  let bandPct = null;
-  if (price != null && bandLo != null && bandHi != null && bandHi > bandLo)
-    bandPct = Math.max(0, Math.min(100, Math.round((price - bandLo) / (bandHi - bandLo) * 100)));
+  const bandPct = bandPercentile(price, bandLo, bandHi, { round: true });
 
   const pts = Array.isArray(series6h) ? series6h : [];
   const rd = regimeDrift(pts);

@@ -21,8 +21,7 @@
  * so the cutoff NUMBERS differ in scale from the old gp/day ones). Deliberately un-tuned — the retro-
  * join (pipeline/lib/retrojoin.mjs) + F1 calibrate them from realized fills. Don't cite as calibrated.
  */
-
-const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+import { clamp } from '../../js/format.js';   // shared clamp — was reimplemented locally (identical arithmetic)
 
 /* --- risk-quality sub-factors (each ∈ (0,1], 1 = no concern) --- */
 

@@ -860,7 +860,7 @@ async function main() {
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
   const map = await loadMapping();
-  const [v24, latest, guide] = [await loadAll24h(), await loadAllLatest(), await loadGuide()];
+  const [v24, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
   const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure

@@ -38,7 +38,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collapseOffers, matchTrades, dedupeSnapshots } from './lib/reconstruct.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from './lib/marketfetch.mjs';
-import { loadHistState } from './lib/histstate.mjs';
+import { loadHistState, bandPercentile } from './lib/histstate.mjs';
 import { velocityClass } from './lib/velocity.mjs';
 import { parkedStats } from './lib/capitalutil.mjs';
 import { parseArgs, median } from './lib/cli.mjs';
@@ -235,8 +235,7 @@ async function build() {
       bandLo = b.bandLo; bandHi = b.bandHi; bandCovered = b.covered;
       spread2h = (bandLo != null && bandHi != null) ? bandHi - bandLo : null;
       limitVol2h = Math.min(b.loVol, b.hiVol);
-      if (bandLo != null && bandHi != null && bandHi > bandLo && placementPrice != null)
-        bandPct = Math.max(0, Math.min(100, (placementPrice - bandLo) / (bandHi - bandLo) * 100));
+      bandPct = bandPercentile(placementPrice, bandLo, bandHi);   // raw float (logging); shared formula in histstate.mjs
     }
 
     // realized net after tax: sum FIFO closed lots whose sellTs is one of this (sell) campaign's offers
