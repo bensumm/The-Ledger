@@ -67,7 +67,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H } from '../js/quotecore.js';
 import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // diurnal peak-timing read (auto, off the in-hand 1h series)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
@@ -80,7 +80,7 @@ import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // here: gateCandidates/risingPoolFloor/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
-import { gateCandidates, rankAndSlice, surviveMode, expUnits, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from './lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from './lib/gatecandidates.mjs';
 import { valueRanges, valueScore, valueGate, valueTier } from '../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
 // P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — strategies.mjs) and reads each spec's inferred default
@@ -581,6 +581,41 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   if (diurnalLines.length) {
     console.log(`Diurnal timing (peak-timing bid/ask off the in-hand 1h series — support, not a gate; ★ = clean diurnal candidate):`);
     for (const l of diurnalLines) console.log(`  ↳ ${l}`);
+  }
+  // COD-2 (2026-07-10) — the OVERNIGHT accumulation-and-capital table. Encoded from /overnight §6's
+  // hand-computed sizing (the prose formula min(buyLimit×2, 8/24×0.10×volDay), now the shared
+  // expUnitsOvernight so its constants can't drift from screen's expUnits). Ben's exact ask: "how many
+  // can I accumulate in 8h and how much capital does that require." Prints ONLY under --posture overnight
+  // (the surfaced rows are already the overnight-filtered set), top-down by the overnight sort with a
+  // running capital subtotal so Ben takes lines until his stated capital runs out. Each line binds the
+  // bid to the assumed SELL price (never leave the sell side implicit) and its after-tax net/u + total.
+  // stdout-only (never in screen.json). Up-to units is an UPPER BOUND (assumes fills at your price;
+  // prorates daily volume flat across the quiet hours, no fill probability) — labeled "up to" + the note.
+  if (POSTURE === 'overnight' && rows.length) {
+    const accHeaders = ['#', 'Item', 'Bid', 'Ask (sell)', 'Up-to units/8h', 'Capital', 'Cum capital', 'Net/u', 'Total if cycled'];
+    const accCells = [];
+    let cum = 0;
+    rows.forEach((r, i) => {
+      const bid = r.row.optBuy, ask = r.row.optSell, netU = r.row.optNet;
+      const units = bid != null ? Math.floor(expUnitsOvernight(r.row.limit, r.row.volDay)) : null;
+      const capital = (units != null && bid != null) ? units * bid : null;
+      if (capital != null) cum += capital;
+      const total = (units != null && netU != null) ? units * netU : null;
+      accCells.push([
+        { t: String(i + 1) },
+        { t: map.byId[r.id]?.name || ('#' + r.id) },
+        { t: bid != null ? fmtP(bid) : '—' },
+        { t: ask != null ? fmtP(ask) : '—' },
+        { t: units != null ? `up to ${fmt(units)}` : '—', c: 'mini' },
+        { t: capital != null ? fmtP(capital) : '—' },
+        { t: fmtP(cum), c: 'mini' },
+        { t: netU != null ? (netU >= 0 ? '+' : '') + fmtP(netU) : '—', c: netU != null && netU >= 0 ? 'gain' : 'loss' },
+        { t: total != null ? (total >= 0 ? '+' : '') + fmtP(total) : '—' },
+      ]);
+    });
+    console.log(`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`);
+    console.log(mdTable(accHeaders, accCells));
+    console.log(`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even.)`);
   }
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
   // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.

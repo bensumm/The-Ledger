@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.15
+version: 1.16
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -104,33 +104,31 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      (~75%+), never off a single night's dip (the 176 death-rune bid was one night's
      anomaly — the other 13 nights never went below 184). "Touched" ≠ limit filled —
      pair it with the volume line — and ~14 nights is a small sample (process rule 4).
-6. **Accumulation-and-capital table (required output).** Ben's exact ask: "how many can I
-   accumulate in 8h and how much capital does that require." For each recommended bid:
-   - **Bid price** (the optimistic buy) **and the assumed sell price** (the optimistic
-     2h-band sell target the Net/u uses — the table must state it, never leave the sell
-     side implicit). Both on the standard quote basis; sell never below break-even.
-     **Each carries its timing target (Ben, 2026-07-05):** bind both numbers to the window
-     expected to fill them — the bid to the overnight-window read the fill-realism check
-     already produced ("touched ~75% of nights"), the sell to when tomorrow's flow should
-     reach it (morning lift / next-day churn). "X, targeting Y" — never a bare number.
-   - **Expected units over ~8h** = `min(buyLimit × 2, 8/24 × 0.10 × volDay)` — the buy
-     limit refreshes ~every 4h → 2 windows overnight, capped at a 10% share of
-     limiting-side daily volume (the SAME convention as `screen.mjs`'s `expUnits =
-     min(limit×6, 0.10×volDay)` scaled to 8h; keep the constants aligned with that
-     formula). Buy limits print on `quote.mjs`'s per-item regime line. This figure is an
-     **UPPER BOUND that assumes fills happen at your price** — it prorates daily volume
-     flat across the quiet hours and prices in no fill probability. Present it as "up
-     to", paired with the fill-realism read above.
-   - **Capital required** = expected units × bid price.
-   - **Net/u and total if fully cycled** at the stated sell price, after 2% tax.
-   - **Prioritize top-down** (best risk-adjusted edge first) with a **running capital
-     subtotal**, so Ben takes lines until the Phase-1 stated capital runs out.
+6. **Accumulation-and-capital table — the SCRIPT prints it (COD-2, 2026-07-10).** Ben's exact
+   ask ("how many can I accumulate in 8h and how much capital does that require") is now an
+   ENCODED output of `screen.mjs --posture overnight`: an **Overnight accumulation & capital**
+   table under each niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
+   up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
+   the shared `expUnitsOvernight` (`= expUnits × 8/24 = min(buyLimit×2, 8/24×0.10×volDay)` —
+   `pipeline/lib/gatecandidates.mjs`, so its constants can never drift from `expUnits`); the
+   script prints its UPPER-BOUND caveat itself (assumes fills at your bid, prorates daily volume
+   flat across the quiet hours, no fill probability). **Do not hand-compute or restate the
+   formula — read the table.** Your remaining judgment on top of it:
+   - **Timing target on every line (Ben, 2026-07-05):** bind the bid + sell to the window
+     expected to fill them (the bid to the fill-realism / **Diurnal timing** read the script
+     already prints, the sell to tomorrow's morning-lift / next-day churn). "X, targeting Y" —
+     never a bare number. Sell never below break-even.
+   - **Take lines top-down against the Phase-1 stated capital** using the running `Cum capital`
+     column — stop when it exceeds what Ben freed; **flag retrace risk** on any big-ticket line.
+   - **Pair every up-to-units figure with the fill-realism read** (§5 windowrange) — it is a
+     ceiling, not a forecast.
 7. **Output the cut / hold / slot plan:** which positions were cut (Phase 1), which holds
-   stay listed at what break-even-floored price, and the prioritized bid table with exact
-   prices, expected units, and capital per line.
+   stay listed at what break-even-floored price, and the prioritized bid table (the script's
+   accumulation table, filtered to the lines you're recommending within stated capital).
 
-Note: `screen.mjs --posture overnight` shipped (S2) — this skill now relies on it for the
-structural overnight filtering (above); keep only the sizing + fill-realism layers here.
+Note: `screen.mjs --posture overnight` shipped (S2) and now prints the accumulation-and-capital
+table itself (COD-2) — this skill relies on it for BOTH the structural overnight filtering AND
+the sizing; keep only the prioritization + fill-realism judgment here.
 
 ## Encode learnings (self-improvement — after the offers are placed, never during)
 

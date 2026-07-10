@@ -382,6 +382,15 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+**ARCH-DOCS-AUDIT codification (from `PLAN-ARCH-DOCS-AUDIT.md`, Q3 "prose → code"):**
+- **COD-2 — DONE (2026-07-10):** the `/overnight` accumulation formula is CODE, not prose. Added
+  `expUnitsOvernight` beside `expUnits` in `pipeline/lib/gatecandidates.mjs` (= `expUnits × 8/24`, so the
+  6-limits/day + 10%-share constants can't drift from the day figure); `screen.mjs --posture overnight`
+  now prints the **Overnight accumulation & capital** table itself (bid→sell · up-to units/8h · capital ·
+  running subtotal · net/u · total). `/overnight` §6 shrank to prioritization + fill-realism judgment +
+  a pointer (v1.16). Pinned by `pipeline/expunitsovernight.test.mjs`. Pipeline stdout + skills only → no
+  APP_VERSION.
+
 **Open:**
 - **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day
   `hourProfile`/`deriveDiurnalRange` engine + the screen's `Diurnal timing` block auto-run on SURVIVORS

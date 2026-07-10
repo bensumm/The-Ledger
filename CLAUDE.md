@@ -400,8 +400,11 @@ Script facts the skills rely on (current behavior, not doctrine):
   velocity, and drops items whose *yesterday overnight window* printed below the current bid
   (`overnightStaleRisk`); **auto** picks by the local clock (~22:00–06:00); **active** (default) =
   current behavior. Posture is recorded in `screen.json` so the Scan banner names it. `/overnight`
-  runs `--posture overnight`. `quote.mjs --positions` prints an informational late-night morning-
-  staleness line (verdict logic unchanged).
+  runs `--posture overnight`. Under **overnight** it ALSO prints an **Overnight accumulation & capital**
+  table (COD-2): per surfaced pick `bid→sell · up-to units/8h · capital · running subtotal · net/u ·
+  total`, up-to units = the shared `expUnitsOvernight` (`= expUnits × 8/24`, `pipeline/lib/gatecandidates.mjs`)
+  — the encoded form of `/overnight` §6's old hand-computed sizing; stdout-only, UPPER-BOUND-labeled.
+  `quote.mjs --positions` prints an informational late-night morning-staleness line (verdict logic unchanged).
 - `watch.mjs` watches every **position** = *any committed capital*: held inventory PLUS every active GE
   offer (Ben's definition; shared reader `pipeline/lib/offers.mjs`). Output is headline (alerts up front)
   → one numbers-only table → a per-item note block → summary footer (full shape + the V5 held-lot EMIT

@@ -604,7 +604,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     form hits, deletion prose does NOT), the live corpus has no hard denylist violations + STILL catches
     the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs
     (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), and the live
-    CLAUDE.md ⇆ README axis is clean)
+    CLAUDE.md ⇆ README axis is clean),
+    `expunitsovernight.test.mjs` (COD-2 — pins `expUnitsOvernight` = `expUnits × 8/24`: the alignment
+    identity so the accumulation-sizing constants can't drift from the day figure, the documented
+    closed form `min(limit×2, 8/24×0.10×volDay)`, and the limit-bound/volume-bound/null-limit/zero-vol edges)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +

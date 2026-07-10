@@ -34,7 +34,7 @@
  * strategies.mjs's edge functions now, imported from js/format.js there), so the numbers stay
  * byte-identical to screen.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
-import { overnightStaleRisk } from '../../js/quotecore.js';
+import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
 import { median } from './cli.mjs';
 // P5 — the value niche's term-structure gate + rank (js/valuescreen.mjs, pure). gateCandidates routes
 // a `gate:'value'` spec here instead of the shared band/spread liquidity+edge stack.
@@ -91,6 +91,15 @@ export const SUBFLOOR_GRADE_CAP = 'C';
 // realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
 // of the limiting-side daily volume. Null limit → volume share only.
 export const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); return limit != null ? Math.min(limit * 6, vShare) : vShare; };
+// COD-2 (2026-07-10) — realistic expected units accumulated over the OVERNIGHT window (the /overnight
+// §6 accumulation sizing, previously hand-computed in the skill as min(buyLimit×2, 8/24×0.10×volDay)
+// with a PROSE plea to "keep the constants aligned with expUnits"). This IS that formula, but derived
+// by SCALING expUnits to the OVERNIGHT_SPAN_H window so the 6-limits/day (24/4h) and 10% volume-share
+// constants can NEVER drift from the day figure: min(a,b)·k = min(a·k, b·k), so multiplying the whole
+// expUnits result by SPAN/24 is exact — min(limit·6, 0.10·volDay)·(8/24) = min(limit·2, 8/24·0.10·volDay).
+// Buy limit refreshes ~every 4h → 2 windows in an 8h span; the volume-share leg prorates flat across the
+// span. UPPER BOUND (assumes fills at your price, no fill-probability) — screen.mjs labels it as such.
+export const expUnitsOvernight = (limit, volDay) => expUnits(limit, volDay) * OVERNIGHT_SPAN_H / 24;
 
 // Pure predicate (NY2.1) — true = candidate survives the rising-pool noise floor: a BIG TICKET
 // (mid ≥ midFloor) OR LIQUID enough to move (limitVol ≥ liqVol). Rising mode only.
