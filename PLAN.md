@@ -334,6 +334,25 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   Belongs with rating-cutoff calibration (both need the same validation data).
 - **Per-item "recommend price adjustment" button** (Trends): deferred; T2's 2h readout is
   a step toward it, F1's calibration is the real enabler.
+- **Annotated price-path chart — `pipeline/chart.mjs` + app Trends overlay (Ben, 2026-07-10 — "extremely useful in our app").**
+  Encode the on-demand annotated chart prototyped this session (the Searing-page artifact:
+  90d reprice context + 15d hourly with actionable levels + diurnal hour-of-day profile) into a
+  reusable capability. Two deliverables, shared plumbing:
+  1. **CLI** `node pipeline/chart.mjs "<item or id>"` → emits a self-contained annotated HTML
+     (or SVG) so any desk decision gets a picture without hand-building it — same fewer-scripts-
+     on-the-fly rationale as `limits.mjs`/`quote.mjs`. Data via the shared `fetchTs`/`fetchLatest`
+     (`marketfetch.mjs`); annotations (buy/break-even/ask rungs, dip/peak windows) reuse
+     `computeQuote` + `windowread.mjs`'s `hourProfile`/`deriveDiurnalRange` so the levels are
+     byte-identical to the tables.
+  2. **App Trends tab** — the higher-value half: overlay the SAME annotations (break-even line,
+     band edges, diurnal dip/peak shading, live marker) onto the existing Trends chart, and add the
+     diurnal hour-of-day profile as a companion view. Client-side off the app's own quote path
+     (bumps `APP_VERSION`); the CLI is the node-side twin (no bump). Shared render helper so both
+     surfaces draw the same picture — the ONE chart-annotation home, mirroring the `quotecore` split.
+  Honesty carries into the render: sample-size + reach caveats stay on the chart (the prototype's
+  footnote), and the diurnal profile is an average, not a forecast (the PF-series forecast is the
+  separate quantitative layer). Scope note: distinct from the deferred in-browser re-scan below
+  (that rebuilds the market scan; this draws one item's history).
 - **In-app re-scan** (ex PLAN-2 C3): browser CAN rebuild the band scan (~26 CORS-open
   requests); build only if published-scan staleness proves annoying. IndexedDB cache +
   courtesy rates if built.
