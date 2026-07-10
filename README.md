@@ -65,7 +65,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   clustering, and the stale-to-live guard; the peak-timing engine `screen.mjs` auto-runs and
   `windowrange --profile` prints); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/windowrange.mjs`,
-  `pipeline/watch.mjs`, `pipeline/screen.mjs` and `js/validate.mjs` — NOT yet app-imported),
+  `pipeline/watch.mjs`, `pipeline/screen.mjs`, `js/validate.mjs` and `js/forecast.mjs` — NOT yet app-imported.
+  PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of
+  the deviation samples) so the forecast band isn't re-derived; every pre-existing field is byte-identical),
+  `forecast.mjs` (PF1 2026-07-10 — the pure forward 12h/24h price projection: **CONSUMES** an `hourProfile`
+  object and produces a diurnal+trend forecast — `diurnalForecast(profile, ctx)` → `nextTrough`/`nextPeak`
+  `{level, band, etaH, window, confidence, mode}` + the per-hour projected `series`, plus `whenBuyable`/
+  `whenSellable`/`fmtEta`. The interpretable ADDITIVE model `projLevel(h) ≈ baselineNow + trendPerHour·Δt +
+  deTrendedHourShape(h)`; anchor from the live quote, shape/dispersion from up to 14d, trend from the
+  recent slope. DEGRADES LOUDLY to `{forecast:null, reason}` on a spike/decay phase, a live band violation,
+  a thin/short series, an unreliable quote, or a trend-erased dip (trend-only mode); the band widens with
+  horizon. Claims ONLY "recurring diurnal shape + dumb trend extension" — never an exogenous shock. Imports
+  only `windowread.mjs` (no quotecore — `phase`/`mom`/`reliable` arrive as plain ctx). INFORM-ONLY /
+  console-only / provisional (n≈0, every constant a NAMED PLACEHOLDER pending the PF8 backtest); no consumer
+  wired yet (PF2–PF8) and no app import → no APP_VERSION. Pinned by `pipeline/forecast.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
@@ -505,7 +518,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `alerts.test.mjs` (TD2 — transition-only + quiet-hours contract), `sync-fills.test.mjs`
     (LW1 — `regenerate()` does zero git), `lib/offers.test.mjs` (incl. the LW1 `offersSnapshot`
     emitter), `watchcore.test.mjs` (Watch-tab derivations + `offerVerdict`), `lib/cli.test.mjs`
-    (arg/`parseGp`/`median`), `windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard; moved to `pipeline/` beside the other `js/`-module tests when P2 moved windowread to `js/`), `validate.test.mjs` (P2 — the validator registry semantics + reachValidator fixtures: rarely-reached→caution, never-reached→reject, RC1 stale-optimistic→bumped reject, and the no-data/thin-sample degrade-to-pass contract),
+    (arg/`parseGp`/`median`), `windowread.test.mjs` (window-range quantiles + the RC1 recency-split reach-contamination guard; moved to `pipeline/` beside the other `js/`-module tests when P2 moved windowread to `js/`), `forecast.test.mjs` (PF1 — the `js/forecast.mjs` diurnal+trend model: the pinned BLOOD-RUNE golden (whenBuyable ≈ 4h at the projected trough), the anchor boundary condition, the downtrend step-down, the loud degrades (spike/decay/band-violation/thin/no-anchor/trend-only), and the band-non-shrinking + additive-dispersion-fields checks — all synthetic, no fetch/fs), `validate.test.mjs` (P2 — the validator registry semantics + reachValidator fixtures: rarely-reached→caution, never-reached→reject, RC1 stale-optimistic→bumped reject, and the no-data/thin-sample degrade-to-pass contract),
     `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
     decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and
     the no-data/thin-floor/held-lot degrade-to-pass contract on both surface ctx shapes),
@@ -651,7 +664,8 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | --- | --- |
 | `js/quotecore.js` | 11 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
 | `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) + `pipeline/lib/estimators.mjs` (P6b — `netMargin`/`clamp` for the rank composite) |
-| `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
+| `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
+| `js/forecast.mjs` | `pipeline/forecast.test.mjs` only (PF1 — the pure model landed; no surface consumer wired yet — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate — all pending; not yet app-imported → no APP_VERSION) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |
 | `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |

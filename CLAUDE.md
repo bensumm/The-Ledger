@@ -186,6 +186,14 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     item. This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
     manual `--window`/`--profile` read is now a CONFIRMATION on what you actually pitch (thresholds are
     placeholders; ★ doesn't know froth, so a spike item's amplitude can flatter it — support, not a gate).
+  - **Forward FORECAST (PF1, 2026-07-10 — the pure model only; no surface wired yet).** `js/forecast.mjs`
+    CONSUMES `hourProfile` and projects the next 12h/24h — `diurnalForecast(profile, ctx)` →
+    `nextTrough`/`nextPeak` `{level, band, etaH, window, confidence}` + `whenBuyable`/`whenSellable`, the
+    "not buyable at a profitable price now, but ~X in ~4h" answer. Model = `baselineNow + trendPerHour·Δt +
+    deTrendedHourShape(h)`; anchor from the live quote. Claims ONLY the recurring diurnal shape + a dumb
+    trend extension — it DEGRADES LOUDLY (spike/decay, live band violation, thin series, trend-erased dip)
+    and NEVER forecasts an exogenous shock. The doctrine home is the `forecast.mjs` header. INFORM-ONLY /
+    provisional (n≈0, PLACEHOLDER constants pending the PF8 backtest); consumers land in PF2–PF8.
 **How to generate these tables — each canonical ask maps to a skill or an exact command.
 These scripts exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e`
 fetch for a market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the

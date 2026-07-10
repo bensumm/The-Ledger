@@ -131,6 +131,16 @@ export const TREND_DOM_FRAC = 0.25;      // |daily-low drift/day| ≥ this fract
                                          //   multi-day trend dominates the intraday swing (price to live)
 
 const median = arr => { const s = arr.filter(v => v != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
+// IQR (q75−q25) of a numeric sample — the small-sample DISPERSION statistic the PF1 forecast band is
+// built from. IQR not stdev on purpose: 7–14 samples/hour is a small sample and a lone flier print must
+// not blow up the band (the Bar E robustness lesson). null when fewer than 2 non-null samples. Uses the
+// same ceil-quantile index convention as quantLow so it stays legible next to the reach math.
+const iqr = arr => {
+  const s = arr.filter(v => v != null).sort((a, b) => a - b);
+  if (s.length < 2) return null;
+  const q = p => s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];
+  return q(0.75) - q(0.25);
+};
 
 // least-squares slope per step of a numeric series (oldest→newest); null if <2 points.
 function slopePerStep(ys) {
@@ -199,11 +209,24 @@ export function hourProfile(series, { nights = 14, now = new Date(), recentN = R
     const recent = samples.filter(s => recentSet.has(s.day));
     const devLow = samples.map(s => (s.low != null && baseline.has(s.day)) ? s.low - baseline.get(s.day) : null);
     const devHi = samples.map(s => (s.hi != null && baseline.has(s.day)) ? s.hi - baseline.get(s.day) : null);
+    // per-sample MID deviation — the anchor axis PF1's forecast projects on (`baselineNow = liveMid −
+    // devMid(currentHour)`), so the current-hour projection reproduces the live price by construction.
+    const devMidS = samples.map(s => {
+      if (!baseline.has(s.day)) return null;
+      const m = (s.low != null && s.hi != null) ? (s.low + s.hi) / 2 : (s.low ?? s.hi);
+      return m != null ? m - baseline.get(s.day) : null;
+    });
     const rlows = recent.map(s => s.low).filter(v => v != null);
     const rhis = recent.map(s => s.hi).filter(v => v != null);
     hours.push({
       h, n: samples.length,
       devLow: median(devLow), devHi: median(devHi),                       // de-trended SHAPE
+      // ADDITIVE PF1 dispersion fields — the forecast BAND is built from these so it isn't re-derived
+      // outside hourProfile (the one-owner rule). devMid = de-trended mid shape (the projection anchor);
+      // devLowSpread/devHiSpread = IQR of that hour's low/high deviation samples (how tightly the dip/peak
+      // prints across days). Every field ABOVE/BELOW is byte-unchanged — existing consumers ignore these.
+      devMid: median(devMidS),
+      devLowSpread: iqr(devLow), devHiSpread: iqr(devHi),
       lowRecent: rlows.length ? median(rlows) : median(samples.map(s => s.low)),   // absolute LEVEL
       hiRecent: rhis.length ? median(rhis) : median(samples.map(s => s.hi)),
       volLo: median(samples.map(s => s.volLo)), volHi: median(samples.map(s => s.volHi)),
