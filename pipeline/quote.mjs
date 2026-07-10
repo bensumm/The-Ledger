@@ -104,6 +104,10 @@ async function runItems() {
     // surface used to fetch NO 1h series, so reach/trajectory DEGRADED to pass on exactly the surface Ben
     // uses most ("how's X?"). Now the 1h series is in hand, so reachValidator FIRES (real window read) and
     // trajectoryValidator fires off the warm 1h-derived term structure, and we print the diurnal timing line.
+    // SF-2 (2026-07-10): this ts1h fetch is UNCAPPED — the "1–2 items/invocation" budget is a usage
+    // convention, NOT enforced, so `quote A B C … J` amplifies the 1h fetch count one-per-item linearly.
+    // Fine at the intended handful; if large-batch quotes ever become routine, add a soft cap here
+    // (skip the ts1h enrichment past N items, degrading reach/diurnal to "not fetched — batch too large").
     const inp = await fetchItemInputs(id, { ts1h: true });
     const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));

@@ -497,14 +497,17 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   `all24h.json` (10-min cache). Different snapshots ⇒ the same item can straddle a `liqClassOf`
   boundary (observed live on Toxic blowpipe: `mid` vs `thin`). `outcomes.mjs` re-derives class from
   the stored `volDay`, so re-deriving does NOT launder it — the polluted quantity is `volDay` itself.
-  A calibration pollutant to fix BEFORE F1 opens (F1 is weeks of accrual out → real runway). Three
-  options, ranked by cost (Ben ruled **leave parked for now**, 2026-07-10): (a) **volSrc tag** — log
-  which endpoint the volume came from, F1 normalizes at analysis time; ~5 lines, pipeline-only, no
-  fetch change, labels-not-removes the disagreement; (b) **warm-cache read** — quote reads warm
-  `all24h.json` for the class field, converges only when warm, adds a cold/warm branch (cold-path
-  quote either still splits or pays a ~4000-item bulk fetch for a 1-item ask); (c) **parked** — zero
-  cost now, pollution accrues. Do NOT force a cold bulk fetch on quote. Files: `pipeline/quote.mjs`,
-  `pipeline/screen.mjs`, `pipeline/lib/suggestlog.mjs` (lane O 2026-07-04; enriched by the 2026-07-10 sweep).
+  A calibration pollutant to fix BEFORE F1 opens (F1 is weeks of accrual out → real runway).
+  **APPROVED design (Ben 2026-07-10): warm-cache read + volSrc tag, COMBINED (they are complementary,
+  not either/or).** (1) **volSrc tag** — ALWAYS log which endpoint the volume came from (`bulk` |
+  `peritem`); the honesty layer, lets F1 bucket/normalize. (2) **warm-cache read** — `quote.mjs` reads
+  `all24h.json` for the class field ONLY IF it is already warm (within its ~10-min TTL, written by a
+  recent scan = a file read, ZERO fetch) → volSrc `bulk`, now agreeing with screen; when cold, keep the
+  per-item volume already fetched → volSrc `peritem`, and **NEVER force the ~4000-item bulk fetch for a
+  1-item ask** (the hard constraint). Net: converge for free when the data is on disk, fall back
+  honestly with a normalizable label when not. Pin class-parity with a small test. Files:
+  `pipeline/quote.mjs`, `pipeline/screen.mjs`, `pipeline/lib/suggestlog.mjs`, `pipeline/lib/marketfetch.mjs`
+  (lane O 2026-07-04; enriched + approved by the 2026-07-10 sweep — dispatched as a worktree agent).
 - `js/backup.js:23` stamps the backup filename with the UTC date (`toISOString().slice(0,10)`)
   — a late-evening local backup gets tomorrow's date in the name. File-artifact only, not a
   displayed time; switch to a local slug if it ever annoys (lane E, 2026-07-04).
@@ -528,10 +531,10 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
     copied between the pre-sorted-input ones). Promote quotecore's (lowest in the import graph) to one
     shared home, make the others thin re-exports; fixture-pin all three + audit every caller's
     pre-sorted assumption FIRST. Bundle with the next `js/` shared-module pass.
-  - **SF-2 (LOW) — `quote.mjs` per-item ts1h fetch (COD-4) is uncapped across a batch:** correct, but
-    `quote A B C … J` amplifies the 1h fetch count linearly; the "1–2 items/invocation" budget is a
-    convention, not enforced. Multi-item asks are rare → downgrade to a one-line comment documenting the
-    budget as an assumption; a soft cap is machinery for a non-problem.
+  - ~~**SF-2 (LOW) — `quote.mjs` per-item ts1h fetch (COD-4) is uncapped across a batch**~~ — **DONE**
+    (2026-07-10, comment-only): the amplification (`quote A B C … J` = one 1h fetch per item, budget
+    unenforced) is now documented at the fetch site with the soft-cap recipe for if large batches ever
+    become routine. Ben ruled the comment sufficient — a soft cap is machinery for a non-problem.
   - **SF-4 (LOW) — two `UA` strings drifted** (`js/marketfetch.js` `0.30`, `pipeline/lib/marketfetch.mjs`
     `0.28`, vs `APP_VERSION 0.55`): the version token is dead-decorative (the wiki API doesn't gate on it;
     the contact string is what matters). Drop the version number from both UAs to kill the drift surface;
