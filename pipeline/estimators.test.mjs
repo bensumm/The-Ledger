@@ -165,21 +165,23 @@ ok('rankScore = net × P(fill) ÷ TTF(days), with the TTF floor guarding a divid
   assert.equal(rankScore({ net: 100, pFill: 1, ttfSec: 1 }), 100 / TTF_FLOOR_DAYS);
 });
 
-ok('quotedPair posts the thesis pair: spread=quick, band/rising/churn/scalp=opt, value=term(null)', () => {
+ok('quotedPair posts the thesis pair: band/churn/scalp=opt, value=term(null); quick still served', () => {
   const row = { quickBuy: 100, quickSell: 110, optBuy: 95, optSell: 115 };
-  assert.deepEqual(quotedPair(STRATEGIES.spread, row), { bid: 100, ask: 110, basis: 'quick' });
   assert.deepEqual(quotedPair(STRATEGIES.band, row), { bid: 95, ask: 115, basis: 'opt' });
-  assert.deepEqual(quotedPair(STRATEGIES.rising, row), { bid: 95, ask: 115, basis: 'opt' });
+  assert.deepEqual(quotedPair(STRATEGIES.churn, row), { bid: 95, ask: 115, basis: 'opt' });
+  assert.deepEqual(quotedPair(STRATEGIES.scalp, row), { bid: 95, ask: 115, basis: 'opt' });
   assert.deepEqual(quotedPair(STRATEGIES.value, row), { bid: null, ask: null, basis: 'term' });
+  // no shipped spec posts the 'quick' pair since spread was deleted (Steps 3+4), but quotedPair still serves it.
+  assert.deepEqual(quotedPair({ priceBasis: 'quick' }, row), { bid: 100, ask: 110, basis: 'quick' });
 });
 
-ok('estimateRank bundles pair/net/pFill/ttf/rank off a real archetype row (spread vs band pairs differ)', () => {
+ok('estimateRank bundles pair/net/pFill/ttf/rank off a real archetype row (band + churn = opt pair)', () => {
   const stable = ROWS.find(r => r.name === 'Stable band commodity').row;
   const erBand = estimateRank(STRATEGIES.band, stable);
-  const erSpread = estimateRank(STRATEGIES.spread, stable);
+  const erChurn = estimateRank(STRATEGIES.churn, stable);
   assert.equal(erBand.pair.basis, 'opt');
-  assert.equal(erSpread.pair.basis, 'quick');
-  for (const er of [erBand, erSpread]) {
+  assert.equal(erChurn.pair.basis, 'opt');
+  for (const er of [erBand, erChurn]) {
     assert.ok(Number.isFinite(er.rank) && er.rank >= 0, 'rank finite ≥ 0');
     assert.ok(isShaped(er.pFill) && isShaped(er.ttf), 'components shaped');
   }

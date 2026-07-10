@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.38
+version: 1.39
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -12,7 +12,7 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/screen.mjs [--mode band|spread|rising|churn|scalp|value|all] [--max-price …] [--publish]
+node pipeline/screen.mjs [--mode band|churn|scalp|value|all] [--max-price …] [--publish]
 ```
 
 Map Ben's ask to args: niche mode → `--mode` (default `band`); a price cap → `--max-price`;
@@ -55,16 +55,16 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
   week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
   timing/trajectory` notes + the footer drops, and verify the sell-leg reach by hand before quoting profit.
 
-**Niche set (NY3, 2026-07-09 — Ben's ruling, reverses NY2.2/NY2.3).** `--mode all` runs **band,
-rising, churn** — NOT spread. **Spread is now off-by-default** — the one-thesis-at-a-time scan
-showed its 24h-*average* edge is structurally narrower than the intraday band, and it kept
-surfacing mis-shelved risers (a repricing item whose run-up widens the daily-average gap) with ≈0
-clean flips; reach it only with an explicit `--mode spread`. **Churn is default-on again** — the
+**Niche set (Steps 3+4, 2026-07-09 — Ben's ruling).** `--mode all` runs **band + churn**. **The
+`spread` and `rising` niches were DELETED** (this supersedes NY2/NY3's "spread off-by-default,
+rising kept"): spread's 24h-*average* edge is structurally narrower than the intraday band and
+surfaced ≈0 clean flips once the render net>0 gate landed (its only exclusive lane — thin
+big-tickets with an untraded 2h band — is already caught by band's thin path); `rising` ⊆ `band`
+(a rising item clears band's gates), and its proxy-first fetch ordering is absorbed into the
+screen's small **rising reserve** so risers still aren't buried below flats. **Churn** — the
 high-volume commodity lane (the rune staples: soul/blood/death) earns default visibility even
 though its per-cycle edge is thin and buy-limit-throttled; judge each rune against its weekly
-range (buy the dip, not near the weekly high). **Rising** keeps its NY2.1 noise floor (big-ticket
-OR liquid). Prior NY2 (2026-07-05) had it the other way (churn out, spread in) off one evening of
-`suggestions.jsonl`; NY3 supersedes it on the multi-niche scan evidence.
+range (buy the dip, not near the weekly high). `--mode spread` / `--mode rising` now error cleanly.
 
 **Sync first (SY1).** The §5 position-context pass reads Ben's current book, and there is no
 scheduled sync (on-demand only since the `CofferFillsSync` job was eliminated — FILLS-PIPELINE
@@ -372,8 +372,8 @@ This is the tribal layer the script can't do — apply ALL of these:
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
 - Falling handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5 — memory
-  `falling-exclusion-amended`, encoded in `js/strategies.mjs` `spec.falling`). The `band`/`spread`/
-  `rising`/`churn` niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
+  `falling-exclusion-amended`, encoded in `js/strategies.mjs` `spec.falling`). The `band`/`churn`
+  niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
   or mention a falling row. But `--mode scalp` ACCEPTS fallers (a deliberate intraday flip expects a
   falling wide band) and `--mode value` KNIFE-GUARDS (rejects a decay knife, accepts a flat/basing
   value-low) — do NOT call a scalp/value faller a mistake; the spec surfaced it on purpose. Exception
@@ -397,7 +397,7 @@ recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task �
 — quietly becomes the *only* thing evaluated, and the broader mandate (candidates for the
 dry/committed capital) silently collapses to "nothing." The fix is structural, not
 willpower: the report must give an **explicit one-line read on EACH niche every pass** —
-`Dips · Band big-tickets · Spread · Rising` — even when the answer is "nothing, because X".
+`Dips · Band big-tickets · Churn` — even when the answer is "nothing, because X".
 A slot you must fill can't be silently dropped (same principle as the ONE-LINE-PER-ITEM and
 recent-reach rules — make the output enforce the coverage). "No dips" ends the *dip* line,
 never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no new dips"

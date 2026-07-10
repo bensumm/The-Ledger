@@ -5,6 +5,7 @@
  * lib/gatecandidates.mjs (gateCandidates → rankAndSlice → surviveMode). This module drives that WHOLE
  * per-niche funnel off a committed, synthetic market SNAPSHOT — no live API, no real SQLite — so the
  * screen's discovery behavior is pinned by golden outputs the way computeQuote/reconstruct already are.
+ * (Steps 3+4: the default niche set is band + churn — the spread/rising specs were deleted.)
  *
  * WHY a superset of D0's archive fixture (coffer-archive-fixture/1). D0's exportFixture emits ONLY the
  * raw bucketed /1h+/5m observations the Tier-1 archive stores. The screen funnel needs MORE than raw
@@ -23,10 +24,11 @@
  * `<24 populated points` guard makes it DETERMINISTICALLY false — the overnight scenario here isolates
  * the thin/posture drop, and the staleness sub-check itself stays unit-pinned in survivemode.test.mjs.
  *
- * PIN NOTE (P1 → re-pinned at P5): the goldens encode the CURRENT pre-amendment falling-exclusion
- * (falling ⇒ dropped in every niche). Ben's 2026-07-08 falling amendment lands at P5 (per-strategy, not
- * global) — the goldens here will change then, and that diff IS the doctrine change (same discipline as
- * survivemode.test.mjs). No live data (CLAUDE.md rule 4).
+ * NICHE SET (Steps 3+4, Ben 2026-07-09): runReplay's default modes are now band + churn — the `spread`
+ * and `rising` specs are DELETED (js/strategies.mjs). The falling doctrine is PER-SPEC (P5): band/churn
+ * exclude fallers; the scalp scenario accepts AND requires them (spec.falling=accept + the scalp confirm);
+ * value has its own term-structure gate. Each doctrine diff IS recorded by regenerating the golden.
+ * No live data (CLAUDE.md rule 4).
  */
 import { computeQuote, phase } from '../../js/quotecore.js';
 import { gateCandidates, rankAndSlice, surviveMode, DEFAULT_THRESHOLDS, THIN_RESERVE_DEFAULT, TOP_DEFAULT } from './gatecandidates.mjs';
@@ -80,21 +82,21 @@ export const ARCHETYPES = [
     // flat regime, wide 2h band, deeply liquid → the model surviving-and-surfaced band flip.
     recentMid: 100_000, priorMid: 100_000, band: [98_000, 102_000], active5m: 20,
     v24: [98_000, 102_000, 8_000, 7_000], limit: 1_500, guide: 100_000,
-    expect: 'kept in band/spread/churn; dropped notRising in rising (flat, not confirmed rising)',
+    expect: 'kept in band + churn (flat, wide traded band, deeply liquid); dropped notFalling in scalp (not falling)',
   },
   {
     id: 2002, name: 'Genuine dip riser', behavior: 'genuine dip',
     // confirmed rising regime, clean in-band momentum → survives every niche incl. the rising confirm.
     recentMid: 107_000, priorMid: 100_000, band: [104_000, 109_000], active5m: 20,
     v24: [104_000, 109_000, 6_000, 5_000], limit: 800, guide: 106_000,
-    expect: 'kept in band/spread/rising/churn (rising ≥+5%, momentum clean)',
+    expect: 'kept in band + churn (a confirmed riser clears the band gates); dropped notFalling in scalp',
   },
   {
     id: 2003, name: 'Thin big ticket', behavior: 'thin big ticket',
     // flat, admitted via the gp-flow floor ONLY (limitVol 20 < unit floor; 20×~15m ≥ 250m) → thin.
     recentMid: 15_050_000, priorMid: 15_050_000, band: [14_700_000, 15_400_000], active5m: 3,
     v24: [14_700_000, 15_400_000, 22, 20], limit: 8, guide: 15_000_000,
-    expect: 'kept thin in band/spread; dropped notRising in rising; dropped POSTURE overnight (no thin fast-lane); never in churn (limitVol<2000)',
+    expect: 'kept thin in band; dropped POSTURE overnight (no thin fast-lane); never in churn (limitVol<2000); dropped notFalling in scalp',
   },
   {
     id: 2004, name: 'Decay knife', behavior: 'decay-knife',
@@ -102,7 +104,7 @@ export const ARCHETYPES = [
     // knife caught POST-fetch by the falling-exclusion, before any edge is offered.
     recentMid: 40_000, priorMid: 45_000, band: [39_000, 41_000], active5m: 15,
     v24: [39_000, 41_000, 6_000, 5_000], limit: 1_000, guide: 41_000,
-    expect: 'gated in every niche, dropped FALLING everywhere (falling check precedes all others)',
+    expect: 'gated in band/churn, dropped FALLING there (falling check precedes all others); KEPT in scalp (falling is the thesis)',
   },
   {
     id: 2005, name: 'Falling wide band', behavior: 'falling wide-band',
@@ -110,7 +112,7 @@ export const ARCHETYPES = [
     // faller (the edge is a trap): dropped falling despite the tempting spread.
     recentMid: 200_000, priorMid: 235_000, band: [188_000, 214_000], active5m: 12,
     v24: [190_000, 210_000, 4_000, 3_500], limit: 400, guide: 205_000,
-    expect: 'gated with a fat edge in every niche, dropped FALLING everywhere (width is not a rescue)',
+    expect: 'gated with a fat edge in band/churn, dropped FALLING there (width is not a rescue); KEPT in scalp',
   },
 ];
 
@@ -160,7 +162,7 @@ function snapshotDaily(snap) {
      { gated:[{id,thin}], ranked:[id], survivors:[{id,keep,discardReason,rescued}], kept:[id], dropped:{id:reason} }
    opts: { modes, thresholds, thinReserve, top, phaseRescue, posture } — all default to screen's defaults. */
 export function runReplay(snap, {
-  modes = ['band', 'spread', 'rising', 'churn'],
+  modes = ['band', 'churn'],   // Steps 3+4 (Ben 2026-07-09): spread + rising specs DELETED
   thresholds = DEFAULT_THRESHOLDS,
   thinReserve = THIN_RESERVE_DEFAULT,
   top = TOP_DEFAULT,

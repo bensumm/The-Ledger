@@ -3,15 +3,22 @@
    vocabulary from paths.mjs — no fetch/fs, no window/document), importable by BOTH the browser app
    AND the node pipeline exactly like js/quotecore.js / js/paths.mjs. Keep it that way.
 
-   WHAT THIS IS. Before P4c the screen's four niches (band / spread / rising / churn) lived as
-   imperative `if (mode === 'spread') … else …` branches inside pipeline/lib/gatecandidates.mjs — the
-   niche name was a magic string threaded through the gate stack, the fetch-pool ranker, and the
-   post-fetch survival doctrine. P4c re-expresses each niche as a DATA-SHAPED SPEC here: the per-mode
-   EDGE definition, the pre-fetch pool rule, the fetch-pool ranking mode, and the inferred DEFAULT
-   ENTRY PATH the surfacing implies. gatecandidates.mjs now looks up `STRATEGIES[mode]` and calls
-   `spec.edge(...)` / reads `spec.pool` / `spec.rank` instead of branching on the name — so P5 can add
-   the scalp/value specs (and the per-spec falling gates of the amended doctrine) by REGISTERING a new
-   spec, WITHOUT editing gatecandidates.mjs or screen.mjs again.
+   WHAT THIS IS. Before P4c the screen's niches lived as imperative `if (mode === 'spread') … else …`
+   branches inside pipeline/lib/gatecandidates.mjs — the niche name was a magic string threaded through
+   the gate stack, the fetch-pool ranker, and the post-fetch survival doctrine. P4c re-expresses each
+   niche as a DATA-SHAPED SPEC here: the per-mode EDGE definition, the pre-fetch pool rule, the
+   fetch-pool ranking mode, and the inferred DEFAULT ENTRY PATH the surfacing implies. gatecandidates.mjs
+   now looks up `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool` / `spec.rank` instead of
+   branching on the name — so a niche can be added or REMOVED by editing this registry alone, without
+   touching gatecandidates.mjs or screen.mjs.
+
+   NICHE SET (Steps 3+4, Ben 2026-07-09): the `spread` and `rising` specs are DELETED (git history is the
+   reference). Why: spread's 24h-average edge is structurally narrower than the intraday band, and once the
+   render net>0 gate landed it surfaced ≈0 clean flips (its thin big-ticket lane is already caught by
+   band's thin path, MIN_ACTIVE_THIN:1 + the gp-flow reserve); rising ⊆ band (a rising item clears band's
+   gates too), and its ONE real mechanism — proxy-first fetch-pool ordering so risers aren't buried — is
+   ABSORBED into rankAndSlice's small "rising reserve". Remaining niches: band / churn (both in --mode all)
+   + the provisional off-by-default scalp / value.
 
    BYTE-IDENTITY (the refactor-proof). The edge functions below are a MECHANICAL re-expression of the
    exact inline blocks gatecandidates.mjs used to run — same tax math, same gate order, same `continue`
@@ -20,10 +27,9 @@
    falling-exclusion still lives in gatecandidates.mjs's surviveMode (unchanged here) — the amended
    per-spec falling doctrine is P5, and this registry is the seam it slots into.
 
-   ⚠ The DEFAULT ENTRY PATH per niche (band/spread/churn → scalp, rising → value-hold) is a JUDGMENT
-   proposal (Ben-vetoable) — it encodes how /scan describes each niche's INTENT (band/spread/churn are
-   flip-first "buy the low, sell the top" plays → the intraday `scalp` thesis; rising is a "size-small,
-   mid-reprice move" you hold through the froth → the `value-hold` thesis). It is written to the
+   ⚠ The DEFAULT ENTRY PATH per niche (band/churn → scalp) is a JUDGMENT proposal (Ben-vetoable) — it
+   encodes how /scan describes each niche's INTENT (band/churn are flip-first "buy the low, sell the top"
+   plays → the intraday `scalp` thesis; value is a hold-for-the-cycle move → the `value-hold` thesis). It is written to the
    suggestions ledger as the inferred entry thesis so a LATER fill can attribute a position to a thesis
    when no explicit `thesis.mjs set --path` was declared (the P4b fallback: explicit > inferred > null).
    It is NOT a gate and does not affect which rows surface. */
@@ -76,15 +82,7 @@ function valueEdge({ avgHigh, avgLow }, t) {
    2h band record { bandLo, bandHi, active5m } or undefined (spread never reads it). ALL numeric math
    is the shared `tax()` so the numbers stay byte-identical to screen.mjs / the app. */
 
-// spread: after-tax ROI of the 24h-average spread (the original bludgeon-style screen).
-function spreadEdge({ avgHigh, avgLow, thin }, t) {
-  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
-  const modeRoi = modeNet / avgLow * 100;
-  if (modeRoi < t.MIN_ROI && !(thin && modeNet >= t.MIN_NET_GP)) return null;   // %-ROI OR (thin & abs-gp)
-  return { modeNet, modeRoi, activeWin: null };
-}
-
-// the traded-band common core (band / rising / churn all price the edge off the intraday band).
+// the traded-band common core (band / churn / scalp all price the edge off the intraday band).
 // Returns the band edge + activeWin, or null when the band is missing/untraded. The per-spec gate
 // (ROI vs volume) is applied by the caller edge below.
 function bandCore({ band, thin }, t) {
@@ -96,7 +94,7 @@ function bandCore({ band, thin }, t) {
   return { modeNet, modeRoi, activeWin: band.active5m };
 }
 
-// band / rising: the traded band + the %-ROI OR (thin & abs-gp) gate.
+// band: the traded band + the %-ROI OR (thin & abs-gp) gate.
 function bandEdge(inp, t) {
   const e = bandCore(inp, t);
   if (!e) return null;
@@ -117,20 +115,22 @@ function churnEdge(inp, t) {
    Each spec's SHAPE (validated by validateStrategySpec + the conformance suite):
      key         stable niche id (the --mode value)
      label       display name
-     inAll       part of `--mode all` (NY3, Ben 2026-07-09: churn IN, spread OUT — reverses NY2.2/NY2.3.
-                 Rationale from the one-thesis-at-a-time scan: spread's 24h-average edge is structurally
-                 narrower than the intraday band + kept surfacing mis-shelved risers with ~0 clean flips;
-                 churn's high-volume commodity lane (the rune staples) deserves default visibility. So
-                 --mode all is now band/rising/churn.)
-     pool        pre-fetch pool rule: { risingFloor } — apply risingPoolFloor (NY2.1) before fetch
+     inAll       part of `--mode all` (Steps 3+4, Ben 2026-07-09: band + churn. spread + rising are
+                 DELETED — spread's 24h-average edge is narrower than the band + surfaced ≈0 clean flips
+                 once the net>0 gate landed; rising ⊆ band, its proxy-ordering mechanism absorbed into
+                 rankAndSlice's rising reserve. scalp/value stay off-by-default.)
+     pool        pre-fetch pool rule: { risingFloor } — now vestigial (all false; the rising niche that
+                 set it true is deleted). risingPoolFloor + the field are kept so a future re-add is a
+                 one-flag change, but no shipped spec sets it.
      edge        (inputs, thresholds) → { modeNet, modeRoi, activeWin } | null  (the step-3 edge)
-     rank        fetch-pool ordering: 'proxy' (rising — proxy-drift-first) | 'velocity' (default)
-     confirm     post-fetch survival note ('rising' | null) — DESCRIPTIVE. The rising-confirm/posture
+     rank        fetch-pool ordering: 'velocity' (the shipped path — expGpDay × softFactor, then the
+                 rising reserve front-loads high-proxy risers) | 'value' (valueScore). ('proxy' remains a
+                 valid vocabulary value but no shipped spec uses it since rising was deleted.)
+     confirm     post-fetch survival note ('falling' | null) — DESCRIPTIVE. The scalp-confirm/posture
                  doctrine still lives in surviveMode keyed on mode; this field documents the coupling.
      falling     the PER-SPEC falling doctrine (P5 — the amended, no-longer-global rule). surviveMode
                  reads THIS instead of a hardcoded exclusion:
-                   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing). The four original
-                                   niches keep this → byte-identical behavior (the replay goldens pin it).
+                   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing). band/churn keep this.
                    'accept'      — falling is a valid candidate (scalp EXPECTS a falling wide band; Ben's
                                    2026-07-08 amendment). Not dropped for the regime alone.
                    'knife-guard' — value: reject a real decay/downtrend knife but ACCEPT a flat/basing
@@ -169,20 +169,6 @@ export const STRATEGY_LIST = Object.freeze([
     falling: 'exclude', gate: 'band',
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
-  },
-  {
-    key: 'spread', label: 'Spread', inAll: false,   // NY3 (Ben 2026-07-09) — off-by-default; reach with explicit --mode spread
-    pool: { risingFloor: false }, edge: spreadEdge, rank: 'velocity', confirm: null,
-    falling: 'exclude', gate: 'band',
-    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
-    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'quick',
-  },
-  {
-    key: 'rising', label: 'Rising', inAll: true,
-    pool: { risingFloor: true }, edge: bandEdge, rank: 'proxy', confirm: 'rising',
-    falling: 'exclude', gate: 'band',
-    validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
-    defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'rising', priceBasis: 'opt',
   },
   {
     key: 'churn', label: 'Churn', inAll: true,   // NY3 (Ben 2026-07-09) — default-on again (reverses NY2.2); the high-volume commodity lane
@@ -231,8 +217,8 @@ export const STRATEGY_LIST = Object.freeze([
 // by-key map + the ordered mode-name lists screen.mjs derives from the registry (so the niche names
 // live in ONE place — the registry — not as a magic-string array in screen.mjs).
 export const STRATEGIES = Object.freeze(Object.fromEntries(STRATEGY_LIST.map(s => [s.key, s])));
-export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','spread','rising','churn','scalp','value']
-export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // NY3 (Ben 2026-07-09): band/rising/churn in --mode all (spread + P5 scalp/value explicit-only)
+export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
+export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // Steps 3+4 (Ben 2026-07-09): band/churn in --mode all (spread + rising DELETED; P5 scalp/value explicit-only)
 
 /* --- conformance ----------------------------------------------------------------------------------
    validateStrategySpec(spec) → string[] of structural violations (empty = conformant). The conformance

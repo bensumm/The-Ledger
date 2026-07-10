@@ -113,16 +113,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`),
-  `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's SIX niches
-  (band/spread/rising/churn + P5 scalp/value) as data-shaped specs `{key,label,inAll,pool:{risingFloor},
-  edge,rank,confirm,falling,gate,validators,defaultPath}`. `pipeline/lib/gatecandidates.mjs` looks up
+  `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR niches
+  (band/churn + scalp/value; the `spread` and `rising` specs were DELETED in Steps 3+4) as data-shaped
+  specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,falling,gate,validators,defaultPath}`.
+  `pipeline/lib/gatecandidates.mjs` looks up
   `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
-  / `spec.gate` instead of branching on the niche name — byte-identical to the old inline logic for the
-  four originals (pinned by the P1 replay goldens). P5 adds: the per-spec `falling` doctrine
-  (`exclude`|`accept`|`knife-guard` — the amended, no-longer-global falling rule), a `gate` selector
+  / `spec.gate` instead of branching on the niche name — so a niche can be added or REMOVED by editing the
+  registry alone. P5's per-spec `falling` doctrine (`exclude`|`accept`|`knife-guard`), a `gate` selector
   (`band`|`value` — value routes to the term-structure `valueGate`), and the `scalp`/`value` specs (both
-  off-by-default). `defaultPath` = the inferred DEFAULT ENTRY PATH the surfacing implies (band/spread/churn/
-  scalp → `scalp`, rising/value → `value-hold` — a Ben-vetoable judgment proposal), written to
+  off-by-default). Steps 3+4: `pool.risingFloor` is now vestigial (all false — the rising niche that set it
+  true is deleted) and `rank:'proxy'` is unused (rising's proxy ordering is absorbed into `rankAndSlice`'s
+  rising reserve). `defaultPath` = the inferred DEFAULT ENTRY PATH the surfacing implies (band/churn/
+  scalp → `scalp`, value → `value-hold` — a Ben-vetoable judgment proposal), written to
   `suggestions.jsonl` (lean `path` field) + shown as the screen's per-row entry-path annotation.
   `validateStrategySpec` + `pipeline/strategies.test.mjs` are the CONFORMANCE suite (structural contract +
   no-throw + determinism over the replay archetypes). Imports only `tax` from format.js + `PATH_KEYS` from
@@ -305,8 +307,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
     buy offers. The SUGGESTION-keyed FORWARD counterpart to outcomes.mjs's campaign-keyed backward
-    join; the ground-truth TTF calibrator for P6 and the input to the spread/band/churn
-    consolidation question. Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
+    join; the ground-truth TTF calibrator for P6 and the input to the band/churn
+    consolidation question (the spread/rising niches were deleted in Steps 3+4). Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
     n on every aggregate, deliberately NO grades/verdicts — the archive is weeks-cold and mostly
     not-taken)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
@@ -340,9 +342,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `net × P(fill) ÷ TTF` from `estimators.mjs`, NOT the demoted expGpDay; cutoffs are on that rank
     scale, still PLACEHOLDERS), `estimators.mjs` (P6b — the PURE per-thesis P(fill)+TTF estimators +
     the `rankScore` composite that REPLACED expGpDay as the displayed/graded metric (Ben 2026-07-09:
-    "gp/d is out"). Three families keyed by a spec's `estimator` field — `intraday` (band/spread/churn/
+    "gp/d is out"). Three families keyed by a spec's `estimator` field — `intraday` (band/churn/
     scalp: P(fill) from band-depth / a real windowread reach when fetched, TTF from volume velocity),
-    `value` (P(fill)=floor-proximity, TTF=trough→recovery prior), `rising` (regime/forecast horizon);
+    `value` (P(fill)=floor-proximity, TTF=trough→recovery prior), and `rising` (regime/forecast horizon —
+    retained but no shipped spec uses it since the rising niche was deleted, Steps 3+4);
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
     bundles pair/net/pFill/ttf/rank. ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
@@ -351,12 +354,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     candidate-selection + survival doctrine, moved out of screen.mjs so it's node-importable +
     fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the
     `risingPoolFloor` predicate (GC1's threshold-driven form, default `DEFAULT_THRESHOLDS`), the
-    fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`), and the extracted
-    post-fetch `surviveMode(mode,row,phase,opts)` — falling doctrine/`--phase-rescue`/rising-confirm/
-    overnight-posture, returning `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc`
-    counters; logic byte-identical to the old inline code for the four originals, diff-proven. **P5**:
-    `surviveMode` now reads the PER-SPEC `spec.falling` (band/spread/rising/churn keep `exclude`; scalp
-    `accept`s fallers), and `gateCandidates` routes a `gate:'value'` spec to `gateValueCandidates` (the
+    fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`) + the **rising reserve**
+    (Steps 3+4 — front-loads the highest-proxy risers, the absorbed `rising` niche mechanism), and the
+    extracted post-fetch `surviveMode(mode,row,phase,opts)` — falling doctrine/`--phase-rescue`/the
+    scalp falling-confirm (+ a vestigial rising-confirm)/overnight-posture, returning
+    `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc` counters. **P5**:
+    `surviveMode` reads the PER-SPEC `spec.falling` (band/churn keep `exclude`; scalp `accept`s AND
+    requires fallers), and `gateCandidates` routes a `gate:'value'` spec to `gateValueCandidates` (the
     term-structure value gate off `ctx.daily` + `js/valuescreen.mjs`) with `rankAndSlice` hard-top-N'ing
     the value pool by `valueScore`), `replay.mjs` (P1 — the
     snapshot-replay acceptance ENGINE: `buildSnapshot()` expands five synthetic ARCHETYPES into a full
@@ -507,12 +511,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —
     the pre-fetch gate stack; P1 — the `rankAndSlice`/`proxyDrift`/`softFactor` fetch-pool
-    ordering: thin-reserve slots, rising proxy-first ordering, soft-factor deprioritization, TOP
+    ordering: thin-reserve slots, the rising reserve (Steps 3+4), soft-factor deprioritization, TOP
     slice), `survivemode.test.mjs` (P1 — the post-fetch `surviveMode` doctrine: falling-exclusion +
-    `--phase-rescue` basing rescue, rising-confirm, overnight-posture, and the load-bearing
+    `--phase-rescue` basing rescue, the scalp falling-confirm (+ vestigial rising-confirm), overnight-posture, and the load-bearing
     rescued-carries-through-a-later-posture-drop dual-counter invariant), `replay.test.mjs` (P1 — the
     snapshot-replay ACCEPTANCE harness: feeds the committed `fixtures/replay/snapshot.json` through the
-    full per-niche funnel (`lib/replay.mjs` `runReplay`) for band/spread/rising/churn (active) + band
+    full per-niche funnel (`lib/replay.mjs` `runReplay`) for band/churn (active) + scalp + band
     (overnight posture) and compares each stage to `fixtures/replay/golden.json` — a DRIFT guard
     (`buildSnapshot()` still reproduces the fixture) + a GOLDEN guard (funnel output matches) + readable
     per-archetype path assertions; `--update` regenerates both fixtures for hand-review. Pins the CURRENT

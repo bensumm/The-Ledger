@@ -15,12 +15,14 @@
  *      specs (js/strategies.mjs) this looks up by `mode` — byte-identical, but a new niche registers a
  *      spec instead of adding an `if (mode === …)` branch here.
  *   2. rankAndSlice(mode, cand, dailySeries, opts) + proxyDrift + softFactor — the fetch-pool
- *      ORDERING (never displayed): proxy-drift deprioritizes probable fallers, rising pre-ranks by
- *      the proxy, thin gp-flow qualifiers get a bounded reserve, then TOP-N slice.
+ *      ORDERING (never displayed): proxy-drift deprioritizes probable fallers (softFactor), a bounded
+ *      "rising reserve" front-loads the highest-proxy risers (the absorbed `rising` niche, Steps 3+4),
+ *      thin gp-flow qualifiers get a bounded reserve, then TOP-N slice.
  *   3. surviveMode(mode, row, phase, opts) — the POST-FETCH doctrine renderMode applies to each
- *      fetched row: falling-exclusion (+ --phase-rescue basing rescue), rising-mode confirm, and
+ *      fetched row: falling-exclusion (+ --phase-rescue basing rescue), the scalp falling-confirm, and
  *      overnight-posture filters. Returns {keep, discardReason, rescued}; discardReason maps 1:1 to
- *      renderMode's `disc` counters (falling / notRising / breakdown / posture), and `rescued` drives
+ *      renderMode's `disc` counters (falling / notFalling / posture — plus a vestigial rising branch),
+ *      and `rescued` drives
  *      the disc.rescued counter (which increments on rescue even if a later gate drops the row).
  *   4. risingPoolFloor + expUnits — the shared predicates the above and the watchlist path reuse.
  *
@@ -68,6 +70,9 @@ export const DEFAULT_THRESHOLDS = {
 };
 // Default rank/slice sizing (screen.mjs's --thin-reserve / --top defaults).
 export const THIN_RESERVE_DEFAULT = 6;
+// RISING_RESERVE_DEFAULT (Steps 3+4) — fetch-pool slots reserved for the highest-proxyDrift risers, the
+// absorbed `rising` niche mechanism (see rankAndSlice). Small + bounded (a named PLACEHOLDER, rule 4).
+export const RISING_RESERVE_DEFAULT = 6;
 export const TOP_DEFAULT = 40;
 // P5 — the value niche's HARD top-N (§F flood control: the gated pool WILL be large; never dump it).
 export const VALUE_TOP_DEFAULT = 25;
@@ -223,11 +228,11 @@ export function subFloorLabel(fb) {
 }
 
 // Rank the gated pool and take the top-N to fetch. The proxy (from the bulk daily archive) orders
-// WHICH items we spend the expensive per-item fetch on — deprioritizing probable fallers, and for
-// rising mode pushing likely-rising items to the front so its fetch budget isn't wasted on flats.
-// `opts.thinReserve`/`opts.top` default to screen.mjs's --thin-reserve/--top defaults (screen passes
-// the CLI values explicitly); fixtures can drive them.
-export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, top = TOP_DEFAULT } = {}) {
+// WHICH items we spend the expensive per-item fetch on — deprioritizing probable fallers (softFactor)
+// and front-loading the highest-proxy risers into a bounded reserve so a riser isn't buried below flats
+// (the absorbed `rising` mechanism, Steps 3+4). `opts.thinReserve`/`opts.risingReserve`/`opts.top`
+// default to screen.mjs's defaults (screen passes the CLI values explicitly); fixtures can drive them.
+export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT } = {}) {
   // P5 value niche (§F): rank the WHOLE gated pool by the composite valueScore and take a HARD top-N.
   // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).
   if (STRATEGIES[mode] && STRATEGIES[mode].gate === 'value') {
@@ -242,15 +247,21 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   // (limitVol×mid, not the noisy bandNet). Net effect: the non-thin survivor set is materially unchanged
   // (gp-flow ADDS ≤ thinReserve rows/niche, doesn't reshuffle).
   const nonThin = cand.filter(c => !c.thin);
-  const spec = STRATEGIES[mode];
-  if (spec && spec.rank === 'proxy') {
-    // fetch rising-likely items first: proxy drift desc (unknowns last), expGpDay as tiebreak
-    nonThin.sort((a, b) => ((b.proxyDrift ?? -1e12) - (a.proxyDrift ?? -1e12)) || (b.expGpDay - a.expGpDay));
-  } else {
-    nonThin.sort((a, b) => (b.expGpDay * softFactor(b.proxyDrift)) - (a.expGpDay * softFactor(a.proxyDrift)));
-  }
+  // The shipped fetch-pool order: realistic expGpDay softened DOWN for probable fallers (softFactor).
+  // (The deleted `rising` niche's proxy-first full-pool sort is gone — its mechanism is the reserve below.)
+  nonThin.sort((a, b) => (b.expGpDay * softFactor(b.proxyDrift)) - (a.expGpDay * softFactor(a.proxyDrift)));
+  // RISING RESERVE (Steps 3+4 — the absorbed `rising` niche mechanism). The deleted rising niche's ONE
+  // real edge was proxy-first fetch-pool ordering: it surfaced probable RISERS that band's expGpDay order
+  // can bury below flats. To keep that false-negative protection without a whole niche, reserve up to
+  // `risingReserve` of the top-N fetch slots for the highest positive-proxyDrift non-thin candidates —
+  // exactly mirroring the thin reserve (a small, bounded PREPEND, ranked by its own key; it ADDS ≤
+  // risingReserve high-proxy rows to the front, it does not reshuffle the velocity pool). Bounded + small
+  // by design; a riser already high on expGpDay is a no-op (it was already at the front).
+  const risers = nonThin.filter(c => (c.proxyDrift ?? 0) > 0).sort((a, b) => b.proxyDrift - a.proxyDrift).slice(0, risingReserve);
+  const riserIds = new Set(risers.map(c => c.id));
+  const rest = nonThin.filter(c => !riserIds.has(c.id));
   const reserved = cand.filter(c => c.thin).sort((a, b) => (b.limitVol * b.mid) - (a.limitVol * a.mid)).slice(0, thinReserve);
-  return [...reserved, ...nonThin].slice(0, top);
+  return [...reserved, ...risers, ...rest].slice(0, top);
 }
 
 // --- post-fetch doctrine: does this fetched+quoted row SURVIVE its niche/posture? ------------------

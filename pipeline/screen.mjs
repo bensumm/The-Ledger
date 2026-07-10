@@ -2,28 +2,28 @@
 /**
  * screen.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *
- *   node pipeline/screen.mjs [--mode band|spread|rising|churn|all]
+ *   node pipeline/screen.mjs [--mode band|churn|scalp|value|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-active 6] [--stats] [--publish]
  *
  *   --publish ALSO writes repo-root screen.json: a self-describing per-niche graded snapshot
- *   { app, generatedAt, mode, params, headers, niches:{band,spread,rising,churn} } that the app's
+ *   { app, generatedAt, mode, params, headers, niches:{band,churn} } that the app's
  *   Scan tab renders. Each row is { id (for the Item→Trends deep link), cells } byte-identical to
  *   the printed table. sync-fills.mjs commits screen.json alongside fills/positions when present.
  *
  * The screen has ONE shared gate stack for every mode; --mode only swaps the step-3 EDGE
  * DEFINITION + ranking. Shared gates: two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0,
  * limiting side ≥ --floor — the ghost-spread lesson), --min-price/--max-price on mid, top-N per-item
- * regime confirm via computeQuote, per-spec falling doctrine (P5: band/spread/rising/churn EXCLUDE
- * fallers, scalp ACCEPTS, value KNIFE-GUARDS — `js/strategies.mjs` `spec.falling`, NOT a global rule).
+ * regime confirm via computeQuote, per-spec falling doctrine (P5: band/churn EXCLUDE fallers, scalp
+ * ACCEPTS + REQUIRES, value KNIFE-GUARDS — `js/strategies.mjs` `spec.falling`, NOT a global rule).
  *
  * Fetch-pool ordering (the pre-filter rework): the expensive step is the per-item timeseries fetch,
  * so WHICH gated items make the top-N fetch pool matters. loadDaily() builds a BULK multi-day
  * mid-price archive (whole-market /1h @6h spacing, backed by the D0 Tier-1 SQLite archive) → a regime PROXY (proxyDrift, same
  * 3d-vs-~2wk shape as computeQuote's regimeDrift) that is NEVER displayed and only ORDERS the pool:
- * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and rising mode
- * pre-ranks by the proxy so its budget isn't spent on flats (rising fill went ~25% → ~100%). The real
- * regime + falling-exclusion + rising-confirm still run post-fetch on the real computeQuote. Per-item
+ * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and a bounded rising
+ * reserve front-loads the highest-proxy risers so they aren't buried below flats (the absorbed `rising`
+ * mechanism, Steps 3+4). The real regime + falling-exclusion still run post-fetch on computeQuote. Per-item
  * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API. --stats prints
  * a per-niche footer: gated / fetched / survivors / yield / discard reasons.
  *
@@ -40,23 +40,19 @@
  * are fetched once). A grade-distribution footer per table lets us SEE whether the score separates
  * best-from-good (if a batch clumps at one grade, the factors — not the letter scale — need work).
  *
- * Modes (step-3 edge):
+ * Modes (step-3 edge). Steps 3+4 (Ben 2026-07-09): the `spread` and `rising` niches are DELETED — spread's
+ * 24h-average edge is narrower than the band + surfaced ≈0 clean flips once the net>0 gate landed (its thin
+ * big-ticket lane is already caught by band's thin path), and rising ⊆ band with its proxy-ordering absorbed
+ * into rankAndSlice's rising reserve. Remaining:
  *   band  (DEFAULT) — the crystal-teleport-seed niche: a liquid, regime-stable item with a wide
  *                     INTRADAY band. Edge = after-tax net of bandLo→bandHi from loadBands
  *                     (--band-hours, default 2); gate bandRoi ≥ --min-roi AND the band must be
  *                     TRADED (≥ --min-active two-sided 5m windows, not one spike).
- *   spread          — the ORIGINAL screen: after-tax ROI of the 24h-average spread (bludgeon-style).
- *   rising          — rising regime + mom ≠ breakdown, entry priced at the band low. Frothy. Its
- *                     candidate pool carries a NY2.1 noise floor (risingPoolFloor): a rising
- *                     candidate must be a big ticket (mid ≥ RISE_MID_FLOOR) OR liquid enough to
- *                     move (limitVol ≥ RISE_LIQUID_VOL), which keeps the big-ticket momentum names
- *                     AND the cheap-but-liquid risers (Dragon arrowtips / Cake) while dropping the
- *                     cheap thin/mid teleport-tab D-flood that used to burn the fetch budget.
  *   churn           — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted
- *                     (no --min-roi gate), the high-frequency small-margin niche. NY3 (Ben 2026-07-09):
- *                     PROMOTED back to default-on (reverses NY2.2) — `--mode all` includes it again.
- *   all             — run band, rising, churn in sequence (shared fetch cache). Spread excluded (NY3,
- *                     Ben 2026-07-09 — explicit `--mode spread` only).
+ *                     (no --min-roi gate), the high-frequency small-margin niche.
+ *   scalp / value   — provisional, OFF-by-default (explicit --mode only): scalp = a deliberate flip on a
+ *                     FALLING wide band (fallers only); value = a term-structure buy-hold (own table).
+ *   all             — run band + churn in sequence (shared fetch cache). scalp/value explicit-only.
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
@@ -130,8 +126,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
-const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/spread/rising/churn/scalp/value)
-const ALL_MODES = ALL_MODE_KEYS; // P4c: --mode all runs the inAll specs — NY3 (Ben 2026-07-09): band/rising/churn (spread off-by-default)
+const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/churn/scalp/value — spread+rising deleted, Steps 3+4)
+const ALL_MODES = ALL_MODE_KEYS; // --mode all runs the inAll specs — Steps 3+4 (Ben 2026-07-09): band/churn (scalp/value explicit-only)
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 50;
@@ -178,7 +174,11 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
-// --- NY2.1: rising-pool NOISE FLOOR (rising niche only — does NOT touch the shared stack) --------
+// --- NY2.1: rising-pool NOISE FLOOR — NOW VESTIGIAL (Steps 3+4, Ben 2026-07-09: the `rising` niche was
+// DELETED, and it was the ONLY spec that set pool.risingFloor:true, so this floor no longer fires on any
+// shipped niche). The constants + the risingPoolFloor predicate are KEPT so a future re-add of a rising
+// niche is a one-flag change, and because the CLI flags/THRESHOLDS still thread them harmlessly. Original
+// rationale (kept for that eventual re-add):
 // NY1 found the rising niche's blind fetch pool flooded with cheap teleport-tab/consumable
 // candidates (a trending evening surfaced 33 D-grade froth rows, zero worth an offer, all sub-~100k
 // mid) that burned the expensive per-item fetch budget. This is a rising-POOL pre-fetch floor; the
@@ -233,8 +233,8 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_ACTIVE, posture: POSTURE };
 
-const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // NY3 (Ben 2026-07-09): spread omitted from `all`; P5: scalp/value explicit-only
-const NEED_BANDS = RUN_MODES.some(m => m !== 'spread');
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // Steps 3+4 (Ben 2026-07-09): `all` = band/churn; scalp/value explicit-only
+const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
 const IS_VALUE = RUN_MODES.includes('value');                    // P5 — the value niche needs the 28d term structure
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
 // regime-proxy archive lookback / spacing. P5: value's term structure needs ~28d (§C); extend ONLY when
@@ -255,8 +255,6 @@ const DIURNAL_NIGHTS = 7;                                        // recent local
 
 const PLAYBOOK = {
   band:   'Playbook: ladder BUYS at the band low, SELL at the band top; never list below break-even (tax-capped; shared breakEven).',
-  spread: 'Playbook: mid-liquidity wide-spread flips (bludgeon-style). Buy the 24h avg low, sell the avg high.',
-  rising: 'Playbook: rising + not-breaking-down; enter at the band low. FROTHY — size small, these are mid-reprice moves.',
   churn:  'Playbook: high-frequency buy-limit-cycle commodities. Thin per-unit, volume does the work — buy every limit, flip fast.',
   scalp:  'Playbook (PROVISIONAL, n≈0): a DELIBERATE intraday flip on a falling market — buy a wide FRESH band edge, sell at today\'s high, HARD intraday stop. Flip-only/no-hold: an unsold lap is a CUT, not a hold. Falling is the thesis, not a veto.',
 };
@@ -518,7 +516,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
   }
   console.log(PLAYBOOK[mode]);
-  console.log(mode !== 'spread' ? `(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)` : '(basis: 24h-average spread)');
+  console.log(`(band basis: ${BAND_HOURS}h, ≥${MIN_ACTIVE} traded 5m windows)`);
   // PM1: the dedicated `Probes` column is appended to the PRINTED table ONLY when at least one row
   // fired a probe — so with no module present (or none firing) the table is BYTE-IDENTICAL to pre-PM1
   // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
@@ -595,7 +593,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
+    const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');

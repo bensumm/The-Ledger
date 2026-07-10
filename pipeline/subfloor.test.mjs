@@ -42,16 +42,19 @@ const baseT = {
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
 };
 const rec = (avgLow, avgHigh, hpv, lpv = hpv) => ({ avgLowPrice: avgLow, avgHighPrice: avgHigh, highPriceVolume: hpv, lowPriceVolume: lpv });
+const band = (bandLo, bandHi, active5m) => ({ bandLo, bandHi, active5m });
 const ctx = (v24, byId = {}, bands = {}) => ({ v24, map: { byId }, bands });
+// Steps 3+4: spread was deleted, so these tests use `band` as the generic vehicle — band requires a
+// TRADED band record, so each fixture below carries a matching band (active5m ≥ MIN_ACTIVE_THIN).
 
 console.log('subfloor — P6c empty-result sub-floor fallback:');
 
 /* --- 1. trigger + which-floor identification ----------------------------------------------------- */
 ok('MIN_GPD-emptied pool: fallback fires, relaxed floor = min-gpd, rows still cleared liquidity+edge', () => {
   // liquid two-sided item with a real edge but tiny throughput: expGpDay ≈ 1.6k, far below the 500k floor.
-  const v24 = { 300: rec(1000, 1100, 200) };
-  assert.equal(gateCandidates('spread', ctx(v24), baseT).length, 0, 'precondition: empty at the configured floors');
-  const fb = subFloorFallback('spread', ctx(v24), baseT);
+  const v24 = { 300: rec(1000, 1100, 200) }, bands = { 300: band(1000, 1100, 10) };
+  assert.equal(gateCandidates('band', ctx(v24, {}, bands), baseT).length, 0, 'precondition: empty at the configured floors');
+  const fb = subFloorFallback('band', ctx(v24, {}, bands), baseT);
   assert.ok(fb, 'the fallback un-empties the pool');
   assert.equal(fb.relaxed, 'min-gpd', 'the attention floor was the emptier');
   assert.deepEqual(fb.cand.map(c => c.id), [300]);
@@ -60,9 +63,9 @@ ok('MIN_GPD-emptied pool: fallback fires, relaxed floor = min-gpd, rows still cl
 
 ok('liquidity-emptied pool: escalates to the liquidity step (two-sided but below unit floor AND gp-flow)', () => {
   // two-sided, big honest edge, but 20/day units (<50) and 20×~5.5k gp-flow ≪ 250m → liquidity-emptied.
-  const v24 = { 7: rec(5000, 6000, 20) };
-  assert.equal(gateCandidates('spread', ctx(v24), baseT).length, 0, 'precondition: empty at the configured floors');
-  const fb = subFloorFallback('spread', ctx(v24), baseT);
+  const v24 = { 7: rec(5000, 6000, 20) }, bands = { 7: band(5000, 6000, 6) };
+  assert.equal(gateCandidates('band', ctx(v24, {}, bands), baseT).length, 0, 'precondition: empty at the configured floors');
+  const fb = subFloorFallback('band', ctx(v24, {}, bands), baseT);
   assert.ok(fb, 'the liquidity relaxation un-empties it');
   assert.equal(fb.relaxed, 'liquidity');
   assert.equal(fb.cand[0].thin, true, 'admitted via the (relaxed) gp-flow path → still flagged thin');
@@ -72,8 +75,8 @@ ok('liquidity-emptied pool: escalates to the liquidity step (two-sided but below
 ok('a non-empty niche is untouched: the configured-floor gate output is unchanged by P6c', () => {
   // thin big-ticket that passes TODAY's gate on gp-flow (the gatecandidates.test.mjs fixture) — P6c
   // added exports only; gateCandidates at the configured floors must return exactly what it did.
-  const v24 = { 7: rec(17_000_000, 18_000_000, 20) };
-  const cand = gateCandidates('spread', ctx(v24), baseT);
+  const v24 = { 7: rec(17_000_000, 18_000_000, 20) }, bands = { 7: band(17_000_000, 18_000_000, 6) };
+  const cand = gateCandidates('band', ctx(v24, {}, bands), baseT);
   assert.equal(cand.length, 1);
   assert.equal(cand[0].thin, true);
   // (screen.mjs only calls subFloorFallback when this is empty — with ≥1 candidate the render path
@@ -82,21 +85,21 @@ ok('a non-empty niche is untouched: the configured-floor gate output is unchange
 
 /* --- 3. floors only — never the two-sided gate or the edge ---------------------------------------- */
 ok('a one-sided market returns null (the two-sided gate is NEVER relaxed)', () => {
-  const v24 = { 9: rec(1000, 1100, 200, 0) };   // lpv=0 — ghost-spread
-  assert.equal(subFloorFallback('spread', ctx(v24), baseT), null);
+  const v24 = { 9: rec(1000, 1100, 200, 0) };   // lpv=0 — ghost-spread (dropped pre-edge, no band needed)
+  assert.equal(subFloorFallback('band', ctx(v24), baseT), null);
 });
 
 ok('an edge-emptied market returns null (the thesis edge is NEVER relaxed)', () => {
-  // liquid, two-sided, but the after-tax spread ROI is below MIN_ROI — the EDGE emptied the niche,
+  // liquid, two-sided, but the after-tax band ROI is below MIN_ROI — the EDGE emptied the niche,
   // not a floor → no fallback; the screen keeps its normal `_none_`.
-  const v24 = { 10: rec(1000, 1005, 5000) };    // ~-1.5% after tax
-  assert.equal(gateCandidates('spread', ctx(v24), baseT).length, 0);
-  assert.equal(subFloorFallback('spread', ctx(v24), baseT), null);
+  const v24 = { 10: rec(1000, 1005, 5000) }, bands = { 10: band(1000, 1005, 10) };   // ~-1.5% after tax
+  assert.equal(gateCandidates('band', ctx(v24, {}, bands), baseT).length, 0);
+  assert.equal(subFloorFallback('band', ctx(v24, {}, bands), baseT), null);
 });
 
 /* --- 4. the honest label --------------------------------------------------------------------------- */
 ok('subFloorLabel names the relaxed floor and its configured value', () => {
-  const fb = subFloorFallback('spread', ctx({ 300: rec(1000, 1100, 200) }), baseT);
+  const fb = subFloorFallback('band', ctx({ 300: rec(1000, 1100, 200) }, {}, { 300: band(1000, 1100, 10) }), baseT);
   const label = subFloorLabel(fb);
   assert.match(label, /^sub-floor — shown because nothing cleared /, 'the spec wording leads');
   assert.match(label, /500k gp\/day attention floor/, 'names the floor + its value');
@@ -105,11 +108,11 @@ ok('subFloorLabel names the relaxed floor and its configured value', () => {
 
 /* --- 5. the cap ------------------------------------------------------------------------------------ */
 ok('the fallback pool is sliced to SUBFLOOR_TOP by the existing ordering (rankAndSlice)', () => {
-  const v24 = {};
-  for (let i = 0; i < 12; i++) v24[400 + i] = rec(1000 + i, 1100 + i, 200);   // 12 sub-MIN_GPD liquid rows
-  const fb = subFloorFallback('spread', ctx(v24), baseT);
+  const v24 = {}, bands = {};
+  for (let i = 0; i < 12; i++) { v24[400 + i] = rec(1000 + i, 1100 + i, 200); bands[400 + i] = band(1000 + i, 1100 + i, 10); }   // 12 sub-MIN_GPD liquid rows
+  const fb = subFloorFallback('band', ctx(v24, {}, bands), baseT);
   assert.ok(fb.cand.length > SUBFLOOR_TOP, `precondition: relaxed pool (${fb.cand.length}) exceeds the cap`);
-  const sliced = rankAndSlice('spread', fb.cand, {}, { thinReserve: 6, top: SUBFLOOR_TOP });
+  const sliced = rankAndSlice('band', fb.cand, {}, { thinReserve: 6, top: SUBFLOOR_TOP });
   assert.equal(sliced.length, SUBFLOOR_TOP, 'best few only — the fallback never dumps the pool');
 });
 

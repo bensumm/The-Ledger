@@ -98,9 +98,10 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     Finder margin bond-aware (`market.js` `bondMarginOpts`) — it used to filter it out entirely.
 - **Falling-regime handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5).** A faller is
   not necessarily a poor buy — "we cannot judge falling without its history and typical fluctuations."
-  Each niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/spread/rising/churn EXCLUDE
+  Each niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/churn EXCLUDE
   fallers** (the default — don't show or mention them; the exception below still applies); **scalp ACCEPTS
-  them** (a deliberate intraday flip EXPECTS a falling wide band — its stop lives in the path
+  AND REQUIRES them** (a deliberate intraday flip EXPECTS a falling wide band; a non-falling scalp is a
+  band flip → dropped `notFalling`; its stop lives in the path
   engine/offerVerdict, not a blanket exclusion); **value KNIFE-GUARDS** (reject a decay/downtrend knife,
   accept a flat/basing value-low — the term-structure `valueGate`). Likewise resting bids: `offerVerdict`
   is path-aware — a bid declared under a scalp/value-hold thesis no longer CANCEL-BIDs off the falling
@@ -145,7 +146,7 @@ deliberate):**
 | When Ben says something like… | Run |
 | --- | --- |
 | "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|spread\|rising\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional) |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4) |
 | "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
@@ -181,14 +182,17 @@ Script facts the skills rely on (current behavior, not doctrine):
   gate stack for value). A **render-stage net>0 surface gate** additionally drops any row whose after-tax
   net at the thesis's OWN posted pair is ≤ 0 (the bond retrade-fee / ROI-bind leak — counted `neg-net` in
   `--stats`; held/asked/watchlist rows never reach it, so they're exempt; it's a render drop, so the
-  replay goldens are unaffected). **Six niches** — `band` / `spread` / `rising` / `churn` / `scalp` / `value` —
-  but per Ben's **NY3** ruling (2026-07-09, reversing NY2.2/NY2.3) + **P5** **`--mode all` runs
-  band/rising/churn; spread/scalp/value are off-by-default** (reach each with an explicit `--mode <name>`).
-  Why NY3 flipped it: the one-thesis-at-a-time scan showed spread's 24h-average edge is structurally
-  narrower than the intraday band and kept surfacing mis-shelved risers (≈0 clean flips), while churn's
-  high-volume commodity lane (the rune staples) earns default visibility. `rising`'s
-  candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid, `risingPoolFloor`) that drops the
-  cheap teleport-tab flood while keeping cheap-but-liquid risers. Thin gp-flow big tickets ride a bounded
+  replay goldens are unaffected). **Four niches** — `band` / `churn` / `scalp` / `value` — with **`--mode all`
+  running band/churn; scalp/value are off-by-default** (reach each with an explicit `--mode <name>`).
+  **The `spread` and `rising` niches were DELETED (Steps 3+4, Ben 2026-07-09** — git history is the reference;
+  this supersedes the NY2/NY3 off-by-default framing). Why: spread's 24h-average edge is structurally
+  narrower than the intraday band and surfaced ≈0 clean flips once the net>0 gate landed — and its ONE
+  exclusive lane (thin big-tickets with an untraded 2h band) is already caught by band's thin path
+  (`MIN_ACTIVE_THIN:1` + the gp-flow reserve). `rising` ⊆ `band` (a rising item clears band's gates too);
+  its ONE real mechanism — proxy-first fetch-pool ordering so risers aren't buried below flats — is
+  ABSORBED into `rankAndSlice`'s small **rising reserve** (`RISING_RESERVE_DEFAULT`, mirrors the thin
+  reserve). The `risingPoolFloor` predicate + `RISE_MID_FLOOR`/`RISE_LIQUID_VOL` are kept but VESTIGIAL
+  (no shipped spec sets `pool.risingFloor:true`). Thin gp-flow big tickets ride a bounded
   `--thin-reserve`. **P5 scalp** (provisional, n≈0): a DELIBERATE intraday flip on a FALLING market — `spec.falling='accept'`
   AND a scalp mode-confirm that REQUIRES falling (Step 5, Ben 2026-07-09: a non-falling scalp is a band
   flip band already owns → dropped `notFalling`), so scalp = fallers only. A wide fresh band clearing
@@ -223,7 +227,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   `VALUE_DEPLOY_*`/`VALUE_VOL_SHARE`/`VALUE_ACCUM_DAYS` constant is a NAMED PLACEHOLDER — the three-way min is
   principled (real GE physics, mirrors `expUnits`), the magnitudes need the validation study.
   **Value artifact/liquidity hardening (Ben 2026-07-09)** — the value scan surfaced broken-low quotes and
-  untradeable rows ranking #1, the low-side analog of the band/rising artifact-bid. Two gates fixed it:
+  untradeable rows ranking #1, the low-side analog of the band artifact-bid. Two gates fixed it:
   (1) `valueGate`'s **artifact-low guard** rejects a live price >`VALUE_MAX_BELOW_LOW_PCT` (15%) below the
   durable q15 floor (a lone off-market instasell or a crash mid-fall corrupts proximity → a FAKE dip at the
   top of `valueScore`); it fires post-fetch on the real live instasell (screen counts the drops in the §F
@@ -254,7 +258,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   `elevated` stays a caution flag (timing, not a thesis break); oscillating/based/rising pass. A dropped
   knife is COUNTED + NAMED in the §F footer (`dropped N trajectory-knife: …`), so it leaves BUY-NOW but
   stays auditable. Value-SCOPED (`js/strategies.mjs` value `{key:'trajectory', mode:'gate'}`, applied in
-  `renderValueMode`): band/rising/churn already exclude fallers, scalp accepts them by thesis, so trajectory
+  `renderValueMode`): band/churn already exclude fallers, scalp accepts them by thesis, so trajectory
   stays INFORM there. value-amplitude stays inform (still n≈0). No app import → no APP_VERSION.
   **P4c**: the niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
@@ -263,7 +267,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   row gains a compact stdout entry-path annotation (`↳ <item> — scalp* 0.60 · …`: the spec's inferred
   default entry path `*` + the weighed js/paths.mjs menu) — decision SUPPORT, display-only, NOT in
   `screen.json`; and the spec's `defaultPath` is logged to `suggestions.jsonl` as a lean `path` field so a
-  later fill can infer the entry thesis. The default-path map (band/spread/churn→`scalp`, rising→
+  later fill can infer the entry thesis. The default-path map (band/churn/scalp→`scalp`, value→
   `value-hold`) is a Ben-vetoable judgment proposal, not a gate. **P6c**: a niche whose gate is EMPTY at
   the configured floors re-runs beneath the floor (`subFloorFallback` — a min-gpd→liquidity relaxation
   ladder; the two-sided gate + the thesis edge are NEVER relaxed) and prints the best ≤5 rows labeled
@@ -283,7 +287,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   trajectory: it accepts a falling wide band by thesis). ROLLOUT (rule 4, n≈0): the newly-activated
   `reach`/`value-amplitude` start **inform everywhere**; `floor`+`limit` gate; and **`trajectory` now GATES
   in the `value` niche** (Ben 2026-07-09 — knife drops, the "buy the base, not the knife" + hold-asymmetry
-  case, see the Value trajectory-GATE note above) while staying **inform** on band/rising/churn/scalp. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
+  case, see the Value trajectory-GATE note above) while staying **inform** on band/churn/scalp. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
   level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
   **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
   ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; `quote.mjs` still

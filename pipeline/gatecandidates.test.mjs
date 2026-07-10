@@ -10,15 +10,15 @@
  * API). No live data (CLAUDE.md rule 4).
  * Run: `node pipeline/gatecandidates.test.mjs`  (exits non-zero on any failure).
  *
- * WHAT gateCandidates OWNS (and this file pins) — the PRE-FETCH gate stack:
+ * WHAT gateCandidates OWNS (and this file pins) — the PRE-FETCH gate stack. (Steps 3+4, Ben 2026-07-09:
+ * the spread + rising specs are DELETED; these tests use `band` as the generic vehicle. The risingPoolFloor
+ * predicate is retained-but-unused — no shipped spec sets pool.risingFloor:true — and pinned as a pure fn.)
  *   - two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0) — the NON-NEGOTIABLE ghost-spread gate.
  *   - price window (MIN_PRICE ≤ mid ≤ MAX_PRICE).
- *   - the rising-pool NOISE FLOOR (rising mode only): a candidate must be a big ticket (mid ≥
- *     RISE_MID_FLOOR) OR liquid (limitVol ≥ RISE_LIQUID_VOL). Off in every other mode.
  *   - liquidity: unit floor (limitVol ≥ FLOOR) OR gp-flow (limitVol×mid ≥ GP_FLOOR); the gp-flow-only
  *     admission sets `thin`.
- *   - the per-mode step-3 edge (spread = 24h-avg after-tax spread; band/rising/churn = traded band),
- *     %-ROI ≥ MIN_ROI OR (thin & abs-gp ≥ MIN_NET_GP); churn swaps in a volume+limit gate.
+ *   - the per-mode step-3 edge (band/scalp = traded band, %-ROI ≥ MIN_ROI OR thin&abs-gp; churn swaps in
+ *     a volume+limit gate).
  *   - the 500k/day attention floor (expGpDay ≥ MIN_GPD), from which THIN gp-flow qualifiers are EXEMPT.
  *
  * WHAT gateCandidates DOES NOT OWN (so it's not fixtured HERE): the POST-fetch survival doctrine —
@@ -53,7 +53,8 @@ console.log('gatecandidates.mjs gateCandidates() acceptance:');
 /* --- two-sided liquidity gate ------------------------------------------------------------- */
 ok('two-sided liquidity: a one-sided book (lpv=0) is dropped; a two-sided one survives', () => {
   const v24 = { 100: rec(1000, 1100, 200, 0), 200: rec(1000, 1100, 200, 200) };
-  const cand = gateCandidates('spread', ctx(v24), baseT);
+  const bands = { 100: band(1000, 1100, 10), 200: band(1000, 1100, 10) };
+  const cand = gateCandidates('band', ctx(v24, {}, bands), baseT);
   const ids = cand.map(c => c.id);
   assert.deepEqual(ids, [200], 'only the two-sided item survives (100 has lpv=0)');
   assert.equal(cand[0].thin, false);
@@ -63,11 +64,12 @@ ok('two-sided liquidity: a one-sided book (lpv=0) is dropped; a two-sided one su
 ok('gp-flow path admits a big-ticket thin item (limitVol<FLOOR but limitVol×mid ≥ GP_FLOOR)', () => {
   // mid 17.5m, limitVol 20 (<50 → below the unit floor); 20×17.5m = 350m ≥ 250m GP_FLOOR.
   const v24 = { 7: rec(17_000_000, 18_000_000, 20) };
-  const cand = gateCandidates('spread', ctx(v24), baseT);
+  const bands = { 7: band(17_000_000, 18_000_000, 6) };   // a traded band (active5m ≥ MIN_ACTIVE_THIN)
+  const cand = gateCandidates('band', ctx(v24, {}, bands), baseT);
   assert.equal(cand.length, 1);
   assert.equal(cand[0].thin, true, 'admitted via gp-flow only → flagged thin');
   // and it FAILS when its gp-flow no longer clears a raised GP_FLOOR (350m < 400m)
-  const cand2 = gateCandidates('spread', ctx(v24), { ...baseT, GP_FLOOR: 400_000_000 });
+  const cand2 = gateCandidates('band', ctx(v24, {}, bands), { ...baseT, GP_FLOOR: 400_000_000 });
   assert.equal(cand2.length, 0, 'below both the unit floor and the raised gp-flow floor → dropped');
 });
 
@@ -75,40 +77,33 @@ ok('gp-flow path admits a big-ticket thin item (limitVol<FLOOR but limitVol×mid
 ok('attention floor drops a sub-floor LIQUID row; thin gp-flow qualifiers are EXEMPT', () => {
   // liquid low-net item: expGpDay ≈ 1560 (net 78 × ~20 exp units/day).
   const liquid = { 300: rec(1000, 1100, 200) };
-  assert.equal(gateCandidates('spread', ctx(liquid), { ...baseT, MIN_GPD: 1000 }).length, 1, 'passes a low floor');
-  assert.equal(gateCandidates('spread', ctx(liquid), { ...baseT, MIN_GPD: 5000 }).length, 0, 'dropped below a 5k floor');
+  const lbands = { 300: band(1000, 1100, 10) };
+  assert.equal(gateCandidates('band', ctx(liquid, {}, lbands), { ...baseT, MIN_GPD: 1000 }).length, 1, 'passes a low floor');
+  assert.equal(gateCandidates('band', ctx(liquid, {}, lbands), { ...baseT, MIN_GPD: 5000 }).length, 0, 'dropped below a 5k floor');
   // thin big-ticket: tiny expGpDay, but EXEMPT from even an enormous attention floor.
   const thinBig = { 7: rec(17_000_000, 18_000_000, 20) };
-  const cand = gateCandidates('spread', ctx(thinBig), { ...baseT, MIN_GPD: 10_000_000 });
+  const tbands = { 7: band(17_000_000, 18_000_000, 6) };
+  const cand = gateCandidates('band', ctx(thinBig, {}, tbands), { ...baseT, MIN_GPD: 10_000_000 });
   assert.equal(cand.length, 1, 'thin gp-flow qualifier ignores the attention floor');
   assert.equal(cand[0].thin, true);
 });
 
-/* --- risingPoolFloor: big-ticket OR liquid, rising mode only ------------------------------- */
+/* --- risingPoolFloor: retained-but-unused pure predicate (rising niche deleted) ------------ */
 ok('risingPoolFloor predicate: passes on big-ticket OR liquid, fails cheap-and-thin', () => {
+  // the predicate is kept as a pure fn (a future rising re-add is a one-flag change), though no shipped
+  // spec sets pool.risingFloor:true anymore — so gateCandidates never invokes it in production.
   assert.equal(risingPoolFloor(2_000_000, 100, 1_000_000, 1000), true, 'big ticket');
   assert.equal(risingPoolFloor(500_000, 1500, 1_000_000, 1000), true, 'liquid');
   assert.equal(risingPoolFloor(500_000, 100, 1_000_000, 1000), false, 'cheap AND thin-volume → dropped');
 });
 
-ok('rising mode applies the noise floor; band mode does NOT (same cheap item)', () => {
-  // cheap item, mid 500k, limitVol 100 (≥FLOOR so NOT thin) — fails the rising floor (cheap & <1000 vol).
+ok('no shipped spec triggers the rising pool floor — a cheap-and-thin-volume item survives band', () => {
+  // cheap item, mid 500k, limitVol 100 (≥FLOOR so NOT thin) — this would have been dropped by the deleted
+  // rising niche's pool floor, but band (pool.risingFloor:false) has no such floor, so it survives.
   const v24 = { 1: rec(490_000, 510_000, 100) };
   const bands = { 1: band(490_000, 510_000, 10) };
-  const rising = gateCandidates('rising', ctx(v24, {}, bands), baseT);
-  assert.equal(rising.length, 0, 'rising: cheap-and-thin-volume item dropped by the pool floor');
   const bandMode = gateCandidates('band', ctx(v24, {}, bands), baseT);
-  assert.equal(bandMode.length, 1, 'band mode has no rising floor → same item survives');
-});
-
-ok('rising mode keeps a big-ticket OR a liquid candidate through the noise floor', () => {
-  const v24 = {
-    2: rec(1_950_000, 2_050_000, 100),   // big ticket (mid 2m ≥ 1m), thin-ish volume
-    3: rec(490_000, 510_000, 1500),      // cheap but liquid (limitVol 1500 ≥ 1000)
-  };
-  const bands = { 2: band(1_950_000, 2_050_000, 10), 3: band(490_000, 510_000, 10) };
-  const cand = gateCandidates('rising', ctx(v24, {}, bands), baseT);
-  assert.deepEqual(cand.map(c => c.id).sort((a, b) => a - b), [2, 3], 'both survive the rising floor');
+  assert.equal(bandMode.length, 1, 'band mode has no rising floor → the item survives');
 });
 
 /* --- band mode requires a TRADED band (active5m ≥ MIN_ACTIVE) ------------------------------ */
@@ -122,9 +117,10 @@ ok('band mode: an untraded band (active5m below MIN_ACTIVE) is rejected', () => 
 
 /* --- price window ------------------------------------------------------------------------- */
 ok('price window: mid outside [MIN_PRICE, MAX_PRICE] is dropped', () => {
-  const v24 = { 5: rec(50_000_000, 55_000_000, 100000) };   // mid 52.5m > 45m default MAX_PRICE (wide spread clears tax)
-  assert.equal(gateCandidates('spread', ctx(v24), baseT).length, 0, 'above MAX_PRICE → dropped');
-  assert.equal(gateCandidates('spread', ctx(v24), { ...baseT, MAX_PRICE: 60_000_000 }).length, 1, 'raised MAX_PRICE admits it');
+  const v24 = { 5: rec(50_000_000, 55_000_000, 100000) };   // mid 52.5m > 45m default MAX_PRICE (wide band clears tax)
+  const bands = { 5: band(50_000_000, 55_000_000, 10) };
+  assert.equal(gateCandidates('band', ctx(v24, {}, bands), baseT).length, 0, 'above MAX_PRICE → dropped');
+  assert.equal(gateCandidates('band', ctx(v24, {}, bands), { ...baseT, MAX_PRICE: 60_000_000 }).length, 1, 'raised MAX_PRICE admits it');
 });
 
 /* === fetch-pool ORDERING: proxyDrift / softFactor / rankAndSlice (P1) ===================== *
@@ -177,11 +173,20 @@ ok('non-rising ranking deprioritizes a probable faller via softFactor', () => {
   assert.deepEqual(out.map(x => x.id), [2, 1]);
 });
 
-ok('rising mode orders by proxy drift desc (a strong riser beats a higher-expGpDay flat)', () => {
+ok('rising RESERVE front-loads a strong riser (band mode) despite a higher-expGpDay flat', () => {
+  // the absorbed `rising` mechanism (Steps 3+4): the highest positive-proxyDrift non-thin candidate is
+  // reserved to the FRONT of the fetch pool so a riser isn't buried below a flat with a bigger expGpDay.
   const cand = [c(1, 500), c(2, 9999)];
-  const daily = { 1: dseries(110, 100), 2: dseries(100, 100) };   // id1 +10% drift, id2 flat
-  const out = rankAndSlice('rising', cand, daily);
-  assert.deepEqual(out.map(x => x.id), [1, 2], 'proxy-first: the riser leads despite id2\'s bigger expGpDay');
+  const daily = { 1: dseries(110, 100), 2: dseries(100, 100) };   // id1 +10% drift, id2 flat (0 drift, not reserved)
+  const out = rankAndSlice('band', cand, daily);
+  assert.deepEqual(out.map(x => x.id), [1, 2], 'the riser leads via the reserve despite id2\'s bigger expGpDay');
+});
+
+ok('rising reserve is bounded — risingReserve:0 disables it (pure velocity order)', () => {
+  const cand = [c(1, 500), c(2, 9999)];
+  const daily = { 1: dseries(110, 100), 2: dseries(100, 100) };
+  const out = rankAndSlice('band', cand, daily, { risingReserve: 0 });
+  assert.deepEqual(out.map(x => x.id), [2, 1], 'no reserve → the bigger expGpDay flat leads');
 });
 
 ok('thin gp-flow qualifiers ride a bounded reserve, PREPENDED, ranked by limitVol×mid', () => {

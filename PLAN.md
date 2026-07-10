@@ -133,7 +133,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | FX1 | Finder full-catalog search + Signals badge | `js/ui.js`, `js/market.js` | ✅ `c12bf4b` (0.46.0) |
 | NY1 | Scan niche-yield audit | analysis only | ✅ report delivered 2026-07-05 (no repo change) |
 | SY1 | Strategic sync-fills points in skills | workflow skills | ✅ `563da75` |
-| NY2 | Niche ruling (rising floor, churn off-by-default, spread stays) | `screen.mjs`, `/scan` | ✅ `f982a31` |
+| NY2 | Niche ruling (rising floor, churn off-by-default, spread stays) | `screen.mjs`, `/scan` | ✅ `f982a31` — **SUPERSEDED: spread + rising DELETED (Steps 3+4, see Discovered)** |
 | OR1 | Org map docs | `README.md`, `CLAUDE.md` | ✅ `1822ad9` |
 | OR2 | pipeline/lib/ split | `pipeline/lib/*` | ✅ `94781cc` |
 | TD1 | Glob test runner + money tests | `pipeline/run-tests.mjs`, tests | ✅ `d147bab` |
@@ -394,11 +394,18 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 - **Value niche lacks the LM1 limit stage (LM1 `9517655`, 2026-07-09):** `--mode value` renders via
   `valueGate`, not `runValidators`, so `limitValidator` doesn't reach it. Provisional/off-by-default
   (n≈0) — wire the limits stage in when the value path grows a validator pass, not before.
-- **Spread/band/churn consolidation — evidence-gated (Ben, 2026-07-09):** Ben reads the three as
-  one scalp family (lookback ~0 / 2h / 2h-on-liquid) and doubts spread earns its keep ("fleeting,
-  small flips"). Ruling: do NOT consolidate by judgment now — P4c made each niche a cheap data
-  spec; let P6's retro-join (realized profit per unit of attention, per niche) kill or merge them
-  with evidence. If spread's outcomes are noise, retire the spec then.
+- ~~**Spread/band/churn consolidation — evidence-gated (Ben, 2026-07-09):**~~ **RESOLVED (Steps 3+4,
+  Ben 2026-07-09):** the `spread` AND `rising` specs are DELETED (`js/strategies.mjs`; git history is the
+  reference). Ben approved the cut directly rather than waiting on P6's retro-join. Rationale: spread's
+  24h-average edge is narrower than the intraday band and surfaced ≈0 clean flips once the render net>0
+  gate landed (live check: `--mode spread` rated 1 item, which band also surfaces); rising ⊆ band. This
+  SUPERSEDES NY2/NY3's "spread stays off-by-default" + "rising kept in `--mode all`" rulings. Rising's ONE
+  real mechanism (proxy-first fetch ordering) is absorbed into `rankAndSlice`'s **rising reserve**
+  (`RISING_RESERVE_DEFAULT`). **Residual (by-design, not a gap):** spread's only exclusive lane was thin
+  big-tickets with an UNtraded 2h band; band's thin path (`MIN_ACTIVE_THIN:1` + the gp-flow reserve) catches
+  the traded ones, and an item with ZERO traded 5m windows in the scan's 2h is deliberately excluded (an
+  untraded band can't be trusted — the band-top-artifact lesson; spread's 24h-avg basis for those was the
+  weaker read). `risingPoolFloor` + `RISE_MID_FLOOR`/`RISE_LIQUID_VOL` kept but vestigial (one-flag re-add).
 - **PM1 follow-ons (deliberate, not scope-cut — PM1 `6aba80b`, 2026-07-08):** (1) the **watch
   surface** for probes — dip inverts to "average-down window" on an owned lot (the framing is
   already coded in `modules/dip.mjs` behind `ctx.owned`; wiring watch.mjs to run probes is the

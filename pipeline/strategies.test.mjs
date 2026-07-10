@@ -3,8 +3,9 @@
  * strategies.test.mjs — the CONFORMANCE suite for the declarative strategy registry (js/strategies.mjs,
  * Pipeline v2 chunk P4c).
  *
- * The registry re-expresses the screen's four niches (band/spread/rising/churn) as DATA-SHAPED specs
- * that pipeline/lib/gatecandidates.mjs drives instead of branching on the niche name. This file is the
+ * The registry re-expresses the screen's niches (band/churn + provisional scalp/value; spread/rising were
+ * DELETED in Steps 3+4) as DATA-SHAPED specs that pipeline/lib/gatecandidates.mjs drives instead of
+ * branching on the niche name. This file is the
  * conformance harness the P4c spec calls for: it iterates the registry and asserts every spec's
  * STRUCTURAL contract (required fields, edge callable, default-path key in js/paths.mjs's vocabulary,
  * gates well-formed), proves the checker BITES on a deliberately-malformed spec, and runs each edge over
@@ -33,44 +34,43 @@ const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
 console.log('strategies.mjs conformance:');
 
 /* --- registry shape ------------------------------------------------------------------------------- */
-ok('the registry holds the six niches (P5 added scalp/value), in order, keyed correctly', () => {
-  assert.deepEqual(MODE_KEYS, ['band', 'spread', 'rising', 'churn', 'scalp', 'value']);
+ok('the registry holds the four niches (Steps 3+4 deleted spread/rising), in order, keyed correctly', () => {
+  assert.deepEqual(MODE_KEYS, ['band', 'churn', 'scalp', 'value']);
   assert.deepEqual(STRATEGY_LIST.map(s => s.key), MODE_KEYS);
   for (const s of STRATEGY_LIST) assert.equal(STRATEGIES[s.key], s, `${s.key} indexed by key`);
+  // the deleted specs are truly gone from the registry.
+  for (const k of ['spread', 'rising']) assert.equal(STRATEGIES[k], undefined, `${k} spec deleted`);
 });
 
-ok('--mode all is the inAll specs (band/rising/churn) — spread + P5 scalp/value are off-by-default (NY3, Ben 2026-07-09)', () => {
-  assert.deepEqual(ALL_MODE_KEYS, ['band', 'rising', 'churn']);
-  for (const k of ['spread', 'scalp', 'value']) assert.equal(STRATEGIES[k].inAll, false, `${k} is off-by-default`);
+ok('--mode all is the inAll specs (band/churn) — scalp/value are off-by-default (Steps 3+4, Ben 2026-07-09)', () => {
+  assert.deepEqual(ALL_MODE_KEYS, ['band', 'churn']);
+  for (const k of ['scalp', 'value']) assert.equal(STRATEGIES[k].inAll, false, `${k} is off-by-default`);
   assert.deepEqual(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key), ALL_MODE_KEYS);
 });
 
 ok('P5 per-spec falling doctrine + gate selector are registered as designed', () => {
-  for (const k of ['band', 'spread', 'rising', 'churn']) assert.equal(STRATEGIES[k].falling, 'exclude', `${k} keeps the falling exclusion`);
+  for (const k of ['band', 'churn']) assert.equal(STRATEGIES[k].falling, 'exclude', `${k} keeps the falling exclusion`);
   assert.equal(STRATEGIES.scalp.falling, 'accept', 'scalp EXPECTS a falling wide band');
   assert.equal(STRATEGIES.value.falling, 'knife-guard', 'value rejects the knife but accepts a value-low');
-  for (const k of ['band', 'spread', 'rising', 'churn', 'scalp']) assert.equal(STRATEGIES[k].gate, 'band', `${k} uses the shared gate stack`);
+  for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].gate, 'band', `${k} uses the shared gate stack`);
   assert.equal(STRATEGIES.value.gate, 'value', 'value routes to the term-structure gate');
   assert.equal(STRATEGIES.scalp.defaultPath, PATH_KEYS.SCALP);
   assert.equal(STRATEGIES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
   assert.equal(STRATEGIES.value.rank, 'value', 'value ranks by valueScore');
 });
 
-ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/rising/scalp keep it inform', () => {
+ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/churn/scalp keep it inform', () => {
   const trajMode = k => STRATEGIES[k].validators.find(v => v.key === 'trajectory')?.mode;
   assert.equal(trajMode('value'), 'gate', 'value drops a knife — "buy the base, never the knife" + the hold asymmetry');
-  for (const k of ['band', 'rising', 'churn', 'scalp']) assert.equal(trajMode(k), 'inform', `${k} keeps trajectory inform (already excludes fallers, or accepts by thesis)`);
+  for (const k of ['band', 'churn', 'scalp']) assert.equal(trajMode(k), 'inform', `${k} keeps trajectory inform (already excludes fallers, or accepts by thesis)`);
 });
 
 ok('P6b per-thesis estimator family + price-basis fields are registered as designed', () => {
-  // estimator family: the four fast niches share the intraday family; rising + value have their own.
-  for (const k of ['band', 'spread', 'churn', 'scalp']) assert.equal(STRATEGIES[k].estimator, 'intraday', `${k} → intraday estimator`);
-  assert.equal(STRATEGIES.rising.estimator, 'rising', 'rising → rising estimator');
+  // estimator family: the fast niches share the intraday family; value has its own.
+  for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].estimator, 'intraday', `${k} → intraday estimator`);
   assert.equal(STRATEGIES.value.estimator, 'value', 'value → value estimator');
-  // price basis: spread posts the live quick pair; band/rising/churn/scalp the 2h band edges; value
-  // computes its own term-structure floor→recovery pair.
-  assert.equal(STRATEGIES.spread.priceBasis, 'quick', 'spread = transact-now quick pair');
-  for (const k of ['band', 'rising', 'churn', 'scalp']) assert.equal(STRATEGIES[k].priceBasis, 'opt', `${k} = patient 2h band edges`);
+  // price basis: band/churn/scalp post the 2h band edges; value computes its own term-structure pair.
+  for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].priceBasis, 'opt', `${k} = patient 2h band edges`);
   assert.equal(STRATEGIES.value.priceBasis, 'term', 'value = term-structure pair');
   // and every declared family is one the estimators registry actually serves (no typo).
   for (const s of STRATEGY_LIST) assert.ok(ESTIMATOR_FAMILIES.includes(s.estimator), `${s.key} family in the registry`);
@@ -92,22 +92,20 @@ ok('every spec\'s defaultPath is a valid ENTRY path key in js/paths.mjs\'s vocab
 });
 
 ok('the default-entry-path proposal is the documented mapping (Ben-vetoable)', () => {
-  // band/spread/churn are flip-first "buy the low, sell the top" plays → the intraday scalp thesis;
-  // rising is a "size-small, mid-reprice move" you hold through the froth → value-hold. See the
-  // strategies.mjs header for the /scan grounding.
+  // band/churn are flip-first "buy the low, sell the top" plays → the intraday scalp thesis;
+  // value is a hold-for-the-cycle move → value-hold. See the strategies.mjs header for the /scan grounding.
   assert.equal(STRATEGIES.band.defaultPath, PATH_KEYS.SCALP);
-  assert.equal(STRATEGIES.spread.defaultPath, PATH_KEYS.SCALP);
   assert.equal(STRATEGIES.churn.defaultPath, PATH_KEYS.SCALP);
-  assert.equal(STRATEGIES.rising.defaultPath, PATH_KEYS.VALUE_HOLD);
+  assert.equal(STRATEGIES.scalp.defaultPath, PATH_KEYS.SCALP);
+  assert.equal(STRATEGIES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
 });
 
-ok('only the rising spec carries the pre-fetch pool floor + proxy ranking', () => {
-  assert.equal(STRATEGIES.rising.pool.risingFloor, true);
-  assert.equal(STRATEGIES.rising.rank, 'proxy');
-  for (const k of ['band', 'spread', 'churn']) {
-    assert.equal(STRATEGIES[k].pool.risingFloor, false, `${k} has no rising floor`);
-    assert.equal(STRATEGIES[k].rank, 'velocity', `${k} ranks by velocity`);
-  }
+ok('no shipped spec carries the (vestigial) pre-fetch pool floor or proxy ranking (rising deleted)', () => {
+  // rising was the only spec that set pool.risingFloor:true / rank:'proxy'; its mechanism is now the
+  // rankAndSlice rising reserve. band/churn rank by velocity; value ranks by valueScore.
+  for (const s of STRATEGY_LIST) assert.equal(s.pool.risingFloor, false, `${s.key} has no rising floor`);
+  for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].rank, 'velocity', `${k} ranks by velocity`);
+  assert.equal(STRATEGIES.value.rank, 'value');
 });
 
 /* --- the checker BITES on a malformed spec (so P5 additions can't ship broken) --------------------- */
@@ -181,10 +179,11 @@ ok('edges are DETERMINISTIC — the same input yields a deep-equal result twice'
 });
 
 /* --- a couple of targeted edge behaviors (the niche-defining gates) ------------------------------- */
-ok('spread edge returns null when the 24h spread can\'t clear tax + the ROI floor', () => {
-  // a razor-thin spread on a cheap liquid item: net barely positive, ROI < MIN_ROI, not thin → null.
-  const inp = { avgHigh: 1005, avgLow: 1000, band: undefined, limitVol: 500, limit: 100, thin: false };
-  assert.equal(STRATEGIES.spread.edge(inp, DEFAULT_THRESHOLDS), null);
+ok('band edge returns null when the traded-band ROI can\'t clear the ROI floor (not thin)', () => {
+  // a razor-thin traded band on a cheap liquid item: net barely positive, ROI < MIN_ROI, not thin → null.
+  const band = { bandLo: 1000, bandHi: 1005, active5m: 20 };
+  const inp = { avgHigh: 1005, avgLow: 1000, band, limitVol: 500, limit: 100, thin: false };
+  assert.equal(STRATEGIES.band.edge(inp, DEFAULT_THRESHOLDS), null);
 });
 
 ok('churn edge requires a TRADED band + volume ≥ CHURN_MIN_VOL + a real buy limit', () => {
