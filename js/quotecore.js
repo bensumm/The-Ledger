@@ -74,7 +74,25 @@ export const SHOCK_MAX_NEWLOWS   = 3;
 export const VOL_SPIKE_MULT      = 2.5;
 export const BLEED_MIN_NEWLOWS   = 4;
 
-function med(arr){ if(!arr||!arr.length) return null; const s=arr.slice().sort((a,b)=>a-b), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+/* --- type-7 quantile / median: the ONE shared home (SF-1) ---------------------------------------
+   quotecore.js is lowest in the import graph, so the type-7 linear-interpolation quantile lives HERE and
+   js/termstructure.mjs + pipeline/lib/retrojoin.mjs re-export/alias it (was three drifting copies).
+   TWO shapes, so every caller keeps its exact contract:
+     - quantileSorted(sortedAsc, q) — REQUIRES an ascending array (does NOT sort); q clamped to [0,1],
+       empty → null. Used by robustBand's dense-side edge + termstructure (its mids arrive pre-sorted).
+     - quantileOf(arr, q) / median(arr) — sort a COPY first (never mutate the input), empty/absent → null.
+       The sorting convenience used by retrojoin's q25/q75 and quotecore's own `med` regime/phase math.
+   median(arr) === the classic mean-of-two-middle median (type-7 at q=0.5 is byte-identical to it). */
+export function quantileSorted(sorted, q){       // type-7 linear interpolation over an ascending array
+  const n=sorted?.length||0;
+  if(!n) return null;
+  if(n===1) return sorted[0];
+  const pos=(n-1)*Math.min(1,Math.max(0,q)), base=Math.floor(pos), rest=pos-base;
+  return sorted[base+1]!=null ? sorted[base]+rest*(sorted[base+1]-sorted[base]) : sorted[base];
+}
+export const quantileOf = (arr, q) => (!arr || !arr.length) ? null : quantileSorted([...arr].sort((a,b)=>a-b), q);
+export const median = arr => quantileOf(arr, 0.5);
+const med = median;   // internal alias for the regime/phase/activity math below (was a private copy)
 const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;
 
 /* --- regime-shift guard (MOVED here from trends.js so Trends + quotes share one impl) ----
@@ -192,11 +210,7 @@ export function phase(points){
 export const BAND_EDGE_MIN_SAMPLE = 8;   // < this many prints/side ⇒ raw extremum (a quantile is meaningless)
 export const BAND_EDGE_HI_Q = 0.90;      // dense-side high edge quantile (was the raw max)
 export const BAND_EDGE_LO_Q = 0.10;      // dense-side low edge quantile  (was the raw min)
-function quantileSorted(sorted, q){       // type-7 linear interpolation over an ascending array
-  if(sorted.length===1) return sorted[0];
-  const pos=(sorted.length-1)*q, base=Math.floor(pos), rest=pos-base;
-  return sorted[base+1]!=null ? sorted[base]+rest*(sorted[base+1]-sorted[base]) : sorted[base];
-}
+// quantileSorted is the shared type-7 impl defined at the top of this file (SF-1).
 export function robustBand(los, his){
   const edge=(vals, q, dir)=>{
     const s=vals.filter(x=>x!=null && x>0).sort((a,b)=>a-b);

@@ -68,18 +68,13 @@ export const TRAJ_RECENT_DAYS  = 7;     // the recent leg the reversal/oscillati
 export const TRAJ_ELEVATED_PIR = 0.70;  // current in the top (1-this) of the 14d range, no spike ⇒ 'elevated'
 export const TRAJ_BASED_PIR    = 0.35;  // current in the bottom this of the 14d range + flat ⇒ 'based'
 
-/* quantile(sortedAsc, q) — linear-interpolated quantile of an ASCENDING numeric array. */
-export function quantile(sortedAsc, q) {
-  const n = sortedAsc.length;
-  if (!n) return null;
-  if (n === 1) return sortedAsc[0];
-  const pos = (n - 1) * Math.min(1, Math.max(0, q));
-  const lo = Math.floor(pos), hi = Math.ceil(pos);
-  if (lo === hi) return sortedAsc[lo];
-  return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (pos - lo);
-}
+/* quantile(sortedAsc, q) — linear-interpolated (type-7) quantile of an ASCENDING numeric array. This is
+   the ONE shared impl from js/quotecore.js (SF-1); imported here and re-exported under the historical
+   `quantile` name so every consumer (and the P3 test) keeps its API. midsWithin() hands it ascending mids. */
+import { quantileSorted as quantile } from './quotecore.js';
+export { quantile };
 
-const median = sortedAsc => quantile(sortedAsc, 0.5);
+const median = sortedAsc => quantile(sortedAsc, 0.5);   // PRE-SORTED median (input already ascending)
 
 /* Slice the mids whose ts falls within `days` of `now` (unix seconds), returning the ASCENDING-by-value
    mid array (values only). now defaults to the series' own last ts so the read is anchorable/testable. */

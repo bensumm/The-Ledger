@@ -28,7 +28,7 @@
  */
 import { collapseOffers, matchTrades, dedupeSnapshots } from './reconstruct.mjs';
 import { median } from './cli.mjs';
-import { tax } from '../../js/quotecore.js';
+import { tax, quantileOf } from '../../js/quotecore.js';   // quantileOf = the ONE sorting type-7 quantile (SF-1)
 
 // --- named placeholder horizons (s): how long after a suggestion a BUY fill still counts as "acting
 // on it". Keyed by the strategy niche the row was surfaced under; a row with no/unknown mode (a
@@ -79,15 +79,9 @@ function stampFirstFills(events, offers) {
   }
 }
 
-const q25 = a => quantile(a, 0.25);
-const q75 = a => quantile(a, 0.75);
-function quantile(a, p) {
-  if (!a || !a.length) return null;
-  const s = [...a].sort((x, y) => x - y);
-  const idx = (s.length - 1) * p, lo = Math.floor(idx), hi = Math.ceil(idx);
-  if (lo === hi) return s[lo];
-  return s[lo] + (s[hi] - s[lo]) * (idx - lo);
-}
+// q25/q75 over a RAW (unsorted) latency array — quantileOf sorts a copy (SF-1 shared type-7 quantile).
+const q25 = a => quantileOf(a, 0.25);
+const q75 = a => quantileOf(a, 0.75);
 
 /* retroJoin(suggestions, fillsEvents, opts) → { rows, meta }.
  *   suggestions — array of parsed suggestion rows (the readSuggestionLines JSON objects).

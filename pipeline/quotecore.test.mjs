@@ -23,6 +23,7 @@ import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END
 import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
 import { phase, regimeDrift } from '../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
 import { pressureText } from '../js/quotecore.js';   // 24h buy/sell flow-imbalance display formatter
+import { quantileSorted, quantileOf, median } from '../js/quotecore.js';   // SF-1 shared type-7 quantile/median home
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
 const NOW_MS  = NOW_SEC * 1000;
@@ -46,6 +47,35 @@ let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 
 console.log('PLAN-3 quotecore acceptance:');
+
+// --- 0. SF-1: type-7 quantile/median is the ONE shared home ---------------------------------
+// Pins the byte-identical contract of both shapes so termstructure's quantile re-export and
+// retrojoin's quantileOf alias (which the SF-1 consolidation rewired to import from here) can
+// never drift. quantileSorted REQUIRES pre-sorted input; quantileOf/median sort a copy first.
+ok('SF-1 quantileSorted: type-7 interp over a PRE-SORTED array (hand-checked)', () => {
+  assert.equal(quantileSorted([10, 20, 30, 40, 50], 0.5), 30);   // odd n → middle
+  assert.equal(quantileSorted([10, 20], 0.5), 15);               // even n → interp of the two middle
+  assert.equal(quantileSorted([100, 200, 300, 400], 0.25), 175); // (n-1)*0.25=0.75 → 100+0.75·100
+  assert.equal(quantileSorted([42], 0.9), 42, 'single element');
+  assert.equal(quantileSorted([], 0.5), null, 'empty → null');
+  assert.equal(quantileSorted([1, 2, 3, 4, 5], 1), 5, 'q clamps to [0,1]');
+  assert.equal(quantileSorted([1, 2, 3, 4, 5], 0), 1);
+});
+ok('SF-1 quantileOf / median: sort a COPY, never mutate; empty/absent → null', () => {
+  const raw = [30, 10, 50, 20, 40];
+  assert.equal(quantileOf(raw, 0.5), 30, 'sorts internally (unlike quantileSorted)');
+  assert.equal(quantileOf([20, 10], 0.5), 15);
+  assert.equal(quantileOf([], 0.25), null);
+  assert.equal(quantileOf(null, 0.25), null);
+  assert.deepEqual(raw, [30, 10, 50, 20, 40], 'input array is NOT mutated');
+  // median === classic mean-of-two-middle median === quantileOf(_, 0.5)
+  assert.equal(median([3, 1, 2]), 2);          // odd
+  assert.equal(median([4, 1, 3, 2]), 2.5);     // even → (2+3)/2
+  assert.equal(median([7]), 7);
+  assert.equal(median([]), null);
+  assert.equal(median(undefined), null);
+  assert.equal(median(raw), quantileOf(raw, 0.5), 'median is quantileOf at q=0.5');
+});
 
 // --- 1. Stale quote → NO-READ, never CUT --------------------------------------------------
 ok('stale-quote → NO-READ (never CUT)', () => {

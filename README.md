@@ -58,7 +58,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   offer sizing, `bestWindow`/`median`; moved out of `trends.js` for
   `pipeline/trendcore.test.mjs`), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
-  with the node analysis scripts), `windowread.mjs` (P2 — pure window-range/reach math:
+  with the node analysis scripts; also the ONE type-7 quantile/median home (SF-1):
+  `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
+  re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
   `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
   `recencySplit`/`recentQuant` reach-contamination guard + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
@@ -663,12 +665,12 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 
 | Module | Also imported by (pipeline) |
 | --- | --- |
-| `js/quotecore.js` | 11 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab) |
+| `js/quotecore.js` | 12 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab); plus the js/ side-import `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) |
 | `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) + `pipeline/lib/estimators.mjs` (P6b — `netMargin`/`clamp` for the rank composite) |
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`; not yet app-imported) |
 | `js/forecast.mjs` | `pipeline/forecast.test.mjs` only (PF1 — the pure model landed; no surface consumer wired yet — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate — all pending; not yet app-imported → no APP_VERSION) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor; not yet app-imported) |
-| `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported) |
+| `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
 | `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
 | `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `pipeline/lib/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative niche registry; not yet app-imported) |
 
