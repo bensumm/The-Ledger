@@ -193,6 +193,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | SWEEP | 2026-07-10 sweep innocuous fixes: `Promise.all` bulk loaders · shared `clamp` dedup · `bandPercentile` extraction | `screen.mjs`, `rating.mjs`, `estimators.mjs`, `histstate.mjs`, `outcomes.mjs` | ✅ `ef68792` (byte-identical dedups; the review verdict + parked residue = Discovered SF-1/2/4/5) |
 | SF-2 | Document quote.mjs's uncapped per-item ts1h fetch budget | `pipeline/quote.mjs` | ✅ `fe57a3b` (comment-only; soft-cap recipe if large batches ever routine) |
 | SF-1 | Quantile/median type-7 consolidated to one `js/quotecore.js` home (both sorted + sorting contracts) | `js/quotecore.js`, `js/termstructure.mjs`, `pipeline/lib/retrojoin.mjs` | ✅ `2cbca38` (0.56.0; byte-identical refactor, fixture-pinned; caller audit preserved each site's sorted/unsorted contract) |
+| SF-3 | Liquidity-class volume-source unify: `volSrc` tag + fetch-free warm-only bulk read (never a cold bulk fetch for a 1-item ask) | `pipeline/lib/suggestlog.mjs`, `pipeline/lib/marketfetch.mjs`, `pipeline/quote.mjs`, `pipeline/screen.mjs` | ✅ `3a36a1e` (pre-F1 calibration hygiene; pinned by `sf3-volsrc.test.mjs`; pipeline-only) |
 
 ---
 
@@ -492,31 +493,20 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   the sell window). Honesty: needs days of history before the timing claim is real.
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
-- **Liquidity-`class` volume-source split (SF-3, pre-F1; = the deferred ARCH-3 half).** ✅ **DONE `61e1bd7`**
-  — `volSrc` tag threaded through `suggestionEntry` (lean-included: `bulk`|`peritem`); the pure
-  `classAndSource(row,id,warmBulk)` in `suggestlog.mjs` picks class+source; `marketfetch.loadAll24hWarm()`
-  /`readWarmAll24h(dir,ttl,now)` is a fetch-free warm-only bulk `/24h` read (null when cold/stale — the
-  hard no-cold-fetch constraint); `quote.mjs` converges on the warm bulk snapshot (per-item + `--positions`,
-  the latter reusing `snap.v24` already fetched by loadSnapshot ⇒ zero extra fetch), `screen.mjs` tags
-  `'bulk'`. Class-parity + fetch-free warm read pinned by `pipeline/sf3-volsrc.test.mjs`; docs in
-  FILLS-PIPELINE.md §11.1 + README. Pipeline-only, no APP_VERSION. `quote.mjs`
-  and `screen.mjs` can log a different liquidity `class` for the same item in `suggestions.jsonl`:
-  the logged `class` derives from `volDay = min(hpv,lpv)`, and the hpv/lpv come from DIFFERENT
-  endpoints — quote's per-item `fetch24hOne`/`/24h?id=` (15-min cache) vs screen's bulk `loadAll24h`/
-  `all24h.json` (10-min cache). Different snapshots ⇒ the same item can straddle a `liqClassOf`
-  boundary (observed live on Toxic blowpipe: `mid` vs `thin`). `outcomes.mjs` re-derives class from
-  the stored `volDay`, so re-deriving does NOT launder it — the polluted quantity is `volDay` itself.
-  A calibration pollutant to fix BEFORE F1 opens (F1 is weeks of accrual out → real runway).
-  **APPROVED design (Ben 2026-07-10): warm-cache read + volSrc tag, COMBINED (they are complementary,
-  not either/or).** (1) **volSrc tag** — ALWAYS log which endpoint the volume came from (`bulk` |
-  `peritem`); the honesty layer, lets F1 bucket/normalize. (2) **warm-cache read** — `quote.mjs` reads
-  `all24h.json` for the class field ONLY IF it is already warm (within its ~10-min TTL, written by a
-  recent scan = a file read, ZERO fetch) → volSrc `bulk`, now agreeing with screen; when cold, keep the
-  per-item volume already fetched → volSrc `peritem`, and **NEVER force the ~4000-item bulk fetch for a
-  1-item ask** (the hard constraint). Net: converge for free when the data is on disk, fall back
-  honestly with a normalizable label when not. Pin class-parity with a small test. Files:
-  `pipeline/quote.mjs`, `pipeline/screen.mjs`, `pipeline/lib/suggestlog.mjs`, `pipeline/lib/marketfetch.mjs`
-  (lane O 2026-07-04; enriched + approved by the 2026-07-10 sweep — dispatched as a worktree agent).
+- ~~**Liquidity-`class` volume-source split (SF-3, pre-F1; = the deferred ARCH-3 half)**~~ — **DONE `3a36a1e`**.
+  The problem: the logged `class` derives from `volDay = min(hpv,lpv)`, whose hpv/lpv came from DIFFERENT
+  endpoints (quote's per-item `/24h?id=` vs screen's bulk `loadAll24h`/`all24h.json`), so the same item
+  could straddle a `liqClassOf` boundary (Toxic blowpipe `mid` vs `thin`); `outcomes.mjs` re-derives class
+  from the stored `volDay` so re-deriving did NOT launder it — a pre-F1 calibration pollutant. The APPROVED
+  combined fix (Ben 2026-07-10): (1) a `volSrc` tag (`bulk`|`peritem`) lean-threaded through
+  `suggestionEntry` — the honesty layer F1 normalizes on; (2) a fetch-free warm-only bulk read
+  (`marketfetch.readWarmAll24h(dir,ttl,now)`/`loadAll24hWarm()` — synchronous, NO network path, null when
+  cold/stale) so `quote.mjs` converges on the bulk snapshot when a recent scan warmed `all24h.json` (and
+  `--positions` reuses `snap.v24` loadSnapshot already fetched ⇒ zero extra fetch), else keeps the per-item
+  volume tagged `peritem`. The hard constraint — NEVER a cold ~4000-item bulk fetch for a 1-item ask — is
+  structural (the warm accessor cannot fetch). Pure `classAndSource(row,id,warmBulk)` picks class+source;
+  `screen.mjs` tags `bulk`. Pinned by `pipeline/sf3-volsrc.test.mjs` (class-parity + fetch-free); docs
+  FILLS-PIPELINE.md §11.1 + README. Pipeline-only, no APP_VERSION (lane O 2026-07-04; approved + shipped 2026-07-10).
 - `js/backup.js:23` stamps the backup filename with the UTC date (`toISOString().slice(0,10)`)
   — a late-evening local backup gets tomorrow's date in the name. File-artifact only, not a
   displayed time; switch to a local slug if it ever annoys (lane E, 2026-07-04).
