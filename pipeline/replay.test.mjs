@@ -41,11 +41,11 @@ const GOLD_PATH = path.join(FX_DIR, 'golden.json');
 const SCENARIOS = {
   'active': { posture: 'active' },
   'overnight-band': { modes: ['band'], posture: 'overnight' },
-  // P5 — the falling-doctrine amendment made concrete: the `scalp` niche's spec.falling === 'accept',
-  // so surviveMode does NOT drop the decay-knife (2004) / falling-wide-band (2005) fallers it drops in
-  // every 'exclude' niche. This scenario is the golden-visible doctrine change (the existing four-niche
-  // scenarios above stay byte-identical). Scalp still surfaces the flat/rising rows too — falling is a
-  // valid candidate, not the only one.
+  // P5 + Step 5 — the falling-doctrine amendment made concrete: the `scalp` niche's spec.falling ===
+  // 'accept' stops surviveMode from dropping the decay-knife (2004) / falling-wide-band (2005) fallers it
+  // drops in every 'exclude' niche, AND scalp's mode-confirm (Step 5, Ben 2026-07-09) now REQUIRES falling
+  // — so the flat/rising rows (2001/2002/2003) are dropped 'notFalling' and ONLY the two fallers survive.
+  // This scenario is the golden-visible doctrine change (the existing four-niche scenarios stay identical).
   'scalp': { modes: ['scalp'], posture: 'active' },
 };
 
@@ -54,7 +54,7 @@ function computeGolden(snap) {
   for (const [name, opts] of Object.entries(SCENARIOS)) scenarios[name] = { opts, niches: runReplay(snap, opts) };
   return {
     schema: 'coffer-replay-golden/1',
-    note: 'Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. P5: falling-exclusion is now PER-SPEC — band/spread/rising/churn keep it (exclude); the scalp scenario ACCEPTS fallers (spec.falling=accept), so 2004/2005 survive there.',
+    note: 'Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. P5+Step5: falling-exclusion is PER-SPEC — band/spread/rising/churn keep it (exclude); the scalp scenario ACCEPTS fallers (spec.falling=accept) AND REQUIRES falling (scalp mode-confirm), so ONLY the fallers 2004/2005 survive scalp (the flat/rising 2001/2002/2003 drop notFalling).',
     scenarios,
   };
 }

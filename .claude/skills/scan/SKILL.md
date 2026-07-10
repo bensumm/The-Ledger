@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.37
+version: 1.38
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -23,7 +23,8 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
 
 **P5 niches — scalp / value (both PROVISIONAL, n≈0, OFF-by-default; explicit `--mode` only).**
 - **`--mode scalp`** _(judgment: when to chase — desk-presence call)_ — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
-  faller isn't auto-bad). It INCLUDES fallers other niches exclude. Flip-only/no-hold, HARD intraday
+  faller isn't auto-bad). It surfaces ONLY fallers (Step 5, Ben 2026-07-09: a scalp REQUIRES falling — a
+  non-falling row is a band flip band already owns → dropped `notFalling`). Flip-only/no-hold, HARD intraday
   stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
   never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
 - **`--mode value`** _(judgment: still PROVISIONAL — don't trade on it yet)_ — buy-hold near a multi-week

@@ -327,7 +327,7 @@ function pathLine(name, weighed, defaultPath) {
 function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily) {
   const rows = [];
   const dist = {};
-  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0 };  // post-fetch discard reasons (--stats)
+  const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0 };  // post-fetch discard reasons (--stats)
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
@@ -595,7 +595,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
-    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
+    const reasons = `falling ${disc.falling}` + (mode === 'rising' ? `, not-rising ${disc.notRising}, breakdown ${disc.breakdown}` : '') + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
     console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
   }
   console.log('');

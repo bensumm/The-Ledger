@@ -271,6 +271,8 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
 //                   here defensively, but value never reaches surviveMode — its knife guard is valueGate.
 //   'accept'      — falling is a VALID candidate (scalp EXPECTS a falling wide band); not dropped for
 //                   the regime alone. Its intraday tripwire lives in offerVerdict/the path engine.
+//                   Step 5 (2026-07-09): scalp goes further — a scalp-mode CONFIRM below REQUIRES falling
+//                   (a non-falling scalp is a band flip → dropped 'notFalling'), so scalp = fallers only.
 export function surviveMode(mode, row, phase, opts = {}) {
   const { phaseRescue = false, posture = 'active', thin = false, series5m = null } = opts;
   const fallingDoctrine = STRATEGIES[mode] ? STRATEGIES[mode].falling : 'exclude';
@@ -282,6 +284,15 @@ export function surviveMode(mode, row, phase, opts = {}) {
   if (mode === 'rising') {                                  // rising-mode confirm
     if (!row.rising) return { keep: false, discardReason: 'notRising', rescued };
     if (row.mom === 'breakdown') return { keep: false, discardReason: 'breakdown', rescued };
+  }
+  // scalp-mode confirm (Step 5, Ben 2026-07-09): STRICT falling-only. spec.falling='accept' stops the
+  // exclusion above from dropping a faller, but a scalp on a NON-falling item is just a band flip band
+  // already owns — so a scalp positively REQUIRES a falling regime (mirrors the rising confirm). This
+  // converts scalp from "band + fallers" to "fallers only". Its ROI-bind (a fresh wide band that only
+  // clears −ROI once tax is paid, e.g. ZGS at −0.5%) is caught separately by renderMode's Step-2 net>0
+  // surface gate, so it isn't re-checked here.
+  if (mode === 'scalp') {
+    if (!row.falling) return { keep: false, discardReason: 'notFalling', rescued };
   }
   if (posture === 'overnight') {
     // overnight posture: only a confident, patient, non-thin edge that won't be stale by morning.

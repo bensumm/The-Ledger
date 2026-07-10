@@ -71,6 +71,11 @@ ok('band still EXCLUDES the same falling row (existing niches unchanged — byte
   const sv = surviveMode('band', row({ falling: true }), { phase: 'decay' }, {});
   assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
 });
+// Step 5 (Ben 2026-07-09): scalp is STRICT falling-only — a non-falling scalp is a band flip band owns.
+ok('scalp DROPS a non-falling row ("notFalling") — scalp requires falling, not just accepts it', () => {
+  const sv = surviveMode('scalp', row({ falling: false }), { phase: 'base' }, {});
+  assert.deepEqual(sv, { keep: false, discardReason: 'notFalling', rescued: false });
+});
 ok('scalp still applies overnight posture (accept ≠ bypass every gate) — a thin scalp drops overnight', () => {
   const sv = surviveMode('scalp', row({ falling: true, thin: true }), { phase: 'decay' }, { posture: 'overnight', thin: true });
   assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });

@@ -1,6 +1,6 @@
 {
   "schema": "coffer-replay-golden/1",
-  "note": "Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. P5: falling-exclusion is now PER-SPEC — band/spread/rising/churn keep it (exclude); the scalp scenario ACCEPTS fallers (spec.falling=accept), so 2004/2005 survive there.",
+  "note": "Golden per-niche funnel outputs for the P1 snapshot-replay harness. Regenerate + hand-review with `node pipeline/replay.test.mjs --update`. P5+Step5: falling-exclusion is PER-SPEC — band/spread/rising/churn keep it (exclude); the scalp scenario ACCEPTS fallers (spec.falling=accept) AND REQUIRES falling (scalp mode-confirm), so ONLY the fallers 2004/2005 survive scalp (the flat/rising 2001/2002/2003 drop notFalling).",
   "scenarios": {
     "active": {
       "opts": {
@@ -408,20 +408,20 @@
           "survivors": [
             {
               "id": 2003,
-              "keep": true,
-              "discardReason": null,
+              "keep": false,
+              "discardReason": "notFalling",
               "rescued": false
             },
             {
               "id": 2002,
-              "keep": true,
-              "discardReason": null,
+              "keep": false,
+              "discardReason": "notFalling",
               "rescued": false
             },
             {
               "id": 2001,
-              "keep": true,
-              "discardReason": null,
+              "keep": false,
+              "discardReason": "notFalling",
               "rescued": false
             },
             {
@@ -438,13 +438,14 @@
             }
           ],
           "kept": [
-            2001,
-            2002,
-            2003,
             2004,
             2005
           ],
-          "dropped": {}
+          "dropped": {
+            "2001": "notFalling",
+            "2002": "notFalling",
+            "2003": "notFalling"
+          }
         }
       }
     }

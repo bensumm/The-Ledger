@@ -193,9 +193,11 @@ export const STRATEGY_LIST = Object.freeze([
   },
   {
     key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
-    pool: { risingFloor: false }, edge: scalpEdge, rank: 'velocity', confirm: null,
-    // scalp accepts a falling wide band by thesis → trajectory + floor INFORM only (never veto a scalp for
-    // being a faller; its stop lives in the path engine / offerVerdict, not a screen gate).
+    pool: { risingFloor: false }, edge: scalpEdge, rank: 'velocity', confirm: 'falling',
+    // scalp accepts AND REQUIRES a falling wide band (Step 5, Ben 2026-07-09): falling='accept' stops the
+    // exclusion, and surviveMode's scalp-confirm additionally DROPS a non-falling row ('notFalling') — a
+    // scalp on a non-falling item is just a band flip band already owns. trajectory + floor stay INFORM
+    // (never veto a scalp for being a faller; its stop lives in the path engine / offerVerdict, not a gate).
     falling: 'accept', gate: 'band',
     validators: [{ key: 'floor', mode: 'inform' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',

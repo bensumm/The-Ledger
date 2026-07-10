@@ -189,8 +189,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   high-volume commodity lane (the rune staples) earns default visibility. `rising`'s
   candidate pool carries a NY2.1 noise floor (big-ticket **OR** liquid, `risingPoolFloor`) that drops the
   cheap teleport-tab flood while keeping cheap-but-liquid risers. Thin gp-flow big tickets ride a bounded
-  `--thin-reserve`. **P5 scalp** (provisional, n≈0): a DELIBERATE intraday flip on a FALLING market
-  (`spec.falling='accept'`) — a wide fresh band clearing tax+scalp-margin (`SCALP_MIN_ROI`), reach-
+  `--thin-reserve`. **P5 scalp** (provisional, n≈0): a DELIBERATE intraday flip on a FALLING market — `spec.falling='accept'`
+  AND a scalp mode-confirm that REQUIRES falling (Step 5, Ben 2026-07-09: a non-falling scalp is a band
+  flip band already owns → dropped `notFalling`), so scalp = fallers only. A wide fresh band clearing
+  tax+scalp-margin (`SCALP_MIN_ROI`; the ROI-bind is caught by the render net>0 gate), reach-
   validated on today's high, flip-only/no-hold (an unsold lap migrates to `cut`, never `hold-recovery` —
   encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold niche with its OWN
   term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
