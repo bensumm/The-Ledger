@@ -160,21 +160,31 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     budgeted `ts1h` fetch put the series in hand there too). This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
     manual `--window`/`--profile` read is now a CONFIRMATION on what you actually pitch (thresholds are
     placeholders; ★ doesn't know froth, so a spike item's amplitude can flatter it — support, not a gate).
-    **The APP renders this too (TV, 0.58.0+):** the Trends item page has a **Diurnal timing** section
-    (timing tier, below Price history) — a per-hour-of-day bar chart (dip/peak hours in a NEUTRAL
-    cool/warm pair — timing, not good/bad — with a 7d/28d lookback toggle) via the interactive
-    `js/chartlib.js`, the same shared `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange` BID→ASK + ★
-    the console prints (parity, not a fork), and an inform-only `reachValidator` note. `chartlib.js`
-    also now backs the Trends **Recent movement** + **Price history** charts (pan/zoom, hover tooltip,
-    axis labels, selectable 1/7/30/90d windows — 0.59.0).
-  - **Forward FORECAST (PF1, 2026-07-10 — the pure model only; no surface wired yet).** `js/forecast.mjs`
-    CONSUMES `hourProfile` and projects the next 12h/24h — `diurnalForecast(profile, ctx)` →
-    `nextTrough`/`nextPeak` `{level, band, etaH, window, confidence}` + `whenBuyable`/`whenSellable`, the
+    **The APP renders this too (TV, 0.58.0+):** the Trends item page carries **all four** decision-support
+    reads. **Diurnal timing** (timing tier, below Price history) — a per-hour-of-day bar chart (dip/peak
+    hours in a NEUTRAL cool/warm pair — timing, not good/bad — with a 7d/28d lookback toggle) via the
+    interactive `js/chartlib.js`, the same shared `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`
+    BID→ASK + ★ the console prints (parity, not a fork), and an inform-only `reachValidator` note.
+    **Term-structure floor overlay (0.60.0)** on the Price history chart — `termStructure`'s durable
+    multi-week floor/ceiling as teal reference lines + a support band, with the **`floorValidator` +
+    `trajectoryValidator` notes** rendered verbatim beside it (the "buy the base, not the knife" read).
+    **Forward forecast (0.60.0)** — a timing-tier section off `diurnalForecast` (the SAME `hourProfile`):
+    next trough/peak + eta/window/band + confidence, the projected-low "when does it get cheap" curve;
+    degrades loudly (post-shock / live-band-violation / thin → an explicit "withheld — <why>" line). The
+    **validator notes are SPLIT** across the viz they qualify (reach → diurnal; floor/trajectory → history
+    overlay; forecast caveat → forecast band) per Ben's refinement — not one flat block. `chartlib.js`
+    also backs the **Recent movement** + **Price history** charts (pan/zoom, hover tooltip, axis labels,
+    selectable 1/7/30/90d windows — 0.59.0). So `forecast.mjs`/`termstructure.mjs`/`validate.mjs` are ALL
+    app-imported now (via `trends.js`) — a behavior change to any of them bumps `APP_VERSION`.
+  - **Forward FORECAST (PF1, 2026-07-10 — pure model; app-surfaced in Trends since 0.60.0).**
+    `js/forecast.mjs` CONSUMES `hourProfile` and projects the next 12h/24h — `diurnalForecast(profile, ctx)`
+    → `nextTrough`/`nextPeak` `{level, band, etaH, window, confidence}` + `whenBuyable`/`whenSellable`, the
     "not buyable at a profitable price now, but ~X in ~4h" answer. Model = `baselineNow + trendPerHour·Δt +
     deTrendedHourShape(h)`; anchor from the live quote. Claims ONLY the recurring diurnal shape + a dumb
     trend extension — it DEGRADES LOUDLY (spike/decay, live band violation, thin series, trend-erased dip)
     and NEVER forecasts an exogenous shock. The doctrine home is the `forecast.mjs` header. INFORM-ONLY /
-    provisional (n≈0, PLACEHOLDER constants pending the PF8 backtest); consumers land in PF2–PF8.
+    provisional (n≈0, PLACEHOLDER constants pending the PF8 backtest) — the Trends surface labels it so; the
+    console-side consumers still land in PF2–PF8.
 **How to generate these tables — each canonical ask maps to a skill or an exact command.
 These scripts exist and ARE the workflow.** ALWAYS use them; NEVER hand-write a `node -e`
 fetch for a market read (each ad-hoc script also burns ~1–2k tokens to author + parse — the

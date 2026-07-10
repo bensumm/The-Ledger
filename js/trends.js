@@ -4,7 +4,9 @@ import { tax, netMargin, netMarginQty, fmt, fmtP, now, pad2, fmtHour, sgn, clamp
 import { svgLine, svgBars } from './charts.js';
 import { createChart } from './chartlib.js';                                  // CL: interactive chart (diurnal viz)
 import { hourProfile, deriveDiurnalRange } from './windowread.mjs';           // shared diurnal peak-timing math (same module the console uses)
-import { reachValidator } from './validate.mjs';                             // TV: reach note beside the diurnal timing (inform-only)
+import { reachValidator, floorValidator, trajectoryValidator } from './validate.mjs';   // TV: validator notes split across their viz (inform-only)
+import { termStructure } from './termstructure.mjs';                         // TV: durable multi-week floor/ceiling/typical-swing + trajectory shape (shared)
+import { diurnalForecast, fmtEta } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0)
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
@@ -264,7 +266,7 @@ function renderRecent(it, s5m, qrow, showAnalysis){
    Degrades to a "not enough history yet" line when hourProfile returns null (never a broken chart). */
 const DIURNAL_MIN_ROI=1;   // PLACEHOLDER (rule 4): after-tax ROI a clean ★ diurnal candidate must clear
 // interactive-chart handles (chartlib) — destroyed + recreated each runTrends so listeners don't leak.
-let diurnalChart=null, recentChart=null, histChart=null;
+let diurnalChart=null, recentChart=null, histChart=null, forecastChart=null;
 function renderDiurnal(profSeries, qrow, it, showAnalysis){
   const el=document.getElementById('trDiurnal'); if(!el) return;
   const chartEl=document.getElementById('trDiurnalChart'), cap=document.getElementById('trDiurnalCap'),
@@ -343,6 +345,68 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
   function setN(n){ if(togEl) togEl.querySelectorAll('.chartspan').forEach(b=>b.classList.toggle('on', +b.dataset.n===n)); draw(n); }
   setN(7);
 }
+/* TV: the floor + trajectory validator notes, rendered WITH the term-structure overlay they qualify
+   (Ben's validator-note split, not one flat block). Both are the SAME shared js/validate.mjs validators
+   the console runs — the reason text is verbatim parity. BUY-side (a Trends read is an entry decision);
+   gated on real evidence so a cold-archive degrade (internal code) never leaks to the user. */
+function renderTermNote(ts, it){
+  const el=document.getElementById('trHistNote'); if(!el) return; el.innerHTML='';
+  if(!ts || ts.hasData===false || ts.floor==null){
+    el.innerHTML='<span class="mini">A durable multi-week floor forms once ~2+ weeks of daily history accrue (the archive began 2026-07-08) — the floor/trajectory read appears here as it warms.</span>';
+    return;
+  }
+  const ctx={ history:{termStructure:ts}, floor:{level:it.low}, market:{row:{optBuy:it.low}} };
+  let f=null,t=null; try{ f=floorValidator(ctx); }catch(_){ } try{ t=trajectoryValidator(ctx); }catch(_){ }
+  const cls=s=>s==='reject'?'loss':s==='caution'?'gold':'gain';
+  const parts=[];
+  if(t && t.evidence && t.evidence.shape) parts.push('<b class="'+cls(t.status)+'">trajectory</b> <span class="mini">'+t.reason+'</span>');
+  if(f && f.evidence && f.evidence.floor!=null) parts.push('<b class="'+cls(f.status)+'">floor</b> <span class="mini">'+f.reason+'</span>');
+  if(!parts.length){ el.innerHTML=''; return; }
+  el.innerHTML='<span class="mini">Structure (inform-only): </span>'+parts.join(' <span class="mini">·</span> ')+
+    ' <span class="ccap">Multi-week floor &amp; path shape — the “buy the base, not the knife” read; thresholds placeholder (n≈0).</span>';
+}
+/* TV: the "Forward forecast" section — forecast.mjs diurnalForecast projects the next 24h off the
+   SAME hourProfile the Diurnal timing chart reads (parity). Answers "not buyable at a good price now —
+   when ~?": next trough (bid) + next peak (ask) with eta/window/band, else a LOUD degrade reason
+   (post-shock, live-band violation, thin/flat series). The chart plots the projected LOW curve (the
+   "when does it get cheap" line) with the trough marked. Provisional (PF, n≈0) — the forecast caveat
+   is rendered here, WITH the band it qualifies (the validator-note split). */
+function renderForecast(profSeries, qrow, it, showAnalysis){
+  const el=document.getElementById('trForecast'); if(!el) return;
+  const chartEl=document.getElementById('trForecastChart'), cap=document.getElementById('trForecastCap');
+  if(forecastChart){ try{ forecastChart.destroy(); }catch(_){ } forecastChart=null; }
+  if(!showAnalysis){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  let prof=null; try{ prof=hourProfile(profSeries||[], {nights:7}); }catch(_){ prof=null; }
+  const liveLo=(qrow&&qrow.quickBuy!=null)?qrow.quickBuy:it.low;
+  const liveHi=(qrow&&qrow.quickSell!=null)?qrow.quickSell:it.high;
+  const ctx={ liveLo, liveHi, mom:qrow?qrow.mom:null, reliable:qrow?qrow.reliable:undefined, phase:qrow?qrow.phase:null, now:new Date() };
+  let fc=null; try{ fc=diurnalForecast(prof, ctx); }catch(_){ fc={forecast:null, reason:'error'}; }
+  if(!fc || !fc.forecast){
+    if(chartEl) chartEl.innerHTML='';
+    const why={ 'no-profile':'not enough hourly history yet', 'post-shock-shape':'the price is mid-spike/decay — the recurring rhythm can’t be projected through a shock', 'band-violation-live':'the live price is breaking its own 2h band right now — the anchor is untrustworthy', 'unreliable-quote':'the live quote is unreliable', 'no-anchor':'no live price anchor', 'flat-window':'the daily rhythm is too flat to call a trough/peak' }[fc&&fc.reason]||'unavailable at this read';
+    cap.innerHTML='<span class="mini">Forecast withheld — '+why+'. (The model degrades loudly rather than guess through a shock — provisional, PF n≈0.)</span>';
+    return;
+  }
+  const f=fc.forecast, tr=f.nextTrough, pk=f.nextPeak;
+  // chart: the projected LOW over the next 24h (the "when does it get cheap" curve), trough marked.
+  const series=(f.series||[]).map(s=>({t:s.etaH, v:s.projLow})).filter(p=>p.v!=null);
+  const refs=[{v:liveLo, cls:'reflive', label:'live'}];
+  if(tr && tr.level!=null) refs.push({v:tr.level, cls:'reffloor', label:'trough'});
+  const markers=(tr && tr.etaH!=null)?[{t:tr.etaH, cls:'nowmark', label:fmtEta(tr.etaH)}]:[];
+  if(series.length>1) forecastChart=createChart(chartEl, {series, refs, markers, kind:'line', spans:false, xFmt:h=>'+'+fmtEta(h), yFmt:fmt});
+  else if(chartEl) chartEl.innerHTML='';
+  const lvl=x=>(x&&x.level!=null)?fmtP(Math.round(x.level)):'—';
+  const eta=x=>(x&&x.etaH!=null)?('in ~'+fmtEta(x.etaH)+(x.window?' ('+x.window+')':'')):'(trend-only — no eta)';
+  let s='<b>Next trough</b> '+lvl(tr)+' '+eta(tr);
+  if(tr && tr.band && tr.band.lo!=null) s+=' <span class="mini">[band '+fmtP(Math.round(tr.band.lo))+'–'+fmtP(Math.round(tr.band.hi))+']</span>';
+  s+=' <span class="mini">·</span> <b>Next peak</b> '+lvl(pk)+' '+eta(pk);
+  s+=' <span class="mini">· confidence '+(f.confidence||'?')+'</span>';
+  if(tr && tr.note) s+='<br><span class="loss">⚠ '+tr.note+'</span>';
+  if(pk && pk.note) s+='<br><span class="loss">⚠ '+pk.note+'</span>';
+  s+=' <span class="ccap">Projection = live anchor + the daily-rhythm shape + a dumb trend extension; it never predicts an exogenous shock. Provisional (PF, n≈0) — timing guidance, not a fill promise (touched ≠ filled).</span>';
+  cap.innerHTML=s;
+}
 export async function runTrends(){
   const name=document.getElementById('trItem').value.trim();
   const status=document.getElementById('trStatus');
@@ -364,7 +428,7 @@ export async function runTrends(){
     document.getElementById('trResult').classList.remove('hidden');
     renderTrendHead(it);
     const showAnalysis=!it.offscreen;   // off-screen quotes stay compact: plan card only
-    ['trWhy','trHistWrap','trTiming','trRecent','trDiurnal'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
+    ['trWhy','trHistWrap','trTiming','trRecent','trDiurnal','trForecast'].forEach(eid=>{ const el=document.getElementById(eid); if(el) el.classList.toggle('hidden',!showAnalysis); });
     const hourLabels=Array.from({length:24},(_,i)=>pad2(i));
     // seasonal plan (the reconciled buy/sell model)
     const P=buildPlan(pts.length>1?pts:s1h, s6h, it);
@@ -375,13 +439,23 @@ export async function runTrends(){
       document.getElementById('trHistWrap').classList.remove('hidden');
       // interactive chart (chartlib): axis labels + hover tooltip + selectable 1/7/30/90-day windows.
       if(histChart){ try{ histChart.destroy(); }catch(_){ } histChart=null; }
+      // TV: durable multi-week floor/ceiling + typical-swing band overlaid as reference structure — the
+      // SAME shared termstructure.mjs read the console's floor/trajectory validators use (parity, not a
+      // fork). Degrades quietly on a cold/thin archive (floor null → no overlay, just the live-buy line).
+      let ts=null; try{ ts=termStructure(hseries.map(p=>({ts:p.t, mid:p.v}))); }catch(_){ ts=null; }
+      const hrefs=[{v:it.low, cls:'reflive', label:'buy'}], hbands=[];
+      if(ts && ts.hasData && ts.floor!=null){
+        hrefs.push({v:ts.floor, cls:'reffloor', label:ts.floorLookback+'d floor'});
+        if(ts.ceiling!=null){ hrefs.push({v:ts.ceiling, cls:'reffloor', label:'ceil'}); hbands.push({lo:ts.floor, hi:ts.ceiling, cls:'cband floorband'}); }
+      }
       const HSPANS=[{label:'1d',s:86400},{label:'7d',s:7*86400},{label:'30d',s:30*86400},{label:'90d',s:90*86400},{label:'All',s:null}];
-      histChart=createChart(document.getElementById('trHist'), {series:hseries, refs:[{v:it.low, cls:'reflive', label:'buy'}], kind:'line', spans:HSPANS, span:'All',
+      histChart=createChart(document.getElementById('trHist'), {series:hseries, refs:hrefs, bands:hbands, kind:'line', spans:HSPANS, span:'All',
         xFmt:t=>new Date(t*1000).toLocaleDateString([], {month:'short',day:'numeric'}), yFmt:fmt});
-      let hc='6h steps · dashed line = live buy ('+fmtP(it.low)+') · drag to pan, wheel to zoom, or pick a window.';
+      let hc='6h steps · dashed line = live buy ('+fmtP(it.low)+')'+(ts&&ts.floor!=null?' · teal = '+ts.floorLookback+'d durable floor/ceiling':'')+' · drag to pan, wheel to zoom, or pick a window.';
       if(P.trendPct!=null && Math.abs(P.trendPct)>=2) hc+=' Over ~'+b.days+' days it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
       document.getElementById('trHistCap').innerHTML=hc;
-    } else { document.getElementById('trHistWrap').classList.add('hidden'); }
+      renderTermNote(ts, it);   // TV: floor + trajectory validator notes live WITH the term-structure overlay
+    } else { document.getElementById('trHistWrap').classList.add('hidden'); const hn=document.getElementById('trHistNote'); if(hn) hn.innerHTML=''; }
     // ---- plan card: the live spread IS the plan (median targets removed); trend box + warnings ----
     const prof=P.nowProfitable;
     const gs=coarseTrend(it);
@@ -436,6 +510,9 @@ export async function runTrends(){
     // ---- TV: "Diurnal timing" (timing tier) — hour-of-day dip/peak profile off the in-hand 1h series
     // (the richer archive points when we have them, else the raw 1h) via shared windowread math. ----
     renderDiurnal(pts.length>1?pts:s1h, qrowT, it, showAnalysis);
+    // ---- TV: "Forward forecast" (timing tier) — next-24h projection off the SAME hourProfile the
+    // diurnal chart reads; the "buyable at ~X in ~4h" answer. Provisional (PF, n≈0); degrades loudly. ----
+    renderForecast(pts.length>1?pts:s1h, qrowT, it, showAnalysis);
 
     // ---- "Why this trend?" expander (Tier 2): plain-language guide divergence, σ only in the detail ----
     if(showAnalysis){

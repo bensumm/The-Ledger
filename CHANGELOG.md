@@ -10,6 +10,32 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.60.0 — Trends item page: Forward forecast + term-structure floor overlay (TV, app-parity) (2026-07-10)
+Two of the four Q3 item-page visualizations, both **strategy (C)** off shared `js/` modules the
+console already uses — the numbers are the SAME reads, not an app fork. `js/trends.js` +
+`index.html` + `styles.css`; the shared modules (`forecast.mjs`, `termstructure.mjs`,
+`validate.mjs`) are **now app-imported** (this falsifies their old "not app-imported → no
+APP_VERSION" notes — reconciled in README/CLAUDE).
+
+- **Term-structure floor overlay** (on the Price history chart). `termStructure(hseries)` — the
+  durable multi-week **floor / ceiling** (robust q15/q85) drawn as teal reference lines + a shaded
+  support band, over the existing 6h history. Beside it, the **floor + trajectory validator notes**
+  (`floorValidator`/`trajectoryValidator`, inform-only) render the SAME verbatim text the console
+  prints — the "buy the base, not the knife" read (trajectory shape: based / oscillating / knife /
+  elevated; floor proximity in typical-swings). This is Ben's **validator-note split** — the note
+  lives WITH the picture it qualifies, not in one flat block. Degrades quietly on a cold/thin archive
+  (floor null → just the live-buy line + a "forms as history accrues" line).
+- **Forward forecast** (new timing-tier section). `diurnalForecast(profile)` off the SAME
+  `hourProfile` the Diurnal timing chart reads — projects the next 24h: **next trough (bid) + next
+  peak (ask)** with eta / window / uncertainty band + confidence, the "not buyable at a good price
+  now — buyable ~X in ~4h" answer. A projected-low curve charts the "when does it get cheap" line
+  with the trough marked. **Degrades loudly** (post-shock spike/decay, live 2h-band violation,
+  thin/flat series → an explicit "withheld — <why>" line, never a guessed number). Provisional
+  (PF, n≈0) — the forecast caveat is the note beneath, per the split.
+- The two remaining Q3 viz (diurnal is already in since 0.58.0; the fourth is the reach note, also
+  in) — the item page now carries all four decision-support reads. Finder rank/grade rebase (AP4),
+  Watch verdict consistency (AP3), and buy-limit context (AP5) remain before the 1.0.0 milestone.
+
 ### 0.59.0 — Trends charts on `chartlib`: labels, tooltips, timespan windows, neutral diurnal (2026-07-10)
 First visual-review pass on the item-page charts (Ben, on localhost). All in `js/trends.js` +
 `js/chartlib.js` + `styles.css` + `index.html`; no shared-module or pipeline change.

@@ -216,6 +216,11 @@
   .cgrid{stroke:var(--line); stroke-width:.5; opacity:.5}
   .cband{fill:rgba(230,181,74,.07)}
   .cband.dipband{fill:rgba(95,151,184,.12)} .cband.peakband{fill:rgba(207,138,79,.12)}
+  /* TV: term-structure floor/ceiling overlay (durable multi-week support band) — muted teal, distinct from the gold live line */
+  .reffloor{stroke:var(--cool); stroke-width:1; stroke-dasharray:5 3; opacity:.7}
+  .cband.floorband{fill:rgba(95,151,184,.08)}
+  /* TV: inform-only validator note under a viz (floor/trajectory, reach, forecast caveat) */
+  .vnote{margin-top:5px}
   .cxhair{stroke:var(--gold); stroke-width:.75; stroke-dasharray:2 2; opacity:.6; pointer-events:none}
   .cxdot{fill:var(--gold); pointer-events:none}
   .charttip{position:absolute; z-index:5; pointer-events:none; background:var(--oak3); border:1px solid var(--line2); border-radius:7px; padding:5px 8px; font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--parch); box-shadow:var(--shadow); max-width:150px; line-height:1.4}
