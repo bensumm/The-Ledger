@@ -25,7 +25,7 @@
 import assert from 'node:assert/strict';
 import {
   identityStage, marketStage, historyStage, intradayStage, positionStage,
-  buildItemContext, heldMomVerdict, renderHeldVerdict,
+  buildItemContext, heldMomVerdict, renderHeldVerdict, staleBookBanner, STALE_BOOK_MIN,
 } from './lib/context.mjs';
 import { ALERT_PERSIST_MS } from './lib/watchstate.mjs';
 
@@ -201,6 +201,21 @@ ok('CONVICTION PIN: once the underwater streak has persisted ≥ ALERT_PERSIST_M
   });
   assert.equal(ctx.position.gate.escalate, true);
   assert.equal(ctx.position.gate.reason, 'cut-candidate');
+});
+
+// --- COD-4: staleBookBanner (the shared positions.json-age banner) --------------------------
+ok('staleBookBanner: null age → unavailable form', () => {
+  assert.equal(staleBookBanner(null), 'held basis positions.json unavailable');
+});
+ok('staleBookBanner: fresh age (≤ threshold) → age only, no ⚠', () => {
+  const s = staleBookBanner(10);
+  assert.match(s, /positions\.json 10m old/);
+  assert.ok(!s.includes('⚠'));
+});
+ok('staleBookBanner: past the stale threshold → ⚠ + re-sync prompt', () => {
+  const s = staleBookBanner(STALE_BOOK_MIN + 1);
+  assert.match(s, /⚠ stale/);
+  assert.match(s, /sync-fills\.mjs/);
 });
 
 console.log(`\n${pass} checks passed.`);

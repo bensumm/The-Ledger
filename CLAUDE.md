@@ -183,7 +183,8 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     `★` as a **diurnal candidate**. The SHAPE is de-trended (each hour's deviation from its own day's
     baseline) so the trend can't fool the dip/peak detection; each side clusters off its OWN deviation
     spread. `windowrange.mjs --profile` prints the full hour-by-hour table + the derived range for one
-    item. This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
+    item, and **`quote.mjs`'s per-item read now prints the same diurnal BID/ASK line** (COD-4 — the
+    budgeted `ts1h` fetch put the series in hand there too). This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
     manual `--window`/`--profile` read is now a CONFIRMATION on what you actually pitch (thresholds are
     placeholders; ★ doesn't know froth, so a spike item's amplitude can flatter it — support, not a gate).
   - **Forward FORECAST (PF1, 2026-07-10 — the pure model only; no surface wired yet).** `js/forecast.mjs`
@@ -360,8 +361,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   case, see the Value trajectory-GATE note above) while staying **inform** on band/churn/scalp. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
   level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
   **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
-  ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; `quote.mjs` still
-  doesn't fetch it, so reach degrades there. **Reach now scores BOTH legs (2026-07-09):** the spec-plan
+  ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; **`quote.mjs`'s per-item
+  read now fetches a BUDGETED `ts1h` too (COD-4, 2026-07-10: 1–2 items/invocation) so reach AND trajectory
+  FIRE on the explicit-ask surface** (fixing the A4 asymmetry where the surface Ben uses most had the
+  weakest validation — trajectory reads the warm 1h-derived shape via the shared `lib/richterm.mjs`
+  `trajectoryFrom1h`; `quote.mjs` also prints the diurnal BID/ASK timing line, now that the 1h series is in
+  hand). **Reach now scores BOTH legs (2026-07-09):** the spec-plan
   `reach` validator scores the patient ASK (`optSell`); `screen.mjs` (`renderMode`) additionally runs a
   SECOND inform-only reach call on the patient BID (`optBuy`, `side:'bid'` — mirrors `renderValueMode`)
   because the 2h band min is artifact-prone and an unreachable bid silently inflates the grade
@@ -385,8 +390,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   structure over the daily-mid series): a buy parked well above where the 14/28d structure says support
   durably prints (the decay-knife shape) → reject, marginally-elevated → caution, at/below the floor → pass.
   It reads the `loadDaily` regime-proxy series ALREADY at gate time on `screen.mjs` and the read-only
-  archived daily mids (`loadDaily …{noFetch:true}`) on a per-item `quote.mjs` buy read — no fetch-semantics
-  change; a HELD lot (`quote --positions`) is a sell decision so it degrades. The archive only began
+  archived daily mids (`loadDaily …{noFetch:true}`) on a per-item `quote.mjs` buy read — the FLOOR read
+  stays the noFetch daily (COD-4's added `ts1h` fetch feeds reach/trajectory, NOT floor); a HELD lot
+  (`quote --positions`) is a sell decision so it degrades. The archive only began
   accruing 2026-07-08, so a thin/cold series DEGRADES to pass (a real reject needs a warm multi-week
   series). Thresholds are named PLACEHOLDERS. **`limitValidator` (LM1, BUY-side)** wraps the rolling-4h
   `limitWindow` (`pipeline/lib/limits.mjs`, fed per-item buys from `fills.json` via `buysByItem`): a

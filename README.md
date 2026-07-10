@@ -474,7 +474,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     on a path-less state file) + `renderPathLine(ctx)` — the ONE shared dominant-path line both
     surfaces print beside the verdict (a CONFIRMED migration headlines as `path MIGRATED a → b`;
     decision support, never an alert input; the verdict strings stay byte-identical).
-    No fetch/fs — every stage is node-importable + fixture-pinned in `context.test.mjs`), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    **COD-4** adds the shared `staleBookBanner(ageMin)` (+ `STALE_BOOK_MIN`) — the positions.json-age line
+    watch.mjs already prints, now the ONE home both surfaces word identically, so `quote.mjs --positions`
+    warns on a stale book too (was silent — the A4 inversion). No fetch/fs — every stage is
+    node-importable + fixture-pinned in `context.test.mjs`), `richterm.mjs` (COD-4 — `richFrom1h`/
+    `trajectoryFrom1h`: aggregate a fetched 1h /timeseries into a WARM multi-week term structure so
+    reach/trajectory FIRE while the `loadDaily` archive is still young; EXTRACTED from screen.mjs so
+    `quote.mjs`'s budgeted-`ts1h` read shares the identical aggregation — one home, no drift), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's

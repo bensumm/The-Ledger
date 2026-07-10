@@ -21,7 +21,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, rebidAdvice } from '../js/quotecore.js';
-import { fmtP } from '../js/format.js';
+import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
+import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series
+import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
@@ -32,7 +34,7 @@ import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // 
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
-import { buildItemContext, renderHeldVerdict, renderPathLine } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line
+import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
 import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
@@ -98,26 +100,46 @@ async function runItems() {
   try { ({ series: daily } = await loadDaily(28, 6, { noFetch: true })); } catch { daily = {}; }
   const rows = [], lines = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
-    const inp = await fetchItemInputs(id);
+    // COD-4: BUDGETED ts1h fetch (1–2 items/invocation — cheap). Fixes the A4 asymmetry: the explicit-ask
+    // surface used to fetch NO 1h series, so reach/trajectory DEGRADED to pass on exactly the surface Ben
+    // uses most ("how's X?"). Now the 1h series is in hand, so reachValidator FIRES (real window read) and
+    // trajectoryValidator fires off the warm 1h-derived term structure, and we print the diurnal timing line.
+    const inp = await fetchItemInputs(id, { ts1h: true });
     const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     rows.push(stdCells(name, row));
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null, limWin));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) lines.push('  ' + gl);
-    // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window; quote
-    // does NOT fetch the 1h series (fetchItemInputs default ts1h:false), so it DEGRADES to pass/no-data.
-    // P3's floorValidator scores the patient BUY (optBuy) — a per-item quote IS a buy-interest read —
-    // against the durable multi-week floor from the read-only daily mids (cold archive → degrade). An
-    // explicit ask is NEVER hidden: a fired flag is a NOTE + logged; the table row is untouched.
+    // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window — NOW it
+    // FIRES because ts1h is fetched above (COD-4). P3's floorValidator scores the patient BUY (optBuy) —
+    // a per-item quote IS a buy-interest read — against the durable multi-week floor from the read-only
+    // daily mids (cold archive → degrade); its .trajectory is OVERRIDDEN with the WARM 1h-derived shape
+    // (trajectoryFrom1h, the same richterm.mjs helper screen.mjs uses) so trajectoryValidator fires too.
+    // An explicit ask is NEVER hidden: a fired flag is a NOTE + logged; the table row is untouched.
+    const ts = termStructure(daily[id]);
+    const richTraj = trajectoryFrom1h(inp.ts1h);
+    if (richTraj) ts.trajectory = richTraj;
     const vres = runValidators({
       market: { row },
-      history: { termStructure: termStructure(daily[id]) },
+      history: { termStructure: ts },
       intraday: { ts1h: inp.ts1h ?? null, reach: row.optSell != null ? { side: 'ask', level: row.optSell } : null },
       floor: { level: row.optBuy != null ? row.optBuy : null },
       limits: { window: limWin },   // LM1: a buy read — limitValidator flags an exhausted/near buy limit as a NOTE (never hides the row)
     });
     for (const f of flags(vres)) lines.push(`  ⚠ ${f.key}: ${f.reason}`);
+    // COD-4: diurnal BID/ASK timing line — the SAME hourProfile/deriveDiurnalRange the screen's Diurnal
+    // block uses, now feasible on quote because the 1h series is in hand. Support, not a gate; the bid is
+    // stale-guarded to live (the Ghrazi lesson lives in deriveDiurnalRange). tax() nets the after-tax swing.
+    const prof = hourProfile(inp.ts1h, { nights: 7 });
+    const dr = prof ? deriveDiurnalRange(prof, { liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null }) : null;
+    if (dr && dr.bid != null && dr.ask != null) {
+      const win = w => `${fmtHour(w.startH)}–${fmtHour(w.endH)}`;
+      const net = Math.round(dr.ask - tax(dr.ask) - dr.bid);
+      const roi = dr.bid ? (net / dr.bid * 100) : null;
+      const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
+      lines.push(`  ↳ diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}`);
+    }
     sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
@@ -147,7 +169,7 @@ async function runItems() {
 }
 
 async function runPositions() {
-  const { err, groups, openLots } = readOpenPositions(POSITIONS);
+  const { err, groups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
   if (!groups.length) { console.log('No open positions in positions.json.'); return; }
   // P0: one loadSnapshot() per pass — the position surface's mapping/guide + the passive Tier-1
@@ -252,6 +274,10 @@ async function runPositions() {
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
   if (snap) { try { snap.archive.close(); } catch {} }   // P0: loadSnapshot leaves the archive open when it owns it
   console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
+  // COD-4: the SHARED stale-book banner (context.mjs staleBookBanner) — watch.mjs already prints this off
+  // positions.json's mtime; quote.mjs --positions read the same file silently, so the surface Ben uses
+  // most never warned when the book was stale (the A4 inversion). Now both surfaces word it identically.
+  console.log(staleBookBanner(ageMin) + '\n');
   console.log(mdTable(headers, rows));
   console.log('');
   console.log(lines.join('\n'));

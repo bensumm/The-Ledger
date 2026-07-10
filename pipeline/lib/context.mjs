@@ -353,3 +353,18 @@ export function renderPathLine(ctx) {
     .slice(0, 3).map(w => `${w.key} ${viaOf(w.key)}`).join(' · ');
   return `${head}${arming}${alts ? ` · menu: ${alts}` : ''} (support, not a verdict — placeholder weights)`;
 }
+
+/* staleBookBanner(ageMin) — the SHARED positions.json-age banner (COD-4). watch.mjs already prints a
+   held-basis staleness line off positions.json's mtime; before COD-4, quote.mjs --positions read the same
+   file SILENTLY, so the explicit-ask/positions surface never warned when the book was stale (the A4 quiet
+   inversion — the surface Ben uses most had the weakest freshness signal). This is the ONE home for that
+   line so both surfaces word the age + stale threshold identically. Returns the banner string; ageMin ==
+   null → the "unavailable" form. STALE_BOOK_MIN mirrors watch.mjs's 25m threshold. */
+export const STALE_BOOK_MIN = 25;
+export function staleBookBanner(ageMin) {
+  if (ageMin == null) return 'held basis positions.json unavailable';
+  return `held basis positions.json ${ageMin}m old` +
+    (ageMin > STALE_BOOK_MIN
+      ? ' ⚠ stale — a very recent trade may not show yet; re-sync (node pipeline/sync-fills.mjs from the MAIN checkout) before trusting the held count'
+      : '');
+}

@@ -401,6 +401,16 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   `pipeline/rebid.test.mjs`. FORWARD HOOK: PF1 (PLAN-FORECAST.md) upgrades the qualitative peak to a
   quantitative projected {level, eta}. `js/quotecore.js` is app-imported, but `rebidBar`/`rebidAdvice` are
   NEW exports — computeQuote/replay golden byte-unchanged → no APP_VERSION.
+- **COD-4 — DONE (2026-07-10, fixes flaw A4):** validation on the explicit-ask surface. `quote.mjs`'s
+  per-item read now takes a BUDGETED `ts1h` fetch (1–2 items/invocation) so reach AND trajectory FIRE
+  there (verified live: Zaryte crossbow printed `⚠ reach: ask … reached only 0/14d` + `⚠ trajectory:
+  elevated`, both of which degraded to pass pre-COD-4). Warm 1h-derived trajectory via a NEW shared
+  `pipeline/lib/richterm.mjs` (`richFrom1h`/`trajectoryFrom1h` EXTRACTED from screen.mjs — one home, no
+  drift). Also: (a) `quote.mjs --positions` now prints the shared `staleBookBanner` (`lib/context.mjs`)
+  off positions.json's age — the same held-basis staleness line watch.mjs shows; (b) `quote.mjs`'s
+  per-item read prints the diurnal BID/ASK timing line (series now in hand). Fetch budget noted honestly.
+  Pinned by the `context.test.mjs` staleBookBanner block; validators verified firing live. Pipeline
+  stdout only → no APP_VERSION.
 
 **Open:**
 - **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day

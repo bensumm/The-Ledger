@@ -92,34 +92,11 @@ import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs'
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
-import { windowStats } from '../js/windowread.mjs';   // 2026-07-09 — aggregate the fetched 1h series into daily mids so trajectory fires on a still-cold loadDaily archive
-
-// 2026-07-09: derive a daily-mid series from the freshly-fetched 1h series (Leg B) and compute a WARM
-// term structure off it NOW — the loadDaily regime-proxy archive only began accruing 2026-07-08 (cold →
-// classifyTrajectory 'unknown', lookbacks[7] thin), but the 1h /timeseries spans weeks. Full-day window
-// (0–0) over `nights` daily buckets → { ts, mid=(low+hi)/2 } → termStructure. Returns the full structure
-// (or null if thin) so callers can take BOTH the warm .trajectory AND the warm recent-week .lookbacks
-// (value-amplitude's basis). floorValidator keeps the loadDaily source (its documented, thresholds-tuned
-// durable-floor proxy — a LEVEL read that wants the archive's regime-proxy spacing, not the 1h shape).
-function richFrom1h(ts1h, nights = 28) {
-  if (!ts1h || !ts1h.length) return null;
-  const now = new Date();
-  const ws = windowStats(ts1h, { nights, wStart: 0, wEnd: 0, now });
-  if (!ws || !ws.days || ws.days.length < 6) return null;
-  const N = ws.days.length, DAY = 86400, nowSec = Math.floor(now.getTime() / 1000);
-  const series = ws.days.map(([, n], i) => ({
-    ts: nowSec - (N - 1 - i) * DAY,
-    mid: (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low != null ? n.low : n.hi),
-  }));
-  const rich = termStructure(series, { now: nowSec });
-  return rich && rich.hasData !== false ? rich : null;
-}
-// convenience: the warm .trajectory (or null when thin/unknown) — the shape override renderMode applies
-// to the loadDaily-based ts so trajectory FIRES on the screen while the archive is still cold.
-function trajectoryFrom1h(ts1h, nights = 28) {
-  const rich = richFrom1h(ts1h, nights);
-  return rich && rich.trajectory && rich.trajectory.shape !== 'unknown' ? rich.trajectory : null;
-}
+// COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/richterm.mjs (byte-identical
+// logic) so quote.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
+// two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
+// value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the richterm.mjs header for why.
+import { richFrom1h, trajectoryFrom1h } from './lib/richterm.mjs';
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
