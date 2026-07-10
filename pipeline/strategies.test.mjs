@@ -42,9 +42,9 @@ ok('the registry holds the four niches (Steps 3+4 deleted spread/rising), in ord
   for (const k of ['spread', 'rising']) assert.equal(STRATEGIES[k], undefined, `${k} spec deleted`);
 });
 
-ok('--mode all is the inAll specs (band/churn) — scalp/value are off-by-default (Steps 3+4, Ben 2026-07-09)', () => {
-  assert.deepEqual(ALL_MODE_KEYS, ['band', 'churn']);
-  for (const k of ['scalp', 'value']) assert.equal(STRATEGIES[k].inAll, false, `${k} is off-by-default`);
+ok('--mode all is the inAll specs (band/churn/value) — scalp stays off-by-default (Ben 2026-07-10: value graduated into the default scan)', () => {
+  assert.deepEqual(ALL_MODE_KEYS, ['band', 'churn', 'value']);
+  assert.equal(STRATEGIES.scalp.inAll, false, 'scalp is off-by-default');
   assert.deepEqual(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key), ALL_MODE_KEYS);
 });
 
