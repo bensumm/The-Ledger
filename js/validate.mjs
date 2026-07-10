@@ -219,6 +219,15 @@ export function trajectoryValidator(ctx) {
 // (that is the MULTI-WEEK 14/28d cycle gate; this is the recent-WEEK amplitude + proximity read). BUY-side.
 export const VALAMP_MIN_PCT  = 0.04;   // PLACEHOLDER (rule 4): after-tax week amplitude below this ⇒ no cycle to harvest → reject
 export const VALAMP_NEAR_LOW = 0.40;   // PLACEHOLDER: live above this fraction up the week range ⇒ not at the low yet → caution (wait for the dip)
+// BAR E's LOW-SIDE TWIN (Ben 2026-07-10): the week edges are the ROBUST q15/q85 of the 7d daily mids, not
+// the raw min/max — so a LONE recent dip/spike print can't set the week floor/ceiling and fake proximity
+// (the Extreme-energy 1,447 artifact: one thin dip dragged the raw week low far below where the item
+// actually trades, making "70% up a phantom-wide range → wait" contradict the durable-range BUY-NOW tier).
+// Dense side (≥ VALAMP_EDGE_MIN_SAMPLE daily mids) → the quantile edge; sparser than that ⇒ keep the raw
+// extremum (a quantile over a handful of points is unreliable) — the same sample-gated fallback discipline
+// as robustBand's BAND_EDGE_MIN_SAMPLE. The q15/q85 come from js/termstructure.mjs's lookbackStat (the ONE
+// home for the term-structure edge math + the FLOOR_QUANTILE/CEIL_QUANTILE the value tier also uses).
+export const VALAMP_EDGE_MIN_SAMPLE = 6;   // PLACEHOLDER (rule 4): min 7d daily mids to trust the q15/q85 edge (mirrors FLOOR_MIN_POINTS)
 //   VALIDATE (F1/P6): the week amplitude that actually predicts a profitable timed entry, and the
 //   proximity band within which "near the week low" fills at a good price rather than mid-range.
 const afterTax = p => p - tax(p);
@@ -230,10 +239,15 @@ export function valueAmplitudeValidator(ctx) {
   const ts = ctx && ctx.history && ctx.history.termStructure;
   const lk7 = ts && ts.lookbacks && ts.lookbacks[7];
   if (!lk7 || lk7.low == null || lk7.high == null || !(lk7.high > lk7.low)) return degrade(key, 'no-week-range');
+  // robust edges when the 7d slice is dense enough; else the raw extremum (Bar E's sparse-side fallback).
+  const robust = lk7.n != null && lk7.n >= VALAMP_EDGE_MIN_SAMPLE
+    && lk7.qlow != null && lk7.qhigh != null && lk7.qhigh > lk7.qlow;
+  const weekLow = robust ? lk7.qlow : lk7.low;
+  const weekHigh = robust ? lk7.qhigh : lk7.high;
   const cur = ts.current;
-  const proximity = cur != null ? (cur - lk7.low) / (lk7.high - lk7.low) : null;   // 0 = at the week low, 1 = at the week high
-  const ampPct = (afterTax(lk7.high) - lk7.low) / lk7.low;
-  const evidence = { weekLow: lk7.low, weekHigh: lk7.high, current: cur, proximity: round2(proximity), ampPct: round2(ampPct) };
+  const proximity = cur != null ? (cur - weekLow) / (weekHigh - weekLow) : null;   // 0 = at the week low, 1 = at the week high
+  const ampPct = (afterTax(weekHigh) - weekLow) / weekLow;
+  const evidence = { weekLow, weekHigh, current: cur, proximity: round2(proximity), ampPct: round2(ampPct), robustEdges: robust };
   if (!(ampPct >= VALAMP_MIN_PCT))
     return { key, status: 'reject', reason: `week after-tax amplitude ${(ampPct * 100).toFixed(1)}% < ${VALAMP_MIN_PCT * 100}% — no cycle to harvest`, evidence };
   if (proximity != null && proximity > VALAMP_NEAR_LOW)

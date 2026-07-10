@@ -106,6 +106,18 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   Thresholds (`BAND_EDGE_MIN_SAMPLE`/`BAND_EDGE_HI_Q`/`BAND_EDGE_LO_Q`) are NAMED PLACEHOLDERS pending a
   validation pass; `rawBandLo/rawBandHi` retained for audit. Pinned by `pipeline/bandedge.test.mjs` +
   the `quotecore.test.mjs` Scope-B split assertion. The reach validator remains the backstop for the sparse residue.
+- **Robust-quantile band edges are a SYSTEM-WIDE discipline (Ben 2026-07-10).** Bar E is one instance of a
+  general rule, now applied consistently wherever a price EDGE is derived from a bag of prints: **a lone
+  flier/dip print must never set an edge — trim to a quantile on a DENSE side, keep the raw extremum on a
+  SPARSE one.** The instances (each with its OWN sample gate + placeholder quantiles, but the same shape):
+  Bar E trims the 2h band edges (`robustBand`, `js/quotecore.js`; `BAND_EDGE_MIN_SAMPLE` 8, p10/p90) on
+  `loadBands`/`bandCore` + `computeQuote`'s Optimistic clamp; and the **value niche's low-side twin**
+  trims the 7d WEEK edges in `valueAmplitudeValidator` (`js/validate.mjs`; q15/q85 from
+  `js/termstructure.mjs`'s `lookbackStat`, gated by `VALAMP_EDGE_MIN_SAMPLE` 6) so a lone recent dip can't
+  fake the week floor/proximity (the Extreme-energy 1,447 artifact). Term-structure edge math (q15/q85)
+  has ONE home — `lookbackStat` (which now emits `qlow`/`qhigh` per lookback alongside the raw `low`/
+  `high`); consumers sample-gate which to use. When you add a new edge-from-prints derivation, follow this
+  discipline; don't re-derive raw min/max.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a
@@ -302,7 +314,14 @@ Script facts the skills rely on (current behavior, not doctrine):
   knife is COUNTED + NAMED in the §F footer (`dropped N trajectory-knife: …`), so it leaves BUY-NOW but
   stays auditable. Value-SCOPED (`js/strategies.mjs` value `{key:'trajectory', mode:'gate'}`, applied in
   `renderValueMode`): band/churn already exclude fallers, scalp accepts them by thesis, so trajectory
-  stays INFORM there. value-amplitude stays inform (still n≈0). No app import → no APP_VERSION.
+  stays INFORM there. value-amplitude stays inform in the spec (still n≈0) — but the **BUY-NOW tier now
+  gates on its verdict (Ben 2026-07-10):** the BUY-NOW tier reads proximity off the durable multi-week
+  range (`valueRanges`, loadDaily) while value-amplitude reads it off the recent WEEK (1h-derived), so the
+  two could disagree and a "wait for the dip" caution could sit INSIDE BUY-NOW (Extreme energy potion). So
+  `renderValueMode` **DEMOTES a BUY-NOW pick to WATCH when value-amplitude would-caution/reject** (its
+  inform-clamped `gatedStatus`) — a tier demotion, NOT a drop (the note still prints), the spec entry stays
+  `mode:'inform'`. Same shape as trajectory gating in value: a BUY-NOW must satisfy BOTH the durable-floor
+  proximity AND the recent-week-not-elevated read. No app import → no APP_VERSION.
   **P4c**: the niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the
@@ -350,7 +369,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   amplitude + proximity-to-low off that **same warm 1h-derived term structure** (`richFrom1h`, `current`
   overridden to the live price so proximity is "is live near the week low right now?") — so it, too, fires
   now instead of degrading on the cold `loadDaily` 7d slice; `valueRanges`/`valueGate`/`floor` keep the
-  `loadDaily` proxy (their tuned multi-week basis). `floorValidator` (P3, BUY-side only) wraps
+  `loadDaily` proxy (their tuned multi-week basis). Its week edges are the **robust q15/q85** of the 7d
+  daily mids (Bar E's low-side twin, Ben 2026-07-10; dense side → quantile via `lookbackStat`'s `qlow`/
+  `qhigh`, sparse < `VALAMP_EDGE_MIN_SAMPLE` → raw extremum) so a lone recent dip can't fake the week
+  floor/proximity — see the system-wide robust-quantile-edge bullet above. `floorValidator` (P3, BUY-side only) wraps
   `js/termstructure.mjs`'s durable multi-week **floor** + **typical fluctuation** (the 1/3/7/14/28d term
   structure over the daily-mid series): a buy parked well above where the 14/28d structure says support
   durably prints (the decay-knife shape) → reject, marginally-elevated → caution, at/below the floor → pass.

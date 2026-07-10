@@ -92,14 +92,18 @@ function midsWithin(series, days, nowSec) {
   return out.sort((a, b) => a - b);
 }
 
-/* lookbackStat(series, days, current, nowSec) → { days, n, median, low, high, pctInRange } | null.
+/* lookbackStat(series, days, current, nowSec) → { days, n, median, low, high, qlow, qhigh, pctInRange } | null.
+   low/high are the RAW min/max; qlow/qhigh are the ROBUST q15/q85 edges (spike/dip-resistant) — the
+   consumer sample-gates which to use (Bar E's dense-side-quantile / sparse-side-raw discipline; e.g.
+   valueAmplitudeValidator's 7d week edges). pctInRange keeps the RAW low/high basis (unchanged).
    pctInRange = where `current` sits between the lookback's low (0) and high (1); null if degenerate. */
 function lookbackStat(series, days, current, nowSec) {
   const vals = midsWithin(series, days, nowSec);
   if (!vals.length) return null;
   const low = vals[0], high = vals[vals.length - 1];
+  const qlow = quantile(vals, FLOOR_QUANTILE), qhigh = quantile(vals, CEIL_QUANTILE);
   const pctInRange = (current != null && high > low) ? (current - low) / (high - low) : null;
-  return { days, n: vals.length, median: median(vals), low, high, pctInRange };
+  return { days, n: vals.length, median: median(vals), low, high, qlow, qhigh, pctInRange };
 }
 
 /**

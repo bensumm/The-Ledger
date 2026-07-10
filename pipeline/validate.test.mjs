@@ -24,8 +24,9 @@ import assert from 'node:assert/strict';
 import {
   reachValidator, trajectoryValidator, valueAmplitudeValidator,
   runValidators, worstStatus, flags, informFlags, leanValidators, worseOf,
-  REACH_MIN_DAYS,
+  REACH_MIN_DAYS, VALAMP_NEAR_LOW,
 } from '../js/validate.mjs';
+import { termStructure } from '../js/termstructure.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -197,6 +198,43 @@ ok('valueAmplitudeValidator: too-thin week amplitude → reject; no week range /
   assert.equal(valueAmplitudeValidator(ctxAmp(100, 101, 100)).status, 'reject');     // ~0% after-tax amp
   assert.equal(valueAmplitudeValidator({ history: {} }).status, 'pass');             // no 7d range → degrade
   assert.equal(valueAmplitudeValidator(ctxAmp(100, 130, 104, { position: { held: true } })).status, 'pass'); // held degrade
+});
+
+// --- valueAmplitudeValidator ROBUST EDGES (Bar E's low-side twin, Ben 2026-07-10) -----------------
+// A DENSE (n ≥ VALAMP_EDGE_MIN_SAMPLE) 7d slice uses the robust q15/q85 edges so a lone dip print in the
+// raw min can't fake a wide week range / high proximity; a SPARSE slice keeps the raw extremum.
+const ctxAmpFull = (lk7, current, extra = {}) => ({ history: { termStructure: { current, lookbacks: { 7: lk7 } } }, ...extra });
+ok('robust edges: a lone dip print (raw low far below the q15) does NOT fake "wait for the dip" → pass', () => {
+  // raw low 1500 (a lone dip) vs robust q15 1900; live 1950. Raw proximity ~0.58 (would caution); the
+  // robust edge measures live at ~0.25 up the q15→q85 range → at the low → pass.
+  const r = valueAmplitudeValidator(ctxAmpFull({ n: 8, low: 1500, high: 2274, qlow: 1900, qhigh: 2100 }, 1950));
+  assert.equal(r.status, 'pass', 'robust q15 edge keeps proximity low despite the raw-min dip artifact');
+  assert.equal(r.evidence.robustEdges, true);
+  assert.equal(r.evidence.weekLow, 1900, 'scored off the q15, not the raw 1500 dip');
+});
+ok('sparse edges: too few 7d mids (< VALAMP_EDGE_MIN_SAMPLE) fall back to the raw extremum', () => {
+  const r = valueAmplitudeValidator(ctxAmpFull({ n: 4, low: 1500, high: 2274, qlow: 1900, qhigh: 2100 }, 1950));
+  assert.equal(r.evidence.robustEdges, false, 'a quantile over a handful of points is unreliable → raw');
+  assert.equal(r.evidence.weekLow, 1500, 'scored off the raw min on a sparse slice');
+  assert.equal(r.status, 'caution');   // raw proximity ~0.58 up range → wait for the dip
+});
+ok('robust edges plumb through termStructure.lookbackStat (qlow/qhigh emitted per lookback)', () => {
+  // 7 daily mids: six clustered 1950–2050 + one lone dip to 1500. The raw 7d low is 1500; q15 sits well
+  // above it. valueAmplitudeValidator reads live 2000 as near the ROBUST low, not 66% up a phantom range.
+  const DAY = 86400, now = Math.floor(new Date(2026, 6, 10, 12, 0, 0).getTime() / 1000);
+  const mids = [1500, 1980, 2020, 1950, 2050, 2000, 2010];   // oldest→newest, one lone dip
+  const series = mids.map((mid, i) => ({ ts: now - (mids.length - 1 - i) * DAY, mid }));
+  const ts = termStructure(series, { now });
+  const lk7 = ts.lookbacks[7];
+  assert.ok(lk7.qlow != null && lk7.qhigh != null, 'lookbackStat emits qlow/qhigh');
+  assert.ok(lk7.qlow > lk7.low, 'the robust q15 sits above the raw min (the lone 1500 dip is trimmed)');
+  // raw range 1500→2050 would read live 1930 at ~78% up (would caution); the robust q15→q85 (~1905→2023)
+  // reads it near the low → pass. This is the artifact fix end-to-end through lookbackStat.
+  const rawProx = (1930 - lk7.low) / (lk7.high - lk7.low);
+  assert.ok(rawProx > VALAMP_NEAR_LOW, `the RAW-edge read would have cautioned (${rawProx.toFixed(2)} up range)`);
+  const r = valueAmplitudeValidator({ history: { termStructure: { ...ts, current: 1930 } } });
+  assert.equal(r.evidence.robustEdges, true);
+  assert.ok(r.evidence.proximity <= VALAMP_NEAR_LOW, 'live near the robust low, not mid a dip-inflated range');
 });
 
 // --- gate vs inform (2026-07-09) — inform clamps a non-pass to pass but keeps the would-have verdict --

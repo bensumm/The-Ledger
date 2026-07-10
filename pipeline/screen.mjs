@@ -675,7 +675,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
       const caut = tg.find(r => r.status === 'caution');
       if (caut) valueInformNotes.push(`${name}: trajectory ${caut.reason} (flagged)`);
     }
-    const tier = valueTier(vr);
+    let tier = valueTier(vr);
     // value's reach as a daily-min TIMING read: is the buy-low actually TOUCHED in the recent week+ (a
     // full-day window over 14 nights, from the spec)? Plus trajectory (oscillating/based/knife) + the
     // recent-week amplitude — all inform, so they annotate the value pick, never re-gate it.
@@ -686,6 +686,18 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     }, { specs: valueInformSpecs });
     const informed = informFlags(vres);
     if (informed.length) valueInformNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
+    // BUY-NOW / value-amplitude reconciliation (Ben 2026-07-10, Rank 1). The BUY-NOW tier reads proximity
+    // off the durable multi-week range (valueRanges, loadDaily); value-amplitude reads it off the recent
+    // WEEK (1h-derived). They can disagree, so a "wait for the dip" caution could sit inside BUY-NOW
+    // (Extreme energy). If value-amplitude WOULD caution/reject (its inform-clamped gatedStatus), DEMOTE
+    // the pick BUY-NOW → WATCH — a tier demotion, NOT a drop (the note still prints), and value-amplitude
+    // STAYS mode:inform in the spec. Mirrors trajectory already gating in value: BUY-NOW must satisfy BOTH
+    // the durable-floor proximity AND the recent-week-not-elevated read before we call it "buy now".
+    const ampGate = (vres.find(r => r.key === 'value-amplitude') || {}).gatedStatus;
+    if (tier === 'buy-now' && (ampGate === 'caution' || ampGate === 'reject')) {
+      tier = 'watch';
+      valueInformNotes.push(`${name}: demoted BUY-NOW → WATCH (value-amplitude would ${ampGate} — live not near the recent-week low)`);
+    }
     // RC1 recency anchor: when the durable q15/q85 range spans a prior regime, the cycle was scored on the
     // recent window instead — say so, so the anchored range isn't mistaken for the full multi-week one.
     if (vr.ceilingStale || vr.floorStale) valueInformNotes.push(`${name}: range recency-anchored — durable ${fmtP(vr.rawDurableLow)}→${fmtP(vr.rawDurableHigh)} spans a prior regime; cycle scored on the recent ${fmtP(vr.durableLow)}→${fmtP(vr.durableHigh)}`);
