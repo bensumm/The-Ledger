@@ -509,9 +509,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
     decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and
     the no-data/thin-floor/held-lot degrade-to-pass contract on both surface ctx shapes),
-    `bandedge.test.mjs` (Bar E — the robust band edge: `marketfetch.mjs`'s `robustBand` takes p90 high /
-    p10 low on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE`), keeps the raw extremum on a SPARSE side, so a lone
-    flier can't set `bandHi`/`bandLo`; a pure-array test — no fetch/fs),
+    `bandedge.test.mjs` (Bar E — the robust band edge: `robustBand` — home MOVED to `js/quotecore.js` by
+    Scope B, `marketfetch.mjs` re-exports it — takes p90 high / p10 low on a DENSE side (≥
+    `BAND_EDGE_MIN_SAMPLE`), keeps the raw extremum on a SPARSE side, so a lone flier can't set
+    `bandHi`/`bandLo`; a pure-array test — no fetch/fs. Scope B (0.55.0) also robustifies `computeQuote`'s
+    app Optimistic column off the same helper — pinned by the `quotecore.test.mjs` Scope-B split assertion),
     `validateslots.test.mjs` (LH1 — impossible-transition re-emit drop), `logblind.test.mjs`
     (LH2 — restart-blindness header), `trendcore.test.mjs` (TC1 — the walk-forward `backtestPlan`
     gate, `patientTargets` sizing, seasonal decomposition) and `gatecandidates.test.mjs` (GC1 —

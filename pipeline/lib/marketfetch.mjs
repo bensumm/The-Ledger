@@ -244,37 +244,17 @@ function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0
 export const BANDS_RETENTION_DAYS = 90;
 
 /* --- Bar E (Ben 2026-07-10) — robustify the band EDGES so a lone flier print can't set bandHi/bandLo.
-   Bar D fixed WHETHER a band gates (density vs two-sidedness); Bar E fixes WHERE its edges sit. The raw
-   min/max over the 2h of 5m prints lets ONE outlier (a lone 100k print against a 59k mid) set the edge
-   and inflate the surfaced ROI — the "band-top artifact". On a DENSE side (≥ BAND_EDGE_MIN_SAMPLE
-   prints) take the p90 high / p10 low instead of the raw extremum; on a SPARSE side keep the extremum,
-   because a quantile over a handful of points either equals the max OR wrongly discards the one real
-   high — exactly the thin big-ticket class Bar D just admitted (the reach validator backstops the
-   residue there; per Ben, Bar E need not be exact — a surfaced outlier gets caught downstream).
-   SCOPE: the LIVE surfacing path (loadBands) ONLY. loadHistBands stays raw min/max on purpose — its
-   job is honest historical RECONSTRUCTION for the O1 backtest-join (the real band a trade sat in,
-   flier and all), not surfacing. All three thresholds are NAMED PLACEHOLDERS pending a validation
-   pass (process rule 4); rawBandLo/rawBandHi are retained on the record for audit / a future §F note. */
-export const BAND_EDGE_MIN_SAMPLE = 8;   // < this many prints/side ⇒ raw extremum (a quantile is meaningless)
-export const BAND_EDGE_HI_Q = 0.90;      // dense-side high edge quantile (was the raw max)
-export const BAND_EDGE_LO_Q = 0.10;      // dense-side low edge quantile  (was the raw min)
-function quantileSorted(sorted, q) {      // type-7 linear interpolation over an ascending array
-  if (sorted.length === 1) return sorted[0];
-  const pos = (sorted.length - 1) * q, base = Math.floor(pos), rest = pos - base;
-  return sorted[base + 1] != null ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
-}
-export function robustBand(los, his) {
-  const edge = (vals, q, dir) => {
-    const s = vals.filter(x => x != null && x > 0).sort((a, b) => a - b);
-    if (!s.length) return { robust: null, raw: null };
-    const raw = dir === 'hi' ? s[s.length - 1] : s[0];
-    if (s.length < BAND_EDGE_MIN_SAMPLE) return { robust: raw, raw };   // sparse ⇒ keep the extremum
-    return { robust: Math.round(quantileSorted(s, q)), raw };
-  };
-  const lo = edge(los, BAND_EDGE_LO_Q, 'lo');
-  const hi = edge(his, BAND_EDGE_HI_Q, 'hi');
-  return { bandLo: lo.robust, bandHi: hi.robust, rawBandLo: lo.raw, rawBandHi: hi.raw };
-}
+   robustBand + the three BAND_EDGE_* placeholders now live in js/quotecore.js (app+node shared home,
+   Scope B) so the pipeline surfacing path here and the app-facing computeQuote Optimistic column
+   robustify off the ONE implementation; re-exported here so callers/tests that import them from this
+   module keep working. Doctrine (see the robustBand header in js/quotecore.js): DENSE side (≥
+   BAND_EDGE_MIN_SAMPLE prints) → p90 high / p10 low; SPARSE side → raw extremum. SCOPE within this file:
+   loadBands (the LIVE surfacing path) uses it; loadHistBands stays RAW min/max on purpose — its job is
+   honest historical RECONSTRUCTION for the O1 backtest-join (the real band a trade sat in, flier and
+   all), not surfacing. Thresholds are NAMED PLACEHOLDERS pending validation; rawBandLo/rawBandHi kept
+   for audit. */
+import { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q } from '../../js/quotecore.js';
+export { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q };   // re-export: callers/tests import from here
 
 export async function loadBands(hours = 2) {
   ensureCacheDir();

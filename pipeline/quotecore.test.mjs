@@ -655,4 +655,21 @@ ok('pressure is display-only — a verdict fixture with vol24 attached is unchan
   assert.deepEqual(a, b);
 });
 
+// --- Bar E Scope B: robust Optimistic edge vs raw momentum tell (the split) ---------------
+ok('Bar E Scope B — a high-side flier trims optSell but leaves rawBandHi/momentum on the raw max', () => {
+  // dense high side clustered at 60k with ONE 100k flier in the last-24 band; live instabuy in-band.
+  const ts5m = mk5m((ha, idx) => ({ low: 58_000, high: idx === 3 ? 100_000 : 60_000, vol: 500 }));
+  const latest = { low: 59_000, high: 61_000, lowTime: FRESH, highTime: FRESH };
+  const row = rowOf(latest, ts5m);
+  assert.equal(row.rawBandHi, 100_000, 'the TRUE band max is preserved (momentum + audit)');
+  assert.ok(row.band.hi < 100_000, `the robust Optimistic edge trims the flier (got ${row.band.hi})`);
+  assert.ok(row.optSell < 100_000, 'optSell is no longer inflated by the lone flier');
+  assert.equal(row.optSell, 61_000, 'optSell clamps to the live instabuy (robust bandHi is below it)');
+  // the momentum tell keys off the RAW max, unchanged by the robust clamp: a fresh 2h high (quickSell
+  // above the raw flier) still fires 'breakup'; the in-band quote above is 'clean'.
+  assert.equal(row.mom, 'clean');
+  const breakup = rowOf({ low: 59_000, high: 120_000, lowTime: FRESH, highTime: FRESH }, ts5m);
+  assert.equal(breakup.mom, 'breakup', 'momentum fires off the raw band max (120k > raw 100k), not the robust p90');
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);

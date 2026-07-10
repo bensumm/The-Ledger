@@ -10,6 +10,35 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.55.0 — BAR-E Scope B: robust band edges in the app Optimistic column (2026-07-10)
+The Scope B follow-through on Bar E (below): the same flier-trimming now lands in the **app-facing**
+`computeQuote` Optimistic column (`optBuy`/`optSell`) at source, not just the pipeline surfacing path.
+Previously the app took `bandLo = min(avgLow)` / `bandHi = max(avgHigh)` raw over the last 24×5m points, so
+a lone flier inflated the surfaced Optimistic ROI — the exact "band-top artifact" Scope A killed on the
+pipeline side. Now `computeQuote` clamps the Optimistic edges against the **robust** band (p10 low / p90
+high on a dense side ≥ 8 prints, raw extremum on a sparse side).
+
+**The split.** `bandLo`/`bandHi` in `computeQuote` did two jobs: (1) the MOMENTUM tell (`mom` =
+breakdown/breakup fired off `quickBuy < rawBandHi` etc.) and (2) the Optimistic clamp. Scope B SPLITS the
+variable so only the clamp changes: `rawBandLo`/`rawBandHi` keep the TRUE `min`/`max` and still drive `mom`
+and the `row.rawBandLo/rawBandHi` audit fields (a "fresh 2h high" must fire off the real band max, not the
+robust p90 — so the Momentum column is byte-identical); the robust edges feed ONLY the Optimistic clamp
+(and `row.band.lo/hi`). Net behavioral effect: Momentum unchanged; Optimistic loses the flier artifact on
+dense bands; sparse bands (<8 prints) unchanged because robust==raw there.
+
+**Shared-home move.** `robustBand` + `quantileSorted` + `BAND_EDGE_MIN_SAMPLE`/`_HI_Q`/`_LO_Q` (all
+NAMED PLACEHOLDERS, unchanged values) MOVED from `pipeline/lib/marketfetch.mjs` into `js/quotecore.js` —
+the app+node shared, DOM-free module every pipeline script already imports — so both paths robustify off
+the ONE implementation (quotecore must never import `marketfetch`, which drags `fs` into the browser).
+`marketfetch.mjs` now imports them from quotecore and re-exports, so `pipeline/bandedge.test.mjs` (imports
+from `./lib/marketfetch.mjs`) is untouched. `loadHistBands` stays RAW on purpose (honest O1 backtest
+reconstruction). Tests: full suite 49 suites green; `pipeline/bandedge.test.mjs` (8) unchanged; a new
+`quotecore.test.mjs` Scope-B assertion proves the split (dense high-side flier → `optSell` below the raw
+max while `rawBandHi`/`mom` still reflect the raw max) — quotecore 41→42. **Replay golden byte-UNCHANGED**
+(the fixture bands are near-flat, so robust==raw for every fixture row). Browser smoke passed. The three
+thresholds remain unvalidated placeholders (process rule 4) — Scope B changes WHERE the edge is drawn, not
+whether the magnitude is right.
+
 ### BAR-E — robust band edges: a lone flier can't set bandHi (2026-07-10, pipeline-only — NO APP_VERSION)
 The Bar-D sequel. Bar D fixed WHETHER a band gates (density vs two-sidedness); Bar E fixes WHERE its
 edges sit. The band edge was the raw `min(avgLow)` / `max(avgHigh)` over the 2h of 5m prints, so ONE
@@ -24,8 +53,8 @@ big-ticket class Bar D just admitted (the reach validator backstops that residue
 catch it").** Bar E robustifies the **LIVE surfacing path only** — `loadBands` → `bandCore`'s edge/Rank.
 Two paths stay RAW on purpose: (1) `loadHistBands`, because the O1 backtest-join reconstructs the *actual*
 band a historical trade sat in (flier and all) for fill-model calibration, not a surfacing decision; and
-(2) `computeQuote`'s app-facing Optimistic column (Scope B, deferred — it would bump `APP_VERSION` and
-needs a browser smoke; the reach validator already flags it inform). Because the robustification lives
+(2) `computeQuote`'s app-facing Optimistic column (Scope B — **DONE in 0.55.0, see the entry above**;
+`robustBand` has since MOVED to `js/quotecore.js` and this file re-exports it). Because the robustification lives
 upstream in the aggregation, `bandCore` and the replay golden are **byte-unchanged**; Bar E gets its own
 focused unit test (`pipeline/bandedge.test.mjs`, 8 checks) on the pure `robustBand` helper instead of a
 golden change. Live `--mode band` confirmed clean (big tickets still surface; edges no longer flier-set).

@@ -59,8 +59,9 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
 `Item | Guide | Quick | Optimistic | Vol/d | Momentum | Regime`
 - **Quick** and **Optimistic** are each SELF-CONTAINED cells reading `buy → sell · net/u (ROI)`
   (net after 2% tax; the cell is colored gain/loss in the app). Quick = transact now (buy at live
-  instasell, sell at live instabuy). Optimistic = patient 2h-band edges (last 24×5m points: min
-  avgLow / max avgHigh). Mid is dropped from the table (redundant next to Guide + the live prices;
+  instasell, sell at live instabuy). Optimistic = patient 2h-band edges (last 24×5m points), Bar-E
+  ROBUSTIFIED (robust p10 low / p90 high on a dense side, raw extremum on a sparse one — see the Bar E
+  bullet below; the momentum tell keeps the true min/max). Mid is dropped from the table (redundant next to Guide + the live prices;
   the row model still exposes `row.mid` for `rating.mjs`/`watch.mjs`).
 - **Ordering + the `Momentum` (last-2h momentum) column.** On ONE consistent basis (live `/latest` +
   2h 5m-band), optBuy ≤ quickBuy ≤ quickSell ≤ optSell holds normally; a break on MIXED bases is a bug
@@ -89,17 +90,22 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `tradedWin`. The ONE home for this is the `bandCore` header in `js/strategies.mjs`.
 - **Band EDGE robustness — Bar E (Ben 2026-07-10).** Bar D fixed WHETHER a band gates; Bar E fixes WHERE
   its edges sit. The raw min/max over the 2h of 5m prints let ONE flier (a lone 100k print against a 59k
-  mid) set `bandHi` and inflate the surfaced ROI — the band-top artifact. `robustBand` (`pipeline/lib/
-  marketfetch.mjs`) takes the **p90 high / p10 low** on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE` 8 prints)
-  and keeps the raw extremum on a SPARSE side (a quantile over a handful of points either == the max or
-  wrongly discards the one real high — the thin big-ticket class Bar D just admitted; reach backstops the
-  residue there). **SCOPE A — the LIVE surfacing path (`loadBands` → `bandCore` edge/Rank) ONLY.** Two
-  things stay RAW on purpose: `loadHistBands` (the O1 backtest-join reconstructs the *actual* band a trade
-  sat in, flier and all) and `computeQuote`'s Optimistic column (the app-facing edge — Scope B, deferred:
-  it'd bump `APP_VERSION`). So `bandCore`/golden are byte-unchanged; the robustification is upstream in the
-  aggregation. Thresholds (`BAND_EDGE_MIN_SAMPLE`/`BAND_EDGE_HI_Q`/`BAND_EDGE_LO_Q`) are NAMED PLACEHOLDERS
-  pending a validation pass; `rawBandLo/rawBandHi` retained on the record for audit. Pinned by
-  `pipeline/bandedge.test.mjs`. The reach validator remains the backstop for the sparse residue.
+  mid) set `bandHi` and inflate the surfaced ROI — the band-top artifact. `robustBand` (now in
+  **`js/quotecore.js`**, the app+node shared home — MOVED there by Scope B so both paths robustify off ONE
+  impl; `pipeline/lib/marketfetch.mjs` re-exports it) takes the **p90 high / p10 low** on a DENSE side (≥
+  `BAND_EDGE_MIN_SAMPLE` 8 prints) and keeps the raw extremum on a SPARSE side (a quantile over a handful
+  of points either == the max or wrongly discards the one real high — the thin big-ticket class Bar D just
+  admitted; reach backstops the residue there). **SCOPE — both surfacing paths now robust (Scope A +
+  Scope B, 0.55.0):** the pipeline path (`loadBands` → `bandCore` edge/Rank) AND the app-facing
+  `computeQuote` Optimistic column (`optBuy`/`optSell`, clamped against the robust edges). Two things stay
+  RAW on purpose: `loadHistBands` (the O1 backtest-join reconstructs the *actual* band a trade sat in,
+  flier and all) and the **momentum tell** — `computeQuote` SPLITS the band variable so `rawBandLo`/
+  `rawBandHi` keep the true `min`/`max` and drive `mom` (a fresh 2h high fires off the real max, not the
+  p90) + the audit fields, while the robust edges feed only the Optimistic clamp (Momentum column
+  byte-identical). `bandCore`/replay golden stay byte-unchanged (fixture bands near-flat ⇒ robust==raw).
+  Thresholds (`BAND_EDGE_MIN_SAMPLE`/`BAND_EDGE_HI_Q`/`BAND_EDGE_LO_Q`) are NAMED PLACEHOLDERS pending a
+  validation pass; `rawBandLo/rawBandHi` retained for audit. Pinned by `pipeline/bandedge.test.mjs` +
+  the `quotecore.test.mjs` Scope-B split assertion. The reach validator remains the backstop for the sparse residue.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a

@@ -415,18 +415,20 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   gate's job. `marketfetch.mjs` emits the fields on both band paths; `bandCore` (js/strategies.mjs) gates on
   them; `active5m` survives as a display signal + `activeWin`→confidence now reports `tradedWin`. Replay
   archetype 2003 became the regression guard (active5m 0, survives on tradedWin 8 — golden byte-unchanged).
-- **Band EDGE robustness — Bar E — DONE (Ben 2026-07-10, Scope A):** robustify the band EDGES so a lone
+- **Band EDGE robustness — Bar E — DONE (Ben 2026-07-10, Scope A + Scope B):** robustify the band EDGES so a lone
   flier can't set `bandHi`/`bandLo` and inflate the surfaced ROI (the band-top artifact). `robustBand`
-  (`pipeline/lib/marketfetch.mjs`) takes p90 high / p10 low on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE` 8
+  (home MOVED to `js/quotecore.js` by Scope B — the app+node shared module; `pipeline/lib/marketfetch.mjs`
+  re-exports it) takes p90 high / p10 low on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE` 8
   prints), keeps the raw extremum on a SPARSE side (a quantile over a few points == the max or discards the
-  one real high — the thin big-ticket class Bar D just admitted; reach backstops it). SCOPE A = the LIVE
-  surfacing path (`loadBands` → `bandCore` edge/Rank) ONLY; `loadHistBands` stays raw (O1 reconstructs the
-  actual band a trade sat in) and `computeQuote`'s Optimistic column stays raw (Scope B, deferred —
-  `APP_VERSION` bump). `bandCore`/replay-golden byte-unchanged (robustification is upstream in aggregation);
-  pinned by `pipeline/bandedge.test.mjs`. Thresholds are NAMED PLACEHOLDERS; `rawBandLo/rawBandHi` kept for
-  audit. **Follow-up not taken (Bar E Scope B):** robustify `computeQuote`'s app-facing Optimistic edges too
-  (removes the artifact from the app's headline column at source) — deferred; it bumps `APP_VERSION` + needs
-  a browser smoke, and the reach validator + Bar E Scope A already cover the surfacing decision.
+  one real high — the thin big-ticket class Bar D just admitted; reach backstops it). SCOPE = both surfacing
+  paths: the pipeline (`loadBands` → `bandCore` edge/Rank) AND the app-facing `computeQuote` Optimistic
+  column (Scope B, 0.55.0). Stays raw: `loadHistBands` (O1 reconstructs the actual band a trade sat in) and
+  `computeQuote`'s MOMENTUM tell (`rawBandLo/rawBandHi` drive `mom` — a fresh 2h high fires off the true max,
+  not the p90; the Momentum column is byte-identical, the Optimistic column is what changed).
+  `bandCore`/replay-golden byte-unchanged (fixture bands near-flat ⇒ robust==raw); pinned by
+  `pipeline/bandedge.test.mjs` + the `quotecore.test.mjs` Scope-B split assertion. Thresholds are NAMED
+  PLACEHOLDERS; `rawBandLo/rawBandHi` kept for audit. **Scope B shipped 0.55.0** — completes the follow-up
+  that Scope A deferred (removes the artifact from the app's headline Optimistic column at source).
 - **Churn per-lap rank + band partition — DONE (Step 6, Ben 2026-07-09, decision A):** churn ranks the
   LAP (`net/u × min(limit, feasibleDepth) × P ÷ TTF`) via its own `churn` estimator family (we always max
   the buy limit → the exact limit is a fact, NOT the demoted ×windows/day `expGpDay`); Death/Blood/Soul

@@ -6,7 +6,9 @@
    The canonical market table (CLAUDE.md "Market analysis workflow"):
      Item | Guide | Mid | Buy@ Quick / Opt | Sell@ Quick / Opt | Net/u Quick / Opt (ROI) | Vol/d | Regime
    - Quick = transact now: buy at live instasell (latest.low), sell at live instabuy (latest.high).
-   - Optimistic = patient 2h-band edges: min(avgLowPrice) / max(avgHighPrice) over the last 24×5m points.
+   - Optimistic = patient 2h-band edges over the last 24×5m points, ROBUSTIFIED (Bar E, robustBand): the
+     p10 low / p90 high on a dense side (≥ BAND_EDGE_MIN_SAMPLE prints), the raw extremum on a sparse one,
+     so a lone flier can't inflate the surfaced edge. The MOMENTUM tell keeps the true raw min/max.
    INVARIANT (guaranteed by construction below): optBuy ≤ quickBuy ≤ quickSell ≤ optSell.
    The 2026-07-03 bug that inflated an edge 2.5× came from mixing bases (24h percentiles vs
    live quotes). Here the optimistic edges are CLAMPED against the SAME live quote, so the
@@ -172,6 +174,42 @@ export function phase(points){
   return {phase:ph, curMid, baseMid, peakMid, lowSlope};
 }
 
+/* --- Bar E (Ben 2026-07-10) — robustify the band EDGES so a lone flier print can't set bandHi/bandLo.
+   Bar D fixed WHETHER a band gates (density vs two-sidedness); Bar E fixes WHERE its edges sit. The raw
+   min/max over the 2h of 5m prints lets ONE outlier (a lone 100k print against a 59k mid) set the edge
+   and inflate the surfaced ROI — the "band-top artifact". On a DENSE side (≥ BAND_EDGE_MIN_SAMPLE
+   prints) take the p90 high / p10 low instead of the raw extremum; on a SPARSE side keep the extremum,
+   because a quantile over a handful of points either equals the max OR wrongly discards the one real
+   high — exactly the thin big-ticket class Bar D just admitted (the reach validator backstops the
+   residue there; per Ben, Bar E need not be exact — a surfaced outlier gets caught downstream).
+   SHARED HOME (Scope B, Ben 2026-07-10): robustBand lives HERE (app+node shared, DOM-free) so BOTH the
+   pipeline surfacing path (marketfetch.mjs loadBands re-imports it) AND the app-facing computeQuote
+   Optimistic column robustify off the ONE implementation. Two paths stay RAW on purpose:
+   marketfetch's loadHistBands (honest historical RECONSTRUCTION for the O1 backtest-join — the real band
+   a trade sat in, flier and all) and computeQuote's MOMENTUM tell (rawBandLo/rawBandHi drive `mom`: a
+   "fresh 2h high" must fire off the true band max, not the robust p90). All three thresholds are NAMED
+   PLACEHOLDERS pending a validation pass (process rule 4); rawBandLo/rawBandHi are retained for audit. */
+export const BAND_EDGE_MIN_SAMPLE = 8;   // < this many prints/side ⇒ raw extremum (a quantile is meaningless)
+export const BAND_EDGE_HI_Q = 0.90;      // dense-side high edge quantile (was the raw max)
+export const BAND_EDGE_LO_Q = 0.10;      // dense-side low edge quantile  (was the raw min)
+function quantileSorted(sorted, q){       // type-7 linear interpolation over an ascending array
+  if(sorted.length===1) return sorted[0];
+  const pos=(sorted.length-1)*q, base=Math.floor(pos), rest=pos-base;
+  return sorted[base+1]!=null ? sorted[base]+rest*(sorted[base+1]-sorted[base]) : sorted[base];
+}
+export function robustBand(los, his){
+  const edge=(vals, q, dir)=>{
+    const s=vals.filter(x=>x!=null && x>0).sort((a,b)=>a-b);
+    if(!s.length) return {robust:null, raw:null};
+    const raw=dir==='hi' ? s[s.length-1] : s[0];
+    if(s.length<BAND_EDGE_MIN_SAMPLE) return {robust:raw, raw};   // sparse ⇒ keep the extremum
+    return {robust:Math.round(quantileSorted(s, q)), raw};
+  };
+  const lo=edge(los, BAND_EDGE_LO_Q, 'lo');
+  const hi=edge(his, BAND_EDGE_HI_Q, 'hi');
+  return {bandLo:lo.robust, bandHi:hi.robust, rawBandLo:lo.raw, rawBandHi:hi.raw};
+}
+
 /* Build the full row model for one item from raw fetched inputs (all DOM-free):
      latest : {low, high, ...}         live /latest snapshot (low=instasell, high=instabuy)
      ts5m   : [{avgLowPrice,avgHighPrice,...}]  5m timeseries (last 24 used for the 2h band)
@@ -188,8 +226,15 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   const recent=(ts5m||[]).slice(-24);
   const los=recent.map(p=>p.avgLowPrice).filter(Boolean);
   const his=recent.map(p=>p.avgHighPrice).filter(Boolean);
-  const bandLo=los.length?Math.min(...los):null;
-  const bandHi=his.length?Math.max(...his):null;
+  // Bar E Scope B (2026-07-10): the band edges are SPLIT into two distinct jobs.
+  //   • rawBandLo/rawBandHi = the TRUE min/max — drive the momentum tell (a "fresh 2h high" fires off
+  //     the real band max) and the row.rawBandLo/rawBandHi audit fields.
+  //   • bandLo/bandHi = the ROBUST edges (robustBand: p10 low / p90 high on a DENSE side ≥
+  //     BAND_EDGE_MIN_SAMPLE, raw extremum on a SPARSE side) — feed ONLY the Optimistic clamp below, so a
+  //     lone flier can't inflate optBuy/optSell (the "band-top artifact"). Sparse bands ⇒ robust==raw.
+  const rb=robustBand(los, his);
+  const rawBandLo=rb.rawBandLo, rawBandHi=rb.rawBandHi;
+  const bandLo=rb.bandLo, bandHi=rb.bandHi;
   // --- GATE 0: quote reliability (PLAN-3, interpretation E; feed-inversion added in Q1) ----
   // Is this reading even a price? A quote is UNRELIABLE if it is stale (a /latest print aged
   // past a print-interval-scaled threshold), inverted (a crossed feed: live instasell above
@@ -222,23 +267,25 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   const regime=regimeDrift(ts6h||[]);
   const rl=regimeLabel(regime);
   const falling=rl.falling;
-  // --- pre-clamp momentum tell (chunk 6) -------------------------------------------------
-  // rawBandLo/rawBandHi are the UNCLAMPED 2h edges (== bandLo/bandHi, before the price clamp
-  // below). The displayed opt prices clamp against the live quote (pricing correctness — never
-  // suggest buying above the live market), which ANNIHILATES the signal — so `mom` is derived
-  // HERE, from the pre-clamp live-vs-band comparison, independently of the clamp:
+  // --- pre-clamp momentum tell (chunk 6; Bar E split, 2026-07-10) -------------------------
+  // The momentum tell uses the TRUE RAW band extremes (rawBandLo/rawBandHi, computed above), NOT the
+  // robust p90/p10 that feed the Optimistic clamp — a "fresh 2h high" must fire off the real band max,
+  // so Bar E deliberately leaves this signal on the raw edges (byte-identical to pre-Bar-E). The
+  // displayed opt prices clamp against the live quote (pricing correctness — never suggest buying above
+  // the live market), which ANNIHILATES the signal — so `mom` is derived HERE, from the pre-clamp
+  // live-vs-RAW-band comparison, independently of the clamp:
   //   quickBuy  < rawBandLo (live instasell below the 2h floor) → 'breakdown' (↓ active pullback)
   //   quickSell > rawBandHi (live instabuy above the 2h top)    → 'breakup'   (↑ fresh 2h high)
   //   otherwise                                                 → 'clean'     (ranging in-band)
   // Same single basis (live /latest + 2h 5m band from the SAME fetch) ⇒ a break is a real momentum
   // tell, not a base-mixing bug. That bug is guarded SEPARATELY by quoteOrdered() on the clamped
   // prices (row.ordered) — the clamp is not what prevents mixing.
-  const rawBandLo=bandLo, rawBandHi=bandHi;
   let mom='clean', momPct=0;
   if(quickBuy!=null && rawBandLo!=null && quickBuy<rawBandLo){ mom='breakdown'; momPct=(rawBandLo-quickBuy)/rawBandLo; }
   else if(quickSell!=null && rawBandHi!=null && quickSell>rawBandHi){ mom='breakup'; momPct=(quickSell-rawBandHi)/rawBandHi; }
-  // Optimistic edges CLAMPED to the live quote → optBuy ≤ quickBuy and optSell ≥ quickSell
-  // ALWAYS (this is the ordering guarantee; single shared basis, no mixing).
+  // Optimistic edges = the ROBUST band (bandLo/bandHi, Bar E) CLAMPED to the live quote → optBuy ≤
+  // quickBuy and optSell ≥ quickSell ALWAYS (this is the ordering guarantee; single shared basis, no
+  // mixing). The robust edges trim a flier out of the surfaced Optimistic ROI at source.
   let optBuy=quickBuy, optSell=quickSell;
   if(quickBuy!=null)  optBuy  = bandLo!=null?Math.min(quickBuy, bandLo):quickBuy;
   if(quickSell!=null) optSell = bandHi!=null?Math.max(quickSell, bandHi):quickSell;
