@@ -100,7 +100,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
-| DP1 | Dip-posture entry classifier (dip DIRECTION, not just depth) — `recentDirection` + `dipPostureValidator`, inform on band/churn | `js/quotecore.js`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/dipposture.test.mjs` | ✅ `landing` (orchestrator reconciles the sha at land) |
+| DP1 | Dip-posture entry classifier (dip DIRECTION, not just depth) — `recentDirection` + `dipPostureValidator`, inform on band/churn | `js/quotecore.js`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/dipposture.test.mjs` | ✅ `597f132` |
 | PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/modules.mjs` | ✅ `6aba80b` |
 | TG1 | Thesis-gated hold alerts | `hold-thesis.json`, `pipeline/lib/holdthesis.mjs`, `watch.mjs` | ✅ `b2634a1` |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, app | ✅ `c7b53e7` (0.34.0) |
