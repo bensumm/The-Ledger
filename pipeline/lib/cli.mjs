@@ -25,7 +25,11 @@ export function parseArgs(argv) {
 
 /* --- parseGp("18.05m" | "450k" | "3439800" | 150) -> integer gp (NaN if unparseable).
    Superset of the two prior copies: accepts a number passthrough and a leading sign,
-   strips commas, honors k/m/b suffix. --- */
+   strips commas, honors k/m/b suffix.
+   NOTE: deliberately NOT identical to js/format.js's parseGp (the app-form copy). This CLI
+   copy accepts a leading '-' sign and ROUNDS a numeric passthrough (CLI args are strings/ints);
+   the app copy instead accepts leading-dot decimals (".5m"), strips internal spaces, and passes
+   a number through unrounded. Two homes on purpose — CLI arg parsing vs browser form input. --- */
 export function parseGp(s) {
   if (typeof s === 'number') return Math.round(s);
   const t = String(s).trim().toLowerCase().replace(/,/g, '');

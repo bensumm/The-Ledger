@@ -39,6 +39,10 @@ export function fmtP(n){
 }
 export function fmtTurn(h){ if(h===null||h===undefined) return '—'; return h<1?'~'+Math.round(h*60)+'m':'~'+h.toFixed(1)+'h'; }
 export const fmtHour=h=>pad2(h)+':00';
+// parseGp — app-form gp parser. Deliberately NOT identical to pipeline/lib/cli.mjs's parseGp:
+// that CLI copy accepts a leading '-' sign and rounds a numeric passthrough; this app copy accepts
+// leading-dot decimals (".5m"), strips internal spaces, and passes a number through unrounded.
+// Kept as two homes on purpose (browser form input vs CLI arg parsing).
 export function parseGp(str){
   if(typeof str==='number') return str; if(!str) return NaN;
   str=(''+str).trim().toLowerCase().replace(/,/g,'').replace(/ /g,'');
