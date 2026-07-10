@@ -188,6 +188,9 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | COD-2 | Overnight accumulation table → script | `lib/gatecandidates.mjs`, `screen.mjs`, `/overnight` SKILL | ✅ `81d9049` (`expUnitsOvernight`; `screen.mjs --posture overnight` prints the table; pinned by `expunitsovernight.test.mjs`; Q3-3) |
 | COD-3 | `rebidBar`/`rebidAdvice` helper + weekly-read marker | `js/quotecore.js`, `pipeline/outcomes.mjs`, skills | ✅ `5b91d10` (trajectory/diurnal-aware CUT-family advisory; `--weekly-due`; pinned by `rebid.test.mjs`; Q3-4/5) |
 | COD-4 | quote.mjs budgeted ts1h → reach/trajectory fire on explicit asks | `pipeline/quote.mjs`, `lib/richterm.mjs`, `lib/context.mjs` | ✅ `a923496` (fixes flaw A4; shared `staleBookBanner` + diurnal line on quote; Q3-6/7) |
+| DOC-1..4 | ARCH-docs cleanup: PLAN prune · CLAUDE diet r3 · README registry-grade · verdict single-home | docs, `.claude/skills/*` | ✅ `e45cd7b`/`560b28b`/`1619ff6`/`0c9ecca` (from `PLAN-ARCH-DOCS-AUDIT.md`; DOC-5+ARCH-2 stay Ben-gated there — see Discovered) |
+| ARCH-3 | `parseGp` cross-comments (the volume-source half is NOT mechanical → Discovered SF-3) | `js/format.js`, `pipeline/lib/cli.mjs` | ✅ `6808c58` (comment-only, no APP_VERSION) |
+| SWEEP | 2026-07-10 sweep innocuous fixes: `Promise.all` bulk loaders · shared `clamp` dedup · `bandPercentile` extraction | `screen.mjs`, `rating.mjs`, `estimators.mjs`, `histstate.mjs`, `outcomes.mjs` | ✅ `ef68792` (byte-identical dedups; the review verdict + parked residue = Discovered SF-1/2/4/5) |
 
 ---
 
@@ -468,11 +471,21 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   the sell window). Honesty: needs days of history before the timing claim is real.
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
-- `quote.mjs` and `screen.mjs` can log a different liquidity `class` for the same item in
-  `suggestions.jsonl` (volume read from `fetch24hOne` vs bulk `loadAll24h` at different
-  moments — observed live on Toxic blowpipe: `mid` vs `thin`). Honest as-computed-then
-  data, but unify the volume source if a single canonical label is ever needed (lane O,
-  2026-07-04).
+- **Liquidity-`class` volume-source split (SF-3, pre-F1; = the deferred ARCH-3 half).** `quote.mjs`
+  and `screen.mjs` can log a different liquidity `class` for the same item in `suggestions.jsonl`:
+  the logged `class` derives from `volDay = min(hpv,lpv)`, and the hpv/lpv come from DIFFERENT
+  endpoints — quote's per-item `fetch24hOne`/`/24h?id=` (15-min cache) vs screen's bulk `loadAll24h`/
+  `all24h.json` (10-min cache). Different snapshots ⇒ the same item can straddle a `liqClassOf`
+  boundary (observed live on Toxic blowpipe: `mid` vs `thin`). `outcomes.mjs` re-derives class from
+  the stored `volDay`, so re-deriving does NOT launder it — the polluted quantity is `volDay` itself.
+  A calibration pollutant to fix BEFORE F1 opens (F1 is weeks of accrual out → real runway). Three
+  options, ranked by cost (Ben ruled **leave parked for now**, 2026-07-10): (a) **volSrc tag** — log
+  which endpoint the volume came from, F1 normalizes at analysis time; ~5 lines, pipeline-only, no
+  fetch change, labels-not-removes the disagreement; (b) **warm-cache read** — quote reads warm
+  `all24h.json` for the class field, converges only when warm, adds a cold/warm branch (cold-path
+  quote either still splits or pays a ~4000-item bulk fetch for a 1-item ask); (c) **parked** — zero
+  cost now, pollution accrues. Do NOT force a cold bulk fetch on quote. Files: `pipeline/quote.mjs`,
+  `pipeline/screen.mjs`, `pipeline/lib/suggestlog.mjs` (lane O 2026-07-04; enriched by the 2026-07-10 sweep).
 - `js/backup.js:23` stamps the backup filename with the UTC date (`toISOString().slice(0,10)`)
   — a late-evening local backup gets tomorrow's date in the name. File-artifact only, not a
   displayed time; switch to a local slug if it ever annoys (lane E, 2026-07-04).
@@ -486,9 +499,35 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
 - Signals render 2-3× during init (`market.js:96-101`: `renderAll` → bare `computeSignals`
   → `archiveWatchlist().then(computeSignals)`) — idempotent, functionally fine; note for a
   future perf pass, not a bug (audit, 2026-07-05).
-- `parseGp` exists in both `pipeline/cli.mjs:29` and `js/format.js:24` with slightly
-  different behavior — intentional app/pipeline divergence; worth a one-line comment in
-  each noting so (audit, 2026-07-05).
+- ~~`parseGp` divergence comment~~ — **DONE `6808c58`** (ARCH-3 part): cross-comments now in both
+  `pipeline/lib/cli.mjs` and `js/format.js` documenting the intentional app/pipeline behavior split.
+- **Arch-sweep followups (2026-07-10 review/sweep; the residue after the innocuous fixes landed in
+  `ef68792`). None has a demonstrated live cost — hygiene/reuse, not bugs.**
+  - **SF-1 (MED) — quantile/median type-7 has THREE copies:** `js/quotecore.js` (`med`+
+    `quantileSorted`, requires pre-sorted input), `js/termstructure.mjs` (`quantile`+`median`), and
+    `pipeline/lib/retrojoin.mjs` (a `quantile` that ALSO sorts internally — a transplant-bug trap if
+    copied between the pre-sorted-input ones). Promote quotecore's (lowest in the import graph) to one
+    shared home, make the others thin re-exports; fixture-pin all three + audit every caller's
+    pre-sorted assumption FIRST. Bundle with the next `js/` shared-module pass.
+  - **SF-2 (LOW) — `quote.mjs` per-item ts1h fetch (COD-4) is uncapped across a batch:** correct, but
+    `quote A B C … J` amplifies the 1h fetch count linearly; the "1–2 items/invocation" budget is a
+    convention, not enforced. Multi-item asks are rare → downgrade to a one-line comment documenting the
+    budget as an assumption; a soft cap is machinery for a non-problem.
+  - **SF-4 (LOW) — two `UA` strings drifted** (`js/marketfetch.js` `0.30`, `pipeline/lib/marketfetch.mjs`
+    `0.28`, vs `APP_VERSION 0.55`): the version token is dead-decorative (the wiki API doesn't gate on it;
+    the contact string is what matters). Drop the version number from both UAs to kill the drift surface;
+    the app-file touch is a rule-5 deployed change (APP_VERSION bump + smoke), so bundle with the next
+    genuine app change or SF-1's js/ pass.
+  - **SF-5 (cosmetic — skip unless a Finder/forecast pass happens anyway):** `js/market.js:171`
+    `ratingParts` terse field names (`roiS/volS/…` vs the spelled-out style); PF1 `js/forecast.mjs`
+    `atHours` (dip/peak cluster window) vs `etaH` (global-extremum hour) can point at slightly different
+    hours under a sub-`trendDominates` trend (label only — level+eta stay correct); README/commit claim
+    "`forecast.mjs` imports windowread" but the module has no import (it consumes a passed-in profile).
+- **DOC-5 / ARCH-2 stay Ben-gated proposals** in `PLAN-ARCH-DOCS-AUDIT.md`: DOC-5 = skills anchor
+  compression (table-first per the P7 precedent — compress incident STORIES to `rule + anchor + LORE`
+  pointer, keep the rules); ARCH-2 = thesis-store unification (the same two-store `tripwire` hazard
+  already noted in the P4a follow-on above — a product-semantics ruling, not a mechanical fix). Not
+  started by design.
 - Log-file discovery near-duplicated between `sync-fills.readLogFiles` and
   `offers.readExchangeLog` — partly justified (`--log-dir` override, mobile file); unify
   only if either changes again (audit, 2026-07-05).
