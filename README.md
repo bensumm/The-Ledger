@@ -353,7 +353,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     synchronous read of `all24h.json` when within `ALL24H_TTL`, else null; NEVER forces the bulk dump,
     letting `quote.mjs` converge its logged liquidity `class` on screen's bulk snapshot for free),
     `cli.mjs` (shared arg/format/table
-    helpers), `rating.mjs` (grade/score model — P6b: the reward basis is the per-thesis RANK
+    helpers). **`rating.mjs` and `estimators.mjs` MOVED to `js/` (2026-07-10, app-parity Wave 2a)** —
+    they are now app-importable shared modules (the Finder rank/grade wiring is AP4); `pipeline/lib/`
+    keeps a one-line re-export shim at each old path so every node importer resolves byte-identically.
+    Their descriptions (retained here for the pipeline reader): `rating.mjs` (grade/score model — P6b:
+    the reward basis is the per-thesis RANK
     `net × P(fill) ÷ TTF` from `estimators.mjs`, NOT the demoted expGpDay; cutoffs are on that rank
     scale, still PLACEHOLDERS), `estimators.mjs` (P6b — the PURE per-thesis P(fill)+TTF estimators +
     the `rankScore` composite that REPLACED expGpDay as the displayed/graded metric (Ben 2026-07-09:
@@ -366,7 +370,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
     bundles pair/net/pFill/ttf/rank. ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
-    calibrator. Consumed by `screen.mjs`+`rating.mjs`; NOT app-imported → no APP_VERSION),
+    calibrator. Consumed by `screen.mjs`+`rating.mjs` today; now in `js/` (shared home) so the app can
+    import it once AP4 lands — no app file imports it yet, so no APP_VERSION bump on the move),
     `gatecandidates.mjs` (P1 — screen.mjs's PURE
     candidate-selection + survival doctrine, moved out of screen.mjs so it's node-importable +
     fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the
@@ -695,13 +700,13 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | Module | Also imported by (pipeline) |
 | --- | --- |
 | `js/quotecore.js` | 12 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab); plus the js/ side-import `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) |
-| `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) + `pipeline/lib/estimators.mjs` (P6b — `netMargin`/`clamp` for the rank composite) |
+| `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) + `js/estimators.mjs` (P6b — `netMargin`/`clamp` for the rank composite; moved from pipeline/lib 2026-07-10) |
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints) |
 | `js/forecast.mjs` | `pipeline/forecast.test.mjs` only (PF1 — the pure model landed; no surface consumer wired yet — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate — all pending; not yet app-imported → no APP_VERSION) |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs` (P2/P3 — the validator registry: reach + floor); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator`, inform-only, beside the Diurnal timing chart) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor; not yet app-imported). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
 | `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
-| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `pipeline/lib/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative niche registry; not yet app-imported) |
+| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative niche registry; not yet app-imported) |
 
 ### Test-location convention
 
