@@ -492,7 +492,14 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   the sell window). Honesty: needs days of history before the timing claim is real.
 - No `--niche` keyword flag on `screen.mjs` (skills filter output rows by hand; a flag is
   a possible future convenience).
-- **Liquidity-`class` volume-source split (SF-3, pre-F1; = the deferred ARCH-3 half).** `quote.mjs`
+- **Liquidity-`class` volume-source split (SF-3, pre-F1; = the deferred ARCH-3 half).** ✅ **DONE `61e1bd7`**
+  — `volSrc` tag threaded through `suggestionEntry` (lean-included: `bulk`|`peritem`); the pure
+  `classAndSource(row,id,warmBulk)` in `suggestlog.mjs` picks class+source; `marketfetch.loadAll24hWarm()`
+  /`readWarmAll24h(dir,ttl,now)` is a fetch-free warm-only bulk `/24h` read (null when cold/stale — the
+  hard no-cold-fetch constraint); `quote.mjs` converges on the warm bulk snapshot (per-item + `--positions`,
+  the latter reusing `snap.v24` already fetched by loadSnapshot ⇒ zero extra fetch), `screen.mjs` tags
+  `'bulk'`. Class-parity + fetch-free warm read pinned by `pipeline/sf3-volsrc.test.mjs`; docs in
+  FILLS-PIPELINE.md §11.1 + README. Pipeline-only, no APP_VERSION. `quote.mjs`
   and `screen.mjs` can log a different liquidity `class` for the same item in `suggestions.jsonl`:
   the logged `class` derives from `volDay = min(hpv,lpv)`, and the hpv/lpv come from DIFFERENT
   endpoints — quote's per-item `fetch24hOne`/`/24h?id=` (15-min cache) vs screen's bulk `loadAll24h`/

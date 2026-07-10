@@ -8,8 +8,9 @@
  *    repo-root file, so a wrong path means suggestions are written but never published.
  * 2. suggestionEntry never fabricates a number — absent row fields become null.
  * 3. liqClassOf thresholds: <100 thin, <1000 mid, else liquid; null → 'unknown'.
- * 4. YS2 forward fields (posture/tripwire/fillWindowHrs/velocityClass/thesis) are LEAN-INCLUDED:
- *    written only when supplied, so a legacy call (no forward fields) is byte-identical to before.
+ * 4. YS2 forward fields (posture/tripwire/fillWindowHrs/velocityClass/thesis) — and the SF-3 `volSrc`
+ *    tag — are LEAN-INCLUDED: written only when supplied, so a legacy call (no such fields) is
+ *    byte-identical to before. (Full SF-3 class/source parity is pinned in sf3-volsrc.test.mjs.)
  * 5. SR1 rotation/compaction: completed months move OUT of the active ledger into monthly archive
  *    files with ZERO row loss (active ∪ archives == original set, always), idempotently, across
  *    multiple accumulated months; the current month is NEVER rotated; readSuggestionLines reunites
@@ -44,6 +45,16 @@ ok('YS2 forward fields are omitted when absent (legacy row stays byte-identical)
   assert.ok(!('posture' in legacy) && !('tripwire' in legacy) && !('fillWindowHrs' in legacy) &&
     !('velocityClass' in legacy) && !('thesis' in legacy), 'no forward keys when none supplied');
   assert.ok(!('path' in legacy), 'P4c: no path key when none supplied — clean row byte-identical');
+  assert.ok(!('volSrc' in legacy), 'SF-3: no volSrc key when none supplied (watch.mjs rows stay byte-identical)');
+});
+
+ok('SF-3: volSrc is lean-included (present only when supplied)', () => {
+  const bulk = suggestionEntry({}, { itemId: 8, cls: 'mid', verdict: 'A', volSrc: 'bulk' });
+  assert.equal(bulk.volSrc, 'bulk', 'supplied volSrc is written');
+  const peritem = suggestionEntry({}, { itemId: 9, cls: 'thin', verdict: 'A', volSrc: 'peritem' });
+  assert.equal(peritem.volSrc, 'peritem');
+  const none = suggestionEntry({}, { itemId: 10, cls: 'liquid', verdict: 'A' });
+  assert.ok(!('volSrc' in none), 'absent volSrc stays absent (lean, byte-identity)');
 });
 
 ok('P4c: the inferred entry `path` is lean-included (present only when supplied)', () => {

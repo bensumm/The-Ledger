@@ -452,12 +452,24 @@ Repo-root, committed. `quote.mjs` (per-item **and** `--positions`), `screen.mjs`
 niche row), and `watch.mjs` (each held/target read) append every emitted recommendation **at
 emit time, unconditionally**, via the shared `pipeline/lib/suggestlog.mjs`. One JSON object per line:
 ```
-{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict }
+{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict, volSrc? }
 ```
 `ts` = unix seconds. `class` = the item-type/liquidity label **as computed then** (the logic
 evolves; recomputing later would rewrite history, so it is snapshotted — coarse `liqClass()` for
 quote/screen, `watch.mjs`'s richer `classify()` taxonomy for watch). `verdict` = the emitted
 action string where the script produces one (position verdict / grade / watch action), else null.
+**`volSrc` (SF-3 — `'bulk'` | `'peritem'`, lean-included):** WHICH `/24h` endpoint the volume behind
+`class` came from — `screen.mjs` reads the whole-market bulk `/24h` (`loadAll24h`/`all24h.json`) so it
+always logs `'bulk'`; `quote.mjs` fetches per-item `/24h`, but when a recent scan left `all24h.json`
+WARM (within its 10-min TTL) it reuses that bulk volume for `class` (a fetch-free file read via
+`loadAll24hWarm`, NEVER forcing the ~4000-item bulk dump for a 1-item ask) and logs `'bulk'` too —
+converging with screen; a cold quote keeps its per-item volume and logs `'peritem'`. The point: the two
+scripts sample `/24h` at different instants, so the same item could log a DIFFERENT `class` across them
+(the polluted quantity is `volDay = min(hpv,lpv)` itself; re-deriving from the stored `volDay` doesn't
+launder it). `volSrc` lets F1 bucket/normalize the two sources; the warm read converges them for free
+when the data is on disk. Decided by the pure `classAndSource(row, id, warmBulkMap)` in
+`suggestlog.mjs`; `watch.mjs` supplies no `volSrc` (its `classify()` label isn't a `volDay` class) so
+its rows stay byte-identical. Pinned by `pipeline/sf3-volsrc.test.mjs`.
 No PII — ids/prices/timestamps only (the repo is public). `sync-fills.mjs`'s commit set now
 includes it when present (same add-only-these-files discipline as `screen.json`). NB: `watch.mjs`
 is still read-only w.r.t. the market/positions — this analytics append is the sole exception, and

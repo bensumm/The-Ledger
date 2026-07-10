@@ -206,12 +206,29 @@ export function pruneCache(subdir, maxAgeMs) {
 }
 
 /* --- bulk inputs (screen.mjs). 10-min cache; these are the whole-market snapshots. --- */
+export const ALL24H_TTL = 10 * 60 * 1000;   // ONE source of the bulk /24h freshness window (loadAll24h + the warm read)
 export async function loadAll24h() {
-  const cached = readCache('all24h.json', 10 * 60 * 1000);
+  const cached = readWarmAll24h();
   if (cached) return cached;
   const j = await jget(API + '/24h'); const d = j.data || {};
   writeCache('all24h.json', d); return d;
 }
+/* SF-3 — warm-ONLY read of the bulk /24h snapshot (the CONVERGENCE layer for the logged liquidity
+   `class`). Returns the whole-market { id: {highPriceVolume, lowPriceVolume, …} } map ONLY IF
+   all24h.json is present AND within ALL24H_TTL (a recent screen wrote it) — a PURE, SYNCHRONOUS
+   FILE READ, ZERO network. Returns null when the cache is cold / stale / absent so the caller keeps
+   its already-fetched per-item volume. HARD CONSTRAINT (SF-3): this must NEVER trigger the ~4000-item
+   bulk /24h fetch for a 1-item ask — it reuses the readCache path and by construction cannot fetch
+   (no `await`/`jget`). readWarmAll24h(dir, ttl, now) is the dir-injectable primitive (fixture-testable
+   without the network, mirroring FC1's _fetchCacheGet); loadAll24hWarm() is the production wrapper. */
+export function readWarmAll24h(dir = CACHE_DIR, ttlMs = ALL24H_TTL, now = Date.now()) {
+  try {
+    const o = JSON.parse(fs.readFileSync(path.join(dir, 'all24h.json'), 'utf8'));
+    if (o && (now - o.ts) < ttlMs) return o.data;
+  } catch {}
+  return null;   // cold / stale / absent — caller must NOT fetch (keeps the per-item volume instead)
+}
+export function loadAll24hWarm() { return readWarmAll24h(); }
 export async function loadAllLatest() {
   const cached = readCache('latest.json', 3 * 60 * 1000);
   if (cached) return cached;

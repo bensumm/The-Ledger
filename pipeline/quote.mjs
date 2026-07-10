@@ -24,12 +24,12 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, rebid
 import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series
 import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily } from './lib/marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence)
 import { readOpenPositions } from './lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { mdTable, stdCells } from './lib/cli.mjs';
 import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
-import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
+import { logSuggestions, suggestionEntry, classAndSource } from './lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback)
 import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
@@ -98,6 +98,11 @@ async function runItems() {
   // series → floorValidator degrades to pass. Best-effort: any archive error leaves daily empty.
   let daily = {};
   try { ({ series: daily } = await loadDaily(28, 6, { noFetch: true })); } catch { daily = {}; }
+  // SF-3: warm-ONLY bulk /24h map (null unless a recent screen wrote all24h.json within its TTL). When
+  // warm, the logged liquidity `class` converges with screen.mjs (both read the bulk snapshot) and tags
+  // volSrc:'bulk'; when cold it's null → classAndSource keeps the per-item volume, tags volSrc:'peritem'.
+  // NEVER fetches — loadAll24hWarm is a pure file read; a 1-item ask never triggers the ~4000-item dump.
+  const warm24h = loadAll24hWarm();
   const rows = [], lines = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
     // COD-4: BUDGETED ts1h fetch (1–2 items/invocation — cheap). Fixes the A4 asymmetry: the explicit-ask
@@ -144,7 +149,8 @@ async function runItems() {
       const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
       lines.push(`  ↳ diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}`);
     }
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
+    const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
+    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).
@@ -185,6 +191,11 @@ async function runPositions() {
   const map = snap ? snap.mapping : await loadMapping();
   const guide = snap ? snap.guide : await loadGuide();
   const getInputs = async id => (snap ? (await snap.series(id)) : null) ?? await fetchItemInputs(id);
+  // SF-3: the bulk /24h map for the logged liquidity `class` (converges with screen.mjs). On the normal
+  // path loadSnapshot ALREADY fetched the whole-market /24h (snap.v24) — reusing it adds ZERO fetch and
+  // tags volSrc:'bulk'; on the degraded no-snapshot path fall back to the warm-only file read (still
+  // fetch-free — never forces the bulk dump), null → classAndSource keeps per-item volume, volSrc:'peritem'.
+  const warm24h = snap ? snap.v24 : loadAll24hWarm();
   // P0: the live book (offers.json) + the watch loop's cross-pass state + declared hold theses —
   // the inputs quote.mjs never read before, so it can now print HOLD — ask filling + conviction.
   const offers = readOffersSnapshot(OFFERS);
@@ -239,7 +250,8 @@ async function runPositions() {
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) lines.push('  ' + gl);
     for (const f of flags(vres)) lines.push(`  ⚠ ${name} ${f.key}: ${f.reason}`);
-    sugg.push(suggestionEntry(row, { itemId, cls: liqClass(row), verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // the emitted per-position verdict string
+    const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
+    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // the emitted per-position verdict string
     // P0: conviction timers — surfaced as an informational line (the table's Verdict column is
     // unchanged). Mirrors watch.mjs's armed/escalated read off the SAME shared watch-state, so the
     // two surfaces agree on how long a lot has been underwater / whether an escalation has confirmed.

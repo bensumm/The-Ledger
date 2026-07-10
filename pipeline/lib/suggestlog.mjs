@@ -10,6 +10,8 @@
  *
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
+ *     volSrc?,   (SF-3 — 'bulk' | 'peritem': which /24h endpoint the volume behind `class` came from;
+ *                 lean-included, quote/screen always supply it, watch.mjs omits it)
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
@@ -149,6 +151,24 @@ export function liqClassOf(volDay) {
 }
 export function liqClass(row) { return liqClassOf(row && row.volDay); }
 
+// SF-3 — decide the logged liquidity `class` AND its volume SOURCE, deterministically and WITHOUT any
+// fetch. Problem: quote.mjs's per-item /24h and screen.mjs's bulk /24h are different snapshots, so the
+// same item could log a different `class` across scripts (the `volDay` itself is polluted; re-deriving
+// from the stored volDay doesn't launder it). Fix: when a WARM bulk /24h map is in hand (the caller
+// passes marketfetch.loadAll24hWarm() — null when cold), take the item's volume from the SAME bulk
+// endpoint screen uses → the classes CONVERGE, tagged volSrc:'bulk'. When cold, keep the per-item
+// row.volDay and tag volSrc:'peritem' (the honesty label F1 can bucket/normalize on). This is PURE —
+// it fetches nothing; the warm map is whatever the caller already had (the hard no-cold-fetch constraint
+// lives at the loadAll24hWarm accessor). screen.mjs passes volSrc:'bulk' directly (it already reads bulk).
+export function classAndSource(row, id, warmBulk) {
+  const be = warmBulk ? (warmBulk[id] || warmBulk[String(id)]) : null;
+  if (be) {
+    const volDay = Math.min(be.highPriceVolume || 0, be.lowPriceVolume || 0);   // same min(hpv,lpv) basis as computeQuote
+    return { cls: liqClassOf(volDay), volSrc: 'bulk' };
+  }
+  return { cls: liqClass(row), volSrc: 'peritem' };
+}
+
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate
 // from logSuggestions so a caller can assemble a batch, then log once.
 //
@@ -162,7 +182,7 @@ export function liqClass(row) { return liqClassOf(row && row.volDay); }
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -174,6 +194,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, posture, tripwire, 
     class:     cls ?? null,
     verdict:   verdict ?? null,
   };
+  // SF-3: `volSrc` ('bulk' | 'peritem') records which /24h endpoint the volume behind `class` came
+  // from, so F1 can bucket/normalize the two snapshot sources. Lean-included (the YS2 pattern): quote/
+  // screen always supply it; a caller that doesn't (watch.mjs passes its own classify() label) logs a
+  // byte-identical shape.
+  if (volSrc != null)        e.volSrc = volSrc;
   if (posture != null)       e.posture = posture;
   if (tripwire != null)      e.tripwire = tripwire;
   if (fillWindowHrs != null) e.fillWindowHrs = fillWindowHrs;

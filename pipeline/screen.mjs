@@ -494,7 +494,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // absent-field pattern — normal rows stay byte-identical) so calibration can segment or exclude them
   // and a ledger reader can never mistake one for a floor-qualified suggestion.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er) })));
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er) })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -733,7 +733,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vpFill = ESTIMATORS.value.pFill({ valueRanges: vr });
     const vttf = ESTIMATORS.value.ttf({ valueRanges: vr });
     const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
-    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',
+    sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: bulk /24h volume
       bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n) }));
   }
   buyNow.sort((a, b) => b.score - a.score); watch.sort((a, b) => b.score - a.score);
@@ -837,7 +837,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
     const cells = [std[0], gradeCell, ...std.slice(1), rankCell, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
     rows.push({ id, cells });
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), verdict: r.grade, posture: POSTURE, ...estFields(er) }));
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), volSrc: 'bulk', verdict: r.grade, posture: POSTURE, ...estFields(er) }));   // SF-3: watchlist row's volDay is bulk /24h (v24)
   }
   logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
   const headers = [...HEADERS, 'Note'];

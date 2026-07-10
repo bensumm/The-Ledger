@@ -213,7 +213,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   fixture-pinned in `pipeline/ignored.test.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
-  via `pipeline/lib/suggestlog.mjs`. **Bounded to the CURRENT month (SR1):** on append,
+  via `pipeline/lib/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
+  recording which `/24h` endpoint the liquidity `class` volume came from (screen = bulk; quote = bulk
+  when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources.
+  **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is
   archived, never deleted.
@@ -332,7 +335,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     mapping, guide, archive, series(id)}` composed from the existing loaders, passively accruing the
     archive (appends the current bulk `/1h`+`/5m` buckets, check-before-fetch) + the FC1 opt-in cross-invocation fetch
     cache — `setFetchCache`/`cachedJget` serve the per-item GETs from gitignored `.cache/fetch/`
-    within per-endpoint TTLs; OFF by default so decision paths stay byte-identical), `cli.mjs` (shared arg/format/table
+    within per-endpoint TTLs; OFF by default so decision paths stay byte-identical + the SF-3
+    `loadAll24hWarm()`/`readWarmAll24h(dir,ttl,now)` warm-ONLY bulk `/24h` accessor — a fetch-free
+    synchronous read of `all24h.json` when within `ALL24H_TTL`, else null; NEVER forces the bulk dump,
+    letting `quote.mjs` converge its logged liquidity `class` on screen's bulk snapshot for free),
+    `cli.mjs` (shared arg/format/table
     helpers), `rating.mjs` (grade/score model — P6b: the reward basis is the per-thesis RANK
     `net × P(fill) ÷ TTF` from `estimators.mjs`, NOT the demoted expGpDay; cutoffs are on that rank
     scale, still PLACEHOLDERS), `estimators.mjs` (P6b — the PURE per-thesis P(fill)+TTF estimators +
@@ -372,7 +379,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     reunites active+archives for full-history readers; YS2 `suggestionEntry` also lean-includes the
     forward prediction fields — `posture` and the plumbing for `tripwire`/`fillWindowHrs`/`velocityClass`/`thesis` —
     written only when a caller honestly supplies them, so legacy rows stay byte-identical; P2 also
-    lean-includes a `validators` flag list), `retrojoin.mjs` (P6a — the PURE, fixture-tested join
+    lean-includes a `validators` flag list; SF-3's `classAndSource(row,id,warmBulkMap)` picks the logged
+    liquidity `class` + the lean `volSrc` (`bulk`|`peritem`) tag, converging quote on screen's bulk
+    `/24h` snapshot when it's warm), `retrojoin.mjs` (P6a — the PURE, fixture-tested join
     core behind `pipeline/retrojoin.mjs`: `retroJoin(suggestions, fillsEvents)` classifies each
     suggestion row's forward outcome (filled / filled-worse / not-taken), measures suggestion→fill
     latency + the FIFO-matched round-trip (realized net / hold time, reusing reconstruct.mjs's
@@ -582,7 +591,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     closed form `min(limit×2, 8/24×0.10×volDay)`, and the limit-bound/volume-bound/null-limit/zero-vol edges),
     `rebid.test.mjs` (COD-3 — the cut-and-rebid helpers in `js/quotecore.js`: `rebidBar`'s friction
     arithmetic (tax + half-spread below the clear) + `rebidAdvice`'s trajectory-branch selection — knife→against,
-    oscillating→rebid-at-trough/sell-peak with diurnal level carry-through, else→friction-bar governs)
+    oscillating→rebid-at-trough/sell-peak with diurnal level carry-through, else→friction-bar governs),
+    `sf3-volsrc.test.mjs` (SF-3 — the liquidity-`class` volume-source split: `classAndSource` CLASS PARITY
+    (a warm bulk map converges quote's logged class on screen's, even across a per-item straddle) + the
+    cold `peritem` fallback (pure/synchronous ⇒ no fetch) + `readWarmAll24h`'s fetch-free warm/stale/absent
+    reads — all synthetic, no network)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +
@@ -653,7 +666,7 @@ constant governs each, so these can move without touching the deployed app or ph
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/alerts.mjs` (N1) | tracked (ships empty) |
-| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/…); SR1-bounded to the current month | tracked, append-only |
+| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/… + SF-3 `volSrc?`); SR1-bounded to the current month | tracked, append-only |
 | `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | tracked, append-only (lazy) |
 | `outcomes.json` | derived by `pipeline/outcomes.mjs` (F1 join reads active+archives) | gitignored |
 
