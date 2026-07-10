@@ -242,6 +242,40 @@ function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0
 // band at each historical trade PLACEMENT, so recent (weeks-old) windows must survive to be joinable.
 // Local + gitignored (.cache/) — band data is NEVER committed. 90d is the enrichable outcome window.
 export const BANDS_RETENTION_DAYS = 90;
+
+/* --- Bar E (Ben 2026-07-10) — robustify the band EDGES so a lone flier print can't set bandHi/bandLo.
+   Bar D fixed WHETHER a band gates (density vs two-sidedness); Bar E fixes WHERE its edges sit. The raw
+   min/max over the 2h of 5m prints lets ONE outlier (a lone 100k print against a 59k mid) set the edge
+   and inflate the surfaced ROI — the "band-top artifact". On a DENSE side (≥ BAND_EDGE_MIN_SAMPLE
+   prints) take the p90 high / p10 low instead of the raw extremum; on a SPARSE side keep the extremum,
+   because a quantile over a handful of points either equals the max OR wrongly discards the one real
+   high — exactly the thin big-ticket class Bar D just admitted (the reach validator backstops the
+   residue there; per Ben, Bar E need not be exact — a surfaced outlier gets caught downstream).
+   SCOPE: the LIVE surfacing path (loadBands) ONLY. loadHistBands stays raw min/max on purpose — its
+   job is honest historical RECONSTRUCTION for the O1 backtest-join (the real band a trade sat in,
+   flier and all), not surfacing. All three thresholds are NAMED PLACEHOLDERS pending a validation
+   pass (process rule 4); rawBandLo/rawBandHi are retained on the record for audit / a future §F note. */
+export const BAND_EDGE_MIN_SAMPLE = 8;   // < this many prints/side ⇒ raw extremum (a quantile is meaningless)
+export const BAND_EDGE_HI_Q = 0.90;      // dense-side high edge quantile (was the raw max)
+export const BAND_EDGE_LO_Q = 0.10;      // dense-side low edge quantile  (was the raw min)
+function quantileSorted(sorted, q) {      // type-7 linear interpolation over an ascending array
+  if (sorted.length === 1) return sorted[0];
+  const pos = (sorted.length - 1) * q, base = Math.floor(pos), rest = pos - base;
+  return sorted[base + 1] != null ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
+}
+export function robustBand(los, his) {
+  const edge = (vals, q, dir) => {
+    const s = vals.filter(x => x != null && x > 0).sort((a, b) => a - b);
+    if (!s.length) return { robust: null, raw: null };
+    const raw = dir === 'hi' ? s[s.length - 1] : s[0];
+    if (s.length < BAND_EDGE_MIN_SAMPLE) return { robust: raw, raw };   // sparse ⇒ keep the extremum
+    return { robust: Math.round(quantileSorted(s, q)), raw };
+  };
+  const lo = edge(los, BAND_EDGE_LO_Q, 'lo');
+  const hi = edge(his, BAND_EDGE_HI_Q, 'hi');
+  return { bandLo: lo.robust, bandHi: hi.robust, rawBandLo: lo.raw, rawBandHi: hi.raw };
+}
+
 export async function loadBands(hours = 2) {
   ensureCacheDir();
   try { fs.mkdirSync(BANDS_DIR, { recursive: true }); } catch {}
@@ -294,15 +328,23 @@ export async function loadBands(hours = 2) {
     const snap = archive.get(w); if (!snap) continue;
     for (const id in snap) {
       const e = snap[id]; if (!e) continue;
-      let b = bands[id]; if (!b) b = bands[id] = { bandLo: null, bandHi: null, active5m: 0, tradedWin: 0, sawLow: false, sawHigh: false };
-      if (e.avgLowPrice)  b.bandLo = b.bandLo == null ? e.avgLowPrice : Math.min(b.bandLo, e.avgLowPrice);
-      if (e.avgHighPrice) b.bandHi = b.bandHi == null ? e.avgHighPrice : Math.max(b.bandHi, e.avgHighPrice);
+      let b = bands[id]; if (!b) b = bands[id] = { los: [], his: [], active5m: 0, tradedWin: 0, sawLow: false, sawHigh: false };
+      if (e.avgLowPrice)  b.los.push(e.avgLowPrice);   // Bar E: collect each side's prints; robustBand sets the edge below
+      if (e.avgHighPrice) b.his.push(e.avgHighPrice);
       const lv = e.lowPriceVolume || 0, hv = e.highPriceVolume || 0;
       if (lv > 0 && hv > 0) b.active5m++;   // both sides in the SAME 5m window (a quality/display signal, no longer the gate)
       if (lv > 0 || hv > 0) b.tradedWin++;  // Bar D DENSITY: any trade this window (one-sided OK)
       if (lv > 0) b.sawLow = true;          // Bar D TWO-SIDEDNESS: each side printed ≥1× across the whole window
       if (hv > 0) b.sawHigh = true;
     }
+  }
+  // Bar E — set each band's edges from the collected prints (robust p90/p10 on a dense side, raw
+  // extremum on a sparse one); rawBandLo/rawBandHi kept for audit. Drop the working arrays.
+  for (const id in bands) {
+    const b = bands[id];
+    const r = robustBand(b.los, b.his);
+    b.bandLo = r.bandLo; b.bandHi = r.bandHi; b.rawBandLo = r.rawBandLo; b.rawBandHi = r.rawBandHi;
+    delete b.los; delete b.his;
   }
   return bands;
 }
@@ -426,7 +468,9 @@ export async function loadHistBands(reqs, hours = 2) {
   }
   for (const id of dirty) { try { fs.writeFileSync(path.join(OB_DIR, id + '.json'), JSON.stringify(store.get(id))); } catch {} }
 
-  // aggregate the band per request (same min-low / max-high basis as computeQuote's 2h band)
+  // aggregate the band per request (same min-low / max-high basis as computeQuote's 2h band).
+  // Bar E note: this RECONSTRUCTION path stays RAW min/max on purpose (the real band a historical
+  // trade sat in, flier and all — the O1 backtest-join needs the actual band, not the surfacing-robust one).
   return reqs.map((r, idx) => {
     const s = store.get(r.id);
     let bandLo = null, bandHi = null, active5m = 0, tradedWin = 0, sawLow = false, sawHigh = false, loVol = 0, hiVol = 0, covered = 0;

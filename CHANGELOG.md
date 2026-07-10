@@ -10,6 +10,28 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### BAR-E — robust band edges: a lone flier can't set bandHi (2026-07-10, pipeline-only — NO APP_VERSION)
+The Bar-D sequel. Bar D fixed WHETHER a band gates (density vs two-sidedness); Bar E fixes WHERE its
+edges sit. The band edge was the raw `min(avgLow)` / `max(avgHigh)` over the 2h of 5m prints, so ONE
+flier — a lone 100k print against a 59k mid — set `bandHi` and inflated the surfaced ROI (the "band-top
+artifact" the reach validator and a manual `/scan` rule had to catch after the fact). `robustBand`
+(`pipeline/lib/marketfetch.mjs`) now takes the **p90 high / p10 low** on a DENSE side (≥
+`BAND_EDGE_MIN_SAMPLE` = 8 prints) and keeps the raw extremum on a SPARSE side — because a quantile over
+a handful of points either equals the max or wrongly *discards the one real high*, exactly the thin
+big-ticket class Bar D just admitted (the reach validator backstops that residue).
+
+**Scope decision (Ben, "let's do scope A first… even if we surface outliers the validation layer should
+catch it").** Bar E robustifies the **LIVE surfacing path only** — `loadBands` → `bandCore`'s edge/Rank.
+Two paths stay RAW on purpose: (1) `loadHistBands`, because the O1 backtest-join reconstructs the *actual*
+band a historical trade sat in (flier and all) for fill-model calibration, not a surfacing decision; and
+(2) `computeQuote`'s app-facing Optimistic column (Scope B, deferred — it would bump `APP_VERSION` and
+needs a browser smoke; the reach validator already flags it inform). Because the robustification lives
+upstream in the aggregation, `bandCore` and the replay golden are **byte-unchanged**; Bar E gets its own
+focused unit test (`pipeline/bandedge.test.mjs`, 8 checks) on the pure `robustBand` helper instead of a
+golden change. Live `--mode band` confirmed clean (big tickets still surface; edges no longer flier-set).
+The three thresholds are NAMED PLACEHOLDERS pending a validation pass (process rule 4); `rawBandLo`/
+`rawBandHi` are retained on the band record for audit / a future §F "edge trimmed X→Y" note.
+
 ### BAR-D — traded-band gate: decouple density from two-sidedness (2026-07-09, pipeline-only)
 Ben: "This seems to bite us a bunch, how can we improve on this?" — the "residual" from the spread/rising
 deletion (an item with ZERO traded 5m windows in the 2h is deliberately excluded) was culling nearly every

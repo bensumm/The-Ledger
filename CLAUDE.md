@@ -86,8 +86,20 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   dense / `MIN_TRADED_THIN` 2 thin) and TWO-SIDEDNESS = `sawLow && sawHigh` asked ONCE across the whole
   window (a one-sided ghost fails). Liquidity proper stays the 24h gate's job. `active5m` is kept as a
   display/quality signal but no longer gates; `activeWin` (→ `rating.mjs` confidence) now reports
-  `tradedWin`. The ONE home for this is the `bandCore` header in `js/strategies.mjs`; the residual
-  band-EDGE artifact (a lone print setting `bandHi`) stays the reach validators' / band-top-artifact job.
+  `tradedWin`. The ONE home for this is the `bandCore` header in `js/strategies.mjs`.
+- **Band EDGE robustness — Bar E (Ben 2026-07-10).** Bar D fixed WHETHER a band gates; Bar E fixes WHERE
+  its edges sit. The raw min/max over the 2h of 5m prints let ONE flier (a lone 100k print against a 59k
+  mid) set `bandHi` and inflate the surfaced ROI — the band-top artifact. `robustBand` (`pipeline/lib/
+  marketfetch.mjs`) takes the **p90 high / p10 low** on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE` 8 prints)
+  and keeps the raw extremum on a SPARSE side (a quantile over a handful of points either == the max or
+  wrongly discards the one real high — the thin big-ticket class Bar D just admitted; reach backstops the
+  residue there). **SCOPE A — the LIVE surfacing path (`loadBands` → `bandCore` edge/Rank) ONLY.** Two
+  things stay RAW on purpose: `loadHistBands` (the O1 backtest-join reconstructs the *actual* band a trade
+  sat in, flier and all) and `computeQuote`'s Optimistic column (the app-facing edge — Scope B, deferred:
+  it'd bump `APP_VERSION`). So `bandCore`/golden are byte-unchanged; the robustification is upstream in the
+  aggregation. Thresholds (`BAND_EDGE_MIN_SAMPLE`/`BAND_EDGE_HI_Q`/`BAND_EDGE_LO_Q`) are NAMED PLACEHOLDERS
+  pending a validation pass; `rawBandLo/rawBandHi` retained on the record for audit. Pinned by
+  `pipeline/bandedge.test.mjs`. The reach validator remains the backstop for the sparse residue.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a

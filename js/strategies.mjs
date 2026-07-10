@@ -79,8 +79,10 @@ function valueEdge({ avgHigh, avgLow }, t) {
    Each takes ({ avgHigh, avgLow, band, limitVol, limit, thin }, thresholds) and returns either
      { modeNet, modeRoi, activeWin }   (the row's after-tax edge + traded-window count, or null win)
    or null when the item fails this niche's edge/gate (the old `continue`). `band` is the aggregated
-   2h band record { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh } or undefined. ALL numeric math
-   is the shared `tax()` so the numbers stay byte-identical to screen.mjs / the app. */
+   2h band record { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh (+ rawBandLo/rawBandHi) } or
+   undefined. bandLo/bandHi are already Bar-E robustified upstream (marketfetch.mjs robustBand — a lone
+   flier can't set the edge on a dense band); bandCore just consumes them. ALL numeric math is the
+   shared `tax()` so the numbers stay byte-identical to screen.mjs / the app. */
 
 // the traded-band common core (band / churn / scalp all price the edge off the intraday band).
 // Returns the band edge + activeWin, or null when the band is missing/untraded. The per-spec gate

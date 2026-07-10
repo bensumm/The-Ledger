@@ -415,8 +415,18 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   gate's job. `marketfetch.mjs` emits the fields on both band paths; `bandCore` (js/strategies.mjs) gates on
   them; `active5m` survives as a display signal + `activeWin`→confidence now reports `tradedWin`. Replay
   archetype 2003 became the regression guard (active5m 0, survives on tradedWin 8 — golden byte-unchanged).
-  **Follow-up not taken (Bar E):** robustify the band EDGES themselves (p10/p90 instead of min/max) so a
-  lone print can't set `bandHi` — deferred; the reach validators backstop that residual today.
+- **Band EDGE robustness — Bar E — DONE (Ben 2026-07-10, Scope A):** robustify the band EDGES so a lone
+  flier can't set `bandHi`/`bandLo` and inflate the surfaced ROI (the band-top artifact). `robustBand`
+  (`pipeline/lib/marketfetch.mjs`) takes p90 high / p10 low on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE` 8
+  prints), keeps the raw extremum on a SPARSE side (a quantile over a few points == the max or discards the
+  one real high — the thin big-ticket class Bar D just admitted; reach backstops it). SCOPE A = the LIVE
+  surfacing path (`loadBands` → `bandCore` edge/Rank) ONLY; `loadHistBands` stays raw (O1 reconstructs the
+  actual band a trade sat in) and `computeQuote`'s Optimistic column stays raw (Scope B, deferred —
+  `APP_VERSION` bump). `bandCore`/replay-golden byte-unchanged (robustification is upstream in aggregation);
+  pinned by `pipeline/bandedge.test.mjs`. Thresholds are NAMED PLACEHOLDERS; `rawBandLo/rawBandHi` kept for
+  audit. **Follow-up not taken (Bar E Scope B):** robustify `computeQuote`'s app-facing Optimistic edges too
+  (removes the artifact from the app's headline column at source) — deferred; it bumps `APP_VERSION` + needs
+  a browser smoke, and the reach validator + Bar E Scope A already cover the surfacing decision.
 - **Churn per-lap rank + band partition — DONE (Step 6, Ben 2026-07-09, decision A):** churn ranks the
   LAP (`net/u × min(limit, feasibleDepth) × P ÷ TTF`) via its own `churn` estimator family (we always max
   the buy limit → the exact limit is a fact, NOT the demoted ×windows/day `expGpDay`); Death/Blood/Soul
