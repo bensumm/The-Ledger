@@ -89,6 +89,7 @@ import { STRATEGIES, MODE_KEYS, ALL_MODE_KEYS } from '../js/strategies.mjs';
 import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
+import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
@@ -942,6 +943,7 @@ async function main() {
     const payload = {
       app: 'the-coffer-screen',
       schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)
+      pipeline: PIPELINE_VERSION,      // PV — the app renders "pipeline vX" from this (additive; old apps ignore it)
       generatedAt: new Date().toISOString(),
       mode: MODE,
       posture: POSTURE,                // S2: the Scan banner reads this to say which posture it shows

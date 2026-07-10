@@ -381,7 +381,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     written only when a caller honestly supplies them, so legacy rows stay byte-identical; P2 also
     lean-includes a `validators` flag list; SF-3's `classAndSource(row,id,warmBulkMap)` picks the logged
     liquidity `class` + the lean `volSrc` (`bulk`|`peritem`) tag, converging quote on screen's bulk
-    `/24h` snapshot when it's warm), `retrojoin.mjs` (P6a — the PURE, fixture-tested join
+    `/24h` snapshot when it's warm), `version.mjs` (PV — the ONE `PIPELINE_VERSION` const, stamped
+    into `screen.json` (`pipeline` field) + `positions.json` so the app can display the pipeline
+    version beside APP_VERSION; independent bump track, launched at 1.0.0 with the app parity milestone),
+    `retrojoin.mjs` (P6a — the PURE, fixture-tested join
     core behind `pipeline/retrojoin.mjs`: `retroJoin(suggestions, fillsEvents)` classifies each
     suggestion row's forward outcome (filled / filled-worse / not-taken), measures suggestion→fill
     latency + the FIFO-matched round-trip (realized net / hold time, reusing reconstruct.mjs's

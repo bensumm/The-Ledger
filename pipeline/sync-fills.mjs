@@ -59,6 +59,7 @@ import { readOfferRows, offersSnapshot, nameLookupFromCache } from './lib/offers
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
 import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from './lib/reconstruct.mjs';
 import { loadIgnored, quarantineEvents } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
+import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
@@ -268,7 +269,7 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
     if (eventsChanged) writeFileSync(fillsPath, JSON.stringify({
       app: 'the-coffer-fills', version: 1, generatedAt: new Date().toISOString(), events: merged
     }));
-    if (positionsChanged) writeFileSync(positionsPath, JSON.stringify(pos));
+    if (positionsChanged) writeFileSync(positionsPath, JSON.stringify({ ...pos, pipeline: PIPELINE_VERSION }));   // PV: additive stamp; positionsSig ignores it, so no spurious rewrite
     if (offersChanged) writeFileSync(offersPath, JSON.stringify(offersSnap));
   }
 
