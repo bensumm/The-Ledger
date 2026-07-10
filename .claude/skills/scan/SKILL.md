@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.43
+version: 1.44
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -21,7 +21,9 @@ filter the output rows by niche yourself; `--publish` only if Ben wants the app'
 updated. The script already gates (two-sided liquidity, price window, per-spec falling doctrine)
 and grades (`rating.mjs`); your job is the judgment pass over what it prints.
 
-**P5 niches — scalp / value (both PROVISIONAL, n≈0, OFF-by-default; explicit `--mode` only).**
+**P5 niches — scalp / value (both PROVISIONAL, n≈0).** `--mode scalp` stays OFF-by-default (explicit
+`--mode scalp` only); **`--mode value` now RUNS IN `--mode all` by default (Ben 2026-07-10)** — still
+console-only (excluded from `screen.json`, no app tab) and provisional, but it surfaces on every default scan.
 - **`--mode scalp`** _(judgment: when to chase — desk-presence call)_ — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
   faller isn't auto-bad). It surfaces ONLY fallers (Step 5, Ben 2026-07-09: a scalp REQUIRES falling — a
   non-falling row is a band flip band already owns → dropped `notFalling`). Flip-only/no-hold, HARD intraday
@@ -55,7 +57,8 @@ and grades (`rating.mjs`); your job is the judgment pass over what it prints.
   week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
   timing/trajectory` notes + the footer drops, and verify the sell-leg reach by hand before quoting profit.
 
-**Niche set (Steps 3+4, 2026-07-09 — Ben's ruling).** `--mode all` runs **band + churn**. **The
+**Niche set (Steps 3+4, 2026-07-09 — Ben's ruling; value added 2026-07-10).** `--mode all` runs **band +
+churn + value** (value graduated into the default scan 2026-07-10 — console-only, provisional). **The
 `spread` and `rising` niches were DELETED** (this supersedes NY2/NY3's "spread off-by-default,
 rising kept"): spread's 24h-*average* edge is structurally narrower than the intraday band and
 surfaced ≈0 clean flips once the render net>0 gate landed (its only exclusive lane — thin

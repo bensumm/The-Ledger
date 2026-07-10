@@ -10,6 +10,20 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### value-default — value niche runs in `--mode all` (2026-07-10, pipeline-only, no APP_VERSION)
+Ben's ruling: the `value` niche graduates from explicit-`--mode value`-only to running in the default
+`--mode all` scan alongside band + churn. Mechanism: `inAll: false → true` on the value spec in
+`js/strategies.mjs`, so `ALL_MODE_KEYS` now resolves to `['band','churn','value']`. **`scalp` stays
+off-by-default** (explicit `--mode scalp` only). Value remains **console-only** (excluded from
+`screen.json`, no app tab) so there is no APP_VERSION bump, and it stays **provisional** (n≈0, PLACEHOLDER
+thresholds) — a bare `--mode all` runs it on placeholder `--capital`/`--slots` (pass `--capital <gp>` for a
+real deployable-capital rank). Docs reconciled in place (CLAUDE.md, `/scan` SKILL v1.44, `screen.mjs`
+header/comments). Known open follow-up surfaced by the first default run: the BUY-NOW tier vs the
+value-amplitude validator can disagree on a soft-floor item — they measure proximity off different
+series/windows (tier: robust q15/q85 over the 28d loadDaily archive; validator: raw min/max over the 7d
+1h-derived series). Root-caused this session; fix is queued (demote buy-now→watch on an amplitude caution
++ robustify the validator's 7d edges with quantiles, Bar E's low-side twin).
+
 ### 0.55.0 — BAR-E Scope B: robust band edges in the app Optimistic column (2026-07-10)
 The Scope B follow-through on Bar E (below): the same flier-trimming now lands in the **app-facing**
 `computeQuote` Optimistic column (`optBuy`/`optSell`) at source, not just the pipeline surfacing path.

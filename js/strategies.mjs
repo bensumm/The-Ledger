@@ -211,7 +211,7 @@ export const STRATEGY_LIST = Object.freeze([
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
   },
   {
-    key: 'value', label: 'Value', inAll: false,   // P5 — off-by-default; explicit --mode value only (provisional, n≈0)
+    key: 'value', label: 'Value', inAll: true,   // Ben 2026-07-10: value runs in --mode all by default (was explicit-only). Still console-only (excluded from screen.json) + provisional (n≈0); a bare `all` runs it on placeholder --capital/--slots.
     pool: { risingFloor: false }, edge: valueEdge, rank: 'value', confirm: null,
     // value KEEPS reach — as a full-day week+ daily-min TIMING read (windowHours 24 / 14 nights), not an
     // 8h flip check: it finds WHEN the recent-week low prints so the entry is timed (Hydra/Berserker).
@@ -240,7 +240,7 @@ export const STRATEGY_LIST = Object.freeze([
 // live in ONE place — the registry — not as a magic-string array in screen.mjs).
 export const STRATEGIES = Object.freeze(Object.fromEntries(STRATEGY_LIST.map(s => [s.key, s])));
 export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
-export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // Steps 3+4 (Ben 2026-07-09): band/churn in --mode all (spread + rising DELETED; P5 scalp/value explicit-only)
+export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/value in --mode all (Ben 2026-07-10 added value; spread + rising DELETED; scalp stays explicit-only)
 
 /* --- conformance ----------------------------------------------------------------------------------
    validateStrategySpec(spec) → string[] of structural violations (empty = conformant). The conformance

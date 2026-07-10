@@ -223,7 +223,8 @@ Script facts the skills rely on (current behavior, not doctrine):
   net at the thesis's OWN posted pair is ≤ 0 (the bond retrade-fee / ROI-bind leak — counted `neg-net` in
   `--stats`; held/asked/watchlist rows never reach it, so they're exempt; it's a render drop, so the
   replay goldens are unaffected). **Four niches** — `band` / `churn` / `scalp` / `value` — with **`--mode all`
-  running band/churn; scalp/value are off-by-default** (reach each with an explicit `--mode <name>`).
+  running band/churn/value (Ben 2026-07-10 — value graduated into the default scan; still console-only +
+  provisional); scalp stays off-by-default** (reach it with an explicit `--mode scalp`).
   **The `spread` and `rising` niches were DELETED (Steps 3+4, Ben 2026-07-09** — git history is the reference;
   this supersedes the NY2/NY3 off-by-default framing). Why: spread's 24h-average edge is structurally
   narrower than the intraday band and surfaced ≈0 clean flips once the net>0 gate landed — and its ONE
@@ -289,7 +290,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   regime; cycle scored on the recent C→D` note. Effect: Contract → WATCH, BUY-NOW 21→11. Also fixed the
   `Live vs low` `+-1.4%` doubled-sign display bug. The daily archive is **backfilled to ~2026-06-19 (~20d)**
   — the old "began accruing 2026-07-08 / needs weeks to warm" notes are superseded (a newly-tracked item can
-  still be short → the honest no-data degrade). Still provisional/off-by-default (n≈0, PLACEHOLDER thresholds).
+  still be short → the honest no-data degrade). Still provisional (n≈0, PLACEHOLDER thresholds), but as of
+  2026-07-10 value RUNS IN `--mode all` by default (`inAll:true` in `js/strategies.mjs`) — console-only
+  (excluded from `screen.json`, no app tab → no APP_VERSION); a bare `all` runs it on placeholder --capital/--slots.
   **Value trajectory-GATE (Ben 2026-07-09)** — trajectory graduates from inform→**gate in the value niche
   only**: a KNIFE now DROPS (was a "would reject" note that let Inoculation bracelet / Zombie axe sit atop
   BUY-NOW). Rationale: the knife is value's defining anti-pattern ("buy the base, never the knife") AND the

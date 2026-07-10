@@ -51,9 +51,11 @@
  *                     printed ≥1× across the window (two-sided), NOT the old same-5m-window count.
  *   churn           — buy-limit-cycle commodities: volDay ≥ 2000 && limit > 0, tiny ROI accepted
  *                     (no --min-roi gate), the high-frequency small-margin niche.
- *   scalp / value   — provisional, OFF-by-default (explicit --mode only): scalp = a deliberate flip on a
- *                     FALLING wide band (fallers only); value = a term-structure buy-hold (own table).
- *   all             — run band + churn in sequence (shared fetch cache). scalp/value explicit-only.
+ *   scalp           — provisional, OFF-by-default (explicit --mode only): a deliberate flip on a FALLING
+ *                     wide band (fallers only).
+ *   value           — a term-structure buy-hold (own table); provisional (n≈0) but IN --mode all as of
+ *                     2026-07-10 (Ben) — console-only (excluded from screen.json).
+ *   all             — run band + churn + value in sequence (shared fetch cache). scalp explicit-only.
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
@@ -128,7 +130,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
 const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/churn/scalp/value — spread+rising deleted, Steps 3+4)
-const ALL_MODES = ALL_MODE_KEYS; // --mode all runs the inAll specs — Steps 3+4 (Ben 2026-07-09): band/churn (scalp/value explicit-only)
+const ALL_MODES = ALL_MODE_KEYS; // --mode all runs the inAll specs — band/churn/value (Ben 2026-07-10 added value; scalp explicit-only)
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 50;
@@ -239,7 +241,7 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE };
 
-const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // Steps 3+4 (Ben 2026-07-09): `all` = band/churn; scalp/value explicit-only
+const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/value (Ben 2026-07-10 added value); scalp explicit-only
 const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
 const IS_VALUE = RUN_MODES.includes('value');                    // P5 — the value niche needs the 28d term structure
 const N_WIN = Math.max(1, Math.ceil(BAND_HOURS * 3600 / 300));   // 5m windows in the band (confidence denom)
