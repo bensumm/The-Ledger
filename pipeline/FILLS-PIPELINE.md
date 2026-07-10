@@ -425,6 +425,11 @@ slot is a state machine and cannot close twice with no offer placed between.
   — which the ingest validator never re-reads — is still dropped from the derived view. Fixtures
   (a: blowpipe dup pair, b: genuine same-price repeat with a placement between → NOT deduped,
   c: dup straddling an EMPTY-burst) live in `pipeline/reconstruct.test.mjs`.
+  **NB — no manual-slot exemption here** (unlike the loud validator above): `dedupeSnapshots` keys purely
+  on slot, so two IDENTICAL manual `complete` terminals on the SAME slot 8 (or 9) silently collapse to one.
+  A same-item/qty/price **multi-window backfill** must give each window a DISTINCT slot via
+  `add-manual-fill.mjs --slot <n>` (≥ 8), or a window is lost with no warning (the 2026-07-10 soul-rune
+  two-25k-window backfill hit exactly this — both buys on slot 8 merged; slot 8 + slot 9 fixed it).
 
 So `fills.json` is no longer guaranteed to archive both raw lines of a fresh re-emit (LH1 filters it
 at ingest); a pre-LH1 archive that still carries a duplicate pair is handled correctly by the

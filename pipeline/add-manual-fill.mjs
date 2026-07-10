@@ -18,6 +18,8 @@
  *   node pipeline/add-manual-fill.mjs --item "Crystal seed" --type sell --qty 2 --price 3439800 --net --time "2026-07-02T14:30"
  *   node pipeline/add-manual-fill.mjs --item "Abyssal bludgeon" --type withdraw --qty 1 --time "2026-07-03T12:00"
  *   node pipeline/add-manual-fill.mjs --item "Dragon claws" --type banked --qty 1 --price 40.2m
+ *   node pipeline/add-manual-fill.mjs --id 566 --type buy --qty 25000 --price 381 --time "2026-07-09T12:00"            # window 1 (slot 8)
+ *   node pipeline/add-manual-fill.mjs --id 566 --type buy --qty 25000 --price 381 --time "2026-07-09T16:00" --slot 9  # window 2 — distinct slot so it survives the re-emit guard
  *   node pipeline/add-manual-fill.mjs --remove a1b2c3d4e5f60718
  *
  * Flags:
@@ -38,6 +40,11 @@
  *                    actually happened — FIFO matching is timestamp-ordered, so a "now"
  *                    timestamp on a backdated trade mis-pairs lots (the phantom-bludgeons
  *                    incident, 2026-07-03). A sell must timestamp AFTER its buy.
+ *   --slot <n>       synthetic GE slot (default 8; must be ≥ 8, live slots 0-7 are reserved).
+ *                    Give each window a DISTINCT slot when backfilling repeated identical fills
+ *                    (same item/qty/price) — the re-emit guard collapses identical terminals that
+ *                    repeat on the SAME slot with no offer between, silently dropping the duplicate
+ *                    (the 2026-07-10 soul-rune two-window backfill: both buys on slot 8 merged to one).
  *   --remove <eventId>  append a tombstone {"state":"REMOVE","target":"<id>"} instead of
  *                    a fill — the next sync deletes that event id from the merged set,
  *                    INCLUDING events already persisted in fills.json.
@@ -57,6 +64,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 const OUT = path.join(LOG_DIR, 'coffer-manual.log'); // sibling file; ingested by sync-fills.mjs, never written by RuneLite
 const MANUAL_SLOT = 8; // real GE slots are 0-7; 8 keeps synthetic events clear of live-slot cancel inference
+// Distinct synthetic slots (8, 9, 10, …) let two otherwise-identical manual terminals coexist. The
+// TRAP: reconstruct.mjs's SILENT derivation dedupe (`dedupeSnapshots`) keys purely on slot and — unlike
+// the LOUD ingest `validateSlotTransitions`, which exempts manual slots 8/9 — has NO manual-slot exempt,
+// so two identical `complete` terminals on the SAME slot silently collapse to one (it can't tell a real
+// second window from a snapshot re-emit). A same-item/qty/price multi-window backfill must therefore put
+// each window on a DISTINCT slot (the 2026-07-10 soul-rune two-25k-window backfill lost a window to this).
+// --slot picks one; must stay ≥ 8 to avoid live-slot cancel inference (8 = desktop/CLI, 9 = mobile by
+// convention, both loud-exempt; a single terminal on 10+ is fine since neither guard fires without a
+// same-slot prior terminal).
 
 // --- args (parseArgs/parseGp shared via cli.mjs, chunk 10.2) ---
 const A = parseArgs(process.argv.slice(2));
@@ -78,6 +94,11 @@ if (A.remove) {
 
 const type = String(A.type || '').toLowerCase();
 if (!['buy', 'sell', 'withdraw', 'banked'].includes(type)) die('--type must be buy, sell, withdraw or banked');
+// --slot: synthetic GE slot for this line (default MANUAL_SLOT). Must be ≥ 8 so it never collides with
+// the live slots 0-7 (cancel inference). Use a distinct slot per window when backfilling repeated
+// identical fills, so the re-emit guard doesn't collapse them (see MANUAL_SLOT note above).
+const slot = A.slot === undefined ? MANUAL_SLOT : parseInt(A.slot, 10);
+if (!Number.isFinite(slot) || slot < MANUAL_SLOT) die(`--slot must be an integer ≥ ${MANUAL_SLOT} (live slots 0-7 are reserved for real offers)`);
 const qty = parseInt(A.qty, 10);
 if (!Number.isFinite(qty) || qty <= 0) die('--qty must be a positive integer');
 let priceEach;
@@ -124,11 +145,11 @@ else if (A.item) { const map = await loadMapping();
 const state = type === 'buy' ? 'BOUGHT' : type === 'sell' ? 'SOLD'
             : type === 'withdraw' ? 'WITHDRAWN' : 'BANKED';
 const line = JSON.stringify({
-  date, time, state, slot: MANUAL_SLOT,
+  date, time, state, slot,
   item: itemId, qty, worth: priceEach * qty, max: qty, offer: priceEach
 });
 
-console.log(`\n${type.toUpperCase()} ${qty} × ${itemName} (#${itemId}) @ ${priceEach.toLocaleString()} ea  [${date} ${time}]`);
+console.log(`\n${type.toUpperCase()} ${qty} × ${itemName} (#${itemId}) @ ${priceEach.toLocaleString()} ea  [${date} ${time}]${slot !== MANUAL_SLOT ? ` (slot ${slot})` : ''}`);
 console.log('line:', line);
 if (A.dry) { console.log('\n[dry] not written.'); process.exit(0); }
 if (!fs.existsSync(LOG_DIR)) die('log dir not found: ' + LOG_DIR);
