@@ -68,9 +68,28 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
 
 - **Global falling-exclusion → per-strategy (P5, Ben 2026-07-08).** Falling was once a blanket
   screen exclusion. It is now PER-SPEC (`js/strategies.mjs` `spec.falling`:
-  `exclude`/`accept`/`knife-guard`) — band/spread/rising/churn still exclude, but scalp accepts a
-  falling wide band deliberately and value knife-guards. Memory `falling-exclusion-amended`. Any doc
-  saying "falling items are silently excluded" without the per-spec qualifier is stale.
+  `exclude`/`accept`/`knife-guard`) — band/churn still exclude, but scalp accepts a falling wide
+  band deliberately and value knife-guards. Memory `falling-exclusion-amended`. Any doc saying
+  "falling items are silently excluded" without the per-spec qualifier is stale.
+- **Niche roster: NY2/NY3 off-by-default → `spread`/`rising` DELETED (Ben 2026-07-09, Steps 3+4).**
+  NY2/NY3 ruled `spread` "stays off-by-default" and `rising` "kept in `--mode all`". Both specs were
+  then deleted outright: spread's 24h-average edge is structurally narrower than the intraday band and
+  surfaced ≈0 clean flips once the render net>0 gate landed; `rising` ⊆ `band` (a riser clears band's
+  gates too). Rising's one real mechanism — proxy-first fetch-pool ordering so risers aren't buried
+  below flats — was absorbed into `rankAndSlice`'s small rising reserve (`RISING_RESERVE_DEFAULT`). The
+  live roster is band/churn/scalp/value (`js/strategies.mjs`); doclint denylists spread/rising as live
+  niches. Git history is the spec reference.
+- **Value-niche rank: %-amplitude → abs-gp → deployable-capital (all same day, Ben 2026-07-09).**
+  `valueScore`'s amplitude term is a scale-free PERCENTAGE, so cheap high-volatility teleport tabs
+  (cycling 30–100%) swept the hard top-N fetch cut while the genuinely viable mid-amp DEPLOYABLE sub-1m
+  class (Soiled page, Snape grass seed, Awakener's orb) never got quoted. A first patch boosted ABSOLUTE
+  gp/unit (`VALUE_ABSGP_*`) — but a full-pool (235-item) investigation showed abs-gp just rewards
+  "expensive" (ZERO big-liquid items exist: nothing >1m trades 500+/d) and buried the same class. So
+  abs-gp was SUPERSEDED the same day by the DEPLOYABLE-CAPITAL measure (realizable after-tax gp/cycle on
+  the capital you can actually park+exit — the three-way `deployUnits` min + a clamped `deployMult`
+  folded into `valueScore`). `VALUE_ABSGP_*` is gone; the operating rule lives in `js/valuescreen.mjs`'s
+  header. This was one of four same-day value iterations (deployable-capital, artifact/liquidity
+  hardening, RC1 recency anchor, trajectory-GATE) whose current form is now that module header.
 - **`expGpDay` as the ranking metric → demoted (P6b, Ben 2026-07-09: "I despise gp/d").** Rank is now
   `net after tax × P(fill at the quoted pair) ÷ TTF` per thesis (`pipeline/lib/estimators.mjs`);
   `expGpDay` survives only as the cheap pre-fetch pool orderer + the 500k `--min-gpd` pre-filter.

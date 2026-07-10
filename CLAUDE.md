@@ -78,46 +78,19 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `limitVol ≥ --floor` **OR** gp-flow `limitVol×mid ≥ --gp-floor` (250m). The gp-flow path admits big
   tickets, flagged `thin`, grade-capped **A-** (`THIN_GRADE_CAP`), bounded to `--thin-reserve`. Full
   rationale in `/scan`.
-- **Traded-band gate — Bar D (Ben 2026-07-09).** Separate from the 24h liquidity gate above, band/churn/
-  scalp price the edge off the 2h intraday band, which must be TRADED (not a one-spike artifact). The old
-  gate counted 5m windows two-sided *within the same 5 minutes* (`active5m`) — a coincidence a big ticket
-  (a few prints scattered across the hour) structurally fails, so it culled exactly the thin big-ticket
-  class it was meant to admit. **Bar D DECOUPLES the two jobs the one count conflated:** DENSITY =
-  `tradedWin` (windows with ANY trade, one-sided OK — a lone spike is 1, still rejected; `MIN_TRADED` 6
-  dense / `MIN_TRADED_THIN` 2 thin) and TWO-SIDEDNESS = `sawLow && sawHigh` asked ONCE across the whole
-  window (a one-sided ghost fails). Liquidity proper stays the 24h gate's job. `active5m` is kept as a
-  display/quality signal but no longer gates; `activeWin` (→ `rating.mjs` confidence) now reports
-  `tradedWin`. The ONE home for this is the `bandCore` header in `js/strategies.mjs`.
-- **Band EDGE robustness — Bar E (Ben 2026-07-10).** Bar D fixed WHETHER a band gates; Bar E fixes WHERE
-  its edges sit. The raw min/max over the 2h of 5m prints let ONE flier (a lone 100k print against a 59k
-  mid) set `bandHi` and inflate the surfaced ROI — the band-top artifact. `robustBand` (now in
-  **`js/quotecore.js`**, the app+node shared home — MOVED there by Scope B so both paths robustify off ONE
-  impl; `pipeline/lib/marketfetch.mjs` re-exports it) takes the **p90 high / p10 low** on a DENSE side (≥
-  `BAND_EDGE_MIN_SAMPLE` 8 prints) and keeps the raw extremum on a SPARSE side (a quantile over a handful
-  of points either == the max or wrongly discards the one real high — the thin big-ticket class Bar D just
-  admitted; reach backstops the residue there). **SCOPE — both surfacing paths now robust (Scope A +
-  Scope B, 0.55.0):** the pipeline path (`loadBands` → `bandCore` edge/Rank) AND the app-facing
-  `computeQuote` Optimistic column (`optBuy`/`optSell`, clamped against the robust edges). Two things stay
-  RAW on purpose: `loadHistBands` (the O1 backtest-join reconstructs the *actual* band a trade sat in,
-  flier and all) and the **momentum tell** — `computeQuote` SPLITS the band variable so `rawBandLo`/
-  `rawBandHi` keep the true `min`/`max` and drive `mom` (a fresh 2h high fires off the real max, not the
-  p90) + the audit fields, while the robust edges feed only the Optimistic clamp (Momentum column
-  byte-identical). `bandCore`/replay golden stay byte-unchanged (fixture bands near-flat ⇒ robust==raw).
-  Thresholds (`BAND_EDGE_MIN_SAMPLE`/`BAND_EDGE_HI_Q`/`BAND_EDGE_LO_Q`) are NAMED PLACEHOLDERS pending a
-  validation pass; `rawBandLo/rawBandHi` retained for audit. Pinned by `pipeline/bandedge.test.mjs` +
-  the `quotecore.test.mjs` Scope-B split assertion. The reach validator remains the backstop for the sparse residue.
-- **Robust-quantile band edges are a SYSTEM-WIDE discipline (Ben 2026-07-10).** Bar E is one instance of a
-  general rule, now applied consistently wherever a price EDGE is derived from a bag of prints: **a lone
-  flier/dip print must never set an edge — trim to a quantile on a DENSE side, keep the raw extremum on a
-  SPARSE one.** The instances (each with its OWN sample gate + placeholder quantiles, but the same shape):
-  Bar E trims the 2h band edges (`robustBand`, `js/quotecore.js`; `BAND_EDGE_MIN_SAMPLE` 8, p10/p90) on
-  `loadBands`/`bandCore` + `computeQuote`'s Optimistic clamp; and the **value niche's low-side twin**
-  trims the 7d WEEK edges in `valueAmplitudeValidator` (`js/validate.mjs`; q15/q85 from
-  `js/termstructure.mjs`'s `lookbackStat`, gated by `VALAMP_EDGE_MIN_SAMPLE` 6) so a lone recent dip can't
-  fake the week floor/proximity (the Extreme-energy 1,447 artifact). Term-structure edge math (q15/q85)
-  has ONE home — `lookbackStat` (which now emits `qlow`/`qhigh` per lookback alongside the raw `low`/
-  `high`); consumers sample-gate which to use. When you add a new edge-from-prints derivation, follow this
-  discipline; don't re-derive raw min/max.
+- **Traded-band gate — Bar D.** The 2h band edge must be TRADED, not a one-spike artifact: Bar D decouples
+  DENSITY (`tradedWin`, one-sided OK) from TWO-SIDEDNESS (`sawLow && sawHigh` once across the window) so a
+  scattered-print big ticket stops failing the old same-5m-bucket `active5m` count. ONE home: the `bandCore`
+  header in `js/strategies.mjs`; pinned by replay archetype 2003.
+- **Band EDGE robustness — Bar E.** A lone flier must not set a band edge and inflate ROI: `robustBand`
+  (`js/quotecore.js`, the app+node shared home; `pipeline/lib/marketfetch.mjs` re-exports it) takes p90/p10
+  on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE`), raw extremum on a SPARSE side, on BOTH surfacing paths
+  (`bandCore` edge + `computeQuote`'s Optimistic clamp). The momentum tell stays raw (`rawBandLo/rawBandHi`
+  drive `mom`). Full spec in the `robustBand` header; pinned by `pipeline/bandedge.test.mjs` + the
+  `quotecore.test.mjs` Scope-B split. **This is a SYSTEM-WIDE discipline** — trim to a quantile on a dense
+  side, keep the raw extremum on a sparse one, wherever a price EDGE comes from a bag of prints (the other
+  instance: the value niche's 7d week-edge twin in `valueAmplitudeValidator`, off `lookbackStat`'s
+  `qlow`/`qhigh`). Don't re-derive raw min/max for a new edge; follow this.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a
@@ -266,71 +239,20 @@ Script facts the skills rely on (current behavior, not doctrine):
   `valueScore` (amplitude × proximity-to-low × floor-stability × deployable-capital multiplier) with a HARD
   top-N + buy-now/watch tiers (§F flood control); console-only, its own table, NOT in `screen.json` (no app
   tab yet → no APP_VERSION).
-  **Value DEPLOYABLE-CAPITAL rank (Ben 2026-07-09)** — `valueScore`'s amplitude term is a scale-free
-  PERCENTAGE, so cheap high-volatility teleport tabs (cycling 30–100%) swept the HARD top-N fetch cut and
-  the genuinely viable class never got quoted. A first patch boosted ABSOLUTE gp/unit (`VALUE_ABSGP_*`) —
-  but a Fable investigation of the full 235-item gated pool showed that just rewards "expensive" and there
-  are **zero big-liquid items** (nothing >1m trades 500+/d); the class it buried was **mid-amp DEPLOYABLE
-  sub-1m** items (Soiled page, Snape grass seed, Awakener's orb). So abs-gp is SUPERSEDED (same day) by a
-  deployable-capital measure = REALIZABLE after-tax gp/cycle on the capital you can actually PARK+EXIT:
-  `deployUnits = min(capGp/buyLow, VALUE_VOL_SHARE·limitVol·VALUE_ACCUM_DAYS, limit·VALUE_WINDOWS_PER_DAY·
-  VALUE_ACCUM_DAYS)`; `realProfit = afterTaxAmpPct·deployUnits·buyLow`; `deployMult = clamp(1 +
-  VALUE_DEPLOY_W·log10(realProfit/VALUE_DEPLOY_REF_GP), VALUE_DEPLOY_MULT_MIN, VALUE_DEPLOY_MULT_MAX)`, folded
-  into `valueScore = amp·prox·stab·deployMult·100`. Two-sided + clamped (unlike the one-sided abs-gp boost it
-  can DISCOUNT a near-undeployable %-monster to ×0.2, boost a large realizable cycle to ×2), range ~10× so
-  the shape features stay primary. **`capGp` is an INPUT, not a constant** (Ben's steer): `screen.mjs`
-  `--capital <gp>` ÷ `--slots N` = the per-position cap (his current capital spread across the positions
-  we'd hold; defaults to a 100m/5 PLACEHOLDER, and the footer prints `N buy-now surfaced — re-run --slots
-  N`). `valueScore(vr, {limitVol, limit, capGp})`; absent liquidity opts degrade to `deployMult=1`
-  (shape-only). Effect: the default scan now surfaces a real MIX — big tickets (Nightmare, Bellator, Blood
-  moon chestplate) + mid-deployable sub-1m (Awakener's orb, Bloodbark helm, Mokhaiotl waystone) + deployable
-  cheap items — and the %-monster tabs no longer sweep. Honesty (rule 4): `realProfit` is an UPPER bound
-  (assumes the full anchored cycle + your whole volume share both sides; `limitVol` is a 24h snapshot); every
-  `VALUE_DEPLOY_*`/`VALUE_VOL_SHARE`/`VALUE_ACCUM_DAYS` constant is a NAMED PLACEHOLDER — the three-way min is
-  principled (real GE physics, mirrors `expUnits`), the magnitudes need the validation study.
-  **Value artifact/liquidity hardening (Ben 2026-07-09)** — the value scan surfaced broken-low quotes and
-  untradeable rows ranking #1, the low-side analog of the band artifact-bid. Two gates fixed it:
-  (1) `valueGate`'s **artifact-low guard** rejects a live price >`VALUE_MAX_BELOW_LOW_PCT` (15%) below the
-  durable q15 floor (a lone off-market instasell or a crash mid-fall corrupts proximity → a FAKE dip at the
-  top of `valueScore`); it fires post-fetch on the real live instasell (screen counts the drops in the §F
-  footer). (2) The value **unit-liquidity floor was raised 20→50** (`VALUE_LIQ_FLOOR`, = the base `FLOOR`):
-  value relaxes the gp/day *throughput* bar, NOT the two-sided *unit* bar — a hold you can't exit isn't a
-  hold (dropped Adamant halberd 6/d, Gloves of silence 1/d). Two-sided (`hpv>0 && lpv>0`) stays
-  non-negotiable.
-  **Value RC1 recency anchor (Ben 2026-07-09)** — the value BUY-NOW tier was contaminated the OTHER way:
-  the durable q15/q85 range spans the FULL 28d window, so a stale HIGH from a prior regime the item has
-  LEFT inflated the cycle amplitude AND faked proximity — a mid-recovery item read as "near the low →
-  BUY-NOW" (Contract-of-sensory-clouding: a month-old 365k q85 ceiling it crashed away from vs a live 200k
-  that's actually +50% up the recent week; ~18/21 BUY-NOW rows carried a warm-7d "would caution/reject").
-  This is RC1's reach-contamination disease, in the value range. Fix: `valueRanges` **recency-anchors the
-  cycle range** (`VALUE_RECENT_DAYS`=7) — the recovery ceiling can't exceed the recent regime's top and the
-  buy floor can't sit below where the item recently floors, using the RAW recent high/low (min/max direction
-  ⇒ robust to a single recent spike; anchoring fires only when the WHOLE recent window shifted). It returns
-  the anchored `durableLow/durableHigh` (the table now shows the credible range) + the raw values + a
-  `ceilingStale`/`floorStale` flag; `screen.mjs` prints a `range recency-anchored — durable A→B spans a prior
-  regime; cycle scored on the recent C→D` note. Effect: Contract → WATCH, BUY-NOW 21→11. Also fixed the
-  `Live vs low` `+-1.4%` doubled-sign display bug. The daily archive is **backfilled to ~2026-06-19 (~20d)**
-  — the old "began accruing 2026-07-08 / needs weeks to warm" notes are superseded (a newly-tracked item can
-  still be short → the honest no-data degrade). Still provisional (n≈0, PLACEHOLDER thresholds), but as of
-  2026-07-10 value RUNS IN `--mode all` by default (`inAll:true` in `js/strategies.mjs`) — console-only
-  (excluded from `screen.json`, no app tab → no APP_VERSION); a bare `all` runs it on placeholder --capital/--slots.
-  **Value trajectory-GATE (Ben 2026-07-09)** — trajectory graduates from inform→**gate in the value niche
-  only**: a KNIFE now DROPS (was a "would reject" note that let Inoculation bracelet / Zombie axe sit atop
-  BUY-NOW). Rationale: the knife is value's defining anti-pattern ("buy the base, never the knife") AND the
-  multi-week HOLD makes buying a knife cost far more than missing one (asymmetry) — so value graduates ahead
-  of the other niches, and it catches the shapes `valueGate`'s weaker term-structure `knifeDelta` misses.
-  `elevated` stays a caution flag (timing, not a thesis break); oscillating/based/rising pass. A dropped
-  knife is COUNTED + NAMED in the §F footer (`dropped N trajectory-knife: …`), so it leaves BUY-NOW but
-  stays auditable. Value-SCOPED (`js/strategies.mjs` value `{key:'trajectory', mode:'gate'}`, applied in
-  `renderValueMode`): band/churn already exclude fallers, scalp accepts them by thesis, so trajectory
-  stays INFORM there. value-amplitude stays inform in the spec (still n≈0) — but the **BUY-NOW tier now
-  gates on its verdict (Ben 2026-07-10):** the BUY-NOW tier reads proximity off the durable multi-week
-  range (`valueRanges`, loadDaily) while value-amplitude reads it off the recent WEEK (1h-derived), so the
-  two could disagree and a "wait for the dip" caution could sit INSIDE BUY-NOW (Extreme energy potion). So
-  `renderValueMode` **DEMOTES a BUY-NOW pick to WATCH when value-amplitude would-caution/reject** (its
-  inform-clamped `gatedStatus`) — a tier demotion, NOT a drop (the note still prints), the spec entry stays
-  `mode:'inform'`. Same shape as trajectory gating in value: a BUY-NOW must satisfy BOTH the durable-floor
-  proximity AND the recent-week-not-elevated read. No app import → no APP_VERSION.
+  **Value niche rank + BUY-NOW gating (Ben 2026-07-09/10) — operating pointer; full spec in the
+  `js/valuescreen.mjs` header.** `valueScore` = amplitude × proximity-to-low × floor-stability × a
+  **deployable-capital** multiplier (realizable after-tax gp/cycle on the capital you can park+exit;
+  `capGp` = `screen.mjs --capital ÷ --slots`, a PLACEHOLDER input) — so cheap %-monster teleport tabs no
+  longer sweep the top-N over deployable mid-tickets. The cycle range is **RC1 recency-anchored**
+  (`VALUE_RECENT_DAYS`) so a stale prior-regime high can't fake amplitude/proximity; an **artifact-low
+  guard** rejects a live print implausibly below the durable q15 floor; the **unit-liquidity floor is 50**
+  (`VALUE_LIQ_FLOOR` — a hold you can't exit isn't a hold; value relaxes only the gp/day *throughput* bar).
+  The **BUY-NOW tier gates twice**: a trajectory KNIFE drops (value's defining anti-pattern — "buy the
+  base, never the knife" + the multi-week hold-asymmetry) and a value-amplitude would-caution DEMOTES the
+  pick to WATCH (durable-floor proximity AND recent-week-not-elevated must both hold). Tier gating lives in
+  `renderValueMode`; value-amplitude in `js/validate.mjs`. Value RUNS IN `--mode all` (`inAll:true`,
+  `js/strategies.mjs`) but stays console-only + provisional (n≈0, PLACEHOLDER thresholds, no APP_VERSION).
+  Resolved-history (%-amp → abs-gp → deployable-capital; NY2/NY3 spread/rising deletion): `docs/LORE.md`.
   **P4c**: the niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the

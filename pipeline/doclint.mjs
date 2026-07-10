@@ -97,6 +97,18 @@ export const DENYLIST = [
     files: ['CLAUDE.md', 'README.md', 'index.html'],
     reason: '`--mode rising` is a DELETED command (Steps 3+4) — the live modes are band|churn|scalp|value|all',
   },
+  {
+    id: 'value-absgp-rank',
+    // The abs-gp value-rank constant (`VALUE_ABSGP_*`) was SUPERSEDED the same day (Ben 2026-07-09) by the
+    // deployable-capital multiplier folded into `valueScore` (js/valuescreen.mjs). abs-gp just rewarded
+    // "expensive" over the deployable mid-ticket class it was meant to surface. Resurrecting the constant
+    // as a live ranking term in an operating doc is the drift. The concept-level history is narrated in
+    // docs/LORE.md (not in `files`, so it doesn't self-trip). DOC-3 extends this to README.md once its
+    // valuescreen.mjs entry drops the `VALUE_ABSGP_*` mention.
+    pattern: /VALUE_ABSGP/,
+    files: ['CLAUDE.md'],
+    reason: '`VALUE_ABSGP_*` is a DELETED value-rank constant — value ranks by the deployable-capital multiplier (js/valuescreen.mjs); history lives in docs/LORE.md',
+  },
 ];
 
 // Returns [{ id, file, reason, xfail }] — every denylist match. `xfail` is truthy (the owner string)
