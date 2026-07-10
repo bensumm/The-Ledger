@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.19
+version: 1.20
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -76,21 +76,18 @@ exclude them from the action plan. **Never CUT-recommend an incidental lot.**
 
 ## 3. Interpret each verdict
 
-Vocabulary = `pipeline/MONITORING.md` step 4 (the PLAN-3 gate tree). The script emitted the
-verdict; you translate it into the action line:
+**Vocabulary — the ONE home is `pipeline/MONITORING.md` step 4** (the PLAN-3 gate tree + the
+momentum-up verdicts). Every verdict the script can emit — NO-READ, DIURNAL-WATCH, SHOCK-WATCH,
+CUT, LIST-TO-CLEAR, CUT-CANDIDATE, WATCH — fresh entry, HOLD — ask filling, and the momentum-up
+HOLD — list high / HOLD — watch — is defined there with what each means and does. Read it there;
+don't re-derive it here. The script emitted the verdict; your job is to **render it as the action
+line in §4, against the per-item dossier** — a verdict is a prompt for judgment, not an order
+(the CANCEL-BID-on-a-thin-book and fresh-chase-entry examples in MONITORING step 4).
 
-| Verdict | Action |
-| --- | --- |
-| NO-READ | No action — quote basis isn't a price. Keep any ask ≥ break-even; re-check at the next liquid window. |
-| DIURNAL-WATCH | Hold ≥ break-even; do NOT cut into a quiet-hour trough that recovered yesterday. |
-| SHOCK-WATCH | One-off volume shock, not a bleed — hold one more cycle; cut on a fresh low. |
-| CUT | Clear now at the instabuy. This is **controlled loss-taking** — freeing the capital — never "staying ahead of the drop" (MONITORING.md's sell-side framing; you can't outrun a fall by chasing your ask down). |
-| LIST-TO-CLEAR | List at the instabuy to clear. |
-| HOLD — list high | Momentum broke UP (fresh 2h high / `mom` breakup) — list at the 2h top / patient edge and let it run. |
-| HOLD — watch | A lone 2h pullback against a *rising* regime on a sub-`BIG_TICKET_GP` lot — usually noise, not a breakdown; hold and watch, it may reabsorb (no reprice, `listAt` null). |
-| CUT-CANDIDATE | Underwater through a liquid window — persistence, not the clock. List to clear before a bigger loss. |
-| WATCH — fresh entry | The Gate-D CUT-CANDIDATE **softened** because the lot was bought under `FRESH_HOURS` (1h, placeholder) ago (V3). A fresh patient fill is *definitionally* underwater on the instant-clear price and hasn't had its thesis window. Hold the ask ≥ break-even and give it the window; do NOT cut a brand-new lot on the instant read. (A fresh lot that *genuinely breaks down* still CUTs — Gate 2 is untouched.) |
-| HOLD — ask filling | The Gate-D CUT-CANDIDATE **suppressed** because your own ask is actively filling ABOVE the clear price (V3). A fill above the clear beats repricing down — hold it and let the ask keep filling; don't chase the price down. |
+Interpretation that goes BEYOND the tree (this skill's value-add, not restated in MONITORING)
+lives below: the sell-velocity preference (how to step an unfilled ask down toward the clear)
+and the fill-progress check before acting on a CUT-CANDIDATE (an actively-filling ask may already
+be resolving the underwater flag).
 
 **Sell-velocity preference (Ben, 2026-07-04):** when a held item's ask sits ABOVE the current 2h band top and isn't filling, don't let it ride — recommend stepping the ask down to just under the band top (the price the market is actually printing), and if it still doesn't move within ~an hour or momentum flips ↓, step again to just above the live instabuy to clear. Moving the item and freeing the capital generally beats the patient premium. The floor is unchanged — never below break-even (the shared tax-capped `breakEven()`; see CLAUDE.md "Break-even") — the CUT/CUT-CANDIDATE verdicts remain the only exceptions. Present the rungs with net-per-unit and lot P/L so the velocity/premium trade-off is explicit.
 

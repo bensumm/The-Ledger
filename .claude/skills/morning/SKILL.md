@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.7
+version: 1.8
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -54,41 +54,20 @@ fixed V5 EMIT CONTRACT — verdict → conviction → Δ → tripwire → **guar
 `sell: list @ X · break-even Y` line** → fill-progress (`MONITORING.md` "What each tick
 surfaces"); the sell line is where you read every held item's list-at without re-deriving it.
 
-## 5. Encode learnings (self-improvement — after the review, never during)
-
-The morning reconstruction can teach what the overnight plan got wrong (a bid that should
-have been repriced, a staleness call that missed). Capture it — but the re-verdicts and any
-reprice/cancel actions come first, always.
-
-- **Timing:** _(judgment: process)_ only AFTER the review is delivered and Ben has repriced/cancelled the stale
-  offers (or says he's done). Never interleave doc edits with the market work — offers
-  first, encoding after (Ben's explicit rule).
-- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
-  encoding?" — and propose the candidates this run surfaced (an overnight call that
-  worked/failed, a re-verdict that read wrong, a reconstruction gap).
-- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ an overnight-posture lesson →
-  the `/overnight` SKILL.md; a positions judgment lesson → `/positions`; morning-flow
-  doctrine → this SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user
-  preferences → Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
-- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
-  conversation keeps flowing; report the diff summary when it lands.
-- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
-  fill-rate, a nightly pattern) needs the usual evidence standard — one night is one sample.
-
 ## 4. Book the realized P/L narrative
 
 Summarize `closed` trades since the last session (after-tax), what the overnight offers
 achieved vs the plan Ben recalls, and what to redeploy freed capital into — **offer
 `/scan`** for the redeploy.
 
-## 6. Weekly descriptive-outcomes read (once a week, not every morning)
+## 5. Weekly descriptive-outcomes read (once a week, not every morning)
 
 **Cadence (W1, 2026-07-05; mechanized COD-3, 2026-07-10):** descriptive trade analysis starts
 NOW and runs **weekly** — calibration (F1) stays gated. Run this section once per **Mon–Sun
 week**. The "did it already run this week?" question is now a MECHANICAL check, not "ask Ben if
 unsure": run `node pipeline/outcomes.mjs --weekly-due` (a cheap standalone check — no rebuild).
 It prints `weekly-due: yes` (run the section below) or `weekly-due: no` (skip it — a `--report`
-this week already stamped `.cache/last-weekly-report`). Running §6's `outcomes.mjs --report`
+this week already stamped `.cache/last-weekly-report`). Running this section's `outcomes.mjs --report`
 re-stamps the marker, so the next `--weekly-due` reads `no` for the rest of the week. Every
 other morning, this check reads `no` — skip straight past this section.
 
@@ -117,3 +96,24 @@ Deliverable: a short honest "here's what the record shows so far, and here's how
 from calibration-grade (F1-gate progress)" — not a recommendation to change the algorithm.
 F1 opens only when its documented thresholds clear (weeks away at ~20 lots/day); this read
 just makes that distance visible every week.
+
+## 6. Encode learnings (self-improvement — after the review, never during)
+
+The morning reconstruction can teach what the overnight plan got wrong (a bid that should
+have been repriced, a staleness call that missed). Capture it — but the re-verdicts and any
+reprice/cancel actions come first, always.
+
+- **Timing:** _(judgment: process)_ only AFTER the review is delivered and Ben has repriced/cancelled the stale
+  offers (or says he's done). Never interleave doc edits with the market work — offers
+  first, encoding after (Ben's explicit rule).
+- **Prompt:** _(judgment: process)_ at that point ask one short question — "anything from this run worth
+  encoding?" — and propose the candidates this run surfaced (an overnight call that
+  worked/failed, a re-verdict that read wrong, a reconstruction gap).
+- **Routing — one canonical home per fact, move never copy:** _(judgment: process)_ an overnight-posture lesson →
+  the `/overnight` SKILL.md; a positions judgment lesson → `/positions`; morning-flow
+  doctrine → this SKILL.md (bump its `version:`); table/app contracts → CLAUDE.md; user
+  preferences → Claude memory; monitoring doctrine → `pipeline/MONITORING.md`.
+- **Execution:** _(judgment: process)_ spawn a **background subagent** to make the edits + commit so this
+  conversation keeps flowing; report the diff summary when it lands.
+- **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
+  fill-rate, a nightly pattern) needs the usual evidence standard — one night is one sample.

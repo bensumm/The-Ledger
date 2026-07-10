@@ -97,8 +97,11 @@ Print-only — it never writes trade data. Each run emits:
      longer fires and it falls through to Gate 2.
    - **GATE 2 — what kind of down-move?** A `mom==='breakdown'` that is a **one-off shock**
      (a ≤3-window volume-spike gap that then stabilized) on a small lot with an intact regime
-     → **SHOCK-WATCH** (one more cycle); a **bleed**, a big-ticket lot, or an ambiguous shape
-     → the existing **CUT / LIST-TO-CLEAR** matrix.
+     → **SHOCK-WATCH** (hold one more cycle; cut on a fresh low); a **bleed**, a big-ticket lot,
+     or an ambiguous shape → the existing **CUT / LIST-TO-CLEAR** matrix. **CUT** = clear now at
+     the instabuy: **controlled loss-taking** to free the capital, never "staying ahead of the
+     drop" (you can't outrun a fall by chasing your own ask down — the sell-side framing below).
+     **LIST-TO-CLEAR** = list at the instabuy to clear (a softer clear when the book can absorb it).
    - **D-escalation — persistence.** Clean `mom` but the band has printed below break-even
      **through a liquid (busy-hour) window** → **CUT-CANDIDATE**: a genuine daily trough
      recovers when the book fills, so this is persistence, not the clock. This is what stops a
@@ -127,6 +130,13 @@ Print-only — it never writes trade data. Each run emits:
      defer a **decision** made on a good input. The seed incident was the second question
      misfiled as the first: a liquidity artifact adjudicated under the price-cycle standard of
      evidence, and (correctly, under that standard) lost.
+   - **Momentum-UP verdicts (not underwater).** The gates above triage a lot trading *below*
+     break-even; the same `momVerdict()` also emits two verdicts for a lot whose momentum broke
+     UP: **HOLD — list high** (a fresh 2h high / `mom` breakup → list at the 2h top / patient edge
+     and let it run) and **HOLD — watch** (a lone 2h pullback against a *rising* regime on a
+     sub-`BIG_TICKET_GP` lot — usually noise, not a breakdown; hold, no reprice, `listAt` null, it
+     may reabsorb). These are the full verdict vocabulary alongside the underwater set — this list
+     is the ONE home for it (skills point here, they don't restate it).
 5. **Flag** if an item's total held qty exceeds its exposure cap, or if held inventory is
    **UNLISTED** (bought but not in a sell offer).
 6. Keep each report tight — one line if nothing changed. Only re-run a full multi-day trend
