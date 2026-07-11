@@ -324,8 +324,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     join; the ground-truth TTF calibrator for P6 and the input to the band/churn
     consolidation question (the spread/rising niches were deleted in Steps 3+4). Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
     n on every aggregate, deliberately NO grades/verdicts — the archive is weeks-cold and mostly
-    not-taken)
-  - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `reconstruct.mjs` (shared
+    not-taken),
+    `analyze.mjs` (PLAN-ANALYZE AZ1 — the ANALYSIS ENGINE: read-only IO+print shell that AUDITS the
+    dataset's health (ledger freshness/volume, field-DROP detection — an ALWAYS_FIELD that stopped being
+    logged, fills⇆ledger un-attributed-buy coherence, a rebuildability PROXY = inputs parse + positions.json
+    fresh vs fills.json, and forward-data recommendations), ORCHESTRATES the existing joins for a compact
+    per-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), and derives
+    n-gated TUNING CANDIDATES that are FLAGS for F1, never applied here; a ~0% taken rate is treated as the
+    documented BASELINE, not a finding. `--since <hrs>`/`--json`/`--min-n`. Pure core is `lib/analyze.mjs`,
+    fixture-tested by `analyze.test.mjs`; consumed by the `/analyze` skill (AZ2). READ-ONLY — never in a
+    commit/sync path)
+  - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `analyze.mjs` (AZ1 — the PURE audit +
+    tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence` + the NAMED-PLACEHOLDER
+    thresholds; no fs/no fetch, the honesty n-gates live here so a skill can't launder a thin signal),
+    `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →
     tombstone-filtered event list monitor.mjs reconstructs from, mirroring sync's inline REMOVE-tombstone
     filter), `offers.mjs` (exchange-log discovery + open-offer

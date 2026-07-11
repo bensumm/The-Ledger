@@ -1,0 +1,146 @@
+/* analyze.mjs — the PURE analysis core (PLAN-ANALYZE chunk AZ1).
+ *
+ * The dataset AUDIT + tuning-CANDIDATE derivation, with NO fs / NO fetch — the same PURE-core / IO-shell
+ * split as retrojoin.mjs ⇄ lib/retrojoin.mjs. The caller (pipeline/analyze.mjs) reads the ledger + fills
+ * + positions and feeds parsed objects in; analyze.test.mjs feeds SYNTHETIC fixtures only.
+ *
+ * It re-implements NONE of the join math — the retro rollup is the caller's `retroJoin`/`aggregateOutcomes`
+ * (lib/retrojoin.mjs); this file only AUDITS completeness and turns the aggregates into honest flags.
+ *
+ * HONESTY (rule 4). Candidates are ANOMALIES the documented baseline can't explain, never the baseline
+ * itself (a ~0% taken rate is EXPECTED — most suggestions are never acted on). Every threshold is a
+ * NAMED PLACEHOLDER; every aggregate carries n; the n-gates live HERE so a skill can't launder a thin
+ * signal into a confident claim.
+ */
+import { fmt, fmtTurn } from '../../js/format.js';
+
+// --- NAMED PLACEHOLDER thresholds (audit SHAPE, not tuned magnitudes) --------------------------------
+export const MIN_N_CANDIDATE = 20;        // a tuning candidate needs at least this many suggestions in its group
+export const RECENT_FRACTION = 0.25;      // field-drop audit splits the ledger's recent tail (by ts) vs the prior body
+export const FIELD_DROP_MIN_WINDOW = 30;  // min rows in EACH of {prior, recent} before a field-drop flag can fire
+export const FIELD_PRIOR_PRESENT = 0.8;   // a field counts as "was reliably logged" at ≥ this presence in the prior body
+export const FIELD_RECENT_ABSENT = 0.5;   // …and "regressed" if its recent presence falls below this
+export const POSITIONS_STALE_SEC = 3600;  // positions.json older than fills.json by more than this ⇒ a staleness flag
+// Fields that SHOULD be present on ~every quote/screen row — a recent collapse means an emit path broke.
+export const ALWAYS_FIELDS = ['class', 'regime'];
+// Lean/conditional forward fields — reported as presence RATES (informational), never flagged as bugs.
+export const OPTIONAL_FIELDS = ['validators', 'rank', 'bid', 'ask', 'posture', 'path', 'volSrc'];
+
+// pure formatters (shared by the core's flag strings + the script's report) ---------------------------
+export const hrs = sec => sec == null ? '—' : fmtTurn(sec / 3600);
+export const gp = n => n == null ? '—' : (n >= 0 ? '+' : '') + fmt(n);
+export const pct = x => x == null ? '—' : Math.round(x * 100) + '%';
+
+export function fieldPresence(rows, field) {
+  if (!rows.length) return null;
+  let present = 0;
+  for (const r of rows) if (r[field] != null) present++;
+  return present / rows.length;
+}
+function isoToSec(iso) { const t = Date.parse(iso); return Number.isFinite(t) ? Math.floor(t / 1000) : null; }
+
+/* auditDataset(sug, fillsData, posData, retroMeta, opts) → the dataset-health section.
+ *   sug        — { rows, malformed, noKey } from the caller's ledger read.
+ *   fillsData  — parsed fills.json (or null); posData — parsed positions.json (or null).
+ *   retroMeta  — retroJoin(...).meta (nBuyOffers / nClaimed for the un-attributed signal).
+ *   opts.nowSec (default Date.now()/1000), opts.sinceH (freshness window, or null). PURE. */
+export function auditDataset(sug, fillsData, posData, retroMeta, { nowSec = Math.floor(Date.now() / 1000), sinceH = null } = {}) {
+  const { rows, malformed = 0, noKey = 0 } = sug;
+  const flags = [];   // { level: 'warn'|'info', msg }
+  const sorted = [...rows].sort((a, b) => a.ts - b.ts);
+  const newest = sorted.length ? sorted[sorted.length - 1].ts : null;
+  const oldest = sorted.length ? sorted[0].ts : null;
+  const sinceCut = sinceH != null ? nowSec - sinceH * 3600 : null;
+  const inWindow = sinceCut != null ? rows.filter(r => r.ts >= sinceCut).length : null;
+
+  const byScript = {};
+  for (const r of rows) { const k = r.script || '(none)'; byScript[k] = (byScript[k] || 0) + 1; }
+
+  if (malformed > 0) flags.push({ level: 'warn', msg: `${malformed} unparseable ledger line(s) — a writer emitted malformed JSON` });
+  if (noKey > 0) flags.push({ level: 'warn', msg: `${noKey} ledger row(s) missing itemId/ts (dropped from every join)` });
+  if (newest != null && nowSec - newest > 24 * 3600) flags.push({ level: 'info', msg: `newest suggestion is ${hrs(nowSec - newest)} old — no reads logged recently` });
+  if (sinceH != null && inWindow === 0) flags.push({ level: 'warn', msg: `0 suggestions logged in the last ${sinceH}h — is an emit path (or a running loop) silent?` });
+
+  // field-DROP detection: recent tail (RECENT_FRACTION by ts) vs prior body; flag an ALWAYS_FIELD that
+  // was reliably logged in the body but collapsed recently (an emit path broke).
+  const fieldAudit = { always: {}, optional: {} };
+  const splitIdx = Math.floor(sorted.length * (1 - RECENT_FRACTION));
+  const prior = sorted.slice(0, splitIdx);
+  const recent = sorted.slice(splitIdx);
+  for (const f of ALWAYS_FIELDS) {
+    const pr = fieldPresence(prior, f), rc = fieldPresence(recent, f);
+    fieldAudit.always[f] = { prior: pr, recent: rc };
+    if (prior.length >= FIELD_DROP_MIN_WINDOW && recent.length >= FIELD_DROP_MIN_WINDOW &&
+        pr != null && rc != null && pr >= FIELD_PRIOR_PRESENT && rc < FIELD_RECENT_ABSENT) {
+      flags.push({ level: 'warn', msg: `field '${f}' presence dropped ${pct(pr)}→${pct(rc)} (prior n=${prior.length} → recent n=${recent.length}) — an emit path stopped logging it` });
+    }
+  }
+  for (const f of OPTIONAL_FIELDS) fieldAudit.optional[f] = fieldPresence(rows, f);
+
+  // fills ⇆ ledger coherence: buy offers with no plausible prior suggestion (mobile/manual — un-attributed).
+  const nBuy = retroMeta ? retroMeta.nBuyOffers : 0;
+  const nClaimed = retroMeta ? retroMeta.nClaimed : 0;
+  const unattributed = nBuy - nClaimed;
+  const unattributedRate = nBuy ? unattributed / nBuy : null;
+  if (unattributedRate != null && unattributedRate > 0.5 && nBuy >= 20)
+    flags.push({ level: 'info', msg: `${unattributed}/${nBuy} filled buy offers (${pct(unattributedRate)}) have no prior suggestion — un-attributed (mobile/manual, or a read that wasn't logged)` });
+
+  // rebuildability PROXY (outcomes.mjs is not run here): inputs parse + positions fresh vs fills.
+  const fillsSec = fillsData ? isoToSec(fillsData.generatedAt) : null;
+  const posSec = posData ? isoToSec(posData.generatedAt) : null;
+  const rebuild = {
+    fillsParsed: !!fillsData, positionsParsed: !!posData,
+    fillsGeneratedAt: fillsSec, positionsGeneratedAt: posSec,
+    positionsBehindFillsSec: (fillsSec != null && posSec != null) ? fillsSec - posSec : null,
+  };
+  if (!fillsData) flags.push({ level: 'warn', msg: `fills.json missing/unparseable — every join is blind` });
+  if (!posData) flags.push({ level: 'warn', msg: `positions.json missing/unparseable — FIFO view unavailable` });
+  if (rebuild.positionsBehindFillsSec != null && rebuild.positionsBehindFillsSec > POSITIONS_STALE_SEC)
+    flags.push({ level: 'warn', msg: `positions.json is ${hrs(rebuild.positionsBehindFillsSec)} behind fills.json — re-run sync/reconstruct before trusting the FIFO view` });
+
+  // forward-data recommendations: analyses we CAN'T do because a field was never logged.
+  const forward = [];
+  if (fieldPresence(rows, 'rank') != null && !rows.some(r => r.grade != null))
+    forward.push(`grade LETTER is not logged (only numeric 'rank') — a grade-clumping audit needs 'grade' in suggestionEntry to segment S+…D.`);
+  if (rows.length && !rows.some(r => r.spread != null || r.depth != null))
+    forward.push(`no book spread/depth snapshot at emit — can't retro fill-rate vs. book depth. Consider a lean 'spread'/'depth' field (YS2 pattern).`);
+
+  return { total: rows.length, oldest, newest, inWindow, sinceH, byScript,
+    malformed, noKey, fieldAudit, unattributed, nBuy, unattributedRate, rebuild, forward, flags };
+}
+
+/* deriveCandidates(perNiche, sug, opts) → an array of { kind, signal, evidence, pointsAt }.
+ * kind ∈ { 'context', 'candidate', 'inform' }. Only 'candidate' is a real tunable anomaly.
+ *
+ * HONESTY (rule 4). A ~0% taken rate is the documented BASELINE (most suggestions are never acted on),
+ * NOT a finding — flagging it per-niche floods the skill with meaningless flags (the first-run failure
+ * this was rewritten to avoid). So the only real candidate is a NET-NEGATIVE realized-per-attention on a
+ * niche with a real realisedN; validator reject frequency is INFORM prioritization, never a verdict; and
+ * the thin taken sample is reported ONCE as context. opts.minN (default MIN_N_CANDIDATE). PURE. */
+export function deriveCandidates(perNiche, sug, { minN = MIN_N_CANDIDATE } = {}) {
+  const cands = [];
+  const rowsN = perNiche.reduce((a, g) => a + g.n, 0);
+  const totalTaken = perNiche.reduce((a, g) => a + (g.filled + g.filledWorse), 0);
+  if (totalTaken < minN)
+    cands.push({ kind: 'context', signal: `taken sample is too thin to judge niche viability (only ${totalTaken} of ${rowsN} suggestions were acted on) — a ~0% taken rate across niches is the EXPECTED baseline, not a finding`,
+      evidence: { totalTaken, n: rowsN },
+      pointsAt: `no niche-gate change is warranted on taken-rate yet; re-run once fills accumulate` });
+  for (const g of perNiche) {
+    if (g.key === '(none)') continue;   // the mode-less bucket (quotes + --positions) is not a niche to tune
+    if (g.realisedN >= minN && g.realisedPerAttention != null && g.realisedPerAttention < 0)
+      cands.push({ kind: 'candidate', signal: `niche '${g.key}' realized NET-NEGATIVE per unit of attention (${gp(Math.round(g.realisedPerAttention))}/row over realisedN=${g.realisedN})`,
+        evidence: { niche: g.key, realisedPerAttention: g.realisedPerAttention, realisedSum: g.realisedSum, n: g.realisedN },
+        pointsAt: `whether '${g.key}' earns its slot — realized attribution, F1's spread/band/churn consolidation question` });
+  }
+  const rejByKey = {};
+  for (const r of (sug.rows || [])) {
+    if (!Array.isArray(r.validators)) continue;
+    for (const v of r.validators) if (v && v.status === 'reject' && v.key) rejByKey[v.key] = (rejByKey[v.key] || 0) + 1;
+  }
+  for (const [k, n] of Object.entries(rejByKey).sort((a, b) => b[1] - a[1])) {
+    if (n >= minN) cands.push({ kind: 'inform', signal: `validator '${k}' is the/a most-firing reject (${n} rows) — study first IF fills suggest it's over-tight; a high reject count alone is NOT evidence of over-tightness`,
+      evidence: { validator: k, rejects: n, n },
+      pointsAt: `the '${k}' validator thresholds (js/validate.mjs) — needs a not-taken→would-have-filled counterfactual to become a real candidate` });
+  }
+  return cands;
+}
