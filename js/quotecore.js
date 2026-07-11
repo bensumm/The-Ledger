@@ -931,13 +931,26 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
    HONESTY (process rule 4): every DL4_* threshold below is a NAMED PLACEHOLDER, n=2, none validated —
    F1 (the retro-join in pipeline/analyze.mjs) owns calibration.
 
+   SUITABILITY GATES (all must hold, else null): TWO-SIDED (ghost-spread guard) + WIDE-ENOUGH amplitude
+   (band % or 24h-range % fallback) + a VALUE FLOOR (gp-flow = mid × limitVol ≥ DL4_MIN_GP_FLOW, the tool-
+   wide 500k gp/day attention scale) so a huge-% swing on a penny item (Sweetcorn seed) can't nominate.
+   The value floor is a gp-SCALE gate, NOT a unit-price one — cheap high-throughput churn keeps a huge
+   gp-flow and passes; both tracks gate on it.
+
    nominateDip(v24Entry, bandEntry, { now } = {}) → null (not suitable / missing inputs) or
-     { track:'liquid'|'illiquid', score, amplitude, limitVol, twoSided }.
+     { track:'liquid'|'illiquid', score, amplitude, limitVol, gpFlow, twoSided }.
    selectNominations(existing, candidates, cap) → the ≤cap highest-score candidates NOT already in
      `existing` (deduped by id, polymorphic over legacy plain-string/number existing entries). */
 export const DL4_WIDE_BAND_PCT = 0.03;          // PLACEHOLDER (n=2): min 2h-band amplitude (bandHi-bandLo)/bandLo to be flush-suitable
 export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-range amplitude fallback when no band present (coarser → wider bar)
 export const DL4_MAX_NOMINATIONS_PER_SCAN = 10; // PLACEHOLDER (n=2): cap on NEW auto-nominations per scan (bounds the 5m loop pool growth)
+// VALUE FLOOR (2026-07-11): reuses the tool-wide 500k gp/day ATTENTION floor (screen.mjs MIN_GPD) as a
+// gp-SCALE gate, applied as gp-flow = mid × limitVol (the SAME construction as the main gate's gp-flow
+// path). It fixes the penny-item leak: a huge-% band on a sub-gp item (e.g. Sweetcorn seed — guide 3gp,
+// ~7→14gp band, ~3.9k/d → ~39k/d gp-flow) is three orders below anything worth watching for a flush, yet
+// cleared the %-only amplitude bar. This is about gp SCALE, NOT unit price — cheap-but-high-throughput
+// churn (a ~200gp rune moving millions/day) has huge gp-flow and still passes. Both tracks gate on it.
+export const DL4_MIN_GP_FLOW = 500_000;         // PLACEHOLDER (n=2): min mid×limitVol gp-flow/day to be worth watching (= the 500k attention floor)
 
 export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unused today — kept for signature parity / future recency gating
   if (!v24Entry) return null;
@@ -959,6 +972,15 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
     amplitude = (v24Entry.avgHighPrice - v24Entry.avgLowPrice) / v24Entry.avgLowPrice;
   }
   if (!(amplitude >= (haveBand ? DL4_WIDE_BAND_PCT : DL4_WIDE_DAY_PCT))) return null;   // not volatile enough to flush
+  // VALUE FLOOR — reject penny items whose big % swing is trivial gp. gp-flow = mid × limitVol (the SAME
+  // construction the main screen's gp-flow gate uses); mid prefers the band midpoint, falls back to the 24h
+  // avg mid (both already validated non-null above on their respective paths). This is a gp-SCALE gate, NOT
+  // a unit-price gate — high-throughput cheap churn keeps a huge gp-flow and passes. Applies to BOTH tracks
+  // (a worthless-scale book is worthless whether liquid or thin). PLACEHOLDER (n=2); F1 owns calibration.
+  const mid = haveBand ? (bandEntry.bandLo + bandEntry.bandHi) / 2
+                       : (v24Entry.avgLowPrice + v24Entry.avgHighPrice) / 2;
+  const gpFlow = mid * limitVol;
+  if (!(gpFlow >= DL4_MIN_GP_FLOW)) return null;   // below the 500k gp/day attention scale → not worth watching
   // TRACK split off the DL2 fill-floor (reused, not re-derived): a liquid book is an active FLUSH
   // candidate; a two-sided-but-thinner book is a DL3 standing-bid candidate (still worth watching, its
   // depth history is DL3's input). A dead/one-sided book already returned null above.
@@ -966,7 +988,7 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
   // SCORE — ranks which nominations win the per-scan cap: amplitude (the flush headroom) weighted by
   // log-volume (fillability). Both tracks share it so a wide liquid book outranks a wide thin one.
   const score = amplitude * Math.log10(Math.max(10, limitVol));
-  return { track, score, amplitude, limitVol, twoSided: true };
+  return { track, score, amplitude, limitVol, gpFlow, twoSided: true };
 }
 
 // selectNominations — pure dedup + cap for the scan nomination pass (extracted so it's fixture-testable

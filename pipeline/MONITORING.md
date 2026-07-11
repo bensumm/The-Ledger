@@ -321,9 +321,11 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   fetches the whole liquid universe's 24h stats + 2h bands — runs a zero-fetch **nomination pass**
   (`nominateDip`) over that universe and APPENDS flush-SUITABLE candidates (`source:'auto'`, `track`
   liquid/illiquid) so the reactive `--dip` loop always has a fresh, breadth-discovered pool to poll.
-  Suitability = two-sided + wide-enough amplitude; a survivor already flushing NOW is bonused. It's a
-  **proposal to watch, not a validated pick** (n=2, `DL4_*` placeholders, F1 owns calibration). The scan
-  prints a `Dip nominations` line; curate it.
+  Suitability = two-sided + wide-enough amplitude + a **value floor** (gp-flow `mid × limitVol ≥
+  DL4_MIN_GP_FLOW`, the 500k gp/day attention scale — so a huge-% swing on a penny item like Sweetcorn
+  seed is rejected while cheap high-throughput churn passes; gp SCALE, not unit price); a survivor already
+  flushing NOW is bonused. It's a **proposal to watch, not a validated pick** (n=2, `DL4_*` placeholders,
+  F1 owns calibration). The scan prints a `Dip nominations` line; curate it.
 - **FILLABILITY is UNIT-FLOW, not deployability.** The gate is `volDay ≥ DIP_LOOP_LIQUID_FLOOR` (1000/d,
   a PLACEHOLDER) — `price×limit` measures whether you can PARK capital, but whether a seller actually
   crosses down to your bid is unit-flow. The retro anchor (n=2): a Searing-page flush (~14.4k/d, 4,732

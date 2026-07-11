@@ -582,8 +582,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `dipScore` fallback + ranking sanity; bucketVol-informs-not-gates; `suggestionEntry` lean-includes
     `dipLoop`; and `dipLoopAudit` separates fillable from not-taken firings),
     `dl4nominate.test.mjs` (DL4 — `nominateDip` fires liquid/illiquid tracks on two-sided+wide books,
-    rejects one-sided ghost books + narrow books + missing inputs, prefers band amplitude over the 24h
-    range, and score-ranks; `selectNominations` dedups by id AND legacy name/number, respects the cap, and
+    rejects one-sided ghost books + narrow books + missing inputs + **penny items below the `DL4_MIN_GP_FLOW`
+    value floor** (while cheap high-volume churn still passes — gp SCALE not unit price), prefers band
+    amplitude over the 24h range, and score-ranks; `selectNominations` dedups by id AND legacy name/number, respects the cap, and
     highest-score wins; plus the polymorphic `--dip` reader token-extraction over a mixed array),
     `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
     decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and

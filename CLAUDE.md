@@ -404,7 +404,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   2h bands — now runs a **nomination pass** (pure `nominateDip` in `js/quotecore.js`, ZERO extra fetch)
   over that universe and APPENDS flush-SUITABLE candidates to `dip-watchlist.json`. Suitability =
   two-sided (the non-negotiable ghost-spread guard) + wide-enough amplitude (band ≥ `DL4_WIDE_BAND_PCT`,
-  else 24h range ≥ `DL4_WIDE_DAY_PCT`), split into a `liquid` track (`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` →
+  else 24h range ≥ `DL4_WIDE_DAY_PCT`) + a **VALUE FLOOR** (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW`,
+  reusing the tool-wide 500k gp/day attention scale — a gp-SCALE gate, NOT a unit-price one, so a huge-%
+  swing on a penny item like Sweetcorn seed is rejected while cheap high-throughput churn still passes),
+  split into a `liquid` track (`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` →
   active FLUSH candidate) and an `illiquid` track (DL3 standing-bid candidate); a survivor already
   flushing NOW (via `flushSignal` on its in-hand 5m series) is bonused to win the per-scan cap
   (`DL4_MAX_NOMINATIONS_PER_SCAN`, deduped by id, `selectNominations`). The scan prints a **Dip
