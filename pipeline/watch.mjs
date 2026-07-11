@@ -499,16 +499,20 @@ async function main() {
     targetSpecs.push({ id: hit.id, name: hit.name });
   }
   // DL2 --dip: fold the tracked dip-watchlist.json pool into the buy-side target set (deduped against
-  // held lots + CLI tokens). New candidates are appended to dip-watchlist.json on discovery (manual for
-  // now; the screen-fed auto-population is the DL2 follow-on). Each entry is an item name OR numeric id
-  // (mirrors watchlist.json's simple shape). Best-effort: a missing/garbled file degrades to no dip pool.
+  // held lots + CLI tokens). Best-effort: a missing/garbled file degrades to no dip pool.
+  // DL4 (2026-07-11): the schema evolved and screen-fed AUTO-POPULATION now landed (screen.mjs's
+  // nomination pass appends flush-SUITABLE candidates). The reader is POLYMORPHIC — an entry is either
+  // a LEGACY plain item name / numeric id (mirrors watchlist.json's simple shape) OR a NEW object
+  // { id, name, source:'auto'|'manual', track:'liquid'|'illiquid', addedTs }. A mixed array works; we
+  // resolve an object by id ?? name (prefer id, the stable key).
   if (DIP) {
     let pool = [];
     try { const raw = JSON.parse(fs.readFileSync(DIP_WATCHLIST, 'utf8')); if (Array.isArray(raw)) pool = raw; }
     catch { /* no dip pool — degrade */ }
     for (const entry of pool) {
-      const hit = map.resolve(String(entry));
-      if (!hit) { console.error(`! dip-watchlist: no item named "${entry}" — skipping`); continue; }
+      const token = (entry && typeof entry === 'object') ? (entry.id ?? entry.name) : entry;
+      const hit = map.resolve(String(token));
+      if (!hit) { console.error(`! dip-watchlist: no item named "${token}" — skipping`); continue; }
       if (heldSpecs.some(h => h.id === hit.id)) continue;      // covered as a held lot
       if (targetSpecs.some(t => t.id === hit.id)) continue;    // already a CLI target
       targetSpecs.push({ id: hit.id, name: hit.name });

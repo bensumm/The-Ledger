@@ -73,8 +73,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   offer sizing, `bestWindow`/`median`; moved out of `trends.js` for
   `pipeline/trendcore.test.mjs`), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
-  with the node analysis scripts; also home to `recentDirection` (DP1) and `flushSignal` (DL2 — the
-  reactive liquid-flush firing read, consumed ONLY by `pipeline/watch.mjs --dip`, no app import);
+  with the node analysis scripts; also home to `recentDirection` (DP1), `flushSignal` (DL2 — the
+  reactive liquid-flush firing read, consumed ONLY by `pipeline/watch.mjs --dip`, no app import), and
+  `nominateDip`/`selectNominations` (DL4 — the scan's flush-SUITABILITY nomination + dedup/cap, consumed
+  ONLY by `pipeline/screen.mjs`, no app import);
   also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
@@ -207,10 +209,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the GitHub contents API (`js/github.js`)
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/alerts.mjs` (N1); ships empty
-- `dip-watchlist.json` — tracked repo-root pool of LIQUID flush candidates (array of item
-  names/ids, mirrors `watchlist.json`'s shape; ships empty `[]`). Read **only** by
-  `pipeline/watch.mjs --dip` (DL2) — NOT app-imported (watchlist.json is the app's, kept separate).
-  New candidates appended on discovery (the screen-fed auto-population is the DL2 follow-on).
+- `dip-watchlist.json` — tracked repo-root pool of flush candidates for the `--dip` loop (ships empty
+  `[]`). **DL4 schema:** an array of `{ id, name, source:'auto'|'manual', track:'liquid'|'illiquid',
+  addedTs }` objects; the legacy plain name/id string-or-number form is still accepted (the reader is
+  polymorphic). PRODUCED by BOTH manual curation AND `pipeline/screen.mjs`'s DL4 auto-nomination pass
+  (`--mode all` appends flush-SUITABLE candidates via `nominateDip`/`selectNominations`, source `auto`).
+  CONSUMED by `pipeline/watch.mjs --dip` (DL2 — polymorphic reader) — NOT app-imported (watchlist.json is
+  the app's, kept separate).
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
   a flat array of `{id, exitPrice, tripwire, horizon, path, enteredUnder, ts}` (`path`/`enteredUnder`
   added additively by P4a — the js/paths.mjs entry-path declaration; legacy entries without them stay
@@ -576,6 +581,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     on thin/shallow/reverting/flat/exit-underwater/unreliable; null on missing inputs; the null-limit
     `dipScore` fallback + ranking sanity; bucketVol-informs-not-gates; `suggestionEntry` lean-includes
     `dipLoop`; and `dipLoopAudit` separates fillable from not-taken firings),
+    `dl4nominate.test.mjs` (DL4 — `nominateDip` fires liquid/illiquid tracks on two-sided+wide books,
+    rejects one-sided ghost books + narrow books + missing inputs, prefers band amplitude over the 24h
+    range, and score-ranks; `selectNominations` dedups by id AND legacy name/number, respects the cap, and
+    highest-score wins; plus the polymorphic `--dip` reader token-extraction over a mixed array),
     `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
     decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and
     the no-data/thin-floor/held-lot degrade-to-pass contract on both surface ctx shapes),

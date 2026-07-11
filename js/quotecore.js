@@ -900,3 +900,93 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
     afterTaxMargin != null && afterTaxMargin > 0 && row.optSell > breakEven(row.quickBuy, bondOpts);
   return { flush: signal && liquid && exitClears, signal, dir, depthPct, bucketVol, deployableGp, afterTaxMargin, dipScore, liquid };
 }
+
+/* ============================================================================================
+   DL4 (2026-07-11) — nominateDip / selectNominations: the "B feeds A" discovery half of the DL2
+   dip-loop. Pure, DOM-free math (quotecore.js still imports only format.js). Consumed ONLY by node
+   pipeline scripts (screen.mjs nominates; watch.mjs --dip polls) — NO app module imports this, so it
+   ships with NO APP_VERSION bump. Fixture-pinned in pipeline/dl4nominate.test.mjs.
+
+   THE PROBLEM DL4 SOLVES (this is the DL4 DOCTRINE HOME). A flush is EXOGENOUS — you cannot know in
+   advance WHICH liquid item will gap down — so DL2's hand-curated dip-watchlist.json has a coverage
+   gap: an item nobody thought to add can never fire the 5m FLUSH loop. DL4 closes that gap by letting
+   the on-demand SCAN (which ALREADY fetches the whole liquid universe's 24h stats + 2h bands) NOMINATE
+   flush-SUITABLE candidates into the dip-watchlist, so discovery happens breadth-first in the scan
+   while the reactive 5m loop stays bounded to a curated pool.
+
+   SUITABILITY, NOT A LIVE CATCH. nominateDip does NOT say "this is flushing" or "trade this" — the scan
+   basis (24h stats + 2h band) is too coarse and too stale for that (that's flushSignal's job on the
+   fresh 5m survivor series). It says only "this book is VOLATILE + TWO-SIDED + liquid enough that a
+   future flush here would be catchable — worth WATCHING." A nomination is a PROPOSAL TO WATCH that Ben
+   curates, never a validated pick.
+
+   THE ZERO-FETCH BOUNDARY (a HARD requirement — DL4 adds NO fetches). Two data tiers, both already in
+   hand at nomination time in screen.mjs:
+     • GATE tier — v24[id] (avgLow/High + hpv/lpv) + bands[id] (bandLo/Hi, sawLow/High, tradedWin) are
+       loaded for the WHOLE liquid universe before any survivor fetch. This is the breadth source DL4
+       keys off: nominateDip reads ONLY these two objects.
+     • SURVIVOR tier — series5m is fetched only for survivors; screen.mjs runs flushSignal on those
+       (zero extra fetch) to BONUS a nominee that is a survivor AND flushing right now.
+
+   HONESTY (process rule 4): every DL4_* threshold below is a NAMED PLACEHOLDER, n=2, none validated —
+   F1 (the retro-join in pipeline/analyze.mjs) owns calibration.
+
+   nominateDip(v24Entry, bandEntry, { now } = {}) → null (not suitable / missing inputs) or
+     { track:'liquid'|'illiquid', score, amplitude, limitVol, twoSided }.
+   selectNominations(existing, candidates, cap) → the ≤cap highest-score candidates NOT already in
+     `existing` (deduped by id, polymorphic over legacy plain-string/number existing entries). */
+export const DL4_WIDE_BAND_PCT = 0.03;          // PLACEHOLDER (n=2): min 2h-band amplitude (bandHi-bandLo)/bandLo to be flush-suitable
+export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-range amplitude fallback when no band present (coarser → wider bar)
+export const DL4_MAX_NOMINATIONS_PER_SCAN = 10; // PLACEHOLDER (n=2): cap on NEW auto-nominations per scan (bounds the 5m loop pool growth)
+
+export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unused today — kept for signature parity / future recency gating
+  if (!v24Entry) return null;
+  const hpv = v24Entry.highPriceVolume, lpv = v24Entry.lowPriceVolume;
+  if (hpv == null || lpv == null) return null;                     // missing volume → can't judge → degrade, never guess
+  const limitVol = Math.min(hpv, lpv);
+  // TWO-SIDED liquidity GUARD (the non-negotiable ghost-spread rule): a book must trade on BOTH sides,
+  // either as a band that saw both edges once, or as positive hpv AND lpv over the 24h window. A
+  // one-sided book is a ghost spread — NEVER nominate it (both tracks require this; a dead/one-sided
+  // book returns null here before either track).
+  const twoSided = (!!bandEntry && bandEntry.sawLow === true && bandEntry.sawHigh === true) || (hpv > 0 && lpv > 0);
+  if (!twoSided) return null;
+  // AMPLITUDE — prefer the tighter, fresher 2h band edge; fall back to the coarse 24h range. Guard denominators.
+  const haveBand = !!bandEntry && bandEntry.bandLo != null && bandEntry.bandHi != null && bandEntry.bandLo > 0;
+  let amplitude;
+  if (haveBand) amplitude = (bandEntry.bandHi - bandEntry.bandLo) / bandEntry.bandLo;
+  else {
+    if (v24Entry.avgLowPrice == null || v24Entry.avgHighPrice == null || !(v24Entry.avgLowPrice > 0)) return null;
+    amplitude = (v24Entry.avgHighPrice - v24Entry.avgLowPrice) / v24Entry.avgLowPrice;
+  }
+  if (!(amplitude >= (haveBand ? DL4_WIDE_BAND_PCT : DL4_WIDE_DAY_PCT))) return null;   // not volatile enough to flush
+  // TRACK split off the DL2 fill-floor (reused, not re-derived): a liquid book is an active FLUSH
+  // candidate; a two-sided-but-thinner book is a DL3 standing-bid candidate (still worth watching, its
+  // depth history is DL3's input). A dead/one-sided book already returned null above.
+  const track = (limitVol >= DIP_LOOP_LIQUID_FLOOR) ? 'liquid' : 'illiquid';
+  // SCORE — ranks which nominations win the per-scan cap: amplitude (the flush headroom) weighted by
+  // log-volume (fillability). Both tracks share it so a wide liquid book outranks a wide thin one.
+  const score = amplitude * Math.log10(Math.max(10, limitVol));
+  return { track, score, amplitude, limitVol, twoSided: true };
+}
+
+// selectNominations — pure dedup + cap for the scan nomination pass (extracted so it's fixture-testable
+// independent of screen.mjs's fetch/IO). `existing` is the current dip-watchlist.json array, which is
+// POLYMORPHIC: legacy plain string/number entries OR new { id, name, source, track, addedTs } objects.
+// `candidates` = [{ id, name, track, score, ... }] already-nominated rows. Returns the ≤cap highest-score
+// candidates whose id is NOT already present (by id, and — for legacy entries — never re-adding one that
+// only carries a name/number). Existing entries are never touched/migrated; the caller appends the result.
+export function selectNominations(existing, candidates, cap = DL4_MAX_NOMINATIONS_PER_SCAN) {
+  const haveIds = new Set();
+  const haveNames = new Set();
+  for (const e of (existing || [])) {
+    if (e == null) continue;
+    if (typeof e === 'object') { if (e.id != null) haveIds.add(Number(e.id)); if (e.name != null) haveNames.add(String(e.name).toLowerCase()); }
+    else if (typeof e === 'number') haveIds.add(Number(e));
+    else if (typeof e === 'string') { const n = Number(e); if (Number.isFinite(n) && String(n) === e.trim()) haveIds.add(n); else haveNames.add(e.toLowerCase()); }
+  }
+  const fresh = (candidates || []).filter(c => c && c.id != null
+    && !haveIds.has(Number(c.id))
+    && !(c.name != null && haveNames.has(String(c.name).toLowerCase())));
+  fresh.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return fresh.slice(0, Math.max(0, cap));
+}

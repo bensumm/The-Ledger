@@ -10,6 +10,29 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DL4 — the scan auto-nominates dip candidates ("B feeds A", 2026-07-11, pipeline-only — NO APP_VERSION)
+A flush is EXOGENOUS — you can't know in advance WHICH liquid item will gap down — so DL2's hand-curated
+`dip-watchlist.json` has a coverage gap: an item nobody added can never fire the 5m FLUSH loop. DL4 closes
+it by letting the on-demand SCAN feed the reactive loop. `pipeline/screen.mjs --mode all` already fetches
+the whole liquid universe's 24h stats + 2h bands (the gate tier) plus the survivors' 5m series; DL4 adds a
+zero-fetch **nomination pass** over exactly that in-hand data — NO new fetches (the hard constraint). Pure
+**`nominateDip(v24Entry, bandEntry)`** (`js/quotecore.js`) reads flush-SUITABILITY: a two-sided book (the
+non-negotiable ghost-spread guard — `sawLow && sawHigh`, else `hpv>0 && lpv>0`) with wide-enough amplitude
+(2h band ≥ `DL4_WIDE_BAND_PCT`, else 24h range ≥ `DL4_WIDE_DAY_PCT`), split into a **liquid** track
+(`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` — an active FLUSH candidate) or an **illiquid** track (a DL3 standing-
+bid candidate); a one-sided or narrow book returns null. A nominee that is also a survivor gets a
+zero-fetch **flush-now bonus** (`flushSignal` on its already-fetched 5m series) so a live flush wins the
+per-scan cap. Pure **`selectNominations(existing, candidates, cap)`** dedups by id (polymorphic over legacy
+plain-string/number entries) and caps at `DL4_MAX_NOMINATIONS_PER_SCAN`. New picks are APPENDED as
+`{ id, name, source:'auto', track, addedTs }` objects; the scan prints a `Dip nominations` line for Ben to
+curate. The `dip-watchlist.json` schema evolved to these objects and **`watch.mjs`'s `--dip` reader is now
+polymorphic** (legacy plain name/id entries still resolve; a mixed array works). SUITABILITY, NOT a live
+catch — a nomination is a **PROPOSAL TO WATCH, not a validated pick, not "trade this"**; n=2, every `DL4_*`
+constant is a NAMED PLACEHOLDER, F1 owns calibration. Node-only: `screen.mjs` writes, `watch.mjs` reads;
+no `js/` app module imports the nomination logic (verified by grep) → NO APP_VERSION bump. Tests:
+`pipeline/dl4nominate.test.mjs`. This partly de-risks DL3's discovery half (still n-gated on the log
+accruing).
+
 ### DL2 — the reactive liquid-flush loop: bid-into-the-fall on a dumping liquid book (2026-07-11, pipeline-only — NO APP_VERSION)
 Some dips are off-schedule EXOGENOUS flushes: a holder dumps units into a LIQUID book faster than buyers
 absorb them, so price gaps down and stays fillable for a short window before it reverts. These are not the

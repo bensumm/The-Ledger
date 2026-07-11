@@ -67,7 +67,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, selectNominations, flushSignal, DL4_MAX_NOMINATIONS_PER_SCAN } from '../js/quotecore.js';
 import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // diurnal peak-timing read (auto, off the in-hand 1h series)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
@@ -865,6 +865,52 @@ function loadBuysByItem() {
   catch { return new Map(); }   // absent/unreadable fills.json → no limit context (validator degrades to pass)
 }
 
+// DL4: the "B feeds A" nomination pass — the SCAN feeds the DL2 dip-loop pool. Off the ALREADY-in-hand
+// gate-tier data (v24 + bands for the whole liquid universe) + the survivors' already-fetched series5m,
+// it runs nominateDip over the universe, bonuses any survivor that flushSignal says is flushing NOW
+// (zero extra fetch — both tiers are in hand), dedups against dip-watchlist.json, caps the new picks, and
+// APPENDS them as { id, name, source:'auto', track, addedTs } objects. A nomination is a PROPOSAL TO
+// WATCH (not a validated pick, not "trade this"); n=2, thresholds are PLACEHOLDERS (F1 owns calibration).
+// Whole pass is best-effort try/caught by the caller — a nomination failure NEVER breaks the scan output.
+const DIP_WATCHLIST_PATH = join(REPO_ROOT, 'dip-watchlist.json');
+function runDipNominations(v24, bands, map, qcache, series5m) {
+  const now = Date.now();
+  // 1) breadth: nominate over the whole liquid universe off zero-fetch gate-tier data only.
+  const cands = [];
+  for (const key of Object.keys(v24)) {
+    const id = Number(key);
+    if (!Number.isFinite(id)) continue;
+    const nom = nominateDip(v24[key], bands ? (bands[key] || bands[id]) : null, { now });
+    if (!nom) continue;
+    const name = map.byId[id]?.name || ('#' + id);
+    let score = nom.score, flushingNow = false;
+    // 2) survivor flush-now bonus (zero-fetch): a nominee already fetched as a survivor gets its fresh
+    // 5m series read by flushSignal; a real flush (or at least still-falling with depth) wins the cap.
+    if (qcache.has(id) && series5m.has(id)) {
+      try {
+        const fs2 = flushSignal(qcache.get(id), series5m.get(id), v24[key]?.avgLowPrice ?? v24[id]?.avgLowPrice, { now: new Date(now) });
+        if (fs2 && (fs2.flush || fs2.signal || fs2.dir === 'falling')) { flushingNow = !!(fs2.flush || fs2.signal); score = score * 2 + (fs2.dipScore || 0); }
+      } catch { /* best-effort bonus — a survivor read failure never drops the base nomination */ }
+    }
+    cands.push({ id, name, track: nom.track, score, amplitude: nom.amplitude, limitVol: nom.limitVol, flushingNow });
+  }
+  if (!cands.length) return;
+  // 3) dedup vs the current file + cap. Preserve existing entries verbatim (polymorphic legacy/object).
+  let existing = [];
+  try { const raw = JSON.parse(readFileSync(DIP_WATCHLIST_PATH, 'utf8')); if (Array.isArray(raw)) existing = raw; } catch { /* absent/garbled → treat as empty */ }
+  const picks = selectNominations(existing, cands, DL4_MAX_NOMINATIONS_PER_SCAN);
+  if (!picks.length) { console.log('(no new dip candidates)'); console.log(''); return; }
+  const additions = picks.map(p => ({ id: p.id, name: p.name, source: 'auto', track: p.track, addedTs: now }));
+  // 4) best-effort append (screen.mjs never touches git; the coordinator/manual curation owns commits).
+  try { writeFileSync(DIP_WATCHLIST_PATH, JSON.stringify(existing.concat(additions), null, 2) + '\n'); }
+  catch (err) { console.error('(dip-nominate: could not write dip-watchlist.json — ' + ((err && err.message) || err) + ')'); }
+  // 5) the /scan surface line — Ben sees + curates the proposals.
+  const liq = picks.filter(p => p.track === 'liquid').length, illiq = picks.length - liq;
+  console.log(`## Dip nominations — ${picks.length} new dip candidate(s) (${liq} liquid / ${illiq} illiquid) → dip-watchlist.json (PROPOSALS to watch, not validated picks; n=2 placeholders)`);
+  for (const p of picks) console.log(`- ${p.name} — ${p.track}${p.flushingNow ? ' ⚡flushing-now' : ''}`);
+  console.log('');
+}
+
 async function main() {
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
@@ -936,6 +982,9 @@ async function main() {
     for (const e of watchClosely.values()) console.log(`- ${e.name}: ${e.state} — ${e.note}`);
     console.log('');
   }
+  // DL4: nominate flush-suitable dip candidates into dip-watchlist.json — only in the routine `--mode all`
+  // scan Ben runs (not a single-niche run), best-effort so a failure never breaks the scan output.
+  if (MODE === 'all') { try { runDipNominations(v24, bands, map, qcache, series5m); } catch (err) { console.error('(dip-nominate: pass failed — ' + ((err && err.message) || err) + ')'); } }
   const watchlist = await runWatchlist(map, ctx, guide, latest, qcache, series5m);   // S3: always-scanned watchlist
 
   // --publish: self-describing per-niche snapshot for the app's Scan tab. `headers` travels WITH the

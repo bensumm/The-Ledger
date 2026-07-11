@@ -197,7 +197,7 @@ deliberate):**
 | When Ben says something like… | Run |
 | --- | --- |
 | "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4) |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip-nominations line) |
 | "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
@@ -398,6 +398,21 @@ Script facts the skills rely on (current behavior, not doctrine):
   calibration). Thresholds are PLACEHOLDERS (n=2). Pure detector `flushSignal` in `js/quotecore.js`
   (node-only consumer; no app import → no APP_VERSION bump). Full doctrine: `pipeline/MONITORING.md`
   "DL2 — the FLUSH carve-out".
+  **DL4 — the SCAN auto-populates the dip pool ("B feeds A", landed 2026-07-11):** a flush is exogenous
+  (you can't know WHICH item flushes), so the `--dip` loop's hand-curated pool has a coverage gap. The
+  on-demand `screen.mjs --mode all` scan — which already fetches the whole liquid universe's 24h stats +
+  2h bands — now runs a **nomination pass** (pure `nominateDip` in `js/quotecore.js`, ZERO extra fetch)
+  over that universe and APPENDS flush-SUITABLE candidates to `dip-watchlist.json`. Suitability =
+  two-sided (the non-negotiable ghost-spread guard) + wide-enough amplitude (band ≥ `DL4_WIDE_BAND_PCT`,
+  else 24h range ≥ `DL4_WIDE_DAY_PCT`), split into a `liquid` track (`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` →
+  active FLUSH candidate) and an `illiquid` track (DL3 standing-bid candidate); a survivor already
+  flushing NOW (via `flushSignal` on its in-hand 5m series) is bonused to win the per-scan cap
+  (`DL4_MAX_NOMINATIONS_PER_SCAN`, deduped by id, `selectNominations`). The scan prints a **Dip
+  nominations** line so Ben curates. A nomination is a **PROPOSAL TO WATCH, not a validated pick** (n=2,
+  all `DL4_*` PLACEHOLDERS, F1 owns calibration). The `dip-watchlist.json` schema evolved to
+  `{ id, name, source:'auto'|'manual', track, addedTs }` objects; the `--dip` reader is polymorphic
+  (legacy plain name/id entries still resolve). Node-only (screen.mjs writes, watch.mjs reads) → no
+  APP_VERSION bump.
   `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
   for askFilling + conviction + the same read-only path line; the booked FIFO lots are still the basis).
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--profile]` (bucketing/quantile
