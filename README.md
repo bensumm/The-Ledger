@@ -244,7 +244,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
   via `pipeline/lib/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
   recording which `/24h` endpoint the liquidity `class` volume came from (screen = bulk; quote = bulk
-  when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources.
+  when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources. A row may also
+  carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
+  off the quoted ask — `{gap, gapPct, rawTop, topBucketVol, netLever, trusted}`, logged trusted AND
+  audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is
@@ -344,13 +347,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     dip-loop retro §4** (`dipLoopAudit` — joins the widened flush log against the retro rows, segments
     `alerted` (liquid) from `signal-only` (illiquid → DL3 input) rows, and computes fillable-vs-not
     separation over the alerted subset; candidate-surfacing → points at F1, never retunes; n≈0 placeholder),
+    a **Bar E ask-headroom retro §5** (`askHeadroomAudit` — pulls the lean `askHeadroom` shave-gap flags,
+    segments trusted (surfaced) from untrusted (audit-only), joins the trusted subset to the retro
+    round-trip; candidate-surfacing → F1 owns `ASK_HEADROOM_*` + the deferred clamp-widen; n≈0 placeholder),
     and derives
     n-gated TUNING CANDIDATES that are FLAGS for F1, never applied here; a ~0% taken rate is treated as the
     documented BASELINE, not a finding. `--since <hrs>`/`--json`/`--min-n`. Pure core is `lib/analyze.mjs`,
     fixture-tested by `analyze.test.mjs`; consumed by the `/analyze` skill (AZ2). READ-ONLY — never in a
     commit/sync path)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `analyze.mjs` (AZ1 — the PURE audit +
-    tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence` + the NAMED-PLACEHOLDER
+    tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence`/`dipLoopAudit`/`askHeadroomAudit`
+    + the NAMED-PLACEHOLDER
     thresholds; no fs/no fetch, the honesty n-gates live here so a skill can't launder a thin signal),
     `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →

@@ -239,6 +239,13 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Schema: { volDay, price, limit, depthPct, bucketVol, quickBuy, optSell, afterTaxMargin, dipScore,
   // alerted, gatedReason }; joinable against fills.json via the row's itemId + ts.
   if (dipLoop != null)       e.dipLoop = dipLoop;
+  // Bar E ask-headroom signal (PLAN Bar-E-signal, Ben 2026-07-11): the robust p90 shaved a TRADED in-band
+  // top off the quoted ask (row.askHeadroom, computeQuote). Logged whenever present — TRUSTED (surfaced as
+  // a note) AND UNTRUSTED (audit only) — so analyze.mjs/F1 can join it to realized fills (does the raw top
+  // actually get reached?) before tuning the PLACEHOLDER thresholds or graduating the deferred clamp-widen.
+  // Derived off `row` (not a caller param), so quote/screen both log it with no call-site change; a row
+  // with no shave gap has row.askHeadroom===null → no field → byte-identical shape. INFORM-ONLY.
+  if (row.askHeadroom != null) e.askHeadroom = row.askHeadroom;
   return e;
 }
 

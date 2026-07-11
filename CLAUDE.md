@@ -91,6 +91,21 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   side, keep the raw extremum on a sparse one, wherever a price EDGE comes from a bag of prints (the other
   instance: the value niche's 7d week-edge twin in `valueAmplitudeValidator`, off `lookbackStat`'s
   `qlow`/`qhigh`). Don't re-derive raw min/max for a new edge; follow this.
+  - **Ask-headroom signal (PLAN Bar-E-signal, Ben 2026-07-11) — the raw residue is now SURFACED, not just
+    audited.** When the robust p90 shaved a TRADED in-band top off the quoted Optimistic ask
+    (`rawBandHi > optSell`, a DENSE side, not a breakup), `computeQuote` emits an **inform-only**
+    `row.askHeadroom` (`⤴ ask headroom` note on `quote.mjs`/`screen.mjs` + a held-lot sibling line on
+    `quote.mjs --positions`; a breakup — the incident's own case — has no new number, its upside IS the
+    existing `mom='breakup'` tell re-voiced as ladder guidance). It says "ladder the ask up, don't relist
+    down" (cheap under the GE better-price rule); it **NEVER moves a quoted number, gates, drops, or
+    grades** — the robust band still sets every price, so Bar E's thin-flier protection and the value-niche
+    q15/q85 twin are UNCHANGED. Trust = the raw-top 5m BUCKET's own `highPriceVolume` (sharper than
+    counting buckets), fallback item `volDay`; an untrusted gap is logged for audit, not surfaced. A lean
+    `askHeadroom` field rides `suggestions.jsonl` → `analyze.mjs` §5 joins it to fills for F1. All three
+    thresholds (`ASK_HEADROOM_MIN_PCT`/`RAWTOP_TRUST_BUCKET_VOL`/`ASK_HEADROOM_VOL_FLOOR`) are PLACEHOLDERS
+    pending F1 retro calibration (n=1); the p97/raw clamp-widen is a pre-registered F1 graduation, not
+    shipped. Node-only consumers → no `APP_VERSION` bump. Pinned by the `quotecore.test.mjs` ask-headroom
+    fixtures; full spec in the `robustBand` header.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a

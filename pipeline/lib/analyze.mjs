@@ -160,6 +160,49 @@ export function dipLoopAudit(sugRows = [], retroRows = []) {
   };
 }
 
+/* askHeadroomAudit(sugRows, retroRows) → the Bar E ask-headroom retro section. PURE. CANDIDATE-SURFACING,
+ * never constant-mutating (same encoding boundary as dipLoopAudit — evidence-with-n → F1; F1 owns any
+ * retune of ASK_HEADROOM_* or the deferred Option-B clamp-widen).
+ *
+ * WHAT IT DOES. Pulls every ledger row carrying the lean `askHeadroom` object (computeQuote flagged the
+ * robust p90 shaved a TRADED in-band top off the quoted ask). Segments TRUSTED (surfaced as a ladder note)
+ * from UNTRUSTED (logged for audit only — the thin-flier path Bar E protects). Joins each to retroRows[i]
+ * (1:1 with sugRows) for the realized round-trip. THE QUESTION F1 needs answered: on a TRUSTED-headroom
+ * suggestion, did the realized sell actually reach the raw top (i.e. was the quoted ask genuinely leaving
+ * money on the table)? The realized SELL price is not directly on the retro row today (it is BUY-keyed:
+ * fillEach = the buy, realisedPerUnit = the round-trip net), so the STRICT "sell reached rawTop" join is a
+ * documented follow-up; what IS measurable now is the trusted-headroom population, its gap distribution,
+ * and the realized round-trip on the taken subset — the raw material for that graduation, reported n-honest.
+ *
+ * HONESTY (rule 4). n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are NAMED
+ * PLACEHOLDERS; the caller emits this as an n-gated CANDIDATE pointing at F1, never a calibrated conclusion. */
+export function askHeadroomAudit(sugRows = [], retroRows = []) {
+  const rows = [];
+  for (let i = 0; i < sugRows.length; i++) {
+    const s = sugRows[i];
+    if (!s || s.askHeadroom == null) continue;   // askHeadroom presence IS the marker (trusted or audit-only)
+    const rj = retroRows[i] || {};
+    rows.push({
+      itemId: s.itemId, ts: s.ts, ...s.askHeadroom,
+      trusted: !!s.askHeadroom.trusted,
+      outcome: rj.outcome ?? null, realisedPerUnit: rj.realisedPerUnit ?? null,
+      taken: rj.outcome != null && rj.outcome !== 'not-taken',
+    });
+  }
+  const trusted = rows.filter(r => r.trusted);
+  const untrusted = rows.filter(r => !r.trusted);
+  const takenTrusted = trusted.filter(r => r.taken);
+  const avg = (arr, k) => { const v = arr.map(r => r[k]).filter(x => x != null); return v.length ? v.reduce((a, x) => a + x, 0) / v.length : null; };
+  return {
+    n: rows.length, nTrusted: trusted.length, nUntrusted: untrusted.length, nTakenTrusted: takenTrusted.length,
+    rows, trusted, untrusted,
+    // gap distribution on the trusted (surfaced) subset — how much upside the note claimed — and the
+    // realized round-trip where a taken lot closed (the material F1 joins to the raw-top-reach question).
+    gapPctTrusted: avg(trusted, 'gapPct'), netLeverTrusted: avg(trusted, 'netLever'),
+    realisedPerUnitTaken: avg(takenTrusted, 'realisedPerUnit'),
+  };
+}
+
 /* deriveCandidates(perNiche, sug, opts) → an array of { kind, signal, evidence, pointsAt }.
  * kind ∈ { 'context', 'candidate', 'inform' }. Only 'candidate' is a real tunable anomaly.
  *

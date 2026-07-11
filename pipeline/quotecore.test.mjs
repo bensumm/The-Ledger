@@ -23,6 +23,7 @@ import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END
 import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
 import { phase, regimeDrift } from '../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
 import { pressureText } from '../js/quotecore.js';   // 24h buy/sell flow-imbalance display formatter
+import { askHeadroomText } from '../js/quotecore.js';   // Bar E ask-headroom inform-only signal formatter
 import { quantileSorted, quantileOf, median } from '../js/quotecore.js';   // SF-1 shared type-7 quantile/median home
 
 const NOW_SEC = 1_720_000_000;          // arbitrary fixed "now" (unix seconds)
@@ -733,6 +734,49 @@ ok('COD-1 — quoteOrdered holds across consistent-basis fixtures (optBuy ≤ qu
     assert.ok(row.quickBuy <= row.quickSell, `${name}: quickBuy ≤ quickSell`);
     assert.ok(row.quickSell <= row.optSell, `${name}: quickSell ≤ optSell`);
   }
+});
+
+// --- Bar E ask-headroom signal (PLAN Bar-E-signal) — inform-only, never changes a quoted number ------
+// Pins the CORRECTED mechanism from the plan: Class 1 (the robust p90 shaved a TRADED in-band top) fires
+// a trusted signal WITHOUT moving optSell; the thin-flier path is provably still protected (untrusted);
+// a sparse side is structurally silent; and a BREAKUP (the actual incident) has NO Class-1 gap — its
+// upside is the existing Momentum 'breakup' tell, not a new number.
+ok('Bar E ask-headroom — Class 1: robust p90 shaved a TRADED top ⇒ trusted headroom, optSell UNCHANGED', () => {
+  // dense high side: 23 prints at 390 + one TRADED 397 (vol 500) → robust p90 ≈ 390, raw max 397.
+  const ts5m = mk5m((ha, idx) => ({ low: 380, high: idx === 3 ? 397 : 390, vol: 500 }));
+  const row = rowOf({ low: 382, high: 391, lowTime: FRESH, highTime: FRESH }, ts5m);
+  assert.equal(row.rawBandHi, 397, 'the true band max is preserved');
+  assert.ok(row.band.hi < 397, `robust bandHi trims the top (got ${row.band.hi})`);
+  assert.equal(row.optSell, 391, 'optSell is the robust/clamped number — the signal does NOT move it');
+  assert.equal(row.mom, 'clean', 'not a breakup — live print sits inside the raw band (the gap Momentum cannot show)');
+  assert.ok(row.askHeadroom && row.askHeadroom.trusted === true, 'Class-1 headroom fires trusted');
+  assert.equal(row.askHeadroom.gap, 397 - row.optSell, 'gap = raw top − quoted ask');
+  assert.equal(row.askHeadroom.rawTop, 397);
+  assert.ok(askHeadroomText(row) && /raw top 397/.test(askHeadroomText(row)), 'the note surfaces the raw top');
+});
+ok('Bar E ask-headroom — untrusted: a tiny raw-top bucket is logged but NOT surfaced (flier still protected)', () => {
+  // same shape but the 397 bucket traded only 10 u (< RAWTOP_TRUST_BUCKET_VOL) and no volDay fallback.
+  const ts5m = mk5m((ha, idx) => ({ low: 380, high: idx === 3 ? 397 : 390, vol: idx === 3 ? 10 : 500 }));
+  const row = rowOf({ low: 382, high: 391, lowTime: FRESH, highTime: FRESH }, ts5m);
+  assert.ok(row.askHeadroom, 'the gap is still computed (logged for the F1 audit)');
+  assert.equal(row.askHeadroom.trusted, false, 'a thin-flier top is NOT trusted');
+  assert.equal(askHeadroomText(row), null, 'an untrusted gap is never surfaced as a recommendation');
+  assert.equal(row.optSell, 391, 'optSell unchanged regardless');
+});
+ok('Bar E ask-headroom — sparse high side is structurally silent (robust == raw ⇒ no Class-1 gap)', () => {
+  // fewer than BAND_EDGE_MIN_SAMPLE high prints ⇒ robustBand keeps the raw extremum ⇒ bandHi == rawBandHi.
+  const ts5m = mk5m((ha, idx) => ({ low: 380, high: idx < 5 ? (idx === 0 ? 397 : 390) : 0, vol: 500 }));
+  const row = rowOf({ low: 382, high: 391, lowTime: FRESH, highTime: FRESH }, ts5m);
+  assert.equal(row.band.hi, row.rawBandHi, 'sparse ⇒ robust edge equals the raw max');
+  assert.equal(row.askHeadroom, null, 'no shave gap on a sparse side (the thin big-ticket class)');
+});
+ok('Bar E ask-headroom — breakup (the incident): Class-1 gap is null; the Momentum tell carries the upside', () => {
+  // dense band raw max 397, but the live instabuy broke ABOVE it (420) → optSell == quickSell, mom breakup.
+  const ts5m = mk5m((ha, idx) => ({ low: 380, high: idx === 3 ? 397 : 390, vol: 500 }));
+  const row = rowOf({ low: 382, high: 420, lowTime: FRESH, highTime: FRESH }, ts5m);
+  assert.equal(row.mom, 'breakup', 'live instabuy above the raw band max fires breakup (the existing tell)');
+  assert.equal(row.optSell, row.quickSell, 'optSell == quickSell (live print is the top; no in-band evidence above)');
+  assert.equal(row.askHeadroom, null, 'no Class-1 number in a breakup — ladder guidance rides the momentum verdict');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

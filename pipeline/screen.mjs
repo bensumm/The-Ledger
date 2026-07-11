@@ -69,7 +69,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, selectNominations, flushSignal, DL4_MAX_NOMINATIONS_PER_SCAN } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, selectNominations, flushSignal, askHeadroomText, DL4_MAX_NOMINATIONS_PER_SCAN } from '../js/quotecore.js';
 import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // diurnal peak-timing read (auto, off the in-hand 1h series)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
@@ -317,6 +317,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   const rejReasons = {};   // P2: reject reason → count, for the `rejected: N (top reasons)` footer
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
+  const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -415,6 +416,10 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     const informed = [...informFlags(vres), ...bidReach];
     if (informed.length)
       informNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
+    // Bar E ask-headroom (inform-only, PLAN Bar-E-signal): surfaced as a sibling note so Ben ladders the
+    // ask up instead of relisting down. NEVER a gate/drop/grade/screen.json input; the lean askHeadroom
+    // field is logged to suggestions.jsonl (off row.askHeadroom, in suggestionEntry) for the analyze/F1 join.
+    { const ah = askHeadroomText(row); if (ah) headroomNotes.push(`${name}: ${ah}`); }
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF
     // all evaluated at that same pair. Extra data (reach/velocity) is null at the screen surface today
     // (no 1h fetch), so the estimators degrade honestly to their band-depth / volume-velocity priors.
@@ -541,6 +546,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   }
   for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
   for (const n of informNotes) console.log(`ℹ trajectory/reach — ${n}`);
+  for (const n of headroomNotes) console.log(`⤴ ask headroom — ${n}`);
   // Diurnal timing (2026-07-09) — the peak-timing read auto-run on the top surfaced picks. FREE: the 1h
   // series is already in hand (Leg B fetched it per survivor), so this adds NO fetch. For each top pick it
   // derives the stale-guarded bid (dip-window level, priced to LIVE when a dominating trend erases the dip

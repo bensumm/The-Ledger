@@ -18,7 +18,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  auditDataset, deriveCandidates, fieldPresence,
+  auditDataset, deriveCandidates, fieldPresence, askHeadroomAudit,
   MIN_N_CANDIDATE, FIELD_DROP_MIN_WINDOW,
 } from './lib/analyze.mjs';
 
@@ -156,6 +156,33 @@ ok('surfaces most-firing reject validators as inform (n-gated), never candidate'
 ok('fieldPresence returns null for empty and a fraction otherwise', () => {
   assert.equal(fieldPresence([], 'x'), null);
   assert.equal(fieldPresence([{ x: 1 }, { x: null }, { y: 2 }, { x: 3 }], 'x'), 2 / 4);
+});
+
+// --- askHeadroomAudit (Bar E ask-headroom retro) ---------------------------------------------
+ok('askHeadroomAudit: empty ledger → n=0 (PLACEHOLDER, nothing to flag)', () => {
+  const a = askHeadroomAudit([], []);
+  assert.equal(a.n, 0);
+  assert.equal(a.nTrusted, 0);
+  assert.equal(a.gapPctTrusted, null);
+});
+ok('askHeadroomAudit: segments trusted vs untrusted and joins the retro outcome', () => {
+  const sug = [
+    { itemId: 566, ts: 100, askHeadroom: { gap: 4, gapPct: 0.01, rawTop: 397, topBucketVol: 1200, netLever: 2, trusted: true } },
+    { itemId: 999, ts: 200, askHeadroom: { gap: 3, gapPct: 0.008, rawTop: 200, topBucketVol: 5, netLever: 1, trusted: false } },
+    { itemId: 12, ts: 300 },   // no askHeadroom → ignored
+  ];
+  const retro = [
+    { outcome: 'filled', realisedPerUnit: 8 },   // trusted row was taken & realized
+    { outcome: 'not-taken', realisedPerUnit: null },
+    { outcome: 'filled', realisedPerUnit: 50 },
+  ];
+  const a = askHeadroomAudit(sug, retro);
+  assert.equal(a.n, 2, 'only rows carrying askHeadroom counted');
+  assert.equal(a.nTrusted, 1);
+  assert.equal(a.nUntrusted, 1);
+  assert.equal(a.nTakenTrusted, 1);
+  assert.equal(a.realisedPerUnitTaken, 8, 'realized/u averaged over the taken trusted subset');
+  assert.ok(Math.abs(a.gapPctTrusted - 0.01) < 1e-9);
 });
 
 console.log(`\nanalyze.test: ${pass} assertions passed.`);

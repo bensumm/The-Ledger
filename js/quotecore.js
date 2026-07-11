@@ -206,10 +206,23 @@ export function phase(points){
    marketfetch's loadHistBands (honest historical RECONSTRUCTION for the O1 backtest-join — the real band
    a trade sat in, flier and all) and computeQuote's MOMENTUM tell (rawBandLo/rawBandHi drive `mom`: a
    "fresh 2h high" must fire off the true band max, not the robust p90). All three thresholds are NAMED
-   PLACEHOLDERS pending a validation pass (process rule 4); rawBandLo/rawBandHi are retained for audit. */
+   PLACEHOLDERS pending a validation pass (process rule 4). rawBandLo/rawBandHi are retained for audit AND
+   for the ask-headroom signal (the FIRST live consumer of the raw residue): when the robust p90 shaved a
+   TRADED in-band top, `computeQuote`'s inform-only `askHeadroom` surfaces the discarded upside so the
+   operator ladders the ask up instead of relisting down (see the askHeadroom derivation below). That is a
+   parallel READ of the raw edge, NOT a fork of the robust-edge rule — the quoted NUMBER still comes from
+   the robust band everywhere (the value-niche q15/q85 twin in valueAmplitudeValidator is UNCHANGED and
+   must stay so; don't "fix" it to match a misread of this signal). */
 export const BAND_EDGE_MIN_SAMPLE = 8;   // < this many prints/side ⇒ raw extremum (a quantile is meaningless)
 export const BAND_EDGE_HI_Q = 0.90;      // dense-side high edge quantile (was the raw max)
 export const BAND_EDGE_LO_Q = 0.10;      // dense-side low edge quantile  (was the raw min)
+// Bar E ask-headroom signal (inform-only; PLAN Bar-E-signal, Ben 2026-07-11). ALL PLACEHOLDERS pending
+// F1 RETRO CALIBRATION — n=1 (one Soul rune lot, 566): analyze.mjs joins the ledger `askHeadroom` field
+// to realized fills so F1 can measure how often a trusted raw top is actually reached before tuning these
+// or graduating the deferred clamp-widen. Do NOT treat them as validated.
+export const ASK_HEADROOM_MIN_PCT = 0.005;    // Class-1 materiality floor (0.5%) — a smaller gap isn't worth a ladder note
+export const RAWTOP_TRUST_BUCKET_VOL = 50;    // min raw-top 5m-bucket highPriceVolume to TRUST the top traded size (sharper than counting buckets)
+export const ASK_HEADROOM_VOL_FLOOR = 2000;   // item-level volDay fallback when bucket volumes are absent (churn scale, cf CHURN_MIN_VOL)
 // quantileSorted is the shared type-7 impl defined at the top of this file (SF-1).
 export function robustBand(los, his){
   const edge=(vals, q, dir)=>{
@@ -336,10 +349,36 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   const optNet  =(optSell!=null&&optBuy!=null)?netMargin(optBuy,optSell,bopt):null;
   const quickRoi=(quickNet!=null&&quickBuy)?quickNet/quickBuy*100:null;
   const optRoi  =(optNet!=null&&optBuy)?optNet/optBuy*100:null;
+  // --- Bar E ask-headroom signal (inform-only; PLAN Bar-E-signal) --------------------------
+  // "Real demand printed above the number I quoted — laddering is cheap under the GE better-price
+  // rule." TWO classes (see the robustBand header):
+  //   Class 1 — SHAVE GAP: the robust p90 discarded a TRADED in-band top (rawBandHi > optSell, which
+  //     structurally implies a DENSE high side AND mom!=='breakup'). This is the gap the Momentum
+  //     column CANNOT show — `mom` is 'clean' because the live print sits inside the raw band. This
+  //     block emits the number.
+  //   Class 2 — BREAKUP: optSell==quickSell (live print is the top, no in-band evidence above it) —
+  //     the upside IS the Momentum 'breakup' tell (mom/momPct), voiced as ladder guidance at the
+  //     render/verdict layer, NOT a new number here → askHeadroom stays null (the incident's own case).
+  // INFORM-ONLY: never gates, drops, reprices, or grades. Trust = Bar E's density intent made sharper
+  // (the raw-top BUCKET's own highPriceVolume — direct evidence the top PRICE traded size — falling
+  // back to item volDay). netLever is the "why": near break-even a small gp gap is a large SHARE of
+  // the after-tax net (Soul runes: 4gp gap ≈ 2× the 4gp net). All thresholds PLACEHOLDER, F1-routed.
+  let askHeadroom=null;
+  if(rawBandHi!=null && optSell!=null && rawBandHi>optSell && mom!=='breakup'){
+    const gap=rawBandHi-optSell, gapPct=gap/optSell;
+    if(gapPct>=ASK_HEADROOM_MIN_PCT){
+      let topBucketVol=null;
+      for(const p of recent){ if(p && p.avgHighPrice===rawBandHi){ topBucketVol=(p.highPriceVolume||0); break; } }
+      const trusted = topBucketVol!=null ? topBucketVol>=RAWTOP_TRUST_BUCKET_VOL
+                                         : (volDay!=null && volDay>=ASK_HEADROOM_VOL_FLOOR);
+      const netLever=(optNet!=null && optNet>0)?gap/optNet:null;
+      askHeadroom={gap, gapPct, rawTop:rawBandHi, topBucketVol, netLever, trusted};
+    }
+  }
   const row={ quickBuy, quickSell, optBuy, optSell, mid, guide:guide??null, volDay, pressure,
     quickNet, optNet, quickRoi, optRoi, limit:limit??null, bond, retradeFee,
     regime, regimeLabel:rl.label, falling, rising:rl.rising, held:!!held, asked:!!asked,
-    mom, momPct, rawBandLo, rawBandHi,
+    mom, momPct, rawBandLo, rawBandHi, askHeadroom,
     reliable, reliableReason, quoteAgeMin:{buy:buyAgeMin, sell:sellAgeMin},
     band:{lo:bandLo, hi:bandHi, n:recent.length} };
   row.ordered=quoteOrdered(row);
@@ -358,6 +397,24 @@ export function pressureText(pressure, {compact}={}){
   const r=pressure.ratio, side=r>=1?'buy':'sell', mag=r>=1?r:1/r;
   const head=side+' '+mag.toFixed(1)+'×';
   return compact?head:head+' (hpv '+fmt(pressure.hpv)+' / lpv '+fmt(pressure.lpv)+')';
+}
+
+/* Compact display text for row.askHeadroom — the ONE formatter every surface prints from (quote.mjs
+   read, screen.mjs note block, renderHeldVerdict), so the phrasing can't drift. INFORM-ONLY prose:
+   the robust p90 shaved a TRADED in-band top off the quoted Optimistic ask; laddering up is cheap
+   under the GE better-price rule (a list at the quoted number already fills at the best standing bid).
+   Returns null unless there is a TRUSTED Class-1 gap (untrusted gaps are logged for F1, not surfaced).
+   Returns the BODY only (each surface adds its own `⤴ ask headroom:` / `⤴ ask headroom — <item>:` label,
+   mirroring how screen labels the `ℹ trajectory/reach` notes). Body shape: `raw top 397 traded (1.2k u)
+   above the quoted ask 393 — +4/u ≈ 2.0× the quoted net; ladder the ask, don't relist down`. netLever is
+   stated because near break-even the gp gap is a large SHARE of the after-tax net — that ratio, not the
+   raw %, is why it matters. PLACEHOLDER thresholds. */
+export function askHeadroomText(row){
+  const h=row && row.askHeadroom;
+  if(!h || !h.trusted) return null;
+  const lever=(h.netLever!=null)?` ≈ ${h.netLever.toFixed(1)}× the quoted net`:'';
+  const vol=(h.topBucketVol!=null)?` traded (${fmt(h.topBucketVol)} u)`:'';
+  return `raw top ${fmt(h.rawTop)}${vol} above the quoted ask ${fmt(row.optSell)} — +${fmt(h.gap)}/u${lever}; ladder the ask, don't relist down (inform-only, n=1)`;
 }
 
 /* the ordering INVARIANT as a testable predicate (chunk-2 acceptance asserts this on fixtures) */

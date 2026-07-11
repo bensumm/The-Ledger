@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.20
+version: 1.21
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -114,6 +114,18 @@ the table, and a rebuy to recapture it pays the 2% tax twice (worse than having 
 doubly overnight, where the UK-day lift is exactly the run you want the ask to ride (`/overnight`
 time-geography). This is the complement of the sell-velocity step-down, not a contradiction: step
 DOWN a stalled/decaying ask; price UP or hold a rising one. Break-even floor unchanged.
+
+**Ask-headroom note — a `⤴ ask headroom` line means LADDER UP, don't relist down (PLAN Bar-E-signal, Ben
+2026-07-11).** _(enforced: `js/quotecore.js` `computeQuote` `row.askHeadroom` + `askHeadroomText`; rendered
+on `quote.mjs --positions`)_ On a held lot, the verdict's "list @ X" is a FLOOR, not a ceiling. When
+`quote.mjs` prints `⤴ … ask headroom — raw top N traded above the quoted ask X` (Class 1: the robust p90
+shaved a TRADED in-band top) or `⤴ … list @ X is a FLOOR … live broke +N%` (Class 2: a live 2h breakup),
+step the ask UP toward the raw top rather than parroting the verdict's number — the GE better-price rule
+makes the ladder cheap (a list at X already fills at the best standing bid; a list a few ticks higher risks
+only time). This is the ENCODED form of the rising-item / don't-sell-into-strength doctrine above (it's the
+Soul-rune-393-sold-397 lesson) — but INFORM-ONLY: it never moves the quoted number, never a cut/alert
+input, and the break-even floor is unchanged. Honesty (rule 4): n=1, thresholds are PLACEHOLDERS pending F1
+retro calibration — treat the note as a prompt to ladder, not a validated target.
 
 **Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `windowrange.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
 

@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, rebidAdvice } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice } from '../js/quotecore.js';
 import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series
 import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
@@ -154,6 +154,10 @@ async function runItems() {
       const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
       lines.push(`  ↳ diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}`);
     }
+    // Bar E ask-headroom (inform-only): the robust p90 shaved a TRADED in-band top off the quoted ask —
+    // ladder up, don't relist down (the GE better-price rule makes the ladder cheap). Null unless trusted.
+    const ah = askHeadroomText(row);
+    if (ah) lines.push(`  ⤴ ask headroom: ${ah}`);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
     sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
@@ -273,6 +277,15 @@ async function runPositions() {
     // persistence-gated path read off the SAME state, so the two surfaces agree on the current path.
     const pl = renderPathLine(ctx);
     if (pl) pathLines.push(`  ${name}: ${pl}`);
+    // Bar E ask-headroom (inform-only, PLAN Bar-E-signal): on a HELD lot the verdict's "list @ X" is a
+    // FLOOR, not a ceiling — surface upside above it so the ask ladders UP, not down. Class 1 = the robust
+    // p90 shaved a TRADED in-band top (askHeadroomText); Class 2 = a live breakup above the 2h band (the
+    // EXISTING mom tell re-voiced as ladder guidance, no new number). Sibling line off the verdict (the
+    // renderPathLine pattern) — the verdict string + momVerdict are UNTOUCHED (no APP_VERSION, no
+    // byte-identity break); never an alert/reprice input. The lean askHeadroom field is logged via suggestionEntry.
+    const ahHeld = askHeadroomText(row);
+    if (ahHeld) lines.push(`  ⤴ ${name}: ask headroom — ${ahHeld}`);
+    else if (row.mom === 'breakup' && row.optSell != null) lines.push(`  ⤴ ${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.`);
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid

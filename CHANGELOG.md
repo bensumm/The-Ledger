@@ -10,6 +10,44 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Ask-headroom signal — surface the profit above the quoted ask (2026-07-11, PLAN Bar-E-signal, pipeline-only — NO APP_VERSION)
+**The incident (n=1).** A held Soul rune lot (25k, break-even 389) was verdicted `HOLD — list high @ 393
+(2h breakup — patient on the sell)` and then SOLD at 397 — only because the GE better-price rule fills a
+393 list against higher standing bids. At 4gp of net/u on an 8gp true edge, the suggested NUMBER pointed at
+HALF the profit (~100k vs ~200k). The tool had no way to say "real demand prints above the number I quoted
+— ladder up." A Fable subagent designed the fix and **corrected the diagnosis**: under a breakup
+`quickSell > rawBandHi`, so `optSell = max(quickSell, bandHi) = quickSell` — the 393 was the **live
+instabuy**, not a p90-shaved edge; the 397 was standing-bid depth `/latest` structurally can't show. So
+there are TWO upside classes, and both are covered.
+
+**What shipped (Option C — signal now, clamp-widen deferred to F1).** `computeQuote` emits an additive,
+inform-only `row.askHeadroom = {gap, gapPct, rawTop, topBucketVol, netLever, trusted} | null`:
+- **Class 1 (shave gap):** fires when `rawBandHi > optSell` (structurally a DENSE side, not a breakup) —
+  the robust p90 discarded a TRADED in-band top. This is the gap Momentum **cannot** show (`mom` is 'clean'
+  because the live print sits inside the raw band). It is the first live consumer of the `rawBandLo/rawBandHi`
+  "retained for audit" fields.
+- **Class 2 (breakup — the actual incident):** `optSell == quickSell`, no in-band evidence above — the
+  upside IS the existing `mom='breakup'` tell, re-voiced as ladder guidance at the render layer, no new number.
+
+**Inform-only, everywhere.** It NEVER moves a quoted number, gates, drops, reprices, or grades — the robust
+band still sets every price, so Bar E's thin-flier protection and the value-niche q15/q85 twin
+(`valueAmplitudeValidator`) are UNCHANGED. Trust = the raw-top 5m BUCKET's own `highPriceVolume` (direct
+evidence the top price traded size — sharper than counting buckets or item `volDay`), fallback item `volDay`;
+an untrusted gap is logged for audit but not surfaced. Rendered as `⤴ ask headroom` on `quote.mjs` (read +
+`--positions` held sibling line, following the `renderPathLine` pattern so `momVerdict`/`renderHeldVerdict`
+stay byte-identical) and `screen.mjs` (sibling of the `ℹ trajectory/reach` note, stdout-only, NOT in
+`screen.json`). A lean `askHeadroom` field rides `suggestions.jsonl`; **`analyze.mjs` §5** (`askHeadroomAudit`)
+joins it to `fills.json` and surfaces the n-gated Option-B graduation candidate to F1.
+
+**Honesty (rule 4).** n=1 — the market claim ("dense-churn raw tops are reachable demand") is a HYPOTHESIS.
+All three constants (`ASK_HEADROOM_MIN_PCT` 0.5%, `RAWTOP_TRUST_BUCKET_VOL` 50, `ASK_HEADROOM_VOL_FLOOR`
+2000) are PLACEHOLDERS pending F1 retro calibration; the p97/raw clamp-widen is a pre-registered F1
+graduation (which WOULD bump `APP_VERSION` + regen the replay goldens), not shipped. `robustBand`/`mom`/
+`optSell`/`momVerdict` byte-identical; no app code reads the new field → no `APP_VERSION` bump (the
+`flushSignal`/`nominateDip` node-only-consumer precedent). Pinned by four new `quotecore.test.mjs` fixtures
+(trusted / untrusted-flier-still-protected / sparse-silent / breakup-is-Class-2) + an `analyze.test.mjs`
+audit fixture; all 59 suites + doclint green.
+
 ### screen.mjs survivor fetch — bounded worker pool (2026-07-11, pipeline-only — NO APP_VERSION)
 The cold-scan cost was one sequential loop: ~50+ survivors × 3 serialized timeseries round-trips
 (5m/6h/1h) each followed by a `sleep(30)`. Replaced with a bounded worker pool (`FETCH_CONCURRENCY = 5`

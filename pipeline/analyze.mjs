@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from './lib/cli.mjs';
 import { readSuggestionLines } from './lib/suggestlog.mjs';
 import { retroJoin, aggregateOutcomes } from './lib/retrojoin.mjs';
-import { auditDataset, deriveCandidates, dipLoopAudit, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from './lib/analyze.mjs';
+import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from './lib/analyze.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -68,6 +68,7 @@ const MIN_N_DEFAULT = 20;   // mirrors lib/analyze.mjs MIN_N_CANDIDATE (the deri
 const minN = MIN_N ?? MIN_N_DEFAULT;
 const candidates = deriveCandidates(perNiche, sug, { minN: MIN_N });
 const dipLoop = dipLoopAudit(sug.rows, retroRows);   // DL2 — FLUSH firings ⇆ fills.json retro
+const askHead = askHeadroomAudit(sug.rows, retroRows);   // Bar E — ask-headroom flags ⇆ fills.json retro
 
 const brief = {
   generatedAt: nowSec,
@@ -83,6 +84,7 @@ const brief = {
   },
   candidates,
   dipLoop,
+  askHead,
   minN,
 };
 
@@ -145,5 +147,18 @@ if (!dipLoop.n) {
 console.log(`  ⚠ n≈0 — DIP_LOOP_LIQUID_FLOOR / DIP_LOOP_FLUSH_PCT / dipScore are PLACEHOLDERS; this is a FLAG for F1 (analyze surfaces evidence, never retunes a constant), not a calibrated conclusion.`);
 // TODO(DL2-follow): richer join — correlate the FALLING LEG (did the still-falling flush actually keep
 // filling a resting bid?) + per-item episode duration; feed the signal-only distribution into DL3.
+
+// §5 — Bar E ask-headroom retro (candidate-surfacing; F1 calibrates ASK_HEADROOM_* / the deferred widen).
+console.log(`\n## 5. Ask-headroom (Bar E) retro — shave-gap flags ⇆ fills.json (candidate-surfacing; F1 calibrates)`);
+if (!askHead.n) {
+  console.log(`  no ask-headroom flags logged yet (quote/screen) — n=0. PLACEHOLDER until the robust p90 shaves a traded top on a surfaced row; nothing to flag for F1 (rule 4).`);
+} else {
+  console.log(`  ${askHead.n} shave-gap flag(s) · ${askHead.nTrusted} trusted (surfaced as a ladder note) · ${askHead.nUntrusted} untrusted (audit only — thin-flier path Bar E protects)`);
+  console.log(`  trusted subset: mean gap ${pct(askHead.gapPctTrusted)} of the ask · mean net-leverage ${askHead.netLeverTrusted != null ? askHead.netLeverTrusted.toFixed(1) + '×' : '—'} · ${askHead.nTakenTrusted} taken → realized/u ${gp(askHead.realisedPerUnitTaken)}`);
+  for (const r of askHead.trusted)
+    console.log(`    - #${r.itemId} · gap +${r.gap != null ? r.gap.toLocaleString() : '—'} (raw top ${r.rawTop != null ? r.rawTop.toLocaleString() : '—'}) · bucket ${r.topBucketVol != null ? r.topBucketVol.toLocaleString() : '—'} u → ${r.outcome ?? 'not-taken'}${r.realisedPerUnit != null ? ` · realized/u ${gp(r.realisedPerUnit)}` : ''}`);
+  console.log(`  NOTE: the STRICT "did the realized sell reach the raw top?" join needs the realized SELL price (the retro row is buy-keyed today) — a documented follow-up; this reports the trusted population + round-trip now.`);
+}
+console.log(`  ⚠ n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are PLACEHOLDERS; this is a FLAG for F1 (analyze surfaces evidence, never retunes; the Option-B clamp-widen is F1's to graduate), not a calibrated conclusion.`);
 
 console.log(`\n(read-only: suggestions ledger + fills.json + positions.json; nothing written, nothing fetched)`);
