@@ -24,7 +24,9 @@
  * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and a bounded rising
  * reserve front-loads the highest-proxy risers so they aren't buried below flats (the absorbed `rising`
  * mechanism, Steps 3+4). The real regime + falling-exclusion still run post-fetch on computeQuote. Per-item
- * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API. --stats prints
+ * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API, and the survivor
+ * fetch runs through a bounded worker pool (FETCH_CONCURRENCY items at once, each item's 5m/6h/1h in
+ * parallel — the pool bound is the politeness throttle, not per-fetch sleeps). --stats prints
  * a per-niche footer: gated / fetched / survivors / yield / discard reasons.
  *
  * Output (chunk 0 rework): ONE table PER niche (no more Tier A / Tier B split), each sorted by a
@@ -943,23 +945,35 @@ async function main() {
     gated[m] = { cand, survivors: rankAndSlice(m, cand, daily, { thinReserve: THIN_RESERVE, top }) };
   }
 
-  // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it
+  // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it.
+  // Bounded worker pool: the 3 per-item series (5m/6h/1h — independent endpoints) fetch in parallel, and
+  // FETCH_CONCURRENCY items run at once. The pool bound IS the API-politeness throttle (it replaced the old
+  // serialized per-fetch sleep(30)); results land in id-keyed Maps, so scheduling order can't change output.
+  const FETCH_CONCURRENCY = 5;   // max in-flight items — keep modest; the wiki API sees ≤15 concurrent requests
   const ids = new Set();
   for (const m of RUN_MODES) for (const s of gated[m].survivors) ids.add(s.id);
   const qcache = new Map(), series5m = new Map(), series6h = new Map(), series1h = new Map();
-  for (const id of ids) {
-    const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
-    const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
-    // Leg B (2026-07-09): the 1h series for reachValidator — the sell-leg "windowrange --ask" reach + the
-    // value niche's daily-min TIMING read. SURVIVOR-ONLY (this loop is the union of mode survivors, not
-    // the top-40 gated pool), so a scan adds ~one 1h fetch per surfaced row, never per candidate.
-    const ts1h = await fetchTsCached(id, '1h', TS_TTL_1H); await sleep(30);
-    const lt = latest[id] || latest[String(id)] || null;
-    const limit = map.byId[id]?.limit ?? null;
-    qcache.set(id, computeQuote({ id, latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
-    series5m.set(id, ts5m);   // kept raw for the overnight-posture staleness read (overnightStaleRisk)
-    series6h.set(id, ts6h);   // kept raw for the Part A phase() trajectory read (same ts6h as the quote)
-    series1h.set(id, ts1h);   // Leg B — reachValidator's window series (was null → reach degraded to pass)
+  {
+    const queue = [...ids];
+    const worker = async () => {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        // Leg B (2026-07-09): the 1h series for reachValidator — the sell-leg "windowrange --ask" reach + the
+        // value niche's daily-min TIMING read. SURVIVOR-ONLY (this pool is the union of mode survivors, not
+        // the top-40 gated pool), so a scan adds ~one 1h fetch per surfaced row, never per candidate.
+        const [ts5m, ts6h, ts1h] = await Promise.all([
+          fetchTsCached(id, '5m', TS_TTL_5M),
+          fetchTsCached(id, '6h', TS_TTL_6H),
+          fetchTsCached(id, '1h', TS_TTL_1H),
+        ]);
+        const lt = latest[id] || latest[String(id)] || null;
+        const limit = map.byId[id]?.limit ?? null;
+        qcache.set(id, computeQuote({ id, latest: lt, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit }));
+        series5m.set(id, ts5m);   // kept raw for the overnight-posture staleness read (overnightStaleRisk)
+        series6h.set(id, ts6h);   // kept raw for the Part A phase() trajectory read (same ts6h as the quote)
+        series1h.set(id, ts1h);   // Leg B — reachValidator's window series (was null → reach degraded to pass)
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, ids.size) || 1 }, worker));
   }
 
   console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);

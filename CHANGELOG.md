@@ -10,6 +10,16 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### screen.mjs survivor fetch — bounded worker pool (2026-07-11, pipeline-only — NO APP_VERSION)
+The cold-scan cost was one sequential loop: ~50+ survivors × 3 serialized timeseries round-trips
+(5m/6h/1h) each followed by a `sleep(30)`. Replaced with a bounded worker pool (`FETCH_CONCURRENCY = 5`
+items at once; each item's three independent endpoints fetched via `Promise.all`) — the pool bound is
+now the API-politeness throttle, so the per-fetch sleeps in that loop are gone. Byte-identical results
+(same fetches, same id-keyed Map writes, same `computeQuote` inputs; replay goldens pin it) — only the
+fetch scheduling changed. `fetchTsCached`'s per-(id,step) disk cache is untouched, so warm re-runs stay
+fast; structurally a cold `--mode all` scan drops from ~160 serialized round-trips + ~5s of sleeps to
+~⌈53/5⌉ pool waves of parallel triples.
+
 ### Chart axis/tooltip resolution — fmtSig 4-sig-fig labels (0.62.0)
 The Trends charts rendered y-axis labels and hover tooltips with the app's `fmt()`, which collapses the
 k-range to a single decimal (`7834 → "7.8k"`). On a narrow-band item like snapdragon (~7.8k↔8.0k) that
