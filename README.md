@@ -73,7 +73,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   offer sizing, `bestWindow`/`median`; moved out of `trends.js` for
   `pipeline/trendcore.test.mjs`), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
-  with the node analysis scripts; also the ONE type-7 quantile/median home (SF-1):
+  with the node analysis scripts; also home to `recentDirection` (DP1) and `flushSignal` (DL2 — the
+  reactive liquid-flush firing read, consumed ONLY by `pipeline/watch.mjs --dip`, no app import);
+  also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
   `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
@@ -205,6 +207,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the GitHub contents API (`js/github.js`)
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
   `pipeline/alerts.mjs` (N1); ships empty
+- `dip-watchlist.json` — tracked repo-root pool of LIQUID flush candidates (array of item
+  names/ids, mirrors `watchlist.json`'s shape; ships empty `[]`). Read **only** by
+  `pipeline/watch.mjs --dip` (DL2) — NOT app-imported (watchlist.json is the app's, kept separate).
+  New candidates appended on discovery (the screen-fed auto-population is the DL2 follow-on).
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
   a flat array of `{id, exitPrice, tripwire, horizon, path, enteredUnder, ts}` (`path`/`enteredUnder`
   added additively by P4a — the js/paths.mjs entry-path declaration; legacy entries without them stay
@@ -329,7 +335,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     dataset's health (ledger freshness/volume, field-DROP detection — an ALWAYS_FIELD that stopped being
     logged, fills⇆ledger un-attributed-buy coherence, a rebuildability PROXY = inputs parse + positions.json
     fresh vs fills.json, and forward-data recommendations), ORCHESTRATES the existing joins for a compact
-    per-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), and derives
+    per-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), a **DL2
+    dip-loop retro §4** (`dipLoopAudit` — joins the widened flush log against the retro rows, segments
+    `alerted` (liquid) from `signal-only` (illiquid → DL3 input) rows, and computes fillable-vs-not
+    separation over the alerted subset; candidate-surfacing → points at F1, never retunes; n≈0 placeholder),
+    and derives
     n-gated TUNING CANDIDATES that are FLAGS for F1, never applied here; a ~0% taken rate is treated as the
     documented BASELINE, not a finding. `--since <hrs>`/`--json`/`--min-n`. Pure core is `lib/analyze.mjs`,
     fixture-tested by `analyze.test.mjs`; consumed by the `/analyze` skill (AZ2). READ-ONLY — never in a
@@ -562,6 +572,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `dipposture.test.mjs` (DP1 — `recentDirection` falling/reverting/flat/thin/lone-flier-robustness +
     `dipPostureValidator`: no-dip/held/missing-input degrades, falling→pass, reverting→caution with the
     cross message + crossNet, unprofitable-cross language, the NEVER-reject invariant, and the inform clamp),
+    `diploop.test.mjs` (DL2 — `flushSignal` fires on liquid+deep+falling+profitable-exit; does not fire
+    on thin/shallow/reverting/flat/exit-underwater/unreliable; null on missing inputs; the null-limit
+    `dipScore` fallback + ranking sanity; bucketVol-informs-not-gates; `suggestionEntry` lean-includes
+    `dipLoop`; and `dipLoopAudit` separates fillable from not-taken firings),
     `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
     decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and
     the no-data/thin-floor/held-lot degrade-to-pass contract on both surface ctx shapes),

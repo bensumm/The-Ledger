@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from './lib/cli.mjs';
 import { readSuggestionLines } from './lib/suggestlog.mjs';
 import { retroJoin, aggregateOutcomes } from './lib/retrojoin.mjs';
-import { auditDataset, deriveCandidates, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from './lib/analyze.mjs';
+import { auditDataset, deriveCandidates, dipLoopAudit, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from './lib/analyze.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -67,6 +67,7 @@ const audit = auditDataset(sug, fillsData, posData, retroMeta, { nowSec, sinceH:
 const MIN_N_DEFAULT = 20;   // mirrors lib/analyze.mjs MIN_N_CANDIDATE (the deriveCandidates default when --min-n is absent)
 const minN = MIN_N ?? MIN_N_DEFAULT;
 const candidates = deriveCandidates(perNiche, sug, { minN: MIN_N });
+const dipLoop = dipLoopAudit(sug.rows, retroRows);   // DL2 — FLUSH firings ⇆ fills.json retro
 
 const brief = {
   generatedAt: nowSec,
@@ -81,6 +82,7 @@ const brief = {
     perNiche, perPath,
   },
   candidates,
+  dipLoop,
   minN,
 };
 
@@ -122,5 +124,26 @@ const realCands = candidates.filter(c => c.kind === 'candidate');
 if (!realCands.length) console.log(`  no anomaly cleared the n≥${minN} floor — nothing honestly tunable yet (a ~0% taken rate is the expected baseline, not a candidate).`);
 const mark = { context: 'ℹ context', candidate: '• CANDIDATE', inform: 'ℹ inform' };
 for (const c of candidates) { console.log(`  ${mark[c.kind] || '•'}: ${c.signal}`); console.log(`    → ${c.pointsAt}`); }
+
+// ---- 4. Dip-loop (DL2 FLUSH) retro ------------------------------------------------------------------
+// CANDIDATE-SURFACING ONLY (PLAN-ANALYZE boundary): emits evidence-with-n and POINTS AT F1; it never
+// mutates DIP_LOOP_* — F1 (gated on O1 sample thresholds) owns any actual retune, exactly like §3.
+console.log(`\n## 4. Dip-loop (DL2 FLUSH) retro — flush SIGNALS ⇆ fills.json (candidate-surfacing; F1 calibrates)`);
+if (!dipLoop.n) {
+  console.log(`  no flush signals logged yet (watch.mjs --dip) — n=0. The dip-loop retro is a PLACEHOLDER until signals accrue; nothing to flag for F1 (rule 4).`);
+} else {
+  console.log(`  ${dipLoop.n} flush signal(s) · ${dipLoop.nAlerted} alerted (liquid → headline FLUSH) · ${dipLoop.nSignalOnly} signal-only (illiquid/gated — DL3 input)`);
+  const sep = dipLoop.separation;
+  const sfmt = (a, b) => `${a != null ? Math.round(a).toLocaleString() : '—'} vs ${b != null ? Math.round(b).toLocaleString() : '—'}`;
+  console.log(`  alerted split: ${dipLoop.nFillable} fillable (a buy filled within horizon) · ${dipLoop.nNotFillable} not-taken`);
+  console.log(`  separation over ALERTED (fillable vs not-taken): dipScore ${sfmt(sep.dipScoreFillable, sep.dipScoreNotFillable)} · volDay ${sfmt(sep.volDayFillable, sep.volDayNotFillable)} · depth ${pct(sep.depthPctFillable)} vs ${pct(sep.depthPctNotFillable)}`);
+  const so = dipLoop.signalOnlyDist;
+  if (so.n) console.log(`  signal-only distribution (DL3 standing-bid input): n=${so.n} · depth ${pct(so.depthPct)} · volDay ${so.volDay != null ? Math.round(so.volDay).toLocaleString() : '—'} · dipScore ${so.dipScore != null ? Math.round(so.dipScore).toLocaleString() : '—'}`);
+  for (const f of dipLoop.firings)
+    console.log(`    - #${f.itemId} · ${f.alerted ? 'ALERTED' : 'signal-only (' + (f.gatedReason || 'gated') + ')'} · depth ${pct(f.depthPct)} · volDay ${f.volDay != null ? f.volDay.toLocaleString() : '—'} · bucket ${f.bucketVol != null ? f.bucketVol.toLocaleString() : '—'} · dipScore ${f.dipScore != null ? Math.round(f.dipScore).toLocaleString() : '—'} → ${f.outcome ?? 'not-taken'}${f.latencySec != null ? ` (${hrs(f.latencySec)})` : ''}`);
+}
+console.log(`  ⚠ n≈0 — DIP_LOOP_LIQUID_FLOOR / DIP_LOOP_FLUSH_PCT / dipScore are PLACEHOLDERS; this is a FLAG for F1 (analyze surfaces evidence, never retunes a constant), not a calibrated conclusion.`);
+// TODO(DL2-follow): richer join — correlate the FALLING LEG (did the still-falling flush actually keep
+// filling a resting bid?) + per-item episode duration; feed the signal-only distribution into DL3.
 
 console.log(`\n(read-only: suggestions ledger + fills.json + positions.json; nothing written, nothing fetched)`);

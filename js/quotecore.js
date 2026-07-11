@@ -810,3 +810,93 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
   else                                dir = 'flat';
   return { dir, minLow, minAgeMin, recentLevel, bouncePct, n: slice.length };
 }
+
+/* ============================================================================================
+   DL2 (2026-07-11) — flushSignal: the REACTIVE LIQUID-FLUSH → bid-into-the-fall detector. A SEPARATE
+   appended block of pure, DOM-free math (quotecore.js imports only format.js — kept that way); it does
+   NOT touch momVerdict / the gate tree. Consumed ONLY by pipeline/watch.mjs's --dip loop (a node CLI
+   surface); no app module imports it, so it ships without an APP_VERSION bump. Fixture-pinned in
+   pipeline/diploop.test.mjs.
+
+   THE MECHANIC (this is the DL2 DOCTRINE HOME). Some dips are off-schedule EXOGENOUS FLUSHES — a holder
+   dumps units into the book faster than buyers absorb them, so price gaps DOWN and stays fillable for a
+   short window before it reverts. These are NOT the multi-day faller the regime column tracks (the knife
+   thesis LAGS them) and they are NOT diurnal (the forecast is silent — they're unscheduled). The right
+   play is REACTIVE: when a LIQUID book is actively flushing, bid INTO the fall to catch the cheap units,
+   then list at the patient band top. flushSignal is the detector; watch.mjs turns a firing into a headline
+   FLUSH alert. It ALERTS, never auto-places (the watch.mjs read-only guardrail is untouched).
+
+   FILLABILITY IS UNIT-FLOW, NOT DEPLOYABILITY. The retro anchor (n=2, be honest — this is NOT a validated
+   edge): today we MISSED a Searing page flush — it dumped 4,732 instasell units in ONE 5m bucket and
+   stayed fillable ~45 min, but our ~15-min-stale scan missed the front-loaded volume. The illiquid twin
+   (Abyssal bludgeon, ~83/day, ~16m/unit) was UN-fillable — only 2 units crossed the whole episode — even
+   though price×limit looked deployable. So `price×limit` measures DEPLOYABILITY (can you park capital
+   here?); FILLABILITY is UNIT-FLOW (`volDay`, will a seller actually cross down to your bid?). The liquid
+   floor below gates on unit-flow, which is why it cleanly excludes the bludgeon and admits Searing.
+
+   REUSE, don't re-derive: DIRECTION is recentDirection() (the DP1 5m-shape read — reverting is already
+   its own cross-or-pass case, so a flush only fires while STILL falling); tax/break-even are the shared
+   breakEven()/netMargin(). HONESTY (process rule 4): every threshold below is a NAMED PLACEHOLDER, n=2,
+   none validated — the DL2 retro-join (FLUSH firings ⇆ fills.json, in pipeline/analyze.mjs) is the
+   calibration path that would tell us whether the defaults separate fillable from un-fillable firings.
+
+   Signature: flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) → null (missing inputs) or
+     { flush, signal, dir, depthPct, bucketVol, deployableGp, afterTaxMargin, dipScore, liquid }.
+
+   TWO-LEVEL OUTPUT — SIGNAL (log) vs FLUSH (alert), deliberately decoupled (DL2 addition, 2026-07-11):
+     • SIGNAL (`signal:true`) = gates (ii)+(iii) ALONE: a genuine falling flush of REAL DEPTH on ANY watched
+       item, LIQUID OR NOT. It is worth LOGGING even for an illiquid item that will never earn the headline
+       alert, because its depth/frequency history is exactly the evidence basis for WHERE to rest a standing
+       bid on that illiquid item — the other half of the liquid/illiquid split, and DL3's input. So flushSignal
+       ALWAYS returns the full computed object (never bails to null on the illiquid path).
+     • FLUSH (`flush:true`) = ALL FOUR gates: a SIGNAL on a LIQUID book whose exit clears after tax. ONLY this
+       produces the headline bid-into-the-fall alert (a fire-fast alert is pointless where you can't poll-fill).
+   FIRING GATES (flush:true requires ALL; current-5m-bucket volume is NOT a gate — Ben's refinement):
+     (i)   fillability — row.volDay >= DIP_LOOP_LIQUID_FLOOR (else liquid:false; signal may still be true).
+     (ii)  depth      — depthPct = (avgLow24 − quickBuy)/avgLow24 >= DIP_LOOP_FLUSH_PCT (a flush is sharp).
+     (iii) direction  — recentDirection === 'falling' (reverting/flat/null → no signal; DP1 owns reverting).
+     (iv)  exit clears — row.reliable AND optSell != null AND after-tax net at the bid > 0 AND optSell >
+           break-even (liquid-fill economics — NOT part of the log-worthy SIGNAL). */
+export const DIP_LOOP_LIQUID_FLOOR   = 1000;   // PLACEHOLDER (n=2): min two-sided volDay to treat a book as FILLABLE
+//   (unit-flow, NOT deployability). Cleanly excludes the ~83/d Abyssal bludgeon, admits ~14.4k/d Searing;
+//   room to tune DOWN as the DL2 retro-join accrues. Validation = the DL2 retro (FLUSH firings ⇆ fills.json).
+export const DIP_LOOP_FLUSH_PCT      = 0.03;   // PLACEHOLDER (n=2): live instasell this fraction below the 24h avg low
+//   = a fresh flush (deeper than DP1's 1% dip depth — a flush is a sharp gap, not a drift).
+export const DIP_LOOP_DEPLOY_VOL_FRAC = 0.01;  // PLACEHOLDER (n=2): when limit is null/unknown, deployable units fall
+//   back to this fraction of volDay (never let a null limit break the dipScore — Searing logs a null limit).
+export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
+  if (!row || !ts5m || avgLow24 == null || !(avgLow24 > 0) || row.quickBuy == null) return null;   // degrade — never guess
+  const liquid = row.volDay != null && row.volDay >= DIP_LOOP_LIQUID_FLOOR;
+  const depthPct = (avgLow24 - row.quickBuy) / avgLow24;
+  const dir = recentDirection(ts5m, { now })?.dir ?? null;
+  // bucketVol (INFORMATIONAL — alert text only, never a firing gate): the instasell units in the latest
+  // 5m bucket (sum of the last ≤5 min of points, else the freshest point's lowPriceVolume).
+  const nowSec = ((now instanceof Date) ? now.getTime() : (now != null ? now : Date.now())) / 1000;
+  const pts = (ts5m || []).filter(p => p && p.timestamp != null).slice().sort((a, b) => a.timestamp - b.timestamp);
+  const inLast5 = pts.filter(p => p.timestamp >= nowSec - 300);
+  const bucketVol = inLast5.length
+    ? inLast5.reduce((s, p) => s + (p.lowPriceVolume || 0), 0)
+    : (pts.length ? (pts[pts.length - 1].lowPriceVolume || 0) : 0);
+  // after-tax net at the bid-into-the-fall (buy live instasell, sell the patient band top), bond-aware via
+  // the shared netMargin (the ONE tax exception — no re-derived tax here).
+  const bondOpts = row.bond ? { bond: true, guide: row.guide } : undefined;
+  const afterTaxMargin = (row.optSell != null && row.quickBuy != null) ? netMargin(row.quickBuy, row.optSell, bondOpts) : null;
+  // dipScore — soft SECONDARY priority (ranks which FLUSH surfaces first when several trip at once; NOT a
+  // gate). deployableGp = price × min(limit, volume-proxy); the limit===null fallback uses the vol proxy
+  // alone so a null limit (Searing) can never break the score.
+  const price = row.quickBuy;
+  const volProxy = Math.max(1, Math.floor((row.volDay || 0) * DIP_LOOP_DEPLOY_VOL_FRAC));
+  const deployUnits = (row.limit != null) ? Math.min(row.limit, volProxy) : volProxy;
+  const deployableGp = price * deployUnits;
+  const dipScore = Math.log10(Math.max(1, row.volDay || 1)) * deployableGp * (afterTaxMargin || 0);
+  const deepEnough = depthPct >= DIP_LOOP_FLUSH_PCT;                                        // (ii)
+  const stillFalling = dir === 'falling';                                                   // (iii)
+  // SIGNAL = gates (ii)+(iii) only — a genuine falling flush of real depth on ANY item (liquid or not),
+  // worth LOGGING even when it will never alert (the illiquid standing-bid evidence basis / DL3 input).
+  const signal = deepEnough && stillFalling;
+  // ALERT (flush) = ALL FOUR gates. exitClears is liquid-fill economics (reliable quote + a profitable
+  // patient exit) and is independent of the liquidity floor; it is NOT part of the log-worthy SIGNAL.
+  const exitClears = row.reliable === true && row.optSell != null &&                        // (iv)
+    afterTaxMargin != null && afterTaxMargin > 0 && row.optSell > breakEven(row.quickBuy, bondOpts);
+  return { flush: signal && liquid && exitClears, signal, dir, depthPct, bucketVol, deployableGp, afterTaxMargin, dipScore, liquid };
+}

@@ -44,6 +44,7 @@
  *   node pipeline/watch.mjs                       # every position: held lots + active offers
  *   node pipeline/watch.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
  *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
+ *   node pipeline/watch.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
  *   node pipeline/watch.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
  */
 import fs from 'node:fs';
@@ -51,7 +52,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
-  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText } from '../js/quotecore.js';
+  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal } from '../js/quotecore.js';
+import { limitWindow, buysByItem } from './lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../js/format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
 import { renderHeldVerdict, pathsStage, renderPathLine } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line
@@ -75,6 +77,8 @@ import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } fro
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', 'positions.json');
+const FILLS = path.join(HERE, '..', 'fills.json');   // DL2 — logged buys for the FLUSH buy-limit clause
+const DIP_WATCHLIST = path.join(HERE, '..', 'dip-watchlist.json'); // DL2 tracked pool of LIQUID flush candidates (--dip)
 const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
 const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
 const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
@@ -321,6 +325,37 @@ function bidAlert(it) {
   return null;
 }
 
+// --- DL2 FLUSH alert: a REACTIVE liquid-flush bid-into-the-fall carve-out. Deliberately NOT routed
+// through classify()/targetAction — those emit "FALLING → SKIP", correct for a multi-day faller but
+// WRONG for a fresh liquid flush (the whole point of DL2). It reads flushSignal (js/quotecore.js) on the
+// buy-side row; when flush:true it returns a headline alert telling Ben to bid INTO the fall + list at
+// the band top (break-even-floored), buy-limit aware. It ALERTS, never places (the read-only guardrail
+// stands). `buys` is the per-item logged-buy list (fills.json via buysByItem, or [] when unavailable) so
+// the 4h window can gate the bid clause; a missing/null limit degrades to the normal bid clause.
+function flushAlert(it, sig, buysByItemMap) {
+  const { row, name } = it;
+  if (!sig || !sig.flush) return null;
+  const bondOpts = row.bond ? { bond: true, guide: row.guide } : undefined;
+  const be = breakEven(row.quickBuy, bondOpts);
+  const listAt = row.optSell != null ? Math.max(row.optSell, be) : be;   // list at the band top, NEVER below break-even
+  // BUY-LIMIT clause: if the 4h window is exhausted, the bid-into-the-fall clause is replaced by a
+  // "buy limit exhausted — frees ~HH:MM" note. A null limit / no buys degrades to the normal bid clause.
+  const limit = row.limit ?? null;
+  const buys = (buysByItemMap && buysByItemMap.get(it.id)) || [];
+  let actionClause = `bid-into-the-fall @ ${fmtP(row.quickBuy)} now`;
+  try {
+    const lw = limitWindow({ buys, limit });
+    if (limit != null && lw.remaining === 0) {
+      const free = lw.nextFreeAt != null ? new Date(lw.nextFreeAt * 1000) : null;
+      const hhmm = free ? `${String(free.getHours()).padStart(2, '0')}:${String(free.getMinutes()).padStart(2, '0')}` : '?';
+      actionClause = `buy limit exhausted — frees ~${hhmm}`;
+    }
+  } catch { /* limit read is best-effort — never suppress the flush alert */ }
+  const depthTxt = (sig.depthPct * 100).toFixed(1) + '%';
+  return { level: 'FLUSH', dipScore: sig.dipScore, sig,
+    msg: `FLUSH — ${name} dumping (${depthTxt} below 24h floor, ${fmt(sig.bucketVol)} units this bucket) · ${actionClause} · list @ ${fmtP(listAt)} (BE ${fmtP(be)}) · window closing — reverts fast.` };
+}
+
 async function buildItem({ id, name, qty, avgCost, buyTs }, map, guide) {
   const inp = await fetchItemInputs(id, { ts1h: true }); // ts1h feeds the window-context line
   const held = qty != null;
@@ -331,7 +366,9 @@ async function buildItem({ id, name, qty, avgCost, buyTs }, map, guide) {
   const lotValue = held ? qty * avgCost : null;
   // V3 lot-context: buyTs (oldest lot's buy time, unix s) enables the entry-age softening;
   // askFilling is set later in main() once the live asks are known (needs both this row + asks).
-  return { id, name, qty, avgCost, buyTs: buyTs ?? null, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts6h: inp.ts6h, ts1h: inp.ts1h, askFilling: false };
+  return { id, name, qty, avgCost, buyTs: buyTs ?? null, held, row, cls, meta, be, lotValue, ts5m: inp.ts5m, ts6h: inp.ts6h, ts1h: inp.ts1h, askFilling: false,
+    // DL2 — the 24h avg low (the flush DEPTH reference); the row doesn't carry it (DP1 confirmed), so stash it here.
+    _avgLow24: inp.vol24?.avgLowPrice ?? null };
 }
 
 // V3 lot-context for momVerdict's Gate-D softening — { buyTs, askFilling } off a built held item.
@@ -397,6 +434,7 @@ async function main() {
   const args = process.argv.slice(2);
   const TARGETS_ONLY = args.includes('--targets-only');
   const BRIEF = args.includes('--brief');   // compact one-line-per-item book (stable, script-owned format)
+  const DIP = args.includes('--dip');       // DL2 — also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
   const tokens = args.filter(a => !a.startsWith('--'));
 
   // --sync (LW-loop): refresh the booked view before this pass so held-basis/realised-P&L are current
@@ -459,6 +497,22 @@ async function main() {
     if (!hit) { console.error(`! no item named "${t}" — skipping`); continue; }
     if (heldSpecs.some(h => h.id === hit.id)) continue; // already covered as a held lot
     targetSpecs.push({ id: hit.id, name: hit.name });
+  }
+  // DL2 --dip: fold the tracked dip-watchlist.json pool into the buy-side target set (deduped against
+  // held lots + CLI tokens). New candidates are appended to dip-watchlist.json on discovery (manual for
+  // now; the screen-fed auto-population is the DL2 follow-on). Each entry is an item name OR numeric id
+  // (mirrors watchlist.json's simple shape). Best-effort: a missing/garbled file degrades to no dip pool.
+  if (DIP) {
+    let pool = [];
+    try { const raw = JSON.parse(fs.readFileSync(DIP_WATCHLIST, 'utf8')); if (Array.isArray(raw)) pool = raw; }
+    catch { /* no dip pool — degrade */ }
+    for (const entry of pool) {
+      const hit = map.resolve(String(entry));
+      if (!hit) { console.error(`! dip-watchlist: no item named "${entry}" — skipping`); continue; }
+      if (heldSpecs.some(h => h.id === hit.id)) continue;      // covered as a held lot
+      if (targetSpecs.some(t => t.id === hit.id)) continue;    // already a CLI target
+      targetSpecs.push({ id: hit.id, name: hit.name });
+    }
   }
 
   // bid items get a market read of their own (skip ones already held/targeted — those rows cover it)
@@ -550,6 +604,27 @@ async function main() {
   logGuideChanges(all, guide); // pin guide-update timing/magnitude for watched items
   const loopMin = Math.min(...all.map(it => it.meta.cadence));
 
+  // DL2 — flushSignal per buy-side target, computed ONCE (pure) as the single source for BOTH the FLUSH
+  // ledger rows below and the FLUSH alert pass. LOGGING is DECOUPLED FROM ALERTING (2026-07-11): the map
+  // holds every target with a genuine flush SIGNAL (deep + falling; gates ii+iii) — liquid OR NOT — so the
+  // illiquid signal-only rows are logged too (their depth/frequency history is the standing-bid evidence
+  // basis / DL3's input). Only the LIQUID + exit-clearing subset (sig.flush) produces a headline alert.
+  const sigByTarget = new Map();
+  for (const it of targets) {
+    try { const sig = flushSignal(it.row, it.ts5m, it._avgLow24, {}); if (sig && sig.signal) sigByTarget.set(it.id, sig); }
+    catch { /* flush detection is additive — never break a pass */ }
+  }
+  // DL2 — the durable FLUSH record (Ben's hard condition on the placeholders): every SIGNAL logs ALL
+  // components so the DL2 retro-join (analyze.mjs §4) can join it against fills.json and, over enough
+  // history, surface a re-fit CANDIDATE to F1 (analyze never mutates a constant). `alerted` = the row also
+  // passed the fillability + exit gates → headline FLUSH; `gatedReason` names WHY a signal-only row was
+  // held back ('liquid-floor' = volDay < DIP_LOOP_LIQUID_FLOOR · 'exit-not-clear' = liquid but the after-tax
+  // exit didn't clear). Alerted rows carry gatedReason:null.
+  const dipLoopOf = (it, sig) => ({ volDay: it.row.volDay, price: it.row.quickBuy, limit: it.row.limit ?? null,
+    depthPct: sig.depthPct, bucketVol: sig.bucketVol, quickBuy: it.row.quickBuy, optSell: it.row.optSell,
+    afterTaxMargin: sig.afterTaxMargin, dipScore: sig.dipScore,
+    alerted: !!sig.flush, gatedReason: sig.flush ? null : (!sig.liquid ? 'liquid-floor' : 'exit-not-clear') });
+
   // O1 suggestions ledger: log every held/target read at emit time, unconditionally. `class` is
   // watch's richer classify() taxonomy label; verdict is the concise action token for the read.
   const heldVerdict = it => {
@@ -566,7 +641,11 @@ async function main() {
   const wPosture = isOvernightNow() ? 'overnight' : 'active';   // YS2: the posture this live read was made under
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture })),
-    ...targets.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: targetVerdict(it), posture: wPosture })),
+    ...targets.map(it => { const sig = sigByTarget.get(it.id); return suggestionEntry(it.row, {
+      itemId: it.id, cls: it.cls,
+      // verdict: FLUSH (alerted) or FLUSH-SIGNAL (logged silently, gated out) or the normal target verdict.
+      verdict: sig ? (sig.flush ? 'FLUSH' : 'FLUSH-SIGNAL') : targetVerdict(it),
+      posture: wPosture, dipLoop: sig ? dipLoopOf(it, sig) : undefined }); }),
     ...bidItems.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: bidVerdict(it), posture: wPosture })),
   ]);
 
@@ -580,8 +659,19 @@ async function main() {
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 
+  // DL2 FLUSH pass — reactive liquid-flush ALERTS over the buy-side targets (sigByTarget, the single
+  // source shared with the ledger rows). flushAlert returns null unless sig.flush (all four gates), so the
+  // illiquid signal-only rows in the map are logged above but stay silent here — alerting is UNCHANGED,
+  // only the LOG was widened. Per-item logged buys feed the buy-limit clause; fills.json is read once,
+  // best-effort (a missing log → empty map → the normal bid clause).
+  let buysMap = new Map();
+  try { const fd = JSON.parse(fs.readFileSync(FILLS, 'utf8')); buysMap = buysByItem(fd && Array.isArray(fd.events) ? fd.events : []); }
+  catch { /* no fills log (other machine) — buy-limit clause degrades to the normal bid clause */ }
+  const flushAlerts = targets.map(it => flushAlert(it, sigByTarget.get(it.id), buysMap)).filter(Boolean)
+    .sort((a, b) => (b.dipScore || 0) - (a.dipScore || 0));   // highest-priority flush first
+
   // ---- HEADLINE: the whole state in one line; alert details right under it ----
-  const alerts = [...held.map(heldAlert), ...bidItems.map(bidAlert)].filter(Boolean);
+  const alerts = [...flushAlerts, ...held.map(heldAlert), ...bidItems.map(bidAlert)].filter(Boolean);
   const bidCount = bidItems.reduce((n, it) => n + it.bids.length, 0);
   const orphanAsks = asks.filter(a => !held.some(h => h.id === a.item));
   const counts = [];

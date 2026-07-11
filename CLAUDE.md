@@ -202,6 +202,7 @@ deliberate):**
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
 | "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/watch.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
+| "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/watch.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
 | "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/analyze.mjs` (read-only dataset audit + per-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 
@@ -383,6 +384,20 @@ Script facts the skills rely on (current behavior, not doctrine):
   arm-then-confirm + hysteresis gate (`PATH_PERSIST_MS`/`PATH_HYSTERESIS_MARGIN`, placeholders), so
   flapping weights never whiplash the headline path; decision support only, no path-driven alert
   class. watch.mjs is the ONE writer of the path fields on watch-state.
+  **DL2 (`--dip`):** `watch.mjs --dip` folds the tracked repo-root `dip-watchlist.json` pool (item
+  names/ids) into the buy-side target set and fires a **reactive FLUSH** headline — a bid-into-the-fall
+  alert on a LIQUID book actively dumping (live instasell ≥3% below the 24h floor AND still `falling` via
+  `recentDirection`), list-at break-even-floored, buy-limit-aware. **Fillability = UNIT-FLOW** (`volDay ≥
+  DIP_LOOP_LIQUID_FLOOR`, NOT `price×limit` deployability); it's a distinct carve-out from the `FALLING →
+  SKIP` default (the knife lags a flush; diurnal is silent). **ALERTS, never places**; **5m cadence
+  floor / ~5m latency**; **reactive, not a predictor**. **Logging is WIDER than alerting:** the flush
+  SIGNAL (deep + falling) is logged for every watched item — liquid AND illiquid (`verdict` `FLUSH` when
+  alerted / `FLUSH-SIGNAL` when signal-only, + a `dipLoop` object with `alerted`/`gatedReason`); the
+  illiquid signal-only rows are the standing-bid evidence / DL3's input. `analyze.mjs` §4 joins them to
+  `fills.json` and SURFACES an n-gated re-fit CANDIDATE to F1 (analyze never retunes a constant; F1 owns
+  calibration). Thresholds are PLACEHOLDERS (n=2). Pure detector `flushSignal` in `js/quotecore.js`
+  (node-only consumer; no app import → no APP_VERSION bump). Full doctrine: `pipeline/MONITORING.md`
+  "DL2 — the FLUSH carve-out".
   `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
   for askFilling + conviction + the same read-only path line; the booked FIFO lots are still the basis).
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--profile]` (bucketing/quantile

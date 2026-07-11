@@ -109,6 +109,57 @@ export function auditDataset(sug, fillsData, posData, retroMeta, { nowSec = Math
     malformed, noKey, fieldAudit, unattributed, nBuy, unattributedRate, rebuild, forward, flags };
 }
 
+/* dipLoopAudit(sugRows, retroRows) → the DL2 dip-loop (FLUSH) retro section. PURE. CANDIDATE-SURFACING,
+ * never constant-mutating (the PLAN-ANALYZE encoding boundary: analyze.mjs emits evidence-with-n and
+ * points at F1; F1 owns any actual retune of DIP_LOOP_*).
+ *
+ * WHAT IT DOES. Pulls every flush SIGNAL row (a watch.mjs --dip suggestion carrying the lean `dipLoop`
+ * component object) out of the ledger and JOINS it against fills.json via the SAME retroJoin rows the
+ * rollup already built — retroRows aligns 1:1 with sugRows (retroJoin maps over the suggestions in order),
+ * so retroRows[i].outcome tells whether a buy actually FILLED on that item within the horizon. The log is
+ * WIDER than the alert: `alerted` firings (liquid + exit-clearing → the headline FLUSH) are segmented from
+ * `signal-only` rows (illiquid / gated out — the standing-bid evidence, DL3's input). The alerted subset is
+ * where fillability is meaningful, so the fillable-vs-not SEPARATION is computed over ALERTED rows only; the
+ * signal-only distribution is reported separately (it is DL3's raw material, not a DL2 fill signal).
+ *
+ * HONESTY (rule 4). n≈0 — DIP_LOOP_LIQUID_FLOOR / DIP_LOOP_FLUSH_PCT / dipScore are NAMED PLACEHOLDERS; the
+ * caller emits this as an n-gated CANDIDATE pointing at F1, never a calibrated conclusion. "Fillable" is the
+ * retro-join's own outcome sense (a buy plausibly caused by the firing filled) — same mobile/manual-
+ * attribution caveat as the rollup. */
+export function dipLoopAudit(sugRows = [], retroRows = []) {
+  const firings = [];
+  for (let i = 0; i < sugRows.length; i++) {
+    const s = sugRows[i];
+    if (!s || s.dipLoop == null) continue;   // dipLoop presence IS the flush-record marker (alerted or signal-only)
+    const rj = retroRows[i] || {};
+    firings.push({
+      itemId: s.itemId, ts: s.ts, ...s.dipLoop,
+      alerted: !!s.dipLoop.alerted, gatedReason: s.dipLoop.gatedReason ?? null,
+      outcome: rj.outcome ?? null, latencySec: rj.latencySec ?? null,
+      fillable: rj.outcome != null && rj.outcome !== 'not-taken',
+    });
+  }
+  const alerted = firings.filter(f => f.alerted);
+  const signalOnly = firings.filter(f => !f.alerted);
+  const afill = alerted.filter(f => f.fillable);
+  const anot = alerted.filter(f => !f.fillable);
+  const avg = (arr, k) => { const v = arr.map(f => f[k]).filter(x => x != null); return v.length ? v.reduce((a, x) => a + x, 0) / v.length : null; };
+  return {
+    n: firings.length, nAlerted: alerted.length, nSignalOnly: signalOnly.length,
+    nFillable: alerted.filter(f => f.fillable).length, nNotFillable: anot.length,
+    firings, alerted, signalOnly,
+    // fillable-vs-not-taken separation over the ALERTED subset (where a bid was actually placeable).
+    separation: {
+      dipScoreFillable: avg(afill, 'dipScore'), dipScoreNotFillable: avg(anot, 'dipScore'),
+      volDayFillable: avg(afill, 'volDay'), volDayNotFillable: avg(anot, 'volDay'),
+      depthPctFillable: avg(afill, 'depthPct'), depthPctNotFillable: avg(anot, 'depthPct'),
+    },
+    // the illiquid signal-only distribution — DL3's input (per-item flush depth/price/frequency), not a
+    // DL2 fill signal. Reported so the two populations are never conflated.
+    signalOnlyDist: { n: signalOnly.length, depthPct: avg(signalOnly, 'depthPct'), volDay: avg(signalOnly, 'volDay'), dipScore: avg(signalOnly, 'dipScore') },
+  };
+}
+
 /* deriveCandidates(perNiche, sug, opts) → an array of { kind, signal, evidence, pointsAt }.
  * kind ∈ { 'context', 'candidate', 'inform' }. Only 'candidate' is a real tunable anomaly.
  *

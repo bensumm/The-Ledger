@@ -10,6 +10,55 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DL2 — the reactive liquid-flush loop: bid-into-the-fall on a dumping liquid book (2026-07-11, pipeline-only — NO APP_VERSION)
+Some dips are off-schedule EXOGENOUS flushes: a holder dumps units into a LIQUID book faster than buyers
+absorb them, so price gaps down and stays fillable for a short window before it reverts. These are not the
+multi-day faller the regime column tracks (the knife thesis LAGS them) and not diurnal (the forecast is
+silent — they're unscheduled), so the `FALLING → SKIP` default misses them. The retro anchor (n=2): today
+we MISSED a Searing-page flush — it dumped 4,732 instasell units in ONE 5m bucket and stayed fillable ~45
+min, but our ~15-min-stale scan missed the front-loaded volume. The illiquid twin (Abyssal bludgeon,
+~83/day, ~16m/unit) was UN-fillable — only 2 units crossed all episode. The lesson: `price×limit` is
+DEPLOYABILITY (can you park capital?); FILLABILITY is UNIT-FLOW (`volDay` — will a seller cross down to your
+bid?).
+
+DL2 adds a ~5m REACTIVE dip loop for LIQUID lanes only. **`flushSignal(row, ts5m, avgLow24)`** (pure, in
+`js/quotecore.js`) fires `flush:true` when ALL hold: (i) liquid (`volDay ≥ DIP_LOOP_LIQUID_FLOOR`, 1000/d),
+(ii) deep (live instasell ≥`DIP_LOOP_FLUSH_PCT`=3% below the 24h avg low), (iii) still `falling` (reuses
+DP1's `recentDirection` — reverting/flat/null don't fire), (iv) the exit clears (reliable quote, after-tax
+net at the bid >0, `optSell` above break-even). It REUSES `recentDirection`/`breakEven`/`netMargin` — no
+re-derived direction or tax math. A soft `dipScore = log10(volDay) × deployableGp × afterTaxMargin` ranks
+which firing surfaces first (null-limit guarded via a `DIP_LOOP_DEPLOY_VOL_FRAC` volume proxy — Searing had
+a null limit). Current-bucket volume is INFORMATIONAL (alert text only), never a firing gate (Ben's
+refinement — the front-loaded flush already happened by the time a scan sees it).
+
+`pipeline/watch.mjs --dip` folds the tracked repo-root **`dip-watchlist.json`** pool (item names/ids) into
+the buy-side target set and emits a headline `FLUSH — <item> dumping (<depth%> below 24h floor, <N> units
+this bucket) · bid-into-the-fall @ <buy> now · list @ <sell> (BE <be>) · window closing — reverts fast.`
+(list-at break-even-floored; buy-limit-aware via the shared `limitWindow` — an exhausted 4h window replaces
+the bid clause with "buy limit exhausted — frees ~HH:MM"; multiple firings sort by `dipScore` desc). It's a
+deliberate carve-out from `FALLING → SKIP` — NOT routed through `classify()`/`targetAction`, which correctly
+SKIP a multi-day faller. It ALERTS, never places (the watch.mjs read-only guardrail is untouched).
+
+LOGGING IS DECOUPLED FROM ALERTING (Ben's amendment). The ALERT stays liquid-only, but the flush SIGNAL
+(deep + falling; gates ii+iii, minus the liquidity floor i and the liquid-fill-economics exit gate iv) is
+logged for EVERY watched item — liquid AND illiquid. An illiquid item never alerts (you can't poll-fill it),
+but its flush depth/frequency history is the evidence basis for WHERE to rest a standing bid on it — the
+other half of the liquid/illiquid split, and DL3's input. `flushSignal` now returns a `signal` flag beside
+`flush`; each firing logs a `dipLoop` record with `alerted` (true = headline FLUSH · false = SIGNAL-ONLY,
+logged silently) + `gatedReason` (`liquid-floor` / `exit-not-clear` / null), verdict `FLUSH` vs `FLUSH-SIGNAL`.
+
+HONESTY (rule 4): thresholds are NAMED PLACEHOLDERS, n=2, 5m cadence floor / ~5m latency, reactive-not-a-
+predictor. Full `dipLoop` schema: `{ volDay, price, limit, depthPct, bucketVol, quickBuy, optSell,
+afterTaxMargin, dipScore, alerted, gatedReason }` (joinable against `fills.json` by itemId+ts). ONE ledger,
+ONE writer: it's a lean field on the existing `suggestlog.mjs → suggestions.jsonl`, NOT a separate silo log,
+so AZ1's dataset audit auto-covers its health. **`pipeline/analyze.mjs` §4** (`dipLoopAudit`) joins signals
+against fills, segments alerted (fillable-vs-not separation) from signal-only (the illiquid distribution,
+DL3's input), and SURFACES an n-gated re-fit CANDIDATE that POINTS AT F1 — read-only, evidence-with-n, never
+mutates a `DIP_LOOP_*` constant (F1 owns calibration, the PLAN-ANALYZE encoding boundary). NO APP_VERSION:
+`flushSignal` is consumed only by the node CLI monitor; no `js/` app module imports it (verified by grep).
+Tests: `pipeline/diploop.test.mjs`. Follow-on **DL3** (flush-distribution → candidate discovery feeding the
+thesis layer / `strategies.mjs` + auto-fed `dip-watchlist.json`) is specced in PLAN.md, OPEN/n-gated.
+
 ### DP1 — dip DIRECTION, not just depth: the dip-posture entry classifier (2026-07-10, pipeline-only — NO APP_VERSION)
 A resting bid only fills while price is still coming DOWN to it — a seller has to cross the spread down.
 Once a dip REVERTS (bounces off its low and runs away up) no seller crosses down, so the bid just sits

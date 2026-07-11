@@ -100,6 +100,8 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 
 | Chunk | What | Primary files | State |
 | --- | --- | --- | --- |
+| DL2 | Reactive liquid-flush loop — `flushSignal` + `watch.mjs --dip` FLUSH alert (bid-into-the-fall, liquid-only, unit-flow fillability); widened SIGNAL log (liquid+illiquid, `alerted`/`gatedReason`) + `analyze.mjs §4` candidate-surfacing retro; PLACEHOLDERS n=2, ALERTS-never-places | `js/quotecore.js`, `pipeline/watch.mjs`, `pipeline/lib/suggestlog.mjs`, `pipeline/lib/analyze.mjs`, `pipeline/analyze.mjs`, `dip-watchlist.json`, `pipeline/diploop.test.mjs` | ✅ `landing` |
+| DL3 | Flush-distribution → candidate discovery feeding the thesis layer (spec below) | `pipeline/lib/analyze.mjs`, `js/strategies.mjs`, `dip-watchlist.json` (auto-fed), tests | OPEN (n-gated on DL2's widened log accruing, like F1) |
 | DP1 | Dip-posture entry classifier (dip DIRECTION, not just depth) — `recentDirection` + `dipPostureValidator`, inform on band/churn | `js/quotecore.js`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/dipposture.test.mjs` | ✅ `597f132` |
 | PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/modules.mjs` | ✅ `6aba80b` |
 | TG1 | Thesis-gated hold alerts | `hold-thesis.json`, `pipeline/lib/holdthesis.mjs`, `watch.mjs` | ✅ `b2634a1` |
@@ -209,6 +211,35 @@ calibration report (the O1 suggestion join makes it a query). Known confound: re
 bucket outcomes by regime label before believing any curve. Do not start until O1's
 documented sample thresholds clear (n≥30 per side×pctl×class×regime cell, ≥5 cells —
 currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/day.
+
+### DL3 — flush-distribution → candidate discovery feeding the thesis layer (n-gated on DL2's log)
+
+Consumes DL2's **widened flush log** (every flush SIGNAL — liquid `alerted` AND illiquid `signal-only`
+— with per-row depth/price/volDay/dipScore + `alerted`/`gatedReason`, joinable to `fills.json`). Builds a
+**per-item flush profile**: each item's OWN depth/frequency signature (a bludgeon's differs from a rune's) —
+p25/p50 flush price, flush frequency/cadence, floor-stability. DL2's log schema is a complete enough input
+(per-item flush price/depth/frequency is reconstructable from the rows).
+
+NOT a standalone illiquid-bid report — it is a candidate-**DISCOVERY** source that feeds the EXISTING
+machinery two ways: **(a)** auto-feeds the DL2 `dip-watchlist.json` pool (closes the discovery loop — the
+"B feeds A" screen/flush-history → curated-pool path); **(b)** surfaces an item into the relevant niche via
+the declarative `js/strategies.mjs` spec pattern (a predictably-deep recurring flusher is a standing-bid /
+value candidate the theses put forward, with the flush profile as supporting evidence). It integrates with
+`strategies.mjs`, not a separate silo.
+
+Output = a suggested **RESTING-BID level + expected fill cadence** per illiquid item, where the bid
+PERCENTILE is **NOT a fixed p25** — it is a TUNABLE parameter CONDITIONED on item features (price × liquidity
+× floor-stability), per-item or per-item-class: shallower (→median) fills more/less discount; deeper (p10–p25)
+better price / misses more; the optimum is item-dependent (cheap + hyperliquid + frequent-shallow → nearer
+median, favoring fill-rate/velocity; expensive + illiquid + rare-deep → deeper, few shots so make them count,
+safe IF the floor is stable; unstable floor → more conservative/deeper).
+
+**Calibration routes THROUGH F1 (the encoding boundary):** DL3's `analyze.mjs` retro-join (flush-log ↔
+`fills.json`) FITS percentile-as-a-function-of-(price, liquidity, stability) optimizing fill-rate × edge, but
+`analyze.mjs` only **SURFACES** that fit as an n-gated CANDIDATE with evidence — **F1/Ben OWN the actual
+calibration**, exactly like DL2's thresholds (analyze surfaces with n; F1 calibrates; no constant analyze
+writes). Placeholder p25 default until the data speaks, NO hardcoded constant, same log-everything /
+fit-from-data discipline as DL2. Depends on DL2's widened log having accrued enough history (n-gated like F1).
 
 ---
 

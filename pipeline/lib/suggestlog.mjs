@@ -15,6 +15,10 @@
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
+ *     dipLoop?,  (DL2 — a flush-SIGNAL component object {volDay,price,limit,depthPct,bucketVol,quickBuy,
+ *                 optSell,afterTaxMargin,dipScore,alerted,gatedReason}; lean-included, present on watch
+ *                 --dip flush rows (alerted=true → headline FLUSH · alerted=false → SIGNAL-ONLY, gated out
+ *                 by gatedReason); joinable against fills.json via itemId+ts)
  *     subFloor? }   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
  *     sub-floor fallback under THAT relaxed floor; lean-included, absent on floor-qualified rows)
  *     ts      — unix SECONDS at emit time
@@ -182,7 +186,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -227,6 +231,14 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude
   // sub-floor rows instead of mistaking them for qualified suggestions.
   if (subFloor != null)      e.subFloor = subFloor;
+  // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
+  // (pipeline/analyze.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
+  // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid
+  // (alerted) AND illiquid (signal-only, the standing-bid / DL3 evidence). Lean-included exactly like the
+  // YS2 fields — a caller that supplies no dipLoop logs a byte-identical shape (pinned by diploop.test.mjs).
+  // Schema: { volDay, price, limit, depthPct, bucketVol, quickBuy, optSell, afterTaxMargin, dipScore,
+  // alerted, gatedReason }; joinable against fills.json via the row's itemId + ts.
+  if (dipLoop != null)       e.dipLoop = dipLoop;
   return e;
 }
 

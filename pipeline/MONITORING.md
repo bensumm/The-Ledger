@@ -268,7 +268,7 @@ attach to a trending item:
 
 | Class | Trigger | Cadence | Playbook |
 |---|---|---|---|
-| `FALLING` | regime falling **or** (`mom==='breakdown'` **and** the quote is reliable — PLAN-3 Gate 0) | **1m** | cut/clear discipline; targets → SKIP (don't buy a drop) |
+| `FALLING` | regime falling **or** (`mom==='breakdown'` **and** the quote is reliable — PLAN-3 Gate 0) | **1m** | cut/clear discipline; targets → SKIP (don't buy a drop) — **but see the DL2 FLUSH carve-out below** |
 | `THIN_BIG_TICKET_VOLATILE` | thin (`vol<floor`) & unit ≥ 1m | **1m** | hair-trigger cut; strong adverse-selection warning |
 | `LIQUID_RANGING_WIDE` | liquid & flat regime & spread ≥ 3% | **2m** | **SCALP** — ladder band low→top; the only class that gets market-making |
 | `STABLE_LIQUID` | liquid & confirmed regime, narrow band | **3m** | ordinary patient flip; glance |
@@ -298,6 +298,47 @@ sync failure (network/git hiccup → `sync · ⚠ skipped`, watch still runs off
 loop must not be left running unattended — that would recreate the deliberately-eliminated
 auto-writer (FILLS-PIPELINE §12). Stop the loop when you step away (which you should do anyway —
 never leave near-live offers unwatched).
+
+### DL2 — the FLUSH carve-out (reactive liquid-flush → bid-into-the-fall)
+
+The `FALLING → SKIP` rule above is the right default for a **multi-day faller** (a knife). It is the
+**wrong** call for one narrow, distinct case: a fresh **off-schedule liquid flush** — a holder dumps
+units into a LIQUID book faster than buyers absorb them, so price gaps down and stays fillable for a
+short window before it reverts. The knife thesis LAGS these and the diurnal forecast is silent (they're
+unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH` alert telling you to
+**bid INTO the fall** and list at the patient band top.
+
+- **Enable with `--dip`.** `node pipeline/watch.mjs --dip [targets…]` also folds the tracked repo-root
+  **`dip-watchlist.json`** pool (an array of item names/ids, mirrors `watchlist.json`) into the buy-side
+  target set. A firing prints as a headline alert:
+  `FLUSH — <item> dumping (<depth%> below 24h floor, <N> units this bucket) · bid-into-the-fall @ <buy>
+  now · list @ <sell> (BE <be>) · window closing — reverts fast.` (list-at is **break-even-floored**;
+  if the item's 4h buy limit is exhausted the bid clause becomes `buy limit exhausted — frees ~HH:MM`).
+  Multiple firings sort by `dipScore` desc (highest priority first). New candidates are **appended to
+  `dip-watchlist.json` on discovery** (manual for now; the screen-fed auto-population is the DL2 follow-on).
+- **FILLABILITY is UNIT-FLOW, not deployability.** The gate is `volDay ≥ DIP_LOOP_LIQUID_FLOOR` (1000/d,
+  a PLACEHOLDER) — `price×limit` measures whether you can PARK capital, but whether a seller actually
+  crosses down to your bid is unit-flow. The retro anchor (n=2): a Searing-page flush (~14.4k/d, 4,732
+  units in one 5m bucket, fillable ~45 min) was missed by a ~15-min-stale scan; the Abyssal-bludgeon twin
+  (~83/d, ~16m/unit) was UN-fillable — only 2 units crossed all episode. The floor excludes the bludgeon,
+  admits Searing.
+- **REACTIVE, NOT a predictor.** It reads the CURRENT flush (live instasell ≥3% below the 24h avg low AND
+  the last-3h 5m shape still `falling` via `recentDirection`) — it does not forecast one. The detection
+  latency is **~5m** (the /timeseries bucket cadence), so run the `--dip` loop at the **5m cadence floor**
+  when hunting flushes (a coarser loop risks missing the front-loaded window, exactly the miss DL2 fixes).
+- **ALERTS, never places** (the watch.mjs read-only guardrail is untouched — you place every offer).
+- **LOGGING IS WIDER THAN ALERTING.** The ALERT is liquid-only (above); the SIGNAL — a genuine deep +
+  still-falling flush — is logged for **every** watched item, LIQUID and ILLIQUID. An illiquid item never
+  alerts (you can't poll-fill it), but its flush depth/frequency history is exactly the evidence basis for
+  WHERE to rest a standing bid on it — the other half of the liquid/illiquid split, and DL3's input. Each
+  firing logs a `dipLoop` record with `alerted` (true = passed the fillability + exit gates → headline
+  FLUSH · false = SIGNAL-ONLY, logged silently) + `gatedReason` (`liquid-floor` / `exit-not-clear` / null).
+- **HONEST LIMITS.** `DIP_LOOP_LIQUID_FLOOR` / `DIP_LOOP_FLUSH_PCT` / the `dipScore` weights are NAMED
+  PLACEHOLDERS, n=2, none validated. Every signal is logged to `suggestions.jsonl` (`verdict` `FLUSH` when
+  alerted / `FLUSH-SIGNAL` when signal-only, + the `dipLoop` object) so the DL2 retro (`node
+  pipeline/analyze.mjs` §4) can join firings against `fills.json` and **surface an n-gated re-fit candidate
+  to F1** — analyze SURFACES evidence, it never retunes a constant (F1 owns calibration, like every other
+  placeholder). That retro is the calibration path, not these constants.
 
 ### What each tick surfaces
 
