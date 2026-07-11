@@ -31,6 +31,20 @@ export function fmt(n){
   if(a>=1e3) return s+(a/1e3).toFixed(1).replace(/\.0$/,'')+'k';
   return s+Math.round(a).toLocaleString();
 }
+// fmtSig(n, sig) — FIXED-significant-figure display for chart axes/tooltips, where fmt()'s 1-decimal
+// k-range (7834 → "7.8k") collapses distinct prints onto the same label and hides trend detail. Keeps a
+// compact k/m/b suffix but shows `sig` significant figures with the decimals RETAINED (not stripped),
+// so 7834/7850/8000 render "7.834k"/"7.850k"/"8.000k" — visibly different. Default 4 sig figs (Ben's ask).
+export function fmtSig(n,sig=4){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  const s=n<0?'-':''; const a=Math.abs(n);
+  if(a<1000) return s+(a>=100?Math.round(a):+a.toPrecision(Math.min(sig,3))).toLocaleString();
+  let unit=1,suf='';
+  if(a>=1e9){unit=1e9;suf='b';} else if(a>=1e6){unit=1e6;suf='m';} else {unit=1e3;suf='k';}
+  const x=a/unit;                                    // x in [1,1000)
+  const dec=Math.max(0,sig-(Math.floor(Math.log10(x))+1));
+  return s+x.toFixed(dec)+suf;
+}
 export function fmtP(n){
   if(n===null||n===undefined||isNaN(n)) return '—';
   const a=Math.abs(n);

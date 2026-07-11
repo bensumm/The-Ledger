@@ -240,7 +240,7 @@ function renderRecent(it, s5m, qrow, showAnalysis){
   if(recentChart){ try{ recentChart.destroy(); }catch(_){ } recentChart=null; }
   const rseries=recent.map((p,i)=>({t:p.timestamp, v:mids[i]})).filter(p=>p.v!=null);
   recentChart=createChart(chart, {series:rseries, refs, kind:'line', spans:false,
-    xFmt:t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), yFmt:fmt});
+    xFmt:t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});
   const liveMid=qrow.mid!=null?qrow.mid:mids[mids.length-1];
   const pctl=(lo!=null && hi!=null && hi>lo)?clamp(Math.round((liveMid-lo)/(hi-lo)*100),0,100):null;
   const traded=recent.filter(p=>p.avgLowPrice&&p.avgHighPrice).length;
@@ -303,7 +303,7 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
     if(dr&&dr.bid!=null) refs.push({v:dr.bid, cls:'reflive', label:'bid'});
     const markers=[{t:new Date().getHours(), cls:'nowmark', label:'now'}];
     diurnalChart=createChart(chartEl, {series, refs, markers, kind:'bars', spans:false,
-      xFmt:h=>fmtHour(((Math.round(h)%24)+24)%24), yFmt:fmt});
+      xFmt:h=>fmtHour(((Math.round(h)%24)+24)%24)});
     // readout — the SAME framing as the console's Diurnal block (deriveDiurnalRange + the ★ formula)
     if(dr&&dr.bid!=null&&dr.ask!=null){
       const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
@@ -398,7 +398,7 @@ function renderForecast(profSeries, qrow, it, showAnalysis){
   const markers=[];
   if(tr && tr.etaH!=null) markers.push({t:tr.etaH, cls:'nowmark', label:'trough '+fmtEta(tr.etaH)});
   if(pk && pk.etaH!=null && (!tr || pk.etaH!==tr.etaH)) markers.push({t:pk.etaH, cls:'nowmark', label:'peak '+fmtEta(pk.etaH)});
-  if(series.length>1) forecastChart=createChart(chartEl, {series, overlay, fillBetween:true, refs, markers, kind:'line', spans:false, xFmt:h=>'+'+fmtEta(h), yFmt:fmt});
+  if(series.length>1) forecastChart=createChart(chartEl, {series, overlay, fillBetween:true, refs, markers, kind:'line', spans:false, xFmt:h=>'+'+fmtEta(h)});
   else if(chartEl) chartEl.innerHTML='';
   const lvl=x=>(x&&x.level!=null)?fmtP(Math.round(x.level)):'—';
   const eta=x=>(x&&x.etaH!=null)?('in ~'+fmtEta(x.etaH)+(x.window?' ('+x.window+')':'')):'(trend-only — no eta)';
@@ -461,7 +461,7 @@ export async function runTrends(){
       }
       const HSPANS=[{label:'1d',s:86400},{label:'7d',s:7*86400},{label:'30d',s:30*86400},{label:'90d',s:90*86400},{label:'All',s:null}];
       histChart=createChart(document.getElementById('trHist'), {series:hseries, refs:hrefs, bands:hbands, kind:'line', spans:HSPANS, span:'All',
-        xFmt:t=>new Date(t*1000).toLocaleDateString([], {month:'short',day:'numeric'}), yFmt:fmt});
+        xFmt:t=>new Date(t*1000).toLocaleDateString([], {month:'short',day:'numeric'})});
       let hc='6h steps · dashed line = live buy ('+fmtP(it.low)+')'+(ts&&ts.floor!=null?' · teal = '+ts.floorLookback+'d durable floor/ceiling':'')+' · drag to pan, wheel to zoom, or pick a window.';
       if(P.trendPct!=null && Math.abs(P.trendPct)>=2) hc+=' Over ~'+b.days+' days it has drifted <b>'+(P.trendPct>0?'+':'')+P.trendPct.toFixed(0)+'%</b>.';
       document.getElementById('trHistCap').innerHTML=hc;

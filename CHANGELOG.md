@@ -10,6 +10,18 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Chart axis/tooltip resolution — fmtSig 4-sig-fig labels (0.62.0)
+The Trends charts rendered y-axis labels and hover tooltips with the app's `fmt()`, which collapses the
+k-range to a single decimal (`7834 → "7.8k"`). On a narrow-band item like snapdragon (~7.8k↔8.0k) that
+maps consecutive, visibly-different prints onto the SAME label — a rising or falling series looks flat, and
+the resolution the chart exists to show is hidden. Fix: a new **`fmtSig(n, sig=4)`** in `js/format.js` shows
+a FIXED number of significant figures (default 4, Ben's ask) with a compact k/m/b suffix but the decimals
+**retained, not stripped** — so `7834/7850/8000` render `7.834k / 7.850k / 8.000k`, distinct. `chartlib.js`
+now defaults its y label/tooltip formatter to `fmtSig` (was `fmt`), and all four Trends charts (recent,
+diurnal bars, forecast, price history) drop their explicit `yFmt:fmt` to inherit it — one change covers the
+whole Trends page. `fmt()` is unchanged everywhere else (tables, cells). Alternative considered: step-based
+precision (only as many digits as the tick spacing needs); 4 sig figs is simpler and honors the stated ask.
+
 ### DL4 — the scan auto-nominates dip candidates ("B feeds A", 2026-07-11, pipeline-only — NO APP_VERSION)
 A flush is EXOGENOUS — you can't know in advance WHICH liquid item will gap down — so DL2's hand-curated
 `dip-watchlist.json` has a coverage gap: an item nobody added can never fire the 5m FLUSH loop. DL4 closes

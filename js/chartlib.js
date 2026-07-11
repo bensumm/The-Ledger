@@ -1,4 +1,4 @@
-import { fmt } from './format.js';
+import { fmt, fmtSig } from './format.js';
 
 /*
  * chartlib.js — a reusable INTERACTIVE SVG chart (CL, PLAN-APP-PARITY).
@@ -31,7 +31,8 @@ import { fmt } from './format.js';
  *     markers: [{ t, label?, cls? }]     // vertical markers at a data-x (e.g. "now").
  *     kind:    'line' | 'bars'           // default 'line'. bars render from the visible y-min baseline
  *                                        //   (so a price shape's variation shows, not hugging zero).
- *     yFmt:    v => string               // y label/tooltip formatter (default the app's fmt()).
+ *     yFmt:    v => string               // y label/tooltip formatter (default fmtSig — 4 sig figs, decimals
+ *                                        //   retained, so a narrow price band doesn't collapse to one label).
  *     xFmt:    t => string               // x label/tooltip formatter (default local time of unix t).
  *     spans:   [{label, s}] | false      // span buttons; false hides them (e.g. hour-of-day charts).
  *     span:    label | seconds | 'All'   // initial window (default 'All').
@@ -68,7 +69,9 @@ function defaultXFmt(t) {
 export function createChart(container, config = {}) {
   if (!container || !container.appendChild) return NOOP;
   const kind = config.kind === 'bars' ? 'bars' : 'line';
-  const yFmt = typeof config.yFmt === 'function' ? config.yFmt : fmt;
+  // Default y labels/tooltips use fmtSig (4 sig figs, decimals retained) so a narrow-range price series
+  // (e.g. snapdragon 7.8k↔8.0k) doesn't collapse onto one fmt() "7.8k" label and hide the trend.
+  const yFmt = typeof config.yFmt === 'function' ? config.yFmt : fmtSig;
   const xFmt = typeof config.xFmt === 'function' ? config.xFmt : defaultXFmt;
   const refs = (config.refs || []).filter(r => r && finite(r.v));
   const bands = (config.bands || []).filter(b => b && finite(b.lo) && finite(b.hi));
