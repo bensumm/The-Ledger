@@ -85,7 +85,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `recencySplit`/`recentQuant` reach-contamination guard + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen.mjs` auto-runs and
-  `windowrange --profile` prints); MOVED here from `pipeline/lib/`
+  `windowrange --profile` prints) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
+  deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
+  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/windowrange.mjs`,
   `pipeline/watch.mjs`, `pipeline/screen.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of
@@ -443,7 +445,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     horizon — retained but no shipped spec uses it since the rising niche was deleted, Steps 3+4);
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
-    bundles pair/net/pFill/ttf/rank. ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
+    bundles pair/net/pFill/ttf/rank (Proposal A two-leg P via `askReachFactor` — SKIPPED for
+    `fillShape:'symmetric'` specs, the PART II churn exemption); `asymEstimate(spec,row,asymPair)`
+    (PART II PLAN-GRADE-REACH — the asymmetric deep-buy/reliable-sell estimate: rank = net × P_ask ÷ TTF,
+    P_bid is annotation-only, ordering guards; feeds the inform line + the `asym` ledger shadow field +
+    `screen.mjs --asym`). ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
     calibrator. Consumed by `screen.mjs`+`rating.mjs` and **app-imported by `js/market.js`** (AP4,
     0.61.0 — the Finder desirability rank/grade; a behavior change to it now bumps APP_VERSION),
     `gatecandidates.mjs` (P1 — screen.mjs's PURE

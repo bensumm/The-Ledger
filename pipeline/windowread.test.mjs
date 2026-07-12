@@ -16,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../js/windowread.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -212,6 +212,32 @@ ok('deriveDiurnalRange: a clean dip below live with no trend is an unflagged pat
   assert.equal(r.bid, 1000); assert.equal(r.bidBasis, 'patient-dip');
   assert.equal(r.notes.length, 0, 'no trend, dip below live → nothing to warn about');
   assert.equal(r.ask, 1080);
+});
+
+// --- PART II (PLAN-GRADE-REACH): asymPair — deep-buy / reliable-sell realizable pair ----------
+// 14 synthetic nights. lows/his ascending (windowStats' contract); days only carries the count here.
+const asymStats = (lows, his) => ({ days: Array.from({ length: Math.max(lows.length, his.length) }, (_, i) => [`d${i}`, {}]), lows: [...lows].sort((a, b) => a - b), his: [...his].sort((a, b) => a - b) });
+
+ok('asymPair: deep bid = the ASYM_P_LO low quantile (rare fill), ask = the ASYM_P_HI high quantile (near-certain print)', () => {
+  const lows = Array.from({ length: 14 }, (_, i) => 100 + i * 10);   // 100…230
+  const his = Array.from({ length: 14 }, (_, i) => 300 + i * 10);   // 300…430
+  const p = asymPair(asymStats(lows, his));
+  assert.equal(p.deepBid, quantLow(lows, ASYM_P_LO), 'deep bid is the flush quantile');
+  assert.equal(p.highReachAsk, quantHigh(his, ASYM_P_HI), 'ask is the high-reach quantile');
+  // the realized fractions are consistent with the quantile definitions (ties can only push them ≥ p)
+  assert.equal(p.pBid, touchedDays(lows, p.deepBid) / 14);
+  assert.equal(p.pAsk, reachedDays(his, p.highReachAsk) / 14);
+  assert.ok(p.pBid <= 0.5, 'the deep bid fills on a MINORITY of nights (the rare flush)');
+  assert.ok(p.pAsk >= 0.75, 'the ask prints on a large MAJORITY of nights (the near-certain exit)');
+  assert.equal(p.nDays, 14);
+});
+
+ok('asymPair degrades: null stats / empty sides / a sample thinner than ASYM_MIN_DAYS → null (never a fake pair)', () => {
+  assert.equal(asymPair(null), null);
+  assert.equal(asymPair({ days: [], lows: [], his: [] }), null);
+  const thinN = ASYM_MIN_DAYS - 1;
+  const thin = Array.from({ length: thinN }, (_, i) => 100 + i);
+  assert.equal(asymPair(asymStats(thin, thin)), null, 'thin day sample → null');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

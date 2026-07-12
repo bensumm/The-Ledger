@@ -114,6 +114,36 @@ export function askReachFactor(askReach) {
   return clamp01(PFILL_ASKREACH_FLOOR + (1 - PFILL_ASKREACH_FLOOR) * frac);
 }
 
+/* --- asymmetric fill-shape estimate (PART II, PLAN-GRADE-REACH §II.1 — deep-buy / reliable-sell) ---
+   Ben's mandate: "I'd much rather hit a 2/14 buy and a 12/14 sell than 50/50 both sides." The
+   asymmetric rank re-targets the objective at the pair js/windowread.mjs asymPair derives (deep flush
+   bid → high-reach ask, day-level quantiles) instead of the symmetric intraday p10/p90 band pair:
+       asymRank = net(deepBid → highReachAsk) × P_ask ÷ TTF
+   THE KEY NUANCE — P_bid NEVER multiplies the rank. A rare deep fill is a FEATURE (deeper entry =
+   larger net, and the bigger net already carries that value); punishing a low bid-reach would re-punish
+   exactly the entry the shape wants. P_bid is returned as an annotation ("fills ~N/14 — rest it as
+   optionality", the patience-on-cancel-and-cut doctrine), never a weight. P_ask IS the fill weight —
+   the exit is the flip's big assumption (Part I's whole diagnosis).
+   ORDERING GUARDS (§II.2): the pair returned keeps bid ≤ quickBuy and ask ≥ quickSell (the min/max
+   guards), so a quoted asym pair can never break optBuy ≤ quickBuy ≤ quickSell ≤ optSell. When the ask
+   guard BINDS (live instabuy above the high-reach level) the exit is a transact-now sell, so the
+   reported pAsk (measured at the unguarded quantile) is a floor, not exact — documented, not patched
+   (F1 calibrates). The momentum tell (rawBandLo/rawBandHi) is quotecore's and is untouched here.
+   STATUS (§II.3): SHIP-SAFE half = display + shadow-log this estimate (screen/quote inform lines +
+   the suggestions.jsonl `asym` field). The repricing/sort flip is F1-GATED behind screen.mjs --asym
+   (OFF by default). ASYM_P_LO/ASYM_P_HI (windowread) are PLACEHOLDERS, n≈14 (rule 4). */
+export function asymEstimate(spec, row = {}, asym = null) {
+  if (!asym || num(asym.deepBid) == null || num(asym.highReachAsk) == null) return null;
+  const bid = num(row.quickBuy) != null ? Math.min(row.quickBuy, asym.deepBid) : asym.deepBid;
+  const ask = num(row.quickSell) != null ? Math.max(row.quickSell, asym.highReachAsk) : asym.highReachAsk;
+  // the ONE shared netMargin; BOND exception rides through row.bond/row.guide exactly like estimateRank.
+  const net = netMargin(bid, ask, row.bond ? { bond: true, guide: row.guide } : null);
+  const ttf = estimatorFor(spec).ttf({ volDay: row.volDay ?? null });
+  const pAsk = clamp01(num(asym.pAsk) ?? 0);
+  const pBid = clamp01(num(asym.pBid) ?? 0);
+  return { bid, ask, net, pAsk, pBid, nDays: asym.nDays ?? null, ttf, rank: rankScore({ net, pFill: pAsk, ttfSec: ttf.value }) };
+}
+
 // value family — P(fill at the floor bid) IS proximity-to-low (the P5 valueScore component): live near
 // the durable multi-week low ⇒ a floor bid fills soon; live far above ⇒ it rarely fills. n = coverage days.
 export function pFillValue(ctx = {}) {
@@ -243,8 +273,14 @@ export function estimateRank(spec, row = {}, extra = {}) {
   // P is a TWO-LEG fill prob (Proposal A): the family pFill (entry) discounted by the ASK/exit reach. No
   // askReach passed (quote/watch surfaces, value niche) → factor 1 → byte-identical rank. The discounted P
   // is what BOTH the rank AND the returned pFill report, so the displayed "P~X" now honestly means both legs.
+  // PART II CHURN EXEMPTION (Ben 2026-07-12, spec.fillShape 'symmetric'): a buy-limit-cycle commodity
+  // SELLS INTO CONTINUOUS TWO-SIDED FLOW near a tight band top — its exit does not need the day-HIGH to
+  // print, and the day-level reach read (1h avg-high aggregates vs a tight 5m band top) systematically
+  // mismeasures a small-margin band. The lap thesis is fill-every-lap, the anti-shape of the asymmetric
+  // objective (§II.2 "a deep-flush bid is anti-churn") — so a 'symmetric' fillShape spec skips the
+  // Proposal-A ask-reach discount entirely (and screen.mjs mirrors this for the REACH_GRADE_CAP letter).
   const pFillRaw = est.pFill(ctx);
-  const askF = askReachFactor(ctx.askReach);
+  const askF = (spec && spec.fillShape === 'symmetric') ? 1 : askReachFactor(ctx.askReach);
   const pFill = askF < 1
     ? { value: clamp01(pFillRaw.value * askF), n: pFillRaw.n, basis: pFillRaw.basis + '×askreach' }
     : pFillRaw;

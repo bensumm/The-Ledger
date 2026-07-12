@@ -71,11 +71,11 @@
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../js/quotecore.js';
 import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
-import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // diurnal peak-timing read (auto, off the in-hand 1h series)
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair } from '../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf } from './lib/estimators.mjs';
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate } from './lib/estimators.mjs';
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
@@ -216,6 +216,8 @@ const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'acti
 // file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
 // for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
 const PUBLISH = A.publish === true;
+// PART II safety: uncalibrated --asym prices must never reach screen.json/the app (F1 gates that step).
+if (PUBLISH && A.asym === true) { console.error('! --asym is experimental (F1-ungraduated) — refusing --publish under it.'); process.exit(1); }
 // --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
 // default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
@@ -224,6 +226,18 @@ const PUBLISH = A.publish === true;
 // thresholds are unvalidated placeholders. capGrade is reused from rating.mjs (no rating.mjs change).
 const PHASE_RESCUE = A['phase-rescue'] === true;
 const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-rescue surface
+// --- PART II (PLAN-GRADE-REACH, opt-in): --asym flips the 'asym'-fillShape niches (band/scalp) to the
+// asymmetric deep-buy/reliable-sell objective AS THE QUOTED PRICES AND SORT — optBuy→the flush bid,
+// optSell→the high-reach ask (min/max ordering guards in asymEstimate), rank = net × P_ask ÷ TTF.
+// OFF BY DEFAULT and F1-GATED: the quantiles (ASYM_P_LO/ASYM_P_HI) are n≈14 PLACEHOLDERS, so the
+// DEFAULT table stays byte-identical (the asym read ships only as the inform line + the shadow
+// suggestions.jsonl `asym` field until the shadow A/B graduates it). --publish is refused under --asym
+// so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
+// gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
+const ASYM = A.asym === true;
+// PART II asym-pair read parameters: full-local-day window (wStart 0 → wEnd 0 wraps to all 24h — the
+// day-level deep-low/high-reach read, distinct from reachValidator's coming-8h window) over ~14 nights.
+const ASYM_NIGHTS = 14;
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
 const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE };
 
@@ -324,8 +338,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
+  const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair + P_ask/P_bid split — sibling inform note, never a gate/drop/grade/screen.json input
   for (const s of survivors) {
-    const row = qcache.get(s.id);
+    let row = qcache.get(s.id);   // PART II: reassigned to a repriced CLONE only under --asym (qcache never mutated)
     if (!row) continue;
     // Part A: phase() over the SAME ts6h this row was already quoted from (zero new fetch) —
     // observational trajectory shape, folded into the Regime cell below when informative.
@@ -433,9 +448,37 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     const askReachRes = vres.find(r => r.key === 'reach');
     const askEv = askReachRes && askReachRes.evidence;
     const askReachExtra = (askEv && askEv.days >= 1) ? { reachedDays: askEv.hit, nDays: askEv.days } : null;
+    // PART II (PLAN-GRADE-REACH §II.1-II.3): the ASYMMETRIC realizable pair — deep flush bid → high-reach
+    // ask off the day-level quantiles (js/windowread.mjs asymPair, full-day window, ~14 nights) of the 1h
+    // series ALREADY in hand (zero new fetch). 'asym'-fillShape niches only (band/scalp — churn fills
+    // every lap, value prices its own term pair). By DEFAULT this is inform+shadow ONLY: an `◆ asym fill`
+    // note (same pattern as askHeadroom/diurnal — never a gate/drop/grade/screen.json input) + the lean
+    // `asym` field on suggestions.jsonl beside the symmetric rank (the F1 shadow A/B). P_bid is surfaced
+    // as "rest it as optionality", NEVER a rank multiplier (asymEstimate header is the doctrine home).
+    let asymRead = null, asymEr = null;
+    if (STRATEGIES[mode].fillShape === 'asym' && series1h && series1h.get(s.id)) {
+      const st = windowStats(series1h.get(s.id), { nights: ASYM_NIGHTS, wStart: 0, wEnd: 0 });
+      asymRead = st ? asymPair(st) : null;
+      if (asymRead) asymEr = asymEstimate(STRATEGIES[mode], row, asymRead);
+    }
+    // --asym (F1-GATED, off by default): the asym pair BECOMES the quoted prices — a repriced CLONE
+    // (ordering guards already applied by asymEstimate; qcache and the raw momentum tell untouched).
+    if (ASYM && asymEr) row = { ...row, optBuy: asymEr.bid, optSell: asymEr.ask, optNet: asymEr.net };
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF all
     // evaluated at that same pair. reach = the BID-fill prob (entry); askReach = the two-leg exit discount.
-    const er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra, askReach: askReachExtra });
+    let er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra, askReach: askReachExtra });
+    // --asym sort flip: rank = net(asym pair) × P_ask ÷ TTF — P_ask is the ONLY fill weight (§II.1; the
+    // bid-reach P and the Part-I ask-reach discount both step aside), and r.score/sort follow the rank.
+    if (ASYM && asymEr) er = { ...er, pFill: { value: asymEr.pAsk, n: asymRead.nDays, basis: 'ask-reach-asym' }, rank: rankScore({ net: er.net * er.lapUnits, pFill: asymEr.pAsk, ttfSec: er.ttf.value }) };
+    // the ◆ asym fill inform line (one line per item — the compact-output rule). Shows the realizable
+    // asymmetric pair + both reach fractions; the deep bid is FREE OPTIONALITY (rest it, expect ~pBid×n
+    // fills), the ask is the near-certain exit. Under --asym these ARE the quoted numbers (say so).
+    if (asymEr) {
+      const nD = asymRead.nDays;
+      const hB = Math.round(asymEr.pBid * nD), hA = Math.round(asymEr.pAsk * nD);
+      const roi = asymEr.bid > 0 ? (asymEr.net / asymEr.bid * 100).toFixed(1) : null;
+      asymNotes.push(`${name}: deep-bid ${fmt(asymEr.bid)} (fills ~${hB}/${nD}d — rest as optionality) → ask ${fmt(asymEr.ask)} (prints ~${hA}/${nD}d) · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
+    }
     // Step 2 (2026-07-09): a RENDER-stage net>0 surface gate. er.net is the after-tax net at the thesis's
     // OWN posted price pair (spec.priceBasis; the BOND 10%-guide-retrade exception rides through via
     // netMargin). A non-positive net means the thesis can't make money at the pair it would post — a bond
@@ -462,7 +505,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // Proposal B (PLAN-GRADE-REACH): a mirage exit can't advertise a headline letter. When the quoted ASK
     // reaches < REACH_GRADE_CAP_FRAC of recent days, cap the grade (Proposal A already shrank the rank
     // number; this guarantees the LETTER an operator reads can't oversell it). Same capGrade site as above.
-    if (askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
+    // PART II churn exemption: a 'symmetric'-fillShape niche (churn) is exempt — its lap exit sells into
+    // continuous two-sided flow, so the day-high reach read mismeasures it (mirrors estimateRank's askF skip).
+    if (STRATEGIES[mode].fillShape !== 'symmetric' && askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
       grade = capGrade(grade, REACH_GRADE_CAP);
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // Part A: fold an informative phase into the existing Regime cell (no new column — the canonical
@@ -509,7 +554,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, probeStr, validators: leanValidators(vres), pathWeighed });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -527,7 +572,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // absent-field pattern — normal rows stay byte-identical) so calibration can segment or exclude them
   // and a ledger reader can never mistake one for a floor-qualified suggestion.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er) })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er),
+      // PART II shadow field: the asymmetric estimate BESIDE the symmetric rank (same row → the F1 A/B join)
+      asym: r.asymEr ? { bid: r.asymEr.bid, ask: r.asymEr.ask, pAsk: round2(r.asymEr.pAsk), pBid: round2(r.asymEr.pBid), n: r.asymEr.nDays, rank: Math.round(r.asymEr.rank) } : null })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -564,6 +611,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
   for (const n of informNotes) console.log(`ℹ trajectory/reach — ${n}`);
   for (const n of headroomNotes) console.log(`⤴ ask headroom — ${n}`);
+  // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
+  // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
+  for (const n of asymNotes) console.log(`◆ asym fill — ${n}`);
   // Diurnal timing (2026-07-09) — the peak-timing read auto-run on the top surfaced picks. FREE: the 1h
   // series is already in hand (Leg B fetched it per survivor), so this adds NO fetch. For each top pick it
   // derives the stale-guarded bid (dip-window level, priced to LIVE when a dominating trend erases the dip
@@ -1010,6 +1060,8 @@ async function main() {
 
   console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
+  // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
+  if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
   console.log('');
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)

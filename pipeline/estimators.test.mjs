@@ -21,7 +21,7 @@ import { buildSnapshot } from './lib/replay.mjs';
 import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,
   pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
-  quotedPair, rankScore, estimateRank, fmtTtf,
+  quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
@@ -204,6 +204,57 @@ ok('estimateRank bundles pair/net/pFill/ttf/rank off a real archetype row (band 
   }
   // value spec on a plain row has a null (term) pair → net null → rank 0 (value ranks off its own vr).
   assert.equal(estimateRank(STRATEGIES.value, stable).rank, 0);
+});
+
+/* --- PART II (PLAN-GRADE-REACH): asymmetric fill shape ---------------------------------------------- */
+ok('PART II golden (Lightbearer archetype): a 3/14-bid + 11/14-ask pick OUT-RANKS a 12/14-bid + 2/14-ask pick of EQUAL net', () => {
+  // same realizable pair (equal net), opposite fill shapes. A = Ben's ideal (rare deep entry, near-
+  // certain exit); B = the mirage-exit shape Part I diagnosed.
+  const row = { quickBuy: 3_900_000, quickSell: 3_950_000, volDay: 500 };
+  const A = { deepBid: 3_800_000, highReachAsk: 4_050_000, pAsk: 11 / 14, pBid: 3 / 14, nDays: 14 };
+  const B = { deepBid: 3_800_000, highReachAsk: 4_050_000, pAsk: 2 / 14, pBid: 12 / 14, nDays: 14 };
+  const eA = asymEstimate(STRATEGIES.band, row, A);
+  const eB = asymEstimate(STRATEGIES.band, row, B);
+  assert.equal(eA.net, eB.net, 'equal band net by construction');
+  assert.ok(eA.rank > eB.rank, 'asym objective: the near-certain EXIT wins the rank');
+  assert.ok(Math.abs(eA.rank / eB.rank - (11 / 2)) < 1e-9, 'rank scales by P_ask alone (11/14 vs 2/14)');
+  // …and under the OLD symmetric two-leg P (bid-fill × ask-reach factor) B would out-rank A — the
+  // exact inversion Part II exists to fix (pinned so the contrast can't silently regress).
+  const oldP = (pBid, pAsk) => pBid * askReachFactor({ reachedDays: pAsk * 14, nDays: 14 });
+  assert.ok(oldP(12 / 14, 2 / 14) > oldP(3 / 14, 11 / 14), 'the symmetric objective preferred the wrong shape');
+});
+
+ok('asymEstimate: P_bid NEVER multiplies the rank (a rare deep fill is a feature, not a defect)', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, volDay: 5000 };
+  const base = { deepBid: 900, highReachAsk: 1100, pAsk: 0.8, nDays: 14 };
+  const rare = asymEstimate(STRATEGIES.band, row, { ...base, pBid: 1 / 14 });
+  const often = asymEstimate(STRATEGIES.band, row, { ...base, pBid: 13 / 14 });
+  assert.equal(rare.rank, often.rank, 'pBid is an annotation, not a weight');
+  assert.equal(rare.pBid, 1 / 14, 'but it IS surfaced for the rest-it-as-optionality line');
+});
+
+ok('asymEstimate: ordering guards hold (bid ≤ quickBuy, ask ≥ quickSell); degrades to null without a pair', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, volDay: 5000 };
+  // a deep bid ABOVE live clamps down to quickBuy; a high-reach ask BELOW live instabuy clamps up.
+  const e = asymEstimate(STRATEGIES.band, row, { deepBid: 1200, highReachAsk: 990, pAsk: 0.9, pBid: 0.9, nDays: 14 });
+  assert.ok(e.bid <= row.quickBuy, 'optBuy ≤ quickBuy guard');
+  assert.ok(e.ask >= row.quickSell, 'optSell ≥ quickSell guard');
+  assert.equal(asymEstimate(STRATEGIES.band, row, null), null);
+  assert.equal(asymEstimate(STRATEGIES.band, row, { deepBid: null, highReachAsk: 1100 }), null);
+});
+
+ok('PART II churn exemption: a symmetric-fillShape spec skips the Proposal-A ask-reach discount; band still discounts', () => {
+  const row = { optBuy: 100, optSell: 110, quickBuy: 101, quickSell: 109, volDay: 100_000, limit: 20_000, mid: 105 };
+  const badAskReach = { reachedDays: 2, nDays: 14 };   // a 2/14 mirage exit
+  assert.equal(STRATEGIES.churn.fillShape, 'symmetric');
+  assert.equal(STRATEGIES.band.fillShape, 'asym');
+  const churnNo = estimateRank(STRATEGIES.churn, row);
+  const churnWith = estimateRank(STRATEGIES.churn, row, { askReach: badAskReach });
+  assert.equal(churnWith.pFill.value, churnNo.pFill.value, 'churn P untouched by ask-reach');
+  assert.equal(churnWith.rank, churnNo.rank, 'churn rank untouched by ask-reach');
+  const bandNo = estimateRank(STRATEGIES.band, row);
+  const bandWith = estimateRank(STRATEGIES.band, row, { askReach: badAskReach });
+  assert.ok(bandWith.pFill.value < bandNo.pFill.value, 'band (asym fillShape) still takes the Part-I discount');
 });
 
 ok('fmtTtf renders compact minutes/hours/days', () => {

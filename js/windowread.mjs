@@ -112,6 +112,40 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
   };
 }
 
+// --- asymmetric realizable pair (PART II, PLAN-GRADE-REACH — deep-buy / reliable-sell) ---------
+// Ben's mandate: "I'd much rather hit a 2/14 buy and a 12/14 sell than 50/50 both sides." The ideal
+// flip is a RARE DEEP entry (a bid that fills only on a genuine flush) paired with a NEAR-CERTAIN
+// exit (an ask that prints most nights). The symmetric intraday p10/p90 band pair is structurally the
+// 50/50 shape; asymPair instead derives a day-level DEEP bid + HIGH-REACH ask from windowStats' lows/
+// his arrays (the same quantile machinery the reach validator scores against — one vocabulary):
+//   deepBid      = quantLow(lows, ASYM_P_LO)   — touched on only ~ASYM_P_LO of nights (the flush)
+//   highReachAsk = quantHigh(his, ASYM_P_HI)   — reached on ~ASYM_P_HI of nights (near-certain exit)
+//   pAsk / pBid  = the realized reach/touch fractions AT those levels (ties can push them past p)
+// DOCTRINE (§II.1): pAsk is the fill WEIGHT of the asymmetric rank (the exit is the flip's big
+// assumption); pBid is an ANNOTATION ONLY — "rest the bid as optionality, expect ~pBid×n fills" —
+// NEVER a rank multiplier (that would re-punish exactly the deep entry the shape wants). The deep
+// bid's value is already captured by the larger net. asymEstimate (js/estimators.mjs) is the consumer.
+// HONESTY (rule 4): n≈14 nights per item — every quantile below is a PLACEHOLDER pending F1/retro
+// calibration; a sample thinner than ASYM_MIN_DAYS returns null (degrade, never a fake pair).
+export const ASYM_P_LO = 0.25;    // flush-bid quantile — fills ~3-4/14 nights (PLACEHOLDER, F1 tunes)
+export const ASYM_P_HI = 0.8;     // high-reach-ask quantile — prints ~11/14 nights (PLACEHOLDER, F1 tunes)
+export const ASYM_MIN_DAYS = 5;   // thinner day sample than this ⇒ no read (mirrors REACH_MIN_DAYS)
+
+export function asymPair(stats, { pLo = ASYM_P_LO, pHi = ASYM_P_HI, minDays = ASYM_MIN_DAYS } = {}) {
+  if (!stats || !Array.isArray(stats.lows) || !Array.isArray(stats.his)
+    || !stats.lows.length || !stats.his.length) return null;
+  const nDays = stats.days ? stats.days.length : Math.max(stats.lows.length, stats.his.length);
+  if (nDays < minDays || stats.lows.length < minDays || stats.his.length < minDays) return null;
+  const deepBid = quantLow(stats.lows, pLo);
+  const highReachAsk = quantHigh(stats.his, pHi);
+  return {
+    deepBid, highReachAsk,
+    pAsk: reachedDays(stats.his, highReachAsk) / stats.his.length,
+    pBid: touchedDays(stats.lows, deepBid) / stats.lows.length,
+    nDays,
+  };
+}
+
 // --- hour-of-day diurnal profile (the peak-timing read) ---------------------------------------
 // windowStats scores ONE fixed wall-clock window; hourProfile instead buckets the SAME 1h series by
 // LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak

@@ -22,7 +22,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice } from '../js/quotecore.js';
 import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
-import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series
+import { asymEstimate } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality)
+import { STRATEGIES } from '../js/strategies.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from './lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
@@ -165,6 +167,18 @@ async function runItems() {
     // ladder up, don't relist down (the GE better-price rule makes the ladder cheap). Null unless trusted.
     const ah = askHeadroomText(row);
     if (ah) lines.push(`  ⤴ ask headroom: ${ah}`);
+    // PART II (PLAN-GRADE-REACH): the asym-fill inform line — deep flush bid → high-reach ask off the
+    // day-level quantiles of the SAME in-hand ts1h (zero new fetch; full-day window, ~14 nights). Same
+    // inform pattern as the diurnal line above: decision support, never a table/verdict/price input.
+    // P_bid is "rest it as optionality", NEVER a rank weight (doctrine: js/estimators.mjs asymEstimate).
+    const ast = inp.ts1h ? windowStats(inp.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
+    const ap = ast ? asymPair(ast) : null;
+    const ae = ap ? asymEstimate(STRATEGIES.band, row, ap) : null;
+    if (ae) {
+      const hB = Math.round(ae.pBid * ap.nDays), hA = Math.round(ae.pAsk * ap.nDays);
+      const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
+      lines.push(`  ◆ asym fill: deep-bid ${fmt(ae.bid)} (fills ~${hB}/${ap.nDays}d — rest as optionality) → ask ${fmt(ae.ask)} (prints ~${hA}/${ap.nDays}d) · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})`);
+    }
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
     sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the

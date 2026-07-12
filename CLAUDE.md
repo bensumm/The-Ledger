@@ -154,8 +154,21 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   a quoted ask reaching < `REACH_GRADE_CAP_FRAC` of days caps the LETTER so it can't oversell either. Both are
   render-stage in `screen.mjs` (the app Finder passes no `askReach` → byte-identical → no `APP_VERSION` bump;
   replay goldens unaffected). PLACEHOLDER constants (n≈14), F1/retro-join calibrates the magnitudes;
-  promoting `reach` inform→gate (Proposal C) + the asymmetric deep-buy/reliable-sell repricing (PLAN-GRADE-REACH
-  Part II) are HELD for F1. This is Proposals A+B of `PLAN-GRADE-REACH.md`.
+  promoting `reach` inform→gate (Proposal C) is HELD for F1. This is Proposals A+B of `PLAN-GRADE-REACH.md`.
+  **CHURN IS EXEMPT from both** (Part II, Ben 2026-07-12 — `spec.fillShape:'symmetric'`, `js/strategies.mjs`):
+  a lap exit sells into continuous two-sided flow near a tight band top, so the day-high reach read
+  mismeasures it; the discount + cap apply only to `fillShape:'asym'` niches (band/scalp).
+  **Asymmetric fill shape — Part II of PLAN-GRADE-REACH (Ben 2026-07-12: "I'd much rather hit a 2/14 buy
+  and a 12/14 sell than 50/50 both sides").** The ideal flip is a RARE DEEP entry + a NEAR-CERTAIN exit;
+  the symmetric p10/p90 band pair is structurally 50/50. SHIPPED (safe reframing): an inform-only
+  `◆ asym fill` line on `screen.mjs` (band) + `quote.mjs` — the day-level deep-bid → high-reach-ask pair
+  (`asymPair`, `js/windowread.mjs`, off the in-hand 1h series — zero new fetch) with `P_ask` (the rank
+  weight) and `P_bid` rendered as "rest as optionality" (NEVER a rank multiplier — the doctrine home is
+  the `asymEstimate` header, `js/estimators.mjs`); plus a lean `asym` shadow field on `suggestions.jsonl`
+  beside the symmetric rank (the F1 A/B accrual). WIRED-OFF (F1-gated): `screen.mjs --asym` flips the
+  quoted prices + sort to the asymmetric objective — OFF by default, refuses `--publish`, quantiles
+  (`ASYM_P_LO`/`ASYM_P_HI`) are n≈14 PLACEHOLDERS. Never touches the raw momentum tell, the ordering
+  invariant (min/max guards), break-even, or the value q15/q85 twin; render-stage only (goldens hold).
   **Churn per-lap EXCEPTION (Step 6, Ben 2026-07-09, decision A):** the per-thesis rank is PER-UNIT for
   every niche EXCEPT `churn`, which ranks the **LAP** — `net/u × min(limit, feasibleDepth) × P(fill) ÷
   TTF` via its own `churn` estimator family (we always max the buy limit on these commodities, so the

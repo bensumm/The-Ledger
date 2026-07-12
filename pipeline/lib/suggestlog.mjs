@@ -21,6 +21,13 @@
  *                 by gatedReason); joinable against fills.json via itemId+ts)
  *     subFloor?,   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
  *     sub-floor fallback under THAT relaxed floor; lean-included, absent on floor-qualified rows)
+ *     asym?,   (PART II PLAN-GRADE-REACH 2026-07-12 — the SHADOW asymmetric-fill estimate
+ *               { bid, ask, pAsk, pBid, n, rank }: the deep-bid → high-reach-ask pair (js/windowread.mjs
+ *               asymPair, guarded), its exit/entry reach fractions, and the asymmetric rank
+ *               (net × P_ask ÷ TTF — js/estimators.mjs asymEstimate). The row's plain `rank` field is
+ *               the SYMMETRIC rank, so old-vs-new ride the SAME row for the F1 A/B (graduate the sort
+ *               flip only if asym.rank predicts realized exit-safe edge better). Lean-included:
+ *               band/scalp screen rows with an in-hand 1h series only; PLACEHOLDER quantiles, n≈14.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch.mjs uses for action verdicts); lean-included, screen supplies
@@ -197,7 +204,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -242,6 +249,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude
   // sub-floor rows instead of mistaking them for qualified suggestions.
   if (subFloor != null)      e.subFloor = subFloor;
+  // PART II (PLAN-GRADE-REACH) — the SHADOW asymmetric-fill estimate { bid, ask, pAsk, pBid, n, rank }
+  // beside the row's symmetric `rank`, the data-accrual half of the F1 A/B (see the schema doc above).
+  // Lean-included (YS2 pattern): callers without an asym read (quote/watch, churn/value rows, no 1h
+  // series) log a byte-identical shape.
+  if (asym != null)          e.asym = asym;
   // AZ-forward (2026-07-12, analyze.mjs forward-data gaps): `grade` is the rating LETTER as rendered
   // then (incl. any thin/sub-floor cap) — the grade-clumping audit's segmentation key. Only screen.mjs
   // computes a grade, so it's a caller param (quote/watch never supply it). Lean-included (YS2 pattern):

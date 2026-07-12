@@ -181,7 +181,18 @@ function churnEdge(inp, t) {
      priceBasis  (P6b) the ONE price pair the thesis posts — the price-basis principle: net, P(fill),
                  TTF are ALL evaluated at this pair. 'quick' = the live quick pair (transact-now,
                  spread); 'opt' = the patient 2h band edges (band/rising/churn/scalp); 'term' = the
-                 term-structure floor→recovery pair the value surface computes itself (valuescreen). */
+                 term-structure floor→recovery pair the value surface computes itself (valuescreen).
+     fillShape   (PART II, PLAN-GRADE-REACH — Ben 2026-07-12) the fill SHAPE the thesis targets:
+                   'asym'      — deep-buy / reliable-sell (Ben: "I'd much rather hit a 2/14 buy and a
+                                 12/14 sell than 50/50 both sides"). band + scalp. Gets the Part-I
+                                 ask-reach rank discount + REACH_GRADE_CAP, the asym-fill inform line,
+                                 and the shadow asym-rank field on suggestions.jsonl.
+                   'symmetric' — fill-every-lap / own-pricing. churn (sells into continuous two-sided
+                                 flow near a tight band top; the day-level ask-reach read mismeasures
+                                 it and a deep-flush bid is anti-churn — EXEMPT from the Part-I
+                                 ask-reach discount AND the reach grade cap) + value (its own
+                                 term-structure pricing; never had an ask-reach read). Doctrine homes:
+                                 js/estimators.mjs asymEstimate + js/windowread.mjs asymPair. */
 export const STRATEGY_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,
@@ -192,7 +203,7 @@ export const STRATEGY_LIST = Object.freeze([
     // on scalp (accepts fallers by thesis — direction is the point, not a caution) or value (a
     // buy-hold-the-cycle move, not a bid-fill play).
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
-    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
+    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
     key: 'churn', label: 'Churn', inAll: true,   // the high-volume buy-limit-cycle commodity lane
@@ -201,7 +212,9 @@ export const STRATEGY_LIST = Object.freeze([
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // Step 6 (Ben 2026-07-09, decision A): churn ranks the LAP (net/u × min(limit, feasibleDepth) × P ÷
     // TTF) via its own estimator family — we always max the buy limit on these, so the exact limit is a fact.
-    defaultPath: PATH_KEYS.SCALP, estimator: 'churn', priceBasis: 'opt',
+    // fillShape 'symmetric' (PART II): churn fills EVERY lap on a two-sided commodity — exempt from the
+    // ask-reach rank discount + reach grade cap, and outside the asym display/shadow (see header).
+    defaultPath: PATH_KEYS.SCALP, estimator: 'churn', priceBasis: 'opt', fillShape: 'symmetric',
   },
   {
     key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
@@ -212,7 +225,7 @@ export const STRATEGY_LIST = Object.freeze([
     // (never veto a scalp for being a faller; its stop lives in the path engine / offerVerdict, not a gate).
     falling: 'accept', gate: 'band',
     validators: [{ key: 'floor', mode: 'inform' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
-    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt',
+    defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
     key: 'value', label: 'Value', inAll: true,   // Ben 2026-07-10: value runs in --mode all by default (was explicit-only). Still console-only (excluded from screen.json) + provisional (n≈0); a bare `all` runs it on placeholder --capital/--slots.
@@ -236,7 +249,7 @@ export const STRATEGY_LIST = Object.freeze([
       { key: 'value-amplitude', mode: 'inform' },
       { key: 'limit', mode: 'gate' },
     ],
-    defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term',
+    defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term', fillShape: 'symmetric',
   },
 ]);
 
@@ -260,6 +273,10 @@ const VALID_GATE = new Set(['band', 'value']);                          // P5 ga
 // typo'd family name is caught by conformance instead of silently defaulting to intraday in production).
 const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising', 'churn']);   // Step 6 — churn per-lap rank
 const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term']);
+// PART II — the fill SHAPE the thesis targets (see the fillShape doc in the header): 'asym' = deep-buy/
+// reliable-sell (band/scalp, the Part-I ask-reach discount applies); 'symmetric' = fill-every-lap /
+// own-pricing (churn/value — EXEMPT from the discount + the reach grade cap).
+const VALID_FILL_SHAPE = new Set(['asym', 'symmetric']);
 // The validator KEYS a spec may name + the gate/inform modes. Kept as a local literal (NOT imported
 // from js/validate.mjs) so this registry stays near-dependency-free / app-bundle-light; the SOURCE OF
 // TRUTH is validate.mjs's REGISTRY_ORDER — the conformance test cross-checks the two so drift bites.
@@ -302,5 +319,6 @@ export function validateStrategySpec(spec) {
     errs.push('defaultPath must be an ENTRY (unheld-enumerable) path key: ' + ENTRY_PATH_KEYS.join('/'));
   if (!VALID_ESTIMATORS.has(spec.estimator)) errs.push(`estimator must be one of ${[...VALID_ESTIMATORS].join('/')}`);
   if (!VALID_PRICE_BASIS.has(spec.priceBasis)) errs.push(`priceBasis must be one of ${[...VALID_PRICE_BASIS].join('/')}`);
+  if (!VALID_FILL_SHAPE.has(spec.fillShape)) errs.push(`fillShape must be one of ${[...VALID_FILL_SHAPE].join('/')}`);
   return errs;
 }
