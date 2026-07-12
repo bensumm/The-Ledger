@@ -101,3 +101,17 @@ if (scanDue) {
 try { fs.mkdirSync(path.dirname(STATE), { recursive: true }); fs.writeFileSync(STATE, JSON.stringify(state)); } catch {}
 
 if (!watchDue && !scanDue) console.log('(nothing due this tick — next action within one interval)');
+
+// --- next-iteration schedule (Ben, 2026-07-12): name the local time each action is next DUE, and the
+// earliest of them (the next tick that actually does work). Due = lastRun + interval; an action that just
+// ran was stamped `now`, so its next-due is now + interval. The cron fires every `cronMin`, so the real run
+// is the first fire at/after the due time — we print the due time (the meaningful "when will it run" answer).
+const localHM = ms => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+const relMin = ms => Math.max(0, Math.round((ms - now) / 60000));
+const dueAt = (key, min) => min == null ? null : (state[key] ?? now) + min * 60_000;
+const nextWatch = dueAt('watch', watchMin), nextScan = dueAt('scan', scanMin);
+const parts = [];
+if (nextWatch != null) parts.push(`watch ~${localHM(nextWatch)} (${relMin(nextWatch)}m)`);
+if (nextScan != null) parts.push(`scan ~${localHM(nextScan)} (${relMin(nextScan)}m)`);
+const earliest = [nextWatch, nextScan].filter(v => v != null).sort((a, b) => a - b)[0];
+if (parts.length) console.log(`\n# next due: ${parts.join(' · ')}${earliest != null ? ` → next work ~${localHM(earliest)} local` : ''}`);
