@@ -100,11 +100,17 @@ ok('flags missing fills/positions', () => {
 });
 
 // --- auditDataset: forward-data recommendations ----------------------------------------------
-ok('recommends logging grade + spread/depth when absent', () => {
-  const rows = ledgerRows(40, { base: { rank: 1234 } });   // rank present, grade + spread/depth absent
+ok('flags a window predating the lean grade/depth fields (shipped 2026-07-12)', () => {
+  const rows = ledgerRows(40, { base: { rank: 1234 } });   // rank present, grade + depth absent (pre-field window)
   const a = auditDataset({ rows }, {}, {}, freshMeta, { nowSec: NOW });
   assert.ok(a.forward.some(f => f.includes('grade LETTER')));
-  assert.ok(a.forward.some(f => f.includes('spread/depth')));
+  assert.ok(a.forward.some(f => f.includes('depth snapshot')));
+});
+ok('is silent once grade + depth are present in the window (the fields now ship)', () => {
+  const rows = ledgerRows(40, { base: { rank: 1234, grade: 'A-', depth: { hpv: 300, lpv: 200 } } });
+  const a = auditDataset({ rows }, {}, {}, freshMeta, { nowSec: NOW });
+  assert.ok(!a.forward.some(f => f.includes('grade LETTER')));
+  assert.ok(!a.forward.some(f => f.includes('depth snapshot')));
 });
 
 // --- deriveCandidates: the n-floor is the honesty gate ---------------------------------------
@@ -172,7 +178,7 @@ ok('askHeadroomAudit: segments trusted vs untrusted and joins the retro outcome'
     { itemId: 12, ts: 300 },   // no askHeadroom → ignored
   ];
   const retro = [
-    { outcome: 'filled', realisedPerUnit: 8 },   // trusted row was taken & realized
+    { outcome: 'filled', realisedPerUnit: 8, sellEach: 398 },   // trusted row was taken & realized; sold ABOVE rawTop 397
     { outcome: 'not-taken', realisedPerUnit: null },
     { outcome: 'filled', realisedPerUnit: 50 },
   ];
@@ -183,6 +189,19 @@ ok('askHeadroomAudit: segments trusted vs untrusted and joins the retro outcome'
   assert.equal(a.nTakenTrusted, 1);
   assert.equal(a.realisedPerUnitTaken, 8, 'realized/u averaged over the taken trusted subset');
   assert.ok(Math.abs(a.gapPctTrusted - 0.01) < 1e-9);
+  // strict raw-top-reach join (2026-07-12): sellEach 398 ≥ rawTop 397 → reached; the untrusted row's
+  // retro lacks sellEach → unanswerable (null), never a crash.
+  assert.equal(a.rows.find(r => r.itemId === 566).rawTopReached, true);
+  assert.equal(a.rows.find(r => r.itemId === 999).rawTopReached, null, 'no sellEach → unknown, degrade');
+  assert.equal(a.rawTopKnownTrusted, 1);
+  assert.equal(a.rawTopReachedTrusted, 1);
+});
+ok('askHeadroomAudit: a realized sell BELOW the raw top reads rawTopReached=false', () => {
+  const sug = [{ itemId: 7, ts: 100, askHeadroom: { gap: 10, gapPct: 0.02, rawTop: 500, topBucketVol: 900, netLever: 3, trusted: true } }];
+  const a = askHeadroomAudit(sug, [{ outcome: 'filled', realisedPerUnit: 4, sellEach: 490 }]);
+  assert.equal(a.rows[0].rawTopReached, false);
+  assert.equal(a.rawTopKnownTrusted, 1);
+  assert.equal(a.rawTopReachedTrusted, 0);
 });
 
 console.log(`\nanalyze.test: ${pass} assertions passed.`);

@@ -156,8 +156,11 @@ if (!askHead.n) {
   console.log(`  ${askHead.n} shave-gap flag(s) · ${askHead.nTrusted} trusted (surfaced as a ladder note) · ${askHead.nUntrusted} untrusted (audit only — thin-flier path Bar E protects)`);
   console.log(`  trusted subset: mean gap ${pct(askHead.gapPctTrusted)} of the ask · mean net-leverage ${askHead.netLeverTrusted != null ? askHead.netLeverTrusted.toFixed(1) + '×' : '—'} · ${askHead.nTakenTrusted} taken → realized/u ${gp(askHead.realisedPerUnitTaken)}`);
   for (const r of askHead.trusted)
-    console.log(`    - #${r.itemId} · gap +${r.gap != null ? r.gap.toLocaleString() : '—'} (raw top ${r.rawTop != null ? r.rawTop.toLocaleString() : '—'}) · bucket ${r.topBucketVol != null ? r.topBucketVol.toLocaleString() : '—'} u → ${r.outcome ?? 'not-taken'}${r.realisedPerUnit != null ? ` · realized/u ${gp(r.realisedPerUnit)}` : ''}`);
-  console.log(`  NOTE: the STRICT "did the realized sell reach the raw top?" join needs the realized SELL price (the retro row is buy-keyed today) — a documented follow-up; this reports the trusted population + round-trip now.`);
+    console.log(`    - #${r.itemId} · gap +${r.gap != null ? r.gap.toLocaleString() : '—'} (raw top ${r.rawTop != null ? r.rawTop.toLocaleString() : '—'}) · bucket ${r.topBucketVol != null ? r.topBucketVol.toLocaleString() : '—'} u → ${r.outcome ?? 'not-taken'}${r.realisedPerUnit != null ? ` · realized/u ${gp(r.realisedPerUnit)}` : ''}${r.rawTopReached != null ? ` · sold @ ${r.sellEach.toLocaleString()} — raw top ${r.rawTopReached ? 'REACHED' : 'not reached'}` : ''}`);
+  // The strict "did the realized sell reach the raw top?" join is COMPUTED as of 2026-07-12
+  // (retrojoin.mjs sellEach — the qty-weighted realized gross sell price); unanswerable rows
+  // (no closed round-trip / pre-field history) degrade to unknown, never a crash.
+  console.log(`  strict raw-top-reach (trusted, answerable only): ${askHead.rawTopReachedTrusted}/${askHead.rawTopKnownTrusted} reached${askHead.rawTopKnownTrusted === 0 ? ' — no closed round-trip on a trusted flag yet' : ''}`);
 }
 console.log(`  ⚠ n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are PLACEHOLDERS; this is a FLAG for F1 (analyze surfaces evidence, never retunes; the Option-B clamp-widen is F1's to graduate), not a calibrated conclusion.`);
 

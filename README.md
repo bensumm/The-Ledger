@@ -359,7 +359,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     separation over the alerted subset; candidate-surfacing → points at F1, never retunes; n≈0 placeholder),
     a **Bar E ask-headroom retro §5** (`askHeadroomAudit` — pulls the lean `askHeadroom` shave-gap flags,
     segments trusted (surfaced) from untrusted (audit-only), joins the trusted subset to the retro
-    round-trip; candidate-surfacing → F1 owns `ASK_HEADROOM_*` + the deferred clamp-widen; n≈0 placeholder),
+    round-trip incl. the STRICT raw-top-reach answer (`rawTopReached` off retrojoin's realized `sellEach`,
+    2026-07-12 — unanswerable rows degrade to unknown); candidate-surfacing → F1 owns `ASK_HEADROOM_*` +
+    the deferred clamp-widen; n≈0 placeholder),
     and derives
     n-gated TUNING CANDIDATES that are FLAGS for F1, never applied here; a ~0% taken rate is treated as the
     documented BASELINE, not a finding. `--since <hrs>`/`--json`/`--min-n`. Pure core is `lib/analyze.mjs`,

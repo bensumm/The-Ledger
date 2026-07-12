@@ -452,12 +452,19 @@ Repo-root, committed. `quote.mjs` (per-item **and** `--positions`), `screen.mjs`
 niche row), and `watch.mjs` (each held/target read) append every emitted recommendation **at
 emit time, unconditionally**, via the shared `pipeline/lib/suggestlog.mjs`. One JSON object per line:
 ```
-{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict, volSrc? }
+{ ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict, volSrc?, grade?, depth? }
 ```
 `ts` = unix seconds. `class` = the item-type/liquidity label **as computed then** (the logic
 evolves; recomputing later would rewrite history, so it is snapshotted — coarse `liqClass()` for
 quote/screen, `watch.mjs`'s richer `classify()` taxonomy for watch). `verdict` = the emitted
 action string where the script produces one (position verdict / grade / watch action), else null.
+**`grade` (AZ-forward 2026-07-12, lean-included):** the rating LETTER as rendered then (`'S+'…'D'`,
+incl. any thin/sub-floor cap) — only `screen.mjs` computes one, so quote/watch rows omit it; absent on
+all older rows (consumers treat absent as unknown). **`depth` (AZ-forward 2026-07-12, lean-included):**
+`{hpv, lpv}` off `computeQuote`'s `row.pressure` — the realized trailing-24h two-sided flow at emit, a
+FLOW PROXY not an order book (cite with the pressure derivation's shortcomings); the live SPREAD
+snapshot is already `quickSell − quickBuy` on every row, deliberately not duplicated. The full
+lean-field inventory lives in the `suggestlog.mjs` header (the ONE schema home).
 **`volSrc` (SF-3 — `'bulk'` | `'peritem'`, lean-included):** WHICH `/24h` endpoint the volume behind
 `class` came from — `screen.mjs` reads the whole-market bulk `/24h` (`loadAll24h`/`all24h.json`) so it
 always logs `'bulk'`; `quote.mjs` fetches per-item `/24h`, but when a recent scan left `all24h.json`

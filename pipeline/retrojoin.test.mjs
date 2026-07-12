@@ -144,6 +144,19 @@ ok('a closed round-trip surfaces realisedNet / realisedPerUnit / holdSec', () =>
   assert.equal(rows[0].realisedPerUnit, Math.round(rows[0].realisedNet / 10));
   assert.equal(rows[0].holdSec, sellOpenTs - buyTs);   // buy offer tsOpen → sell tsOpen
   assert.notEqual(rows[0].suggestedNetPerUnit, null);
+  // sellEach (2026-07-12): the qty-weighted realized GROSS sell price — the Bar E raw-top-reach input
+  assert.equal(rows[0].sellEach, 200, 'sellEach = realized gross sell price of the closing sells');
+});
+
+// --- 7b. sellEach degrades to null when no round-trip closed ----------------------------------
+ok('sellEach is null on a not-taken row and on a filled-but-unsold lot', () => {
+  const T0 = 1_000_000;
+  const { rows: nt } = retroJoin([sug(T0, 100, { optBuy: 100 })], []);
+  assert.equal(nt[0].sellEach, null, 'not-taken → sellEach null');
+  const events = buyOffer(1, 100, 90, 10, 10, T0 + 100, T0 + 150);   // bought, never sold
+  const { rows } = retroJoin([sug(T0, 100, { optBuy: 100 })], events);
+  assert.equal(rows[0].outcome, 'filled');
+  assert.equal(rows[0].sellEach, null, 'open (unsold) lot → sellEach null, never fabricated');
 });
 
 // --- 8. partial fill flagged ------------------------------------------------------------------

@@ -24,7 +24,7 @@ export const POSITIONS_STALE_SEC = 3600;  // positions.json older than fills.jso
 // Fields that SHOULD be present on ~every quote/screen row — a recent collapse means an emit path broke.
 export const ALWAYS_FIELDS = ['class', 'regime'];
 // Lean/conditional forward fields — reported as presence RATES (informational), never flagged as bugs.
-export const OPTIONAL_FIELDS = ['validators', 'rank', 'bid', 'ask', 'posture', 'path', 'volSrc'];
+export const OPTIONAL_FIELDS = ['validators', 'rank', 'bid', 'ask', 'posture', 'path', 'volSrc', 'grade', 'depth'];
 
 // pure formatters (shared by the core's flag strings + the script's report) ---------------------------
 export const hrs = sec => sec == null ? '—' : fmtTurn(sec / 3600);
@@ -100,10 +100,12 @@ export function auditDataset(sug, fillsData, posData, retroMeta, { nowSec = Math
 
   // forward-data recommendations: analyses we CAN'T do because a field was never logged.
   const forward = [];
+  // Both fields ship as of 2026-07-12 (lean `grade` + `depth` in suggestionEntry) — these fire only
+  // while the analysis window predates the fields (self-silencing as new rows accrue).
   if (fieldPresence(rows, 'rank') != null && !rows.some(r => r.grade != null))
-    forward.push(`grade LETTER is not logged (only numeric 'rank') — a grade-clumping audit needs 'grade' in suggestionEntry to segment S+…D.`);
+    forward.push(`grade LETTER is not logged in this window (only numeric 'rank') — the lean 'grade' field shipped 2026-07-12; a grade-clumping audit needs rows from after that.`);
   if (rows.length && !rows.some(r => r.spread != null || r.depth != null))
-    forward.push(`no book spread/depth snapshot at emit — can't retro fill-rate vs. book depth. Consider a lean 'spread'/'depth' field (YS2 pattern).`);
+    forward.push(`no book depth snapshot in this window — the lean 'depth' ({hpv,lpv} 24h flow proxy) shipped 2026-07-12; fill-rate-vs-depth retro needs rows from after that (spread is already derivable: quickSell − quickBuy).`);
 
   return { total: rows.length, oldest, newest, inWindow, sinceH, byScript,
     malformed, noKey, fieldAudit, unattributed, nBuy, unattributedRate, rebuild, forward, flags };
@@ -169,10 +171,11 @@ export function dipLoopAudit(sugRows = [], retroRows = []) {
  * from UNTRUSTED (logged for audit only — the thin-flier path Bar E protects). Joins each to retroRows[i]
  * (1:1 with sugRows) for the realized round-trip. THE QUESTION F1 needs answered: on a TRUSTED-headroom
  * suggestion, did the realized sell actually reach the raw top (i.e. was the quoted ask genuinely leaving
- * money on the table)? The realized SELL price is not directly on the retro row today (it is BUY-keyed:
- * fillEach = the buy, realisedPerUnit = the round-trip net), so the STRICT "sell reached rawTop" join is a
- * documented follow-up; what IS measurable now is the trusted-headroom population, its gap distribution,
- * and the realized round-trip on the taken subset — the raw material for that graduation, reported n-honest.
+ * money on the table)? As of 2026-07-12 the retro row carries `sellEach` (retrojoin.mjs — the
+ * qty-weighted realized GROSS sell price of the claimed lot's closing sells), so the STRICT join IS
+ * computed here: rawTopReached = sellEach ≥ askHeadroom.rawTop, null when either side is unknown (an
+ * unclosed round-trip, or a pre-field row). Old buy-keyed-only rows degrade to null, never a crash.
+ * F1 still owns what to DO with the answer; this reports it n-honest.
  *
  * HONESTY (rule 4). n≈0 — ASK_HEADROOM_MIN_PCT / RAWTOP_TRUST_BUCKET_VOL / ASK_HEADROOM_VOL_FLOOR are NAMED
  * PLACEHOLDERS; the caller emits this as an n-gated CANDIDATE pointing at F1, never a calibrated conclusion. */
@@ -182,11 +185,16 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
     const s = sugRows[i];
     if (!s || s.askHeadroom == null) continue;   // askHeadroom presence IS the marker (trusted or audit-only)
     const rj = retroRows[i] || {};
+    const sellEach = rj.sellEach ?? null;
+    const rawTop = s.askHeadroom.rawTop ?? null;
     rows.push({
       itemId: s.itemId, ts: s.ts, ...s.askHeadroom,
       trusted: !!s.askHeadroom.trusted,
       outcome: rj.outcome ?? null, realisedPerUnit: rj.realisedPerUnit ?? null,
       taken: rj.outcome != null && rj.outcome !== 'not-taken',
+      // the strict Bar E join (2026-07-12): did the realized sell PRINT at/above the raw band top the
+      // robust clamp shaved? null = unanswerable (no closed round-trip / pre-sellEach retro row).
+      sellEach, rawTopReached: (sellEach != null && rawTop != null) ? sellEach >= rawTop : null,
     });
   }
   const trusted = rows.filter(r => r.trusted);
@@ -200,6 +208,10 @@ export function askHeadroomAudit(sugRows = [], retroRows = []) {
     // realized round-trip where a taken lot closed (the material F1 joins to the raw-top-reach question).
     gapPctTrusted: avg(trusted, 'gapPct'), netLeverTrusted: avg(trusted, 'netLever'),
     realisedPerUnitTaken: avg(takenTrusted, 'realisedPerUnit'),
+    // strict raw-top-reach accounting over the trusted subset — n-honest: `known` counts only rows
+    // where the join was answerable (a closed round-trip with both sellEach and rawTop).
+    rawTopKnownTrusted: trusted.filter(r => r.rawTopReached != null).length,
+    rawTopReachedTrusted: trusted.filter(r => r.rawTopReached === true).length,
   };
 }
 

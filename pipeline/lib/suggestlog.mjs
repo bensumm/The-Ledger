@@ -19,8 +19,19 @@
  *                 optSell,afterTaxMargin,dipScore,alerted,gatedReason}; lean-included, present on watch
  *                 --dip flush rows (alerted=true → headline FLUSH · alerted=false → SIGNAL-ONLY, gated out
  *                 by gatedReason); joinable against fills.json via itemId+ts)
- *     subFloor? }   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
+ *     subFloor?,   (P6c — 'min-gpd' | 'liquidity': the row was surfaced by the empty-result
  *     sub-floor fallback under THAT relaxed floor; lean-included, absent on floor-qualified rows)
+ *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
+ *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
+ *               `verdict` (which watch.mjs uses for action verdicts); lean-included, screen supplies
+ *               it, quote/watch have no grade → absent. Absent on all pre-2026-07-12 rows.)
+ *     depth?,  (AZ-forward 2026-07-12 — the realized 24h book-depth snapshot at emit:
+ *               {hpv, lpv} straight off computeQuote's `row.pressure` (units traded at the instabuy /
+ *               instasell sides, trailing 24h — a FLOW PROXY, not an order book; same shortcomings as
+ *               the pressure token). Derived off `row`, no call-site change; lean-included, absent
+ *               when the /24h read was missing. NOTE: the live SPREAD snapshot is already on every
+ *               row as quickBuy/quickSell (spread = quickSell − quickBuy) — deliberately NOT
+ *               duplicated as its own field (SR1 lean discipline).)
  *     ts      — unix SECONDS at emit time
  *     script  — 'quote' | 'screen' | 'watch'
  *     mode    — the mode/niche as computed then (screen niche name, or null)
@@ -186,7 +197,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -231,6 +242,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude
   // sub-floor rows instead of mistaking them for qualified suggestions.
   if (subFloor != null)      e.subFloor = subFloor;
+  // AZ-forward (2026-07-12, analyze.mjs forward-data gaps): `grade` is the rating LETTER as rendered
+  // then (incl. any thin/sub-floor cap) — the grade-clumping audit's segmentation key. Only screen.mjs
+  // computes a grade, so it's a caller param (quote/watch never supply it). Lean-included (YS2 pattern):
+  // absent on every pre-field row and on grade-less scripts — consumers treat absent as unknown.
+  if (grade != null)         e.grade = grade;
   // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/analyze.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid
@@ -246,6 +262,15 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Derived off `row` (not a caller param), so quote/screen both log it with no call-site change; a row
   // with no shave gap has row.askHeadroom===null → no field → byte-identical shape. INFORM-ONLY.
   if (row.askHeadroom != null) e.askHeadroom = row.askHeadroom;
+  // AZ-forward (2026-07-12): `depth` = the realized 24h two-sided flow at emit, {hpv, lpv} off
+  // computeQuote's row.pressure — the "fill-rate vs. book depth" retro input analyze.mjs flagged as
+  // unlogged. Derived off `row` (like askHeadroom — quote/screen/watch all log it with no call-site
+  // change). HONESTY: this is the trailing-24h FLOW PROXY, not an order-book depth snapshot (cite it
+  // with the shortcomings documented at the pressure derivation in js/quotecore.js computeQuote).
+  // The SPREAD half of the analyze recommendation is already logged: quickSell − quickBuy on every row.
+  // Lean-included: no /24h read → no field → byte-identical shape.
+  if (row.pressure && (row.pressure.hpv != null || row.pressure.lpv != null))
+    e.depth = { hpv: row.pressure.hpv ?? null, lpv: row.pressure.lpv ?? null };
   return e;
 }
 

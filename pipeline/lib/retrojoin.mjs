@@ -97,7 +97,9 @@ const q75 = a => quantileOf(a, 0.75);
  *
  * Each result row carries: outcome ∈ {filled, filled-worse, not-taken}, latencySec (suggestion→first
  * claimed fill = the TTF ground truth), partial (the claimed fill filled < its offer qty), the
- * realized round-trip (FIFO-matched sell: realisedNet / realisedPerUnit / holdSec) where one exists,
+ * realized round-trip (FIFO-matched sell: realisedNet / realisedPerUnit / holdSec, plus sellEach —
+ * the qty-weighted realized GROSS sell price, so sell-side joins like the Bar E raw-top-reach
+ * question are no longer buy-keyed-only) where one exists,
  * and suggestedNetPerUnit for the realized-vs-suggested comparison. mode/path are carried through
  * for attribution (path absent on rows that predate P4c → grouped under mode only). */
 export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY_MODE } = {}) {
@@ -108,12 +110,16 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
   stampFirstFills(deduped, buyOffers);
 
   // FIFO closed lots → realized round-trip keyed by the BUY offer tsOpen (lot.ts). Never re-derived.
+  // sellGross accumulates qty×sellEach across the lot's closing sells so the row can carry the
+  // qty-weighted REALIZED SELL PRICE (sellEach) — the field the Bar E "did the sell reach the raw
+  // top?" join needs (analyze.mjs §5); before 2026-07-12 the row was buy-keyed only.
   const { closed } = matchTrades(offers);
-  const rtByBuyTs = new Map();   // buyTs -> { qty, realised, sellTs (earliest) }
+  const rtByBuyTs = new Map();   // buyTs -> { qty, realised, sellGross, sellTs (earliest) }
   for (const t of closed) {
     if (t.withdrawn || t.buyTs == null) continue;
-    const e = rtByBuyTs.get(t.buyTs) || { qty: 0, realised: 0, sellTs: null };
+    const e = rtByBuyTs.get(t.buyTs) || { qty: 0, realised: 0, sellGross: 0, sellTs: null };
     e.qty += t.qty; e.realised += (t.realised || 0);
+    e.sellGross += (t.sellEach || 0) * t.qty;
     e.sellTs = e.sellTs == null ? t.sellTs : Math.min(e.sellTs, t.sellTs);
     rtByBuyTs.set(t.buyTs, e);
   }
@@ -147,7 +153,7 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
       mode, path, refBuy, suggestedNetPerUnit: s ? suggestedNetPerUnit(s) : null };
     if (!claimed.length) {
       return { ...base, outcome: 'not-taken', latencySec: null, fillEach: null, priceKnown: refBuy != null,
-        partial: false, realisedNet: null, realisedPerUnit: null, holdSec: null };
+        partial: false, realisedNet: null, realisedPerUnit: null, sellEach: null, holdSec: null };
     }
     const first = claimed[0];
     const fillEach = first.filled > 0 ? first.spent / first.filled : null;
@@ -163,6 +169,9 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
       partial: (first.filled || 0) < (first.qty || 0),
       realisedNet: rt ? rt.realised : null,
       realisedPerUnit: rt && rt.qty ? Math.round(rt.realised / rt.qty) : null,
+      // qty-weighted realized GROSS sell price across the lot's closing sells (pre-tax, the price the
+      // ask actually printed at) — null until a round-trip closes. Additive 2026-07-12.
+      sellEach: rt && rt.qty ? Math.round(rt.sellGross / rt.qty) : null,
       holdSec: rt && rt.sellTs != null ? rt.sellTs - first.tsOpen : null,
     };
   });

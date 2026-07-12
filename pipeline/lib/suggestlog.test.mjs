@@ -57,6 +57,25 @@ ok('SF-3: volSrc is lean-included (present only when supplied)', () => {
   assert.ok(!('volSrc' in none), 'absent volSrc stays absent (lean, byte-identity)');
 });
 
+ok('AZ-forward: `grade` letter is lean-included (present only when supplied)', () => {
+  const graded = suggestionEntry({}, { itemId: 11, cls: 'liquid', verdict: 'A-', grade: 'A-' });
+  assert.equal(graded.grade, 'A-', 'supplied grade letter is written');
+  const none = suggestionEntry({}, { itemId: 12, cls: 'liquid', verdict: 'HOLD' });
+  assert.ok(!('grade' in none), 'absent grade stays absent (quote/watch rows byte-identical)');
+});
+
+ok('AZ-forward: `depth` {hpv,lpv} is derived off row.pressure; no pressure → no field', () => {
+  const withP = suggestionEntry({ quickBuy: 100, quickSell: 110, pressure: { hpv: 3050, lpv: 1910, ratio: 1.6 } },
+    { itemId: 13, cls: 'liquid', verdict: 'B' });
+  assert.deepEqual(withP.depth, { hpv: 3050, lpv: 1910 }, 'depth snapshots the two 24h flow sides');
+  const noP = suggestionEntry({ quickBuy: 100, quickSell: 110 }, { itemId: 14, cls: 'liquid', verdict: 'B' });
+  assert.ok(!('depth' in noP), 'no /24h pressure → no depth field (lean, byte-identity)');
+  const nullSides = suggestionEntry({ pressure: { hpv: null, lpv: null, ratio: null } }, { itemId: 15, cls: 'mid', verdict: 'B' });
+  assert.ok(!('depth' in nullSides), 'pressure with both sides null → no depth field');
+  const oneSide = suggestionEntry({ pressure: { hpv: 500, lpv: null, ratio: null } }, { itemId: 16, cls: 'mid', verdict: 'B' });
+  assert.deepEqual(oneSide.depth, { hpv: 500, lpv: null }, 'a one-sided read is kept with the null side explicit');
+});
+
 ok('P4c: the inferred entry `path` is lean-included (present only when supplied)', () => {
   const e = suggestionEntry({}, { itemId: 5, cls: 'liquid', verdict: 'A', path: 'scalp' });
   assert.equal(e.path, 'scalp', 'supplied path is written');
