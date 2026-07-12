@@ -192,10 +192,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   renders as verdict-tagged offer rows (`FILLS-PIPELINE.md` §14). P0: `quote.mjs --positions` also
   reads it (via `lib/offers.mjs`'s `readOffersSnapshot`) as the held-book source for the askFilling
   softening — the OTHER-machine-safe path that needs no local `~/.runelite` log dir
-- `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's STATED idle-cash
-  balance (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `watch.mjs`'s SUMMARY
-  total-capital line. The GE cash stack is in no log, so idle GP is a stated snapshot: it ages the
-  moment a trade happens (staleness-bannered) and is NEVER a verdict/alert input — purely the
+- `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's cash ANCHOR
+  (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `lib/cashderive.mjs` +
+  `watch.mjs`'s SUMMARY total-capital line. The GE cash stack is in no log, but idle cash is no
+  longer merely stated: this is the ANCHOR `cashderive.mjs` runs FORWARD from (anchor + Σ sells-
+  after-tax − Σ buys − resting-bid escrow). It is NEVER a verdict/alert input — purely the
   denominator for the idle-vs-working picture
 - `heartbeat.json` — **gitignored, local-only, never deployed** — a tiny daemon-liveness
   heartbeat (`{app:'the-coffer-heartbeat', generatedAt:<ISO>}`) written by `watch-log.mjs`
@@ -314,8 +315,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     to print a per-held reminder. **P4a** — `set … --path <key> [--entered-under <key>]` ALSO declares
     the path-engine entry path into the TRACKED root `hold-thesis.json` via `holdthesis.upsertThesis`,
     preserving any existing plan fields; enteredUnder defaults to the path on first declaration),
-    `cash.mjs` (CLI to set/read/clear the STATED idle-cash balance
-    in `.capital-state.json` — the total-capital denominator `watch.mjs`'s SUMMARY reads),
+    `cash.mjs` (CLI to DERIVE / re-anchor / clear the idle-cash balance: bare = the derived balance
+    (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/cashderive.mjs`); `<amount>` =
+    re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch.mjs`'s
+    SUMMARY reads),
     `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring; `--profile` = the hour-of-day diurnal dip/peak read
     + derived stale-guarded bid/ask), `limits.mjs` (LM1 — the buy-limit read:
@@ -486,7 +489,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     STATED idle cash → the WHOLE-pool idle-vs-working split, null-safe when cash is unknown);
     output-only, never a verdict input),
     `cashstate.mjs` (impure fs sibling — `readCash`/`writeCash`/`clearCash` over the gitignored
-    `.capital-state.json`; kept out of pure `capitalutil.mjs`),
+    `.capital-state.json`; now the ANCHOR store rather than the answer — kept out of pure
+    `capitalutil.mjs`),
+    `cashderive.mjs` (PLAN-CASH-TRACKING — PURE `deriveCash(events, anchor, liveOffers)` +
+    `restingBuyEscrow` deriving idle cash from the fills-log flow (Σ sells-after-tax − Σ buys since the
+    anchor) minus LIVE-offers.json resting-bid escrow, so the balance is computed not re-stated; the
+    INJECTION DETECTOR raises the anchor when resting bids exceed the tracked balance; `loadDerivedCash`
+    is the impure loader (fills.json + offers.json + `cashstate` anchor). Pinned by `cashderive.test.mjs`),
     `statetransition.mjs` (YP2 #2 — PURE `stateTransition(phase())`: flags a basing faller / a spike on
     rising-vs-falling lows for the screen's "watch closely" list; descriptive, never a buy signal),
     `velocitytag.mjs` (Build 2 — PURE `buildVelocityIndex`/`velocityTag` over the gitignored

@@ -1,9 +1,12 @@
-/* cashstate.mjs — persist Ben's STATED idle-cash balance for the total-capital read
-   (capitalutil.totalCapital). The GE cash stack is not in any log (fills/positions/offers carry
-   committed capital only), so idle GP can only be tracked from a figure Ben states via
-   pipeline/cash.mjs. Stored in gitignored `.capital-state.json` at the repo root
-   ({ cashGp, statedAt }); read by watch.mjs's SUMMARY footer. Impure (fs) — kept OUT of the pure
-   capitalutil.mjs so that module stays fixture-testable. */
+/* cashstate.mjs — persist Ben's cash ANCHOR ({ cashGp, statedAt }) for the total-capital read.
+   NOTE (PLAN-CASH-TRACKING): the GE cash stack is not in any log, but idle cash is no longer merely
+   "stated" — the stored figure is the ANCHOR that lib/cashderive.mjs runs FORWARD from (anchor +
+   Σ sells-after-tax − Σ buys − resting-bid escrow). So this module stores the starting point;
+   cashderive.mjs computes the current balance. A re-anchor (pipeline/cash.mjs <amount>) is the manual
+   reset — the first anchor, or the one DOWN correction when Ben is short / spent gp off-ledger (the
+   only movement the log can't see). Stored in gitignored `.capital-state.json` at the repo root;
+   read by cashderive + watch.mjs's SUMMARY footer. Impure (fs) — kept OUT of the pure capitalutil.mjs
+   / cashderive deriveCash so those stay fixture-testable. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { REPO_DIR } from '../sync-fills.mjs';
