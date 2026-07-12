@@ -218,19 +218,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   CONSUMED by `pipeline/watch.mjs --dip` (DL2 — polymorphic reader) — NOT app-imported (watchlist.json is
   the app's, kept separate).
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
-  a flat array of `{id, exitPrice, tripwire, horizon, path, enteredUnder, ts}` (`path`/`enteredUnder`
-  added additively by P4a — the js/paths.mjs entry-path declaration; legacy entries without them stay
-  valid). When Ben declares a patient/accumulation hold ("accumulate nest, exit 4,848, tripwire 4,678,
-  multi-day") the agent appends/upserts an entry (the greenlist pattern — hand-edit, `holdthesis.mjs
-  upsertThesis`, or `thesis.mjs set … --path <key>` which declares the path/enteredUnder here); a
-  14-day TTL prunes stale
+  a flat array of `{id, exitPrice, tripwire, horizon, window, path, enteredUnder, ts}`
+  (`path`/`enteredUnder` added additively by P4a — the js/paths.mjs entry-path declaration; `window`
+  — the declared exit window, "h-h" local hours — added additively by VN-2; legacy entries without
+  them stay valid). When Ben declares a patient/accumulation hold ("accumulate nest, exit 4,848,
+  tripwire 4,678, multi-day") the agent appends/upserts an entry (the greenlist pattern — hand-edit,
+  `holdthesis.mjs upsertThesis`, or `thesis.mjs set … --tripwire <gp> --exit <gp> --window <h-h>
+  --path <key>`, which VN-2 made the full declared-plan writer); a 14-day TTL prunes stale
   intent. `watch.mjs` reads it READ-ONLY through `pipeline/lib/holdthesis.mjs` and passes it into
-  `convictionGate` (`lib/watchstate.mjs`): while the live price holds ABOVE the declared tripwire, the
-  EXPECTED-underwater `UNDERWATER`/`CUT-CANDIDATE` headline is silenced to an armed note (being
-  underwater vs the instant-clear IS the plan); below the tripwire the real-risk headline fires.
-  `momVerdict` is untouched (the verdict stays honest); only the headline is gated. The Gate-2
-  breakdown `CUT` is never silenced. Ships empty (`[]`); fixture-pinned in
-  `pipeline/lib/holdthesis.test.mjs` + `pipeline/watchstate.test.mjs`.
+  `convictionGate` (`lib/watchstate.mjs`): while the live price holds ABOVE the declared tripwire,
+  the EXPECTED signals — `UNDERWATER`/`CUT-CANDIDATE` and (VN-2) `LIST-TO-CLEAR` — are silenced to
+  an armed note (the pre-peak trough is the plan, not news), and the shared display layer renders
+  the lot as the `HOLD — per thesis: exit … · abort < …` frame (MONITORING.md step 4); below the
+  tripwire the real-risk headline fires and normal escalation resumes.
+  `momVerdict` is untouched (the raw verdict stays honest in the ledger). The Gate-2
+  breakdown `CUT` is never silenced or frame-masked. Ships empty (`[]`); fixture-pinned in
+  `pipeline/lib/holdthesis.test.mjs` + `pipeline/watchstate.test.mjs` + `pipeline/verdictpersist.test.mjs`.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
   `items` are dropped from the DERIVED merch views (`positions.json` phantom lots + unmatched-harvest
@@ -314,7 +317,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
     to print a per-held reminder. **P4a** — `set … --path <key> [--entered-under <key>]` ALSO declares
     the path-engine entry path into the TRACKED root `hold-thesis.json` via `holdthesis.upsertThesis`,
-    preserving any existing plan fields; enteredUnder defaults to the path on first declaration),
+    preserving any existing plan fields; enteredUnder defaults to the path on first declaration.
+    **VN-2** — with `--path`, a numeric `--tripwire`, `--exit <gp>` and `--window <h-h>` now ride the
+    hold-thesis entry too (parseGp; omitted/unparseable flags preserve the existing values), making
+    one command the full declared-plan writer the thesis render frame reads),
     `cash.mjs` (CLI to DERIVE / re-anchor / clear the idle-cash balance: bare = the derived balance
     (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/cashderive.mjs`); `<amount>` =
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch.mjs`'s

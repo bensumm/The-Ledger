@@ -445,27 +445,35 @@ of the numbered signals, in more detail:
        armed…`) rather than alerting. This is the codified override-discipline "require conviction
        (0.5% or sustained)" — the fix for the 2026-07-06 too-tight tripwire (a level broke −0.9% then
        bounced within one pass).
-     - **THESIS silence (TG1) — a declared hold plan silences the EXPECTED-underwater headline.** A
+     - **THESIS silence (TG1; VN-2 widened) — a declared hold plan silences the EXPECTED signals.** A
        patient/accumulation hold is *definitionally* underwater on the instant-clear from the moment
        its bid fills, so `UNDERWATER`/`CUT-CANDIDATE` cries wolf every pass on a lot where being
        underwater IS the plan. When an **agent-written hold thesis** (`hold-thesis.json`, read via
-       `lib/holdthesis.mjs`) declares `{exitPrice, tripwire, horizon}` for the item AND the live price
-       still holds **ABOVE the declared tripwire**, `convictionGate` returns **ARMED, not a headline**
-       (`per thesis (multi-day): expected-underwater — silent above tripwire X, exit Y; headline only
-       on a break below.`). Below the tripwire it **falls through** to the normal escalation above so
-       the *real* risk headlines. The RAW verdict is UNCHANGED (`momVerdict` is untouched; the ledger
-       still logs `UNDERWATER`/`CUT-CANDIDATE`, honest) — the headline is gated here, and the
-       rendered label separately rides the VN-1 display persistence above.
+       `lib/holdthesis.mjs`) declares `{exitPrice, tripwire, horizon, window}` for the item AND the
+       live price still holds **ABOVE the declared tripwire**, `convictionGate` returns **ARMED, not a
+       headline** — for `UNDERWATER`/`CUT-CANDIDATE` and (**VN-2**) for **`LIST-TO-CLEAR`** too: on a
+       declared hold the pre-peak trough's band-top "clear" is exactly the expected dip the declared
+       abort level supersedes (the band-flip frame was re-litigating the plan — PLAN-VERDICT-NOISE
+       RC7). Below the tripwire it **falls through** to the normal escalation above so the *real* risk
+       headlines. The RAW verdict is UNCHANGED (`momVerdict` is untouched; the ledger
+       still logs `UNDERWATER`/`CUT-CANDIDATE`/`LIST-TO-CLEAR`, honest) — the headline is gated here.
+       **VN-2 render frame:** on both console surfaces a declared lot above its tripwire also RENDERS
+       as the plan — `HOLD — per thesis (<path>): exit <declared exitPrice, or the diurnal ASK off the
+       in-hand 1h series on watch.mjs, else "exit per plan"> @ <window>h local · abort < <tripwire>` —
+       via the shared display layer (`heldDisplay`), with the raw band-flip read demoted to the note.
+       The frame exit is the DECLARED/diurnal level, never the 2h band top (the band top under-priced
+       the diurnal exit — the 43.60m-vs-44.22m Masori leak). Declare it at entry:
+       `node pipeline/thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
        **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
-       silenced by a thesis; `LIST-TO-CLEAR` (a live 2h breakdown) is excluded from the silence; and
+       silenced (or frame-masked) by a thesis; and
        absent a thesis (empty store) behavior is byte-identical to today. The thesis is a *declaration*
        Ben makes — never a market claim; it silences a known-expected signal, never manufactures a new
        one. The store is TRACKED (`hold-thesis.json` at repo root, agent-written like the greenlist,
        14-day TTL); watch reads it READ-ONLY.
      The headline alert count reflects only **confirmed** escalations + the always-immediate
-     breakdowns / UNDERWATER / FALLING / CANCEL-BID (an UNDERWATER/CUT-CANDIDATE is suppressed only
-     when a declared hold thesis silences it above the tripwire — TG1). Armed candidates (including
-     thesis-armed) are visible in the notes, never the headline.
+     breakdowns / UNDERWATER / FALLING / CANCEL-BID (an UNDERWATER/CUT-CANDIDATE/LIST-TO-CLEAR is
+     suppressed only when a declared hold thesis silences it above the tripwire — TG1/VN-2). Armed
+     candidates (including thesis-armed) are visible in the notes, never the headline.
 2. **Live re-quoted buy-at / list-at**, `break-even`-floored — never list below the shared
    `breakEven()` (tax-capped; see CLAUDE.md "Break-even").
 3. **Per-item RISK read**: spread width, two-sided liquidity (limiting side), regime, unit

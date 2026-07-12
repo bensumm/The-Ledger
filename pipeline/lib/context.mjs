@@ -126,23 +126,45 @@ export function rawHeldToken(row, be, mv) {
      with no watch loop running the prior is stale/absent, so this degrades to the instantaneous
      verdict: an honest degrade, documented in MONITORING.md step 4). */
 export function heldDisplay({ row = null, be = null, mv = null, prior = null,
-  nowMs = Date.now(), persistMs = VERDICT_PERSIST_MS } = {}) {
+  nowMs = Date.now(), persistMs = VERDICT_PERSIST_MS, thesis = null, diurnalAsk = null } = {}) {
   const raw = rawHeldToken(row, be, mv);
   const immediate = !!(mv && mv.action === 'CUT' && mv.gate === 2);   // the Gate-2 breakdown CUT invariant
-  const vp = verdictPersistence(prior, { candidate: raw, immediate, now: nowMs, persistMs });
+  // VN-2 THESIS RENDER FRAME (RC7): a lot with a DECLARED plan whose live price still holds ABOVE
+  // the declared tripwire RENDERS as the plan — `HOLD — per thesis: exit <declared> @ <window> ·
+  // abort < <tripwire>` — with the band-flip read demoted to the raw/notes layer. The exit is the
+  // DECLARED exitPrice (falling back to the caller-supplied diurnal ASK off the in-hand 1h series —
+  // never the 2h band top, which under-priced the diurnal exit: the 43.60m-band-top-vs-44.22m-peak
+  // money leak). The Gate-2 breakdown CUT ALWAYS overrides the frame (`immediate` above — same
+  // precedence convictionGate #1 encodes); live at/below the tripwire → frame off, normal
+  // escalation resumes. Display-only: momVerdict + the raw ledger token are untouched.
+  const live = row ? row.quickSell : null;
+  const frameActive = !immediate && thesis && thesis.tripwire != null && live != null && live > thesis.tripwire;
+  let frameLabel = null;
+  if (frameActive) {
+    const exit = thesis.exitPrice ?? diurnalAsk ?? null;
+    const exitBit = exit != null ? `exit ${fmtP(exit)}` : 'exit per plan';
+    const winBit = thesis.window != null ? ` @ ${thesis.window}h local` : '';
+    const pathBit = thesis.path != null ? ` (${thesis.path})` : '';
+    frameLabel = `HOLD — per thesis${pathBit}: ${exitBit}${winBit} · abort < ${fmtP(thesis.tripwire)}`;
+  }
+  const candidate = frameActive ? 'HOLD — per thesis' : raw;
+  const vp = verdictPersistence(prior, { candidate, immediate, now: nowMs, persistMs });
   const min = ms => Math.max(0, Math.round((ms || 0) / 60000));
-  let label = vp.displayVerdict ?? raw;
+  const token = vp.displayVerdict ?? candidate;
+  // the frame's full label replaces the bare frame token whenever the frame is what displays
+  let label = (frameActive && token === 'HOLD — per thesis') ? frameLabel : token;
   if (vp.arming && vp.armedKey != null)
     label += ` (${vp.armedKey} arming ~${min(vp.armedMs)}m/${min(persistMs)}m)`;
   if (vp.unreliableThisPass)
     label += ` (read unreliable this pass${row && row.reliableReason ? ` — ${row.reliableReason}` : ''})`;
-  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass;
-  const mvDisplay = diverges ? { synthetic: true, verdict: label, raw } : mv;
+  const frameShown = frameActive && token === 'HOLD — per thesis';
+  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass || frameShown;
+  const mvDisplay = diverges ? { synthetic: true, kind: frameShown ? 'frame' : 'persist', verdict: label, raw } : mv;
   return {
-    raw, token: vp.displayVerdict ?? raw, label, arming: vp.arming, armedKey: vp.armedKey,
+    raw, token, label, frame: frameShown, arming: vp.arming, armedKey: vp.armedKey,
     armedMs: vp.armedMs, persistMs, confirmedThisPass: vp.confirmedThisPass,
     unreliableThisPass: vp.unreliableThisPass, mvDisplay,
-    state: { displayVerdict: vp.displayVerdict ?? raw,
+    state: { displayVerdict: vp.displayVerdict ?? candidate,
       verdictArmedKey: vp.arming ? vp.armedKey : null,
       verdictArmedSince: vp.arming ? vp.armedSince : null },
   };
@@ -165,7 +187,7 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
 export function positionStage(ctx, {
   held = false, qty = null, avgCost = null, buyTs = null,
   ask = null, bid = null, support = null, cutTrigger = null,
-  watchStatePrior = null, nowMs = Date.now(), thesisEntry = null,
+  watchStatePrior = null, nowMs = Date.now(), thesisEntry = null, diurnalAsk = null,
 } = {}) {
   const row = ctx.market ? ctx.market.row : null;
   const ts5m = ctx.intraday ? ctx.intraday.ts5m : null;
@@ -203,7 +225,8 @@ export function positionStage(ctx, {
   let display = null;
   if (held && row) {
     const freshD = deltas ? (deltas.firstSeen || deltas.reset) : true;
-    display = heldDisplay({ row, be, mv, prior: freshD ? null : watchStatePrior, nowMs });
+    display = heldDisplay({ row, be, mv, prior: freshD ? null : watchStatePrior, nowMs,
+      thesis: thesisEntry, diurnalAsk });   // VN-2: declared plan → render frame (quote passes the declared plan verbatim; watch adds the diurnal-ask fallback)
     if (newStateEntry) {
       newStateEntry.displayVerdict = display.state.displayVerdict;
       newStateEntry.verdictArmedKey = display.state.verdictArmedKey;
@@ -397,6 +420,10 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
   const disp = p.display || null;
   const mv = disp ? disp.mvDisplay : heldMomVerdict(ctx);
   if (mv && mv.synthetic) {
+    if (mv.kind === 'frame')
+      return mode === 'verbose'
+        ? `${mv.verdict} — the declared plan governs (raw band-flip read this pass: ${mv.raw}). Below the tripwire normal escalation resumes; a Gate-2 breakdown CUT always overrides the frame.`
+        : mv.verdict;
     return mode === 'verbose'
       ? `${mv.verdict} — displayed verdict is persistence-gated (raw read this pass: ${mv.raw}); a change confirms only once it holds, except a Gate-2 breakdown CUT which is always immediate.`
       : mv.verdict;

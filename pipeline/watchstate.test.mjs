@@ -302,12 +302,26 @@ ok('TG1 INVARIANT: a Gate-2 breakdown CUT is NEVER silenced by a thesis, even ab
   assert.equal(g.reason, 'breakdown');
 });
 
-ok('TG1: LIST-TO-CLEAR is NOT thesis-silenced (a live 2h breakdown is a real move, gated by #4 not thesis)', () => {
-  // even underwater + above the tripwire, a LIST-TO-CLEAR follows its own V7 arm-then-confirm, not the thesis.
+ok('TG1 (VN-2): LIST-TO-CLEAR IS thesis-silenced ABOVE the tripwire (the expected pre-peak trough)', () => {
+  // VN-2 supersedes the original exclusion: on a DECLARED hold above its tripwire, the band-flip
+  // frame's "clear at the band top" is the expected dip the declared abort level supersedes (RC7) —
+  // even a PERSISTED breakdown only ARMS while the plan holds.
   const g = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, price: 4700, underwater: true,
     thesis: NEST_THESIS, breakdownMs: PERSIST, persistMs: PERSIST });
-  assert.equal(g.reason, 'clear', 'LIST-TO-CLEAR escalates on its own held breakdown, unaffected by the thesis');
-  assert.equal(g.escalate, true);
+  assert.equal(g.escalate, false, 'above the tripwire, a declared plan silences LIST-TO-CLEAR');
+  assert.equal(g.armed, true);
+  assert.equal(g.reason, 'thesis-armed');
+});
+
+ok('TG1 (VN-2): LIST-TO-CLEAR BELOW the tripwire resumes its own #4 arm-then-confirm (real risk headlines)', () => {
+  const g = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, price: 4650, underwater: true,
+    thesis: NEST_THESIS, breakdownMs: PERSIST, persistMs: PERSIST });
+  assert.equal(g.escalate, true, 'below the tripwire the thesis no longer silences — V7 escalation stands');
+  assert.equal(g.reason, 'clear');
+  // and WITHOUT a declared thesis, LIST-TO-CLEAR behavior is byte-identical to V7 (arm-then-confirm on time)
+  const noThesis = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, breakdownMs: PERSIST, persistMs: PERSIST });
+  assert.equal(noThesis.reason, 'clear');
+  assert.equal(noThesis.escalate, true);
 });
 
 ok('TG1 SAFE-DEGRADE: no thesis (or a thesis with no numeric tripwire) → byte-identical to today', () => {

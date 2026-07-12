@@ -26,11 +26,13 @@
  * cache would silently forget the plan on the next machine. It carries item ids/prices only (no PII).
  *
  * Store shape: a flat ARRAY of entries (mirrors the greenlist), one per declared lot:
- *   { id, exitPrice, tripwire, horizon, path, enteredUnder, ts }
+ *   { id, exitPrice, tripwire, horizon, window, path, enteredUnder, ts }
  *     id           — item id (number)
- *     exitPrice    — the declared target sell (gp); display only
+ *     exitPrice    — the declared target sell (gp); feeds the VN-2 thesis render frame's exit
  *     tripwire     — the declared structural break level (gp); THE gating level
  *     horizon      — free-text plan horizon ("multi-day", "overnight", …); display only
+ *     window       — (VN-2, optional) the declared exit WINDOW, local hours "h-h" (e.g. "1-3" =
+ *                    the diurnal peak window the exit targets); display/frame only, never gates
  *     path         — (P4a, optional) the CURRENT declared path key for the lot (js/paths.mjs
  *                    PATH_KEYS — 'value-hold' / 'hold-recovery' / …); null when undeclared
  *     enteredUnder — (P4a, optional) the path key the lot was ENTERED under; feeds the path
@@ -43,6 +45,8 @@
  * (no path/enteredUnder keys) stay fully valid everywhere — load/lookup/prune never read them, and
  * upsertThesis defaults both to null. The path engine treats a missing path/enteredUnder as
  * "undeclared" (no migration signal), exactly the degrade-not-throw contract js/paths.mjs relies on.
+ * VN-2 adds `window` under the same contract: additive, optional, defaults null, never read by
+ * load/lookup/prune — only the render frame displays it.
  */
 import fs from 'node:fs';
 
@@ -73,10 +77,10 @@ export function thesisFor(store, id) {
    fully-shaped entry, so a store of new-shape entries reads identically to the legacy shape wherever
    those keys go unused. */
 export function upsertThesis(store,
-  { id, exitPrice = null, tripwire = null, horizon = null, path = null, enteredUnder = null } = {},
+  { id, exitPrice = null, tripwire = null, horizon = null, window: win = null, path = null, enteredUnder = null } = {},
   now = Math.floor(Date.now() / 1000)) {
   const rest = (store || []).filter(e => !(e && e.id === id));
-  return [...rest, { id, exitPrice, tripwire, horizon, path, enteredUnder, ts: now }];
+  return [...rest, { id, exitPrice, tripwire, horizon, window: win, path, enteredUnder, ts: now }];
 }
 
 /* clearThesis — drop every entry for an id (the plan is done / abandoned). PURE. */

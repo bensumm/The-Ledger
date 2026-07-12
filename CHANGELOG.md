@@ -10,6 +10,25 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### VN-2 — thesis-aware exit frame (2026-07-11, PLAN-VERDICT-NOISE F3, pipeline-only — NO APP_VERSION)
+**RC7, the frame mismatch (Ben's key point).** The churn session's positions were entered on the
+DIURNAL thesis (buy the dip window, sell the peak window), but `momVerdict` judges every hold with a
+band-flip frame — so the expected pre-peak trough kept flagging LIST-TO-CLEAR/CUT, and the band-top
+"clear" (43.60m Masori) sat BELOW the peak target the lot was entered to capture (44.22m): the noise
+frame was actively losing money vs the plan. **What shipped:** (1) `hold-thesis.json` grows an
+additive `window` field ("h-h" local exit window) and `thesis.mjs set … --path` now writes the FULL
+declared plan — numeric `--tripwire` (parseGp), new `--exit <gp>`, `--window` — preserving existing
+values when omitted. (2) `convictionGate` 1b (TG1) now ALSO thesis-silences **LIST-TO-CLEAR** above
+the declared tripwire (supersedes the original exclusion — on a declared hold the band-top clear IS
+the expected dip; below the tripwire the V7 escalation resumes; the Gate-2 CUT exemption untouched,
+checked first). (3) The shared display layer renders a declared lot above its tripwire as
+`HOLD — per thesis (<path>): exit <declared exitPrice | diurnal ASK (watch.mjs, off the in-hand 1h
+series, zero extra fetch) | "exit per plan"> @ <window>h local · abort < <tripwire>`, with the raw
+band-flip read demoted to the note — fixing the band-top-below-peak exit mis-pricing. Undeclared
+lots are byte-identical (VN-1 stays the floor). `momVerdict`/`js/quotecore.js`/`js/paths.mjs`
+untouched. Pinned by the verdictpersist.test.mjs thesis-frame fixtures + the amended
+watchstate.test.mjs TG1 cases.
+
 ### VN-1 — persistence-gated DISPLAYED verdict (2026-07-11, PLAN-VERDICT-NOISE F1, pipeline-only — NO APP_VERSION)
 **The incident (n=1 session).** A Berserker ring lot parked ON break-even, re-read every 3 min, swung
 `HOLD → UNDERWATER → NO-READ → CUT → CUT-CANDIDATE → HOLD → LIST-TO-CLEAR → …` (~12 label flips in 30

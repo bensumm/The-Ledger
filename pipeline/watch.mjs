@@ -62,7 +62,7 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/mar
 import { readOpenPositions } from './lib/positions.mjs';
 import { readExchangeLog, activeOffers } from './lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from '../js/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand)
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
@@ -586,8 +586,19 @@ async function main() {
       // VN-1: the persistence-gated DISPLAY read (shared heldDisplay, lib/context.mjs) — what the
       // table/brief/note render; the raw verdict stays what the ledger logs. Fields ride
       // newState[key] ADDITIVELY (this loop stays the ONE writer of the state file).
+      // VN-2: the declared thesis activates the render frame; when the plan declares no exitPrice,
+      // the diurnal ASK off the already-in-hand 1h series is the fallback exit (zero extra fetch).
+      let diurnalAsk = null;
+      if (it._thesis && it._thesis.tripwire != null && it._thesis.exitPrice == null) {
+        try {
+          const prof = hourProfile(it.ts1h, { nights: 7 });
+          const dr = prof ? deriveDiurnalRange(prof, { liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null }) : null;
+          diurnalAsk = dr && dr.ask != null ? dr.ask : null;
+        } catch { /* fallback only — the frame degrades to "exit per plan" */ }
+      }
       it._display = heldDisplay({ row: it.row, be: it.be, mv,
-        prior: (d.firstSeen || d.reset) ? null : priorState[key], nowMs });
+        prior: (d.firstSeen || d.reset) ? null : priorState[key], nowMs,
+        thesis: it._thesis, diurnalAsk });
       newState[key].displayVerdict = it._display.state.displayVerdict;
       newState[key].verdictArmedKey = it._display.state.verdictArmedKey;
       newState[key].verdictArmedSince = it._display.state.verdictArmedSince;

@@ -142,6 +142,70 @@ ok('FIXTURE 2b: the Gate-2 CUT headline layer (convictionGate) is still escalati
 });
 
 /* =============================================================================================
+ * 3. THESIS FRAME (VN-2) — the declared plan governs the render above its tripwire
+ * ============================================================================================= */
+
+// the Masori shape: entered on the diurnal thesis, exit 44.22m @ the 23-06h peak window,
+// abort 42.5m; band-flip frame keeps emitting LIST-TO-CLEAR at the band top (43.60m) pre-peak.
+const MASORI_THESIS = { id: 27235, exitPrice: 44_220_000, tripwire: 42_500_000,
+  horizon: 'overnight', window: '23-6', path: 'value-hold', enteredUnder: 'value-hold' };
+
+ok('FIXTURE 3: above the tripwire, the frame renders the DECLARED exit (not the band top) on both surfaces', () => {
+  const row = rowOf({ quickBuy: 43_000_000, quickSell: 43_110_000, optBuy: 42_900_000,
+    optSell: 43_600_000, rawBandLo: 42_900_000, rawBandHi: 43_600_000, mom: 'breakdown' });
+  const mv = { action: 'CLEAR', verdict: 'LIST-TO-CLEAR', listAt: 43_110_000, gate: 2 };
+  const d = heldDisplay({ row, be: 43_070_000, mv, prior: null, nowMs: T0, thesis: MASORI_THESIS });
+  assert.equal(d.frame, true);
+  assert.equal(d.token, 'HOLD — per thesis');
+  assert.match(d.label, /HOLD — per thesis \(value-hold\): exit 44\.22m @ 23-6h local · abort < 42\.50m/);
+  assert.equal(d.raw, 'LIST-TO-CLEAR', 'the raw band-flip read stays honest underneath');
+  const ctx = { market: { row }, intraday: {}, position: { be: 43_070_000, mv, display: d } };
+  assert.equal(renderHeldVerdict(ctx, { mode: 'compact' }), d.label);
+  assert.ok(renderHeldVerdict(ctx, { mode: 'verbose' }).includes('raw band-flip read this pass: LIST-TO-CLEAR'));
+});
+
+ok('FIXTURE 3b: the frame exit falls back to the caller-supplied diurnal ASK when no exitPrice declared', () => {
+  const row = rowOf({ quickSell: 43_110_000 });
+  const th = { ...MASORI_THESIS, exitPrice: null };
+  const d = heldDisplay({ row, be: 43_070_000, mv: null, prior: null, nowMs: T0, thesis: th, diurnalAsk: 44_000_000 });
+  assert.match(d.label, /exit 44m/);
+  const d2 = heldDisplay({ row, be: 43_070_000, mv: null, prior: null, nowMs: T0, thesis: th });
+  assert.match(d2.label, /exit per plan/, 'no declared exit + no diurnal ask → honest "exit per plan"');
+});
+
+ok('FIXTURE 3c: live AT/BELOW the tripwire → frame off, normal escalation resumes', () => {
+  const row = rowOf({ quickSell: 42_400_000, mom: 'breakdown' });
+  const mv = { action: 'CLEAR', verdict: 'LIST-TO-CLEAR', listAt: 42_400_000, gate: 2 };
+  // incumbent was the frame; the raw LIST-TO-CLEAR (sev 2 vs sev 0) arms-then-confirms per VN-1
+  const d = heldDisplay({ row, be: 43_070_000, mv, prior: { displayVerdict: 'HOLD — per thesis' },
+    nowMs: T0, thesis: MASORI_THESIS });
+  assert.equal(d.frame, false);
+  assert.equal(d.arming, true, 'the real escalation arms against the frame incumbent');
+  assert.equal(d.armedKey, 'LIST-TO-CLEAR');
+});
+
+ok('FIXTURE 3d: a Gate-2 breakdown CUT OVERRIDES the frame — immediate at the label layer', () => {
+  const row = rowOf({ quickSell: 43_000_000, mom: 'breakdown' });
+  const mv = { action: 'CUT', verdict: 'CUT', listAt: 43_000_000, gate: 2 };
+  const d = heldDisplay({ row, be: 43_070_000, mv, prior: { displayVerdict: 'HOLD — per thesis' },
+    nowMs: T0, thesis: MASORI_THESIS });   // live 43.0m is still ABOVE the 42.5m tripwire — the CUT wins anyway
+  assert.equal(d.frame, false);
+  assert.equal(d.token, 'CUT');
+  assert.equal(d.label, 'CUT');
+});
+
+ok('FIXTURE 3e (alert layer): convictionGate thesis-silences LIST-TO-CLEAR above the tripwire only', () => {
+  const above = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, price: 43_110_000, underwater: false,
+    thesis: MASORI_THESIS, breakdownMs: 10 * MIN, persistMs: 4 * MIN });
+  assert.equal(above.escalate, false);
+  assert.equal(above.reason, 'thesis-armed');
+  const below = convictionGate({ verdict: 'LIST-TO-CLEAR', gate: 2, price: 42_400_000, underwater: false,
+    thesis: MASORI_THESIS, breakdownMs: 10 * MIN, persistMs: 4 * MIN });
+  assert.equal(below.escalate, true, 'below the tripwire the V7 escalation stands');
+  assert.equal(below.reason, 'clear');
+});
+
+/* =============================================================================================
  * 4. NO-READ INTERLEAVE — end-to-end through heldDisplay + renderHeldVerdict
  * ============================================================================================= */
 

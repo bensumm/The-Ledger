@@ -241,7 +241,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   arm-then-confirm before the label changes, the Gate-2 breakdown CUT is always immediate, and a
   NO-READ against an established incumbent demotes to a `(read unreliable this pass)` note
   (`verdictPersistence`/`heldDisplay`; MONITORING.md step 4 is the home; the raw `momVerdict` is
-  untouched and stays what the ledger logs). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
+  untouched and stays what the ledger logs). **VN-2: a DECLARED hold plan
+  (`thesis.mjs set … --tripwire --exit --window --path`, hold-thesis.json) renders above its
+  tripwire as the `HOLD — per thesis: exit <declared/diurnal> · abort < <tripwire>` frame** — the
+  exit is the declared/diurnal level, never the 2h band top — and the TG1 headline silence now
+  covers LIST-TO-CLEAR too (the expected pre-peak trough); Gate-2 CUT overrides everything.
+  **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
   reads the root `offers.json` book (so `HOLD — ask filling` actually prints — quote lacked an
   offer read before), reads the watch loop's `.cache/watch-state.json` READ-ONLY for a conviction
   line, renders the verdict via the ONE shared `renderHeldVerdict`, and runs one `loadSnapshot()`

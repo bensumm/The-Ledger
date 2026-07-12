@@ -210,9 +210,13 @@ export function advanceState(prior, cur, now) {
         the byte-identical breakdown invariant — a live 2h breakdown while underwater is not a thing
         to sit on; delaying it is the exact failure that cost the bludgeon exit. NEVER silenced by a
         thesis (a real breakdown is real risk, thesis or not).
-     1b. THESIS silence (TG1) — a declared-thesis underwater/CUT-CANDIDATE lot whose live price is
-        still ABOVE the tripwire → ARM (visible note), no headline. Below the tripwire → fall through.
-        Excludes LIST-TO-CLEAR (a live 2h breakdown is a real move, gated by #4, not thesis-silenced).
+     1b. THESIS silence (TG1; VN-2 widened) — a declared-thesis lot whose live price is still ABOVE
+        the tripwire → ARM (visible note), no headline, for the underwater/CUT-CANDIDATE signals AND
+        (VN-2) for LIST-TO-CLEAR: on a declared hold the pre-peak trough's "clear at the band top"
+        is exactly the expected dip the declared abort level supersedes — the band-flip frame was
+        re-litigating the plan (PLAN-VERDICT-NOISE RC7). Below the tripwire → fall through (a
+        LIST-TO-CLEAR resumes its own #4 arm-then-confirm). The Gate-2 CUT exemption (#1) is
+        untouched — a real breakdown is never thesis-silenced.
      2. Structural break CONVINCINGLY broken — price ≥δ below support (i.e. below the cut-trigger) OR
         below support for 2 consecutive passes → escalate. Codifies the override-discipline
         "require conviction (0.5% or two passes)"; the direct fix for the 2026-07-06 too-tight
@@ -234,13 +238,14 @@ export function convictionGate({ verdict, gate,
   if (verdict === 'CUT' && gate === 2)
     return { escalate: true, armed: false, reason: 'breakdown' };
 
-  // 1b. THESIS silence (TG1) — expected-underwater is not news. A declared thesis with a numeric
-  //     tripwire silences the UNDERWATER/CUT-CANDIDATE headline while the live price holds ABOVE the
-  //     tripwire → ARM, no headline. Below the tripwire, fall through to the normal escalation so the
-  //     real risk headlines. LIST-TO-CLEAR is excluded (a live 2h breakdown is a real move, not the
-  //     expected-underwater signal). No thesis / no numeric tripwire / no price → skip (byte-identical).
+  // 1b. THESIS silence (TG1; VN-2 widened) — an expected signal is not news. A declared thesis with
+  //     a numeric tripwire silences the UNDERWATER/CUT-CANDIDATE headline AND (VN-2) the
+  //     LIST-TO-CLEAR headline while the live price holds ABOVE the tripwire → ARM, no headline (the
+  //     pre-peak trough's band-top "clear" is the dip the declared abort level supersedes — RC7).
+  //     Below the tripwire, fall through to the normal escalation so the real risk headlines.
+  //     No thesis / no numeric tripwire / no price → skip (byte-identical).
   if (thesis && thesis.tripwire != null && price != null && price > thesis.tripwire
-      && verdict !== 'LIST-TO-CLEAR' && (underwater || verdict === 'CUT-CANDIDATE'))
+      && (underwater || verdict === 'CUT-CANDIDATE' || verdict === 'LIST-TO-CLEAR'))
     return { escalate: false, armed: true, reason: 'thesis-armed', thesis };
 
   const belowSupport = price != null && support != null && price < support;
