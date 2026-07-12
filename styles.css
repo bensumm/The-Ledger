@@ -138,7 +138,8 @@
   .star.on{color:var(--gold)}
   .ignbtn{cursor:pointer; font-size:15px; line-height:1; background:none; border:none; padding:2px 4px; opacity:.35; filter:grayscale(1)}
   .ignbtn.on{opacity:1; filter:none}
-  .reasonsel{background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:2px 6px; font-size:12px}
+  .reasonsel{background:var(--oak2); color:var(--parch); border:1px solid var(--line2); border-radius:4px; padding:2px 6px; font-size:12px}
+  .reasonsel option{background:var(--oak2); color:var(--parch)}
   .mini{font-size:11px; color:var(--muted)}
   .grade{display:inline-block; min-width:20px; text-align:center; font-weight:700; font-family:'IBM Plex Mono',monospace; border-radius:5px; padding:2px 6px; font-size:12px}
   /* S1: thin (gp-flow-only) grade flag — the big-ticket honesty marker; full text in its title tooltip */
