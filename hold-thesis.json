@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "id": 27229,
+    "exitPrice": 44340000,
+    "tripwire": 41500000,
+    "horizon": null,
+    "window": "22-00",
+    "path": "diurnal",
+    "enteredUnder": "diurnal",
+    "ts": 1783835675
+  },
+  {
+    "id": 6737,
+    "exitPrice": 3238000,
+    "tripwire": 3060000,
+    "horizon": null,
+    "window": "01-03",
+    "path": "diurnal",
+    "enteredUnder": "diurnal",
+    "ts": 1783835675
+  }
+]

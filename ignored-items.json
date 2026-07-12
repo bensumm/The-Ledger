@@ -7,7 +7,12 @@
     { "id": 5972, "name": "Papaya fruit", "reason": "farming" },
     { "id": 5501, "name": "Papaya sapling", "reason": "farming" },
     { "id": 22856, "name": "Celastrus sapling", "reason": "farming" },
-    { "id": 21480, "name": "Mahogany sapling", "reason": "farming" }
+    { "id": 21480, "name": "Mahogany sapling", "reason": "farming" },
+    { "id": 13190, "name": "Old school bond", "reason": "personal-use" },
+    { "id": 1201, "name": "Rune kiteshield", "reason": "boss-drop" },
+    { "id": 1079, "name": "Rune platelegs", "reason": "boss-drop" },
+    { "id": 1127, "name": "Rune platebody", "reason": "boss-drop" },
+    { "id": 1163, "name": "Rune full helm", "reason": "boss-drop" }
   ],
   "greenlisted": []
 }

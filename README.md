@@ -316,7 +316,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `monitor.mjs`
     (live read-only log-state snapshot; ARCH-1 — its in-memory held book now applies coffer-manual.log
     REMOVE tombstones via `reconstruct.buildTombstonedEvents`, the same purge sync/positions.json honor,
-    so a corrected/mobile lot never reappears as a phantom hold), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
+    so a corrected/mobile lot never reappears as a phantom hold. Also applies the shared `lib/ignored.mjs`
+    MERCH-book quarantine BY DEFAULT (2026-07-12) — held/offers/fills skip non-greenlisted ignored items
+    (farming/loot/personal-use) so `/morning` no longer reads them back as phantom positions; `--all` shows
+    the raw unfiltered log), `loop-tick.mjs` (multi-action `/loop` driver — time-gated multiplexer that
+    execs `watch.mjs` (positions) and `screen.mjs --mode all` (scan) on independent cadences from one loop;
+    scan is gated on `loadDerivedCash` availableCash ≥ `--min-idle`; state in `.cache/loop-state.json`;
+    pure driver, streams the sub-scripts' stdout, no fetch/writes), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
     to print a per-held reminder. **P4a** — `set … --path <key> [--entered-under <key>]` ALSO declares
     the path-engine entry path into the TRACKED root `hold-thesis.json` via `holdthesis.upsertThesis`,

@@ -23,8 +23,21 @@ import { readExchangeLog, activeOffers } from './lib/offers.mjs'; // shared log 
 import { breakEven } from '../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
 import { loadMapping } from './lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
+import { loadIgnored, quarantineEvents, offerQuarantined } from './lib/ignored.mjs'; // MERCH-book quarantine (shared with positions.json/watch)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.join(HERE, '..');
+
+// MERCH-book quarantine (Ben, 2026-07-12): the live-log reconstruction below double-counts farming
+// inputs / loot / personal-use consumables as "held" and their offers/fills as merch activity, so a
+// morning review reads them back as phantom positions (the Snapdragon/Battlestaff false-bug reports).
+// positions.json + watch already filter these via ignored.mjs; monitor was the ONE derived view that
+// didn't. Apply the SAME quarantine here by default — held, active offers, and recent fills all skip a
+// non-greenlisted ignored-item line — so the merch views agree. `--all` shows the full raw log for the
+// rare "let me see everything" ask (a greenlisted confirmed flip is never hidden — that's the audit path).
+const SHOW_IGNORED = process.argv.includes('--all');
+const ignoreCfg = loadIgnored(REPO);
+const quarantined = (id, price) => !SHOW_IGNORED && offerQuarantined(ignoreCfg, id, price);
 
 // item id -> name via the shared mapping loader (24h-cached, tolerates whichever cache shape
 // another script last wrote). Reduce its byId to the {id:name} lookup this snapshot needs.
@@ -36,10 +49,12 @@ const nm = id => name[id] || ('#'+id);
 const { logLines, rows, staleMin } = readExchangeLog();
 const ep = l => Date.parse(l.date+'T'+l.time);            // local wall-clock -> epoch
 const now = Date.now();                                    // real wall clock — detects a stalled log
-const active = activeOffers(rows);
+const activeAll = activeOffers(rows);
+const active = activeAll.filter(r => !quarantined(r.item, r.offer)); // merch-view: hide ignored-item offers by default
 
 const WIN_MIN = 30;
-const terminal = rows.filter(r => /BOUGHT|SOLD|CANCELLED/.test(r.state) && (now-ep(r)) <= WIN_MIN*60000);
+const terminalAll = rows.filter(r => /BOUGHT|SOLD|CANCELLED/.test(r.state) && (now-ep(r)) <= WIN_MIN*60000);
+const terminal = terminalAll.filter(r => !quarantined(r.item, r.offer)); // merch-view: hide ignored-item fills/cancels
 
 const ago = t => { const m = Math.round((now-ep(t))/60000); return m<=0?'just now':m+'m ago'; };
 const gp = n => Number(n).toLocaleString('en-US');
@@ -54,7 +69,10 @@ const gp = n => Number(n).toLocaleString('en-US');
 // the monitor's live-log FIFO re-materializes lots that positions.json has already purged → phantom
 // holds + wrong listing advice (observed live 2026-07-05). warn:false keeps the LH1 re-emit chatter
 // quiet on this frequently-re-run poll.
-const events = buildTombstonedEvents(logLines, { warn: false });
+const eventsRaw = buildTombstonedEvents(logLines, { warn: false });
+// merch-view: quarantine non-greenlisted ignored-item events out of the held reconstruction (same
+// filter positions.json applies). eventsRaw is kept for the hidden-count footer below.
+const events = SHOW_IGNORED ? eventsRaw : quarantineEvents(eventsRaw, ignoreCfg);
 const pos = reconstruct(events);
 let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:breakEven(o.buyEach) }));
 // Manual overrides. The Exchange Logger drops some SOLD events during fast same-second flipping, so
@@ -107,3 +125,14 @@ for (const h of held) {
 
 console.log('\nactive_item_ids:', active.map(r=>r.item).join(',') || '(none)');
 console.log('held_item_ids:', held.map(h=>h.item).join(',') || '(none)');
+
+// merch-view footer: name how many raw-log lines the quarantine hid this pass, so the filter is
+// visible (never silent) and the `--all` escape is discoverable. Held-hidden = the extra open lots the
+// unfiltered reconstruction would have shown (farming/loot/personal-use phantoms).
+if (!SHOW_IGNORED) {
+  const hiddenHeld = Math.max(0, reconstruct(eventsRaw).open.length - pos.open.length);
+  const hiddenOffers = activeAll.length - active.length;
+  const hiddenFills = terminalAll.length - terminal.length;
+  if (hiddenHeld + hiddenOffers + hiddenFills > 0)
+    console.log(`\n(quarantined from this merch view — held ${hiddenHeld}, offers ${hiddenOffers}, fills ${hiddenFills}; farming/loot/personal-use per ignored-items.json — pass --all to show)`);
+}

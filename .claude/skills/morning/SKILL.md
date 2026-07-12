@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.8
+version: 1.9
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -30,6 +30,16 @@ sync and say the overnight numbers may be stale rather than pushing from the wro
 - **Live truth** ← `node pipeline/monitor.mjs` (reads the exchange log directly, ~0 lag):
   resting offers still open (didn't fill), recent fills/cancels. Use monitor for
   freshness, positions.json for booked numbers — never re-sum the log yourself.
+  **Monitor now applies the MERCH-book quarantine by default (Ben, 2026-07-12):** its
+  held/offers/fills views skip non-greenlisted ignored items (farming inputs, loot,
+  personal-use consumables) — the SAME `ignored-items.json` filter positions.json/watch use.
+  So do NOT report an ignored item as a phantom position or a "reconstruction bug" — that
+  was the failure this fixes (the Snapdragon/Battlestaff false-bug reports, 2026-07-12).
+  **Ben doesn't want to hear about quarantined items unless he asks** — the monitor footer
+  names how many lines it hid; only run `node pipeline/monitor.mjs --all` if Ben explicitly
+  asks to see them. Pricing help on an ignored item is still fine when Ben asks (the
+  quarantine is a VIEW filter, not a gag — memory `pricing-ok-on-ignored-items`); this rule
+  is just "don't surface them unprompted in the overnight reconstruction".
 
 **Honest gap — no fabricated intent.** Skills are stateless: there is no record of what
 bids were placed last night. Reconstruct intent from the currently-open offers plus Ben's
