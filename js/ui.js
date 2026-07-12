@@ -227,8 +227,9 @@ export async function loadRepoIgnored(){
   renderIgnore();
 }
 export function renderIgnore(){
-  document.getElementById('ignoreBadge').textContent=STATE.ignored.length;
-  const body=document.getElementById('ignoreBody'), empty=document.getElementById('ignoreEmpty');
+  const badge=document.getElementById('ignoreBadge'), body=document.getElementById('ignoreBody'), empty=document.getElementById('ignoreEmpty');
+  if(!badge||!body||!empty) return;   // graceful degrade if the Ignore markup isn't present (e.g. a cached old index.html mid-deploy) — never throw out of renderAll and stall init
+  badge.textContent=STATE.ignored.length;
   if(!STATE.ignored.length){ body.innerHTML=''; empty.classList.remove('hidden');
     empty.innerHTML='<div class="big">Nothing ignored</div><div class="sm">Hit 🚫 on a Finder row to quarantine an item from the merch views (farming inputs, loot, personal-use). It stays in the fill log for the audit — the pipeline hides it on the next sync.</div>'; return; }
   empty.classList.add('hidden');
