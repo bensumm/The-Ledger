@@ -17,8 +17,9 @@
  */
 import assert from 'node:assert/strict';
 import {
-  nominateDip, selectNominations,
-  DL4_WIDE_BAND_PCT, DL4_WIDE_DAY_PCT, DL4_MAX_NOMINATIONS_PER_SCAN, DL4_MIN_GP_FLOW, DIP_LOOP_LIQUID_FLOOR,
+  nominateDip, selectNominations, pruneDipPool, reconcileDipPool,
+  DL4_WIDE_BAND_PCT, DL4_WIDE_DAY_PCT, DL4_MAX_NOMINATIONS_PER_SCAN, DL4_MIN_GP_FLOW, DL4_MIN_ABS_SWING,
+  DL4_POOL_MAX_AGE_DAYS, DL4_POOL_CAP_LIQUID, DL4_POOL_CAP_ILLIQUID, DIP_LOOP_LIQUID_FLOOR,
 } from '../js/quotecore.js';
 
 let pass = 0;
@@ -34,12 +35,13 @@ const band = (lo, hi, sawLow = true, sawHigh = true) => ({ bandLo: lo, bandHi: h
 
 // --- 1. FIRES liquid track: wide band + limitVol ≥ floor + two-sided ---------------------------
 ok('nominateDip: wide band + liquid two-sided → track:liquid', () => {
-  // band amplitude = (1050-1000)/1000 = 5% ≥ DL4_WIDE_BAND_PCT; limitVol = min(5000,5000) ≥ floor.
-  const n = nominateDip(v24(1000, 1050, 5000, 5000), band(1000, 1050));
+  // band amplitude = (1060-1000)/1000 = 6% ≥ DL4_WIDE_BAND_PCT; swing 60 ≥ DL4_MIN_ABS_SWING; limitVol ≥ floor.
+  const n = nominateDip(v24(1000, 1060, 5000, 5000), band(1000, 1060));
   assert.ok(n, 'nominates');
   assert.equal(n.track, 'liquid');
   assert.equal(n.twoSided, true);
   assert.ok(n.amplitude >= DL4_WIDE_BAND_PCT);
+  assert.ok(n.swingGp >= DL4_MIN_ABS_SWING);
   assert.equal(n.limitVol, 5000);
   assert.ok(n.score > 0);
 });
@@ -81,16 +83,18 @@ ok('nominateDip: missing volume → null (degrade, never guess)', () => {
 
 // --- 5. amplitude prefers band over 24h-range when band present --------------------------------
 ok('nominateDip: amplitude reads the BAND when present, not the 24h range', () => {
-  // 24h range is huge (50%) but band is tight (4%) — nomination amplitude must be the band's 4%.
-  const n = nominateDip(v24(1000, 1500, 5000, 5000), band(1000, 1040));
+  // 24h range is huge (50%) but band is tight (4%) — nomination amplitude must be the band's 4%. Priced at
+  // 10k so the 4% band swing (400gp) clears DL4_MIN_ABS_SWING (this test isolates amplitude source, not the floor).
+  const n = nominateDip(v24(10000, 15000, 5000, 5000), band(10000, 10400));
   assert.ok(n);
   assert.ok(Math.abs(n.amplitude - 0.04) < 1e-9, 'amplitude is the band amplitude (4%), not the 24h 50%');
 });
 
 // --- 6. score ranks higher-amplitude / higher-vol higher ---------------------------------------
 ok('nominateDip: score rises with amplitude and with volume', () => {
-  const lowAmp = nominateDip(v24(1000, 1035, 5000, 5000), band(1000, 1035));   // 3.5%
-  const hiAmp  = nominateDip(v24(1000, 1100, 5000, 5000), band(1000, 1100));   // 10%
+  // priced at 10k so both band swings (350gp / 1000gp) clear DL4_MIN_ABS_SWING — isolates the score comparison.
+  const lowAmp = nominateDip(v24(10000, 10350, 5000, 5000), band(10000, 10350));   // 3.5%
+  const hiAmp  = nominateDip(v24(10000, 11000, 5000, 5000), band(10000, 11000));   // 10%
   assert.ok(hiAmp.score > lowAmp.score, 'more amplitude → higher score');
   // prices kept high enough that both clear the value floor (mid ~10.5k × 100 ≈ 1.05m gp-flow) so the
   // comparison isolates volume, not the floor.
@@ -106,14 +110,32 @@ ok('nominateDip: penny item (wide % but trivial gp-flow) → null', () => {
   const n = nominateDip(v24(7, 14, 3900, 3900), band(7, 14));
   assert.equal(n, null, 'penny item excluded by the value floor');
 });
-// --- 6c. VALUE FLOOR is gp-SCALE, NOT unit-price: cheap high-throughput churn still INCLUDED ----
-ok('nominateDip: cheap-but-high-volume churn (rune-like) → still nominates', () => {
-  // ~190→205gp rune (7.9% band ≥ wide), ~2m/d volume. mid ~197 × 2m ≈ 394m gp-flow ≫ floor → nominates,
-  // liquid track. Proves the floor keys on gp SCALE, not raw unit price.
+// --- 6c. PER-UNIT SWING FLOOR: cheap high-throughput churn is now EXCLUDED (2026-07-12 doctrine change) --
+ok('nominateDip: cheap-but-high-volume churn (rune-like) → null (swing too small for a flush)', () => {
+  // ~190→205gp rune: 7.9% band ≥ wide AND 394m gp-flow ≫ the SCALE floor — but its per-unit swing is only
+  // 15gp (< DL4_MIN_ABS_SWING), so a flush is worth ~15gp/unit — not a bid-into-the-fall play. This is the
+  // penny-junk fix: SUPERSEDES the old "cheap high-volume churn still passes" property. Cheap churn is the
+  // CHURN niche's job (buy-the-dip on its normal band); the flush pool wants meaningful per-unit swings.
   const n = nominateDip(v24(190, 210, 2_000_000, 2_000_000), band(190, 205));
-  assert.ok(n, 'cheap high-volume churn passes the value floor');
-  assert.equal(n.track, 'liquid');
-  assert.ok(n.gpFlow >= DL4_MIN_GP_FLOW);
+  assert.equal(n, null, 'trivial per-unit swing excluded even at huge gp-flow');
+});
+// --- 6c2. PER-UNIT SWING FLOOR: a meaningful mid-ticket swing PASSES even at modest volume --------------
+ok('nominateDip: mid-ticket with a real per-unit swing → nominates', () => {
+  // 8000→8400gp item: 5% band, swing 400gp ≥ DL4_MIN_ABS_SWING; mid 8200 × 200 = 1.64m gp-flow ≥ floor.
+  const n = nominateDip(v24(8000, 8400, 200, 200), band(8000, 8400));
+  assert.ok(n, 'a meaningful per-unit swing passes');
+  assert.ok(n.swingGp >= DL4_MIN_ABS_SWING);
+});
+// --- 6c3. PER-UNIT SWING FLOOR boundary: just under → null, at/over → nominates -------------------------
+ok('nominateDip: abs-swing boundary around DL4_MIN_ABS_SWING', () => {
+  // hold gp-flow well over the scale floor (huge volume) so ONLY the swing floor is exercised. amplitude
+  // kept ≥ wide by construction (both bands are ≥ 3% of their low).
+  const lo = DL4_MIN_ABS_SWING - 2, hi = DL4_MIN_ABS_SWING + 2;
+  const under = nominateDip(v24(1000, 1000 + lo, 1_000_000, 1_000_000), band(1000, 1000 + lo));
+  const over  = nominateDip(v24(1000, 1000 + hi, 1_000_000, 1_000_000), band(1000, 1000 + hi));
+  // (1000 + ~50)/1000 ≈ 5% ≥ wide, so amplitude is not the binding gate here — the swing floor is.
+  assert.equal(under, null, 'per-unit swing just under the floor → null');
+  assert.ok(over, 'per-unit swing at/over the floor → nominates');
 });
 // --- 6d. VALUE FLOOR boundary: just under → null, at/over → nominates ---------------------------
 ok('nominateDip: value-floor boundary (mid×limitVol around DL4_MIN_GP_FLOW)', () => {
@@ -169,4 +191,64 @@ ok('polymorphic reader: mixed [string, number, object] all yield a resolvable to
   assert.equal(dipToken({ name: 'Onlyname' }), 'Onlyname');
 });
 
-console.log(`\nAll ${pass} acceptance checks passed. (DL4_WIDE_BAND_PCT=${DL4_WIDE_BAND_PCT}, DL4_WIDE_DAY_PCT=${DL4_WIDE_DAY_PCT}, DL4_MIN_GP_FLOW=${DL4_MIN_GP_FLOW}, cap=${DL4_MAX_NOMINATIONS_PER_SCAN} — placeholders, n=2)`);
+// --- 9. POOL HYGIENE: pruneDipPool ages by last-qualification + caps top-N BY SCORE per track ------------
+const DAY = 86400000;
+ok('pruneDipPool: ages out AUTO entries whose lastQualTs is past DL4_POOL_MAX_AGE_DAYS', () => {
+  const now = 1_000 * DAY;
+  const pool = [
+    { id: 1, name: 'fresh', source: 'auto', track: 'liquid', addedTs: now - 99 * DAY, lastQualTs: now - 1 * DAY, score: 5 }, // kept (recently qualified)
+    { id: 2, name: 'stale', source: 'auto', track: 'liquid', addedTs: now - 1 * DAY, lastQualTs: now - (DL4_POOL_MAX_AGE_DAYS + 1) * DAY, score: 9 }, // aged out despite high score
+  ];
+  const kept = pruneDipPool(pool, { now });
+  assert.deepEqual(kept.map(e => e.id), [1], 'aging is by lastQualTs, not addedTs or score');
+});
+ok('pruneDipPool: caps each TRACK to top-N BY SCORE (not by recency)', () => {
+  const now = 1_000 * DAY;
+  // 3 liquid with a tiny cap of 2 → the two HIGHEST scores survive regardless of addedTs order.
+  const pool = [
+    { id: 1, name: 'lo',  source: 'auto', track: 'liquid', addedTs: now, lastQualTs: now, score: 1 },
+    { id: 2, name: 'hi',  source: 'auto', track: 'liquid', addedTs: now, lastQualTs: now, score: 9 },
+    { id: 3, name: 'mid', source: 'auto', track: 'liquid', addedTs: now, lastQualTs: now, score: 5 },
+  ];
+  const kept = pruneDipPool(pool, { now, capLiquid: 2, capIlliquid: 45 });
+  assert.deepEqual(kept.map(e => e.id), [2, 3], 'top-2 by score kept (hi, mid); lowest evicted');
+});
+ok('pruneDipPool: liquid + illiquid capped INDEPENDENTLY', () => {
+  const now = 1_000 * DAY;
+  const mk = (id, track, score) => ({ id, name: 't' + id, source: 'auto', track, addedTs: now, lastQualTs: now, score });
+  const pool = [mk(1, 'liquid', 3), mk(2, 'liquid', 1), mk(3, 'illiquid', 3), mk(4, 'illiquid', 2), mk(5, 'illiquid', 1)];
+  const kept = pruneDipPool(pool, { now, capLiquid: 1, capIlliquid: 2 });
+  assert.deepEqual(kept.map(e => e.id), [1, 3, 4], 'liquid top-1 + illiquid top-2, tracks independent');
+});
+ok('pruneDipPool: manual + legacy entries are NEVER aged or capped', () => {
+  const now = 1_000 * DAY;
+  const pool = [
+    'Searing page',                                                                                          // legacy string
+    28931,                                                                                                   // legacy number
+    { id: 3, name: 'curated', source: 'manual', track: 'liquid', addedTs: now - 999 * DAY, lastQualTs: now - 999 * DAY }, // ancient manual
+    { id: 4, name: 'stale-auto', source: 'auto', track: 'liquid', addedTs: now - 999 * DAY, lastQualTs: now - 999 * DAY, score: 9 }, // aged out
+  ];
+  const kept = pruneDipPool(pool, { now, capLiquid: 0, capIlliquid: 0 });   // cap 0 → drop ALL auto, keep all manual/legacy
+  assert.deepEqual(kept, ['Searing page', 28931, pool[2]], 'manual/legacy survive age + cap:0; auto dropped');
+});
+ok('reconcileDipPool: re-qualifier re-scored + kept fresh; non-qualifier ages; new qualifier inserted', () => {
+  const now = 1_000 * DAY;
+  const oldTs = now - (DL4_POOL_MAX_AGE_DAYS + 1) * DAY;   // already past the age cutoff
+  const existing = [
+    { id: 10, name: 'requal', source: 'auto', track: 'liquid', addedTs: oldTs, lastQualTs: oldTs, score: 2 }, // qualifies again → refreshed
+    { id: 11, name: 'gone',   source: 'auto', track: 'liquid', addedTs: oldTs, lastQualTs: oldTs, score: 9 }, // not in this scan → ages out
+  ];
+  const qualifiers = [
+    { id: 10, name: 'requal', track: 'liquid', score: 7 },   // re-scored higher
+    { id: 12, name: 'new',    track: 'liquid', score: 4 },   // brand new
+  ];
+  const next = reconcileDipPool(existing, qualifiers, { now });
+  const ids = next.map(e => e.id).sort((a, b) => a - b);
+  assert.deepEqual(ids, [10, 12], 're-qualifier + new survive; stale non-qualifier aged out');
+  const requal = next.find(e => e.id === 10);
+  assert.equal(requal.lastQualTs, now, 're-qualifier lastQualTs refreshed');
+  assert.equal(requal.score, 7, 're-qualifier re-scored to the fresh value');
+  assert.equal(requal.addedTs, oldTs, 'addedTs preserved (first-seen time)');
+});
+
+console.log(`\nAll ${pass} acceptance checks passed. (DL4_WIDE_BAND_PCT=${DL4_WIDE_BAND_PCT}, DL4_WIDE_DAY_PCT=${DL4_WIDE_DAY_PCT}, DL4_MIN_GP_FLOW=${DL4_MIN_GP_FLOW}, DL4_MIN_ABS_SWING=${DL4_MIN_ABS_SWING}, cap/scan=${DL4_MAX_NOMINATIONS_PER_SCAN}, pool cap liquid=${DL4_POOL_CAP_LIQUID}/illiquid=${DL4_POOL_CAP_ILLIQUID}, age=${DL4_POOL_MAX_AGE_DAYS}d — placeholders, n=2)`);

@@ -1008,6 +1008,28 @@ export const DL4_MAX_NOMINATIONS_PER_SCAN = 10; // PLACEHOLDER (n=2): cap on NEW
 // cleared the %-only amplitude bar. This is about gp SCALE, NOT unit price — cheap-but-high-throughput
 // churn (a ~200gp rune moving millions/day) has huge gp-flow and still passes. Both tracks gate on it.
 export const DL4_MIN_GP_FLOW = 500_000;         // PLACEHOLDER (n=2): min mid×limitVol gp-flow/day to be worth watching (= the 500k attention floor)
+// PER-UNIT SWING FLOOR (2026-07-12, Ben — the penny-junk-still-leaked fix). The gp-flow floor above is a
+// gp-SCALE gate (is the MARKET big enough), but it admits cheap high-throughput commodities — Feather (2gp),
+// Water/Mind rune, Iron bolts, seeds — because their volume clears the flow bar despite a trivial per-unit
+// swing. A FLUSH bid captures ~one band-amplitude of gp/UNIT on the bounce, so a 3% dip on a 2gp item is
+// 0.06gp — never worth a bid-into-the-fall. This ORTHOGONAL floor asks "is the dip worth catching per unit":
+// the absolute swing (bandHi−bandLo, or the 24h avg range) must clear DL4_MIN_ABS_SWING. It's what actually
+// screens the flush pool down to meaningful mid/big tickets (Searing-page/bludgeon class) and keeps cheap
+// churn in the CHURN niche where it belongs — SUPERSEDES the old "cheap high-volume churn still passes"
+// property (dl4nominate.test 6c). PLACEHOLDER (n=2); F1 owns calibration.
+export const DL4_MIN_ABS_SWING = 50;            // PLACEHOLDER (n=2): min absolute per-unit swing (gp) for a flush to be worth catching
+// POOL HYGIENE (2026-07-12): the auto-nomination pool grew unbounded (640 entries in <1 day) because nothing
+// aged out — the --dip loop's target set crept toward the whole universe, and each entry is a live fetch +
+// flushSignal check EVERY ~5m pass (watch.mjs --dip folds the whole pool into targetSpecs). So pool size =
+// the dip loop's per-pass cost, and "which stay/go" must be a QUALITY ranking, not a timestamp accident.
+// reconcileDipPool therefore re-SCORES every qualifier each scan and keeps the top-N BY SCORE per track;
+// an entry drops when it (a) stops re-qualifying for DL4_POOL_MAX_AGE_DAYS, or (b) falls out of the top-N on
+// score. Manual/legacy entries are never touched. TRACK split: only the LIQUID track is watched live by
+// --dip (it's the FLUSH-alert set) so it's capped TIGHT; the ILLIQUID track is DL3's (unbuilt) standing-bid
+// backlog — deeper cap, not fetched live yet. Entry schema gains { lastQualTs, score }.
+export const DL4_POOL_MAX_AGE_DAYS = 3;         // PLACEHOLDER: an auto entry that stops re-qualifying ages out after this many days
+export const DL4_POOL_CAP_LIQUID = 15;          // PLACEHOLDER: max LIQUID auto entries (the --dip live-watch set) — kept tight; top-N by score
+export const DL4_POOL_CAP_ILLIQUID = 45;        // PLACEHOLDER: max ILLIQUID auto entries (DL3 backlog, not watched live) — deeper; top-N by score
 
 export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unused today — kept for signature parity / future recency gating
   if (!v24Entry) return null;
@@ -1038,6 +1060,11 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
                        : (v24Entry.avgLowPrice + v24Entry.avgHighPrice) / 2;
   const gpFlow = mid * limitVol;
   if (!(gpFlow >= DL4_MIN_GP_FLOW)) return null;   // below the 500k gp/day attention scale → not worth watching
+  // PER-UNIT SWING FLOOR — orthogonal to the gp-SCALE floor above: reject items whose per-unit dip is too
+  // small to be worth a bid-into-the-fall (kills the Feather/rune/seed churn the flow floor let through).
+  const swingGp = haveBand ? (bandEntry.bandHi - bandEntry.bandLo)
+                           : (v24Entry.avgHighPrice - v24Entry.avgLowPrice);
+  if (!(swingGp >= DL4_MIN_ABS_SWING)) return null;
   // TRACK split off the DL2 fill-floor (reused, not re-derived): a liquid book is an active FLUSH
   // candidate; a two-sided-but-thinner book is a DL3 standing-bid candidate (still worth watching, its
   // depth history is DL3's input). A dead/one-sided book already returned null above.
@@ -1045,7 +1072,7 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
   // SCORE — ranks which nominations win the per-scan cap: amplitude (the flush headroom) weighted by
   // log-volume (fillability). Both tracks share it so a wide liquid book outranks a wide thin one.
   const score = amplitude * Math.log10(Math.max(10, limitVol));
-  return { track, score, amplitude, limitVol, gpFlow, twoSided: true };
+  return { track, score, amplitude, swingGp, limitVol, gpFlow, twoSided: true };
 }
 
 // selectNominations — pure dedup + cap for the scan nomination pass (extracted so it's fixture-testable
@@ -1068,4 +1095,55 @@ export function selectNominations(existing, candidates, cap = DL4_MAX_NOMINATION
     && !(c.name != null && haveNames.has(String(c.name).toLowerCase())));
   fresh.sort((a, b) => (b.score || 0) - (a.score || 0));
   return fresh.slice(0, Math.max(0, cap));
+}
+
+// pruneDipPool — pure age + QUALITY cap over the dip-watchlist, applied on every write so the AUTO pool can't
+// grow unbounded (the 640-entry-in-a-day bloat, 2026-07-12). MANUAL/legacy entries (source !== 'auto', incl.
+// plain string/number legacy tokens) are NEVER aged or capped — hand-curation is permanent. An auto entry is
+// dropped once its LAST QUALIFICATION is older than maxAgeMs (it stopped re-qualifying), then each TRACK is
+// kept to its top-N BY SCORE (the flush-quality rank nominateDip produces) — so eviction keeps the best flush
+// candidates, not the most-recently-touched. Order: manual first (verbatim), then surviving liquid, then
+// illiquid. PURE + fixture-pinned (dl4nominate.test.mjs).
+export function pruneDipPool(pool, { now = Date.now(), maxAgeMs = DL4_POOL_MAX_AGE_DAYS * 86400000,
+                                     capLiquid = DL4_POOL_CAP_LIQUID, capIlliquid = DL4_POOL_CAP_ILLIQUID } = {}) {
+  const manual = [], auto = [];
+  for (const e of (pool || [])) {
+    if (e == null) continue;
+    if (e && typeof e === 'object' && e.source === 'auto') auto.push(e);
+    else manual.push(e);   // manual/legacy → exempt
+  }
+  const ts = e => Number(e.lastQualTs ?? e.addedTs ?? 0);          // back-compat: fall back to addedTs
+  const byScore = (a, b) => (Number(b.score) || 0) - (Number(a.score) || 0);
+  const fresh = auto.filter(e => (now - ts(e)) <= maxAgeMs);
+  const liquid = fresh.filter(e => e.track === 'liquid').sort(byScore).slice(0, Math.max(0, capLiquid));
+  const illiquid = fresh.filter(e => e.track !== 'liquid').sort(byScore).slice(0, Math.max(0, capIlliquid));
+  return manual.concat(liquid, illiquid);
+}
+
+// reconcileDipPool — the ONE write-path transform for the auto pool. `qualifiers` = EVERY item nominateDip
+// hit this scan, each { id, name, track, score } (score = the flush-quality rank, flush-now-boosted by the
+// caller). It (1) upserts each qualifier — refreshing an existing entry's score + lastQualTs, or inserting a
+// new one — so a persistent qualifier stays fresh and re-scored; (2) leaves non-qualifying existing auto
+// entries untouched (their stale lastQualTs lets them age out); (3) prunes by age + per-track top-N score.
+// PURE + fixture-pinned.
+export function reconcileDipPool(existing, qualifiers, opts = {}) {
+  const now = opts.now ?? Date.now();
+  const quals = new Map((qualifiers || []).filter(q => q && q.id != null).map(q => [Number(q.id), q]));
+  const manual = [], auto = [];
+  for (const e of (existing || [])) {
+    if (e == null) continue;
+    if (e && typeof e === 'object' && e.source === 'auto') auto.push(e);
+    else manual.push(e);
+  }
+  const seen = new Set();
+  const merged = auto.map(e => {
+    const id = Number(e.id); seen.add(id);
+    const q = quals.get(id);
+    return q ? { ...e, name: e.name ?? q.name, track: q.track, score: q.score, lastQualTs: now } : e;
+  });
+  for (const q of quals.values()) {
+    if (seen.has(Number(q.id))) continue;
+    merged.push({ id: Number(q.id), name: q.name, source: 'auto', track: q.track, addedTs: now, lastQualTs: now, score: q.score });
+  }
+  return pruneDipPool(manual.concat(merged), { ...opts, now });
 }

@@ -520,6 +520,11 @@ async function main() {
     try { const raw = JSON.parse(fs.readFileSync(DIP_WATCHLIST, 'utf8')); if (Array.isArray(raw)) pool = raw; }
     catch { /* no dip pool — degrade */ }
     for (const entry of pool) {
+      // DL4 (2026-07-12): only the LIQUID track is watched live — it's the FLUSH-alert set, and each target
+      // is a live fetch every ~5m pass, so the illiquid track (DL3's standing-bid backlog, not yet consumed
+      // for alerts) is skipped here to keep the loop's per-pass cost bounded. A legacy entry has no track →
+      // watched (back-compat: hand-curated entries were always liquid flush candidates).
+      if (entry && typeof entry === 'object' && entry.track === 'illiquid') continue;
       const token = (entry && typeof entry === 'object') ? (entry.id ?? entry.name) : entry;
       const hit = map.resolve(String(token));
       if (!hit) { console.error(`! dip-watchlist: no item named "${token}" — skipping`); continue; }

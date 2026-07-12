@@ -212,7 +212,7 @@ deliberate):**
 | When Ben says something like… | Run |
 | --- | --- |
 | "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip-nominations line) |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip pool line) |
 | "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
@@ -437,18 +437,26 @@ Script facts the skills rely on (current behavior, not doctrine):
   2h bands — now runs a **nomination pass** (pure `nominateDip` in `js/quotecore.js`, ZERO extra fetch)
   over that universe and APPENDS flush-SUITABLE candidates to `dip-watchlist.json`. Suitability =
   two-sided (the non-negotiable ghost-spread guard) + wide-enough amplitude (band ≥ `DL4_WIDE_BAND_PCT`,
-  else 24h range ≥ `DL4_WIDE_DAY_PCT`) + a **VALUE FLOOR** (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW`,
-  reusing the tool-wide 500k gp/day attention scale — a gp-SCALE gate, NOT a unit-price one, so a huge-%
-  swing on a penny item like Sweetcorn seed is rejected while cheap high-throughput churn still passes),
-  split into a `liquid` track (`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` →
-  active FLUSH candidate) and an `illiquid` track (DL3 standing-bid candidate); a survivor already
-  flushing NOW (via `flushSignal` on its in-hand 5m series) is bonused to win the per-scan cap
-  (`DL4_MAX_NOMINATIONS_PER_SCAN`, deduped by id, `selectNominations`). The scan prints a **Dip
-  nominations** line so Ben curates. A nomination is a **PROPOSAL TO WATCH, not a validated pick** (n=2,
-  all `DL4_*` PLACEHOLDERS, F1 owns calibration). The `dip-watchlist.json` schema evolved to
-  `{ id, name, source:'auto'|'manual', track, addedTs }` objects; the `--dip` reader is polymorphic
-  (legacy plain name/id entries still resolve). Node-only (screen.mjs writes, watch.mjs reads) → no
-  APP_VERSION bump.
+  else 24h range ≥ `DL4_WIDE_DAY_PCT`) + **TWO orthogonal value floors**: a gp-SCALE floor (gp-flow
+  `mid × limitVol ≥ DL4_MIN_GP_FLOW`, the 500k attention scale — is the market big enough) AND a **per-unit
+  SWING floor** (`bandHi−bandLo ≥ DL4_MIN_ABS_SWING`, 2026-07-12 — is the dip worth catching per unit; a
+  flush-bid captures ~one amplitude of gp/unit, so a 3% swing on a 2gp Feather is 0.06gp — worthless). The
+  swing floor is what screens the pool down to meaningful mid/big tickets; it **SUPERSEDES the old "cheap
+  high-throughput churn still passes" property** — cheap churn (runes/feather/seeds) is now excluded (its
+  home is the CHURN niche's buy-the-dip, not a flush alert). Suitable items split into a `liquid` track
+  (`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` → the active FLUSH-alert set) and an `illiquid` track (DL3 standing-bid
+  backlog); a survivor already flushing NOW (via `flushSignal` on its in-hand 5m series) gets a score bonus.
+  **POOL HYGIENE (2026-07-12 — the 640-entry-in-a-day bloat fix):** the pool is no longer append-only.
+  `reconcileDipPool` re-SCORES every qualifier each scan and keeps the **top-N BY SCORE per track**
+  (`DL4_POOL_CAP_LIQUID` 15 / `DL4_POOL_CAP_ILLIQUID` 45) — so "which stay/go" is a flush-QUALITY ranking, not
+  a timestamp accident; an entry ages out once it stops re-qualifying for `DL4_POOL_MAX_AGE_DAYS` (by
+  `lastQualTs`). Manual/legacy entries are never aged or capped. **`--dip` watches the LIQUID track ONLY** (the
+  alert set — each target is a live fetch every ~5m pass; the illiquid track accrues for DL3 but isn't fetched
+  live). The scan prints a **Dip pool** line (liquid/illiquid counts + items added this scan). A nomination is
+  a **PROPOSAL TO WATCH, not a validated pick** (n=2, all `DL4_*` PLACEHOLDERS, F1 owns calibration). The
+  `dip-watchlist.json` schema is `{ id, name, source:'auto'|'manual', track, addedTs, lastQualTs, score }`
+  objects; the `--dip` reader is polymorphic (legacy plain name/id entries still resolve). Node-only
+  (screen.mjs writes, watch.mjs reads) → no APP_VERSION bump.
   `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
   for askFilling + conviction + the same read-only path line; the booked FIFO lots are still the basis).
 - `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--profile]` (bucketing/quantile

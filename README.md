@@ -75,8 +75,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
   with the node analysis scripts; also home to `recentDirection` (DP1), `flushSignal` (DL2 — the
   reactive liquid-flush firing read, consumed ONLY by `pipeline/watch.mjs --dip`, no app import), and
-  `nominateDip`/`selectNominations` (DL4 — the scan's flush-SUITABILITY nomination + dedup/cap, consumed
-  ONLY by `pipeline/screen.mjs`, no app import);
+  `nominateDip`/`reconcileDipPool`/`pruneDipPool` (DL4 — the scan's flush-SUITABILITY nomination + the
+  quality-ranked, self-pruning pool write; `selectNominations` is the legacy dedup/cap, retained + tested but
+  no longer on the write path — all consumed ONLY by `pipeline/screen.mjs`, no app import);
   also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
@@ -213,11 +214,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pipeline/alerts.mjs` (N1); ships empty
 - `dip-watchlist.json` — tracked repo-root pool of flush candidates for the `--dip` loop (ships empty
   `[]`). **DL4 schema:** an array of `{ id, name, source:'auto'|'manual', track:'liquid'|'illiquid',
-  addedTs }` objects; the legacy plain name/id string-or-number form is still accepted (the reader is
-  polymorphic). PRODUCED by BOTH manual curation AND `pipeline/screen.mjs`'s DL4 auto-nomination pass
-  (`--mode all` appends flush-SUITABLE candidates via `nominateDip`/`selectNominations`, source `auto`).
-  CONSUMED by `pipeline/watch.mjs --dip` (DL2 — polymorphic reader) — NOT app-imported (watchlist.json is
-  the app's, kept separate).
+  addedTs, lastQualTs, score }` objects (`lastQualTs`/`score` added 2026-07-12 for the quality-ranked
+  hygiene); the legacy plain name/id string-or-number form is still accepted (the reader is polymorphic).
+  PRODUCED by BOTH manual curation AND `pipeline/screen.mjs`'s DL4 nomination pass (`--mode all` re-scores
+  every flush-SUITABLE candidate via `nominateDip` and rewrites the pool via `reconcileDipPool` —
+  SELF-PRUNING, not append-only: top-N by score per track, `DL4_POOL_CAP_LIQUID` 15 / `DL4_POOL_CAP_ILLIQUID`
+  45, aged out after `DL4_POOL_MAX_AGE_DAYS` of not re-qualifying; manual entries exempt). Suitability now
+  gates on a per-unit swing floor (`DL4_MIN_ABS_SWING`) as well as the gp-scale floor, so cheap high-volume
+  churn no longer qualifies. CONSUMED by `pipeline/watch.mjs --dip` — which folds the **LIQUID track ONLY**
+  into its live target set (illiquid is DL3 backlog, not fetched live); the reader is polymorphic. NOT
+  app-imported (watchlist.json is the app's, kept separate).
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
   a flat array of `{id, exitPrice, tripwire, horizon, window, path, enteredUnder, ts}`
   (`path`/`enteredUnder` added additively by P4a — the js/paths.mjs entry-path declaration; `window`
@@ -640,9 +646,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `dipLoop`; and `dipLoopAudit` separates fillable from not-taken firings),
     `dl4nominate.test.mjs` (DL4 — `nominateDip` fires liquid/illiquid tracks on two-sided+wide books,
     rejects one-sided ghost books + narrow books + missing inputs + **penny items below the `DL4_MIN_GP_FLOW`
-    value floor** (while cheap high-volume churn still passes — gp SCALE not unit price), prefers band
-    amplitude over the 24h range, and score-ranks; `selectNominations` dedups by id AND legacy name/number, respects the cap, and
-    highest-score wins; plus the polymorphic `--dip` reader token-extraction over a mixed array),
+    gp-scale floor OR the `DL4_MIN_ABS_SWING` per-unit swing floor** (cheap high-volume churn now EXCLUDED by
+    the swing floor — 2026-07-12), prefers band amplitude over the 24h range, and score-ranks; the
+    `pruneDipPool`/`reconcileDipPool` hygiene ages by `lastQualTs` + caps each track top-N BY SCORE (manual
+    exempt); `selectNominations` (legacy) dedups by id AND legacy name/number, respects the cap, highest-score
+    wins; plus the polymorphic `--dip` reader token-extraction over a mixed array),
     `termstructure.test.mjs` (P3 — the `js/termstructure.mjs` math + floorValidator acceptance:
     decay-knife buy above the durable floor→reject, genuine dip at/below it→pass, spike-robust IQR, and
     the no-data/thin-floor/held-lot degrade-to-pass contract on both surface ctx shapes),

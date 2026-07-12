@@ -337,13 +337,17 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
 - **The SCAN feeds this pool (DL4 — the discovery half of the loop).** A flush is exogenous, so a hand-
   curated `dip-watchlist.json` has a coverage gap. `node pipeline/screen.mjs --mode all` — which already
   fetches the whole liquid universe's 24h stats + 2h bands — runs a zero-fetch **nomination pass**
-  (`nominateDip`) over that universe and APPENDS flush-SUITABLE candidates (`source:'auto'`, `track`
-  liquid/illiquid) so the reactive `--dip` loop always has a fresh, breadth-discovered pool to poll.
-  Suitability = two-sided + wide-enough amplitude + a **value floor** (gp-flow `mid × limitVol ≥
-  DL4_MIN_GP_FLOW`, the 500k gp/day attention scale — so a huge-% swing on a penny item like Sweetcorn
-  seed is rejected while cheap high-throughput churn passes; gp SCALE, not unit price); a survivor already
-  flushing NOW is bonused. It's a **proposal to watch, not a validated pick** (n=2, `DL4_*` placeholders,
-  F1 owns calibration). The scan prints a `Dip nominations` line; curate it.
+  (`nominateDip`) over that universe and re-scores flush-SUITABLE candidates into a **self-pruning** pool
+  (`reconcileDipPool` — NOT append-only) so the reactive `--dip` loop always has a fresh, breadth-discovered,
+  BOUNDED pool to poll. Suitability = two-sided + wide-enough amplitude + **two floors**: a gp-SCALE floor
+  (gp-flow `mid × limitVol ≥ DL4_MIN_GP_FLOW`, the 500k attention scale) AND a **per-unit swing floor**
+  (`bandHi−bandLo ≥ DL4_MIN_ABS_SWING`, 2026-07-12) — the swing floor EXCLUDES cheap high-throughput churn
+  (a flush on a 2gp item is worth ~nothing/unit; that's the CHURN niche's job), superseding the old "cheap
+  churn passes" behavior. A survivor flushing NOW is score-bonused. **Pool hygiene:** each scan keeps the
+  top-N BY SCORE per track (`DL4_POOL_CAP_LIQUID` 15 / `DL4_POOL_CAP_ILLIQUID` 45), ages out non-qualifiers
+  after `DL4_POOL_MAX_AGE_DAYS`; **`--dip` watches the LIQUID track only** (each target is a live fetch per
+  ~5m pass; illiquid is DL3 backlog). It's a **proposal to watch, not a validated pick** (n=2, `DL4_*`
+  placeholders, F1 owns calibration). The scan prints a `Dip pool` line; curate it.
 - **FILLABILITY is UNIT-FLOW, not deployability.** The gate is `volDay ≥ DIP_LOOP_LIQUID_FLOOR` (1000/d,
   a PLACEHOLDER) — `price×limit` measures whether you can PARK capital, but whether a seller actually
   crosses down to your bid is unit-flow. The retro anchor (n=2): a Searing-page flush (~14.4k/d, 4,732

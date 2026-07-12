@@ -69,7 +69,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, selectNominations, flushSignal, askHeadroomText, DL4_MAX_NOMINATIONS_PER_SCAN } from '../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../js/quotecore.js';
 import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // diurnal peak-timing read (auto, off the in-hand 1h series)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
@@ -915,16 +915,22 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
   // 3) dedup vs the current file + cap. Preserve existing entries verbatim (polymorphic legacy/object).
   let existing = [];
   try { const raw = JSON.parse(readFileSync(DIP_WATCHLIST_PATH, 'utf8')); if (Array.isArray(raw)) existing = raw; } catch { /* absent/garbled → treat as empty */ }
-  const picks = selectNominations(existing, cands, DL4_MAX_NOMINATIONS_PER_SCAN);
-  if (!picks.length) { console.log('(no new dip candidates)'); console.log(''); return; }
-  const additions = picks.map(p => ({ id: p.id, name: p.name, source: 'auto', track: p.track, addedTs: now }));
-  // 4) best-effort append (screen.mjs never touches git; the coordinator/manual curation owns commits).
-  try { writeFileSync(DIP_WATCHLIST_PATH, JSON.stringify(existing.concat(additions), null, 2) + '\n'); }
+  // 4) reconcile: re-score EVERY qualifier into the pool, age out non-qualifiers, keep top-N by score per
+  // track (liquid = the --dip live-watch set, illiquid = DL3 backlog). Runs every scan so the pool stays a
+  // quality-ranked, self-pruning set — the bloat fix. Best-effort write (screen.mjs never touches git).
+  const qualifiers = cands.map(c => ({ id: c.id, name: c.name, track: c.track, score: c.score }));
+  const existingIds = new Set(existing.filter(e => e && typeof e === 'object' && e.id != null).map(e => Number(e.id)));
+  const nextPool = reconcileDipPool(existing, qualifiers, { now });
+  try { writeFileSync(DIP_WATCHLIST_PATH, JSON.stringify(nextPool, null, 2) + '\n'); }
   catch (err) { console.error('(dip-nominate: could not write dip-watchlist.json — ' + ((err && err.message) || err) + ')'); }
-  // 5) the /scan surface line — Ben sees + curates the proposals.
-  const liq = picks.filter(p => p.track === 'liquid').length, illiq = picks.length - liq;
-  console.log(`## Dip nominations — ${picks.length} new dip candidate(s) (${liq} liquid / ${illiq} illiquid) → dip-watchlist.json (PROPOSALS to watch, not validated picks; n=2 placeholders)`);
-  for (const p of picks) console.log(`- ${p.name} — ${p.track}${p.flushingNow ? ' ⚡flushing-now' : ''}`);
+  // 5) the /scan surface line — report the pool honestly + the items newly ADDED to it this scan (those that
+  // survived the score cap). flushingNow comes from the survivor bonus computed above.
+  const flushNow = new Set(cands.filter(c => c.flushingNow).map(c => c.id));
+  const liqPool = nextPool.filter(e => e && e.source === 'auto' && e.track === 'liquid');
+  const illiqPool = nextPool.filter(e => e && e.source === 'auto' && e.track === 'illiquid');
+  const added = nextPool.filter(e => e && e.source === 'auto' && !existingIds.has(Number(e.id)));
+  console.log(`## Dip pool — ${liqPool.length} liquid (watched live by --dip) / ${illiqPool.length} illiquid (DL3 backlog); ${added.length} added this scan → dip-watchlist.json (flush-suitability PROPOSALS, quality-capped; n=2 placeholders)`);
+  for (const p of added.slice(0, 10)) console.log(`- ${p.name} — ${p.track}${flushNow.has(p.id) ? ' ⚡flushing-now' : ''}`);
   console.log('');
 }
 
