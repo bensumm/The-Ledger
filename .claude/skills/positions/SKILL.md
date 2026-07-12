@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.21
+version: 1.22
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -160,6 +160,21 @@ spike-and-return; the named tripwire was sub-15.00m (a break below the base low)
 guard (process rule 4):** the METHOD encodes freely, but the market findings here are a tiny
 sample — n=1 item, ~3 Sun→Mon transitions, one spike-and-return. Treat "basing = bottoming"
 as a hypothesis to keep testing, not an established pattern.
+
+**Declare the thesis AT ENTRY — every deliberate diurnal/value hold (VN-0, Ben 2026-07-11):**
+a position entered on a plan (buy the dip window, sell the diurnal peak; a value-hold toward a
+multi-week level) gets its plan DECLARED the moment the bid is placed/filled:
+`node pipeline/thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
+The declared tripwire activates the TG1 headline silence and the thesis render frame
+(MONITORING.md step 4) — without it, the band-flip frame re-litigates the expected pre-peak
+trough as UNDERWATER/LIST-TO-CLEAR churn every pass (the 2026-07-11 Berserker/Masori session).
+An undeclared deliberate hold is an operating error, not a tooling gap.
+
+**Thesis-appropriate cadence (VN-0):** a parked-at-break-even hold with a declared exit window
+wants a check NEAR ITS PEAK WINDOW plus ~2–3 passes/day — not the 1–3m hair-trigger class
+cadence. Nothing actionable happens in 3 minutes on a lot moving ~1%/hour; oversampling
+manufactures flip-flop reads (MONITORING.md "Cadence"). The tight cadence is for FALLING /
+thin-big-ticket hazard classes, not a declared multi-hour hold.
 
 **Entry-age check — fresh entries draw false CUTs (2026-07-05, three-for-three):** the gate
 tree has no concept of entry age, so a just-filled patient buy shows "underwater" on the

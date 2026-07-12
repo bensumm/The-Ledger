@@ -150,6 +150,14 @@ Cron-style loop (session-only) at ~5 min is comfortable; GE offers fill over min
 hours. Tighten to ~2 min during active flipping, widen when idle. Nothing here writes — it's
 safe to poll as often as you like; the only cost is API calls in step 3–4.
 
+**Thesis-appropriate cadence (VN-0, Ben 2026-07-11).** The class cadences below are for the
+HAZARD cases (falling, thin big-ticket). A parked-at-break-even hold with a DECLARED exit
+window (`thesis.mjs set … --window`) wants a check **near its peak window plus ~2–3
+passes/day**, not a 1–3m loop — nothing actionable happens in 3 minutes on a lot moving
+~1%/hour, and oversampling manufactures flip-flop reads (the 2026-07-11 verdict-churn
+session: ~12 label flips in 30 min at a 3m cadence on a ~2% band). Match the cadence to the
+thesis horizon, not to the tightest class on the board.
+
 ---
 
 ## Adaptive item-type-aware routine (`pipeline/watch.mjs`)

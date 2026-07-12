@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.16
+version: 1.17
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -122,6 +122,13 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      column — stop when it exceeds what Ben freed; **flag retrace risk** on any big-ticket line.
    - **Pair every up-to-units figure with the fill-realism read** (§5 windowrange) — it is a
      ceiling, not a forecast.
+6b. **Declare the thesis on every deliberate overnight/diurnal entry (VN-0, Ben 2026-07-11).**
+   Each bid placed on a plan (buy tonight's trough, sell tomorrow's peak window) gets
+   `node pipeline/thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h>
+   --path <key>` at placement time — the declared tripwire/exit window is what keeps the
+   morning-after verdicts framed against the PLAN instead of band-flip churn (`/positions`
+   "Declare the thesis AT ENTRY"; MONITORING.md step 4). An overnight hold's cadence is the
+   morning review, not a tight loop.
 7. **Output the cut / hold / slot plan:** which positions were cut (Phase 1), which holds
    stay listed at what break-even-floored price, and the prioritized bid table (the script's
    accumulation table, filtered to the lines you're recommending within stated capital).
