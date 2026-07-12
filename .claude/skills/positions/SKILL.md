@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.23
+version: 1.24
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -171,6 +171,11 @@ The declared tripwire activates the TG1 headline silence and the thesis render f
 (MONITORING.md step 4) — without it, the band-flip frame re-litigates the expected pre-peak
 trough as UNDERWATER/LIST-TO-CLEAR churn every pass (the 2026-07-11 Berserker/Masori session).
 An undeclared deliberate hold is an operating error, not a tooling gap.
+A declared exit is point-in-time: `quote.mjs --positions` now auto-flags one that has gone
+STALE on reach (`⚠ declared exit X looks STALE — printed N/3 recent nights; recent reachable
+peak ~Y`, Proposal C — inform-only, placeholder <2/3-recent bar, n≈0). On that flag, judge
+whether the thesis premise still holds; if you agree the peak has moved, re-declare the exit
+via `thesis.mjs set … --exit` (the flag never edits the thesis or the verdict itself).
 
 **Thesis-appropriate cadence (VN-0):** a parked-at-break-even hold with a declared exit window
 wants a check NEAR ITS PEAK WINDOW plus ~2–3 passes/day — not the 1–3m hair-trigger class

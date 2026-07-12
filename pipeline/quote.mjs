@@ -24,7 +24,8 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
 import { hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series
 import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence)
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read
+import { staleExitRead, STALE_EXIT_RECENT_FRAC } from './lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from './lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { mdTable, stdCells } from './lib/cli.mjs';
@@ -45,6 +46,12 @@ const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl');   // YP1: watch.m
 const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch.mjs (read-only here)
 const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
 const FILLS = path.join(HERE, '..', 'fills.json');   // LM1: RuneLite-logged fills → per-item 4h buy-limit windows (no fetch)
+
+// Proposal C: the stale declared-exit read needs the 1h series, which this booked-lots view doesn't
+// otherwise fetch. The fetch is TARGETED (only lots with a declared numeric thesis exit — typically
+// 0–2 items) and TTL-cached (same fetchTsCached mechanism as screen.mjs's Leg-B survivor fetch), so
+// a re-run inside the TTL is fetch-free. Same 15-min TTL as screen's TS_TTL_1H.
+const TS_TTL_1H_EXIT = 15 * 60 * 1000;
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
@@ -223,6 +230,7 @@ async function runPositions() {
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const inp = await getInputs(itemId);
+    const thesisEntry = thesisFor(holdThesisStore, itemId);   // Proposal C reads it too (declared exit)
     // Build the shared item context: identity → market → history → intraday → position. The position
     // stage folds in the live ask (askFilling), the cross-pass state (conviction), and any hold thesis.
     const ctx = buildItemContext({
@@ -235,7 +243,7 @@ async function runPositions() {
         ask: askFromSnapshot(offers, itemId), bid: bidFromSnapshot(offers, itemId),
         // support/cutTrigger need the 1h window series (not fetched on this booked-lots view) → null;
         // conviction still covers underwater/breakdown/thesis persistence off the shared state.
-        watchStatePrior: priorState['held:' + itemId] || null, nowMs, thesisEntry: thesisFor(holdThesisStore, itemId),
+        watchStatePrior: priorState['held:' + itemId] || null, nowMs, thesisEntry,
       },
       // P4b: the path stage — weigh the lot's thesis-paths + run the persistence gate off the SAME
       // shared watch-state entry watch.mjs persists. READ-ONLY here (P0 contract): quote renders the
@@ -283,6 +291,22 @@ async function runPositions() {
     // EXISTING mom tell re-voiced as ladder guidance, no new number). Sibling line off the verdict (the
     // renderPathLine pattern) — the verdict string + momVerdict are UNTOUCHED (no APP_VERSION, no
     // byte-identity break); never an alert/reprice input. The lean askHeadroom field is logged via suggestionEntry.
+    // Proposal C (2026-07-12): stale declared-exit auto-flag — INFORM-ONLY. When the hold thesis
+    // declares a numeric exit, score it against the recent full-day reach history (lib/staleexit.mjs
+    // — windowread's own windowStats/recencySplit/recentQuant, the reachValidator machinery). A
+    // declared exit recent nights no longer print gets a NOTE naming the reachable level (the
+    // 44.34m-Masori / 3.24m-Berserker miss). NEVER moves a quoted number, verdict, gate, or the
+    // break-even floor; the thesis stays as declared until Ben re-declares it. The 1h fetch is
+    // targeted (declared-exit lots only) + TTL-cached — see TS_TTL_1H_EXIT above.
+    if (thesisEntry && typeof thesisEntry.exitPrice === 'number' && Number.isFinite(thesisEntry.exitPrice)) {
+      let ts1hExit = inp.ts1h ?? null;                       // reuse a series if one is ever in hand
+      if (!ts1hExit) { try { ts1hExit = await fetchTsCached(itemId, '1h', TS_TTL_1H_EXIT); } catch { ts1hExit = null; } }
+      const se = staleExitRead({ ts1h: ts1hExit, exitLevel: thesisEntry.exitPrice, now: new Date(nowMs) });
+      if (se && se.stale) {
+        const reach = se.reachable != null ? `; recent reachable peak ~${fmtP(se.reachable)}` : '';
+        lines.push(`  ⚠ ${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via thesis.mjs if you agree.`);
+      }
+    }
     const ahHeld = askHeadroomText(row);
     if (ahHeld) lines.push(`  ⤴ ${name}: ask headroom — ${ahHeld}`);
     else if (row.mom === 'breakup' && row.optSell != null) lines.push(`  ⤴ ${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.`);

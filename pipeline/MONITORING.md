@@ -480,6 +480,18 @@ of the numbered signals, in more detail:
        Ben makes — never a market claim; it silences a known-expected signal, never manufactures a new
        one. The store is TRACKED (`hold-thesis.json` at repo root, agent-written like the greenlist,
        14-day TTL); watch reads it READ-ONLY.
+       **Stale declared-exit auto-flag (Proposal C, 2026-07-12; `quote.mjs --positions` only).** A
+       declared exit is set once, off the peaks visible then — and can go stale on reach (the
+       44.34m-Masori / 3.24m-Berserker miss: both were old-peak levels recent nights no longer print).
+       On every `--positions` pass, a lot with a numeric declared `exitPrice` gets the exit scored
+       against the recent FULL-DAY reach history (`lib/staleexit.mjs` — windowread's own
+       `windowStats`/`recencySplit`/`recentQuant`, the reachValidator machinery; a targeted TTL-cached
+       1h fetch for declared-exit lots only). Printed on < 2/3 of the recent nights
+       (`STALE_EXIT_RECENT_FRAC`, PLACEHOLDER n≈0) → an INFORM note naming the recent reachable peak:
+       `⚠ <item>: declared exit X looks STALE on reach — printed N/3 recent nights …; recent reachable
+       peak ~Y`. It NEVER moves a quoted number, verdict, gate, or the break-even floor, and never
+       edits the thesis — Ben re-declares via `thesis.mjs` if he agrees. Honesty: touched ≠ filled,
+       ~14 nights is a small sample; thin history degrades to silence. watch.mjs does not run it yet.
      The headline alert count reflects only **confirmed** escalations + the always-immediate
      breakdowns / UNDERWATER / FALLING / CANCEL-BID (an UNDERWATER/CUT-CANDIDATE/LIST-TO-CLEAR is
      suppressed only when a declared hold thesis silences it above the tripwire — TG1/VN-2). Armed

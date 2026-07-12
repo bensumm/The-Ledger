@@ -300,7 +300,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
     column when a probe fires. `--positions` builds the shared `context.mjs` chain per lot — offers.json
     book, read-only watch-state + hold thesis, the shared `renderHeldVerdict`, and a read-only `pathsStage`
-    `Paths` block — so it can't disagree with watch.mjs; behavior detail in CLAUDE.md "Script facts"), `screen.mjs`
+    `Paths` block — so it can't disagree with watch.mjs; Proposal C (2026-07-12) adds the INFORM-ONLY
+    stale declared-exit flag per held lot (`lib/staleexit.mjs` over a targeted TTL-cached 1h fetch —
+    declared-exit lots only); behavior detail in CLAUDE.md "Script facts"), `screen.mjs`
     (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 a stdout-only
     `Probes` column per niche; P6c re-runs an empty niche beneath the floor (`subFloorFallback` in
     `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
@@ -510,6 +512,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     anchor) minus LIVE-offers.json resting-bid escrow, so the balance is computed not re-stated; the
     INJECTION DETECTOR raises the anchor when resting bids exceed the tracked balance; `loadDerivedCash`
     is the impure loader (fills.json + offers.json + `cashstate` anchor). Pinned by `cashderive.test.mjs`),
+    `staleexit.mjs` (Proposal C 2026-07-12 — PURE `staleExitRead({ts1h, exitLevel})`: scores a DECLARED
+    hold-thesis exit against the recent full-day reach history via `js/windowread.mjs`'s own
+    `windowStats`/`recencySplit`/`recentQuant` (min-sample floor imported from `reachValidator` — reuse,
+    never re-derived). Stale = printed on < `STALE_EXIT_RECENT_FRAC` (2/3, PLACEHOLDER n≈0) of the recent
+    nights; names the recent ~50% reachable high instead. Consumed by `quote.mjs --positions` as an
+    INFORM-ONLY note — never a verdict/gate/price input; degrades to null (silent) on thin history.
+    Pinned by `staleexit.test.mjs`),
     `statetransition.mjs` (YP2 #2 — PURE `stateTransition(phase())`: flags a basing faller / a spike on
     rising-vs-falling lows for the screen's "watch closely" list; descriptive, never a buy signal),
     `velocitytag.mjs` (Build 2 — PURE `buildVelocityIndex`/`velocityTag` over the gitignored

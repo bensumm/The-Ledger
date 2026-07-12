@@ -245,7 +245,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   (`thesis.mjs set … --tripwire --exit --window --path`, hold-thesis.json) renders above its
   tripwire as the `HOLD — per thesis: exit <declared/diurnal> · abort < <tripwire>` frame** — the
   exit is the declared/diurnal level, never the 2h band top — and the TG1 headline silence now
-  covers LIST-TO-CLEAR too (the expected pre-peak trough); Gate-2 CUT overrides everything.
+  covers LIST-TO-CLEAR too (the expected pre-peak trough); Gate-2 CUT overrides everything. A
+  declared exit gone STALE on reach (printed < 2/3 of recent nights — Proposal C 2026-07-12,
+  `pipeline/lib/staleexit.mjs` off the windowread reach machinery, targeted TTL-cached 1h fetch)
+  gets an INFORM-ONLY `⚠ declared exit … looks STALE` note on `quote.mjs --positions` naming the
+  recent reachable peak — never a verdict/gate/price input; PLACEHOLDER threshold, n≈0
+  (MONITORING.md step 4 is the home).
   **VN-3: a clean lot with live inside a dead-band of break-even renders `PARKED — at break-even
   (±X)`** instead of the per-print HOLD↔UNDERWATER coin-flip (ungated UNDERWATER headline
   suppressed in-band; placeholders, n=1). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
