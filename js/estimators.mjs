@@ -70,6 +70,12 @@ export const TTF_VEL_MAX             = 4;     // … a thin book ≤4× slower (
 export const TTF_FLOOR_DAYS          = 1 / 24; // 1h min in the rank denominator — no divide-by-tiny blowup
 export const RISING_PFILL_CONFIRMED  = 0.7;   // rising + not breaking down → entry near current fills readily
 export const RISING_PFILL_UNCONFIRMED = 0.4;  // unconfirmed rising → the forecast entry is less certain
+export const PFILL_ASKREACH_FLOOR    = 0.25;  // two-leg P (Proposal A, PLAN-GRADE-REACH): a flip only "fills"
+                                              // if BOTH legs transact, so the family bid-fill P is discounted by
+                                              // how often the ASK/exit reaches ACROSS DAYS. A 0/14-reach exit
+                                              // floors the weight HERE (not to 0) so a stale fortnight demotes a
+                                              // large-net item hard without zeroing it — SOFT by design
+                                              // (rule 4: n≈14 per item, F1/retrojoin calibrates the magnitude).
 
 /* --- P(fill) estimators — return { value∈[0,1], n, basis } ---------------------------------------- */
 
@@ -94,6 +100,18 @@ export function pFillIntraday(ctx = {}) {
   }
   if (c.mom === 'breakdown') p = clamp01(p - PFILL_BREAKDOWN_PENALTY);
   return estR(p, 0, 'band-depth');
+}
+
+// two-leg fill weight (Proposal A, PLAN-GRADE-REACH) — the family pFill above is the BID/ENTRY fill; the
+// rank's `net` silently ASSUMES the exit at optSell prints. Discount that by the cross-day ASK reach so a
+// mirage exit (e.g. a p90 band top reaching 2/14 days) can't carry a full rank. ABSENT an ask-reach read →
+// 1 (byte-identical to the pre-askReach rank). Softened linear map: reachFrac 0 → PFILL_ASKREACH_FLOOR,
+// 1 → 1 — a stale fortnight demotes, never zeroes (the false-negative guard for the n≈14 window).
+export function askReachFactor(askReach) {
+  const a = askReach || null;
+  if (!a || !(num(a.nDays) > 0) || num(a.reachedDays) == null) return 1;
+  const frac = clamp01(a.reachedDays / a.nDays);
+  return clamp01(PFILL_ASKREACH_FLOOR + (1 - PFILL_ASKREACH_FLOOR) * frac);
 }
 
 // value family — P(fill at the floor bid) IS proximity-to-low (the P5 valueScore component): live near
@@ -220,9 +238,16 @@ export function estimateRank(spec, row = {}, extra = {}) {
     mom: row.mom ?? null,
     regime: row.falling ? 'falling' : row.rising ? 'rising' : (row.regime && row.regime.ok ? 'flat' : null),
     reliable: row.reliable, volDay: row.volDay ?? null, limit: row.limit ?? null,
-    reach: extra.reach ?? null, velocity: extra.velocity ?? null, valueRanges: extra.valueRanges ?? null,
+    reach: extra.reach ?? null, askReach: extra.askReach ?? null, velocity: extra.velocity ?? null, valueRanges: extra.valueRanges ?? null,
   };
-  const pFill = est.pFill(ctx);
+  // P is a TWO-LEG fill prob (Proposal A): the family pFill (entry) discounted by the ASK/exit reach. No
+  // askReach passed (quote/watch surfaces, value niche) → factor 1 → byte-identical rank. The discounted P
+  // is what BOTH the rank AND the returned pFill report, so the displayed "P~X" now honestly means both legs.
+  const pFillRaw = est.pFill(ctx);
+  const askF = askReachFactor(ctx.askReach);
+  const pFill = askF < 1
+    ? { value: clamp01(pFillRaw.value * askF), n: pFillRaw.n, basis: pFillRaw.basis + '×askreach' }
+    : pFillRaw;
   const ttf = est.ttf(ctx);
   // Step 6 (churn): rank the LAP, not the unit — multiply the per-unit net by the family's lapUnits
   // (the exact buy limit, bounded by feasible depth). Families without lapUnits rank per unit (≡ 1), so

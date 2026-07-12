@@ -89,7 +89,7 @@ import { valueRanges, valueScore, valueGate, valueTier } from '../js/valuescreen
 // entry path for the suggestions ledger + the per-row path annotation.
 import { STRATEGIES, MODE_KEYS, ALL_MODE_KEYS } from '../js/strategies.mjs';
 import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
-import { rateItem, GRADE_CUTOFFS, capGrade } from './lib/rating.mjs';
+import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from './lib/cashderive.mjs';   // value niche: DERIVED redeployable pool → --capital default (cash.mjs anchor + log flow)
@@ -426,10 +426,16 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // ask up instead of relisting down. NEVER a gate/drop/grade/screen.json input; the lean askHeadroom
     // field is logged to suggestions.jsonl (off row.askHeadroom, in suggestionEntry) for the analyze/F1 join.
     { const ah = askHeadroomText(row); if (ah) headroomNotes.push(`${name}: ${ah}`); }
-    // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF
-    // all evaluated at that same pair. Extra data (reach/velocity) is null at the screen surface today
-    // (no 1h fetch), so the estimators degrade honestly to their band-depth / volume-velocity priors.
-    const er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra });
+    // Proposal A (PLAN-GRADE-REACH): the ASK-side reach already scored in `vres` (side:'ask', optSell,
+    // line ~379) feeds the rank's TWO-LEG P — the rank's net silently assumed the exit prints; now a
+    // mirage exit (a p90 band top reaching 2/14 days) discounts P instead of ranking full. Zero new
+    // fetch (the number is in hand); field remap mirrors reachExtra (validator emits evidence.hit/days).
+    const askReachRes = vres.find(r => r.key === 'reach');
+    const askEv = askReachRes && askReachRes.evidence;
+    const askReachExtra = (askEv && askEv.days >= 1) ? { reachedDays: askEv.hit, nDays: askEv.days } : null;
+    // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF all
+    // evaluated at that same pair. reach = the BID-fill prob (entry); askReach = the two-leg exit discount.
+    const er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra, askReach: askReachExtra });
     // Step 2 (2026-07-09): a RENDER-stage net>0 surface gate. er.net is the after-tax net at the thesis's
     // OWN posted price pair (spec.priceBasis; the BOND 10%-guide-retrade exception rides through via
     // netMargin). A non-positive net means the thesis can't make money at the pair it would post — a bond
@@ -453,6 +459,11 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // configured floors, so it must never print a grade a qualified row could.
     let grade = rescued ? capGrade(r.grade, PHASE_BASING_GRADE_CAP) : r.grade;
     if (subFloor) grade = capGrade(grade, SUBFLOOR_GRADE_CAP);
+    // Proposal B (PLAN-GRADE-REACH): a mirage exit can't advertise a headline letter. When the quoted ASK
+    // reaches < REACH_GRADE_CAP_FRAC of recent days, cap the grade (Proposal A already shrank the rank
+    // number; this guarantees the LETTER an operator reads can't oversell it). Same capGrade site as above.
+    if (askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
+      grade = capGrade(grade, REACH_GRADE_CAP);
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // Part A: fold an informative phase into the existing Regime cell (no new column — the canonical
     // width/contract is untouched). A rescued row gets an explicit provisional note; other spike/decay/

@@ -145,6 +145,17 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `net after tax × P(fill at the quoted pair) ÷ TTF` from `pipeline/lib/estimators.mjs`, evaluated at
   the ONE price pair the thesis posts. `expGpDay` survives ONLY as the cheap pre-fetch pool orderer +
   the 500k `--min-gpd` pre-filter. Grade cutoffs in `rating.mjs` are placeholders pending validation).
+  **P(fill) is TWO-LEG (PLAN-GRADE-REACH, Ben 2026-07-12).** The rank's `net` silently assumes the exit at
+  `optSell` prints; it doesn't always — a robust p90 band top can reach only ~2/14 days (the S+-godsword-on-a-
+  mirage-exit class). So `P = P_bid × askReachFactor(askReach)`: the family bid/entry fill discounted by the
+  cross-day ASK reach (`js/estimators.mjs` `askReachFactor`, softened floor `PFILL_ASKREACH_FLOOR` so a stale
+  fortnight demotes but never zeroes; the ask reach is the SAME inform-mode `reachValidator` number already in
+  hand — zero new fetch). Paired with a **`REACH_GRADE_CAP`** (`js/rating.mjs`, mirrors `THIN_GRADE_CAP`):
+  a quoted ask reaching < `REACH_GRADE_CAP_FRAC` of days caps the LETTER so it can't oversell either. Both are
+  render-stage in `screen.mjs` (the app Finder passes no `askReach` → byte-identical → no `APP_VERSION` bump;
+  replay goldens unaffected). PLACEHOLDER constants (n≈14), F1/retro-join calibrates the magnitudes;
+  promoting `reach` inform→gate (Proposal C) + the asymmetric deep-buy/reliable-sell repricing (PLAN-GRADE-REACH
+  Part II) are HELD for F1. This is Proposals A+B of `PLAN-GRADE-REACH.md`.
   **Churn per-lap EXCEPTION (Step 6, Ben 2026-07-09, decision A):** the per-thesis rank is PER-UNIT for
   every niche EXCEPT `churn`, which ranks the **LAP** — `net/u × min(limit, feasibleDepth) × P(fill) ÷
   TTF` via its own `churn` estimator family (we always max the buy limit on these commodities, so the

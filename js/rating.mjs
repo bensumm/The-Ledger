@@ -100,6 +100,14 @@ export function gradeFor(score) {
    like a cap escape — it isn't; the cap never applied). No code gap; the ledger's `class` is just a
    coarser vocabulary than the screen's admission `thin`. */
 export const THIN_GRADE_CAP = 'A-';
+// Proposal B (PLAN-GRADE-REACH): a headline-grade CEILING when the quoted ASK/exit reaches < REACH_GRADE_CAP_FRAC
+// of recent days. Proposal A already shrinks the RANK NUMBER for a mirage exit; this guarantees the LETTER an
+// operator reads can't oversell it either (a 2/14-reach S+ ask can't advertise an S/A grade). Applied at the
+// screen render site via capGrade, exactly like THIN_GRADE_CAP / PHASE_BASING_GRADE_CAP / SUBFLOOR_GRADE_CAP.
+// PLACEHOLDER cutoff+cap (rule 4: n≈14 ask reach) — the frac mirrors the reachValidator caution band
+// (validate.mjs REACH_CAUTION_FRAC 0.5); F1/retro-join calibrates both against realized sell latency.
+export const REACH_GRADE_CAP = 'B';
+export const REACH_GRADE_CAP_FRAC = 0.5;
 export function capGrade(grade, cap) {
   const order = GRADE_CUTOFFS.map(([g]) => g);
   const gi = order.indexOf(grade), ci = order.indexOf(cap);
