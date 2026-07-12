@@ -628,5 +628,8 @@ now **SHIPPED** (`7502889`) as a stdout velocity FOOTNOTE (`lib/velocitytag.mjs`
 table/`screen.json`/app contract stay byte-identical (same discipline as the phase fold). Also
 shipped post-YIELD: **total-capital view** (`2fdae81`) — `capitalutil.totalCapital` + `lib/cashstate.mjs`
 + `pipeline/cash.mjs` add a committed + STATED idle-cash line to the watch footer (idle GP is in no
-log, so it's a stated snapshot, staleness-bannered, never a verdict input). Earlier per-plan Discovered
+log, so it's a stated snapshot, staleness-bannered, never a verdict input). SUPERSEDED
+(PLAN-CASH-TRACKING): the footer's idle figure is now DERIVED (`lib/cashderive.mjs` —
+anchor + log flow, escrow-excluded `availableCash`), and `screen.mjs`'s `--capital` default
+falls back to the derived `liquidCapital` instead of the 100m placeholder. Earlier per-plan Discovered
 lists (chunks 4/8/10 fixes) are preserved in git history — `git show 39e5d23:PLAN.md`.

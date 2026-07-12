@@ -70,7 +70,7 @@ import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized
 import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization, totalCapital } from './lib/capitalutil.mjs';   // YV1 (#3) — working-vs-parked capital line
-import { readCash } from './lib/cashstate.mjs';            // total-capital: STATED idle-cash denominator (cash.mjs)
+import { loadDerivedCash } from './lib/cashderive.mjs';    // total-capital: DERIVED idle-cash denominator (cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
@@ -919,19 +919,23 @@ async function main() {
   if (util.utilizationPct != null) sumBits.push(`capital ${util.utilizationPct}% working / ${100 - util.utilizationPct}% parked`);
   sumBits.push(alerts.length ? `⚠ ${alerts.length} alert${alerts.length > 1 ? 's need' : ' needs'} action` : 'no alerts');
   console.log(`  ${sumBits.join(' · ')}`);
-  // Total capital = committed (working+parked) + STATED idle cash (cash.mjs). Idle GP isn't in any
-  // log, so it's a stated snapshot that ages the moment you trade → staleness-bannered, NEVER a
-  // verdict/alert input; it's purely the denominator for the idle-vs-working picture. Absent a
-  // stated figure we show the committed absolute and nudge how to set idle cash.
-  const cashRec = readCash();
-  const tc = totalCapital({ workingGp: exposure, parkedGp: committed, cashGp: cashRec ? cashRec.cashGp : null });
+  // Total capital = committed (working+parked) + DERIVED idle cash (lib/cashderive.mjs, PLAN-CASH-TRACKING).
+  // Idle GP isn't in any log, so it's DERIVED FORWARD from a stored anchor (anchor + Σsells−Σbuys−escrow),
+  // not a stated snapshot that ages the moment you trade. We feed `availableCash` (the FREE coin stack,
+  // resting-bid ESCROW excluded) as the idle figure — the escrow is already counted in `committed` above,
+  // so using liquidCapital here would double-count the parked bids. NEVER a verdict/alert input; purely the
+  // idle-vs-working denominator. Absent an anchor we show the committed absolute and nudge how to set one.
+  const dc = loadDerivedCash();
+  const tc = totalCapital({ workingGp: exposure, parkedGp: committed, cashGp: dc.known ? dc.availableCash : null });
   if (tc.totalGp != null) {
-    const min = cashRec?.statedAt ? Math.round((Date.now() - new Date(cashRec.statedAt).getTime()) / 60000) : null;
+    const min = dc.statedAt ? Math.round((Date.now() - new Date(dc.statedAt).getTime()) / 60000) : null;
     const ageTxt = min == null ? '' : (min < 60 ? `${min}m` : `${Math.floor(min / 60)}h${min % 60 ? ' ' + (min % 60) + 'm' : ''}`);
-    const cashTag = min != null && min > 120 ? ` ⚠ cash stated ${ageTxt} ago — update via cash.mjs` : (min != null ? ` · cash stated ${ageTxt} ago` : '');
-    console.log(`  total capital ~${fmtP(tc.totalGp)} · committed ${fmtP(tc.committedGp)} (${tc.committedPct}%) / idle cash ~${fmtP(tc.cashGp)} (${tc.idlePct}%)${cashTag}`);
+    const flowTxt = dc.netFlow ? ` ${dc.netFlow > 0 ? '+' : ''}${fmtP(dc.netFlow)} since` : '';
+    const prov = min != null ? ` · idle derived from anchor ${ageTxt} ago${flowTxt}` : '';
+    const inj = dc.inferredInjection > 0 ? ` ⚠ +${fmtP(dc.inferredInjection)} inferred injection — re-anchor to confirm (cash.mjs)` : '';
+    console.log(`  total capital ~${fmtP(tc.totalGp)} · committed ${fmtP(tc.committedGp)} (${tc.committedPct}%) / idle cash ~${fmtP(tc.cashGp)} (${tc.idlePct}%)${prov}${inj}`);
   } else if (exposure > 0 || committed > 0) {
-    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not stated — set with: node pipeline/cash.mjs <amount>`);
+    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/cash.mjs <amount>`);
   }
   if (!TARGETS_ONLY) {
     console.log(posAge != null

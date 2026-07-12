@@ -5,7 +5,9 @@
    cashderive.mjs computes the current balance. A re-anchor (pipeline/cash.mjs <amount>) is the manual
    reset — the first anchor, or the one DOWN correction when Ben is short / spent gp off-ledger (the
    only movement the log can't see). Stored in gitignored `.capital-state.json` at the repo root;
-   read by cashderive + watch.mjs's SUMMARY footer. Impure (fs) — kept OUT of the pure capitalutil.mjs
+   read by cashderive, whose loadDerivedCash feeds watch.mjs's SUMMARY footer (availableCash) and
+   screen.mjs's --capital default (liquidCapital) — consumers no longer read this anchor directly.
+   Impure (fs) — kept OUT of the pure capitalutil.mjs
    / cashderive deriveCash so those stay fixture-testable. */
 import fs from 'node:fs';
 import path from 'node:path';

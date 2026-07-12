@@ -193,8 +193,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   reads it (via `lib/offers.mjs`'s `readOffersSnapshot`) as the held-book source for the askFilling
   softening — the OTHER-machine-safe path that needs no local `~/.runelite` log dir
 - `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's cash ANCHOR
-  (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `lib/cashderive.mjs` +
-  `watch.mjs`'s SUMMARY total-capital line. The GE cash stack is in no log, but idle cash is no
+  (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `lib/cashderive.mjs` — whose
+  `loadDerivedCash` feeds `watch.mjs`'s SUMMARY total-capital line (`availableCash`, escrow excluded)
+  and `screen.mjs`'s `--capital` default (`liquidCapital`). The GE cash stack is in no log, but idle cash is no
   longer merely stated: this is the ANCHOR `cashderive.mjs` runs FORWARD from (anchor + Σ sells-
   after-tax − Σ buys − resting-bid escrow). It is NEVER a verdict/alert input — purely the
   denominator for the idle-vs-working picture
@@ -496,7 +497,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     MEASURED round-trip hold; placeholder thresholds), `capitalutil.mjs` (#3/YV1 — PURE
     `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
     "how long bids sat" + velocity mix over outcomes campaigns) + `totalCapital` (committed +
-    STATED idle cash → the WHOLE-pool idle-vs-working split, null-safe when cash is unknown);
+    idle cash → the WHOLE-pool idle-vs-working split, null-safe when cash is unknown; the idle
+    figure it's fed is now the DERIVED `availableCash` from `cashderive.mjs`, not a stated snapshot);
     output-only, never a verdict input),
     `cashstate.mjs` (impure fs sibling — `readCash`/`writeCash`/`clearCash` over the gitignored
     `.capital-state.json`; now the ANCHOR store rather than the answer — kept out of pure
