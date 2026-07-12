@@ -246,7 +246,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   tripwire as the `HOLD — per thesis: exit <declared/diurnal> · abort < <tripwire>` frame** — the
   exit is the declared/diurnal level, never the 2h band top — and the TG1 headline silence now
   covers LIST-TO-CLEAR too (the expected pre-peak trough); Gate-2 CUT overrides everything.
-  **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
+  **VN-3: a clean lot with live inside a dead-band of break-even renders `PARKED — at break-even
+  (±X)`** instead of the per-print HOLD↔UNDERWATER coin-flip (ungated UNDERWATER headline
+  suppressed in-band; placeholders, n=1). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
   reads the root `offers.json` book (so `HOLD — ask filling` actually prints — quote lacked an
   offer read before), reads the watch loop's `.cache/watch-state.json` READ-ONLY for a conviction
   line, renders the verdict via the ONE shared `renderHeldVerdict`, and runs one `loadSnapshot()`
@@ -404,7 +406,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   `pipeline/lib/context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
   the old inline `heldAction`, diff-verified) — and each pass runs one `loadSnapshot()` for the passive
   Tier-1 archive append (per-item live fetch semantics unchanged). **P4b**: each held note block gains
-  a persistence-gated dominant-path line (`path <key> 0.62 · menu: …`; a confirmed migration prints
+  a persistence-gated dominant-path line (`path <key> 0.6 · menu: …` — one-decimal weights, VN-3; a confirmed migration prints
   `path MIGRATED a → b`) — the path engine's weighed read through the `pathPersistence`
   arm-then-confirm + hysteresis gate (`PATH_PERSIST_MS`/`PATH_HYSTERESIS_MARGIN`, placeholders), so
   flapping weights never whiplash the headline path; decision support only, no path-driven alert

@@ -10,6 +10,22 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### VN-3 — PARKED-at-break-even dead-band + coarse path weights (2026-07-11, PLAN-VERDICT-NOISE F2+F4, pipeline-only — NO APP_VERSION)
+**RC1 (the remaining flap after VN-1).** HOLD and UNDERWATER both deliberately rank severity 0 in the
+VN-1 persistence layer (so the mv-null token set stayed byte-identical), which left the BE-parked
+coin-flip — "is live above break-even?" re-answered per print on a lot whose BE sits INSIDE the 5m
+noise band (Berserker BE 3.15m, live 3.10–3.17m) — flipping the label every pass. **F2:** on a clean
+(mv-null, non-falling) read with live inside a dead-band of BE — HALF the current 2h raw band width,
+floored at ±0.5% of BE (`BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`, both PLACEHOLDERS, n=1) — the
+display names the situation: `PARKED — at break-even (±X) — list ≥ <BE>`, one stable state instead of
+the alternation, and watch.mjs suppresses the ungated UNDERWATER headline inside the band (the
+falling-regime alert is unchanged — PARKED requires a non-falling row; an escalated verdict or an
+out-of-band print exits the state). Display-only: the raw HOLD/UNDERWATER token still flips
+underneath and stays what the ledger logs. **F4 (RC5):** `renderPathLine` viabilities render at ONE
+decimal — the placeholder weights step in ±0.12 quanta, and two decimals rendered that as false
+precision that read as instability (0.30↔0.42). Pinned by the verdictpersist.test.mjs FIXTURE-1
+Berserker sequence (one rendered state across 12 passes, raw flipping underneath).
+
 ### VN-2 — thesis-aware exit frame (2026-07-11, PLAN-VERDICT-NOISE F3, pipeline-only — NO APP_VERSION)
 **RC7, the frame mismatch (Ben's key point).** The churn session's positions were entered on the
 DIURNAL thesis (buy the dip window, sell the peak window), but `momVerdict` judges every hold with a

@@ -137,6 +137,16 @@ Print-only — it never writes trade data. Each run emits:
      sub-`BIG_TICKET_GP` lot — usually noise, not a breakdown; hold, no reprice, `listAt` null, it
      may reabsorb). These are the full verdict vocabulary alongside the underwater set — this list
      is the ONE home for it (skills point here, they don't restate it).
+   - **Display-layer tokens (VN-2/VN-3 — rendered states, not momVerdict outputs).** The console
+     surfaces can additionally render two persistence-layer states in the Verdict cell:
+     **`PARKED — at break-even (±X)`** — live sits inside a dead-band of break-even on a clean
+     (mv-null, non-falling) read, so the per-print HOLD↔UNDERWATER coin-flip is noise; the ungated
+     UNDERWATER headline is suppressed inside the band (dead-band = half the 2h raw band width,
+     floored at ±0.5% of BE — `BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`, PLACEHOLDERS, n=1) —
+     and **`HOLD — per thesis (…): exit … · abort < …`** (the VN-2 declared-plan frame, above).
+     Both are DISPLAY states: the raw momVerdict/fallback token is unchanged underneath and stays
+     what the ledger logs; a falling regime, an escalated verdict, or a print outside the band
+     exits PARKED. Home: `heldDisplay` (`lib/context.mjs`), pinned in `verdictpersist.test.mjs`.
 5. **Flag** if an item's total held qty exceeds its exposure cap, or if held inventory is
    **UNLISTED** (bought but not in a sell offer).
 6. Keep each report tight — one line if nothing changed. Only re-run a full multi-day trend
@@ -383,7 +393,7 @@ field is a nested (4-space) sub-line. **Fixed field order:**
 4. **structural tripwire** (V2) — `support X · cut-trigger Y`, when computable.
 4a. **recovery-read** (V6, ADVISORY) — `recovery-read: likely recovers|drops|uncertain — <drivers>`;
    only on a non-clean lot. Decision SUPPORT, never a verdict/alert input.
-4b. **dominant path** (V2-P4b, decision SUPPORT) — the persistence-gated `path <current> 0.62 ·
+4b. **dominant path** (V2-P4b, decision SUPPORT) — the persistence-gated `path <current> 0.6 ·
    entered under <key> · menu: …` line (a CONFIRMED migration headlines as `path MIGRATED a → b`).
    Never an alert input; the verdict string is untouched.
 5. **sell/list-at (+ break-even) + fill-progress** — `sell: list @ X · break-even Y · <ask n/m

@@ -111,6 +111,30 @@ export function rawHeldToken(row, be, mv) {
   return row.quickSell != null ? 'HOLD' : 'NO-QUOTE';
 }
 
+// VN-3 (F2) — the PARKED-at-break-even dead-band. RC1: a lot whose break-even sits INSIDE the 5m
+// noise band flips HOLD↔UNDERWATER on every print ("is live above BE?" is a coin-flip per pass —
+// the Berserker shape: BE 3.15m, live 3.10–3.17m). Both tokens rank severity 0 (deliberately, so
+// the mv-null set stayed byte-identical in VN-1), so persistence alone can't stop that flap. When
+// live sits within a dead-band of BE on a CLEAN read, the display names the actual situation —
+// `PARKED — at break-even (±X)` — instead of alternating, and watch.mjs suppresses the ungated
+// UNDERWATER headline inside the band (the falling-regime alert is unchanged — PARKED requires a
+// non-falling row). Display-only; the raw HOLD/UNDERWATER token still flips underneath (logged).
+// ⚠ BOTH PLACEHOLDERS (rule 4, n=1 session): dead-band = HALF the current 2h raw band width
+// (BE_DEADBAND_BAND_FRAC), floored at a fixed pct of BE (BE_DEADBAND_MIN_PCT) — shape, not
+// calibration; F1-retro owns tuning.
+export const BE_DEADBAND_BAND_FRAC = 0.5;    // fraction of the 2h raw band width
+export const BE_DEADBAND_MIN_PCT = 0.005;    // floor: ±0.5% of break-even
+
+/* isParkedAtBE — PURE: a held lot counts as PARKED when no momVerdict fired (a clean read — any
+   escalated/softened state keeps its own token), the regime is not falling, and |live − BE| sits
+   inside the dead-band. Returns the dead-band gp (truthy) or null. */
+export function parkedDeadband(row, be) {
+  if (!row || be == null || row.quickSell == null || row.falling) return null;
+  const bandW = (row.rawBandHi != null && row.rawBandLo != null) ? (row.rawBandHi - row.rawBandLo) : 0;
+  const dead = Math.max(BE_DEADBAND_BAND_FRAC * bandW, BE_DEADBAND_MIN_PCT * be);
+  return Math.abs(row.quickSell - be) <= dead ? dead : null;
+}
+
 /* heldDisplay — compute the persistence-gated DISPLAY read for a held lot. PURE; the caller
    supplies the (possibly nulled-for-fresh) prior watch-state entry and the clock, exactly like
    pathsStage. Returns:
@@ -147,21 +171,30 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
     const pathBit = thesis.path != null ? ` (${thesis.path})` : '';
     frameLabel = `HOLD — per thesis${pathBit}: ${exitBit}${winBit} · abort < ${fmtP(thesis.tripwire)}`;
   }
-  const candidate = frameActive ? 'HOLD — per thesis' : raw;
+  // VN-3 (F2): PARKED dead-band — only reachable on a clean mv-null read (never masks an
+  // escalated/softened verdict) and only when no thesis frame governs.
+  const deadband = (!frameActive && !immediate && mv == null) ? parkedDeadband(row, be) : null;
+  const parkedActive = deadband != null;
+  const candidate = frameActive ? 'HOLD — per thesis' : parkedActive ? 'PARKED' : raw;
   const vp = verdictPersistence(prior, { candidate, immediate, now: nowMs, persistMs });
   const min = ms => Math.max(0, Math.round((ms || 0) / 60000));
   const token = vp.displayVerdict ?? candidate;
-  // the frame's full label replaces the bare frame token whenever the frame is what displays
-  let label = (frameActive && token === 'HOLD — per thesis') ? frameLabel : token;
+  // the frame's/PARKED's full label replaces the bare token whenever it is what displays
+  const parkedShown = parkedActive && token === 'PARKED';
+  let label = (frameActive && token === 'HOLD — per thesis') ? frameLabel
+    : parkedShown ? `PARKED — at break-even (±${fmtP(Math.round(deadband))})${be != null ? ` — list ≥ ${fmtP(be)}` : ''}`
+    : token;
   if (vp.arming && vp.armedKey != null)
     label += ` (${vp.armedKey} arming ~${min(vp.armedMs)}m/${min(persistMs)}m)`;
   if (vp.unreliableThisPass)
     label += ` (read unreliable this pass${row && row.reliableReason ? ` — ${row.reliableReason}` : ''})`;
   const frameShown = frameActive && token === 'HOLD — per thesis';
-  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass || frameShown;
-  const mvDisplay = diverges ? { synthetic: true, kind: frameShown ? 'frame' : 'persist', verdict: label, raw } : mv;
+  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass || frameShown || parkedShown;
+  const mvDisplay = diverges
+    ? { synthetic: true, kind: frameShown ? 'frame' : parkedShown ? 'parked' : 'persist', verdict: label, raw }
+    : mv;
   return {
-    raw, token, label, frame: frameShown, arming: vp.arming, armedKey: vp.armedKey,
+    raw, token, label, frame: frameShown, parked: parkedShown, arming: vp.arming, armedKey: vp.armedKey,
     armedMs: vp.armedMs, persistMs, confirmedThisPass: vp.confirmedThisPass,
     unreliableThisPass: vp.unreliableThisPass, mvDisplay,
     state: { displayVerdict: vp.displayVerdict ?? candidate,
@@ -424,6 +457,10 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
       return mode === 'verbose'
         ? `${mv.verdict} — the declared plan governs (raw band-flip read this pass: ${mv.raw}). Below the tripwire normal escalation resumes; a Gate-2 breakdown CUT always overrides the frame.`
         : mv.verdict;
+    if (mv.kind === 'parked')
+      return mode === 'verbose'
+        ? `${mv.verdict} — live is inside the break-even dead-band (raw this pass: ${mv.raw}); the HOLD/UNDERWATER coin-flip on a BE-parked lot is noise, not a signal. A falling regime, an escalated verdict, or a print outside the band exits this state.`
+        : mv.verdict;
     return mode === 'verbose'
       ? `${mv.verdict} — displayed verdict is persistence-gated (raw read this pass: ${mv.raw}); a change confirms only once it holds, except a Gate-2 breakdown CUT which is always immediate.`
       : mv.verdict;
@@ -438,8 +475,8 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
    by both surfaces (watch.mjs's held note block; quote.mjs --positions' per-item info lines). It is
    the renderer-family sibling of renderHeldVerdict — the verdict string itself is deliberately
    UNTOUCHED (momVerdict byte-identity, P4a-pinned); the path read is decision SUPPORT beside it,
-   never an alert input. Shape:
-     path <current> 0.62 · entered under <key> · menu: <alt> 0.45 · <alt> 0.40 (support, not a verdict)
+   never an alert input. Shape (VN-3/F4: viabilities render at ONE decimal — coarse on purpose):
+     path <current> 0.6 · entered under <key> · menu: <alt> 0.5 · <alt> 0.4 (support, not a verdict)
    A CONFIRMED migration (persisted currentPath ≠ enteredUnder — survived the arm-then-confirm gate)
    headlines the line as `path MIGRATED <enteredUnder> → <current>`; a challenger still inside the
    persistMs window shows as `<key> challenging (arming ~Nm/Pm)`. Returns null when no path read
@@ -450,7 +487,9 @@ export function renderPathLine(ctx) {
   if (!pa || !pa.dominant) return null;
   const P = pa.persisted || {};
   const cur = P.currentPath != null ? P.currentPath : pa.dominant.key;
-  const viaOf = k => { const w = pa.weighed.find(x => x.key === k); return (w && w.viability != null) ? w.viability.toFixed(2) : '?'; };
+  // VN-3 (F4, RC5): ONE decimal — the P4a weights are placeholder heuristics stepping in ±0.12
+  // quanta; two decimals rendered that as false precision that READ as instability (0.30↔0.42).
+  const viaOf = k => { const w = pa.weighed.find(x => x.key === k); return (w && w.viability != null) ? w.viability.toFixed(1) : '?'; };
   const min = ms => Math.max(0, Math.round((ms || 0) / 60000));
   const entered = P.enteredUnder != null ? P.enteredUnder : pa.enteredUnder;
   const head = P.migration

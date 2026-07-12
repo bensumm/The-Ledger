@@ -117,6 +117,44 @@ ok('legacy prior (no display fields) behaves as first sight — adopt the candid
 });
 
 /* =============================================================================================
+ * 1. PARKED-AT-BE (the Berserker shape) — the label holds ONE state while the raw token flips
+ * ============================================================================================= */
+import { parkedDeadband, BE_DEADBAND_BAND_FRAC, BE_DEADBAND_MIN_PCT } from './lib/context.mjs';
+
+ok('FIXTURE 1: instabuy oscillating across BE inside the dead-band → ONE rendered state over ≥10 passes, raw still flips', () => {
+  const BE = 3_150_000;                       // Berserker: BE 3.15m, 2h raw band 3.10–3.17m
+  const band = { rawBandLo: 3_100_000, rawBandHi: 3_170_000 };
+  let prior = null;
+  const labels = new Set(), raws = new Set();
+  for (let i = 0; i < 12; i++) {
+    const live = i % 2 ? 3_130_000 : 3_160_000;   // alternating below/above BE, inside the dead-band
+    const row = rowOf({ ...band, quickSell: live });
+    const d = heldDisplay({ row, be: BE, mv: null, prior, nowMs: T0 + i * 3 * MIN });
+    labels.add(d.token); raws.add(d.raw);
+    assert.equal(d.parked, true, `pass ${i}: inside the dead-band the display is PARKED`);
+    assert.match(d.label, /^PARKED — at break-even \(±.+\) — list ≥ 3\.15m$/);
+    prior = { ...d.state };                      // chain the persisted display fields
+  }
+  assert.deepEqual([...labels], ['PARKED'], 'ONE rendered state across all passes');
+  assert.deepEqual([...raws].sort(), ['HOLD', 'UNDERWATER'], 'honesty: the raw token still flips underneath');
+});
+
+ok('PARKED never masks an escalated/softened verdict, a falling regime, or an out-of-band print', () => {
+  const BE = 3_150_000;
+  // an mv fired (CUT-CANDIDATE) → parked unreachable even at BE
+  const d1 = heldDisplay({ row: rowOf({ quickSell: 3_150_000 }), be: BE,
+    mv: { action: 'CUT', verdict: 'CUT-CANDIDATE', gate: 'D', listAt: 3_150_000 }, prior: null, nowMs: T0 });
+  assert.equal(d1.parked, false);
+  // falling regime → parkedDeadband is null (the FALLING alert path is untouched)
+  assert.equal(parkedDeadband(rowOf({ falling: true, quickSell: 3_150_000 }), BE), null);
+  // a print outside the dead-band → normal HOLD/UNDERWATER token
+  const dead = Math.max(BE_DEADBAND_BAND_FRAC * 70_000, BE_DEADBAND_MIN_PCT * BE);
+  const d2 = heldDisplay({ row: rowOf({ quickSell: BE - dead - 60_000 }), be: BE, mv: null, prior: null, nowMs: T0 });
+  assert.equal(d2.parked, false);
+  assert.equal(d2.raw, 'UNDERWATER');
+});
+
+/* =============================================================================================
  * 2. REAL BREAKDOWN (the bludgeon shape) — Gate-2 CUT immediate at BOTH layers, through the new layer
  * ============================================================================================= */
 

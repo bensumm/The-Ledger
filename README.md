@@ -534,7 +534,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     held display token, ex-watch.mjs heldVerdict) + `heldDisplay` (the persistence-gated display
     read — token/label/mvDisplay off `verdictPersistence`; computed in `positionStage`, consumed by
     `renderHeldVerdict` so the table cell and the note render ONE label; byte-identical when nothing
-    diverges). No fetch/fs — every stage is node-importable +
+    diverges); **VN-2** the thesis render frame (a declared plan above its tripwire renders
+    `HOLD — per thesis: exit <declared/diurnal> · abort < <tripwire>`); **VN-3** `parkedDeadband` +
+    the `PARKED — at break-even (±X)` dead-band state (`BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`
+    placeholders) and one-decimal path-menu weights in `renderPathLine` (F4 — the ±0.12 placeholder
+    steps stop reading as instability). No fetch/fs — every stage is node-importable +
     fixture-pinned in `context.test.mjs`), `richterm.mjs` (COD-4 — `richFrom1h`/
     `trajectoryFrom1h`: aggregate a fetched 1h /timeseries into a WARM multi-week term structure so
     reach/trajectory FIRE while the `loadDaily` archive is still young; EXTRACTED from screen.mjs so

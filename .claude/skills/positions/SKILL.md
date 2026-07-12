@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.22
+version: 1.23
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -78,8 +78,10 @@ exclude them from the action plan. **Never CUT-recommend an incidental lot.**
 
 **Vocabulary — the ONE home is `pipeline/MONITORING.md` step 4** (the PLAN-3 gate tree + the
 momentum-up verdicts). Every verdict the script can emit — NO-READ, DIURNAL-WATCH, SHOCK-WATCH,
-CUT, LIST-TO-CLEAR, CUT-CANDIDATE, WATCH — fresh entry, HOLD — ask filling, and the momentum-up
-HOLD — list high / HOLD — watch — is defined there with what each means and does. Read it there;
+CUT, LIST-TO-CLEAR, CUT-CANDIDATE, WATCH — fresh entry, HOLD — ask filling, the momentum-up
+HOLD — list high / HOLD — watch, and the VN-2/VN-3 display states PARKED — at break-even /
+HOLD — per thesis (persistence-gated labels; an `(X arming ~Nm)` suffix means the change hasn't
+confirmed yet) — is defined there with what each means and does. Read it there;
 don't re-derive it here. The script emitted the verdict; your job is to **render it as the action
 line in §4, against the per-item dossier** — a verdict is a prompt for judgment, not an order
 (the CANCEL-BID-on-a-thin-book and fresh-chase-entry examples in MONITORING step 4).

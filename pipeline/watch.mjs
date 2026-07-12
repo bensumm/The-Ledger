@@ -429,6 +429,10 @@ function heldAlert(it) {
   // TG1: a thesis-armed lot is expected-underwater above its declared tripwire — same suppression as
   // the Gate-D armed case (else it would fall straight to the plain UNDERWATER headline TG1 silences).
   if (gate && gate.armed && (gate.reason === 'cut-candidate-armed' || gate.reason === 'thesis-armed')) return null;
+  // VN-3 (F2): inside the break-even dead-band the HOLD↔UNDERWATER flip is noise — the display
+  // reads PARKED and the ungated UNDERWATER headline is suppressed (falling-regime alert unchanged:
+  // PARKED requires a non-falling row, so a falling lot never reaches this suppression).
+  if (it._display && it._display.parked) return null;
   if (instabuy != null && be != null && instabuy < be)
     return { level: 'UNDERWATER', msg: `UNDERWATER ${name} — live sell ${fmtP(instabuy)} < break-even ${fmtP(be)}. Hold ≥ break-even only if regime is flat/rising; cut if it turns.` };
   if (row.falling)
