@@ -404,9 +404,23 @@ of the numbered signals, in more detail:
    lot escalates to CUT before the lagging multi-day regime confirms** (the bludgeon-exit
    lesson). An item also alerts if it's simply UNDERWATER (`instabuy < break-even`) or its
    multi-day regime is FALLING.
-   - **Conviction gating — arm-then-confirm, TIME-based (V4 + V7).** Whether a verdict becomes a
-     *headline* ⚠ ALERT is gated by the pure `convictionGate()` (`lib/watchstate.mjs`) — the verdict
-     *string* is unchanged (the Verdict column still prints `CUT-CANDIDATE`); only escalation is gated.
+   - **Conviction gating — arm-then-confirm, TIME-based (V4 + V7); the DISPLAYED label is gated
+     too (VN-1).** Whether a verdict becomes a *headline* ⚠ ALERT is gated by the pure
+     `convictionGate()` (`lib/watchstate.mjs`). The RAW verdict string (`momVerdict`, what the
+     suggestions ledger logs) is unchanged — but as of VN-1 the *rendered* Verdict column/cell is
+     ALSO persistence-gated (`verdictPersistence` + the shared `heldDisplay`/`renderHeldVerdict`,
+     `lib/context.mjs`): an ESCALATION (`CUT-CANDIDATE`/`LIST-TO-CLEAR`, severity rank 2) must hold
+     ≥ `VERDICT_PERSIST_MS` (placeholder, = `ALERT_PERSIST_MS`) before the label changes — until
+     then the incumbent renders with an `(X arming ~Nm/Pm)` suffix, so the table and the armed
+     note can never disagree (the 2026-07-11 churn fix). A calmer-or-equal candidate adopts
+     IMMEDIATELY (de-escalation never lingers on a scary label); the **Gate-2 breakdown `CUT`
+     bypasses the timer at BOTH layers** (the invariant, below); a `NO-READ` against an
+     established incumbent demotes to a `(read unreliable this pass — <reason>)` note on the
+     kept label (headline suppressed too) and is the label only on first sight. The app
+     Trends/Watch surfaces keep the instantaneous verdict (they are not the fast-cadence
+     surface); with no watch loop running, `quote.mjs --positions` reads a stale/absent state
+     file and honestly degrades to the instantaneous verdict. Pinned by
+     `pipeline/verdictpersist.test.mjs`.
      **As of V7 the confirmation is WALL-CLOCK TIME, not a pass count** (`ALERT_PERSIST_MS`, 4-min
      placeholder): a condition must PERSIST for the window before it headlines, so a faster loop no
      longer manufactures faster alerts — sensitivity is independent of the /loop cadence (the fix for
@@ -439,8 +453,9 @@ of the numbered signals, in more detail:
        still holds **ABOVE the declared tripwire**, `convictionGate` returns **ARMED, not a headline**
        (`per thesis (multi-day): expected-underwater — silent above tripwire X, exit Y; headline only
        on a break below.`). Below the tripwire it **falls through** to the normal escalation above so
-       the *real* risk headlines. The verdict string is UNCHANGED (`momVerdict` is untouched — the
-       Verdict column still prints `UNDERWATER`/`CUT-CANDIDATE`, honest); only the headline is gated.
+       the *real* risk headlines. The RAW verdict is UNCHANGED (`momVerdict` is untouched; the ledger
+       still logs `UNDERWATER`/`CUT-CANDIDATE`, honest) — the headline is gated here, and the
+       rendered label separately rides the VN-1 display persistence above.
        **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
        silenced by a thesis; `LIST-TO-CLEAR` (a live 2h breakdown) is excluded from the silence; and
        absent a thesis (empty store) behavior is byte-identical to today. The thesis is a *declaration*

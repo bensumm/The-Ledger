@@ -41,7 +41,8 @@
  */
 import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../js/quotecore.js';
 import { fmtP } from '../../js/format.js';
-import { computeDeltas, advanceState, convictionGate, pathPersistence } from './watchstate.mjs';
+import { computeDeltas, advanceState, convictionGate, pathPersistence,
+  verdictPersistence, VERDICT_PERSIST_MS } from './watchstate.mjs';
 import { enumeratePaths, weighPaths } from '../../js/paths.mjs';
 
 // ---------------------------------------------------------------------------
@@ -89,6 +90,62 @@ export function intradayStage(ctx, { ts5m = null, ts6h = null, ts1h = null, reac
 // above the live instabuy. Normalized offer shape `{ price, filled, total }`; null ask → false.
 function askIsFilling(row, ask) {
   return !!(ask && ask.filled > 0 && row && row.quickSell != null && ask.price > row.quickSell);
+}
+
+// ---------------------------------------------------------------------------
+// VN-1 DISPLAYED-VERDICT layer — ONE home for the token + label so the table cell and the note
+// can never disagree (RC4 of PLAN-VERDICT-NOISE dissolves by construction). The RAW verdict
+// (momVerdict + the mv-null fallbacks) is UNTOUCHED and stays what the suggestions ledger logs;
+// this layer only decides what the two surfaces RENDER, via watchstate.verdictPersistence.
+// ---------------------------------------------------------------------------
+
+/* rawHeldToken — the ONE raw display token for a held lot (byte-identical to the pre-VN-1
+   watch.mjs heldVerdict()): the momVerdict verdict string when one fired, else the
+   FALLING / UNDERWATER / HOLD / NO-QUOTE fallbacks. This is what the ledger logs (raw, honest)
+   and what feeds the persistence gate as the candidate. */
+export function rawHeldToken(row, be, mv) {
+  if (mv) return mv.verdict;
+  if (!row) return 'NO-QUOTE';
+  if (row.falling) return 'FALLING';
+  if (row.quickSell != null && be != null && row.quickSell < be) return 'UNDERWATER';
+  return row.quickSell != null ? 'HOLD' : 'NO-QUOTE';
+}
+
+/* heldDisplay — compute the persistence-gated DISPLAY read for a held lot. PURE; the caller
+   supplies the (possibly nulled-for-fresh) prior watch-state entry and the clock, exactly like
+   pathsStage. Returns:
+     { raw, token, label, arming, armedKey, armedMs, persistMs, confirmedThisPass,
+       unreliableThisPass, mvDisplay, state:{displayVerdict, verdictArmedKey, verdictArmedSince} }
+   - `token` is the persistence-gated verdict token; `label` is the FULL rendered string
+     (token + an "(X arming ~Nm/Pm)" suffix while a challenger arms, + a
+     "(read unreliable this pass — reason)" note on a NO-READ demotion).
+   - `mvDisplay` is what renderHeldVerdict consumes: the RAW mv (possibly null) when nothing
+     diverges — so rendering is byte-identical to pre-VN-1 — or a `{ synthetic:true, verdict:label,
+     raw }` wrapper when the displayed label differs from the raw read.
+   - `state` rides the newStateEntry ADDITIVELY (only watch.mjs persists it; quote reads-only —
+     with no watch loop running the prior is stale/absent, so this degrades to the instantaneous
+     verdict: an honest degrade, documented in MONITORING.md step 4). */
+export function heldDisplay({ row = null, be = null, mv = null, prior = null,
+  nowMs = Date.now(), persistMs = VERDICT_PERSIST_MS } = {}) {
+  const raw = rawHeldToken(row, be, mv);
+  const immediate = !!(mv && mv.action === 'CUT' && mv.gate === 2);   // the Gate-2 breakdown CUT invariant
+  const vp = verdictPersistence(prior, { candidate: raw, immediate, now: nowMs, persistMs });
+  const min = ms => Math.max(0, Math.round((ms || 0) / 60000));
+  let label = vp.displayVerdict ?? raw;
+  if (vp.arming && vp.armedKey != null)
+    label += ` (${vp.armedKey} arming ~${min(vp.armedMs)}m/${min(persistMs)}m)`;
+  if (vp.unreliableThisPass)
+    label += ` (read unreliable this pass${row && row.reliableReason ? ` — ${row.reliableReason}` : ''})`;
+  const diverges = (vp.displayVerdict !== raw) || vp.arming || vp.unreliableThisPass;
+  const mvDisplay = diverges ? { synthetic: true, verdict: label, raw } : mv;
+  return {
+    raw, token: vp.displayVerdict ?? raw, label, arming: vp.arming, armedKey: vp.armedKey,
+    armedMs: vp.armedMs, persistMs, confirmedThisPass: vp.confirmedThisPass,
+    unreliableThisPass: vp.unreliableThisPass, mvDisplay,
+    state: { displayVerdict: vp.displayVerdict ?? raw,
+      verdictArmedKey: vp.arming ? vp.armedKey : null,
+      verdictArmedSince: vp.arming ? vp.armedSince : null },
+  };
 }
 
 /* position — THE load-bearing stage. Reads ctx.market.row + ctx.intraday.ts5m and folds in the lot,
@@ -139,9 +196,24 @@ export function positionStage(ctx, {
     });
   }
 
+  // VN-1: the persistence-gated DISPLAY read (one home; both surfaces render from it via
+  // renderHeldVerdict). A fresh episode (first-seen / reset) drops the prior so a re-bought lot
+  // re-establishes its label, mirroring the conviction counters. Fields ride newStateEntry
+  // ADDITIVELY (only watch.mjs persists; quote is read-only per the P0 contract).
+  let display = null;
+  if (held && row) {
+    const freshD = deltas ? (deltas.firstSeen || deltas.reset) : true;
+    display = heldDisplay({ row, be, mv, prior: freshD ? null : watchStatePrior, nowMs });
+    if (newStateEntry) {
+      newStateEntry.displayVerdict = display.state.displayVerdict;
+      newStateEntry.verdictArmedKey = display.state.verdictArmedKey;
+      newStateEntry.verdictArmedSince = display.state.verdictArmedSince;
+    }
+  }
+
   ctx.position = {
     held, qty, avgCost, buyTs: buyTs ?? null, be, lotValue,
-    ask, bid, askFilling, lotCtx, mv,
+    ask, bid, askFilling, lotCtx, mv, display,
     support, cutTrigger, deltas, gate, newStateEntry, thesis: thesisEntry ?? null,
   };
   return ctx;
@@ -313,11 +385,22 @@ function heldActionVerbose(row, be, lotValue, ts5m, mv) {
 /* renderHeldVerdict(ctx, { mode }) — the ONE entry point both surfaces call.
      mode 'compact'  → quote.mjs `--positions` Verdict cell (byte-identical to pre-P0 verdict()).
      mode 'verbose'  → watch.mjs heldAction line (byte-identical to pre-P0 heldAction()).
-   Both derive from ctx.position.mv, so the two surfaces render the SAME verdict for the SAME lot. */
+   Both derive from ctx.position.mv, so the two surfaces render the SAME verdict for the SAME lot.
+   VN-1: when the position stage computed a DISPLAY read (ctx.position.display), the renderer
+   consumes display.mvDisplay instead — the persistence-gated label. When nothing diverges,
+   mvDisplay IS the raw mv, so output is byte-identical to pre-VN-1 (and when the display context
+   is absent entirely — the pre-VN-1 minimal-ctx call sites — behavior is unchanged). A synthetic
+   (diverging) display renders the shared label so the table and the note can't disagree. */
 export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
   const row = ctx && ctx.market ? ctx.market.row : null;
   const p = (ctx && ctx.position) || {};
-  const mv = heldMomVerdict(ctx);
+  const disp = p.display || null;
+  const mv = disp ? disp.mvDisplay : heldMomVerdict(ctx);
+  if (mv && mv.synthetic) {
+    return mode === 'verbose'
+      ? `${mv.verdict} — displayed verdict is persistence-gated (raw read this pass: ${mv.raw}); a change confirms only once it holds, except a Gate-2 breakdown CUT which is always immediate.`
+      : mv.verdict;
+  }
   const ts5m = ctx && ctx.intraday ? ctx.intraday.ts5m : null;
   return mode === 'verbose'
     ? heldActionVerbose(row, p.be, p.lotValue, ts5m, mv)

@@ -353,6 +353,87 @@ export function pathPersistence(prior, {
     armedKey: dominantKey, armedSince: now, arming: true, armedMs: 0 };
 }
 
+// --- VN-1 DISPLAYED-VERDICT PERSISTENCE (arm-then-confirm for the LABEL, not just the alert) --
+// RC4 of PLAN-VERDICT-NOISE: the V4/V7 convictionGate debounces the HEADLINE, but the table's
+// verdict LABEL still showed the instantaneous per-pass momVerdict — so one render could print
+// `⚠ LIST-TO-CLEAR` in the table while the note called the same read "a flicker at this cadence".
+// verdictPersistence extends the SAME arm-then-confirm discipline to the DISPLAYED label, keyed on
+// the watch-state entry exactly like pathPersistence above. It is a DISPLAY layer: momVerdict is
+// UNTOUCHED and stays the raw logged decision; only what the table/notes RENDER is gated.
+//
+// SEVERITY RANK drives the asymmetry: only an ESCALATION (a scarier candidate than the incumbent)
+// must arm-then-confirm; a calmer-or-EQUAL candidate is adopted IMMEDIATELY — de-escalation never
+// lingers on a scary label. HOLD / UNDERWATER / FALLING all rank 0, so the mv-null token set
+// renders exactly as today (the HOLD↔UNDERWATER flip is F2's PARKED dead-band, deliberately not
+// fixed here — clean chunk separation).
+//
+// INVARIANTS (structurally preserved):
+//   - the Gate-2 breakdown CUT bypasses the timer via `immediate` (caller sets it from
+//     mv.action==='CUT' && mv.gate===2) — a genuine breakdown displays AND headlines on pass 1,
+//     the same carve-out convictionGate #1 encodes for the alert layer.
+//   - NO-READ demotion (RC3): a NO-READ candidate against a non-NO-READ incumbent keeps the
+//     incumbent label and sets `unreliableThisPass` (rendered as a "(read unreliable this pass)"
+//     note) — a feed artifact stops interleaving with real verdicts. NO-READ is the label only
+//     on first sight (no incumbent).
+//
+// ⚠ PLACEHOLDER (honesty rule 4): VERDICT_PERSIST_MS defaults to ALERT_PERSIST_MS (4m) — the
+// SHAPE of the guard, not a calibrated magnitude (n=1 replay session). F1-retro/analyze owns
+// later calibration off the suggestions ledger.
+export const VERDICT_PERSIST_MS = ALERT_PERSIST_MS;
+
+// Severity rank of a display token. CUT (any CUT-headlined verdict incl. the structural-break
+// form) = 3; the escalated-but-softer CUT-CANDIDATE / LIST-TO-CLEAR = 2; everything else
+// (HOLD / UNDERWATER / FALLING / NO-READ / DIURNAL-WATCH / SHOCK-WATCH / the HOLD—… family) = 0,
+// so those adopt immediately and today's rendering is unchanged for them.
+export function verdictSeverity(token) {
+  if (token === 'CUT') return 3;
+  if (token === 'CUT-CANDIDATE' || token === 'LIST-TO-CLEAR') return 2;
+  return 0;
+}
+
+/* PURE. The displayed-verdict arm-then-confirm gate (mirrors pathPersistence). `prior` is the
+   watch-state entry (fields displayVerdict / verdictArmedKey / verdictArmedSince — ADDITIVE, a
+   legacy entry without them behaves as first sight). `candidate` is THIS pass's raw verdict token;
+   `immediate` bypasses the timer (the Gate-2 breakdown CUT invariant). now = ms.
+
+   Returns { displayVerdict, armedKey, armedSince, arming, armedMs, confirmedThisPass,
+             unreliableThisPass, persistMs }.
+
+   Contract:
+     - immediate → adopt the candidate NOW (disarm anything pending).
+     - no incumbent (first sight / fresh episode with prior nulled by the caller) → adopt.
+     - candidate === incumbent → re-affirmed, disarm.
+     - candidate 'NO-READ' with a non-NO-READ incumbent → keep the incumbent,
+       unreliableThisPass:true (never arms anything).
+     - severity(candidate) ≤ severity(incumbent) → adopt immediately (calm never waits).
+     - ESCALATION → arm-then-confirm on TIME: the same candidate must hold ≥ persistMs before it
+       becomes the displayed label; until then the incumbent renders with the challenger arming.
+       A different challenger re-arms afresh (the clock does not transfer). */
+export function verdictPersistence(prior, {
+  candidate = null, immediate = false, now = null, persistMs = VERDICT_PERSIST_MS,
+} = {}) {
+  const incumbent = (prior && prior.displayVerdict != null) ? prior.displayVerdict : null;
+  const base = { armedKey: null, armedSince: null, arming: false, armedMs: 0,
+    confirmedThisPass: false, unreliableThisPass: false, persistMs };
+  if (candidate == null) return { ...base, displayVerdict: incumbent };
+  if (immediate) return { ...base, displayVerdict: candidate, confirmedThisPass: incumbent !== candidate };
+  if (incumbent == null) return { ...base, displayVerdict: candidate };
+  if (candidate === incumbent) return { ...base, displayVerdict: incumbent };
+  if (candidate === 'NO-READ') return { ...base, displayVerdict: incumbent, unreliableThisPass: true };
+  if (verdictSeverity(candidate) <= verdictSeverity(incumbent))
+    return { ...base, displayVerdict: candidate };   // calmer-or-equal → adopt immediately
+  // Escalation → arm-then-confirm on TIME (cadence-independent, mirrors convictionGate/pathPersistence).
+  const armedKey = (prior && prior.verdictArmedKey != null) ? prior.verdictArmedKey : null;
+  const armedSince = (prior && prior.verdictArmedSince != null) ? prior.verdictArmedSince : null;
+  if (armedKey === candidate && armedSince != null) {
+    const armedMs = elapsed(armedSince, now);
+    if (now != null && armedMs >= persistMs)
+      return { ...base, displayVerdict: candidate, confirmedThisPass: true, armedMs };
+    return { ...base, displayVerdict: incumbent, armedKey: candidate, armedSince, arming: true, armedMs };
+  }
+  return { ...base, displayVerdict: incumbent, armedKey: candidate, armedSince: now, arming: true, armedMs: 0 };
+}
+
 // --- THIN IO (the only fs surface; never in the tested path) -------------------------------
 // loadState degrades to {} on ANY failure (missing file, corrupt JSON) — a bad state file must
 // never break a pass. saveState writes the whole keyed map compactly, creating .cache/ if needed.

@@ -236,7 +236,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
   NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE, plus the
   V3 Gate-D softenings WATCH — fresh entry (fresh lot) / HOLD — ask filling (own ask filling
-  above the clear). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
+  above the clear). **VN-1 (2026-07-11): the RENDERED verdict label on both console surfaces
+  (this table + watch.mjs's) is persistence-gated** — escalations (CUT-CANDIDATE/LIST-TO-CLEAR)
+  arm-then-confirm before the label changes, the Gate-2 breakdown CUT is always immediate, and a
+  NO-READ against an established incumbent demotes to a `(read unreliable this pass)` note
+  (`verdictPersistence`/`heldDisplay`; MONITORING.md step 4 is the home; the raw `momVerdict` is
+  untouched and stays what the ledger logs). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
   reads the root `offers.json` book (so `HOLD — ask filling` actually prints — quote lacked an
   offer read before), reads the watch loop's `.cache/watch-state.json` READ-ONLY for a conviction
   line, renders the verdict via the ONE shared `renderHeldVerdict`, and runs one `loadSnapshot()`

@@ -56,7 +56,7 @@ import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
 import { limitWindow, buysByItem } from './lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../js/format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
-import { renderHeldVerdict, pathsStage, renderPathLine } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line
+import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot } from './lib/marketfetch.mjs';
 import { readOpenPositions } from './lib/positions.mjs';
@@ -274,8 +274,10 @@ function recoveryReadFor(it) {
 // the ONE home quote.mjs --positions renders from too, so the two surfaces can't disagree on a held
 // verdict. Output is byte-identical to the pre-P0 inline heldAction() (same mv, same strings). The
 // caller passes the ALREADY-computed mv (off lotCtxOf(it)) via a minimal ctx so nothing recomputes.
-function heldAction(row, be, lotValue, ts5m, mv) {
-  return renderHeldVerdict({ market: { row }, intraday: { ts5m }, position: { be, lotValue, mv } }, { mode: 'verbose' });
+// VN-1: the caller also passes the persistence-gated display read (it._display) so the note's
+// verdict line renders the SAME label as the table cell (RC4 — the two can never disagree).
+function heldAction(row, be, lotValue, ts5m, mv, display = null) {
+  return renderHeldVerdict({ market: { row }, intraday: { ts5m }, position: { be, lotValue, mv, display } }, { mode: 'verbose' });
 }
 
 // --- ACTION line for a WATCHED (not held) target. Buy-side, with the scalp entry gated.
@@ -405,8 +407,12 @@ function heldAlert(it) {
       if (mv.action === 'CLEAR' && gate && gate.escalate && gate.reason === 'clear')
         return { level: 'CLEAR', msg: `LIST-TO-CLEAR ${name} @ ${fmtP(mv.listAt)} — 2h breakdown held; bank it, don't hold for the premium.` };
       if (mv.action === 'CLEAR') { /* armed flicker or structural — no CLEAR headline; fall through */ }
-      if (mv.action === 'NO_READ')
+      if (mv.action === 'NO_READ') {
+        // VN-1 (RC3): a NO-READ against an established display incumbent is a feed artifact, not
+        // news — demoted to the "(read unreliable this pass)" note on the label; no headline.
+        if (it._display && it._display.unreliableThisPass) return null;
         return { level: 'NO-READ', msg: `NO-READ ${name} (${row.reliableReason}) — can't price a decision off this quote. Keep any ask ≥ break-even ${fmtP(be)}; re-check at a liquid window.` };
+      }
       if (mv.action === 'DIURNAL_WATCH')
         return { level: 'DIURNAL', msg: `DIURNAL-WATCH ${name} — underwater at a quiet hour that recovered yesterday. Hold ≥ break-even ${fmtP(be)}; don't cut into the trough.` };
       if (mv.action === 'SHOCK_WATCH')
@@ -557,7 +563,7 @@ async function main() {
   const newState = {};
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
-    it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null;
+    it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
     try {
       const key = 'held:' + it.id;
       const support = structuralSupport(dayLowsFrom(it.ts1h));
@@ -577,6 +583,14 @@ async function main() {
         // TG1: the declared-hold-thesis silence (expected-underwater not news above the tripwire).
         thesis: it._thesis, underwater: d.underwater,
       });
+      // VN-1: the persistence-gated DISPLAY read (shared heldDisplay, lib/context.mjs) — what the
+      // table/brief/note render; the raw verdict stays what the ledger logs. Fields ride
+      // newState[key] ADDITIVELY (this loop stays the ONE writer of the state file).
+      it._display = heldDisplay({ row: it.row, be: it.be, mv,
+        prior: (d.firstSeen || d.reset) ? null : priorState[key], nowMs });
+      newState[key].displayVerdict = it._display.state.displayVerdict;
+      newState[key].verdictArmedKey = it._display.state.verdictArmedKey;
+      newState[key].verdictArmedSince = it._display.state.verdictArmedSince;
       // V2-P4b: weigh the lot's thesis-paths + persistence-gate dominance flips (arm-then-confirm +
       // hysteresis, pathPersistence via pathsStage) against the prior state entry. pathsStage folds
       // currentPath/pathArmedKey/pathArmedSince/enteredUnder ADDITIVELY into newState[key] — this
@@ -631,13 +645,8 @@ async function main() {
 
   // O1 suggestions ledger: log every held/target read at emit time, unconditionally. `class` is
   // watch's richer classify() taxonomy label; verdict is the concise action token for the read.
-  const heldVerdict = it => {
-    const mv = momVerdict(it.row, it.be, it.lotValue, it.ts5m, undefined, lotCtxOf(it));
-    if (mv) return mv.verdict;
-    if (it.row.falling) return 'FALLING';
-    if (it.row.quickSell != null && it.be != null && it.row.quickSell < it.be) return 'UNDERWATER';
-    return it.row.quickSell != null ? 'HOLD' : 'NO-QUOTE';
-  };
+  const heldVerdict = it =>   // the RAW token (rawHeldToken, shared home — byte-identical to the old inline chain); the ledger logs this, the display layer gates what renders
+    rawHeldToken(it.row, it.be, momVerdict(it.row, it.be, it.lotValue, it.ts5m, undefined, lotCtxOf(it)));
   const targetVerdict = it => it.cls === 'FALLING' ? 'SKIP'
     : it.row.quickBuy == null ? 'NO-QUOTE'
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
@@ -734,7 +743,9 @@ async function main() {
     // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
     const openBid = bids.find(b => b.item === it.id);
     const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)}` : '';
-    const heldVer = heldVerdict(it);
+    // VN-1: the TABLE cell renders the persistence-gated display label (falls back to the raw
+    // token when the display read is unavailable); the ledger above logged the raw token.
+    const heldVer = it._display ? it._display.label : heldVerdict(it);
     const heldPos = `×${qty} @ ${fmtP(Math.round(avgCost))}${listed ? ' · ' + listed : ''}${bidNote}`;
     tableRows.push([heldVer, name, heldPos,
       ...quoteCells(row), volCell(row), momArrow(row), regimeCell(row), fmtP(be)]);
@@ -745,7 +756,7 @@ async function main() {
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
     const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
-    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld));
+    const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display));
     let conviction = null, delta = null, tripwire = null, recovery = null;
     try {
       delta = it._deltas ? deltaLine(it._deltas) : null;

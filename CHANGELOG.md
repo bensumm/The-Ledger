@@ -10,6 +10,24 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### VN-1 — persistence-gated DISPLAYED verdict (2026-07-11, PLAN-VERDICT-NOISE F1, pipeline-only — NO APP_VERSION)
+**The incident (n=1 session).** A Berserker ring lot parked ON break-even, re-read every 3 min, swung
+`HOLD → UNDERWATER → NO-READ → CUT → CUT-CANDIDATE → HOLD → LIST-TO-CLEAR → …` (~12 label flips in 30
+min on a ~2% band), and one render could print `⚠ LIST-TO-CLEAR` in the table while the note below
+called the same read "a flicker at this cadence" (RC4: the alert layer was debounced since V4/V7, the
+LABEL never was). **What shipped:** `verdictPersistence()` (`lib/watchstate.mjs`, mirrors
+`pathPersistence`) + the shared `heldDisplay`/`rawHeldToken` display layer (`lib/context.mjs`) — the
+RENDERED label on watch.mjs + `quote.mjs --positions` is now severity-ranked arm-then-confirm
+(CUT=3, CUT-CANDIDATE/LIST-TO-CLEAR=2 escalations must hold `VERDICT_PERSIST_MS`, a PLACEHOLDER =
+`ALERT_PERSIST_MS`; calmer-or-equal adopts immediately so de-escalation never lingers). The **Gate-2
+breakdown CUT bypasses the timer at both layers** (the bludgeon invariant, structurally preserved);
+a **NO-READ against an established incumbent** demotes to a `(read unreliable this pass)` note (RC3)
+and no longer headlines. The raw `momVerdict` is UNTOUCHED — it stays what `suggestions.jsonl` logs
+(the replay/calibration basis); HOLD/UNDERWATER/FALLING rank severity 0 so the mv-null token set
+renders byte-identically (the HOLD↔UNDERWATER flip is VN-3's PARKED dead-band, deliberately
+separate). App surfaces keep the instantaneous verdict; quote degrades honestly when no watch loop
+has been writing state. Pinned by `pipeline/verdictpersist.test.mjs`.
+
 ### Ask-headroom signal — surface the profit above the quoted ask (2026-07-11, PLAN Bar-E-signal, pipeline-only — NO APP_VERSION)
 **The incident (n=1).** A held Soul rune lot (25k, break-even 389) was verdicted `HOLD — list high @ 393
 (2h breakup — patient on the sell)` and then SOLD at 397 — only because the GE better-price rule fills a

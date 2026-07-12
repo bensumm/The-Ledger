@@ -466,9 +466,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     named placeholders) before the persisted `currentPath` changes; a flip-back disarms, so flapping
     weights never whiplash the headline path. State entries grow the ADDITIVE `currentPath`/
     `pathArmedKey`/`pathArmedSince`/`enteredUnder` fields (legacy entries stay byte-identical —
-    fixture-pinned in `pathpersist.test.mjs`).
-    Thin `loadState`/`saveState` are the only fs surface — verdict strings untouched, `momVerdict`
-    untouched), `levels.mjs`
+    fixture-pinned in `pathpersist.test.mjs`). **VN-1** adds `verdictPersistence()`/`verdictSeverity`
+    (`VERDICT_PERSIST_MS` placeholder) — the same arm-then-confirm discipline applied to the
+    DISPLAYED verdict label: escalations (severity 2+) must persist before the rendered label
+    changes, calmer candidates adopt immediately, the Gate-2 breakdown CUT bypasses the timer, and
+    a NO-READ against an incumbent demotes to an `unreliableThisPass` note; ADDITIVE state fields
+    `displayVerdict`/`verdictArmedKey`/`verdictArmedSince` (pinned in `verdictpersist.test.mjs`).
+    Thin `loadState`/`saveState` are the only fs surface — the raw `momVerdict` untouched), `levels.mjs`
     (V2 — PURE `structuralSupport`/`cutTrigger`: recent higher-low support + a δ-below cut-trigger
     tripwire off the per-day lows watch.mjs already fetches — OUTPUT-ONLY context, no verdict),
     `emit.mjs` (V5 — PURE `heldNoteBlock`/`heldListAt`: the watch loop's stable, consistently-ordered
@@ -520,7 +524,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     verbose (watch heldAction) form off ONE `heldMomVerdict`, byte-identical to the pre-P0 inline
     functions, so the two surfaces can't disagree. **P4b** adds `pathsStage` + `renderPathLine` (the
     shared dominant-path line, ADDITIVE watch-state fields); **COD-4** adds `staleBookBanner` (the
-    positions.json-age warning both surfaces now share). No fetch/fs — every stage is node-importable +
+    positions.json-age warning both surfaces now share); **VN-1** adds `rawHeldToken` (the one raw
+    held display token, ex-watch.mjs heldVerdict) + `heldDisplay` (the persistence-gated display
+    read — token/label/mvDisplay off `verdictPersistence`; computed in `positionStage`, consumed by
+    `renderHeldVerdict` so the table cell and the note render ONE label; byte-identical when nothing
+    diverges). No fetch/fs — every stage is node-importable +
     fixture-pinned in `context.test.mjs`), `richterm.mjs` (COD-4 — `richFrom1h`/
     `trajectoryFrom1h`: aggregate a fetched 1h /timeseries into a WARM multi-week term structure so
     reach/trajectory FIRE while the `loadDaily` archive is still young; EXTRACTED from screen.mjs so
@@ -582,7 +590,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     persistence-gate acceptance: flapping weights never flip the persisted `currentPath`/headline
     inside `PATH_PERSIST_MS`, a real migration arms→confirms→`MIGRATED` prose, the entered-under-
     hold-recovery decay-knife end-to-end through `pathsStage`, hysteresis, and the legacy
-    watch-state back-compat pin), `reconstruct.test.mjs` (FIFO/tombstone/
+    watch-state back-compat pin), `verdictpersist.test.mjs` (VN-1/2/3 — the persistence-gated
+    DISPLAYED verdict: severity-ranked arm-then-confirm on the label, the Gate-2 breakdown CUT
+    immediate at both layers, NO-READ demoted to a note against an incumbent, the thesis render
+    frame + PARKED dead-band fixtures, and the byte-identity pin for an all-quiet pass),
+    `reconstruct.test.mjs` (FIFO/tombstone/
     snapshot-dedupe fixtures), `format.test.mjs` (money primitives), `lib/rating.test.mjs`
     (grade/score model), `ledgercore.test.mjs` (TD2 — `periodKey`/`groupTrades` local
     day/week/month bucketing), `table.test.mjs` (TD2 — the `compareRows` sort comparator),
