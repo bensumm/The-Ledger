@@ -249,8 +249,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   consumed}]` surfaces a *specific* transaction as a real flip (matched on id + price ±3% + ts ±6h) —
   the agent appends one when Ben confirms a recommended flip of an ignored item (he only flips these
   on a rec, so every legit flip passes that gate). Read + matched by `pipeline/lib/ignored.mjs`,
-  applied in `sync-fills.mjs` (positions/offers derivation) and `lib/offers.mjs activeOffers` (watch);
-  fixture-pinned in `pipeline/ignored.test.mjs`.
+  applied in `sync-fills.mjs` (positions/offers derivation), `monitor.mjs` (live-log views), and
+  `lib/offers.mjs activeOffers` (watch); fixture-pinned in `pipeline/ignored.test.mjs`.
+  **EDITED FROM the app (0.63.0):** the deployed app's **Ignore tab** (mirrors Watchlist) is an EDITOR
+  — add/remove items (🚫 on a Finder row, reason picker in the tab) and push `items` back via the
+  GitHub contents API (`putJsonFile`, same path as `watchlist.json`), PRESERVING `_doc` + `greenlisted`.
+  The app never applies the quarantine itself — it only curates the file; the pipeline applies the
+  filter on its next sync. `js/github.js IGNORED_PATH`; handlers + `loadRepoIgnored`/`renderIgnore` in
+  `js/ui.js`; `STATE.ignored`/`STATE.ignoredMeta` in `js/state.js`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote.mjs`/`screen.mjs`/`watch.mjs`
   via `pipeline/lib/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)

@@ -1,7 +1,7 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog, setLogFilter } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
-import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist, finderSort } from './ui.js';
+import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist, loadRepoIgnored, finderSort } from './ui.js';
 import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync, startLocalPoll } from './ledger.js';   // A3: ledger + fills-write cluster; LW2: localhost live-refresh poll
 import { enterWatch, leaveWatch, refreshWatchQuotes } from './watch.js';   // WATCH tab: verdict-first flipping desk
 import { savePat } from './github.js';
@@ -11,7 +11,7 @@ import './backup.js'; // side-effect import: wires up the Export/Import buttons'
 /* tabs + events */
 export function switchTab(name){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  ['finder','scan','trends','watchlist','watch','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  ['finder','scan','trends','watchlist','ignore','watch','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
   if(name==='scan') renderScan();   // lazy: fetch the published screen.json on first open (cached after)
   if(name==='watch') enterWatch(); else leaveWatch();   // WATCH: re-quote loop runs only while the tab is visible
 }
@@ -72,6 +72,7 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   else if(!hasStore && !idb) setHealth('storage','warn','Price history can\u2019t be cached on this device — flipping works, but Trends won\u2019t accumulate.');
   logEvent('info','storage','state\u2192'+(hasStore?'artifact':(ls?'localStorage':'memory'))+', archives\u2192'+(hasStore?'artifact':(idb?'IndexedDB':'memory')));
   const wl=await sGet('watchlist'); if(Array.isArray(wl)) STATE.watchlist=wl;
+  const ig=await sGet('ignored'); if(Array.isArray(ig)) STATE.ignored=ig;
   const tr=await sGet('trades'); if(Array.isArray(tr)) STATE.trades=tr;
   const pn=await sGet('pinned'); if(Array.isArray(pn)) STATE.pinned=pn;
   const fh=await sGet('fillsHidden'); if(Array.isArray(fh)) STATE.fillsHidden=fh;
@@ -91,6 +92,7 @@ slotsI.onchange=async()=>{ let v=parseInt(slotsI.value,10); if(isNaN(v)||v<1)v=1
   renderGhSync();
   await loadAll();
   loadRepoWatchlist();   // S3: union repo watchlist.json into STATE.watchlist (in-memory, post-mapping)
+  loadRepoIgnored();     // union repo ignored-items.json into STATE.ignored (editor tab; pipeline applies the filter)
   startLocalPoll();      // LW2: localhost only — poll positions.json/offers.json every ~30s for the local watch-log daemon's rewrites (no-op on the deployed origin)
   setTimeout(refreshWatchQuotes, 1500);   // WATCH: one background quote pass so the tab's alert badge is live before it's opened (syncFills populates STATE.trades first)
 })();

@@ -17,6 +17,7 @@
 const GH_PAT_KEY = 'cofferGhPat';
 export const MOBILE_LOG_PATH = 'mobile-fills.log';
 export const WATCHLIST_PATH = 'watchlist.json';
+export const IGNORED_PATH = 'ignored-items.json';   // merch-book quarantine — app is an EDITOR (pipeline applies the filter)
 
 function lstore(){ try{ return window.localStorage; }catch{ return null; } }
 export function hasPat(){ const s=lstore(); return !!(s && s.getItem(GH_PAT_KEY)); }

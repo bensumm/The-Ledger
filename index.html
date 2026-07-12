@@ -51,6 +51,7 @@
     <button data-tab="scan">Scan</button>
     <button data-tab="trends">Trends</button>
     <button data-tab="watchlist">Watchlist <span class="badge" id="watchBadge">0</span></button>
+    <button data-tab="ignore">Ignore <span class="badge" id="ignoreBadge">0</span></button>
     <button data-tab="watch">Watch <span class="badge" id="watchTabBadge">0</span></button>
     <button data-tab="ledger">Ledger <span class="badge" id="ledgerBadge">0</span></button>
     <button data-tab="logs">Logs</button>
@@ -147,6 +148,18 @@
     <div id="watchEmpty" class="empty hidden"></div>
   </section>
 
+
+  <!-- IGNORE (merch-book quarantine editor — mirrors Watchlist; the pipeline applies the filter on next sync) -->
+  <section class="panel hidden" id="panel-ignore">
+    <div class="mini" style="margin-bottom:10px; color:var(--parch2)">Items here are quarantined from the merch views (farming inputs, loot, personal-use). Their trades still stay in the fill log for the audit — this only hides them from positions/screens. Edits push to <code>ignored-items.json</code> when a GitHub token is set; the pipeline applies the filter on its next sync.</div>
+    <div class="tablewrap">
+      <table id="ignoreTable">
+        <thead><tr><th class="left" data-k="name">Item</th><th data-k="reason">Reason</th><th></th></tr></thead>
+        <tbody id="ignoreBody"></tbody>
+      </table>
+    </div>
+    <div id="ignoreEmpty" class="empty hidden"></div>
+  </section>
 
   <!-- WATCH (the at-a-glance flipping desk — verdicts from the shared momVerdict/offerVerdict) -->
   <section class="panel hidden" id="panel-watch">

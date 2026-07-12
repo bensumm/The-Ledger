@@ -6,7 +6,7 @@ import { switchTab } from './main.js';
 import { fetchQuote, quoteTableHtml } from './quote.js';
 import { renderLedger } from './ledger.js';   // A3: Ledger + fills-write cluster split out; renderAll still coordinates
 import { renderWatchTab } from './watch.js';   // WATCH tab: renderAll paints its sync structure (quotes fill in async)
-import { ghConfigured, putJsonFile, WATCHLIST_PATH } from './github.js';
+import { ghConfigured, putJsonFile, WATCHLIST_PATH, IGNORED_PATH } from './github.js';
 import { makeSortable } from './table.js';
 
 /* finder — sort owned by the shared sortable-table helper (TB1); columns mirror the
@@ -96,9 +96,10 @@ export function renderFinder(){
       '<td class="num gain">'+fmtP(it.margin)+'</td><td class="num">'+it.roi.toFixed(1)+'%</td>'+
       '<td class="num">'+(it.fill?it.fill.toLocaleString():'—')+'</td><td class="num mini">'+fmtTurn(it.turn)+'</td>'+
       '<td class="num gold">'+fmt(it.pph)+'</td>'+
-      '<td><button class="act qbtn" data-quote="'+it.id+'" title="on-demand standard market table (Quick/Optimistic, regime)">quote</button> <button class="star '+(watched?'on':'')+'" data-id="'+it.id+'">'+(watched?'★':'☆')+'</button></td></tr>';
+      '<td><button class="act qbtn" data-quote="'+it.id+'" title="on-demand standard market table (Quick/Optimistic, regime)">quote</button> <button class="star '+(watched?'on':'')+'" data-id="'+it.id+'">'+(watched?'★':'☆')+'</button> <button class="ignbtn '+(isIgnored(it.id)?'on':'')+'" data-ign="'+it.id+'" title="'+(isIgnored(it.id)?'ignored — quarantined from merch views':'ignore — quarantine from merch views (farming/loot/personal-use)')+'">🚫</button></td></tr>';
   }).join('');
   body.querySelectorAll('.star').forEach(b=>b.onclick=()=>toggleWatch(+b.dataset.id));
+  body.querySelectorAll('.ignbtn').forEach(b=>b.onclick=()=>toggleIgnore(+b.dataset.ign));
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
   body.querySelectorAll('.qbtn').forEach(b=>b.onclick=()=>toggleFinderQuote(b));
 }
@@ -177,6 +178,69 @@ export function renderWatch(){
   body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
   body.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{ const it=resolveId(+b.dataset.buy); if(!it) return; switchTab('ledger');
     document.getElementById('tItem').value=it.name; document.getElementById('tBuy').value=it.low||''; document.getElementById('tQty').focus(); });
+}
+
+/* IGNORE LIST — the merch-book quarantine EDITOR (mirrors the watchlist above). The app never applies
+   the filter itself (positions/screens come pre-filtered from the pipeline, which owns ignored.mjs); this
+   tab just curates the shared source of truth ignored-items.json and pushes it via the same contents-API
+   path as the watchlist. STATE.ignored holds {id,name,reason}; STATE.ignoredMeta preserves the file's _doc
+   + greenlisted so a write-back never clobbers the confirmed-flips list the pipeline needs. */
+export const IGNORE_REASONS=['farming','loot','personal-use','boss-drop','other'];
+const isIgnored=id=>STATE.ignored.some(e=>+e.id===+id);
+export async function toggleIgnore(id, reason='other'){
+  const i=STATE.ignored.findIndex(e=>+e.id===+id), it=resolveId(id), nm=(it&&it.name)||('#'+id);
+  if(i>=0){ STATE.ignored.splice(i,1); logEvent('info','action','unignore '+nm); }
+  else { STATE.ignored.push({ id:+id, name:nm, reason }); logEvent('info','action','ignore '+nm+' ('+reason+')'); }
+  await sSet('ignored',STATE.ignored); renderFinder(); renderIgnore(); pushIgnored();
+}
+export async function setIgnoreReason(id, reason){
+  const e=STATE.ignored.find(x=>+x.id===+id); if(!e || e.reason===reason) return;
+  e.reason=reason; await sSet('ignored',STATE.ignored); pushIgnored();
+}
+/* Write STATE.ignored back to ignored-items.json, PRESERVING _doc + greenlisted (only the items list is
+   app-editable). Best-effort/silent when no token is set — like the watchlist. */
+export async function pushIgnored(){
+  if(!ghConfigured()) return;
+  const obj={ items: STATE.ignored.map(e=>({ id:+e.id, name:e.name, reason:e.reason })), greenlisted: STATE.ignoredMeta.greenlisted||[] };
+  if(STATE.ignoredMeta._doc) obj._doc=STATE.ignoredMeta._doc;   // keep the doc string as the first key when present
+  const ordered=STATE.ignoredMeta._doc ? { _doc:STATE.ignoredMeta._doc, items:obj.items, greenlisted:obj.greenlisted } : obj;
+  const res=await putJsonFile(IGNORED_PATH, ordered, 'app: ignore list ('+STATE.ignored.length+' items)');
+  if(res.ok){ if(!res.noop) logEvent('info','action','ignore list synced to repo ('+STATE.ignored.length+')'); }
+  else logEvent('warn','ignore','repo write-back failed: '+res.reason);
+}
+/* Union repo ignored-items.json into STATE.ignored (post-mapping), preserving _doc + greenlisted into
+   STATE.ignoredMeta. Mirrors loadRepoWatchlist: the file is the shared source of truth; local adds are
+   kept, repo items missing locally are added (by id). */
+export async function loadRepoIgnored(){
+  let data;
+  try{ const r=await fetch('ignored-items.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return; data=await r.json(); }
+  catch{ return; }
+  if(!data || typeof data!=='object') return;
+  STATE.ignoredMeta={ _doc:data._doc||null, greenlisted:Array.isArray(data.greenlisted)?data.greenlisted:[] };
+  let added=0;
+  for(const e of (Array.isArray(data.items)?data.items:[])){
+    const id=+e.id; if(!Number.isFinite(id)) continue;
+    if(STATE.ignored.some(x=>+x.id===id)) continue;
+    const it=resolveId(id); STATE.ignored.push({ id, name:e.name||(it&&it.name)||('#'+id), reason:e.reason||'other' }); added++;
+  }
+  if(added) logEvent('info','ignore','union +'+added+' from repo ignored-items.json');
+  renderIgnore();
+}
+export function renderIgnore(){
+  document.getElementById('ignoreBadge').textContent=STATE.ignored.length;
+  const body=document.getElementById('ignoreBody'), empty=document.getElementById('ignoreEmpty');
+  if(!STATE.ignored.length){ body.innerHTML=''; empty.classList.remove('hidden');
+    empty.innerHTML='<div class="big">Nothing ignored</div><div class="sm">Hit 🚫 on a Finder row to quarantine an item from the merch views (farming inputs, loot, personal-use). It stays in the fill log for the audit — the pipeline hides it on the next sync.</div>'; return; }
+  empty.classList.add('hidden');
+  const opts=r=>IGNORE_REASONS.map(x=>'<option value="'+x+'"'+(x===r?' selected':'')+'>'+x+'</option>').join('');
+  body.innerHTML=STATE.ignored.map(e=>{ const it=resolveId(e.id); const nm=(it&&it.name)||e.name||('#'+e.id);
+    return '<tr><td class="left"><span class="linkname" data-trend="'+e.id+'">'+nm+'</span></td>'+
+      '<td><select class="reasonsel" data-rid="'+e.id+'">'+opts(e.reason||'other')+'</select></td>'+
+      '<td><button class="act danger" data-unignore="'+e.id+'">Remove</button></td></tr>';
+  }).join('');
+  body.querySelectorAll('[data-unignore]').forEach(b=>b.onclick=()=>toggleIgnore(+b.dataset.unignore));
+  body.querySelectorAll('.reasonsel').forEach(s=>s.onchange=()=>setIgnoreReason(+s.dataset.rid, s.value));
+  body.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
 }
 
 /* After-tax realised P/L — SHARED between the Coffer summary (here) and the Ledger (js/ledger.js).
@@ -339,5 +403,5 @@ export async function loadRepoWatchlist(){
   if(added){ logEvent('info','watchlist','union +'+added+' from repo watchlist.json'); renderWatch(); }
 }
 
-export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderLedger(); renderWatchTab(); }
+export function renderAll(){ renderCoffer(); renderFinder(); renderWatch(); renderIgnore(); renderLedger(); renderWatchTab(); }
 export function recompute(){ computeScores(); renderAll(); }
