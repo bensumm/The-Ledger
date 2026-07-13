@@ -1,7 +1,7 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog, setLogFilter } from './state.js';
 import { fmt, parseGp } from './format.js';
 import { loadAll } from './market.js';
-import { renderFinder, renderCoffer, recompute, renderScan, loadRepoWatchlist, loadRepoIgnored, finderSort } from './ui.js';
+import { renderFinder, renderCoffer, recompute, renderScan, refreshScan, loadRepoWatchlist, loadRepoIgnored, finderSort } from './ui.js';
 import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync, startLocalPoll } from './ledger.js';   // A3: ledger + fills-write cluster; LW2: localhost live-refresh poll
 import { enterWatch, leaveWatch, refreshWatchQuotes } from './watch.js';   // WATCH tab: verdict-first flipping desk
 import { savePat } from './github.js';
@@ -29,7 +29,7 @@ document.getElementById('sortSel').onchange=e=>{ finderSort.setSort(e.target.val
 document.getElementById('stratSel').onchange=async e=>{ STATE.strategy=e.target.value; logEvent('info','action','strategy → '+STATE.strategy); await sSet('strategy',STATE.strategy); recompute(); };
 document.getElementById('budgetToggle').onchange=e=>{ document.getElementById('budgetChip').classList.toggle('on',e.target.checked); renderFinder(); };
 // Finder header click-to-sort + the sort-select sync are owned by finderSort (js/table.js, TB1).
-const scanRef=document.getElementById('scanRefresh'); if(scanRef) scanRef.onclick=()=>{ logEvent('info','action','scan refresh'); renderScan(true); };
+const scanRef=document.getElementById('scanRefresh'); if(scanRef) scanRef.onclick=()=>{ logEvent('info','action','scan refresh'); refreshScan(scanRef); };
 document.getElementById('trLoad').onclick=runTrends;
 document.getElementById('trItem').addEventListener('keydown',e=>{ if(e.key==='Enter') runTrends(); });
 document.getElementById('addTrade').onclick=addTrade;

@@ -12,8 +12,10 @@ push to `main`).
   holds all styles; logic is split into ES modules under `js/`. **No build step, no framework, no
   bundler** — deployed to GitHub Pages exactly as the files sit on disk. The **full module/file
   inventory is `README.md`** ("Files" + "Map of the repo") — the ONE registry; don't duplicate it
-  here. Why it's split out of the old single `index.html`, and how localhost differs (the LW2/LW3
-  live desk): `docs/LORE.md`. Local testing needs `serve.cmd` (ES modules don't load over
+  here. Why it's split out of the old single `index.html`, and how localhost differs (the
+  LW2/LW3/LW4 live desk — incl. the Scan tab's LOCAL "Refresh scan" that runs a real
+  `screen.mjs --publish` via `pipeline/dev-server.mjs`'s `POST /api/scan`, zero git): `docs/LORE.md`.
+  Local testing needs `serve.cmd` (ES modules don't load over
   `file://`); see README "Local development".
 - **Fill-data pipeline**: closes the loop between the tool's suggestions and real GE trades,
   captured client-side via RuneLite's Exchange Logger. Lives in `pipeline/` (separate from the

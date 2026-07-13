@@ -1,4 +1,4 @@
-import { API, STATE, sSet, logEvent, setHealth } from './state.js';
+import { API, STATE, sSet, logEvent, setHealth, IS_LOCALHOST } from './state.js';
 import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, gradeCls, now, fmtHour, sgn, pad2 } from './format.js';
 import { loadAll, resolveId, computeScores, TREND_BADGE, rawItem } from './market.js';
 import { openTrends } from './trends.js';
@@ -282,6 +282,7 @@ export function renderCoffer(){
    file can never mismatch app-side header code. Item names deep-link to the live Trends view.
    Fetched once per session (like syncFills) unless the user hits "Refresh scan". */
 let scanLoaded=false;
+let lastScanGeneratedAt=null;   // the generatedAt of the last rendered screen.json (for the refresh honesty check)
 export const fmtAge=ms=>{ const s=Math.max(0,Math.round(ms/1000));
   if(s<90) return s+'s';
   const m=Math.round(s/60); if(m<90) return m+'m';
@@ -342,6 +343,7 @@ export async function renderScan(force){
   if(metaEl) metaEl.innerHTML='<b>'+mode.toUpperCase()+'</b> scan · <b>'+posture.toUpperCase()+'</b> posture · floor '+(p.floor??'—')+'/d'+
     (p.gpFloor?(' or '+fmt(p.gpFloor)+' gp-flow'):'')+' · min ROI '+(p.minRoi??'—')+'% · attn '+(p.minGpd?fmt(p.minGpd):'—')+'/d · '+priceWin+' gp · top '+(p.top??'—')+
     (['band','churn'].includes(mode)?(' · band '+(p.bandHours??'—')+'h ≥'+(p.minActive??'—')+' traded windows'):'');
+  lastScanGeneratedAt=scan.generatedAt||null;   // remember it so a Refresh can tell "newer" from "no-op"
   // staleness — always surface the age (an hours-old scan is CONTEXT, not a live quote)
   const genMs=Date.parse(scan.generatedAt), ageMs=isNaN(genMs)?null:(Date.now()-genMs);
   if(staleEl){
@@ -379,6 +381,50 @@ export async function renderScan(force){
   }
   tablesEl.innerHTML = html;
   tablesEl.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
+}
+
+/* LW4 — the "Refresh scan" button.
+   On the LOCAL dev server (serve.cmd → localhost, IS_LOCALHOST) the dev-server exposes POST
+   /api/scan, which runs `screen.mjs --mode all --publish` and rewrites the local screen.json with
+   ZERO git — so a click here runs a REAL scan, then we re-fetch + re-render the fresh file. A scan
+   takes ~10–30s, so the button shows a "Scanning…" busy state and is disabled meanwhile.
+   On deployed GitHub Pages (IS_LOCALHOST false) — or if the endpoint is unreachable / errors / times
+   out — this DEGRADES to today's behavior: just re-fetch the published screen.json. If that re-fetch
+   finds no newer snapshot (generatedAt unchanged), surface an honest "run the pipeline" hint rather
+   than looking like a silent no-op. The endpoint fetch is fully guarded (AbortController timeout +
+   try/catch), so under the CI smoke stub (127.0.0.1, no /api/scan handler) it fails gracefully. */
+export async function refreshScan(btn){
+  const before=lastScanGeneratedAt;
+  let ranLocal=false;
+  if(IS_LOCALHOST){
+    const orig=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='Scanning…'; }
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),120000);   // a --mode all scan can take a while; bound it
+    try{
+      const r=await fetch('/api/scan',{method:'POST',signal:ctrl.signal});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok && j && j.ok){ ranLocal=true; logEvent('info','scan','local scan ran → '+(j.generatedAt||'?')); }
+      else if(j && j.busy){ logEvent('info','scan','local scan already running — showing latest'); }
+      else { logEvent('warn','scan','local scan endpoint error — falling back to published snapshot'); }
+    }catch(e){
+      // endpoint unavailable (static-only server / abort / offline) → silently fall back to a re-fetch
+      logEvent('info','scan','no local scan endpoint — falling back to published snapshot');
+    }finally{
+      clearTimeout(timer);
+      if(btn){ btn.disabled=false; btn.textContent=orig; }
+    }
+  }
+  await renderScan(true);   // re-fetch + re-render (the fresh local file, or the published one)
+  // Honesty: a click that produced no newer snapshot shouldn't look like a no-op. If the endpoint
+  // didn't run a fresh scan and the timestamp is unchanged, tell the user how to get a newer one.
+  if(!ranLocal && before && lastScanGeneratedAt===before){
+    const staleEl=document.getElementById('scanStale');
+    if(staleEl){ staleEl.classList.remove('hidden'); staleEl.className='scanstale warn';
+      staleEl.innerHTML=(IS_LOCALHOST
+        ? 'No newer scan produced. Is the dev-server running? Otherwise run <code>node pipeline/screen.mjs --mode all --publish</code> to refresh <code>screen.json</code>.'
+        : 'No newer snapshot published yet — run the pipeline (<code>screen.mjs --publish</code>) to refresh. This panel mirrors the committed <code>screen.json</code>.'); }
+  }
 }
 
 /* S3: repo watchlist union. The pipeline can't read the browser's localStorage, so the shared

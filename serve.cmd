@@ -9,7 +9,15 @@ rem positions/offers.json (LW2), making serve.cmd the live desk experience.
 rem Running serve.cmd twice would start a second (harmless, idempotent) watcher.
 start /b node pipeline/watch-log.mjs
 echo Serving http://localhost:8000/ -- Ctrl+C to stop (also stops the log-watcher)
-py -m http.server 8000 2>nul
+rem LW4: the node dev-server serves the repo-root static files (ES modules, correct MIME) AND
+rem exposes POST /api/scan (bound 127.0.0.1 only) so the app's "Refresh scan" button runs a REAL
+rem local scan -- screen.mjs --mode all --publish rewrites screen.json with ZERO git, then the app
+rem re-reads it. If node is unavailable, fall back to a static-only server (no local scan endpoint).
+node pipeline/dev-server.mjs
+if errorlevel 1 (
+  echo dev-server failed to start -- falling back to a static-only server (no /api/scan endpoint).
+  py -m http.server 8000 2>nul
+)
 if errorlevel 1 (
   python3 -m http.server 8000 2>nul
 )

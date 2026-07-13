@@ -316,6 +316,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `heartbeat.json` at the repo root every ~30s (LW3, zero git) so the localhost stamp shows
     "watcher live" independent of book changes; started manually via
     `watch-log.cmd`, dies with the terminal — see `FILLS-PIPELINE.md` §14),
+    `dev-server.mjs` (LW4 local dev HTTP server launched by `serve.cmd` — serves the repo-root
+    static files (ES modules, correct MIME) exactly like the old Python `http.server` AND exposes
+    ONE localhost-only endpoint `POST /api/scan` (bound `127.0.0.1`) that runs `screen.mjs --mode
+    all --publish` (rewrites `screen.json` with **ZERO git**), single-flight-guarded, so the app's
+    Scan-tab "Refresh scan" button runs a REAL local scan; never reachable off-localhost, no git
+    ops — see README "Local development"),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
     column when a probe fires. `--positions` builds the shared `context.mjs` chain per lot — offers.json
@@ -860,9 +866,23 @@ subjects live under `pipeline/`, which is where the runner globs — the `quotec
 ## Local development
 
 ES module scripts can't load over `file://` (browsers block it for CORS reasons),
-so double-clicking `index.html` won't work. Run **`serve.cmd`** (tries the `py`
-launcher's `http.server`, falls back to `python3`, then `npx serve`) and open
-`http://localhost:8000/`. GitHub Pages is unaffected — it always serves over HTTP.
+so double-clicking `index.html` won't work. Run **`serve.cmd`** (launches the node
+**`pipeline/dev-server.mjs`**, falling back to the `py` launcher's `http.server`,
+`python3`, then `npx serve` if node is unavailable) and open `http://localhost:8000/`.
+GitHub Pages is unaffected — it always serves over HTTP.
+
+`dev-server.mjs` (LW4) serves the repo-root static files exactly like the old Python
+server (ES modules, correct MIME) AND exposes **one localhost-only endpoint**, `POST
+/api/scan`, bound to `127.0.0.1`. It runs `node pipeline/screen.mjs --mode all --publish`
+(which rewrites the repo-root `screen.json` with **ZERO git**) and responds `{ ok,
+generatedAt }`. That is what makes the Scan tab's **Refresh scan** button run a REAL scan
+on the local desk: on localhost the app POSTs the endpoint, waits (~10–30s, showing a
+"Scanning…" state), then re-reads the freshly-written `screen.json`. A single-flight guard
+returns `{ ok:false, busy:true }` (HTTP 409) if a scan is already running. It does NO git
+operations (mirroring `watch-log.mjs`'s zero-git rule) and is never reachable off-localhost
+(it runs a shell command). On deployed GitHub Pages there is no endpoint, so Refresh
+degrades to re-fetching the committed `screen.json` (and surfaces an honest "run the
+pipeline" hint if that snapshot isn't newer) — the deployed behavior is unchanged.
 
 `serve.cmd` is also the **live desk experience** (LW2): it now `start /b`s the
 `watch-log.mjs` daemon in the same console (one Ctrl+C stops both, commit `74e437a`), so no

@@ -24,7 +24,7 @@ more reviewable/diffable. Consequence that still bites: ES modules don't load ov
 local testing needs `serve.cmd` (see README "Local development"). The full current module
 inventory is README's "Files" section — not duplicated here or in CLAUDE.md.
 
-## The live desk experience (LW2/LW3) — why localhost behaves differently
+## The live desk experience (LW2/LW3/LW4) — why localhost behaves differently
 
 `serve.cmd` is also the **live desk experience**: on localhost the app polls
 `positions.json`/`offers.json`/`heartbeat.json` and, paired with the `watch-log.mjs` daemon,
@@ -34,6 +34,19 @@ no-fill stretch — that split fixed a false "is the watcher running?" alarm the
 stamp raised during no-fill stretches. On `bensumm.github.io` the poll is off and the M1
 Refresh-positions banner + button are unchanged. Operational detail: README "Local development",
 `FILLS-PIPELINE.md` §14.
+
+**LW4 — the local scan refresh (2026-07-12).** The Scan tab renders a static `screen.json` snapshot
+that only the pipeline's `screen.mjs --publish` rewrites, so on the deployed site "Refresh scan"
+could only ever re-fetch the same frozen file — a no-op on a stale snapshot. But the same zero-git
+insight behind LW2 applies: on the local dev server the browser reads `screen.json` off local disk,
+so a fresh LOCAL scan is purely a local file write — nothing to do with git. So `serve.cmd` swapped
+the Python `http.server` for a node **`dev-server.mjs`** that serves the same static root AND exposes
+`POST /api/scan` (127.0.0.1 only), which runs `screen.mjs --mode all --publish` and rewrites
+`screen.json` locally. Now a localhost Refresh click runs a REAL scan and the app re-reads the fresh
+file — and a Claude session at the same desk can read that same regenerated `screen.json` as context.
+It keeps the daemon's zero-git discipline (local file write only; publishing to Pages stays the
+attended `sync-fills.mjs`), is bound off-localhost-unreachable because it runs a shell command, and
+degrades on deployed Pages to the old re-fetch-the-published-snapshot behavior.
 
 ## The fills pipeline's evolution — the eliminated scheduler
 
