@@ -335,9 +335,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (farming/loot/personal-use) so `/morning` no longer reads them back as phantom positions; `--all` shows
     the raw unfiltered log), `loop-tick.mjs` (multi-action `/loop` driver — time-gated multiplexer that
     execs `watch.mjs` (positions) and `screen.mjs --mode all` (scan) on independent cadences from one loop;
-    scan is gated on `loadDerivedCash` availableCash ≥ `--min-idle`; state in `.cache/loop-state.json`;
+    scan is gated on `loadDerivedCash` availableCash ≥ `--min-idle`; a **sync step rides with the watch pass
+    by default** (2026-07-12 — `sync-fills.mjs --local`: rebuilds fills/positions/offers.json from the
+    exchange logs so positions always reads a FRESH book, ZERO git like the watch-log daemon — the loop never
+    pushes to `main`, so publishing stays the overnight flow's attended job and cron-firing the loop can't
+    breach the no-unattended-writer invariant; `--no-sync` opts out); state in `.cache/loop-state.json`;
     prints a `next due:` footer naming each action's next-due LOCAL time + the earliest; pure driver, streams
-    the sub-scripts' stdout, no fetch/writes), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
+    the sub-scripts' stdout, no fetch/writes of its own), `thesis.mjs` (YT1 #4 — CLI to set/clear/list the SESSION
     THESIS per item, the sole writer of gitignored `.cache/session-thesis.json`; watch.mjs reads it
     to print a per-held reminder. **P4a** — `set … --path <key> [--entered-under <key>]` ALSO declares
     the path-engine entry path into the TRACKED root `hold-thesis.json` via `holdthesis.upsertThesis`,
