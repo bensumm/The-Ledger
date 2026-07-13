@@ -1,22 +1,12 @@
 [
   {
-    "id": 27229,
-    "exitPrice": 44340000,
-    "tripwire": 41500000,
+    "id": 23956,
+    "exitPrice": 6270000,
+    "tripwire": 6000000,
     "horizon": null,
-    "window": "22-00",
-    "path": "diurnal",
-    "enteredUnder": "diurnal",
-    "ts": 1783835675
-  },
-  {
-    "id": 6737,
-    "exitPrice": 3238000,
-    "tripwire": 3060000,
-    "horizon": null,
-    "window": "01-03",
-    "path": "diurnal",
-    "enteredUnder": "diurnal",
-    "ts": 1783835675
+    "window": "18-23",
+    "path": "value-hold",
+    "enteredUnder": "value-hold",
+    "ts": 1783927939
   }
 ]
