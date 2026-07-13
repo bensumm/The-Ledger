@@ -25,10 +25,15 @@
  *           because the loop never pushes, cron-firing it can't create an unattended writer to main —
  *           FILLS-PIPELINE §12 stays satisfied). Skip the refresh with `--no-sync`.
  *   watch — `node pipeline/watch.mjs`         : the position/offer deterioration pass (every --watch min).
- *   scan  — `node pipeline/screen.mjs --mode all` : opportunity discovery (every --scan min), GATED on idle
- *           capital — skipped when availableCash < --min-idle (nothing to deploy → don't burn a scan or the
- *           agent's judgment pass). The gate uses the DERIVED available cash (cashderive.mjs — coins free to
- *           commit now without cancelling a resting bid), the same figure watch.mjs footers.
+ *   scan  — `node pipeline/screen.mjs --mode all` : opportunity discovery (every --scan min), GATED on
+ *           DEPLOYABLE capital — skipped when deployablePool < --min-idle (nothing to deploy → don't burn a
+ *           scan or the agent's judgment pass). The gate uses the DERIVED deployablePool (cashderive.mjs —
+ *           the free coin stack PLUS the escrow of DEEP/reclaimable resting bids: bids priced far enough
+ *           below the market that they're freely cancellable, unlike a near-live flip bid you expect to
+ *           fill). To classify its resting bids the gate does a SMALL live fetch of just the item ids that
+ *           have resting buy offers (usually 1–3, via fetchItemInputs); a failed fetch degrades to no-ref →
+ *           deployablePool falls back to availableCash (conservative — never over-counts deployable). Same
+ *           three-tier figure watch.mjs footers.
  *
  * A skipped-for-capital scan STILL stamps its lastRun, so the cadence is "re-check whether to scan every
  * --scan min", not "retry every tick until capital appears". State: pipeline/.cache/loop-state.json.
@@ -42,6 +47,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadDerivedCash } from './lib/cashderive.mjs';
+import { readOffersSnapshot } from './lib/offers.mjs';
+import { fetchItemInputs } from './lib/marketfetch.mjs';
+import { computeQuote } from '../js/quotecore.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..');
@@ -73,12 +81,35 @@ const hhmm = new Date(now).toLocaleTimeString('en-GB', { hour: '2-digit', minute
 const watchDue = due('watch', watchMin);
 const scanDue = due('scan', scanMin);
 
+// buildMarketRef(repoDir) -> { itemId: { live, bandLow } } for every item with a resting BUY offer, so
+// cashderive can classify each bid DEEP (reclaimable) vs COMMITTED. SMALL live fetch — only the (usually
+// 1–3) item ids that actually have a resting bid. Any per-item failure is skipped (that item → COMMITTED,
+// conservative); no resting bids → null (no ref → deployablePool == availableCash).
+async function buildMarketRef(repoDir) {
+  let offers = [];
+  try { offers = readOffersSnapshot(path.join(repoDir, 'offers.json')); } catch { return null; }
+  const ids = [...new Set(offers.filter(o => o && o.side === 'buy' && ((o.qty || 0) - (o.filled || 0)) > 0).map(o => o.itemId))];
+  if (!ids.length) return null;
+  const ref = {};
+  for (const id of ids) {
+    try {
+      const row = computeQuote({ ...(await fetchItemInputs(id)), id });
+      ref[id] = { live: row.quickBuy ?? null, bandLow: row.band?.lo ?? null };
+    } catch { /* skip — missing ref classifies COMMITTED (conservative) */ }
+  }
+  return ref;
+}
+
 // --- scan capital gate (only evaluated when the scan is actually due) ---
-let scanRun = false, scanSkipReason = null, idle = null;
+let scanRun = false, scanSkipReason = null, idle = null, dcRec = null;
 if (scanDue) {
-  try { const c = loadDerivedCash(REPO); idle = c && c.known ? c.availableCash : null; } catch { idle = null; }
+  try {
+    const marketRef = await buildMarketRef(REPO);   // null on any failure → deployablePool degrades to availableCash
+    dcRec = loadDerivedCash(REPO, { marketRef });
+    idle = dcRec && dcRec.known ? dcRec.deployablePool : null;
+  } catch { idle = null; dcRec = null; }
   // idle unknown (no cash anchor) → don't block discovery; run the scan.
-  if (idle != null && idle < minIdle) scanSkipReason = `idle ${fmtGp(idle)} < floor ${fmtGp(minIdle)} — no capital to deploy`;
+  if (idle != null && idle < minIdle) scanSkipReason = `deployable ${fmtGp(idle)} < floor ${fmtGp(minIdle)} — no capital to deploy`;
   else scanRun = true;
 }
 
@@ -88,7 +119,12 @@ if (watchDue && syncOn) plan.push('sync');
 if (watchDue) plan.push('watch');
 if (scanDue) plan.push(scanRun ? 'scan' : 'scan(skipped)');
 const cad = m => m == null ? 'off' : `${m}m`;
-const idleNote = scanSkipReason ? ` · ${scanSkipReason}` : (idle != null ? ` · idle ${fmtGp(idle)}` : '');
+// tiering note: name the deployable figure and, when bids are resting, the free-vs-reclaimable split
+// (deployable = free stack + reclaimable deep-bid escrow) so the gate is never a silent binary.
+const tierNote = (dcRec && dcRec.known && dcRec.reserved > 0)
+  ? ` (free ${fmtGp(dcRec.availableCash)}${dcRec.restingDeepN > 0 ? ` + ${fmtGp(dcRec.reservedDeep)} reclaimable from ${dcRec.restingDeepN} deep bid${dcRec.restingDeepN > 1 ? 's' : ''}` : ''} · liquid ${fmtGp(dcRec.liquidCapital)})`
+  : '';
+const idleNote = scanSkipReason ? ` · ${scanSkipReason}${tierNote}` : (idle != null ? ` · deployable ${fmtGp(idle)}${tierNote}` : '');
 console.log(`# loop-tick ${hhmm} — cadence watch ${cad(watchMin)} / scan ${cad(scanMin)} · fire every ${cronMin}m`);
 console.log(`# this tick: ${plan.length ? plan.join(', ') : 'nothing due'}${idleNote}\n`);
 

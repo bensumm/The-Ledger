@@ -197,11 +197,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   softening — the OTHER-machine-safe path that needs no local `~/.runelite` log dir
 - `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's cash ANCHOR
   (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `lib/cashderive.mjs` — whose
-  `loadDerivedCash` feeds `watch.mjs`'s SUMMARY total-capital line (`availableCash`, escrow excluded)
-  and `screen.mjs`'s `--capital` default (`liquidCapital`). The GE cash stack is in no log, but idle cash is no
-  longer merely stated: this is the ANCHOR `cashderive.mjs` runs FORWARD from (anchor + Σ sells-
-  after-tax − Σ buys − resting-bid escrow). It is NEVER a verdict/alert input — purely the
-  denominator for the idle-vs-working picture
+  `loadDerivedCash` feeds `watch.mjs`'s SUMMARY total-capital line (`availableCash`, escrow excluded),
+  `loop-tick.mjs`'s scan-gate (`deployablePool`), and `screen.mjs`'s value `--capital` default
+  (`deployablePool`). The GE cash stack is in no log, but idle cash is no longer merely stated: this is the
+  ANCHOR `cashderive.mjs` runs FORWARD from (anchor + Σ sells-after-tax − Σ buys − resting-bid escrow).
+  **THREE-TIER model** (`availableCash ≤ deployablePool ≤ liquidCapital`): `availableCash` = the free coin
+  stack (all resting-bid escrow excluded); `deployablePool` = free stack + the escrow of DEEP/reclaimable
+  bids only (priced ≥ `DEEP_BID_PCT` below the market — a supplied `marketRef` of live/band-low classifies
+  each bid, a missing ref → COMMITTED, conservative); `liquidCapital` = + every resting bid's escrow (the
+  loosest "cancel everything" pool). `cashderive` NEVER fetches — the `marketRef` is supplied by the caller
+  (loop-tick does a small live fetch of resting-bid ids; watch/screen reuse prices already in hand). It is
+  NEVER a verdict/alert input — purely the denominator for the idle-vs-working picture
 - `heartbeat.json` — **gitignored, local-only, never deployed** — a tiny daemon-liveness
   heartbeat (`{app:'the-coffer-heartbeat', generatedAt:<ISO>}`) written by `watch-log.mjs`
   every ~30s (LW3). The localhost app polls it (`js/ledger.js` `fetchHeartbeat`) for the
@@ -335,7 +341,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (farming/loot/personal-use) so `/morning` no longer reads them back as phantom positions; `--all` shows
     the raw unfiltered log), `loop-tick.mjs` (multi-action `/loop` driver — time-gated multiplexer that
     execs `watch.mjs` (positions) and `screen.mjs --mode all` (scan) on independent cadences from one loop;
-    scan is gated on `loadDerivedCash` availableCash ≥ `--min-idle`; a **sync step rides with the watch pass
+    scan is gated on `loadDerivedCash` `deployablePool` ≥ `--min-idle` (free cash + reclaimable deep-bid
+    escrow — a small live fetch of the resting-bid ids classifies each bid deep-vs-committed); a **sync step rides with the watch pass
     by default** (2026-07-12 — `sync-fills.mjs --local`: rebuilds fills/positions/offers.json from the
     exchange logs so positions always reads a FRESH book, ZERO git like the watch-log daemon — the loop never
     pushes to `main`, so publishing stays the overnight flow's attended job and cron-firing the loop can't

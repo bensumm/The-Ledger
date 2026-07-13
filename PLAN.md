@@ -630,6 +630,9 @@ shipped post-YIELD: **total-capital view** (`2fdae81`) — `capitalutil.totalCap
 + `pipeline/cash.mjs` add a committed + STATED idle-cash line to the watch footer (idle GP is in no
 log, so it's a stated snapshot, staleness-bannered, never a verdict input). SUPERSEDED
 (PLAN-CASH-TRACKING): the footer's idle figure is now DERIVED (`lib/cashderive.mjs` —
-anchor + log flow, escrow-excluded `availableCash`), and `screen.mjs`'s `--capital` default
-falls back to the derived `liquidCapital` instead of the 100m placeholder. Earlier per-plan Discovered
+anchor + log flow, escrow-excluded `availableCash`), and `screen.mjs`'s value `--capital` default +
+`loop-tick.mjs`'s scan-gate now use the derived **`deployablePool`** — the THREE-TIER model
+(`availableCash ≤ deployablePool ≤ liquidCapital`, `lib/cashderive.mjs`): deployablePool = free cash +
+reclaimable DEEP-bid escrow (bids priced ≥ `DEEP_BID_PCT` below a caller-supplied market ref; a near-live
+flip bid stays COMMITTED), superseding the looser `liquidCapital` default. Earlier per-plan Discovered
 lists (chunks 4/8/10 fixes) are preserved in git history — `git show 39e5d23:PLAN.md`.

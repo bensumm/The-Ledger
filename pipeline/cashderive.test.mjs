@@ -6,14 +6,17 @@
  *
  * Pins: the realized-flow math (sell net after tax − buy spent, gated to AFTER the anchor), the
  * escrow-from-LIVE-offers rule (a stale phantom open bid in fills.json must NOT count), the
- * partial-fill no-double-count guard, banked/withdraw carrying no cash, and the INJECTION DETECTOR
- * (reserved bids > tracked balance → inferred capital add, availableCash floored at 0).
+ * partial-fill no-double-count guard, banked/withdraw carrying no cash, the INJECTION DETECTOR
+ * (reserved bids > tracked balance → inferred capital add, availableCash floored at 0), and the
+ * THREE-TIER capital model (availableCash ≤ deployablePool ≤ liquidCapital): the deep-vs-committed
+ * bid classifier, deep escrow landing in deployablePool, and the CONSERVATIVE default (a missing
+ * marketRef classifies a bid COMMITTED so deployablePool never over-counts deployable capital).
  *
  * PURE-function test — synthetic events/offers only, no fetch/fs, no live ledger (CLAUDE.md rule 4).
  * Run: `node pipeline/cashderive.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { deriveCash, restingBuyEscrow } from './lib/cashderive.mjs';
+import { deriveCash, restingBuyEscrow, classifyBid, DEEP_BID_PCT } from './lib/cashderive.mjs';
 import { GE_TAX } from './lib/reconstruct.mjs';
 
 let pass = 0;
@@ -119,6 +122,69 @@ ok('restingBuyEscrow sums only unfilled buy-side remainders', () => {
   ]);
   assert.equal(reserved, 7_000_000);
   assert.equal(restingN, 1);
+});
+
+/* --- 9. classifyBid: deep vs committed vs no-reference ------------------------------------------------ */
+ok('classifyBid marks a bid DEEP only when it clears DEEP_BID_PCT below the (lower) reference', () => {
+  const ref = { live: 1_000_000, bandLow: 990_000 };            // reference := min(live, bandLow) = 990k
+  assert.equal(classifyBid(900_000, ref), 'deep');              // 10% under live, well below 990k×0.95
+  assert.equal(classifyBid(995_000, ref), 'committed');         // near-live flip bid → committed
+  assert.equal(classifyBid(990_000 * (1 - DEEP_BID_PCT), ref), 'deep');   // exactly at the threshold
+  assert.equal(classifyBid(950_000, null), 'committed');        // NO reference → conservative committed
+  assert.equal(classifyBid(900_000, { live: 1_000_000 }), 'deep');   // live-only reference works
+});
+
+/* --- 10. three-tier ordering + deep-bid escrow lands in deployablePool -------------------------------- */
+const buyOfferId = (itemId, price, qty, filled) => ({ side: 'buy', itemId, price, qty, filled });
+ok('deployablePool counts DEEP escrow but not COMMITTED, and availableCash ≤ deployablePool ≤ liquidCapital', () => {
+  const marketRef = {
+    2000: { live: 1_000_000, bandLow: 990_000 },
+    2001: { live: 1_000_000, bandLow: 990_000 },
+  };
+  const live = [
+    buyOfferId(2000, 900_000, 10, 0),                            // DEEP (10% under) → escrow 9m reclaimable
+    buyOfferId(2001, 995_000, 10, 0),                            // near-live → COMMITTED → escrow 9.95m
+  ];
+  const r = deriveCash([], anchor, live, { marketRef });
+  assert.equal(r.reserved, 18_950_000);
+  assert.equal(r.reservedDeep, 9_000_000);
+  assert.equal(r.reservedCommitted, 9_950_000);
+  assert.equal(r.restingDeepN, 1);
+  assert.equal(r.availableCash, 100_000_000 - 18_950_000);      // free stack excludes ALL escrow
+  assert.equal(r.deployablePool, r.availableCash + 9_000_000);  // + the reclaimable deep escrow
+  assert.equal(r.liquidCapital, 100_000_000);                   // all escrow reclaimable in principle
+  assert.ok(r.availableCash <= r.deployablePool && r.deployablePool <= r.liquidCapital);
+});
+
+/* --- 11. a MISSING marketRef classifies every bid COMMITTED (deployablePool == availableCash) --------- */
+ok('no marketRef → deployablePool degrades to availableCash (never over-counts deployable)', () => {
+  const live = [buyOfferId(2000, 900_000, 10, 0), buyOfferId(2001, 995_000, 10, 0)];
+  const r = deriveCash([], anchor, live);                       // no { marketRef }
+  assert.equal(r.reservedDeep, 0);
+  assert.equal(r.restingDeepN, 0);
+  assert.equal(r.deployablePool, r.availableCash);
+  assert.ok(r.availableCash <= r.deployablePool && r.deployablePool <= r.liquidCapital);
+});
+
+/* --- 12. a bid whose item is ABSENT from the ref is COMMITTED (conservative), even alongside a deep one */
+ok('a bid missing from the marketRef is COMMITTED while a referenced deep bid still counts', () => {
+  const marketRef = { 2000: { live: 1_000_000, bandLow: 990_000 } };   // 2001 absent
+  const live = [buyOfferId(2000, 900_000, 10, 0), buyOfferId(2001, 100_000, 10, 0)];
+  const r = deriveCash([], anchor, live, { marketRef });
+  assert.equal(r.reservedDeep, 9_000_000);                     // only the referenced deep bid
+  assert.equal(r.reservedCommitted, 1_000_000);                // the unreferenced bid, however cheap
+});
+
+/* --- 13. injection path keeps deployablePool consistent (availableCash floored at 0) ------------------ */
+ok('under an inferred injection deployablePool == reservedDeep and the ordering still holds', () => {
+  const small = { cashGp: 10_000_000, statedAt: anchor.statedAt };
+  const marketRef = { 3000: { live: 20_000_000, bandLow: 20_000_000 } };
+  const live = [buyOfferId(3000, 15_000_000, 1, 0)];           // 15m DEEP bid vs a 10m tracked balance
+  const r = deriveCash([], small, live, { marketRef });
+  assert.equal(r.availableCash, 0);
+  assert.equal(r.reservedDeep, 15_000_000);
+  assert.equal(r.deployablePool, r.reservedDeep);              // 0 free + 15m reclaimable
+  assert.ok(r.availableCash <= r.deployablePool && r.deployablePool <= r.liquidCapital);
 });
 
 console.log(`\ncashderive: ${pass} checks passed.`);

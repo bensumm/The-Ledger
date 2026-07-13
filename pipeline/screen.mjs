@@ -92,7 +92,8 @@ import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed 
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
-import { loadDerivedCash } from './lib/cashderive.mjs';   // value niche: DERIVED redeployable pool → --capital default (cash.mjs anchor + log flow)
+import { loadDerivedCash } from './lib/cashderive.mjs';   // value niche: DERIVED deployable pool → --capital default (cash.mjs anchor + log flow)
+import { readOffersSnapshot } from './lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
@@ -130,16 +131,21 @@ const STATS = !!A.stats;
 // valueScore's deployable-units is NOT a fixed constant — it's Ben's current capital ÷ how many positions
 // (slots) we'd spread it across. --capital <gp> is the input (his real bankroll); --slots N is how many
 // concurrent value holds to size for (≈ the count of quality candidates). VALUE_CAP_GP = capital ÷ slots.
-// The default is no longer a bare 100m placeholder: absent --capital we DERIVE the redeployable pool from
-// the cash anchor + log flow (lib/cashderive.mjs liquidCapital = every coin if all resting bids were
-// cancelled — exactly "scan at N capital"), falling back to the 100m placeholder only when no anchor is set.
+// The default is no longer a bare 100m placeholder: absent --capital we DERIVE the deployable pool from
+// the cash anchor + log flow (lib/cashderive.mjs deployablePool = the free coin stack PLUS the escrow of
+// DEEP/reclaimable resting bids — NOT liquidCapital, which would over-count a near-live flip bid you
+// expect to fill as freely redeployable into a multi-week value hold). We fall back to the 100m
+// placeholder only when no anchor is set. The eager figure here has NO market reference (so a resting bid
+// classifies COMMITTED → deployablePool == availableCash, the conservative floor); main() RE-DERIVES it
+// with a marketRef built from the bulk /latest it fetches (zero extra fetch) so deep bids count — this is
+// only used inside main(), always after that re-derive, so the eager conservative value is never surfaced.
 const VALUE_CAPITAL_EXPLICIT = A.capital != null;
-const DERIVED_CASH = VALUE_CAPITAL_EXPLICIT ? null : loadDerivedCash();
+let DERIVED_CASH = VALUE_CAPITAL_EXPLICIT ? null : loadDerivedCash();
 const VALUE_CAPITAL_DERIVED = !!(DERIVED_CASH && DERIVED_CASH.known);   // derived from the cash anchor (not a placeholder)
-const VALUE_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
-  : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.liquidCapital : 100_000_000);
+let VALUE_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
+  : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.deployablePool : 100_000_000);
 const VALUE_SLOTS = A.slots != null ? Math.max(1, +A.slots) : 5;
-const VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
+let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
 // --- S1 screening economics (gp-flow gate + 500k attention floor) ------------------------------
 // GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
 // lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
@@ -829,7 +835,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   console.log('Playbook: buy near the multi-week low, HOLD for the range to cycle up; the edge is ONE tax-paid sell of a big move, not fast churn. State the hold horizon at entry — this is a multi-day/week HOLD, not a flip.');
   console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability × deployable-capital multiplier — PLACEHOLDER weights, n≈0)`);
   const capSource = VALUE_CAPITAL_EXPLICIT ? ''
-    : (VALUE_CAPITAL_DERIVED ? ' — derived redeployable pool from your cash anchor (cash.mjs); pass --capital <gp> to override'
+    : (VALUE_CAPITAL_DERIVED ? ' — derived deployablePool from your cash anchor (cash.mjs: free stack + reclaimable deep-bid escrow, deep bids classified off live prices); pass --capital <gp> to override'
       : ' — PLACEHOLDER capital; set an anchor (cash.mjs) or pass --capital <gp> [--slots N] for your real figure');
   console.log(`(deployable-capital cap ${fmtP(VALUE_CAP_GP)}/position = ${fmtP(VALUE_CAPITAL)} capital ÷ ${VALUE_SLOTS} slots${capSource}. ${buyNow.length} buy-now surfaced — re-run --slots ${buyNow.length || 1} to size the cap to that.)`);
   if (buyNow.length) {
@@ -1000,6 +1006,24 @@ async function main() {
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
   const map = await loadMapping();
   const [v24, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
+
+  // Value --capital default = the DERIVED deployablePool (lib/cashderive.mjs). Re-derive it here WITH a
+  // marketRef built from the bulk /latest already in hand (ZERO extra fetch): each resting bid classifies
+  // DEEP (reclaimable → counts toward deployable) vs COMMITTED (near-live, expected to fill → excluded)
+  // using its item's live instasell (latest[id].low). A resting-bid item absent from /latest → no ref →
+  // COMMITTED (conservative). Only re-derives when value runs on a DERIVED (non-explicit) capital.
+  if (!VALUE_CAPITAL_EXPLICIT && VALUE_CAPITAL_DERIVED && RUN_MODES.some(m => STRATEGIES[m].gate === 'value')) {
+    const bidMarketRef = {};
+    for (const o of readOffersSnapshot(join(REPO_ROOT, 'offers.json'))) {
+      if (!o || o.side !== 'buy' || ((o.qty || 0) - (o.filled || 0)) <= 0) continue;
+      const lt = latest[o.itemId] || latest[String(o.itemId)] || null;
+      if (lt && lt.low) bidMarketRef[o.itemId] = { live: lt.low };
+    }
+    DERIVED_CASH = loadDerivedCash(REPO_ROOT, { marketRef: bidMarketRef });
+    VALUE_CAPITAL = DERIVED_CASH.deployablePool;
+    VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
+    THRESHOLDS.VALUE_CAP_GP = VALUE_CAP_GP;   // gateCandidates/valueScore read the cap from THRESHOLDS
+  }
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
   const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.45
+version: 1.46
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -47,8 +47,10 @@ console-only (excluded from `screen.json`, no app tab) and provisional, but it s
   class (which, per a Fable pool audit, is **mid-amp DEPLOYABLE sub-1m** items like Soiled page / Awakener's
   orb, NOT the illiquid big tickets — there are no big-LIQUID items). The per-position cap is an INPUT: pass
   **`--capital <gp>`** (your current bankroll) **`--slots N`** (concurrent value holds; cap = capital÷slots;
-  absent `--capital` the default is the DERIVED redeployable pool from the cash anchor —
-  `lib/cashderive.mjs` `liquidCapital` — falling back to a 100m placeholder only when no anchor is set;
+  absent `--capital` the default is the DERIVED `deployablePool` from the cash anchor —
+  `lib/cashderive.mjs` (free cash + reclaimable DEEP-bid escrow; a near-live flip bid you expect to fill is
+  NOT counted as freely redeployable, unlike the older looser `liquidCapital`) — falling back to a 100m
+  placeholder only when no anchor is set;
   slots default 5; the footer names which source it used and prints `N buy-now surfaced — re-run --slots N`). The
   default scan now surfaces a real MIX (big tickets + mid-deployable sub-1m + deployable cheap); if you
   expect a specific item and don't see it, it's genuinely gated (illiquid, or a knife) or out-deployed, not

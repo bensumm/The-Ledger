@@ -68,10 +68,18 @@ availableCash(now) = liquidCapital(now)
                    − Σ restingBuyEscrow(active unfilled bids)      [offers.json]
 ```
 
-- **`liquidCapital`** = every coin you'd have if all resting bids were cancelled — the true
-  redeployable pool. This is what "scan at N capital" should use.
+- **`liquidCapital`** = every coin you'd have if all resting bids were cancelled — the loosest
+  "cancel everything" pool.
 - **`availableCash`** = coins free to commit *right now* without cancelling anything (the
   in-game coin stack). This is what the footer's "idle cash" should show.
+- **UPDATE (shipped 2026-07-12) — a THIRD middle tier `deployablePool`.** Not all resting bids are
+  equally reclaimable: a DEEP bid (priced ≥ `DEEP_BID_PCT` below the market, designed to mostly-not-fill)
+  is freely cancellable, but a NEAR-LIVE flip bid is semi-committed. So
+  `deployablePool = availableCash + Σ escrow of DEEP bids only`, ordering
+  `availableCash ≤ deployablePool ≤ liquidCapital`. **`deployablePool` is now what "scan at N capital"
+  uses** (the `screen.mjs` value `--capital` default and the `loop-tick.mjs` scan-gate) — superseding the
+  "liquidCapital is the redeployable pool" line above. `cashderive` stays PURE (no fetch); the deep-vs-
+  committed market reference is supplied by the caller. Full model in the `lib/cashderive.mjs` header.
 - The split must be **consistent about what the anchor means**: is `cashGp₀` the coin stack
   (excludes resting-bid escrow) or total liquid (includes it)? Pin one definition. (Recommended:
   anchor = coin stack = `availableCash` at `statedAt`; then resting bids placed *after* the

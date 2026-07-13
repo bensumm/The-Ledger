@@ -930,7 +930,13 @@ async function main() {
   // resting-bid ESCROW excluded) as the idle figure — the escrow is already counted in `committed` above,
   // so using liquidCapital here would double-count the parked bids. NEVER a verdict/alert input; purely the
   // idle-vs-working denominator. Absent an anchor we show the committed absolute and nudge how to set one.
-  const dc = loadDerivedCash();
+  // Three-tier capital (lib/cashderive.mjs): classify each resting bid DEEP (reclaimable) vs COMMITTED
+  // using the rows we ALREADY computed this pass (row.quickBuy = live instasell, row.band.lo = robust 2h
+  // band low) — ZERO extra fetch. A bid not in this map (none here — every bidItem has a row) would
+  // classify COMMITTED. availableCash stays the literal free coin stack the idle-cash line shows.
+  const bidMarketRef = {};
+  for (const it of bidItems) if (it.row) bidMarketRef[it.id] = { live: it.row.quickBuy ?? null, bandLow: it.row.band?.lo ?? null };
+  const dc = loadDerivedCash(undefined, { marketRef: bidMarketRef });
   const tc = totalCapital({ workingGp: exposure, parkedGp: committed, cashGp: dc.known ? dc.availableCash : null });
   if (tc.totalGp != null) {
     const min = dc.statedAt ? Math.round((Date.now() - new Date(dc.statedAt).getTime()) / 60000) : null;
@@ -939,6 +945,14 @@ async function main() {
     const prov = min != null ? ` · idle derived from anchor ${ageTxt} ago${flowTxt}` : '';
     const inj = dc.inferredInjection > 0 ? ` ⚠ +${fmtP(dc.inferredInjection)} inferred injection — re-anchor to confirm (cash.mjs)` : '';
     console.log(`  total capital ~${fmtP(tc.totalGp)} · committed ${fmtP(tc.committedGp)} (${tc.committedPct}%) / idle cash ~${fmtP(tc.cashGp)} (${tc.idlePct}%)${prov}${inj}`);
+    // Three-tier deployable capital — never a silent binary. Printed only when something is resting (else all
+    // three tiers equal availableCash). deployablePool = free stack + reclaimable DEEP-bid escrow; liquid =
+    // + every resting bid's escrow (the loosest "cancel everything" pool). NEVER a verdict/alert input.
+    if (dc.reserved > 0) {
+      const dn = dc.restingDeepN || 0;
+      const reclaim = dn > 0 ? `+ reclaimable ${fmtP(dc.reservedDeep)} from ${dn} deep bid${dn > 1 ? 's' : ''}` : '· no reclaimable deep bids';
+      console.log(`  deployable ${fmtP(dc.deployablePool)} (free ${fmtP(dc.availableCash)} ${reclaim}) · liquid ${fmtP(dc.liquidCapital)} (all ${fmtP(dc.reserved)} bid escrow reclaimable)`);
+    }
   } else if (exposure > 0 || committed > 0) {
     console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/cash.mjs <amount>`);
   }
