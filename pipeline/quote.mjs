@@ -22,8 +22,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice } from '../js/quotecore.js';
 import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series
-import { asymEstimate } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality)
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence
+import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
+import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { STRATEGIES } from '../js/strategies.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read
@@ -57,6 +58,11 @@ const TS_TTL_1H_EXIT = 15 * 60 * 1000;
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
+// PLAN-OUTPUT-TABLE (2026-07-13): the per-item table's DEFAULT view is the reconciliation-estimator
+// pair (Est. buy/sell/Net/BE, confidence in the cells — estimatePair, PLACEHOLDER model n≈14);
+// --raw restores the model-free Quick + Optimistic columns. --positions is INTENT-DIFFERENT (the
+// held-lot clear-price/list-at frame) and keeps Quick/Optimistic unconditionally — see runPositions.
+const RAW = args.includes('--raw');
 const tokens = args.filter(a => !a.startsWith('--'));
 
 // LM1: per-item 4h buy-limit windows, built ONCE per run from the repo-root fills.json (local file, no
@@ -101,6 +107,12 @@ async function runItems() {
   }
   const hist = loadGuideHistory(GUIDE_HISTORY);   // YP1 advisory (gated → silent until history accrues)
   const buysByItemMap = loadBuysByItem();   // LM1: per-item 4h buy-limit windows (regime-line + limitValidator)
+  const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // PLAN-OUTPUT-TABLE rev2: declared exits anchor Est. sell (READ-ONLY)
+  // FIX 1 (2026-07-13): a declared exit is a HELD-LOT plan, so an ad-hoc per-item read anchors Est. sell
+  // to it ONLY when that id is actually held (an open lot in positions.json) — never on a bare "how's X"
+  // read of an item we don't hold. Build the open-position id set once (read-only; degrades to empty).
+  const heldIds = new Set();
+  try { const { groups } = readOpenPositions(POSITIONS); for (const g of (groups || [])) heldIds.add(g.itemId); } catch { /* no positions.json → nothing held → no anchoring */ }
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   // P3: read-only daily mids from whatever the Tier-1 archive already holds (noFetch → zero network,
   // no fetch-semantics change on this surface) → floorValidator's term structure. Cold archive → empty
@@ -124,7 +136,7 @@ async function runItems() {
     // (skip the ts1h enrichment past N items, degrading reach/diurnal to "not fetched — batch too large").
     const inp = await fetchItemInputs(id, { ts1h: true });
     const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
-    rows.push(stdCells(name, row));
+    const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
     lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null, limWin));
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
@@ -179,8 +191,31 @@ async function runItems() {
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
       lines.push(`  ◆ asym fill: deep-bid ${fmt(ae.bid)} (fills ~${hB}/${ap.nDays}d — rest as optionality) → ask ${fmt(ae.ask)} (prints ~${hA}/${ap.nDays}d) · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})`);
     }
+    // PLAN-OUTPUT-TABLE: the reconciliation estimate off the SAME in-hand reads (windowStats touch/
+    // reach at the patient pair, the diurnal dip/peak levels, the asym high-reach ask) — zero new
+    // fetch. Rendered as the DEFAULT table columns (--raw restores Quick/Optimistic) and logged as
+    // the estBuy/estSell/estConfidence shadow fields either way (the F1 accrual).
+    // rev1: the RC1 recent-3 split (recencySplit over ast.days) rides alongside the full-window count so
+    // estimatePair folds on recent-3 and the confidence token shows it (with the full window on divergence).
+    const bidRc = (ast && ast.days && row.optBuy != null) ? recencySplit(ast.days, 'bid', row.optBuy) : null;
+    const askRc = (ast && ast.days && row.optSell != null) ? recencySplit(ast.days, 'ask', row.optSell) : null;
+    const bidReach = (ast && ast.lows && ast.lows.length && row.optBuy != null)
+      ? { reachedDays: touchedDays(ast.lows, row.optBuy), nDays: ast.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
+    const askReach = (ast && ast.his && ast.his.length && row.optSell != null)
+      ? { reachedDays: reachedDays(ast.his, row.optSell), nDays: ast.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
+    // rev2 + FIX 1: a declared thesis exit anchors Est. sell ONLY when the id is an actual open lot
+    // (a declared exit is a held-lot SELL plan; it must not inflate an ad-hoc read of an item we don't
+    // hold). spec stays STRATEGIES.band — an explicit "how's X" is a generic flip read.
+    const declaredExit = heldIds.has(id) ? (thesisFor(holdThesisStore, id)?.exitPrice ?? null) : null;
+    const est = estimatePair(STRATEGIES.band, row, {
+      bidReach, askReach,
+      diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
+      asym: ap, declaredExit,
+    }, { nudge: anchorNudge });
+    rows.push(RAW ? std : [std[0], std[1], ...estPairCells(est), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
-    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // per-item read has no verdict
+    sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
+      estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est) }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair rides the row
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).
@@ -201,9 +236,12 @@ async function runItems() {
   // PM1: append the `Probes` column ONLY when a probe fired (byte-identical table otherwise — the
   // removability guarantee). stdout-only; no app/publish path on the per-item quote surface.
   const anyProbe = probeStrs.some(Boolean);
-  const headers = anyProbe ? [...QUOTE_HEADERS, 'Probes'] : QUOTE_HEADERS;
+  // PLAN-OUTPUT-TABLE: default = the estimated view; --raw = the model-free Quick/Optimistic set.
+  const baseHeaders = RAW ? QUOTE_HEADERS : ['Item', 'Guide', ...EST_HEADERS, 'Vol/d', 'Momentum', 'Regime'];
+  const headers = anyProbe ? [...baseHeaders, 'Probes'] : baseHeaders;
   const outRows = anyProbe ? rows.map((r, i) => [...r, { t: probeStrs[i], c: 'mini' }]) : rows;
   console.log(mdTable(headers, outRows));
+  if (!RAW) console.log(`(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. Est. sell anchors to a DECLARED thesis exit when one exists ("(declared)"). BE is model-free and floors Est. sell. --raw restores the model-free Quick/Optimistic columns.)`);
   console.log('');
   console.log(lines.join('\n'));
 }

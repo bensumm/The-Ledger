@@ -15,13 +15,14 @@
  * Run: `node pipeline/estimators.test.mjs`. Auto-discovered by run-tests.mjs.
  */
 import assert from 'node:assert/strict';
-import { computeQuote } from '../js/quotecore.js';
+import { computeQuote, breakEven } from '../js/quotecore.js';
 import { STRATEGY_LIST, STRATEGIES } from '../js/strategies.mjs';
 import { buildSnapshot } from './lib/replay.mjs';
 import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,
   pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
   quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
+  estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_HEADERS,
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
@@ -255,6 +256,123 @@ ok('PART II churn exemption: a symmetric-fillShape spec skips the Proposal-A ask
   const bandNo = estimateRank(STRATEGIES.band, row);
   const bandWith = estimateRank(STRATEGIES.band, row, { askReach: badAskReach });
   assert.ok(bandWith.pFill.value < bandNo.pFill.value, 'band (asym fillShape) still takes the Part-I discount');
+});
+
+/* --- PLAN-OUTPUT-TABLE + REVISIONS: the reconciliation estimator (Est. buy / Est. sell) ------------- */
+ok('estimatePair MIRAGE EXIT (full-window only, no recent split): a 4/14d ask folds estSell below the raw top', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: { reachedDays: 4, nDays: 14 } });
+  assert.ok(e.estSell < row.optSell, 'estSell discounted below the raw band top');
+  assert.ok(e.estSell > row.quickSell, 'but not collapsed past the live instabuy');
+  const fold = Math.min(1, (4 / 14) / EST_REACH_SAT_FRAC);   // no recent counts → full-window basis
+  assert.equal(e.estSell, Math.round(row.quickSell + (row.optSell - row.quickSell) * fold));
+  const rawNet = row.optSell - Math.floor(row.optSell * 0.02) - row.optBuy;
+  assert.ok(e.estNet < rawNet / 2, `estNet ${e.estNet} collapses vs raw ${rawNet}`);
+  assert.equal(e.estBuy, row.optBuy, 'no bid read ⇒ the band bid stands');
+  // rev1 confidence shape: full window present, recent-3 absent, not diverging.
+  assert.equal(e.confidence.ask.full.hit, 4); assert.equal(e.confidence.ask.full.days, 14);
+  assert.equal(e.confidence.ask.rec, null);
+  assert.equal(e.confidence.bid, null);
+  assert.equal(e.confidence.beFloored, false);
+});
+
+ok('rev1 RECENT-3 is the fold basis + the primary token: a good 12/14 full that CRASHED to 0/3 recent collapses estSell to live and shows BOTH', () => {
+  // the true mirage: the full window looks great (12/14) but the RECENT reach is 0/3 = it stopped printing.
+  const row = { quickBuy: 24_500_000, quickSell: 25_000_000, optBuy: 24_000_000, optSell: 27_000_000 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: { reachedDays: 12, nDays: 14, recentHit: 0, recentDays: 3 } });
+  assert.equal(e.estSell, row.quickSell, 'recent 0/3 folds the ask fully to live (BE non-binding here)');
+  assert.equal(e.confidence.beFloored, false);
+  // the token shows recent-3 PRIMARY with the full window BESIDE it (divergence = the stale flag).
+  const cells = estPairCells(e);
+  assert.ok(/0\/3 · 12\/14/.test(cells[1].t), `sell cell shows both tokens: ${cells[1].t}`);
+  const lean = estConfLean(e);
+  assert.equal(lean.askRecHit, 0); assert.equal(lean.askRecDays, 3);
+  assert.equal(lean.askHit, 12); assert.equal(lean.askDays, 14);
+});
+
+ok('rev1 recent + full AGREEING shows the recent token ALONE (no divergence clutter)', () => {
+  const row = { quickBuy: 100, quickSell: 110, optBuy: 90, optSell: 130 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 } });
+  const cells = estPairCells(e);
+  assert.ok(/\(3\/3\)/.test(cells[1].t) && !/·/.test(cells[1].t), `sell shows recent only: ${cells[1].t}`);
+});
+
+ok('estimatePair CLEAN DENSE: a 12/14d + 3/3-recent ask keeps estSell at the band top', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: rc, bidReach: rc });
+  assert.equal(e.estSell, row.optSell, 'clean reach ⇒ the robust band top stands');
+  assert.equal(e.estBuy, row.optBuy, 'clean touch ⇒ the band bid stands');
+});
+
+ok('rev2 STRATEGY-AWARE entry: scalp bids near-live, value bids the trough, band reach-folds → three different estBuy', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 900, optSell: 1100 };
+  const reach = { bidReach: { reachedDays: 7, nDays: 14 } };   // a mid touch-reach so band folds partway
+  const scalp = estimatePair(STRATEGIES.scalp, row, reach);
+  const value = estimatePair(STRATEGIES.value, row, reach);
+  const band  = estimatePair(STRATEGIES.band,  row, reach);
+  assert.equal(scalp.estBuy, row.quickBuy, 'scalp → near-live (the live instasell)');
+  assert.equal(value.estBuy, row.optBuy, 'value → the trough (band low, unfolded)');
+  assert.ok(band.estBuy > value.estBuy && band.estBuy < scalp.estBuy, `band reach-folds between the two: ${band.estBuy}`);
+  // scalp's buy cell carries NO reach caveat (a live bid fills); value/band do.
+  assert.equal(scalp.confidence.bid, null);
+  assert.ok(value.confidence.bid && band.confidence.bid, 'value/band annotate the trough touch-reach');
+  // the entry doctrine is surfaced in the lean shadow (non-default only).
+  assert.equal(estConfLean(scalp).doctrine, 'near-live');
+  assert.equal(estConfLean(value).doctrine, 'trough');
+  assert.equal(estConfLean(band).doctrine, undefined, 'reach-fold is the default → omitted');
+});
+
+ok('rev2 DECLARED-EXIT anchors estSell to the thesis target (above the band top), not the reach-folded ask', () => {
+  // crystal-seed shape: a declared 6.27m evening-peak exit ABOVE the band top.
+  const row = { quickBuy: 6_000_000, quickSell: 6_100_000, optBuy: 5_900_000, optSell: 6_200_000 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: { reachedDays: 3, nDays: 14, recentHit: 0, recentDays: 3 }, declaredExit: 6_270_000 });
+  assert.equal(e.estSell, 6_270_000, 'estSell = the declared exit, NOT ceiling-clamped to the band top');
+  assert.equal(e.confidence.declaredAnchored, true);
+  assert.equal(e.confidence.ask, null, 'a declared exit suppresses the generic ask-reach token');
+  const cells = estPairCells(e);
+  assert.ok(/\(declared\)/.test(cells[1].t), `sell cell marks it declared: ${cells[1].t}`);
+  assert.equal(estConfLean(e).declaredAnchored, true);
+  // a declared exit BELOW break-even is STILL BE-floored (BE never overridden).
+  const e2 = estimatePair(STRATEGIES.band, { quickBuy: 100_000, quickSell: 100_500, optBuy: 99_000, optSell: 103_000 }, { declaredExit: 50_000 });
+  assert.equal(e2.estSell, breakEven(e2.estBuy), 'BE still floors a declared exit below break-even');
+  assert.equal(e2.confidence.beFloored, true);
+});
+
+ok('estimatePair BE FLOOR: a fully-collapsed ask is clamped UP to breakEven(estBuy) and flagged', () => {
+  const row = { quickBuy: 100_000, quickSell: 100_500, optBuy: 99_000, optSell: 103_000 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: { reachedDays: 0, nDays: 14 } });
+  assert.equal(e.estBuy, 99_000);
+  assert.equal(e.estSell, breakEven(99_000), 'estSell clamped to the model-free break-even');
+  assert.equal(e.confidence.beFloored, true, 'the floor binding is surfaced in the confidence');
+  assert.ok(e.estNet >= 0 && e.estNet <= 2, 'net collapses to ~0 — the estimate self-reports "no trade"');
+  assert.deepEqual(estConfLean(e), { askHit: 0, askDays: 14, beFloored: true });
+});
+
+ok('rev3 the asym DEEP bid is NEVER folded into estBuy (optionality, not an expected entry)', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const withAsym = estimatePair(STRATEGIES.band, row, { asym: { deepBid: 700, highReachAsk: 1200 } });
+  const without  = estimatePair(STRATEGIES.band, row, {});
+  assert.equal(withAsym.estBuy, without.estBuy, 'deepBid never enters estBuy');
+  assert.ok(withAsym.estBuy >= row.optBuy, 'estBuy stays at/above the band low');
+});
+
+ok('estimatePair degrades honestly: no reads ⇒ the model-free edge; no live pair ⇒ null; blends clamp; nudge applies', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const bare = estimatePair(STRATEGIES.band, row, {});
+  assert.equal(bare.estBuy, 950); assert.equal(bare.estSell, 1100);   // absent evidence ⇒ no discount
+  assert.equal(estimatePair(STRATEGIES.band, { optBuy: 950, optSell: 1100 }, {}), null, 'no live pair → null');
+  // diurnal/asym levels are clamped INSIDE the live↔band span before blending (a flier can't drag the pair out).
+  const wild = estimatePair(STRATEGIES.band, row, { diurnal: { bid: 1, ask: 99_999 }, asym: { highReachAsk: 99_999 } });
+  assert.ok(wild.estBuy >= row.optBuy && wild.estBuy <= row.quickBuy, 'estBuy stays in [optBuy, quickBuy]');
+  assert.ok(wild.estSell >= row.quickSell && wild.estSell <= row.optSell, 'estSell stays in [quickSell, optSell]');
+  const nudged = estimatePair(STRATEGIES.band, row, {}, { nudge: (side, p) => side === 'ask' ? { price: p - 1 } : null });
+  assert.equal(nudged.estSell, 1099, 'nudge applied as the final pricing step');
+  assert.equal(EST_HEADERS.length, 4);
+  const cells = estPairCells(bare);
+  assert.equal(cells.length, 4);
+  assert.ok(cells[0].t.includes('(–)') && cells[1].t.includes('(–)'), 'no-read confidence token rendered');
+  assert.equal(estPairCells(null).length, 4, 'null estimate renders em-dash cells, never throws');
 });
 
 ok('fmtTtf renders compact minutes/hours/days', () => {

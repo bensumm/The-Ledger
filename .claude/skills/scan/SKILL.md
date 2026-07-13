@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.46
+version: 1.48
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -278,9 +278,12 @@ This is the tribal layer the script can't do — apply ALL of these:
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
   `windowrange.mjs --ask <sell target>` and quote the REACHABLE sell (the ~50–75%-day reach level),
-  NEVER the raw 2h band top** — the screen's `Optimistic`/`Rank` column price the sell at the band top,
-  which on a thin + wide-band item is an artifact that never reaches. No pitch without the sell leg
-  verified. Anchor: DHCB surfaced top-of-board (score 2.24m/d) and I verified the BUY (21-night
+  NEVER the raw 2h band top** — the raw `Optimistic`/`Rank` pricing sells at the band top, which on a
+  thin + wide-band item is an artifact that never reaches. (PLAN-OUTPUT-TABLE 2026-07-13 + revisions: the
+  screen's DEFAULT table now renders the reach-folded `Est. sell` — the fold (on the RECENT-3 reach) already
+  collapses a mirage top and the cell carries its recent reach token (`0/3`, full window beside it on
+  divergence) — but it is a PLACEHOLDER model, so the `--ask` confirmation on what you actually pitch STAYS
+  mandatory; `--raw` shows the unfolded pair.) No pitch without the sell leg verified. Anchor: DHCB surfaced top-of-board (score 2.24m/d) and I verified the BUY (21-night
   trajectory = a healthy recovery) but carried the band-top sell 36.21m forward UNVERIFIED and quoted
   +690–810k; `--ask 36.21m` reached **0/7 days**, the reachable sell was ~35.6m, and the real trade was
   +80k that then went underwater. The band top is a fine CANDIDATE (input); it is never the pitched

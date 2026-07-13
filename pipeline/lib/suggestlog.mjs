@@ -28,6 +28,13 @@
  *               the SYMMETRIC rank, so old-vs-new ride the SAME row for the F1 A/B (graduate the sort
  *               flip only if asym.rank predicts realized exit-safe edge better). Lean-included:
  *               band/scalp screen rows with an in-hand 1h series only; PLACEHOLDER quantiles, n≈14.)
+ *     estBuy?, estSell?, estConfidence?,   (PLAN-OUTPUT-TABLE 2026-07-13 + REVISIONS — the reconciliation-
+ *               estimator shadow pair (js/estimators.mjs estimatePair: strategy-aware entry + declared-
+ *               exit-anchored, reach-folded, BE-floored Est. buy/sell) + its lean evidence
+ *               { askRecHit?, askRecDays?, askHit?, askDays?, bidRecHit?…, declaredAnchored?, beFloored?,
+ *               doctrine? } — recent-3 (RC1) AND full-window reach counts, the entry doctrine, and the
+ *               declared/BE flags; the F1 join scores estSell against the realized sell. Lean-included;
+ *               PLACEHOLDER model n≈3–14.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch.mjs uses for action verdicts); lean-included, screen supplies
@@ -204,7 +211,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -254,6 +261,15 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): callers without an asym read (quote/watch, churn/value rows, no 1h
   // series) log a byte-identical shape.
   if (asym != null)          e.asym = asym;
+  // PLAN-OUTPUT-TABLE (2026-07-13) — the RECONCILIATION-ESTIMATOR shadow pair: estBuy/estSell are the
+  // reach-folded, BE-floored Est. buy/sell the console table now renders (js/estimators.mjs
+  // estimatePair; PLACEHOLDER model, n≈14), and estConfidence is its lean evidence object
+  // ({ askHit, askDays, bidHit, bidDays, beFloored? } — estConfLean). Logged BESIDE the model-free
+  // quickBuy/optBuy/… fields so the F1 retro-join can score "did estSell predict the realized sell".
+  // Lean-included (YS2 pattern): callers without an estimate log a byte-identical shape.
+  if (estBuy != null)        e.estBuy = estBuy;
+  if (estSell != null)       e.estSell = estSell;
+  if (estConfidence != null) e.estConfidence = estConfidence;
   // AZ-forward (2026-07-12, analyze.mjs forward-data gaps): `grade` is the rating LETTER as rendered
   // then (incl. any thin/sub-floor cap) — the grade-clumping audit's segmentation key. Only screen.mjs
   // computes a grade, so it's a caller param (quote/watch never supply it). Lean-included (YS2 pattern):

@@ -41,12 +41,15 @@
  * n:0 means "no observations, pure prior". Do NOT cite any constant here as validated.
  *
  * PURITY. DOM-free, fetch-free, fs-free ESM. Imports only the pure js/format.js helpers (the ONE
- * tax()/netMargin). Every ctx field is optional; every estimator degrades to an honest wide prior,
+ * tax()/netMargin) plus js/quotecore.js's breakEven (itself pure, format.js-only — no cycle: quotecore
+ * does not import this module). Every ctx field is optional; every estimator degrades to an honest wide prior,
  * never throws. Lives in js/ (2026-07-10 — moved out of pipeline/lib/) as the ONE shared home so the
  * app can rank/grade on it too (the app↔console parity boundary — shared logic in js/, node re-imports
  * via the pipeline/lib/estimators.mjs re-export shim, byte-identical). The Finder wiring is AP4.
  */
-import { netMargin, clamp } from './format.js';
+import { netMargin, clamp, fmtP } from './format.js';
+import { breakEven } from './quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE model-free break-even (BE floor for estSell)
+import { RECENCY_DIVERGE } from './windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
 
 const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -300,4 +303,200 @@ export function fmtTtf(sec) {
   if (s < 2 * 3600) return Math.round(s / 60) + 'm';
   if (s < 2 * 86400) return (s / 3600).toFixed(1).replace(/\.0$/, '') + 'h';
   return (s / 86400).toFixed(1).replace(/\.0$/, '') + 'd';
+}
+
+/* ============================================================================================
+   PLAN-OUTPUT-TABLE (2026-07-13, + REVISIONS same day) — the RECONCILIATION ESTIMATOR: Est. buy / Est. sell.
+   THE MOTIVE (Ben): the table's Quick + Optimistic cells are two theoretical, model-free pairs the
+   operator reconciles BY HAND into the one number he posts (Optimistic ∩ diurnal ∩ reach ∩ anchor ∩
+   BE-floor, synthesized every pass). estimatePair promotes that synthesis into first-class numbers.
+
+   estSELL — the price you'll ACTUALLY clear at:
+     • DECLARED-EXIT-ANCHORED (rev2, thesis-aware): when `extra.declaredExit` is passed, estSell anchors
+       to THAT — the operator's stated target governs, NOT the generic band top (and it may sit ABOVE the
+       band top, so it is NOT ceiling-clamped to the band — only floored to live + break-even). CALLER
+       CONTRACT (FIX 1, 2026-07-13): a declared exit is a HELD-LOT sell plan, so a caller passes
+       `declaredExit` ONLY for an item it actually HOLDS (an open lot in positions.json). The pure
+       DISCOVERY screen (screen.mjs band/churn/value) NEVER passes it — a bare candidate is a buy read,
+       not a held lot; anchoring it would inflate its Est. sell/net off a plan that doesn't apply.
+     • else the band top DISCOUNTED BY REACH so a mirage exit collapses toward the live instabuy, blended
+       with the diurnal peak ask + the asymPair high-reach ask.
+     • BE-FLOORED always (never < breakEven — the ONE model-free honesty anchor; the floor binding IS the
+       estimate saying "no trade").
+
+   estBUY — STRATEGY-AWARE (rev2, `entryDoctrine(spec)` off EXISTING spec fields, no new field):
+     • scalp (falling:'accept') → NEAR-LIVE: a deliberate intraday flip bids at the live instasell to
+       FILL — the band low is not its entry (it accepts a falling tape and wants the fill).
+     • value (priceBasis:'term') → TROUGH: a buy-hold bids the durable floor (the band low proxy), never
+       folded toward live — a value entry wants the low, not a quick fill.
+     • band/churn (priceBasis:'opt', falling:'exclude') → REACH-FOLD: the band low folded toward live by
+       how rarely it TOUCHES, blended with the diurnal dip bid (the original behaviour).
+   The asymPair DEEP bid is NEVER folded into estBuy (rev3) — DERIVED FROM THE STRATEGY MODEL: no
+   strategy posts a ~4/14-flush deep bid as its EXPECTED entry (scalp bids to fill, value bids the floor,
+   band ladders the low). A deep flush bid is rest-and-see OPTIONALITY, so it stays the separate `◆ asym`
+   line, never inside an expected-price number.
+
+   CONFIDENCE (rev1) — carried WITH the price as the RECENT-3 reach idiom, not the full window: the
+   godsword read `2/14` fine but its RECENT reach was `0/3` = the mirage. Recent-3 (`recencySplit`,
+   already computed) is the freshness-honest signal AND the fold basis; the full window is the
+   sample-size backstop, shown BESIDE it only when the two DIVERGE (`0/3 · 2/14` — that divergence is the
+   stale flag). The `(live)` span-0 fallback is dropped.
+
+   CONSOLE-ONLY consumer set today (screen.mjs / quote.mjs stdout — --raw restores Quick/Optimistic);
+   the app Finder/screen.json never call this → no APP_VERSION bump. PURE over the already-computed
+   row/ctx — ZERO new fetch; every missing input degrades to the model-free edge (absent evidence ⇒ no
+   discount, the askReachFactor absent→1 precedent). Quoted momentum tell, break-even, ordering
+   invariant, and the value q15/q85 twin are all untouched.
+   HONESTY (rule 4): EVERY constant/weight/per-strategy placement below is a NAMED PLACEHOLDER, n≈14 per
+   item at best; the F1 retro-join (estBuy/estSell/estConfidence shadow fields on suggestions.jsonl) owns
+   calibration.
+   ============================================================================================ */
+// Reach saturation: an edge reached on ≥ this fraction of the (recent-3, else full) days is treated as
+// FULLY reachable (fold factor 1 → the robust band edge stands); below it the edge folds linearly toward
+// live. PLACEHOLDER (n≈3–14) — e.g. a recent 0/3 ⇒ fold 0 ⇒ the mirage top collapses fully to live.
+export const EST_REACH_SAT_FRAC = 0.75;
+// Reconciliation weights: the reach-folded band edge and each present secondary source (diurnal
+// dip/peak level; asym high-reach ask) blend as an EQUAL-WEIGHT mean, clamped inside [live, band edge].
+// Deliberately the simplest documented default — PLACEHOLDER, no calibrated weighting exists yet.
+export const EST_BLEND_EQUAL_WEIGHTS = true;   // (named so the placeholder choice is greppable/citable)
+// The estimated-pair column set (shared by screen.mjs/quote.mjs so the header row can't drift).
+export const EST_HEADERS = ['Est. buy', 'Est. sell', 'Net/u (ROI)', 'BE'];
+
+/* entryDoctrine(spec) → 'near-live' | 'trough' | 'reach-fold' — the per-strategy ENTRY placement
+   (rev2). DERIVED from existing spec fields so no new declarative field is added (and the app-parity
+   registry stays untouched): a faller-ACCEPTING thesis (scalp) bids to fill (near-live); a term-basis
+   thesis (value) bids the durable floor (trough); everything else (band/churn, opt basis) reach-folds.
+   PLACEHOLDER mapping — F1 calibrates each niche's real entry aggression. */
+export function entryDoctrine(spec) {
+  if (spec && spec.falling === 'accept') return 'near-live';   // scalp — a deliberate flip bids to FILL
+  if (spec && spec.priceBasis === 'term') return 'trough';     // value — a buy-hold bids the durable floor
+  return 'reach-fold';                                         // band/churn — the original reach-folded edge
+}
+
+/* reachRead({ reachedDays, nDays, recentHit, recentDays }) → { frac, rec, full, diverges } | null.
+   rev1: the FOLD basis is the RECENT-3 fraction when scored (freshness-honest), else the full window
+   (the sample-size backstop). `diverges` reuses windowread's RECENCY_DIVERGE + its zero-recent clause. */
+function reachRead(r) {
+  if (!r) return null;
+  const full = (num(r.nDays) > 0 && num(r.reachedDays) != null) ? { hit: r.reachedDays, days: r.nDays, frac: clamp01(r.reachedDays / r.nDays) } : null;
+  const rec  = (num(r.recentDays) > 0 && num(r.recentHit) != null) ? { hit: r.recentHit, days: r.recentDays, frac: clamp01(r.recentHit / r.recentDays) } : null;
+  if (!full && !rec) return null;
+  const frac = rec ? rec.frac : full.frac;   // recent-3 IS the confidence; full is only the backstop
+  const diverges = !!(rec && full && (Math.abs(rec.frac - full.frac) >= RECENCY_DIVERGE || (rec.hit === 0 && full.hit > 0 && full.frac >= 0.2)));
+  return { frac, rec, full, diverges };
+}
+
+/* estimatePair(spec, row, extra, { nudge }) → { estBuy, estSell, estNet, estRoi, be, confidence } | null.
+   extra (ALL optional — zero new fetch; the caller passes only what it already computed):
+     bidReach  { reachedDays, nDays, recentHit?, recentDays? }  patient bid TOUCH counts (full + recent-3)
+     askReach  { reachedDays, nDays, recentHit?, recentDays? }  patient ask REACH counts (full + recent-3)
+     diurnal   { bid, ask }        deriveDiurnalRange's dip/peak-window levels
+     asym      { highReachAsk }    asymPair's near-certain exit level (deepBid is NEVER consumed — rev3)
+     declaredExit  number|null     the lot's declared thesis exit (hold-thesis.json) — anchors estSell
+   nudge: optional (side, price) → { price }|null — the ⚓ anchor round-number nudge (pipeline passes
+   modules/anchor.mjs anchorNudge; injected so this module stays pure/app-importable). Final pricing step.
+   `spec` drives the per-strategy entry doctrine (rev2). Returns null when there is no live pair. */
+export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) {
+  const qb = num(row.quickBuy), qs = num(row.quickSell);
+  if (qb == null || qs == null) return null;                    // no live pair → no estimate (degrade)
+  const ob = num(row.optBuy) ?? qb, os = num(row.optSell) ?? qs;
+  const bidR = reachRead(extra.bidReach), askR = reachRead(extra.askReach);
+  const fold = f => f == null ? 1 : Math.min(1, f / EST_REACH_SAT_FRAC);   // absent read ⇒ 1 (no discount)
+  const doctrine = entryDoctrine(spec);
+  // --- BUY: per-strategy entry doctrine (rev2) ---
+  let estBuy, buyReach = bidR;   // buyReach = the reach read that ANNOTATES the buy cell (null for near-live)
+  if (doctrine === 'near-live') {
+    estBuy = qb;                 // scalp bids the live instasell to FILL — the band-low reach doesn't apply
+    buyReach = null;             // a live bid needs no cross-day touch caveat
+  } else {
+    // trough (value) anchors the band-low WITHOUT folding toward live; reach-fold (band/churn) folds it.
+    const anchor = doctrine === 'trough' ? ob : Math.round(qb - (qb - ob) * fold(bidR ? bidR.frac : null));
+    const bCands = [anchor];
+    const dBid = extra.diurnal ? num(extra.diurnal.bid) : null;
+    if (dBid != null) bCands.push(Math.round(clamp(dBid, Math.min(ob, qb), qb)));
+    estBuy = Math.round(bCands.reduce((s, x) => s + x, 0) / bCands.length);
+  }
+  // --- SELL: declared-exit-anchored (thesis-aware, rev2) OR reach-folded band top ---
+  const declared = num(extra.declaredExit);
+  let estSell, declaredAnchored = false;
+  if (declared != null && declared > 0) {
+    estSell = declared;          // the operator's stated target governs — NOT ceiling-clamped to the band
+    declaredAnchored = true;
+  } else {
+    const sCands = [Math.round(qs + (os - qs) * fold(askR ? askR.frac : null))];
+    const dAsk = extra.diurnal ? num(extra.diurnal.ask) : null;
+    if (dAsk != null) sCands.push(Math.round(clamp(dAsk, qs, Math.max(os, qs))));
+    const aAsk = extra.asym ? num(extra.asym.highReachAsk) : null;
+    if (aAsk != null) sCands.push(Math.round(clamp(aAsk, qs, Math.max(os, qs))));
+    estSell = Math.round(sCands.reduce((s, x) => s + x, 0) / sCands.length);
+  }
+  // ⚓ anchor nudge (final step — nudge, never override), then re-clamp.
+  if (typeof nudge === 'function') {
+    const nb = nudge('bid', estBuy); if (nb && num(nb.price) != null) estBuy = nb.price;
+    const na = nudge('ask', estSell); if (na && num(na.price) != null) estSell = na.price;
+  }
+  estBuy = Math.round(clamp(estBuy, Math.min(ob, qb), qb));
+  // a declared exit is floored to live (never below the live instabuy), but not ceiling-clamped to the band.
+  estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, Math.max(os, qs)));
+  // BE floor — MODEL-FREE and applied LAST: never emit estSell < breakEven(estBuy). The floor binding
+  // is the estimate self-reporting "no profitable trade at model prices" (estNet collapses to ~0).
+  const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
+  const be = breakEven(estBuy, bopt);
+  const beFloored = estSell < be;
+  if (beFloored) estSell = be;
+  const estNet = netMargin(estBuy, estSell, bopt);
+  const estRoi = (estNet != null && estBuy > 0) ? estNet / estBuy * 100 : null;
+  const confidence = {
+    bid: buyReach ? { rec: buyReach.rec, full: buyReach.full, diverges: buyReach.diverges } : null,
+    ask: (!declaredAnchored && askR) ? { rec: askR.rec, full: askR.full, diverges: askR.diverges } : null,
+    beFloored, declaredAnchored, doctrine,
+  };
+  return { estBuy, estSell, estNet, estRoi, be, confidence };
+}
+
+// compact reach token (rev1) — the RECENT-3 fraction is PRIMARY; the full window is appended only when
+// the two DIVERGE (`0/3 · 2/14`). Recent-3 absent (thin) ⇒ the full window alone; no read ⇒ '–'.
+const fracTok = f => f ? `${f.hit}/${f.days}` : null;
+function reachTok(info) {
+  if (!info) return '–';
+  const recT = fracTok(info.rec), fullT = fracTok(info.full);
+  if (recT && info.diverges && fullT) return `${recT} · ${fullT}`;   // divergence → show both (the stale flag)
+  return recT || fullT || '–';                                       // recent-3 primary; full is the backstop
+}
+
+/* estPairCells(est) → the four structured {t, c} cells for the EST_HEADERS columns (screen + quote
+   render from this ONE builder so the cell text can't drift). Confidence rides IN the price cells
+   (Ben's rule): buy carries its touch fraction (recent-3 primary), sell its reach fraction OR a
+   `(declared)` marker when anchored to a thesis exit; a bound BE floor is named on the sell cell
+   (amber) — that row's estimate is saying "no trade at model prices". */
+export function estPairCells(est) {
+  if (!est) return [{ t: '—' }, { t: '—' }, { t: '—' }, { t: '—' }];
+  const c = est.confidence;
+  let sellSuffix;
+  if (c.beFloored) sellSuffix = ` (BE-floored${c.ask ? `, ${reachTok(c.ask)}` : ''})`;
+  else if (c.declaredAnchored) sellSuffix = ' (declared)';
+  else sellSuffix = ` (${reachTok(c.ask)})`;
+  const netTxt = est.estNet == null ? '—'
+    : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})`;
+  return [
+    { t: `${fmtP(est.estBuy)} (${reachTok(c.bid)})` },
+    { t: `${fmtP(est.estSell)}${sellSuffix}`, c: c.beFloored ? 'amber' : (c.declaredAnchored ? 'gain' : undefined) },
+    { t: netTxt, c: est.estNet == null ? undefined : (est.estNet >= 0 ? 'gain' : 'loss') },
+    { t: fmtP(est.be), c: 'mini' },
+  ];
+}
+
+/* estConfLean(est) → the lean suggestions.jsonl shadow object (F1 retro-join input) or null.
+   Numbers, not strings, so the join can score "did estSell predict the realized sell" directly. Carries
+   BOTH the recent-3 and full-window counts (rev1) + the entry doctrine + declared/BE flags. Lean
+   discipline (YS2): a field is present only when there is evidence behind it. */
+export function estConfLean(est) {
+  if (!est) return null;
+  const c = est.confidence, o = {};
+  if (c.ask) { if (c.ask.rec) { o.askRecHit = c.ask.rec.hit; o.askRecDays = c.ask.rec.days; } if (c.ask.full) { o.askHit = c.ask.full.hit; o.askDays = c.ask.full.days; } }
+  if (c.bid) { if (c.bid.rec) { o.bidRecHit = c.bid.rec.hit; o.bidRecDays = c.bid.rec.days; } if (c.bid.full) { o.bidHit = c.bid.full.hit; o.bidDays = c.bid.full.days; } }
+  if (c.declaredAnchored) o.declaredAnchored = true;
+  if (c.beFloored) o.beFloored = true;
+  if (c.doctrine && c.doctrine !== 'reach-fold') o.doctrine = c.doctrine;
+  return Object.keys(o).length ? o : null;
 }

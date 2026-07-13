@@ -14,7 +14,8 @@
    (override with `--entered-under <key>`). A path key is one of js/paths.mjs' PATH_KEYS
    ('value-hold'/'hold-recovery'/'scalp'/'be-escape'/'list-to-clear'/'cut').
    (Two-store note: session-thesis = free-text INTENT/reminder; hold-thesis = the declared, gating,
-   path-carrying plan. `--path` is what routes the flags into the latter.)
+   path-carrying plan. `--path` is what routes the flags into the latter. `clear` removes the id from
+   BOTH stores — FIX 2, 2026-07-13 — so a cleared plan can't leave a gating exit/tripwire behind.)
 
      node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
      node pipeline/thesis.mjs clear "<item|id>"
@@ -23,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from './lib/marketfetch.mjs';
 import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';
-import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis } from './lib/holdthesis.mjs';
+import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from './lib/holdthesis.mjs';
 import { parseGp } from './lib/cli.mjs';   // VN-2 — numeric tripwire/exit for the hold-thesis write
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -74,8 +75,17 @@ async function main() {
   if (cmd === 'clear') {
     if (!pos.length) { usage(); process.exit(1); }
     const { id, name } = await resolveId(pos[0]);
+    // clear the session-thesis store (free-text INTENT/reminder)…
     saveThesis(THESIS_PATH, clearThesis(pruneThesis(loadThesis(THESIS_PATH)), id));
-    console.log(`cleared thesis for ${name} (${id}).`);
+    // …AND the TRACKED hold-thesis store (the declared, GATING, path-carrying plan `set --path` writes).
+    // FIX 2 (2026-07-13): `clear` used to leave the hold-thesis entry behind, so a cleared plan kept
+    // gating (its exit/tripwire lingered — the stale Masori body / Lightbearer / fury pollution). Reach
+    // BOTH stores; only write hold-thesis.json when an entry actually existed (else it's untouched).
+    const hstore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
+    const hadHold = holdThesisFor(hstore, id) != null;
+    if (hadHold) saveHoldThesis(HOLD_THESIS_PATH, clearHoldThesis(hstore, id));
+    console.log(`cleared thesis for ${name} (${id}) — session-thesis.json`
+      + `${hadHold ? ' + hold-thesis.json (declared plan removed)' : ' (no declared plan in hold-thesis.json)'}.`);
     return;
   }
 

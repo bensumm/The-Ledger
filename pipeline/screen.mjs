@@ -75,7 +75,8 @@ import { hourProfile, deriveDiurnalRange, windowStats, asymPair } from '../js/wi
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate } from './lib/estimators.mjs';
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS } from './lib/estimators.mjs';
+import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
@@ -241,6 +242,16 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
 // gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
 const ASYM = A.asym === true;
+// --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
+// estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells
+// (js/estimators.mjs estimatePair — reach-folded, BE-floored, PLACEHOLDER model n≈14). `--raw`
+// restores the model-free Quick + Optimistic columns (the honest arithmetic underneath). --asym
+// IMPLIES --raw: under --asym the QUOTED Quick/Optimistic prices ARE the experimental asym pair, so
+// the raw view is the one that shows them (blending two experimental reprices in one cell would be
+// unreadable; the est pair is still computed off the DEFAULT row + logged for F1 either way).
+// STDOUT-ONLY: the --publish screen.json cells are built from the SAME raw stdCells path as before,
+// byte-identical regardless of this flag — the app contract is untouched (no APP_VERSION bump).
+const RAW = A.raw === true || ASYM;
 // PART II asym-pair read parameters: full-local-day window (wStart 0 → wEnd 0 wraps to all 24h — the
 // day-level deep-low/high-reach read, distinct from reachValidator's coming-8h window) over ~14 nights.
 const ASYM_NIGHTS = 14;
@@ -276,6 +287,10 @@ const PLAYBOOK = {
 // The app renders screen.json headers generically (only 'Grade' is special-cased in js/ui.js), and
 // the headers TRAVEL with the payload, so renaming is app-safe (no APP_VERSION bump).
 const HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Rank net·P/ttf'];
+// PLAN-OUTPUT-TABLE: the DEFAULT stdout column set — Est. buy/sell REPLACE Quick+Optimistic on the
+// printed niche tables only (Grade moves after Regime per the plan's row layout; the Rank column is
+// kept — it's the sort key's honesty readout). HEADERS above stays the --raw AND --publish set.
+const HEADERS_EST = ['Item', 'Guide', ...EST_HEADERS, 'Vol/d', 'Momentum', 'Regime', 'Grade', 'Rank net·P/ttf'];
 
 const round2 = x => Math.round(x * 100) / 100;   // P6b: pFill logged to 2dp (lean ledger)
 // P6b: the compact honest lean fields for a rank estimate `er` (estimateRank result) — the quoted pair
@@ -435,7 +450,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       bidReach = informFlags(bidRes);
       const reachRes = bidRes.find(r => r.key === 'reach');
       const ev = reachRes && reachRes.evidence;
-      reachExtra = (ev && ev.days >= 1) ? { reachedDays: ev.hit, nDays: ev.days } : null;
+      // rev1: carry the RC1 recent-3 counts (evidence.recentHit/recentDays) alongside the full window so
+      // estimatePair folds on recent-3 and the confidence token surfaces it.
+      reachExtra = (ev && ev.days >= 1) ? { reachedDays: ev.hit, nDays: ev.days, recentHit: ev.recentHit, recentDays: ev.recentDays } : null;
     }
     // reachExtra stays null when the 1h series is absent (the block above is skipped) → estimateRank
     // keeps its honest band-depth/prior degrade (the existing no-fetch contract). Only the ASK-side reach
@@ -453,7 +470,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // fetch (the number is in hand); field remap mirrors reachExtra (validator emits evidence.hit/days).
     const askReachRes = vres.find(r => r.key === 'reach');
     const askEv = askReachRes && askReachRes.evidence;
-    const askReachExtra = (askEv && askEv.days >= 1) ? { reachedDays: askEv.hit, nDays: askEv.days } : null;
+    const askReachExtra = (askEv && askEv.days >= 1) ? { reachedDays: askEv.hit, nDays: askEv.days, recentHit: askEv.recentHit, recentDays: askEv.recentDays } : null;
     // PART II (PLAN-GRADE-REACH §II.1-II.3): the ASYMMETRIC realizable pair — deep flush bid → high-reach
     // ask off the day-level quantiles (js/windowread.mjs asymPair, full-day window, ~14 nights) of the 1h
     // series ALREADY in hand (zero new fetch). 'asym'-fillShape niches only (band/scalp — churn fills
@@ -467,6 +484,25 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       asymRead = st ? asymPair(st) : null;
       if (asymRead) asymEr = asymEstimate(STRATEGIES[mode], row, asymRead);
     }
+    // PLAN-OUTPUT-TABLE: the diurnal profile + the reconciliation estimate (Est. buy/sell) — computed
+    // off the DEFAULT row (before any --asym reprice) from data ALREADY in hand (the Leg-B 1h series,
+    // the bid/ask reach reads above) — zero new fetch. prof/dr are stored on the row and REUSED by the
+    // Diurnal timing block below (same pure math, computed once). The est pair is logged to the
+    // suggestions ledger unconditionally (the F1 accrual) and rendered as the DEFAULT table columns
+    // (--raw restores Quick/Optimistic); it never touches the published screen.json cells.
+    const prof = hourProfile(series1h && series1h.get(s.id), { nights: DIURNAL_NIGHTS });
+    const dr = prof ? deriveDiurnalRange(prof, { liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null }) : null;
+    // rev2: strategy-aware entry (estimatePair reads STRATEGY[mode]'s falling/priceBasis doctrine).
+    // FIX 1 (2026-07-13): declared-exit anchoring is DELIBERATELY NOT applied on the discovery screen —
+    // a bare candidate row is a "should I buy this" read, never a held lot, so a declared SELL exit
+    // (a held-lot plan) must not inflate its Est. sell/net. Declared-exit anchoring lives ONLY on the
+    // held-lot surfaces (quote.mjs --positions/watch.mjs verdict frame, and quote.mjs per-item ONLY when
+    // that id is actually held). So no declaredExit is passed here.
+    const est = estimatePair(STRATEGIES[mode], row, {
+      bidReach: reachExtra, askReach: askReachExtra,
+      diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
+      asym: asymRead,
+    }, { nudge: anchorNudge });
     // --asym (F1-GATED, off by default): the asym pair BECOMES the quoted prices — a repriced CLONE
     // (ordering guards already applied by asymEstimate; qcache and the raw momentum tell untouched).
     if (ASYM && asymEr) row = { ...row, optBuy: asymEr.bid, optSell: asymEr.ask, optNet: asymEr.net };
@@ -560,7 +596,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -580,7 +616,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
     rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er),
       // PART II shadow field: the asymmetric estimate BESIDE the symmetric rank (same row → the F1 A/B join)
-      asym: r.asymEr ? { bid: r.asymEr.bid, ask: r.asymEr.ask, pAsk: round2(r.asymEr.pAsk), pBid: round2(r.asymEr.pBid), n: r.asymEr.nDays, rank: Math.round(r.asymEr.rank) } : null })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
+      asym: r.asymEr ? { bid: r.asymEr.bid, ask: r.asymEr.ask, pAsk: round2(r.asymEr.pAsk), pBid: round2(r.asymEr.pBid), n: r.asymEr.nDays, rank: Math.round(r.asymEr.rank) } : null,
+      // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
+      estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est) })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -601,9 +639,26 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
   // the app render) — an app Probes column is a separate, APP_VERSION-bumping step (out of PM1 scope).
   const anyProbe = rows.some(r => r.probeStr);
-  const printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
-  const printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
-  console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
+  // PLAN-OUTPUT-TABLE: the DEFAULT print is the reconciliation-estimate view (Est. buy/sell replace
+  // Quick+Optimistic; Grade moves after Regime); --raw (and --asym, which implies it) prints the
+  // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
+  // to screen.json either way, so the app contract is byte-identical regardless of the view.
+  if (RAW) {
+    const printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
+    const printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
+    console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
+  } else {
+    const printHeaders = anyProbe ? [...HEADERS_EST, 'Probes'] : HEADERS_EST;
+    // r.cells layout: [item, grade, guide, quick, opt, vol, mom, regime, rank] — reuse the shared
+    // structured cells (phase-suffixed regime, sub-floor grade label) and swap in the est pair cells.
+    const printCells = rows.map(r => {
+      const c = r.cells;
+      const base = [c[0], c[2], ...estPairCells(r.est), c[5], c[6], c[7], c[1], c[8]];
+      return anyProbe ? [...base, { t: r.probeStr, c: 'mini' }] : base;
+    });
+    console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
+    if (rows.length) console.log(`(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band reach-folded), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. BE is model-free and floors Est. sell — a "(BE-floored)" ask means no profitable trade at model prices. --raw restores the model-free Quick/Optimistic columns.)`);
+  }
   console.log(`Grades: ${gradeDist(dist)}`);
   // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
   // the count + the top-3 reasons. reachValidator still degrades to pass here (no 1h series fetched);
@@ -629,9 +684,11 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // a CLEAN pick (concentrated, trend-quiet, positive after-tax swing) is flagged as a diurnal candidate.
   const diurnalLines = [];
   for (const r of rows) {
-    const prof = hourProfile(series1h && series1h.get(r.id), { nights: DIURNAL_NIGHTS });
+    // PLAN-OUTPUT-TABLE: prof/dr were computed once in the loop above (same pure math, same inputs)
+    // and stored on the row — reused here instead of recomputing.
+    const prof = r.prof;
     if (!prof) continue;
-    const dr = deriveDiurnalRange(prof, { liveLo: r.row.quickBuy ?? null, liveHi: r.row.quickSell ?? null });
+    const dr = r.dr;
     if (!dr) continue;
     const nm = map.byId[r.id]?.name || ('#' + r.id);
     const win = w => `${fmtHour(w.startH)}–${fmtHour(w.endH)}`;
@@ -948,6 +1005,7 @@ function loadBuysByItem() {
   try { return buysByItem(JSON.parse(readFileSync(join(REPO_ROOT, 'fills.json'), 'utf8')).events || []); }
   catch { return new Map(); }   // absent/unreadable fills.json → no limit context (validator degrades to pass)
 }
+
 
 // DL4: the "B feeds A" nomination pass — the SCAN feeds the DL2 dip-loop pool. Off the ALREADY-in-hand
 // gate-tier data (v24 + bands for the whole liquid universe) + the survivors' already-fetched series5m,

@@ -287,6 +287,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen.mjs --publish`)
+- `PLAN-OUTPUT-TABLE.md` — in-flight per-topic plan: the reach-folded `Est. buy`/`Est. sell`
+  console table (shipped 2026-07-13 as `js/estimators.mjs` `estimatePair` + the `screen.mjs`/
+  `quote.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
+  `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
+  plan-file rule).
 - `docs/` — repo docs that aren't app/pipeline reference:
   - `PLANNING.md` — the planning process itself (required plan sections, chunk design rules, the
     skills improvement loop, anti-patterns; written 2026-07-08, follow it when producing any
@@ -466,7 +471,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `fillShape:'symmetric'` specs, the PART II churn exemption); `asymEstimate(spec,row,asymPair)`
     (PART II PLAN-GRADE-REACH — the asymmetric deep-buy/reliable-sell estimate: rank = net × P_ask ÷ TTF,
     P_bid is annotation-only, ordering guards; feeds the inform line + the `asym` ledger shadow field +
-    `screen.mjs --asym`). ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
+    `screen.mjs --asym`); `estimatePair(spec,row,extra,{nudge})` + `entryDoctrine`/`estPairCells`/`estConfLean`/
+    `EST_HEADERS` (PLAN-OUTPUT-TABLE 2026-07-13 + REVISIONS — the RECONCILIATION estimator behind the
+    console-default `Est. buy`/`Est. sell` columns: `Est. buy` is STRATEGY-AWARE (`entryDoctrine(spec)` off
+    the existing falling/priceBasis fields — scalp near-live · value trough · band/churn reach-folded; the
+    asym DEEP bid is never folded in — rev3); `Est. sell` anchors to a declared `hold-thesis.json` exit
+    ONLY on a HELD lot (FIX 1 — an open lot in positions.json; the discovery screen never anchors), else
+    the reach-folded band top + diurnal/asym blend; confidence is the RECENT-3 reach
+    (`recencySplit`, the fold basis) with the full window shown on divergence — rev1; ⚓ nudge, BE-floored;
+    `--raw` restores Quick/Optimistic; consumed by `screen.mjs`+`quote.mjs` stdout only — never the
+    `screen.json` publish cells). ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the
     calibrator. Consumed by `screen.mjs`+`rating.mjs` and **app-imported by `js/market.js`** (AP4,
     0.61.0 — the Finder desirability rank/grade; a behavior change to it now bumps APP_VERSION),
     `gatecandidates.mjs` (P1 — screen.mjs's PURE

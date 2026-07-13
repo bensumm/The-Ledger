@@ -65,6 +65,31 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   ROBUSTIFIED (robust p10 low / p90 high on a dense side, raw extremum on a sparse one — see the Bar E
   bullet below; the momentum tell keeps the true min/max). Mid is dropped from the table (redundant next to Guide + the live prices;
   the row model still exposes `row.mid` for `rating.mjs`/`watch.mjs`).
+  - **CONSOLE default = `Est. buy`/`Est. sell` (PLAN-OUTPUT-TABLE, 2026-07-13 + REVISIONS same day).** On
+    `screen.mjs`'s niche tables + `quote.mjs`'s per-item read, the STDOUT default REPLACES Quick+Optimistic
+    with the reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators.mjs`
+    `estimatePair` — the encoded by-hand Optimistic ∩ diurnal ∩ reach ∩ ⚓-anchor ∩ BE-floor synthesis):
+    - **`Est. buy` is STRATEGY-AWARE** (`entryDoctrine(spec)`, off the existing spec fields): **scalp**
+      (`falling:'accept'`) → NEAR-LIVE (bids the live instasell to fill); **value** (`priceBasis:'term'`) →
+      TROUGH (the band low, unfolded); **band/churn** (`priceBasis:'opt'`) → the band low REACH-FOLDED
+      toward live by touch-reach. The asym DEEP bid is **never** folded in (rest-and-see optionality — no
+      strategy posts a ~4/14 flush bid as its expected entry; it stays the `◆ asym` line).
+    - **`Est. sell`** = a DECLARED thesis exit **only on a HELD lot** (`hold-thesis.json` + an open lot in
+      `positions.json` → `(declared)`, floored to live but NOT ceiling-clamped to the band), else the band
+      top FOLDED BY REACH + diurnal/asym blend; **BE-FLOORED** always (`BE` stays model-free, its own
+      column; `(BE-floored)` = "no trade"). **The pure discovery screen NEVER anchors** (FIX 1 — a bare
+      candidate is a buy read, not a held lot; a declared SELL plan must not inflate its net); anchoring
+      lives on the held-lot surfaces (`quote --positions`/watch verdict frame, and `quote <item>` only when
+      that id is actually held).
+    - **Confidence** rides IN the price cells as the **RECENT-3 reach** (`0/3`, `recencySplit`), the
+      freshness-honest signal AND the fold basis; the full window shows BESIDE it only on divergence
+      (`0/3 · 12/14` = stale); `–` = no read.
+    - **`--raw` restores the model-free Quick/Optimistic columns** (`--asym` implies `--raw`). CONSOLE-ONLY:
+      `screen.json`/the app render the unchanged T1 cells (byte-identical publish, no `APP_VERSION` bump);
+      held-lot surfaces (`quote --positions`, watch.mjs) are INTENT-DIFFERENT and KEEP Quick as the
+      clear-price. PLACEHOLDER model (`EST_REACH_SAT_FRAC`, equal-weight blend, per-strategy placements;
+      n≈3–14) — lean `estBuy`/`estSell`/`estConfidence` (recent-3 + full counts, doctrine, declared/BE
+      flags) shadow fields ride `suggestions.jsonl` for the F1 retro calibration.
 - **Ordering + the `Momentum` (last-2h momentum) column.** On ONE consistent basis (live `/latest` +
   2h 5m-band), optBuy ≤ quickBuy ≤ quickSell ≤ optSell holds normally; a break on MIXED bases is a bug
   (fix the script). On consistent bases the break is a real momentum tell — the live price left its own
