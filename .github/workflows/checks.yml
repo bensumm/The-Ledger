@@ -32,6 +32,9 @@ jobs:
       - name: acceptance fixtures (auto-discovered *.test.mjs)
         run: node pipeline/run-tests.mjs
 
+      - name: import-resolution (entrypoint imports resolve against module exports)
+        run: node pipeline/import-check.mjs
+
       - name: skill-lint (every SKILL.md rule-block tagged, P7)
         run: node pipeline/skill-lint.mjs
 

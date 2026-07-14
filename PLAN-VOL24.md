@@ -109,12 +109,25 @@ Default `--vol-source` flipped to `rolling`; `legacy` kept as an escape hatch. R
 "Combined-effect verification" below) — the mid-liquidity commodity lane surfaces, ghost-spread thin items
 stay gated, and keeping MIN_GPD at 500k is NOT moot (it binds, not FLOOR, for the small lane).
 
+### Step 2b — per-item node surfaces (quote.mjs + watch.mjs) ✅ SHIPPED 2026-07-13
+Step 2 flipped only the `screen` surface; `quote.mjs` + `watch.mjs` still read the broken `/24h` per-item
+(`fetch24hOne`) — phantom Vol/d, off pressure ratio, reach-relief firing off deflated numbers. Fixed by
+`marketfetch.mjs` `vol24FromInputs(inp)`: composes the true rolling-24h from the item's IN-HAND `ts1h`
+(quote COD-4, watch window line → zero new fetch), reassigned onto `inp.vol24` before `computeQuote` so
+Vol/d + pressure + the 24h avg-low dip reference + reach-relief all read corrected volume; degrades to the
+`/24h` read (`volSrc:'peritem-24h'`) only when the 1h series is too short (brand-new item). `computeQuote`
+(js/quotecore.js, app-imported) is UNTOUCHED — only the VALUE passed in changed → no APP_VERSION. Verified
+live: Soul rune Vol/d 477k(broken) → **9.82m** rolling, pressure recomputed, reach-relief fires 75%; a thin
+book computes its real small volume and degrades sanely. Also landed the **CI import-resolution guard**
+(`pipeline/import-check.mjs` → `checks.yml`) that closes the gap which let a missing export ride onto main.
+
 ### Step 3 — REMAINING: fix the browser app (deferred, APP_VERSION-bumping)
-The pipeline (`screen.mjs`) is fixed; the browser app's `js/marketfetch.js` (`fetch24h`, feeding the
-Finder Grade/sort, Watch tab, Trends Vol/d) STILL reads the broken `/24h`. So the published `screen.json`
-Scan tab is now MORE correct than the live app until this lands. Per-item the app can sum its own 1h
-series; the Finder's bulk read needs a design decision (24 bulk `/1h` fetches per Finder load, or read a
-published rolling snapshot). This is the `APP_VERSION`-bumping change; the pipeline fix is not.
+Every NODE surface (screen + quote + watch) now reads corrected volume; the ONE remaining broken consumer
+is the browser app's `js/marketfetch.js` (`fetch24h`, feeding the Finder Grade/sort, Watch tab, Trends
+Vol/d). So the published `screen.json` Scan tab + every node CLI are now MORE correct than the live app
+until this lands. Per-item the app can sum its own 1h series; the Finder's bulk read needs a design decision
+(24 bulk `/1h` fetches per Finder load, or read a published rolling snapshot). This is the `APP_VERSION`-
+bumping change; the pipeline fix is not.
 
 ### Combined-effect verification (2026-07-13, applied config: rolling + new floors + MIN_GPD 500k)
 `node pipeline/screen.mjs --mode all --stats` on the EXACT applied config:

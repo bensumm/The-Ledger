@@ -104,8 +104,9 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
       / `SIZE_ZERO` 0.10) is unchanged and correctly makes a normal buy-limit position ≪ corrected flow (size
       factor ~1) while a genuinely large position (≥10% of flow) still gets relief 0 — verified live (Dragon
       arrow 2.03m/d @ 0.5% of flow → 75% softening; Opal bolts 115k/d @ 9.5% of flow → 0%, size governs).
-      NOTE — `quote.mjs`'s per-item read still consumes the BROKEN `/24h` volume (the deferred vol24 quote/watch
-      fix), so reach-relief there fires off deflated numbers until that lands; the SCREEN surface is corrected.
+      `quote.mjs` + `watch.mjs` now ALSO read corrected per-item volume (PLAN-VOL24, 2026-07-13:
+      `vol24FromInputs` composes the true rolling-24h from the in-hand `ts1h` → reach-relief fires there too),
+      so every node surface is corrected; only the browser app still reads the broken `/24h` (step 3).
       Still labeled PLACEHOLDER (n=1, the soul-rune anchor); F1 owns the magnitudes, and the
       `reachRelief`/`sizeRatio`/`debiasedTop` shadow fields ride `estConfidence` on `suggestions.jsonl` for the
       F1 retro-join.
@@ -134,7 +135,10 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   UTC hours (Ben's US-afternoon sessions).** A CORRECTED trailing-24h source composed from the healthy `/1h`
   grain (`marketfetch.mjs` `loadAll24hRolling` / `rolling24FromTs1h`, proven exact) is now the DEFAULT that
   `screen.mjs` gates/ranks/displays off (PLAN-VOL24 step 2, Ben-validated 2026-07-13); `--vol-source legacy`
-  restores the broken `/24h` value (escape hatch / pre-recal repro). **Every volume-denominated floor was
+  restores the broken `/24h` value (escape hatch / pre-recal repro). **`quote.mjs` + `watch.mjs` read corrected
+  per-item volume too** (`vol24FromInputs` composes the rolling-24h from the in-hand `ts1h` → real Vol/d,
+  pressure, and the 24h avg-low dip reference; degrades to the `/24h` read only when the 1h series is too
+  short). **Every volume-denominated floor was
   RECALIBRATED against the corrected distribution in the same change** (count-matched to preserve each gate's
   old selectivity — the `/24h` under-read ~10–27×, so the old floors were ~18× too loose in corrected units):
   `FLOOR`/`VALUE_LIQ_FLOOR` 50→3500, `CHURN_MIN_VOL` 2000→65000, `DIP_LOOP_LIQUID_FLOOR` 1000→40000,
@@ -142,11 +146,13 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   deliberately KEPT at 500k** (Ben — it's a real NET-throughput quantity, so 500k of TRUE throughput is the
   honest floor; it now admits the smaller real-throughput lane rather than the deflated one). `DL4_MIN_ABS_
   SWING` (per-unit, not volume-linked) is UNCHANGED. Every screen row also logs the corrected per-item volume
-  as a lean `volDayRolling` on `suggestions.jsonl`. SIDE-CASUALTY: the `pressure` ratio and the `/24h`
-  `avgHigh`/`avgLow` (gatecandidates' `mid`, the dip "24h avg low" reference) still come from the broken
-  frozen bucket — treat them as ~26h-stale 1–3h samples. The browser app (`js/marketfetch.js`: Finder/Watch/
-  Trends) STILL reads the broken `/24h`, so the published Scan tab is now MORE correct than the live app
-  until the deferred, APP_VERSION-bumping step 3 lands.
+  as a lean `volDayRolling` on `suggestions.jsonl`. On the corrected node surfaces the `pressure` ratio and
+  the `avgHigh`/`avgLow` dip reference are now derived from the true rolling-24h too (they ride the same
+  corrected `vol24`); the ONE remaining broken consumer is the browser app (`js/marketfetch.js`: Finder/Watch/
+  Trends) — it STILL reads the broken `/24h`, so the published Scan tab + every node CLI are now MORE correct
+  than the live app until the deferred, APP_VERSION-bumping step 3 lands. **CI import-resolution guard**
+  (`pipeline/import-check.mjs`, wired into `checks.yml`) statically verifies every pipeline entrypoint's
+  imports resolve against module exports — closes the gap that let a missing-export ride onto main undetected.
 - **Liquidity gate (S1):** two-sided (`hpv>0 && lpv>0`, the non-negotiable ghost-spread lesson) AND
   `limitVol ≥ --floor` (3500, PLAN-VOL24-recalibrated) **OR** gp-flow `limitVol×mid ≥ --gp-floor` (4.5b). The gp-flow path admits big
   tickets, flagged `thin`, grade-capped **A-** (`THIN_GRADE_CAP`), bounded to `--thin-reserve`. Full
@@ -690,7 +696,9 @@ metadata, not a leak; the concern is content, not commit authorship.
   (pipeline-owned artifacts; clobber-guard reconciles). No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
 - **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
-  + reconstruct acceptance fixtures, `fills.json`/`positions.json` parse, `skill-lint.mjs`, and
+  + reconstruct acceptance fixtures, **`import-check.mjs`** — the import-RESOLUTION guard that statically
+  verifies every pipeline entrypoint's imports resolve against module exports (catches a missing-export that
+  `node --check`'s syntax-only pass lets through), `fills.json`/`positions.json` parse, `skill-lint.mjs`, and
   `doclint.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
   a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis; **must stay a denylist +
   structural checker, never a semantic/LLM one**) plus a separate

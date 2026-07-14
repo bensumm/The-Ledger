@@ -26,8 +26,9 @@ distribution (p50 146 · p75 3,265 · p90 62,357 · p95 250,541 · max ~19m) and
   9.5% of flow → **0%** (the size gate governs, exactly as designed).
 - Decision rationale: the values are SANE in true units, and adjusting them would over-tune to a single
   snapshot (process rule 4). They stay labeled PLACEHOLDER (n=1); F1 owns the magnitudes. NOTE: `quote.mjs`
-  per-item still reads the broken `/24h` volume (deferred vol24 quote/watch fix), so reach-relief there
-  fires off deflated numbers until that lands — the SCREEN surface is the corrected one.
+  per-item now ALSO reads corrected volume (PLAN-VOL24 `vol24FromInputs`, 2026-07-13), so reach-relief fires
+  on quote/watch too — verified live (Soul rune 9.82m/d corrected → 75% softening + top de-biased). Every
+  node surface is corrected now; only the browser app still reads the broken `/24h` (step 3).
 
 ## Motive (Ben, 2026-07-13 — the soul-rune desk investigation)
 Ben deep-bid Soul rune (25k @ 381, the 14-day band low) and listed near the top. The tool

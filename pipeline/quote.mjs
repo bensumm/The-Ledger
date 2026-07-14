@@ -27,7 +27,7 @@ import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, day
 import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { STRATEGIES } from '../js/strategies.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from './lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from './lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
@@ -135,6 +135,11 @@ async function runItems() {
     // Fine at the intended handful; if large-batch quotes ever become routine, add a soft cap here
     // (skip the ts1h enrichment past N items, degrading reach/diurnal to "not fetched — batch too large").
     const inp = await fetchItemInputs(id, { ts1h: true });
+    // PLAN-VOL24: the /24h per-item endpoint is BROKEN (frozen stale ~1–3h slice). Correct vol24 from the
+    // in-hand 1h series (rolling24, zero new fetch); degrades to the /24h read when the series is too short.
+    // Reassigned on inp so EVERY downstream use — computeQuote's Vol/d + pressure, avgLow24/avgHigh24 dip
+    // reference, reach-relief input — reads the corrected value. computeQuote itself is untouched (app-safe).
+    const _cv = vol24FromInputs(inp); inp.vol24 = _cv.vol24;
     const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });

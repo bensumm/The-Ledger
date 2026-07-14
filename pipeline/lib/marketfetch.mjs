@@ -275,6 +275,29 @@ export function rolling24FromTs1h(ts1h, now = Date.now()) {
   }
   return { highPriceVolume: hpv, lowPriceVolume: lpv, avgHighPrice: vwap(hi), avgLowPrice: vwap(lo) };
 }
+/* vol24FromInputs(inp, now) → { vol24, volSrc } — the CORRECTED per-item volume for a quote/watch read.
+   The broken /24h per-item endpoint (fetch24hOne → inp.vol24) serves a frozen stale ~1–3h slice, so
+   prefer the TRUE trailing-24h composed from the item's IN-HAND 1h series (rolling24FromTs1h — zero new
+   fetch on a surface that already fetched ts1h: quote COD-4, watch window line). DEGRADES to the /24h read
+   (volSrc 'peritem-24h') when the 1h series is absent OR too short to cover the trailing 24h (a brand-new
+   item, or a truncated fetch) — a partial 1h sum would UNDER-report worse than /24h. The returned vol24 is
+   the SAME shape computeQuote consumes ({highPriceVolume,lowPriceVolume,avgHighPrice,avgLowPrice}), so it's
+   a drop-in override that also corrects the pressure ratio + the 24h avg-low/high dip reference. It does NOT
+   touch computeQuote (js/quotecore.js is app-imported — byte-identical); it only changes the VALUE passed in. */
+export function vol24FromInputs(inp, now = Date.now()) {
+  const ts1h = inp && inp.ts1h;
+  if (Array.isArray(ts1h) && ts1h.length) {
+    const anchor = lastCompleteHour(now);
+    const from = anchor - (ROLL24_HOURS - 1) * 3600;
+    let earliest = Infinity;
+    for (const p of ts1h) if (p && Number.isFinite(p.timestamp) && p.timestamp < earliest) earliest = p.timestamp;
+    if (earliest <= from) {                                   // the series REACHES the window start → full 24h coverage
+      const r = rolling24FromTs1h(ts1h, now);
+      if (r && ((r.highPriceVolume || 0) > 0 || (r.lowPriceVolume || 0) > 0)) return { vol24: r, volSrc: 'rolling' };
+    }
+  }
+  return { vol24: inp ? (inp.vol24 ?? null) : null, volSrc: 'peritem-24h' };   // DEGRADED: the broken /24h read
+}
 export async function loadAll24hRolling({ db } = {}) {
   const cached = readCache('all24h-rolling.json', ALL24H_TTL);
   if (cached) return cached;

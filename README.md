@@ -469,7 +469,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     sum off an already-fetched per-item 1h series → zero new fetch) — now the DEFAULT `screen.mjs` volume
     (`--vol-source legacy` restores the broken `/24h`; PLAN-VOL24 step 2), with the volume floors recalibrated
     to the corrected distribution; consumed by `screen.mjs` and logged as the `volDayRolling` shadow field for the
-    floor recalibration (`PLAN-VOL24.md`)), `cli.mjs` (shared arg/format/table
+    floor recalibration (`PLAN-VOL24.md`) + `vol24FromInputs(inp)` (PLAN-VOL24 step 2b — the per-item corrected
+    volume for `quote.mjs`/`watch.mjs`: `rolling24FromTs1h` off the in-hand `ts1h`, reassigned onto `inp.vol24`
+    so Vol/d + pressure + the dip reference read corrected volume; degrades to the `/24h` read when the 1h series
+    is too short)), `cli.mjs` (shared arg/format/table
     helpers). **`rating.mjs` and `estimators.mjs` MOVED to `js/` (2026-07-10, app-parity Wave 2a)** —
     now **APP-IMPORTED by `js/market.js`** (AP4, 0.61.0 — the Finder Grade column + Rating bar + sort use
     the shared `estimateRank` + `rateItem`, replacing the old `RATE_W` profit/hr Risk model; coarse
@@ -682,6 +685,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     verbatim: it catches recurrence of NAMED drift + novel COPY, NOT novel contradiction; the wave-start
     semantic drift scan stays necessary). Exports `DENYLIST`/`runDenylist`/`normalizeWords`/
     `findDuplicateShingles`/`runDuplicatePhrase` for the test),
+  - `import-check.mjs` (PLAN-VOL24 follow-up — the CI import-RESOLUTION guard run in the cheap `checks`
+    job: STATICALLY parses each pipeline entrypoint's relative `import { … } from './x.mjs'` and verifies
+    every named/default import exists in the target module's exports, dynamic-importing ONLY the pure lib
+    targets (never the entrypoints — so no main()/fetch/git/argv side effect fires). Closes the gap that let
+    screen.mjs's missing `dayHighFrom5m` import ride onto main undetected — `node --check` is syntax-only, no
+    test imports the entrypoints, smoke loads only the browser app. Fast/offline/deterministic; exits non-zero
+    naming the offending entrypoint→module→symbol),
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
