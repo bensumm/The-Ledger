@@ -276,7 +276,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the
-  blind value).
+  blind value). A churn/scalp screen row (and every `quote.mjs` per-item read) also carries a lean
+  **`winClear`** object (PLAN-WINDOW-CLEAR B2): the within-window CLEAR read for the quoted ask over its
+  diurnal peak window — `{windowReach, reachedDays, nDays, pool, clearRatio, wStart, wEnd, diverges}` — so
+  F1 can test whether the days-reach ≠ lap-clear divergence predicts an unfilled/slow ask (the note fires
+  on the window-reach leg only; `clearRatio`/`sizeShort` ride the shadow for calibration).
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

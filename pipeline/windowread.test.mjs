@@ -17,6 +17,7 @@
  */
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../js/windowread.mjs';
+import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -238,6 +239,49 @@ ok('asymPair degrades: null stats / empty sides / a sample thinner than ASYM_MIN
   const thinN = ASYM_MIN_DAYS - 1;
   const thin = Array.from({ length: thinN }, (_, i) => 100 + i);
   assert.equal(asymPair(asymStats(thin, thin)), null, 'thin day sample → null');
+});
+
+// --- windowClear (PLAN-WINDOW-CLEAR B1): within-window reach + absorption pool + clearRatio -----
+// one 15:00 point per day inside a 14–17 window; controlled window-high + high-side volume.
+const dayPt = (d, hi, volHi) => pt(ts(2026, 0, d, 15), hi - 20, hi, 10, volHi);
+const clearNow = new Date(2026, 0, 25, 12, 0, 0);   // daytime (hour 12 ∉ 14–17) → nothing skipped
+
+ok('windowClear: window-reach fraction + absorption pool + clearRatio off the target window', () => {
+  const series = [
+    dayPt(10, 1050, 100), dayPt(11, 1050, 100),                              // two days reach 1040
+    dayPt(12, 1020, 80), dayPt(13, 1020, 80), dayPt(14, 1020, 80), dayPt(15, 1020, 80),
+  ];
+  const opts = { wStart: 14, wEnd: 17, now: clearNow };
+  // ask under every window-high → reaches all 6 days
+  const dense = windowClear(series, { ask: 1000, units: 10, ...opts });
+  assert.equal(dense.nDays, 6);
+  assert.equal(dense.windowReach, 1, 'ask under every window-high → reaches all 6 days');
+  // ask above most window-highs → only the two 1050-days print inside the window
+  const thin = windowClear(series, { ask: 1040, units: 10, ...opts });
+  assert.equal(thin.reachedDays, 2);
+  assert.ok(Math.abs(thin.windowReach - 2 / 6) < 1e-9, 'low within-window reach even if all-day reach is fine');
+  assert.equal(thin.pool, 100, 'pool = median window volHi on the days the ask printed');
+  assert.ok(Math.abs(thin.clearRatio - 10 / 100) < 1e-9, 'clearRatio = units ÷ pool');
+  // ask above EVERYTHING → 0 reached, pool 0, clearRatio null (never divide by zero)
+  const none = windowClear(series, { ask: 2000, units: 10, ...opts });
+  assert.equal(none.windowReach, 0);
+  assert.equal(none.pool, 0);
+  assert.equal(none.clearRatio, null);
+  assert.equal(windowClear(series, { ask: null, ...opts }), null, 'no ask → no read');
+});
+
+ok('windowClear: null on a too-thin window; windowClearDiverges flags the two traps', () => {
+  const few = [dayPt(10, 1050, 100), dayPt(11, 1050, 100), dayPt(12, 1050, 100)];   // 3 < WINCLEAR_MIN_DAYS (4)
+  assert.equal(windowClear(few, { ask: 1000, wStart: 14, wEnd: 17, now: clearNow }), null, 'thin window → null');
+  // days-reach healthy but within-window reach low → windowShort (the days-reach ≠ lap-clear trap)
+  const short = windowClearDiverges({ windowReach: 0.2, clearRatio: 0.1 }, 0.9);
+  assert.ok(short.diverges && short.windowShort && !short.sizeShort);
+  // size ≫ pool → sizeShort even with a fine within-window reach
+  const big = windowClearDiverges({ windowReach: 0.9, clearRatio: 3 }, 0.9);
+  assert.ok(big.diverges && big.sizeShort && !big.windowShort);
+  // both fine → no divergence; null read → no divergence
+  assert.ok(!windowClearDiverges({ windowReach: 0.9, clearRatio: 0.1 }, 0.9).diverges);
+  assert.ok(!windowClearDiverges(null).diverges);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

@@ -215,7 +215,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -293,6 +293,12 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): a caller with no expGpDay (quote/watch/watchlist) → no field → byte-identical.
   if (expGpDay != null)      e.expGpDay = expGpDay;
   if (expGpDayLegacy != null) e.expGpDayLegacy = expGpDayLegacy;
+  // PLAN-WINDOW-CLEAR B2 (2026-07-14) — the within-window CLEAR read { windowReach, reachedDays, nDays,
+  // pool, clearRatio, wStart, wEnd, diverges } for the quoted ask's diurnal peak window, logged wider
+  // than surfaced (every churn/scalp row, not only the diverging ones) so analyze/F1 can test whether the
+  // days-reach ≠ lap-clear divergence predicts an unfilled/slow ask. Lean-included (YS2): a caller with no
+  // read (no ts1h / no peak window) supplies null → no field → byte-identical shape.
+  if (winClear != null)      e.winClear = winClear;
   // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/analyze.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid

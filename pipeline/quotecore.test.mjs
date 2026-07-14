@@ -18,7 +18,7 @@
  *   - quoteOrdered invariant untouched by the new fields
  */
 import assert from 'node:assert/strict';
-import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, BIG_TICKET_GP, FRESH_HOURS } from '../js/quotecore.js';
+import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, maxBuyForExit, BIG_TICKET_GP, FRESH_HOURS } from '../js/quotecore.js';
 import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../js/quotecore.js';   // S2 posture helpers
 import { regimeLabel, momCell, MOM_STRONG_PCT } from '../js/quotecore.js';   // TD3 derivation/display helpers
 import { phase, regimeDrift } from '../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
@@ -451,6 +451,31 @@ ok('breakEven BOND opts: buy + 10%-guide fee, tax-free (never the 2% inverse)', 
   assert.equal(breakEven(15_000_000), Math.ceil(15_000_000 / 0.98));   // default path unchanged
   // no guide → fee 0 → bond BE is just buy (still tax-free, no phantom 2%).
   assert.equal(breakEven(200, { bond: true, guide: 0 }), 200);
+});
+
+// --- 15. maxBuyForExit — the EXACT inverse of breakEven (PLAN-WINDOW-CLEAR B3) --------------
+// For any (sell, margin), b = maxBuyForExit(sell,margin) must be the LARGEST buy with
+// breakEven(buy)+margin ≤ sell: brute-verify validity AND maximality (b+1 overshoots) across all
+// three regions + the boundaries, plus the bond path and the no-profitable-buy null.
+ok('maxBuyForExit: max buy with breakEven(buy)+margin ≤ sell, brute-verified across regions', () => {
+  const cases = [
+    [2899, 60], [2899, 0], [100, 0], [52, 0], [51, 0], [50, 0], [49, 0], [10, 0],           // small + sub-50 region
+    [18_052_000, 100_000], [18_052_000, 0],                                                  // uncapped mid region
+    [250_000_000, 0], [251_000_000, 0], [260_000_000, 5_000_000], [1_638_000_000, 10_000_000], // capped region + knee
+  ];
+  for (const [sell, margin] of cases) {
+    const b = maxBuyForExit(sell, margin);
+    assert.ok(b != null && Number.isInteger(b), `maxBuyForExit(${sell},${margin}) → integer buy`);
+    assert.ok(breakEven(b) + margin <= sell, `breakEven(${b})+${margin} must be ≤ ${sell}`);
+    assert.ok(breakEven(b + 1) + margin > sell, `${b} must be MAXIMAL (b+1 overshoots ${sell})`);
+  }
+  // exit below the smallest break-even → no profitable buy → null (never a negative/garbage buy).
+  assert.equal(maxBuyForExit(100, 150), null, 'sell − margin < 0 → null');
+  assert.equal(maxBuyForExit(0, 0), 0, 'sell 0, margin 0 → buy 0 (breakEven(0)=0)');
+  // BOND path: breakEven(buy)=buy+bondFee(guide), tax-free → invert through the same opts.
+  const bopt = { bond: true, guide: 15_000_000 };   // fee 1.5m
+  const bb = maxBuyForExit(20_000_000, 0, bopt);
+  assert.ok(breakEven(bb, bopt) <= 20_000_000 && breakEven(bb + 1, bopt) > 20_000_000, 'bond inverse round-trips');
 });
 
 // --- 14. computeQuote BOND net: sell − (buy + 10%-guide fee), tax-free, row flags set ------

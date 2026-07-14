@@ -10,6 +10,25 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### WINDOW-CLEAR: days-reach ≠ within-window clear (2026-07-14, PLAN-WINDOW-CLEAR A+B, pipeline/skills-only — NO APP_VERSION)
+A churn/scalp lap is a WITHIN-WINDOW round trip, but every reach number we surface answers "did this
+level print on N of M DAYS" — not "does it print WHEN I'm selling (in the target window), and does the
+window absorb my size". A level can reach 12/14 days yet only print in a 2h spike that's already behind
+you today (the Hydra trap). **Part A (skills):** graduated the `peak-timing-default-for-pricing` memory
+into a canonical WINDOW-CLEAR PRICING step in `/scan` (name the exit window → quote the reachable-IN-WINDOW
+ask → BACK-SOLVE the buy so BE+margin ≤ that exit → project whether today's window is ahead/printed);
+`/positions` sell-velocity points at it; the diurnal/asym-reach sections retag as its inputs; memory
+retired to a pointer (fold-not-copy, doclint-clean). **Part B (code):** `js/windowread.mjs`
+`windowClear`/`windowClearDiverges` — the within-window reach + absorption pool + `clearRatio` off the
+SAME in-hand 1h series (zero new fetch); `js/quotecore.js` `maxBuyForExit` — the tax-EXACT inverse of
+`breakEven` (largest buy with `breakEven(buy)+margin ≤ sell`, piecewise+bond, brute-verified). `screen.mjs`
+(churn/scalp) + `quote.mjs` fire an inform-only `ℹ window-clear` note when the ask reaches on DAYS but
+rarely IN its peak window (live: Anglerfish 6/14-in-window vs 9/14 all-day) — never a gate/drop/grade/
+`screen.json`/verdict input; a lean `winClear` rides `suggestions.jsonl` for F1. The note is gated to the
+window-REACH leg; the `sizeShort`/`clearRatio` size leg is shadow-only (a narrow peak window mis-reads
+size on a continuously-clearing churn lap — deferred to F1). New pure exports, node-only consumers,
+`screen.json` byte-identical → NO APP_VERSION. Pinned by windowread.test/quotecore.test fixtures.
+
 ### Capital-aware expGpDay — the band/churn attention floor + fetch-rank now respect your bankroll (2026-07-14, PLAN-CAPITAL-THROUGHPUT, pipeline-only — NO APP_VERSION)
 **Ben's ask:** "there's no way I'm cycling 90k anglerfish — for this price, how many can I realistically
 capture over the next day × profit." The discovery throughput `expGpDay` (the `MIN_GPD` attention floor +

@@ -71,7 +71,7 @@
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../js/quotecore.js';
 import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair } from '../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series)
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -389,6 +389,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   const cautionNotes = []; // P2: one flagged-caution note per item (the row still shows)
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
+  const windowClearNotes = []; // PLAN-WINDOW-CLEAR B2 (churn/scalp): the ask reaches on days but rarely IN its peak window / size ≫ window pool — sibling inform note, never a gate/drop/grade/screen.json input
   const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair + P_ask/P_bid split — sibling inform note, never a gate/drop/grade/screen.json input
   for (const s of survivors) {
     let row = qcache.get(s.id);   // PART II: reassigned to a repriced CLONE only under --asym (qcache never mutated)
@@ -537,6 +538,26 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       asym: asymRead,
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
     }, { nudge: anchorNudge });
+    // PLAN-WINDOW-CLEAR B2 (churn/scalp only): does the quoted ask PRINT inside its diurnal peak window
+    // (not just on N/M DAYS), and does that window absorb a buy-limit tranche? Inform-only (the askHeadroom/
+    // asym pattern — never a gate/drop/grade/screen.json input); a divergence is the days-reach ≠ lap-clear
+    // trap. Zero new fetch (reuses dr + the in-hand 1h series + the all-day askReach). A lean `winClear`
+    // rides suggestions.jsonl for the F1 join. Placeholders (n≈0).
+    let winClear = null;
+    if ((mode === 'churn' || mode === 'scalp') && dr && dr.peakWindow && row.optSell != null && series1h && series1h.get(s.id)) {
+      const wc = windowClear(series1h.get(s.id), { ask: row.optSell, units: s.limit ?? null, wStart: dr.peakWindow.startH, wEnd: dr.peakWindow.endH, nights: 14 });
+      const dayFrac = askReachExtra && askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
+      const div = windowClearDiverges(wc, dayFrac);
+      // NOTE fires on the WINDOW-REACH divergence only (the clean days-reach ≠ lap-clear signal). The
+      // sizeShort leg is DELIBERATELY not surfaced yet: churn's peak window is often a narrow 1–2h slice
+      // and a lap sells into a CONTINUOUS two-sided book, so the peak-window absorption pool mis-reads size
+      // (PLAN-WINDOW-CLEAR open question). clearRatio/diverges still ride the shadow field for F1 to settle it.
+      if (wc && div.windowShort) {
+        const dayTxt = dayFrac != null ? ` vs ${askReachExtra.reachedDays}/${askReachExtra.nDays} all-day` : '';
+        windowClearNotes.push(`${name}: ask ${fmt(row.optSell)} prints ${wc.reachedDays}/${wc.nDays} in the ${fmtHour(dr.peakWindow.startH)}–${fmtHour(dr.peakWindow.endH)} peak window${dayTxt}`);
+      }
+      if (wc) winClear = { windowReach: wc.windowReach, reachedDays: wc.reachedDays, nDays: wc.nDays, pool: wc.pool, clearRatio: wc.clearRatio, wStart: wc.wStart, wEnd: wc.wEnd, diverges: div.diverges };
+    }
     // PLAN-LIQUIDITY-REACH stdout note (inform-only — never a gate/drop/grade/screen.json input): when
     // the liquidity/size relief changed the Est. sell, say so beside the reach note it counterweights,
     // instead of letting the raw reach caution discourage a viable top ask on a liquid small-size book.
@@ -637,7 +658,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -664,7 +685,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       volDayRolling: rollShadow(series1h, r.id),   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
       // PLAN-CAPITAL-THROUGHPUT shadow pair: the ACTIVE (capital-aware, default) expGpDay + the legacy
       // capital-blind expGpDayLegacy, so --stats/analyze/F1 can diff old-vs-new surfacing on real rows.
-      expGpDay: r.expGpDay, expGpDayLegacy: r.expGpDayLegacy })));
+      expGpDay: r.expGpDay, expGpDayLegacy: r.expGpDayLegacy,
+      // PLAN-WINDOW-CLEAR B2 shadow: the within-window clear read (churn/scalp; null elsewhere)
+      winClear: r.winClear })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -718,6 +741,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
   for (const n of informNotes) console.log(`ℹ trajectory/reach — ${n}`);
   for (const n of headroomNotes) console.log(`⤴ ask headroom — ${n}`);
+  for (const n of windowClearNotes) console.log(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
   for (const n of asymNotes) console.log(`◆ asym fill — ${n}`);

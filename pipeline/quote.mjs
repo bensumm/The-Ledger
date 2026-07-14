@@ -22,7 +22,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice } from '../js/quotecore.js';
 import { fmtP, fmt, fmtHour, tax } from '../js/format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
 import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { STRATEGIES } from '../js/strategies.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -208,6 +208,27 @@ async function runItems() {
       ? { reachedDays: touchedDays(ast.lows, row.optBuy), nDays: ast.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
     const askReach = (ast && ast.his && ast.his.length && row.optSell != null)
       ? { reachedDays: reachedDays(ast.his, row.optSell), nDays: ast.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
+    // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
+    // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
+    // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
+    // rarely prints IN the peak window, or size ≫ the window pool — is the days-reach ≠ lap-clear trap.
+    // Zero new fetch (reuses the in-hand ts1h + the peak window the diurnal line already derived). Never a
+    // table/verdict/price input; a lean `winClear` rides suggestions.jsonl for F1. Placeholders (n≈0).
+    let winClear = null;
+    if (dr && dr.peakWindow && row.optSell != null && inp.ts1h) {
+      const units = map.byId[id]?.limit ?? null;
+      const wc = windowClear(inp.ts1h, { ask: row.optSell, units, wStart: dr.peakWindow.startH, wEnd: dr.peakWindow.endH, nights: 14 });
+      const dayFrac = askReach && askReach.nDays ? askReach.reachedDays / askReach.nDays : null;
+      const div = windowClearDiverges(wc, dayFrac);
+      // NOTE on the WINDOW-REACH divergence only (the clean days-reach ≠ lap-clear signal); the sizeShort
+      // leg stays shadow-only for now — a narrow peak window mis-reads size on a continuously-clearing lap
+      // (PLAN-WINDOW-CLEAR open question). clearRatio/diverges still ride suggestions.jsonl for F1.
+      if (wc && div.windowShort) {
+        const dayTxt = dayFrac != null ? ` (vs ${askReach.reachedDays}/${askReach.nDays} all-day)` : '';
+        lines.push(`  ℹ window-clear: ask ${fmt(row.optSell)} prints ${wc.reachedDays}/${wc.nDays} in the ${fmtHour(dr.peakWindow.startH)}–${fmtHour(dr.peakWindow.endH)} peak window${dayTxt} — days-reach ≠ lap-clear (placeholder, n≈0)`);
+      }
+      if (wc) winClear = { windowReach: wc.windowReach, reachedDays: wc.reachedDays, nDays: wc.nDays, pool: wc.pool, clearRatio: wc.clearRatio, wStart: wc.wStart, wEnd: wc.wEnd, diverges: div.diverges };
+    }
     // rev2 + FIX 1: a declared thesis exit anchors Est. sell ONLY when the id is an actual open lot
     // (a declared exit is a held-lot SELL plan; it must not inflate an ad-hoc read of an item we don't
     // hold). spec stays STRATEGIES.band — an explicit "how's X" is a generic flip read.
@@ -229,7 +250,7 @@ async function runItems() {
     rows.push(RAW ? std : [std[0], std[1], ...estPairCells(est), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
     sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
-      estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est) }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair rides the row
+      estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear ride the row
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).

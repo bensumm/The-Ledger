@@ -38,6 +38,29 @@ export const breakEven = (buy, opts) => {
   if (buy > TAXCAP/0.02 - TAXCAP) return buy + TAXCAP;
   return Math.ceil(buy/0.98);
 };
+// Inverse of breakEven for WINDOW-CLEAR PRICING (PLAN-WINDOW-CLEAR B3): the LARGEST integer buy whose
+// break-even + `margin` still lands at/under a reachable exit `sell` — i.e. the max buy with
+// breakEven(buy) + margin ≤ sell. This is the tax-EXACT form of the /scan WINDOW-CLEAR back-solve, so it
+// MUST live beside breakEven (CLAUDE.md: breakEven is "the ONE definition" — an inverse implemented
+// anywhere else is a second tax-math home that would drift). A plain (sell − margin)·0.98 is WRONG in the
+// two flat regions breakEven is piecewise over, so this mirrors them exactly (target = the largest
+// break-even the exit can carry = sell − margin):
+//   • target < 50            → target        (sub-50 sells are tax-exempt: breakEven(buy)=buy, so buy=target)
+//   • target > 250m          → target−TAXCAP (the cap binds: breakEven(buy)=buy+TAXCAP → buy=target−5m; a
+//                                             ·0.98 here UNDER-shoots the true max buy)
+//   • otherwise              → floor(target·0.98)   (inverse of ceil(buy/0.98); floor picks the max buy)
+// Bond exception via the same opts (bonds pay no sell tax; breakEven=buy+bondFee → buy=target−bondFee).
+// Returns null when no profitable buy exists (sell − margin below the smallest break-even). `margin`
+// defaults to 0 (the break-even-neutral max buy). Round-trip against breakEven is brute-force-pinned in
+// pipeline/quotecore.test.mjs.
+export const maxBuyForExit = (sell, margin = 0, opts) => {
+  const target = sell - margin;                                   // the largest break-even the exit can carry
+  if (opts && opts.bond) { const b = target - bondFee(opts.guide); return b >= 0 ? Math.floor(b) : null; }
+  if (target < 0) return null;
+  if (target < 50) return Math.floor(target);                     // sub-50 tax-exempt: breakEven(buy) = buy
+  if (target > TAXCAP/0.02) return Math.floor(target - TAXCAP);    // tax-capped region (target > 250m)
+  return Math.floor(target * 0.98);                               // uncapped: inverse of ceil(buy/0.98)
+};
 // Total lot value (qty × avgCost, i.e. capital at risk — NOT per-unit) at/above which a 2h
 // breakdown against a rising regime is CLEARED rather than held (chunk 6 cut-trigger). Named +
 // tunable; lives here (the shared node+browser module) so reviewPositions and quote.mjs --positions

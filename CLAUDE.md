@@ -208,6 +208,21 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   (sub-50gp sells are tax-exempt), `buy + TAXCAP` (5m) once the cap binds at `buy > 245m` (`ceil(buy/0.98)`
   overstates a big-ticket break-even by up to 5m), else the uncapped `ceil(buy/0.98)`. Never list a held
   item below it. This is the ONE definition — every other doc/skill points here.
+  - **`maxBuyForExit(sell, margin, opts)` is its INVERSE (PLAN-WINDOW-CLEAR B3), beside it in `js/quotecore.js`:**
+    the LARGEST buy whose `breakEven(buy) + margin ≤ sell` — the tax-exact back-solver for `/scan`'s
+    WINDOW-CLEAR PRICING (bid ≤ what leaves BE+margin under the reachable-in-window exit). Piecewise-exact
+    against the same three regions + bond, brute-verified in `pipeline/quotecore.test.mjs`. An inverse
+    implemented anywhere else would be a second tax-math home — don't; call this.
+- **WINDOW-CLEAR: days-reach ≠ within-window clear (PLAN-WINDOW-CLEAR B1/B2).** `js/windowread.mjs`
+  `windowClear(series1h, {ask, units, wStart, wEnd})` reads whether a quoted ask actually PRINTS inside its
+  diurnal peak window (window-reach, the within-window twin of `reachedDays`) + the window's absorption
+  pool/`clearRatio` — off the SAME in-hand 1h series (zero new fetch). `screen.mjs` (churn/scalp rows) +
+  `quote.mjs` fire an INFORM-ONLY `ℹ window-clear` note when the ask reaches on DAYS but rarely IN its peak
+  window (the days-reach ≠ lap-clear trap); `windowClearDiverges` is the predicate. NOTE fires on the
+  window-reach leg only — the `sizeShort`/`clearRatio` leg is shadow-only for now (a narrow peak window
+  mis-reads size on a continuously-clearing churn lap; F1 open question). Never a gate/drop/grade/
+  `screen.json`/verdict input; a lean `winClear` rides `suggestions.jsonl`. New pure exports, node-only
+  consumers → NO `APP_VERSION` bump. PLACEHOLDER thresholds (n≈0).
   - **BOND exception (Ben 2026-07-09).** The Old School Bond (`BOND_ID`, `js/format.js`) is EXEMPT from the
     2% GE tax, but a GP-bought bond is untradeable and costs **10% of guide** (`BOND_RETRADE_PCT`) to make
     re-tradeable — so a bond flip's net = `sell − (buy + bondFee(guide))`, tax-free, and its break-even =

@@ -146,6 +146,51 @@ export function asymPair(stats, { pLo = ASYM_P_LO, pHi = ASYM_P_HI, minDays = AS
   };
 }
 
+// --- within-window CLEARING read (PLAN-WINDOW-CLEAR B1) ----------------------------------------
+// windowStats/asymPair/reach all answer "did this level print on N of M DAYS". But a churn/scalp LAP
+// is a WITHIN-WINDOW round trip, so the honest question is different: inside the TARGET window (the 4h
+// lap, or the diurnal spike window the ask targets), does the ask PRINT, and does the window's volume
+// ABSORB my size? windowClear reads exactly that off the SAME per-day window buckets (ZERO new fetch —
+// it just re-runs windowStats over [wStart,wEnd]):
+//   windowReach = fraction of window-days whose window-high reached the ask (the within-window twin of
+//                 reachedDays — NOT the all-day reach the reachValidator scores)
+//   pool        = median window volHi on the days the ask WAS reachable (the absorption pool; HONESTY
+//                 (rule 4): 1h volHi is the SUMMED high-side bucket volume over the window hours, so
+//                 "volume at/above the ask" is approximated by the reachable days' totals — a guide,
+//                 not an order book)
+//   clearRatio  = units ÷ pool (the size leg — the within-window cousin of PLAN-LIQUIDITY-REACH's sizeRatio)
+// The FLAG that turns this into the days-reach ≠ lap-clear signal (healthy all-day reach but LOW
+// windowReach, or size ≫ pool — the Hydra "spike is behind you today" trap) is windowClearDiverges below;
+// the NOTE is render-stage (B2, screen/quote). Degrades to null on too thin a window sample (mirrors
+// ASYM_MIN_DAYS). n≈0 → the WINCLEAR_* thresholds are NAMED PLACEHOLDERS pending F1.
+export const WINCLEAR_MIN_DAYS = 4;    // fewer window-days than this ⇒ null (too thin to read)
+export const WINCLEAR_MIN_FRAC = 0.5;  // windowReach below this (against a healthy all-day reach) ⇒ diverges (PLACEHOLDER)
+export const WINCLEAR_SIZE_MAX = 0.5;  // clearRatio above this (size ≥ half the window pool) ⇒ diverges (PLACEHOLDER)
+
+export function windowClear(series, { ask, units = null, wStart, wEnd, nights = 14, now = new Date(), minDays = WINCLEAR_MIN_DAYS } = {}) {
+  if (ask == null) return null;
+  const stats = windowStats(series, { nights, wStart, wEnd, now });
+  if (!stats || !stats.his.length || stats.his.length < minDays) return null;
+  const nDays = stats.his.length;
+  const reached = reachedDays(stats.his, ask);
+  // absorption pool = median window volHi on the days the ask actually printed (window-high ≥ ask)
+  const reachedVols = stats.days.filter(([, n]) => n.hi != null && n.hi >= ask).map(([, n]) => n.volHi);
+  const pool = reachedVols.length ? median(reachedVols) : 0;
+  const clearRatio = (units != null && pool > 0) ? units / pool : null;
+  return { ask, units, wStart, wEnd, nDays, reachedDays: reached, windowReach: reached / nDays, pool, clearRatio };
+}
+
+// Pure divergence predicate for the B2 render-stage note: given the within-window read + the item's
+// ALL-DAY reach fraction (from the existing reach machinery), is this the days-reach ≠ lap-clear trap?
+// Diverges when the all-day reach is healthy (≥ minFrac, or unknown) but the WINDOW reach lags it, OR
+// the size can't clear the window pool. Inform-only — the caller formats/gates the note, never a price.
+export function windowClearDiverges(clear, dayReachFrac = null, { minFrac = WINCLEAR_MIN_FRAC, sizeMax = WINCLEAR_SIZE_MAX } = {}) {
+  if (!clear) return { diverges: false, windowShort: false, sizeShort: false };
+  const windowShort = clear.windowReach < minFrac && (dayReachFrac == null || dayReachFrac >= minFrac);
+  const sizeShort = clear.clearRatio != null && clear.clearRatio > sizeMax;
+  return { diverges: windowShort || sizeShort, windowShort, sizeShort };
+}
+
 // --- hour-of-day diurnal profile (the peak-timing read) ---------------------------------------
 // windowStats scores ONE fixed wall-clock window; hourProfile instead buckets the SAME 1h series by
 // LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak
