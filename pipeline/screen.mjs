@@ -116,7 +116,7 @@ const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the 
 const ALL_MODES = ALL_MODE_KEYS; // --mode all runs the inAll specs — band/churn/value (Ben 2026-07-10 added value; scalp explicit-only)
 const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
-const FLOOR = A.floor != null ? +A.floor : 50;
+const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (count-matched to the old 50/legacy selectivity; the /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units). Band `thin` (limitVol < FLOOR) auto-follows.
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
 const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
@@ -153,7 +153,7 @@ let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
 // measure — it hides an Avernic-class big ticket (single-digit units/day yet hundreds of millions of
 // gp of real two-sided daily flow, a genuine ~six-figure-net/u edge). An item clears liquidity on
 // EITHER limitVol ≥ FLOOR OR limitVol×mid ≥ GP_FLOOR. 250m is picked to admit that profile with margin.
-const GP_FLOOR = A['gp-floor'] != null ? parseGp(A['gp-floor']) : 250_000_000;
+const GP_FLOOR = A['gp-floor'] != null ? parseGp(A['gp-floor']) : 4_500_000_000;   // PLAN-VOL24 step 2: 250m → 4.5b, count-matched (~18×) to the corrected rolling-24h gp-flow (mid×volDay) distribution.
 // MIN_NET_GP: the absolute-gp ROI alternative for thin items — a thin big ticket rarely clears the
 // percentage --min-roi bar (its spread is a small % of a huge price) but a six-figure net/u is still
 // worth one offer, so a thin item passes on modeRoi ≥ MIN_ROI OR modeNet ≥ MIN_NET_GP.
@@ -242,17 +242,19 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
 // gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
 const ASYM = A.asym === true;
-// --- PLAN-VOL24 (2026-07-13): --vol-source legacy|rolling. The wiki /24h endpoint is BROKEN (it serves a
+// --- PLAN-VOL24 (2026-07-13): --vol-source rolling|legacy. The wiki /24h endpoint is BROKEN (it serves a
 // frozen ~1–3h slice of a stale UTC day, under-reporting the true rolling 24h ~10–27× — see PLAN-VOL24.md).
-// A corrected trailing-24h source composed from the /1h grain (loadAll24hRolling) is available BUT
-// SHADOW-only: the DEFAULT `legacy` keeps the /24h value as the ACTIVE volDay behind every gate/rank/column
-// (byte-identical screen.json + goldens; ZERO extra fetch — loadAll24hRolling is not called). `rolling` is
-// the VALIDATION LEVER for the floor recalibration (step 2): it swaps in the corrected whole-market map
-// (24 bulk /1h windows, mostly warm from the SQLite archive). Every published row ALSO logs the corrected
-// per-item volume as the lean shadow `volDayRolling` regardless of this flag (computed from the in-hand 1h
-// series → no new fetch), so the real distribution accrues while gates stay put.
-const VOL_SOURCE = A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : 'legacy';
-if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use legacy (default) or rolling.`); process.exit(1); }
+// The DEFAULT is now `rolling` (step 2, Ben-validated): the corrected trailing-24h volume composed from the
+// healthy /1h grain (loadAll24hRolling — 24 bulk /1h windows, mostly warm from the SQLite 1h archive) is the
+// ACTIVE volDay behind every gate/rank/column, and the volume-denominated floors (FLOOR/GP_FLOOR/VALUE_LIQ_
+// FLOOR/CHURN_MIN_VOL/DIP_LOOP_LIQUID_FLOOR/DL4_MIN_GP_FLOW) were count-matched to the corrected distribution
+// in the same change. `--vol-source legacy` restores the broken /24h value (kept as an escape hatch / for
+// reproducing pre-recal output). Every published row also logs the corrected per-item volume as the lean
+// `volDayRolling` shadow field regardless of this flag (from the in-hand 1h series → no new fetch).
+// NOTE: MIN_GPD (the 500k gp/day ATTENTION floor) was deliberately KEPT at 500k (Ben's call) — it is a
+// real-world NET-throughput quantity, so 500k of TRUE throughput is the honest floor; it now admits more.
+const VOL_SOURCE = A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : 'rolling';
+if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use rolling (default) or legacy.`); process.exit(1); }
 // --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells
 // (js/estimators.mjs estimatePair — reach-folded, BE-floored, PLACEHOLDER model n≈14). `--raw`
@@ -1097,11 +1099,11 @@ async function main() {
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
   const map = await loadMapping();
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
-  // PLAN-VOL24: DEFAULT `legacy` keeps the (broken) /24h map as the ACTIVE volume behind every gate/rank/
-  // column → byte-identical output + ZERO extra fetch (loadAll24hRolling is NOT called). `--vol-source
-  // rolling` swaps in the corrected whole-market trailing-24h map (24 bulk /1h windows, mostly warm from
-  // the archive) — the validation lever for the floor recalibration; it is NOT the default until the floors
-  // are re-tuned against the true distribution (step 2).
+  // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
+  // bulk /1h windows, mostly warm from the SQLite archive) is the ACTIVE volume behind every gate/rank/
+  // column, with the volume floors count-matched to it in the same change. `--vol-source legacy` restores
+  // the broken /24h map (escape hatch / pre-recal repro). loadAll24hRolling is a small extra fetch cost on a
+  // cold archive (≤24 bulk /1h, mostly deduped against buckets loadSnapshot/loadDaily already accrue).
   const v24 = VOL_SOURCE === 'rolling' ? await loadAll24hRolling() : v24legacy;
 
   // Value --capital default = the DERIVED deployablePool (lib/cashderive.mjs). Re-derive it here WITH a

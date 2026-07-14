@@ -71,7 +71,7 @@ const flatSeries = mk([
 // (clears DIP_LOOP_FLUSH_PCT). optSell 1060 → an after-tax-profitable exit above break-even.
 const AVG_LOW_24 = 1000;
 const liqRow = (over = {}) => ({
-  quickBuy: 950, quickSell: 970, optSell: 1060, volDay: 14400, limit: 30000,
+  quickBuy: 950, quickSell: 970, optSell: 1060, volDay: 144000, limit: 30000,   // PLAN-VOL24: was 14400 (pre-recal); bumped above the recalibrated DIP_LOOP_LIQUID_FLOOR (40000) so this stays the LIQUID fixture
   reliable: true, bond: false, guide: null, ...over,
 });
 
@@ -145,7 +145,7 @@ ok('flushSignal: a null-limit (Searing-shaped) firing does NOT throw and yields 
 });
 ok('flushSignal: a higher-volDay/higher-margin fixture scores HIGHER (ranking sanity)', () => {
   const lo = flushSignal(liqRow(), fallingSeries, AVG_LOW_24, {});
-  const hi = flushSignal(liqRow({ volDay: 50000, optSell: 1200 }), fallingSeries, AVG_LOW_24, {});
+  const hi = flushSignal(liqRow({ volDay: 500000, optSell: 1200 }), fallingSeries, AVG_LOW_24, {});   // PLAN-VOL24: bumped above the recalibrated default liqRow volDay (144000) so it stays the HIGHER-volDay fixture
   assert.ok(hi.dipScore > lo.dipScore, `${Math.round(hi.dipScore)} > ${Math.round(lo.dipScore)}`);
 });
 

@@ -38,10 +38,15 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 // A realistic thresholds object; individual tests override fields via spread. MIN_GPD is kept LOW in
 // the base so edge/liquidity tests aren't incidentally filtered by the attention floor — the floor has
 // its own dedicated test that sets it explicitly.
+// NOTE (PLAN-VOL24): these are the TEST-LOCAL floors (deliberately the small pre-recal scale so the
+// synthetic fixtures below stay readable — this file pins gate LOGIC, not the production constant values,
+// which moved when the /24h→rolling recalibration landed). VALUE_LIQ_FLOOR is pinned here too so the value
+// fixtures don't leak the raised DEFAULT_THRESHOLDS value (the value gate reads
+// `t.VALUE_LIQ_FLOOR ?? DEFAULT_THRESHOLDS.VALUE_LIQ_FLOOR`).
 const baseT = {
   FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
   MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 1000, GP_FLOOR: 250_000_000,
-  RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
+  RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000, VALUE_LIQ_FLOOR: 50,
 };
 // build a 24h record and (optionally) a map limit / a band, keyed by id. Bar D: a band carries tradedWin
 // (density) + sawLow/sawHigh (two-sided); default them off active5m so existing calls exercise the real

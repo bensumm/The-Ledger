@@ -117,7 +117,7 @@ ok('thin big ticket (2003): gp-flow-admitted (thin), kept in band, dropped POSTU
   assert.ok(active.band.gated.find(g => g.id === 2003).thin, '2003 flagged thin (gp-flow admission)');
   assert.ok(active.band.kept.includes(2003));
   assert.equal(overnight.band.dropped['2003'], 'posture', 'overnight has no thin fast-lane');
-  assert.ok(!active.churn.gated.some(g => g.id === 2003), '2003 never reaches the churn gate (limitVol<2000)');
+  assert.ok(!active.churn.gated.some(g => g.id === 2003), '2003 never reaches the churn gate (limitVol<CHURN_MIN_VOL)');
 });
 
 ok('decay-knife (2004): dropped FALLING in band/churn but KEPT in scalp (falling is the thesis)', () => {

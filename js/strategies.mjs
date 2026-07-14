@@ -42,9 +42,10 @@ import { PATH_KEYS } from './paths.mjs';
 export const ENTRY_PATH_KEYS = Object.freeze([PATH_KEYS.SCALP, PATH_KEYS.VALUE_HOLD, PATH_KEYS.AVOID]);
 
 // The churn volume floor — a buy-limit-cycle commodity must trade this many two-sided units/day AND
-// have a real buy limit. Byte-identical to the `limitVol >= 2000 && limit > 0` gate the old inline
-// churn branch ran; named here so the number has one home.
-export const CHURN_MIN_VOL = 2000;
+// have a real buy limit. PLAN-VOL24 step 2: recalibrated 2000 → 65000 against the CORRECTED rolling-24h
+// volume (the /24h endpoint under-read ~10–27×; count-matched to the old 2000/legacy churn selectivity).
+// Node-only (screen.mjs churn niche via gatecandidates) — NOT app-imported, so no APP_VERSION bump.
+export const CHURN_MIN_VOL = 65000;
 
 // P5 scalp niche — a DELIBERATE intraday flip on a falling market (Ben's 2026-07-08 amendment: a
 // faller is not necessarily a poor buy). The scalp edge wants a WIDER fresh band than the base `band`

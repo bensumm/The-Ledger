@@ -11,8 +11,8 @@
       "v24": {
         "avgLowPrice": 98000,
         "avgHighPrice": 102000,
-        "highPriceVolume": 8000,
-        "lowPriceVolume": 7000
+        "highPriceVolume": 140000,
+        "lowPriceVolume": 126000
       },
       "band": {
         "bandLo": 98000,
@@ -298,8 +298,8 @@
       "v24": {
         "avgLowPrice": 104000,
         "avgHighPrice": 109000,
-        "highPriceVolume": 6000,
-        "lowPriceVolume": 5000
+        "highPriceVolume": 110000,
+        "lowPriceVolume": 95000
       },
       "band": {
         "bandLo": 104000,
@@ -585,8 +585,8 @@
       "v24": {
         "avgLowPrice": 14700000,
         "avgHighPrice": 15400000,
-        "highPriceVolume": 22,
-        "lowPriceVolume": 20
+        "highPriceVolume": 340,
+        "lowPriceVolume": 320
       },
       "band": {
         "bandLo": 14700000,
@@ -872,8 +872,8 @@
       "v24": {
         "avgLowPrice": 39000,
         "avgHighPrice": 41000,
-        "highPriceVolume": 6000,
-        "lowPriceVolume": 5000
+        "highPriceVolume": 110000,
+        "lowPriceVolume": 95000
       },
       "band": {
         "bandLo": 39000,
@@ -1159,8 +1159,8 @@
       "v24": {
         "avgLowPrice": 190000,
         "avgHighPrice": 210000,
-        "highPriceVolume": 4000,
-        "lowPriceVolume": 3500
+        "highPriceVolume": 90000,
+        "lowPriceVolume": 78000
       },
       "band": {
         "bandLo": 188000,

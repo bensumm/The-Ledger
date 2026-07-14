@@ -914,7 +914,7 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
      (iii) direction  — recentDirection === 'falling' (reverting/flat/null → no signal; DP1 owns reverting).
      (iv)  exit clears — row.reliable AND optSell != null AND after-tax net at the bid > 0 AND optSell >
            break-even (liquid-fill economics — NOT part of the log-worthy SIGNAL). */
-export const DIP_LOOP_LIQUID_FLOOR   = 1000;   // PLACEHOLDER (n=2): min two-sided volDay to treat a book as FILLABLE
+export const DIP_LOOP_LIQUID_FLOOR   = 40000;  // PLAN-VOL24 step 2: 1000 → 40000, count-matched to the CORRECTED rolling-24h volume (was PLACEHOLDER n=2). Node-only consumer (dip/watch) → no APP_VERSION bump. Min two-sided volDay to treat a book as FILLABLE
 //   (unit-flow, NOT deployability). Cleanly excludes the ~83/d Abyssal bludgeon, admits ~14.4k/d Searing;
 //   room to tune DOWN as the DL2 retro-join accrues. Validation = the DL2 retro (FLUSH firings ⇆ fills.json).
 export const DIP_LOOP_FLUSH_PCT      = 0.03;   // PLACEHOLDER (n=2): live instasell this fraction below the 24h avg low
@@ -1007,7 +1007,7 @@ export const DL4_MAX_NOMINATIONS_PER_SCAN = 10; // PLACEHOLDER (n=2): cap on NEW
 // ~7→14gp band, ~3.9k/d → ~39k/d gp-flow) is three orders below anything worth watching for a flush, yet
 // cleared the %-only amplitude bar. This is about gp SCALE, NOT unit price — cheap-but-high-throughput
 // churn (a ~200gp rune moving millions/day) has huge gp-flow and still passes. Both tracks gate on it.
-export const DL4_MIN_GP_FLOW = 500_000;         // PLACEHOLDER (n=2): min mid×limitVol gp-flow/day to be worth watching (= the 500k attention floor)
+export const DL4_MIN_GP_FLOW = 9_000_000;       // PLAN-VOL24 step 2: 500k → 9m (~18×), count-matched to CORRECTED rolling-24h gp-flow (mid×limitVol turnover, ~18× higher; the directive's "~4.5b" was GP_FLOOR-specific — DL4's 500k scaled by the same ~18× factor = 9m; NOT tied to MIN_GPD's kept-500k NET-throughput floor, a different dimension). Node-only (dip nomination) → no APP_VERSION bump. Min mid×limitVol gp-flow/day to be worth watching
 // PER-UNIT SWING FLOOR (2026-07-12, Ben — the penny-junk-still-leaked fix). The gp-flow floor above is a
 // gp-SCALE gate (is the MARKET big enough), but it admits cheap high-throughput commodities — Feather (2gp),
 // Water/Mind rune, Iron bolts, seeds — because their volume clears the flow bar despite a trivial per-unit

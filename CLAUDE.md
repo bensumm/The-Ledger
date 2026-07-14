@@ -118,16 +118,23 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   trailing-24h source (investigated 2026-07-13, `PLAN-VOL24.md`): it serves a FROZEN ~1–3h slice of a STALE
   UTC day (its `timestamp` lags ~26h), under-reporting the true rolling 24h by ~10–27× — worst in early/mid-
   UTC hours (Ben's US-afternoon sessions).** A CORRECTED trailing-24h source composed from the healthy `/1h`
-  grain exists (`marketfetch.mjs` `loadAll24hRolling` / `rolling24FromTs1h`, proven exact); it is **SHADOW-
-  only** — `screen.mjs --vol-source rolling` opts it in, but the DEFAULT `legacy` still gates/displays off the
-  broken `/24h` value pending the floor recalibration (`PLAN-VOL24.md` steps 2/3), so every volume-denominated
-  floor is currently calibrated against deflated numbers. Every screen row also logs the corrected volume as a
-  lean `volDayRolling` on `suggestions.jsonl` (the recalibration dataset). SIDE-CASUALTY: the `pressure`
-  ratio and the `/24h` `avgHigh`/`avgLow` (gatecandidates' `mid`, the dip "24h avg low" reference) come from
-  the same frozen bucket — treat them as ~26h-stale 1–3h samples too. The browser app (`js/marketfetch.js`)
-  is NOT yet fixed (deferred, APP_VERSION-bumping — step 3).
+  grain (`marketfetch.mjs` `loadAll24hRolling` / `rolling24FromTs1h`, proven exact) is now the DEFAULT that
+  `screen.mjs` gates/ranks/displays off (PLAN-VOL24 step 2, Ben-validated 2026-07-13); `--vol-source legacy`
+  restores the broken `/24h` value (escape hatch / pre-recal repro). **Every volume-denominated floor was
+  RECALIBRATED against the corrected distribution in the same change** (count-matched to preserve each gate's
+  old selectivity — the `/24h` under-read ~10–27×, so the old floors were ~18× too loose in corrected units):
+  `FLOOR`/`VALUE_LIQ_FLOOR` 50→3500, `CHURN_MIN_VOL` 2000→65000, `DIP_LOOP_LIQUID_FLOOR` 1000→40000,
+  `GP_FLOOR` 250m→4.5b, `DL4_MIN_GP_FLOW` 500k→9m. **`MIN_GPD` (the 500k gp/d ATTENTION floor) was
+  deliberately KEPT at 500k** (Ben — it's a real NET-throughput quantity, so 500k of TRUE throughput is the
+  honest floor; it now admits the smaller real-throughput lane rather than the deflated one). `DL4_MIN_ABS_
+  SWING` (per-unit, not volume-linked) is UNCHANGED. Every screen row also logs the corrected per-item volume
+  as a lean `volDayRolling` on `suggestions.jsonl`. SIDE-CASUALTY: the `pressure` ratio and the `/24h`
+  `avgHigh`/`avgLow` (gatecandidates' `mid`, the dip "24h avg low" reference) still come from the broken
+  frozen bucket — treat them as ~26h-stale 1–3h samples. The browser app (`js/marketfetch.js`: Finder/Watch/
+  Trends) STILL reads the broken `/24h`, so the published Scan tab is now MORE correct than the live app
+  until the deferred, APP_VERSION-bumping step 3 lands.
 - **Liquidity gate (S1):** two-sided (`hpv>0 && lpv>0`, the non-negotiable ghost-spread lesson) AND
-  `limitVol ≥ --floor` **OR** gp-flow `limitVol×mid ≥ --gp-floor` (250m). The gp-flow path admits big
+  `limitVol ≥ --floor` (3500, PLAN-VOL24-recalibrated) **OR** gp-flow `limitVol×mid ≥ --gp-floor` (4.5b). The gp-flow path admits big
   tickets, flagged `thin`, grade-capped **A-** (`THIN_GRADE_CAP`), bounded to `--thin-reserve`. Full
   rationale in `/scan`.
 - **Traded-band gate — Bar D.** The 2h band edge must be TRADED, not a one-spike artifact: Bar D decouples
@@ -521,7 +528,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   over that universe and APPENDS flush-SUITABLE candidates to `dip-watchlist.json`. Suitability =
   two-sided (the non-negotiable ghost-spread guard) + wide-enough amplitude (band ≥ `DL4_WIDE_BAND_PCT`,
   else 24h range ≥ `DL4_WIDE_DAY_PCT`) + **TWO orthogonal value floors**: a gp-SCALE floor (gp-flow
-  `mid × limitVol ≥ DL4_MIN_GP_FLOW`, the 500k attention scale — is the market big enough) AND a **per-unit
+  `mid × limitVol ≥ DL4_MIN_GP_FLOW`, 9m turnover/day after the PLAN-VOL24 rolling-24h recalibration — is the market big enough) AND a **per-unit
   SWING floor** (`bandHi−bandLo ≥ DL4_MIN_ABS_SWING`, 2026-07-12 — is the dip worth catching per unit; a
   flush-bid captures ~one amplitude of gp/unit, so a 3% swing on a 2gp Feather is 0.06gp — worthless). The
   swing floor is what screens the pool down to meaningful mid/big tickets; it **SUPERSEDES the old "cheap

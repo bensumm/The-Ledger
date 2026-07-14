@@ -51,11 +51,11 @@ import { STRATEGIES } from '../../js/strategies.mjs';
 // THRESHOLDS from parsed args and passes it explicitly; this default serves fixtures / import callers
 // that don't supply one). Values mirror screen.mjs's `A.<flag> != null ? … : <default>` fallbacks.
 export const DEFAULT_THRESHOLDS = {
-  FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
+  FLOOR: 3500, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,   // PLAN-VOL24 step 2: FLOOR 50 → 3500 (mirrors screen.mjs; count-matched to the corrected rolling-24h volume)
   // Bar D (Ben 2026-07-09): the traded-band gate reads tradedWin (density) + sawLow/sawHigh (two-sided),
   // NOT the same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
   // MIN_TRADED_THIN = the relaxed floor for gp-flow big tickets (2 ⇒ a lone spike still fails).
-  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 500_000, GP_FLOOR: 250_000_000,
+  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 500_000, GP_FLOOR: 4_500_000_000,   // PLAN-VOL24 step 2: GP_FLOOR 250m → 4.5b (corrected gp-flow); MIN_GPD KEPT at 500k (Ben — real NET-throughput floor)
   RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
   // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
   // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value
@@ -64,7 +64,9 @@ export const DEFAULT_THRESHOLDS = {
   // 07-09: raised 20 → 50 (= the base FLOOR) after the value scan surfaced 1/d–6/d untradeable rows
   // (Adamant halberd 6/d, Gloves of silence 1/d) — a hold you can't exit isn't a hold. PLACEHOLDER
   // (rule 4). Two-sided liquidity (hpv>0 && lpv>0) stays non-negotiable.
-  VALUE_LIQ_FLOOR: 50,
+  // PLAN-VOL24 step 2: 50 → 3500, tracking the base FLOOR against the CORRECTED rolling-24h volume (the
+  // /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units).
+  VALUE_LIQ_FLOOR: 3500,
   // VALUE_CAP_GP: the per-position capital cap that bounds valueScore's deployable-units (bankroll leg). NOT
   // a fixed doctrine number — screen.mjs derives it from --capital ÷ --slots (Ben's current capital spread
   // across the positions we'd hold). This default (≈ 100m ÷ 5 slots) serves fixtures / import callers that

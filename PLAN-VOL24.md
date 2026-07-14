@@ -88,18 +88,55 @@ Two proposals were sketched. Prototype comparison (limiting-side volDay, window
   `CLAUDE.md` Vol/d line, `README.md` registry (marketfetch + this file), `pipeline/lib/suggestlog.mjs`
   schema.
 
-### Step 2 — recalibrate every volume-denominated floor off the true distribution (PROPOSAL, pending validation with Ben)
-Run `screen.mjs --mode all --stats` twice (`--vol-source legacy` vs `rolling`) and produce the side-by-side:
-per-gate survivor-count deltas, the newly-admitted item classes, the flood magnitude, and the real
-rolling-volDay distribution. For EACH volume-denominated constant propose a new value that preserves the
-same selectivity against the corrected distribution:
-`FLOOR` (~100/d two-sided) · `GP_FLOOR` (250m) · `MIN_GPD` (500k, via `expUnits = 0.10×volDay`) ·
-`DIP_LOOP_LIQUID_FLOOR` (1000) · `VALUE_LIQ_FLOOR` (50) · `DL4_MIN_GP_FLOW` · `DL4_MIN_ABS_SWING`
-(if volume-linked) · the `THIN` classification (`limitVol < 50`). These are PROPOSALS — do not edit the
-constants until Ben validates the numbers.
+### Step 2 — recalibrate every volume-denominated floor + flip the default to rolling ✅ SHIPPED 2026-07-13 (Ben-validated)
+The `--mode all --stats` legacy-vs-rolling side-by-side confirmed the flood (BAND gated 23→238, CHURN
+1→135, VALUE admitted 124→550, dip-pool +40). The `rolling/legacy` volDay ratio is HUGELY dispersed
+(p10 7.8× · median 23.0× · p90 173×), so a flat multiplier is wrong — each floor was **count-matched** to
+the corrected distribution (the floor that admits ≈ the same item count the old floor did under legacy):
 
-### Step 3 — flip the default + fix the browser app (deferred, APP_VERSION-bumping)
-Once step-2 floors are agreed: make `rolling` the default `volDay` source, and fix the app's
-`js/marketfetch.js` (`fetch24h`) — per-item it can sum its own 1h series; the Finder's bulk read needs a
-design decision (24 bulk fetches per Finder load, or a published rolling snapshot). This is the
-`APP_VERSION`-bumping change; the pipeline fix in step 1 is not.
+| Constant | old | new | basis |
+| --- | --- | --- | --- |
+| `FLOOR` / `VALUE_LIQ_FLOOR` / band `thin` (`limitVol<FLOOR`) | 50 | **3,500** | count-matched (884 items; rounded 3,652→3,500, leaning looser per Ben's surface-the-lane intent) |
+| `CHURN_MIN_VOL` | 2,000 | **65,000** | count-matched (361) |
+| `DIP_LOOP_LIQUID_FLOOR` | 1,000 | **40,000** | count-matched (438; rounded from 42,425) |
+| `GP_FLOOR` | 250m | **4,500m** | count-matched gp-flow (89; ~18×) |
+| `DL4_MIN_GP_FLOW` | 500k | **9m** | GP_FLOOR's ~18× applied to DL4's own 500k turnover floor (NOT tied to MIN_GPD) |
+| `DL4_MIN_ABS_SWING` | 50 | **50 (unchanged)** | per-unit price swing, not volume-linked |
+| `MIN_GPD` (attention floor) | 500k | **500k (unchanged)** | Ben's call: it's a real NET-throughput quantity — 500k of TRUE throughput is the honest floor; now surfaces the smaller real-throughput lane |
+
+Default `--vol-source` flipped to `rolling`; `legacy` kept as an escape hatch. Replay goldens regenerated
+(recorded inputs now flow through the new floor constants). **Combined-effect check confirmed** (see the
+"Combined-effect verification" below) — the mid-liquidity commodity lane surfaces, ghost-spread thin items
+stay gated, and keeping MIN_GPD at 500k is NOT moot (it binds, not FLOOR, for the small lane).
+
+### Step 3 — REMAINING: fix the browser app (deferred, APP_VERSION-bumping)
+The pipeline (`screen.mjs`) is fixed; the browser app's `js/marketfetch.js` (`fetch24h`, feeding the
+Finder Grade/sort, Watch tab, Trends Vol/d) STILL reads the broken `/24h`. So the published `screen.json`
+Scan tab is now MORE correct than the live app until this lands. Per-item the app can sum its own 1h
+series; the Finder's bulk read needs a design decision (24 bulk `/1h` fetches per Finder load, or read a
+published rolling snapshot). This is the `APP_VERSION`-bumping change; the pipeline fix is not.
+
+### Combined-effect verification (2026-07-13, applied config: rolling + new floors + MIN_GPD 500k)
+`node pipeline/screen.mjs --mode all --stats` on the EXACT applied config:
+
+| Niche | legacy (broken /24h, old floors) | rolling + OLD floors (the flood) | **rolling + NEW floors (applied)** |
+| --- | --- | --- | --- |
+| BAND gated / surfaced | 23 / 6 | 238 / 36 | **137 / 34** |
+| CHURN gated / surfaced | 1 / 0 | 135 / 6 | **96 / 10** |
+| VALUE admitted / shown | 124 / 22 | 550 / 20 | **122 / 22** |
+| unique items fetched | 32 | 96 | **77** |
+| Dip-pool added this scan | 0 | 40 (flood) | **1** (DL4 recal fixed the flood) |
+
+The recalibration lands BETWEEN the over-tight legacy and the flood — the mid/small-liquidity lane surfaces
+without the 238-gated blow-up. Newly-admitted sample (all two-sided, Vol/d = corrected rolling): big tickets
+(Noxious halberd 45m, Dragon claws, Armadyl crossbow) AND the smaller real-throughput lane — Kourend teleport
+tab (20.7k/d), Super strength(4) (136k/d), Blue dragon leather (278k/d), Snape grass/Torstol seed (~14k/d),
+Divine ranging potion(4) (6.8k/d); CHURN commodities Black chinchompa (408k/d), Sanfew serum(4), Anglerfish,
+Dragon bones, Saradomin brew(4), Mahogany plank (1.39m/d). Ghost-spread thin items stay gated (the two-sided
+`hpv>0 && lpv>0` floor is untouched).
+
+**MIN_GPD-500k combined-effect check — NOT moot, strongly BINDING.** Holding the new FLOOR fixed and raising
+MIN_GPD 500k → 5m collapses BAND gated **139 → 30** (surfaced 34 → 5). So the ~109 lower-throughput band
+candidates that surface are admitted specifically BECAUSE MIN_GPD stays at 500k — FLOOR (a unit floor) is NOT
+the sole binding gate, and Ben's smaller real-throughput lane genuinely appears. Keeping MIN_GPD at 500k was
+the operative choice, not a no-op.

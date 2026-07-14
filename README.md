@@ -293,12 +293,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
 - `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is broken (serves a frozen stale
-  ~1–3h UTC-day slice, under-reporting true rolling 24h ~10–27×). Step 1 (SHIPPED 2026-07-13) — the
-  corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`)
-  landed SHADOW-only (`screen.mjs --vol-source rolling`; `volDayRolling` logged on `suggestions.jsonl`),
-  gates unchanged. Steps 2 (recalibrate every volume-denominated floor off the true distribution) +
-  3 (flip the default + fix the browser app, APP_VERSION) pending. Folds into `PLAN.md` and is deleted
-  when its last chunk ships (the plan-file rule).
+  ~1–3h UTC-day slice, under-reporting true rolling 24h ~10–27×). Steps 1+2 (SHIPPED 2026-07-13) — the
+  corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`) is now
+  the DEFAULT `screen.mjs` volume (`--vol-source legacy` = escape hatch), and every volume-denominated floor
+  was count-matched to the corrected distribution (`FLOOR`/`VALUE_LIQ_FLOOR` 50→3500, `CHURN_MIN_VOL`
+  2000→65000, `DIP_LOOP_LIQUID_FLOOR` 1000→40000, `GP_FLOOR` 250m→4.5b, `DL4_MIN_GP_FLOW` 500k→9m; `MIN_GPD`
+  KEPT at 500k — Ben, real NET-throughput floor; `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
+  `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
+  read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
 - `PLAN-LIQUIDITY-REACH.md` — in-flight per-topic plan (the soul-rune desk investigation): make the
   ask-reach discount CONDITIONAL on liquidity + `position_size ÷ volume` (`reachRelief` +
   `dayHighFrom5m` in `js/estimators.mjs`, wired into `estimatePair`'s sell fold + stdout relief
@@ -463,8 +465,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     PLAN-VOL24 CORRECTED rolling-24h volume composers `loadAll24hRolling({db})` (whole-market trailing-24h
     map from the last 24 complete `/1h?timestamp` bulk windows, reusing the SQLite 1h archive; the fix for
     the broken `/24h` endpoint that serves a frozen stale ~1–3h slice) + `rolling24FromTs1h(ts1h)` (the same
-    sum off an already-fetched per-item 1h series → zero new fetch) — SHADOW-only, gated behind `screen.mjs
-    --vol-source rolling`; consumed by `screen.mjs` and logged as the `volDayRolling` shadow field for the
+    sum off an already-fetched per-item 1h series → zero new fetch) — now the DEFAULT `screen.mjs` volume
+    (`--vol-source legacy` restores the broken `/24h`; PLAN-VOL24 step 2), with the volume floors recalibrated
+    to the corrected distribution; consumed by `screen.mjs` and logged as the `volDayRolling` shadow field for the
     floor recalibration (`PLAN-VOL24.md`)), `cli.mjs` (shared arg/format/table
     helpers). **`rating.mjs` and `estimators.mjs` MOVED to `js/` (2026-07-10, app-parity Wave 2a)** —
     now **APP-IMPORTED by `js/market.js`** (AP4, 0.61.0 — the Finder Grade column + Rating bar + sort use

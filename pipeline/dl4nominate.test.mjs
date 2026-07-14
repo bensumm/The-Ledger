@@ -36,13 +36,15 @@ const band = (lo, hi, sawLow = true, sawHigh = true) => ({ bandLo: lo, bandHi: h
 // --- 1. FIRES liquid track: wide band + limitVol ≥ floor + two-sided ---------------------------
 ok('nominateDip: wide band + liquid two-sided → track:liquid', () => {
   // band amplitude = (1060-1000)/1000 = 6% ≥ DL4_WIDE_BAND_PCT; swing 60 ≥ DL4_MIN_ABS_SWING; limitVol ≥ floor.
-  const n = nominateDip(v24(1000, 1060, 5000, 5000), band(1000, 1060));
+  // PLAN-VOL24: limitVol 5000→50000 — clears BOTH the recalibrated DIP_LOOP_LIQUID_FLOOR (40000 → liquid
+  // track) and DL4_MIN_GP_FLOW (mid 1030 × 50000 = 51.5m ≥ 9m).
+  const n = nominateDip(v24(1000, 1060, 50000, 50000), band(1000, 1060));
   assert.ok(n, 'nominates');
   assert.equal(n.track, 'liquid');
   assert.equal(n.twoSided, true);
   assert.ok(n.amplitude >= DL4_WIDE_BAND_PCT);
   assert.ok(n.swingGp >= DL4_MIN_ABS_SWING);
-  assert.equal(n.limitVol, 5000);
+  assert.equal(n.limitVol, 50000);
   assert.ok(n.score > 0);
 });
 
@@ -66,7 +68,8 @@ ok('nominateDip: one-sided (lpv=0) → null even if wide', () => {
 });
 ok('nominateDip: one-sided (sawHigh false, hpv>0 lpv>0 saves it) → still nominates via volume path', () => {
   // band is one-sided but hpv>0 && lpv>0 satisfies the OR — two-sidedness can come from either source.
-  const n = nominateDip(v24(1000, 1200, 5000, 5000), band(1000, 1200, true, false));
+  // PLAN-VOL24: vol 5000→50000 (≥ the recalibrated DIP_LOOP_LIQUID_FLOOR 40000 → liquid track; gp-flow ≫ 9m).
+  const n = nominateDip(v24(1000, 1200, 50000, 50000), band(1000, 1200, true, false));
   assert.ok(n, 'volume two-sidedness carries it');
   assert.equal(n.track, 'liquid');
 });
@@ -96,9 +99,9 @@ ok('nominateDip: score rises with amplitude and with volume', () => {
   const lowAmp = nominateDip(v24(10000, 10350, 5000, 5000), band(10000, 10350));   // 3.5%
   const hiAmp  = nominateDip(v24(10000, 11000, 5000, 5000), band(10000, 11000));   // 10%
   assert.ok(hiAmp.score > lowAmp.score, 'more amplitude → higher score');
-  // prices kept high enough that both clear the value floor (mid ~10.5k × 100 ≈ 1.05m gp-flow) so the
-  // comparison isolates volume, not the floor.
-  const lowVol = nominateDip(v24(10000, 11000, 100, 100), band(10000, 11000));
+  // prices kept high enough that both clear the value floor (mid ~10.5k × 1000 ≈ 10.5m gp-flow ≥ the
+  // recalibrated 9m DL4_MIN_GP_FLOW) so the comparison isolates volume, not the floor. (PLAN-VOL24: lowVol 100→1000.)
+  const lowVol = nominateDip(v24(10000, 11000, 1000, 1000), band(10000, 11000));
   const hiVol  = nominateDip(v24(10000, 11000, 50000, 50000), band(10000, 11000));
   assert.ok(hiVol.score > lowVol.score, 'more volume → higher score at equal amplitude');
 });
@@ -121,8 +124,9 @@ ok('nominateDip: cheap-but-high-volume churn (rune-like) → null (swing too sma
 });
 // --- 6c2. PER-UNIT SWING FLOOR: a meaningful mid-ticket swing PASSES even at modest volume --------------
 ok('nominateDip: mid-ticket with a real per-unit swing → nominates', () => {
-  // 8000→8400gp item: 5% band, swing 400gp ≥ DL4_MIN_ABS_SWING; mid 8200 × 200 = 1.64m gp-flow ≥ floor.
-  const n = nominateDip(v24(8000, 8400, 200, 200), band(8000, 8400));
+  // 8000→8400gp item: 5% band, swing 400gp ≥ DL4_MIN_ABS_SWING; mid 8200 × 1200 = 9.84m gp-flow ≥ the
+  // recalibrated 9m floor (PLAN-VOL24: vol 200→1200 — still modest units, a real per-unit swing passing).
+  const n = nominateDip(v24(8000, 8400, 1200, 1200), band(8000, 8400));
   assert.ok(n, 'a meaningful per-unit swing passes');
   assert.ok(n.swingGp >= DL4_MIN_ABS_SWING);
 });
@@ -140,9 +144,10 @@ ok('nominateDip: abs-swing boundary around DL4_MIN_ABS_SWING', () => {
 // --- 6d. VALUE FLOOR boundary: just under → null, at/over → nominates ---------------------------
 ok('nominateDip: value-floor boundary (mid×limitVol around DL4_MIN_GP_FLOW)', () => {
   // amplitude fixed wide (10% band); vary limitVol so mid×limitVol straddles the floor. mid=1000.
-  const under = nominateDip(v24(950, 1050, 400, 400), band(950, 1050));   // mid 1000 × 400 = 400k < 500k
+  // PLAN-VOL24: DL4_MIN_GP_FLOW recalibrated 500k→9m, so straddle 9m (limitVol 8900 vs 9100).
+  const under = nominateDip(v24(950, 1050, 8900, 8900), band(950, 1050));   // mid 1000 × 8900 = 8.9m < 9m
   assert.equal(under, null, 'just under the value floor → null');
-  const over = nominateDip(v24(950, 1050, 600, 600), band(950, 1050));    // mid 1000 × 600 = 600k ≥ 500k
+  const over = nominateDip(v24(950, 1050, 9100, 9100), band(950, 1050));    // mid 1000 × 9100 = 9.1m ≥ 9m
   assert.ok(over, 'at/over the value floor → nominates');
   assert.ok(over.gpFlow >= DL4_MIN_GP_FLOW);
 });
