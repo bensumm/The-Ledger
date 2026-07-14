@@ -23,7 +23,8 @@ import {
   pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
   quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
   estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_HEADERS,
-  PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY,
+  reachRelief, dayHighFrom5m, REACH_RELIEF_MAX, REACH_DEBIAS_MAX_FRAC,   // PLAN-LIQUIDITY-REACH
+  PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
 } from './lib/estimators.mjs';
@@ -380,6 +381,116 @@ ok('fmtTtf renders compact minutes/hours/days', () => {
   assert.equal(fmtTtf(3 * 3600), '3h');
   assert.equal(fmtTtf(3 * 86400), '3d');
   assert.equal(fmtTtf(null), '—');
+});
+
+/* --- PLAN-LIQUIDITY-REACH: liquidity/size-conditioned reach relief + the de-biased top -------------- */
+// THE GATING FIXTURE (the hard constraint): a LOW-liquidity mirage exit keeps the discount
+// BYTE-FOR-BYTE — the Ancient-godsword class (thin big ticket, 2/14 ask reach, huge size÷flow) must
+// discount exactly as it did before this change existed.
+ok('LOW-LIQUIDITY MIRAGE PRESERVED: thin book + 2/14 reach + large size/volume → relief 0, discount byte-identical', () => {
+  const ar = { reachedDays: 2, nDays: 14 };
+  // thin book: 40/d limiting side, buy limit 8 (godsword-class) — sizeRatio 0.2, volume ≪ the floor.
+  assert.equal(reachRelief({ intendedUnits: 8, volDay: 40 }), 0, 'thin book → relief exactly 0');
+  // askReachFactor: today's flat formula, with and without the relief arg, identical.
+  const today = PFILL_ASKREACH_FLOOR + (1 - PFILL_ASKREACH_FLOOR) * (2 / 14);
+  assert.equal(askReachFactor(ar), today, 'one-arg call is today\'s flat map');
+  assert.equal(askReachFactor(ar, reachRelief({ intendedUnits: 8, volDay: 40 })), today, 'relief 0 → byte-identical');
+  // estimatePair: a thin row (volDay/limit present but thin) with a dayHigh above the band top must emit
+  // the SAME estSell as the pre-change formula — no fold softening, no top de-bias.
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000, volDay: 40, limit: 8 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: ar, dayHigh: 25_000_000 });
+  const fold = Math.min(1, (2 / 14) / EST_REACH_SAT_FRAC);
+  assert.equal(e.estSell, Math.round(row.quickSell + (row.optSell - row.quickSell) * fold), 'thin-book estSell = the exact pre-change fold');
+  assert.equal(e.confidence.relief, null, 'no relief surfaced');
+  assert.equal(estConfLean(e).reachRelief, undefined, 'no shadow field');
+});
+
+ok('HIGH-LIQUIDITY SMALL-SIZE relief: the discount softens toward 1 (never to 1), estSell lifts, never above the observed 24h high', () => {
+  // soul-rune class: 5M/d limiting side, buy limit 25k → sizeRatio 0.005 (≪ SIZE_FULL) → relief = REACH_RELIEF_MAX.
+  const rl = reachRelief({ intendedUnits: 25_000, volDay: 5_000_000 });
+  assert.equal(rl, REACH_RELIEF_MAX, 'liq + size both saturated → max relief');
+  assert.ok(rl < 1, 'relief NEVER erases the whole discount');
+  const ar = { reachedDays: 4, nDays: 14 };
+  const flat = askReachFactor(ar);
+  const soft = askReachFactor(ar, rl);
+  assert.ok(soft > flat && soft < 1, `softens toward 1 but not to 1: ${flat} → ${soft}`);
+  assert.equal(soft, flat + rl * (1 - flat), 'exact relief map');
+  // estimatePair: estSell lifts vs the no-relief read, and the de-biased top is capped at dayHigh.
+  const mk = (volDay, limit) => ({ quickBuy: 380, quickSell: 385, optBuy: 378, optSell: 396, volDay, limit });
+  const thin = estimatePair(STRATEGIES.band, mk(40, 8), { askReach: ar, dayHigh: 400 });
+  const liquid = estimatePair(STRATEGIES.band, mk(5_000_000, 25_000), { askReach: ar, dayHigh: 400 });
+  assert.ok(liquid.estSell > thin.estSell, `liquid small-size estSell lifts: ${thin.estSell} → ${liquid.estSell}`);
+  assert.ok(liquid.estSell <= 400, 'never above the observed 24h high');
+  assert.ok(liquid.confidence.relief && liquid.confidence.relief.relief === rl, 'relief surfaced in confidence');
+  const lean = estConfLean(liquid);
+  assert.equal(lean.reachRelief, Math.round(rl * 100) / 100);
+  assert.equal(lean.sizeRatio, 0.005);
+  assert.ok(lean.debiasedTop > 396 && lean.debiasedTop <= 400, `debiasedTop in (bandTop, dayHigh]: ${lean.debiasedTop}`);
+});
+
+ok('HIGH-LIQUIDITY LARGE-SIZE gets NO relief (size governs, not liquidity alone)', () => {
+  // a 500k-unit intent on a 5M/d book: sizeRatio 0.1 ≥ REACH_RELIEF_SIZE_ZERO → relief exactly 0.
+  assert.equal(reachRelief({ intendedUnits: 500_000, volDay: 5_000_000 }), 0);
+  const row = { quickBuy: 380, quickSell: 385, optBuy: 378, optSell: 396, volDay: 5_000_000, limit: 500_000 };
+  const ar = { reachedDays: 4, nDays: 14 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: ar, dayHigh: 400 });
+  const fold = Math.min(1, (4 / 14) / EST_REACH_SAT_FRAC);
+  assert.equal(e.estSell, Math.round(row.quickSell + (row.optSell - row.quickSell) * fold), 'large size → the exact unrelieved fold');
+  assert.equal(e.confidence.relief, null);
+});
+
+ok('ABSENT size/vol inputs → byte-identical (degrade-to-model-free) + relief monotonicity', () => {
+  const ar = { reachedDays: 4, nDays: 14 };
+  assert.equal(reachRelief(), 0); assert.equal(reachRelief({}), 0);
+  assert.equal(reachRelief({ intendedUnits: null, volDay: 5_000_000 }), 0);
+  assert.equal(reachRelief({ intendedUnits: 25_000, volDay: null }), 0);
+  assert.equal(askReachFactor(ar), askReachFactor(ar, 0), 'default relief arg is 0');
+  assert.equal(askReachFactor(null, 0.75), 1, 'absent reach read still → 1 regardless of relief');
+  // a row with NO volDay/limit behaves exactly as before (all pre-existing fixtures re-pin this too).
+  const row = { quickBuy: 380, quickSell: 385, optBuy: 378, optSell: 396 };
+  const e = estimatePair(STRATEGIES.band, row, { askReach: ar, dayHigh: 400 });
+  const fold = Math.min(1, (4 / 14) / EST_REACH_SAT_FRAC);
+  assert.equal(e.estSell, Math.round(row.quickSell + (row.optSell - row.quickSell) * fold));
+  assert.equal(e.confidence.relief, null);
+  // monotone in liquidity (volDay ↑ ⇒ relief non-decreasing) at fixed size ratio inputs…
+  const r1 = reachRelief({ intendedUnits: 1000, volDay: 150_000 });
+  const r2 = reachRelief({ intendedUnits: 1000, volDay: 500_000 });
+  const r3 = reachRelief({ intendedUnits: 1000, volDay: 2_000_000 });
+  assert.ok(r1 > 0 && r2 > r1 && r3 >= r2, `monotone in volume: ${r1} ≤ ${r2} ≤ ${r3}`);
+  // …and monotone-DECREASING in intended size at fixed volume.
+  const s1 = reachRelief({ intendedUnits: 5_000, volDay: 500_000 });
+  const s2 = reachRelief({ intendedUnits: 25_000, volDay: 500_000 });
+  const s3 = reachRelief({ intendedUnits: 45_000, volDay: 500_000 });
+  assert.ok(s1 >= s2 && s2 > s3 && s3 >= 0, `monotone-decreasing in size: ${s1} ≥ ${s2} ≥ ${s3}`);
+});
+
+ok('PART B de-bias: liquid book lifts the top reference toward dayHigh (capped AT it); thin book unchanged; dayHighFrom5m reads the trailing 24h', () => {
+  // saturated reach (12/14 + 3/3) so the fold is 1 → estSell sits AT the top reference; the lift is Part B alone.
+  const ar = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const mk = (volDay, limit) => ({ quickBuy: 380, quickSell: 385, optBuy: 378, optSell: 396, volDay, limit });
+  const liquid = estimatePair(STRATEGIES.band, mk(5_000_000, 25_000), { askReach: ar, dayHigh: 400 });
+  const bandTop = 396, gap = 400 - bandTop;
+  const expectTop = Math.min(400, Math.round(bandTop + REACH_DEBIAS_MAX_FRAC * REACH_RELIEF_MAX * gap));
+  assert.equal(liquid.estSell, expectTop, `estSell = the de-biased top ${expectTop} (avgHighPrice bias corrected, ≤ observed high)`);
+  assert.ok(liquid.estSell <= 400, 'the real ceiling holds');
+  // a HUGE dayHigh cannot pull the top past the fraction-of-gap widen (no "list arbitrarily high").
+  const wild = estimatePair(STRATEGIES.band, mk(5_000_000, 25_000), { askReach: ar, dayHigh: 4_000 });
+  assert.ok(wild.estSell < 4_000 && wild.estSell > bandTop, `fraction-of-gap widen only: ${wild.estSell}`);
+  // thin book: dayHigh present but relief 0 → the band top stands (~no de-bias where averaging hid little).
+  const thin = estimatePair(STRATEGIES.band, mk(40, 8), { askReach: ar, dayHigh: 400 });
+  assert.equal(thin.estSell, bandTop, 'thin book: top unchanged');
+  // dayHighFrom5m: max avgHighPrice inside the trailing 24h of the series' own last stamp; older points excluded.
+  const t0 = 1_700_000_000;
+  const series = [
+    { timestamp: t0 - 30 * 3600, avgHighPrice: 999 },            // outside 24h → ignored
+    { timestamp: t0 - 20 * 3600, avgHighPrice: 400 },
+    { timestamp: t0 - 2 * 3600, avgHighPrice: 396 },
+    { timestamp: t0, avgHighPrice: 390 },
+  ];
+  assert.equal(dayHighFrom5m(series), 400);
+  assert.equal(dayHighFrom5m([]), null);
+  assert.equal(dayHighFrom5m(null), null);
+  assert.equal(dayHighFrom5m([{ avgHighPrice: 50 }, { avgHighPrice: 70 }]), 70, 'timestamp-less series degrades to a tail read');
 });
 
 console.log(`\nAll ${pass} estimator checks passed.`);

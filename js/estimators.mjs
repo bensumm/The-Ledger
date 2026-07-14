@@ -105,16 +105,80 @@ export function pFillIntraday(ctx = {}) {
   return estR(p, 0, 'band-depth');
 }
 
+/* --- PLAN-LIQUIDITY-REACH (2026-07-13) — liquidity/size-conditioned reach relief -------------------
+   WHY (Ben, the soul-rune desk investigation): reach measures how OFTEN a price prints, not how much
+   of YOUR stock clears when it does. Depth-at-percentile scales with volume, so on a deep book a
+   position that is a small fraction of daily flow can realistically target a higher percentile than
+   the flat reach discount implies. The relief SOFTENS the ask-reach discount toward 1 ONLY when BOTH
+   hold: the book is genuinely liquid (absolute volume floor) AND the position is small relative to
+   flow (`sizeRatio = intendedUnits ÷ limiting-side volDay`).
+   ⚠ THE HARD CONSTRAINT (non-negotiable): the reach discount exists to catch the thin-big-ticket
+   MIRAGE EXIT (the Ancient-godsword 2/14 p90 top that would grade S+ off a mirage). A thin book
+   (volDay < REACH_RELIEF_MIN_VOL) or a large relative size (sizeRatio ≥ REACH_RELIEF_SIZE_ZERO) gets
+   relief EXACTLY 0 → byte-for-byte today's discount. Size GOVERNS, not liquidity alone — a 500k-unit
+   position on a liquid book gets NO relief. Absent inputs → 0 (the absent→1/degrade precedent).
+   intendedUnits source (per-surface deciding point, PLACEHOLDER): the BUY LIMIT — the standard
+   per-window accumulation unit on discovery/per-item reads (no held qty exists there); a held-lot
+   surface may later pass the real lot size. ALL constants are PLACEHOLDERS (n=1 — the soul-rune
+   anchor); F1 owns the magnitudes. Relief is monotone in volDay and monotone-decreasing in
+   intendedUnits (pinned by tests). */
+export const REACH_RELIEF_MIN_VOL   = 100_000;   // limiting-side vol/d floor — below it relief is EXACTLY 0 (the mirage guard)
+export const REACH_RELIEF_FULL_VOL  = 1_000_000; // vol/d at which the liquidity factor saturates to 1
+export const REACH_RELIEF_SIZE_FULL = 0.02;      // sizeRatio at/below which the size factor is 1 (position ≪ flow)
+export const REACH_RELIEF_SIZE_ZERO = 0.10;      // sizeRatio at/above which relief is EXACTLY 0 (size governs)
+export const REACH_RELIEF_MAX       = 0.75;      // max fraction of the remaining discount relief may erase — NEVER all of it
+export const REACH_DEBIAS_MAX_FRAC  = 0.5;       // Part B: max fraction of the (observed-24h-high − band-top) gap the top reference may widen by
+
+export function reachRelief({ intendedUnits, volDay } = {}) {
+  const v = num(volDay), u = num(intendedUnits);
+  if (v == null || u == null || v <= 0 || u <= 0) return 0;          // absent/degenerate inputs → no relief (byte-identical)
+  if (v < REACH_RELIEF_MIN_VOL) return 0;                            // thin book → the FULL existing discount stands
+  const ratio = u / v;
+  if (ratio >= REACH_RELIEF_SIZE_ZERO) return 0;                     // large relative size → NO relief (size governs)
+  const liq  = clamp01((v - REACH_RELIEF_MIN_VOL) / (REACH_RELIEF_FULL_VOL - REACH_RELIEF_MIN_VOL));
+  const size = clamp01((REACH_RELIEF_SIZE_ZERO - ratio) / (REACH_RELIEF_SIZE_ZERO - REACH_RELIEF_SIZE_FULL));
+  return clamp01(REACH_RELIEF_MAX * liq * size);
+}
+
+/* dayHighFrom5m(ts5m, {hours}) → the max 5m-bucket avgHighPrice over the trailing `hours` (default 24h),
+   anchored to the series' own last timestamp (unix SECONDS) so tests/replays are deterministic; a
+   timestamp-less series degrades to the last hours×12 buckets. Part B's HONEST de-bias reference: the
+   wiki data exposes NO raw-tick period max (the /24h endpoint returns only avgHighPrice + volumes; every
+   series field is a bucket AVERAGE), so the least-smoothed high actually retrievable is the 5m bucket
+   average — closer to the true peaks a resting LIMIT ask fills at than the 1h avgHighPrice the reach
+   read is built on, but still an average (documented, not oversold). Null when no high ever printed. */
+export function dayHighFrom5m(ts5m, { hours = 24 } = {}) {
+  const s = Array.isArray(ts5m) ? ts5m.filter(p => p && num(p.avgHighPrice) != null) : null;
+  if (!s || !s.length) return null;
+  const stamped = s.filter(p => num(p.timestamp) != null);
+  let pts = s;
+  if (stamped.length) {
+    let maxTs = -Infinity; for (const p of stamped) if (p.timestamp > maxTs) maxTs = p.timestamp;
+    pts = stamped.filter(p => p.timestamp >= maxTs - hours * 3600);
+  } else pts = s.slice(-Math.round(hours * 12));
+  let hi = null;
+  for (const p of pts) if (hi == null || p.avgHighPrice > hi) hi = p.avgHighPrice;
+  return hi;
+}
+
 // two-leg fill weight (Proposal A, PLAN-GRADE-REACH) — the family pFill above is the BID/ENTRY fill; the
 // rank's `net` silently ASSUMES the exit at optSell prints. Discount that by the cross-day ASK reach so a
 // mirage exit (e.g. a p90 band top reaching 2/14 days) can't carry a full rank. ABSENT an ask-reach read →
 // 1 (byte-identical to the pre-askReach rank). Softened linear map: reachFrac 0 → PFILL_ASKREACH_FLOOR,
 // 1 → 1 — a stale fortnight demotes, never zeroes (the false-negative guard for the n≈14 window).
-export function askReachFactor(askReach) {
+// PLAN-LIQUIDITY-REACH: the optional `relief` (reachRelief's [0,1] output) moves the discount toward 1 —
+// factor' = factor + relief×(1−factor) — for a LIQUID book where the position is small vs flow. Default
+// 0 ⇒ byte-identical to the flat map; a thin book computes relief 0 so its mirage discount is untouched.
+// DELIBERATELY NOT WIRED INTO estimateRank yet (F1-gated): the rank feeds the published grade/sort
+// (screen.json), so promoting relief into the rank/letter is held for F1 calibration — today the relief
+// consumers are the est-view price fold (estimatePair) + the stdout reach notes only.
+export function askReachFactor(askReach, relief = 0) {
   const a = askReach || null;
   if (!a || !(num(a.nDays) > 0) || num(a.reachedDays) == null) return 1;
   const frac = clamp01(a.reachedDays / a.nDays);
-  return clamp01(PFILL_ASKREACH_FLOOR + (1 - PFILL_ASKREACH_FLOOR) * frac);
+  const base = clamp01(PFILL_ASKREACH_FLOOR + (1 - PFILL_ASKREACH_FLOOR) * frac);
+  const r = clamp01(num(relief) ?? 0);
+  return r > 0 ? clamp01(base + r * (1 - base)) : base;
 }
 
 /* --- asymmetric fill-shape estimate (PART II, PLAN-GRADE-REACH §II.1 — deep-buy / reliable-sell) ---
@@ -320,7 +384,10 @@ export function fmtTtf(sec) {
        DISCOVERY screen (screen.mjs band/churn/value) NEVER passes it — a bare candidate is a buy read,
        not a held lot; anchoring it would inflate its Est. sell/net off a plan that doesn't apply.
      • else the band top DISCOUNTED BY REACH so a mirage exit collapses toward the live instabuy, blended
-       with the diurnal peak ask + the asymPair high-reach ask.
+       with the diurnal peak ask + the asymPair high-reach ask. PLAN-LIQUIDITY-REACH (2026-07-13): the
+       fold is liquidity/size-CONDITIONED — reachRelief softens it (and de-biases the top toward the
+       observed 24h high, extra.dayHigh) ONLY on a liquid book with a small position÷flow ratio; a thin
+       book keeps the FULL discount byte-identically (the mirage guard is the mechanism's reason to exist).
      • BE-FLOORED always (never < breakEven — the ONE model-free honesty anchor; the floor binding IS the
        estimate saying "no trade").
 
@@ -393,6 +460,11 @@ function reachRead(r) {
      diurnal   { bid, ask }        deriveDiurnalRange's dip/peak-window levels
      asym      { highReachAsk }    asymPair's near-certain exit level (deepBid is NEVER consumed — rev3)
      declaredExit  number|null     the lot's declared thesis exit (hold-thesis.json) — anchors estSell
+     dayHigh   number|null         PLAN-LIQUIDITY-REACH Part B: the observed trailing-24h high (the
+                                   caller's dayHighFrom5m over its in-hand 5m series — the least-smoothed
+                                   high the wiki exposes). With a positive liquidity/size relief the SELL
+                                   top reference widens toward it (never above it); thin book / large
+                                   size / absent → the band top stands byte-identically.
    nudge: optional (side, price) → { price }|null — the ⚓ anchor round-number nudge (pipeline passes
    modules/anchor.mjs anchorNudge; injected so this module stays pure/app-importable). Final pricing step.
    `spec` drives the per-strategy entry doctrine (rev2). Returns null when there is no live pair. */
@@ -417,18 +489,39 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
     estBuy = Math.round(bCands.reduce((s, x) => s + x, 0) / bCands.length);
   }
   // --- SELL: declared-exit-anchored (thesis-aware, rev2) OR reach-folded band top ---
+  // PLAN-LIQUIDITY-REACH (2026-07-13, ASK side only): on a LIQUID book where the position is small vs
+  // flow (reachRelief > 0 — intendedUnits = the buy limit, the per-surface PLACEHOLDER proxy):
+  //   Part A — the reach fold SOFTENS toward 1 (fold' = fold + relief×(1−fold)): depth clears a small
+  //     position at the top more readily than raw reach-frequency implies.
+  //   Part B — the top REFERENCE de-biases from the smoothed band top toward extra.dayHigh (the observed
+  //     trailing-24h 5m-bucket max — avgHighPrice averaging hides the peaks a resting LIMIT ask fills
+  //     at), by REACH_DEBIAS_MAX_FRAC×relief of the gap, NEVER above dayHigh (the real ceiling).
+  // THE MIRAGE GUARD IS UNTOUCHED: a thin book / large size / absent inputs ⇒ relief 0 ⇒ this whole
+  // block is byte-identical to the flat fold (the Ancient-godsword protection). PLACEHOLDERS, n=1.
+  const relief = reachRelief({ intendedUnits: num(row.limit), volDay: num(row.volDay) });
+  const sizeRatio = (num(row.limit) != null && num(row.volDay) > 0) ? row.limit / row.volDay : null;
+  const bandTop = Math.max(os, qs);
+  const dayHi = num(extra.dayHigh);
+  const topRef = (relief > 0 && dayHi != null && dayHi > bandTop)
+    ? Math.min(dayHi, Math.round(bandTop + REACH_DEBIAS_MAX_FRAC * relief * (dayHi - bandTop)))
+    : bandTop;
   const declared = num(extra.declaredExit);
-  let estSell, declaredAnchored = false;
+  let estSell, declaredAnchored = false, reliefApplied = null;
   if (declared != null && declared > 0) {
     estSell = declared;          // the operator's stated target governs — NOT ceiling-clamped to the band
     declaredAnchored = true;
   } else {
-    const sCands = [Math.round(qs + (os - qs) * fold(askR ? askR.frac : null))];
+    const f0 = fold(askR ? askR.frac : null);
+    const fR = relief > 0 ? f0 + relief * (1 - f0) : f0;
+    const sCands = [Math.round(qs + (topRef - qs) * fR)];
     const dAsk = extra.diurnal ? num(extra.diurnal.ask) : null;
-    if (dAsk != null) sCands.push(Math.round(clamp(dAsk, qs, Math.max(os, qs))));
+    if (dAsk != null) sCands.push(Math.round(clamp(dAsk, qs, bandTop)));
     const aAsk = extra.asym ? num(extra.asym.highReachAsk) : null;
-    if (aAsk != null) sCands.push(Math.round(clamp(aAsk, qs, Math.max(os, qs))));
+    if (aAsk != null) sCands.push(Math.round(clamp(aAsk, qs, bandTop)));
     estSell = Math.round(sCands.reduce((s, x) => s + x, 0) / sCands.length);
+    // surface the relief only when it had an EFFECT (a softened fold or a de-biased top) — lean discipline.
+    if (relief > 0 && ((askR && f0 < 1) || topRef > bandTop))
+      reliefApplied = { relief, sizeRatio, debiasedTop: topRef > bandTop ? topRef : null };
   }
   // ⚓ anchor nudge (final step — nudge, never override), then re-clamp.
   if (typeof nudge === 'function') {
@@ -437,7 +530,9 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
   }
   estBuy = Math.round(clamp(estBuy, Math.min(ob, qb), qb));
   // a declared exit is floored to live (never below the live instabuy), but not ceiling-clamped to the band.
-  estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, Math.max(os, qs)));
+  // topRef == bandTop unless the liquidity/size relief de-biased it (Part B) — the ceiling is then the
+  // observed 24h high (dayHigh), never anything above what actually printed.
+  estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, topRef));
   // BE floor — MODEL-FREE and applied LAST: never emit estSell < breakEven(estBuy). The floor binding
   // is the estimate self-reporting "no profitable trade at model prices" (estNet collapses to ~0).
   const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
@@ -450,6 +545,9 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
     bid: buyReach ? { rec: buyReach.rec, full: buyReach.full, diverges: buyReach.diverges } : null,
     ask: (!declaredAnchored && askR) ? { rec: askR.rec, full: askR.full, diverges: askR.diverges } : null,
     beFloored, declaredAnchored, doctrine,
+    // PLAN-LIQUIDITY-REACH: non-null ONLY when the relief changed the sell estimate (softened fold or
+    // de-biased top) — { relief, sizeRatio, debiasedTop|null }. Feeds the stdout note + the lean shadow.
+    relief: reliefApplied,
   };
   return { estBuy, estSell, estNet, estRoi, be, confidence };
 }
@@ -498,5 +596,12 @@ export function estConfLean(est) {
   if (c.declaredAnchored) o.declaredAnchored = true;
   if (c.beFloored) o.beFloored = true;
   if (c.doctrine && c.doctrine !== 'reach-fold') o.doctrine = c.doctrine;
+  // PLAN-LIQUIDITY-REACH shadow (F1 retro-join: did the relaxed top actually fill?) — present only when
+  // the relief changed the estimate (the YS2 absent-field pattern; normal rows stay byte-identical).
+  if (c.relief) {
+    o.reachRelief = Math.round(c.relief.relief * 100) / 100;
+    if (c.relief.sizeRatio != null) o.sizeRatio = Math.round(c.relief.sizeRatio * 10000) / 10000;
+    if (c.relief.debiasedTop != null) o.debiasedTop = c.relief.debiasedTop;
+  }
   return Object.keys(o).length ? o : null;
 }

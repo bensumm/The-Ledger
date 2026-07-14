@@ -92,9 +92,23 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
       Ancient-godsword 2/14 mirage-exit protection is the mechanism's reason to exist; pinned by the
       gating fixture in `pipeline/estimators.test.mjs`). Est-view + stdout `reach-relief` notes only:
       the rank/grade Proposal-A/B discounts and `reachValidator`'s computation are unchanged (promoting
-      relief into the rank/letter is F1-gated); every `REACH_RELIEF_*`/`REACH_DEBIAS_MAX_FRAC` constant
-      is a PLACEHOLDER (n=1, the soul-rune anchor), and the `reachRelief`/`sizeRatio`/`debiasedTop`
-      shadow fields ride `estConfidence` on `suggestions.jsonl` for the F1 retro-join.
+      relief into the rank/letter is F1-gated). **NOW LIVE ON THE SCREEN SURFACE (PLAN-VOL24, 2026-07-13):**
+      before the rolling-24h correction the broken `/24h` deflated a real 1.5m/d book to ~65k so relief was
+      effectively INERT; with `--vol-source rolling` the default, `reachRelief` finally reads TRUE volume and
+      fires. The thresholds were RE-CHECKED against the corrected two-sided volDay distribution (p50 146 · p90
+      62k · p95 250k · max ~19m) and KEPT intentional (NOT an artifact of the old deflated calibration):
+      `REACH_RELIEF_MIN_VOL` 100k (≈ p92 — cleanly above the mid-liquidity mass so relief fires only for the
+      genuinely-liquid top ~7%, and robustly above any mirage-class thin book) and `REACH_RELIEF_FULL_VOL` 1m
+      (≈ p97 — a graduated ramp across the liquid tail; the soul-rune anchor at ~10m TRUE sits fully saturated,
+      the pinned `reachRelief(25k,5m)=REACH_RELIEF_MAX` fixture). The dimensionless size gate (`SIZE_FULL` 0.02
+      / `SIZE_ZERO` 0.10) is unchanged and correctly makes a normal buy-limit position ≪ corrected flow (size
+      factor ~1) while a genuinely large position (≥10% of flow) still gets relief 0 — verified live (Dragon
+      arrow 2.03m/d @ 0.5% of flow → 75% softening; Opal bolts 115k/d @ 9.5% of flow → 0%, size governs).
+      NOTE — `quote.mjs`'s per-item read still consumes the BROKEN `/24h` volume (the deferred vol24 quote/watch
+      fix), so reach-relief there fires off deflated numbers until that lands; the SCREEN surface is corrected.
+      Still labeled PLACEHOLDER (n=1, the soul-rune anchor); F1 owns the magnitudes, and the
+      `reachRelief`/`sizeRatio`/`debiasedTop` shadow fields ride `estConfidence` on `suggestions.jsonl` for the
+      F1 retro-join.
     - **Confidence** rides IN the price cells as the **RECENT-3 reach** (`0/3`, `recencySplit`), the
       freshness-honest signal AND the fold basis; the full window shows BESIDE it only on divergence
       (`0/3 · 12/14` = stale); `–` = no read.
