@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.49
+version: 1.50
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
 ---
 
@@ -230,7 +230,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   CONFIRMATION on the handful you actually pitch, not the primary detector (a `would reject`/`would caution`
   note is the screen telling you what a stricter thesis would have done). Still verify by hand before
   quoting a profit — the notes are inform-only and thresholds are placeholders.
-- **The DIURNAL TIMING block auto-derives the peak-timing bid/ask (2026-07-09) — READ IT.**
+- **The DIURNAL TIMING block auto-derives the peak-timing bid/ask (2026-07-09) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR PRICING below.**
   _(enforced: `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`, `pipeline/screen.mjs` Diurnal timing block)_
   After the reach notes, `screen.mjs` prints a `Diurnal timing` line per surfaced pick (FREE — off the
   in-hand 1h series): `BID <x> (basis, dip HH–HH) · ASK <y> (peak HH–HH) · ~net/u (roi%)`, with `⚠
@@ -244,7 +244,31 @@ This is the tribal layer the script can't do — apply ALL of these:
   are placeholders, and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we
   hiding winners?") is a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet
   surface the excluded universe.
-- **Asymmetric ask-reach read — the verification gate (2026-07-07, method).** _(judgment: method; tool `pipeline/windowrange.mjs`)_ The screen's ROI is
+- **WINDOW-CLEAR PRICING — the canonical peak-timing step (Ben 2026-07-14; encodes memory
+  `peak-timing-default-for-pricing`).** _(judgment: the pricing method every churn/scalp bid+ask routes through; the reach/diurnal/asym reads below are its INPUTS)_
+  A churn/scalp lap is a WITHIN-WINDOW round trip — buy the tranche, sell it inside the same 4h
+  buy-limit window OR inside the diurnal spike window the ask targets. So **"reaches N/M DAYS" is the
+  daily GATE; whether the price prints INSIDE your target window is the FILL** — a level can reach
+  12/14 days yet only print in a 2h nightly spike that's already behind you today, at volume that clears
+  a tenth of your tranche (the days-reach ≠ lap-clear trap). Price every pick in three moves:
+  1. **Name the exit WINDOW.** *4h-lap* (ask at/just under the live instabuy → clears this window, the
+     churn default) OR *diurnal-spike* (ask at the peak-window level from the **Diurnal timing** block /
+     `windowrange.mjs --profile` → clears in that window, better margin if you can wait). State which.
+  2. **Quote the reachable-IN-WINDOW ask** (RC1 recency-honest; the Asymmetric ask-reach read below
+     verifies it) — NEVER the raw band top.
+  3. **BACK-SOLVE the buy from that ask** — bid ≤ the price that leaves break-even + your target margin
+     UNDER the reachable exit (tax-exact via the shared `breakEven()`; a `maxBuyForExit` helper is a
+     coming fast-follow — do it by hand for now). The buy is priced BACKWARD from the exit, not forward
+     from the band low.
+  4. **Project TODAY** — is the window ahead or already printed? (`diurnalForecast` eta / the Hydra
+     stale-window rule). A spike window behind you today means price the 4h-lap exit or wait for the next.
+  Anchor (2026-07-14, anglerfish): bought 2,735, but to clear the volume you EITHER hold the ask for the
+  14:00–17:00 spike (~2,899, prints 3/3 recent) OR clear-in-4h just under live instabuy (~2,815); the
+  next rebuy back-solves to ~2,710 (BE ~2,760) so both exits carry real margin. This is the ONE home for
+  the peak-timing pricing method — the reach/diurnal/asym reads below FEED it; `/positions` points here
+  for the sell-side (step-down) voice. (The mechanical within-window clear-rate + `maxBuyForExit` are
+  `PLAN-WINDOW-CLEAR.md` Part B, not yet built — this is the judgment form.)
+- **Asymmetric ask-reach read — the verification gate (2026-07-07, method) — an INPUT to WINDOW-CLEAR PRICING above.** _(judgment: method; tool `pipeline/windowrange.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
   pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the
   doctrine already requires and read it two ways: **band-top ask reached ~0/7 days = artifact, SKIP**
