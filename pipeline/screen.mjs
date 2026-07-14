@@ -75,9 +75,9 @@ import { hourProfile, deriveDiurnalRange, windowStats, asymPair } from '../js/wi
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS } from './lib/estimators.mjs';
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series
 import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
-import { loadMapping, loadGuide, loadAll24h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
+import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/risingPoolFloor/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
@@ -242,6 +242,17 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
 // gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
 const ASYM = A.asym === true;
+// --- PLAN-VOL24 (2026-07-13): --vol-source legacy|rolling. The wiki /24h endpoint is BROKEN (it serves a
+// frozen ~1–3h slice of a stale UTC day, under-reporting the true rolling 24h ~10–27× — see PLAN-VOL24.md).
+// A corrected trailing-24h source composed from the /1h grain (loadAll24hRolling) is available BUT
+// SHADOW-only: the DEFAULT `legacy` keeps the /24h value as the ACTIVE volDay behind every gate/rank/column
+// (byte-identical screen.json + goldens; ZERO extra fetch — loadAll24hRolling is not called). `rolling` is
+// the VALIDATION LEVER for the floor recalibration (step 2): it swaps in the corrected whole-market map
+// (24 bulk /1h windows, mostly warm from the SQLite archive). Every published row ALSO logs the corrected
+// per-item volume as the lean shadow `volDayRolling` regardless of this flag (computed from the in-hand 1h
+// series → no new fetch), so the real distribution accrues while gates stay put.
+const VOL_SOURCE = A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : 'legacy';
+if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use legacy (default) or rolling.`); process.exit(1); }
 // --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells
 // (js/estimators.mjs estimatePair — reach-folded, BE-floored, PLACEHOLDER model n≈14). `--raw`
@@ -256,7 +267,7 @@ const RAW = A.raw === true || ASYM;
 // day-level deep-low/high-reach read, distinct from reachValidator's coming-8h window) over ~14 nights.
 const ASYM_NIGHTS = 14;
 // snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
-const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE };
+const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE, volSource: VOL_SOURCE };
 
 const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/value (Ben 2026-07-10 added value); scalp explicit-only
 const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
@@ -302,6 +313,14 @@ function estFields(er) {
     pFill: round2(er.pFill.value), ttfSec: er.ttf.value, rank: Math.round(er.rank),
     estBasis: `${er.pFill.basis}/${er.ttf.basis}`, estN: Math.min(er.pFill.n, er.ttf.n),
   };
+}
+
+// PLAN-VOL24 shadow: the CORRECTED trailing-24h volume {hpv,lpv} for one surfaced row, composed from its
+// ALREADY-FETCHED 1h series (series1h map) → ZERO new fetch. Logged beside the active legacy volDay for the
+// floor-recalibration retro-join. Null (→ lean-omitted) when no 1h series is in hand.
+function rollShadow(series1h, id) {
+  const rr = rolling24FromTs1h(series1h && series1h.get(id));
+  return rr ? { hpv: rr.highPriceVolume, lpv: rr.lowPriceVolume } : null;
 }
 
 // grade-distribution footer, in GRADE_CUTOFFS (best→worst) order, present grades only
@@ -498,11 +517,22 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // (a held-lot plan) must not inflate its Est. sell/net. Declared-exit anchoring lives ONLY on the
     // held-lot surfaces (quote.mjs --positions/watch.mjs verdict frame, and quote.mjs per-item ONLY when
     // that id is actually held). So no declaredExit is passed here.
+    // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the SAME in-hand 5m
+    // series (zero new fetch) — Part B's de-bias reference. estimatePair applies it (and the Part-A fold
+    // softening) ONLY when reachRelief > 0 (liquid book, small limit÷flow); a thin book is byte-identical.
     const est = estimatePair(STRATEGIES[mode], row, {
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: asymRead,
+      dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
     }, { nudge: anchorNudge });
+    // PLAN-LIQUIDITY-REACH stdout note (inform-only — never a gate/drop/grade/screen.json input): when
+    // the liquidity/size relief changed the Est. sell, say so beside the reach note it counterweights,
+    // instead of letting the raw reach caution discourage a viable top ask on a liquid small-size book.
+    if (est && est.confidence.relief) {
+      const rl = est.confidence.relief;
+      informNotes.push(`${name}: reach-relief — liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)`);
+    }
     // --asym (F1-GATED, off by default): the asym pair BECOMES the quoted prices — a repriced CLONE
     // (ordering guards already applied by asymEstimate; qcache and the raw momentum tell untouched).
     if (ASYM && asymEr) row = { ...row, optBuy: asymEr.bid, optSell: asymEr.ask, optNet: asymEr.net };
@@ -618,7 +648,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       // PART II shadow field: the asymmetric estimate BESIDE the symmetric rank (same row → the F1 A/B join)
       asym: r.asymEr ? { bid: r.asymEr.bid, ask: r.asymEr.ask, pAsk: round2(r.asymEr.pAsk), pBid: round2(r.asymEr.pBid), n: r.asymEr.nDays, rank: Math.round(r.asymEr.rank) } : null,
       // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
-      estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est) })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
+      estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est),
+      // PLAN-VOL24 shadow: the corrected /1h-composed trailing-24h volume beside the active (broken) /24h volDay
+      volDayRolling: rollShadow(series1h, r.id) })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -881,7 +913,8 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vttf = ESTIMATORS.value.ttf({ valueRanges: vr });
     const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
     sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: bulk /24h volume
-      bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n) }));
+      bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n),
+      volDayRolling: rollShadow(series1h, s.id) }));   // PLAN-VOL24 shadow: corrected /1h-composed 24h volume
   }
   buyNow.sort((a, b) => b.score - a.score); watch.sort((a, b) => b.score - a.score);
   // §E — value picks are logged in ISOLATION (mode 'value'); they never touch the fast-flip ledger rows.
@@ -1063,7 +1096,13 @@ async function main() {
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
   const map = await loadMapping();
-  const [v24, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
+  const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
+  // PLAN-VOL24: DEFAULT `legacy` keeps the (broken) /24h map as the ACTIVE volume behind every gate/rank/
+  // column → byte-identical output + ZERO extra fetch (loadAll24hRolling is NOT called). `--vol-source
+  // rolling` swaps in the corrected whole-market trailing-24h map (24 bulk /1h windows, mostly warm from
+  // the archive) — the validation lever for the floor recalibration; it is NOT the default until the floors
+  // are re-tuned against the true distribution (step 2).
+  const v24 = VOL_SOURCE === 'rolling' ? await loadAll24hRolling() : v24legacy;
 
   // Value --capital default = the DERIVED deployablePool (lib/cashderive.mjs). Re-derive it here WITH a
   // marketRef built from the bulk /latest already in hand (ZERO extra fetch): each resting bid classifies

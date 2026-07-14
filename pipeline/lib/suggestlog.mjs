@@ -35,6 +35,10 @@
  *               doctrine? } — recent-3 (RC1) AND full-window reach counts, the entry doctrine, and the
  *               declared/BE flags; the F1 join scores estSell against the realized sell. Lean-included;
  *               PLACEHOLDER model n≈3–14.)
+ *     volDayRolling?,  (PLAN-VOL24 2026-07-13 — the CORRECTED trailing-24h volume {hpv,lpv} from the
+ *               /1h grain (the broken /24h endpoint serves a frozen stale ~1–3h slice); logged BESIDE
+ *               the active legacy volDay/class for the floor-recalibration retro-join. Lean-included;
+ *               absent when no 1h series was in hand — e.g. watchlist rows.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch.mjs uses for action verdicts); lean-included, screen supplies
@@ -211,7 +215,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -275,6 +279,14 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // computes a grade, so it's a caller param (quote/watch never supply it). Lean-included (YS2 pattern):
   // absent on every pre-field row and on grade-less scripts — consumers treat absent as unknown.
   if (grade != null)         e.grade = grade;
+  // PLAN-VOL24 (2026-07-13) — the CORRECTED trailing-24h volume { hpv, lpv } composed from the /1h
+  // grain (marketfetch.rolling24FromTs1h, off an already-fetched 1h series → zero new fetch), logged
+  // BESIDE the ACTIVE legacy `volDay`/`class` (which still come from the broken /24h endpoint until the
+  // floors are recalibrated — PLAN-VOL24 step 2). This is the "start collecting real numbers" shadow:
+  // F1/the recalibration read the true distribution from here without any live gate/display flipping.
+  // Lean-included (YS2 pattern): a caller with no 1h series in hand (watchlist rows) supplies null →
+  // no field → byte-identical shape.
+  if (volDayRolling != null) e.volDayRolling = volDayRolling;
   // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/analyze.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid

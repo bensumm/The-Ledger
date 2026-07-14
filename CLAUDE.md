@@ -81,6 +81,20 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
       candidate is a buy read, not a held lot; a declared SELL plan must not inflate its net); anchoring
       lives on the held-lot surfaces (`quote --positions`/watch verdict frame, and `quote <item>` only when
       that id is actually held).
+      **The ask-reach fold is LIQUIDITY/SIZE-CONDITIONED (PLAN-LIQUIDITY-REACH, Ben 2026-07-13):** reach
+      measures how often a price prints, not how much of YOUR stock clears when it does — so on a LIQUID
+      book where the position is small vs flow (`reachRelief`, `js/estimators.mjs`: buy limit ÷
+      limiting-side vol/d, with an absolute-volume floor) the fold SOFTENS toward 1 and the sell top
+      reference DE-BIASES toward the observed 24h high (`dayHighFrom5m` — the trailing-24h 5m-bucket max;
+      the wiki exposes NO raw-tick period max, and `avgHighPrice` averages away the peaks a resting LIMIT
+      ask fills at), NEVER above it. **The LOW-liquidity / thin-big-ticket mirage discount is UNTOUCHED,
+      byte-for-byte** — a thin book or a large `size/volume` computes relief EXACTLY 0 (the
+      Ancient-godsword 2/14 mirage-exit protection is the mechanism's reason to exist; pinned by the
+      gating fixture in `pipeline/estimators.test.mjs`). Est-view + stdout `reach-relief` notes only:
+      the rank/grade Proposal-A/B discounts and `reachValidator`'s computation are unchanged (promoting
+      relief into the rank/letter is F1-gated); every `REACH_RELIEF_*`/`REACH_DEBIAS_MAX_FRAC` constant
+      is a PLACEHOLDER (n=1, the soul-rune anchor), and the `reachRelief`/`sizeRatio`/`debiasedTop`
+      shadow fields ride `estConfidence` on `suggestions.jsonl` for the F1 retro-join.
     - **Confidence** rides IN the price cells as the **RECENT-3 reach** (`0/3`, `recencySplit`), the
       freshness-honest signal AND the fold basis; the full window shows BESIDE it only on divergence
       (`0/3 · 12/14` = stale); `–` = no read.
@@ -100,7 +114,18 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   comparison, strength-graded: `–` · `↑`/`↓` (amber) · `↑↑`/`↓↓` (≥ `MOM_STRONG_PCT`, green/red). It
   drives the position cut-trigger via `momVerdict`; deliberately NOT wired into the bulk Finder rating.
 - Guide = real GE guide price, NEVER the wiki mapping `value` field (that's base/alch value).
-- Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)` from the 24h endpoint.
+- Vol/d = limiting side, `min(highPriceVolume, lowPriceVolume)`. **The wiki `/24h` endpoint is BROKEN as a
+  trailing-24h source (investigated 2026-07-13, `PLAN-VOL24.md`): it serves a FROZEN ~1–3h slice of a STALE
+  UTC day (its `timestamp` lags ~26h), under-reporting the true rolling 24h by ~10–27× — worst in early/mid-
+  UTC hours (Ben's US-afternoon sessions).** A CORRECTED trailing-24h source composed from the healthy `/1h`
+  grain exists (`marketfetch.mjs` `loadAll24hRolling` / `rolling24FromTs1h`, proven exact); it is **SHADOW-
+  only** — `screen.mjs --vol-source rolling` opts it in, but the DEFAULT `legacy` still gates/displays off the
+  broken `/24h` value pending the floor recalibration (`PLAN-VOL24.md` steps 2/3), so every volume-denominated
+  floor is currently calibrated against deflated numbers. Every screen row also logs the corrected volume as a
+  lean `volDayRolling` on `suggestions.jsonl` (the recalibration dataset). SIDE-CASUALTY: the `pressure`
+  ratio and the `/24h` `avgHigh`/`avgLow` (gatecandidates' `mid`, the dip "24h avg low" reference) come from
+  the same frozen bucket — treat them as ~26h-stale 1–3h samples too. The browser app (`js/marketfetch.js`)
+  is NOT yet fixed (deferred, APP_VERSION-bumping — step 3).
 - **Liquidity gate (S1):** two-sided (`hpv>0 && lpv>0`, the non-negotiable ghost-spread lesson) AND
   `limitVol ≥ --floor` **OR** gp-flow `limitVol×mid ≥ --gp-floor` (250m). The gp-flow path admits big
   tickets, flagged `thin`, grade-capped **A-** (`THIN_GRADE_CAP`), bounded to `--thin-reserve`. Full
@@ -182,6 +207,10 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   render-stage in `screen.mjs` (the app Finder passes no `askReach` → byte-identical → no `APP_VERSION` bump;
   replay goldens unaffected). PLACEHOLDER constants (n≈14), F1/retro-join calibrates the magnitudes;
   promoting `reach` inform→gate (Proposal C) is HELD for F1. This is Proposals A+B of `PLAN-GRADE-REACH.md`.
+  (`askReachFactor` also accepts an optional `reachRelief` arg — PLAN-LIQUIDITY-REACH's liquidity/size
+  softening, see the Est. sell bullet above — but the RANK/GRADE path deliberately does NOT pass it:
+  wiring relief into the published rank/letter is F1-gated, so the rank discount and `REACH_GRADE_CAP`
+  behave exactly as specified here.)
   **CHURN IS EXEMPT from both** (Part II, Ben 2026-07-12 — `spec.fillShape:'symmetric'`, `js/strategies.mjs`):
   a lap exit sells into continuous two-sided flow near a tight band top, so the day-high reach read
   mismeasures it; the discount + cap apply only to `fillShape:'asym'` niches (band/scalp).

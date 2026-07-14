@@ -236,6 +236,86 @@ export async function loadAllLatest() {
   writeCache('latest.json', d); return d;
 }
 
+/* --- Rolling-24h volume (PLAN-VOL24, 2026-07-13) --------------------------------------------
+   The wiki /24h endpoint is BROKEN as a trailing-24h source: it serves a FROZEN ~1–3h slice of a
+   STALE UTC day (its top-level `timestamp` field lagged ~26h at investigation; the served hpv/lpv
+   matched EXACTLY the first 1–3 hours of that UTC day, under-reporting the true rolling 24h by
+   ~10–27× — worst in early/mid-UTC hours, i.e. Ben's US-afternoon sessions). Full evidence:
+   PLAN-VOL24.md. The /5m, /1h, /6h grains are healthy; only the 24h aggregation is broken. These
+   composers reconstruct the TRUE trailing-24h volume from the /1h grain:
+     • rolling24FromTs1h — sums an ALREADY-FETCHED per-item /timeseries?1h (ZERO new fetch on a row
+       whose 1h series is in hand: screen survivors, quote COD-4).
+     • loadAll24hRolling — walks the last 24 complete /1h?timestamp bulk windows (the loadDaily/
+       loadBands grid-aligned pattern), REUSING the Tier-1 SQLite 1h archive (check-before-fetch, so a
+       warm machine fetches only the gaps loadSnapshot/loadDaily didn't accrue).
+   Both were proven EXACT vs a per-item timeseries sum (10/10 items, hpv AND lpv, 2026-07-13). The
+   emitted per-id shape MATCHES loadAll24h's entry — {highPriceVolume,lowPriceVolume,avgHighPrice,
+   avgLowPrice} — so a caller can swap sources with no shape change; the avg prices are volume-weighted
+   24h means of the hourly avgs (a real VWAP, unlike /24h's single averaged number). SHADOW/opt-in for
+   now: screen.mjs --vol-source rolling opts loadAll24hRolling in; the DEFAULT legacy path never calls
+   it, so nothing changes live and no extra fetch is added, pending the floor recalibration (step 2). */
+export const ROLL24_HOURS = 24;
+// last COMPLETE 1h bucket start (unix sec); the trailing-24h window is [anchor-23h, anchor].
+function lastCompleteHour(now = Date.now()) { return Math.floor(now / 1000 / 3600) * 3600 - 3600; }
+// volume-weighted mean of [[avgPrice, vol], …] (skips null price / zero-vol pairs); null if no volume.
+function vwap(pairs) {
+  let num = 0, den = 0;
+  for (const [p, v] of pairs) { if (p == null || !(v > 0)) continue; num += p * v; den += v; }
+  return den > 0 ? Math.round(num / den) : null;
+}
+export function rolling24FromTs1h(ts1h, now = Date.now()) {
+  if (!Array.isArray(ts1h) || !ts1h.length) return null;
+  const anchor = lastCompleteHour(now);
+  const from = anchor - (ROLL24_HOURS - 1) * 3600;
+  let hpv = 0, lpv = 0; const hi = [], lo = [];
+  for (const p of ts1h) {
+    if (!p || !(p.timestamp >= from) || p.timestamp > anchor) continue;
+    hpv += p.highPriceVolume || 0; lpv += p.lowPriceVolume || 0;
+    hi.push([p.avgHighPrice, p.highPriceVolume || 0]); lo.push([p.avgLowPrice, p.lowPriceVolume || 0]);
+  }
+  return { highPriceVolume: hpv, lowPriceVolume: lpv, avgHighPrice: vwap(hi), avgLowPrice: vwap(lo) };
+}
+export async function loadAll24hRolling({ db } = {}) {
+  const cached = readCache('all24h-rolling.json', ALL24H_TTL);
+  if (cached) return cached;
+  const archive = db || openArchive();
+  const ownArchive = !db;
+  try {
+    const anchor = lastCompleteHour();
+    const windows = []; for (let i = 0; i < ROLL24_HOURS; i++) windows.push(anchor - i * 3600);
+    // backfill only the /1h buckets the archive lacks (bulk fetch each once, append RAW — idempotent PK)
+    for (const w of windows) {
+      if (archive.hasBucket('1h', w)) continue;
+      let resp = null;
+      try { resp = await jget(API + '/1h?timestamp=' + w); } catch { resp = null; }
+      await sleep(70);
+      if (!resp || !resp.data) continue;
+      const bts = Number.isFinite(resp.timestamp) ? resp.timestamp : w;   // grid-aligned ⇒ bts === w
+      try { archive.append('1h', bts, resp.data); } catch {}
+    }
+    // aggregate per item across the 24 windows from the archive (raw obs)
+    const acc = {};                                            // id -> {hpv,lpv, hi:[[p,v]], lo:[[p,v]]}
+    for (const w of windows) {
+      const snap = archive.marketAt('1h', w);
+      for (const id in snap) {
+        const e = snap[id]; if (!e) continue;
+        const a = acc[id] || (acc[id] = { hpv: 0, lpv: 0, hi: [], lo: [] });
+        a.hpv += e.highPriceVolume || 0; a.lpv += e.lowPriceVolume || 0;
+        a.hi.push([e.avgHighPrice, e.highPriceVolume || 0]); a.lo.push([e.avgLowPrice, e.lowPriceVolume || 0]);
+      }
+    }
+    const out = {};
+    for (const id in acc) {
+      const a = acc[id];
+      out[id] = { highPriceVolume: a.hpv, lowPriceVolume: a.lpv, avgHighPrice: vwap(a.hi), avgLowPrice: vwap(a.lo) };
+    }
+    writeCache('all24h-rolling.json', out);
+    return out;
+  } finally {
+    if (ownArchive) archive.close();
+  }
+}
+
 /* --- loadBands(hours): whole-market intraday band data for EVERY item, zero per-item
    timeseries calls (chunk 9.1). The wiki /5m endpoint is a bulk whole-market snapshot and
    accepts ?timestamp=<unix, divisible by 300> to fetch a past 5m window. We walk the last
