@@ -272,7 +272,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources. A row may also
   carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
   off the quoted ask — `{gap, gapPct, rawTop, topBucketVol, netLever, trusted}`, logged trusted AND
-  audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1.
+  audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A screen row also carries
+  the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
+  capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
+  capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the
+  blind value).
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

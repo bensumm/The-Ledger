@@ -138,8 +138,11 @@ const STATS = !!A.stats;
 // expect to fill as freely redeployable into a multi-week value hold). We fall back to the 100m
 // placeholder only when no anchor is set. The eager figure here has NO market reference (so a resting bid
 // classifies COMMITTED → deployablePool == availableCash, the conservative floor); main() RE-DERIVES it
-// with a marketRef built from the bulk /latest it fetches (zero extra fetch) so deep bids count — this is
-// only used inside main(), always after that re-derive, so the eager conservative value is never surfaced.
+// with a marketRef built from the bulk /latest it fetches (zero extra fetch) so deep bids count. The value
+// niche always reads the re-derived figure. NOTE (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the band/churn
+// THROUGHPUT_CAP_GP also reads VALUE_CAPITAL — after the re-derive when value runs, else this eager
+// CONSERVATIVE (no-marketRef) figure. That's intentional (a smaller pool binds the throughput cap a touch
+// harder = more conservative demotion); it is no longer true that the eager value is "never surfaced".
 const VALUE_CAPITAL_EXPLICIT = A.capital != null;
 let DERIVED_CASH = VALUE_CAPITAL_EXPLICIT ? null : loadDerivedCash();
 const VALUE_CAPITAL_DERIVED = !!(DERIVED_CASH && DERIVED_CASH.known);   // derived from the cash anchor (not a placeholder)
@@ -202,9 +205,15 @@ const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1
 // GC1: the CLI-derived thresholds gateCandidates consumes, grouped into ONE object so the gate stack
 // takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
+// PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): --throughput capital|legacy toggles the capital-aware
+// expGpDay (default capital). THROUGHPUT_CAP_GP is set from the DERIVED deployablePool after main()
+// re-derives the cash anchor (below); the build-time default is the pre-derive VALUE_CAPITAL (which is
+// itself the derived pool unless --capital was passed). 'legacy' or a null pool → capital-blind expGpDay.
+const THROUGHPUT_MODE = (A.throughput === 'legacy') ? 'legacy' : 'capital';
 const THRESHOLDS = {
   FLOOR, MIN_ROI, MIN_PRICE, MAX_PRICE, MIN_NET_GP, MIN_TRADED, MIN_TRADED_THIN, MIN_GPD, GP_FLOOR,
   RISE_MID_FLOOR, RISE_LIQUID_VOL, VALUE_CAP_GP,
+  THROUGHPUT_MODE, THROUGHPUT_CAP_GP: THROUGHPUT_MODE === 'legacy' ? null : VALUE_CAPITAL,
 };
 // --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
 //   active   (default) — current behavior.
@@ -628,7 +637,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -652,7 +661,10 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
       estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est),
       // PLAN-VOL24 shadow: the corrected /1h-composed trailing-24h volume beside the active (broken) /24h volDay
-      volDayRolling: rollShadow(series1h, r.id) })));   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
+      volDayRolling: rollShadow(series1h, r.id),   // SF-3: screen's volDay is bulk /24h (v24) → volSrc 'bulk'. AZ-forward: grade = the rendered letter (verdict keeps it too — legacy readers)
+      // PLAN-CAPITAL-THROUGHPUT shadow pair: the ACTIVE (capital-aware, default) expGpDay + the legacy
+      // capital-blind expGpDayLegacy, so --stats/analyze/F1 can diff old-vs-new surfacing on real rows.
+      expGpDay: r.expGpDay, expGpDayLegacy: r.expGpDayLegacy })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -1123,6 +1135,11 @@ async function main() {
     VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
     THRESHOLDS.VALUE_CAP_GP = VALUE_CAP_GP;   // gateCandidates/valueScore read the cap from THRESHOLDS
   }
+  // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): sync the band/churn capital cap to the current deployable
+  // pool (the market-ref-refined VALUE_CAPITAL if value ran above; else the conservative pre-derive pool,
+  // or the explicit --capital). The FULL pool, NOT ÷slots — the attention floor asks "if I put everything
+  // in this ONE lane…". Left null under --throughput legacy → gateCandidates uses the capital-blind value.
+  if (THROUGHPUT_MODE !== 'legacy') THRESHOLDS.THROUGHPUT_CAP_GP = VALUE_CAPITAL;
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
   const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure

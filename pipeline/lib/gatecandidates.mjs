@@ -72,6 +72,14 @@ export const DEFAULT_THRESHOLDS = {
   // across the positions we'd hold). This default (≈ 100m ÷ 5 slots) serves fixtures / import callers that
   // don't supply one. PLACEHOLDER (rule 4).
   VALUE_CAP_GP: 20_000_000,
+  // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14) — the band/churn expGpDay is now CAPITAL-AWARE. THROUGHPUT_CAP_GP
+  // is the FULL derived deployable pool (NOT ÷slots — unlike VALUE_CAP_GP): the attention floor asks "if I
+  // dedicate everything to this ONE lane, can it net MIN_GPD/day?"; if not, skip. THROUGHPUT_MODE 'capital'
+  // (default) applies the affordable-units cap in expUnits; 'legacy' restores the pre-change capital-blind
+  // value (escape hatch + the --stats old-vs-new repro). A null cap (no cash anchor / fixtures / import
+  // callers) degrades to legacy, so DEFAULT_THRESHOLDS is byte-identical to pre-change behavior. screen.mjs
+  // sets THROUGHPUT_CAP_GP from the derived deployablePool after it re-derives the anchor.
+  THROUGHPUT_MODE: 'capital', THROUGHPUT_CAP_GP: null,
 };
 // Default rank/slice sizing (screen.mjs's --thin-reserve / --top defaults).
 export const THIN_RESERVE_DEFAULT = 6;
@@ -92,7 +100,25 @@ export const SUBFLOOR_GRADE_CAP = 'C';
 
 // realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
 // of the limiting-side daily volume. Null limit → volume share only.
-export const expUnits = (limit, volDay) => { const vShare = 0.10 * (volDay || 0); return limit != null ? Math.min(limit * 6, vShare) : vShare; };
+// PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): optional PER-WINDOW capital cap — `capPerWindow` = units the
+// deployable bankroll affords in ONE 4h buy-window (deployablePool / price). It answers Ben's "for THIS
+// price, how many can I realistically capture" — the old two caps measured MARKET capacity (limit +
+// volume share), capital-blind. The cap enters INSIDE the ×6 (not as a separate whole-day cap) because
+// churn RECYCLES intra-day: you deploy a tranche, it sells within the window, and the freed capital
+// rebuys next window — so the binding question is "can I afford ONE buy-limit tranche?", not "can I
+// afford a whole day's accumulation at once?". (A whole-day/turns=1 cap wrongly HID fast churn Ben trades
+// — anglerfish/sanfew — because it under-credited the intra-day recycle; per-window fixes that.)
+// SELF-TARGETING: when one tranche is affordable (min(limit, capPerWindow) == limit) the result is
+// byte-identical to legacy (soul rune, anglerfish, chins — never hidden). It binds ONLY where even a
+// single buy-limit tranche costs more than the pool — the genuinely capital-constrained big/expensive
+// positions, exactly the intended demotion. null capPerWindow → legacy (no capital term), so every
+// existing caller (overnight, watchlist, fixtures) is byte-for-byte unchanged.
+export const expUnits = (limit, volDay, capPerWindow = null) => {
+  const vShare = 0.10 * (volDay || 0);
+  if (capPerWindow == null) return limit != null ? Math.min(limit * 6, vShare) : vShare;   // legacy — byte-identical
+  const perWindow = limit != null ? Math.min(limit, capPerWindow) : capPerWindow;          // + per-window affordability
+  return Math.min(perWindow * 6, vShare);
+};
 // COD-2 (2026-07-10) — realistic expected units accumulated over the OVERNIGHT window (the /overnight
 // §6 accumulation sizing, previously hand-computed in the skill as min(buyLimit×2, 8/24×0.10×volDay)
 // with a PROSE plea to "keep the constants aligned with expUnits"). This IS that formula, but derived
@@ -162,11 +188,23 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
     if (!edge) continue;
     const { modeNet, activeWin } = edge;
     if (modeNet <= 0) continue;
-    const expGpDay = Math.round(expUnits(limit, limitVol) * modeNet);
+    // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): expGpDay is CAPITAL-AWARE — the PER-WINDOW buy is capped by
+    // what the deployable bankroll affords one tranche of at this price (capPerWindow = pool / mid; mid is
+    // the gp-flow price proxy this gate already uses at line ~155). THROUGHPUT_MODE 'legacy' or a null cap
+    // restores the capital-blind value. expGpDayLegacy is carried on the candidate so screen.mjs can log it
+    // as a shadow field (suggestions.jsonl) → --stats/F1 diff old-vs-new surfacing. THIN gp-flow big tickets
+    // stay EXEMPT from the floor (unchanged — they ride the thin reserve; folding capital into the thin path
+    // is a documented follow-up in PLAN-CAPITAL-THROUGHPUT).
+    // A null/absent OR ≤0 pool degrades to capital-blind legacy (a 0 pool is a failed/empty cash anchor —
+    // degrade to legacy rather than nuke the whole screen to expGpDay 0; the `&&` truthiness handles both).
+    const capPerWindow = (t.THROUGHPUT_MODE !== 'legacy' && t.THROUGHPUT_CAP_GP && mid > 0)
+      ? t.THROUGHPUT_CAP_GP / mid : null;
+    const expGpDay = Math.round(expUnits(limit, limitVol, capPerWindow) * modeNet);
+    const expGpDayLegacy = Math.round(expUnits(limit, limitVol) * modeNet);
     // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
     // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note).
     if (!thin && expGpDay < t.MIN_GPD) continue;
-    cand.push({ id, limitVol, mid, limit, expGpDay, activeWin, thin });
+    cand.push({ id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin });
   }
   return cand;
 }

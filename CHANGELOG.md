@@ -10,6 +10,28 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Capital-aware expGpDay — the band/churn attention floor + fetch-rank now respect your bankroll (2026-07-14, PLAN-CAPITAL-THROUGHPUT, pipeline-only — NO APP_VERSION)
+**Ben's ask:** "there's no way I'm cycling 90k anglerfish — for this price, how many can I realistically
+capture over the next day × profit." The discovery throughput `expGpDay` (the `MIN_GPD` attention floor +
+the fetch-pool order) was **capital-blind** — `expUnits = min(limit×6, 0.10×volDay)` measures MARKET
+capacity, so a cheap-but-your-full-limit-position-exceeds-your-bankroll lane over-reported throughput.
+Now `expUnits(limit, volDay, capPerWindow)` caps the PER-WINDOW buy by what the derived `deployablePool`
+(`lib/cashderive.mjs`) affords one tranche of: `min(limit, pool/mid) × 6`. The cap enters INSIDE the ×6
+(per-window) NOT as a whole-day cap, because churn RECYCLES intra-day — the binding question is "can I
+afford ONE buy-limit tranche?" (a whole-day `turns=1` cap wrongly hid fast churn — anglerfish/sanfew — in
+the first cut; per-window fixes it). **SELF-TARGETING:** byte-identical when one tranche is affordable
+(cheap/liquid churn — anglerfish, soul rune, chins — never hidden), binds ONLY where even one tranche >
+the pool (expensive/big positions; the thin big-tickets it bites are floor-EXEMPT, so it makes their rank
+NUMBER honest without gating them). `screen.mjs --throughput capital|legacy` (default capital); a null/≤0
+pool degrades to legacy. `expGpDay`/`expGpDayLegacy` log as a shadow pair on `suggestions.jsonl` for the
+F1 old-vs-new diff. **At a 77m pool it is a NO-OP on surfacing** (nothing crossed the 500k floor — only
+Osmumten's fang's rank number moved), so `MIN_GPD` stays 500k; it's a correct latent guard that activates
+at smaller capital / larger positions. Node-only (the app Finder passes no capital; `screen.json` publishes
+only `{id, cells}`) → replay goldens + `screen.json` byte-identical → **no APP_VERSION**. Pure gate stays
+fixture-drivable (null cap = legacy branch); pinned by the `gatecandidates.test.mjs` SLACK/BIND/legacy
+fixture. Architecture-reviewed PASS. The ÷slots variant was dropped (concurrency is owned by the
+positions-side opportunity-cost read, PLAN-CAPITAL-OPCOST).
+
 ### VN-3 — PARKED-at-break-even dead-band + coarse path weights (2026-07-11, PLAN-VERDICT-NOISE F2+F4, pipeline-only — NO APP_VERSION)
 **RC1 (the remaining flap after VN-1).** HOLD and UNDERWATER both deliberately rank severity 0 in the
 VN-1 persistence layer (so the mv-null token set stayed byte-identical), which left the BE-parked

@@ -215,7 +215,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -287,6 +287,12 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): a caller with no 1h series in hand (watchlist rows) supplies null →
   // no field → byte-identical shape.
   if (volDayRolling != null) e.volDayRolling = volDayRolling;
+  // PLAN-CAPITAL-THROUGHPUT (2026-07-14) — the ACTIVE capital-aware expGpDay + the LEGACY capital-blind
+  // expGpDayLegacy, logged as a shadow pair so a --stats/analyze read can diff old-vs-new surfacing on
+  // real rows before/after the default flip (the same rollout the volDayRolling shadow served for VOL24).
+  // Lean-included (YS2 pattern): a caller with no expGpDay (quote/watch/watchlist) → no field → byte-identical.
+  if (expGpDay != null)      e.expGpDay = expGpDay;
+  if (expGpDayLegacy != null) e.expGpDayLegacy = expGpDayLegacy;
   // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/analyze.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid

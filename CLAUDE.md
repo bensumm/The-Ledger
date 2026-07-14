@@ -187,6 +187,18 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     fixtures; full spec in the `robustBand` header.
 - **500k attention floor (S1):** `--min-gpd` (500k) drops sub-floor `expGpDay` pre-rating — Ben's
   "never surface sub-500k" rule. Thin gp-flow qualifiers and held/asked items exempt.
+  - **`expGpDay` is CAPITAL-AWARE (PLAN-CAPITAL-THROUGHPUT, Ben 2026-07-14).** `expUnits` (band/churn)
+    now caps the PER-WINDOW buy by what the derived `deployablePool` affords one tranche of at `mid`
+    (`min(limit, pool/mid) × 6`, `pipeline/lib/gatecandidates.mjs`), so the floor+fetch-rank measure
+    real capital throughput, not capital-blind market capacity (Ben's "there's no way I'm cycling 90k
+    anglerfish"). SELF-TARGETING: byte-identical when one buy-limit tranche is affordable (cheap/liquid
+    churn — anglerfish, soul rune, chins — never hidden), binds ONLY where even one tranche > the pool
+    (expensive/big positions; the thin big-tickets it bites are floor-exempt, so it makes their rank
+    NUMBER honest, doesn't yet gate them — folding capital into the thin path is a follow-up).
+    `--throughput legacy` restores the capital-blind value (escape hatch / `--stats` repro); a null pool
+    degrades to legacy. `expGpDay`/`expGpDayLegacy` ride `suggestions.jsonl` as a shadow pair for F1.
+    Node-only (the app Finder passes no capital) → no `APP_VERSION` bump. At 77m it's a NO-OP on
+    surfacing (capital doesn't bind liquid churn — the buy limit does), so `MIN_GPD` stays 500k.
 - Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a
   **phase tag** (`spike`/`decay`/`basing`, from shared `phase()`, zero extra fetch) into the Regime
   cell — display-only, NOT a gate, pipeline-only. `--phase-rescue` (OFF by default) is an opt-in

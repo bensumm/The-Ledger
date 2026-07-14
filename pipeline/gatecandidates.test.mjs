@@ -95,6 +95,30 @@ ok('attention floor drops a sub-floor LIQUID row; thin gp-flow qualifiers are EX
   assert.equal(cand[0].thin, true);
 });
 
+/* --- PLAN-CAPITAL-THROUGHPUT: capital-aware expGpDay (Ben 2026-07-14) --------------------- */
+ok('capital-aware expGpDay: SLACK cap → unchanged; BINDING cap → demoted below floor; legacy ignores it', () => {
+  // same liquid fixture as the attention-floor test: mid 1050, ~20 volume-share units/day, net ~78 →
+  // expGpDay ~1560 with no capital cap.
+  const liquid = { 300: rec(1000, 1100, 200) };
+  const lbands = { 300: band(1000, 1100, 10) };
+  const T = { ...baseT, MIN_GPD: 1000 };
+  assert.equal(gateCandidates('band', ctx(liquid, {}, lbands), T).length, 1, 'no cap (null) → legacy passes');
+  // SLACK: a 1m pool affords ~952 units/window at mid 1050 ≫ the per-window need → cap never binds →
+  // byte-identical (this is the affordable-per-tranche churn case: anglerfish/soul rune stay unchanged).
+  const slack = gateCandidates('band', ctx(liquid, {}, lbands), { ...T, THROUGHPUT_CAP_GP: 1_000_000 });
+  assert.equal(slack.length, 1, 'slack pool → still passes');
+  assert.equal(slack[0].expGpDay, slack[0].expGpDayLegacy, 'slack cap → capital-aware == legacy (unchanged)');
+  // BINDING: a 2,100 pool affords only ~2 units/window at mid 1050 → ×6 = 12/day (< the 20-unit share) →
+  // expGpDay ~936 < the 1000 floor → demoted out. The genuinely-capital-constrained case (can't even
+  // afford one buy-limit tranche).
+  const bind = gateCandidates('band', ctx(liquid, {}, lbands), { ...T, THROUGHPUT_CAP_GP: 2100 });
+  assert.equal(bind.length, 0, 'binding pool demotes the row below the attention floor');
+  // legacy MODE ignores the cap entirely (the --throughput legacy escape hatch / --stats repro).
+  const legacy = gateCandidates('band', ctx(liquid, {}, lbands), { ...T, THROUGHPUT_CAP_GP: 2100, THROUGHPUT_MODE: 'legacy' });
+  assert.equal(legacy.length, 1, '--throughput legacy ignores the cap → passes');
+  assert.equal(legacy[0].expGpDay, legacy[0].expGpDayLegacy, 'legacy mode → the two are equal');
+});
+
 /* --- risingPoolFloor: retained-but-unused pure predicate (rising niche deleted) ------------ */
 ok('risingPoolFloor predicate: passes on big-ticket OR liquid, fails cheap-and-thin', () => {
   // the predicate is kept as a pure fn (a future rising re-add is a one-flag change), though no shipped
