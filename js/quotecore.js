@@ -58,7 +58,8 @@ export const breakEven = (buy, opts) => {
 // line (the profitable-buy target for whenBuyable). CAVEAT for callers: the exact back-solve wants the
 // WITHIN-WINDOW-REACHABLE exit — optSell is the ask that doesn't clear in-window, so passing it OVER-states
 // the entry ceiling (conservative for an inform read). The dedicated exact surface is `read-window-range.mjs
-// --exit <ask> --margin <gp>` (#9 / PLAN-WINDOW-CLEAR open-Q4). Pinned by quotecore.test.mjs.
+// --exit <ask> [--margin <gp>]` (#9, built 2026-07-15 — back-solves the buy AND shows the exit's in-window
+// reachability so a rarely-printed, over-stated exit is flagged). Pinned by quotecore.test.mjs.
 export const maxBuyForExit = (sell, margin = 0, opts) => {
   const target = sell - margin;                                   // the largest break-even the exit can carry
   if (opts && opts.bond) { const b = target - bondFee(opts.guide); return b >= 0 ? Math.floor(b) : null; }

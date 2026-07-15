@@ -29,10 +29,19 @@
  *                  e.g. 23-7 — the day is keyed to the morning the window ends on)
  *   --bid <gp>     score a specific candidate bid ("touched k/N days")
  *   --ask <gp>     score a specific candidate ask ("reached k/N days")
+ *   --exit <gp>    back-solve the LARGEST profitable buy from an intended exit ask (#9, PLAN-WINDOW-CLEAR
+ *                  B3 — maxBuyForExit, the tax-exact inverse of breakEven) + how reachable the exit is in
+ *                  the window (a rarely-printed exit over-states the sell → the buy is optimistic)
+ *   --margin <gp>  minimum after-tax net/u the back-solve must leave (default 0 = break-even-clearing)
  */
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../../js/windowread.mjs';
+import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
+
+// #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
+// so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
+const EXIT_REACH_MIN = 0.5;
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);
@@ -43,7 +52,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);
@@ -54,6 +63,11 @@ const BID = A.bid !== undefined ? parseGp(A.bid) : null;
 if (A.bid !== undefined && !Number.isFinite(BID)) { console.error('error: --bid is not a parseable gp amount'); process.exit(1); }
 const ASK = A.ask !== undefined ? parseGp(A.ask) : null;
 if (A.ask !== undefined && !Number.isFinite(ASK)) { console.error('error: --ask is not a parseable gp amount'); process.exit(1); }
+// #9 — --exit <ask> [--margin <gp>]: back-solve the LARGEST profitable buy from an intended exit.
+const EXIT = A.exit !== undefined ? parseGp(A.exit) : null;
+if (A.exit !== undefined && !Number.isFinite(EXIT)) { console.error('error: --exit is not a parseable gp amount'); process.exit(1); }
+const MARGIN = A.margin !== undefined ? parseGp(A.margin) : 0;
+if (A.margin !== undefined && !Number.isFinite(MARGIN)) { console.error('error: --margin is not a parseable gp amount'); process.exit(1); }
 
 const fmt = n => n == null ? '—' : n.toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
@@ -123,5 +137,25 @@ for (const want of positionals) {
     console.log(`  --bid ${fmt(BID)} → would have been touched on ${touchedDays(lows, BID)}/${lows.length} day(s)${splitNote('bid', BID)}`);
   if (ASK != null && his.length)
     console.log(`  --ask ${fmt(ASK)} → would have been reached on ${reachedDays(his, ASK)}/${his.length} day(s)${splitNote('ask', ASK)}`);
+  // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solve — the LARGEST buy whose break-even+margin still clears
+  // the intended exit ask (maxBuyForExit, the tax-exact inverse of breakEven). The exit's REACHABILITY in
+  // this window is shown beside it: an exit that rarely prints in-window over-states the sell, so the
+  // back-solved buy is optimistic (the days-reach ≠ lap-clear caveat — pick a reachable exit).
+  if (EXIT != null) {
+    const buy = maxBuyForExit(EXIT, MARGIN);
+    if (buy == null || buy <= 0) {
+      console.log(`  --exit ${fmt(EXIT)} (margin ${fmt(MARGIN)}) → no profitable buy (the exit can't carry break-even + margin)`);
+    } else {
+      console.log(`  --exit ${fmt(EXIT)} (margin ${fmt(MARGIN)}) → max profitable BUY ${fmt(buy)}  (break-even ${fmt(breakEven(buy))} clears the exit after 2% tax; tax-exact back-solve)`);
+      if (his.length) {
+        const reached = reachedDays(his, EXIT), N = his.length;
+        console.log(`    exit ${fmt(EXIT)} reached on ${reached}/${N} day(s) in this ${winLabel}${splitNote('ask', EXIT)}`);
+        if (reached / N < EXIT_REACH_MIN)
+          console.log(`    ⚠ this exit rarely prints in-window (${reached}/${N}) — it OVER-states the reachable sell, so the back-solved buy ${fmt(buy)} is optimistic; pick a lower, more-reachable exit`);
+      } else {
+        console.log(`    (no window highs to score the exit's reachability against — treat the buy as an upper bound)`);
+      }
+    }
+  }
   console.log(`  (touched/reached ≠ limit filled — small sample, ~${scored.length} days; a guide, not a guarantee)`);
 }

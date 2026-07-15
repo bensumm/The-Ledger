@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.54
+version: 1.55
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -257,17 +257,20 @@ This is the tribal layer the script can't do — apply ALL of these:
   2. **Quote the reachable-IN-WINDOW ask** (RC1 recency-honest; the Asymmetric ask-reach read below
      verifies it) — NEVER the raw band top.
   3. **BACK-SOLVE the buy from that ask** — bid ≤ the price that leaves break-even + your target margin
-     UNDER the reachable exit (tax-exact via the shared `breakEven()`; a `maxBuyForExit` helper is a
-     coming fast-follow — do it by hand for now). The buy is priced BACKWARD from the exit, not forward
-     from the band low.
+     UNDER the reachable exit. Run `node pipeline/commands/read-window-range.mjs "<item>" --window <peak
+     hours> --exit <ask> [--margin <gp>]` (#9): it prints the tax-exact max profitable buy (`maxBuyForExit`,
+     the inverse of `breakEven()`) AND how often that exit actually prints in the window — a low reach means
+     the exit over-states the sell, so pick a lower one. The buy is priced BACKWARD from the exit, not
+     forward from the band low.
   4. **Project TODAY** — is the window ahead or already printed? (`diurnalForecast` eta / the Hydra
      stale-window rule). A spike window behind you today means price the 4h-lap exit or wait for the next.
   Anchor (2026-07-14, anglerfish): bought 2,735, but to clear the volume you EITHER hold the ask for the
   14:00–17:00 spike (~2,899, prints 3/3 recent) OR clear-in-4h just under live instabuy (~2,815); the
   next rebuy back-solves to ~2,710 (BE ~2,760) so both exits carry real margin. This is the ONE home for
   the peak-timing pricing method — the reach/diurnal/asym reads below FEED it; `/positions` points here
-  for the sell-side (step-down) voice. (The mechanical within-window clear-rate + `maxBuyForExit` are
-  `PLAN-WINDOW-CLEAR.md` Part B, not yet built — this is the judgment form.)
+  for the sell-side (step-down) voice. (The tax-exact back-solve is now `read-window-range.mjs --exit`
+  above; the mechanical within-window clear-RATE is the shadow-logged `winClear` on
+  `screen-flip-niches.mjs`/`quote-items.mjs` — this bullet is the judgment form that routes them.)
 - **Asymmetric ask-reach read — the verification gate (2026-07-07, method) — an INPUT to WINDOW-CLEAR PRICING above.** _(judgment: method; tool `pipeline/commands/read-window-range.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
   pays. Before recommending ANY pick, run the `read-window-range.mjs --ask <band-top>` reach check the
