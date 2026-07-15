@@ -64,6 +64,7 @@ import { readExchangeLog, activeOffers } from '../lib/offers.mjs';
 import { logSuggestions, suggestionEntry } from '../lib/suggestlog.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
+import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt } from '../lib/emit.mjs';   // V5 standardized per-held emit contract
@@ -181,7 +182,7 @@ function classify(row) {
 // touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
 const WINDOW_HOURS = 8;
 const WINDOW_DAYS = 7;
-function windowLine(ts1h, { bid = null, ask = null, compact = false } = {}) {
+function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = null, volDay = null } = {}) {
   if (!ts1h || !ts1h.length) return null;
   const h = new Date().getHours();
   const wStart = h, wEnd = (h + WINDOW_HOURS) % 24;
@@ -191,9 +192,25 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false } = {}) {
   // recency-split guard: a ⚠ marker when the full touched/reached count is concentrated in an
   // older price regime (recent nights don't dip to the bid / reach the ask) — see windowread.mjs
   const stale = (side, level) => recencySplit(stats.days, side, level, RECENT_NIGHTS).staleOptimistic ? ' ⚠stale' : '';
+  // PLAN-LIQUIDITY-REACH: the raw N/Md ask-reach count measures how OFTEN the band top prints, NOT whether
+  // YOUR size clears there — on a deep book a lot that is a small fraction of daily flow realistically fills
+  // a higher percentile than the flat count implies. reachRelief (js/estimators.mjs) softens the discount when
+  // BOTH the book is liquid AND the lot is small vs flow (intendedUnits = the REAL held qty here, not a proxy).
+  // Surface it only when it has an EFFECT (relief > 0 AND the raw reach is a discount) — lean discipline; a thin
+  // book / large lot / absent inputs ⇒ relief 0 ⇒ the bare count stands (the mirage guard is untouched).
+  const reliefSuffix = (askLevel) => {
+    if (heldQty == null || volDay == null || !his.length) return '';
+    const rel = reachRelief({ intendedUnits: heldQty, volDay });
+    if (!(rel > 0)) return '';
+    const aR = { reachedDays: reachedDays(his, askLevel), nDays: his.length };
+    const base = askReachFactor(aR, 0), relieved = askReachFactor(aR, rel);
+    if (!(relieved > base)) return '';
+    const pct = heldQty / volDay * 100;
+    return ` · size-relieved fill ~${Math.round(relieved * 100)}% (${fmt(heldQty)}≈${pct < 0.1 ? '<0.1' : pct.toFixed(1)}% of ${fmt(volDay)}/d — deep book)`;
+  };
   if (compact) { // one short clause for the notes list (same numbers, no label/caveat prose)
     if (bid != null && lows.length) return `bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)}`;
-    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}`;
+    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${reliefSuffix(ask)}`;
     if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`;
     return null;
   }
@@ -202,7 +219,7 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false } = {}) {
   if (bid != null && lows.length)
     bits.push(`bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)} · lows ~50% ${fmtP(quantLow(lows, 0.5))} / ~75% ${fmtP(quantLow(lows, 0.75))}`);
   if (ask != null && his.length)
-    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}`);
+    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${reliefSuffix(ask)}`);
   if (his.length)
     bits.push(`highs reached ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`);
   if (!bits.length) return null;
@@ -778,7 +795,7 @@ async function main() {
     // guaranteed pieces (verdict, list-at, break-even, fill-progress) are computed OUTSIDE the
     // try so a context-field failure never drops the load-bearing sell line; the optional context
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
-    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true });
+    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay });
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
     const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display));
     let conviction = null, delta = null, tripwire = null, recovery = null;

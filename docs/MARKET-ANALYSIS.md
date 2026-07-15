@@ -49,8 +49,14 @@ the raw table-v2 cells (byte-identical publish). Operating summary:
   price prints, not how much of *your* stock clears — so on a liquid book where your position is
   small vs flow the fold softens toward 1 and the sell reference de-biases toward the observed 24h
   high (`dayHighFrom5m`), never above it. A thin book or a large size/volume computes relief exactly
-  0 (the Ancient-godsword mirage-exit protection). Full mechanism + thresholds + the F1 shadow
-  fields: the `asymEstimate`/`reachRelief` headers in `js/estimators.mjs`.
+  0 (the Ancient-godsword mirage-exit protection). **The size input is the REAL held lot on a
+  positions surface** — `quote-items --positions` and `watch-positions` pass the open qty
+  (`extra.intendedUnits`); a bare discovery/per-item read with no held qty degrades to the buy-limit
+  proxy. So a held-lot ask reads its relief off the actual position, not an accumulation estimate
+  (`watch-positions` renders it as the `size-relieved fill ~N%` note beside the raw reach count).
+  Full mechanism + thresholds + the F1 shadow fields: the `asymEstimate`/`reachRelief` headers in
+  `js/estimators.mjs`. (The principled successor — a percentile-depth exit off the window's
+  volume-by-price distribution — is scoped as PLAN-DEPTH-EXIT, folded into PLAN.md when it ships.)
 - **Confidence rides IN the price cell** as the recent-3 reach (`0/3`, `recencySplit`) — the
   freshness-honest signal and the fold basis; the full window shows beside it only on divergence
   (`0/3 · 12/14` = stale); `–` = no read.

@@ -118,11 +118,11 @@ export function pFillIntraday(ctx = {}) {
    (volDay < REACH_RELIEF_MIN_VOL) or a large relative size (sizeRatio ≥ REACH_RELIEF_SIZE_ZERO) gets
    relief EXACTLY 0 → byte-for-byte today's discount. Size GOVERNS, not liquidity alone — a 500k-unit
    position on a liquid book gets NO relief. Absent inputs → 0 (the absent→1/degrade precedent).
-   intendedUnits source (per-surface deciding point, PLACEHOLDER): the BUY LIMIT — the standard
-   per-window accumulation unit on discovery/per-item reads (no held qty exists there); a held-lot
-   surface may later pass the real lot size. ALL constants are PLACEHOLDERS (n=1 — the soul-rune
-   anchor); F1 owns the magnitudes. Relief is monotone in volDay and monotone-decreasing in
-   intendedUnits (pinned by tests). */
+   intendedUnits source (per-surface deciding point, PLACEHOLDER): a HELD-LOT surface (quote-items
+   --positions, watch-positions) passes the REAL lot size (positions.json qty) via extra.intendedUnits;
+   a discovery/per-item read with no held qty degrades to the BUY LIMIT (the standard per-window
+   accumulation proxy). ALL constants are PLACEHOLDERS (n=1 — the soul-rune anchor); F1 owns the
+   magnitudes. Relief is monotone in volDay and monotone-decreasing in intendedUnits (pinned by tests). */
 export const REACH_RELIEF_MIN_VOL   = 100_000;   // limiting-side vol/d floor — below it relief is EXACTLY 0 (the mirage guard)
 export const REACH_RELIEF_FULL_VOL  = 1_000_000; // vol/d at which the liquidity factor saturates to 1
 export const REACH_RELIEF_SIZE_FULL = 0.02;      // sizeRatio at/below which the size factor is 1 (position ≪ flow)
@@ -493,7 +493,8 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
   }
   // --- SELL: declared-exit-anchored (thesis-aware, rev2) OR reach-folded band top ---
   // PLAN-LIQUIDITY-REACH (2026-07-13, ASK side only): on a LIQUID book where the position is small vs
-  // flow (reachRelief > 0 — intendedUnits = the buy limit, the per-surface PLACEHOLDER proxy):
+  // flow (reachRelief > 0 — intendedUnits = the real held lot size on a positions surface, else the buy
+  // limit proxy — the per-surface PLACEHOLDER deciding point):
   //   Part A — the reach fold SOFTENS toward 1 (fold' = fold + relief×(1−fold)): depth clears a small
   //     position at the top more readily than raw reach-frequency implies.
   //   Part B — the top REFERENCE de-biases from the smoothed band top toward extra.dayHigh (the observed
@@ -501,8 +502,13 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
   //     at), by REACH_DEBIAS_MAX_FRAC×relief of the gap, NEVER above dayHigh (the real ceiling).
   // THE MIRAGE GUARD IS UNTOUCHED: a thin book / large size / absent inputs ⇒ relief 0 ⇒ this whole
   // block is byte-identical to the flat fold (the Ancient-godsword protection). PLACEHOLDERS, n=1.
-  const relief = reachRelief({ intendedUnits: num(row.limit), volDay: num(row.volDay) });
-  const sizeRatio = (num(row.limit) != null && num(row.volDay) > 0) ? row.limit / row.volDay : null;
+  // intendedUnits: a held-lot surface passes the REAL lot size (extra.intendedUnits — positions.json qty);
+  // absent it (a discovery/per-item read with no held qty) we degrade to the buy limit, the standard
+  // per-window accumulation proxy — byte-identical to the pre-override behaviour.
+  const iu = num(extra.intendedUnits);
+  const intendedUnits = iu != null ? iu : num(row.limit);
+  const relief = reachRelief({ intendedUnits, volDay: num(row.volDay) });
+  const sizeRatio = (intendedUnits != null && num(row.volDay) > 0) ? intendedUnits / row.volDay : null;
   const bandTop = Math.max(os, qs);
   const dayHi = num(extra.dayHigh);
   const topRef = (relief > 0 && dayHi != null && dayHi > bandTop)

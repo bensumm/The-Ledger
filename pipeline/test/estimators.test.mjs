@@ -439,6 +439,26 @@ ok('HIGH-LIQUIDITY LARGE-SIZE gets NO relief (size governs, not liquidity alone)
   assert.equal(e.confidence.relief, null);
 });
 
+ok('HELD-LOT intendedUnits override: the REAL lot size sizes the relief, not the buy-limit proxy', () => {
+  // a held-lot surface (quote-items --positions / watch-positions) passes the real open qty; the buy limit
+  // here is LARGE (proxy would size a big accumulation → no relief) but the actual lot is small vs flow.
+  const row = { quickBuy: 380, quickSell: 385, optBuy: 378, optSell: 396, volDay: 5_000_000, limit: 600_000 };
+  const ar = { reachedDays: 4, nDays: 14 };
+  // proxy path (no override): limit 600k / 5M = 0.12 ≥ SIZE_ZERO → relief 0, exact unrelieved fold.
+  const proxy = estimatePair(FLIP_NICHES.band, row, { askReach: ar, dayHigh: 400 });
+  assert.equal(proxy.confidence.relief, null, 'buy-limit proxy → no relief');
+  // override path: the real 25k lot / 5M = 0.005 ≪ flow → relief fires, estSell lifts above the proxy.
+  const held = estimatePair(FLIP_NICHES.band, row, { askReach: ar, dayHigh: 400, intendedUnits: 25_000 });
+  assert.ok(held.confidence.relief && held.confidence.relief.relief > 0, 'real small lot → relief applies');
+  assert.ok(held.estSell > proxy.estSell, 'the size-relieved held-lot ask lifts above the buy-limit-proxy ask');
+  // and the converse: a large real lot on the same book kills a relief the small limit would have given.
+  const bigRow = { ...row, limit: 25_000 };
+  const smallProxy = estimatePair(FLIP_NICHES.band, bigRow, { askReach: ar, dayHigh: 400 });
+  assert.ok(smallProxy.confidence.relief && smallProxy.confidence.relief.relief > 0, 'small limit proxy → relief');
+  const bigHeld = estimatePair(FLIP_NICHES.band, bigRow, { askReach: ar, dayHigh: 400, intendedUnits: 600_000 });
+  assert.equal(bigHeld.confidence.relief, null, 'a large REAL lot governs → no relief despite the small limit');
+});
+
 ok('ABSENT size/vol inputs → byte-identical (degrade-to-model-free) + relief monotonicity', () => {
   const ar = { reachedDays: 4, nDays: 14 };
   assert.equal(reachRelief(), 0); assert.equal(reachRelief({}), 0);

@@ -114,7 +114,8 @@ async function runItems() {
   // to it ONLY when that id is actually held (an open lot in positions.json) — never on a bare "how's X"
   // read of an item we don't hold. Build the open-position id set once (read-only; degrades to empty).
   const heldIds = new Set();
-  try { const { groups } = readOpenPositions(POSITIONS); for (const g of (groups || [])) heldIds.add(g.itemId); } catch { /* no positions.json → nothing held → no anchoring */ }
+  const heldQty = new Map();   // itemId → total open qty (PLAN-LIQUIDITY-REACH: real lot size feeds reachRelief, not the buy-limit proxy)
+  try { const { groups } = readOpenPositions(POSITIONS); for (const g of (groups || [])) { heldIds.add(g.itemId); heldQty.set(g.itemId, g.qty); } } catch { /* no positions.json → nothing held → no anchoring */ }
   await loadModules();   // PM1: discover pipeline/modules/*.mjs once (empty/absent dir → zero probes → byte-identical)
   // P3: read-only daily mids from whatever the Tier-1 archive already holds (noFetch → zero network,
   // no fetch-semantics change on this surface) → floorValidator's term structure. Cold archive → empty
@@ -275,6 +276,9 @@ async function runItems() {
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: ap, declaredExit,
       dayHigh: dayHighFrom5m(inp.ts5m),
+      // PLAN-LIQUIDITY-REACH: on a held lot, the reach relief sizes off the REAL lot qty, not the buy-limit
+      // proxy (absent → estimatePair degrades to row.limit, byte-identical for a bare "how's X" read).
+      intendedUnits: heldIds.has(id) ? (heldQty.get(id) ?? null) : null,
     }, { nudge: anchorNudge });
     // PLAN-LIQUIDITY-REACH inform line (never a table/verdict/price-column input): the relief that
     // counterweights the ⚠ reach caution above on a liquid small-relative-size book.
