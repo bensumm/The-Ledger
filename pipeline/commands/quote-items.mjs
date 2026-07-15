@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit } from '../../js/quotecore.js';
-import { diurnalForecast, whenBuyable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable in ~Xh" forecast line off the in-hand hourProfile
+import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
@@ -182,27 +182,37 @@ async function runItems() {
       const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
       lines.push(`  ↳ diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}`);
     }
-    // #6 (PF1 forecast, Ben 2026-07-15): the module's motivating ask — "not buyable at a profitable price
-    // NOW, but ~Xh from now." When the live buy price doesn't clear break-even against the reachable exit,
-    // project when the diurnal dip reaches a profitable buy level (whenBuyable over diurnalForecast, both
-    // js/forecast.mjs). Inform-only, provisional (n≈0, diurnal+trend only) — zero new fetch (reuses the
-    // in-hand prof); never a table/verdict/price input. The profitable target = maxBuyForExit(optSell,0),
-    // the tax-exact inverse of breakEven; optSell OVER-states the in-window exit, so the ceiling is
-    // conservative and "not buyable now" fires less often (PLAN-WINDOW-CLEAR caveat; #9 adds the exact
-    // within-window-reachable --exit back-solve).
-    if (prof && row.quickBuy != null && row.optSell != null) {
-      const { forecast: fc } = diurnalForecast(prof, {
-        liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
-      });
-      if (fc) {
-        const bondOpts = row.bond ? { bond: true, guide: row.guide } : undefined;
-        const targetBid = maxBuyForExit(row.optSell, 0, bondOpts);
-        if (targetBid != null && row.quickBuy > targetBid) {          // live buy doesn't clear BE at the reachable exit
-          const wb = whenBuyable(fc, targetBid);
-          const head = `not profitably buyable now (live ${fmt(row.quickBuy)} > ~${fmt(targetBid)} to clear BE at ${fmt(row.optSell)})`;
-          if (wb) lines.push(`  ℹ forecast: ${head} → buyable ${fmtEta(wb.etaH)} (${fmtHour(wb.atHours[0])}) @ ~${fmt(wb.projLevel)} [${fmt(wb.band.lo)}–${fmt(wb.band.hi)}] (provisional, n≈0 — diurnal+trend)`);
-          else lines.push(`  ℹ forecast: ${head} — NOT projected buyable within ${fc.horizonH}h on this model (provisional, n≈0)`);
-        }
+    // #6 (PF1 forecast, Ben 2026-07-15): the module's motivating ask — "not buyable/sellable at a good
+    // price NOW, but ~Xh from now." whenBuyable/whenSellable over ONE diurnalForecast (all js/forecast.mjs).
+    // Inform-only, provisional (n≈0, diurnal+trend only) — zero new fetch (reuses the in-hand prof); never
+    // a table/verdict/price input. The projection is computed ONCE and shared by both timing lines.
+    const { forecast: fc } = prof
+      ? diurnalForecast(prof, { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable })
+      : { forecast: null };
+    // BUY timing (any item): profitable target = maxBuyForExit(optSell,0), the tax-exact inverse of
+    // breakEven; optSell OVER-states the in-window exit, so the ceiling is conservative and "not buyable
+    // now" fires less often (PLAN-WINDOW-CLEAR caveat; #9's read-window-range --exit is the exact form).
+    if (fc && row.quickBuy != null && row.optSell != null) {
+      const bondOpts = row.bond ? { bond: true, guide: row.guide } : undefined;
+      const targetBid = maxBuyForExit(row.optSell, 0, bondOpts);
+      if (targetBid != null && row.quickBuy > targetBid) {            // live buy doesn't clear BE at the reachable exit
+        const wb = whenBuyable(fc, targetBid);
+        const head = `not profitably buyable now (live ${fmt(row.quickBuy)} > ~${fmt(targetBid)} to clear BE at ${fmt(row.optSell)})`;
+        if (wb) lines.push(`  ℹ forecast: ${head} → buyable ${fmtEta(wb.etaH)} (${fmtHour(wb.atHours[0])}) @ ~${fmt(wb.projLevel)} [${fmt(wb.band.lo)}–${fmt(wb.band.hi)}] (provisional, n≈0 — diurnal+trend)`);
+        else lines.push(`  ℹ forecast: ${head} — NOT projected buyable within ${fc.horizonH}h on this model (provisional, n≈0)`);
+      }
+    }
+    // SELL timing (HELD lot only — a non-held read is a buy decision): when does the projected high reach
+    // your target ask? Target = the DECLARED thesis exit if set, else the reachable band top (optSell).
+    // "not sellable now" = the live instabuy sits below the target. whenSellable's held-lot home (was the
+    // #6 follow-up marker) — zero new fetch, the same shared fc.
+    if (fc && heldIds.has(id) && row.quickSell != null) {
+      const targetAsk = (thesisFor(holdThesisStore, id)?.exitPrice ?? null) ?? row.optSell;
+      if (targetAsk != null && row.quickSell < targetAsk) {          // can't sell at the target at the live instabuy now
+        const ws = whenSellable(fc, targetAsk);
+        const head = `not sellable at ${fmt(targetAsk)} now (live instabuy ${fmt(row.quickSell)})`;
+        if (ws) lines.push(`  ℹ forecast: ${head} → sellable ${fmtEta(ws.etaH)} (${fmtHour(ws.atHours[0])}) @ ~${fmt(ws.projLevel)} [${fmt(ws.band.lo)}–${fmt(ws.band.hi)}] (provisional, n≈0 — diurnal+trend)`);
+        else lines.push(`  ℹ forecast: ${head} — NOT projected sellable within ${fc.horizonH}h on this model (provisional, n≈0)`);
       }
     }
     // Bar E ask-headroom (inform-only): the robust p90 shaved a TRADED in-band top off the quoted ask —

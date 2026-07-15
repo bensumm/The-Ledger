@@ -209,10 +209,9 @@ export function whenBuyable(fc, targetBid) {
  * whenSellable(fc, targetAsk) — mirror: the first horizon hour whose PROJECTED HIGH is at/above the
  * target ask (held-position sell timing). Returns the same shape | null.
  */
-// @provisional-api: the sell-side twin of whenBuyable (held-lot sell timing) — KEPT (not dropped, #6
-// decision 2026-07-15) but not yet wired: its natural home is quote-items.mjs --positions, which doesn't
-// fetch the 1h series a forecast needs (line ~405). Follow-up: wire it once the held-lot path has the
-// hourProfile in hand. Pinned by pipeline/test/forecast.test.mjs (whenSellable + unreachable→null).
+// CONSUMED by pipeline/commands/quote-items.mjs (#6, Ben 2026-07-15) — the sell-side twin: on a HELD lot
+// (heldIds), "not sellable at your target ask now → sellable ~Xh" off the same in-hand hourProfile as
+// whenBuyable (zero extra fetch). Pinned by pipeline/test/forecast.test.mjs (whenSellable + unreachable→null).
 export function whenSellable(fc, targetAsk) {
   const f = inner(fc);
   if (!f || !f.series || targetAsk == null) return null;
