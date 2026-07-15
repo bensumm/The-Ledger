@@ -28,13 +28,13 @@
  *     (two homes that say opposite things in different words). Nothing here replaces the wave-start
  *     Sonnet semantic drift scan — it narrows what that scan must find, it doesn't retire it.
  *
- * Run: `node pipeline/lint-docs.mjs`  (CI runs it in the cheap `checks` job; pinned by lint-docs.test.mjs).
+ * Run: `node pipeline/ci/lint-docs.mjs`  (CI runs it in the cheap `checks` job; pinned by lint-docs.test.mjs).
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');   // pipeline/ci -> repo root
 const read = rel => { try { return readFileSync(join(ROOT, rel), 'utf8'); } catch { return null; } };
 
 // CHECK 2's corpus — the CLAUDE.md ⇆ README.md axis, where the single-source rule is sharpest (both

@@ -89,7 +89,7 @@ missed-rule incidents, not an enforcer — CI's `lint-docs.mjs`/`lint-skills.mjs
   no n≈0 signal is stated as calibrated (rule 4).
 - **Public repo, no PII** — `judgment:` no RSNs/real names/emails/account names in tracked content
   (code, docs, `suggestions.jsonl`, commit messages) — the repo is public.
-- **Green before done** — `judgment:` `node pipeline/run-tests.mjs` + `node pipeline/lint-docs.mjs` pass;
+- **Green before done** — `judgment:` `node pipeline/ci/run-tests.mjs` + `node pipeline/ci/lint-docs.mjs` pass;
   a deployed-app change also needs the browser smoke (CI runs it on push).
 
 ## What this skill does NOT do

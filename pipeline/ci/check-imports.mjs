@@ -18,7 +18,7 @@
  * no secrets, no network. Exits non-zero (and prints the offending entrypoint→module→name) on any
  * unresolved import; exits 0 when every entrypoint's imports resolve.
  *
- * Run: `node pipeline/check-imports.mjs`   (CI wires it into checks.yml).
+ * Run: `node pipeline/ci/check-imports.mjs`   (CI wires it into checks.yml).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,7 +32,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ENTRYPOINTS = [
   'commands/screen-flip-niches.mjs', 'commands/quote-items.mjs', 'commands/watch-positions.mjs', 'commands/run-loop.mjs', 'commands/analyze-record.mjs',
   'commands/monitor-offers.mjs', 'commands/read-buy-limits.mjs', 'commands/read-window-range.mjs', 'commands/sync-fills.mjs', 'commands/add-manual-fill.mjs',
-].map(f => path.join(HERE, f)).filter(p => fs.existsSync(p));
+].map(f => path.join(HERE, '..', f)).filter(p => fs.existsSync(p));   // HERE=pipeline/ci; '..' -> pipeline/
 
 // Extract [{ specifier, names:Set, wantDefault:bool, nsOnly:bool }] for every RELATIVE from-import in src.
 // Handles single- and multi-line braces, `as` renames (checks the EXPORTED name), default + namespace,

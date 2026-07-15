@@ -8,7 +8,7 @@
  * index.html in Playwright chromium (headless), and fails on any uncaught page error, any
  * app-originated console error, or a pane that renders empty.
  *
- *   node pipeline/smoke-test.mjs
+ *   node pipeline/ci/smoke-test.mjs
  *
  * ALL external network is stubbed — nothing hits prices.runescape.wiki, the wiki guide, the
  * GitHub API, or Google Fonts in CI. Same-origin files (index.html, js/*, styles.css, the
@@ -25,7 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');   // pipeline/ci -> repo root
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.json': 'application/json', '.css': 'text/css', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {
   DENYLIST, runDenylist, normalizeWords, findDuplicateShingles, runDuplicatePhrase,
   SHINGLE_WORDS, POINTER_DOCS,
-} from '../lint-docs.mjs';
+} from '../ci/lint-docs.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -80,11 +80,11 @@ Triage on red:
 
 `.github/workflows/checks.yml` runs on push to `main`, PRs, `merge_group`, and manual
 dispatch. Two jobs: a cheap **`checks`** job (`node --check` over `js/*.js` + `pipeline/*.mjs`,
-the auto-discovered acceptance fixtures `node pipeline/run-tests.mjs` — one runner that
+the auto-discovered acceptance fixtures `node pipeline/ci/run-tests.mjs` — one runner that
 recursively finds and runs every `pipeline/**/*.test.mjs`, so adding a test file needs no CI
 edit — and JSON-parse of `fills.json`/`positions.json`) and a
 separate **`smoke`** job (CI1) that installs Playwright chromium and runs
-`node pipeline/smoke-test.mjs` — a headless DOM smoke of `index.html` with all external network
+`node pipeline/ci/smoke-test.mjs` — a headless DOM smoke of `index.html` with all external network
 stubbed, failing on any page error / app console error / empty pane. Split jobs so the cheap
 one fails fast. Constraints on any workflow change:
 
@@ -147,7 +147,7 @@ The dispatch model when a wave has multiple lanes (PLAN.md's "Dispatch model"). 
 1. **Coordinator commits the plan file into the lane worktree** — the subagent starts with the
    plan already on disk in its isolated worktree (`isolation: "worktree"`).
 2. **An Opus subagent implements the chunk** chunk-by-chunk with local commits, running
-   `node --check` on every touched file and `node pipeline/run-tests.mjs` when a tested module
+   `node --check` on every touched file and `node pipeline/ci/run-tests.mjs` when a tested module
    is touched.
 3. **Coordinator verifies** the result against the chunk's Acceptance criteria.
 4. **On Ben's "merge":** `git fetch && git rebase origin/main` → re-run the tests →

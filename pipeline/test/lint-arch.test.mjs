@@ -8,7 +8,7 @@
  * future file, and reject a missing one. No live data (rule 4). Run: node pipeline/test/lint-arch.test.mjs
  */
 import assert from 'node:assert/strict';
-import { extractRefs, resolveRef } from '../lint-arch.mjs';
+import { extractRefs, resolveRef } from '../ci/lint-arch.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -13,14 +13,14 @@
  *   - Discovery is filesystem-based (fs.readdirSync recursion), never shell globbing, so the
  *     runner is identical on Windows and ubuntu CI.
  *
- * Run: `node pipeline/run-tests.mjs`  (this file, run-tests.mjs, is NOT itself a *.test.mjs suite).
+ * Run: `node pipeline/ci/run-tests.mjs`  (this file, run-tests.mjs, is NOT itself a *.test.mjs suite).
  */
 import { readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 
-const PIPELINE_DIR = dirname(fileURLToPath(import.meta.url));
+const PIPELINE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');   // this file is in pipeline/ci; discover under pipeline/
 
 function discover(dir) {
   const found = [];

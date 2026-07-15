@@ -325,20 +325,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     invariants, in ONE place (the anti-fragmentation index). Split into 🔒 ENFORCED (each naming the CI
     guard that fails on violation — `import-check`/`dead-export-check`/`doclint`/`skill-lint`/`smoke`/replay
     goldens/`archlint`) vs ⚖️ JUDGMENT principles. Its own file references are guarded by
-    `pipeline/lint-arch.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
+    `pipeline/ci/lint-arch.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
     organized + why".
   - `GLOSSARY.md` (2026-07-14) — the plain-English lookup for the vocabulary: core concepts
     (flip-niche / held-item strategy, reach, diurnal, band, verdicts, cash tiers…) + the codename
     dictionary (the concept behind each plan-chunk shorthand like `Bar E` / `DL4`). The ONE home for
     term definitions — module headers point here rather than re-explain. Its file-refs are guarded by
-    `pipeline/lint-arch.mjs`. Built + maintained by the R1 rename pass (`PLAN-RENAME.md`).
+    `pipeline/ci/lint-arch.mjs`. Built + maintained by the R1 rename pass (`PLAN-RENAME.md`).
   - `LORE.md` (P7) — narrative/history + superseded-approach rationale (the single-file→split
     story, the LW2/LW3 live desk, the pipeline's eliminated scheduler, the incident anchors behind
     the process rules, the rejected/retired approaches). Nothing here is load-bearing — CLAUDE.md
     "Where shipped work is documented" points here for the stories; invariants stay in module headers.
   - `SKILL-TRIAGE.md` (P7) — the three-way triage (ENCODE / KEEP-AS-JUDGMENT / RETIRE-proposal) of
     every prose rule-block in the four market skills + the memory index. The semantic record behind
-    the `pipeline/lint-skills.mjs` tags; hand-maintained — add a row when a skill gains a rule.
+    the `pipeline/ci/lint-skills.mjs` tags; hand-maintained — add a row when a skill gains a rule.
 - `.gitattributes` — repo EOL normalization (GA1): text sources (`*.js`/`*.mjs`/`*.json`/
   `*.jsonl`/`*.md`/`*.yml`/`*.css`/`*.html`/`*.log` + `.gitignore`/`LICENSE`) are `text eol=lf`,
   the Windows batch launchers (`serve.cmd`/`watch-log.cmd`/`*.cmd`) are `text eol=crlf`, and
@@ -937,7 +937,7 @@ Tests are `*.test.mjs` files that all live in **`pipeline/test/`** (R3 — one t
 `pipeline/test/quotecore.test.mjs` pins `js/quotecore.js`, `pipeline/test/rating.test.mjs` pins
 `pipeline/lib/rating.mjs`). Test fixtures live beside them under `pipeline/test/fixtures/`. Each
 test is plain `node <file>.test.mjs` (no framework — copy the shape of an existing one). They are
-**auto-discovered**: `pipeline/run-tests.mjs` recursively finds every `pipeline/**/*.test.mjs` (so
+**auto-discovered**: `pipeline/ci/run-tests.mjs` recursively finds every `pipeline/**/*.test.mjs` (so
 a suite placed anywhere under `pipeline/` still runs), runs each in its own child process, and
 exits non-zero if any suite fails **or** if zero suites are found. CI (`.github/workflows/checks.yml`) and `/ship` call the
 runner once, so **adding a test file is the whole job** — nothing else wires it in. Follow the

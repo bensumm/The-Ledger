@@ -17,7 +17,7 @@ documented"). The last PLAN.md revision carrying the long per-row summaries is
 ## Executor rules (apply to every chunk, verbatim)
 
 - Each chunk ends with: `node --check` every touched `js/*.js` / `pipeline/*.mjs`; run
-  `node pipeline/run-tests.mjs` (the auto-discovery runner — runs every `pipeline/**/*.test.mjs`)
+  `node pipeline/ci/run-tests.mjs` (the auto-discovery runner — runs every `pipeline/**/*.test.mjs`)
   if any tested module was touched; a real browser or Playwright
   smoke test for any app-facing change (ES modules don't load over `file://` — use
   `serve.cmd`); `APP_VERSION` bump in `js/state.js` if app behavior changed (skills-only
@@ -131,7 +131,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | A3 | Split `js/ledger.js` out of `ui.js` | `js/ledger.js` | ✅ `7ef1db1` (0.43.0) |
 | BE1 | Break-even 5m tax-cap fix | `js/quotecore.js` | ✅ `82340d5` (0.40.0) |
 | W1 | Trade-analysis cadence | `/morning` skill | ✅ `5666eac` |
-| CI1 | Browser smoke test in CI | `checks.yml`, `pipeline/smoke-test.mjs` | ✅ `69bf79d` |
+| CI1 | Browser smoke test in CI | `checks.yml`, `pipeline/ci/smoke-test.mjs` | ✅ `69bf79d` |
 | TB1 | Reusable sortable-table component | `js/table.js` | ✅ `3e40cbe` (0.44.0) |
 | LU1 | Ledger UX rework | `js/ledger.js`, app | ✅ `c88df30` (0.45.0) |
 | FX1 | Finder full-catalog search + Signals badge | `js/ui.js`, `js/market.js` | ✅ `c12bf4b` (0.46.0) |
@@ -140,7 +140,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | NY2 | Niche ruling (rising floor, churn off-by-default, spread stays) | `screen.mjs`, `/scan` | ✅ `f982a31` — **SUPERSEDED: spread + rising DELETED (Steps 3+4, see Discovered)** |
 | OR1 | Org map docs | `README.md`, `CLAUDE.md` | ✅ `1822ad9` |
 | OR2 | pipeline/lib/ split | `pipeline/lib/*` | ✅ `94781cc` |
-| TD1 | Glob test runner + money tests | `pipeline/run-tests.mjs`, tests | ✅ `d147bab` |
+| TD1 | Glob test runner + money tests | `pipeline/ci/run-tests.mjs`, tests | ✅ `d147bab` |
 | TD2 | Testability extractions | `js/ledgercore.js` et al. | ✅ `e442367` (0.47.0) |
 | TD3 | Nice-to-have test sweep | tests | ✅ `a1110c7` |
 | LW1 | Local log-watcher core + `offers.json` + daemon | `sync-fills.mjs`, `watch-log.mjs` | ✅ `b97c87b` (offers.json `d395864`; the daemon does ZERO git — load-bearing) |
@@ -182,13 +182,13 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | `pipeline/lib/retrojoin.mjs`, `pipeline/commands/report-retro.mjs` | ✅ `6c3f1b5` |
 | V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/flip-niches.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
 | V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | ✅ `6432a05` (two-sided gate + thesis edge NEVER relaxed; sub-floor rows stdout-only, never screen.json; ledger rows carry a lean `subFloor` marker) |
-| V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/lint-skills.mjs`, `docs/LORE.md` | ✅ `105326a` (skill-lint in CI — rule-blocks need a code pointer or `judgment:` tag). Lone RETIRE disposition executed `f8de508` (Ben 2026-07-09): `/overnight` v1.11 weekend-shift prose → one-line full-day check (v1.15) |
+| V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/ci/lint-skills.mjs`, `docs/LORE.md` | ✅ `105326a` (skill-lint in CI — rule-blocks need a code pointer or `judgment:` tag). Lone RETIRE disposition executed `f8de508` (Ben 2026-07-09): `/overnight` v1.11 weekend-shift prose → one-line full-day check (v1.15) |
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
 | TV1 | Per-thesis validators (gate/inform) + trajectory (knife/oscillating/based) classifier + in-script windowrange (reach Leg B + 1h-derived trajectory) | `js/termstructure.mjs`, `js/validate.mjs`, `js/flip-niches.mjs`, `pipeline/commands/screen-flip-niches.mjs`, tests | ✅ 2026-07-09 (Ben design session: separate validator COMPUTATION from per-thesis ACTION; `spec.validators`={key,mode,window}; reach/trajectory/value-amplitude start inform everywhere, floor+limit gate; trajectory off the fetched 1h series so it fires while loadDaily is cold — the Nightmare-staff knife catch; SKILL /scan v1.29; replay goldens untouched; no APP_VERSION) |
 | PF1 | Forecast: pure diurnal+trend 12h/24h projection module + `hourProfile` dispersion fields | `js/forecast.mjs` (new), `js/windowread.mjs` (additive), `pipeline/test/forecast.test.mjs` (new) | ✅ 2026-07-10 (`diurnalForecast`/`whenBuyable`/`whenSellable`; blood-rune golden pinned; loud degrades; band widens with horizon; INFORM-ONLY/console-only, n≈0 placeholders, no APP_VERSION. **PF2–PF8 remain OPEN** — surfaces (quote/screen/windowrange/watch), estimator/validator hooks, and the PF8 validation study that gates any graduation past inform-only; see `PLAN-FORECAST.md`) |
 | ARCH-1 | monitor.mjs applies REMOVE tombstones (no phantom holds) | `pipeline/commands/monitor-offers.mjs`, `lib/reconstruct.mjs`, `monitor.test.mjs` | ✅ `a24d456` (routes monitor's in-memory FIFO through shared `buildTombstonedEvents`; PLAN-ARCH-DOCS-AUDIT A1) |
 | COD-1 | Quote-basis ordering invariant fixture | `pipeline/test/quotecore.test.mjs` | ✅ `55861d1` (test-only; `quoteOrdered(row)` across consistent-basis shapes; Q3-2) |
-| DL1 | Structural doc-drift linter + CI wire | `pipeline/lint-docs.mjs`, `lint-docs.test.mjs`, `checks.yml` | ✅ `ef239dc` (denylist + duplicate-phrase; stays denylist/structural, never semantic; Q3-1) |
+| DL1 | Structural doc-drift linter + CI wire | `pipeline/ci/lint-docs.mjs`, `lint-docs.test.mjs`, `checks.yml` | ✅ `ef239dc` (denylist + duplicate-phrase; stays denylist/structural, never semantic; Q3-1) |
 | COD-2 | Overnight accumulation table → script | `lib/gatecandidates.mjs`, `screen.mjs`, `/overnight` SKILL | ✅ `81d9049` (`expUnitsOvernight`; `screen.mjs --posture overnight` prints the table; pinned by `expunitsovernight.test.mjs`; Q3-3) |
 | COD-3 | `rebidBar`/`rebidAdvice` helper + weekly-read marker | `js/quotecore.js`, `pipeline/commands/join-outcomes.mjs`, skills | ✅ `5b91d10` (trajectory/diurnal-aware CUT-family advisory; `--weekly-due`; pinned by `rebid.test.mjs`; Q3-4/5) |
 | COD-4 | quote.mjs budgeted ts1h → reach/trajectory fire on explicit asks | `pipeline/commands/quote-items.mjs`, `lib/warm-term-structure.mjs`, `lib/item-context.mjs` | ✅ `a923496` (fixes flaw A4; shared `staleBookBanner` + diurnal line on quote; Q3-6/7) |
@@ -322,7 +322,7 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
 - **Encoding boundary:** encode everything mechanical-given-data; judgment stays for novel events
   / taste / placeholder-era thresholds; the split is "scripts compute the weighed menu with
   evidence; Ben picks". Skills improvement loop: fixture-first; prose only with a `judgment:` tag;
-  pointers not copies; enforced by `pipeline/lint-skills.mjs` (P7) + a wave-start drift audit of
+  pointers not copies; enforced by `pipeline/ci/lint-skills.mjs` (P7) + a wave-start drift audit of
   the `judgment:` inventory.
 
 ### Chunks (each carries its own reconciling docs pass + README inventory in the same commit)

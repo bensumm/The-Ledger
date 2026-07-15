@@ -7,7 +7,7 @@
  * live regression guard — that the four real SKILL.md files currently lint clean.
  */
 import assert from 'node:assert';
-import { lintText, lintFile, SKILL_FILES } from '../lint-skills.mjs';
+import { lintText, lintFile, SKILL_FILES } from '../ci/lint-skills.mjs';
 
 let passed = 0;
 const ok = (name, fn) => { fn(); console.log(`  ✓ ${name}`); passed++; };

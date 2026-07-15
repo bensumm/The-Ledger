@@ -16,7 +16,7 @@ entry, sorted into one of three dispositions.
   PROPOSALS only** — nothing is deleted in P7 beyond mechanical tagging. The prose stays until
   Ben signs off; this table records the case for removal.
 
-**How the tags relate.** `pipeline/lint-skills.mjs` (CI, cheap `checks` job) fails on any
+**How the tags relate.** `pipeline/ci/lint-skills.mjs` (CI, cheap `checks` job) fails on any
 top-level `- **…**` rule-block that carries neither a `` `code-pointer` `` nor a `judgment:`
 tag. The linter is a growth-visibility heuristic, NOT a semantic checker (it cannot tell whether
 a cited script actually enforces the rule) — this table is the semantic record, hand-maintained.

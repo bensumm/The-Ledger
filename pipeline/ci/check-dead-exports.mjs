@@ -28,15 +28,15 @@
  * to the next reader. A rare case that can't take an inline marker (e.g. a re-export) uses ALLOW below.
  *
  * CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, public-log-safe, no ~/.runelite,
- * no secrets, no network, static-only (never imports the scanned files). Run: node pipeline/check-dead-exports.mjs
+ * no secrets, no network, static-only (never imports the scanned files). Run: node pipeline/ci/check-dead-exports.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');
-const SCAN_DIRS = [path.join(ROOT, 'js'), HERE];   // walk() recurses, so `pipeline/` already covers pipeline/lib
+const ROOT = path.join(HERE, '..', '..');   // HERE=pipeline/ci; up two -> repo root
+const SCAN_DIRS = [path.join(ROOT, 'js'), path.join(HERE, '..')];   // js/ + all of pipeline/ (walk() recurses, covers lib/commands/probes/test)
 
 // Exports intentionally kept without a current non-test consumer. Each needs a reason; adding a line
 // here is the deliberate acknowledgement that this symbol is a public/future API, not accidental residue.

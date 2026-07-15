@@ -10,7 +10,7 @@
  * Run: `node pipeline/test/check-dead-exports.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { stripComments, ownedExports, testOnlyNames, namedImports } from '../check-dead-exports.mjs';
+import { stripComments, ownedExports, testOnlyNames, namedImports } from '../ci/check-dead-exports.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -14,14 +14,14 @@
  *
  * MUST STAY a structural/existence checker, never a semantic one (the skill-lint / doclint honesty note
  * applies verbatim). CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, no network/secrets.
- * Run: node pipeline/lint-arch.mjs
+ * Run: node pipeline/ci/lint-arch.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');
+const ROOT = path.join(HERE, '..', '..');   // HERE=pipeline/ci; up two -> repo root
 
 // Docs whose code-font file references are guarded (extend as more durable docs adopt the contract).
 const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
@@ -31,7 +31,7 @@ const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
 const PROPOSED = new Set(['docs/FLOW.md', 'flip-niches.mjs', 'held-item-strategy.mjs']);
 
 // A bare basename resolves against these dirs (repo-root-relative). '' = repo root (index.html, *.json).
-const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'pipeline/test', 'pipeline/commands', 'pipeline/probes', 'docs', '.github/workflows', '.claude/skills'];
+const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'pipeline/test', 'pipeline/commands', 'pipeline/ci', 'pipeline/probes', 'docs', '.github/workflows', '.claude/skills'];
 
 const EXT = /\.(mjs|js|json|jsonl|md|css|html|yml|yaml)$/;
 

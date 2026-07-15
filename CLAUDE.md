@@ -47,7 +47,7 @@ load-bearing "don’t-rebuild" invariant lives in the header of the module/test 
 the Gate-2-`CUT`-exempt rule in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in
 `pipeline/commands/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/probes.mjs`).
 Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`**, enforced by
-`pipeline/lint-skills.mjs` in CI. Before building something that feels new, check `git log` +
+`pipeline/ci/lint-skills.mjs` in CI. Before building something that feels new, check `git log` +
 `CHANGELOG.md` — much of it already exists; don’t work from a stale assumption that a capability is
 missing.
 
@@ -155,7 +155,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   corrected `vol24`); the ONE remaining broken consumer is the browser app (`js/marketfetch.js`: Finder/Watch/
   Trends) — it STILL reads the broken `/24h`, so the published Scan tab + every node CLI are now MORE correct
   than the live app until the deferred, APP_VERSION-bumping step 3 lands. **CI import-resolution guard**
-  (`pipeline/check-imports.mjs`, wired into `checks.yml`) statically verifies every pipeline entrypoint's
+  (`pipeline/ci/check-imports.mjs`, wired into `checks.yml`) statically verifies every pipeline entrypoint's
   imports resolve against module exports — closes the gap that let a missing-export ride onto main undetected.
 - **Liquidity gate (S1):** two-sided (`hpv>0 && lpv>0`, the non-negotiable ghost-spread lesson) AND
   `limitVol ≥ --floor` (3500, PLAN-VOL24-recalibrated) **OR** gp-flow `limitVol×mid ≥ --gp-floor` (4.5b). The gp-flow path admits big
@@ -735,7 +735,7 @@ metadata, not a leak; the concern is content, not commit authorship.
   structural checker, never a semantic/LLM one**) plus a separate
   **`smoke` job** (CI1) that loads `index.html` in headless Playwright chromium with all
   external network stubbed and fails on any page error / app console error / empty pane —
-  the "syntax passed but the app broke" class the process rules warn about (`pipeline/smoke-test.mjs`).
+  the "syntax passed but the app broke" class the process rules warn about (`pipeline/ci/smoke-test.mjs`).
   Both run on push, PR, and `merge_group`; the cheap job is split out so it fails fast. Agents
   may add/improve workflows within the constraints in `/ship` §4 (public logs, no `~/.runelite`,
   seconds-fast, no secrets).

@@ -31,13 +31,13 @@
  *   - It is a GROWTH-VISIBILITY guard, not proof of correctness. A green lint means "every
  *     rule-block is at least labelled", never "the skills are right".
  *
- * Run: `node pipeline/lint-skills.mjs`  (CI runs it in the cheap `checks` job).
+ * Run: `node pipeline/ci/lint-skills.mjs`  (CI runs it in the cheap `checks` job).
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');   // pipeline/ci -> repo root
 
 export const SKILL_FILES = [
   '.claude/skills/scan/SKILL.md',

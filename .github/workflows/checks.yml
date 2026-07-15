@@ -30,22 +30,22 @@ jobs:
           echo "syntax OK"
 
       - name: acceptance fixtures (auto-discovered *.test.mjs)
-        run: node pipeline/run-tests.mjs
+        run: node pipeline/ci/run-tests.mjs
 
       - name: import-resolution (entrypoint imports resolve against module exports)
-        run: node pipeline/check-imports.mjs
+        run: node pipeline/ci/check-imports.mjs
 
       - name: dead-export (no export kept alive only by its own test — RC-A vestigial-code guard)
-        run: node pipeline/check-dead-exports.mjs
+        run: node pipeline/ci/check-dead-exports.mjs
 
       - name: archlint (every file ARCHITECTURE.md names resolves on disk — doc-reference guard E7)
-        run: node pipeline/lint-arch.mjs
+        run: node pipeline/ci/lint-arch.mjs
 
       - name: skill-lint (every SKILL.md rule-block tagged, P7)
-        run: node pipeline/lint-skills.mjs
+        run: node pipeline/ci/lint-skills.mjs
 
       - name: doc-lint (denylist of superseded terms + single-source duplicate-phrase, DL1)
-        run: node pipeline/lint-docs.mjs
+        run: node pipeline/ci/lint-docs.mjs
 
       - name: fills.json / positions.json parse
         run: |
@@ -76,4 +76,4 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Browser DOM smoke
-        run: node pipeline/smoke-test.mjs
+        run: node pipeline/ci/smoke-test.mjs
