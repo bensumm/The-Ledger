@@ -81,7 +81,3 @@ export function buysByItem(events) {
   return byItem;
 }
 
-/* buysForItem(events, itemId) — the single-item convenience slice ([] when the item has no logged buy). */
-export function buysForItem(events, itemId) {
-  return buysByItem(events).get(itemId) || [];
-}

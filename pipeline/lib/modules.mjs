@@ -134,7 +134,9 @@ export async function loadModules(dir = MODULES_DIR) {
 }
 
 // test/inspection helpers — the loaded set, and a reset so a fixture can load a synthetic dir cleanly.
+// @test-only: module-registry introspection for modules.test.mjs.
 export function loadedModules() { return _loaded; }
+// @test-only: module-registry reset between modules.test.mjs cases.
 export function resetModules() { _loaded = null; }
 
 /* runProbes(row, surface, ctx) — the stage-keyed runner. Runs OBSERVE-stage probes (the tag producers
@@ -168,6 +170,7 @@ export function runProbes(row, surface, ctx = {}) {
    via `needs(row, ctx)`, MINUS ids already present. A surface that must actively pre-fetch (e.g. quote)
    would fetch these before running the probes; the screen surface satisfies decant off `ctx.v24all`
    instead, so it does not need to call this. Advisory until such a caller exists. */
+// @provisional-api: the probe-orchestration framework IS adopted (screen.mjs + quote.mjs run loadModules/runProbes every pass); collectNeeds is its not-yet-wired NEEDS half (the PM1 active pre-fetch contract — the pending consumer is quote.mjs pre-fetching a probe's declared sibling ids, e.g. decant dose variants). Exercised by modules.test.mjs until that lands.
 export function collectNeeds(items, surface, ctxFor = () => ({})) {
   const g = _loaded;
   if (!g) return [];

@@ -17,7 +17,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  structuralSupport, cutTrigger, supportLevels,
+  structuralSupport, cutTrigger,
   SUPPORT_LOOKBACK_DAYS, CUT_TRIGGER_DELTA,
 } from './lib/levels.mjs';
 
@@ -52,12 +52,6 @@ ok('cut-trigger = support × (1 − δ) and is strictly below support', () => {
   assert.equal(cutTrigger(null), null);            // null-safe
 });
 
-ok('supportLevels bundles both, and both are null when support is unknown', () => {
-  const lv = supportLevels([100, 90, 95, 96]);      // 96≥95 → support 95
-  assert.equal(lv.support, 95);
-  assert.equal(lv.trigger, 95 * (1 - CUT_TRIGGER_DELTA));
-  assert.equal(supportLevels([100]), null);
-});
 
 /* --- graceful degradation ------------------------------------------------------------------- */
 ok('fewer than 2 usable lows → null (no crash, no fabricated level)', () => {

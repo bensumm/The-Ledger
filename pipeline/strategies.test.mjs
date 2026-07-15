@@ -101,10 +101,9 @@ ok('the default-entry-path proposal is the documented mapping (Ben-vetoable)', (
   assert.equal(STRATEGIES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
 });
 
-ok('no shipped spec carries the (vestigial) pre-fetch pool floor or proxy ranking (rising deleted)', () => {
-  // rising was the only spec that set pool.risingFloor:true / rank:'proxy'; its mechanism is now the
-  // rankAndSlice rising reserve. band/churn rank by velocity; value ranks by valueScore.
-  for (const s of STRATEGY_LIST) assert.equal(s.pool.risingFloor, false, `${s.key} has no rising floor`);
+ok('no shipped spec ranks by proxy (rising deleted); ranks are velocity/value', () => {
+  // rising was the only spec that ranked by 'proxy'; its fetch-ordering mechanism is now the rankAndSlice
+  // rising reserve (proxyDrift-based). band/churn/scalp rank by velocity; value ranks by valueScore.
   for (const k of ['band', 'churn', 'scalp']) assert.equal(STRATEGIES[k].rank, 'velocity', `${k} ranks by velocity`);
   assert.equal(STRATEGIES.value.rank, 'value');
 });

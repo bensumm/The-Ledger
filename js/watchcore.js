@@ -111,8 +111,3 @@ export function briefLine({verdict, name, position, listAt=null, breakEven=null}
     : (breakEven!=null?`(BE ${fmtP(breakEven)})`:'');
   return `${briefDot(verdict)} ${name} · ${position}${sell?` ${sell}`:''} · ${verdict}`;
 }
-export function briefBook(rows=[], {time='', alerts=0}={}){
-  const n=rows.length;
-  const head=`# book ${time} · ${n} position${n===1?'':'s'}${alerts?` · ⚠ ${alerts} alert${alerts===1?'':'s'}`:' · all quiet'}`.replace(/\s+/g,' ').trim();
-  return [head, ...rows.map(briefLine)];
-}

@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import { verdictFamily, isHeldAlert, alertCount, splitHeld, INCIDENTAL_GP,
          isSameLocalDay, todaysFills, summary, capitalSplit, CANCEL_BID,
-         briefDot, briefLine, briefBook } from '../js/watchcore.js';
+         briefDot, briefLine } from '../js/watchcore.js';
 import { offerVerdict } from '../js/quotecore.js';
 
 let pass = 0;
@@ -209,17 +209,6 @@ ok('briefLine degrades gracefully when list-at is unknown (BE-only, then bare)',
     '⚪ X · ask 0/1 @ 35.6m (BE 35.51m) · NO-READ');
   assert.equal(briefLine({ verdict: 'UNBOOKED-ASK', name: 'Y', position: 'ask 1/1 @ 100', listAt: null, breakEven: null }),
     '⚪ Y · ask 1/1 @ 100 · UNBOOKED-ASK');
-});
-ok('briefBook header states count + alert state; one line per row', () => {
-  const rows = [
-    { verdict: 'HOLD', name: 'A', position: 'p', listAt: 10, breakEven: 8 },
-    { verdict: 'CUT-CANDIDATE', name: 'B', position: 'q', listAt: 20, breakEven: 18 },
-  ];
-  const out = briefBook(rows, { time: '14:52', alerts: 1 });
-  assert.equal(out.length, 3);                              // header + one line PER row (never collapsed)
-  assert.equal(out[0], '# book 14:52 · 2 positions · ⚠ 1 alert');
-  const quiet = briefBook([rows[0]], { time: '09:00', alerts: 0 });
-  assert.equal(quiet[0], '# book 09:00 · 1 position · all quiet');
 });
 
 console.log(`\nAll ${pass} checks passed.`);

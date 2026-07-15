@@ -80,7 +80,7 @@ import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE: the 
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
-// here: gateCandidates/risingPoolFloor/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
+// here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from './lib/gatecandidates.mjs';
@@ -178,30 +178,6 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
-// --- NY2.1: rising-pool NOISE FLOOR — NOW VESTIGIAL (Steps 3+4, Ben 2026-07-09: the `rising` niche was
-// DELETED, and it was the ONLY spec that set pool.risingFloor:true, so this floor no longer fires on any
-// shipped niche). The constants + the risingPoolFloor predicate are KEPT so a future re-add of a rising
-// niche is a one-flag change, and because the CLI flags/THRESHOLDS still thread them harmlessly. Original
-// rationale (kept for that eventual re-add):
-// NY1 found the rising niche's blind fetch pool flooded with cheap teleport-tab/consumable
-// candidates (a trending evening surfaced 33 D-grade froth rows, zero worth an offer, all sub-~100k
-// mid) that burned the expensive per-item fetch budget. This is a rising-POOL pre-fetch floor; the
-// other niches and the shared gates are untouched.
-//
-// MEASURE CHOSEN — keep a rising candidate iff it is a BIG TICKET (mid ≥ RISE_MID_FLOOR) OR LIQUID
-// enough to move (limitVol ≥ RISE_LIQUID_VOL). Rationale (why not a naive price floor): the named
-// keepers span BOTH classes and a price-only floor would kill the cheap ones —
-//   • big-ticket momentum names (Armadyl crossbow ~42.6m, Twisted buckler ~22.9m, Webweaver bow
-//     ~18.9m, Abyssal bludgeon ~17.4m, Basilisk jaw ~17.1m, Toxic blowpipe ~10.6m) all clear the
-//     mid floor;
-//   • cheap-but-liquid risers (Dragon arrowtips ~4.9k, Cake ~617 — both graded S WHILE liquid)
-//     would be wrongly dropped by a price floor but sail through the liquid-volume arm.
-// The teleport-tab D-flood is cheap AND thin/mid (below BOTH arms) → it drops. RISE_LIQUID_VOL=1000
-// matches suggestlog's liqClass 'liquid' cutoff (one vocabulary; volDay == limitVol == min(hpv,lpv)).
-// HONESTY: one evening of data (NY1); rising was re-judged on a trending day — re-check on a flat one.
-// (The pure `risingPoolFloor` predicate moved to lib/gatecandidates.mjs with the gate stack, P1.)
-const RISE_MID_FLOOR = A['rise-mid-floor'] != null ? parseGp(A['rise-mid-floor']) : 1_000_000;
-const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1000;
 // GC1: the CLI-derived thresholds gateCandidates consumes, grouped into ONE object so the gate stack
 // takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
@@ -212,7 +188,7 @@ const RISE_LIQUID_VOL = A['rise-liquid-vol'] != null ? +A['rise-liquid-vol'] : 1
 const THROUGHPUT_MODE = (A.throughput === 'legacy') ? 'legacy' : 'capital';
 const THRESHOLDS = {
   FLOOR, MIN_ROI, MIN_PRICE, MAX_PRICE, MIN_NET_GP, MIN_TRADED, MIN_TRADED_THIN, MIN_GPD, GP_FLOOR,
-  RISE_MID_FLOOR, RISE_LIQUID_VOL, VALUE_CAP_GP,
+  VALUE_CAP_GP,
   THROUGHPUT_MODE, THROUGHPUT_CAP_GP: THROUGHPUT_MODE === 'legacy' ? null : VALUE_CAPITAL,
 };
 // --- S2 posture: overnight vs active. Posture TUNES the shared stack, it is not a new niche.
@@ -295,7 +271,7 @@ const DIURNAL_NIGHTS = 7;                                        // recent local
 //  gate-bounded — so it runs on EVERY surfaced pick, same coverage as the Entry-paths block below.)
 
 // P1: the gate stack (`gateCandidates`), the fetch-pool ranker (`rankAndSlice` + `proxyDrift` +
-// `softFactor`), the `risingPoolFloor` predicate, and `expUnits` all live in lib/gatecandidates.mjs
+// `softFactor`) and `expUnits` all live in lib/gatecandidates.mjs
 // now (imported above). main() passes screen's CLI THRESHOLDS to gateCandidates and { thinReserve,
 // top } to rankAndSlice explicitly (the lib defaults to the same values via DEFAULT_THRESHOLDS /
 // THIN_RESERVE_DEFAULT / TOP_DEFAULT). expUnits is reused below by roughExpGpDay (the watchlist path).

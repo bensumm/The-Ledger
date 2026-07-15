@@ -37,7 +37,6 @@ import { recentDirection, DIR_LOOKBACK_H } from './quotecore.js';
 import { tax, netMargin } from './format.js';
 
 // --- status algebra ---------------------------------------------------------------------------
-export const STATUS = { PASS: 'pass', CAUTION: 'caution', REJECT: 'reject' };
 const SEVERITY = { pass: 0, caution: 1, reject: 2 };
 /* the more severe of two statuses (reject > caution > pass) — the worst gate wins on a surface. */
 export function worseOf(a, b) { return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a; }

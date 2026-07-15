@@ -139,9 +139,6 @@ function churnEdge(inp, t) {
                  DELETED — spread's 24h-average edge is narrower than the band + surfaced ≈0 clean flips
                  once the net>0 gate landed; rising ⊆ band, its proxy-ordering mechanism absorbed into
                  rankAndSlice's rising reserve. scalp/value stay off-by-default.)
-     pool        pre-fetch pool rule: { risingFloor } — now vestigial (all false; the rising niche that
-                 set it true is deleted). risingPoolFloor + the field are kept so a future re-add is a
-                 one-flag change, but no shipped spec sets it.
      edge        (inputs, thresholds) → { modeNet, modeRoi, activeWin } | null  (the step-3 edge)
      rank        fetch-pool ordering: 'velocity' (the shipped path — expGpDay × softFactor, then the
                  rising reserve front-loads high-proxy risers) | 'value' (valueScore). ('proxy' remains a
@@ -197,7 +194,7 @@ function churnEdge(inp, t) {
 export const STRATEGY_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,
-    pool: { risingFloor: false }, edge: bandEdge, rank: 'velocity', confirm: null,
+    edge:bandEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     // DP1 dip-posture is INFORM (never drops a row — the validator can't reject anyway). Wired on
     // band + churn (both are resting-bid flip plays where a reverting dip means the bid misses); NOT
@@ -208,7 +205,7 @@ export const STRATEGY_LIST = Object.freeze([
   },
   {
     key: 'churn', label: 'Churn', inAll: true,   // the high-volume buy-limit-cycle commodity lane
-    pool: { risingFloor: false }, edge: churnEdge, rank: 'velocity', confirm: null,
+    edge:churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // Step 6 (Ben 2026-07-09, decision A): churn ranks the LAP (net/u × min(limit, feasibleDepth) × P ÷
@@ -219,7 +216,7 @@ export const STRATEGY_LIST = Object.freeze([
   },
   {
     key: 'scalp', label: 'Scalp', inAll: false,   // P5 — off-by-default; explicit --mode scalp only (provisional, n≈0)
-    pool: { risingFloor: false }, edge: scalpEdge, rank: 'velocity', confirm: 'falling',
+    edge:scalpEdge, rank: 'velocity', confirm: 'falling',
     // scalp accepts AND REQUIRES a falling wide band (Step 5, Ben 2026-07-09): falling='accept' stops the
     // exclusion, and surviveMode's scalp-confirm additionally DROPS a non-falling row ('notFalling') — a
     // scalp on a non-falling item is just a band flip band already owns. trajectory + floor stay INFORM
@@ -230,7 +227,7 @@ export const STRATEGY_LIST = Object.freeze([
   },
   {
     key: 'value', label: 'Value', inAll: true,   // Ben 2026-07-10: value runs in --mode all by default (was explicit-only). Still console-only (excluded from screen.json) + provisional (n≈0); a bare `all` runs it on placeholder --capital/--slots.
-    pool: { risingFloor: false }, edge: valueEdge, rank: 'value', confirm: null,
+    edge:valueEdge, rank: 'value', confirm: null,
     // value KEEPS reach — as a full-day week+ daily-min TIMING read (windowHours 24 / 14 nights), not an
     // 8h flip check: it finds WHEN the recent-week low prints so the entry is timed (Hydra/Berserker).
     // value-amplitude is value's own recent-week cycle+proximity check. All inform in the n≈0 rollout.
@@ -298,14 +295,13 @@ function validatorEntryError(v) {
   return null;
 }
 
+// @test-only: spec conformance validator, run over STRATEGY_LIST by strategies.test.mjs (dev/CI schema check, not a production code path).
 export function validateStrategySpec(spec) {
   const errs = [];
   if (!spec || typeof spec !== 'object') return ['spec is not an object'];
   if (typeof spec.key !== 'string' || !spec.key) errs.push('key must be a non-empty string');
   if (typeof spec.label !== 'string' || !spec.label) errs.push('label must be a non-empty string');
   if (typeof spec.inAll !== 'boolean') errs.push('inAll must be a boolean');
-  if (!spec.pool || typeof spec.pool !== 'object') errs.push('pool must be an object');
-  else if (typeof spec.pool.risingFloor !== 'boolean') errs.push('pool.risingFloor must be a boolean');
   if (typeof spec.edge !== 'function') errs.push('edge must be a function');
   else if (spec.edge.length < 1) errs.push('edge must take (inputs, thresholds)');
   if (!VALID_RANKS.has(spec.rank)) errs.push(`rank must be one of ${[...VALID_RANKS].join('/')}`);

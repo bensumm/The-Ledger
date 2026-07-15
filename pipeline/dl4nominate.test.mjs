@@ -2,7 +2,8 @@
 /**
  * dl4nominate.test.mjs — acceptance fixtures for DL4 (the "B feeds A" scan→dip-loop discovery half):
  *   - nominateDip (js/quotecore.js) — the pure flush-SUITABILITY read off zero-fetch gate-tier data.
- *   - selectNominations (js/quotecore.js) — the pure dedup + cap over the current dip-watchlist.
+ *   - reconcileDipPool (js/quotecore.js) — the ONE auto-pool write transform: upsert/re-score/age + the
+ *     manual↔auto name/id dedup (ported from the retired selectNominations).
  *   - the polymorphic dip-watchlist reader logic (legacy string/number OR new object entries).
  *
  * Lives in pipeline/ next to diploop.test.mjs / dipposture.test.mjs (the convention for js/-module tests;
@@ -17,15 +18,15 @@
  */
 import assert from 'node:assert/strict';
 import {
-  nominateDip, selectNominations, pruneDipPool, reconcileDipPool,
-  DL4_WIDE_BAND_PCT, DL4_WIDE_DAY_PCT, DL4_MAX_NOMINATIONS_PER_SCAN, DL4_MIN_GP_FLOW, DL4_MIN_ABS_SWING,
+  nominateDip, pruneDipPool, reconcileDipPool,
+  DL4_WIDE_BAND_PCT, DL4_WIDE_DAY_PCT, DL4_MIN_GP_FLOW, DL4_MIN_ABS_SWING,
   DL4_POOL_MAX_AGE_DAYS, DL4_POOL_CAP_LIQUID, DL4_POOL_CAP_ILLIQUID, DIP_LOOP_LIQUID_FLOOR,
 } from '../js/quotecore.js';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 
-console.log('DL4 nominateDip + selectNominations + polymorphic-reader acceptance:');
+console.log('DL4 nominateDip + reconcileDipPool + polymorphic-reader acceptance:');
 
 // --- fixture builders -------------------------------------------------------------------------
 // v24 entry: { avgLowPrice, avgHighPrice, highPriceVolume, lowPriceVolume }
@@ -155,33 +156,20 @@ ok('nominateDip: value-floor boundary (mid×limitVol around DL4_MIN_GP_FLOW)', (
 // so the "null buy-limit" hazard of a guide×limit design simply does not arise here — there is no limit
 // input to be null. That absence of a degenerate case is a deliberate reason this design was chosen.
 
-// --- 7. selectNominations: dedup + cap + highest-score win --------------------------------------
-ok('selectNominations: existing id never re-added; cap respected; highest-score win', () => {
-  const existing = [{ id: 10, name: 'Held', source: 'manual', track: 'liquid', addedTs: 1 }];
-  const cands = [
-    { id: 10, name: 'Held', track: 'liquid', score: 9 },   // dup → dropped
-    { id: 11, name: 'A', track: 'liquid', score: 5 },
-    { id: 12, name: 'B', track: 'illiquid', score: 8 },
-    { id: 13, name: 'C', track: 'liquid', score: 1 },
+// --- 7. reconcileDipPool: a manual/legacy entry blocks an AUTO duplicate by id OR name ----------
+// The name-dedup was ported from the retired selectNominations into the LIVE write-path (reconcileDipPool),
+// so the manual↔auto guard is exercised where it actually runs — not in a dead helper.
+ok('reconcileDipPool: a manual/legacy entry blocks an auto qualifier by name AND by numeric id', () => {
+  const now = 1e12;
+  const existing = ['Searing page', 28931];   // legacy plain-name string + numeric-id (both manual/exempt)
+  const qualifiers = [
+    { id: 111, name: 'Searing page', track: 'liquid', score: 5 },   // name matches a manual entry → NOT inserted
+    { id: 28931, name: 'Whatever', track: 'liquid', score: 6 },     // numeric-id matches a manual entry → NOT inserted
+    { id: 222, name: 'Fresh', track: 'illiquid', score: 4 },        // genuinely new → inserted
   ];
-  const picks = selectNominations(existing, cands, 2);
-  assert.equal(picks.length, 2, 'cap respected');
-  assert.deepEqual(picks.map(p => p.id), [12, 11], 'highest scores first, dup excluded');
-});
-ok('selectNominations: legacy plain-array existing entries dedupe by name AND numeric id', () => {
-  // legacy array mixes a plain name string and a numeric-id number.
-  const existing = ['Searing page', 28931];
-  const cands = [
-    { id: 111, name: 'Searing page', track: 'liquid', score: 5 },   // name dup → dropped
-    { id: 28931, name: 'Whatever', track: 'liquid', score: 6 },     // numeric-id dup → dropped
-    { id: 222, name: 'Fresh', track: 'illiquid', score: 4 },
-  ];
-  const picks = selectNominations(existing, cands, DL4_MAX_NOMINATIONS_PER_SCAN);
-  assert.deepEqual(picks.map(p => p.id), [222], 'both legacy forms dedupe; only the fresh one survives');
-});
-ok('selectNominations: empty candidates / cap 0 → empty (never throws)', () => {
-  assert.deepEqual(selectNominations([], [], 5), []);
-  assert.deepEqual(selectNominations(null, [{ id: 1, score: 1 }], 0), []);
+  const next = reconcileDipPool(existing, qualifiers, { now });
+  assert.deepEqual(next.filter(e => e && typeof e === 'object').map(e => e.id), [222], 'only the fresh qualifier inserted; manual dups blocked by name + id');
+  assert.deepEqual(next.filter(e => typeof e !== 'object'), ['Searing page', 28931], 'manual/legacy entries preserved verbatim');
 });
 
 // --- 8. polymorphic reader logic (watch.mjs --dip): a mixed array resolves all three forms ------
@@ -256,4 +244,4 @@ ok('reconcileDipPool: re-qualifier re-scored + kept fresh; non-qualifier ages; n
   assert.equal(requal.addedTs, oldTs, 'addedTs preserved (first-seen time)');
 });
 
-console.log(`\nAll ${pass} acceptance checks passed. (DL4_WIDE_BAND_PCT=${DL4_WIDE_BAND_PCT}, DL4_WIDE_DAY_PCT=${DL4_WIDE_DAY_PCT}, DL4_MIN_GP_FLOW=${DL4_MIN_GP_FLOW}, DL4_MIN_ABS_SWING=${DL4_MIN_ABS_SWING}, cap/scan=${DL4_MAX_NOMINATIONS_PER_SCAN}, pool cap liquid=${DL4_POOL_CAP_LIQUID}/illiquid=${DL4_POOL_CAP_ILLIQUID}, age=${DL4_POOL_MAX_AGE_DAYS}d — placeholders, n=2)`);
+console.log(`\nAll ${pass} acceptance checks passed. (DL4_WIDE_BAND_PCT=${DL4_WIDE_BAND_PCT}, DL4_WIDE_DAY_PCT=${DL4_WIDE_DAY_PCT}, DL4_MIN_GP_FLOW=${DL4_MIN_GP_FLOW}, DL4_MIN_ABS_SWING=${DL4_MIN_ABS_SWING}, pool cap liquid=${DL4_POOL_CAP_LIQUID}/illiquid=${DL4_POOL_CAP_ILLIQUID}, age=${DL4_POOL_MAX_AGE_DAYS}d — placeholders, n=2)`);

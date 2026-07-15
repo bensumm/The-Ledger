@@ -10,6 +10,29 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Vestigial-code cleanup + the RC-A dead-export guard (2026-07-14, APP_VERSION 0.64.1)
+The architecture re-audit (`PLAN-ARCH-DOCS-AUDIT.md` Parts 4–5) found the repo's recurring drift is
+vestigial "kept-for-future / until-torn-out" code, so the fix is a GUARD for the whole class, not a
+symptom-by-symptom patch (Ben's steer). Shipped:
+- **`pipeline/dead-export-check.mjs` (RC-A guard)** — the inverse of import-check: fails CI if any `js/`/
+  `pipeline/` export has no non-test consumer. Fable validated the dispositions (`PLAN-CLEANUP-VALIDATION.md`);
+  it immediately caught `maxBuyForExit` shipped unwired last session. Legit test-only / provisional exports
+  declare intent inline (`// @test-only:` / `// @provisional-api:`). Its own occurrence-counter had a
+  false-positive bug (a naive comment-stripper dropped `STAGES` from a `${…}` template) — fixed with a
+  character-scanner (strings/templates/regexes preserved) and pinned by `dead-export-check.test.mjs`. Wired
+  into `checks.yml`.
+- **Removed 6 confirmed remnants:** `selectNominations` (its manual↔auto name-dedup was PORTED into the live
+  `reconcileDipPool`, closing a latent duplicate gap), `briefBook`, `supportLevels`, `buysForItem`, the dead
+  `STATUS` enum, and `DL4_MAX_NOMINATIONS_PER_SCAN` (pre-reconcile append-model leftovers).
+- **N1 — deleted the vestigial rising/spread scaffolding** (`pool.risingFloor` on every spec + its
+  validation, `risingPoolFloor`, `RISE_MID_FLOOR`/`RISE_LIQUID_VOL`, the dead `mode==='rising'` branch).
+- **N2 — `surviveMode` now reads `spec.confirm`** instead of hardcoding `mode==='scalp'` (the declarative
+  intent P4c claimed; the dead `rising` branch was kept alive ONLY by its test — the RC-A pattern exactly).
+- **`alertCount` wired into `js/watch.js`** (it duplicated the expression inline against its own header's
+  "the ONE count — never diverge" rule → the APP_VERSION bump). `maxBuyForExit` marked `@provisional-api`
+  with its proper back-solve consumer (a `windowrange --exit` CLI) tracked as a fast-follow.
+All 62 test suites + import-check + dead-export + doclint green; behavior byte-identical (replay goldens hold).
+
 ### WINDOW-CLEAR: days-reach ≠ within-window clear (2026-07-14, PLAN-WINDOW-CLEAR A+B, pipeline/skills-only — NO APP_VERSION)
 A churn/scalp lap is a WITHIN-WINDOW round trip, but every reach number we surface answers "did this
 level print on N of M DAYS" — not "does it print WHEN I'm selling (in the target window), and does the

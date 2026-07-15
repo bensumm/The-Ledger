@@ -21,7 +21,8 @@
 
 // ── Named PLACEHOLDER constants (all pending PF8 calibration) ─────────────────────────────────────
 export const FC_HORIZON_DEFAULT = 24;   // hours the trough/peak scan covers by default
-export const FC_HORIZON_SHORT   = 12;   // the shorter horizon a surface may request (band is tighter)
+// @provisional-api: forecast horizon knob a PF2–PF8 console surface (unbuilt) may request for a tighter band; the shipped default is FC_HORIZON_DEFAULT.
+export const FC_HORIZON_SHORT   = 12;
 export const FC_TREND_ERR_FRAC  = 0.5;  // trend-extrapolation error as a fraction of the moved trend, per hour:
                                         //   the band's horizon-growing term = |trendPerHour|·Δt·this
 export const FC_DISP_FALLBACK_FRAC = 0.25; // when an hour has no dispersion sample, fall back to this ×|amplitude|
@@ -191,6 +192,7 @@ const inner = fc => (fc && fc.forecast !== undefined ? fc.forecast : fc);
  * this model" — itself a useful answer). Scans the central projected low (the median dip), band exposed
  * so the caller sees the uncertainty. NOT a fill guarantee (touched ≠ filled — the standing caveat).
  */
+// @provisional-api: PF1 forecast fn — no surface consumes it yet (app uses diurnalForecast's return; the console PF2–8 forecast surface is unbuilt). Implement-vs-drop is tracked; keep pending that decision.
 export function whenBuyable(fc, targetBid) {
   const f = inner(fc);
   if (!f || !f.series || targetBid == null) return null;
@@ -206,6 +208,7 @@ export function whenBuyable(fc, targetBid) {
  * whenSellable(fc, targetAsk) — mirror: the first horizon hour whose PROJECTED HIGH is at/above the
  * target ask (held-position sell timing). Returns the same shape | null.
  */
+// @provisional-api: PF1 forecast fn — twin of whenBuyable; no surface consumes it yet. Implement-vs-drop tracked; keep pending that decision.
 export function whenSellable(fc, targetAsk) {
   const f = inner(fc);
   if (!f || !f.series || targetAsk == null) return null;

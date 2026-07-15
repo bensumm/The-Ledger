@@ -129,6 +129,7 @@ export const ARCHETYPES = [
 
 /* buildSnapshot() → the full coffer-replay-snapshot/1 object (deterministic). This IS the committed
    fixture's content; the test guards the committed JSON against drift from this generator. */
+// @test-only: replay golden-fixture harness, driven by replay.test.mjs (no production entrypoint runs replay).
 export function buildSnapshot(anchor = ANCHOR_TS) {
   const items = {};
   for (const a of ARCHETYPES) {
@@ -172,6 +173,7 @@ function snapshotDaily(snap) {
    surviveMode (post-fetch doctrine). Returns, per niche, the exact stage outputs the golden pins:
      { gated:[{id,thin}], ranked:[id], survivors:[{id,keep,discardReason,rescued}], kept:[id], dropped:{id:reason} }
    opts: { modes, thresholds, thinReserve, top, phaseRescue, posture } — all default to screen's defaults. */
+// @test-only: replay golden-fixture harness, driven by replay.test.mjs (no production entrypoint runs replay).
 export function runReplay(snap, {
   modes = ['band', 'churn'],   // Steps 3+4 (Ben 2026-07-09): spread + rising specs DELETED
   thresholds = DEFAULT_THRESHOLDS,

@@ -11,8 +11,9 @@
  * Run: `node pipeline/gatecandidates.test.mjs`  (exits non-zero on any failure).
  *
  * WHAT gateCandidates OWNS (and this file pins) — the PRE-FETCH gate stack. (Steps 3+4, Ben 2026-07-09:
- * the spread + rising specs are DELETED; these tests use `band` as the generic vehicle. The risingPoolFloor
- * predicate is retained-but-unused — no shipped spec sets pool.risingFloor:true — and pinned as a pure fn.)
+ * the spread + rising specs are DELETED; these tests use `band` as the generic vehicle. (The risingPoolFloor
+ * predicate + its RISE_* consts were removed in the 2026-07-14 vestigial cleanup — the dead-export guard's
+ * motivating case.)
  *   - two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0) — the NON-NEGOTIABLE ghost-spread gate.
  *   - price window (MIN_PRICE ≤ mid ≤ MAX_PRICE).
  *   - liquidity: unit floor (limitVol ≥ FLOOR) OR gp-flow (limitVol×mid ≥ GP_FLOOR); the gp-flow-only
@@ -30,7 +31,7 @@
  * gateCandidates is the thin-gp-flow exemption from the attention floor, pinned below.
  */
 import assert from 'node:assert/strict';
-import { gateCandidates, risingPoolFloor, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT } from './lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT } from './lib/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -46,7 +47,7 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 const baseT = {
   FLOOR: 50, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,
   MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 1000, GP_FLOOR: 250_000_000,
-  RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000, VALUE_LIQ_FLOOR: 50,
+  VALUE_LIQ_FLOOR: 50,
 };
 // build a 24h record and (optionally) a map limit / a band, keyed by id. Bar D: a band carries tradedWin
 // (density) + sawLow/sawHigh (two-sided); default them off active5m so existing calls exercise the real
@@ -119,18 +120,9 @@ ok('capital-aware expGpDay: SLACK cap → unchanged; BINDING cap → demoted bel
   assert.equal(legacy[0].expGpDay, legacy[0].expGpDayLegacy, 'legacy mode → the two are equal');
 });
 
-/* --- risingPoolFloor: retained-but-unused pure predicate (rising niche deleted) ------------ */
-ok('risingPoolFloor predicate: passes on big-ticket OR liquid, fails cheap-and-thin', () => {
-  // the predicate is kept as a pure fn (a future rising re-add is a one-flag change), though no shipped
-  // spec sets pool.risingFloor:true anymore — so gateCandidates never invokes it in production.
-  assert.equal(risingPoolFloor(2_000_000, 100, 1_000_000, 1000), true, 'big ticket');
-  assert.equal(risingPoolFloor(500_000, 1500, 1_000_000, 1000), true, 'liquid');
-  assert.equal(risingPoolFloor(500_000, 100, 1_000_000, 1000), false, 'cheap AND thin-volume → dropped');
-});
-
 ok('no shipped spec triggers the rising pool floor — a cheap-and-thin-volume item survives band', () => {
   // cheap item, mid 500k, limitVol 100 (≥FLOOR so NOT thin) — this would have been dropped by the deleted
-  // rising niche's pool floor, but band (pool.risingFloor:false) has no such floor, so it survives.
+  // rising niche's pool floor, but band has no pre-fetch pool floor, so it survives.
   const v24 = { 1: rec(490_000, 510_000, 100) };
   const bands = { 1: band(490_000, 510_000, 10) };
   const bandMode = gateCandidates('band', ctx(v24, {}, bands), baseT);

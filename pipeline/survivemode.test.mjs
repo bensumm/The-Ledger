@@ -3,8 +3,9 @@
  * survivemode.test.mjs — acceptance fixtures for surviveMode() (P1).
  *
  * surviveMode() is the POST-fetch survival doctrine renderMode() applies to each fetched+quoted row:
- * the falling-regime EXCLUSION (+ the --phase-rescue basing rescue), the rising-mode CONFIRM, and the
- * overnight-POSTURE filters. P1 extracted it verbatim from screen.mjs's inline renderMode loop into
+ * the falling-regime EXCLUSION (+ the --phase-rescue basing rescue), the SPEC-DRIVEN confirm (a spec with
+ * confirm:'falling', i.e. scalp, requires a falling regime — N2), and the overnight-POSTURE filters. P1
+ * extracted it verbatim from screen.mjs's inline renderMode loop into
  * the pure lib/gatecandidates.mjs so it is node-importable + fixture-testable with synthetic rows (no
  * live API / CLI state). This file PINS the byte-identical behavior — most importantly the
  * discardReason→disc-counter 1:1 map and the `rescued`-carries-through-a-later-gate contract that
@@ -81,24 +82,17 @@ ok('scalp still applies overnight posture (accept ≠ bypass every gate) — a t
   assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
 });
 
-/* --- rising-mode confirm ------------------------------------------------------------------ */
-ok('rising mode drops a non-rising row (discardReason "notRising")', () => {
+/* --- N2 (2026-07-14): confirm is SPEC-DRIVEN; the "rising" niche + its hardcoded confirm are DELETED --- */
+ok('an unknown/deleted mode (e.g. "rising") has no spec → no confirm; a clean row survives', () => {
+  // The old `mode === 'rising'` branch was dead code kept alive ONLY by this test (the rising spec was
+  // deleted in Steps 3+4). N2 removed it and made confirm read spec.confirm, so an unknown mode simply has
+  // no spec → nothing to confirm → it falls through to the posture/keep path.
   const sv = surviveMode('rising', row({ rising: false }), { phase: 'base' }, {});
-  assert.deepEqual(sv, { keep: false, discardReason: 'notRising', rescued: false });
+  assert.equal(sv.keep, true, 'no spec ⇒ no confirm ⇒ kept');
 });
 
-ok('rising mode drops a rising row that is breaking down (discardReason "breakdown")', () => {
-  const sv = surviveMode('rising', row({ rising: true, mom: 'breakdown' }), { phase: 'base' }, {});
-  assert.deepEqual(sv, { keep: false, discardReason: 'breakdown', rescued: false });
-});
-
-ok('rising mode keeps a confirmed rising, non-breakdown row', () => {
-  const sv = surviveMode('rising', row({ rising: true, mom: 'ranging' }), { phase: 'base' }, {});
-  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false });
-});
-
-ok('band mode does NOT apply the rising confirm (a non-rising row survives)', () => {
-  const sv = surviveMode('band', row({ rising: false }), { phase: 'base' }, {});
+ok('band (confirm:null) applies no confirm — a non-falling band row survives', () => {
+  const sv = surviveMode('band', row({ falling: false }), { phase: 'base' }, {});
   assert.equal(sv.keep, true);
 });
 

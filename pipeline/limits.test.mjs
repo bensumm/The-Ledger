@@ -11,7 +11,7 @@
  *    returns a status (a reject on a held lot is still just a status the surface renders as a note).
  */
 import assert from 'node:assert/strict';
-import { limitWindow, buysByItem, buysForItem, LIMIT_WINDOW_SEC } from './lib/limits.mjs';
+import { limitWindow, buysByItem, LIMIT_WINDOW_SEC } from './lib/limits.mjs';
 import { limitValidator, runValidators, worstStatus, flags, LIMIT_CAUTION_FRAC } from '../js/validate.mjs';
 
 let n = 0;
@@ -90,12 +90,12 @@ ok('buysByItem keeps only completed GE BUY fills (final cumulative filled)', () 
   assert.equal(m.has(888), false);   // banked (pre-owned) → not a GE purchase → excluded
 });
 
-ok('buysForItem returns [] for an item with no logged buy', () => {
-  assert.deepEqual(buysForItem(EVENTS, 999), []);
+ok('buysByItem returns no entry for an item with no logged buy', () => {
+  assert.equal(buysByItem(EVENTS).get(999) ?? null, null);
 });
 
 ok('a real 3-quarters-full window off extracted buys leaves the right remainder', () => {
-  const buys = buysForItem(EVENTS, 555);
+  const buys = buysByItem(EVENTS).get(555) || [];
   const w = limitWindow({ buys, limit: 40, now: NOW });
   assert.equal(w.boughtInWindow, 10);
   assert.equal(w.remaining, 30);

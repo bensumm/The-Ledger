@@ -19,7 +19,7 @@ import { fmt, fmtP, netMargin } from './format.js';
 import { resolveId } from './market.js';
 import { openTrends } from './trends.js';
 import { realised, fmtAge } from './ui.js';
-import { verdictFamily, isHeldAlert, CANCEL_BID, splitHeld, todaysFills, summary, capitalSplit, isSameLocalDay } from './watchcore.js';
+import { verdictFamily, isHeldAlert, alertCount, CANCEL_BID, splitHeld, todaysFills, summary, capitalSplit, isSameLocalDay } from './watchcore.js';
 
 const FRESH_MS = 10 * 60 * 1000;          // "book synced"/offers go amber past ~10 min (localhost)
 const WATCH_REFRESH_MS = 180000;          // re-quote every ~3 min while the tab is open
@@ -282,7 +282,7 @@ export function renderWatchTab() {
   // alerts (spec D): CUT-family held + CANCEL-BID buy offers — both from the quote cache
   const heldVerdicts = flips.map(g => { const q = quoteCache.get(g.itemId); return q ? heldVerdict(q.row, breakEven(g.avgBuy), g.value, q.ts5m).verdict : null; }).filter(Boolean);
   const offerVerdicts = (STATE.offers || []).filter(o => o.side === 'buy').map(o => { const q = quoteCache.get(o.itemId); return q ? offerVerdict(q.row, o.price) : null; }).filter(Boolean);
-  const alerts = heldVerdicts.filter(isHeldAlert).length + offerVerdicts.filter(v => v === CANCEL_BID).length;
+  const alerts = alertCount(heldVerdicts, offerVerdicts);   // the ONE alert-count home (watchcore) — never re-inline this expression (it must not diverge)
   const alertMeta = alerts > 0 ? (heldVerdicts.filter(isHeldAlert)[0] || CANCEL_BID) : (heldVerdicts.length || offerVerdicts.length ? 'all clear' : 'nothing to action');
 
   // tab badge

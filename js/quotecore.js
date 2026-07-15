@@ -53,6 +53,10 @@ export const breakEven = (buy, opts) => {
 // Returns null when no profitable buy exists (sell − margin below the smallest break-even). `margin`
 // defaults to 0 (the break-even-neutral max buy). Round-trip against breakEven is brute-force-pinned in
 // pipeline/quotecore.test.mjs.
+// @provisional-api: the tax-exact inverse of breakEven (PLAN-WINDOW-CLEAR B3), READY but not yet wired to
+// a consumer — the proper back-solve needs the WITHIN-WINDOW-REACHABLE exit price (optSell is the ask that
+// doesn't clear in-window, so it over-states the entry ceiling). Fast-follow: a `windowrange.mjs --exit
+// <ask> --margin <gp>` CLI (PLAN-WINDOW-CLEAR open-Q4). The /scan skill says "do it by hand for now." Pinned by quotecore.test.mjs.
 export const maxBuyForExit = (sell, margin = 0, opts) => {
   const target = sell - margin;                                   // the largest break-even the exit can carry
   if (opts && opts.bond) { const b = target - bondFee(opts.guide); return b >= 0 ? Math.floor(b) : null; }
@@ -982,7 +986,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
 }
 
 /* ============================================================================================
-   DL4 (2026-07-11) — nominateDip / selectNominations: the "B feeds A" discovery half of the DL2
+   DL4 (2026-07-11) — nominateDip + the pool-reconcile transforms: the "B feeds A" discovery half of the DL2
    dip-loop. Pure, DOM-free math (quotecore.js still imports only format.js). Consumed ONLY by node
    pipeline scripts (screen.mjs nominates; watch.mjs --dip polls) — NO app module imports this, so it
    ships with NO APP_VERSION bump. Fixture-pinned in pipeline/dl4nominate.test.mjs.
@@ -1019,11 +1023,11 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
 
    nominateDip(v24Entry, bandEntry, { now } = {}) → null (not suitable / missing inputs) or
      { track:'liquid'|'illiquid', score, amplitude, limitVol, gpFlow, twoSided }.
-   selectNominations(existing, candidates, cap) → the ≤cap highest-score candidates NOT already in
-     `existing` (deduped by id, polymorphic over legacy plain-string/number existing entries). */
+   reconcileDipPool(existing, qualifiers) → the ONE auto-pool write transform (upsert + re-score + age +
+     per-track score cap) with the manual↔auto id/name dedup; pruneDipPool is its age+cap helper. Both
+     are polymorphic over legacy plain-string/number existing entries. See their definitions below. */
 export const DL4_WIDE_BAND_PCT = 0.03;          // PLACEHOLDER (n=2): min 2h-band amplitude (bandHi-bandLo)/bandLo to be flush-suitable
 export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-range amplitude fallback when no band present (coarser → wider bar)
-export const DL4_MAX_NOMINATIONS_PER_SCAN = 10; // PLACEHOLDER (n=2): cap on NEW auto-nominations per scan (bounds the 5m loop pool growth)
 // VALUE FLOOR (2026-07-11): reuses the tool-wide 500k gp/day ATTENTION floor (screen.mjs MIN_GPD) as a
 // gp-SCALE gate, applied as gp-flow = mid × limitVol (the SAME construction as the main gate's gp-flow
 // path). It fixes the penny-item leak: a huge-% band on a sub-gp item (e.g. Sweetcorn seed — guide 3gp,
@@ -1098,28 +1102,6 @@ export function nominateDip(v24Entry, bandEntry, { now } = {}) {   // `now` unus
   return { track, score, amplitude, swingGp, limitVol, gpFlow, twoSided: true };
 }
 
-// selectNominations — pure dedup + cap for the scan nomination pass (extracted so it's fixture-testable
-// independent of screen.mjs's fetch/IO). `existing` is the current dip-watchlist.json array, which is
-// POLYMORPHIC: legacy plain string/number entries OR new { id, name, source, track, addedTs } objects.
-// `candidates` = [{ id, name, track, score, ... }] already-nominated rows. Returns the ≤cap highest-score
-// candidates whose id is NOT already present (by id, and — for legacy entries — never re-adding one that
-// only carries a name/number). Existing entries are never touched/migrated; the caller appends the result.
-export function selectNominations(existing, candidates, cap = DL4_MAX_NOMINATIONS_PER_SCAN) {
-  const haveIds = new Set();
-  const haveNames = new Set();
-  for (const e of (existing || [])) {
-    if (e == null) continue;
-    if (typeof e === 'object') { if (e.id != null) haveIds.add(Number(e.id)); if (e.name != null) haveNames.add(String(e.name).toLowerCase()); }
-    else if (typeof e === 'number') haveIds.add(Number(e));
-    else if (typeof e === 'string') { const n = Number(e); if (Number.isFinite(n) && String(n) === e.trim()) haveIds.add(n); else haveNames.add(e.toLowerCase()); }
-  }
-  const fresh = (candidates || []).filter(c => c && c.id != null
-    && !haveIds.has(Number(c.id))
-    && !(c.name != null && haveNames.has(String(c.name).toLowerCase())));
-  fresh.sort((a, b) => (b.score || 0) - (a.score || 0));
-  return fresh.slice(0, Math.max(0, cap));
-}
-
 // pruneDipPool — pure age + QUALITY cap over the dip-watchlist, applied on every write so the AUTO pool can't
 // grow unbounded (the 640-entry-in-a-day bloat, 2026-07-12). MANUAL/legacy entries (source !== 'auto', incl.
 // plain string/number legacy tokens) are NEVER aged or capped — hand-curation is permanent. An auto entry is
@@ -1158,6 +1140,16 @@ export function reconcileDipPool(existing, qualifiers, opts = {}) {
     if (e && typeof e === 'object' && e.source === 'auto') auto.push(e);
     else manual.push(e);
   }
+  // A manual/legacy entry (hand-curated, exempt from aging) already covers its item — never insert an
+  // AUTO duplicate of it, matched by id OR name. The pool is polymorphic: a legacy entry may be a plain
+  // name string, a numeric id (string or number), or an object. (Name-dedup ported here from the retired
+  // selectNominations so the live write-path — not just a dead helper — keeps the manual↔auto guard.)
+  const manualIds = new Set(), manualNames = new Set();
+  for (const e of manual) {
+    if (e && typeof e === 'object') { if (e.id != null) manualIds.add(Number(e.id)); if (e.name != null) manualNames.add(String(e.name).toLowerCase()); }
+    else if (typeof e === 'number') manualIds.add(Number(e));
+    else if (typeof e === 'string') { const num = Number(e); if (Number.isFinite(num) && String(num) === e.trim()) manualIds.add(num); else manualNames.add(e.toLowerCase()); }
+  }
   const seen = new Set();
   const merged = auto.map(e => {
     const id = Number(e.id); seen.add(id);
@@ -1165,8 +1157,10 @@ export function reconcileDipPool(existing, qualifiers, opts = {}) {
     return q ? { ...e, name: e.name ?? q.name, track: q.track, score: q.score, lastQualTs: now } : e;
   });
   for (const q of quals.values()) {
-    if (seen.has(Number(q.id))) continue;
-    merged.push({ id: Number(q.id), name: q.name, source: 'auto', track: q.track, addedTs: now, lastQualTs: now, score: q.score });
+    const qid = Number(q.id);
+    if (seen.has(qid)) continue;
+    if (manualIds.has(qid) || (q.name != null && manualNames.has(String(q.name).toLowerCase()))) continue;   // a manual/legacy entry already covers this item
+    merged.push({ id: qid, name: q.name, source: 'auto', track: q.track, addedTs: now, lastQualTs: now, score: q.score });
   }
   return pruneDipPool(manual.concat(merged), { ...opts, now });
 }

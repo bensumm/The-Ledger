@@ -283,6 +283,7 @@ export const ESTIMATORS = Object.freeze({
   rising:   { pFill: pFillRising,   ttf: ttfRising },
   churn:    { pFill: pFillIntraday, ttf: ttfIntraday, lapUnits: churnLapUnits },
 });
+// @test-only: estimator-family list; strategies.mjs VALID_ESTIMATORS mirrors it and strategies.test.mjs cross-checks the two so a family-name drift bites.
 export const ESTIMATOR_FAMILIES = Object.freeze(Object.keys(ESTIMATORS));
 
 // estimatorFor(spec) → the { pFill, ttf } pair for a strategy spec. Degrades to the intraday family for
@@ -425,7 +426,8 @@ export const EST_REACH_SAT_FRAC = 0.75;
 // Reconciliation weights: the reach-folded band edge and each present secondary source (diurnal
 // dip/peak level; asym high-reach ask) blend as an EQUAL-WEIGHT mean, clamped inside [live, band edge].
 // Deliberately the simplest documented default — PLACEHOLDER, no calibrated weighting exists yet.
-export const EST_BLEND_EQUAL_WEIGHTS = true;   // (named so the placeholder choice is greppable/citable)
+// @provisional-api: F1-pending placeholder — the est-blend weights each signal equally until the F1 retro sets real per-signal weights; exported so the choice is greppable and the retro can cite it.
+export const EST_BLEND_EQUAL_WEIGHTS = true;
 // The estimated-pair column set (shared by screen.mjs/quote.mjs so the header row can't drift).
 export const EST_HEADERS = ['Est. buy', 'Est. sell', 'Net/u (ROI)', 'BE'];
 

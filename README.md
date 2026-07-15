@@ -700,6 +700,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     screen.mjs's missing `dayHighFrom5m` import ride onto main undetected — `node --check` is syntax-only, no
     test imports the entrypoints, smoke loads only the browser app. Fast/offline/deterministic; exits non-zero
     naming the offending entrypoint→module→symbol),
+  - `dead-export-check.mjs` (RC-A guard, 2026-07-14 — the INVERSE of import-check, run in the cheap `checks`
+    job: a name-based, comment-stripped, deliberately CONSERVATIVE static scan of `js/` + `pipeline/` that
+    fails if any export has NO non-test consumer — the recurring "kept-for-future / until-torn-out" vestigial
+    pattern (its motivating case, `risingPoolFloor`, was removed by the same cleanup). An export exists solely
+    for its test declares that inline: `// @test-only: <reason>` or `// @provisional-api: <reason>` (an intended-
+    but-unwired API citing a tracking item) immediately above it — the acknowledgement travels with the code.
+    Uses a character-scanner comment stripper (strings/templates/regexes preserved verbatim, so an identifier in
+    a `${…}` interpolation still counts — the STAGES false-positive lesson). Pure helpers exported + pinned by
+    `dead-export-check.test.mjs`,
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below

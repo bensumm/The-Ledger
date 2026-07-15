@@ -36,9 +36,3 @@ export function cutTrigger(support, delta = CUT_TRIGGER_DELTA) {
   return support * (1 - delta);
 }
 
-/* Convenience: both levels in one call. { support, trigger } | null when support is unknown. */
-export function supportLevels(dayLows, lookback = SUPPORT_LOOKBACK_DAYS, delta = CUT_TRIGGER_DELTA) {
-  const support = structuralSupport(dayLows, lookback);
-  if (support == null) return null;
-  return { support, trigger: cutTrigger(support, delta) };
-}

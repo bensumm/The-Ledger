@@ -71,7 +71,9 @@ export const sleep = ms => new Promise(r => setTimeout(r, ms));
    that had no cross-process cache. .cache/ is already gitignored (OR2), so no new ignore entry. */
 const FETCH_DIR = path.join(CACHE_DIR, 'fetch');
 let cacheEnabled = process.env.COFFER_FETCH_CACHE === '1';
+// @test-only: fetch-cache control for deterministic tests (fetchcache.test.mjs); production leaves the cache at its default.
 export function setFetchCache(on) { cacheEnabled = !!on; }
+// @test-only: fetch-cache state probe for tests (fetchcache.test.mjs).
 export function fetchCacheEnabled() { return cacheEnabled; }
 // per-endpoint TTLs (ms): live /latest + the 5m band move fast → short; /24h + the 1h/6h series move
 // slowly → longer. Sized so a cached value can never feed a decision a stale price it would regret.

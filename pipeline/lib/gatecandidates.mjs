@@ -21,10 +21,9 @@
  *   3. surviveMode(mode, row, phase, opts) — the POST-FETCH doctrine renderMode applies to each
  *      fetched row: falling-exclusion (+ --phase-rescue basing rescue), the scalp falling-confirm, and
  *      overnight-posture filters. Returns {keep, discardReason, rescued}; discardReason maps 1:1 to
- *      renderMode's `disc` counters (falling / notFalling / posture — plus a vestigial rising branch),
- *      and `rescued` drives
+ *      renderMode's `disc` counters (falling / notFalling / posture), and `rescued` drives
  *      the disc.rescued counter (which increments on rescue even if a later gate drops the row).
- *   4. risingPoolFloor + expUnits — the shared predicates the above and the watchlist path reuse.
+ *   4. expUnits — the shared throughput predicate the above and the watchlist path reuse.
  *
  * PIN NOTE (P1 → re-pinned at P5): surviveMode encodes the CURRENT pre-amendment falling-exclusion
  * behavior (falling ⇒ dropped unless --phase-rescue basing). Ben's 2026-07-08 falling amendment
@@ -42,7 +41,7 @@ import { termStructure } from '../../js/termstructure.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '../../js/valuescreen.mjs';
 // P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
 // js/strategies.mjs. gateCandidates/rankAndSlice look up STRATEGIES[mode] and call spec.edge / read
-// spec.pool.risingFloor / spec.rank instead of branching on the niche name — byte-identical behavior
+// spec.rank / spec.confirm instead of branching on the niche name — byte-identical behavior
 // (the P1 replay goldens pin it), but a new niche (P5 scalp/value) registers a spec instead of editing
 // this file. `tax` moved with the edge functions into strategies.mjs.
 import { STRATEGIES } from '../../js/strategies.mjs';
@@ -56,7 +55,6 @@ export const DEFAULT_THRESHOLDS = {
   // NOT the same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
   // MIN_TRADED_THIN = the relaxed floor for gp-flow big tickets (2 ⇒ a lone spike still fails).
   MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 500_000, GP_FLOOR: 4_500_000_000,   // PLAN-VOL24 step 2: GP_FLOOR 250m → 4.5b (corrected gp-flow); MIN_GPD KEPT at 500k (Ben — real NET-throughput floor)
-  RISE_MID_FLOOR: 1_000_000, RISE_LIQUID_VOL: 1000,
   // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
   // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value
   // relaxes is the gp/day THROUGHPUT bar, NOT the two-sided UNIT-liquidity bar: you still have to exit a
@@ -129,12 +127,6 @@ export const expUnits = (limit, volDay, capPerWindow = null) => {
 // span. UPPER BOUND (assumes fills at your price, no fill-probability) — screen.mjs labels it as such.
 export const expUnitsOvernight = (limit, volDay) => expUnits(limit, volDay) * OVERNIGHT_SPAN_H / 24;
 
-// Pure predicate (NY2.1) — true = candidate survives the rising-pool noise floor: a BIG TICKET
-// (mid ≥ midFloor) OR LIQUID enough to move (limitVol ≥ liqVol). Rising mode only.
-export function risingPoolFloor(mid, limitVol, midFloor = DEFAULT_THRESHOLDS.RISE_MID_FLOOR, liqVol = DEFAULT_THRESHOLDS.RISE_LIQUID_VOL) {
-  return mid >= midFloor || limitVol >= liqVol;
-}
-
 // --- regime proxy off loadDaily's bulk {ts,mid} series: SAME 3d-vs-prior-~2wk shape as quotecore's
 // regimeDrift, but computed from the whole-market archive and NEVER displayed — it only ORDERS the
 // fetch pool so we spend the expensive per-item fetches on likely survivors. The real regime (and the
@@ -174,7 +166,6 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
     if (mid < t.MIN_PRICE || mid > t.MAX_PRICE) continue;   // price window (shared)
-    if (spec.pool.risingFloor && !risingPoolFloor(mid, limitVol, t.RISE_MID_FLOOR, t.RISE_LIQUID_VOL)) continue;  // NY2.1: rising-pool noise floor (big-ticket OR liquid)
     // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
     // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
     const thin = limitVol < t.FLOOR;
@@ -338,25 +329,21 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
 //                   (a non-falling scalp is a band flip → dropped 'notFalling'), so scalp = fallers only.
 export function surviveMode(mode, row, phase, opts = {}) {
   const { phaseRescue = false, posture = 'active', thin = false, series5m = null } = opts;
-  const fallingDoctrine = STRATEGIES[mode] ? STRATEGIES[mode].falling : 'exclude';
+  const spec = STRATEGIES[mode];
+  const fallingDoctrine = spec ? spec.falling : 'exclude';
   let rescued = false;
   if (row.falling && fallingDoctrine !== 'accept') {
     if (phaseRescue && phase && phase.phase === 'basing') rescued = true;   // decayed off a spike, lows flattened
     else return { keep: false, discardReason: 'falling', rescued: false };  // screen rule: never surface fallers
   }
-  if (mode === 'rising') {                                  // rising-mode confirm
-    if (!row.rising) return { keep: false, discardReason: 'notRising', rescued };
-    if (row.mom === 'breakdown') return { keep: false, discardReason: 'breakdown', rescued };
-  }
-  // scalp-mode confirm (Step 5, Ben 2026-07-09): STRICT falling-only. spec.falling='accept' stops the
-  // exclusion above from dropping a faller, but a scalp on a NON-falling item is just a band flip band
-  // already owns — so a scalp positively REQUIRES a falling regime (mirrors the rising confirm). This
-  // converts scalp from "band + fallers" to "fallers only". Its ROI-bind (a fresh wide band that only
-  // clears −ROI once tax is paid, e.g. ZGS at −0.5%) is caught separately by renderMode's Step-2 net>0
+  // Post-fetch CONFIRM — SPEC-DRIVEN (P4c → N2, 2026-07-14: was `mode === 'scalp'` plus a dead
+  // `mode === 'rising'` branch for the deleted niche; `spec.confirm` was declared+validated but unread).
+  // A spec that declares `confirm: 'falling'` (scalp) positively REQUIRES a falling regime:
+  // spec.falling='accept' stops the exclusion above from dropping the faller, and this confirm ALSO drops a
+  // NON-falling row ('notFalling') — a scalp on a non-falling item is just a band flip band already owns.
+  // Its ROI-bind (a fresh wide band clearing −ROI once tax is paid) is caught by renderMode's Step-2 net>0
   // surface gate, so it isn't re-checked here.
-  if (mode === 'scalp') {
-    if (!row.falling) return { keep: false, discardReason: 'notFalling', rescued };
-  }
+  if (spec && spec.confirm === 'falling' && !row.falling) return { keep: false, discardReason: 'notFalling', rescued };
   if (posture === 'overnight') {
     // overnight posture: only a confident, patient, non-thin edge that won't be stale by morning.
     if (thin) return { keep: false, discardReason: 'posture', rescued };                                      // no thin fast-lane
