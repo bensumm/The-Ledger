@@ -1,4 +1,4 @@
-/* capitalutil.mjs — #3 capital-utilization analytics (PLAN-YIELD). Yield is often lost to IDLE
+/* capital-utilization.mjs — #3 capital-utilization analytics (PLAN-YIELD). Yield is often lost to IDLE
    capital (gp parked in unfilled bids) and slow fills more than to bad picks; this makes that
    visible. PURE — output-only, never a verdict/alert input.
 

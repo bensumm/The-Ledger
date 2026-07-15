@@ -1,5 +1,5 @@
 /**
- * richterm.mjs — build a WARM multi-week term structure from a freshly-fetched 1h /timeseries.
+ * warm-term-structure.mjs — build a WARM multi-week term structure from a freshly-fetched 1h /timeseries.
  *
  * WHY. The `loadDaily` regime-proxy archive only began accruing 2026-07-08, so a `termStructure` off it
  * is COLD (classifyTrajectory → 'unknown', the 7d lookback thin) — but the 1h /timeseries spans weeks.

@@ -77,7 +77,7 @@ import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, wi
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
 import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series
-import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
+import { anchorNudge } from './probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
@@ -94,19 +94,19 @@ import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed 
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
-import { loadDerivedCash } from './lib/cashderive.mjs';   // value niche: DERIVED deployable pool → --capital default (cash.mjs anchor + log flow)
+import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (cash.mjs anchor + log flow)
 import { readOffersSnapshot } from './lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
-// COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/richterm.mjs (byte-identical
+// COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
 // logic) so quote.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
 // two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
-// value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the richterm.mjs header for why.
-import { richFrom1h, trajectoryFrom1h } from './lib/richterm.mjs';
+// value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the warm-term-structure.mjs header for why.
+import { richFrom1h, trajectoryFrom1h } from './lib/warm-term-structure.mjs';
 import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
-import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
+import { loadModules, runProbes, logFirings } from './lib/probes.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -134,7 +134,7 @@ const STATS = !!A.stats;
 // (slots) we'd spread it across. --capital <gp> is the input (his real bankroll); --slots N is how many
 // concurrent value holds to size for (≈ the count of quality candidates). VALUE_CAP_GP = capital ÷ slots.
 // The default is no longer a bare 100m placeholder: absent --capital we DERIVE the deployable pool from
-// the cash anchor + log flow (lib/cashderive.mjs deployablePool = the free coin stack PLUS the escrow of
+// the cash anchor + log flow (lib/derive-cash-tiers.mjs deployablePool = the free coin stack PLUS the escrow of
 // DEEP/reclaimable resting bids — NOT liquidCapital, which would over-count a near-live flip bid you
 // expect to fill as freely redeployable into a multi-week value hold). We fall back to the 100m
 // placeholder only when no anchor is set. The eager figure here has NO market reference (so a resting bid
@@ -322,7 +322,7 @@ function gradeDist(dist) {
 const watchClosely = new Map();   // id -> { name, state, note }
 
 // P4c: the weighed ENTRY-path menu for a surfaced (unheld) candidate. Builds the DERIVED path-scoring
-// ctx from the computeQuote row + phase (the same shape context.mjs's pathsStage derives for held lots,
+// ctx from the computeQuote row + phase (the same shape item-context.mjs's pathsStage derives for held lots,
 // minus the position/floor fields a screen candidate doesn't have — those degrade in js/paths.mjs), then
 // enumerates + weighs the unheld theses (scalp / value-hold / avoid). Display-only, DECISION SUPPORT —
 // never a gate, never reorders/hides a row (the P4c contract). Viabilities are the P4a PLACEHOLDER
@@ -1119,7 +1119,7 @@ async function main() {
   // cold archive (≤24 bulk /1h, mostly deduped against buckets loadSnapshot/loadDaily already accrue).
   const v24 = VOL_SOURCE === 'rolling' ? await loadAll24hRolling() : v24legacy;
 
-  // Value --capital default = the DERIVED deployablePool (lib/cashderive.mjs). Re-derive it here WITH a
+  // Value --capital default = the DERIVED deployablePool (lib/derive-cash-tiers.mjs). Re-derive it here WITH a
   // marketRef built from the bulk /latest already in hand (ZERO extra fetch): each resting bid classifies
   // DEEP (reclaimable → counts toward deployable) vs COMMITTED (near-live, expected to fill → excluded)
   // using its item's live instasell (latest[id].low). A resting-bid item absent from /latest → no ref →

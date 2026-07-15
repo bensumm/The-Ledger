@@ -1,9 +1,9 @@
-/* cashderive.mjs — DERIVE idle cash from the log + an anchor, instead of asking Ben to re-state it.
+/* derive-cash-tiers.mjs — DERIVE idle cash from the log + an anchor, instead of asking Ben to re-state it.
  *
  * PLAN-CASH-TRACKING: cash is conserved (zero-sum) — it only moves when a buy fills (out), a sell
  * fills (in, after the 2% tax), or Ben injects/withdraws. The fills log records the first two with
  * the full offer lifecycle, so idle cash is a DERIVED balance off a starting anchor, not a figure to
- * poll a human for. This supersedes cashstate.mjs's old "the cash stack can only be stated" premise:
+ * poll a human for. This supersedes cash-anchor.mjs's old "the cash stack can only be stated" premise:
  * a stated `{cashGp, statedAt}` is now the ANCHOR the derivation runs forward from, not the answer.
  *
  * The THREE-TIER accounting model (relative to anchor {cashGp0, statedAt}) — Ben's insight: not all
@@ -58,7 +58,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { collapseOffers, dedupeSnapshots, GE_TAX } from './reconstruct.mjs';
-import { readCash } from './cashstate.mjs';
+import { readCash } from './cash-anchor.mjs';
 import { readOffersSnapshot } from './offers.mjs';
 import { REPO_DIR } from '../sync-fills.mjs';
 

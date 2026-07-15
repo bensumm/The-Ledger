@@ -25,21 +25,21 @@ import { tax } from '../js/money-math.js';
 import { fmtP, fmt, fmtHour } from '../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
-import { anchorNudge } from './modules/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
+import { anchorNudge } from './probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { STRATEGIES } from '../js/strategies.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
-import { trajectoryFrom1h } from './lib/richterm.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
+import { trajectoryFrom1h } from './lib/warm-term-structure.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from './lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from './lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { mdTable, stdCells } from './lib/cli.mjs';
-import { loadModules, runProbes, logFirings } from './lib/modules.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
+import { loadModules, runProbes, logFirings } from './lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, classAndSource } from './lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback)
 import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
-import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from './lib/context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
+import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from './lib/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
 import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
@@ -151,7 +151,7 @@ async function runItems() {
     // FIRES because ts1h is fetched above (COD-4). P3's floorValidator scores the patient BUY (optBuy) —
     // a per-item quote IS a buy-interest read — against the durable multi-week floor from the read-only
     // daily mids (cold archive → degrade); its .trajectory is OVERRIDDEN with the WARM 1h-derived shape
-    // (trajectoryFrom1h, the same richterm.mjs helper screen.mjs uses) so trajectoryValidator fires too.
+    // (trajectoryFrom1h, the same warm-term-structure.mjs helper screen.mjs uses) so trajectoryValidator fires too.
     // An explicit ask is NEVER hidden: a fired flag is a NOTE + logged; the table row is untouched.
     const ts = termStructure(daily[id]);
     const richTraj = trajectoryFrom1h(inp.ts1h);
@@ -254,7 +254,7 @@ async function runItems() {
       estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear ride the row
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
-    // here (no whole-market map on the per-item surface — see modules.mjs NEEDS).
+    // here (no whole-market map on the per-item surface — see probes.mjs NEEDS).
     const ph = phase(inp.ts6h);
     const fired = runProbes(row, 'quote', {
       surface: 'quote', owned: false, id, name, thin: false,
@@ -420,7 +420,7 @@ async function runPositions() {
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
   if (snap) { try { snap.archive.close(); } catch {} }   // P0: loadSnapshot leaves the archive open when it owns it
   console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
-  // COD-4: the SHARED stale-book banner (context.mjs staleBookBanner) — watch.mjs already prints this off
+  // COD-4: the SHARED stale-book banner (item-context.mjs staleBookBanner) — watch.mjs already prints this off
   // positions.json's mtime; quote.mjs --positions read the same file silently, so the surface Ben uses
   // most never warned when the book was stale (the A4 inversion). Now both surfaces word it identically.
   console.log(staleBookBanner(ageMin) + '\n');

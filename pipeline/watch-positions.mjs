@@ -56,7 +56,7 @@ import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
 import { limitWindow, buysByItem } from './lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../js/money-format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
-import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
+import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from './lib/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from './lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from './lib/positions.mjs';
@@ -68,9 +68,9 @@ import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALER
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized per-held emit contract
 import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
-import { freedCapital } from './lib/capital.mjs';   // V6 companion — freed-capital redeploy prompt
-import { bookUtilization, totalCapital } from './lib/capitalutil.mjs';   // YV1 (#3) — working-vs-parked capital line
-import { loadDerivedCash } from './lib/cashderive.mjs';    // total-capital: DERIVED idle-cash denominator (cash.mjs anchor + log flow)
+import { freedCapital } from './lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
+import { bookUtilization, totalCapital } from './lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
+import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
@@ -270,7 +270,7 @@ function recoveryReadFor(it) {
 // --- ACTION line for a HELD lot. Sell-side framing is HONEST (clear-vs-hold), never
 // "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
 // 2h breakdown escalates before the lagging multi-day regime confirms.
-// P0: the prose is now the SHARED renderer (renderHeldVerdict verbose) in pipeline/lib/context.mjs —
+// P0: the prose is now the SHARED renderer (renderHeldVerdict verbose) in pipeline/lib/item-context.mjs —
 // the ONE home quote.mjs --positions renders from too, so the two surfaces can't disagree on a held
 // verdict. Output is byte-identical to the pre-P0 inline heldAction() (same mv, same strings). The
 // caller passes the ALREADY-computed mv (off lotCtxOf(it)) via a minimal ctx so nothing recomputes.
@@ -596,7 +596,7 @@ async function main() {
         // TG1: the declared-hold-thesis silence (expected-underwater not news above the tripwire).
         thesis: it._thesis, underwater: d.underwater,
       });
-      // VN-1: the persistence-gated DISPLAY read (shared heldDisplay, lib/context.mjs) — what the
+      // VN-1: the persistence-gated DISPLAY read (shared heldDisplay, lib/item-context.mjs) — what the
       // table/brief/note render; the raw verdict stays what the ledger logs. Fields ride
       // newState[key] ADDITIVELY (this loop stays the ONE writer of the state file).
       // VN-2: the declared thesis activates the render frame; when the plan declares no exitPrice,
@@ -928,13 +928,13 @@ async function main() {
   if (util.utilizationPct != null) sumBits.push(`capital ${util.utilizationPct}% working / ${100 - util.utilizationPct}% parked`);
   sumBits.push(alerts.length ? `⚠ ${alerts.length} alert${alerts.length > 1 ? 's need' : ' needs'} action` : 'no alerts');
   console.log(`  ${sumBits.join(' · ')}`);
-  // Total capital = committed (working+parked) + DERIVED idle cash (lib/cashderive.mjs, PLAN-CASH-TRACKING).
+  // Total capital = committed (working+parked) + DERIVED idle cash (lib/derive-cash-tiers.mjs, PLAN-CASH-TRACKING).
   // Idle GP isn't in any log, so it's DERIVED FORWARD from a stored anchor (anchor + Σsells−Σbuys−escrow),
   // not a stated snapshot that ages the moment you trade. We feed `availableCash` (the FREE coin stack,
   // resting-bid ESCROW excluded) as the idle figure — the escrow is already counted in `committed` above,
   // so using liquidCapital here would double-count the parked bids. NEVER a verdict/alert input; purely the
   // idle-vs-working denominator. Absent an anchor we show the committed absolute and nudge how to set one.
-  // Three-tier capital (lib/cashderive.mjs): classify each resting bid DEEP (reclaimable) vs COMMITTED
+  // Three-tier capital (lib/derive-cash-tiers.mjs): classify each resting bid DEEP (reclaimable) vs COMMITTED
   // using the rows we ALREADY computed this pass (row.quickBuy = live instasell, row.band.lo = robust 2h
   // band low) — ZERO extra fetch. A bid not in this map (none here — every bidItem has a row) would
   // classify COMMITTED. availableCash stays the literal free coin stack the idle-cash line shows.

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * capital.test.mjs — the watch loop's freed-capital redeploy prompt (chunk V6 Companion).
+ * freed-capital.test.mjs — the watch loop's freed-capital redeploy prompt (chunk V6 Companion).
  *
- * lib/capital.mjs detects capital FREED by a booked SELL between two consecutive passes (a held
+ * lib/freed-capital.mjs detects capital FREED by a booked SELL between two consecutive passes (a held
  * lot's qty dropped, read off V1's prior-pass state map) and, when it clears a threshold, tells the
  * loop to SURFACE a scan prompt. It is SURFACE-ONLY — it never auto-places and never runs the scan.
  * This pins the detection + the anti-misfire guards (first-seen / stale-gap / a growing lot).
@@ -14,10 +14,10 @@
  *   - A fresh/empty prior (startup), a stale-gap prior (overnight pause), and a lot that GREW or is
  *     unchanged → NO event (no false positive).
  *
- * Synthetic fixtures only. Run: `node pipeline/capital.test.mjs` (exits non-zero on any failure).
+ * Synthetic fixtures only. Run: `node pipeline/freed-capital.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { freedCapital, FREED_CAPITAL_SCAN_GP } from './lib/capital.mjs';
+import { freedCapital, FREED_CAPITAL_SCAN_GP } from './lib/freed-capital.mjs';
 import { STALE_GAP_MS } from './lib/watchstate.mjs';
 
 let pass = 0;

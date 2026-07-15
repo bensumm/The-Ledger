@@ -9,7 +9,7 @@
  *
  * WHAT: for each pipeline ENTRYPOINT it STATICALLY parses the `import { … } from './rel.mjs'` statements
  * and verifies every named/default import actually exists in the TARGET module's exports. It dynamic-
- * imports only the TARGET modules (pipeline/lib/*, js/*, pipeline/modules/* — all pure, DOM-free, side-
+ * imports only the TARGET modules (pipeline/lib/*, js/*, pipeline/probes/* — all pure, DOM-free, side-
  * effect-free on import) to read their export lists; it NEVER imports the entrypoints themselves, so no
  * entrypoint main()/fetch/git/argv side effect can fire. That import of the targets ALSO transitively
  * loads the shared graph, so a missing export DEEPER in the dependency chain throws here too.

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * context.test.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + shared held-verdict renderer (chunk P0).
+ * item-context.test.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + shared held-verdict renderer (chunk P0).
  *
- * context.mjs is the single home that ended the quote.mjs-vs-watch.mjs verdict fork: one staged
+ * item-context.mjs is the single home that ended the quote.mjs-vs-watch.mjs verdict fork: one staged
  * enricher chain builds an ItemContext, one parameterized renderer turns it into either surface's
  * verdict. This suite pins:
  *
@@ -20,13 +20,13 @@
  *     the shared position stage yields one armed gate, and both renderers read CUT-CANDIDATE.
  *
  * PURE / synthetic fixtures only (no network, no fs, no DB — auto-discovered by run-tests.mjs).
- * Run: `node pipeline/context.test.mjs` (exits non-zero on any failure).
+ * Run: `node pipeline/item-context.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
 import {
   identityStage, marketStage, historyStage, intradayStage, positionStage,
   buildItemContext, heldMomVerdict, renderHeldVerdict, staleBookBanner, STALE_BOOK_MIN,
-} from './lib/context.mjs';
+} from './lib/item-context.mjs';
 import { ALERT_PERSIST_MS } from './lib/watchstate.mjs';
 
 let pass = 0;

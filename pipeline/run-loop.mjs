@@ -27,7 +27,7 @@
  *   watch — `node pipeline/watch-positions.mjs`         : the position/offer deterioration pass (every --watch min).
  *   scan  — `node pipeline/screen-flip-niches.mjs --mode all` : opportunity discovery (every --scan min), GATED on
  *           DEPLOYABLE capital — skipped when deployablePool < --min-idle (nothing to deploy → don't burn a
- *           scan or the agent's judgment pass). The gate uses the DERIVED deployablePool (cashderive.mjs —
+ *           scan or the agent's judgment pass). The gate uses the DERIVED deployablePool (derive-cash-tiers.mjs —
  *           the free coin stack PLUS the escrow of DEEP/reclaimable resting bids: bids priced far enough
  *           below the market that they're freely cancellable, unlike a near-live flip bid you expect to
  *           fill). To classify its resting bids the gate does a SMALL live fetch of just the item ids that
@@ -46,7 +46,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { loadDerivedCash } from './lib/cashderive.mjs';
+import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';
 import { readOffersSnapshot } from './lib/offers.mjs';
 import { fetchItemInputs } from './lib/marketfetch.mjs';
 import { computeQuote } from '../js/quotecore.js';

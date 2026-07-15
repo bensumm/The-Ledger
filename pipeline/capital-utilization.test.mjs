@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * capitalutil.test.mjs — acceptance fixtures for #3's PURE capital-utilization reads
- * (lib/capitalutil.mjs). Pure over plain objects — fixture-testable with synthetic values, no live
- * data (rule 4). Run: `node pipeline/capitalutil.test.mjs` (exits non-zero on any failure).
+ * capital-utilization.test.mjs — acceptance fixtures for #3's PURE capital-utilization reads
+ * (lib/capital-utilization.mjs). Pure over plain objects — fixture-testable with synthetic values, no live
+ * data (rule 4). Run: `node pipeline/capital-utilization.test.mjs` (exits non-zero on any failure).
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - bookUtilization splits committed capital into working (held) vs parked (bids); the pct is
@@ -13,7 +13,7 @@
  *     is excluded from the parked-time median (it has no first-fill).
  */
 import assert from 'node:assert/strict';
-import { bookUtilization, parkedStats, totalCapital } from './lib/capitalutil.mjs';
+import { bookUtilization, parkedStats, totalCapital } from './lib/capital-utilization.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

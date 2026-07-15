@@ -596,7 +596,7 @@ export async function loadHistBands(reqs, hours = 2) {
    each endUnix — the exact `[{avgLowPrice, avgHighPrice, timestamp}]` shape regimeDrift()/phase()
    consume — sourced from the historical whole-market /1h?timestamp bulk endpoint (the ONLY way to
    read a PAST 1h window; per-item /timeseries has no timestamp param). This is what lets
-   lib/histstate.mjs classify regime + phase AS OF a fill, not just now.
+   lib/range-position.mjs classify regime + phase AS OF a fill, not just now.
 
    Same disk discipline as loadHistBands: each distinct 6h window (aligned to the step grid so
    nearby reqs share windows) is fetched ONCE whole-market, every requested item extracted from it,

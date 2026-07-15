@@ -45,7 +45,7 @@ the codename dictionary — `flip-niche`/`held-item strategy`/`Bar E`/`DL4`…) 
 **`docs/LORE.md`**; each
 load-bearing "don’t-rebuild" invariant lives in the header of the module/test that governs it (e.g.
 the Gate-2-`CUT`-exempt rule in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in
-`pipeline/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/modules.mjs`).
+`pipeline/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/probes.mjs`).
 Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`**, enforced by
 `pipeline/lint-skills.mjs` in CI. Before building something that feels new, check `git log` +
 `CHANGELOG.md` — much of it already exists; don’t work from a stale assumption that a capability is
@@ -355,7 +355,7 @@ deliberate):**
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
 | "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/watch-positions.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
-| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch.mjs` + `screen.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`cashderive.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/run-loop.mjs --watch 30 --scan 15`) |
+| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch.mjs` + `screen.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/run-loop.mjs --watch 30 --scan 15`) |
 | "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
 | "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
@@ -392,7 +392,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   (MONITORING.md step 4 is the home).
   **VN-3: a clean lot with live inside a dead-band of break-even renders `PARKED — at break-even
   (±X)`** instead of the per-print HOLD↔UNDERWATER coin-flip (ungated UNDERWATER headline
-  suppressed in-band; placeholders, n=1). **P0** wired it through the shared `pipeline/lib/context.mjs` chain: it now
+  suppressed in-band; placeholders, n=1). **P0** wired it through the shared `pipeline/lib/item-context.mjs` chain: it now
   reads the root `offers.json` book (so `HOLD — ask filling` actually prints — quote lacked an
   offer read before), reads the watch loop's `.cache/watch-state.json` READ-ONLY for a conviction
   line, renders the verdict via the ONE shared `renderHeldVerdict`, and runs one `loadSnapshot()`
@@ -433,7 +433,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   `js/valuescreen.mjs` header.** `valueScore` = amplitude × proximity-to-low × floor-stability × a
   **deployable-capital** multiplier (realizable after-tax gp/cycle on the capital you can park+exit;
   `capGp` = `screen.mjs --capital ÷ --slots`, a PLACEHOLDER input; absent `--capital` the default is the
-  DERIVED `deployablePool` — free cash + reclaimable DEEP-bid escrow, `lib/cashderive.mjs`, deep bids
+  DERIVED `deployablePool` — free cash + reclaimable DEEP-bid escrow, `lib/derive-cash-tiers.mjs`, deep bids
   classified off the bulk `/latest` screen already fetched — NOT the looser `liquidCapital`, which would
   over-count a near-live flip bid as freely redeployable) — so cheap %-monster teleport tabs no
   longer sweep the top-N over deployable mid-tickets. The cycle range is **RC1 recency-anchored**
@@ -479,7 +479,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; **`quote.mjs`'s per-item
   read now fetches a BUDGETED `ts1h` too (COD-4, 2026-07-10: 1–2 items/invocation) so reach AND trajectory
   FIRE on the explicit-ask surface** (fixing the A4 asymmetry where the surface Ben uses most had the
-  weakest validation — trajectory reads the warm 1h-derived shape via the shared `lib/richterm.mjs`
+  weakest validation — trajectory reads the warm 1h-derived shape via the shared `lib/warm-term-structure.mjs`
   `trajectoryFrom1h`; `quote.mjs` also prints the diurnal BID/ASK timing line, now that the 1h series is in
   hand). **Reach now scores BOTH legs (2026-07-09):** the spec-plan
   `reach` validator scores the patient ASK (`optSell`); `screen.mjs` (`renderMode`) additionally runs a
@@ -550,7 +550,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   (and in the deployed app Watch tab, which calls `offerVerdict(row, price)` with no path arg), the verdict
   is byte-identical to before — so no app behavior changed and APP_VERSION did not bump.
   **P0**: the held verdict prose is now the SHARED `renderHeldVerdict` (verbose) from
-  `pipeline/lib/context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
+  `pipeline/lib/item-context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
   the old inline `heldAction`, diff-verified) — and each pass runs one `loadSnapshot()` for the passive
   Tier-1 archive append (per-item live fetch semantics unchanged). **P4b**: each held note block gains
   a persistence-gated dominant-path line (`path <key> 0.6 · menu: …` — one-decimal weights, VN-3; a confirmed migration prints

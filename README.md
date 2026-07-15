@@ -140,7 +140,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Consumes the enriched ItemContext; recomputes no prices. Alternatives are decision SUPPORT, never
   alert inputs; `migration` here is the RAW instantaneous flag — the persistence-gated
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
-  (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/context.mjs`). NOT yet app-imported →
+  (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`),
   `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR flip-niches
   (band/churn + scalp/value; the `spread` and `rising` specs were DELETED in Steps 3+4) as data-shaped
@@ -198,11 +198,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   reads it (via `lib/offers.mjs`'s `readOffersSnapshot`) as the held-book source for the askFilling
   softening — the OTHER-machine-safe path that needs no local `~/.runelite` log dir
 - `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's cash ANCHOR
-  (`{cashGp, statedAt}`), written by `pipeline/derive-cash.mjs`, read by `lib/cashderive.mjs` — whose
+  (`{cashGp, statedAt}`), written by `pipeline/derive-cash.mjs`, read by `lib/derive-cash-tiers.mjs` — whose
   `loadDerivedCash` feeds `watch.mjs`'s SUMMARY total-capital line (`availableCash`, escrow excluded),
   `loop-tick.mjs`'s scan-gate (`deployablePool`), and `screen.mjs`'s value `--capital` default
   (`deployablePool`). The GE cash stack is in no log, but idle cash is no longer merely stated: this is the
-  ANCHOR `cashderive.mjs` runs FORWARD from (anchor + Σ sells-after-tax − Σ buys − resting-bid escrow).
+  ANCHOR `derive-cash-tiers.mjs` runs FORWARD from (anchor + Σ sells-after-tax − Σ buys − resting-bid escrow).
   **THREE-TIER model** (`availableCash ≤ deployablePool ≤ liquidCapital`): `availableCash` = the free coin
   stack (all resting-bid escrow excluded); `deployablePool` = free stack + the escrow of DEEP/reclaimable
   bids only (priced ≥ `DEEP_BID_PCT` below the market — a supplied `marketRef` of live/band-low classifies
@@ -365,7 +365,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     ops — see README "Local development"),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
-    column when a probe fires. `--positions` builds the shared `context.mjs` chain per lot — offers.json
+    column when a probe fires. `--positions` builds the shared `item-context.mjs` chain per lot — offers.json
     book, read-only watch-state + hold thesis, the shared `renderHeldVerdict`, and a read-only `pathsStage`
     `Paths` block — so it can't disagree with watch.mjs; Proposal C (2026-07-12) adds the INFORM-ONLY
     stale declared-exit flag per held lot (`lib/staleexit.mjs` over a targeted TTL-cached 1h fetch —
@@ -377,7 +377,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
     Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
     the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
-    (`renderHeldVerdict`/`pathsStage`, `lib/context.mjs`). The ONE WRITER of the watch-state path fields
+    (`renderHeldVerdict`/`pathsStage`, `lib/item-context.mjs`). The ONE WRITER of the watch-state path fields
     and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
     contract: `pipeline/MONITORING.md`),
     `monitor.mjs`
@@ -404,7 +404,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     hold-thesis entry too (parseGp; omitted/unparseable flags preserve the existing values), making
     one command the full declared-plan writer the thesis render frame reads),
     `cash.mjs` (CLI to DERIVE / re-anchor / clear the idle-cash balance: bare = the derived balance
-    (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/cashderive.mjs`); `<amount>` =
+    (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/derive-cash-tiers.mjs`); `<amount>` =
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch.mjs`'s
     SUMMARY reads),
     `windowrange.mjs` (né `nightlows.mjs` — time-of-day
@@ -417,7 +417,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
     `outcomes.mjs` (derived campaign/outcomes join — gitignored output; schema v2 (YS1) adds per-campaign
-    `stateAtFill` (band-pctl+regime+phase AS OF the fill via `lib/histstate.mjs`, for EVERY fill),
+    `stateAtFill` (band-pctl+regime+phase AS OF the fill via `lib/range-position.mjs`, for EVERY fill),
     measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the joined
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`
     stamps `.cache/last-weekly-report` and the cheap standalone `--weekly-due` prints `weekly-due: yes|no`
@@ -595,24 +595,24 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
     underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a
     non-clean position — decides NOTHING, never a verdict/alert input; a `spike` caps confidence),
-    `capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
+    `freed-capital.mjs` (V6 Companion — PURE `freedCapital`: detects capital freed by a booked SELL between
     passes off V1's prior-pass state and prompts a redeploy scan ≥ `FREED_CAPITAL_SCAN_GP` — surface-
     only, never auto-places/runs the scan; anchor-free, no startup/stale-gap misfire),
     `velocity.mjs` (#3/YS1 — PURE `velocityClass(holdTimeSec)` → fast-cycler/mid/slow-hold/n·a off a
-    MEASURED round-trip hold; placeholder thresholds), `capitalutil.mjs` (#3/YV1 — PURE
+    MEASURED round-trip hold; placeholder thresholds), `capital-utilization.mjs` (#3/YV1 — PURE
     `bookUtilization` (working-held vs parked-bid capital split) + `parkedStats` (historical
     "how long bids sat" + velocity mix over outcomes campaigns) + `totalCapital` (committed +
     idle cash → the WHOLE-pool idle-vs-working split, null-safe when cash is unknown; the idle
-    figure it's fed is now the DERIVED `availableCash` from `cashderive.mjs`, not a stated snapshot);
+    figure it's fed is now the DERIVED `availableCash` from `derive-cash-tiers.mjs`, not a stated snapshot);
     output-only, never a verdict input),
-    `cashstate.mjs` (impure fs sibling — `readCash`/`writeCash`/`clearCash` over the gitignored
+    `cash-anchor.mjs` (impure fs sibling — `readCash`/`writeCash`/`clearCash` over the gitignored
     `.capital-state.json`; now the ANCHOR store rather than the answer — kept out of pure
-    `capitalutil.mjs`),
-    `cashderive.mjs` (PLAN-CASH-TRACKING — PURE `deriveCash(events, anchor, liveOffers)` +
+    `capital-utilization.mjs`),
+    `derive-cash-tiers.mjs` (PLAN-CASH-TRACKING — PURE `deriveCash(events, anchor, liveOffers)` +
     `restingBuyEscrow` deriving idle cash from the fills-log flow (Σ sells-after-tax − Σ buys since the
     anchor) minus LIVE-offers.json resting-bid escrow, so the balance is computed not re-stated; the
     INJECTION DETECTOR raises the anchor when resting bids exceed the tracked balance; `loadDerivedCash`
-    is the impure loader (fills.json + offers.json + `cashstate` anchor). Pinned by `cashderive.test.mjs`),
+    is the impure loader (fills.json + offers.json + `cashstate` anchor). Pinned by `derive-cash-tiers.test.mjs`),
     `staleexit.mjs` (Proposal C 2026-07-12 — PURE `staleExitRead({ts1h, exitLevel})`: scores a DECLARED
     hold-thesis exit against the recent full-day reach history via `js/windowread.mjs`'s own
     `windowStats`/`recencySplit`/`recentQuant` (min-sample floor imported from `reachValidator` — reuse,
@@ -638,7 +638,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fully valid, both default null); watch.mjs reads it read-only and feeds it to `convictionGate` to
     SILENCE the expected-underwater headline while live holds above the declared tripwire — never
     touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
-    `context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer, the home that ENDS
+    `item-context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer, the home that ENDS
     the quote-vs-watch verdict fork: staged PURE enrichers (identity→market→history→intraday→position)
     build an `ItemContext`; `renderHeldVerdict(ctx,{mode})` emits the compact (quote `--positions`) or
     verbose (watch heldAction) form off ONE `heldMomVerdict`, byte-identical to the pre-P0 inline
@@ -653,15 +653,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the `PARKED — at break-even (±X)` dead-band state (`BE_DEADBAND_BAND_FRAC`/`BE_DEADBAND_MIN_PCT`
     placeholders) and one-decimal path-menu weights in `renderPathLine` (F4 — the ±0.12 placeholder
     steps stop reading as instability). No fetch/fs — every stage is node-importable +
-    fixture-pinned in `context.test.mjs`), `richterm.mjs` (COD-4 — `richFrom1h`/
+    fixture-pinned in `item-context.test.mjs`), `warm-term-structure.mjs` (COD-4 — `richFrom1h`/
     `trajectoryFrom1h`: aggregate a fetched 1h /timeseries into a WARM multi-week term structure so
     reach/trajectory FIRE while the `loadDaily` archive is still young; EXTRACTED from screen.mjs so
-    `quote.mjs`'s budgeted-`ts1h` read shares the identical aggregation — one home, no drift), `histstate.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
+    `quote.mjs`'s budgeted-`ts1h` read shares the identical aggregation — one home, no drift), `range-position.mjs` (YF1 — reconstruct MARKET STATE AS OF a past timestamp: the PURE `deriveState`
     composes `loadHistBands` + `loadHistDaily` into the SHIPPED `regimeDrift`/`regimeLabel`/`phase`
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
     state-transition scan both read — no market math re-implemented),
-    `modules.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
+    `probes.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
     `pipeline/modules/*.mjs`, groups by stage (`observe`/`price`/`gate`), and `runProbes(row,surface,ctx)`
     returns the fired display annotations. **Presence = enabled** (delete the file to disable). The
     **empty-passthrough guarantee** — no module present or none fire ⇒ `[]` ⇒ nothing appends ⇒
@@ -789,12 +789,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     cut-trigger + graceful degradation), `emit.test.mjs` (V5 — the per-held emit contract: the
     guaranteed sell line + fixed field order + `heldListAt` precedence), `recovery.test.mjs` (V6 — the
     advisory recover-vs-drop composition, the spike confidence-cap, and the trigger gating) and
-    `capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
+    `freed-capital.test.mjs` (V6 — freed-capital detection + the first-seen/stale-gap/grown-lot anti-misfire
     guards), `fetchcache.test.mjs` (FC1 — the opt-in fetch cache's TTL hit/miss + byte-identical
-    payload + default-off toggle), `histstate.test.mjs` (YF1 — `deriveState` band-percentile
+    payload + default-off toggle), `range-position.test.mjs` (YF1 — `deriveState` band-percentile
     clamp, regime/phase off a synthetic 6h series, and the `reconstructed:false` honesty guard),
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
-    `capitalutil.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix
+    `capital-utilization.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix
     + `totalCapital` committed/idle-cash split, null-safe when cash unknown),
     `velocitytag.test.mjs` (Build 2 — `buildVelocityIndex` aggregation/dominant-class/median + null-safe;
     `velocityTag` minN gate, `fast·~Nm` format, ≥20% unfilled suffix),
@@ -803,7 +803,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     P4a — path/enteredUnder persistence + the legacy-entry back-compat fixture),
     `statetransition.test.mjs` (YP2 — basing/spike-rising/spike-falling classification + the base/decay/null focus guard),
     `guideanchor.test.mjs` (YP1 — the honesty gate + prev:null-baseline filter + modal-hour/median-step above the gate),
-    `modules.test.mjs` (PM1 — the loader's empty-passthrough + stage grouping, the observe-touches-no-number
+    `probes.test.mjs` (PM1 — the loader's empty-passthrough + stage grouping, the observe-touches-no-number
     and price-only-when-ctx.price invariants, and each seed probe's gates: dip fire/silence + owned framing,
     froth healthy-vs-knife, anchor's `{price}` nudge, decant's `bestDecant` dose math + `needs()` declaration;
     PM2 — `logFirings` writes a well-formed line to the right `<module>.log`, appends not overwrites, no
@@ -812,7 +812,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     check-before-fetch, `seriesFor`/`marketAt` vs hand-computed slices on `:memory:` DBs, `exportFixture`
     round-trip, `pruneBefore`, the never-`/latest` grain guard, and the `dailyMidsAt`+`daily_seed`
     loadDaily bridge — all on `:memory:`/tmp DBs, NEVER the real archive),
-    `context.test.mjs` (P0 — the context chain's per-stage enrichers (identity/market/history/intraday/
+    `item-context.test.mjs` (P0 — the context chain's per-stage enrichers (identity/market/history/intraday/
     position), THE PIN (`HOLD — ask filling` renders the same verdict on compact + verbose off one
     `ctx.position.mv`), and the CONVICTION PIN (an armed-not-escalated Gate-D CUT-CANDIDATE is
     consistent on both surfaces, then escalates once the underwater streak persists ≥ `ALERT_PERSIST_MS`)),
@@ -923,12 +923,12 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | --- | --- |
 | `js/quotecore.js` | 13 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
 | `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote.mjs`/`screen.mjs` (`tax`) + js-side node imports `js/strategies.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
-| `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs`, `cash.mjs` + `lib/analyze.mjs`/`context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
+| `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs`, `cash.mjs` + `lib/analyze.mjs`/`item-context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
 | `js/windowread.mjs` | `pipeline/read-window-range.mjs`, `pipeline/watch-positions.mjs`, `pipeline/screen-flip-niches.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints) |
 | `js/forecast.mjs` | `pipeline/forecast.test.mjs`; **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs`, `pipeline/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
-| `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
+| `js/paths.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
 | `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
 
 ### Test-location convention

@@ -70,7 +70,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | --- | --- | --- |
 | Run the script / sync-first (SY1, SY1.2) / stale-book banner | ENCODE | `pipeline/quote-items.mjs --positions`, `pipeline/sync-fills.mjs`, `pipeline/watch-positions.mjs` banner. |
 | Reading watch.mjs per-held note block (V5 EMIT CONTRACT) | ENCODE | `pipeline/lib/emit.mjs` `heldNoteBlock()`; the block shape is the code's, the doc points at it (see MONITORING.md). |
-| Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/context.mjs`); the skill translates them to actions (judgment). |
+| Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/item-context.mjs`); the skill translates them to actions (judgment). |
 | Sell-velocity / HOLD-band-top step-down / rising-item no-underprice / decaying-band-top / trajectory read / entry-age / override-discipline / cut-and-rebid friction / tripwire conviction / limit-blocked CROSSING / fill-progress | KEEP-AS-JUDGMENT | The interpretation layer over the verdicts; several have coded support (`convictionGate` in `lib/watchstate.mjs` for tripwire-conviction; `breakEven()` floor in `js/quotecore.js`), but the step-down/hold taste is the LLM's. |
 | Verify SELL leg before quoting profit (MANDATORY) | KEEP-AS-JUDGMENT | Same ENCODE-candidate as /scan's — `reachValidator` blocked on ts1h fetch. |
 | Reading recovery-read (V6) as decision support | ENCODE | `pipeline/lib/recovery.mjs`; the "apply judgment on conflict" is the judgment. |

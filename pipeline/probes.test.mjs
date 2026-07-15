@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * modules.test.mjs — the PM1 probe-module system (loader + stage runner + the four seed probes).
+ * probes.test.mjs — the PM1 probe-module system (loader + stage runner + the four seed probes).
  *
  * BUSINESS REQUIREMENTS (what an agent can rely on — diff against this):
  *   LOADER / REMOVABILITY
  *     - An empty/absent modules dir loads ZERO probes and runProbes() returns [] → the empty-passthrough
  *       guarantee (no module present or none fire ⇒ output byte-identical, nothing appends).
  *     - Before any load, runProbes() returns [] (never throws).
- *     - The real pipeline/modules/ dir groups probes BY STAGE: dip/froth/decant → observe, anchor → price.
+ *     - The real pipeline/probes/ dir groups probes BY STAGE: dip/froth/decant → observe, anchor → price.
  *   INVARIANTS (non-negotiable)
  *     - An 'observe' probe TOUCHES NO NUMBER: the row object is byte-identical (deep-equal) after
  *       runProbes(). Its output is ONLY a {tag, note} annotation.
@@ -28,17 +28,17 @@
  *     - No firing (empty/non-array) ⇒ NO write ⇒ NO file created.
  *     - A write failure is swallowed — logFirings never throws (a broken log can't break a render).
  *
- * Run: node pipeline/modules.test.mjs   (auto-discovered by run-tests.mjs).
+ * Run: node pipeline/probes.test.mjs   (auto-discovered by run-tests.mjs).
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadModules, runProbes, logFirings, collectNeeds, loadedModules, resetModules, MODULES_DIR } from './lib/modules.mjs';
-import dip, { DIP_MIN_PCT } from './modules/dip.mjs';
-import froth from './modules/froth.mjs';
-import anchor, { anchorNudge, nearestAnchors } from './modules/anchor.mjs';
-import decant, { bestDecant } from './modules/decant.mjs';
+import { loadModules, runProbes, logFirings, collectNeeds, loadedModules, resetModules, PROBES_DIR } from './lib/probes.mjs';
+import dip, { DIP_MIN_PCT } from './probes/dip.mjs';
+import froth from './probes/froth.mjs';
+import anchor, { anchorNudge, nearestAnchors } from './probes/anchor.mjs';
+import decant, { bestDecant } from './probes/decant.mjs';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed++; };
@@ -62,7 +62,7 @@ const g0 = loadedModules();
 ok(g0 && g0.all.length === 0, 'empty modules dir → zero probes loaded');
 ok(runProbes(baseRow(), 'screen', { avgLow24: 2000 }).length === 0, 'empty dir → runProbes [] (empty-passthrough)');
 
-await loadModules(join(MODULES_DIR, 'does-not-exist'));
+await loadModules(join(PROBES_DIR, 'does-not-exist'));
 ok(loadedModules().all.length === 0, 'absent modules dir → zero probes (no throw)');
 
 // load the REAL seed modules and check stage grouping
@@ -199,4 +199,4 @@ ok(g.price.map(m => m.name).join(',') === 'anchor', 'price stage = anchor');
   passed++;
 }
 
-console.log(`\n✓ modules.test.mjs — ${passed} checks passed.`);
+console.log(`\n✓ probes.test.mjs — ${passed} checks passed.`);

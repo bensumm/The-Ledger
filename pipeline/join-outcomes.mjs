@@ -21,7 +21,7 @@
  *   where it closes a FIFO lot Â· the nearest PRIOR suggestion for the item.
  *
  * SCHEMA v2 (YS1, PLAN-YIELD) adds, per campaign: `stateAtFill` (band-pctl + regime + phase AS OF the
- * fill, via lib/histstate.mjs - reconstructed for EVERY fill, not just suggestion-matched ones, with
+ * fill, via lib/range-position.mjs - reconstructed for EVERY fill, not just suggestion-matched ones, with
  * `reconstructed:false` honesty when the history is gone); the measured `holdTimeSec` (round-trip
  * buy->sell), `parkedSec` (rest before first fill, or whole lifetime if never filled), and
  * `velocityClass`; and `predicted` (posture/tripwire/fillWindowHrs/thesis - copied from the joined
@@ -38,9 +38,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collapseOffers, matchTrades, dedupeSnapshots } from './lib/reconstruct.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from './lib/marketfetch.mjs';
-import { loadHistState, bandPercentile } from './lib/histstate.mjs';
+import { loadHistState, bandPercentile } from './lib/range-position.mjs';
 import { velocityClass } from './lib/velocity.mjs';
-import { parkedStats } from './lib/capitalutil.mjs';
+import { parkedStats } from './lib/capital-utilization.mjs';
 import { parseArgs, median } from './lib/cli.mjs';
 import { liqClassOf, readSuggestionLines } from './lib/suggestlog.mjs';
 import { fmtP, fmt, fmtTurn } from '../js/money-format.js';
@@ -235,7 +235,7 @@ async function build() {
       bandLo = b.bandLo; bandHi = b.bandHi; bandCovered = b.covered;
       spread2h = (bandLo != null && bandHi != null) ? bandHi - bandLo : null;
       limitVol2h = Math.min(b.loVol, b.hiVol);
-      bandPct = bandPercentile(placementPrice, bandLo, bandHi);   // raw float (logging); shared formula in histstate.mjs
+      bandPct = bandPercentile(placementPrice, bandLo, bandHi);   // raw float (logging); shared formula in range-position.mjs
     }
 
     // realized net after tax: sum FIFO closed lots whose sellTs is one of this (sell) campaign's offers

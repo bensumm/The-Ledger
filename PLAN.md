@@ -104,7 +104,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | DL4 | Scan auto-nominates dip candidates ("B feeds A") — pure `nominateDip`/`selectNominations` (zero-fetch flush-suitability over the gate-tier universe) append flush-suitable picks to `dip-watchlist.json`; polymorphic `--dip` reader; PROPOSALS-to-watch, PLACEHOLDERS n=2 | `js/quotecore.js`, `pipeline/screen-flip-niches.mjs`, `pipeline/watch-positions.mjs`, `dip-watchlist.json`, `pipeline/dl4nominate.test.mjs` | ✅ `6c9abf2` |
 | DL3 | Flush-distribution → candidate discovery feeding the thesis layer (spec below) — DL4 already landed the `dip-watchlist.json` auto-feed half; DL3 adds the flush-distribution thesis layer on top | `pipeline/lib/analyze.mjs`, `js/strategies.mjs`, `dip-watchlist.json` (auto-fed by DL4), tests | OPEN (n-gated on DL2's widened log accruing, like F1) |
 | DP1 | Dip-posture entry classifier (dip DIRECTION, not just depth) — `recentDirection` + `dipPostureValidator`, inform on band/churn | `js/quotecore.js`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/dipposture.test.mjs` | ✅ `597f132` |
-| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/modules.mjs` | ✅ `6aba80b` |
+| PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/probes.mjs` | ✅ `6aba80b` |
 | TG1 | Thesis-gated hold alerts | `hold-thesis.json`, `pipeline/lib/holdthesis.mjs`, `watch.mjs` | ✅ `b2634a1` |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, app | ✅ `c7b53e7` (0.34.0) |
 | T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | ✅ `70633f6` (0.35.0) |
@@ -156,22 +156,22 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V3 | Gate-D lot-context softening | `js/quotecore.js` | ✅ `692baee` (0.52.0) |
 | V4 | Conviction gating (arm-then-confirm) | `lib/watchstate.mjs` | ✅ `2a87269` (Gate-2 breakdown CUT EXEMPT — immediate) |
 | V5 | Emit-contract standardization | `lib/emit.mjs`, `watch.mjs` | ✅ `825469f` |
-| V6 | Recovery-read + capital companion (advisory) | `lib/recovery.mjs`/`capital.mjs` | ✅ (the PLAN-VERDICT.md fold commit, 2026-07-06) |
+| V6 | Recovery-read + capital companion (advisory) | `lib/recovery.mjs`/`freed-capital.mjs` | ✅ (the PLAN-VERDICT.md fold commit, 2026-07-06) |
 | FC1 | Opt-in cross-invocation fetch cache | `lib/marketfetch.mjs` | ✅ `0e48b2c` (OFF by default — decision paths byte-identical) |
-| YF1 | Historical market-state helper | `lib/histstate.mjs` | ✅ `2ab0139` |
+| YF1 | Historical market-state helper | `lib/range-position.mjs` | ✅ `2ab0139` |
 | YS1 | outcomes.mjs schema v2 | `outcomes.mjs`, `lib/velocity.mjs` | ✅ `92ffa1c` |
 | YS2 | Forward prediction-field logging | `lib/suggestlog.mjs` + surfaces | ✅ `27f0baa` |
-| YV1 | Velocity + capital-utilization analytics | `lib/capitalutil.mjs` | ✅ `1ea914d` (+ velocity footnote `7502889`, total-capital `2fdae81`) |
+| YV1 | Velocity + capital-utilization analytics | `lib/capital-utilization.mjs` | ✅ `1ea914d` (+ velocity footnote `7502889`, total-capital `2fdae81`) |
 | YT1 | Session-thesis memory | `lib/sessionthesis.mjs`, `thesis.mjs` | ✅ `5439fed` |
 | YP2 | State-transition scan | `lib/statetransition.mjs` | ✅ `9f60c15` |
 | YP1 | Guide re-anchor prediction (honesty-gated, ships silent) | `lib/guideanchor.mjs` | ✅ `a93da6a` |
 | YA1 | In-app capital-utilization line | `js/watchcore.js`, app | ✅ `a7fd785` (0.53.0) |
-| PM2 | Probe firing logs | `lib/modules.mjs` | ✅ `5ca4f95` |
+| PM2 | Probe firing logs | `lib/probes.mjs` | ✅ `5ca4f95` |
 | SR1 | `suggestions.jsonl` rotation/compaction | `lib/suggestlog.mjs` | ✅ `457a7bd` |
 | GA1 | `.gitattributes` LF/CRLF normalization | `.gitattributes` | ✅ `3a7f68f` |
 | F1 | Algorithm feedback loop | (gated on O1) | GATED (spec below) |
 | D0 | Snapshot + SQLite archive | `pipeline/lib/archive.mjs` | ✅ `7e0e962` |
-| V2-P0 | Context chain + unified held verdict | `pipeline/lib/context.mjs` | ✅ `a6dc7d1` |
+| V2-P0 | Context chain + unified held verdict | `pipeline/lib/item-context.mjs` | ✅ `a6dc7d1` |
 | V2-P1 | Surface extraction + replay harness | `lib/gatecandidates.mjs`, `lib/replay.mjs` | ✅ `f02fbf5`+`8db97bf` |
 | V2-P2 | Validate stage + reachValidator (every surface) | `js/validate.mjs`, `js/windowread.mjs` | ✅ `910bea1` |
 | V2-P3 | floorValidator + term structure | `js/termstructure.mjs` | ✅ `b55f895` |
@@ -191,10 +191,10 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | DL1 | Structural doc-drift linter + CI wire | `pipeline/lint-docs.mjs`, `lint-docs.test.mjs`, `checks.yml` | ✅ `ef239dc` (denylist + duplicate-phrase; stays denylist/structural, never semantic; Q3-1) |
 | COD-2 | Overnight accumulation table → script | `lib/gatecandidates.mjs`, `screen.mjs`, `/overnight` SKILL | ✅ `81d9049` (`expUnitsOvernight`; `screen.mjs --posture overnight` prints the table; pinned by `expunitsovernight.test.mjs`; Q3-3) |
 | COD-3 | `rebidBar`/`rebidAdvice` helper + weekly-read marker | `js/quotecore.js`, `pipeline/join-outcomes.mjs`, skills | ✅ `5b91d10` (trajectory/diurnal-aware CUT-family advisory; `--weekly-due`; pinned by `rebid.test.mjs`; Q3-4/5) |
-| COD-4 | quote.mjs budgeted ts1h → reach/trajectory fire on explicit asks | `pipeline/quote-items.mjs`, `lib/richterm.mjs`, `lib/context.mjs` | ✅ `a923496` (fixes flaw A4; shared `staleBookBanner` + diurnal line on quote; Q3-6/7) |
+| COD-4 | quote.mjs budgeted ts1h → reach/trajectory fire on explicit asks | `pipeline/quote-items.mjs`, `lib/warm-term-structure.mjs`, `lib/item-context.mjs` | ✅ `a923496` (fixes flaw A4; shared `staleBookBanner` + diurnal line on quote; Q3-6/7) |
 | DOC-1..4 | ARCH-docs cleanup: PLAN prune · CLAUDE diet r3 · README registry-grade · verdict single-home | docs, `.claude/skills/*` | ✅ `e45cd7b`/`560b28b`/`1619ff6`/`0c9ecca` (from `PLAN-ARCH-DOCS-AUDIT.md`; DOC-5+ARCH-2 stay Ben-gated there — see Discovered) |
 | ARCH-3 | `parseGp` cross-comments (the volume-source half is NOT mechanical → Discovered SF-3) | `js/format.js`, `pipeline/lib/cli.mjs` | ✅ `6808c58` (comment-only, no APP_VERSION) |
-| SWEEP | 2026-07-10 sweep innocuous fixes: `Promise.all` bulk loaders · shared `clamp` dedup · `bandPercentile` extraction | `screen.mjs`, `rating.mjs`, `estimators.mjs`, `histstate.mjs`, `outcomes.mjs` | ✅ `ef68792` (byte-identical dedups; the review verdict + parked residue = Discovered SF-1/2/4/5) |
+| SWEEP | 2026-07-10 sweep innocuous fixes: `Promise.all` bulk loaders · shared `clamp` dedup · `bandPercentile` extraction | `screen.mjs`, `rating.mjs`, `estimators.mjs`, `range-position.mjs`, `outcomes.mjs` | ✅ `ef68792` (byte-identical dedups; the review verdict + parked residue = Discovered SF-1/2/4/5) |
 | SF-2 | Document quote.mjs's uncapped per-item ts1h fetch budget | `pipeline/quote-items.mjs` | ✅ `fe57a3b` (comment-only; soft-cap recipe if large batches ever routine) |
 | SF-1 | Quantile/median type-7 consolidated to one `js/quotecore.js` home (both sorted + sorting contracts) | `js/quotecore.js`, `js/termstructure.mjs`, `pipeline/lib/retrojoin.mjs` | ✅ `2cbca38` (0.56.0; byte-identical refactor, fixture-pinned; caller audit preserved each site's sorted/unsorted contract) |
 | SF-3 | Liquidity-class volume-source unify: `volSrc` tag + fetch-free warm-only bulk read (never a cold bulk fetch for a 1-item ask) | `pipeline/lib/suggestlog.mjs`, `pipeline/lib/marketfetch.mjs`, `pipeline/quote-items.mjs`, `pipeline/screen-flip-niches.mjs` | ✅ `3a36a1e` (pre-F1 calibration hygiene; pinned by `sf3-volsrc.test.mjs`; pipeline-only) |
@@ -626,13 +626,13 @@ Trends "recommend price adjustment" button (both need **F1** open + a published 
 now **SHIPPED** (`7502889`) as a stdout velocity FOOTNOTE (`lib/velocitytag.mjs` reads the gitignored
 `outcomes.json`) rather than a table column — kept out of the published cells so the canonical
 table/`screen.json`/app contract stay byte-identical (same discipline as the phase fold). Also
-shipped post-YIELD: **total-capital view** (`2fdae81`) — `capitalutil.totalCapital` + `lib/cashstate.mjs`
+shipped post-YIELD: **total-capital view** (`2fdae81`) — `capitalutil.totalCapital` + `lib/cash-anchor.mjs`
 + `pipeline/derive-cash.mjs` add a committed + STATED idle-cash line to the watch footer (idle GP is in no
 log, so it's a stated snapshot, staleness-bannered, never a verdict input). SUPERSEDED
-(PLAN-CASH-TRACKING): the footer's idle figure is now DERIVED (`lib/cashderive.mjs` —
+(PLAN-CASH-TRACKING): the footer's idle figure is now DERIVED (`lib/derive-cash-tiers.mjs` —
 anchor + log flow, escrow-excluded `availableCash`), and `screen.mjs`'s value `--capital` default +
 `loop-tick.mjs`'s scan-gate now use the derived **`deployablePool`** — the THREE-TIER model
-(`availableCash ≤ deployablePool ≤ liquidCapital`, `lib/cashderive.mjs`): deployablePool = free cash +
+(`availableCash ≤ deployablePool ≤ liquidCapital`, `lib/derive-cash-tiers.mjs`): deployablePool = free cash +
 reclaimable DEEP-bid escrow (bids priced ≥ `DEEP_BID_PCT` below a caller-supplied market ref; a near-live
 flip bid stays COMMITTED), superseding the looser `liquidCapital` default. Earlier per-plan Discovered
 lists (chunks 4/8/10 fixes) are preserved in git history — `git show 39e5d23:PLAN.md`.

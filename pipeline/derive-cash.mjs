@@ -9,13 +9,13 @@
  *
  * Cash is conserved (zero-sum): it only moves when a buy fills (out), a sell fills (in, after the 2% tax),
  * or you inject/withdraw. The fills log records the first two, so idle cash is DERIVED from a stored anchor
- * (lib/cashderive.mjs), not a figure to re-state every pass — this supersedes the old "the cash stack can
- * only be stated" model (cashstate.mjs). The INJECTION DETECTOR auto-raises the anchor when resting bids
+ * (lib/derive-cash-tiers.mjs), not a figure to re-state every pass — this supersedes the old "the cash stack can
+ * only be stated" model (cash-anchor.mjs). The INJECTION DETECTOR auto-raises the anchor when resting bids
  * exceed the tracked balance (you clearly added capital); the ONE thing it can't see is an off-ledger
  * outflow / missed log, which you correct with a bare re-anchor. Output-only — NEVER a verdict/alert input. */
 import { parseGp, fmtP } from '../js/money-format.js';
-import { writeCash, clearCash } from './lib/cashstate.mjs';
-import { loadDerivedCash } from './lib/cashderive.mjs';
+import { writeCash, clearCash } from './lib/cash-anchor.mjs';
+import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';
 
 const arg = process.argv[2];
 

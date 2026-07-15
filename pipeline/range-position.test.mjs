@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * histstate.test.mjs — acceptance fixtures for YF1's PURE classification core `deriveState`
- * (lib/histstate.mjs). deriveState composes the shipped quotecore classifiers over a
+ * range-position.test.mjs — acceptance fixtures for YF1's PURE classification core `deriveState`
+ * (lib/range-position.mjs). deriveState composes the shipped quotecore classifiers over a
  * reconstructed past band + 6h series; it is DOM/network-free, so it is fixture-testable with
  * synthetic values — no live data (CLAUDE.md rule 4).
- * Run: `node pipeline/histstate.test.mjs`  (exits non-zero on any failure).
+ * Run: `node pipeline/range-position.test.mjs`  (exits non-zero on any failure).
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - bandPct is the price's percentile within [bandLo,bandHi], clamped 0..100, null when the band
@@ -16,7 +16,7 @@
  *     6h series exists — an unrecoverable fill is never given a fabricated state.
  */
 import assert from 'node:assert/strict';
-import { deriveState } from './lib/histstate.mjs';
+import { deriveState } from './lib/range-position.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

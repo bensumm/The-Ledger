@@ -1,4 +1,4 @@
-// capital.mjs — PURE freed-capital detector for the watch loop (chunk V6 Companion).
+// freed-capital.mjs — PURE freed-capital detector for the watch loop (chunk V6 Companion).
 //
 // SURFACE-ONLY. The watch loop knows DEPLOYED capital (held lots + resting bids) but NOT free cash —
 // that isn't in the RuneLite logs, so we assume it's reinvested. What we CAN detect, anchor-free, is

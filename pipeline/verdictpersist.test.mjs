@@ -27,7 +27,7 @@
  */
 import assert from 'node:assert/strict';
 import { verdictPersistence, verdictSeverity, VERDICT_PERSIST_MS, convictionGate } from './lib/watchstate.mjs';
-import { heldDisplay, rawHeldToken, renderHeldVerdict } from './lib/context.mjs';
+import { heldDisplay, rawHeldToken, renderHeldVerdict } from './lib/item-context.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -36,7 +36,7 @@ const T0 = 1_800_000_000_000;
 const MIN = 60_000;
 const P = VERDICT_PERSIST_MS;
 
-// a computeQuote-shaped held row (mirrors context.test.mjs's heldRow helper)
+// a computeQuote-shaped held row (mirrors item-context.test.mjs's heldRow helper)
 const rowOf = (o = {}) => ({
   quickBuy: 3_120_000, quickSell: 3_140_000, optBuy: 3_100_000, optSell: 3_170_000,
   rawBandLo: 3_100_000, rawBandHi: 3_170_000, mom: 'clean', reliable: true, ordered: true,
@@ -119,7 +119,7 @@ ok('legacy prior (no display fields) behaves as first sight — adopt the candid
 /* =============================================================================================
  * 1. PARKED-AT-BE (the Berserker shape) — the label holds ONE state while the raw token flips
  * ============================================================================================= */
-import { parkedDeadband, BE_DEADBAND_BAND_FRAC, BE_DEADBAND_MIN_PCT } from './lib/context.mjs';
+import { parkedDeadband, BE_DEADBAND_BAND_FRAC, BE_DEADBAND_MIN_PCT } from './lib/item-context.mjs';
 
 ok('FIXTURE 1: instabuy oscillating across BE inside the dead-band → ONE rendered state over ≥10 passes, raw still flips', () => {
   const BE = 3_150_000;                       // Berserker: BE 3.15m, 2h raw band 3.10–3.17m

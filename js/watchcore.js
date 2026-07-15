@@ -81,7 +81,7 @@ export function summary(openFlips=[], closedToday=[]){
 // #3 capital utilization (YA1 — the in-app surface of YV1's bookUtilization). working = held
 // inventory able to profit; parked = capital tied up in resting UNFILLED buy bids. PURE, output-only
 // (a display read, never a verdict input). utilizationPct is null when nothing is committed — never
-// a fabricated 0/100. (A tiny parallel of pipeline/lib/capitalutil.mjs kept here so the browser needs
+// a fabricated 0/100. (A tiny parallel of pipeline/lib/capital-utilization.mjs kept here so the browser needs
 // no node-only import; the math is trivial.)
 export function capitalSplit(workingGp=0, parkedGp=0){
   const w=workingGp||0, p=parkedGp||0, committed=w+p;

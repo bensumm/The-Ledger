@@ -5,7 +5,7 @@
  * P4a's weighPaths re-weighs an item's thesis-paths every pass; its `dominant`/`migration` are
  * INSTANTANEOUS. P4b adds the cross-pass whiplash guard: `pathPersistence()` (lib/watchstate.mjs,
  * arm-then-confirm + hysteresis, the convictionGate discipline applied to path dominance) and the
- * `pathsStage()` chain slice (lib/context.mjs) both surfaces consume. This pins the PLAN.md P4b
+ * `pathsStage()` chain slice (lib/item-context.mjs) both surfaces consume. This pins the PLAN.md P4b
  * acceptance verbatim:
  *
  *   - FLAPPING weights (dominance alternating within persistMs) NEVER flip the persisted
@@ -26,7 +26,7 @@ import {
   pathPersistence, PATH_PERSIST_MS, PATH_HYSTERESIS_MARGIN,
   computeDeltas, advanceState,
 } from './lib/watchstate.mjs';
-import { pathsStage, renderPathLine } from './lib/context.mjs';
+import { pathsStage, renderPathLine } from './lib/item-context.mjs';
 import { PATH_KEYS } from '../js/paths.mjs';
 
 let pass = 0;

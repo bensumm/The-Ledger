@@ -5,7 +5,7 @@
  *
  * WHAT A VALIDATOR IS. A validator is a PURE function `(ctx) → { key, status, reason, evidence }`
  * where `status ∈ 'pass' | 'caution' | 'reject'`. It reads an already-built ItemContext (the P0
- * chain, pipeline/lib/context.mjs) and answers ONE question about a candidate — "is this level
+ * chain, pipeline/lib/item-context.mjs) and answers ONE question about a candidate — "is this level
  * reachable?", "is this buy near a durable floor?" (P3), etc. Validators run on EVERY surface so a
  * screen, a per-item quote and a positions review can never disagree on the same gate.
  *

@@ -1,5 +1,5 @@
 /**
- * context.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer (chunk P0).
+ * item-context.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer (chunk P0).
  *
  * WHY THIS EXISTS. Before P0 the two single-item surfaces disagreed by construction: `quote.mjs
  * --positions` and `watch.mjs` each re-derived a held lot's verdict inline, from DIFFERENT inputs.

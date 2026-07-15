@@ -114,7 +114,7 @@ Print-only — it never writes trade data. Each run emits:
      thesis window). Both hold the ask ≥ break-even; neither is an alert. A fresh lot that
      *genuinely breaks down* still CUTs immediately (Gate 2 is untouched). **P0 closed the source
      gap that made the "identical on both surfaces" claim above aspirational for this one verdict:**
-     the lot context (askFilling) + the verdict rendering now live in the shared `lib/context.mjs`
+     the lot context (askFilling) + the verdict rendering now live in the shared `lib/item-context.mjs`
      chain — `watch.mjs` sources the ask from the live exchange log, `quote.mjs --positions` from the
      root `offers.json` — so **`HOLD — ask filling` prints on BOTH** (previously only watch could, as
      quote.mjs had no offer read). Both surfaces render via the one `renderHeldVerdict`.
@@ -146,7 +146,7 @@ Print-only — it never writes trade data. Each run emits:
      and **`HOLD — per thesis (…): exit … · abort < …`** (the VN-2 declared-plan frame, above).
      Both are DISPLAY states: the raw momVerdict/fallback token is unchanged underneath and stays
      what the ledger logs; a falling regime, an escalated verdict, or a print outside the band
-     exits PARKED. Home: `heldDisplay` (`lib/context.mjs`), pinned in `verdictpersist.test.mjs`.
+     exits PARKED. Home: `heldDisplay` (`lib/item-context.mjs`), pinned in `verdictpersist.test.mjs`.
 5. **Flag** if an item's total held qty exceeds its exposure cap, or if held inventory is
    **UNLISTED** (bought but not in a sell offer).
 6. Keep each report tight — one line if nothing changed. Only re-run a full multi-day trend
@@ -407,7 +407,7 @@ field is a nested (4-space) sub-line. **Fixed field order:**
 
 The exact wording/derivation of every field (the pressure token's shortcomings, the path-dominance
 `pathPersistence` arm-then-confirm, the `heldListAt` precedence, why `quote.mjs --positions` prints
-the same path line read-only) lives in the `lib/emit.mjs` + `lib/context.mjs` + `lib/watchstate.mjs`
+the same path line read-only) lives in the `lib/emit.mjs` + `lib/item-context.mjs` + `lib/watchstate.mjs`
 headers — the authority; don't restate it here.
 
 Resting-bid and target rows keep their own single note line (buy-side; no held sell price). Content
@@ -423,7 +423,7 @@ of the numbered signals, in more detail:
      `convictionGate()` (`lib/watchstate.mjs`). The RAW verdict string (`momVerdict`, what the
      suggestions ledger logs) is unchanged — but as of VN-1 the *rendered* Verdict column/cell is
      ALSO persistence-gated (`verdictPersistence` + the shared `heldDisplay`/`renderHeldVerdict`,
-     `lib/context.mjs`): an ESCALATION (`CUT-CANDIDATE`/`LIST-TO-CLEAR`, severity rank 2) must hold
+     `lib/item-context.mjs`): an ESCALATION (`CUT-CANDIDATE`/`LIST-TO-CLEAR`, severity rank 2) must hold
      ≥ `VERDICT_PERSIST_MS` (placeholder, = `ALERT_PERSIST_MS`) before the label changes — until
      then the incumbent renders with an `(X arming ~Nm/Pm)` suffix, so the table and the armed
      note can never disagree (the 2026-07-11 churn fix). A calmer-or-equal candidate adopts
@@ -546,11 +546,11 @@ of the numbered signals, in more detail:
 7. **FREED-CAPITAL prompt** (V6 Companion, SURFACE-ONLY — in the headline block), e.g.
    `⋯ freed ~7.4m this pass — consider a scan to redeploy`. When a SELL that FREED ≥
    `FREED_CAPITAL_SCAN_GP` (default 5m, a documented placeholder) is detected — a held lot whose qty
-   dropped since last pass, read off V1's prior-pass state (`lib/capital.mjs`) — the loop surfaces a
+   dropped since last pass, read off V1's prior-pass state (`lib/freed-capital.mjs`) — the loop surfaces a
    redeploy prompt. It NEVER auto-places an offer and NEVER runs the scan (Ben places every offer; the
    LLM/Ben runs `/scan`). Anchor-free and guarded: a fresh/empty prior (startup), a stale-gap prior
    (overnight pause), or a lot that grew/is unchanged yields no prompt (no misfire). Fixture-pinned in
-   `pipeline/capital.test.mjs`.
+   `pipeline/freed-capital.test.mjs`.
 
 ### Reporting a pass to Ben — the SCRIPT owns the format (`--brief`, Ben 2026-07-07)
 

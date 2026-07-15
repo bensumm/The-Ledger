@@ -1,9 +1,9 @@
-/* modules.mjs — the probe-module LOADER + stage-keyed runner (PM1).
+/* probes.mjs — the probe-module LOADER + stage-keyed runner (PM1).
  *
  * WHAT A PROBE IS. A *probe* is an experimental, per-item ANNOTATION — the lightweight cousin of a
  * niche. A niche is a permanent, validated candidate MODE (band/spread/rising, heavy, in screen.mjs);
  * a probe is a trial-and-keep-or-drop THEORY you can see in the output and DELETE cleanly if it's
- * wrong. Each probe lives in ONE file `pipeline/modules/<name>.mjs` and is discovered by presence:
+ * wrong. Each probe lives in ONE file `pipeline/probes/<name>.mjs` and is discovered by presence:
  * drop the file in → enabled; delete it → gone without a trace. That removability is the whole point,
  * and it is guaranteed by the empty-passthrough contract below.
  *
@@ -49,7 +49,7 @@
  * BYTE-IDENTICAL to a build with no probe system at all. Callers add the dedicated `Probes` column
  * ONLY when at least one row produced a tag (so "no module present OR none fire → byte-identical").
  *
- * FIRING LOG (PM2 — wired). Every fired annotation is APPENDED to `pipeline/modules/<module>.log`
+ * FIRING LOG (PM2 — wired). Every fired annotation is APPENDED to `pipeline/probes/<module>.log`
  * (gitignored) by `logFirings(fired, meta)`, called EXPLICITLY by each surface AFTER runProbes (runProbes
  * itself stays PURE). One compact JSONL line per firing carries enough to SCORE it later without
  * re-fetching: `{ts, module, version, stage, surface, id, name, tag, price (price-stage only), quickBuy,
@@ -83,7 +83,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const MODULES_DIR = join(HERE, '..', 'modules');
+export const PROBES_DIR = join(HERE, '..', 'probes');
 export const STAGES = ['observe', 'price', 'gate'];
 
 // module-level cache of the loaded, stage-grouped probes. null until loadModules() runs, so a caller
@@ -91,7 +91,7 @@ export const STAGES = ['observe', 'price', 'gate'];
 // carry the spec's (row, surface, ctx) signature without threading the loaded set through every call.
 let _loaded = null;
 
-// discover pipeline/modules/*.mjs (NOT *.test.mjs — a colocated test isn't a probe). Absent dir → [].
+// discover pipeline/probes/*.mjs (NOT *.test.mjs — a colocated test isn't a probe). Absent dir → [].
 // Same fs.readdirSync trick as run-tests.mjs (identical on Windows + ubuntu CI; no shell globbing).
 function discoverFiles(dir) {
   let ents;
@@ -118,7 +118,7 @@ function validate(mod, file) {
    Returns { observe:[], price:[], gate:[], all:[] } and caches it for runProbes/collectNeeds. Call it
    at surface startup (screen.mjs main(), quote.mjs). A module that throws on import is warned + skipped
    (a broken probe never breaks the surface — removability again). */
-export async function loadModules(dir = MODULES_DIR) {
+export async function loadModules(dir = PROBES_DIR) {
   const grouped = { observe: [], price: [], gate: [], all: [] };
   for (const file of discoverFiles(dir)) {
     let mod;
@@ -134,9 +134,9 @@ export async function loadModules(dir = MODULES_DIR) {
 }
 
 // test/inspection helpers — the loaded set, and a reset so a fixture can load a synthetic dir cleanly.
-// @test-only: module-registry introspection for modules.test.mjs.
+// @test-only: module-registry introspection for probes.test.mjs.
 export function loadedModules() { return _loaded; }
-// @test-only: module-registry reset between modules.test.mjs cases.
+// @test-only: module-registry reset between probes.test.mjs cases.
 export function resetModules() { _loaded = null; }
 
 /* runProbes(row, surface, ctx) — the stage-keyed runner. Runs OBSERVE-stage probes (the tag producers
@@ -170,7 +170,7 @@ export function runProbes(row, surface, ctx = {}) {
    via `needs(row, ctx)`, MINUS ids already present. A surface that must actively pre-fetch (e.g. quote)
    would fetch these before running the probes; the screen surface satisfies decant off `ctx.v24all`
    instead, so it does not need to call this. Advisory until such a caller exists. */
-// @provisional-api: the probe-orchestration framework IS adopted (screen.mjs + quote.mjs run loadModules/runProbes every pass); collectNeeds is its not-yet-wired NEEDS half (the PM1 active pre-fetch contract — the pending consumer is quote.mjs pre-fetching a probe's declared sibling ids, e.g. decant dose variants). Exercised by modules.test.mjs until that lands.
+// @provisional-api: the probe-orchestration framework IS adopted (screen.mjs + quote.mjs run loadModules/runProbes every pass); collectNeeds is its not-yet-wired NEEDS half (the PM1 active pre-fetch contract — the pending consumer is quote.mjs pre-fetching a probe's declared sibling ids, e.g. decant dose variants). Exercised by probes.test.mjs until that lands.
 export function collectNeeds(items, surface, ctxFor = () => ({})) {
   const g = _loaded;
   if (!g) return [];
@@ -188,7 +188,7 @@ export function collectNeeds(items, surface, ctxFor = () => ({})) {
 }
 
 /* logFirings(fired, meta) — the PM2 hit/miss ledger writer. Appends ONE compact JSONL line per fired
-   annotation to `pipeline/modules/<module>.log` (gitignored), recording enough context to SCORE the
+   annotation to `pipeline/probes/<module>.log` (gitignored), recording enough context to SCORE the
    firing later WITHOUT re-fetching: identity (id/name), the probe's declared `version` (looked up from
    the loaded set so a scoreable log knows which theory-version fired), the fired tag, the nudged price
    (price-stage only), and the live quote context (quickBuy/quickSell/guide/regime/phase) as of the pass.
@@ -196,8 +196,8 @@ export function collectNeeds(items, surface, ctxFor = () => ({})) {
    promises is PURE): a surface calls this explicitly AFTER runProbes.
    FAILURE-SAFE: every write is individually try/caught + swallowed — a broken log can NEVER break a
    render (the same throw-swallowing discipline as runProbes). No firing → no write → no file created.
-   `dir` defaults to MODULES_DIR (surface callers omit it); it exists only so a fixture can target a temp dir. */
-export function logFirings(fired, meta = {}, dir = MODULES_DIR) {
+   `dir` defaults to PROBES_DIR (surface callers omit it); it exists only so a fixture can target a temp dir. */
+export function logFirings(fired, meta = {}, dir = PROBES_DIR) {
   if (!Array.isArray(fired) || !fired.length) return;   // no firing → nothing written (no file created)
   const g = _loaded;
   const ts = Math.floor(Date.now() / 1000);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * cashderive.test.mjs — acceptance fixtures for the DERIVED idle-cash model (lib/cashderive.mjs,
+ * derive-cash-tiers.test.mjs — acceptance fixtures for the DERIVED idle-cash model (lib/derive-cash-tiers.mjs,
  * PLAN-CASH-TRACKING). Cash is conserved; deriveCash reconstructs it from the fills-log flow + a
  * live-offers escrow + an anchor, so Ben never re-states a number the log already implies.
  *
@@ -13,10 +13,10 @@
  * marketRef classifies a bid COMMITTED so deployablePool never over-counts deployable capital).
  *
  * PURE-function test — synthetic events/offers only, no fetch/fs, no live ledger (CLAUDE.md rule 4).
- * Run: `node pipeline/cashderive.test.mjs`  (exits non-zero on any failure).
+ * Run: `node pipeline/derive-cash-tiers.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { deriveCash, restingBuyEscrow, classifyBid, DEEP_BID_PCT } from './lib/cashderive.mjs';
+import { deriveCash, restingBuyEscrow, classifyBid, DEEP_BID_PCT } from './lib/derive-cash-tiers.mjs';
 import { GE_TAX } from './lib/reconstruct.mjs';
 
 let pass = 0;

@@ -1,11 +1,11 @@
-/* histstate.mjs — YF1: reconstruct the MARKET STATE AS OF a past timestamp (the shared seam #1(a)
+/* range-position.mjs — YF1: reconstruct the MARKET STATE AS OF a past timestamp (the shared seam #1(a)
    and #2 both need). Composes the two past-anchored fetchers in marketfetch (loadHistBands for the
    trailing-2h 5m band, loadHistDaily for the ~17d 6h series) and feeds them into the EXISTING PURE
    classifiers in js/quotecore.js (regimeDrift/regimeLabel/phase) — no market math is re-implemented
    here; this only ASSEMBLES already-shipped pieces at a historical time.
 
    The classification core `deriveState` is PURE (no fetch), so it is fixture-testable with synthetic
-   values (histstate.test.mjs). `loadHistState` is the thin network wrapper around it.
+   values (range-position.test.mjs). `loadHistState` is the thin network wrapper around it.
 
    Honesty: a fill whose history is gone (past the /5m or /1h retention) yields reconstructed:false
    with nulled fields — NEVER a fabricated percentile/regime/phase. bandPct is 5m-bucket approximate
