@@ -50,9 +50,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `BOND_ID`/`isBond`/`bondFee`: a bond is tax-exempt but pays a 10%-of-guide retrade fee, so
   `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free; plus the generic `clamp`/`now`),
   `money-format.js` (gp/number DISPLAY formatting — `fmt`/`fmtSig`/`fmtP`/`fmtTurn`/`fmtHour` +
-  `pad2`/`parseGp`/`sgn`/`grade`/`gradeCls`; split out of the old `format.js` in the R2 rename), `charts.js`
+  `pad2`/`parseGp`/`sgn`/`grade`/`gradeCls`; split out of the old `format.js` in the R2 rename), `charts-static.js`
   (static inline SVG — `svgLine`/`svgBars`, fixed-size, no interaction; still used by the
-  Trends hourly seasonality charts + the quote sparkline), `chartlib.js` (CL — the reusable
+  Trends hourly seasonality charts + the quote sparkline), `charts-interactive.js` (CL — the reusable
   **interactive** SVG chart: `createChart(container,{series,overlay,fillBetween,refs,bands,markers,
   kind,yFmt,xFmt,spans,span})` → `{setSpan,destroy}` handle, with pointer-drag PAN, wheel/pinch ZOOM about the
   cursor, a span selector, y-axis auto-rescale to the visible window, a hover tooltip + crosshair,
@@ -62,14 +62,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `fillBetween` shading draws the Forward-forecast low/high CONE (0.61.0; absent config ⇒ byte-identical
   single-series). Consumed by `trends.js` — the **Recent movement** (2h), **Price history** (1/7/30/90d
   windows), **Diurnal timing** (7d/28d toggle), and **Forward forecast** (cone) charts; more surfaces
-  adopt it over time. ADDITIVE — `charts.js` stays intact), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
+  adopt it over time. ADDITIVE — `charts-static.js` stays intact), `marketfetch.js` (shared browser fetch layer — one timeout-guarded `jget`
   + one cached `fetchTs`/`fetch24h` store, A2), `market.js`
   (price/guide fetch + scoring; keeps the bond in the catalog — searchable — with a
   bond-aware Finder margin via `bondMarginOpts`; AP4 `desirabilityOf` computes the Finder's shared
   rank + Desirability grade off `js/estimators.mjs`+`js/rating.mjs`), `trends.js` (archive + seasonal analysis +
   regime/patient/backtest — renders the Trends view; pure analytics live in
   `trendcore.js`; TV — also renders the **Diurnal timing** section via the shared
-  `windowread.mjs` `hourProfile`/`deriveDiurnalRange` + a `chartlib.js` bar chart + an
+  `windowread.mjs` `hourProfile`/`deriveDiurnalRange` + a `charts-interactive.js` bar chart + an
   inform-only `validate.mjs` `reachValidator` note — the same computation the console prints), `trendcore.js` (TC1 — pure DOM-free Trends analytics:
   hourly/seasonal decomposition, the walk-forward `backtestPlan` gate, `patientTargets`
   offer sizing, `bestWindow`/`median`; moved out of `trends.js` for

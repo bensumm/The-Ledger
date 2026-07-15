@@ -24,7 +24,7 @@ These are different things at different levels — kept as two words on purpose.
     Provisional, off by default.
   - **value** — buy-and-hold near a multi-week low, sell one big move up the cycle. Provisional.
 - **held-item strategy** — a *position-level* approach for a lot you already hold, produced by the
-  path engine (`paths.mjs`, "compare strategies"). The options: **hold-recovery** (wait for the
+  path engine (`held-item-strategy.mjs`, "compare strategies"). The options: **hold-recovery** (wait for the
   thesis to play out), **cut** (take the loss, redeploy), **break-even-escape** (get out at cost),
   **list-to-clear** (step the ask down to the printing price), **value-hold** (ride the multi-week
   cycle).

@@ -4,7 +4,7 @@ import { regimeDrift } from './quotecore.js';   // shared 3d-vs-~2wk regime-drif
 /*
  * TREND CORE (TC1) — the pure, DOM-free analytics behind the Trends view.
  *
- * These functions were living in js/trends.js, but trends.js pulls in the DOM + STATE (charts.js,
+ * These functions were living in js/trends.js, but trends.js pulls in the DOM + STATE (charts-static.js,
  * ui.js, main.js, marketfetch/state) at import — which pinned the decision-bearing analytics behind
  * an un-node-importable module. This is a straight MOVE into a pure module (mirrors TD2's ledgercore/
  * watchcore extractions) so the hourly/seasonal decomposition, the walk-forward backtest gate, and

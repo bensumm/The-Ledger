@@ -316,7 +316,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     **The APP renders this too (TV, 0.58.0+):** the Trends item page carries **all four** decision-support
     reads. **Diurnal timing** (timing tier, below Price history) — a per-hour-of-day bar chart (dip/peak
     hours in a NEUTRAL cool/warm pair — timing, not good/bad — with a 7d/28d lookback toggle) via the
-    interactive `js/chartlib.js`, the same shared `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`
+    interactive `js/charts-interactive.js`, the same shared `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`
     BID→ASK + ★ the console prints (parity, not a fork), and an inform-only `reachValidator` note.
     **Term-structure floor overlay (0.60.0)** on the Price history chart — `termStructure`'s durable
     multi-week floor/ceiling as teal reference lines + a support band, with the **`floorValidator` +
@@ -325,7 +325,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     next trough/peak + eta/window/band + confidence, the projected-low "when does it get cheap" curve;
     degrades loudly (post-shock / live-band-violation / thin → an explicit "withheld — <why>" line). The
     **validator notes are SPLIT** across the viz they qualify (reach → diurnal; floor/trajectory → history
-    overlay; forecast caveat → forecast band) per Ben's refinement — not one flat block. `chartlib.js`
+    overlay; forecast caveat → forecast band) per Ben's refinement — not one flat block. `charts-interactive.js`
     also backs the **Recent movement** + **Price history** charts (pan/zoom, hover tooltip, axis labels,
     selectable 1/7/30/90d windows — 0.59.0). So `forecast.mjs`/`termstructure.mjs`/`validate.mjs` are ALL
     app-imported now (via `trends.js`) — a behavior change to any of them bumps `APP_VERSION`.

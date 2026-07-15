@@ -1,11 +1,11 @@
 import { fmt, fmtSig } from './money-format.js';
 
 /*
- * chartlib.js — a reusable INTERACTIVE SVG chart (CL, PLAN-APP-PARITY).
+ * charts-interactive.js — a reusable INTERACTIVE SVG chart (CL, PLAN-APP-PARITY).
  *
- * WHY THIS EXISTS. js/charts.js (svgLine/svgBars) is a static 480×150 snapshot — no pan, no zoom,
+ * WHY THIS EXISTS. js/charts-static.js (svgLine/svgBars) is a static 480×150 snapshot — no pan, no zoom,
  * no rescale. This is the interactive successor the whole app can adopt over time (Trends
- * diurnal/history, later Scan/Watch sparklines). charts.js stays intact; chartlib is ADDITIVE.
+ * diurnal/history, later Scan/Watch sparklines). charts-static.js stays intact; chartlib is ADDITIVE.
  *
  * THE PAN/ZOOM MODEL (decided — SVG-with-viewBox semantics, JS-recomputed; NOT canvas, NOT a CSS
  * transform). The SVG coordinate space is a FIXED viewBox (0 0 W H, crisp at any device zoom). What

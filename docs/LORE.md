@@ -80,7 +80,7 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
 ## Superseded / rejected approaches (don't rebuild these)
 
 - **Global falling-exclusion → per-strategy (P5, Ben 2026-07-08).** Falling was once a blanket
-  screen exclusion. It is now PER-SPEC (`js/strategies.mjs` `spec.falling`:
+  screen exclusion. It is now PER-SPEC (`js/flip-niches.mjs` `spec.falling`:
   `exclude`/`accept`/`knife-guard`) — band/churn still exclude, but scalp accepts a falling wide
   band deliberately and value knife-guards. Memory `falling-exclusion-amended`. Any doc saying
   "falling items are silently excluded" without the per-spec qualifier is stale.
@@ -90,7 +90,7 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
   surfaced ≈0 clean flips once the render net>0 gate landed; `rising` ⊆ `band` (a riser clears band's
   gates too). Rising's one real mechanism — proxy-first fetch-pool ordering so risers aren't buried
   below flats — was absorbed into `rankAndSlice`'s small rising reserve (`RISING_RESERVE_DEFAULT`). The
-  live roster is band/churn/scalp/value (`js/strategies.mjs`); doclint denylists spread/rising as live
+  live roster is band/churn/scalp/value (`js/flip-niches.mjs`); doclint denylists spread/rising as live
   niches. Git history is the spec reference.
 - **Value-niche rank: %-amplitude → abs-gp → deployable-capital (all same day, Ben 2026-07-09).**
   `valueScore`'s amplitude term is a scale-free PERCENTAGE, so cheap high-volatility teleport tabs

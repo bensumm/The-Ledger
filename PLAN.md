@@ -107,7 +107,7 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/probes.mjs` | ✅ `6aba80b` |
 | TG1 | Thesis-gated hold alerts | `hold-thesis.json`, `pipeline/lib/holdthesis.mjs`, `watch.mjs` | ✅ `b2634a1` |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, app | ✅ `c7b53e7` (0.34.0) |
-| T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts.js` | ✅ `70633f6` (0.35.0) |
+| T2 | Trends sections + last-2h view | `js/trends.js`, `js/charts-static.js` | ✅ `70633f6` (0.35.0) |
 | O1 | Outcomes dataset | `pipeline/join-outcomes.mjs`, `suggestions.jsonl` | ✅ `b0749bf` (F1 gate: n≥30 per side×pctl×class×regime cell, ≥5 cells — stays GATED) |
 | K1 | Self-improving skills | `.claude/skills/*/SKILL.md` | ✅ `283e12a` |
 | K2 | Memory dedupe pass | Claude memory dir | ✅ (memory-dir only — no repo commit) |
