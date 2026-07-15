@@ -7,8 +7,9 @@ a stale convention can sit for weeks until someone digs to reconstruct the "why"
 audit). This doc is the anti-fragmentation index.
 
 It is **not** the file inventory (that's `README.md` "Map of the repo"), the change log (`CHANGELOG.md`),
-the narrative history (`docs/LORE.md`), or the agent workflow (`.claude/skills/*`). It is the durable
-"how this is organized and why" that those all assume.
+the term lookup (`docs/GLOSSARY.md` — plain-English definitions of the vocabulary + the codename
+dictionary), the narrative history (`docs/LORE.md`), or the agent workflow (`.claude/skills/*`). It is
+the durable "how this is organized and why" that those all assume.
 
 ## How to read this doc (and how it stays in sync)
 

@@ -1,6 +1,11 @@
-/* paths.mjs — the PURE path engine core (Pipeline v2, chunk P4a).
+/* paths.mjs — the PURE HELD-ITEM STRATEGY engine ("compare strategies", chunk P4a).
    DOM-free, dependency-free ESM (imports nothing — no fetch/fs, no window/document), importable by
    BOTH the browser app AND the node pipeline exactly like js/quotecore.js. Keep it that way.
+
+   VOCAB (see docs/GLOSSARY.md): a "path" here IS a HELD-ITEM STRATEGY — one candidate approach for a
+   lot you already hold (hold-recovery / cut / be-escape / list-to-clear / value-hold). "strategy" is
+   reserved for THIS level; the screen's band/churn/scalp/value are FLIP-NICHES (strategies.mjs). The
+   file → held-item-strategy.mjs rename is R2 (PLAN-RENAME.md).
 
    WHAT A "PATH" IS. A verdict in the v2 world is not "item → one label"; it is "item × THESIS → an
    action under that thesis". A held Dragon Warhammer can be, simultaneously: a value-hold above its

@@ -24,7 +24,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
 
 // Docs whose code-font file references are guarded (extend as more durable docs adopt the contract).
-const DOCS = ['docs/ARCHITECTURE.md'];
+const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
 
 // Referenced files that intentionally don't exist YET (the doc must mark each "(proposed)"/"planned").
 // Removing a file's proposed status = deleting its line here once it ships (the acknowledgement gate).

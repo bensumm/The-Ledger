@@ -325,6 +325,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     goldens/`archlint`) vs ⚖️ JUDGMENT principles. Its own file references are guarded by
     `pipeline/archlint.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
     organized + why".
+  - `GLOSSARY.md` (2026-07-14) — the plain-English lookup for the vocabulary: core concepts
+    (flip-niche / held-item strategy, reach, diurnal, band, verdicts, cash tiers…) + the codename
+    dictionary (the concept behind each plan-chunk shorthand like `Bar E` / `DL4`). The ONE home for
+    term definitions — module headers point here rather than re-explain. Its file-refs are guarded by
+    `pipeline/archlint.mjs`. Built + maintained by the R1 rename pass (`PLAN-RENAME.md`).
   - `LORE.md` (P7) — narrative/history + superseded-approach rationale (the single-file→split
     story, the LW2/LW3 live desk, the pipeline's eliminated scheduler, the incident anchors behind
     the process rules, the rejected/retired approaches). Nothing here is load-bearing — CLAUDE.md

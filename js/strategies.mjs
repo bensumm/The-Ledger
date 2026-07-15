@@ -1,15 +1,18 @@
-/* strategies.mjs — the DECLARATIVE STRATEGY REGISTRY (Pipeline v2, chunk P4c).
+/* strategies.mjs — the DECLARATIVE FLIP-NICHE REGISTRY (declarative flip-niche specs, chunk P4c).
+   VOCAB (see docs/GLOSSARY.md): band/churn/scalp/value are FLIP-NICHES — screen-level find-&-flip
+   styles. "strategy" now names the HELD-ITEM level (paths.mjs). The file + STRATEGIES/STRATEGY_LIST
+   identifier rename to flip-niches.mjs/FLIP_NICHES is R2 (PLAN-RENAME.md); prose says flip-niche now.
    DOM-free, near-dependency-free ESM (imports only the pure `tax` from format.js + the path
    vocabulary from paths.mjs — no fetch/fs, no window/document), importable by BOTH the browser app
    AND the node pipeline exactly like js/quotecore.js / js/paths.mjs. Keep it that way.
 
-   WHAT THIS IS. Before P4c the screen's niches lived as imperative `if (mode === 'spread') … else …`
-   branches inside pipeline/lib/gatecandidates.mjs — the niche name was a magic string threaded through
+   WHAT THIS IS. Before P4c the screen's flip-niches lived as imperative `if (mode === 'spread') … else …`
+   branches inside pipeline/lib/gatecandidates.mjs — the flip-niche name was a magic string threaded through
    the gate stack, the fetch-pool ranker, and the post-fetch survival doctrine. P4c re-expresses each
-   niche as a DATA-SHAPED SPEC here: the per-mode EDGE definition, the pre-fetch pool rule, the
+   flip-niche as a DATA-SHAPED SPEC here: the per-mode EDGE definition, the pre-fetch pool rule, the
    fetch-pool ranking mode, and the inferred DEFAULT ENTRY PATH the surfacing implies. gatecandidates.mjs
    now looks up `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool` / `spec.rank` instead of
-   branching on the name — so a niche can be added or REMOVED by editing this registry alone, without
+   branching on the name — so a flip-niche can be added or REMOVED by editing this registry alone, without
    touching gatecandidates.mjs or screen.mjs.
 
    NICHE SET (Steps 3+4, Ben 2026-07-09): the `spread` and `rising` specs are DELETED (git history is the
@@ -17,7 +20,7 @@
    render net>0 gate landed it surfaced ≈0 clean flips (its thin big-ticket lane is already caught by
    band's thin path, MIN_TRADED_THIN:2 + the gp-flow reserve); rising ⊆ band (a rising item clears band's
    gates too), and its ONE real mechanism — proxy-first fetch-pool ordering so risers aren't buried — is
-   ABSORBED into rankAndSlice's small "rising reserve". Remaining niches: band / churn (both in --mode all)
+   ABSORBED into rankAndSlice's small "rising reserve". Remaining flip-niches: band / churn (both in --mode all)
    + the provisional off-by-default scalp / value.
 
    BYTE-IDENTITY (the refactor-proof). The edge functions below are a MECHANICAL re-expression of the
@@ -27,8 +30,8 @@
    falling-exclusion still lives in gatecandidates.mjs's surviveMode (unchanged here) — the amended
    per-spec falling doctrine is P5, and this registry is the seam it slots into.
 
-   ⚠ The DEFAULT ENTRY PATH per niche (band/churn → scalp) is a JUDGMENT proposal (Ben-vetoable) — it
-   encodes how /scan describes each niche's INTENT (band/churn are flip-first "buy the low, sell the top"
+   ⚠ The DEFAULT ENTRY PATH per flip-niche (band/churn → scalp) is a JUDGMENT proposal (Ben-vetoable) — it
+   encodes how /scan describes each flip-niche's INTENT (band/churn are flip-first "buy the low, sell the top"
    plays → the intraday `scalp` thesis; value is a hold-for-the-cycle move → the `value-hold` thesis). It is written to the
    suggestions ledger as the inferred entry thesis so a LATER fill can attribute a position to a thesis
    when no explicit `thesis.mjs set --path` was declared (the P4b fallback: explicit > inferred > null).
@@ -44,12 +47,12 @@ export const ENTRY_PATH_KEYS = Object.freeze([PATH_KEYS.SCALP, PATH_KEYS.VALUE_H
 // The churn volume floor — a buy-limit-cycle commodity must trade this many two-sided units/day AND
 // have a real buy limit. PLAN-VOL24 step 2: recalibrated 2000 → 65000 against the CORRECTED rolling-24h
 // volume (the /24h endpoint under-read ~10–27×; count-matched to the old 2000/legacy churn selectivity).
-// Node-only (screen.mjs churn niche via gatecandidates) — NOT app-imported, so no APP_VERSION bump.
+// Node-only (screen.mjs churn flip-niche via gatecandidates) — NOT app-imported, so no APP_VERSION bump.
 export const CHURN_MIN_VOL = 65000;
 
-// P5 scalp niche — a DELIBERATE intraday flip on a falling market (Ben's 2026-07-08 amendment: a
+// P5 scalp flip-niche — a DELIBERATE intraday flip on a falling market (Ben's 2026-07-08 amendment: a
 // faller is not necessarily a poor buy). The scalp edge wants a WIDER fresh band than the base `band`
-// niche: after-tax ROI ≥ SCALP_MIN_ROI (above band's MIN_ROI 1.5%), clearing tax + a real scalp
+// flip-niche: after-tax ROI ≥ SCALP_MIN_ROI (above band's MIN_ROI 1.5%), clearing tax + a real scalp
 // margin. Reach-validation against TODAY's high (is the sell level actually printing today?) is the
 // P2 reachValidator, which degrades to pass on the screen (no 1h fetch) exactly like every other
 // surface. Flip-only / no-hold / hard intraday stop — encoded in the path engine (SCALP_NO_HOLD_PENALTY
@@ -79,7 +82,7 @@ function valueEdge({ avgHigh, avgLow }, t) {
 /* --- edge functions (pure; the spec's step-3 edge, re-expressed verbatim from gatecandidates.mjs) ---
    Each takes ({ avgHigh, avgLow, band, limitVol, limit, thin }, thresholds) and returns either
      { modeNet, modeRoi, activeWin }   (the row's after-tax edge + traded-window count, or null win)
-   or null when the item fails this niche's edge/gate (the old `continue`). `band` is the aggregated
+   or null when the item fails this flip-niche's edge/gate (the old `continue`). `band` is the aggregated
    2h band record { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh (+ rawBandLo/rawBandHi) } or
    undefined. bandLo/bandHi are already Bar-E robustified upstream (marketfetch.mjs robustBand — a lone
    flier can't set the edge on a dense band); bandCore just consumes them. ALL numeric math is the
@@ -133,7 +136,7 @@ function churnEdge(inp, t) {
 
 /* --- the registry ---------------------------------------------------------------------------------
    Each spec's SHAPE (validated by validateStrategySpec + the conformance suite):
-     key         stable niche id (the --mode value)
+     key         stable flip-niche id (the --mode value)
      label       display name
      inAll       part of `--mode all` (Steps 3+4, Ben 2026-07-09: band + churn. spread + rising are
                  DELETED — spread's 24h-average edge is narrower than the band + surfaced ≈0 clean flips
@@ -172,7 +175,7 @@ function churnEdge(inp, t) {
      defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header).
      estimator   (P6b) the per-thesis P(fill)+TTF estimator FAMILY key — one of pipeline/lib/
                  estimators.mjs's ESTIMATOR_FAMILIES ('intraday' | 'value' | 'rising' | 'churn' — Step 6:
-                 churn ranks the LAP via its own family, not the unit). The niche's
+                 churn ranks the LAP via its own family, not the unit). The flip-niche's
                  rank = net × P(fill) ÷ TTF is computed by that family's estimators (the demoted
                  expGpDay is no longer the ranked/displayed "best" — Ben, 2026-07-09). Just a family
                  STRING here (data); the estimator functions + registry live in pipeline/lib.
@@ -237,7 +240,7 @@ export const STRATEGY_LIST = Object.freeze([
       { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
       // trajectory GATES in value (Ben 2026-07-09): a KNIFE drops. Value's defining thesis is "buy the
       // base, never the knife", and a multi-week HOLD makes buying a knife cost far more than missing one
-      // (asymmetry) — so this is the one niche where the knife verdict is a thesis violation, not a nuance,
+      // (asymmetry) — so this is the one flip-niche where the knife verdict is a thesis violation, not a nuance,
       // and it graduates from inform→gate ahead of the others. It catches the knives valueGate's weaker
       // term-structure knifeDelta misses (Inoculation bracelet, Zombie axe). `elevated` stays a caution
       // flag (a timing note, not a drop); oscillating/based/rising pass. A dropped knife is NAMED in the
@@ -251,7 +254,7 @@ export const STRATEGY_LIST = Object.freeze([
   },
 ]);
 
-// by-key map + the ordered mode-name lists screen.mjs derives from the registry (so the niche names
+// by-key map + the ordered mode-name lists screen.mjs derives from the registry (so the flip-niche names
 // live in ONE place — the registry — not as a magic-string array in screen.mjs).
 export const STRATEGIES = Object.freeze(Object.fromEntries(STRATEGY_LIST.map(s => [s.key, s])));
 export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
