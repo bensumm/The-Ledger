@@ -1,8 +1,8 @@
 // levels.mjs — PURE structural-support / cut-trigger levels for the watch loop (chunk V2).
 //
-// Given a recent per-day LOW series (which watch.mjs derives from the 1h /timeseries it ALREADY
+// Given a recent per-day LOW series (which watch-positions.mjs derives from the 1h /timeseries it ALREADY
 // fetches for its window-context line — no new network here), compute the recent STRUCTURAL
-// SUPPORT and a cut-trigger level below it. OUTPUT-ONLY in V2: watch.mjs prints these as context
+// SUPPORT and a cut-trigger level below it. OUTPUT-ONLY in V2: watch-positions.mjs prints these as context
 // on held rows; they change NO verdict and raise NO alert (conviction gating off a broken tripwire
 // is chunk V4, not here). Pure, DOM-free, fs-free, network-free — node-importable + fixture-tested.
 

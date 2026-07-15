@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/* thesis.mjs — CLI to record / clear / list the #4 SESSION THESIS per item (PLAN-YIELD). The SOLE
-   writer of .cache/session-thesis.json (gitignored); watch.mjs is a read-only consumer that prints
+/* declare-thesis.mjs — CLI to record / clear / list the #4 SESSION THESIS per item (PLAN-YIELD). The SOLE
+   writer of .cache/session-thesis.json (gitignored); watch-positions.mjs is a read-only consumer that prints
    the reminder under each held lot. A thesis is INTENT — never a verdict/alert input, decides nothing.
    NO PII in a thesis string (the repo is public; the store is local but the discipline stands).
 

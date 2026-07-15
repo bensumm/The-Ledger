@@ -13,9 +13,9 @@
  *
  * IT RE-IMPLEMENTS NOTHING (rule 8). The suggestion→fill retro is the PURE `retroJoin`/`aggregateOutcomes`
  * (lib/retrojoin.mjs); the audit/candidate logic is the PURE lib/analyze.mjs; the ledger read is the ONE
- * shared `readSuggestionLines` (active + monthly archives). The campaign/band-percentile join (outcomes.mjs)
+ * shared `readSuggestionLines` (active + monthly archives). The campaign/band-percentile join (join-outcomes.mjs)
  * is NOT re-run here — it fetches historical bands and is slow; AZ1 does a lightweight REBUILDABILITY PROXY
- * (inputs parse + positions.json fresh vs fills.json) and points the skill at `outcomes.mjs --report`.
+ * (inputs parse + positions.json fresh vs fills.json) and points the skill at `join-outcomes.mjs --report`.
  *
  * READ-ONLY like retrojoin.mjs: reads suggestions.jsonl (+ archives) + fills.json + positions.json and
  * writes NOTHING (no artifact, no ledger, no fetch). It must NEVER enter a commit/sync path.
@@ -132,7 +132,7 @@ for (const c of candidates) { console.log(`  ${mark[c.kind] || '•'}: ${c.signa
 // mutates DIP_LOOP_* — F1 (gated on O1 sample thresholds) owns any actual retune, exactly like §3.
 console.log(`\n## 4. Dip-loop (DL2 FLUSH) retro — flush SIGNALS ⇆ fills.json (candidate-surfacing; F1 calibrates)`);
 if (!dipLoop.n) {
-  console.log(`  no flush signals logged yet (watch.mjs --dip) — n=0. The dip-loop retro is a PLACEHOLDER until signals accrue; nothing to flag for F1 (rule 4).`);
+  console.log(`  no flush signals logged yet (watch-positions.mjs --dip) — n=0. The dip-loop retro is a PLACEHOLDER until signals accrue; nothing to flag for F1 (rule 4).`);
 } else {
   console.log(`  ${dipLoop.n} flush signal(s) · ${dipLoop.nAlerted} alerted (liquid → headline FLUSH) · ${dipLoop.nSignalOnly} signal-only (illiquid/gated — DL3 input)`);
   const sep = dipLoop.separation;

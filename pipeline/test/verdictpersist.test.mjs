@@ -260,7 +260,7 @@ ok('FIXTURE 4: NO-READ on pass N of a stable HOLD keeps the label + appends the 
   assert.ok(renderHeldVerdict(ctx, { mode: 'verbose' }).startsWith(d.label));
 });
 
-ok('rawHeldToken matches the pre-VN-1 watch.mjs token chain (mv > FALLING > UNDERWATER > HOLD > NO-QUOTE)', () => {
+ok('rawHeldToken matches the pre-VN-1 watch-positions.mjs token chain (mv > FALLING > UNDERWATER > HOLD > NO-QUOTE)', () => {
   assert.equal(rawHeldToken(rowOf(), 3_100_000, { verdict: 'CUT-CANDIDATE' }), 'CUT-CANDIDATE');
   assert.equal(rawHeldToken(rowOf({ falling: true }), 3_100_000, null), 'FALLING');
   assert.equal(rawHeldToken(rowOf({ quickSell: 3_000_000 }), 3_100_000, null), 'UNDERWATER');

@@ -2,7 +2,7 @@
 /**
  * holdthesis.test.mjs — the TG1 agent-written declared-hold-thesis store (pipeline/lib/holdthesis.mjs).
  *
- * The store is the read side of the thesis-gated hold alert (TG1). watch.mjs reads it READ-ONLY to
+ * The store is the read side of the thesis-gated hold alert (TG1). watch-positions.mjs reads it READ-ONLY to
  * silence the expected-underwater headline while a lot holds above its declared tripwire. These
  * fixtures pin the store contract so a future editor can't silently break the read/write shape.
  *

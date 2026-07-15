@@ -13,7 +13,7 @@
    fetch-pool ranking mode, and the inferred DEFAULT ENTRY PATH the surfacing implies. gatecandidates.mjs
    now looks up `FLIP_NICHES[mode]` and calls `spec.edge(...)` / reads `spec.pool` / `spec.rank` instead of
    branching on the name — so a flip-niche can be added or REMOVED by editing this registry alone, without
-   touching gatecandidates.mjs or screen.mjs.
+   touching gatecandidates.mjs or screen-flip-niches.mjs.
 
    NICHE SET (Steps 3+4, Ben 2026-07-09): the `spread` and `rising` specs are DELETED (git history is the
    reference). Why: spread's 24h-average edge is structurally narrower than the intraday band, and once the
@@ -34,7 +34,7 @@
    encodes how /scan describes each flip-niche's INTENT (band/churn are flip-first "buy the low, sell the top"
    plays → the intraday `scalp` thesis; value is a hold-for-the-cycle move → the `value-hold` thesis). It is written to the
    suggestions ledger as the inferred entry thesis so a LATER fill can attribute a position to a thesis
-   when no explicit `thesis.mjs set --path` was declared (the P4b fallback: explicit > inferred > null).
+   when no explicit `declare-thesis.mjs set --path` was declared (the P4b fallback: explicit > inferred > null).
    It is NOT a gate and does not affect which rows surface. */
 
 import { tax } from './money-math.js';
@@ -47,7 +47,7 @@ export const ENTRY_PATH_KEYS = Object.freeze([PATH_KEYS.SCALP, PATH_KEYS.VALUE_H
 // The churn volume floor — a buy-limit-cycle commodity must trade this many two-sided units/day AND
 // have a real buy limit. PLAN-VOL24 step 2: recalibrated 2000 → 65000 against the CORRECTED rolling-24h
 // volume (the /24h endpoint under-read ~10–27×; count-matched to the old 2000/legacy churn selectivity).
-// Node-only (screen.mjs churn flip-niche via gatecandidates) — NOT app-imported, so no APP_VERSION bump.
+// Node-only (screen-flip-niches.mjs churn flip-niche via gatecandidates) — NOT app-imported, so no APP_VERSION bump.
 export const CHURN_MIN_VOL = 65000;
 
 // P5 scalp flip-niche — a DELIBERATE intraday flip on a falling market (Ben's 2026-07-08 amendment: a
@@ -86,7 +86,7 @@ function valueEdge({ avgHigh, avgLow }, t) {
    2h band record { bandLo, bandHi, active5m, tradedWin, sawLow, sawHigh (+ rawBandLo/rawBandHi) } or
    undefined. bandLo/bandHi are already Bar-E robustified upstream (marketfetch.mjs robustBand — a lone
    flier can't set the edge on a dense band); bandCore just consumes them. ALL numeric math is the
-   shared `tax()` so the numbers stay byte-identical to screen.mjs / the app. */
+   shared `tax()` so the numbers stay byte-identical to screen-flip-niches.mjs / the app. */
 
 // the traded-band common core (band / churn / scalp all price the edge off the intraday band).
 // Returns the band edge + activeWin, or null when the band is missing/untraded. The per-spec gate
@@ -157,7 +157,7 @@ function churnEdge(inp, t) {
                                    value-low (handled in the term-structure valueGate, not surviveMode).
      gate        'band' (default — the shared liquidity+edge pre-fetch stack) | 'value' (the
                  term-structure valueGate in js/valuescreen.mjs; gateCandidates routes on this).
-     validators  the PER-THESIS validator PLAN (Ben 2026-07-09 — no longer dormant metadata; screen.mjs
+     validators  the PER-THESIS validator PLAN (Ben 2026-07-09 — no longer dormant metadata; screen-flip-niches.mjs
                  now drives runValidators off THIS instead of the full registry). Each entry is either a
                  bare key string (gate mode) or { key, mode:'gate'|'inform', window? }:
                    gate   — the validator's verdict stands (caution flags, reject drops the row).
@@ -254,8 +254,8 @@ export const FLIP_NICHE_LIST = Object.freeze([
   },
 ]);
 
-// by-key map + the ordered mode-name lists screen.mjs derives from the registry (so the flip-niche names
-// live in ONE place — the registry — not as a magic-string array in screen.mjs).
+// by-key map + the ordered mode-name lists screen-flip-niches.mjs derives from the registry (so the flip-niche names
+// live in ONE place — the registry — not as a magic-string array in screen-flip-niches.mjs).
 export const FLIP_NICHES = Object.freeze(Object.fromEntries(FLIP_NICHE_LIST.map(s => [s.key, s])));
 export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
 export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/value in --mode all (Ben 2026-07-10 added value; spread + rising DELETED; scalp stays explicit-only)

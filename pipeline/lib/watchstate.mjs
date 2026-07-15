@@ -1,6 +1,6 @@
-// watchstate.mjs — PURE cross-pass TEMPORAL MEMORY for the console watch.mjs loop (chunk V1).
+// watchstate.mjs — PURE cross-pass TEMPORAL MEMORY for the console watch-positions.mjs loop (chunk V1).
 //
-// watch.mjs is stateless per pass: it re-quotes every position from scratch and never remembers
+// watch-positions.mjs is stateless per pass: it re-quotes every position from scratch and never remembers
 // what the LAST pass looked like. That stateless purity is correct for the DECISION layer —
 // momVerdict() (js/quotecore.js) stays a pure function of the current quote and is NOT touched
 // here. What this module adds is the layer momVerdict deliberately cannot have: memory of how a
@@ -12,7 +12,7 @@
 // SPLIT (deliberate, mirrors ledgercore/watchcore): the pure delta/counter logic (computeDeltas /
 // advanceState / classifyBandTop) is DOM-free, network-free, fs-free and is what the fixtures
 // exercise. The thin IO wrappers (loadState / saveState) are the ONLY things that touch fs and are
-// never in the tested path — a state-file failure must never break a watch pass, so watch.mjs
+// never in the tested path — a state-file failure must never break a watch pass, so watch-positions.mjs
 // guards every call and loadState degrades to {} rather than throw.
 //
 // State entry shape (one per position key, e.g. "held:27652" / "bid:27652:18000000"):
@@ -36,7 +36,7 @@ import { dirname } from 'node:path';
 
 // --- named tunables (NOT magic numbers) ----------------------------------------------------
 // A position is considered a NEW episode (counters reset) when the gap since its last observed
-// pass exceeds this. ~2× the tightest expected /loop cadence (CADENCE_TIGHT = 1min in watch.mjs,
+// pass exceeds this. ~2× the tightest expected /loop cadence (CADENCE_TIGHT = 1min in watch-positions.mjs,
 // but real human loops run minutes apart) → 15 min: two consecutive passes must be recent to count
 // as consecutive. Keeps `passesUnderwater` honest across an overnight pause / a closed laptop.
 export const STALE_GAP_MS = 15 * 60 * 1000;
@@ -148,7 +148,7 @@ export function computeDeltas(prior, cur, now) {
     bandTopTrend, bandTopFrom, bandTopTo };
 }
 
-/* PURE. Produce the NEW stored entry for this pass (the value watch.mjs persists for `cur`'s key).
+/* PURE. Produce the NEW stored entry for this pass (the value watch-positions.mjs persists for `cur`'s key).
    Advances the underwater counter and the band-top history under the same reset policy as
    computeDeltas, so the two never disagree. Never mutates its inputs. now = ms. */
 export function advanceState(prior, cur, now) {
@@ -185,7 +185,7 @@ export function advanceState(prior, cur, now) {
 
 /* PURE. The V4 arm-then-confirm ESCALATION decision — decides ONLY whether a held-lot verdict is
    allowed to become a HEADLINE ⚠ ALERT this pass. It does NOT change any verdict string (momVerdict
-   is untouched) and NOT any pricing; watch.mjs consumes { escalate, armed, reason } to route an
+   is untouched) and NOT any pricing; watch-positions.mjs consumes { escalate, armed, reason } to route an
    escalation into the headline block (escalate) vs. a visible armed NOTE (armed) vs. nothing.
 
    Inputs (all from the current pass; the cross-pass counts come from computeDeltas):

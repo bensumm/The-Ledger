@@ -1,10 +1,10 @@
 /**
  * item-context.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer (chunk P0).
  *
- * WHY THIS EXISTS. Before P0 the two single-item surfaces disagreed by construction: `quote.mjs
- * --positions` and `watch.mjs` each re-derived a held lot's verdict inline, from DIFFERENT inputs.
- * quote.mjs never read the live offer book or the watch loop's cross-pass memory, so it could not
- * print the `HOLD — ask filling` (V3 Gate-D) softening or any conviction-timer state — watch.mjs
+ * WHY THIS EXISTS. Before P0 the two single-item surfaces disagreed by construction: `quote-items.mjs
+ * --positions` and `watch-positions.mjs` each re-derived a held lot's verdict inline, from DIFFERENT inputs.
+ * quote-items.mjs never read the live offer book or the watch loop's cross-pass memory, so it could not
+ * print the `HOLD — ask filling` (V3 Gate-D) softening or any conviction-timer state — watch-positions.mjs
  * could. Same lot, two answers. This module is the single home that ends the fork: one staged
  * enricher chain builds an `ItemContext`, and one parameterized renderer turns it into either
  * surface's verdict string. Both surfaces call the SAME functions here, so the matrix cannot drift.
@@ -26,16 +26,16 @@
  * entry via lib/watchstate.mjs, the hold-thesis entry via lib/holdthesis.mjs, and the structural
  * support/cut-trigger from the already-fetched ts1h) and feeds it in. That keeps every stage
  * node-importable + fixture-tested with no network. The position stage's conviction math is the pure
- * computeDeltas / advanceState / convictionGate from watchstate.mjs — quote.mjs gains the same
- * arm-then-confirm read watch.mjs has, off the SAME shared state file.
+ * computeDeltas / advanceState / convictionGate from watchstate.mjs — quote-items.mjs gains the same
+ * arm-then-confirm read watch-positions.mjs has, off the SAME shared state file.
  *
  * THE POSITION STAGE loads (via its caller) offers.json + watch-state for ALL consumers — that is
- * precisely what gives `quote.mjs --positions` the askFilling softening + conviction timers it
+ * precisely what gives `quote-items.mjs --positions` the askFilling softening + conviction timers it
  * previously lacked. `ask`/`bid` are NORMALIZED offers `{ price, filled, total }` so a caller can
  * source them from offers.json (quote) OR the live exchange log (watch) without this module caring.
  *
  * THE RENDERER is shared and PARAMETERIZED, not forked: `renderHeldVerdict(ctx, { mode })` emits
- * `compact` (the quote.mjs table Verdict cell) or `verbose` (the watch.mjs heldAction line) off the
+ * `compact` (the quote-items.mjs table Verdict cell) or `verbose` (the watch-positions.mjs heldAction line) off the
  * SAME `heldMomVerdict(ctx)` decision. Both strings are reproduced VERBATIM from the pre-P0 inline
  * functions so existing output stays byte-identical; only the shared source of `mv` changed.
  */
@@ -68,7 +68,7 @@ export function marketStage(ctx, { inp = {}, guide = null, limit = null, held = 
    the P3 read (js/termstructure.mjs — 1/3/7/14/28d + durable floor + typical fluctuation), passed in by
    the caller when it has a daily-mid series. Left null when absent so downstream `?? null`-degrades; the
    BUY-side floorValidator reads it (a HELD lot on this chain is a sell decision → floorValidator degrades
-   regardless, so quote.mjs --positions deliberately leaves it null). */
+   regardless, so quote-items.mjs --positions deliberately leaves it null). */
 export function historyStage(ctx, { ts6h = null, termStructure = null } = {}) {
   ctx.history = { phase: ts6h ? phase(ts6h) : null, termStructure };
   return ctx;
@@ -86,7 +86,7 @@ export function intradayStage(ctx, { ts5m = null, ts6h = null, ts1h = null, reac
 }
 
 // Is the held lot's OWN ask actively transacting ABOVE the clear price? The V3 Gate-D fill-progress
-// heuristic, byte-identical to watch.mjs's inline test — an active sell with filled units priced
+// heuristic, byte-identical to watch-positions.mjs's inline test — an active sell with filled units priced
 // above the live instabuy. Normalized offer shape `{ price, filled, total }`; null ask → false.
 function askIsFilling(row, ask) {
   return !!(ask && ask.filled > 0 && row && row.quickSell != null && ask.price > row.quickSell);
@@ -100,7 +100,7 @@ function askIsFilling(row, ask) {
 // ---------------------------------------------------------------------------
 
 /* rawHeldToken — the ONE raw display token for a held lot (byte-identical to the pre-VN-1
-   watch.mjs heldVerdict()): the momVerdict verdict string when one fired, else the
+   watch-positions.mjs heldVerdict()): the momVerdict verdict string when one fired, else the
    FALLING / UNDERWATER / HOLD / NO-QUOTE fallbacks. This is what the ledger logs (raw, honest)
    and what feeds the persistence gate as the candidate. */
 export function rawHeldToken(row, be, mv) {
@@ -116,7 +116,7 @@ export function rawHeldToken(row, be, mv) {
 // the Berserker shape: BE 3.15m, live 3.10–3.17m). Both tokens rank severity 0 (deliberately, so
 // the mv-null set stayed byte-identical in VN-1), so persistence alone can't stop that flap. When
 // live sits within a dead-band of BE on a CLEAN read, the display names the actual situation —
-// `PARKED — at break-even (±X)` — instead of alternating, and watch.mjs suppresses the ungated
+// `PARKED — at break-even (±X)` — instead of alternating, and watch-positions.mjs suppresses the ungated
 // UNDERWATER headline inside the band (the falling-regime alert is unchanged — PARKED requires a
 // non-falling row). Display-only; the raw HOLD/UNDERWATER token still flips underneath (logged).
 // ⚠ BOTH PLACEHOLDERS (rule 4, n=1 session): dead-band = HALF the current 2h raw band width
@@ -146,7 +146,7 @@ export function parkedDeadband(row, be) {
    - `mvDisplay` is what renderHeldVerdict consumes: the RAW mv (possibly null) when nothing
      diverges — so rendering is byte-identical to pre-VN-1 — or a `{ synthetic:true, verdict:label,
      raw }` wrapper when the displayed label differs from the raw read.
-   - `state` rides the newStateEntry ADDITIVELY (only watch.mjs persists it; quote reads-only —
+   - `state` rides the newStateEntry ADDITIVELY (only watch-positions.mjs persists it; quote reads-only —
      with no watch loop running the prior is stale/absent, so this degrades to the instantaneous
      verdict: an honest degrade, documented in MONITORING.md step 4). */
 export function heldDisplay({ row = null, be = null, mv = null, prior = null,
@@ -208,7 +208,7 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
    hold thesis. Produces the ONE lotCtx + momVerdict `mv` both surfaces render, plus the conviction
    gate (arm-then-confirm) and the next-pass state entry (the caller persists it — watch does; quote
    reads-only). Every conviction input is optional: absent a watch-state prior / support / nowMs the
-   gate degrades to no-escalation and the verdict is unchanged (the pre-P0 quote.mjs behavior).
+   gate degrades to no-escalation and the verdict is unchanged (the pre-P0 quote-items.mjs behavior).
 
    inputs:
      held, qty, avgCost, buyTs   the lot (buyTs = oldest lot's unix seconds; feeds the fresh-entry gate)
@@ -233,7 +233,7 @@ export function positionStage(ctx, {
   // The ONE momVerdict both surfaces render — computed once, off the full lotCtx (the fork's cure).
   const mv = held ? momVerdict(row, be, lotValue, ts5m, undefined, lotCtx) : null;
 
-  // Conviction (arm-then-confirm) — the timers quote.mjs previously lacked. Pure watchstate math over
+  // Conviction (arm-then-confirm) — the timers quote-items.mjs previously lacked. Pure watchstate math over
   // the shared state file. Guarded shape: any missing input degrades to a no-escalation gate.
   let deltas = null, gate = { escalate: false, armed: false, reason: null }, newStateEntry = null;
   if (held && row) {
@@ -254,7 +254,7 @@ export function positionStage(ctx, {
   // VN-1: the persistence-gated DISPLAY read (one home; both surfaces render from it via
   // renderHeldVerdict). A fresh episode (first-seen / reset) drops the prior so a re-bought lot
   // re-establishes its label, mirroring the conviction counters. Fields ride newStateEntry
-  // ADDITIVELY (only watch.mjs persists; quote is read-only per the P0 contract).
+  // ADDITIVELY (only watch-positions.mjs persists; quote is read-only per the P0 contract).
   let display = null;
   if (held && row) {
     const freshD = deltas ? (deltas.firstSeen || deltas.reset) : true;
@@ -283,14 +283,14 @@ export function positionStage(ctx, {
    supplies the prior state entry + clock, exactly like positionStage's conviction inputs.
 
    enteredUnder source (P4b contract): the tracked hold-thesis entry's `enteredUnder` (declared via
-   `thesis.mjs set --path`), read off ctx.position.thesis; null when undeclared — NEVER fabricated.
+   `declare-thesis.mjs set --path`), read off ctx.position.thesis; null when undeclared — NEVER fabricated.
    The declared `path` field additionally SEEDS the incumbent when the watch-state entry carries no
    persisted currentPath yet (a declared plan shouldn't be displaced without arm-then-confirm just
    because the state file is fresh).
 
    Persistence fields ride the position stage's `newStateEntry` ADDITIVELY (`currentPath` /
-   `pathArmedKey` / `pathArmedSince` / `enteredUnder`) so the ONE writer (watch.mjs) persists them
-   with the entry it already saves; quote.mjs builds the same ctx but never persists (P0 read-only
+   `pathArmedKey` / `pathArmedSince` / `enteredUnder`) so the ONE writer (watch-positions.mjs) persists them
+   with the entry it already saves; quote-items.mjs builds the same ctx but never persists (P0 read-only
    contract). `fresh` (first-seen / reset, from position deltas) drops the prior so a re-bought lot
    re-establishes its path from scratch, mirroring the conviction counters. */
 export function pathsStage(ctx, { watchStatePrior = null, nowMs = Date.now(), fresh = null } = {}) {
@@ -336,7 +336,7 @@ export function pathsStage(ctx, { watchStatePrior = null, nowMs = Date.now(), fr
     enteredUnder, now: nowMs,
   });
   ctx.paths = { ...weighedRes, persisted, declaredPath };
-  // fold the persistence fields into the next-pass state entry (ADDITIVE; only watch.mjs saves it)
+  // fold the persistence fields into the next-pass state entry (ADDITIVE; only watch-positions.mjs saves it)
   if (ctx.position && ctx.position.newStateEntry) {
     ctx.position.newStateEntry.currentPath = persisted.currentPath ?? null;
     ctx.position.newStateEntry.pathArmedKey = persisted.armedKey ?? null;
@@ -372,8 +372,8 @@ export function heldMomVerdict(ctx) {
   return ctx && ctx.position ? ctx.position.mv : null;
 }
 
-/* COMPACT — the quote.mjs `--positions` table Verdict cell. Body reproduced VERBATIM from the pre-P0
-   quote.mjs verdict() so booked-lots output stays byte-identical; the only change is that `mv` now
+/* COMPACT — the quote-items.mjs `--positions` table Verdict cell. Body reproduced VERBATIM from the pre-P0
+   quote-items.mjs verdict() so booked-lots output stays byte-identical; the only change is that `mv` now
    carries the askFilling softening (the HOLD — ask filling case quote could not previously reach). */
 function heldVerdictCompact(row, be, mv) {
   const instabuy = row ? row.quickSell : null;
@@ -402,7 +402,7 @@ function heldVerdictCompact(row, be, mv) {
   return `HOLD — underwater, list ≥ ${fmtP(be)} (break-even)`;
 }
 
-/* VERBOSE — the watch.mjs per-held action line. Body reproduced VERBATIM from the pre-P0 watch.mjs
+/* VERBOSE — the watch-positions.mjs per-held action line. Body reproduced VERBATIM from the pre-P0 watch-positions.mjs
    heldAction() (it now takes the shared `mv` rather than recomputing it — same inputs, same result). */
 function heldActionVerbose(row, be, lotValue, ts5m, mv) {
   const instabuy = row ? row.quickSell : null;
@@ -439,8 +439,8 @@ function heldActionVerbose(row, be, lotValue, ts5m, mv) {
 }
 
 /* renderHeldVerdict(ctx, { mode }) — the ONE entry point both surfaces call.
-     mode 'compact'  → quote.mjs `--positions` Verdict cell (byte-identical to pre-P0 verdict()).
-     mode 'verbose'  → watch.mjs heldAction line (byte-identical to pre-P0 heldAction()).
+     mode 'compact'  → quote-items.mjs `--positions` Verdict cell (byte-identical to pre-P0 verdict()).
+     mode 'verbose'  → watch-positions.mjs heldAction line (byte-identical to pre-P0 heldAction()).
    Both derive from ctx.position.mv, so the two surfaces render the SAME verdict for the SAME lot.
    VN-1: when the position stage computed a DISPLAY read (ctx.position.display), the renderer
    consumes display.mvDisplay instead — the persistence-gated label. When nothing diverges,
@@ -472,7 +472,7 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
 }
 
 /* renderPathLine(ctx) — the ONE shared dominant-path line (V2-P4b), rendered ALONGSIDE the verdict
-   by both surfaces (watch.mjs's held note block; quote.mjs --positions' per-item info lines). It is
+   by both surfaces (watch-positions.mjs's held note block; quote-items.mjs --positions' per-item info lines). It is
    the renderer-family sibling of renderHeldVerdict — the verdict string itself is deliberately
    UNTOUCHED (momVerdict byte-identity, P4a-pinned); the path read is decision SUPPORT beside it,
    never an alert input. Shape (VN-3/F4: viabilities render at ONE decimal — coarse on purpose):
@@ -503,12 +503,12 @@ export function renderPathLine(ctx) {
   return `${head}${arming}${alts ? ` · menu: ${alts}` : ''} (support, not a verdict — placeholder weights)`;
 }
 
-/* staleBookBanner(ageMin) — the SHARED positions.json-age banner (COD-4). watch.mjs already prints a
-   held-basis staleness line off positions.json's mtime; before COD-4, quote.mjs --positions read the same
+/* staleBookBanner(ageMin) — the SHARED positions.json-age banner (COD-4). watch-positions.mjs already prints a
+   held-basis staleness line off positions.json's mtime; before COD-4, quote-items.mjs --positions read the same
    file SILENTLY, so the explicit-ask/positions surface never warned when the book was stale (the A4 quiet
    inversion — the surface Ben uses most had the weakest freshness signal). This is the ONE home for that
    line so both surfaces word the age + stale threshold identically. Returns the banner string; ageMin ==
-   null → the "unavailable" form. STALE_BOOK_MIN mirrors watch.mjs's 25m threshold. */
+   null → the "unavailable" form. STALE_BOOK_MIN mirrors watch-positions.mjs's 25m threshold. */
 export const STALE_BOOK_MIN = 25;
 export function staleBookBanner(ageMin) {
   if (ageMin == null) return 'held basis positions.json unavailable';

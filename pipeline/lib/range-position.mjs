@@ -19,7 +19,7 @@ import { regimeDrift, regimeLabel, phase } from '../../js/quotecore.js';
    price    : the fill/placement price (optional) -> band percentile within the trailing-2h band */
 // Where `price` sits within a 2h traded band, clamped to [0,100]. `null` when the band is absent
 // or degenerate (hi ≤ lo). `round` yields an integer percent (state-comparison callers); the raw
-// float is kept for logging callers. ONE home for the formula (was duplicated in outcomes.mjs).
+// float is kept for logging callers. ONE home for the formula (was duplicated in join-outcomes.mjs).
 export function bandPercentile(price, lo, hi, { round = false } = {}) {
   if (price == null || lo == null || hi == null || hi <= lo) return null;
   const pct = Math.max(0, Math.min(100, (price - lo) / (hi - lo) * 100));

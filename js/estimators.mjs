@@ -26,9 +26,9 @@
  *     span (reuses a real windowread reach read WHEN one is fetched; degrades to a band-depth heuristic
  *     on screen/quote, which do NOT fetch the 1h series — same discipline as reachValidator). TTF from
  *     intraday velocity (quoted size vs daily volume) around the intraday prior. NOTE (2026-07-09, Step 1):
- *     screen.mjs NOW fetches the 1h series for surfaced SURVIVORS, so it passes a REAL bid-side reach read
+ *     screen-flip-niches.mjs NOW fetches the 1h series for surfaced SURVIVORS, so it passes a REAL bid-side reach read
  *     via `extra.reach` on the screen surface — P(fill) there is the reach fraction, not the band-depth
- *     prior. quote.mjs still fetches no 1h series → it keeps the honest band-depth/prior degrade.
+ *     prior. quote-items.mjs still fetches no 1h series → it keeps the honest band-depth/prior degrade.
  *   value — P(fill at the floor bid) reuses the P5 valueScore components (proximity-to-low × floor
  *     stability); TTF is the historical trough→recovery duration proxy around the multi-day prior.
  *   rising — P(fill)/TTF off the regime-drift/forecast horizon.
@@ -198,7 +198,7 @@ export function askReachFactor(askReach, relief = 0) {
    reported pAsk (measured at the unguarded quantile) is a floor, not exact — documented, not patched
    (F1 calibrates). The momentum tell (rawBandLo/rawBandHi) is quotecore's and is untouched here.
    STATUS (§II.3): SHIP-SAFE half = display + shadow-log this estimate (screen/quote inform lines +
-   the suggestions.jsonl `asym` field). The repricing/sort flip is F1-GATED behind screen.mjs --asym
+   the suggestions.jsonl `asym` field). The repricing/sort flip is F1-GATED behind screen-flip-niches.mjs --asym
    (OFF by default). ASYM_P_LO/ASYM_P_HI (windowread) are PLACEHOLDERS, n≈14 (rule 4). */
 export function asymEstimate(spec, row = {}, asym = null) {
   if (!asym || num(asym.deepBid) == null || num(asym.highReachAsk) == null) return null;
@@ -347,7 +347,7 @@ export function estimateRank(spec, row = {}, extra = {}) {
   // print, and the day-level reach read (1h avg-high aggregates vs a tight 5m band top) systematically
   // mismeasures a small-margin band. The lap thesis is fill-every-lap, the anti-shape of the asymmetric
   // objective (§II.2 "a deep-flush bid is anti-churn") — so a 'symmetric' fillShape spec skips the
-  // Proposal-A ask-reach discount entirely (and screen.mjs mirrors this for the REACH_GRADE_CAP letter).
+  // Proposal-A ask-reach discount entirely (and screen-flip-niches.mjs mirrors this for the REACH_GRADE_CAP letter).
   const pFillRaw = est.pFill(ctx);
   const askF = (spec && spec.fillShape === 'symmetric') ? 1 : askReachFactor(ctx.askReach);
   const pFill = askF < 1
@@ -383,7 +383,7 @@ export function fmtTtf(sec) {
        band top, so it is NOT ceiling-clamped to the band — only floored to live + break-even). CALLER
        CONTRACT (FIX 1, 2026-07-13): a declared exit is a HELD-LOT sell plan, so a caller passes
        `declaredExit` ONLY for an item it actually HOLDS (an open lot in positions.json). The pure
-       DISCOVERY screen (screen.mjs band/churn/value) NEVER passes it — a bare candidate is a buy read,
+       DISCOVERY screen (screen-flip-niches.mjs band/churn/value) NEVER passes it — a bare candidate is a buy read,
        not a held lot; anchoring it would inflate its Est. sell/net off a plan that doesn't apply.
      • else the band top DISCOUNTED BY REACH so a mirage exit collapses toward the live instabuy, blended
        with the diurnal peak ask + the asymPair high-reach ask. PLAN-LIQUIDITY-REACH (2026-07-13): the
@@ -411,7 +411,7 @@ export function fmtTtf(sec) {
    sample-size backstop, shown BESIDE it only when the two DIVERGE (`0/3 · 2/14` — that divergence is the
    stale flag). The `(live)` span-0 fallback is dropped.
 
-   CONSOLE-ONLY consumer set today (screen.mjs / quote.mjs stdout — --raw restores Quick/Optimistic);
+   CONSOLE-ONLY consumer set today (screen-flip-niches.mjs / quote-items.mjs stdout — --raw restores Quick/Optimistic);
    the app Finder/screen.json never call this → no APP_VERSION bump. PURE over the already-computed
    row/ctx — ZERO new fetch; every missing input degrades to the model-free edge (absent evidence ⇒ no
    discount, the askReachFactor absent→1 precedent). Quoted momentum tell, break-even, ordering
@@ -429,7 +429,7 @@ export const EST_REACH_SAT_FRAC = 0.75;
 // Deliberately the simplest documented default — PLACEHOLDER, no calibrated weighting exists yet.
 // @provisional-api: F1-pending placeholder — the est-blend weights each signal equally until the F1 retro sets real per-signal weights; exported so the choice is greppable and the retro can cite it.
 export const EST_BLEND_EQUAL_WEIGHTS = true;
-// The estimated-pair column set (shared by screen.mjs/quote.mjs so the header row can't drift).
+// The estimated-pair column set (shared by screen-flip-niches.mjs/quote-items.mjs so the header row can't drift).
 export const EST_HEADERS = ['Est. buy', 'Est. sell', 'Net/u (ROI)', 'BE'];
 
 /* entryDoctrine(spec) → 'near-live' | 'trough' | 'reach-fold' — the per-strategy ENTRY placement

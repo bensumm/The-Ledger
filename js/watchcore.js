@@ -30,7 +30,7 @@ export function alertCount(heldVerdicts=[], offerVerdicts=[]){
 
 // Incidental inventory: a held lot whose TOTAL value (qty×avgCost) is below this floor is noise,
 // not a flip — collapsed to one muted line, never a card (the /positions incidental-inventory
-// rule; matches watch.mjs NOISE_OFFER_GP). splitHeld partitions {value} lots accordingly.
+// rule; matches watch-positions.mjs NOISE_OFFER_GP). splitHeld partitions {value} lots accordingly.
 export const INCIDENTAL_GP=100_000;
 export function splitHeld(lots=[]){
   const flips=[], incidentals=[];
@@ -88,7 +88,7 @@ export function capitalSplit(workingGp=0, parkedGp=0){
   return {workingGp:w, parkedGp:p, committed, utilizationPct: committed>0 ? Math.round(w/committed*100) : null};
 }
 
-// --- watch.mjs --brief compact book: the format is OWNED BY THE SCRIPT, not the agent ------------
+// --- watch-positions.mjs --brief compact book: the format is OWNED BY THE SCRIPT, not the agent ------------
 // Rationale: the recurring one-line-per-item loop report kept drifting (collapsed lines, dropped
 // sell prices) because the layout lived in the agent's head. These pure functions make the layout a
 // fixed contract: ONE line per position, a dot from the verdict, and `list @ X (BE Y)` ALWAYS present

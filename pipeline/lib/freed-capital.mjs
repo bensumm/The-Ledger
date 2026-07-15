@@ -19,7 +19,7 @@ import { STALE_GAP_MS } from './watchstate.mjs';
 // is incidental. Cited nowhere as calibrated; tune against real loop cadence.
 export const FREED_CAPITAL_SCAN_GP = 5_000_000;
 
-// Parse a held-lot identity string ("hld:<qty>:<avgCost>", the key watch.mjs stores) back into its
+// Parse a held-lot identity string ("hld:<qty>:<avgCost>", the key watch-positions.mjs stores) back into its
 // qty + avgCost. Tolerant: a malformed / non-held identity → null (the caller skips it).
 function parseHeldIdentity(identity) {
   if (typeof identity !== 'string') return null;

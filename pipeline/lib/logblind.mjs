@@ -1,15 +1,15 @@
 /**
- * logblind.mjs — LH2 restart-blindness detector for monitor.mjs / watch.mjs headers.
+ * logblind.mjs — LH2 restart-blindness detector for monitor-offers.mjs / watch-positions.mjs headers.
  *
  * THE PROBLEM (2026-07-05, the 10:21 all-slots-blank read): the Exchange Logger plugin emits
  * only on a slot STATE CHANGE. After a client restart it re-emits nothing until each slot next
  * changes, so for minutes-to-hours the live exchange log shows NO active offers even though offers
- * are resting in-game. monitor.mjs / watch.mjs then read "NOT LISTED / no active bids" and a session
+ * are resting in-game. monitor-offers.mjs / watch-positions.mjs then read "NOT LISTED / no active bids" and a session
  * burns rounds chasing offers that "vanished." This is a plugin emit-on-change artifact, NOT fixable
  * in reconstruction — but it IS detectable, and the fix is a single honest warning line.
  *
  * CHOSEN HEURISTIC (and why): the simplest signal that is both reliable and fully SELF-CONTAINED —
- * it needs only values monitor.mjs / watch.mjs already read, no fragile RuneLite launcher.log /
+ * it needs only values monitor-offers.mjs / watch-positions.mjs already read, no fragile RuneLite launcher.log /
  * client.log mtime parsing (client.log is rewritten continuously while running, so its mtime is not
  * a clean restart marker, and the launcher is not always used). Fire the warning when ALL of:
  *   (1) the newest exchange-log line is STALE (age ≥ BLIND_STALE_MIN) — the log is not currently

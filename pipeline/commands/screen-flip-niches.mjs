@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * screen.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
+ * screen-flip-niches.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
@@ -82,11 +82,11 @@ import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1
 import { parseArgs, parseGp, mdTable, stdCells } from '../lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
-// renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
+// renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
 import { valueRanges, valueScore, valueGate, valueTier } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
-// P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
+// P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS } from '../../js/flip-niches.mjs';
@@ -94,13 +94,13 @@ import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from '../lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from '../lib/suggestlog.mjs';
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (cash.mjs anchor + log flow)
+import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
 // COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
-// logic) so quote.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
+// logic) so quote-items.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
 // two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
 // value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the warm-term-structure.mjs header for why.
 import { richFrom1h, trajectoryFrom1h } from '../lib/warm-term-structure.mjs';
@@ -504,7 +504,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // FIX 1 (2026-07-13): declared-exit anchoring is DELIBERATELY NOT applied on the discovery screen —
     // a bare candidate row is a "should I buy this" read, never a held lot, so a declared SELL exit
     // (a held-lot plan) must not inflate its Est. sell/net. Declared-exit anchoring lives ONLY on the
-    // held-lot surfaces (quote.mjs --positions/watch.mjs verdict frame, and quote.mjs per-item ONLY when
+    // held-lot surfaces (quote-items.mjs --positions/watch-positions.mjs verdict frame, and quote-items.mjs per-item ONLY when
     // that id is actually held). So no declaredExit is passed here.
     // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the SAME in-hand 5m
     // series (zero new fetch) — Part B's de-bias reference. estimatePair applies it (and the Part-A fold
@@ -646,7 +646,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
   // P4c: log the surfacing spec's inferred DEFAULT entry path on each row so a later fill can infer the
-  // thesis a position was entered under when no explicit thesis.mjs --path was declared.
+  // thesis a position was entered under when no explicit declare-thesis.mjs --path was declared.
   const defaultPath = FLIP_NICHES[mode].defaultPath;
   // P6c: sub-floor rows ARE logged (a surfaced row Ben acts on must stay joinable to its fill for the
   // F1 calibration), but each carries a lean `subFloor: <'min-gpd'|'liquidity'>` marker (the YS2
@@ -940,8 +940,8 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   console.log('Playbook: buy near the multi-week low, HOLD for the range to cycle up; the edge is ONE tax-paid sell of a big move, not fast churn. State the hold horizon at entry — this is a multi-day/week HOLD, not a flip.');
   console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability × deployable-capital multiplier — PLACEHOLDER weights, n≈0)`);
   const capSource = VALUE_CAPITAL_EXPLICIT ? ''
-    : (VALUE_CAPITAL_DERIVED ? ' — derived deployablePool from your cash anchor (cash.mjs: free stack + reclaimable deep-bid escrow, deep bids classified off live prices); pass --capital <gp> to override'
-      : ' — PLACEHOLDER capital; set an anchor (cash.mjs) or pass --capital <gp> [--slots N] for your real figure');
+    : (VALUE_CAPITAL_DERIVED ? ' — derived deployablePool from your cash anchor (derive-cash.mjs: free stack + reclaimable deep-bid escrow, deep bids classified off live prices); pass --capital <gp> to override'
+      : ' — PLACEHOLDER capital; set an anchor (derive-cash.mjs) or pass --capital <gp> [--slots N] for your real figure');
   console.log(`(deployable-capital cap ${fmtP(VALUE_CAP_GP)}/position = ${fmtP(VALUE_CAPITAL)} capital ÷ ${VALUE_SLOTS} slots${capSource}. ${buyNow.length} buy-now surfaced — re-run --slots ${buyNow.length || 1} to size the cap to that.)`);
   if (buyNow.length) {
     console.log(`\n### BUY-NOW — live at/near the multi-week low (${buyNow.length})`);
@@ -970,7 +970,7 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Build 2: per-item velocity index from the gitignored outcomes.json (YV1 campaigns), loaded ONCE.
 // Descriptive footnote source only — absent/unreadable/empty file → null → the footnote stays silent
-// (never a fetch, never a fabricated tag). Refreshed by `outcomes.mjs --report`.
+// (never a fetch, never a fabricated tag). Refreshed by `join-outcomes.mjs --report`.
 function loadVelocityIndex() {
   try { return buildVelocityIndex(JSON.parse(readFileSync(join(REPO_ROOT, 'outcomes.json'), 'utf8'))); }
   catch { return null; }
@@ -1090,7 +1090,7 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
   try { const raw = JSON.parse(readFileSync(DIP_WATCHLIST_PATH, 'utf8')); if (Array.isArray(raw)) existing = raw; } catch { /* absent/garbled → treat as empty */ }
   // 4) reconcile: re-score EVERY qualifier into the pool, age out non-qualifiers, keep top-N by score per
   // track (liquid = the --dip live-watch set, illiquid = DL3 backlog). Runs every scan so the pool stays a
-  // quality-ranked, self-pruning set — the bloat fix. Best-effort write (screen.mjs never touches git).
+  // quality-ranked, self-pruning set — the bloat fix. Best-effort write (screen-flip-niches.mjs never touches git).
   const qualifiers = cands.map(c => ({ id: c.id, name: c.name, track: c.track, score: c.score }));
   const existingIds = new Set(existing.filter(e => e && typeof e === 'object' && e.id != null).map(e => Number(e.id)));
   const nextPool = reconcileDipPool(existing, qualifiers, { now });

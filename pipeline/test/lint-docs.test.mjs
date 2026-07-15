@@ -29,8 +29,8 @@ ok('the unqualified falling-exclusion pattern matches only the global framing', 
   assert.ok(!e.pattern.test('band/churn EXCLUDE fallers (the per-strategy doctrine)'), 'the qualified per-strategy form is NOT a hit');
 });
 ok('the --mode {spread,rising} patterns catch the deleted commands', () => {
-  assert.ok(DENYLIST.find(x => x.id === 'mode-spread-cmd').pattern.test('run `screen.mjs --mode spread`'));
-  assert.ok(DENYLIST.find(x => x.id === 'mode-rising-cmd').pattern.test('screen.mjs --mode rising --floor 50'));
+  assert.ok(DENYLIST.find(x => x.id === 'mode-spread-cmd').pattern.test('run `screen-flip-niches.mjs --mode spread`'));
+  assert.ok(DENYLIST.find(x => x.id === 'mode-rising-cmd').pattern.test('screen-flip-niches.mjs --mode rising --floor 50'));
 });
 
 /* ---- CHECK 1: live corpus is clean (AP1 fixed the last outstanding drift) ----------------- */

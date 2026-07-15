@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * emit.test.mjs — the watch.mjs per-HELD-item emit contract (chunk V5).
+ * emit.test.mjs — the watch-positions.mjs per-HELD-item emit contract (chunk V5).
  *
  * emit.mjs orders + formats the already-computed pieces of a held-lot note block into ONE stable,
  * consistently-ordered shape. It decides nothing (V5 is output-format-only). This pins the contract

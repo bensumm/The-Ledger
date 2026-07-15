@@ -83,7 +83,7 @@ export function parseJsonLine(line) {
   // Tombstone directive (see PLAN.md chunk 1.4): a REMOVE line targets an event id and, on
   // merge, deletes the matching event from fills.json even if already persisted. Returned as
   // a marker so the runner (sync-fills.mjs main()) can collect it; it carries no ts/slot of
-  // its own. Non-runner consumers (monitor.mjs) filter these markers out before buildEvents.
+  // its own. Non-runner consumers (monitor-offers.mjs) filter these markers out before buildEvents.
   if (String(pick(o, 'state', 'status', 'offerState') ?? '').toUpperCase() === 'REMOVE') {
     return { remove: String(pick(o, 'target', 'id', 'event') ?? '') };
   }
@@ -305,8 +305,8 @@ export function matchTrades(offers) {
 
 export function reconstruct(events) {
   // dedupeSnapshots first (P1): strip snapshot re-emissions before offers are collapsed, so a
-  // phantom duplicate terminal never becomes a second offer. monitor.mjs shares reconstruct(), so
-  // its live held count gets the same fix. (outcomes.mjs calls collapseOffers/matchTrades directly
+  // phantom duplicate terminal never becomes a second offer. monitor-offers.mjs shares reconstruct(), so
+  // its live held count gets the same fix. (join-outcomes.mjs calls collapseOffers/matchTrades directly
   // for campaign boundaries and does NOT go through here — see the Discovered note in PLAN.md.)
   const { closed, open, unmatched } = matchTrades(collapseOffers(dedupeSnapshots(events)));
   return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched };
@@ -319,7 +319,7 @@ export function eventId(e) {
 }
 
 // buildTombstonedEvents (ARCH-1) — the LIVE-LOG → tombstone-filtered event list, the shared home
-// monitor.mjs reconstructs its held book from. Parses raw JSON log lines (or pre-parsed markers),
+// monitor-offers.mjs reconstructs its held book from. Parses raw JSON log lines (or pre-parsed markers),
 // collects REMOVE tombstone targets, sequences via buildEvents, LH1-validates the slot machine,
 // stamps each surviving event's content-hash id, then DROPS any event whose id was tombstoned — the
 // same correction sync-fills.mjs applies inline (its ~lines 193-227) so both answer "what do I hold?"

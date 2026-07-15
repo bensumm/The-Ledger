@@ -2,11 +2,11 @@
 /**
  * monitor.test.mjs — pins the ARCH-1 tombstone fold-in for the live position monitor.
  *
- * monitor.mjs rebuilds a FIFO held-book IN-MEMORY from the live Exchange Logger. Before ARCH-1 it
+ * monitor-offers.mjs rebuilds a FIFO held-book IN-MEMORY from the live Exchange Logger. Before ARCH-1 it
  * DROPPED the coffer-manual.log REMOVE tombstone markers instead of applying them, so a lot the
  * sync/positions.json path had already purged reappeared as a phantom hold — and gave wrong listing
  * advice once (2026-07-05). The routing now goes through the shared buildTombstonedEvents() helper
- * (reconstruct.mjs), the same correction sync-fills.mjs applies. monitor.mjs is a top-level
+ * (reconstruct.mjs), the same correction sync-fills.mjs applies. monitor-offers.mjs is a top-level
  * side-effecting script (it reads ~/.runelite on import), so we pin the shared helper it calls —
  * that IS the reconstruction routing under test.
  *

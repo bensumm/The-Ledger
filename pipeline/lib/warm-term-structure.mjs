@@ -7,7 +7,7 @@
  * returns the WARM `termStructure` so callers get a firing `.trajectory` (and the recent-week `.lookbacks`
  * value-amplitude reads) NOW instead of degrading on the cold archive.
  *
- * EXTRACTED (COD-4, 2026-07-10): this was inline in screen.mjs; quote.mjs's budgeted-ts1h read needs the
+ * EXTRACTED (COD-4, 2026-07-10): this was inline in screen-flip-niches.mjs; quote-items.mjs's budgeted-ts1h read needs the
  * SAME warm trajectory so reach/trajectory FIRE on the explicit-ask surface (fixing the A4 asymmetry).
  * ONE home so the two surfaces can't drift. Pure over an already-fetched 1h array — no fetch/fs/DOM.
  *

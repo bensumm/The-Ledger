@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * alerts.mjs — the PUSH-NOTIFICATION TRIGGER ENGINE (PLAN chunk N1, design-first).
+ * trigger-alerts.mjs — the PUSH-NOTIFICATION TRIGGER ENGINE (PLAN chunk N1, design-first).
  *
  * DELIVERY-AGNOSTIC by design. This script only DETECTS market events worth a buzz and
  * EMITS them as structured JSON lines (plus a human-readable line) on stdout. It NEVER
@@ -12,10 +12,10 @@
  * Three trigger classes (spec'd in MONITORING.md):
  *   1. POSITION — a held position's verdict escalates to CUT / CUT-CANDIDATE, or Momentum
  *      hits ↓↓ (a strong 2h breakdown) on a held item. Verdict comes from the SHARED
- *      momVerdict() gate tree in js/quotecore.js — identical to `quote.mjs --positions`,
+ *      momVerdict() gate tree in js/quotecore.js — identical to `quote-items.mjs --positions`,
  *      never re-implemented here.
  *   2. FILL — a resting GE offer filled/completed (read from the exchange log via offers.mjs,
- *      the same source monitor.mjs uses).
+ *      the same source monitor-offers.mjs uses).
  *   3. PRICE — a live price crosses an explicit named alert ("tell me if X breaks Y"), read
  *      from the tracked repo-root alerts.json.
  *
@@ -99,7 +99,7 @@ function emit(obj, human) {
  * ========================================================================================== */
 // Returns the alertable signal for a held row, or null. `sig` is the transition key stored in
 // state; a change in sig (and cooldown clear) is what fires. Verdict text is sourced from the
-// shared momVerdict() so it can't drift from the app / quote.mjs.
+// shared momVerdict() so it can't drift from the app / quote-items.mjs.
 export function positionSignal(row, be, lotValue, ts5m) {
   const mv = momVerdict(row, be, lotValue, ts5m);
   const strongDown = row.mom === 'breakdown' && (row.momPct || 0) >= MOM_STRONG_PCT;
@@ -109,7 +109,7 @@ export function positionSignal(row, be, lotValue, ts5m) {
     return { sig: mv.verdict + (strongDown ? '+↓↓' : ''), verdict: mv.verdict, why: mv.why, mom: strongDown ? '↓↓' : null };
   }
   // (b) falling regime + underwater with a clean/na mom (momVerdict returns null here) — this is
-  // the CUT quote.mjs --positions prints from its falling branch; surface it as a push too.
+  // the CUT quote-items.mjs --positions prints from its falling branch; surface it as a push too.
   if (!mv && row.falling && underwater && row.reliable !== false) {
     return { sig: 'CUT-FALLING', verdict: 'CUT', why: 'falling regime & underwater — free capital (0.20.0 clear rule).', mom: null };
   }
@@ -122,7 +122,7 @@ export function positionSignal(row, be, lotValue, ts5m) {
 
 async function runPositions(st) {
   // open lots grouped by itemId at weighted-avg cost — the shared reader (same view as
-  // quote.mjs --positions / watch.mjs); positions.json is read-only here.
+  // quote-items.mjs --positions / watch-positions.mjs); positions.json is read-only here.
   const { err, groups } = readOpenPositions(POSITIONS);
   if (err) { console.error('! cannot read positions.json — skipping position alerts'); return; }
   if (!groups.length) return;

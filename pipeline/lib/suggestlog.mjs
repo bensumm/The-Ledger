@@ -1,7 +1,7 @@
 /* suggestlog.mjs — the append-only SUGGESTIONS LEDGER (PLAN O1 step 1).
  *
- * Every recommendation the analysis scripts emit — quote.mjs (per-item + --positions),
- * screen.mjs (each rated niche row), watch.mjs (each held/target read) — is logged HERE at
+ * Every recommendation the analysis scripts emit — quote-items.mjs (per-item + --positions),
+ * screen-flip-niches.mjs (each rated niche row), watch-positions.mjs (each held/target read) — is logged HERE at
  * emit time, unconditionally, one JSON object per line, to repo-root suggestions.jsonl. This
  * is the "what the tool SAID" half of the outcomes dataset; pipeline/commands/join-outcomes.mjs joins it to
  * "what actually FILLED" (fills.json). The ledger is TRACKED in git (append-only; ids / prices
@@ -11,7 +11,7 @@
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
  *     volSrc?,   (SF-3 — 'bulk' | 'peritem': which /24h endpoint the volume behind `class` came from;
- *                 lean-included, quote/screen always supply it, watch.mjs omits it)
+ *                 lean-included, quote/screen always supply it, watch-positions.mjs omits it)
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
@@ -41,7 +41,7 @@
  *               absent when no 1h series was in hand — e.g. watchlist rows.)
  *     grade?,  (AZ-forward 2026-07-12 — the rating LETTER as rendered then ('S+'…'D', incl. any
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
- *               `verdict` (which watch.mjs uses for action verdicts); lean-included, screen supplies
+ *               `verdict` (which watch-positions.mjs uses for action verdicts); lean-included, screen supplies
  *               it, quote/watch have no grade → absent. Absent on all pre-2026-07-12 rows.)
  *     depth?,  (AZ-forward 2026-07-12 — the realized 24h book-depth snapshot at emit:
  *               {hpv, lpv} straight off computeQuote's `row.pressure` (units traded at the instabuy /
@@ -146,7 +146,7 @@ export function rotateLedger(now = Date.now(), { ledger = LEDGER, archiveDir = A
 
 // Read EVERY suggestion line across the active ledger + all monthly archives, oldest-file first
 // (active last = newest). Rotation splits the O1 dataset across files, so any reader that needs the
-// FULL history (outcomes.mjs's F1 calibration join) MUST read through here, not the active file
+// FULL history (join-outcomes.mjs's F1 calibration join) MUST read through here, not the active file
 // alone — reading LEDGER directly would silently halve the calibration set after the first rotation.
 export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR } = {}) {
   const files = [];
@@ -166,13 +166,13 @@ export function readSuggestionLines({ ledger = LEDGER, archiveDir = ARCHIVE_DIR 
 }
 
 // Coarse liquidity class from the limiting-side daily volume — a stable, script-independent
-// vocabulary so quote.mjs / screen.mjs rows share one `class`. Thresholds mirror CLAUDE.md's
-// two-sided practical floor (~100/d) and a rough liquid cutoff. watch.mjs instead passes its
+// vocabulary so quote-items.mjs / screen-flip-niches.mjs rows share one `class`. Thresholds mirror CLAUDE.md's
+// two-sided practical floor (~100/d) and a rough liquid cutoff. watch-positions.mjs instead passes its
 // richer classify() taxonomy label (FALLING / THIN_BIG_TICKET_VOLATILE / …) — that IS "the label
 // as computed then" for that script.
-// liqClassOf(volDay) is the raw-number core (outcomes.mjs joins on stored volDay, no row); liqClass(row)
-// is the row convenience wrapper. ONE threshold set (X1 dedup — was copied as liqClassOf in outcomes.mjs).
-// NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen.mjs's grade-capping `thin` (the gp-flow-only
+// liqClassOf(volDay) is the raw-number core (join-outcomes.mjs joins on stored volDay, no row); liqClass(row)
+// is the row convenience wrapper. ONE threshold set (X1 dedup — was copied as liqClassOf in join-outcomes.mjs).
+// NY2.4: this 'thin' (volDay < 100) is DISTINCT from screen-flip-niches.mjs's grade-capping `thin` (the gp-flow-only
 // admission path, limitVol < 50). Because volDay == limitVol, an item at 50–99/day logs class:'thin'
 // here yet is NOT gp-flow-thin, so it grades on merit — a class:'thin' + high grade in the ledger is
 // expected, not a cap escape (see rating.mjs THIN_GRADE_CAP note).
@@ -185,14 +185,14 @@ export function liqClassOf(volDay) {
 export function liqClass(row) { return liqClassOf(row && row.volDay); }
 
 // SF-3 — decide the logged liquidity `class` AND its volume SOURCE, deterministically and WITHOUT any
-// fetch. Problem: quote.mjs's per-item /24h and screen.mjs's bulk /24h are different snapshots, so the
+// fetch. Problem: quote-items.mjs's per-item /24h and screen-flip-niches.mjs's bulk /24h are different snapshots, so the
 // same item could log a different `class` across scripts (the `volDay` itself is polluted; re-deriving
 // from the stored volDay doesn't launder it). Fix: when a WARM bulk /24h map is in hand (the caller
 // passes marketfetch.loadAll24hWarm() — null when cold), take the item's volume from the SAME bulk
 // endpoint screen uses → the classes CONVERGE, tagged volSrc:'bulk'. When cold, keep the per-item
 // row.volDay and tag volSrc:'peritem' (the honesty label F1 can bucket/normalize on). This is PURE —
 // it fetches nothing; the warm map is whatever the caller already had (the hard no-cold-fetch constraint
-// lives at the loadAll24hWarm accessor). screen.mjs passes volSrc:'bulk' directly (it already reads bulk).
+// lives at the loadAll24hWarm accessor). screen-flip-niches.mjs passes volSrc:'bulk' directly (it already reads bulk).
 export function classAndSource(row, id, warmBulk) {
   const be = warmBulk ? (warmBulk[id] || warmBulk[String(id)]) : null;
   if (be) {
@@ -212,7 +212,7 @@ export function classAndSource(row, id, warmBulk) {
 // written ONLY when the caller supplies a non-null value, so a row with no forward context stays
 // byte-for-byte the shape it had before (keeps suggestions.jsonl from ballooning — SR1). Honesty:
 // a script logs only what it can HONESTLY compute (e.g. posture from the clock/flag); it never
-// fabricates a thesis or a pre-F1 predicted velocity. outcomes.mjs joinSuggestion reads each `?? null`.
+// fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
 export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear } = {}) {
@@ -229,7 +229,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   };
   // SF-3: `volSrc` ('bulk' | 'peritem') records which /24h endpoint the volume behind `class` came
   // from, so F1 can bucket/normalize the two snapshot sources. Lean-included (the YS2 pattern): quote/
-  // screen always supply it; a caller that doesn't (watch.mjs passes its own classify() label) logs a
+  // screen always supply it; a caller that doesn't (watch-positions.mjs passes its own classify() label) logs a
   // byte-identical shape.
   if (volSrc != null)        e.volSrc = volSrc;
   if (posture != null)       e.posture = posture;
@@ -240,9 +240,9 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (validators != null)    e.validators = validators;
   // P4c: `path` is the INFERRED default entry-path key from the surfacing strategy spec
   // (js/flip-niches.mjs defaultPath — band/spread/churn → scalp, rising → value-hold). Lean-included
-  // exactly like the YS2 fields, so a caller that supplies no path (quote.mjs, watchlist rows) logs a
+  // exactly like the YS2 fields, so a caller that supplies no path (quote-items.mjs, watchlist rows) logs a
   // byte-identical shape. It lets a later fill attribute a position to a thesis when no explicit
-  // `thesis.mjs set --path` was declared (the P4b fallback: explicit hold-thesis > inferred > null).
+  // `declare-thesis.mjs set --path` was declared (the P4b fallback: explicit hold-thesis > inferred > null).
   if (path != null)          e.path = path;
   // P6b — the per-thesis rank estimate: the ONE quoted pair the thesis posts (bid/ask) + the rank
   // components (pFill, TTF seconds, the composite rank = net×P÷TTF) + n/basis so the retro-join can
@@ -275,7 +275,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (estSell != null)       e.estSell = estSell;
   if (estConfidence != null) e.estConfidence = estConfidence;
   // AZ-forward (2026-07-12, analyze.mjs forward-data gaps): `grade` is the rating LETTER as rendered
-  // then (incl. any thin/sub-floor cap) — the grade-clumping audit's segmentation key. Only screen.mjs
+  // then (incl. any thin/sub-floor cap) — the grade-clumping audit's segmentation key. Only screen-flip-niches.mjs
   // computes a grade, so it's a caller param (quote/watch never supply it). Lean-included (YS2 pattern):
   // absent on every pre-field row and on grade-less scripts — consumers treat absent as unknown.
   if (grade != null)         e.grade = grade;
@@ -299,7 +299,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // days-reach ≠ lap-clear divergence predicts an unfilled/slow ask. Lean-included (YS2): a caller with no
   // read (no ts1h / no peak window) supplies null → no field → byte-identical shape.
   if (winClear != null)      e.winClear = winClear;
-  // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
+  // DL2 — a flush SIGNAL (watch-positions.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/commands/analyze-record.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid
   // (alerted) AND illiquid (signal-only, the standing-bid / DL3 evidence). Lean-included exactly like the

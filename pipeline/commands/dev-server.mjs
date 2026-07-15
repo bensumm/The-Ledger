@@ -8,7 +8,7 @@
  * endpoint so the app's "Refresh scan" button can run a REAL scan on the local machine:
  *
  *   POST /api/scan  → runs `node pipeline/commands/screen-flip-niches.mjs --mode all --publish` (which rewrites the
- *                     repo-root screen.json with ZERO git — see screen.mjs), then responds
+ *                     repo-root screen.json with ZERO git — see screen-flip-niches.mjs), then responds
  *                     { ok:true, generatedAt } (the new snapshot's timestamp) once the file is
  *                     written, or { ok:false, error } / { ok:false, busy:true } (single-flight).
  *
@@ -18,7 +18,7 @@
  * operations, ever (mirroring watch-log.mjs's zero-git rule): it only writes screen.json locally.
  * Publishing to Pages stays the attended, on-demand `sync-fills.mjs` flow, unchanged.
  *
- * SECURITY: bound to 127.0.0.1 ONLY. It runs a shell command (screen.mjs), so it must never be
+ * SECURITY: bound to 127.0.0.1 ONLY. It runs a shell command (screen-flip-niches.mjs), so it must never be
  * reachable off-localhost. The deployed GitHub Pages app never talks to this server (its refresh
  * falls back to re-fetching the published screen.json) — this is a dev-desk convenience only.
  *
@@ -45,7 +45,7 @@ const sendJson = (res, code, obj) => { res.writeHead(code, { 'content-type': 'ap
 
 // --- single-flight scan guard ---------------------------------------------------------------
 // If a scan is already running, a second POST returns busy rather than launching a second
-// screen.mjs (which would double-fetch the market and race the screen.json write).
+// screen-flip-niches.mjs (which would double-fetch the market and race the screen.json write).
 let scanning = false;
 
 function readGeneratedAt() {
@@ -54,7 +54,7 @@ function readGeneratedAt() {
 }
 
 // Run `node pipeline/commands/screen-flip-niches.mjs --mode all --publish` and resolve when the file is (re)written.
-// ZERO git — screen.mjs --publish only writes the local screen.json.
+// ZERO git — screen-flip-niches.mjs --publish only writes the local screen.json.
 function runScan() {
   return new Promise(resolve => {
     const before = readGeneratedAt();
@@ -62,7 +62,7 @@ function runScan() {
       { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'] });
     child.on('error', e => resolve({ ok: false, error: 'spawn failed: ' + (e && e.message || e) }));
     child.on('close', code => {
-      if (code !== 0) return resolve({ ok: false, error: 'screen.mjs exited ' + code });
+      if (code !== 0) return resolve({ ok: false, error: 'screen-flip-niches.mjs exited ' + code });
       const after = readGeneratedAt();
       if (!after) return resolve({ ok: false, error: 'screen.json missing after scan' });
       resolve({ ok: true, generatedAt: after, changed: after !== before });
@@ -73,7 +73,7 @@ function runScan() {
 async function handleScan(res) {
   if (scanning) { sendJson(res, 409, { ok: false, busy: true, error: 'a scan is already running' }); return; }
   scanning = true;
-  console.log(`${hhmm()} /api/scan — running screen.mjs --mode all --publish …`);
+  console.log(`${hhmm()} /api/scan — running screen-flip-niches.mjs --mode all --publish …`);
   try {
     const r = await runScan();
     console.log(`${hhmm()} /api/scan — ${r.ok ? `done (screen.json ${r.changed ? 'updated' : 'unchanged'} @ ${r.generatedAt})` : 'FAILED: ' + r.error}`);
@@ -106,7 +106,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`dev-server: serving http://${HOST}:${PORT}/ (repo root) — Ctrl+C to stop.`);
-  console.log(`dev-server: POST /api/scan runs screen.mjs --mode all --publish locally (ZERO git).`);
+  console.log(`dev-server: POST /api/scan runs screen-flip-niches.mjs --mode all --publish locally (ZERO git).`);
 });
 server.on('error', e => {
   console.error(`dev-server: FAILED to bind ${HOST}:${PORT} — ${e && e.message || e}`);

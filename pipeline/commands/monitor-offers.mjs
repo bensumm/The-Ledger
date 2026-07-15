@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * monitor.mjs — live GE position monitor (read-only companion to sync-fills.mjs).
+ * monitor-offers.mjs — live GE position monitor (read-only companion to sync-fills.mjs).
  *
  * Parses the RuneLite Exchange Logger for (a) offers open RIGHT NOW, (b) recent
  * fills/cancels, and (c) HELD positions with cost basis + break-even — reconstructed
@@ -45,7 +45,7 @@ const map = await loadMapping();
 const name = {}; for (const id in map.byId) name[id] = map.byId[id].name;
 const nm = id => name[id] || ('#'+id);
 
-// shared log discovery + open-offer semantics (offers.mjs — one owner, also used by watch.mjs)
+// shared log discovery + open-offer semantics (offers.mjs — one owner, also used by watch-positions.mjs)
 const { logLines, rows, staleMin } = readExchangeLog();
 const ep = l => Date.parse(l.date+'T'+l.time);            // local wall-clock -> epoch
 const now = Date.now();                                    // real wall clock — detects a stalled log

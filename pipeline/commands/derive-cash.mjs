@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* cash.mjs — DERIVE / re-anchor the idle-cash balance the total-capital footer uses (watch.mjs).
+/* derive-cash.mjs — DERIVE / re-anchor the idle-cash balance the total-capital footer uses (watch-positions.mjs).
  *
  *   node pipeline/commands/derive-cash.mjs          DERIVE cash now = anchor + Σ(sells after tax) − Σ(buys) − resting escrow
  *   node pipeline/commands/derive-cash.mjs 16m      RE-ANCHOR to 16,000,000 (accepts k/m/b + commas) — the manual reset:

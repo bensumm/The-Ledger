@@ -1,6 +1,6 @@
 /* velocity.mjs — PURE velocity classification off a MEASURED round-trip hold time (#3, PLAN-YIELD).
    A fast-cycler frees capital quickly; a slow-hold ties it up. The class is derived from the
-   observed buy-fill→sell-fill hold (outcomes.mjs holdTimeSec), never guessed from liquidity.
+   observed buy-fill→sell-fill hold (join-outcomes.mjs holdTimeSec), never guessed from liquidity.
 
    The thresholds are NAMED PLACEHOLDERS pending validation — same discipline as phase()/rating
    cutoffs; do NOT cite them as calibrated. A per-item class off a handful of lots is a LABEL, not a

@@ -3,7 +3,7 @@
  *
  * WHY: the cheap `checks` job only proves SYNTAX (`node --check` never resolves imports), no test
  * imports the pipeline entrypoints, and the smoke job loads only the browser app — so an entrypoint that
- * imports a name a shared module does NOT export sits UNDETECTED on main (exactly how screen.mjs's
+ * imports a name a shared module does NOT export sits UNDETECTED on main (exactly how screen-flip-niches.mjs's
  * `import { … dayHighFrom5m }` rode a whole-file commit while estimators.mjs stayed behind, ESM-erroring
  * on a clean checkout). This check closes that gap.
  *
@@ -27,7 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // The pipeline CLI entrypoints. Their imports are checked; the files themselves are NEVER executed
-// (guarded ones like screen.mjs/sync-fills.mjs AND unguarded ones like quote/watch/analyze alike — the
+// (guarded ones like screen-flip-niches.mjs/sync-fills.mjs AND unguarded ones like quote/watch/analyze alike — the
 // static parse means guardedness is irrelevant to safety here).
 const ENTRYPOINTS = [
   'commands/screen-flip-niches.mjs', 'commands/quote-items.mjs', 'commands/watch-positions.mjs', 'commands/run-loop.mjs', 'commands/analyze-record.mjs',

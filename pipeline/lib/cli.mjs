@@ -2,14 +2,14 @@
    Companion to marketfetch.mjs (which owns the FETCH layer); this file owns the
    CLI-plumbing that had re-grown as byte-identical copies across the scripts
    (chunk 10.2 dedup). No market/quote math lives here — that is js/quotecore.js.
-   Consumers: screen.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote.mjs,
-   screen.mjs (mdTable/stdCells). */
+   Consumers: screen-flip-niches.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote-items.mjs,
+   screen-flip-niches.mjs (mdTable/stdCells). */
 import { quoteCells, cellText } from '../../js/quotecore.js';
 
 /* --- parseArgs(argv): the `--flag value` / bare-`--flag` loop.
    argv = process.argv.slice(2). A bare flag (no value, or followed by another --flag)
    becomes `true`; otherwise the next token is its string value. Returns a plain object.
-   (Was duplicated verbatim in screen.mjs + add-manual-fill.mjs.) --- */
+   (Was duplicated verbatim in screen-flip-niches.mjs + add-manual-fill.mjs.) --- */
 export function parseArgs(argv) {
   const A = {};
   for (let i = 0; i < argv.length; i++) {
@@ -40,13 +40,13 @@ export function parseGp(s) {
 }
 
 /* --- median(a): middle value of a numeric array (mean of the two middle values for an even
-   length); null for an empty/absent array. The ONE copy — was byte-identical in screen.mjs
-   (band medians) and outcomes.mjs (fill-time cells) (X1 dedup). Does not mutate its input. --- */
+   length); null for an empty/absent array. The ONE copy — was byte-identical in screen-flip-niches.mjs
+   (band medians) and join-outcomes.mjs (fill-time cells) (X1 dedup). Does not mutate its input. --- */
 export const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 /* --- mdTable(headers, rows): generic markdown table (rows = array of cells).
-   Generic on purpose — both consumers APPEND columns to the standard set (quote.mjs
-   --positions adds Held@/Break-even/Verdict; screen.mjs adds Grade + the per-thesis Rank net·P/ttf), which is
+   Generic on purpose — both consumers APPEND columns to the standard set (quote-items.mjs
+   --positions adds Held@/Break-even/Verdict; screen-flip-niches.mjs adds Grade + the per-thesis Rank net·P/ttf), which is
    why quotecore's fixed-column quoteMarkdown() can't serve them. A cell may be a plain
    string OR a T1 structured `{t, c}` cell — cellText() renders the plain markdown text for
    either, so stdout stays colorless while the app keeps the class. --- */

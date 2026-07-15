@@ -85,7 +85,7 @@ export function auditDataset(sug, fillsData, posData, retroMeta, { nowSec = Math
   if (unattributedRate != null && unattributedRate > 0.5 && nBuy >= 20)
     flags.push({ level: 'info', msg: `${unattributed}/${nBuy} filled buy offers (${pct(unattributedRate)}) have no prior suggestion — un-attributed (mobile/manual, or a read that wasn't logged)` });
 
-  // rebuildability PROXY (outcomes.mjs is not run here): inputs parse + positions fresh vs fills.
+  // rebuildability PROXY (join-outcomes.mjs is not run here): inputs parse + positions fresh vs fills.
   const fillsSec = fillsData ? isoToSec(fillsData.generatedAt) : null;
   const posSec = posData ? isoToSec(posData.generatedAt) : null;
   const rebuild = {
@@ -115,7 +115,7 @@ export function auditDataset(sug, fillsData, posData, retroMeta, { nowSec = Math
  * never constant-mutating (the PLAN-ANALYZE encoding boundary: analyze.mjs emits evidence-with-n and
  * points at F1; F1 owns any actual retune of DIP_LOOP_*).
  *
- * WHAT IT DOES. Pulls every flush SIGNAL row (a watch.mjs --dip suggestion carrying the lean `dipLoop`
+ * WHAT IT DOES. Pulls every flush SIGNAL row (a watch-positions.mjs --dip suggestion carrying the lean `dipLoop`
  * component object) out of the ledger and JOINS it against fills.json via the SAME retroJoin rows the
  * rollup already built — retroRows aligns 1:1 with sugRows (retroJoin maps over the suggestions in order),
  * so retroRows[i].outcome tells whether a buy actually FILLED on that item within the horizon. The log is

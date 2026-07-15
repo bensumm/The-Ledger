@@ -2,7 +2,7 @@
 /**
  * item-context.test.mjs — the Pipeline-v2 ITEM CONTEXT CHAIN + shared held-verdict renderer (chunk P0).
  *
- * item-context.mjs is the single home that ended the quote.mjs-vs-watch.mjs verdict fork: one staged
+ * item-context.mjs is the single home that ended the quote-items.mjs-vs-watch.mjs verdict fork: one staged
  * enricher chain builds an ItemContext, one parameterized renderer turns it into either surface's
  * verdict. This suite pins:
  *
@@ -12,8 +12,8 @@
  *     it); intraday carries the series through; position derives break-even + lotValue + askFilling
  *     + lotCtx + the ONE momVerdict + the conviction gate, and degrades gracefully on missing inputs.
  *   - THE PIN: a `HOLD — ask filling` lot (held, underwater through a liquid peak, own ask filling
- *     above the clear) renders the SAME verdict on BOTH surfaces — quote.mjs's compact renderer and
- *     watch.mjs's verbose renderer — because both read the SAME ctx.position.mv. Before P0 quote.mjs
+ *     above the clear) renders the SAME verdict on BOTH surfaces — quote-items.mjs's compact renderer and
+ *     watch-positions.mjs's verbose renderer — because both read the SAME ctx.position.mv. Before P0 quote-items.mjs
  *     could not reach this verdict (no offer read → no askFilling).
  *   - THE CONVICTION PIN: a Gate-D CUT-CANDIDATE that is armed-not-escalated (underwater, but the
  *     underwater streak hasn't persisted ≥ ALERT_PERSIST_MS) reads consistently on both surfaces —
@@ -142,8 +142,8 @@ ok('PIN: HOLD — ask filling renders the SAME verdict on quote (compact) + watc
   assert.equal(mv.action, 'HOLD_FILLING');
   assert.equal(mv.verdict, 'HOLD — ask filling');
   // both renderers derive from ctx.position.mv → they agree on the verdict
-  const compact = renderHeldVerdict(ctx, { mode: 'compact' });   // quote.mjs
-  const verbose = renderHeldVerdict(ctx, { mode: 'verbose' });   // watch.mjs
+  const compact = renderHeldVerdict(ctx, { mode: 'compact' });   // quote-items.mjs
+  const verbose = renderHeldVerdict(ctx, { mode: 'verbose' });   // watch-positions.mjs
   assert.ok(compact.startsWith('HOLD — ask filling'), `compact reads HOLD — ask filling (got: ${compact})`);
   assert.ok(verbose.startsWith('HOLD — ask filling'), `verbose reads HOLD — ask filling (got: ${verbose})`);
 });

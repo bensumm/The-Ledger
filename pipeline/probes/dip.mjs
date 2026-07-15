@@ -7,7 +7,7 @@
  * falling knife. A market-STATE 'observe' tag; touches no number, feeds no verdict.
  *
  * PROVENANCE. This is the migration of the uncommitted `⬇DIP` prototype that lived inline in
- * screen.mjs (appended to the Regime cell). PM1 lifts it into a probe and moves the tag to the
+ * screen-flip-niches.mjs (appended to the Regime cell). PM1 lifts it into a probe and moves the tag to the
  * dedicated `Probes` column — same gates, cleaner home, now deletable in one `rm`.
  *
  * SURFACE SEMANTICS. On screen/quote (items you don't own) ⬇DIP reads as a BUY candidate. When

@@ -1,7 +1,7 @@
 /**
  * replay.mjs — the snapshot-replay acceptance ENGINE (Pipeline v2, chunk P1, the harness half).
  *
- * P1's mechanical half extracted screen.mjs's candidate-selection + survival doctrine into the pure
+ * P1's mechanical half extracted screen-flip-niches.mjs's candidate-selection + survival doctrine into the pure
  * lib/gatecandidates.mjs (gateCandidates → rankAndSlice → surviveMode). This module drives that WHOLE
  * per-niche funnel off a committed, synthetic market SNAPSHOT — no live API, no real SQLite — so the
  * screen's discovery behavior is pinned by golden outputs the way computeQuote/reconstruct already are.

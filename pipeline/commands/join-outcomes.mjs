@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * outcomes.mjs â€” THE JOIN (PLAN O1 step 3/4). Derived + rebuildable â†’ GITIGNORED (never commit
+ * join-outcomes.mjs â€” THE JOIN (PLAN O1 step 3/4). Derived + rebuildable â†’ GITIGNORED (never commit
  * outcomes.json or the .cache/outcomes-bands/ data). Rebuilds the full "story of every offer" from
  * fills.json + suggestions.jsonl + historical market context, so the algorithm-feedback loop (F1)
  * becomes a query rather than a re-derivation.

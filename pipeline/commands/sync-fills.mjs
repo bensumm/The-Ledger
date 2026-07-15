@@ -55,7 +55,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // the flat live-offer snapshot; nameLookupFromCache resolves display names offline (best-effort).
 import { readOfferRows, offersSnapshot, nameLookupFromCache } from '../lib/offers.mjs';
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
-// event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
+// event id all live in reconstruct.mjs so this pipeline AND monitor-offers.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
 import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct.mjs';
 import { loadIgnored, quarantineEvents } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
@@ -82,7 +82,7 @@ const PROBE = args.has('--probe'), DRY = args.has('--dry'), LOCAL = args.has('--
 
 /* ---------------------------------------------------------------------
  * ADAPTER + reconstruction now live in reconstruct.mjs (chunk 8) — the ONE
- * shared copy this pipeline AND monitor.mjs both reconstruct positions from,
+ * shared copy this pipeline AND monitor-offers.mjs both reconstruct positions from,
  * so there is no longer a stale parallel copy that mis-handles WITHDRAWN/BANKED.
  * Imported at the top of this file:
  *   parseJsonLine — one line -> normalized event (incl. the REMOVE tombstone
@@ -390,7 +390,7 @@ function main() {
   }
 }
 
-// Invocation guard (matches alerts.mjs / TD2): main() runs ONLY when this file is executed
+// Invocation guard (matches trigger-alerts.mjs / TD2): main() runs ONLY when this file is executed
 // directly, so importing regenerate()/syncMainToRemote() (the watch-log.mjs daemon, the fixture
 // tests) never triggers a real sync — no reading the live log, and crucially NO git side effects.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

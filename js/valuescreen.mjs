@@ -1,7 +1,7 @@
 /**
  * valuescreen.mjs — PURE gate + rank math for the `--mode value` buy-hold niche (Pipeline-v2 chunk
  * P5 / PLAN-VALUE). Lives in js/ (NOT pipeline/lib/) for the same reason as js/quotecore.js /
- * js/termstructure.mjs: importable from BOTH node (screen.mjs / gatecandidates.mjs) AND — later — the
+ * js/termstructure.mjs: importable from BOTH node (screen-flip-niches.mjs / gatecandidates.mjs) AND — later — the
  * app. No DOM, no fetch, no fs — the caller hands in an already-loaded daily-mid series' term
  * structure (js/termstructure.mjs) + the live price.
  *
@@ -91,7 +91,7 @@ export const VALUE_STAB_FLOOR_W  = 0.5;    // stability multiplier floor (an uns
 // stay the primary signal — a raw-gp term with unbounded range collapses into a price/volume sort. Honesty
 // (rule 4): every constant is a NAMED PLACEHOLDER; realProfit is an UPPER bound (assumes you catch the full
 // anchored cycle + transact your whole volume share both sides); limitVol is a 24h snapshot. capGp is not a
-// constant here — it is threaded in as an input (see screen.mjs --capital/--slots). Missing liquidity opts
+// constant here — it is threaded in as an input (see screen-flip-niches.mjs --capital/--slots). Missing liquidity opts
 // degrade to deployMult = 1 (shape-only), so a bare valueScore(vr) still returns a sane score.
 export const VALUE_DEPLOY_W        = 1.0;        // strength of the deployable-capital multiplier
 export const VALUE_DEPLOY_REF_GP   = 300_000;    // realizable after-tax gp/cycle at which deployMult crosses 1×

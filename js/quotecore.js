@@ -1,7 +1,7 @@
 /* quotecore.js — DOM-free quote model + canonical market-table cells.
    Pure ESM: imports only money-math.js + money-format.js (also pure), references no window/document.
    Importable by BOTH the browser app (js/quote.js, trends.js, ui.js) AND node
-   pipeline scripts (chunk 3 quote.mjs/screen.mjs, chunk 5 bank.mjs) — keep it that way.
+   pipeline scripts (chunk 3 quote-items.mjs/screen-flip-niches.mjs, chunk 5 bank.mjs) — keep it that way.
 
    The canonical market table (CLAUDE.md "Market analysis workflow"):
      Item | Guide | Mid | Buy@ Quick / Opt | Sell@ Quick / Opt | Net/u Quick / Opt (ROI) | Vol/d | Regime
@@ -56,7 +56,7 @@ export const breakEven = (buy, opts) => {
 // pipeline/test/quotecore.test.mjs.
 // @provisional-api: the tax-exact inverse of breakEven (PLAN-WINDOW-CLEAR B3), READY but not yet wired to
 // a consumer — the proper back-solve needs the WITHIN-WINDOW-REACHABLE exit price (optSell is the ask that
-// doesn't clear in-window, so it over-states the entry ceiling). Fast-follow: a `windowrange.mjs --exit
+// doesn't clear in-window, so it over-states the entry ceiling). Fast-follow: a `read-window-range.mjs --exit
 // <ask> --margin <gp>` CLI (PLAN-WINDOW-CLEAR open-Q4). The /scan skill says "do it by hand for now." Pinned by quotecore.test.mjs.
 export const maxBuyForExit = (sell, margin = 0, opts) => {
   const target = sell - margin;                                   // the largest break-even the exit can carry
@@ -68,7 +68,7 @@ export const maxBuyForExit = (sell, margin = 0, opts) => {
 };
 // Total lot value (qty × avgCost, i.e. capital at risk — NOT per-unit) at/above which a 2h
 // breakdown against a rising regime is CLEARED rather than held (chunk 6 cut-trigger). Named +
-// tunable; lives here (the shared node+browser module) so reviewPositions and quote.mjs --positions
+// tunable; lives here (the shared node+browser module) so reviewPositions and quote-items.mjs --positions
 // use ONE constant and can never drift.
 export const BIG_TICKET_GP = 10_000_000;
 // V3 lot-context softening of the Gate-D clean-momentum CUT-CANDIDATE (see momVerdict). A lot
@@ -156,7 +156,7 @@ export function regimeLabel(regime){
    COMPLEMENTARY to regimeDrift/regimeLabel, which stays the flat/rising/falling GATE driver (this
    changes NOTHING about that). phase() reads the *shape* of a pump-and-fade off the SAME `ts6h`
    points computeQuote already fetches (points = [{avgLowPrice, avgHighPrice, timestamp}]) → ZERO new
-   network. It is consumed ONLY by the pipeline (screen.mjs display + the opt-in basing-rescue); the
+   network. It is consumed ONLY by the pipeline (screen-flip-niches.mjs display + the opt-in basing-rescue); the
    deployed app renders nothing off it, so this ships without an APP_VERSION bump.
 
    Returns { phase, curMid, baseMid, peakMid, lowSlope }, phase ∈ 'base'|'spike'|'decay'|'basing'|'unknown':
@@ -309,7 +309,7 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   // Q1: a crossed/inverted feed (live instasell above the live instabuy) is not a real
   // two-sided price — quoteOrdered() below would fail on it. Gate it here at the SINGLE
   // reliability source so `reliable` is correct for EVERY consumer (momVerdict's Gate 0,
-  // watch.mjs's `mom==='breakdown' && reliable`, quote.mjs's classify), not just one path.
+  // watch-positions.mjs's `mom==='breakdown' && reliable`, quote-items.mjs's classify), not just one path.
   const inverted=quickBuy!=null && quickSell!=null && quickBuy>quickSell;
   let reliableReason;
   if(quickSell==null)        reliableReason='no-quote';       // no live instabuy → cannot price a sell/cut
@@ -412,8 +412,8 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   row.ordered=quoteOrdered(row);
   return row;
 }
-/* Compact display text for row.pressure — the ONE formatter every surface prints from (quote.mjs
-   regime line, watch.mjs note lines), so the phrasing can't drift. Reads the DOMINANT side:
+/* Compact display text for row.pressure — the ONE formatter every surface prints from (quote-items.mjs
+   regime line, watch-positions.mjs note lines), so the phrasing can't drift. Reads the DOMINANT side:
    `buy 1.4×` = 1.4 units bought aggressively per unit sold aggressively over the trailing 24h;
    `sell 1.3×` = the inverse. Full form appends the raw sides `(hpv 32.1k / lpv 23.0k)`; compact
    form is the bare `buy 1.4×`. Returns null when either side is zero/absent (a one-sided or
@@ -427,8 +427,8 @@ export function pressureText(pressure, {compact}={}){
   return compact?head:head+' (hpv '+fmt(pressure.hpv)+' / lpv '+fmt(pressure.lpv)+')';
 }
 
-/* Compact display text for row.askHeadroom — the ONE formatter every surface prints from (quote.mjs
-   read, screen.mjs note block, renderHeldVerdict), so the phrasing can't drift. INFORM-ONLY prose:
+/* Compact display text for row.askHeadroom — the ONE formatter every surface prints from (quote-items.mjs
+   read, screen-flip-niches.mjs note block, renderHeldVerdict), so the phrasing can't drift. INFORM-ONLY prose:
    the robust p90 shaved a TRADED in-band top off the quoted Optimistic ask; laddering up is cheap
    under the GE better-price rule (a list at the quoted number already fills at the best standing bid).
    Returns null unless there is a TRUSTED Class-1 gap (untrusted gaps are logged for F1, not surfaced).
@@ -643,9 +643,9 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
 
 /* Shared BUY-OFFER (resting bid) verdict — the ONE decision pipeline/commands/watch-positions.mjs (console) and the
    in-app Watch tab both consume, so a resting bid reads IDENTICALLY in both (the momVerdict
-   precedent, extracted from watch.mjs's inline bidVerdict by the Watch-tab build). Pure:
+   precedent, extracted from watch-positions.mjs's inline bidVerdict by the Watch-tab build). Pure:
    (row, offerPrice) → one of 'CANCEL-BID' | 'NO-QUOTE' | 'CROSSING' | 'BID-BEHIND' | 'BID-OK'.
-   Gate ORDER is load-bearing and matches watch.mjs's original inline logic exactly:
+   Gate ORDER is load-bearing and matches watch-positions.mjs's original inline logic exactly:
      CANCEL-BID  falling regime OR a reliable 2h breakdown → a fill here is adverse selection
      NO-QUOTE    no live instasell to judge the bid against
      CROSSING    bid ≥ live instasell → expect fills about now
@@ -693,7 +693,7 @@ export function offerVerdict(row, offerPrice, pathCtx){
    T1 (table v2): the composite Buy@/Sell@/Net columns collapsed into two SELF-CONTAINED
    columns — Quick and Optimistic — each carrying its own `buy → sell · net (ROI)`; Mid is
    dropped from the table (it's just the 24h-avg midpoint, redundant next to Guide + live
-   prices — the model still exposes row.mid for rating.mjs/watch.mjs). quoteCells now returns
+   prices — the model still exposes row.mid for rating.mjs/watch-positions.mjs). quoteCells now returns
    an ORDERED ARRAY of structured cells `{t, c}` (t = plain text for markdown/cellText; c =
    optional css class, app-only color). cellText() derives the exact markdown string the
    scripts print, so stdout stays plain while the app colors gain/loss + momentum. */
@@ -734,7 +734,7 @@ export function quoteCells(name, row){
     {t:(row.regime&&row.regime.ok)?(cap(row.regimeLabel)+' '+(row.regime.driftPct>=0?'+':'')+row.regime.driftPct.toFixed(0)+'%'):'—'}
   ];
 }
-/* NOTE: a fixed-column quoteMarkdown() helper was removed by A1 (dead — quote.mjs/screen.mjs
+/* NOTE: a fixed-column quoteMarkdown() helper was removed by A1 (dead — quote-items.mjs/screen-flip-niches.mjs
    both APPEND columns and share pipeline/cli.mjs's mdTable + stdCells split instead). The
    structured quoteCells/cellText split above is the real shared table API. */
 
@@ -749,7 +749,7 @@ export const OVERNIGHT_START_HOUR = 22;   // local hour, inclusive
 export const OVERNIGHT_END_HOUR   = 6;    // local hour, exclusive
 export const OVERNIGHT_SPAN_H     = 8;    // the forward window an overnight bid rests through
 // Is `now` (ms, default Date.now()) inside the local overnight window? Wraps midnight. `--posture auto`
-// on screen.mjs uses this; all displayed clocks are LOCAL (CLAUDE.md local-time rule).
+// on screen-flip-niches.mjs uses this; all displayed clocks are LOCAL (CLAUDE.md local-time rule).
 export function isOvernightNow(now){
   const h=new Date(now!=null?now:Date.now()).getHours();
   return h>=OVERNIGHT_START_HOUR || h<OVERNIGHT_END_HOUR;
@@ -908,8 +908,8 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
    short window before it reverts. These are NOT the multi-day faller the regime column tracks (the knife
    thesis LAGS them) and they are NOT diurnal (the forecast is silent — they're unscheduled). The right
    play is REACTIVE: when a LIQUID book is actively flushing, bid INTO the fall to catch the cheap units,
-   then list at the patient band top. flushSignal is the detector; watch.mjs turns a firing into a headline
-   FLUSH alert. It ALERTS, never auto-places (the watch.mjs read-only guardrail is untouched).
+   then list at the patient band top. flushSignal is the detector; watch-positions.mjs turns a firing into a headline
+   FLUSH alert. It ALERTS, never auto-places (the watch-positions.mjs read-only guardrail is untouched).
 
    FILLABILITY IS UNIT-FLOW, NOT DEPLOYABILITY. The retro anchor (n=2, be honest — this is NOT a validated
    edge): today we MISSED a Searing page flush — it dumped 4,732 instasell units in ONE 5m bucket and
@@ -989,7 +989,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
 /* ============================================================================================
    DL4 (2026-07-11) — nominateDip + the pool-reconcile transforms: the "B feeds A" discovery half of the DL2
    dip-loop. Pure, DOM-free math (quotecore.js still imports only money-math.js + money-format.js). Consumed ONLY by node
-   pipeline scripts (screen.mjs nominates; watch.mjs --dip polls) — NO app module imports this, so it
+   pipeline scripts (screen-flip-niches.mjs nominates; watch-positions.mjs --dip polls) — NO app module imports this, so it
    ships with NO APP_VERSION bump. Fixture-pinned in pipeline/test/dl4nominate.test.mjs.
 
    THE PROBLEM DL4 SOLVES (this is the DL4 DOCTRINE HOME). A flush is EXOGENOUS — you cannot know in
@@ -1006,11 +1006,11 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
    curates, never a validated pick.
 
    THE ZERO-FETCH BOUNDARY (a HARD requirement — DL4 adds NO fetches). Two data tiers, both already in
-   hand at nomination time in screen.mjs:
+   hand at nomination time in screen-flip-niches.mjs:
      • GATE tier — v24[id] (avgLow/High + hpv/lpv) + bands[id] (bandLo/Hi, sawLow/High, tradedWin) are
        loaded for the WHOLE liquid universe before any survivor fetch. This is the breadth source DL4
        keys off: nominateDip reads ONLY these two objects.
-     • SURVIVOR tier — series5m is fetched only for survivors; screen.mjs runs flushSignal on those
+     • SURVIVOR tier — series5m is fetched only for survivors; screen-flip-niches.mjs runs flushSignal on those
        (zero extra fetch) to BONUS a nominee that is a survivor AND flushing right now.
 
    HONESTY (process rule 4): every DL4_* threshold below is a NAMED PLACEHOLDER, n=2, none validated —
@@ -1029,7 +1029,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
      are polymorphic over legacy plain-string/number existing entries. See their definitions below. */
 export const DL4_WIDE_BAND_PCT = 0.03;          // PLACEHOLDER (n=2): min 2h-band amplitude (bandHi-bandLo)/bandLo to be flush-suitable
 export const DL4_WIDE_DAY_PCT  = 0.05;          // PLACEHOLDER (n=2): min 24h-range amplitude fallback when no band present (coarser → wider bar)
-// VALUE FLOOR (2026-07-11): reuses the tool-wide 500k gp/day ATTENTION floor (screen.mjs MIN_GPD) as a
+// VALUE FLOOR (2026-07-11): reuses the tool-wide 500k gp/day ATTENTION floor (screen-flip-niches.mjs MIN_GPD) as a
 // gp-SCALE gate, applied as gp-flow = mid × limitVol (the SAME construction as the main gate's gp-flow
 // path). It fixes the penny-item leak: a huge-% band on a sub-gp item (e.g. Sweetcorn seed — guide 3gp,
 // ~7→14gp band, ~3.9k/d → ~39k/d gp-flow) is three orders below anything worth watching for a flush, yet
@@ -1048,7 +1048,7 @@ export const DL4_MIN_GP_FLOW = 9_000_000;       // PLAN-VOL24 step 2: 500k → 9
 export const DL4_MIN_ABS_SWING = 50;            // PLACEHOLDER (n=2): min absolute per-unit swing (gp) for a flush to be worth catching
 // POOL HYGIENE (2026-07-12): the auto-nomination pool grew unbounded (640 entries in <1 day) because nothing
 // aged out — the --dip loop's target set crept toward the whole universe, and each entry is a live fetch +
-// flushSignal check EVERY ~5m pass (watch.mjs --dip folds the whole pool into targetSpecs). So pool size =
+// flushSignal check EVERY ~5m pass (watch-positions.mjs --dip folds the whole pool into targetSpecs). So pool size =
 // the dip loop's per-pass cost, and "which stay/go" must be a QUALITY ranking, not a timestamp accident.
 // reconcileDipPool therefore re-SCORES every qualifier each scan and keeps the top-N BY SCORE per track;
 // an entry drops when it (a) stops re-qualifying for DL4_POOL_MAX_AGE_DAYS, or (b) falls out of the top-N on

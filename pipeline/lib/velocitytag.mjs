@@ -1,8 +1,8 @@
 /* velocitytag.mjs — Build 2 (the deferred YV1 #3 scan tag). PURE per-item velocity read over the
-   gitignored outcomes.json campaigns (YV1), so screen.mjs can annotate a scan row with how that item
+   gitignored outcomes.json campaigns (YV1), so screen-flip-niches.mjs can annotate a scan row with how that item
    has historically behaved: how fast it cycles, its typical time-to-first-fill, and how often its
    bids never filled. DESCRIPTIVE — a label off a handful of lots, NEVER a rate/sort/gate (the
-   concentration + F1 caveats carry). Kept pure (no fs): screen.mjs reads outcomes.json and passes the
+   concentration + F1 caveats carry). Kept pure (no fs): screen-flip-niches.mjs reads outcomes.json and passes the
    parsed object in; absent/empty → an empty index → screen stays silent. */
 import { median } from './cli.mjs';
 

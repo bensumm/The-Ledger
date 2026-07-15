@@ -1,7 +1,7 @@
 /**
- * emit.mjs — the watch.mjs per-HELD-item EMIT CONTRACT (chunk V5). PURE, console-only.
+ * emit.mjs — the watch-positions.mjs per-HELD-item EMIT CONTRACT (chunk V5). PURE, console-only.
  *
- * V1–V4 grew watch.mjs's per-held note block organically (a verdict note, then a Δ line, a
+ * V1–V4 grew watch-positions.mjs's per-held note block organically (a verdict note, then a Δ line, a
  * support/cut-trigger line, armed-conviction notes). V5 makes it ONE stable, predictable,
  * consistently-ordered block so a reader (human or LLM) always gets the same fields in the same
  * order. The fields, in contract order:

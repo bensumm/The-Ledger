@@ -5,7 +5,7 @@
  * surviveMode() is the POST-fetch survival doctrine renderMode() applies to each fetched+quoted row:
  * the falling-regime EXCLUSION (+ the --phase-rescue basing rescue), the SPEC-DRIVEN confirm (a spec with
  * confirm:'falling', i.e. scalp, requires a falling regime — N2), and the overnight-POSTURE filters. P1
- * extracted it verbatim from screen.mjs's inline renderMode loop into
+ * extracted it verbatim from screen-flip-niches.mjs's inline renderMode loop into
  * the pure lib/gatecandidates.mjs so it is node-importable + fixture-testable with synthetic rows (no
  * live API / CLI state). This file PINS the byte-identical behavior — most importantly the
  * discardReason→disc-counter 1:1 map and the `rescued`-carries-through-a-later-gate contract that

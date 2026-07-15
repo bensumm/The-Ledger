@@ -172,7 +172,7 @@ ok('reconcileDipPool: a manual/legacy entry blocks an auto qualifier by name AND
   assert.deepEqual(next.filter(e => typeof e !== 'object'), ['Searing page', 28931], 'manual/legacy entries preserved verbatim');
 });
 
-// --- 8. polymorphic reader logic (watch.mjs --dip): a mixed array resolves all three forms ------
+// --- 8. polymorphic reader logic (watch-positions.mjs --dip): a mixed array resolves all three forms ------
 // Mirror the exact token-extraction the reader uses: object → id ?? name; else the entry itself.
 const dipToken = entry => (entry && typeof entry === 'object') ? (entry.id ?? entry.name) : entry;
 ok('polymorphic reader: mixed [string, number, object] all yield a resolvable token', () => {

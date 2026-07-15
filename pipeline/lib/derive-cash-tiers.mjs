@@ -44,7 +44,7 @@
  * the inferred injection. It cannot self-heal the other way — an off-ledger WITHDRAWAL or a MISSED LOG
  * (RuneLite off / an untracked device — a missed sell looks like an injection, a missed buy looks like an
  * over-estimate) leaves the derived cash too HIGH. Ben's rule collapses that whole class to one rare
- * manual DOWN signal ("I'm short") = a re-anchor via cash.mjs. HONEST LIMIT (process rule 4): this is
+ * manual DOWN signal ("I'm short") = a re-anchor via derive-cash.mjs. HONEST LIMIT (process rule 4): this is
  * DETERMINISTIC ACCOUNTING, exactly as correct as the log is complete — the injection detector is a
  * convenience, not a proof of correctness.
  *
@@ -179,8 +179,8 @@ export function loadEvents(repoDir = REPO_DIR) {
 }
 
 /* loadDerivedCash(repoDir, { marketRef }) -> deriveCash over the committed fills.json (flow) + the live
- * offers.json (escrow) + the stored anchor. The impure seam the consumers (cash.mjs, watch.mjs footer,
- * loop-tick scan-gate, screen.mjs --capital) call. `marketRef` is threaded through unchanged so a caller
+ * offers.json (escrow) + the stored anchor. The impure seam the consumers (derive-cash.mjs, watch-positions.mjs footer,
+ * loop-tick scan-gate, screen-flip-niches.mjs --capital) call. `marketRef` is threaded through unchanged so a caller
  * that has live prices in hand can classify deep-vs-committed bids; absent it, deployablePool == availableCash. */
 export function loadDerivedCash(repoDir = REPO_DIR, { marketRef = null } = {}) {
   const liveOffers = readOffersSnapshot(path.join(repoDir, 'offers.json'));

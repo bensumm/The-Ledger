@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * windowrange.mjs — historical time-of-day RANGE read (lows AND highs) for price placement.
+ * read-window-range.mjs — historical time-of-day RANGE read (lows AND highs) for price placement.
  * (Renamed from nightlows.mjs 2026-07-05 when the high side was added — the tool outgrew
  * overnight-bid pricing and became the standing time-of-day context read required by
  * CLAUDE.md's market-analysis contract on every price recommendation.)
@@ -57,7 +57,7 @@ if (A.ask !== undefined && !Number.isFinite(ASK)) { console.error('error: --ask 
 
 const fmt = n => n == null ? '—' : n.toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
-// the bucketing/quantile math lives in windowread.mjs (shared with watch.mjs's window line)
+// the bucketing/quantile math lives in windowread.mjs (shared with watch-positions.mjs's window line)
 
 const map = await loadMapping();
 for (const want of positionals) {

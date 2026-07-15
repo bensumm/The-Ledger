@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine, THESIS_TTL_DAYS } from '../lib/sessionthesis.mjs';
-// FIX 2 (2026-07-13): `thesis.mjs clear` must reach BOTH stores. These are the pure building blocks it
+// FIX 2 (2026-07-13): `declare-thesis.mjs clear` must reach BOTH stores. These are the pure building blocks it
 // wires together — the session clearThesis (above) + the hold-thesis clearThesis/upsertThesis (below).
 import { upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis, thesisFor as holdThesisFor } from '../lib/holdthesis.mjs';
 
@@ -80,7 +80,7 @@ ok('load of an absent/garbage file is {} and save→load round-trips', () => {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
 });
 
-// FIX 2 — the TWO-STORE clear contract: `thesis.mjs clear <id>` drops the id from the session store
+// FIX 2 — the TWO-STORE clear contract: `declare-thesis.mjs clear <id>` drops the id from the session store
 // AND the tracked hold-thesis store (the declared, gating plan `set --path` writes). Before the fix a
 // cleared plan left its gating exit/tripwire behind (the stale Masori body / Lightbearer / fury
 // pollution). Pin the hold-thesis half here (session clear is pinned by 'clear removes a lane' above):
@@ -91,7 +91,7 @@ ok('FIX 2 two-store clear: hold-thesis clear drops the declared id, preserves th
   const after = clearHoldThesis(h, 23956);
   assert.equal(holdThesisFor(after, 23956), null, 'cleared id removed from hold-thesis (no lingering gating exit)');
   assert.ok(holdThesisFor(after, 27229), 'other declared plan untouched');
-  // clearing an id with NO declared entry is a no-op (thesis.mjs only writes the file when one existed).
+  // clearing an id with NO declared entry is a no-op (declare-thesis.mjs only writes the file when one existed).
   assert.deepEqual(clearHoldThesis(after, 99999), after);
 });
 

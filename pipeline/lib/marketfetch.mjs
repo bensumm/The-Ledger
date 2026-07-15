@@ -1,6 +1,6 @@
 /* marketfetch.mjs — the ONE node-side fetch layer for the pipeline analysis scripts
-   (quote.mjs, screen.mjs, watch.mjs, alerts.mjs; loadMapping is also the shared name/id
-   loader for monitor.mjs / add-manual-fill.mjs). DOM-free; pairs with js/quotecore.js (which
+   (quote-items.mjs, screen-flip-niches.mjs, watch-positions.mjs, trigger-alerts.mjs; loadMapping is also the shared name/id
+   loader for monitor-offers.mjs / add-manual-fill.mjs). DOM-free; pairs with js/quotecore.js (which
    owns ALL the quote/tax/regime MATH — this file only fetches raw inputs and feeds them in).
 
    Data sources (identical to what the browser app uses in js/market.js + js/state.js):
@@ -21,7 +21,7 @@ const CACHE_DIR = path.join(HERE, '..', '.cache'); // pipeline/.cache/ — this 
 const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window archive (gitignored via .cache/)
 const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
 const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
-const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (outcomes.mjs; tiny)
+const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (join-outcomes.mjs; tiny)
 const OD_DIR = path.join(CACHE_DIR, 'outcomes-daily'); // per-item REDUCED historical 1h@6h series (YF1 loadHistDaily; tiny)
 const MAP_CACHE = path.join(CACHE_DIR, 'mapping.cache.json'); // under pipeline/.cache/ (OR2); shared name<->id loader
 
@@ -165,14 +165,14 @@ export async function loadGuide() {
   } catch { return readCache('guide.json', Infinity) || {}; }
 }
 
-/* --- single-item live inputs (quote.mjs / --positions) --- */
+/* --- single-item live inputs (quote-items.mjs / --positions) --- */
 export async function fetchLatest(id) { const j = await cachedJget(API + '/latest?id=' + id, FETCH_TTL.latest); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
 export async function fetchTs(id, step) { return (await cachedJget(API + '/timeseries?id=' + id + '&timestep=' + step, step === '5m' ? FETCH_TTL.ts5m : FETCH_TTL.tsSlow)).data || []; }
 export async function fetch24hOne(id) { const j = await cachedJget(API + '/24h?id=' + id, FETCH_TTL.vol24); return (j.data && (j.data[id] || j.data[String(id)])) || null; }
 
 /* --- fetchItemInputs(id): the combined latest + 5m + 6h series + 24h-vol read every per-item
    consumer needs, with polite 60ms spacing across a multi-item ask. THE one copy — was a
-   byte-identical `fetchInputs()` inlined in quote.mjs / watch.mjs / alerts.mjs (X1 dedup;
+   byte-identical `fetchInputs()` inlined in quote-items.mjs / watch-positions.mjs / trigger-alerts.mjs (X1 dedup;
    resolves the lane-N note). Feeds straight into computeQuote({ ...inp, guide, limit, … }). --- */
 export async function fetchItemInputs(id, { ts1h = false } = {}) {
   const latest = await fetchLatest(id); await sleep(60);
@@ -180,14 +180,14 @@ export async function fetchItemInputs(id, { ts1h = false } = {}) {
   const ts6h = await fetchTs(id, '6h'); await sleep(60);
   const vol24 = await fetch24hOne(id);
   const out = { latest, ts5m, ts6h, vol24 };
-  if (ts1h) { await sleep(60); out.ts1h = await fetchTs(id, '1h'); } // window-context line (watch.mjs only)
+  if (ts1h) { await sleep(60); out.ts1h = await fetchTs(id, '1h'); } // window-context line (watch-positions.mjs only)
   return out;
 }
 
 /* --- fetchTsCached(id, step, ttlMs): fetchTs with a short-TTL per-item disk cache under
    .cache/ts/. Used ONLY by the screen (a discovery read where a few-minutes-stale series is
    fine and re-running the screen shouldn't re-hammer the API — the "avoid needless re-fetches"
-   rule). quote.mjs --positions deliberately keeps the UNcached fetchTs (position management wants
+   rule). quote-items.mjs --positions deliberately keeps the UNcached fetchTs (position management wants
    live). Files are overwritten per (id,step); prune old ones with pruneCache('ts', …). --- */
 export async function fetchTsCached(id, step, ttlMs) {
   ensureCacheDir(); try { fs.mkdirSync(TS_DIR, { recursive: true }); } catch {}
@@ -207,7 +207,7 @@ export function pruneCache(subdir, maxAgeMs) {
   }
 }
 
-/* --- bulk inputs (screen.mjs). 10-min cache; these are the whole-market snapshots. --- */
+/* --- bulk inputs (screen-flip-niches.mjs). 10-min cache; these are the whole-market snapshots. --- */
 export const ALL24H_TTL = 10 * 60 * 1000;   // ONE source of the bulk /24h freshness window (loadAll24h + the warm read)
 export async function loadAll24h() {
   const cached = readWarmAll24h();
@@ -254,7 +254,7 @@ export async function loadAllLatest() {
    emitted per-id shape MATCHES loadAll24h's entry — {highPriceVolume,lowPriceVolume,avgHighPrice,
    avgLowPrice} — so a caller can swap sources with no shape change; the avg prices are volume-weighted
    24h means of the hourly avgs (a real VWAP, unlike /24h's single averaged number). SHADOW/opt-in for
-   now: screen.mjs --vol-source rolling opts loadAll24hRolling in; the DEFAULT legacy path never calls
+   now: screen-flip-niches.mjs --vol-source rolling opts loadAll24hRolling in; the DEFAULT legacy path never calls
    it, so nothing changes live and no extra fetch is added, pending the floor recalibration (step 2). */
 export const ROLL24_HOURS = 24;
 // last COMPLETE 1h bucket start (unix sec); the trailing-24h window is [anchor-23h, anchor].
@@ -475,7 +475,7 @@ export async function loadBands(hours = 2) {
 
    { noFetch }: P3 — assemble the daily mids from ONLY what the archive already holds (raw obs + seed),
    skipping the whole-market /1h backfill. This is the read-only path a surface that must NOT change its
-   fetch semantics uses (quote.mjs's per-item read feeds it to floorValidator's term structure): zero
+   fetch semantics uses (quote-items.mjs's per-item read feeds it to floorValidator's term structure): zero
    network, degrades to a sparse/empty series when the archive is cold. --- */
 export async function loadDaily(days = 17, stepHours = 6, { db, noFetch = false } = {}) {
   const archive = db || openArchive();
@@ -520,7 +520,7 @@ export async function loadDaily(days = 17, stepHours = 6, { db, noFetch = false 
 
 /* --- loadHistBands(reqs, hours): the trailing `hours` 5m band for a SET of (item, endUnix)
    requests, sourced from the historical whole-market /5m?timestamp bulk endpoint (the ONLY way to
-   read a PAST 5m window — per-item /timeseries?5m only reaches ~30h back). Powers outcomes.mjs's
+   read a PAST 5m window — per-item /timeseries?5m only reaches ~30h back). Powers join-outcomes.mjs's
    "band percentile at trade placement" enrichment: same basis as computeQuote's bandLo/bandHi
    (min avgLowPrice / max avgHighPrice over the last `hours`), evaluated AS OF each placement time.
 

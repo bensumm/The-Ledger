@@ -4,7 +4,7 @@
 
    Two reads:
      bookUtilization — a POINT-IN-TIME split of committed capital (working = held inventory able to
-       profit; parked = resting unfilled bids). watch.mjs feeds it the live exposure/bid totals.
+       profit; parked = resting unfilled bids). watch-positions.mjs feeds it the live exposure/bid totals.
      parkedStats    — a HISTORICAL "how long bids sat" read over outcomes campaigns, off the MEASURED
        parkedSec/velocityClass YS1 records. Honest: a per-item read off a handful of lots is a LABEL,
        not a rate (the ~116-lot concentration caveat applies). */

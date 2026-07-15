@@ -142,7 +142,7 @@ export const DENYLIST = [
             'pipeline/FILLS-PIPELINE.md', '.claude/skills/scan/SKILL.md',
             '.claude/skills/positions/SKILL.md', '.claude/skills/overnight/SKILL.md',
             '.claude/skills/morning/SKILL.md', '.claude/skills/analyze/SKILL.md'],
-    reason: 'pre-rename CLI basename (R2a/R3) — use the verb-object name in pipeline/commands/ (e.g. screen.mjs -> screen-flip-niches.mjs). Map + rationale: PLAN-RENAME.md; history keeps old names in CHANGELOG/LORE.',
+    reason: 'pre-rename CLI basename (R2a/R3) — use the verb-object name in pipeline/commands/ (e.g. screen-flip-niches.mjs -> screen-flip-niches.mjs). Map + rationale: PLAN-RENAME.md; history keeps old names in CHANGELOG/LORE.',
   },
 ];
 

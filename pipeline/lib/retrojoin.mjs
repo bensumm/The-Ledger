@@ -9,7 +9,7 @@
  * "spread/band/churn consolidation — evidence-gated" question later (realized profit per unit of
  * attention, per niche), with the honesty that the sample is weeks-cold and mostly `not-taken`.
  *
- * DIRECTION — WHY THIS IS NOT outcomes.mjs. outcomes.mjs is CAMPAIGN-keyed and joins BACKWARD (each
+ * DIRECTION — WHY THIS IS NOT join-outcomes.mjs. join-outcomes.mjs is CAMPAIGN-keyed and joins BACKWARD (each
  * offer-campaign → the nearest PRIOR suggestion) to validate the campaign schema + band-percentile
  * fill-time cells. This module is SUGGESTION-keyed and joins FORWARD (each suggestion → the fills
  * it plausibly caused). The primary key, the join direction, and the output (per-niche/per-path

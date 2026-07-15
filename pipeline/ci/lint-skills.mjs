@@ -24,7 +24,7 @@
  *
  * HONEST LIMITS (this is a heuristic, not a semantic checker — do not oversell it):
  *   - It cannot tell whether a cited script ACTUALLY enforces the rule; a block that merely
- *     mentions `windowrange.mjs` as the tool it uses counts as pointed. The OR is intentional
+ *     mentions `read-window-range.mjs` as the tool it uses counts as pointed. The OR is intentional
  *     (Ben's spec) and the real semantic call lives in `docs/SKILL-TRIAGE.md`, hand-maintained.
  *   - It only recognises the `- **…**` top-level convention; a rule written as a bare paragraph
  *     or a sub-bullet is invisible to it. Keep material rules as top-level bolded bullets.

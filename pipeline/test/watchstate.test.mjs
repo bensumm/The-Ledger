@@ -2,7 +2,7 @@
 /**
  * watchstate.test.mjs — the watch loop's PURE cross-pass temporal memory (chunk V1).
  *
- * watchstate.mjs is the OUTPUT-ONLY memory layer watch.mjs owns OUTSIDE the pure momVerdict:
+ * watchstate.mjs is the OUTPUT-ONLY memory layer watch-positions.mjs owns OUTSIDE the pure momVerdict:
  * per-pass deltas + a consecutive-underwater counter that RESETS on identity change or a stale
  * gap. This pins the counting/reset rules so a future editor can't silently let a stale count
  * leak across a re-buy or an overnight pause.

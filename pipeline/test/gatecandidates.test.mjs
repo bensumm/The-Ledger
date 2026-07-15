@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * gatecandidates.test.mjs — acceptance fixtures for screen.mjs's candidate gate stack (GC1).
+ * gatecandidates.test.mjs — acceptance fixtures for screen-flip-niches.mjs's candidate gate stack (GC1).
  *
- * GC1 extracted screen.mjs's pre-fetch gating into the exported, threshold-driven gateCandidates();
+ * GC1 extracted screen-flip-niches.mjs's pre-fetch gating into the exported, threshold-driven gateCandidates();
  * P1 then RELOCATED it (with risingPoolFloor + the rest of the pool-selection cluster) into
  * pipeline/lib/gatecandidates.mjs — a pure module, so importing it fires NO screen/network. The gate
- * LOGIC is byte-identical to the original inline screen.mjs code — the `thresholds` argument (default
+ * LOGIC is byte-identical to the original inline screen-flip-niches.mjs code — the `thresholds` argument (default
  * DEFAULT_THRESHOLDS) lets fixtures drive the whole stack with synthetic 24h / band data (no live
  * API). No live data (CLAUDE.md rule 4).
  * Run: `node pipeline/test/gatecandidates.test.mjs`  (exits non-zero on any failure).
@@ -163,7 +163,7 @@ ok('price window: mid outside [MIN_PRICE, MAX_PRICE] is dropped', () => {
 });
 
 /* === fetch-pool ORDERING: proxyDrift / softFactor / rankAndSlice (P1) ===================== *
- * These were untested inline in screen.mjs — a selection effect that silently drops opportunities.
+ * These were untested inline in screen-flip-niches.mjs — a selection effect that silently drops opportunities.
  * All pure now, driven with synthetic {ts,mid} archives + candidate stubs (no live API).            */
 
 // build a bulk daily {ts,mid} series with a chosen recent (last-3d) vs prior (4–17d) median so

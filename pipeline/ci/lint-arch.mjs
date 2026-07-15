@@ -7,7 +7,7 @@
  *
  * WHAT: for each governed doc it extracts every `code-font` token that LOOKS like a file (starts with a
  * word char, ends in a known source/data/doc extension, no spaces) and checks it exists — a path with a
- * `/` is resolved from the repo root; a bare basename (docs often write `screen.mjs`, not the full path)
+ * `/` is resolved from the repo root; a bare basename (docs often write `screen-flip-niches.mjs`, not the full path)
  * resolves against the known source dirs. Function names / field names / mode strings in code font have no
  * file extension → ignored. Transient PLAN-*.md working docs are exempt (they are folded + deleted by
  * design). Genuinely-future files go in PROPOSED with the doc marking them "(proposed)".

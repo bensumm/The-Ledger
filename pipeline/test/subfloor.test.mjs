@@ -10,7 +10,7 @@
  * What this file pins (the P6c contract):
  *   1. TRIGGER SHAPE — the fallback un-empties a pool the MIN_GPD attention floor emptied, and names
  *      'min-gpd' as the relaxed floor; a pool the LIQUIDITY floor emptied escalates to 'liquidity'.
- *   2. NON-EMPTY BYTE-IDENTITY — the fallback never runs on a non-empty niche (screen.mjs's trigger is
+ *   2. NON-EMPTY BYTE-IDENTITY — the fallback never runs on a non-empty niche (screen-flip-niches.mjs's trigger is
  *      `!cand.length`); pinned here by asserting gateCandidates at the configured floors is UNCHANGED
  *      by the fallback's existence (same module, same thresholds → same output), and structurally by
  *      the P1 replay goldens (gateCandidates itself was not touched by P6c).
@@ -78,7 +78,7 @@ ok('a non-empty niche is untouched: the configured-floor gate output is unchange
   const cand = gateCandidates('band', ctx(v24, {}, bands), baseT);
   assert.equal(cand.length, 1);
   assert.equal(cand[0].thin, true);
-  // (screen.mjs only calls subFloorFallback when this is empty — with ≥1 candidate the render path
+  // (screen-flip-niches.mjs only calls subFloorFallback when this is empty — with ≥1 candidate the render path
   // takes subFloor=null and is byte-identical; the replay goldens pin the full funnel.)
 });
 

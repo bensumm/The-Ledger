@@ -1,5 +1,5 @@
 import { tax, netMargin } from './money-math.js';
-import { regimeDrift } from './quotecore.js';   // shared 3d-vs-~2wk regime-drift impl (also used by quote.mjs/positions)
+import { regimeDrift } from './quotecore.js';   // shared 3d-vs-~2wk regime-drift impl (also used by quote-items.mjs/positions)
 
 /*
  * TREND CORE (TC1) — the pure, DOM-free analytics behind the Trends view.

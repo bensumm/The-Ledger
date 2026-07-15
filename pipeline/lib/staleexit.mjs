@@ -1,6 +1,6 @@
 /* staleexit.mjs — Proposal C (2026-07-12): the STALE DECLARED-EXIT read for a held lot.
  *
- * THE MISS IT ENCODES. A hold-thesis exit (`thesis.mjs set … --exit <gp>`, hold-thesis.json) is
+ * THE MISS IT ENCODES. A hold-thesis exit (`declare-thesis.mjs set … --exit <gp>`, hold-thesis.json) is
  * declared ONCE, off the peaks visible at declaration time — and then the market moves. The
  * 2026-07-12 case: declared exits 44.34m (Masori) / 3.24m (Berserker) were set off old peaks that
  * recent nights no longer print, so the rendered `HOLD — per thesis: exit <X>` frame kept naming an
@@ -18,7 +18,7 @@
  * The min-sample floor is imported from reachValidator (REACH_MIN_DAYS) so the two reads can't
  * drift apart. NOTHING here fetches — the caller owns the (TTL-cached, targeted) 1h series.
  *
- * INFORM-ONLY CONTRACT (hard): the result is a NOTE on quote.mjs --positions. It NEVER moves a
+ * INFORM-ONLY CONTRACT (hard): the result is a NOTE on quote-items.mjs --positions. It NEVER moves a
  * quoted number, never changes a gate/verdict/momVerdict, never touches the break-even floor, and
  * never edits the declared thesis — Ben re-declares the exit if he agrees with the read.
  *
@@ -34,7 +34,7 @@ import { REACH_MIN_DAYS, REACH_NIGHTS } from '../../js/validate.mjs';
 // recent nights (recencySplit's RECENT_NIGHTS=3 ⇒ stale = reached ≤1/3 recent; 2/3 exactly is fresh).
 export const STALE_EXIT_RECENT_FRAC = 2 / 3;
 // The named replacement level: the recent-nights ~50% quantile high — "half the recent nights print
-// at/above this", the same quantile family windowrange.mjs's summary line quotes.
+// at/above this", the same quantile family read-window-range.mjs's summary line quotes.
 export const STALE_EXIT_REACHABLE_P = 0.5;
 
 /* staleExitRead({ ts1h, exitLevel, now }) → null | {

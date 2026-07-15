@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * loop-tick.mjs — the MULTI-ACTION monitoring-loop driver (Ben, 2026-07-12).
+ * run-loop.mjs — the MULTI-ACTION monitoring-loop driver (Ben, 2026-07-12).
  *
  * The `/loop` skill fires ONE command per tick. Historically that command was
  * `node pipeline/commands/watch-positions.mjs` — positions only. This driver multiplexes several actions onto a single
@@ -33,7 +33,7 @@
  *           fill). To classify its resting bids the gate does a SMALL live fetch of just the item ids that
  *           have resting buy offers (usually 1–3, via fetchItemInputs); a failed fetch degrades to no-ref →
  *           deployablePool falls back to availableCash (conservative — never over-counts deployable). Same
- *           three-tier figure watch.mjs footers.
+ *           three-tier figure watch-positions.mjs footers.
  *
  * A skipped-for-capital scan STILL stamps its lastRun, so the cadence is "re-check whether to scan every
  * --scan min", not "retry every tick until capital appears". State: pipeline/.cache/loop-state.json.
@@ -141,11 +141,11 @@ const runScript = (label, args) => {
 if (watchDue) {
   // refresh the book from the exchange logs FIRST (local rebuild, zero git) so watch reads fresh.
   if (syncOn) runScript('SYNC (sync-fills.mjs --local)', ['pipeline/commands/sync-fills.mjs', '--local']);
-  runScript('POSITIONS (watch.mjs)', ['pipeline/commands/watch-positions.mjs']);
+  runScript('POSITIONS (watch-positions.mjs)', ['pipeline/commands/watch-positions.mjs']);
   state.watch = now;
 }
 if (scanDue) {
-  if (scanRun) runScript('SCAN (screen.mjs --mode all)', ['pipeline/commands/screen-flip-niches.mjs', '--mode', 'all']);
+  if (scanRun) runScript('SCAN (screen-flip-niches.mjs --mode all)', ['pipeline/commands/screen-flip-niches.mjs', '--mode', 'all']);
   else console.log(`\n===== SCAN skipped =====\n${scanSkipReason} (re-checks in ${scanMin}m)`);
   state.scan = now; // stamp regardless — the cadence is "decide whether to scan", not "retry until funded"
 }

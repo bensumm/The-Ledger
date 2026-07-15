@@ -31,8 +31,8 @@ ok('a backticked source path tags the block (all extensions)', () => {
   }
 });
 ok('a script MENTIONED without a closing backtick after the ext does NOT tag', () => {
-  // `windowrange.mjs --ask <x>` — the .mjs is not immediately before a closing backtick.
-  const [b] = lintText('- **Method rule.** run `windowrange.mjs --ask <top>` before pitching');
+  // `read-window-range.mjs --ask <x>` — the .mjs is not immediately before a closing backtick.
+  const [b] = lintText('- **Method rule.** run `read-window-range.mjs --ask <top>` before pitching');
   assert.strictEqual(b.tagged, false, 'heuristic requires the backtick to close right after the ext');
 });
 

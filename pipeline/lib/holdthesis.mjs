@@ -1,6 +1,6 @@
 /* holdthesis.mjs — TG1: the AGENT-WRITTEN declared-hold-thesis store (the greenlist pattern).
  *
- * The problem it solves. watch.mjs's UNDERWATER / CUT-CANDIDATE headline measures the live instabuy
+ * The problem it solves. watch-positions.mjs's UNDERWATER / CUT-CANDIDATE headline measures the live instabuy
  * against BREAK-EVEN. But a patient / accumulation hold is DEFINITIONALLY underwater on the
  * instant-clear from the moment its bid fills — so the headline cries wolf every pass on a lot where
  * being underwater IS the plan (Ben, 2026-07-07: "I'm tired of being told I'm underwater when that's
@@ -15,7 +15,7 @@
  *
  * AGENT-WRITTEN, watch-READ-ONLY (the greenlist pattern, exactly like ignored-items.json's greenlist).
  * When Ben declares a hold plan ("accumulate nest, exit 4,848, tripwire 4,678, multi-day"), the agent
- * APPENDS/UPSERTS an entry via upsertThesis() (or hand-edits the JSON). watch.mjs only ever READS it —
+ * APPENDS/UPSERTS an entry via upsertThesis() (or hand-edits the JSON). watch-positions.mjs only ever READS it —
  * it is a DECLARATION, never mutates fills/positions, and watch stays read-only. It is a verdict/alert
  * input ONLY through the convictionGate thesis branch (the one deliberate exception, and only to
  * SILENCE a known-expected signal — never to manufacture a new one; honesty rule 4).
@@ -64,7 +64,7 @@ export function saveHoldThesis(p, store) {
 }
 
 /* thesisFor — the active declared thesis for an item id (the most-recently-declared if several),
-   or null. PURE. This is watch.mjs's only read path. */
+   or null. PURE. This is watch-positions.mjs's only read path. */
 export function thesisFor(store, id) {
   const matches = (store || []).filter(e => e && e.id === id);
   if (!matches.length) return null;
@@ -87,7 +87,7 @@ export function upsertThesis(store,
 export function clearThesis(store, id) { return (store || []).filter(e => !(e && e.id === id)); }
 
 /* pruneHoldThesis — drop entries older than ttlDays (stale declared intent) or malformed. PURE.
-   watch.mjs prunes on read so a forgotten plan can't silence forever. */
+   watch-positions.mjs prunes on read so a forgotten plan can't silence forever. */
 export function pruneHoldThesis(store, now = Math.floor(Date.now() / 1000), ttlDays = HOLD_THESIS_TTL_DAYS) {
   const cutoff = now - ttlDays * 86400;
   return (store || []).filter(e => e && e.id != null && (e.ts == null || e.ts >= cutoff));

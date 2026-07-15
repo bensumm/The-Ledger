@@ -7,7 +7,7 @@
  * in js/ too). No DOM, no fetch, no fs — the caller hands in an already-loaded series.
  *
  * WHAT THIS COMPUTES. Given an item's daily-mid series `[{ts, mid}]` (ascending unix-second `ts`,
- * e.g. screen.mjs's loadDaily regime proxy or the Tier-1 archive's daily mids), it derives:
+ * e.g. screen-flip-niches.mjs's loadDaily regime proxy or the Tier-1 archive's daily mids), it derives:
  *   - the 1/3/7/14/28-day STRUCTURE: for each lookback, the median / low / high / count of mids
  *     inside it, and where the CURRENT level sits within that lookback's range (pctInRange).
  *   - a DURABLE FLOOR: a low quantile of the longest available multi-week lookback — the level

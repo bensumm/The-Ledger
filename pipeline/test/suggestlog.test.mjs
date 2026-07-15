@@ -45,7 +45,7 @@ ok('YS2 forward fields are omitted when absent (legacy row stays byte-identical)
   assert.ok(!('posture' in legacy) && !('tripwire' in legacy) && !('fillWindowHrs' in legacy) &&
     !('velocityClass' in legacy) && !('thesis' in legacy), 'no forward keys when none supplied');
   assert.ok(!('path' in legacy), 'P4c: no path key when none supplied — clean row byte-identical');
-  assert.ok(!('volSrc' in legacy), 'SF-3: no volSrc key when none supplied (watch.mjs rows stay byte-identical)');
+  assert.ok(!('volSrc' in legacy), 'SF-3: no volSrc key when none supplied (watch-positions.mjs rows stay byte-identical)');
 });
 
 ok('SF-3: volSrc is lean-included (present only when supplied)', () => {

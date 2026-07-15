@@ -1,5 +1,5 @@
-// windowread.mjs — the PURE window-range math shared by windowrange.mjs (the CLI read)
-// and watch.mjs (the per-offer window-context line). Extracted 2026-07-05 so watch could
+// windowread.mjs — the PURE window-range math shared by read-window-range.mjs (the CLI read)
+// and watch-positions.mjs (the per-offer window-context line). Extracted 2026-07-05 so watch could
 // print time-of-day context without duplicating the bucketing/quantile logic — one owner.
 //
 // All functions are pure over an already-fetched 1h /timeseries array; no fetching here.

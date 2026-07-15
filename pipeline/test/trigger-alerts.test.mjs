@@ -2,7 +2,7 @@
 /**
  * alerts.test.mjs — the push-notification trigger contract (TD2.3, N1 engine).
  *
- * alerts.mjs used to run (and FETCH) on import via a top-level `await runPositions()`; it now
+ * trigger-alerts.mjs used to run (and FETCH) on import via a top-level `await runPositions()`; it now
  * sits behind the standard `import.meta.url === pathToFileURL(argv[1])` guard so it's importable
  * for these tests. positionSignal (the per-held-item transition-KEY generator) and quietSuppresses
  * (the one pure quiet-hours rule) are exported; both are pinned here.

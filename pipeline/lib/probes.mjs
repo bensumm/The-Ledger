@@ -1,7 +1,7 @@
 /* probes.mjs — the probe-module LOADER + stage-keyed runner (PM1).
  *
  * WHAT A PROBE IS. A *probe* is an experimental, per-item ANNOTATION — the lightweight cousin of a
- * niche. A niche is a permanent, validated candidate MODE (band/spread/rising, heavy, in screen.mjs);
+ * niche. A niche is a permanent, validated candidate MODE (band/spread/rising, heavy, in screen-flip-niches.mjs);
  * a probe is a trial-and-keep-or-drop THEORY you can see in the output and DELETE cleanly if it's
  * wrong. Each probe lives in ONE file `pipeline/probes/<name>.mjs` and is discovered by presence:
  * drop the file in → enabled; delete it → gone without a trace. That removability is the whole point,
@@ -116,7 +116,7 @@ function validate(mod, file) {
 
 /* loadModules(dir?) — import + validate + stage-group every module file ONCE. Async (dynamic import).
    Returns { observe:[], price:[], gate:[], all:[] } and caches it for runProbes/collectNeeds. Call it
-   at surface startup (screen.mjs main(), quote.mjs). A module that throws on import is warned + skipped
+   at surface startup (screen-flip-niches.mjs main(), quote-items.mjs). A module that throws on import is warned + skipped
    (a broken probe never breaks the surface — removability again). */
 export async function loadModules(dir = PROBES_DIR) {
   const grouped = { observe: [], price: [], gate: [], all: [] };
@@ -170,7 +170,7 @@ export function runProbes(row, surface, ctx = {}) {
    via `needs(row, ctx)`, MINUS ids already present. A surface that must actively pre-fetch (e.g. quote)
    would fetch these before running the probes; the screen surface satisfies decant off `ctx.v24all`
    instead, so it does not need to call this. Advisory until such a caller exists. */
-// @provisional-api: the probe-orchestration framework IS adopted (screen.mjs + quote.mjs run loadModules/runProbes every pass); collectNeeds is its not-yet-wired NEEDS half (the PM1 active pre-fetch contract — the pending consumer is quote.mjs pre-fetching a probe's declared sibling ids, e.g. decant dose variants). Exercised by probes.test.mjs until that lands.
+// @provisional-api: the probe-orchestration framework IS adopted (screen-flip-niches.mjs + quote-items.mjs run loadModules/runProbes every pass); collectNeeds is its not-yet-wired NEEDS half (the PM1 active pre-fetch contract — the pending consumer is quote-items.mjs pre-fetching a probe's declared sibling ids, e.g. decant dose variants). Exercised by probes.test.mjs until that lands.
 export function collectNeeds(items, surface, ctxFor = () => ({})) {
   const g = _loaded;
   if (!g) return [];

@@ -2,8 +2,8 @@
 /**
  * offers.mjs — shared exchange-log reader: raw lines, parsed rows, and ACTIVE offers.
  *
- * One owner for "what offers are open right now" so monitor.mjs (log-state snapshot) and
- * watch.mjs (market-side read) can't drift apart on log discovery or slot semantics.
+ * One owner for "what offers are open right now" so monitor-offers.mjs (log-state snapshot) and
+ * watch-positions.mjs (market-side read) can't drift apart on log discovery or slot semantics.
  * Read-only: never writes anything.
  *
  * Position terminology (Ben, 2026-07-04): a POSITION is any committed capital — held
@@ -84,7 +84,7 @@ export function offersSnapshot(rows, nameFor = () => undefined, ignoredCfg = nul
  *  ([{ slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs }]) or [] on
  *  ANY failure (missing / stale / corrupt) — a bad snapshot must never break a caller (the
  *  loadState degrade-not-throw precedent). This is the OTHER-machine-safe book source: unlike
- *  readExchangeLog (which needs the local ~/.runelite log dir), quote.mjs reads offers.json so
+ *  readExchangeLog (which needs the local ~/.runelite log dir), quote-items.mjs reads offers.json so
  *  its position stage can see live asks/bids anywhere the file is present. */
 export function readOffersSnapshot(offersPath) {
   try {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * quote.mjs — the canonical market read for a Claude session. ONE command, finished table.
+ * quote-items.mjs — the canonical market read for a Claude session. ONE command, finished table.
  * NEVER hand-write a `node -e` fetch for a market read again — this is the workflow.
  *
  * Two modes:
@@ -46,14 +46,14 @@ import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mj
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
 const OFFERS = path.join(HERE, '..', '..', 'offers.json');   // P0: flat live-offer snapshot (LW1); the book for askFilling
-const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl');   // YP1: watch.mjs writes it, we read it advisory
-const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch.mjs (read-only here)
+const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl');   // YP1: watch-positions.mjs writes it, we read it advisory
+const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch-positions.mjs (read-only here)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
 const FILLS = path.join(HERE, '..', '..', 'fills.json');   // LM1: RuneLite-logged fills → per-item 4h buy-limit windows (no fetch)
 
 // Proposal C: the stale declared-exit read needs the 1h series, which this booked-lots view doesn't
 // otherwise fetch. The fetch is TARGETED (only lots with a declared numeric thesis exit — typically
-// 0–2 items) and TTL-cached (same fetchTsCached mechanism as screen.mjs's Leg-B survivor fetch), so
+// 0–2 items) and TTL-cached (same fetchTsCached mechanism as screen-flip-niches.mjs's Leg-B survivor fetch), so
 // a re-run inside the TTL is fetch-free. Same 15-min TTL as screen's TS_TTL_1H.
 const TS_TTL_1H_EXIT = 15 * 60 * 1000;
 
@@ -121,7 +121,7 @@ async function runItems() {
   let daily = {};
   try { ({ series: daily } = await loadDaily(28, 6, { noFetch: true })); } catch { daily = {}; }
   // SF-3: warm-ONLY bulk /24h map (null unless a recent screen wrote all24h.json within its TTL). When
-  // warm, the logged liquidity `class` converges with screen.mjs (both read the bulk snapshot) and tags
+  // warm, the logged liquidity `class` converges with screen-flip-niches.mjs (both read the bulk snapshot) and tags
   // volSrc:'bulk'; when cold it's null → classAndSource keeps the per-item volume, tags volSrc:'peritem'.
   // NEVER fetches — loadAll24hWarm is a pure file read; a 1-item ask never triggers the ~4000-item dump.
   const warm24h = loadAll24hWarm();
@@ -151,7 +151,7 @@ async function runItems() {
     // FIRES because ts1h is fetched above (COD-4). P3's floorValidator scores the patient BUY (optBuy) —
     // a per-item quote IS a buy-interest read — against the durable multi-week floor from the read-only
     // daily mids (cold archive → degrade); its .trajectory is OVERRIDDEN with the WARM 1h-derived shape
-    // (trajectoryFrom1h, the same warm-term-structure.mjs helper screen.mjs uses) so trajectoryValidator fires too.
+    // (trajectoryFrom1h, the same warm-term-structure.mjs helper screen-flip-niches.mjs uses) so trajectoryValidator fires too.
     // An explicit ask is NEVER hidden: a fired flag is a NOTE + logged; the table row is untouched.
     const ts = termStructure(daily[id]);
     const richTraj = trajectoryFrom1h(inp.ts1h);
@@ -287,7 +287,7 @@ async function runPositions() {
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
   if (!groups.length) { console.log('No open positions in positions.json.'); return; }
   // P0: one loadSnapshot() per pass — the position surface's mapping/guide + the passive Tier-1
-  // archive append (quote.mjs is, with watch.mjs, loadSnapshot's first consumer). Robust fallback:
+  // archive append (quote-items.mjs is, with watch-positions.mjs, loadSnapshot's first consumer). Robust fallback:
   // if the archive/snapshot can't open, degrade to the plain loaders so the read never breaks.
   const ids = groups.map(g => g.itemId);
   let snap = null;
@@ -295,13 +295,13 @@ async function runPositions() {
   const map = snap ? snap.mapping : await loadMapping();
   const guide = snap ? snap.guide : await loadGuide();
   const getInputs = async id => (snap ? (await snap.series(id)) : null) ?? await fetchItemInputs(id);
-  // SF-3: the bulk /24h map for the logged liquidity `class` (converges with screen.mjs). On the normal
+  // SF-3: the bulk /24h map for the logged liquidity `class` (converges with screen-flip-niches.mjs). On the normal
   // path loadSnapshot ALREADY fetched the whole-market /24h (snap.v24) — reusing it adds ZERO fetch and
   // tags volSrc:'bulk'; on the degraded no-snapshot path fall back to the warm-only file read (still
   // fetch-free — never forces the bulk dump), null → classAndSource keeps per-item volume, volSrc:'peritem'.
   const warm24h = snap ? snap.v24 : loadAll24hWarm();
   // P0: the live book (offers.json) + the watch loop's cross-pass state + declared hold theses —
-  // the inputs quote.mjs never read before, so it can now print HOLD — ask filling + conviction.
+  // the inputs quote-items.mjs never read before, so it can now print HOLD — ask filling + conviction.
   const offers = readOffersSnapshot(OFFERS);
   const nowMs = Date.now();
   const priorState = loadState(WATCH_STATE);   // READ-ONLY: quote never persists (only the watch loop owns the write)
@@ -334,7 +334,7 @@ async function runPositions() {
         watchStatePrior: priorState['held:' + itemId] || null, nowMs, thesisEntry,
       },
       // P4b: the path stage — weigh the lot's thesis-paths + run the persistence gate off the SAME
-      // shared watch-state entry watch.mjs persists. READ-ONLY here (P0 contract): quote renders the
+      // shared watch-state entry watch-positions.mjs persists. READ-ONLY here (P0 contract): quote renders the
       // armed/current path state but never saves it — only the watch loop writes the state file.
       paths: { watchStatePrior: priorState['held:' + itemId] || null, nowMs },
     });
@@ -358,7 +358,7 @@ async function runPositions() {
     const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
     sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // the emitted per-position verdict string
     // P0: conviction timers — surfaced as an informational line (the table's Verdict column is
-    // unchanged). Mirrors watch.mjs's armed/escalated read off the SAME shared watch-state, so the
+    // unchanged). Mirrors watch-positions.mjs's armed/escalated read off the SAME shared watch-state, so the
     // two surfaces agree on how long a lot has been underwater / whether an escalation has confirmed.
     const g = ctx.position.gate, d = ctx.position.deltas;
     const persistMin = Math.round(ALERT_PERSIST_MS / 60000);
@@ -369,7 +369,7 @@ async function runPositions() {
       convLines.push(`  ${name}: expected-underwater — silenced above declared tripwire ${fmtP(ctx.position.thesis?.tripwire)} (per hold thesis).`);
     else if (g && g.escalate && g.reason === 'cut-candidate')
       convLines.push(`  ${name}: CUT-CANDIDATE confirmed — underwater sustained ~${heldMin(d && d.underwaterMs)}m (≥ ${persistMin}m) through a liquid window.`);
-    // P4b: the shared dominant-path line (same renderPathLine watch.mjs's note block uses) — the
+    // P4b: the shared dominant-path line (same renderPathLine watch-positions.mjs's note block uses) — the
     // persistence-gated path read off the SAME state, so the two surfaces agree on the current path.
     const pl = renderPathLine(ctx);
     if (pl) pathLines.push(`  ${name}: ${pl}`);
@@ -392,7 +392,7 @@ async function runPositions() {
       const se = staleExitRead({ ts1h: ts1hExit, exitLevel: thesisEntry.exitPrice, now: new Date(nowMs) });
       if (se && se.stale) {
         const reach = se.reachable != null ? `; recent reachable peak ~${fmtP(se.reachable)}` : '';
-        lines.push(`  ⚠ ${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via thesis.mjs if you agree.`);
+        lines.push(`  ⚠ ${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via declare-thesis.mjs if you agree.`);
       }
     }
     const ahHeld = askHeadroomText(row);
@@ -420,8 +420,8 @@ async function runPositions() {
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
   if (snap) { try { snap.archive.close(); } catch {} }   // P0: loadSnapshot leaves the archive open when it owns it
   console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
-  // COD-4: the SHARED stale-book banner (item-context.mjs staleBookBanner) — watch.mjs already prints this off
-  // positions.json's mtime; quote.mjs --positions read the same file silently, so the surface Ben uses
+  // COD-4: the SHARED stale-book banner (item-context.mjs staleBookBanner) — watch-positions.mjs already prints this off
+  // positions.json's mtime; quote-items.mjs --positions read the same file silently, so the surface Ben uses
   // most never warned when the book was stale (the A4 inversion). Now both surfaces word it identically.
   console.log(staleBookBanner(ageMin) + '\n');
   console.log(mdTable(headers, rows));

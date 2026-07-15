@@ -70,7 +70,7 @@ async function fetchWatchQuote(id) {
   return { row, ts5m: arr(ts5m) };
 }
 
-// The held verdict: the shared cut-trigger first (byte-identical to watch.mjs's heldVerdict),
+// The held verdict: the shared cut-trigger first (byte-identical to watch-positions.mjs's heldVerdict),
 // falling back to the same regime-based tokens when momVerdict defers.
 function heldVerdict(row, be, lotValue, ts5m) {
   const mv = momVerdict(row, be, lotValue, ts5m);

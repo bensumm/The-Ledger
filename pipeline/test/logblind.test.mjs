@@ -3,7 +3,7 @@
  * logblind.test.mjs — acceptance fixtures for LH2's restart-blindness header line.
  *
  * blindWarningLine() (pipeline/lib/logblind.mjs) is the PURE header-line assembler for the
- * monitor.mjs / watch.mjs "log may be blind" warning. Per plan LH2.3 the pure line assembly is
+ * monitor-offers.mjs / watch-positions.mjs "log may be blind" warning. Per plan LH2.3 the pure line assembly is
  * tested here; the filesystem probe (reading staleMin / active offers / positions) is NOT — the
  * callers already own that data and pass it in.
  * Run: `node pipeline/test/logblind.test.mjs` (auto-discovered by run-tests.mjs).

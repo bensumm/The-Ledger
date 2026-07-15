@@ -277,7 +277,7 @@ export function renderCoffer(){
 }
 
 /* PLAN-2 C2 — Finder v2 ("Scan"): render the published screen.json opportunity scan as-is.
-   The cells are byte-identical to screen.mjs's markdown table (both go through quotecore's
+   The cells are byte-identical to screen-flip-niches.mjs's markdown table (both go through quotecore's
    stdCells), so there is NO client-side re-scoring here — we render exactly what the scan said.
    The file is self-describing (its own `headers` travel with the rows), so a stale published
    file can never mismatch app-side header code. Item names deep-link to the live Trends view.
@@ -306,7 +306,7 @@ function scanTableHtml(headers, rows){
     }).join('')+'</tr>'; }).join('')+'</tbody>';
   return '<div class="tablewrap"><table class="scantable">'+head+body+'</table></div>';
 }
-// per-niche display metadata — one table per niche, each already sorted by Grade (screen.mjs sorts
+// per-niche display metadata — one table per niche, each already sorted by Grade (screen-flip-niches.mjs sorts
 // by the risk-adjusted score, and Grade is column 2). Rendered in this canonical order when present.
 // Only the SHIPPED niches carry display metadata (spread + rising were DELETED — Steps 3+4). An
 // unknown/future niche key still renders: the `NICHE_META[n]||{label:n,hint:''}` fallback in
@@ -386,7 +386,7 @@ export async function renderScan(force){
 
 /* LW4 — the "Refresh scan" button.
    On the LOCAL dev server (serve.cmd → localhost, IS_LOCALHOST) the dev-server exposes POST
-   /api/scan, which runs `screen.mjs --mode all --publish` and rewrites the local screen.json with
+   /api/scan, which runs `screen-flip-niches.mjs --mode all --publish` and rewrites the local screen.json with
    ZERO git — so a click here runs a REAL scan, then we re-fetch + re-render the fresh file. A scan
    takes ~10–30s, so the button shows a "Scanning…" busy state and is disabled meanwhile.
    On deployed GitHub Pages (IS_LOCALHOST false) — or if the endpoint is unreachable / errors / times
@@ -424,7 +424,7 @@ export async function refreshScan(btn){
     if(staleEl){ staleEl.classList.remove('hidden'); staleEl.className='scanstale warn';
       staleEl.innerHTML=(IS_LOCALHOST
         ? 'No newer scan produced. Is the dev-server running? Otherwise run <code>node pipeline/commands/screen-flip-niches.mjs --mode all --publish</code> to refresh <code>screen.json</code>.'
-        : 'No newer snapshot published yet — run the pipeline (<code>screen.mjs --publish</code>) to refresh. This panel mirrors the committed <code>screen.json</code>.'); }
+        : 'No newer snapshot published yet — run the pipeline (<code>screen-flip-niches.mjs --publish</code>) to refresh. This panel mirrors the committed <code>screen.json</code>.'); }
   }
 }
 

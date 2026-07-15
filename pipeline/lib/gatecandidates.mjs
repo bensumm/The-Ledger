@@ -1,11 +1,11 @@
 /**
  * gatecandidates.mjs — the screen's pure candidate-selection + survival doctrine (P1).
  *
- * Extracted from screen.mjs (GC1 first pulled `gateCandidates`/`risingPoolFloor` out as exported,
- * threshold-driven functions behind screen.mjs's invocation guard; P1 relocated the whole
+ * Extracted from screen-flip-niches.mjs (GC1 first pulled `gateCandidates`/`risingPoolFloor` out as exported,
+ * threshold-driven functions behind screen-flip-niches.mjs's invocation guard; P1 relocated the whole
  * pool-selection + post-fetch-doctrine cluster HERE so it is node-importable + fixture-testable with
- * synthetic data and no live network). The LOGIC is byte-identical to the pre-P1 inline screen.mjs
- * code — this is a pure MOVE. screen.mjs imports everything back and calls it exactly where it did.
+ * synthetic data and no live network). The LOGIC is byte-identical to the pre-P1 inline screen-flip-niches.mjs
+ * code — this is a pure MOVE. screen-flip-niches.mjs imports everything back and calls it exactly where it did.
  *
  * The four concerns that live here (all pure, no CLI/network/fs state):
  *   1. gateCandidates(mode, ctx, thresholds) — the PRE-FETCH gate stack (two-sided liquidity OR
@@ -31,7 +31,7 @@
  *
  * ALL numeric math (the spec edges' tax, overnightStaleRisk, median) is the shared impl (tax lives in
  * flip-niches.mjs's edge functions now, imported from js/money-math.js there), so the numbers stay
- * byte-identical to screen.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
+ * byte-identical to screen-flip-niches.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
 import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
 import { median } from './cli.mjs';
@@ -46,11 +46,11 @@ import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '
 // this file. `tax` moved with the edge functions into flip-niches.mjs.
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 
-// DEFAULT_THRESHOLDS: the gate-stack constants at their CLI defaults (screen.mjs builds its own
+// DEFAULT_THRESHOLDS: the gate-stack constants at their CLI defaults (screen-flip-niches.mjs builds its own
 // THRESHOLDS from parsed args and passes it explicitly; this default serves fixtures / import callers
-// that don't supply one). Values mirror screen.mjs's `A.<flag> != null ? … : <default>` fallbacks.
+// that don't supply one). Values mirror screen-flip-niches.mjs's `A.<flag> != null ? … : <default>` fallbacks.
 export const DEFAULT_THRESHOLDS = {
-  FLOOR: 3500, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,   // PLAN-VOL24 step 2: FLOOR 50 → 3500 (mirrors screen.mjs; count-matched to the corrected rolling-24h volume)
+  FLOOR: 3500, MIN_ROI: 1.5, MIN_PRICE: 0, MAX_PRICE: 45e6, MIN_NET_GP: 100_000,   // PLAN-VOL24 step 2: FLOOR 50 → 3500 (mirrors screen-flip-niches.mjs; count-matched to the corrected rolling-24h volume)
   // Bar D (Ben 2026-07-09): the traded-band gate reads tradedWin (density) + sawLow/sawHigh (two-sided),
   // NOT the same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
   // MIN_TRADED_THIN = the relaxed floor for gp-flow big tickets (2 ⇒ a lone spike still fails).
@@ -66,7 +66,7 @@ export const DEFAULT_THRESHOLDS = {
   // /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units).
   VALUE_LIQ_FLOOR: 3500,
   // VALUE_CAP_GP: the per-position capital cap that bounds valueScore's deployable-units (bankroll leg). NOT
-  // a fixed doctrine number — screen.mjs derives it from --capital ÷ --slots (Ben's current capital spread
+  // a fixed doctrine number — screen-flip-niches.mjs derives it from --capital ÷ --slots (Ben's current capital spread
   // across the positions we'd hold). This default (≈ 100m ÷ 5 slots) serves fixtures / import callers that
   // don't supply one. PLACEHOLDER (rule 4).
   VALUE_CAP_GP: 20_000_000,
@@ -75,11 +75,11 @@ export const DEFAULT_THRESHOLDS = {
   // dedicate everything to this ONE lane, can it net MIN_GPD/day?"; if not, skip. THROUGHPUT_MODE 'capital'
   // (default) applies the affordable-units cap in expUnits; 'legacy' restores the pre-change capital-blind
   // value (escape hatch + the --stats old-vs-new repro). A null cap (no cash anchor / fixtures / import
-  // callers) degrades to legacy, so DEFAULT_THRESHOLDS is byte-identical to pre-change behavior. screen.mjs
+  // callers) degrades to legacy, so DEFAULT_THRESHOLDS is byte-identical to pre-change behavior. screen-flip-niches.mjs
   // sets THROUGHPUT_CAP_GP from the derived deployablePool after it re-derives the anchor.
   THROUGHPUT_MODE: 'capital', THROUGHPUT_CAP_GP: null,
 };
-// Default rank/slice sizing (screen.mjs's --thin-reserve / --top defaults).
+// Default rank/slice sizing (screen-flip-niches.mjs's --thin-reserve / --top defaults).
 export const THIN_RESERVE_DEFAULT = 6;
 // RISING_RESERVE_DEFAULT (Steps 3+4) — fetch-pool slots reserved for the highest-proxyDrift risers, the
 // absorbed `rising` niche mechanism (see rankAndSlice). Small + bounded (a named PLACEHOLDER, rule 4).
@@ -124,7 +124,7 @@ export const expUnits = (limit, volDay, capPerWindow = null) => {
 // constants can NEVER drift from the day figure: min(a,b)·k = min(a·k, b·k), so multiplying the whole
 // expUnits result by SPAN/24 is exact — min(limit·6, 0.10·volDay)·(8/24) = min(limit·2, 8/24·0.10·volDay).
 // Buy limit refreshes ~every 4h → 2 windows in an 8h span; the volume-share leg prorates flat across the
-// span. UPPER BOUND (assumes fills at your price, no fill-probability) — screen.mjs labels it as such.
+// span. UPPER BOUND (assumes fills at your price, no fill-probability) — screen-flip-niches.mjs labels it as such.
 export const expUnitsOvernight = (limit, volDay) => expUnits(limit, volDay) * OVERNIGHT_SPAN_H / 24;
 
 // --- regime proxy off loadDaily's bulk {ts,mid} series: SAME 3d-vs-prior-~2wk shape as quotecore's
@@ -182,7 +182,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
     // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): expGpDay is CAPITAL-AWARE — the PER-WINDOW buy is capped by
     // what the deployable bankroll affords one tranche of at this price (capPerWindow = pool / mid; mid is
     // the gp-flow price proxy this gate already uses at line ~155). THROUGHPUT_MODE 'legacy' or a null cap
-    // restores the capital-blind value. expGpDayLegacy is carried on the candidate so screen.mjs can log it
+    // restores the capital-blind value. expGpDayLegacy is carried on the candidate so screen-flip-niches.mjs can log it
     // as a shadow field (suggestions.jsonl) → --stats/F1 diff old-vs-new surfacing. THIN gp-flow big tickets
     // stay EXEMPT from the floor (unchanged — they ride the thin reserve; folding capital into the thin path
     // is a documented follow-up in PLAN-CAPITAL-THROUGHPUT).
@@ -204,7 +204,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
    price window; REPLACES the 500k gp/day throughput floor with valuescreen's after-tax cycle-amplitude
    floor, LOWERS the liquidity floor (VALUE_LIQ_FLOOR — hold for days–weeks needs eventual exitability,
    not fast churn), and rejects a decay/downtrend KNIFE via the term structure. `ctx.daily` is the bulk
-   daily-mid archive (screen.mjs's loadDaily) already loaded at gate time — the term structure is
+   daily-mid archive (screen-flip-niches.mjs's loadDaily) already loaded at gate time — the term structure is
    computed from it with NO per-item fetch. Each survivor carries its valueScore + valueRanges + tier so
    rankAndSlice can hard top-N by score (§F) and renderMode can print the term-structure row. */
 function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS) {
@@ -232,7 +232,7 @@ function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS)
 }
 
 /* --- P6c: empty-result sub-floor fallback --------------------------------------------------------
-   TRIGGER (screen.mjs owns it): a niche whose gateCandidates() came back EMPTY at the configured
+   TRIGGER (screen-flip-niches.mjs owns it): a niche whose gateCandidates() came back EMPTY at the configured
    floors. This helper then re-runs the SAME gate stack (no forked logic — it just calls
    gateCandidates with relaxed thresholds) down a two-step ladder to find WHICH floor emptied it:
      1. 'min-gpd'    — relax ONLY the attention floor (MIN_GPD → 0). If candidates appear, the 500k
@@ -274,7 +274,7 @@ export function subFloorLabel(fb) {
 // WHICH items we spend the expensive per-item fetch on — deprioritizing probable fallers (softFactor)
 // and front-loading the highest-proxy risers into a bounded reserve so a riser isn't buried below flats
 // (the absorbed `rising` mechanism, Steps 3+4). `opts.thinReserve`/`opts.risingReserve`/`opts.top`
-// default to screen.mjs's defaults (screen passes the CLI values explicitly); fixtures can drive them.
+// default to screen-flip-niches.mjs's defaults (screen passes the CLI values explicitly); fixtures can drive them.
 export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT } = {}) {
   // P5 value niche (§F): rank the WHOLE gated pool by the composite valueScore and take a HARD top-N.
   // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).

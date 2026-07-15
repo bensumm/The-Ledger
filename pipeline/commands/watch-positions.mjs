@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * watch.mjs — ADAPTIVE, item-type-aware live-session monitor (chunk 7).
+ * watch-positions.mjs — ADAPTIVE, item-type-aware live-session monitor (chunk 7).
  *
- * A market-aware companion to monitor.mjs. Where monitor.mjs is a LOG-STATE snapshot
+ * A market-aware companion to monitor-offers.mjs. Where monitor-offers.mjs is a LOG-STATE snapshot
  * (active offers / recent fills / held count from the exchange log, no market fetch),
- * watch.mjs is the MARKET side of the loop: it re-quotes every held/target item live via
+ * watch-positions.mjs is the MARKET side of the loop: it re-quotes every held/target item live via
  * js/quotecore.js, classifies it by item TYPE, and drives a human-executed polling session
  * (the /loop skill, ~1–3 min) with:
  *   - per-item CLASS  → recommended attention cadence + which playbook applies
@@ -14,10 +14,10 @@
  *     with an adverse-selection warning, and the scalp/market-make playbook gated to
  *     ranging-wide-spread items ONLY.
  *
- * Why a sibling and not an edit to monitor.mjs: monitor.mjs is the raw log-state snapshot
- * (no market fetch); watch.mjs owns market fetch + quotecore classification. Log discovery
+ * Why a sibling and not an edit to monitor-offers.mjs: monitor-offers.mjs is the raw log-state snapshot
+ * (no market fetch); watch-positions.mjs owns market fetch + quotecore classification. Log discovery
  * and open-offer semantics are SHARED via offers.mjs (one owner, both import it).
- * Run monitor.mjs for the raw log state; run watch.mjs to decide what to do.
+ * Run monitor-offers.mjs for the raw log state; run watch-positions.mjs to decide what to do.
  *
  * GUARDRAILS (hard):
  *   - HUMAN-EXECUTED DECISION SUPPORT ONLY. This tool NEVER places or cancels a GE offer —
@@ -70,7 +70,7 @@ import { heldNoteBlock, heldListAt } from '../lib/emit.mjs';   // V5 standardize
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from '../lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (cash.mjs anchor + log flow)
+import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from '../lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
@@ -81,7 +81,7 @@ const FILLS = path.join(HERE, '..', '..', 'fills.json');   // DL2 — logged buy
 const DIP_WATCHLIST = path.join(HERE, '..', '..', 'dip-watchlist.json'); // DL2 tracked pool of LIQUID flush candidates (--dip)
 const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
 const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
-const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
+const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; declare-thesis.mjs writes)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
@@ -176,8 +176,8 @@ function classify(row) {
 // --- WINDOW CONTEXT line (2026-07-05, the ring lesson): the stateless 2h verdicts kept
 // firing on a bid whose real question was time-of-day ("does this window print my level,
 // and what does tomorrow recover to?") — evidence that previously needed a manual
-// windowrange.mjs call. This prints the same quantiles inline, scored over the COMING 8
-// machine-local hours across the last 7 days. Same honesty bound as windowrange.mjs:
+// read-window-range.mjs call. This prints the same quantiles inline, scored over the COMING 8
+// machine-local hours across the last 7 days. Same honesty bound as read-window-range.mjs:
 // touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
 const WINDOW_HOURS = 8;
 const WINDOW_DAYS = 7;
@@ -271,7 +271,7 @@ function recoveryReadFor(it) {
 // "out-run the drop". List-at is break-even-floored. momVerdict() (chunk 6) runs FIRST so a
 // 2h breakdown escalates before the lagging multi-day regime confirms.
 // P0: the prose is now the SHARED renderer (renderHeldVerdict verbose) in pipeline/lib/item-context.mjs —
-// the ONE home quote.mjs --positions renders from too, so the two surfaces can't disagree on a held
+// the ONE home quote-items.mjs --positions renders from too, so the two surfaces can't disagree on a held
 // verdict. Output is byte-identical to the pre-P0 inline heldAction() (same mv, same strings). The
 // caller passes the ALREADY-computed mv (off lotCtxOf(it)) via a minimal ctx so nothing recomputes.
 // VN-1: the caller also passes the persistence-gated display read (it._display) so the note's
@@ -299,7 +299,7 @@ function targetAction(row, cls, be) {
 function bidAction(row, off, pathCtx) {
   const filled = `${off.qty}/${fmt(off.max)} filled`;
   // decision via the SHARED offerVerdict (js/quotecore.js) so the console and the app Watch tab
-  // can never disagree on a bid's state; the strings below are watch.mjs's own (byte-identical).
+  // can never disagree on a bid's state; the strings below are watch-positions.mjs's own (byte-identical).
   // P5: pathCtx (a declared scalp/value-hold thesis, or null) makes CANCEL-BID PATH-AWARE — a
   // deliberate thesis expects a soft tape, so falling alone no longer cancels its bid.
   switch (offerVerdict(row, off.offer, pathCtx)) {
@@ -471,7 +471,7 @@ async function main() {
 
   // P0: passive Tier-1 accrual — one loadSnapshot() per pass appends the current complete bulk /5m
   // and /1h buckets to the SQLite archive (check-before-fetch, so a fast loop re-entering the same 5m
-  // window does zero extra network). watch.mjs + quote.mjs are loadSnapshot's first consumers; the
+  // window does zero extra network). watch-positions.mjs + quote-items.mjs are loadSnapshot's first consumers; the
   // running loop is how P6's broad intraday history accrues. budgetIds:[] → NO per-item fan-out: the
   // per-item reads below keep their exact live fetch semantics (fetchItemInputs). Guarded so an
   // archive/sqlite failure can never break a watch pass.
@@ -514,7 +514,7 @@ async function main() {
   }
   // DL2 --dip: fold the tracked dip-watchlist.json pool into the buy-side target set (deduped against
   // held lots + CLI tokens). Best-effort: a missing/garbled file degrades to no dip pool.
-  // DL4 (2026-07-11): the schema evolved and screen-fed AUTO-POPULATION now landed (screen.mjs's
+  // DL4 (2026-07-11): the schema evolved and screen-fed AUTO-POPULATION now landed (screen-flip-niches.mjs's
   // nomination pass appends flush-SUITABLE candidates). The reader is POLYMORPHIC — an entry is either
   // a LEGACY plain item name / numeric id (mirrors watchlist.json's simple shape) OR a NEW object
   // { id, name, source:'auto'|'manual', track:'liquid'|'illiquid', addedTs }. A mixed array works; we
@@ -634,7 +634,7 @@ async function main() {
   for (const s of bidSpecs) {
     const it = await buildItem({ id: s.id, name: s.name }, map, guide);
     it.bid = s.offers[0]; it.bids = s.offers; // primary + all (multi-slot same-item bids)
-    // P5: the DECLARED thesis for this bid (thesis.mjs set --path), read-only. When present, its path
+    // P5: the DECLARED thesis for this bid (declare-thesis.mjs set --path), read-only. When present, its path
     // key + floor tripwire make the shared offerVerdict PATH-AWARE — a scalp/value-hold bid no longer
     // CANCEL-BIDs off the falling regime alone (Ben's 2026-07-08 amendment). null when undeclared.
     const th = thesisFor(holdThesisStore, s.id);
@@ -947,7 +947,7 @@ async function main() {
     const ageTxt = min == null ? '' : (min < 60 ? `${min}m` : `${Math.floor(min / 60)}h${min % 60 ? ' ' + (min % 60) + 'm' : ''}`);
     const flowTxt = dc.netFlow ? ` ${dc.netFlow > 0 ? '+' : ''}${fmtP(dc.netFlow)} since` : '';
     const prov = min != null ? ` · idle derived from anchor ${ageTxt} ago${flowTxt}` : '';
-    const inj = dc.inferredInjection > 0 ? ` ⚠ +${fmtP(dc.inferredInjection)} inferred injection — re-anchor to confirm (cash.mjs)` : '';
+    const inj = dc.inferredInjection > 0 ? ` ⚠ +${fmtP(dc.inferredInjection)} inferred injection — re-anchor to confirm (derive-cash.mjs)` : '';
     console.log(`  total capital ~${fmtP(tc.totalGp)} · committed ${fmtP(tc.committedGp)} (${tc.committedPct}%) / idle cash ~${fmtP(tc.cashGp)} (${tc.idlePct}%)${prov}${inj}`);
     // Three-tier deployable capital — never a silent binary. Printed only when something is resting (else all
     // three tiers equal availableCash). deployablePool = free stack + reclaimable DEEP-bid escrow; liquid =

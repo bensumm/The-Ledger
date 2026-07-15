@@ -145,7 +145,7 @@ export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
   let verdict, cls, listAt, why;
   // Underwater decision tree (PLAN-3, was the chunk-6 cut-trigger): the held position's precise
   // 2h read (from the standard quote row, same fetch) LEADS the multi-day regime. Shared
-  // momVerdict() keeps this identical to quote.mjs --positions / watch.mjs. It returns a verdict
+  // momVerdict() keeps this identical to quote-items.mjs --positions / watch-positions.mjs. It returns a verdict
   // for an unreliable quote (NO-READ), a diurnal trough (DIURNAL-WATCH), a one-off shock
   // (SHOCK-WATCH), a breakup/breakdown, or a clean-but-persistently-underwater lot (CUT-CANDIDATE);
   // it returns null ONLY when the quote is clean, reliable and NOT escalating → the regime-only

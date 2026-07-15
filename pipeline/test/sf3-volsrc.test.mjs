@@ -3,14 +3,14 @@
  * sf3-volsrc.test.mjs — acceptance fixtures for SF-3 (the liquidity-`class` volume-source split).
  * Run: `node pipeline/test/sf3-volsrc.test.mjs`  (exits non-zero on any failure).
  *
- * THE BUG SF-3 FIXES: quote.mjs (per-item /24h) and screen.mjs (bulk /24h) are DIFFERENT snapshots,
+ * THE BUG SF-3 FIXES: quote-items.mjs (per-item /24h) and screen-flip-niches.mjs (bulk /24h) are DIFFERENT snapshots,
  * so the same item could log a different `class` in suggestions.jsonl (observed live: Toxic blowpipe
  * `mid` vs `thin`). The polluted quantity is `volDay` itself, so re-deriving class later doesn't launder
  * it. Fix = warm-cache read (converge on the bulk snapshot when it's on disk) + a `volSrc` honesty tag.
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - CLASS PARITY: when a WARM bulk map is in hand, the class classAndSource logs equals the class
- *     screen.mjs would log for the SAME item (both take min(hpv,lpv) from the SAME bulk /24h entry),
+ *     screen-flip-niches.mjs would log for the SAME item (both take min(hpv,lpv) from the SAME bulk /24h entry),
  *     and it is tagged volSrc:'bulk' — even when the per-item snapshot would have straddled a boundary.
  *   - COLD FALLBACK, NO FETCH: with no warm map (null — the hard no-cold-fetch constraint means the
  *     caller passes null rather than forcing the ~4000-item dump), classAndSource keeps the per-item
@@ -30,14 +30,14 @@ const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 
 console.log('SF-3 volume-source split acceptance:');
 
-// How screen.mjs derives the logged class for an item: computeQuote sets row.volDay = min(hpv,lpv)
+// How screen-flip-niches.mjs derives the logged class for an item: computeQuote sets row.volDay = min(hpv,lpv)
 // over the BULK v24[id] entry, then it logs liqClass(row). This helper reproduces that exactly.
 const screenClass = bulkEntry => liqClass({ volDay: Math.min(bulkEntry.highPriceVolume || 0, bulkEntry.lowPriceVolume || 0) });
 
 const ITEM = 12926;   // Toxic blowpipe (the live-observed straddle item) — id only, no live data (rule 4)
 
 // --- 1. CLASS PARITY on a straddle: per-item snapshot says 'thin', bulk says 'mid' -----------
-ok('warm bulk path converges with screen.mjs (same class) even when per-item straddled the boundary', () => {
+ok('warm bulk path converges with screen-flip-niches.mjs (same class) even when per-item straddled the boundary', () => {
   // Per-item /24h snapshot the quote path already fetched — limiting side 80/day ⇒ liqClassOf → 'thin'.
   const perItemRow = { volDay: 80 };
   assert.equal(liqClass(perItemRow), 'thin', 'the per-item volume would log thin (the polluted path)');

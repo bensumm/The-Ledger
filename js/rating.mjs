@@ -91,7 +91,7 @@ export function gradeFor(score) {
 
    NY2.4 — two DIFFERENT "thin"s, don't conflate them. This cap keys off the screen's `thin` flag,
    which is the GP-FLOW-ONLY ADMISSION PATH: `limitVol < FLOOR` (50/day) AND admitted only because
-   `limitVol×mid ≥ GP_FLOOR` (screen.mjs gateCandidates). That is the ONLY `thin` that caps a grade,
+   `limitVol×mid ≥ GP_FLOOR` (screen-flip-niches.mjs gateCandidates). That is the ONLY `thin` that caps a grade,
    and it is capped every time it reaches rateItem (both the niche and watchlist paths pass it). It is
    NOT the same label as suggestlog's coarse `liqClass` 'thin' (`volDay < 100`) written to the `class`
    field of suggestions.jsonl. Because `volDay == limitVol == min(hpv,lpv)`, an item with volume in

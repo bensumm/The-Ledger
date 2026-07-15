@@ -14,7 +14,7 @@
  *     from today, newest first, with after-tax net on SELLs (from the matched closed view) and
  *     never on buys; an unmatched sell shows a null net (honest, no fabricated profit).
  *   - SUMMARY: exposure = Σ deployed capital in open flips; day P/L = Σ realised of today's closes.
- *   - offerVerdict is byte-identical to watch.mjs's original bid gate ORDER (CANCEL-BID first).
+ *   - offerVerdict is byte-identical to watch-positions.mjs's original bid gate ORDER (CANCEL-BID first).
  *
  * Synthetic fixtures only — no network, no positions.json. Run: `node pipeline/test/watchcore.test.mjs`.
  */
@@ -125,7 +125,7 @@ ok('capitalSplit: working/(working+parked) %, null when nothing committed (YA1 #
   assert.equal(capitalSplit(0, 0).utilizationPct, null, 'nothing committed → null, never a fake %');
 });
 
-/* --- shared offer verdict (byte-identical gate order to watch.mjs's original) -------------- */
+/* --- shared offer verdict (byte-identical gate order to watch-positions.mjs's original) -------------- */
 const orow = o => ({ quickBuy: 100, optBuy: 95, mom: 'clean', reliable: true, falling: false, ...o });
 ok('offerVerdict CANCEL-BID fires first on falling OR a reliable breakdown (adverse selection)', () => {
   assert.equal(offerVerdict(orow({ falling: true }), 90), CANCEL_BID);

@@ -49,7 +49,7 @@ function degrade(key, note) { return { key, status: 'pass', reason: note, eviden
 
 // --- reachValidator ---------------------------------------------------------------------------
 // PLACEHOLDER thresholds (rule 4 — none validated; the study that would tune them is F1/P6):
-export const REACH_WINDOW_HOURS = 8;    // default coming-hours window scored (matches watch.mjs's line)
+export const REACH_WINDOW_HOURS = 8;    // default coming-hours window scored (matches watch-positions.mjs's line)
 export const REACH_NIGHTS = 14;         // same-window nights of history scored (the ~14d small sample)
 export const REACH_MIN_DAYS = 5;        // fewer scored nights than this ⇒ too thin to reject → degrade
 export const REACH_CAUTION_FRAC = 0.5;  // reached on < this fraction of scored nights ⇒ caution
