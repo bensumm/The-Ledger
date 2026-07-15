@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.17
+version: 1.18
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -107,7 +107,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
 6. **Accumulation-and-capital table — the SCRIPT prints it (COD-2, 2026-07-10).** Ben's exact
    ask ("how many can I accumulate in 8h and how much capital does that require") is now an
    ENCODED output of `screen.mjs --posture overnight`: an **Overnight accumulation & capital**
-   table under each niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
+   table under each flip-niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
    up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
    the shared `expUnitsOvernight` (`= expUnits × 8/24 = min(buyLimit×2, 8/24×0.10×volDay)` —
    `pipeline/lib/gatecandidates.mjs`, so its constants can never drift from `expUnits`); the

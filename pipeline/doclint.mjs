@@ -107,6 +107,21 @@ export const DENYLIST = [
     files: ['CLAUDE.md', 'README.md'],
     reason: '`VALUE_ABSGP_*` is a DELETED value-rank constant — value ranks by the deployable-capital multiplier (js/valuescreen.mjs); history lives in docs/LORE.md',
   },
+  {
+    id: 'niche-concept-word',
+    // R1 rename (2026-07-14, PLAN-RENAME.md): the screen niches band/churn/scalp/value are FLIP-NICHES
+    // now; the bare word "niche" is retired as the concept word in the operating docs. ("strategy" is
+    // reserved for the held-item level, js/paths.mjs.) The lookbehind spares `flip-niche`,
+    // `flip-niches.mjs`, and the `FLIP_NICHES` identifier (hyphen OR underscore). Scoped to the DOCS
+    // only — the ~600 code-comment uses are swept opportunistically, so the source tree is NOT listed.
+    // The definition + full codename history live in docs/GLOSSARY.md (not in `files`, so it doesn't
+    // self-trip). Case-insensitive so a capitalized "Niche" heading is caught too.
+    pattern: /(?<!flip[-_])niche/i,
+    files: ['CLAUDE.md', 'README.md', 'docs/ARCHITECTURE.md',
+            '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
+            '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
+    reason: 'the screen niches are "flip-niches" now (R1 rename, PLAN-RENAME.md) — say flip-niche; "strategy" is the held-item level. Definition: docs/GLOSSARY.md',
+  },
 ];
 
 // Returns [{ id, file, reason, xfail }] — every denylist match. `xfail` is truthy (the owner string)
