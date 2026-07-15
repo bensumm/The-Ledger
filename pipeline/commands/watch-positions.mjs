@@ -62,7 +62,9 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs 
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readExchangeLog, activeOffers } from '../lib/offers.mjs';
 import { logSuggestions, suggestionEntry, liqClassOf } from '../lib/suggestlog.mjs';   // DE3: liqClassOf tags the depth-shadow rows so F1 can measure the ×4 liquidity bias by class
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log
+import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head
+import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
@@ -603,16 +605,41 @@ async function main() {
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
-    it._depthExit = null; it._reachable = null;
+    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null;
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
     // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the window-line
     // clause + the suggestions.jsonl shadow fields, never a verdict/alert/price. Guarded separately
     // from the gating try so a depth failure can't cost the conviction read (and vice versa).
+    // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the same block ALSO computes the two OLDER reachability
+    // estimators — the reachRelief-family estSell (estimatePair) and the fixed-quantile asym pair —
+    // so all FIVE competing exit estimators co-log on THIS row (the head-to-head accrual surface). The
+    // shadow est deliberately passes declaredExit:null so the scored number is the MODEL's intrinsic
+    // ask (reachRelief's prediction), not the operator's declared plan; the declared exit is logged
+    // separately via the thesis. Zero new fetch (reuses ts1h/ts5m). Inform-only — nothing rendered.
     try {
-      it._depthExit = clearableAsk(it.ts1h, { qty: it.qty, wStart: 0, wEnd: 0, nights: 14 });
       const dayStats = windowStats(it.ts1h, { nights: 14, wStart: 0, wEnd: 0 });
+      it._depthExit = clearableAsk(it.ts1h, { qty: it.qty, wStart: 0, wEnd: 0, nights: 14 });
       it._reachable = dayStats ? reachableBand(dayStats) : null;
+      if (dayStats) {
+        const ap = asymPair(dayStats);
+        const askRc = it.row.optSell != null ? recencySplit(dayStats.days, 'ask', it.row.optSell) : null;
+        const bidRc = it.row.optBuy != null ? recencySplit(dayStats.days, 'bid', it.row.optBuy) : null;
+        const askReach = (dayStats.his.length && it.row.optSell != null)
+          ? { reachedDays: reachedDays(dayStats.his, it.row.optSell), nDays: dayStats.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
+        const bidReach = (dayStats.lows.length && it.row.optBuy != null)
+          ? { reachedDays: touchedDays(dayStats.lows, it.row.optBuy), nDays: dayStats.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
+        const prof = hourProfile(it.ts1h, { nights: 14 });
+        const dr = prof ? deriveDiurnalRange(prof, { liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null }) : null;
+        it._estShadow = estimatePair(FLIP_NICHES.band, it.row, {
+          bidReach, askReach,
+          diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
+          asym: ap, declaredExit: null,
+          dayHigh: dayHighFrom5m(it.ts5m),
+          intendedUnits: it.qty,
+        });
+        it._asymShadow = ap ? asymEstimate(FLIP_NICHES.band, it.row, ap) : null;
+      }
     } catch { /* inform-only — never block a pass */ }
     try {
       const key = 'held:' + it.id;
@@ -731,9 +758,22 @@ async function main() {
     return { ask: rb.ask, bid: rb.bid, pressure: Math.round(rb.pressure * 100) / 100,
       reliability: Math.round(rb.reliability * 100) / 100, bandLow: rb.bandLow, bandHigh: rb.bandHigh };
   };
+  // RC-S1 — the fixed-quantile asym pair as a lean shadow object (same shape screen logs), so the
+  // head-to-head scorer reads asym.ask beside depthExit.ask / reachable.ask / estSell on ONE row.
+  const round2 = x => x == null ? null : Math.round(x * 100) / 100;
+  const asymShadow = it => {
+    const a = it._asymShadow; if (!a) return null;
+    return { bid: a.bid, ask: a.ask, pAsk: round2(a.pAsk), pBid: round2(a.pBid), n: a.nDays, rank: Math.round(a.rank) };
+  };
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture,
-      depthExit: depthShadow(it), reachable: reachShadow(it) })),
+      depthExit: depthShadow(it), reachable: reachShadow(it),
+      // RC-S1: the reachRelief-family estSell + the asym pair — the two OLDER estimators co-logged
+      // beside depth/pressure so all five compete on the same row against the realized sell (F1).
+      estBuy: it._estShadow ? it._estShadow.estBuy : null,
+      estSell: it._estShadow ? it._estShadow.estSell : null,
+      estConfidence: estConfLean(it._estShadow),
+      asym: asymShadow(it) })),
     ...targets.map(it => { const sig = sigByTarget.get(it.id); return suggestionEntry(it.row, {
       itemId: it.id, cls: it.cls,
       // verdict: FLUSH (alerted) or FLUSH-SIGNAL (logged silently, gated out) or the normal target verdict.

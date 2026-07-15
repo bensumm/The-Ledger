@@ -319,6 +319,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): watch-positions.mjs held rows only; degraded reads → no field → byte-identical.
   if (depthExit != null)     e.depthExit = depthExit;
   if (reachable != null)     e.reachable = reachable;
+  // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION 2026-07-15): estBuy/estSell/estConfidence + asym are the
+  // reachRelief-family + fixed-quantile exit estimators, co-logged on watch HELD rows beside depthExit/
+  // reachable so all five compete head-to-head against the realized sell. On watch the shadow est uses
+  // declaredExit:null (the model's intrinsic ask is the scored quantity). estBuy/estSell/estConfidence/
+  // asym are the SAME fields screen/quote already log (handled just below / above) — no new field shape.
   // DL2 — a flush SIGNAL (watch-positions.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/commands/analyze-record.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid

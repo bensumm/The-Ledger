@@ -97,6 +97,29 @@ ok('YS2 forward fields are included only when supplied (lean, non-null)', () => 
   assert.ok(!('tripwire' in p), 'unsupplied forward field stays absent');
 });
 
+ok('DE3 + RC-S1: the reachability head-to-head shadow fields are lean-included (co-log contract)', () => {
+  // watch held rows co-log all FIVE competing exit estimators on ONE row for the F1 head-to-head
+  // (PLAN-REACHABILITY-CONSOLIDATION): depthExit (depth), reachable (pressure), estSell (reachRelief),
+  // asym (fixed-quantile). Each is lean-included — present only when supplied.
+  const full = suggestionEntry({ quickBuy: 393, quickSell: 396 }, { itemId: 566, cls: 'liquid', verdict: 'HOLD',
+    depthExit: { qty: 25000, competition: 4, liqClass: 'liquid', ask: 394, clearFrac: 0.79 },
+    reachable: { ask: 401, bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
+    estBuy: 385, estSell: 396, estConfidence: { askHit: 7, askDays: 14, reachRelief: 0.75 },
+    asym: { bid: 379, ask: 396, pAsk: 0.86, pBid: 0.29, n: 14, rank: 1200 } });
+  assert.equal(full.depthExit.ask, 394); assert.equal(full.reachable.ask, 401);
+  assert.equal(full.estSell, 396); assert.equal(full.asym.ask, 396);
+  assert.equal(full.estConfidence.reachRelief, 0.75, 'reachRelief number rides estConfidence for the head-to-head');
+  // a collapsed depth read carries its reason + liqClass (the ×4-bias measurement F1 needs), no ask
+  const collapsed = suggestionEntry({}, { itemId: 999, cls: 'thin', verdict: 'HOLD',
+    depthExit: { qty: 100, competition: 4, liqClass: 'thin', collapse: 'insufficient-depth' } });
+  assert.equal(collapsed.depthExit.collapse, 'insufficient-depth');
+  assert.ok(!('ask' in collapsed.depthExit), 'a null depth read logs the reason, not a fake ask');
+  // absent → byte-identical (a bid/target watch row, or any legacy row)
+  const none = suggestionEntry({ quickBuy: 100 }, { itemId: 7, cls: 'mid', verdict: 'BID-OK' });
+  assert.ok(!('depthExit' in none) && !('reachable' in none) && !('estSell' in none) && !('asym' in none),
+    'no reachability shadow keys when none supplied — bid/target/legacy rows stay byte-identical');
+});
+
 ok('liqClassOf thresholds', () => {
   assert.equal(liqClassOf(null), 'unknown');
   assert.equal(liqClassOf(99), 'thin');

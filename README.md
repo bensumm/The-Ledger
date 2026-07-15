@@ -288,8 +288,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   off the quoted ask — `{gap, gapPct, rawTop, topBucketVol, netLever, trusted}`, logged trusted AND
   audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A `watch` held row may
   carry the lean **`depthExit`**/**`reachable`** pair (PLAN-DEPTH-EXIT DE3, 2026-07-15): the depth-floor
-  read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band — the F1
-  alternatives to score against realized exits (schema: the `suggestlog.mjs` header). A screen row also carries
+  read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band; RC-S1
+  (PLAN-REACHABILITY-CONSOLIDATION) adds the reachRelief-family **`estBuy`/`estSell`/`estConfidence`** +
+  the **`asym`** pair on the SAME held row, so all five competing exit estimators score head-to-head
+  against the realized `sellEach` (schema: the `suggestlog.mjs` header). A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the
@@ -405,8 +407,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     held lot's window clause now carries the whole-day depth FLOOR (`clearableAsk` — supersedes the
     relief note when non-null; a collapsed read prints its REASON) beside the pressure-reachable band
     (`reachableBand`), formatted by `lib/emit.mjs depthReachClause` and shadow-logged as the lean
-    `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). The ONE WRITER of
-    the watch-state path fields
+    `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). RC-S1
+    (PLAN-REACHABILITY-CONSOLIDATION, 2026-07-15): held rows ALSO co-log the two OLDER exit estimators —
+    the reachRelief-family `estBuy`/`estSell`/`estConfidence` (`estimatePair`, `declaredExit` nulled so the
+    scored number is the model's intrinsic ask) + the fixed-quantile `asym` pair — so all FIVE competing
+    exit-price estimators ride ONE row for the F1 head-to-head against the realized sell; zero new fetch,
+    inform-only. The ONE WRITER of the watch-state path fields
     and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
     contract: `pipeline/MONITORING.md`),
     `monitor-offers.mjs`

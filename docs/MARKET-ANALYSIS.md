@@ -67,7 +67,11 @@ the raw table-v2 cells (byte-identical publish). Operating summary:
   renders only when the depth read is null (it's the fallback proxy the depth read measures
   directly). Both shadow-log to `suggestions.jsonl` (`depthExit` incl. collapse reason + liquidity
   class, `reachable`) for the F1 retro-join; no verdict/price/grade moves off either until DE4/PB4.
-  All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`).
+  All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`). These two
+  primitives are the successors the older `reachRelief` + `asymPair` heuristics converge on: the watch
+  held row co-logs ALL FIVE exit estimators (reach · reachRelief · asym · depth · pressure) so the F1
+  retro-join can score them head-to-head against the realized sell — the evidence-based, deprecate-then-
+  remove migration is architected in `PLAN-REACHABILITY-CONSOLIDATION.md` (nothing retires on theory).
 - **Confidence rides IN the price cell** as the recent-3 reach (`0/3`, `recencySplit`) — the
   freshness-honest signal and the fold basis; the full window shows beside it only on divergence
   (`0/3 · 12/14` = stale); `–` = no read.

@@ -1,10 +1,18 @@
 # PLAN-DEPTH-EXIT — percentile-depth-aware exit pricing (the reach count's principled successor)
 
-Status: **DRAFT — scoping only, nothing implemented.** Per-topic working doc (PLANNING.md lifecycle
-step 1–2); folds into `PLAN.md` and is deleted when its last chunk ships. Builds ON TOP of the
-uncommitted Task 1+2 baseline in the working tree (real held-lot `intendedUnits` → `reachRelief`
+Status: **DRAFT — DE1/DE2/DE6/PB1/DE3 LANDED (see per-chunk statuses); DE4/DE5/DE7/PB2/PB4 open.**
+Per-topic working doc (PLANNING.md lifecycle step 1–2); folds into `PLAN.md` and is deleted when its
+last chunk ships. Builds ON TOP of the Task 1+2 baseline (real held-lot `intendedUnits` → `reachRelief`
 in `estimatePair` + the watch-positions size-relieved fill note) — that baseline is the CURRENT
 state this plan supersedes, not the shipped `row.limit` proxy.
+
+> **The reachability-layer consolidation this plan feeds:** the depth + pressure primitives shipped here
+> (DE1/DE6 depth, PB1 pressure) OVERLAP with the older `reachRelief` + `asymPair` heuristics and should
+> converge, not accrete. The **evidence-based, staged migration** that retires/merges them —
+> parallel-run head-to-head on `suggestions.jsonl`, per-cell F1 gate, deprecate-then-remove — is
+> architected in **`PLAN-REACHABILITY-CONSOLIDATION.md`** (its RC1 chunk IS this plan's DE4; PB4's
+> no-peak-cap-vs-`dayHighFrom5m` decision is ruled there). The head-to-head co-log scaffolding (RC-S1)
+> is built; the retirements stay F1-gated + attended.
 
 ## Problem / motivation (the soul-rune anchor)
 
