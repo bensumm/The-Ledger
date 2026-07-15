@@ -211,5 +211,5 @@ lead with the concept, keep the codename as a parenthetical cross-ref to the cha
 ---
 
 *Maintenance: this file's file-path references are guarded by `archlint` (they must resolve on disk).
-When the R1 vocabulary sweep retires a term from prose, `doclint` gains a denylist entry so it can't
-creep back — see `PLAN-RENAME.md`.*
+When a rename sweep retires a term from prose, `doclint` gains a denylist entry so it can't
+creep back (`niche-concept-word`, `stale-cli-basename`).*

@@ -311,12 +311,6 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   KEPT at 500k — Ben, real NET-throughput floor; `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
   `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
   read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
-- `PLAN-LIQUIDITY-REACH.md` — per-topic plan (the soul-rune desk investigation), **SHIPPED 2026-07-13**:
-  the ask-reach discount is CONDITIONAL on liquidity + `position_size ÷ volume` (`reachRelief` +
-  `dayHighFrom5m` in `js/estimators.mjs`, wired into `estimatePair`'s sell fold + stdout `reach-relief`
-  notes on `screen-flip-niches.mjs`/`quote-items.mjs`; the thin-book mirage discount stays byte-identical, and the
-  rank/grade wiring is F1-gated → no APP_VERSION). Thresholds re-checked + KEPT under the PLAN-VOL24
-  corrected-volume default (see the file's threshold-decision section). Same fold-and-delete rule as the other plan files.
 - `docs/` — repo docs that aren't app/pipeline reference:
   - `PLANNING.md` — the planning process itself (required plan sections, chunk design rules, the
     skills improvement loop, anti-patterns; written 2026-07-08, follow it when producing any
@@ -335,7 +329,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (flip-niche / held-item strategy, reach, diurnal, band, verdicts, cash tiers…) + the codename
     dictionary (the concept behind each plan-chunk shorthand like `Bar E` / `DL4`). The ONE home for
     term definitions — module headers point here rather than re-explain. Its file-refs are guarded by
-    `pipeline/ci/lint-arch.mjs`. Built + maintained by the R1 rename pass (`PLAN-RENAME.md`).
+    `pipeline/ci/lint-arch.mjs`. Built + maintained by the R1/R2/R3 rename pass (the codename dictionary lives here).
   - `LORE.md` (P7) — narrative/history + superseded-approach rationale (the single-file→split
     story, the LW2/LW3 live desk, the pipeline's eliminated scheduler, the incident anchors behind
     the process rules, the rejected/retired approaches). Nothing here is load-bearing — CLAUDE.md
