@@ -94,7 +94,7 @@ re-run it.)
 This is the tribal layer the script can't do — apply ALL of these:
 
 - **500k gp/day attention floor** _(enforced: `pipeline/commands/screen-flip-niches.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
-  SCRIPT — `screen.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
+  SCRIPT — `screen-flip-niches.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
 - **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/gatecandidates.mjs`)_ If a flip-niche prints `SUB-FLOOR
@@ -179,7 +179,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   real-breakdown cuts are unchanged — this relaxes ENTRY timidity, not the floors. See Claude memory
   `risk-tolerance-lean-in`.
 - **Parked-capital leak on mid-liquidity band-floor bids (HYPOTHESIS, 2026-07-06 — YV1
-  data, not yet a rule).** _(judgment: unproven lean, F1-gated)_ The first `outcomes.mjs --report` capital-efficiency read showed
+  data, not yet a rule).** _(judgment: unproven lean, F1-gated)_ The first `join-outcomes.mjs --report` capital-efficiency read showed
   **~24% of bids never filled** and that band-low (0–20 pct) **mid-liquidity** buys are the
   slowest to fill (~24m median vs ~9m liquid) — i.e. mid-liquidity band-floor bids are where
   capital gets stranded. So when *actively* flipping, lean toward pricing a mid-liquidity entry
@@ -232,7 +232,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   quoting a profit — the notes are inform-only and thresholds are placeholders.
 - **The DIURNAL TIMING block auto-derives the peak-timing bid/ask (2026-07-09) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR PRICING below.**
   _(enforced: `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`, `pipeline/commands/screen-flip-niches.mjs` Diurnal timing block)_
-  After the reach notes, `screen.mjs` prints a `Diurnal timing` line per surfaced pick (FREE — off the
+  After the reach notes, `screen-flip-niches.mjs` prints a `Diurnal timing` line per surfaced pick (FREE — off the
   in-hand 1h series): `BID <x> (basis, dip HH–HH) · ASK <y> (peak HH–HH) · ~net/u (roi%)`, with `⚠
   trend-dominates → bid to live` when a multi-day trend erases the intraday dip (the Ghrazi lesson — the
   BID is then priced to live, not to a stale low). A `★` marks a **clean diurnal candidate** (concentrated
@@ -253,7 +253,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   a tenth of your tranche (the days-reach ≠ lap-clear trap). Price every pick in three moves:
   1. **Name the exit WINDOW.** *4h-lap* (ask at/just under the live instabuy → clears this window, the
      churn default) OR *diurnal-spike* (ask at the peak-window level from the **Diurnal timing** block /
-     `windowrange.mjs --profile` → clears in that window, better margin if you can wait). State which.
+     `read-window-range.mjs --profile` → clears in that window, better margin if you can wait). State which.
   2. **Quote the reachable-IN-WINDOW ask** (RC1 recency-honest; the Asymmetric ask-reach read below
      verifies it) — NEVER the raw band top.
   3. **BACK-SOLVE the buy from that ask** — bid ≤ the price that leaves break-even + your target margin
@@ -270,7 +270,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   `PLAN-WINDOW-CLEAR.md` Part B, not yet built — this is the judgment form.)
 - **Asymmetric ask-reach read — the verification gate (2026-07-07, method) — an INPUT to WINDOW-CLEAR PRICING above.** _(judgment: method; tool `pipeline/commands/read-window-range.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
-  pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the
+  pays. Before recommending ANY pick, run the `read-window-range.mjs --ask <band-top>` reach check the
   doctrine already requires and read it two ways: **band-top ask reached ~0/7 days = artifact, SKIP**
   (the ROI is an illusion — realistic sells sit below break-even; anchor: Dharok's 4.85m and ruby
   bolts' 3,098 both reached 0/7 while the screen showed +9%/+1.7%). **Band-top ask reached ~7/7 days
@@ -305,7 +305,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
-  `windowrange.mjs --ask <sell target>` and quote the REACHABLE sell (the ~50–75%-day reach level),
+  `read-window-range.mjs --ask <sell target>` and quote the REACHABLE sell (the ~50–75%-day reach level),
   NEVER the raw 2h band top** — the raw `Optimistic`/`Rank` pricing sells at the band top, which on a
   thin + wide-band item is an artifact that never reaches. (PLAN-OUTPUT-TABLE 2026-07-13 + revisions: the
   screen's DEFAULT table now renders the reach-folded `Est. sell` — the fold (on the RECENT-3 reach) already
@@ -320,7 +320,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   problem; run `--ask` on the handful you actually pitch instead — accurate + cheap.)
 - **Fresh-repricer flag.** _(judgment: sizing call)_ A large multi-day regime move = the item was recently repriced
   → overnight-retrace risk. Size small; skip for unattended holds.
-- **Phase tag on the Regime cell (2026-07-06).** `screen.mjs` annotates each Regime cell with a
+- **Phase tag on the Regime cell (2026-07-06).** `screen-flip-niches.mjs` annotates each Regime cell with a
   trajectory phase from the shared `phase()` (off the same 6h series, zero extra fetch): `spike`
   (elevated over its own base), `decay` (pulled back from a recent peak with lows STILL stepping
   down — a falling knife), or `basing` (decayed back to the pre-spike base with lows FLATTENED —
@@ -329,7 +329,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   covers BOTH the frothy-about-to-retrace case (DWH) AND a real reprice UP to a new sustained
   higher level (webweaver: base ~15.7m repriced to ~18m, with recent daily LOWS *rising*/higher-lows,
   not decaying). So treat a `spike` on an item you're considering as a PROMPT to run the full
-  `/positions` "trajectory read for confidence" (`windowrange.mjs --window 0-23 --nights 21`,
+  `/positions` "trajectory read for confidence" (`read-window-range.mjs --window 0-23 --nights 21`,
   phase-mapped) and read the recent-low trend: RISING higher-lows = a healthy reprice (holdable);
   lows flattening/falling from a recent peak = the froth-retrace case (size-small/skip). A `basing`
   tag is likewise the prompt to run that same trajectory read before committing. Honesty (process
@@ -340,7 +340,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   of evidence). Honesty rule (process rule 4): the classifier is new and unvalidated.
 - **Froth entry — the check is a CLASSIFIER, not a PREDICTOR (2026-07-07, method).** _(judgment: method, n≈0 froth trades)_ When tempted
   to trade a spike ("catch the froth window"), run the froth-entry diligence — the 21-night full-day
-  trajectory (`windowrange.mjs "<item>" --window 0-23 --nights 21`) read for the **lows-trend + volume**
+  trajectory (`read-window-range.mjs "<item>" --window 0-23 --nights 21`) read for the **lows-trend + volume**
   — but be clear about what it can and cannot do. It tells you, for a move ALREADY UNDERWAY, whether
   it's the good kind or a knife: **spike + rising-then-holding lows + solid/rising volume = a healthy
   reprice to a new sustained base** (ride/dabble-able off that base, with a hard tripwire below the new
@@ -364,7 +364,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   are slow, and its wide band can be a thin-trading artifact — size in units, never chase.
   For a big-ticket price SUGGESTION where you want confidence in the entry / where the item is
   heading, run the same full-day multi-week trajectory read — `/positions` "trajectory read for
-  confidence on a marginal/big-ticket hold" (`windowrange.mjs --window 0-23 --nights 21`,
+  confidence on a marginal/big-ticket hold" (`read-window-range.mjs --window 0-23 --nights 21`,
   phase-mapped). Point to it; don't copy the method here.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
@@ -394,7 +394,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **Buy-limit-aware sizing — NEVER suggest a quantity over the 4h GE limit (Ben, 2026-07-08).**
   _(code-pointer: `pipeline/lib/limits.mjs` `limitWindow` + `js/validate.mjs` `limitValidator`; ask =
   `node pipeline/commands/read-buy-limits.mjs "<item>"`)_ Every accumulation/tranche suggestion is CAPPED by the item's
-  GE buy limit (`quote.mjs` prints it as `· buy limit N/4h`; also in the mapping — look it up before
+  GE buy limit (`quote-items.mjs` prints it as `· buy limit N/4h`; also in the mapping — look it up before
   sizing). A "tranche" is ONE window's worth = **≤ limit units**; a position bigger than the limit is a
   **multi-window accumulation by definition** — state the per-window cap, the gp it represents, and how
   many 4h windows it takes (e.g. "11k darts = ~2.0m/window; 44k = 4 windows ≈ 16h"). Do NOT pitch a
@@ -402,7 +402,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   against an 11k/4h limit — that's 4+ windows, not a tranche). This is now ENCODED on every suggesting
   surface (LM1): the rolling-4h `limitWindow` math is fed to the BUY-side `limitValidator`, which
   **REJECTs** (screen drops it, quote/held/watchlist note it) a buy whose window is exhausted and
-  **CAUTIONs** one nearly spent — and `quote.mjs`'s regime line appends `(bought X this window — Y
+  **CAUTIONs** one nearly spent — and `quote-items.mjs`'s regime line appends `(bought X this window — Y
   left, next frees ~HH:MM)` when there are in-window logged buys. Two follow-ons the numbers already do
   for you: (1) **if the item was already bought today, the limit is partially/fully consumed** — run
   `node pipeline/commands/read-buy-limits.mjs "<item>"` (reads `fills.json`, no fetch) for bought/remaining + the local
@@ -413,7 +413,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **A thin CURRENT 2h band ≠ no edge — read the recent DAILY range on a proven lane (Ben,
   2026-07-08).** _(judgment: read call; tool `pipeline/commands/read-window-range.mjs`)_ The screen's band is the last-2h window; it looks THIN precisely when live sits at
   the top or bottom of the item's wider daily range. Do NOT dismiss a known/proven lane (one you've
-  flipped before) off the thin 2h band — run the full-day `windowrange.mjs --window 0-23` and read
+  flipped before) off the thin 2h band — run the full-day `read-window-range.mjs --window 0-23` and read
   the **recent daily lows→highs** (the band you actually flip over), recency-verified per RC1. Bid
   the recent daily-LOW zone, sell the recent daily-HIGH zone. If live isn't at the low right now,
   it's a **patient dip-bid** (rest it, it fills on the next daily dip), not a fill-now — say which.
@@ -460,7 +460,7 @@ to ask "are we looking at other flip-niches?"; the miss was omission, not a bad 
 sell are each "X, targeting Y" — bind the number to the window/mechanism expected to fill
 it (e.g. "bid 17.00m — tonight's 18:00–23:00 trough, projected 16.8–17.0m" / "sell 17.55m —
 the 23:00–03:00 UK-morning lift, reached 7/7d"; a churn item's target can simply be "normal
-daily churn"). Run the time-of-day `windowrange.mjs` read the CLAUDE.md doctrine already
+daily churn"). Run the time-of-day `read-window-range.mjs` read the CLAUDE.md doctrine already
 requires and quote it — never a bare number.
 
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book

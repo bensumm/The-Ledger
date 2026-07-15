@@ -49,7 +49,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    sessions price bids near the live instasell to fill; overnight inverts that. Before the
    pause, list every RESTING BUY offer (`node pipeline/commands/watch-positions.mjs` shows them with verdicts)
    and flag any bid priced at/near the live instasell or in the upper half of its band —
-   each must be **cancelled or dropped to the band floor / a `windowrange.mjs`-supported
+   each must be **cancelled or dropped to the band floor / a `read-window-range.mjs`-supported
    level** before Ben walks away. A chase-priced bid left unattended fills into the first
    quiet-hours dip with nobody watching the exit — the exact adverse selection the active
    posture accepts only because someone is at the keyboard. Canonical posture doctrine:
@@ -106,7 +106,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      pair it with the volume line — and ~14 nights is a small sample (process rule 4).
 6. **Accumulation-and-capital table — the SCRIPT prints it (COD-2, 2026-07-10).** Ben's exact
    ask ("how many can I accumulate in 8h and how much capital does that require") is now an
-   ENCODED output of `screen.mjs --posture overnight`: an **Overnight accumulation & capital**
+   ENCODED output of `screen-flip-niches.mjs --posture overnight`: an **Overnight accumulation & capital**
    table under each flip-niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
    up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
    the shared `expUnitsOvernight` (`= expUnits × 8/24 = min(buyLimit×2, 8/24×0.10×volDay)` —
@@ -133,7 +133,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    stay listed at what break-even-floored price, and the prioritized bid table (the script's
    accumulation table, filtered to the lines you're recommending within stated capital).
 
-Note: `screen.mjs --posture overnight` shipped (S2) and now prints the accumulation-and-capital
+Note: `screen-flip-niches.mjs --posture overnight` shipped (S2) and now prints the accumulation-and-capital
 table itself (COD-2) — this skill relies on it for BOTH the structural overnight filtering AND
 the sizing; keep only the prioritization + fill-realism judgment here.
 

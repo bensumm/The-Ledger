@@ -36,14 +36,14 @@ running inside a worktree and you can't reach the main checkout, SKIP the sync a
 report that `positions.json` may be stale rather than pushing from the wrong branch.
 
 **Act on the stale-book banner — re-sync, don't just note it (Ben, 2026-07-06).** When
-`watch.mjs`'s summary prints `held basis positions.json Nm old ⚠ stale` and the age keeps
+`watch-positions.mjs`'s summary prints `held basis positions.json Nm old ⚠ stale` and the age keeps
 CLIMBING across passes, the banner is a prompt to ACT: run `node pipeline/commands/sync-fills.mjs`
 (from the MAIN checkout) to refresh the book BEFORE trusting or reporting the held count —
 do not merely mention the banner and report off the stale file. Anchor (the failure this
 fixes): on 2026-07-06 the book sat frozen ~2+ hours (age climbed past 300m) while positions
 had actually changed; the held count was reported as ×2/×1 off a stale book when the real
 position had already half-closed. (This complements the LW3 heartbeat — the heartbeat is the
-localhost app's liveness signal; this is the operator's rule when reading `watch.mjs` in a
+localhost app's liveness signal; this is the operator's rule when reading `watch-positions.mjs` in a
 session.)
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
@@ -51,7 +51,7 @@ session.)
 its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
 and report the offer set as the position set.
 
-**Reading `watch.mjs`'s per-held note block (the V5 EMIT CONTRACT).** Every held lot's note
+**Reading `watch-positions.mjs`'s per-held note block (the V5 EMIT CONTRACT).** Every held lot's note
 block is the same fixed, ordered shape: `verdict · conviction-state (V4 armed) · Δ-since-last
 (V1) · structural tripwire (V2) · sell/list-at (+ break-even) · fill-progress`. The
 **`sell: list @ X · break-even Y · <ask n/m or NOT LISTED>` line is ALWAYS present on a held
@@ -98,7 +98,7 @@ be resolving the underwater flag).
 as its default patient-premium ask. That default is right for a PROVEN lane you're happy to
 wait on, but WRONG for a NEW/test lane, where velocity > premium: don't parrot the verdict's
 band-top note — surface a step-down explicitly. Price the ask at a level the item actually
-REACHES often (run the `windowrange.mjs --ask <level>` reach check the doctrine already
+REACHES often (run the `read-window-range.mjs --ask <level>` reach check the doctrine already
 requires), take a little less profit, and get a few real laps to learn the lane's fill
 behavior. Example (2026-07-06, one item — not a rule): a webweaver ask defaulted to 18.90m
 (reached only 2/7 in the next-8h window); stepping to 18.70m (+226k/lap, +1.25%, reached 4/5
@@ -119,8 +119,8 @@ DOWN a stalled/decaying ask; price UP or hold a rising one. Break-even floor unc
 
 **Ask-headroom note — a `⤴ ask headroom` line means LADDER UP, don't relist down (PLAN Bar-E-signal, Ben
 2026-07-11).** _(enforced: `js/quotecore.js` `computeQuote` `row.askHeadroom` + `askHeadroomText`; rendered
-on `quote.mjs --positions`)_ On a held lot, the verdict's "list @ X" is a FLOOR, not a ceiling. When
-`quote.mjs` prints `⤴ … ask headroom — raw top N traded above the quoted ask X` (Class 1: the robust p90
+on `quote-items.mjs --positions`)_ On a held lot, the verdict's "list @ X" is a FLOOR, not a ceiling. When
+`quote-items.mjs` prints `⤴ … ask headroom — raw top N traded above the quoted ask X` (Class 1: the robust p90
 shaved a TRADED in-band top) or `⤴ … list @ X is a FLOOR … live broke +N%` (Class 2: a live 2h breakup),
 step the ask UP toward the raw top rather than parroting the verdict's number — the GE better-price rule
 makes the ladder cheap (a list at X already fills at the best standing bid; a list a few ticks higher risks
@@ -129,7 +129,7 @@ Soul-rune-393-sold-397 lesson) — but INFORM-ONLY: it never moves the quoted nu
 input, and the break-even floor is unchanged. Honesty (rule 4): n=1, thresholds are PLACEHOLDERS pending F1
 retro calibration — treat the note as a prompt to ladder, not a validated target.
 
-**Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `windowrange.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
+**Decaying-band-top trigger (Ben, 2026-07-04 — the bludgeon retro):** the 2h band top falling across consecutive watch passes while a held item's ask sits above the printing range means the "top" is stale old prints, not live demand — that decay is a step-down trigger in its own right; do NOT wait out the usual hour. And when a measured intraday trough/bounce window lies ahead (per a `read-window-range.mjs` window read), prefer realizing the printing price early and re-bidding the trough over holding a stranded premium through it — two small legs beat one stale ask. Break-even floor unchanged.
 
 **Trajectory read for confidence on a marginal/big-ticket hold (Ben, 2026-07-06 — the DWH
 retro):** the stateless verdict and a narrow-window read can leave a big-ticket hold-vs-cut
@@ -171,11 +171,11 @@ The declared tripwire activates the TG1 headline silence and the thesis render f
 (MONITORING.md step 4) — without it, the band-flip frame re-litigates the expected pre-peak
 trough as UNDERWATER/LIST-TO-CLEAR churn every pass (the 2026-07-11 Berserker/Masori session).
 An undeclared deliberate hold is an operating error, not a tooling gap.
-A declared exit is point-in-time: `quote.mjs --positions` now auto-flags one that has gone
+A declared exit is point-in-time: `quote-items.mjs --positions` now auto-flags one that has gone
 STALE on reach (`⚠ declared exit X looks STALE — printed N/3 recent nights; recent reachable
 peak ~Y`, Proposal C — inform-only, placeholder <2/3-recent bar, n≈0). On that flag, judge
 whether the thesis premise still holds; if you agree the peak has moved, re-declare the exit
-via `thesis.mjs set … --exit` (the flag never edits the thesis or the verdict itself).
+via `declare-thesis.mjs set … --exit` (the flag never edits the thesis or the verdict itself).
 
 **Thesis-appropriate cadence (VN-0):** a parked-at-break-even hold with a declared exit window
 wants a check NEAR ITS PEAK WINDOW plus ~2–3 passes/day — not the 1–3m hair-trigger class
@@ -205,7 +205,7 @@ paired with a deeper re-entry bid is a legitimate two-leg (the jaw anchor: cut 1
 16.42m) — but each sell pays 2% tax, so the pair only beats holding if the rebid sits **more
 than tax + half the spread below the clear price** (~2.5%+). This arithmetic is now the shared
 `rebidBar(clear, spread)` in `js/quotecore.js` (friction = tax + half the spread; threshold =
-the price the rebid must sit at/below), and `quote.mjs --positions` prints a **Rebid advisory**
+the price the rebid must sit at/below), and `quote-items.mjs --positions` prints a **Rebid advisory**
 line on every CUT / CUT-CANDIDATE / LIST-TO-CLEAR verdict — don't re-derive the numbers, read
 that line. It is TRAJECTORY-AWARE (`rebidAdvice`): a **knife** (still falling) → advises AGAINST
 the rebid (the bar is moot, cut and redeploy); an **oscillating** faller (bounces back at the
@@ -222,7 +222,7 @@ immediately — the floor "break" was 20k deep and the item recovered within the
 structural tripwire should require conviction of the break before executing: a print
 **meaningfully through** the level (~0.5%+) or two consecutive passes below it, not a
 grazing touch. This tightens WHEN the tripwire fires; it does not soften obeying it once
-fired (the override-discipline rule above stands). **`watch.mjs` now enforces this
+fired (the override-discipline rule above stands). **`watch-positions.mjs` now enforces this
 mechanically (V4, arm-then-confirm):** its structural-break headline ALERT fires only when the
 live instabuy is `< cut-trigger` (≥ `CUT_TRIGGER_DELTA` below support) OR below support for two
 consecutive passes; a single graze *arms* (a visible note) instead of alerting. Likewise a
@@ -238,7 +238,7 @@ sat CROSSING for ~50 minutes, correctly untouched, until the 23:17 re-arm).
 
 **Fill-progress check before CUT-CANDIDATE action (2026-07-05):** before acting on a
 CUT-CANDIDATE (or shallow UNDERWATER), check whether the current ask is actively filling
-(`monitor.mjs` / the watch row's `listed n/m`). An ask that is transacting above the
+(`monitor-offers.mjs` / the watch row's `listed n/m`). An ask that is transacting above the
 clear price beats repricing down to a lower clear — twice on 2026-07-04 the gate fired
 while the ask was filling (souls at 6k/25k) or 1gp under break-even; both were correctly
 held. Depth and fill progress are context the stateless gate can't see; judge with them.
@@ -256,14 +256,14 @@ Grouped by urgency: **cuts → list-to-clear → holds/watches**. One line each:
 **Every action price states its timing target (Ben, 2026-07-05):** a recommended price is
 "X, targeting Y" — bind the number to the window/mechanism expected to fill it, e.g.
 "17.55m — targets the 23:00–03:00 UK-morning lift (reached 7/7d)" or "10.70m — velocity
-clear, fills on current prints". The data is already in hand (the `windowrange.mjs`/
+clear, fills on current prints". The data is already in hand (the `read-window-range.mjs`/
 window-line read the doctrine above requires); this rule just forbids a bare number. It
 also sets the re-check expectation: a price whose window hasn't arrived yet isn't "not
 filling".
 
 **Verify the SELL leg before quoting a profit — MANDATORY, not judgment (Ben, 2026-07-07, the
 DHCB overpitch).** Whenever you pitch a dip-bid's or a hold's expected profit off a band top /
-optimistic sell, **run `windowrange.mjs --ask <sell target>` first and quote the REACHABLE sell
+optimistic sell, **run `read-window-range.mjs --ask <sell target>` first and quote the REACHABLE sell
 (the ~50–75%-day reach level), never the raw 2h band top.** The band top is a CANDIDATE (input),
 not the pitched number — on a thin + wide-band item it is an artifact that never reaches. This is a
 hard checklist step (like `/overnight`'s fill-realism check), because the failure was a *skipped
@@ -282,8 +282,8 @@ Hard rules — cite, never recompute differently:
 - Held fallers ARE shown here with price-to-clear (the screen-exclusion rule's exception).
 - Guide = real GE guide price, never the wiki mapping `value` field.
 
-**Reading the `recovery-read` line (V6, `watch.mjs` notes) as decision SUPPORT.** On a non-clean
-held lot, `watch.mjs` surfaces `recovery-read: likely recovers|drops|uncertain — <drivers>` — a
+**Reading the `recovery-read` line (V6, `watch-positions.mjs` notes) as decision SUPPORT.** On a non-clean
+held lot, `watch-positions.mjs` surfaces `recovery-read: likely recovers|drops|uncertain — <drivers>` — a
 COMPOSED lean from the same signals the verdict already used (diurnal · regime/phase · underwater-
 persistence · vs structural support). Use it to *prioritise your dig-in*, never as an order: it
 decides nothing and never overrides `momVerdict`. The highest-value case is a **conflict** — a green
@@ -298,7 +298,7 @@ it's `uncertain` or conflicts, that's your signal to apply judgment, not to defe
   caution: `BIG_TICKET_GP` = 10m lot value is the whole-lot threshold).
 - If cuts free GE slots → **offer `/scan`** to redeploy the capital.
 - **Offer the watch loop:** print the ready-to-paste command per MONITORING.md, surfacing
-  `watch.mjs`'s own cadence suggestion, e.g. `/loop 2m node pipeline/commands/watch-positions.mjs`.
+  `watch-positions.mjs`'s own cadence suggestion, e.g. `/loop 2m node pipeline/commands/watch-positions.mjs`.
 
 **Composition note:** when invoked from `/overnight`, SKIP this tail — `/overnight` owns
 the pause-for-capital as its phase boundary. The tail is for standalone use.

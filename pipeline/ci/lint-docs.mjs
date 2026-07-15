@@ -123,6 +123,27 @@ export const DENYLIST = [
             '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
     reason: 'the screen niches are "flip-niches" now (R1 rename, PLAN-RENAME.md) — say flip-niche; "strategy" is the held-item level. Definition: docs/GLOSSARY.md',
   },
+  {
+    id: 'stale-cli-basename',
+    // R2a/R3 rename (2026-07-15, PLAN-RENAME.md): the pre-rename CLI basenames were renamed to verb-object
+    // and moved to pipeline/commands/. The operating docs were swept to the new filenames (#3 doc cleanup);
+    // this bans the OLD bare basenames from creeping back. The lookbehind `(?<![\w-])` is load-bearing: it
+    // spares the NEW hyphenated names that CONTAIN an old basename as their tail — `trigger-alerts.mjs`,
+    // `derive-cash.mjs`, `declare-thesis.mjs`, `join-outcomes.mjs` — and lib collisions like
+    // `holdthesis.mjs`/`sessionthesis.mjs` (preceded by a word char). The surviving lib basenames
+    // analyze.mjs/limits.mjs/retrojoin.mjs are NOT banned (pipeline/lib/{analyze,limits,retrojoin}.mjs
+    // still exist, so a bare mention resolves). Map: screen->screen-flip-niches, quote->quote-items,
+    // watch->watch-positions, monitor->monitor-offers, windowrange->read-window-range, cash->derive-cash,
+    // thesis->declare-thesis, outcomes->join-outcomes, alerts->trigger-alerts, loop-tick->run-loop.
+    // Scoped to the swept operating docs; CHANGELOG/LORE/PLAN keep the historical names (not in `files`).
+    pattern: /(?<![\w-])(screen|quote|watch|monitor|windowrange|cash|thesis|outcomes|alerts|loop-tick)\.mjs\b/,
+    files: ['CLAUDE.md', 'README.md', 'docs/ARCHITECTURE.md', 'docs/GLOSSARY.md',
+            'docs/SKILL-TRIAGE.md', 'docs/PLANNING.md', 'pipeline/MONITORING.md',
+            'pipeline/FILLS-PIPELINE.md', '.claude/skills/scan/SKILL.md',
+            '.claude/skills/positions/SKILL.md', '.claude/skills/overnight/SKILL.md',
+            '.claude/skills/morning/SKILL.md', '.claude/skills/analyze/SKILL.md'],
+    reason: 'pre-rename CLI basename (R2a/R3) — use the verb-object name in pipeline/commands/ (e.g. screen.mjs -> screen-flip-niches.mjs). Map + rationale: PLAN-RENAME.md; history keeps old names in CHANGELOG/LORE.',
+  },
 ];
 
 // Returns [{ id, file, reason, xfail }] — every denylist match. `xfail` is truthy (the owner string)

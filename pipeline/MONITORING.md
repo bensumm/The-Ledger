@@ -10,18 +10,18 @@ band-bottom deterioration and a seed over-cap during the 2026-07-02 session.
 > resting SELL is held inventory being sold. `positions.json` only knows *booked fills*, so
 > tooling that reads only it misses the offer half — the shared reader is `offers.mjs`.
 >
-> **Two tools, two jobs.** `monitor.mjs` (below) is the **log-state snapshot** — your
+> **Two tools, two jobs.** `monitor-offers.mjs` (below) is the **log-state snapshot** — your
 > resting offers, recent fills/cancels, held count — parsed from the exchange log, no market
-> fetch. `watch.mjs` ([Adaptive routine](#adaptive-item-type-aware-routine-pipelinewatchmjs))
+> fetch. `watch-positions.mjs` ([Adaptive routine](#adaptive-item-type-aware-routine-pipelinewatchmjs))
 > is the **market side** — it re-quotes every position (held lots AND active offers) plus any
 > target items, classifies each by item TYPE, and drives an active human session with per-item
-> cadence, drop/CUT alerts, and risk reads. Run `monitor.mjs` for the raw log state; run
-> `watch.mjs` to decide what to do.
+> cadence, drop/CUT alerts, and risk reads. Run `monitor-offers.mjs` for the raw log state; run
+> `watch-positions.mjs` to decide what to do.
 
 The **durable, session-independent** home for this logic is the app itself. The
 **Refresh-positions button shipped** (0.39.0, M1) — a same-origin `positions.json` re-fetch;
 what remains unbuilt is the in-app **break-even/regime deterioration check** on the Ledger. So
-today this doc + `monitor.mjs`/`watch.mjs` are still how the *judgment* half of the workflow
+today this doc + `monitor-offers.mjs`/`watch-positions.mjs` are still how the *judgment* half of the workflow
 runs; the app owns freshness.
 
 ## The tool: `pipeline/commands/monitor-offers.mjs`
@@ -34,8 +34,8 @@ Print-only — it never writes trade data. Each run emits:
 
 - **log freshness** — minutes since the newest exchange-log line, on the wall clock (so a
   stalled/idle log is distinguishable from a live-but-quiet market).
-- **restart-blindness warning (LH2)** — a `⚠ log may be blind` header line (in both `monitor.mjs`
-  and `watch.mjs`) when the log has gone stale (≥20m) AND shows no active offers AND you hold open
+- **restart-blindness warning (LH2)** — a `⚠ log may be blind` header line (in both `monitor-offers.mjs`
+  and `watch-positions.mjs`) when the log has gone stale (≥20m) AND shows no active offers AND you hold open
   inventory: the post-restart state where the plugin has re-emitted nothing, so resting offers read
   as missing. It changes no verdict — it just names the failure so a session doesn't chase "vanished"
   offers (restart-check RuneLite or nudge a slot to force a re-emit). Pure line assembler in
@@ -50,17 +50,17 @@ Print-only — it never writes trade data. Each run emits:
 - Offers/fills come from the RuneLite Exchange Logger (`~/.runelite/exchange-logger/`) —
   real-time.
 - Held positions are reconstructed **IN-MEMORY from the live exchange log** via the shared
-  pipeline FIFO (`reconstruct.mjs`), *not* read from `positions.json` — so `monitor.mjs`'s
-  held count is **real-time**, with no sync-file lag. (`watch.mjs`, by contrast, *does* read
+  pipeline FIFO (`reconstruct.mjs`), *not* read from `positions.json` — so `monitor-offers.mjs`'s
+  held count is **real-time**, with no sync-file lag. (`watch-positions.mjs`, by contrast, *does* read
   `positions.json`; the two are reconciled because both run the same canonical
-  WITHDRAWN/BANKED-aware `reconstruct.mjs` chain — see the `watch.mjs` note below.) A naive
+  WITHDRAWN/BANKED-aware `reconstruct.mjs` chain — see the `watch-positions.mjs` note below.) A naive
   re-sum of terminal log events would double-count RuneLite's re-logged/duplicate terminal
   lines (found live 2026-07-02: an 11:01 buy re-logged identically at 11:15 → a +5 phantom),
   but `reconstruct()` runs **`dedupeSnapshots()`** (P1, 2026-07-05) first, dropping snapshot
   re-emissions before the FIFO, so the in-memory held count never phantoms. Cost basis is
   static once bought.
 - **`held-override.json` reconciliation knob** (`pipeline/.cache/held-override.json`, gitignored,
-  code-only — `monitor.mjs:66-80`): the Exchange Logger occasionally drops a `SOLD` event
+  code-only — `monitor-offers.mjs:66-80`): the Exchange Logger occasionally drops a `SOLD` event
   during fast same-second flipping, so the log can hold more buys than sells and the
   reconstruction *over*-counts held (confirmed: seeds logged 57 bought / 52 sold, real held
   0 — no FIFO can invent the missing sell input). The file maps `{ "<itemId>": "<ISO-or-unix
@@ -80,8 +80,8 @@ Print-only — it never writes trade data. Each run emits:
    (bid vs instasell) and restate its sell target.
 4. **Deterioration watch — the underwater triage gate tree (PLAN-3).** For each **held
    position** where live instabuy < break-even, the verdict comes from the shared
-   `momVerdict()` gate tree in `js/quotecore.js` (identical in `watch.mjs`,
-   `quote.mjs --positions`, and the app's position review — the tooling emits it, you don't
+   `momVerdict()` gate tree in `js/quotecore.js` (identical in `watch-positions.mjs`,
+   `quote-items.mjs --positions`, and the app's position review — the tooling emits it, you don't
    hand-run it). Each gate defers **only on positive evidence**; ambiguity always falls
    through to the cut discipline, so a genuine breakdown still cuts exactly as before.
    - **GATE 0 — is this reading even a price?** A **stale** (`/latest` aged past a
@@ -115,9 +115,9 @@ Print-only — it never writes trade data. Each run emits:
      *genuinely breaks down* still CUTs immediately (Gate 2 is untouched). **P0 closed the source
      gap that made the "identical on both surfaces" claim above aspirational for this one verdict:**
      the lot context (askFilling) + the verdict rendering now live in the shared `lib/item-context.mjs`
-     chain — `watch.mjs` sources the ask from the live exchange log, `quote.mjs --positions` from the
+     chain — `watch-positions.mjs` sources the ask from the live exchange log, `quote-items.mjs --positions` from the
      root `offers.json` — so **`HOLD — ask filling` prints on BOTH** (previously only watch could, as
-     quote.mjs had no offer read). Both surfaces render via the one `renderHeldVerdict`.
+     quote-items.mjs had no offer read). Both surfaces render via the one `renderHeldVerdict`.
    - **regime falling** (drift ≤ −5%) with no live break still lands **CUT-CANDIDATE** (list
      to clear at the instabuy — take the small loss before a bigger one; the 0.20.0
      falling-item rule).
@@ -162,7 +162,7 @@ safe to poll as often as you like; the only cost is API calls in step 3–4.
 
 **Thesis-appropriate cadence (VN-0, Ben 2026-07-11).** The class cadences below are for the
 HAZARD cases (falling, thin big-ticket). A parked-at-break-even hold with a DECLARED exit
-window (`thesis.mjs set … --window`) wants a check **near its peak window plus ~2–3
+window (`declare-thesis.mjs set … --window`) wants a check **near its peak window plus ~2–3
 passes/day**, not a 1–3m loop — nothing actionable happens in 3 minutes on a lot moving
 ~1%/hour, and oversampling manufactures flip-flop reads (the 2026-07-11 verdict-churn
 session: ~12 label flips in 30 min at a 3m cadence on a ~2% band). Match the cadence to the
@@ -172,9 +172,9 @@ thesis horizon, not to the tightest class on the board.
 
 ## Adaptive item-type-aware routine (`pipeline/commands/watch-positions.mjs`)
 
-`monitor.mjs`'s routine runs one flat cadence and one set of rules for every position. But a
+`monitor-offers.mjs`'s routine runs one flat cadence and one set of rules for every position. But a
 thin big-ticket volatile item and a liquid ranging scalp candidate demand **different**
-attention and **different** playbooks. `watch.mjs` classifies each held/target item by TYPE
+attention and **different** playbooks. `watch-positions.mjs` classifies each held/target item by TYPE
 and adapts cadence + playbook + alert thresholds to it. It's the driver for an active,
 human-executed flipping session on a tight 1–3 min loop.
 
@@ -199,7 +199,7 @@ The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
   selection: the market dropped to meet you). Only `CANCEL-BID` joins the alerts section;
   placement feedback never alerts.
   - **P5 path-aware CANCEL-BID.** `offerVerdict` now takes an optional declared-thesis path (from
-    `thesis.mjs set --path`, read off the hold-thesis store). A bid placed under a DELIBERATE thesis
+    `declare-thesis.mjs set --path`, read off the hold-thesis store). A bid placed under a DELIBERATE thesis
     EXPECTS a soft/declining tape (Ben's 2026-07-08 falling amendment), so the falling REGIME alone no
     longer cancels it — only the thesis's OWN tripwire does: **scalp** cancels on a live *reliable* 2h
     breakdown (the intraday band collapsing under the entry = the hard stop); **value-hold** cancels only
@@ -215,7 +215,7 @@ The default run reads the live exchange log via `offers.mjs` (~0 lag) alongside
   is CONTEXT printed next to the verdict, never a verdict input — the 2h gate tree is
   unchanged. It exists because the stateless 2h verdicts kept firing CANCEL-BID on a bid
   whose real question was time-of-day (does this window print my level? what does tomorrow
-  recover to?) — evidence that previously required a manual `windowrange.mjs` call. Same
+  recover to?) — evidence that previously required a manual `read-window-range.mjs` call. Same
   honesty bound: touched ≠ filled, ~7 days is a small sample.
 
 **Read-only, human-executed decision support — the hard guardrail.** This tool NEVER places
@@ -225,23 +225,23 @@ nothing.
 
 **All quote/tax/regime/momentum math is `js/quotecore.js`** (`computeQuote`, `regimeDrift`/
 `regimeLabel`, `breakEven`, `momVerdict`, `BIG_TICKET_GP`) — the same module the app and the
-`quote.mjs`/`screen.mjs` scripts use, so a verdict here can't drift from the app's.
+`quote-items.mjs`/`screen-flip-niches.mjs` scripts use, so a verdict here can't drift from the app's.
 
 **Held basis = `positions.json` open lots**, *not* re-derived in-memory from the log the way
-`monitor.mjs` does. Both are now correct — since chunk 8 they share the SAME canonical
+`monitor-offers.mjs` does. Both are now correct — since chunk 8 they share the SAME canonical
 WITHDRAWN/BANKED-aware `reconstruct.mjs` chain, so the held count agrees either way.
-`positions.json` (written by `sync-fills.mjs` via `reconstruct.mjs`) is chosen for `watch.mjs`
+`positions.json` (written by `sync-fills.mjs` via `reconstruct.mjs`) is chosen for `watch-positions.mjs`
 because it's the already-persisted pipeline output — no log re-parse needed. The only trade-off
 is the file's staleness since the **last regeneration**. Two things now regenerate it: an on-demand
 `sync-fills.mjs` run (there is no scheduled sync — §12 of FILLS-PIPELINE.md; run it at session start)
 and, when running, the `watch-log.mjs` daemon (§14) that rewrites `positions.json`/`offers.json`
-locally on every log change with **zero git**. `watch.mjs` prints the file's age and flags it stale
+locally on every log change with **zero git**. `watch-positions.mjs` prints the file's age and flags it stale
 past 25m, so a very recent trade's lag is visible. Cost basis is static once bought, so lag rarely
 changes a call. **When that stale flag's age keeps climbing across passes, act on it** — re-sync
 before trusting the held count (the operator rule lives in `/positions` §1's freshness area, near
 SY1); the banner is a prompt, not decoration.
 
-**Console `watch.mjs`/`monitor.mjs` remain the zero-lag authority** — they read the exchange log
+**Console `watch-positions.mjs`/`monitor-offers.mjs` remain the zero-lag authority** — they read the exchange log
 directly (`offers.mjs`, ~0 lag). The localhost app's live view (LW2, `FILLS-PIPELINE.md` §14) trails
 them only by the daemon's debounce (~10s) + the app's poll (~30s); it is not the authority, and the
 deployed (`bensumm.github.io`) app is still as-of-last-attended-sync. So: the app *can* now see live
@@ -255,20 +255,20 @@ bid reads BID-OK/BID-BEHIND/CROSSING/CANCEL-BID identically in the terminal and 
 against `positions.json`/`offers.json`, so **offers are only as fresh as the last sync** and are
 honestly stamped/bannered as such (held quotes are live via the market API). What the tab adds over
 this console is a persisted **session-context note** per held item (entry thesis + tripwire), so a
-stateless CUT verdict never reads as an order. Division of labor: run the console `watch.mjs` for the
+stateless CUT verdict never reads as an order. Division of labor: run the console `watch-positions.mjs` for the
 zero-lag "act now" read; glance at the Watch tab for the standing desk picture (exposure, day P/L,
 which held lots want action, what filled today).
 
 ### Item-type classes → cadence + playbook
 
-Boundaries are **tunable named constants** at the top of `watch.mjs`, not magic numbers:
+Boundaries are **tunable named constants** at the top of `watch-positions.mjs`, not magic numbers:
 
 - `LIQUID_FLOOR_PER_DAY = 100` — two-sided daily volume (the limiting side, `min(hi,lo)` from
   `computeQuote`) below which a book is **thin**. 100/d is the practical floor codified in
   the `/scan` skill (`.claude/skills/scan/SKILL.md`); below it, exits are unreliable
   ghost-spreads. **Two different things are both called "the floor" — don't conflate them:**
-  this ~100/d is the *judgment* ghost-spread floor (in `watch.mjs`/`/scan`, "is a book liquid
-  enough to trust an exit?"). `screen.mjs`'s `--floor` (default **50**) is a separate *script
+  this ~100/d is the *judgment* ghost-spread floor (in `watch-positions.mjs`/`/scan`, "is a book liquid
+  enough to trust an exit?"). `screen-flip-niches.mjs`'s `--floor` (default **50**) is a separate *script
   gate* — the raw per-unit `limitVol ≥ FLOOR` liquidity threshold that a candidate must clear
   (OR the `--gp-floor` gp-flow path, S1) to even enter the screen. Different purposes,
   different values.
@@ -293,7 +293,7 @@ attach to a trending item:
 | `THIN_OTHER` | thin, not big-ticket | **2m** | caution; small size; adverse-selection warning |
 | `UNKNOWN` | liquid but regime unconfirmed / vol unknown | **2m** | caution until regime confirms |
 
-The loop runs at **one** interval; `watch.mjs` recommends the **tightest** cadence across
+The loop runs at **one** interval; `watch-positions.mjs` recommends the **tightest** cadence across
 everything you're monitoring (so the most urgent item is polled often enough) and prints the
 ready-to-paste `/loop` command:
 
@@ -358,7 +358,7 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   the last-3h 5m shape still `falling` via `recentDirection`) — it does not forecast one. The detection
   latency is **~5m** (the /timeseries bucket cadence), so run the `--dip` loop at the **5m cadence floor**
   when hunting flushes (a coarser loop risks missing the front-loaded window, exactly the miss DL2 fixes).
-- **ALERTS, never places** (the watch.mjs read-only guardrail is untouched — you place every offer).
+- **ALERTS, never places** (the watch-positions.mjs read-only guardrail is untouched — you place every offer).
 - **LOGGING IS WIDER THAN ALERTING.** The ALERT is liquid-only (above); the SIGNAL — a genuine deep +
   still-falling flush — is logged for **every** watched item, LIQUID and ILLIQUID. An illiquid item never
   alerts (you can't poll-fill it), but its flush depth/frequency history is exactly the evidence basis for
@@ -406,7 +406,7 @@ field is a nested (4-space) sub-line. **Fixed field order:**
    compute. This is the load-bearing invariant the skills read for every held item's list-at.
 
 The exact wording/derivation of every field (the pressure token's shortcomings, the path-dominance
-`pathPersistence` arm-then-confirm, the `heldListAt` precedence, why `quote.mjs --positions` prints
+`pathPersistence` arm-then-confirm, the `heldListAt` precedence, why `quote-items.mjs --positions` prints
 the same path line read-only) lives in the `lib/emit.mjs` + `lib/item-context.mjs` + `lib/watchstate.mjs`
 headers — the authority; don't restate it here.
 
@@ -432,7 +432,7 @@ of the numbered signals, in more detail:
      established incumbent demotes to a `(read unreliable this pass — <reason>)` note on the
      kept label (headline suppressed too) and is the label only on first sight. The app
      Trends/Watch surfaces keep the instantaneous verdict (they are not the fast-cadence
-     surface); with no watch loop running, `quote.mjs --positions` reads a stale/absent state
+     surface); with no watch loop running, `quote-items.mjs --positions` reads a stale/absent state
      file and honestly degrades to the instantaneous verdict. Pinned by
      `pipeline/test/verdictpersist.test.mjs`.
      **As of V7 the confirmation is WALL-CLOCK TIME, not a pass count** (`ALERT_PERSIST_MS`, 4-min
@@ -473,7 +473,7 @@ of the numbered signals, in more detail:
        still logs `UNDERWATER`/`CUT-CANDIDATE`/`LIST-TO-CLEAR`, honest) — the headline is gated here.
        **VN-2 render frame:** on both console surfaces a declared lot above its tripwire also RENDERS
        as the plan — `HOLD — per thesis (<path>): exit <declared exitPrice, or the diurnal ASK off the
-       in-hand 1h series on watch.mjs, else "exit per plan"> @ <window>h local · abort < <tripwire>` —
+       in-hand 1h series on watch-positions.mjs, else "exit per plan"> @ <window>h local · abort < <tripwire>` —
        via the shared display layer (`heldDisplay`), with the raw band-flip read demoted to the note.
        The frame exit is the DECLARED/diurnal level, never the 2h band top (the band top under-priced
        the diurnal exit — the 43.60m-vs-44.22m Masori leak). Declare it at entry:
@@ -484,7 +484,7 @@ of the numbered signals, in more detail:
        Ben makes — never a market claim; it silences a known-expected signal, never manufactures a new
        one. The store is TRACKED (`hold-thesis.json` at repo root, agent-written like the greenlist,
        14-day TTL); watch reads it READ-ONLY.
-       **Stale declared-exit auto-flag (Proposal C, 2026-07-12; `quote.mjs --positions` only).** A
+       **Stale declared-exit auto-flag (Proposal C, 2026-07-12; `quote-items.mjs --positions` only).** A
        declared exit is set once, off the peaks visible then — and can go stale on reach (the
        44.34m-Masori / 3.24m-Berserker miss: both were old-peak levels recent nights no longer print).
        On every `--positions` pass, a lot with a numeric declared `exitPrice` gets the exit scored
@@ -494,8 +494,8 @@ of the numbered signals, in more detail:
        (`STALE_EXIT_RECENT_FRAC`, PLACEHOLDER n≈0) → an INFORM note naming the recent reachable peak:
        `⚠ <item>: declared exit X looks STALE on reach — printed N/3 recent nights …; recent reachable
        peak ~Y`. It NEVER moves a quoted number, verdict, gate, or the break-even floor, and never
-       edits the thesis — Ben re-declares via `thesis.mjs` if he agrees. Honesty: touched ≠ filled,
-       ~14 nights is a small sample; thin history degrades to silence. watch.mjs does not run it yet.
+       edits the thesis — Ben re-declares via `declare-thesis.mjs` if he agrees. Honesty: touched ≠ filled,
+       ~14 nights is a small sample; thin history degrades to silence. watch-positions.mjs does not run it yet.
      The headline alert count reflects only **confirmed** escalations + the always-immediate
      breakdowns / UNDERWATER / FALLING / CANCEL-BID (an UNDERWATER/CUT-CANDIDATE/LIST-TO-CLEAR is
      suppressed only when a declared hold thesis silences it above the tripwire — TG1/VN-2). Armed
@@ -521,7 +521,7 @@ of the numbered signals, in more detail:
 5. **STRUCTURAL-SUPPORT line** (V2, OUTPUT-ONLY — nested under a held note), e.g.
    `support 17.59m · cut-trigger 17.50m (context — not a verdict)`. The recent higher-low that
    held (or the N-day floor) and a placeholder δ-below cut-trigger tripwire, off the per-day
-   lows watch.mjs already fetches for the window line (`lib/levels.mjs` — **no new fetch**).
+   lows watch-positions.mjs already fetches for the window line (`lib/levels.mjs` — **no new fetch**).
    The line itself is context (it names the level; `CUT_TRIGGER_DELTA` is an unvalidated
    placeholder), but as of **V4** a *convincing* break of this tripwire drives the arm-then-confirm
    structural-break alert in item 1 (`< cut-trigger`, or 2 consecutive passes below support).
@@ -568,7 +568,7 @@ longer formats it. What the agent still owns is the DECISION — where its call 
 the script's verdict (fresh-entry noise, window-not-open, a named override), it says so in a
 short note under the line ("script says CUT-CANDIDATE; holding — noise, tripwire 34.4m"). This
 resolves the old "two verdicts" failure mode without hand-layout: the `--brief` line is the raw
-read, the agent's note is the operative call, cleanly separated. Run the full `watch.mjs` (no
+read, the agent's note is the operative call, cleanly separated. Run the full `watch-positions.mjs` (no
 `--brief`) when a decision needs the verbose per-item notes (recovery-read, deltas, tripwire).
 
 The dot palette is emitted by `briefDot` and is the fixed contract below. The verbose
@@ -615,7 +615,7 @@ block format is for passes where something is held, alerted, or changed.
 ### Honest sell-side framing (read this before repricing a sell)
 
 **You cannot "stay ahead of a drop" by chasing your ask down — that is just selling cheaper.**
-`watch.mjs` never frames a sell-side move as out-running the market. A downward reprice is one
+`watch-positions.mjs` never frames a sell-side move as out-running the market. A downward reprice is one
 of exactly two things, and the tool says which:
 
 - **Downtrend (FALLING / breakdown)** → repricing down is **controlled loss-taking**: you're
@@ -647,13 +647,13 @@ pipeline + a scheduled session only, exactly like the monitoring routine above.
 1. **POSITION** — a held position's verdict escalates to **CUT / CUT-CANDIDATE**, or
    **Momentum hits `↓↓`** (a *strong* 2h breakdown — `mom==='breakdown'` and the pre-clamp
    overshoot ≥ `MOM_STRONG_PCT`) on a held item. The verdict comes from the **shared
-   `momVerdict()` gate tree** in `js/quotecore.js` — byte-identical to `quote.mjs
+   `momVerdict()` gate tree** in `js/quotecore.js` — byte-identical to `quote-items.mjs
    --positions` and the app's position review, never re-derived. No new prediction logic:
    an alert fires on the *same* gate-tree evidence a CUT prints on. The falling-regime +
    underwater CUT (the 0.20.0 clear rule, which `momVerdict` returns `null` for and
-   `quote.mjs`'s wrapper labels) is included as a fourth escalation path.
+   `quote-items.mjs`'s wrapper labels) is included as a fourth escalation path.
 2. **FILL** — a resting GE offer **filled/completed**, read from the exchange log via
-   `offers.mjs`/`readExchangeLog()` (the same source `monitor.mjs` uses). Each terminal
+   `offers.mjs`/`readExchangeLog()` (the same source `monitor-offers.mjs` uses). Each terminal
    `BOUGHT`/`SOLD` line in the last `FILL_WINDOW_MIN` is a distinct event.
 3. **PRICE** — a live price crosses an **explicit named alert** ("tell me if X breaks Y"),
    read from the tracked repo-root **`alerts.json`**. Basis is the live mid
@@ -673,7 +673,7 @@ Structured output: each alert is **one JSON line + one human line on stdout**; d
 to **stderr**, so **empty stdout literally means nothing fired** (the delivery session keys
 off that). `--dry-run` detects + emits without writing state (for testing / previewing).
 
-### Named constants (tune in `alerts.mjs`, never inline)
+### Named constants (tune in `trigger-alerts.mjs`, never inline)
 
 - `ALERT_COOLDOWN_MIN = 60` — a POSITION or PRICE alert for the same (class, item) won't
   re-fire within this window even if the state oscillates (anti-flap). A genuine new
@@ -726,5 +726,5 @@ recommended order:
   (class 2) — only the market-fetch classes would work. Named for completeness; not intended.
 
 **Status: option (a) is to be trialed live before any delivery mechanism is committed.** The
-engine (`alerts.mjs`) is delivery-agnostic on purpose so the trial needs no engine changes,
+engine (`trigger-alerts.mjs`) is delivery-agnostic on purpose so the trial needs no engine changes,
 and switching to (b)/(c) later is a change of *who runs it*, not *what it computes*.

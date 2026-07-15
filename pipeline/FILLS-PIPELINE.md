@@ -174,9 +174,9 @@ positions.json`). No file moves ⇒ **no Task Scheduler re-registration needed**
 }
 ```
 
-Reconstruction (in `reconstruct.mjs`, called by `sync-fills.mjs` and `monitor.mjs`),
+Reconstruction (in `reconstruct.mjs`, called by `sync-fills.mjs` and `monitor-offers.mjs`),
 deliberate — don't undo casually. **REMOVE tombstones apply on BOTH paths:** `sync-fills.mjs`
-folds them into the merged `fills.json`+archive set (below), and `monitor.mjs` folds them into its
+folds them into the merged `fills.json`+archive set (below), and `monitor-offers.mjs` folds them into its
 in-memory live-log book via the shared `buildTombstonedEvents()` (ARCH-1, 2026-07-10) — so both
 answer "what do I hold?" the same way and a purged lot never reappears as a phantom monitor hold
 (the class of same-number-two-ways bug the shared reconstruction exists to kill):
@@ -235,7 +235,7 @@ logs, written by `add-manual-fill.mjs`, the app's linked file handle (`js/fillsl
 > auto-populate + M1's 0.39.0 Refresh-positions button), FIFO buy↔sell pairing lives in the
 > pipeline's `reconstruct.mjs` (not re-done in the browser), and the Ledger auto-populates
 > from `positions.json`. Items 4–6 (intent capture, calibration surfaces, skipped-signal
-> scoring) are the O1→F1 line — O1's `suggestions.jsonl` + `outcomes.mjs` now capture intent
+> scoring) are the O1→F1 line — O1's `suggestions.jsonl` + `join-outcomes.mjs` now capture intent
 > and market context (§11); the calibration surfaces open when F1's sample gate clears. The
 > list below is the original ordering, kept for context.
 
@@ -378,7 +378,7 @@ detail is authoritative there; the operational rules below are the single home.
   is dropped LOUDLY at ingest by `validateSlotTransitions()` (LH1) so it never becomes a merged event,
   with `dedupeSnapshots()` as the derivation backstop for any already-persisted duplicate (see the
   "Duplicate terminal lines" subsection below); (2) **restart display-blindness** — after a client
-  restart the plugin re-emits nothing, so `monitor.mjs`/`watch.mjs` can read live offers as missing;
+  restart the plugin re-emits nothing, so `monitor-offers.mjs`/`watch-positions.mjs` can read live offers as missing;
   that is a *display* artifact (not a reconstruction one) surfaced by the LH2 "log may be blind"
   header line. Beyond those, fixing or removing a source log line does NOT by itself purge an
   already-merged event; append a `REMOVE` tombstone line (the chunk-1 vocabulary, confirmed working)
@@ -412,12 +412,12 @@ slot is a state machine and cannot close twice with no offer placed between.
 
 **Two layers, since LH1 (2026-07-05):**
 - **`validateSlotTransitions()` — the LOUD INGEST validator** (`reconstruct.mjs`, called next to
-  `buildEvents()` in `sync-fills.mjs` `regenerate()` and in `monitor.mjs`, BEFORE the `fills.json`
+  `buildEvents()` in `sync-fills.mjs` `regenerate()` and in `monitor-offers.mjs`, BEFORE the `fills.json`
   merge). Drops the identical re-emit, `console.warn`s per drop (with item/qty/price/slot + the prior
   terminal's ts) and a dropped-count in the attended sync summary, and — because it runs pre-merge —
   a FRESH re-emit **never enters `fills.json`**. Conservative: manual slots 8/9 are exempt; a same-slot
   double-terminal that DIFFERS in any field warns but is KEPT (fail toward preserving data). The loud
-  warnings are gated to the attended sync (`warn:false` in the `--local`/`watch-log.mjs`/`monitor.mjs`
+  warnings are gated to the attended sync (`warn:false` in the `--local`/`watch-log.mjs`/`monitor-offers.mjs`
   callers, which re-read the whole log every run and would otherwise re-print months-old re-emits every
   tick). Fixtures in `pipeline/test/validateslots.test.mjs`.
 - **`dedupeSnapshots()` — the SILENT DERIVATION backstop** (inside `reconstruct()`). Catches the same
@@ -437,7 +437,7 @@ derivation backstop and is cleaned out of the archive on any re-sync where the p
 survives ingest. The old **interim manual procedure** — scan after each session for same-item/
 same-price terminal pairs minutes apart and tombstone the later one with `add-manual-fill.mjs
 --remove <eventId>` — is **no longer needed** for this class. (`REMOVE` tombstones remain the
-correction mechanism for genuine mislogged events — see §5.1.) Note: `outcomes.mjs` calls
+correction mechanism for genuine mislogged events — see §5.1.) Note: `join-outcomes.mjs` calls
 `collapseOffers`/`matchTrades` directly (not through `reconstruct()` or the ingest validator), so its
 campaign boundaries do not yet get this dedupe — tracked as a Discovered followup in PLAN.md.
 
@@ -448,26 +448,26 @@ placement*, so every offer's full story is recoverable and F1 (algorithm feedbac
 query rather than a re-derivation. Three pieces:
 
 ### 11.1 `suggestions.jsonl` — the suggestions ledger (TRACKED, append-only)
-Repo-root, committed. `quote.mjs` (per-item **and** `--positions`), `screen.mjs` (each rated
-niche row), and `watch.mjs` (each held/target read) append every emitted recommendation **at
+Repo-root, committed. `quote-items.mjs` (per-item **and** `--positions`), `screen-flip-niches.mjs` (each rated
+niche row), and `watch-positions.mjs` (each held/target read) append every emitted recommendation **at
 emit time, unconditionally**, via the shared `pipeline/lib/suggestlog.mjs`. One JSON object per line:
 ```
 { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict, volSrc?, grade?, depth? }
 ```
 `ts` = unix seconds. `class` = the item-type/liquidity label **as computed then** (the logic
 evolves; recomputing later would rewrite history, so it is snapshotted — coarse `liqClass()` for
-quote/screen, `watch.mjs`'s richer `classify()` taxonomy for watch). `verdict` = the emitted
+quote/screen, `watch-positions.mjs`'s richer `classify()` taxonomy for watch). `verdict` = the emitted
 action string where the script produces one (position verdict / grade / watch action), else null.
 **`grade` (AZ-forward 2026-07-12, lean-included):** the rating LETTER as rendered then (`'S+'…'D'`,
-incl. any thin/sub-floor cap) — only `screen.mjs` computes one, so quote/watch rows omit it; absent on
+incl. any thin/sub-floor cap) — only `screen-flip-niches.mjs` computes one, so quote/watch rows omit it; absent on
 all older rows (consumers treat absent as unknown). **`depth` (AZ-forward 2026-07-12, lean-included):**
 `{hpv, lpv}` off `computeQuote`'s `row.pressure` — the realized trailing-24h two-sided flow at emit, a
 FLOW PROXY not an order book (cite with the pressure derivation's shortcomings); the live SPREAD
 snapshot is already `quickSell − quickBuy` on every row, deliberately not duplicated. The full
 lean-field inventory lives in the `suggestlog.mjs` header (the ONE schema home).
 **`volSrc` (SF-3 — `'bulk'` | `'peritem'`, lean-included):** WHICH `/24h` endpoint the volume behind
-`class` came from — `screen.mjs` reads the whole-market bulk `/24h` (`loadAll24h`/`all24h.json`) so it
-always logs `'bulk'`; `quote.mjs` fetches per-item `/24h`, but when a recent scan left `all24h.json`
+`class` came from — `screen-flip-niches.mjs` reads the whole-market bulk `/24h` (`loadAll24h`/`all24h.json`) so it
+always logs `'bulk'`; `quote-items.mjs` fetches per-item `/24h`, but when a recent scan left `all24h.json`
 WARM (within its 10-min TTL) it reuses that bulk volume for `class` (a fetch-free file read via
 `loadAll24hWarm`, NEVER forcing the ~4000-item bulk dump for a 1-item ask) and logs `'bulk'` too —
 converging with screen; a cold quote keeps its per-item volume and logs `'peritem'`. The point: the two
@@ -475,10 +475,10 @@ scripts sample `/24h` at different instants, so the same item could log a DIFFER
 (the polluted quantity is `volDay = min(hpv,lpv)` itself; re-deriving from the stored `volDay` doesn't
 launder it). `volSrc` lets F1 bucket/normalize the two sources; the warm read converges them for free
 when the data is on disk. Decided by the pure `classAndSource(row, id, warmBulkMap)` in
-`suggestlog.mjs`; `watch.mjs` supplies no `volSrc` (its `classify()` label isn't a `volDay` class) so
+`suggestlog.mjs`; `watch-positions.mjs` supplies no `volSrc` (its `classify()` label isn't a `volDay` class) so
 its rows stay byte-identical. Pinned by `pipeline/test/sf3-volsrc.test.mjs`.
 No PII — ids/prices/timestamps only (the repo is public). `sync-fills.mjs`'s commit set now
-includes it when present (same add-only-these-files discipline as `screen.json`). NB: `watch.mjs`
+includes it when present (same add-only-these-files discipline as `screen.json`). NB: `watch-positions.mjs`
 is still read-only w.r.t. the market/positions — this analytics append is the sole exception, and
 its header guardrail says so.
 
@@ -490,7 +490,7 @@ Rotation NEVER drops a row — it writes each archive fully (existing ∪ new, d
 *before* truncating the active file, so a crash mid-rotation leaves the rows in the active file and
 a re-run re-archives them idempotently. Unparseable / ts-less lines stay in the active file, never
 discarded. The rows are F1's calibration data: **archived, never deleted.** Any full-history reader
-MUST read active + archives via `readSuggestionLines` — `outcomes.mjs`'s F1 join does — since after
+MUST read active + archives via `readSuggestionLines` — `join-outcomes.mjs`'s F1 join does — since after
 the first rotation the active file holds only the current month. `sync-fills.mjs` commits the
 `pipeline/suggestions-archive/` dir alongside `suggestions.jsonl`. The active-ledger path stays
 pinned to the repo root by `pipeline/test/suggestlog.test.mjs` (only history relocates).

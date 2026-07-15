@@ -56,7 +56,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Skip despite high grade | KEEP-AS-JUDGMENT | Grade cutoffs are placeholders (`pipeline/lib/rating.mjs`). |
 | Lane management — scale/rotate | KEEP-AS-JUDGMENT | Exposure call. |
 | Peak-throughput sizing — one-window vs multi-day | KEEP-AS-JUDGMENT | Labeling discipline. |
-| Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen.mjs`/`quote.mjs`); `quote.mjs` regime line shows bought/left/next-frees; `node pipeline/commands/read-buy-limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
+| Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen-flip-niches.mjs`/`quote-items.mjs`); `quote-items.mjs` regime line shows bought/left/next-frees; `node pipeline/commands/read-buy-limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
 | Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/commands/read-window-range.mjs`; the "proven lane" call is judgment. |
 | Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/flip-niches.mjs`; watchlist section + Note in `pipeline/commands/screen-flip-niches.mjs` (S3); columns pinned in `js/quotecore.js`. |
 | Cover every niche each pass | KEEP-AS-JUDGMENT | Output-coverage discipline (memory `salient-subtask-crowds-out-mandate`). |
@@ -69,7 +69,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
 | Run the script / sync-first (SY1, SY1.2) / stale-book banner | ENCODE | `pipeline/commands/quote-items.mjs --positions`, `pipeline/commands/sync-fills.mjs`, `pipeline/commands/watch-positions.mjs` banner. |
-| Reading watch.mjs per-held note block (V5 EMIT CONTRACT) | ENCODE | `pipeline/lib/emit.mjs` `heldNoteBlock()`; the block shape is the code's, the doc points at it (see MONITORING.md). |
+| Reading watch-positions.mjs per-held note block (V5 EMIT CONTRACT) | ENCODE | `pipeline/lib/emit.mjs` `heldNoteBlock()`; the block shape is the code's, the doc points at it (see MONITORING.md). |
 | Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/item-context.mjs`); the skill translates them to actions (judgment). |
 | Sell-velocity / HOLD-band-top step-down / rising-item no-underprice / decaying-band-top / trajectory read / entry-age / override-discipline / cut-and-rebid friction / tripwire conviction / limit-blocked CROSSING / fill-progress | KEEP-AS-JUDGMENT | The interpretation layer over the verdicts; several have coded support (`convictionGate` in `lib/watchstate.mjs` for tripwire-conviction; `breakEven()` floor in `js/quotecore.js`), but the step-down/hold taste is the LLM's. |
 | Verify SELL leg before quoting profit (MANDATORY) | KEEP-AS-JUDGMENT | Same ENCODE-candidate as /scan's — `reachValidator` blocked on ts1h fetch. |
@@ -118,10 +118,10 @@ skill); those are effectively already ENCODE-or-relocated and just need to stay 
 | stale-branch-delete-ok | KEEP-AS-JUDGMENT | Process rule; lives in CLAUDE.md process rule 9 too. |
 | arrows-on-hold-pending-update | KEEP-AS-JUDGMENT | TEMPORARY veto; retire once arrows settle post-update (Ben re-evaluates). |
 | buy-limit-caps-every-size | ENCODE | LM1 (2026-07-09): `limitValidator` (`js/validate.mjs`) off `limitWindow` (`pipeline/lib/limits.mjs`) disqualifies an over-limit buy on every suggesting surface; `pipeline/commands/read-buy-limits.mjs` CLI is the direct read. The multi-window-accumulation framing stays judgment. |
-| peak-timing-default-for-pricing | KEEP-AS-JUDGMENT | Method over `windowrange.mjs`; "encode into skills later" — now in `/scan`+`/overnight` timing-target rules. |
+| peak-timing-default-for-pricing | KEEP-AS-JUDGMENT | Method over `read-window-range.mjs`; "encode into skills later" — now in `/scan`+`/overnight` timing-target rules. |
 | pricing-ok-on-ignored-items | ENCODE (partial) | `ignored-items.json` + `pipeline/lib/ignored.mjs` implement the view-filter; "pricing OK" is the judgment. |
 | gather-before-recommending | KEEP-AS-JUDGMENT | Core discipline; no code gate. |
-| size-scales-diligence | KEEP-AS-JUDGMENT | Diligence trigger; the trajectory read is `windowrange.mjs`. |
+| size-scales-diligence | KEEP-AS-JUDGMENT | Diligence trigger; the trajectory read is `read-window-range.mjs`. |
 | trend-check-overrides-24h-drift | KEEP (pointer) | Already `→ /scan`. |
 | two-sided-liquidity-gate | KEEP (pointer) | Already `→ /scan`; gate coded in `gatecandidates.mjs`. |
 | banded-liquid-item-beats-stable | KEEP (pointer) | Already `→ /scan`. |

@@ -77,7 +77,7 @@ NOW and runs **weekly** — calibration (F1) stays gated. Run this section once 
 week**. The "did it already run this week?" question is now a MECHANICAL check, not "ask Ben if
 unsure": run `node pipeline/commands/join-outcomes.mjs --weekly-due` (a cheap standalone check — no rebuild).
 It prints `weekly-due: yes` (run the section below) or `weekly-due: no` (skip it — a `--report`
-this week already stamped `.cache/last-weekly-report`). Running this section's `outcomes.mjs --report`
+this week already stamped `.cache/last-weekly-report`). Running this section's `join-outcomes.mjs --report`
 re-stamps the marker, so the next `--weekly-due` reads `no` for the rest of the week. Every
 other morning, this check reads `no` — skip straight past this section.
 
@@ -86,10 +86,10 @@ other morning, this check reads `no` — skip straight past this section.
    liquidity class with **n per cell**, plus the F1-gate progress line and the
    concentration line (top item's share of closed lots / realised P/L).
 2. A **realized-P/L attribution** read over `positions.json` `closed` lots (and
-   `outcomes.mjs`'s realised sell campaigns): per-item realised net after tax, **win rate**
+   `join-outcomes.mjs`'s realised sell campaigns): per-item realised net after tax, **win rate**
    (share of closed lots in profit), **hold-time distribution** (buy→sell), and
    **realized-vs-suggested capture** (booked net vs what the nearest-prior suggestion's
-   band edges implied — the suggestion join `outcomes.mjs` already computes).
+   band edges implied — the suggestion join `join-outcomes.mjs` already computes).
 
 **Honesty rules (process rule 4 — descriptive ≠ calibration):**
 - **Print n for every cut you report** _(enforced: `pipeline/commands/join-outcomes.mjs` `--report` suppresses cells under `MIN_N_REPORT`)_ and **refuse per-cell conclusions below the O1

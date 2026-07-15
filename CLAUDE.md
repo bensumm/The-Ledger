@@ -14,7 +14,7 @@ push to `main`).
   inventory is `README.md`** ("Files" + "Map of the repo") — the ONE registry; don't duplicate it
   here. Why it's split out of the old single `index.html`, and how localhost differs (the
   LW2/LW3/LW4 live desk — incl. the Scan tab's LOCAL "Refresh scan" that runs a real
-  `screen.mjs --publish` via `pipeline/commands/dev-server.mjs`'s `POST /api/scan`, zero git): `docs/LORE.md`.
+  `screen-flip-niches.mjs --publish` via `pipeline/commands/dev-server.mjs`'s `POST /api/scan`, zero git): `docs/LORE.md`.
   Local testing needs `serve.cmd` (ES modules don't load over
   `file://`); see README "Local development".
 - **Fill-data pipeline**: closes the loop between the tool's suggestions and real GE trades,
@@ -68,9 +68,9 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   instasell, sell at live instabuy). Optimistic = patient 2h-band edges (last 24×5m points), Bar-E
   ROBUSTIFIED (robust p10 low / p90 high on a dense side, raw extremum on a sparse one — see the Bar E
   bullet below; the momentum tell keeps the true min/max). Mid is dropped from the table (redundant next to Guide + the live prices;
-  the row model still exposes `row.mid` for `rating.mjs`/`watch.mjs`).
+  the row model still exposes `row.mid` for `rating.mjs`/`watch-positions.mjs`).
   - **CONSOLE default = `Est. buy`/`Est. sell` (PLAN-OUTPUT-TABLE, 2026-07-13 + REVISIONS same day).** On
-    `screen.mjs`'s flip-niche tables + `quote.mjs`'s per-item read, the STDOUT default REPLACES Quick+Optimistic
+    `screen-flip-niches.mjs`'s flip-niche tables + `quote-items.mjs`'s per-item read, the STDOUT default REPLACES Quick+Optimistic
     with the reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators.mjs`
     `estimatePair` — the encoded by-hand Optimistic ∩ diurnal ∩ reach ∩ ⚓-anchor ∩ BE-floor synthesis):
     - **`Est. buy` is STRATEGY-AWARE** (`entryDoctrine(spec)`, off the existing spec fields): **scalp**
@@ -108,7 +108,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
       / `SIZE_ZERO` 0.10) is unchanged and correctly makes a normal buy-limit position ≪ corrected flow (size
       factor ~1) while a genuinely large position (≥10% of flow) still gets relief 0 — verified live (Dragon
       arrow 2.03m/d @ 0.5% of flow → 75% softening; Opal bolts 115k/d @ 9.5% of flow → 0%, size governs).
-      `quote.mjs` + `watch.mjs` now ALSO read corrected per-item volume (PLAN-VOL24, 2026-07-13:
+      `quote-items.mjs` + `watch-positions.mjs` now ALSO read corrected per-item volume (PLAN-VOL24, 2026-07-13:
       `vol24FromInputs` composes the true rolling-24h from the in-hand `ts1h` → reach-relief fires there too),
       so every node surface is corrected; only the browser app still reads the broken `/24h` (step 3).
       Still labeled PLACEHOLDER (n=1, the soul-rune anchor); F1 owns the magnitudes, and the
@@ -119,7 +119,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
       (`0/3 · 12/14` = stale); `–` = no read.
     - **`--raw` restores the model-free Quick/Optimistic columns** (`--asym` implies `--raw`). CONSOLE-ONLY:
       `screen.json`/the app render the unchanged T1 cells (byte-identical publish, no `APP_VERSION` bump);
-      held-lot surfaces (`quote --positions`, watch.mjs) are INTENT-DIFFERENT and KEEP Quick as the
+      held-lot surfaces (`quote --positions`, watch-positions.mjs) are INTENT-DIFFERENT and KEEP Quick as the
       clear-price. PLACEHOLDER model (`EST_REACH_SAT_FRAC`, equal-weight blend, per-strategy placements;
       n≈3–14) — lean `estBuy`/`estSell`/`estConfidence` (recent-3 + full counts, doctrine, declared/BE
       flags) shadow fields ride `suggestions.jsonl` for the F1 retro calibration.
@@ -138,8 +138,8 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   UTC day (its `timestamp` lags ~26h), under-reporting the true rolling 24h by ~10–27× — worst in early/mid-
   UTC hours (Ben's US-afternoon sessions).** A CORRECTED trailing-24h source composed from the healthy `/1h`
   grain (`marketfetch.mjs` `loadAll24hRolling` / `rolling24FromTs1h`, proven exact) is now the DEFAULT that
-  `screen.mjs` gates/ranks/displays off (PLAN-VOL24 step 2, Ben-validated 2026-07-13); `--vol-source legacy`
-  restores the broken `/24h` value (escape hatch / pre-recal repro). **`quote.mjs` + `watch.mjs` read corrected
+  `screen-flip-niches.mjs` gates/ranks/displays off (PLAN-VOL24 step 2, Ben-validated 2026-07-13); `--vol-source legacy`
+  restores the broken `/24h` value (escape hatch / pre-recal repro). **`quote-items.mjs` + `watch-positions.mjs` read corrected
   per-item volume too** (`vol24FromInputs` composes the rolling-24h from the in-hand `ts1h` → real Vol/d,
   pressure, and the 24h avg-low dip reference; degrades to the `/24h` read only when the 1h series is too
   short). **Every volume-denominated floor was
@@ -177,8 +177,8 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   - **Ask-headroom signal (PLAN Bar-E-signal, Ben 2026-07-11) — the raw residue is now SURFACED, not just
     audited.** When the robust p90 shaved a TRADED in-band top off the quoted Optimistic ask
     (`rawBandHi > optSell`, a DENSE side, not a breakup), `computeQuote` emits an **inform-only**
-    `row.askHeadroom` (`⤴ ask headroom` note on `quote.mjs`/`screen.mjs` + a held-lot sibling line on
-    `quote.mjs --positions`; a breakup — the incident's own case — has no new number, its upside IS the
+    `row.askHeadroom` (`⤴ ask headroom` note on `quote-items.mjs`/`screen-flip-niches.mjs` + a held-lot sibling line on
+    `quote-items.mjs --positions`; a breakup — the incident's own case — has no new number, its upside IS the
     existing `mom='breakup'` tell re-voiced as ladder guidance). It says "ladder the ask up, don't relist
     down" (cheap under the GE better-price rule); it **NEVER moves a quoted number, gates, drops, or
     grades** — the robust band still sets every price, so Bar E's thin-flier protection and the value-flip-niche
@@ -203,7 +203,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     degrades to legacy. `expGpDay`/`expGpDayLegacy` ride `suggestions.jsonl` as a shadow pair for F1.
     Node-only (the app Finder passes no capital) → no `APP_VERSION` bump. At 77m it's a NO-OP on
     surfacing (capital doesn't bind liquid churn — the buy limit does), so `MIN_GPD` stays 500k.
-- Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen.mjs` folds a
+- Net/u is after 2% tax. Regime = multi-day `regimeDrift` (flat/rising/falling); `screen-flip-niches.mjs` folds a
   **phase tag** (`spike`/`decay`/`basing`, from shared `phase()`, zero extra fetch) into the Regime
   cell — display-only, NOT a gate, pipeline-only. `--phase-rescue` (OFF by default) is an opt-in
   base-buy trial (grade-capped B, unvalidated placeholders). Full method: `/positions`, `/scan`.
@@ -220,8 +220,8 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
 - **WINDOW-CLEAR: days-reach ≠ within-window clear (PLAN-WINDOW-CLEAR B1/B2).** `js/windowread.mjs`
   `windowClear(series1h, {ask, units, wStart, wEnd})` reads whether a quoted ask actually PRINTS inside its
   diurnal peak window (window-reach, the within-window twin of `reachedDays`) + the window's absorption
-  pool/`clearRatio` — off the SAME in-hand 1h series (zero new fetch). `screen.mjs` (churn/scalp rows) +
-  `quote.mjs` fire an INFORM-ONLY `ℹ window-clear` note when the ask reaches on DAYS but rarely IN its peak
+  pool/`clearRatio` — off the SAME in-hand 1h series (zero new fetch). `screen-flip-niches.mjs` (churn/scalp rows) +
+  `quote-items.mjs` fire an INFORM-ONLY `ℹ window-clear` note when the ask reaches on DAYS but rarely IN its peak
   window (the days-reach ≠ lap-clear trap); `windowClearDiverges` is the predicate. NOTE fires on the
   window-reach leg only — the `sizeShort`/`clearRatio` leg is shadow-only for now (a narrow peak window
   mis-reads size on a continuously-clearing churn lap; F1 open question). Never a gate/drop/grade/
@@ -246,11 +246,11 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   is path-aware — a bid declared under a scalp/value-hold thesis no longer CANCEL-BIDs off the falling
   regime alone, only its own tripwire (scalp: a live 2h breakdown; value-hold: a floor break).
   Exception (for the EXCLUDE flip-niches): items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
-  guidance. `screen.mjs` appends a **Watchlist** section (from tracked repo-root `watchlist.json`)
+  guidance. `screen-flip-niches.mjs` appends a **Watchlist** section (from tracked repo-root `watchlist.json`)
   quoting every watchlisted item as a full standard row — exempt from every floor/gate, graded, with
   the reason a gate *would* have hidden it as a Note (below-floor / thin / one-sided / falling).
   Falling watchlist items ARE shown there, with the falling warning.
-- Screens: `screen.mjs` prints one table per flip-niche, adding a Grade + a per-thesis `Rank net·P/ttf`
+- Screens: `screen-flip-niches.mjs` prints one table per flip-niche, adding a Grade + a per-thesis `Rank net·P/ttf`
   column to the canonical layout (P6b — Ben 2026-07-09: gp/d is OUT as the ranking metric; rank =
   `net after tax × P(fill at the quoted pair) ÷ TTF` from `pipeline/lib/estimators.mjs`, evaluated at
   the ONE price pair the thesis posts. `expGpDay` survives ONLY as the cheap pre-fetch pool orderer +
@@ -262,7 +262,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   fortnight demotes but never zeroes; the ask reach is the SAME inform-mode `reachValidator` number already in
   hand — zero new fetch). Paired with a **`REACH_GRADE_CAP`** (`js/rating.mjs`, mirrors `THIN_GRADE_CAP`):
   a quoted ask reaching < `REACH_GRADE_CAP_FRAC` of days caps the LETTER so it can't oversell either. Both are
-  render-stage in `screen.mjs` (the app Finder passes no `askReach` → byte-identical → no `APP_VERSION` bump;
+  render-stage in `screen-flip-niches.mjs` (the app Finder passes no `askReach` → byte-identical → no `APP_VERSION` bump;
   replay goldens unaffected). PLACEHOLDER constants (n≈14), F1/retro-join calibrates the magnitudes;
   promoting `reach` inform→gate (Proposal C) is HELD for F1. This is Proposals A+B of `PLAN-GRADE-REACH.md`.
   (`askReachFactor` also accepts an optional `reachRelief` arg — PLAN-LIQUIDITY-REACH's liquidity/size
@@ -275,11 +275,11 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   **Asymmetric fill shape — Part II of PLAN-GRADE-REACH (Ben 2026-07-12: "I'd much rather hit a 2/14 buy
   and a 12/14 sell than 50/50 both sides").** The ideal flip is a RARE DEEP entry + a NEAR-CERTAIN exit;
   the symmetric p10/p90 band pair is structurally 50/50. SHIPPED (safe reframing): an inform-only
-  `◆ asym fill` line on `screen.mjs` (band) + `quote.mjs` — the day-level deep-bid → high-reach-ask pair
+  `◆ asym fill` line on `screen-flip-niches.mjs` (band) + `quote-items.mjs` — the day-level deep-bid → high-reach-ask pair
   (`asymPair`, `js/windowread.mjs`, off the in-hand 1h series — zero new fetch) with `P_ask` (the rank
   weight) and `P_bid` rendered as "rest as optionality" (NEVER a rank multiplier — the doctrine home is
   the `asymEstimate` header, `js/estimators.mjs`); plus a lean `asym` shadow field on `suggestions.jsonl`
-  beside the symmetric rank (the F1 A/B accrual). WIRED-OFF (F1-gated): `screen.mjs --asym` flips the
+  beside the symmetric rank (the F1 A/B accrual). WIRED-OFF (F1-gated): `screen-flip-niches.mjs --asym` flips the
   quoted prices + sort to the asymmetric objective — OFF by default, refuses `--publish`, quantiles
   (`ASYM_P_LO`/`ASYM_P_HI`) are n≈14 PLACEHOLDERS. Never touches the raw momentum tell, the ordering
   invariant (min/max guards), break-even, or the value q15/q85 twin; render-stage only (goldens hold).
@@ -295,12 +295,12 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   `--min-roi` (band shows those), so the two tables are DISJOINT by margin, zero loss. Render-stage +
   `--mode-all`-only; standalone `--mode churn` is unpartitioned.
 - **Time-of-day context on every price recommendation (Ben, 2026-07-05).** Whenever a specific buy/sell
-  price is suggested, run a `windowrange.mjs` read for the relevant local-hours window and read the level
+  price is suggested, run a `read-window-range.mjs` read for the relevant local-hours window and read the level
   against the last ~14 same-window lows/highs (the NARROW-WINDOW *timing* check — "touched ≠ filled",
   ~14d is a small sample, it shifts a price a few ticks, never overrides band/regime). For a marginal/
   big-ticket hold-or-cut, the FULL-DAY multi-week *trajectory* read (`--window 0-23 --nights 21`,
   phase-mapped) is the distinct confidence tool — see `/positions` "trajectory read for confidence".
-  - **The DIURNAL PROFILE now auto-derives this (2026-07-09).** `screen.mjs` runs an hour-of-day
+  - **The DIURNAL PROFILE now auto-derives this (2026-07-09).** `screen-flip-niches.mjs` runs an hour-of-day
     `hourProfile` + `deriveDiurnalRange` (shared `js/windowread.mjs`) on EVERY surfaced pick off the
     already-in-hand 1h series (zero extra fetch) and prints a **Diurnal timing** support block: the
     stale-guarded BID (the recent DIP-window level, priced to LIVE when a dominating multi-day trend
@@ -308,8 +308,8 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     tax swing; a clean read (concentrated dip+peak, trend-quiet, positive after-tax ≥ min-ROI) is starred
     `★` as a **diurnal candidate**. The SHAPE is de-trended (each hour's deviation from its own day's
     baseline) so the trend can't fool the dip/peak detection; each side clusters off its OWN deviation
-    spread. `windowrange.mjs --profile` prints the full hour-by-hour table + the derived range for one
-    item, and **`quote.mjs`'s per-item read now prints the same diurnal BID/ASK line** (COD-4 — the
+    spread. `read-window-range.mjs --profile` prints the full hour-by-hour table + the derived range for one
+    item, and **`quote-items.mjs`'s per-item read now prints the same diurnal BID/ASK line** (COD-4 — the
     budgeted `ts1h` fetch put the series in hand there too). This is the ENCODED form of the manual per-item windowrange dance — read the block first; the
     manual `--window`/`--profile` read is now a CONFIRMATION on what you actually pitch (thresholds are
     placeholders; ★ doesn't know froth, so a spike item's amplitude can flatter it — support, not a gate).
@@ -353,15 +353,15 @@ deliberate):**
 | "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<flip-niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/commands/screen-flip-niches.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip pool line) |
 | "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/commands/quote-items.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
-| "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
+| "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor-offers.mjs` + re-verdict stale bids |
 | "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/commands/watch-positions.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
-| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/commands/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch.mjs` + `screen.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/commands/run-loop.mjs --watch 30 --scan 15`) |
+| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/commands/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch-positions.mjs` + `screen-flip-niches.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/commands/run-loop.mjs --watch 30 --scan 15`) |
 | "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/commands/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/commands/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
 | "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/commands/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 
 Script facts the skills rely on (current behavior, not doctrine):
-- `quote.mjs` takes multiple items in one call; prints one combined table + a regime line
+- `quote-items.mjs` takes multiple items in one call; prints one combined table + a regime line
   per item that includes the **buy limit** (`· buy limit N/4h`; **LM1**: when `fills.json` shows
   logged buys inside the rolling 4h window it appends `(bought X this window — Y left, next frees
   ~HH:MM)`, local time — zero in-window buys ⇒ byte-identical to before), the **buy/sell pressure**
@@ -369,25 +369,25 @@ Script facts the skills rely on (current behavior, not doctrine):
   off the SAME /24h fetch; display-only, never a gate/verdict input; a flow proxy, NOT an order
   book — cite it with the shortcomings documented at the derivation in `js/quotecore.js`
   `computeQuote`; the Momentum column stays the LIVE directional tell), and a `⚠ feed inversion`
-  footnote when the quote basis is unreliable. watch.mjs held/bid/target note lines carry the
+  footnote when the quote basis is unreliable. watch-positions.mjs held/bid/target note lines carry the
   same pressure token in compact form.
-- `quote.mjs --positions` adds Held@/Break-even/Verdict columns; the verdict vocabulary is
+- `quote-items.mjs --positions` adds Held@/Break-even/Verdict columns; the verdict vocabulary is
   the PLAN-3 gate tree (`MONITORING.md` step 4, emitted by the shared `momVerdict()`):
   NO-READ / DIURNAL-WATCH / SHOCK-WATCH / CUT / LIST-TO-CLEAR / HOLD / CUT-CANDIDATE, plus the
   V3 Gate-D softenings WATCH — fresh entry (fresh lot) / HOLD — ask filling (own ask filling
   above the clear). **VN-1 (2026-07-11): the RENDERED verdict label on both console surfaces
-  (this table + watch.mjs's) is persistence-gated** — escalations (CUT-CANDIDATE/LIST-TO-CLEAR)
+  (this table + watch-positions.mjs's) is persistence-gated** — escalations (CUT-CANDIDATE/LIST-TO-CLEAR)
   arm-then-confirm before the label changes, the Gate-2 breakdown CUT is always immediate, and a
   NO-READ against an established incumbent demotes to a `(read unreliable this pass)` note
   (`verdictPersistence`/`heldDisplay`; MONITORING.md step 4 is the home; the raw `momVerdict` is
   untouched and stays what the ledger logs). **VN-2: a DECLARED hold plan
-  (`thesis.mjs set … --tripwire --exit --window --path`, hold-thesis.json) renders above its
+  (`declare-thesis.mjs set … --tripwire --exit --window --path`, hold-thesis.json) renders above its
   tripwire as the `HOLD — per thesis: exit <declared/diurnal> · abort < <tripwire>` frame** — the
   exit is the declared/diurnal level, never the 2h band top — and the TG1 headline silence now
   covers LIST-TO-CLEAR too (the expected pre-peak trough); Gate-2 CUT overrides everything. A
   declared exit gone STALE on reach (printed < 2/3 of recent nights — Proposal C 2026-07-12,
   `pipeline/lib/staleexit.mjs` off the windowread reach machinery, targeted TTL-cached 1h fetch)
-  gets an INFORM-ONLY `⚠ declared exit … looks STALE` note on `quote.mjs --positions` naming the
+  gets an INFORM-ONLY `⚠ declared exit … looks STALE` note on `quote-items.mjs --positions` naming the
   recent reachable peak — never a verdict/gate/price input; PLACEHOLDER threshold, n≈0
   (MONITORING.md step 4 is the home).
   **VN-3: a clean lot with live inside a dead-band of break-even renders `PARKED — at break-even
@@ -399,9 +399,9 @@ Script facts the skills rely on (current behavior, not doctrine):
   per pass for the passive Tier-1 archive append. **P4b** adds a `Paths` block per held lot — the
   persistence-gated dominant thesis-path + weighed menu (shared `renderPathLine`, placeholder
   weights; a confirmed migration prints `path MIGRATED a → b`) — decision support, never an alert;
-  read-only off the shared watch-state (only watch.mjs persists it). Interpretation of those
+  read-only off the shared watch-state (only watch-positions.mjs persists it). Interpretation of those
   verdicts lives in `/positions`.
-- `screen.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
+- `screen-flip-niches.mjs` shares one gate stack (two-sided liquidity **OR** `--gp-floor` gp-flow, price window,
   `--min-gpd` 500k attention floor, per-spec falling doctrine); `--mode` swaps the step-3 edge (+ the
   gate stack for value). A **render-stage net>0 surface gate** additionally drops any row whose after-tax
   net at the thesis's OWN posted pair is ≤ 0 (the bond retrade-fee / ROI-bind leak — counted `neg-net` in
@@ -432,7 +432,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   **Value flip-niche rank + BUY-NOW gating (Ben 2026-07-09/10) — operating pointer; full spec in the
   `js/valuescreen.mjs` header.** `valueScore` = amplitude × proximity-to-low × floor-stability × a
   **deployable-capital** multiplier (realizable after-tax gp/cycle on the capital you can park+exit;
-  `capGp` = `screen.mjs --capital ÷ --slots`, a PLACEHOLDER input; absent `--capital` the default is the
+  `capGp` = `screen-flip-niches.mjs --capital ÷ --slots`, a PLACEHOLDER input; absent `--capital` the default is the
   DERIVED `deployablePool` — free cash + reclaimable DEEP-bid escrow, `lib/derive-cash-tiers.mjs`, deep bids
   classified off the bulk `/latest` screen already fetched — NOT the looser `liquidCapital`, which would
   over-count a near-live flip bid as freely redeployable) — so cheap %-monster teleport tabs no
@@ -468,21 +468,21 @@ Script facts the skills rely on (current behavior, not doctrine):
   declared per-thesis in `spec.validators` (`js/flip-niches.mjs`) as `{key,mode,window}` — `gate` (the
   verdict stands: caution flags, reject drops) or `inform` (COMPUTED + annotated as a `ℹ trajectory/reach`
   note, status clamped to pass, the would-have verdict logged for the track record; **never drops a row**).
-  `screen.mjs` drives `runValidators(ctx,{specs})` off that plan (was: the whole registry). This is the
+  `screen-flip-niches.mjs` drives `runValidators(ctx,{specs})` off that plan (was: the whole registry). This is the
   noise reconciliation — only a thesis that GATES on a key lets it hide a row (so `scalp` INFORMS on
   trajectory: it accepts a falling wide band by thesis). ROLLOUT (rule 4, n≈0): the newly-activated
   `reach`/`value-amplitude` start **inform everywhere**; `floor`+`limit` gate; and **`trajectory` now GATES
   in the `value` flip-niche** (Ben 2026-07-09 — knife drops, the "buy the base, not the knife" + hold-asymmetry
   case, see the Value trajectory-GATE note above) while staying **inform** on band/churn/scalp. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
   level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
-  **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
-  ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; **`quote.mjs`'s per-item
+  **`screen-flip-niches.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
+  ~one 1h fetch per surfaced row, not per candidate) so reach FIRES on the screen; **`quote-items.mjs`'s per-item
   read now fetches a BUDGETED `ts1h` too (COD-4, 2026-07-10: 1–2 items/invocation) so reach AND trajectory
   FIRE on the explicit-ask surface** (fixing the A4 asymmetry where the surface Ben uses most had the
   weakest validation — trajectory reads the warm 1h-derived shape via the shared `lib/warm-term-structure.mjs`
-  `trajectoryFrom1h`; `quote.mjs` also prints the diurnal BID/ASK timing line, now that the 1h series is in
+  `trajectoryFrom1h`; `quote-items.mjs` also prints the diurnal BID/ASK timing line, now that the 1h series is in
   hand). **Reach now scores BOTH legs (2026-07-09):** the spec-plan
-  `reach` validator scores the patient ASK (`optSell`); `screen.mjs` (`renderMode`) additionally runs a
+  `reach` validator scores the patient ASK (`optSell`); `screen-flip-niches.mjs` (`renderMode`) additionally runs a
   SECOND inform-only reach call on the patient BID (`optBuy`, `side:'bid'` — mirrors `renderValueMode`)
   because the 2h band min is artifact-prone and an unreachable bid silently inflates the grade
   (`estimateRank(optBuy→optSell)` — the Nightmare-staff/Primordial S- catch). Both fold into the one
@@ -491,7 +491,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   series labels **knife** (spike + monotone-down lows — the Nightmare-staff catch → reject), **oscillating**
   (repeating local minima around a flat/declining mean — a falling-BUT-buyable rhythm like Hydra leather →
   pass, buy the local min), **based** (flat at the floor → pass), **elevated** (bought high → caution).
-  `screen.mjs` feeds it a trajectory derived from the fetched **1h series** (`trajectoryFrom1h`, off the
+  `screen-flip-niches.mjs` feeds it a trajectory derived from the fetched **1h series** (`trajectoryFrom1h`, off the
   shared `richFrom1h` helper) so it fires NOW while the `loadDaily` archive is still cold.
   `valueAmplitudeValidator` (2026-07-09, value flip-niche, BUY-side) reads the recent-WEEK (7d) after-tax
   amplitude + proximity-to-low off that **same warm 1h-derived term structure** (`richFrom1h`, `current`
@@ -504,8 +504,8 @@ Script facts the skills rely on (current behavior, not doctrine):
   `js/termstructure.mjs`'s durable multi-week **floor** + **typical fluctuation** (the 1/3/7/14/28d term
   structure over the daily-mid series): a buy parked well above where the 14/28d structure says support
   durably prints (the decay-knife shape) → reject, marginally-elevated → caution, at/below the floor → pass.
-  It reads the `loadDaily` regime-proxy series ALREADY at gate time on `screen.mjs` and the read-only
-  archived daily mids (`loadDaily …{noFetch:true}`) on a per-item `quote.mjs` buy read — the FLOOR read
+  It reads the `loadDaily` regime-proxy series ALREADY at gate time on `screen-flip-niches.mjs` and the read-only
+  archived daily mids (`loadDaily …{noFetch:true}`) on a per-item `quote-items.mjs` buy read — the FLOOR read
   stays the noFetch daily (COD-4's added `ts1h` fetch feeds reach/trajectory, NOT floor); a HELD lot
   (`quote --positions`) is a sell decision so it degrades. The archive only began
   accruing 2026-07-08, so a thin/cold series DEGRADES to pass (a real reject needs a warm multi-week
@@ -526,7 +526,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   **TV (0.58.0):** `js/trends.js` now imports `validate.mjs` (`reachValidator`,
   inform-only, beside the Trends Diurnal timing chart) — so `validate.mjs` IS app-imported now; edits to it
   ripple into the app, and an app-behavior change to it bumps `APP_VERSION`.
-- `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new flip-niche): **overnight**
+- `screen-flip-niches.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new flip-niche): **overnight**
   keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
   velocity, and drops items whose *yesterday overnight window* printed below the current bid
   (`overnightStaleRisk`); **auto** picks by the local clock (~22:00–06:00); **active** (default) =
@@ -535,8 +535,8 @@ Script facts the skills rely on (current behavior, not doctrine):
   table (COD-2): per surfaced pick `bid→sell · up-to units/8h · capital · running subtotal · net/u ·
   total`, up-to units = the shared `expUnitsOvernight` (`= expUnits × 8/24`, `pipeline/lib/gatecandidates.mjs`)
   — the encoded form of `/overnight` §6's old hand-computed sizing; stdout-only, UPPER-BOUND-labeled.
-  `quote.mjs --positions` prints an informational late-night morning-staleness line (verdict logic unchanged).
-- `watch.mjs` watches every **position** = *any committed capital*: held inventory PLUS every active GE
+  `quote-items.mjs --positions` prints an informational late-night morning-staleness line (verdict logic unchanged).
+- `watch-positions.mjs` watches every **position** = *any committed capital*: held inventory PLUS every active GE
   offer (Ben's definition; shared reader `pipeline/lib/offers.mjs`). Output is headline (alerts up front)
   → one numbers-only table → a per-item note block → summary footer (full shape + the V5 held-lot EMIT
   CONTRACT and the V6 `recovery-read`/freed-capital advisories are documented in `MONITORING.md` "What
@@ -545,20 +545,20 @@ Script facts the skills rely on (current behavior, not doctrine):
   verdict/alert input. Bids get their own rows (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID — only
   CANCEL-BID alerts); sub-100k offers collapse to one line; bid/listed rows print a `window` context line.
   **P5**: the bid verdict (`offerVerdict`) is PATH-AWARE — a bid on an item with a declared scalp/value-hold
-  thesis (via `thesis.mjs set --path`) no longer CANCEL-BIDs off the falling regime alone; it cancels only
+  thesis (via `declare-thesis.mjs set --path`) no longer CANCEL-BIDs off the falling regime alone; it cancels only
   on its own tripwire (scalp: a live 2h breakdown; value-hold: a floor break). Absent a declared thesis
   (and in the deployed app Watch tab, which calls `offerVerdict(row, price)` with no path arg), the verdict
   is byte-identical to before — so no app behavior changed and APP_VERSION did not bump.
   **P0**: the held verdict prose is now the SHARED `renderHeldVerdict` (verbose) from
-  `pipeline/lib/item-context.mjs` — the ONE home `quote.mjs --positions` renders from too (byte-identical to
+  `pipeline/lib/item-context.mjs` — the ONE home `quote-items.mjs --positions` renders from too (byte-identical to
   the old inline `heldAction`, diff-verified) — and each pass runs one `loadSnapshot()` for the passive
   Tier-1 archive append (per-item live fetch semantics unchanged). **P4b**: each held note block gains
   a persistence-gated dominant-path line (`path <key> 0.6 · menu: …` — one-decimal weights, VN-3; a confirmed migration prints
   `path MIGRATED a → b`) — the path engine's weighed read through the `pathPersistence`
   arm-then-confirm + hysteresis gate (`PATH_PERSIST_MS`/`PATH_HYSTERESIS_MARGIN`, placeholders), so
   flapping weights never whiplash the headline path; decision support only, no path-driven alert
-  class. watch.mjs is the ONE writer of the path fields on watch-state.
-  **DL2 (`--dip`):** `watch.mjs --dip` folds the tracked repo-root `dip-watchlist.json` pool (item
+  class. watch-positions.mjs is the ONE writer of the path fields on watch-state.
+  **DL2 (`--dip`):** `watch-positions.mjs --dip` folds the tracked repo-root `dip-watchlist.json` pool (item
   names/ids) into the buy-side target set and fires a **reactive FLUSH** headline — a bid-into-the-fall
   alert on a LIQUID book actively dumping (live instasell ≥3% below the 24h floor AND still `falling` via
   `recentDirection`), list-at break-even-floored, buy-limit-aware. **Fillability = UNIT-FLOW** (`volDay ≥
@@ -574,7 +574,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   "DL2 — the FLUSH carve-out".
   **DL4 — the SCAN auto-populates the dip pool ("B feeds A", landed 2026-07-11):** a flush is exogenous
   (you can't know WHICH item flushes), so the `--dip` loop's hand-curated pool has a coverage gap. The
-  on-demand `screen.mjs --mode all` scan — which already fetches the whole liquid universe's 24h stats +
+  on-demand `screen-flip-niches.mjs --mode all` scan — which already fetches the whole liquid universe's 24h stats +
   2h bands — now runs a **nomination pass** (pure `nominateDip` in `js/quotecore.js`, ZERO extra fetch)
   over that universe and APPENDS flush-SUITABLE candidates to `dip-watchlist.json`. Suitability =
   two-sided (the non-negotiable ghost-spread guard) + wide-enough amplitude (band ≥ `DL4_WIDE_BAND_PCT`,
@@ -597,12 +597,12 @@ Script facts the skills rely on (current behavior, not doctrine):
   a **PROPOSAL TO WATCH, not a validated pick** (n=2, all `DL4_*` PLACEHOLDERS, F1 owns calibration). The
   `dip-watchlist.json` schema is `{ id, name, source:'auto'|'manual', track, addedTs, lastQualTs, score }`
   objects; the `--dip` reader is polymorphic (legacy plain name/id entries still resolve). Node-only
-  (screen.mjs writes, watch.mjs reads) → no APP_VERSION bump.
-  `quote.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
+  (screen-flip-niches.mjs writes, watch-positions.mjs reads) → no APP_VERSION bump.
+  `quote-items.mjs --positions` remains the booked-lots view (now with an offers.json + watch-state overlay
   for askFilling + conviction + the same read-only path line; the booked FIFO lots are still the basis).
-- `windowrange.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--profile]` (bucketing/quantile
+- `read-window-range.mjs "<item>" [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--profile]` (bucketing/quantile
   math in `js/windowread.mjs` — moved out of `pipeline/lib/` by P2 so it's node- AND app-importable,
-  shared with `watch.mjs`'s window line + `js/validate.mjs`'s `reachValidator`) scores the last ~14 local
+  shared with `watch-positions.mjs`'s window line + `js/validate.mjs`'s `reachValidator`) scores the last ~14 local
   days: per-day window low/high + volume, bid/ask levels touched/reached on ~50%/~75%/all days, `--bid`/
   `--ask` candidate scoring, and the **RC1 recency split** — the recent-3-night hit rate + a `recent-3
   ~50%` quantile beside the full-window ones, with a `⚠ stale` flag when the full count is concentrated
@@ -610,7 +610,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   fill-realism check runs it on every candidate bid ("touched/reached" ≠ filled; ~14d is a small sample).
   **`--profile`** switches to the hour-of-day **diurnal** read (`hourProfile`/`deriveDiurnalRange`): the
   per-local-hour dip/peak table + the derived stale-guarded BID/ASK (de-trended shape, side-specific
-  clustering, trend-dominates → price to live). `screen.mjs` runs this automatically on every surfaced
+  clustering, trend-dominates → price to live). `screen-flip-niches.mjs` runs this automatically on every surfaced
   pick (the **Diurnal timing** block, ★ = clean candidate) — see the time-of-day doctrine bullet above.
 
 ## Open followups (not yet built)
