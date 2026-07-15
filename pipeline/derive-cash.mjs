@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /* cash.mjs — DERIVE / re-anchor the idle-cash balance the total-capital footer uses (watch.mjs).
  *
- *   node pipeline/cash.mjs          DERIVE cash now = anchor + Σ(sells after tax) − Σ(buys) − resting escrow
- *   node pipeline/cash.mjs 16m      RE-ANCHOR to 16,000,000 (accepts k/m/b + commas) — the manual reset:
+ *   node pipeline/derive-cash.mjs          DERIVE cash now = anchor + Σ(sells after tax) − Σ(buys) − resting escrow
+ *   node pipeline/derive-cash.mjs 16m      RE-ANCHOR to 16,000,000 (accepts k/m/b + commas) — the manual reset:
  *                                   your first anchor, or the one DOWN correction when you're short / spent
  *                                   gp off-ledger (the only case the log can't see — PLAN-CASH-TRACKING)
- *   node pipeline/cash.mjs clear    forget the anchor (footer reverts to committed-absolute only)
+ *   node pipeline/derive-cash.mjs clear    forget the anchor (footer reverts to committed-absolute only)
  *
  * Cash is conserved (zero-sum): it only moves when a buy fills (out), a sell fills (in, after the 2% tax),
  * or you inject/withdraw. The fills log records the first two, so idle cash is DERIVED from a stored anchor
@@ -30,7 +30,7 @@ function ageStr(statedAt) {
 if (arg == null) {
   const d = loadDerivedCash();
   if (!d.known) {
-    console.log('no cash anchor set — set one with:  node pipeline/cash.mjs <amount>  (e.g. 16m)');
+    console.log('no cash anchor set — set one with:  node pipeline/derive-cash.mjs <amount>  (e.g. 16m)');
     process.exit(0);
   }
   // headline: available now (coin stack) + liquid (incl. cancellable bids) when they differ

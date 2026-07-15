@@ -17,11 +17,11 @@ console.log('archlint pure-helper acceptance:');
 
 ok('extractRefs picks file tokens; skips fn names, phrases, .test.mjs fragments, PLAN-*.md', () => {
   const refs = extractRefs(
-    'see `js/state.js` and `pipeline/screen.mjs`, call `computeQuote`, field `spec.confirm`, ' +
+    'see `js/state.js` and `pipeline/screen-flip-niches.mjs`, call `computeQuote`, field `spec.confirm`, ' +
     'pinned by `foo.test.mjs` (+ `.test.mjs`), history in `PLAN-X.md`, and `a phrase.md here`.'
   );
   assert.ok(refs.has('js/state.js'), 'a path token is extracted');
-  assert.ok(refs.has('pipeline/screen.mjs'), 'a second path token is extracted');
+  assert.ok(refs.has('pipeline/screen-flip-niches.mjs'), 'a second path token is extracted');
   assert.ok(refs.has('foo.test.mjs'), 'a full test basename is extracted');
   assert.ok(!refs.has('computeQuote'), 'a function name (no extension) is skipped');
   assert.ok(!refs.has('spec.confirm'), 'a field name (no source extension) is skipped');
@@ -32,7 +32,7 @@ ok('extractRefs picks file tokens; skips fn names, phrases, .test.mjs fragments,
 
 ok('resolveRef: real path resolves; bare basename resolves against source dirs', () => {
   assert.equal(resolveRef('js/state.js'), true, 'existing repo-relative path resolves');
-  assert.equal(resolveRef('screen.mjs'), true, 'bare basename resolves against pipeline/');
+  assert.equal(resolveRef('sync-fills.mjs'), true, 'bare basename resolves against pipeline/');
   assert.equal(resolveRef('quotecore.js'), true, 'bare basename resolves against js/');
 });
 

@@ -41,11 +41,11 @@
  *   Noise guard: offers under NOISE_OFFER_GP total value are collapsed to one ignored line.
  *
  * Usage:
- *   node pipeline/watch.mjs                       # every position: held lots + active offers
- *   node pipeline/watch.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
- *   node pipeline/watch.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
- *   node pipeline/watch.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
- *   node pipeline/watch.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
+ *   node pipeline/watch-positions.mjs                       # every position: held lots + active offers
+ *   node pipeline/watch-positions.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
+ *   node pipeline/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
+ *   node pipeline/watch-positions.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
+ *   node pipeline/watch-positions.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -958,7 +958,7 @@ async function main() {
       console.log(`  deployable ${fmtP(dc.deployablePool)} (free ${fmtP(dc.availableCash)} ${reclaim}) · liquid ${fmtP(dc.liquidCapital)} (all ${fmtP(dc.reserved)} bid escrow reclaimable)`);
     }
   } else if (exposure > 0 || committed > 0) {
-    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/cash.mjs <amount>`);
+    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/derive-cash.mjs <amount>`);
   }
   if (!TARGETS_ONLY) {
     console.log(posAge != null
@@ -968,7 +968,7 @@ async function main() {
           : ` · offer basis unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`)
       : '  held basis positions.json unavailable');
   }
-  console.log(`  loop /loop ${loopMin}m node pipeline/watch.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
+  console.log(`  loop /loop ${loopMin}m node pipeline/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
   console.log('  READ-ONLY decision support — exit at entry · never a stranded ask · cut on breakdown, not hope · you place every offer.');
 }
 

@@ -506,8 +506,8 @@ that window. As insurance against re-fetching, the local `.cache/bands/` prune w
 90d** (`BANDS_RETENTION_DAYS` in `marketfetch.mjs`) — local + gitignored; **band data is never
 committed**.
 
-### 11.3 `pipeline/outcomes.mjs` — the join (DERIVED, gitignored)
-`node pipeline/outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
+### 11.3 `pipeline/join-outcomes.mjs` — the join (DERIVED, gitignored)
+`node pipeline/join-outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
 gitignored `outcomes.json` (rebuildable any time; `outcomes.json` + `.cache/outcomes-bands/` are in
 `.gitignore`). A **campaign** = one intent to trade: a same-item/same-side chain of offers
 `placed → … → terminal`, with cancel-replace successions (re-place within `REPRICE_GAP`, 20 min)

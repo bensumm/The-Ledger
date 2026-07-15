@@ -522,8 +522,8 @@ export function moveShape(ts5m){
 
 /* --- cut-trigger overlay = the PLAN-3 underwater decision tree (was chunk-6 momVerdict) -----
    A HELD position's precise 2h read modifies the HOLD / list-at / CUT verdict. This is the ONE
-   shared implementation — js/trends.js reviewPositions, pipeline/quote.mjs --positions, and
-   pipeline/watch.mjs all call it, so the matrix can't drift between app and scripts.
+   shared implementation — js/trends.js reviewPositions, pipeline/quote-items.mjs --positions, and
+   pipeline/watch-positions.mjs all call it, so the matrix can't drift between app and scripts.
 
    Gate order (each gate defers ONLY on positive evidence; ambiguity falls through to the cut
    discipline, so the real bludgeon-style breakdown still cuts exactly as before):
@@ -641,7 +641,7 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
   return null;   // clean, reliable, not escalated → caller keeps its existing regime verdict
 }
 
-/* Shared BUY-OFFER (resting bid) verdict — the ONE decision pipeline/watch.mjs (console) and the
+/* Shared BUY-OFFER (resting bid) verdict — the ONE decision pipeline/watch-positions.mjs (console) and the
    in-app Watch tab both consume, so a resting bid reads IDENTICALLY in both (the momVerdict
    precedent, extracted from watch.mjs's inline bidVerdict by the Watch-tab build). Pure:
    (row, offerPrice) → one of 'CANCEL-BID' | 'NO-QUOTE' | 'CROSSING' | 'BID-BEHIND' | 'BID-OK'.
@@ -899,7 +899,7 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
 /* ============================================================================================
    DL2 (2026-07-11) — flushSignal: the REACTIVE LIQUID-FLUSH → bid-into-the-fall detector. A SEPARATE
    appended block of pure, DOM-free math (quotecore.js imports only money-math.js + money-format.js — kept that way); it does
-   NOT touch momVerdict / the gate tree. Consumed ONLY by pipeline/watch.mjs's --dip loop (a node CLI
+   NOT touch momVerdict / the gate tree. Consumed ONLY by pipeline/watch-positions.mjs's --dip loop (a node CLI
    surface); no app module imports it, so it ships without an APP_VERSION bump. Fixture-pinned in
    pipeline/diploop.test.mjs.
 
@@ -922,7 +922,7 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
    REUSE, don't re-derive: DIRECTION is recentDirection() (the DP1 5m-shape read — reverting is already
    its own cross-or-pass case, so a flush only fires while STILL falling); tax/break-even are the shared
    breakEven()/netMargin(). HONESTY (process rule 4): every threshold below is a NAMED PLACEHOLDER, n=2,
-   none validated — the DL2 retro-join (FLUSH firings ⇆ fills.json, in pipeline/analyze.mjs) is the
+   none validated — the DL2 retro-join (FLUSH firings ⇆ fills.json, in pipeline/analyze-record.mjs) is the
    calibration path that would tell us whether the defaults separate fillable from un-fillable firings.
 
    Signature: flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) → null (missing inputs) or
@@ -1014,7 +1014,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
        (zero extra fetch) to BONUS a nominee that is a survivor AND flushing right now.
 
    HONESTY (process rule 4): every DL4_* threshold below is a NAMED PLACEHOLDER, n=2, none validated —
-   F1 (the retro-join in pipeline/analyze.mjs) owns calibration.
+   F1 (the retro-join in pipeline/analyze-record.mjs) owns calibration.
 
    SUITABILITY GATES (all must hold, else null): TWO-SIDED (ghost-spread guard) + WIDE-ENOUGH amplitude
    (band % or 24h-range % fallback) + a VALUE FLOOR (gp-flow = mid × limitVol ≥ DL4_MIN_GP_FLOW, the tool-

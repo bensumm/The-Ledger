@@ -4,7 +4,7 @@
    into #1 as a consumer of the enriched log; persists exactly like watchstate's loadState/saveState.
 
    The pure state model is fixture-testable (sessionthesis.test.mjs). watch.mjs is a READ-ONLY
-   consumer (prints the reminder, never writes); pipeline/thesis.mjs is the sole writer (no
+   consumer (prints the reminder, never writes); pipeline/declare-thesis.mjs is the sole writer (no
    concurrent-write race). Honesty: a thesis is INTENT the human/agent records — it is never a
    verdict/alert input and decides nothing.
 

@@ -2,8 +2,8 @@
 /**
  * retrojoin.mjs — the RETRO-JOIN report (Pipeline v2, chunk P6a). The FOUNDATION slice of P6.
  *
- *   node pipeline/retrojoin.mjs           per-niche + per-path outcome accounting (default)
- *   node pipeline/retrojoin.mjs --json    dump the raw joined rows array to stdout (no aggregation)
+ *   node pipeline/report-retro.mjs           per-niche + per-path outcome accounting (default)
+ *   node pipeline/report-retro.mjs --json    dump the raw joined rows array to stdout (no aggregation)
  *
  * For EVERY suggestion row the tool ever logged (active suggestions.jsonl + pipeline/suggestions-
  * archive/*.jsonl, via the ONE shared readSuggestionLines), join FORWARD to fills.json BUY events

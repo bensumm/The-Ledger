@@ -5,11 +5,11 @@
  * fills.json + suggestions.jsonl + historical market context, so the algorithm-feedback loop (F1)
  * becomes a query rather than a re-derivation.
  *
- *   node pipeline/outcomes.mjs            rebuild + write outcomes.json, print a summary
- *   node pipeline/outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile Ã— liquidity
+ *   node pipeline/join-outcomes.mjs            rebuild + write outcomes.json, print a summary
+ *   node pipeline/join-outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile Ã— liquidity
  *                                          class, n PER CELL, refusing to summarize below --min-n
- *   node pipeline/outcomes.mjs --no-bands  skip the historical band-percentile fetch (fast, offline)
- *   node pipeline/outcomes.mjs --json      dump the campaigns array to stdout (no file write)
+ *   node pipeline/join-outcomes.mjs --no-bands  skip the historical band-percentile fetch (fast, offline)
+ *   node pipeline/join-outcomes.mjs --json      dump the campaigns array to stdout (no file write)
  *   flags: --min-n <N> (report cell floor, default 8) Â· --band-hours <H> (band basis, default 2)
  *
  * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers,

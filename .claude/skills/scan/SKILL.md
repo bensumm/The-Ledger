@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.51
+version: 1.52
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -12,7 +12,7 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/screen.mjs [--mode band|churn|scalp|value|all] [--max-price …] [--publish]
+node pipeline/screen-flip-niches.mjs [--mode band|churn|scalp|value|all] [--max-price …] [--publish]
 ```
 
 Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
@@ -93,7 +93,7 @@ re-run it.)
 
 This is the tribal layer the script can't do — apply ALL of these:
 
-- **500k gp/day attention floor** _(enforced: `pipeline/screen.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
+- **500k gp/day attention floor** _(enforced: `pipeline/screen-flip-niches.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
   SCRIPT — `screen.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
@@ -217,7 +217,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   `--min-active` still works as a back-compat alias for `--min-traded`. Bar D gates the band's REALITY;
   Bar E robustifies its EDGES.)
 - **The screen now DOES the windowrange analysis in-script (2026-07-09) — read its `ℹ trajectory/reach`
-  notes first.** _(enforced: `js/validate.mjs` trajectory + reach validators, `pipeline/screen.mjs` Leg B)_
+  notes first.** _(enforced: `js/validate.mjs` trajectory + reach validators, `pipeline/screen-flip-niches.mjs` Leg B)_
   Each surfaced row now carries auto-computed INFORM notes (never a drop, n≈0 rollout): a **reach** note
   covering **BOTH legs** (2026-07-09) — the sell-leg `--ask` reachability AND the buy-leg `bid` touch
   (`reach bid X touched N/14d` — the 2h band min is artifact-prone, and an unreachable bid inflates the
@@ -231,7 +231,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   note is the screen telling you what a stricter thesis would have done). Still verify by hand before
   quoting a profit — the notes are inform-only and thresholds are placeholders.
 - **The DIURNAL TIMING block auto-derives the peak-timing bid/ask (2026-07-09) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR PRICING below.**
-  _(enforced: `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`, `pipeline/screen.mjs` Diurnal timing block)_
+  _(enforced: `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`, `pipeline/screen-flip-niches.mjs` Diurnal timing block)_
   After the reach notes, `screen.mjs` prints a `Diurnal timing` line per surfaced pick (FREE — off the
   in-hand 1h series): `BID <x> (basis, dip HH–HH) · ASK <y> (peak HH–HH) · ~net/u (roi%)`, with `⚠
   trend-dominates → bid to live` when a multi-day trend erases the intraday dip (the Ghrazi lesson — the
@@ -268,7 +268,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   the peak-timing pricing method — the reach/diurnal/asym reads below FEED it; `/positions` points here
   for the sell-side (step-down) voice. (The mechanical within-window clear-rate + `maxBuyForExit` are
   `PLAN-WINDOW-CLEAR.md` Part B, not yet built — this is the judgment form.)
-- **Asymmetric ask-reach read — the verification gate (2026-07-07, method) — an INPUT to WINDOW-CLEAR PRICING above.** _(judgment: method; tool `pipeline/windowrange.mjs`)_ The screen's ROI is
+- **Asymmetric ask-reach read — the verification gate (2026-07-07, method) — an INPUT to WINDOW-CLEAR PRICING above.** _(judgment: method; tool `pipeline/read-window-range.mjs`)_ The screen's ROI is
   computed off the 2h optimistic band edges, which are often extremes the market never actually
   pays. Before recommending ANY pick, run the `windowrange.mjs --ask <band-top>` reach check the
   doctrine already requires and read it two ways: **band-top ask reached ~0/7 days = artifact, SKIP**
@@ -357,7 +357,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   survivable position; and every froth entry pre-commits a mechanical exit (first pass of falling lows /
   momentum ↓ = exit, no averaging down). Honesty (rule 4): n≈0 froth trades of our own — this is
   data-gathering with a capped downside, not a proven edge.
-- **Big-ticket caution.** _(judgment: sizing; gp-flow gate in `pipeline/screen.mjs`)_ High per-unit capital → each fill is expensive; require real
+- **Big-ticket caution.** _(judgment: sizing; gp-flow gate in `pipeline/screen-flip-niches.mjs`)_ High per-unit capital → each fill is expensive; require real
   gp-flow (units × net), not a unit count. The script now SURFACES these via the gp-flow gate,
   flagged `thin` and capped at grade A- with a "~N/day — size in units, expect slow fills" tooltip
   (S1). Treat a `thin` row honestly: the edge is real but you can only place a few units/day, fills
@@ -393,7 +393,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   never a hard cap.
 - **Buy-limit-aware sizing — NEVER suggest a quantity over the 4h GE limit (Ben, 2026-07-08).**
   _(code-pointer: `pipeline/lib/limits.mjs` `limitWindow` + `js/validate.mjs` `limitValidator`; ask =
-  `node pipeline/limits.mjs "<item>"`)_ Every accumulation/tranche suggestion is CAPPED by the item's
+  `node pipeline/read-buy-limits.mjs "<item>"`)_ Every accumulation/tranche suggestion is CAPPED by the item's
   GE buy limit (`quote.mjs` prints it as `· buy limit N/4h`; also in the mapping — look it up before
   sizing). A "tranche" is ONE window's worth = **≤ limit units**; a position bigger than the limit is a
   **multi-window accumulation by definition** — state the per-window cap, the gp it represents, and how
@@ -405,13 +405,13 @@ This is the tribal layer the script can't do — apply ALL of these:
   **CAUTIONs** one nearly spent — and `quote.mjs`'s regime line appends `(bought X this window — Y
   left, next frees ~HH:MM)` when there are in-window logged buys. Two follow-ons the numbers already do
   for you: (1) **if the item was already bought today, the limit is partially/fully consumed** — run
-  `node pipeline/limits.mjs "<item>"` (reads `fills.json`, no fetch) for bought/remaining + the local
+  `node pipeline/read-buy-limits.mjs "<item>"` (reads `fills.json`, no fetch) for bought/remaining + the local
   `next frees ~HH:MM` / `fully resets ~HH:MM`; size the REMAINING headroom, not the full limit. HONEST
   LIMIT: only RuneLite-logged fills are visible, so a mobile/unlogged buy is invisible — "left" is an
   UPPER bound, not a guarantee. (2) **a null/untracked limit ≠ unlimited** — the validator DEGRADES to
   pass on a null limit (never green-lights it); flag it and size conservatively off volume.
 - **A thin CURRENT 2h band ≠ no edge — read the recent DAILY range on a proven lane (Ben,
-  2026-07-08).** _(judgment: read call; tool `pipeline/windowrange.mjs`)_ The screen's band is the last-2h window; it looks THIN precisely when live sits at
+  2026-07-08).** _(judgment: read call; tool `pipeline/read-window-range.mjs`)_ The screen's band is the last-2h window; it looks THIN precisely when live sits at
   the top or bottom of the item's wider daily range. Do NOT dismiss a known/proven lane (one you've
   flipped before) off the thin 2h band — run the full-day `windowrange.mjs --window 0-23` and read
   the **recent daily lows→highs** (the band you actually flip over), recency-verified per RC1. Bid
@@ -466,7 +466,7 @@ requires and quote it — never a bare number.
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 
 A scan is not done until the picks are compared against where Ben's capital already sits.
-After the shortlist, run `node pipeline/watch.mjs` (positions = held inventory + every
+After the shortlist, run `node pipeline/watch-positions.mjs` (positions = held inventory + every
 active offer) and close the loop:
 
 - **Stale-bid displacement.** _(judgment: redeploy call)_ For each resting BUY offer, ask: does a shortlist pick offer

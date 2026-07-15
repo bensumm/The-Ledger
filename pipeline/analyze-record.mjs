@@ -2,10 +2,10 @@
 /**
  * analyze.mjs — the ANALYSIS ENGINE (PLAN-ANALYZE chunk AZ1). READ-ONLY. IO + print shell.
  *
- *   node pipeline/analyze.mjs                whole-history audit + retro rollup + tuning candidates
- *   node pipeline/analyze.mjs --since 24     restrict the freshness/window audit to the last N hours
- *   node pipeline/analyze.mjs --json         emit the structured brief object (for the /analyze skill)
- *   node pipeline/analyze.mjs --min-n 30     override the candidate n-floor (default MIN_N_CANDIDATE)
+ *   node pipeline/analyze-record.mjs                whole-history audit + retro rollup + tuning candidates
+ *   node pipeline/analyze-record.mjs --since 24     restrict the freshness/window audit to the last N hours
+ *   node pipeline/analyze-record.mjs --json         emit the structured brief object (for the /analyze skill)
+ *   node pipeline/analyze-record.mjs --min-n 30     override the candidate n-floor (default MIN_N_CANDIDATE)
  *
  * WHAT THIS IS — and is NOT. The mechanical half of the analysis construct: AUDIT the dataset's health,
  * ORCHESTRATE the already-built joins, derive FLAGGED tuning candidates. The `/analyze` skill (AZ2) is
@@ -119,7 +119,7 @@ const line = r => r.map((c, i) => c.padEnd(w[i])).join('  ');
 console.log('  ' + line(rollupHead));
 console.log('  ' + w.map(x => '-'.repeat(x)).join('  '));
 for (const r of rollupRows) console.log('  ' + line(r));
-console.log(`  (full band-percentile × liquidity fill-time cells: node pipeline/outcomes.mjs --report)`);
+console.log(`  (full band-percentile × liquidity fill-time cells: node pipeline/join-outcomes.mjs --report)`);
 
 console.log(`\n## 3. Tuning candidates (n ≥ ${minN}; each is a flag for F1, never applied here)`);
 const realCands = candidates.filter(c => c.kind === 'candidate');

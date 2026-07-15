@@ -3,13 +3,13 @@
  * loop-tick.mjs — the MULTI-ACTION monitoring-loop driver (Ben, 2026-07-12).
  *
  * The `/loop` skill fires ONE command per tick. Historically that command was
- * `node pipeline/watch.mjs` — positions only. This driver multiplexes several actions onto a single
+ * `node pipeline/watch-positions.mjs` — positions only. This driver multiplexes several actions onto a single
  * loop, each on its OWN cadence, so one `/loop` can both watch the book AND periodically re-scan for
  * fresh opportunities. Fire it at the GCD of the action intervals (see the printed recommendation);
  * the driver is TIME-GATED (not tick-counting), so it stays correct even if the cron jitters or the
  * intervals don't divide evenly.
  *
- *   node pipeline/loop-tick.mjs [--watch <min>|off] [--scan <min>|off] [--min-idle <gp>] [--no-sync]
+ *   node pipeline/run-loop.mjs [--watch <min>|off] [--scan <min>|off] [--min-idle <gp>] [--no-sync]
  *
  * Defaults: --watch 30  --scan 15  --min-idle 20000000  (Ben's stated example: positions every 30m,
  * opportunity scan every 15m). Recommended cron interval = gcd(watch, scan).
@@ -24,8 +24,8 @@
  *           the loop's job (the desk is attended ~always, so the loop only needs the agent's read fresh; and
  *           because the loop never pushes, cron-firing it can't create an unattended writer to main —
  *           FILLS-PIPELINE §12 stays satisfied). Skip the refresh with `--no-sync`.
- *   watch — `node pipeline/watch.mjs`         : the position/offer deterioration pass (every --watch min).
- *   scan  — `node pipeline/screen.mjs --mode all` : opportunity discovery (every --scan min), GATED on
+ *   watch — `node pipeline/watch-positions.mjs`         : the position/offer deterioration pass (every --watch min).
+ *   scan  — `node pipeline/screen-flip-niches.mjs --mode all` : opportunity discovery (every --scan min), GATED on
  *           DEPLOYABLE capital — skipped when deployablePool < --min-idle (nothing to deploy → don't burn a
  *           scan or the agent's judgment pass). The gate uses the DERIVED deployablePool (cashderive.mjs —
  *           the free coin stack PLUS the escrow of DEEP/reclaimable resting bids: bids priced far enough
@@ -141,11 +141,11 @@ const runScript = (label, args) => {
 if (watchDue) {
   // refresh the book from the exchange logs FIRST (local rebuild, zero git) so watch reads fresh.
   if (syncOn) runScript('SYNC (sync-fills.mjs --local)', ['pipeline/sync-fills.mjs', '--local']);
-  runScript('POSITIONS (watch.mjs)', ['pipeline/watch.mjs']);
+  runScript('POSITIONS (watch.mjs)', ['pipeline/watch-positions.mjs']);
   state.watch = now;
 }
 if (scanDue) {
-  if (scanRun) runScript('SCAN (screen.mjs --mode all)', ['pipeline/screen.mjs', '--mode', 'all']);
+  if (scanRun) runScript('SCAN (screen.mjs --mode all)', ['pipeline/screen-flip-niches.mjs', '--mode', 'all']);
   else console.log(`\n===== SCAN skipped =====\n${scanSkipReason} (re-checks in ${scanMin}m)`);
   state.scan = now; // stamp regardless — the cadence is "decide whether to scan", not "retry until funded"
 }

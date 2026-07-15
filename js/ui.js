@@ -331,7 +331,7 @@ export async function renderScan(force){
     if(!r.ok) throw new Error('http '+r.status);
     scan=await r.json();
   }catch(e){
-    showEmpty('No published scan yet','Run <code>node pipeline/screen.mjs --publish</code> — the pipeline commits <code>screen.json</code> alongside fills, and this panel mirrors it.');
+    showEmpty('No published scan yet','Run <code>node pipeline/screen-flip-niches.mjs --publish</code> — the pipeline commits <code>screen.json</code> alongside fills, and this panel mirrors it.');
     return;
   }
   if(!scan || scan.app!=='the-coffer-screen'){ showEmpty('Scan unavailable','<code>screen.json</code> is present but not a Coffer scan file.'); return; }
@@ -423,7 +423,7 @@ export async function refreshScan(btn){
     const staleEl=document.getElementById('scanStale');
     if(staleEl){ staleEl.classList.remove('hidden'); staleEl.className='scanstale warn';
       staleEl.innerHTML=(IS_LOCALHOST
-        ? 'No newer scan produced. Is the dev-server running? Otherwise run <code>node pipeline/screen.mjs --mode all --publish</code> to refresh <code>screen.json</code>.'
+        ? 'No newer scan produced. Is the dev-server running? Otherwise run <code>node pipeline/screen-flip-niches.mjs --mode all --publish</code> to refresh <code>screen.json</code>.'
         : 'No newer snapshot published yet — run the pipeline (<code>screen.mjs --publish</code>) to refresh. This panel mirrors the committed <code>screen.json</code>.'); }
   }
 }

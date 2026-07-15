@@ -3,7 +3,7 @@
  * Every recommendation the analysis scripts emit — quote.mjs (per-item + --positions),
  * screen.mjs (each rated niche row), watch.mjs (each held/target read) — is logged HERE at
  * emit time, unconditionally, one JSON object per line, to repo-root suggestions.jsonl. This
- * is the "what the tool SAID" half of the outcomes dataset; pipeline/outcomes.mjs joins it to
+ * is the "what the tool SAID" half of the outcomes dataset; pipeline/join-outcomes.mjs joins it to
  * "what actually FILLED" (fills.json). The ledger is TRACKED in git (append-only; ids / prices
  * / timestamps only — NO PII; the repo is public). sync-fills.mjs adds it to its commit set
  * when present.
@@ -300,7 +300,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // read (no ts1h / no peak window) supplies null → no field → byte-identical shape.
   if (winClear != null)      e.winClear = winClear;
   // DL2 — a flush SIGNAL (watch.mjs --dip) carries its full component object so the DL2 retro-join
-  // (pipeline/analyze.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
+  // (pipeline/analyze-record.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid
   // (alerted) AND illiquid (signal-only, the standing-bid / DL3 evidence). Lean-included exactly like the
   // YS2 fields — a caller that supplies no dipLoop logs a byte-identical shape (pinned by diploop.test.mjs).

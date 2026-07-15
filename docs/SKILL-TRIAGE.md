@@ -34,9 +34,9 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
 | `--mode scalp` / `--mode value` provisional niches | KEEP-AS-JUDGMENT | Spec is coded (`js/strategies.mjs`); "only chase at the desk" is the judgment. |
-| Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/strategies.mjs` `inAll` + `pipeline/screen.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
+| Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/strategies.mjs` `inAll` + `pipeline/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
 | Sync first (SY1) / run-from-main (SY1.2) | ENCODE | `pipeline/sync-fills.mjs`; the run-location rule is operational, stays as prose. |
-| 500k gp/day attention floor | ENCODE | `pipeline/screen.mjs` `--min-gpd` (default 500_000). |
+| 500k gp/day attention floor | ENCODE | `pipeline/screen-flip-niches.mjs` `--min-gpd` (default 500_000). |
 | SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/gatecandidates.mjs`; the relay-honestly rule is judgment. |
 | 24h-drift is a pre-filter only | KEEP-AS-JUDGMENT | Regime column is coded; "never recommend off 24h alone" is interpretation. |
 | Two-sided liquidity discipline | ENCODE | Two-sided gate in `pipeline/lib/gatecandidates.mjs`; the ~100/day floor stays judgment. |
@@ -47,28 +47,28 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Parked-capital leak (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean off ~116 concentrated lots; F1-gated. Revisit at F1. |
 | Velocity beats magnitude (HYPOTHESIS) | KEEP-AS-JUDGMENT | Unproven lean; crossover unmeasured. Revisit at F1. |
 | Band-top artifact detection | KEEP-AS-JUDGMENT | `--min-active` supports; spotting the lone print is judgment. |
-| Asymmetric ask-reach read + RC1 recency split | KEEP-AS-JUDGMENT | Method over `pipeline/windowrange.mjs` / `js/windowread.mjs`; the `⚠ stale` flag is coded, the read is judgment. Partial-ENCODE candidate → `reachValidator` once screen/quote fetch ts1h (PLAN.md P2 follow-on). |
+| Asymmetric ask-reach read + RC1 recency split | KEEP-AS-JUDGMENT | Method over `pipeline/read-window-range.mjs` / `js/windowread.mjs`; the `⚠ stale` flag is coded, the read is judgment. Partial-ENCODE candidate → `reachValidator` once screen/quote fetch ts1h (PLAN.md P2 follow-on). |
 | MANDATORY verify SELL leg before quoting profit | KEEP-AS-JUDGMENT | ENCODE candidate: `reachValidator` (`js/validate.mjs`) would enforce it, but screen/quote don't fetch ts1h yet (PLAN.md P2 follow-on). Until then it's a hard checklist step. |
 | Fresh-repricer flag | KEEP-AS-JUDGMENT | Sizing call. |
-| Phase tag on the Regime cell | ENCODE | `phase()` in `js/quotecore.js`, folded by `pipeline/screen.mjs`; the "spike ≠ retrace" reading is judgment. |
+| Phase tag on the Regime cell | ENCODE | `phase()` in `js/quotecore.js`, folded by `pipeline/screen-flip-niches.mjs`; the "spike ≠ retrace" reading is judgment. |
 | Froth entry — CLASSIFIER not PREDICTOR | KEEP-AS-JUDGMENT | `froth.mjs` probe classifies (output-only); n≈0 own trades. |
-| Big-ticket caution | KEEP-AS-JUDGMENT | gp-flow gate in `pipeline/screen.mjs`; "size in units, never chase" is judgment. |
+| Big-ticket caution | KEEP-AS-JUDGMENT | gp-flow gate in `pipeline/screen-flip-niches.mjs`; "size in units, never chase" is judgment. |
 | Skip despite high grade | KEEP-AS-JUDGMENT | Grade cutoffs are placeholders (`pipeline/lib/rating.mjs`). |
 | Lane management — scale/rotate | KEEP-AS-JUDGMENT | Exposure call. |
 | Peak-throughput sizing — one-window vs multi-day | KEEP-AS-JUDGMENT | Labeling discipline. |
-| Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen.mjs`/`quote.mjs`); `quote.mjs` regime line shows bought/left/next-frees; `node pipeline/limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
-| Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/windowrange.mjs`; the "proven lane" call is judgment. |
-| Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/strategies.mjs`; watchlist section + Note in `pipeline/screen.mjs` (S3); columns pinned in `js/quotecore.js`. |
+| Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen.mjs`/`quote.mjs`); `quote.mjs` regime line shows bought/left/next-frees; `node pipeline/read-buy-limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
+| Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/read-window-range.mjs`; the "proven lane" call is judgment. |
+| Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/strategies.mjs`; watchlist section + Note in `pipeline/screen-flip-niches.mjs` (S3); columns pinned in `js/quotecore.js`. |
 | Cover every niche each pass | KEEP-AS-JUDGMENT | Output-coverage discipline (memory `salient-subtask-crowds-out-mandate`). |
-| Every recommended price states its timing target | KEEP-AS-JUDGMENT | Tool `pipeline/windowrange.mjs`; binding a number to a window is judgment. |
-| Position-context pass §5 (stale-bid / overlap / held-ask) | KEEP-AS-JUDGMENT | Cross-check over `pipeline/watch.mjs`. |
+| Every recommended price states its timing target | KEEP-AS-JUDGMENT | Tool `pipeline/read-window-range.mjs`; binding a number to a window is judgment. |
+| Position-context pass §5 (stale-bid / overlap / held-ask) | KEEP-AS-JUDGMENT | Cross-check over `pipeline/watch-positions.mjs`. |
 | Encode-learnings boilerplate (Timing/Prompt/Routing/Execution/Honesty) | KEEP-AS-JUDGMENT | Shared self-improvement process across all four skills (see note below). |
 
 ## /positions — `.claude/skills/positions/SKILL.md`
 
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
-| Run the script / sync-first (SY1, SY1.2) / stale-book banner | ENCODE | `pipeline/quote.mjs --positions`, `pipeline/sync-fills.mjs`, `pipeline/watch.mjs` banner. |
+| Run the script / sync-first (SY1, SY1.2) / stale-book banner | ENCODE | `pipeline/quote-items.mjs --positions`, `pipeline/sync-fills.mjs`, `pipeline/watch-positions.mjs` banner. |
 | Reading watch.mjs per-held note block (V5 EMIT CONTRACT) | ENCODE | `pipeline/lib/emit.mjs` `heldNoteBlock()`; the block shape is the code's, the doc points at it (see MONITORING.md). |
 | Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/context.mjs`); the skill translates them to actions (judgment). |
 | Sell-velocity / HOLD-band-top step-down / rising-item no-underprice / decaying-band-top / trajectory read / entry-age / override-discipline / cut-and-rebid friction / tripwire conviction / limit-blocked CROSSING / fill-progress | KEEP-AS-JUDGMENT | The interpretation layer over the verdicts; several have coded support (`convictionGate` in `lib/watchstate.mjs` for tripwire-conviction; `breakEven()` floor in `js/quotecore.js`), but the step-down/hold taste is the LLM's. |
@@ -82,19 +82,19 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | --- | --- | --- |
 | Overnight ASKS favored / DEEP BIDS disfavored (time-geography) | KEEP-AS-JUDGMENT | Volume asymmetry measured, behavioral sample small (1 win / 2 fails). |
 | Weekend→weekday calendar shift (v1.11) | **RETIRED** (Ben, 2026-07-09) | Collapsed to a one-line weekday-basis check pointing at the full-day read (`--window 0-23 --nights 21`); the narrow-slice fade is folded in as an UNCONFIRMED judgment note. `/overnight` v1.15. |
-| Phase 1 chase-bid sweep / STOP-and-wait / measurement-spine refresh | ENCODE | `pipeline/watch.mjs`, `pipeline/outcomes.mjs`; the pause-for-capital is the interactive boundary (process). |
-| Phase 2 posture screen (what it does / does not decide) | ENCODE | `pipeline/screen.mjs --posture overnight` (S2) does the structural filtering; the sizing/retrace judgment stays. |
-| Nightly-low trend / decay-trough projection / fill-realism checks | KEEP-AS-JUDGMENT | Read `pipeline/windowrange.mjs`'s per-day low column; projecting the trough is judgment (small sample). |
-| Accumulation-and-capital table | ENCODE | Formula aligned with `pipeline/screen.mjs`'s `expUnits`; the prioritization is judgment. |
+| Phase 1 chase-bid sweep / STOP-and-wait / measurement-spine refresh | ENCODE | `pipeline/watch-positions.mjs`, `pipeline/join-outcomes.mjs`; the pause-for-capital is the interactive boundary (process). |
+| Phase 2 posture screen (what it does / does not decide) | ENCODE | `pipeline/screen-flip-niches.mjs --posture overnight` (S2) does the structural filtering; the sizing/retrace judgment stays. |
+| Nightly-low trend / decay-trough projection / fill-realism checks | KEEP-AS-JUDGMENT | Read `pipeline/read-window-range.mjs`'s per-day low column; projecting the trough is judgment (small sample). |
+| Accumulation-and-capital table | ENCODE | Formula aligned with `pipeline/screen-flip-niches.mjs`'s `expUnits`; the prioritization is judgment. |
 | Encode-learnings boilerplate | KEEP-AS-JUDGMENT | Shared process boilerplate. |
 
 ## /morning — `.claude/skills/morning/SKILL.md`
 
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
-| What filled vs didn't (two sources) / sync-first / honest-gap | ENCODE | `positions.json` + `pipeline/monitor.mjs` + `pipeline/sync-fills.mjs`; "no fabricated intent" is judgment. |
-| Re-verdict stale bids / review new positions | ENCODE | `pipeline/quote.mjs`; interpretation follows `/positions`. |
-| Weekly descriptive-outcomes read (W1) | ENCODE | `pipeline/outcomes.mjs --report`; the Monday-trigger cadence is process. |
+| What filled vs didn't (two sources) / sync-first / honest-gap | ENCODE | `positions.json` + `pipeline/monitor-offers.mjs` + `pipeline/sync-fills.mjs`; "no fabricated intent" is judgment. |
+| Re-verdict stale bids / review new positions | ENCODE | `pipeline/quote-items.mjs`; interpretation follows `/positions`. |
+| Weekly descriptive-outcomes read (W1) | ENCODE | `pipeline/join-outcomes.mjs --report`; the Monday-trigger cadence is process. |
 | Honesty rules — print n / concentration caveat / one-week-one-sample | KEEP-AS-JUDGMENT | `--report` suppresses sub-`MIN_N_REPORT` cells (coded); respecting the caveat when reporting is the honesty discipline (process rule 4). |
 | Encode-learnings boilerplate | KEEP-AS-JUDGMENT | Shared process boilerplate. |
 
@@ -117,7 +117,7 @@ skill); those are effectively already ENCODE-or-relocated and just need to stay 
 | --- | --- | --- |
 | stale-branch-delete-ok | KEEP-AS-JUDGMENT | Process rule; lives in CLAUDE.md process rule 9 too. |
 | arrows-on-hold-pending-update | KEEP-AS-JUDGMENT | TEMPORARY veto; retire once arrows settle post-update (Ben re-evaluates). |
-| buy-limit-caps-every-size | ENCODE | LM1 (2026-07-09): `limitValidator` (`js/validate.mjs`) off `limitWindow` (`pipeline/lib/limits.mjs`) disqualifies an over-limit buy on every suggesting surface; `pipeline/limits.mjs` CLI is the direct read. The multi-window-accumulation framing stays judgment. |
+| buy-limit-caps-every-size | ENCODE | LM1 (2026-07-09): `limitValidator` (`js/validate.mjs`) off `limitWindow` (`pipeline/lib/limits.mjs`) disqualifies an over-limit buy on every suggesting surface; `pipeline/read-buy-limits.mjs` CLI is the direct read. The multi-window-accumulation framing stays judgment. |
 | peak-timing-default-for-pricing | KEEP-AS-JUDGMENT | Method over `windowrange.mjs`; "encode into skills later" — now in `/scan`+`/overnight` timing-target rules. |
 | pricing-ok-on-ignored-items | ENCODE (partial) | `ignored-items.json` + `pipeline/lib/ignored.mjs` implement the view-filter; "pricing OK" is the judgment. |
 | gather-before-recommending | KEEP-AS-JUDGMENT | Core discipline; no code gate. |

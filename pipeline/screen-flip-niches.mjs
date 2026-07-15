@@ -2,7 +2,7 @@
 /**
  * screen.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *
- *   node pipeline/screen.mjs [--mode band|churn|scalp|value|all]
+ *   node pipeline/screen-flip-niches.mjs [--mode band|churn|scalp|value|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish]
  *
@@ -1255,7 +1255,7 @@ async function main() {
   }
 }
 
-// Run only when invoked directly (`node pipeline/screen.mjs …`); importing the module (e.g. the
+// Run only when invoked directly (`node pipeline/screen-flip-niches.mjs …`); importing the module (e.g. the
 // NY2.1 risingPoolFloor unit check) must NOT fire a full screen / hit the API. process.argv[1] is
 // undefined under `node -e`, so guard it (an eval context is never a direct invocation).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

@@ -24,7 +24,7 @@
  *     treat unknown as "cannot advise a size", NOT as "no limit / unlimited".
  *
  * All DISPLAYED times are the CALLER's concern (repo rule: rendered times are LOCAL) — this module
- * returns unix-SECONDS instants (nextFreeAt / fullResetAt); pipeline/limits.mjs formats them local.
+ * returns unix-SECONDS instants (nextFreeAt / fullResetAt); pipeline/read-buy-limits.mjs formats them local.
  */
 import { collapseOffers, dedupeSnapshots } from './reconstruct.mjs';
 

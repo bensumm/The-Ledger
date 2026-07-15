@@ -4,11 +4,11 @@
  * NEVER hand-write a `node -e` fetch for a market read again — this is the workflow.
  *
  * Two modes:
- *   node pipeline/quote.mjs "Abyssal bludgeon" 23959 "Crystal seed" ...
+ *   node pipeline/quote-items.mjs "Abyssal bludgeon" 23959 "Crystal seed" ...
  *       Per-item read: resolves each name/id, fetches latest/5m/6h/24h + GE guide, and
  *       prints the standard Quick/Optimistic market table (one combined table, one regime
  *       line per item).
- *   node pipeline/quote.mjs --positions
+ *   node pipeline/quote-items.mjs --positions
  *       Positions-vs-market: reads OPEN lots from repo-root positions.json, groups by item
  *       at weighted-avg cost, quotes each held item live, and prints the standard table
  *       PLUS Held@ / Break-even columns + a HOLD / list-at-X / CUT verdict per row.
@@ -97,7 +97,7 @@ function regimeLine(name, row, limit, win) {
 }
 
 async function runItems() {
-  if (!tokens.length) { console.error('usage: node pipeline/quote.mjs "<item or id>" [...more]  |  node pipeline/quote.mjs --positions'); process.exit(1); }
+  if (!tokens.length) { console.error('usage: node pipeline/quote-items.mjs "<item or id>" [...more]  |  node pipeline/quote-items.mjs --positions'); process.exit(1); }
   const map = await loadMapping();
   const guide = await loadGuide();
   const resolved = [];

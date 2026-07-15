@@ -17,9 +17,9 @@
    path-carrying plan. `--path` is what routes the flags into the latter. `clear` removes the id from
    BOTH stores — FIX 2, 2026-07-13 — so a cleared plan can't leave a gating exit/tripwire behind.)
 
-     node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
-     node pipeline/thesis.mjs clear "<item|id>"
-     node pipeline/thesis.mjs list */
+     node pipeline/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
+     node pipeline/declare-thesis.mjs clear "<item|id>"
+     node pipeline/declare-thesis.mjs list */
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from './lib/marketfetch.mjs';
@@ -33,9 +33,9 @@ const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // TRACKED
 
 function usage() {
   console.log('Usage:\n' +
-    '  node pipeline/thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
-    '  node pipeline/thesis.mjs clear "<item|id>"\n' +
-    '  node pipeline/thesis.mjs list');
+    '  node pipeline/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
+    '  node pipeline/declare-thesis.mjs clear "<item|id>"\n' +
+    '  node pipeline/declare-thesis.mjs list');
 }
 
 async function resolveId(token) {

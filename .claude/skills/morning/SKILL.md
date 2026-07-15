@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.9
+version: 1.10
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -27,7 +27,7 @@ sync and say the overnight numbers may be stale rather than pushing from the wro
 
 - **Booked numbers** ← `positions.json` (`closed` = after-tax realized P/L; `open` = new
   inventory) + new `fills.json` events — fresh as of the sync you just ran.
-- **Live truth** ← `node pipeline/monitor.mjs` (reads the exchange log directly, ~0 lag):
+- **Live truth** ← `node pipeline/monitor-offers.mjs` (reads the exchange log directly, ~0 lag):
   resting offers still open (didn't fill), recent fills/cancels. Use monitor for
   freshness, positions.json for booked numbers — never re-sum the log yourself.
   **Monitor now applies the MERCH-book quarantine by default (Ben, 2026-07-12):** its
@@ -36,7 +36,7 @@ sync and say the overnight numbers may be stale rather than pushing from the wro
   So do NOT report an ignored item as a phantom position or a "reconstruction bug" — that
   was the failure this fixes (the Snapdragon/Battlestaff false-bug reports, 2026-07-12).
   **Ben doesn't want to hear about quarantined items unless he asks** — the monitor footer
-  names how many lines it hid; only run `node pipeline/monitor.mjs --all` if Ben explicitly
+  names how many lines it hid; only run `node pipeline/monitor-offers.mjs --all` if Ben explicitly
   asks to see them. Pricing help on an ignored item is still fine when Ben asks (the
   quarantine is a VIEW filter, not a gag — memory `pricing-ok-on-ignored-items`); this rule
   is just "don't surface them unprompted in the overnight reconstruction".
@@ -49,17 +49,17 @@ yet.)
 
 ## 2. Re-verdict stale unfilled bids
 
-For each still-open offer: `node pipeline/quote.mjs "<item>"` (or it's covered by
+For each still-open offer: `node pipeline/quote-items.mjs "<item>"` (or it's covered by
 `--positions` if held) → fresh gate-tree verdict → recommend **keep / reprice / cancel**.
 Never frame a sell-side reprice-down as "outrunning a drop" — it's controlled loss-taking
 or it's realizing the band, and you say which (MONITORING.md's sell-side framing).
 
 ## 3. Review new positions
 
-`node pipeline/quote.mjs --positions` → verdict + price-to-clear for anything acquired
+`node pipeline/quote-items.mjs --positions` → verdict + price-to-clear for anything acquired
 overnight. The incidental-inventory filter and verdict interpretation follow the shared
 `/positions` doctrine (invoke it via the Skill tool rather than duplicating its rules).
-If you read a `node pipeline/watch.mjs` pass here instead, each held lot's note block is the
+If you read a `node pipeline/watch-positions.mjs` pass here instead, each held lot's note block is the
 fixed V5 EMIT CONTRACT — verdict → conviction → Δ → tripwire → **guaranteed
 `sell: list @ X · break-even Y` line** → fill-progress (`MONITORING.md` "What each tick
 surfaces"); the sell line is where you read every held item's list-at without re-deriving it.
@@ -75,14 +75,14 @@ achieved vs the plan Ben recalls, and what to redeploy freed capital into — **
 **Cadence (W1, 2026-07-05; mechanized COD-3, 2026-07-10):** descriptive trade analysis starts
 NOW and runs **weekly** — calibration (F1) stays gated. Run this section once per **Mon–Sun
 week**. The "did it already run this week?" question is now a MECHANICAL check, not "ask Ben if
-unsure": run `node pipeline/outcomes.mjs --weekly-due` (a cheap standalone check — no rebuild).
+unsure": run `node pipeline/join-outcomes.mjs --weekly-due` (a cheap standalone check — no rebuild).
 It prints `weekly-due: yes` (run the section below) or `weekly-due: no` (skip it — a `--report`
 this week already stamped `.cache/last-weekly-report`). Running this section's `outcomes.mjs --report`
 re-stamps the marker, so the next `--weekly-due` reads `no` for the rest of the week. Every
 other morning, this check reads `no` — skip straight past this section.
 
 **What to run** — after the overnight review above is delivered (market work first, always):
-1. `node pipeline/outcomes.mjs --report` — fill-time distributions by band-percentile ×
+1. `node pipeline/join-outcomes.mjs --report` — fill-time distributions by band-percentile ×
    liquidity class with **n per cell**, plus the F1-gate progress line and the
    concentration line (top item's share of closed lots / realised P/L).
 2. A **realized-P/L attribution** read over `positions.json` `closed` lots (and
@@ -92,7 +92,7 @@ other morning, this check reads `no` — skip straight past this section.
    band edges implied — the suggestion join `outcomes.mjs` already computes).
 
 **Honesty rules (process rule 4 — descriptive ≠ calibration):**
-- **Print n for every cut you report** _(enforced: `pipeline/outcomes.mjs` `--report` suppresses cells under `MIN_N_REPORT`)_ and **refuse per-cell conclusions below the O1
+- **Print n for every cut you report** _(enforced: `pipeline/join-outcomes.mjs` `--report` suppresses cells under `MIN_N_REPORT`)_ and **refuse per-cell conclusions below the O1
   thresholds** (`--report` already suppresses cells under `MIN_N_REPORT`; F1's calibration
   gate is n≥30 per side×percentile×class×regime cell, ≥5 such cells — surfaced by the
   F1-gate progress line). This is a *description of what happened*, never a fill-rate model.

@@ -1,7 +1,7 @@
 /* analyze.mjs — the PURE analysis core (PLAN-ANALYZE chunk AZ1).
  *
  * The dataset AUDIT + tuning-CANDIDATE derivation, with NO fs / NO fetch — the same PURE-core / IO-shell
- * split as retrojoin.mjs ⇄ lib/retrojoin.mjs. The caller (pipeline/analyze.mjs) reads the ledger + fills
+ * split as retrojoin.mjs ⇄ lib/retrojoin.mjs. The caller (pipeline/analyze-record.mjs) reads the ledger + fills
  * + positions and feeds parsed objects in; analyze.test.mjs feeds SYNTHETIC fixtures only.
  *
  * It re-implements NONE of the join math — the retro rollup is the caller's `retroJoin`/`aggregateOutcomes`

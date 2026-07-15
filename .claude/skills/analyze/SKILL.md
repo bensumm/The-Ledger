@@ -1,6 +1,6 @@
 ---
 name: analyze
-version: 1.1
+version: 1.2
 description: Retro our own track record, audit that we're logging/storing the right data, and surface data-backed tuning proposals — then check the session's edits against the project guidelines. Triggers — "analyze our track record", "what should we tune", "did we log everything", "run a retro", "how are our suggestions doing", "analyze".
 ---
 
@@ -9,7 +9,7 @@ description: Retro our own track record, audit that we're logging/storing the ri
 Skills-versioning note: this file's `version` bumps on material behavior change; skills NEVER
 bump `APP_VERSION` (that marks the deployed app, which this skill never touches).
 
-This is the JUDGMENT half of the analysis construct. The MECHANICAL half is `pipeline/analyze.mjs`
+This is the JUDGMENT half of the analysis construct. The MECHANICAL half is `pipeline/analyze-record.mjs`
 (AZ1) — it audits the dataset, orchestrates the joins, and derives n-gated flags. Your job is to
 INTERPRET its brief into a retro + proposals and to run the guidelines checklist. The plan of record
 is `PLAN-ANALYZE.md`; the calibration home is F1 (PLAN.md).
@@ -17,9 +17,9 @@ is `PLAN-ANALYZE.md`; the calibration home is F1 (PLAN.md).
 ## 1. Run the engine — never hand-analyze
 
 ```
-node pipeline/analyze.mjs            # audit + per-niche retro rollup + n-gated candidates
-node pipeline/analyze.mjs --since 24 # restrict the freshness/window audit to the last N hours
-node pipeline/analyze.mjs --json     # the structured brief (parse it instead of re-deriving)
+node pipeline/analyze-record.mjs            # audit + per-niche retro rollup + n-gated candidates
+node pipeline/analyze-record.mjs --since 24 # restrict the freshness/window audit to the last N hours
+node pipeline/analyze-record.mjs --json     # the structured brief (parse it instead of re-deriving)
 ```
 
 - **That command IS the analysis** — it reads `suggestions.jsonl` (+ archives), `fills.json`, and
@@ -94,7 +94,7 @@ missed-rule incidents, not an enforcer — CI's `lint-docs.mjs`/`lint-skills.mjs
 
 ## What this skill does NOT do
 
-- **It does not re-run the slow campaign join** — `pipeline/outcomes.mjs` (`--report`) is the
+- **It does not re-run the slow campaign join** — `pipeline/join-outcomes.mjs` (`--report`) is the
   band-percentile × liquidity fill-time view; point Ben there rather than duplicating it. The engine
   does a rebuildability PROXY only.
 - **It does not launder a thin sample into a confident claim, tune a constant, or write any artifact** —

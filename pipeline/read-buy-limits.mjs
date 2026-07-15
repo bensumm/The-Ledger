@@ -2,9 +2,9 @@
 /**
  * limits.mjs — the BUY-LIMIT read for a Claude session. "Can I buy more X? / how much limit left?"
  *
- *   node pipeline/limits.mjs "<item or id>" [...more]
+ *   node pipeline/read-buy-limits.mjs "<item or id>" [...more]
  *       Per-item: limit, bought this 4h window, remaining, and when capacity next frees / fully resets.
- *   node pipeline/limits.mjs
+ *   node pipeline/read-buy-limits.mjs
  *       No args → report every item with a logged BUY in the last 4h.
  *
  * Reads the repo-root fills.json (the RuneLite-logged fills) + loadMapping (names/limits). NO market

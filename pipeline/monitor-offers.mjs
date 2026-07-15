@@ -13,7 +13,7 @@
  * It's the data source for the deterioration-watch polling routine documented in
  * pipeline/MONITORING.md (HOLD / WATCH / CUT with the evidence-gated 24h-cycle guard).
  *
- * Usage:  node pipeline/monitor.mjs
+ * Usage:  node pipeline/monitor-offers.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';

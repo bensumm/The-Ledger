@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.18
+version: 1.19
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -26,7 +26,7 @@ blowpipe 738 vs 220 median units). The game's actual quiet trough (GMT ~04–08)
 - Evidence bounds (process rule 4): the volume asymmetry is measured and the timezone
   geometry is fact; the behavioral sample (1 two-leg win, 2 bid failures) is small — keep
   scoring fills against this model as nights accrue.
-- **Weekday basis of a window read (v1.11→v1.12, 2026-07-06).** _(judgment: the narrow-slice weekend→weekday fade is UNCONFIRMED on full-day data — checked on DWH the apparent fade showed ONLY in the noisier 00-08 slice; full-day lows were flat-to-up across 3 Sun→Mon transitions)._ Before trusting any window read that crosses the weekend/weekday boundary, re-read on the full day — `node pipeline/windowrange.mjs "<item>" --window 0-23 --nights 21` — which is the honest basis; cross-reference `/positions` "trajectory read for confidence on a marginal/big-ticket hold."
+- **Weekday basis of a window read (v1.11→v1.12, 2026-07-06).** _(judgment: the narrow-slice weekend→weekday fade is UNCONFIRMED on full-day data — checked on DWH the apparent fade showed ONLY in the noisier 00-08 slice; full-day lows were flat-to-up across 3 Sun→Mon transitions)._ Before trusting any window read that crosses the weekend/weekday boundary, re-read on the full day — `node pipeline/read-window-range.mjs "<item>" --window 0-23 --nights 21` — which is the honest basis; cross-reference `/positions` "trajectory read for confidence on a marginal/big-ticket hold."
 
 This is a COMPOSITION, explicitly two-phase and interactive — never a single batch read.
 It invokes `/positions` and `/scan` **via the Skill tool** so tweaks to the children
@@ -40,14 +40,14 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    first (from the MAIN checkout, never a worktree — SY1.2), so the book is fresh for the
    whole composition; don't re-run the sync when `/scan` runs in Phase 2.
    **Refresh the measurement spine (Ben, 2026-07-07).** Right after that sync, run
-   `node pipeline/outcomes.mjs` once — the schema-v2 outcomes spine is NOT auto-updated by
+   `node pipeline/join-outcomes.mjs` once — the schema-v2 outcomes spine is NOT auto-updated by
    watch/screen (it's gitignored/derived), so it drifts stale across a trading session;
    `/overnight` is the daily session boundary where the day's completed fills + suggestion→fill
    joins get folded into it. It's EXTEND-never-rebuild, so it's safe to run any time; do it here so
    the F1-calibration accrual and the weekly `/morning` descriptive-outcomes read stay current.
 2. **Chase-bid sweep (Ben, 2026-07-05 — the entry-aggression posture flip).** Active
    sessions price bids near the live instasell to fill; overnight inverts that. Before the
-   pause, list every RESTING BUY offer (`node pipeline/watch.mjs` shows them with verdicts)
+   pause, list every RESTING BUY offer (`node pipeline/watch-positions.mjs` shows them with verdicts)
    and flag any bid priced at/near the live instasell or in the upper half of its band —
    each must be **cancelled or dropped to the band floor / a `windowrange.mjs`-supported
    level** before Ben walks away. A chase-priced bid left unattended fills into the first
@@ -61,7 +61,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
 
 ## Phase 2 — scan, filter, size against stated capital
 
-4. **Run the overnight-posture screen** — `node pipeline/screen.mjs --posture overnight --publish`
+4. **Run the overnight-posture screen** — `node pipeline/screen-flip-niches.mjs --posture overnight --publish`
    (S2), or invoke `/scan` and pass `--posture overnight`. The posture already does the
    structural filtering for you: it keeps only flat/rising regimes with a confident (reliable)
    band, drops the thin gp-flow fast-lane and any 2h breakdown, ranks by net edge over velocity,
@@ -97,7 +97,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      is the 2h-band FLOOR: an extreme print, not a typical price, and overnight is
      exactly when nobody crosses down to it (2026-07-04: both rune bids placed at the
      evening band floor went 0/25,000 in ~7.5h; by morning the floor had drifted above
-     the bids). **Run `node pipeline/windowrange.mjs "<item>" --bid <candidate>` for every
+     the bids). **Run `node pipeline/read-window-range.mjs "<item>" --bid <candidate>` for every
      candidate bid** — it scores the last ~14 local nights from the 1h timeseries and
      prints the bid levels touched on ~50%/~75%/all nights plus the overnight instasell
      volume pool. Price must-fill bids at a level touched on **most** recent nights
@@ -124,7 +124,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
      ceiling, not a forecast.
 6b. **Declare the thesis on every deliberate overnight/diurnal entry (VN-0, Ben 2026-07-11).**
    Each bid placed on a plan (buy tonight's trough, sell tomorrow's peak window) gets
-   `node pipeline/thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h>
+   `node pipeline/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h>
    --path <key>` at placement time — the declared tripwire/exit window is what keeps the
    morning-after verdicts framed against the PLAN instead of band-flip churn (`/positions`
    "Declare the thesis AT ENTRY"; MONITORING.md step 4). An overnight hold's cadence is the

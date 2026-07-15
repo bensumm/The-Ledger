@@ -76,10 +76,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `pipeline/trendcore.test.mjs`), `quotecore.js` (DOM-free quote model + canonical
   market-table cells — `computeQuote`/`regimeDrift`/`quoteCells`; shared byte-for-byte
   with the node analysis scripts; also home to `recentDirection` (DP1), `flushSignal` (DL2 — the
-  reactive liquid-flush firing read, consumed ONLY by `pipeline/watch.mjs --dip`, no app import), and
+  reactive liquid-flush firing read, consumed ONLY by `pipeline/watch-positions.mjs --dip`, no app import), and
   `nominateDip`/`reconcileDipPool`/`pruneDipPool` (DL4 — the scan's flush-SUITABILITY nomination + the
   quality-ranked, self-pruning pool write; `selectNominations` is the legacy dedup/cap, retained + tested but
-  no longer on the write path — all consumed ONLY by `pipeline/screen.mjs`, no app import);
+  no longer on the write path — all consumed ONLY by `pipeline/screen-flip-niches.mjs`, no app import);
   also the ONE type-7 quantile/median home (SF-1):
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
@@ -90,8 +90,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `windowrange --profile` prints) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
   deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
   for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field); MOVED here from `pipeline/lib/`
-  so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/windowrange.mjs`,
-  `pipeline/watch.mjs`, `pipeline/screen.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
+  so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/read-window-range.mjs`,
+  `pipeline/watch-positions.mjs`, `pipeline/screen-flip-niches.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of
   the deviation samples) so the forecast band isn't re-derived; every pre-existing field is byte-identical),
   `forecast.mjs` (PF1 2026-07-10 — the pure forward 12h/24h price projection: **CONSUMES** an `hourProfile`
@@ -123,7 +123,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   q85, so a lone spike can't inflate a range), a **typical fluctuation** (IQR), and a **trajectory** SHAPE
   (TV1 — `classifyTrajectory`: knife/oscillating/based/rising/elevated/flat, attached as `ts.trajectory`);
   degrades to `hasData:false`/`unknown` on a short series. Consumed by `js/validate.mjs`'s floor+trajectory
-  validators + `pipeline/screen.mjs`/`pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
+  validators + `pipeline/screen-flip-niches.mjs`/`pipeline/quote-items.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
   `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold flip-niche:
   `valueRanges` (recency-anchored shape features) / `valueScore` (composite rank with a deployable-capital
   multiplier; `capGp` threaded from `screen.mjs --capital÷--slots`) / `valueGate` (amplitude floor +
@@ -198,7 +198,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   reads it (via `lib/offers.mjs`'s `readOffersSnapshot`) as the held-book source for the askFilling
   softening — the OTHER-machine-safe path that needs no local `~/.runelite` log dir
 - `.capital-state.json` — **gitignored, local-only, never deployed** — Ben's cash ANCHOR
-  (`{cashGp, statedAt}`), written by `pipeline/cash.mjs`, read by `lib/cashderive.mjs` — whose
+  (`{cashGp, statedAt}`), written by `pipeline/derive-cash.mjs`, read by `lib/cashderive.mjs` — whose
   `loadDerivedCash` feeds `watch.mjs`'s SUMMARY total-capital line (`availableCash`, escrow excluded),
   `loop-tick.mjs`'s scan-gate (`deployablePool`), and `screen.mjs`'s value `--capital` default
   (`deployablePool`). The GE cash stack is in no log, but idle cash is no longer merely stated: this is the
@@ -221,17 +221,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   with local `STATE.watchlist` and `screen.mjs` always scans it (S3); app writes it back via
   the GitHub contents API (`js/github.js`)
 - `alerts.json` — tracked named price alerts (`{itemId, direction, price, note?}`) read by
-  `pipeline/alerts.mjs` (N1); ships empty
+  `pipeline/trigger-alerts.mjs` (N1); ships empty
 - `dip-watchlist.json` — tracked repo-root pool of flush candidates for the `--dip` loop (ships empty
   `[]`). **DL4 schema:** an array of `{ id, name, source:'auto'|'manual', track:'liquid'|'illiquid',
   addedTs, lastQualTs, score }` objects (`lastQualTs`/`score` added 2026-07-12 for the quality-ranked
   hygiene); the legacy plain name/id string-or-number form is still accepted (the reader is polymorphic).
-  PRODUCED by BOTH manual curation AND `pipeline/screen.mjs`'s DL4 nomination pass (`--mode all` re-scores
+  PRODUCED by BOTH manual curation AND `pipeline/screen-flip-niches.mjs`'s DL4 nomination pass (`--mode all` re-scores
   every flush-SUITABLE candidate via `nominateDip` and rewrites the pool via `reconcileDipPool` —
   SELF-PRUNING, not append-only: top-N by score per track, `DL4_POOL_CAP_LIQUID` 15 / `DL4_POOL_CAP_ILLIQUID`
   45, aged out after `DL4_POOL_MAX_AGE_DAYS` of not re-qualifying; manual entries exempt). Suitability now
   gates on a per-unit swing floor (`DL4_MIN_ABS_SWING`) as well as the gp-scale floor, so cheap high-volume
-  churn no longer qualifies. CONSUMED by `pipeline/watch.mjs --dip` — which folds the **LIQUID track ONLY**
+  churn no longer qualifies. CONSUMED by `pipeline/watch-positions.mjs --dip` — which folds the **LIQUID track ONLY**
   into its live target set (illiquid is DL3 backlog, not fetched live); the reader is polymorphic. NOT
   app-imported (watchlist.json is the app's, kept separate).
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
@@ -410,7 +410,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `windowrange.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring; `--profile` = the hour-of-day diurnal dip/peak read
     + derived stale-guarded bid/ask), `limits.mjs` (LM1 — the buy-limit read:
-    `node pipeline/limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
+    `node pipeline/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),
     `alerts.mjs` (N1 push-notification trigger
@@ -463,7 +463,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     buy-limit window math: `limitWindow({buys,limit,now})` → `{limit,boughtInWindow,remaining,nextFreeAt,
     fullResetAt}` (null limit = UNKNOWN, never unlimited) + `buysByItem(events)` extracting per-item BUY
     fills the SAME way `reconstruct.mjs` does (`collapseOffers∘dedupeSnapshots`, final cumulative filled,
-    banked/sells excluded). Consumed by `pipeline/limits.mjs` CLI + `screen.mjs`/`quote.mjs`'s
+    banked/sells excluded). Consumed by `pipeline/read-buy-limits.mjs` CLI + `screen.mjs`/`quote.mjs`'s
     `limitValidator` ctx; honesty: logged fills only, so `remaining` is an UPPER bound), `archive.mjs`
     (D0 — the Tier-1 SQLite market archive: a thin `node:sqlite` (`DatabaseSync`) wrapper storing
     RAW `/1h`+`/5m` bulk observations keyed `(grain, ts, itemId)` with `INSERT OR IGNORE` + WAL/
@@ -559,7 +559,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     into `screen.json` (`pipeline` field) + `positions.json` so the app can display the pipeline
     version beside APP_VERSION; independent bump track, launched at 1.0.0 with the app parity milestone),
     `retrojoin.mjs` (P6a — the PURE, fixture-tested join
-    core behind `pipeline/retrojoin.mjs`: `retroJoin(suggestions, fillsEvents)` classifies each
+    core behind `pipeline/report-retro.mjs`: `retroJoin(suggestions, fillsEvents)` classifies each
     suggestion row's forward outcome (filled / filled-worse / not-taken), measures suggestion→fill
     latency + the FIFO-matched round-trip (realized net / hold time, reusing reconstruct.mjs's
     helpers — never re-implemented), with a NEAREST-PRIOR one-fill-one-suggestion dedup rule; and
@@ -908,10 +908,10 @@ constant governs each, so these can move without touching the deployed app or ph
 
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
-| `alerts.json` | read by `pipeline/alerts.mjs` (N1) | tracked (ships empty) |
+| `alerts.json` | read by `pipeline/trigger-alerts.mjs` (N1) | tracked (ships empty) |
 | `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/… + SF-3 `volSrc?`); SR1-bounded to the current month | tracked, append-only |
 | `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | tracked, append-only (lazy) |
-| `outcomes.json` | derived by `pipeline/outcomes.mjs` (F1 join reads active+archives) | gitignored |
+| `outcomes.json` | derived by `pipeline/join-outcomes.mjs` (F1 join reads active+archives) | gitignored |
 
 ### Shared logic modules
 
@@ -924,12 +924,12 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | `js/quotecore.js` | 13 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
 | `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote.mjs`/`screen.mjs` (`tax`) + js-side node imports `js/strategies.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
 | `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs`, `cash.mjs` + `lib/analyze.mjs`/`context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
-| `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints) |
+| `js/windowread.mjs` | `pipeline/read-window-range.mjs`, `pipeline/watch-positions.mjs`, `pipeline/screen-flip-niches.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints) |
 | `js/forecast.mjs` | `pipeline/forecast.test.mjs`; **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate. An app-behavior change to it bumps APP_VERSION. |
-| `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs`, `pipeline/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
-| `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
-| `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
-| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
+| `js/validate.mjs` | `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs`, `pipeline/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
+| `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
+| `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
+| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
 
 ### Test-location convention
 
@@ -955,7 +955,7 @@ GitHub Pages is unaffected — it always serves over HTTP.
 
 `dev-server.mjs` (LW4) serves the repo-root static files exactly like the old Python
 server (ES modules, correct MIME) AND exposes **one localhost-only endpoint**, `POST
-/api/scan`, bound to `127.0.0.1`. It runs `node pipeline/screen.mjs --mode all --publish`
+/api/scan`, bound to `127.0.0.1`. It runs `node pipeline/screen-flip-niches.mjs --mode all --publish`
 (which rewrites the repo-root `screen.json` with **ZERO git**) and responds `{ ok,
 generatedAt }`. That is what makes the Scan tab's **Refresh scan** button run a REAL scan
 on the local desk: on localhost the app POSTs the endpoint, waits (~10–30s, showing a
