@@ -89,7 +89,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
   `windowrange --profile` prints) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
   deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
-  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field); MOVED here from `pipeline/lib/`
+  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `depthDays`/`clearableAsk`
+  (PLAN-DEPTH-EXIT DE1 2026-07-15 — the percentile-DEPTH exit: reconstructs a per-day price→volume
+  distribution from the 1h bucket point masses and answers "what can I actually BOOK at?" for a given lot
+  size; the reach count is its qty→0 limit, and a thin book collapses to a null-with-`reason`; `@provisional-api`
+  until DE2/DE3 consume it, the `DEPTH_*` constants module-internal placeholders); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/commands/read-window-range.mjs`,
   `pipeline/commands/watch-positions.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of

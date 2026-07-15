@@ -18,6 +18,7 @@
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
+import { depthDays, clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -282,6 +283,63 @@ ok('windowClear: null on a too-thin window; windowClearDiverges flags the two tr
   // both fine → no divergence; null read → no divergence
   assert.ok(!windowClearDiverges({ windowReach: 0.9, clearRatio: 0.1 }, 0.9).diverges);
   assert.ok(!windowClearDiverges(null).diverges);
+});
+
+// --- percentile-depth exit (PLAN-DEPTH-EXIT DE1) -----------------------------------------------
+// Multi-bucket days: several 1h prints per day at different (price, volume) so depth distributes
+// across price (windowStats collapses this to a day max/total; depth needs the point masses).
+const dDay = (d, buckets) => buckets.map(b => pt(ts(2026, 0, d, b.h), b.hi - 500, b.hi, 10, b.volHi));
+const dNow = new Date(2026, 0, 25, 12, 0, 0);              // hour 12 ∉ 14–17 → no "today" skip games
+const dOpts = { wStart: 14, wEnd: 17, now: dNow, nights: 14 };
+
+ok('depthDays: qty→0 clearedDays ≡ reachedDays (the reach count is the model\'s zero-size limit)', () => {
+  const series = [];
+  for (let d = 10; d <= 15; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 50 }, { h: 15, hi: 396, volHi: 50 }]));
+  const stats = windowStats(series, dOpts);
+  for (const ask of [395, 397, 399, 401]) {
+    const dd = depthDays(series, ask, { qty: 0, ...dOpts });
+    assert.equal(dd.clearedDays, reachedDays(stats.his, ask), `qty→0 clears ≡ reachedDays @${ask}`);
+  }
+});
+
+ok('clearableAsk: deep book + small size books HIGH; a large lot books lower (size-honest, monotone)', () => {
+  const series = [];   // every day trades deeply at 400 and 396 (1000 u each)
+  for (let d = 10; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 396, volHi: 1000 }]));
+  const small = clearableAsk(series, { qty: 10, ...dOpts });     // need 40 → clears the very top
+  assert.equal(small.price, 400);
+  assert.ok(small.clearFrac >= 0.75 && small.reason == null);
+  const large = clearableAsk(series, { qty: 400, ...dOpts });    // need 1600 → 400 alone (1000) can't; 396 cumulative (2000) can
+  assert.ok(large.price != null && large.price < small.price, 'a large lot books LOWER (needs cumulative depth)');
+});
+
+ok('clearableAsk: a thin book / oversized lot collapses to null WITH a reason (mirage guard, surfaced)', () => {
+  const thin = [];   // 6 days but ~nothing trades — flow can\'t absorb the lot at any level
+  for (let d = 10; d <= 15; d++) thin.push(...dDay(d, [{ h: 14, hi: 400, volHi: 3 }, { h: 15, hi: 396, volHi: 3 }]));
+  const r = clearableAsk(thin, { qty: 100, ...dOpts });          // need 400 ≫ 6 u/day
+  assert.equal(r.price, null);
+  assert.equal(r.reason, 'insufficient-depth', 'never a silent null — the liquidity collapse is named');
+  const few = dDay(10, [{ h: 14, hi: 400, volHi: 1000 }]).concat(dDay(11, [{ h: 14, hi: 400, volHi: 1000 }]));
+  assert.equal(clearableAsk(few, { qty: 1, ...dOpts }).reason, 'thin-history', '< minDays scored → thin-history');
+});
+
+ok('clearableAsk/depthDays: monotone — higher qty/competition/targetFrac never books HIGHER', () => {
+  const series = [];   // three price tiers/day: 410(200) · 400(400) · 390(800)
+  for (let d = 10; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 410, volHi: 200 }, { h: 15, hi: 400, volHi: 400 }, { h: 16, hi: 390, volHi: 800 }]));
+  const p = q => clearableAsk(series, { qty: q, ...dOpts }).price ?? -Infinity;
+  assert.ok(p(10) >= p(100) && p(100) >= p(300), 'price non-increasing in qty');
+  const byComp = c => clearableAsk(series, { qty: 50, competition: c, ...dOpts }).price ?? -Infinity;
+  assert.ok(byComp(1) >= byComp(4) && byComp(4) >= byComp(8), 'price non-increasing in competition');
+  const byFrac = f => clearableAsk(series, { qty: 50, targetFrac: f, ...dOpts }).price ?? -Infinity;
+  assert.ok(byFrac(0.5) >= byFrac(0.75) && byFrac(0.75) >= byFrac(1), 'price non-increasing in targetFrac');
+  const cf = ask => depthDays(series, ask, { qty: 50, ...dOpts }).clearFrac;
+  assert.ok(cf(390) >= cf(400) && cf(400) >= cf(410), 'depthDays clearFrac non-increasing in the ask');
+});
+
+ok('clearableAsk: minBuckets guard — a lone fat bucket at the top cannot set the clearable ask', () => {
+  const series = [...dDay(10, [{ h: 14, hi: 420, volHi: 100000 }])];   // one day, one huge 420 flier
+  for (let d = 11; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 398, volHi: 1000 }]));
+  const r = clearableAsk(series, { qty: 10, ...dOpts });               // 420 is supported by 1 bucket (< minBuckets 2) → skipped
+  assert.ok(r.price != null && r.price <= 400, 'the lone 420 flier does not set the ask — the dense top ≤400 does');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

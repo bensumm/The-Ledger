@@ -191,6 +191,117 @@ export function windowClearDiverges(clear, dayReachFrac = null, { minFrac = WINC
   return { diverges: windowShort || sizeShort, windowShort, sizeShort };
 }
 
+// --- percentile-depth exit/entry (PLAN-DEPTH-EXIT DE1) ----------------------------------------
+// THE GOAL — answer "what can I actually BOOK at?" (the price my size clears), not "how often does
+// the top print?" (that's reachedDays/touchedDays above — and it is the qty→0 LIMIT of this model,
+// pinned as a fixture). windowStats reads each day's MAX high; depth reads the WHOLE window's volume
+// distributed ACROSS price. The wiki exposes no order book, so we reconstruct the distribution from
+// the only thing it gives: each 1h bucket is a POINT MASS — highPriceVolume units transacted at
+// avgHighPrice (bid side: lowPriceVolume at avgLowPrice). depthAbove_d(P) = the instabuy flow that
+// printed at/above P on day d; a day "clears" my lot when that flow is COMPETITION× my size (I don't
+// take the whole pool — other sellers queue too). Full data-availability analysis + bias structure:
+// PLAN-DEPTH-EXIT.md. ALL constants are NAMED PLACEHOLDERS (n≈0 — the soul-rune anchor); F1 owns the
+// magnitudes (process rule 4). Kept module-internal for now (surfaced via the function returns);
+// promote to `export` when a cross-file consumer (DE2/DE3) actually imports one.
+//
+// LIQUIDITY BIAS — SURFACED BY DESIGN (Ben, 2026-07-15): a flat COMPETITION× makes this a LIQUID-CLASS
+// tool. A thin book whose whole-window flow is under COMPETITION×qty at every level returns a null read
+// WITH A REASON ('insufficient-depth') — honest deflation for held-lot pricing, but it means depth
+// cannot rescue a thin item's buried edge (only surface liquid ones). A null NEVER degrades silently;
+// the caller reads the reason and says "reach fallback — book absorbs <N× your lot". F1 must validate
+// whether the flat ×4 systematically nulls a class we'd want to price (DE3 shadow-logs the reason+class).
+const DEPTH_COMPETITION_MULT = 4;    // required flow = COMPETITION × qty (queue-position safety factor; Ben-accepted 2026-07-15 conditional on the surfacing above)
+const DEPTH_TARGET_FRAC      = 0.75; // a level "clears" when ≥ this fraction of scored days absorb the lot (echoes EST_REACH_SAT_FRAC's "reachable-enough")
+const DEPTH_MIN_DAYS         = 5;    // fewer scored window-days than this ⇒ null 'thin-history' (mirrors ASYM_MIN_DAYS)
+const DEPTH_MIN_BUCKETS      = 2;    // a candidate level needs ≥ this many distinct supporting buckets at/beyond it (within-bucket misattribution guard)
+
+/* Group the in-window 1h buckets by day, KEEPING each bucket's (price, volume) point mass — the piece
+ * windowStats discards when it collapses a day to max-hi/total-vol. Returns
+ *   [[key, { hi:[{p,v},…], lo:[{p,v},…] }], …]  oldest→newest, complete days only (today skipped while
+ * inside the window, exactly like windowStats), capped at `nights`. Only buckets that actually TRADED
+ * (vol>0) are kept — a zero-volume average is a quote, not depth. Module-internal engine for both funcs. */
+function windowBuckets(series, { nights = 14, wStart, wEnd, now = new Date() } = {}) {
+  const days = new Map();
+  const today = inWindow(now.getHours(), wStart, wEnd) ? dayKey(now, wStart, wEnd) : null;
+  for (const pt of series) {
+    const d = new Date(pt.timestamp * 1000);
+    if (!inWindow(d.getHours(), wStart, wEnd)) continue;
+    const key = dayKey(d, wStart, wEnd);
+    if (key === today) continue;
+    const rec = days.get(key) || { hi: [], lo: [] };
+    if (pt.avgHighPrice != null && (pt.highPriceVolume || 0) > 0) rec.hi.push({ p: pt.avgHighPrice, v: pt.highPriceVolume });
+    if (pt.avgLowPrice  != null && (pt.lowPriceVolume  || 0) > 0) rec.lo.push({ p: pt.avgLowPrice,  v: pt.lowPriceVolume  });
+    days.set(key, rec);
+  }
+  return [...days.entries()].filter(([, r]) => r.hi.length || r.lo.length)
+    .sort((a, b) => b[0].localeCompare(a[0])).slice(0, nights).reverse();
+}
+
+// Flow at/beyond a level within one day's buckets. ask side = instabuy volume at/ABOVE the ask;
+// bid side = instasell volume at/BELOW the bid (the DE6 low-side mirror rides this same engine).
+const flowBeyond = (buckets, level, side) =>
+  buckets.reduce((s, b) => s + ((side === 'bid' ? b.p <= level : b.p >= level) ? b.v : 0), 0);
+
+/* depthDays(series, level, opts) → per-day flow-beyond + clear counts, or null when no window data.
+ *   { perDay:[{key, flow, clears}], nDays, clearedDays, clearFrac, recentDays, recentClears, recentFrac }
+ * A day "clears" when flow ≥ competition×qty (qty>0); with qty→0 it degenerates to flow>0 — "a bucket
+ * beyond the level actually traded" — which IS reachedDays/touchedDays (the pinned subsumption proof:
+ * the reach count is this model's zero-size limit). `side` selects ask (default) vs the low-side mirror. */
+// @provisional-api: PLAN-DEPTH-EXIT DE1 — the per-day depth read consumed by DE2 (read-window-range --depth)
+// and DE3 (watch-positions held-lot line + suggestions.jsonl shadow fields), the tracked next surfaces.
+export function depthDays(series, level, { qty = 0, competition = DEPTH_COMPETITION_MULT, side = 'ask', wStart, wEnd, nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
+  if (level == null) return null;
+  const scored = windowBuckets(series, { nights, wStart, wEnd, now });
+  if (!scored.length) return null;
+  const need = competition * qty;
+  const perDay = scored.map(([key, r]) => {
+    const flow = flowBeyond(side === 'bid' ? r.lo : r.hi, level, side);
+    return { key, flow, clears: qty > 0 ? flow >= need : flow > 0 };
+  });
+  const nDays = perDay.length;
+  const clearedDays = perDay.filter(d => d.clears).length;
+  const recent = perDay.slice(-recentN);
+  const recentClears = recent.filter(d => d.clears).length;
+  return {
+    perDay, nDays, clearedDays, clearFrac: clearedDays / nDays,
+    recentDays: recent.length, recentClears,
+    recentFrac: recent.length ? recentClears / recent.length : null,
+  };
+}
+
+/* clearableAsk(series, opts) → { price, clearFrac, reason, nDays, competition, qty }.
+ *   price  = the HIGHEST ask whose flow clears the lot on ≥ targetFrac of days AND has ≥ minBuckets
+ *            distinct supporting buckets at/above it — "what I can actually book at" (null when none).
+ *   reason = why price is null: 'thin-history' (< minDays scored), 'no-prints' (no traded buckets),
+ *            'insufficient-depth' (the book can't absorb competition×qty at ANY level — the liquidity
+ *            collapse Ben predicted; the caller MUST surface it, never silently fall back to reach).
+ * Candidate levels = the distinct bucket prices only (no interpolation — that would invent data).
+ * clearFrac is monotone non-increasing in the ask, so scanning high→low the FIRST clearing level is the
+ * max. By construction price never exceeds the observed data (a real bucket price); the caller still
+ * caps a rendered ask at dayHighFrom5m. (The low-side clearableBid mirror is DE6, off this same engine.) */
+// @provisional-api: PLAN-DEPTH-EXIT DE1 — the "book at X" ask, consumed by DE2 (--depth inspector) and
+// DE3 (watch-positions line/shadow log); F1 (DE4) later promotes it into estimatePair's held-lot sell.
+export function clearableAsk(series, { qty, competition = DEPTH_COMPETITION_MULT, targetFrac = DEPTH_TARGET_FRAC, minBuckets = DEPTH_MIN_BUCKETS, minDays = DEPTH_MIN_DAYS, wStart, wEnd, nights = 14, now = new Date() } = {}) {
+  const scored = windowBuckets(series, { nights, wStart, wEnd, now });
+  const nDays = scored.length;
+  if (nDays < minDays) return { price: null, clearFrac: null, reason: 'thin-history', nDays, competition, qty };
+  const levels = [...new Set(scored.flatMap(([, r]) => r.hi.map(b => b.p)))].sort((a, b) => b - a); // high→low
+  if (!levels.length) return { price: null, clearFrac: null, reason: 'no-prints', nDays, competition, qty };
+  const need = competition * qty;
+  for (const P of levels) {
+    let supporting = 0, cleared = 0;
+    for (const [, r] of scored) {
+      const atAbove = r.hi.filter(b => b.p >= P);
+      supporting += atAbove.length;
+      const flow = atAbove.reduce((s, b) => s + b.v, 0);
+      if (flow > 0 && flow >= need) cleared++;
+    }
+    if (supporting < minBuckets) continue;                 // misattribution guard: too few prints to trust P
+    if (cleared / nDays >= targetFrac) return { price: P, clearFrac: cleared / nDays, reason: null, nDays, competition, qty };
+  }
+  return { price: null, clearFrac: 0, reason: 'insufficient-depth', nDays, competition, qty, need };
+}
+
 // --- hour-of-day diurnal profile (the peak-timing read) ---------------------------------------
 // windowStats scores ONE fixed wall-clock window; hourProfile instead buckets the SAME 1h series by
 // LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak
