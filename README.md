@@ -325,6 +325,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     price/trade/suggestion/verdict moves through the system (the two runtimes + shared `js/quotecore.js`
     core; the market-read, opportunity-screen, held-verdict, fill-loop, and learning-loop flows; an
     entities-in-flow-order table). POINTS to this README/ARCHITECTURE/GLOSSARY rather than restating them.
+  - `MARKET-ANALYSIS.md` (2026-07-15) — the doctrine behind a market read, extracted from CLAUDE.md (where
+    it had grown to ~72% of the file). Six sections built in the order a read is: the output table, the
+    tax math, how a candidate is found + validated + ranked, how an entry is priced, the time-of-day reads,
+    and what each script does. Every rule is the operating summary + a pointer to the module header that
+    owns the full spec (thresholds, provenance, fixtures). CLAUDE.md keeps only the table shape + routing.
   - `GLOSSARY.md` (2026-07-14) — the plain-English lookup for the vocabulary: core concepts
     (flip-niche / held-item strategy, reach, diurnal, band, verdicts, cash tiers…) + the codename
     dictionary (the concept behind each plan-chunk shorthand like `Bar E` / `DL4`). The ONE home for

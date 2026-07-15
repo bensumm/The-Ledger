@@ -118,7 +118,7 @@ export const DENYLIST = [
     // tree is NOT listed. The definition + full codename history live in docs/GLOSSARY.md (not in
     // `files`, so it doesn't self-trip). Case-insensitive so a capitalized "Niche" heading is caught too.
     pattern: /(?<![\w-])niche/i,
-    files: ['CLAUDE.md', 'README.md', 'docs/ARCHITECTURE.md',
+    files: ['CLAUDE.md', 'README.md', 'docs/ARCHITECTURE.md', 'docs/MARKET-ANALYSIS.md',
             '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
             '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],
     reason: 'the screen niches are "flip-niches" now (R1 rename) — say flip-niche; "strategy" is the held-item level. Definition: docs/GLOSSARY.md',
@@ -138,7 +138,7 @@ export const DENYLIST = [
     // Scoped to the swept operating docs; CHANGELOG/LORE/PLAN keep the historical names (not in `files`).
     pattern: /(?<![\w-])(screen|quote|watch|monitor|windowrange|cash|thesis|outcomes|alerts|loop-tick)\.mjs\b/,
     files: ['CLAUDE.md', 'README.md', 'docs/ARCHITECTURE.md', 'docs/GLOSSARY.md',
-            'docs/SKILL-TRIAGE.md', 'docs/PLANNING.md', 'pipeline/MONITORING.md',
+            'docs/MARKET-ANALYSIS.md', 'docs/SKILL-TRIAGE.md', 'docs/PLANNING.md', 'pipeline/MONITORING.md',
             'pipeline/FILLS-PIPELINE.md', '.claude/skills/scan/SKILL.md',
             '.claude/skills/positions/SKILL.md', '.claude/skills/overnight/SKILL.md',
             '.claude/skills/morning/SKILL.md', '.claude/skills/analyze/SKILL.md'],
