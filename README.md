@@ -319,6 +319,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   - `PLANNING.md` — the planning process itself (required plan sections, chunk design rules, the
     skills improvement loop, anti-patterns; written 2026-07-08, follow it when producing any
     improvement plan).
+  - `ARCHITECTURE.md` (2026-07-14) — the general-rules layer: what the system IS + the load-bearing
+    invariants, in ONE place (the anti-fragmentation index). Split into 🔒 ENFORCED (each naming the CI
+    guard that fails on violation — `import-check`/`dead-export-check`/`doclint`/`skill-lint`/`smoke`/replay
+    goldens/`archlint`) vs ⚖️ JUDGMENT principles. Its own file references are guarded by
+    `pipeline/archlint.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
+    organized + why".
   - `LORE.md` (P7) — narrative/history + superseded-approach rationale (the single-file→split
     story, the LW2/LW3 live desk, the pipeline's eliminated scheduler, the incident anchors behind
     the process rules, the rejected/retired approaches). Nothing here is load-bearing — CLAUDE.md
@@ -709,6 +715,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Uses a character-scanner comment stripper (strings/templates/regexes preserved verbatim, so an identifier in
     a `${…}` interpolation still counts — the STAGES false-positive lesson). Pure helpers exported + pinned by
     `dead-export-check.test.mjs`,
+  - `archlint.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the
+    cheap `checks` job: every code-font FILE token the governed doc names must resolve on disk — a path from
+    root, a bare basename against the source dirs; function/field names are skipped, `PLAN-*.md` working docs
+    are exempt, genuinely-future files sit in its `PROPOSED` set. Catches rename/delete drift in the doc,
+    esp. through the directory rename. Structural/existence only, never semantic; pinned by
+    `archlint.test.mjs`),
   - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below

@@ -10,6 +10,19 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### `docs/ARCHITECTURE.md` + the `archlint` doc-reference guard (2026-07-14, docs+pipeline — NO APP_VERSION)
+The audit's core finding was that fragmentation persists because no single home states what the system IS
+or why. `docs/ARCHITECTURE.md` is that home — the general-rules layer, deliberately split into **🔒 ENFORCED**
+invariants (E1–E9, each naming the CI guard that fails on violation) vs **⚖️ JUDGMENT** principles (labelled
+not-machine-enforced). The enforced/judgment split is the answer to "how does the doc stay in sync": a
+mechanical claim is either guarded or marked *(proposed)*. The immediate dogfood: **`pipeline/archlint.mjs`**
+(E7) — every code-font FILE token the doc names must resolve on disk (path from root or bare basename against
+the source dirs; `PLAN-*.md` exempt, future files in a `PROPOSED` set), so a rename/delete can't silently
+orphan a reference — most valuable through the coming directory rename. Wired into `checks.yml`; pinned by
+`archlint.test.mjs`. Content is principle-level (one-home rule, the app-imported blast-radius model / N3,
+ROOT-LOCKED artifacts, RC-A/B/C anti-patterns + their guards); the pipeline-order flow walkthrough is a
+deferred companion (`docs/FLOW.md`, after the rename settles names).
+
 ### Vestigial-code cleanup + the RC-A dead-export guard (2026-07-14, APP_VERSION 0.64.1)
 The architecture re-audit (`PLAN-ARCH-DOCS-AUDIT.md` Parts 4–5) found the repo's recurring drift is
 vestigial "kept-for-future / until-torn-out" code, so the fix is a GUARD for the whole class, not a

@@ -38,6 +38,9 @@ jobs:
       - name: dead-export (no export kept alive only by its own test — RC-A vestigial-code guard)
         run: node pipeline/dead-export-check.mjs
 
+      - name: archlint (every file ARCHITECTURE.md names resolves on disk — doc-reference guard E7)
+        run: node pipeline/archlint.mjs
+
       - name: skill-lint (every SKILL.md rule-block tagged, P7)
         run: node pipeline/skill-lint.mjs
 

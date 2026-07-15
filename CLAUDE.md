@@ -38,7 +38,9 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 
 ## Where shipped work is documented (check before assuming something is new)
 Shipped changes + the "why" live in **`CHANGELOG.md`** + `git log`; the file/artifact registry is
-**`README.md`**; narrative/history + superseded-approach stories are **`docs/LORE.md`**; each
+**`README.md`**; the general-rules architecture + load-bearing invariants (🔒 enforced-by-a-guard vs
+⚖️ judgment) are **`docs/ARCHITECTURE.md`**; narrative/history + superseded-approach stories are
+**`docs/LORE.md`**; each
 load-bearing "don’t-rebuild" invariant lives in the header of the module/test that governs it (e.g.
 the Gate-2-`CUT`-exempt rule in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in
 `pipeline/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/modules.mjs`).
