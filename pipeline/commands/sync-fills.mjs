@@ -2,34 +2,37 @@
 /**
  * sync-fills.mjs — The Coffer fill-data pipeline (Windows / RuneLite side)
  *
- * Reads Exchange Logger plugin output (.runelite/exchange-logger/*),
- * normalizes GE offer events into fills.json, commits and pushes to the
- * repo that GitHub Pages serves. The Coffer fetches fills.json same-origin.
+ * Reads Exchange Logger plugin output (.runelite/exchange-logger/*), normalizes GE offer events
+ * into fills.json (+ the derived positions.json/offers.json). The Coffer fetches them same-origin.
  *
- * Sync is ON-DEMAND ONLY. The scheduler-era `--auto` amend/force-push branch (and the
- * CofferFillsSync Task Scheduler job / run-fills-sync wrappers that drove it) was EXCISED
- * 2026-07-05 (chunk X2); it was dead since the schedule was eliminated 2026-07-04
- * (G1 / FILLS-PIPELINE.md §12). Every run is now a fresh checkpoint commit landed via the
- * normal push path; git history is the recovery story if a schedule is ever wanted again.
+ * DEFAULT IS LOCAL — ZERO GIT (Ben 2026-07-15). A bare run REBUILDS fills/positions/offers.json in
+ * the working tree with NO git of any kind (no fetch/ff/commit/push). This is the cheap, always-fresh
+ * in-session read every `/scan`/`/positions`/`/morning` runs at the top — a book read never needs to
+ * touch git. **Publishing is ONCE A DAY, at the `/overnight` boundary, via `--publish`** — that's the
+ * only path that fetches/ff-pulls (folding phone trades) + commits + pushes fills.json to the repo
+ * GitHub Pages serves. So the DEPLOYED app's book updates nightly; the LOCALHOST desk reads the fresh
+ * working-tree rebuild all day. (This replaces the old "every sync commits + pushes" default.)
+ *
+ * Sync is ON-DEMAND ONLY — no scheduler (the CofferFillsSync job was excised 2026-07-05, chunk X2;
+ * FILLS-PIPELINE.md §12). Each `--publish` is a fresh checkpoint commit; git history is the recovery story.
  *
  * Usage:
- *   node sync-fills.mjs            manual run: parse -> merge -> new commit -> push
- *   node sync-fills.mjs --local    parse -> merge -> write fills/positions/offers.json,
- *                                  ZERO git (no fetch/ff/commit/push). Desk-side freshness
- *                                  for the localhost app (LW1); the watch-log.mjs daemon calls
- *                                  the same regenerate() core in-process.
- *   node sync-fills.mjs --probe    print first raw lines of each log file
- *                                  (use this ONCE to verify field mapping)
- *   node sync-fills.mjs --dry      parse + merge + report, no git push
- *   --log-dir <dir> / --repo-dir <dir>   override the source log dir / output
- *                                  repo dir — for isolated fixture tests only
- *                                  (never point a test at the real dirs).
+ *   node sync-fills.mjs            DEFAULT: parse -> merge -> write fills/positions/offers.json,
+ *                                  ZERO git. The in-session book read (cheap, always current).
+ *   node sync-fills.mjs --publish  parse -> fetch/ff-pull (fold phone trades) -> merge -> write ->
+ *                                  commit -> push to main. The ONCE-A-DAY publish (run by /overnight)
+ *                                  that updates the deployed app's fills.json.
+ *   node sync-fills.mjs --local    accepted SYNONYM for the default (kept for back-compat: run-loop's
+ *                                  watch pass + the watch-log.mjs daemon's in-process regenerate()).
+ *   node sync-fills.mjs --probe    print first raw lines of each log file (verify field mapping ONCE)
+ *   node sync-fills.mjs --dry      parse + merge + report only, no write, no git (preview a publish)
+ *   --log-dir <dir> / --repo-dir <dir>   override the source log dir / output repo dir — fixture tests
+ *                                  only (never point a test at the real dirs).
  *
- * --local NOTE: local mode does NOT fold un-pulled phone writes — mobile-fills.log is only as
- * fresh as the local checkout (no fetch/ff happens on the local path). Folding a phone-pushed
- * mobile-fills.log is the ATTENDED sync's job (syncMainToRemote ff before regeneration). That is
- * acceptable: local mode serves desk-side freshness only, which never needs the phone's un-pulled
- * lines. The daemon inherits the same property.
+ * PHONE-TRADE NOTE: the default/local path does NOT fold un-pulled phone writes — mobile-fills.log is
+ * only as fresh as the local checkout (no fetch/ff on the git-free path). Folding a phone-pushed
+ * mobile-fills.log is `--publish`'s job (syncMainToRemote ff before regeneration). Desktop RuneLite
+ * trades (the common case) are always captured locally; phone trades fold at the nightly publish.
  *
  * Manual-line vocabulary (coffer-manual.log, slot 8 — see PLAN.md chunk 1):
  *   BOUGHT / SOLD                  normal manual fills (add-manual-fill.mjs / the app)
@@ -79,6 +82,7 @@ const GIT_PUSH  = true;     // set false to stage commits without pushing
 
 const args = new Set(process.argv.slice(2));
 const PROBE = args.has('--probe'), DRY = args.has('--dry'), LOCAL = args.has('--local');
+const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetch/ff + commit + push) — the once-a-day /overnight publish; default + --local are ZERO-git
 
 /* ---------------------------------------------------------------------
  * ADAPTER + reconstruction now live in reconstruct.mjs (chunk 8) — the ONE
@@ -297,14 +301,16 @@ function main() {
     return;
   }
 
-  // --local: regenerate + write fills/positions/offers.json, but NO git of any kind (no fetch/ff,
-  // no commit, no push, no syncMainToRemote). Desk-side freshness for the localhost app.
-  if (LOCAL) {
+  // DEFAULT (and --local): regenerate + write fills/positions/offers.json, but NO git of any kind (no
+  // fetch/ff, no commit, no push, no syncMainToRemote). The cheap, always-fresh in-session book read —
+  // run this at the top of every /scan and /positions. Publishing to the deployed app is --publish's
+  // job, once a day at /overnight (below). --dry falls through to the preview branch.
+  if (!PUBLISH && !DRY) {
     const r = regenerate({ write: true, warn: false }); // desk-side freshness — drop phantoms, but stay quiet (no per-event spam)
-    if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run an attended sync for the per-event detail)`);
+    if (r.reEmitDropped) console.log(`(${r.reEmitDropped} suspected re-emit(s) dropped — run --publish for the per-event detail)`);
     console.log(`${r.sources.length} log source(s)${r.mobilePresent ? ' (incl. ' + MOBILE_REL + ')' : ''}, ${r.rawLines} lines (${r.parsedLines} valid trade line(s)), ${r.parsed} events, ${r.merged.length} after merge${r.eventsChanged ? '' : ' (no change)'}`);
     console.log(`positions: ${r.pos.closed.length} closed, ${r.pos.open.length} open, ${r.pos.unmatched.length} unmatched · offers: ${r.offersSnap.offers.length} open${r.offersChanged ? '' : ' (no change)'}`);
-    console.log(`[local] wrote fills/positions/offers as needed — NO git (desk-side freshness only).`);
+    console.log(`local rebuild — NO git (desk-side freshness). Publish to the deployed app nightly with --publish (/overnight).`);
     return;
   }
 
@@ -330,7 +336,7 @@ function main() {
       : `  CLOSED item=${t.itemId} qty=${t.qty} buy=${t.buyEach} sell=${t.sellEach} tax=${t.tax} realised=${t.realised >= 0 ? '+' : ''}${t.realised}${t.banked ? ' [banked basis]' : ''}`);
     for (const o of pos.open) console.log(`  OPEN   item=${o.itemId} qty=${o.qty} @ ${o.buyEach}${o.banked ? ' [banked]' : ''}`);
     for (const u of pos.unmatched) console.log(`  UNMATCHED SELL item=${u.itemId} qty=${u.qty} @ ${u.sellEach} (no logged buy — pre-log inventory)`);
-    if (changed) console.log('[dry] would write + push');
+    if (changed) console.log('[dry] --publish would fetch/ff + write + commit + push (a bare run writes locally with no git)');
     return;
   }
   if (!changed) return;

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.55
+version: 1.56
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -77,17 +77,15 @@ the RANK number separates the runes even though the placeholder letter-cutoffs c
 In `--mode all`, churn is disjoint from band by margin (band shows the ROI ≥ min-roi rows; churn
 keeps the sub-min-roi high-volume ones). `--mode spread` / `--mode rising` now error cleanly.
 
-**Sync first (SY1).** The §5 position-context pass reads Ben's current book, and there is no
-scheduled sync (on-demand only since the `CofferFillsSync` job was eliminated — FILLS-PIPELINE
-§12). Run `node pipeline/commands/sync-fills.mjs` before the position-context pass (in practice, at the
-top of the scan) so held-inventory/offer context is current — it also ff-pulls `origin/main`
-so any phone-logged trades are folded in (the multi-writer contract, §13.3).
-**Run it from the MAIN checkout only (SY1.2):** the sync commits+pushes `fills.json`/
-`positions.json` to `main` under the admin bypass, so run it from `C:\dev\The-Ledger`, **never
-a git worktree** (a feature-branch context would push the artifacts to the wrong ref). If
-you're in a worktree and can't reach the main checkout, SKIP the sync and note the book may be
-stale. (When `/scan` runs inside `/overnight`, Phase 1 already synced via `/positions` — don't
-re-run it.)
+**Sync first — ALWAYS, and it's cheap (SY1, Ben 2026-07-15).** Run `node pipeline/commands/sync-fills.mjs`
+at the top of every scan so the §5 position-context pass reads Ben's current book. The DEFAULT is now
+**local / zero-git** (rebuilds `fills.json`/`positions.json`/`offers.json`, no fetch/commit/push) — so
+always run it; it's fast and never touches git. **Never infer the book is fresh from elapsed time** — Ben
+trades asynchronously, so a fill you didn't see may have happened regardless of how little time passed.
+Phone-trade caveat: the local default doesn't ff-pull, so an un-pulled *phone* trade only folds in at the
+once-a-day `/overnight` `sync-fills.mjs --publish`; desktop trades are always captured. No worktree concern
+(the default is git-free — the old main-checkout caveat only applies to `--publish`). When `/scan` runs
+inside `/overnight`, Phase 1 already synced — don't re-run it.
 
 ## 2. Judgment pass over the rated rows
 

@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.26
+version: 1.27
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -20,20 +20,23 @@ prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch.
 already ran inside `momVerdict()` — your job is to *interpret* the printed verdicts, never
 to re-derive them.
 
-Freshness: there is **no scheduled sync** (the 20-min `CofferFillsSync` job was eliminated
-2026-07-04 — sync is on-demand only). **Sync first (SY1):** run `node pipeline/commands/sync-fills.mjs`
-before quoting so `positions.json` reflects every logged trade — including any phone-logged
-lines, since the sync ff-pulls `origin/main` (mobile `mobile-fills.log` writes) before
-reading the logs (the multi-writer contract, FILLS-PIPELINE §13.3) — then run `--positions`
-against the fresh file. (`node pipeline/commands/monitor-offers.mjs` shows live exchange-log truth if a
-just-made trade matters even more immediately.)
+**Sync first — ALWAYS, and it's now cheap (SY1, Ben 2026-07-15).** Run `node pipeline/commands/sync-fills.mjs`
+at the top of **every** positions read, unconditionally. The DEFAULT is now **local / zero-git** — it
+rebuilds `positions.json`/`fills.json`/`offers.json` from the exchange logs with no fetch/commit/push, so
+there's no reason NOT to run it: it's fast, it never touches git, and it's the only thing that makes the
+book current. **Never infer freshness from elapsed time** — Ben trades asynchronously in-game, so "only a
+few minutes passed" tells you nothing; a fill you didn't see may have happened (this is the exact miss the
+2026-07-15 empty-book report made). Then run `--positions` against the fresh file. (`node
+pipeline/commands/monitor-offers.mjs` reads the live exchange log — zero git — if a just-made trade matters
+even more immediately.)
 
-**Run the sync from the MAIN checkout only (SY1.2):** `sync-fills.mjs` commits+pushes the
-pipeline artifacts (`fills.json`/`positions.json`) to `main` under the admin bypass, so run
-it from `C:\dev\The-Ledger` — **never a git worktree** (a worktree is on a feature branch;
-pushing pipeline artifacts from there would land them on the wrong ref). If this session is
-running inside a worktree and you can't reach the main checkout, SKIP the sync and say so —
-report that `positions.json` may be stale rather than pushing from the wrong branch.
+- **Phone trades caveat:** the local default of `pipeline/commands/sync-fills.mjs` does NOT ff-pull
+  `origin/main`, so an un-pulled *phone* (`mobile-fills.log`) trade won't fold in until the once-a-day
+  `/overnight` publish (that path runs it with `--publish`) or a manual `git fetch`. Desktop RuneLite
+  trades — the common case — are always captured locally.
+- **No worktree concern anymore:** the default is git-free, so the old "run from the main checkout / never a
+  worktree" caveat only applies to `--publish` (the /overnight publish that commits+pushes), not to the
+  in-session local read.
 
 **Act on the stale-book banner — re-sync, don't just note it (Ben, 2026-07-06).** When
 `watch-positions.mjs`'s summary prints `held basis positions.json Nm old ⚠ stale` and the age keeps

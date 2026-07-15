@@ -134,13 +134,18 @@ mobile-fills.log (phone, contents API)                       ┘        │
                           (event log)         closed=realised P/L        (live GE slots, LW1)
                                               open=inventory@avg cost
                                                     │
-                                     commit + push to main (admin bypass) ──► app fetches same-origin
-                                                                              + every node surface reads
+              DEFAULT: written to the working tree, ZERO git ──► localhost desk + every node surface read fresh
+                                                    │
+              --publish (once a day, /overnight): fetch/ff (fold phone) + commit + push to main ──► deployed app fetches same-origin
 ```
 
 - `sync-fills.mjs` is **on-demand only** (the scheduler was eliminated — `pipeline/FILLS-PIPELINE.md`
-  §12). `--local` rebuilds the artifacts with **zero git** for desk-side freshness; the
-  `run-loop.mjs` watch pass does this every tick so positions always reads a fresh book.
+  §12), and the **DEFAULT is LOCAL / zero-git** (Ben 2026-07-15): a bare run rebuilds the artifacts in
+  the working tree with no fetch/commit/push — the cheap in-session read run at the top of every
+  `/scan`/`/positions` (the `run-loop.mjs` watch pass does it every tick). **Publishing to the deployed
+  app is once a day at `/overnight` via `sync-fills.mjs --publish`** — the only path that fetches/ff-pulls
+  (folding phone trades) + commits + pushes. So the deployed book updates nightly, the desk reads fresh
+  all day.
 - `positions.json` is the FIFO-reconstructed truth: `closed` = after-tax realised P/L, `open` =
   inventory at real average cost, `unmatched` = pre-log sells. The reconstruction is shared so
   `monitor-offers.mjs` and `sync-fills.mjs` agree. Read `pipeline/FILLS-PIPELINE.md` §5.1 before

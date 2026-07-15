@@ -357,8 +357,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   shared libraries; **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
   - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
-    `fills.json`/`positions.json`/`offers.json`, commit + push; `--local` writes them with
-    **zero git** for desk-side freshness — LW1, exported `regenerate()` core),
+    `fills.json`/`positions.json`/`offers.json`; **DEFAULT is LOCAL / zero-git** — the cheap in-session
+    book read run at the top of every `/scan` + `/positions`; **`--publish` is the once-a-day `/overnight`
+    commit + push** that fetches/ff-pulls phone trades and updates the deployed app; `--local` = an
+    explicit synonym for the default — LW1, exported `regenerate()` core),
     `watch-log.mjs` (LW1 local daemon — `fs.watch` the exchange-logger dir + `regenerate()`
     in-process on every change, ~10s debounce, **zero git**; also writes a liveness
     `heartbeat.json` at the repo root every ~30s (LW3, zero git) so the localhost stamp shows
@@ -908,7 +910,7 @@ deployed-phone change (not a rename):
 | `screen.json` | app fetches same-origin (`js/ui.js` Scan tab) |
 | `watchlist.json` | app fetches same-origin (`js/ui.js`) **and** the phone writes it back via the contents API (`js/github.js` `WATCHLIST_PATH`) |
 | `mobile-fills.log` | the phone appends slot-9 lines via the contents API (`js/github.js` `MOBILE_LOG_PATH`); `sync-fills.mjs` reads it |
-| `fills.json` | the pipeline source `positions.json` is FIFO-reconstructed from; `sync-fills.mjs` commits it at the root (not app-fetched directly, but coupled to the same convention) |
+| `fills.json` | the pipeline source `positions.json` is FIFO-reconstructed from; `sync-fills.mjs --publish` commits it at the root nightly (a bare run rebuilds it locally, zero-git; not app-fetched directly, but coupled to the same convention) |
 
 **Pipeline-only / movable** — no app fetch and no hardcoded remote path; a single path
 constant governs each, so these can move without touching the deployed app or phone:

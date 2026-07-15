@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.10
+version: 1.11
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -12,18 +12,13 @@ exchange log. Skills never bump `APP_VERSION`.
 
 ## 1. What filled vs didn't — two sources, two jobs
 
-**Sync first (SY1).** There is no scheduled sync (the 20-min `CofferFillsSync` job was
-eliminated 2026-07-04 — on-demand only). Run `node pipeline/commands/sync-fills.mjs` at the top of
-the review so `positions.json`/`fills.json` reflect everything the exchange log captured
-overnight — *and* any phone-logged trades, since the sync ff-pulls `origin/main`
-(`mobile-fills.log` writes) before reading logs (the multi-writer contract, FILLS-PIPELINE
-§13.3) — *then* read them below.
-
-**Run the sync from the MAIN checkout only (SY1.2):** `sync-fills.mjs` commits+pushes
-`fills.json`/`positions.json` to `main` under the admin bypass — run it from
-`C:\dev\The-Ledger`, **never a git worktree** (that's a feature branch; the artifacts would
-land on the wrong ref). If you're in a worktree and can't reach the main checkout, SKIP the
-sync and say the overnight numbers may be stale rather than pushing from the wrong branch.
+**Sync first (SY1, Ben 2026-07-15).** Run `node pipeline/commands/sync-fills.mjs` at the top of the review
+so `positions.json`/`fills.json` reflect everything the exchange log captured overnight — *then* read
+them below. The DEFAULT is **local / zero-git** (rebuild only, no fetch/commit/push), so it's cheap; run
+it unconditionally, never inferring freshness from how long you were away. **Phone-trade caveat:** the
+local read doesn't ff-pull, so an un-pulled *phone* overnight trade folds in only at the next `/overnight`
+`sync-fills.mjs --publish` (or a manual `git fetch`); a desktop-RuneLite overnight session is captured
+locally. Publishing to the deployed app is the once-a-day `/overnight` job — `/morning` is a local read.
 
 - **Booked numbers** ← `positions.json` (`closed` = after-tax realized P/L; `open` = new
   inventory) + new `fills.json` events — fresh as of the sync you just ran.
