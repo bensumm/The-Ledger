@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * dead-export-check.test.mjs — pins the RC-A guard's pure helpers (dead-export-check.mjs).
+ * check-dead-exports.test.mjs — pins the RC-A guard's pure helpers (check-dead-exports.mjs).
  *
  * The guard's own occurrence-counter had a false-positive bug (2026-07-14): its naive regex
  * comment-stripper corrupted function bodies with template literals — it dropped `STAGES` from a
  * `${STAGES.join('|')}` interpolation, flagging a LIVE symbol as dead. A false-positive guard gets
  * disabled, so these fixtures pin the character-scanner stripComments (comments out, strings/templates/
  * regexes preserved verbatim) + the marker + owned-export + import parsers. No live data (rule 4).
- * Run: `node pipeline/dead-export-check.test.mjs` (exits non-zero on any failure).
+ * Run: `node pipeline/check-dead-exports.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { stripComments, ownedExports, testOnlyNames, namedImports } from './dead-export-check.mjs';
+import { stripComments, ownedExports, testOnlyNames, namedImports } from './check-dead-exports.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

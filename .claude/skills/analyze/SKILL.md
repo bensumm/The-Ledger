@@ -1,6 +1,6 @@
 ---
 name: analyze
-version: 1.0
+version: 1.1
 description: Retro our own track record, audit that we're logging/storing the right data, and surface data-backed tuning proposals — then check the session's edits against the project guidelines. Triggers — "analyze our track record", "what should we tune", "did we log everything", "run a retro", "how are our suggestions doing", "analyze".
 ---
 
@@ -76,10 +76,10 @@ Before interpreting, know what WE did this session so the retro is grounded, not
 ## 5. Guidelines guard — checklist over the session's edits
 
 Run this over what changed THIS session (from §2's `git log`/working tree). It is a PROMPT that reduces
-missed-rule incidents, not an enforcer — CI's `doclint.mjs`/`skill-lint.mjs` remain the structural gate.
+missed-rule incidents, not an enforcer — CI's `lint-docs.mjs`/`lint-skills.mjs` remain the structural gate.
 
 - **Encoding boundary** — `judgment:` app-needed logic MOVED into `js/` (never copied/forked); a new
-  shared concern has ONE home (the two-homes anti-pattern CLAUDE.md rule 8 + `doclint.mjs` guard).
+  shared concern has ONE home (the two-homes anti-pattern CLAUDE.md rule 8 + `lint-docs.mjs` guard).
 - **Docs reconciliation, not append-only** — `judgment:` did the change update `README.md` inventory,
   the relevant `CLAUDE.md`/`pipeline/*.md` section, AND fix any statement it now contradicts? (rule 8).
 - **Version discipline** — `judgment:` `APP_VERSION` (`js/state.js`) bumped IFF the deployed app changed;
@@ -89,7 +89,7 @@ missed-rule incidents, not an enforcer — CI's `doclint.mjs`/`skill-lint.mjs` r
   no n≈0 signal is stated as calibrated (rule 4).
 - **Public repo, no PII** — `judgment:` no RSNs/real names/emails/account names in tracked content
   (code, docs, `suggestions.jsonl`, commit messages) — the repo is public.
-- **Green before done** — `judgment:` `node pipeline/run-tests.mjs` + `node pipeline/doclint.mjs` pass;
+- **Green before done** — `judgment:` `node pipeline/run-tests.mjs` + `node pipeline/lint-docs.mjs` pass;
   a deployed-app change also needs the browser smoke (CI runs it on push).
 
 ## What this skill does NOT do

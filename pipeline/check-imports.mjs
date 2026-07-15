@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* import-check.mjs — CI import-RESOLUTION guard (PLAN-VOL24 follow-up, 2026-07-13).
+/* check-imports.mjs — CI import-RESOLUTION guard (PLAN-VOL24 follow-up, 2026-07-13).
  *
  * WHY: the cheap `checks` job only proves SYNTAX (`node --check` never resolves imports), no test
  * imports the pipeline entrypoints, and the smoke job loads only the browser app — so an entrypoint that
@@ -18,7 +18,7 @@
  * no secrets, no network. Exits non-zero (and prints the offending entrypoint→module→name) on any
  * unresolved import; exits 0 when every entrypoint's imports resolve.
  *
- * Run: `node pipeline/import-check.mjs`   (CI wires it into checks.yml).
+ * Run: `node pipeline/check-imports.mjs`   (CI wires it into checks.yml).
  */
 import fs from 'node:fs';
 import path from 'node:path';

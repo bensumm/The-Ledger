@@ -47,7 +47,7 @@ load-bearing "don’t-rebuild" invariant lives in the header of the module/test 
 the Gate-2-`CUT`-exempt rule in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in
 `pipeline/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/modules.mjs`).
 Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`**, enforced by
-`pipeline/skill-lint.mjs` in CI. Before building something that feels new, check `git log` +
+`pipeline/lint-skills.mjs` in CI. Before building something that feels new, check `git log` +
 `CHANGELOG.md` — much of it already exists; don’t work from a stale assumption that a capability is
 missing.
 
@@ -155,7 +155,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   corrected `vol24`); the ONE remaining broken consumer is the browser app (`js/marketfetch.js`: Finder/Watch/
   Trends) — it STILL reads the broken `/24h`, so the published Scan tab + every node CLI are now MORE correct
   than the live app until the deferred, APP_VERSION-bumping step 3 lands. **CI import-resolution guard**
-  (`pipeline/import-check.mjs`, wired into `checks.yml`) statically verifies every pipeline entrypoint's
+  (`pipeline/check-imports.mjs`, wired into `checks.yml`) statically verifies every pipeline entrypoint's
   imports resolve against module exports — closes the gap that let a missing-export ride onto main undetected.
 - **Liquidity gate (S1):** two-sided (`hpv>0 && lpv>0`, the non-negotiable ghost-spread lesson) AND
   `limitVol ≥ --floor` (3500, PLAN-VOL24-recalibrated) **OR** gp-flow `limitVol×mid ≥ --gp-floor` (4.5b). The gp-flow path admits big
@@ -727,15 +727,15 @@ metadata, not a leak; the concern is content, not commit authorship.
   (pipeline-owned artifacts; clobber-guard reconciles). No unattended writer / machine
   bypass identity exists — the schedule was eliminated (`pipeline/FILLS-PIPELINE.md` §12).
 - **CI: `.github/workflows/checks.yml`** — a cheap `checks` job (JS syntax sweep, quotecore
-  + reconstruct acceptance fixtures, **`import-check.mjs`** — the import-RESOLUTION guard that statically
+  + reconstruct acceptance fixtures, **`check-imports.mjs`** — the import-RESOLUTION guard that statically
   verifies every pipeline entrypoint's imports resolve against module exports (catches a missing-export that
-  `node --check`'s syntax-only pass lets through), `fills.json`/`positions.json` parse, `skill-lint.mjs`, and
-  `doclint.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
+  `node --check`'s syntax-only pass lets through), `fills.json`/`positions.json` parse, `lint-skills.mjs`, and
+  `lint-docs.mjs` — DL1's structural doc-drift lint: a denylist of superseded terms/commands +
   a single-source duplicate-phrase check on the CLAUDE.md ⇆ README axis; **must stay a denylist +
   structural checker, never a semantic/LLM one**) plus a separate
   **`smoke` job** (CI1) that loads `index.html` in headless Playwright chromium with all
   external network stubbed and fails on any page error / app console error / empty pane —
-  the "syntax passed but the app broke" class the process rules warn about (`pipeline/smoke.mjs`).
+  the "syntax passed but the app broke" class the process rules warn about (`pipeline/smoke-test.mjs`).
   Both run on push, PR, and `merge_group`; the cheap job is split out so it fails fast. Agents
   may add/improve workflows within the constraints in `/ship` §4 (public logs, no `~/.runelite`,
   seconds-fast, no secrets).

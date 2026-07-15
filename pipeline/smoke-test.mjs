@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * smoke.mjs — minimal headless-browser smoke of the deployed app (PLAN CI1).
+ * smoke-test.mjs — minimal headless-browser smoke of the deployed app (PLAN CI1).
  *
  * `node --check` + the quotecore/reconstruct fixtures only cover syntax and pure logic; an
  * ES-module import/export mismatch or a render-path throw ships green today. This is the DOM
@@ -8,7 +8,7 @@
  * index.html in Playwright chromium (headless), and fails on any uncaught page error, any
  * app-originated console error, or a pane that renders empty.
  *
- *   node pipeline/smoke.mjs
+ *   node pipeline/smoke-test.mjs
  *
  * ALL external network is stubbed — nothing hits prices.runescape.wiki, the wiki guide, the
  * GitHub API, or Google Fonts in CI. Same-origin files (index.html, js/*, styles.css, the

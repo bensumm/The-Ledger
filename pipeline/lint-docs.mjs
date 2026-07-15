@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * doclint.mjs — a STRUCTURAL, offline doc-drift linter (DL1). The CI-encoded half of process
+ * lint-docs.mjs — a STRUCTURAL, offline doc-drift linter (DL1). The CI-encoded half of process
  * rule 8 ("grep the docs for statements the change now supersedes and fix them in place"), which
  * was itself only prose. Two deterministic checks, no semantics, no LLM, no network:
  *
@@ -28,7 +28,7 @@
  *     (two homes that say opposite things in different words). Nothing here replaces the wave-start
  *     Sonnet semantic drift scan — it narrows what that scan must find, it doesn't retire it.
  *
- * Run: `node pipeline/doclint.mjs`  (CI runs it in the cheap `checks` job; pinned by doclint.test.mjs).
+ * Run: `node pipeline/lint-docs.mjs`  (CI runs it in the cheap `checks` job; pinned by lint-docs.test.mjs).
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -42,7 +42,7 @@ const read = rel => { try { return readFileSync(join(ROOT, rel), 'utf8'); } catc
 // failure the audit named). Deliberately EXCLUDES: PLAN.md / CHANGELOG.md / docs/LORE.md (history +
 // narrative — restatement is their job); the module headers themselves (the legitimate ONE home); and
 // the SKILL.md files (they share process-boilerplate + trigger scaffolding BY DESIGN, and are governed
-// separately by skill-lint.mjs + the DOC-5 anchor-compression chunk — folding them in here is almost
+// separately by lint-skills.mjs + the DOC-5 anchor-compression chunk — folding them in here is almost
 // all legitimate-shared-boilerplate noise). The DENYLIST (CHECK 1) still scans skills + index.html.
 export const POINTER_DOCS = [
   'CLAUDE.md',

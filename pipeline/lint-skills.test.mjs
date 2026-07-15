@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * skill-lint.test.mjs — acceptance for the P7 heuristic skill linter.
+ * lint-skills.test.mjs — acceptance for the P7 heuristic skill linter.
  *
  * Pins the rule-block convention (`- **…**` top-level bullets), the two tag forms
  * (backticked code pointer OR `judgment:`), the frontmatter/fence exclusions, and — the
  * live regression guard — that the four real SKILL.md files currently lint clean.
  */
 import assert from 'node:assert';
-import { lintText, lintFile, SKILL_FILES } from './skill-lint.mjs';
+import { lintText, lintFile, SKILL_FILES } from './lint-skills.mjs';
 
 let passed = 0;
 const ok = (name, fn) => { fn(); console.log(`  ✓ ${name}`); passed++; };
@@ -85,4 +85,4 @@ ok('all four committed SKILL.md files are fully tagged', () => {
   }
 });
 
-console.log(`\n✓ skill-lint.test.mjs — all ${passed} checks passed.`);
+console.log(`\n✓ lint-skills.test.mjs — all ${passed} checks passed.`);

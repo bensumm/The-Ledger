@@ -325,20 +325,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     invariants, in ONE place (the anti-fragmentation index). Split into 🔒 ENFORCED (each naming the CI
     guard that fails on violation — `import-check`/`dead-export-check`/`doclint`/`skill-lint`/`smoke`/replay
     goldens/`archlint`) vs ⚖️ JUDGMENT principles. Its own file references are guarded by
-    `pipeline/archlint.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
+    `pipeline/lint-arch.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
     organized + why".
   - `GLOSSARY.md` (2026-07-14) — the plain-English lookup for the vocabulary: core concepts
     (flip-niche / held-item strategy, reach, diurnal, band, verdicts, cash tiers…) + the codename
     dictionary (the concept behind each plan-chunk shorthand like `Bar E` / `DL4`). The ONE home for
     term definitions — module headers point here rather than re-explain. Its file-refs are guarded by
-    `pipeline/archlint.mjs`. Built + maintained by the R1 rename pass (`PLAN-RENAME.md`).
+    `pipeline/lint-arch.mjs`. Built + maintained by the R1 rename pass (`PLAN-RENAME.md`).
   - `LORE.md` (P7) — narrative/history + superseded-approach rationale (the single-file→split
     story, the LW2/LW3 live desk, the pipeline's eliminated scheduler, the incident anchors behind
     the process rules, the rejected/retired approaches). Nothing here is load-bearing — CLAUDE.md
     "Where shipped work is documented" points here for the stories; invariants stay in module headers.
   - `SKILL-TRIAGE.md` (P7) — the three-way triage (ENCODE / KEEP-AS-JUDGMENT / RETIRE-proposal) of
     every prose rule-block in the four market skills + the memory index. The semantic record behind
-    the `pipeline/skill-lint.mjs` tags; hand-maintained — add a row when a skill gains a rule.
+    the `pipeline/lint-skills.mjs` tags; hand-maintained — add a row when a skill gains a rule.
 - `.gitattributes` — repo EOL normalization (GA1): text sources (`*.js`/`*.mjs`/`*.json`/
   `*.jsonl`/`*.md`/`*.yml`/`*.css`/`*.html`/`*.log` + `.gitignore`/`LICENSE`) are `text eol=lf`,
   the Windows batch launchers (`serve.cmd`/`watch-log.cmd`/`*.cmd`) are `text eol=crlf`, and
@@ -685,14 +685,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     firing log is now WIRED (PM2): `logFirings` appends one compact JSONL line per firing —
     `{ts,module,version,stage,surface,id,name,tag,price(price-stage),quickBuy,quickSell,guide,regimeLabel,phase}`
     — the hit/miss ledger the validate-before-promote loop scores later (SCORING is a later chunk).
-  - `skill-lint.mjs` (P7 — a HEURISTIC linter for the four market `SKILL.md` files, run in CI's
+  - `lint-skills.mjs` (P7 — a HEURISTIC linter for the four market `SKILL.md` files, run in CI's
     cheap `checks` job + auto-discovered by `run-tests.mjs` via its test: every top-level `- **…**`
     rule-block must carry a backticked `code-pointer` OR an explicit `judgment:` tag; FAILs on
     untagged blocks and prints per-file + total counts so untagged-prose GROWTH is visible. Exports
     `lintText`/`lintFile`/`SKILL_FILES` for the test. Deliberately NOT a Markdown parser — a
     growth-visibility guard; the semantic dispositions live in `docs/SKILL-TRIAGE.md`),
-  - `doclint.mjs` (DL1 — a STRUCTURAL, offline doc-drift linter run in CI's cheap `checks` job +
-    auto-discovered via `doclint.test.mjs`; the CI-encoded half of process rule 8. TWO checks:
+  - `lint-docs.mjs` (DL1 — a STRUCTURAL, offline doc-drift linter run in CI's cheap `checks` job +
+    auto-discovered via `lint-docs.test.mjs`; the CI-encoded half of process rule 8. TWO checks:
     (1) a maintained **DENYLIST** of superseded terms/commands × the operating docs they'd mislead
     (seeded: the deleted spread/rising flip-niches listed as live, an unqualified global falling-exclusion,
     and the removed per-flip-niche mode flags — see the `DENYLIST` table in the source for the exact patterns)
@@ -706,14 +706,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     verbatim: it catches recurrence of NAMED drift + novel COPY, NOT novel contradiction; the wave-start
     semantic drift scan stays necessary). Exports `DENYLIST`/`runDenylist`/`normalizeWords`/
     `findDuplicateShingles`/`runDuplicatePhrase` for the test),
-  - `import-check.mjs` (PLAN-VOL24 follow-up — the CI import-RESOLUTION guard run in the cheap `checks`
+  - `check-imports.mjs` (PLAN-VOL24 follow-up — the CI import-RESOLUTION guard run in the cheap `checks`
     job: STATICALLY parses each pipeline entrypoint's relative `import { … } from './x.mjs'` and verifies
     every named/default import exists in the target module's exports, dynamic-importing ONLY the pure lib
     targets (never the entrypoints — so no main()/fetch/git/argv side effect fires). Closes the gap that let
     screen.mjs's missing `dayHighFrom5m` import ride onto main undetected — `node --check` is syntax-only, no
     test imports the entrypoints, smoke loads only the browser app. Fast/offline/deterministic; exits non-zero
     naming the offending entrypoint→module→symbol),
-  - `dead-export-check.mjs` (RC-A guard, 2026-07-14 — the INVERSE of import-check, run in the cheap `checks`
+  - `check-dead-exports.mjs` (RC-A guard, 2026-07-14 — the INVERSE of import-check, run in the cheap `checks`
     job: a name-based, comment-stripped, deliberately CONSERVATIVE static scan of `js/` + `pipeline/` that
     fails if any export has NO non-test consumer — the recurring "kept-for-future / until-torn-out" vestigial
     pattern (its motivating case, `risingPoolFloor`, was removed by the same cleanup). An export exists solely
@@ -721,14 +721,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     but-unwired API citing a tracking item) immediately above it — the acknowledgement travels with the code.
     Uses a character-scanner comment stripper (strings/templates/regexes preserved verbatim, so an identifier in
     a `${…}` interpolation still counts — the STAGES false-positive lesson). Pure helpers exported + pinned by
-    `dead-export-check.test.mjs`,
-  - `archlint.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the
+    `check-dead-exports.test.mjs`,
+  - `lint-arch.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the
     cheap `checks` job: every code-font FILE token the governed doc names must resolve on disk — a path from
     root, a bare basename against the source dirs; function/field names are skipped, `PLAN-*.md` working docs
     are exempt, genuinely-future files sit in its `PROPOSED` set. Catches rename/delete drift in the doc,
     esp. through the directory rename. Structural/existence only, never semantic; pinned by
-    `archlint.test.mjs`),
-  - `smoke.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
+    `lint-arch.test.mjs`),
+  - `smoke-test.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
     the exit-family, the genuine-dip counter-fixture, enteredUnder→migration, and the
@@ -821,10 +821,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     gate or the thesis edge (null when those emptied it), the honest `subFloorLabel` wording, the
     `SUBFLOOR_TOP` slice bound + `SUBFLOOR_GRADE_CAP` clamp, the value-flip-niche scope-out, and the lean
     `subFloor` suggestions-ledger marker's absent-field byte-identity),
-    `skill-lint.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
+    `lint-skills.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
     detection, the two tag forms (code-pointer vs `judgment:`), frontmatter/fence exclusions, the
     counting, and the LIVE regression guard that all four committed SKILL.md files lint clean),
-    `doclint.test.mjs` (DL1 — the doc-drift linter's two checks: denylist pattern precision (live-flip-niche
+    `lint-docs.test.mjs` (DL1 — the doc-drift linter's two checks: denylist pattern precision (live-flip-niche
     form hits, deletion prose does NOT), the live corpus has no hard denylist violations + STILL catches
     the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs
     (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), and the live

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-/* dead-export-check.mjs — RC-A guard: no export kept alive ONLY by its own test (2026-07-14).
+/* check-dead-exports.mjs — RC-A guard: no export kept alive ONLY by its own test (2026-07-14).
  *
  * WHY (the root cause, PLAN-ARCH-DOCS-AUDIT Part 5 RC-A): the repo's recurring drift is vestigial
  * "kept for future re-add / until torn out" code — a concept's last real consumer gets deleted but the
  * exported function + its test are left behind, against CLAUDE.md's "git history is the reference" rule.
- * It then rots and inflates every later read/rename. `import-check.mjs` proves imports RESOLVE (forward:
+ * It then rots and inflates every later read/rename. `check-imports.mjs` proves imports RESOLVE (forward:
  * entrypoint → target); this proves the INVERSE — that every export still has a real (non-test) consumer.
  * The motivating instance was `risingPoolFloor` (rising niche deleted, its predicate + RISE_* consts + test
  * left behind) — this guard flags exactly that residue once the last production caller goes, so the fn + its
@@ -28,7 +28,7 @@
  * to the next reader. A rare case that can't take an inline marker (e.g. a re-export) uses ALLOW below.
  *
  * CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, public-log-safe, no ~/.runelite,
- * no secrets, no network, static-only (never imports the scanned files). Run: node pipeline/dead-export-check.mjs
+ * no secrets, no network, static-only (never imports the scanned files). Run: node pipeline/check-dead-exports.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';

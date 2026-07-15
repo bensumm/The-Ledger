@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* archlint.mjs — doc-reference guard (2026-07-14): every code-font FILE reference a governed doc names
+/* lint-arch.mjs — doc-reference guard (2026-07-14): every code-font FILE reference a governed doc names
  * must resolve on disk. It is the sync mechanism for docs/ARCHITECTURE.md (invariant E7): a durable
  * architecture doc names ~30 modules/guards, and the failure mode is that a rename/delete leaves the doc
  * pointing at a file that no longer exists (worst during the directory-hierarchy rename). This closes that
@@ -14,7 +14,7 @@
  *
  * MUST STAY a structural/existence checker, never a semantic one (the skill-lint / doclint honesty note
  * applies verbatim). CONSTRAINTS (checks.yml, /ship §4): fast, offline, deterministic, no network/secrets.
- * Run: node pipeline/archlint.mjs
+ * Run: node pipeline/lint-arch.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';

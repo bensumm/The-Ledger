@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * archlint.test.mjs — pins archlint's pure helpers (the ARCHITECTURE.md doc-reference guard).
+ * lint-arch.test.mjs — pins archlint's pure helpers (the ARCHITECTURE.md doc-reference guard).
  *
  * extractRefs must pick FILE tokens (path or bare basename with a known extension) and skip function/
  * field names, spaced phrases, `.test.mjs` suffix fragments, and transient PLAN-*.md working docs.
  * resolveRef must accept a real path, a bare basename resolved against the source dirs, and a PROPOSED
- * future file, and reject a missing one. No live data (rule 4). Run: node pipeline/archlint.test.mjs
+ * future file, and reject a missing one. No live data (rule 4). Run: node pipeline/lint-arch.test.mjs
  */
 import assert from 'node:assert/strict';
-import { extractRefs, resolveRef } from './archlint.mjs';
+import { extractRefs, resolveRef } from './lint-arch.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

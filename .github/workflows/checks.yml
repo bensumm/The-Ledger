@@ -33,19 +33,19 @@ jobs:
         run: node pipeline/run-tests.mjs
 
       - name: import-resolution (entrypoint imports resolve against module exports)
-        run: node pipeline/import-check.mjs
+        run: node pipeline/check-imports.mjs
 
       - name: dead-export (no export kept alive only by its own test — RC-A vestigial-code guard)
-        run: node pipeline/dead-export-check.mjs
+        run: node pipeline/check-dead-exports.mjs
 
       - name: archlint (every file ARCHITECTURE.md names resolves on disk — doc-reference guard E7)
-        run: node pipeline/archlint.mjs
+        run: node pipeline/lint-arch.mjs
 
       - name: skill-lint (every SKILL.md rule-block tagged, P7)
-        run: node pipeline/skill-lint.mjs
+        run: node pipeline/lint-skills.mjs
 
       - name: doc-lint (denylist of superseded terms + single-source duplicate-phrase, DL1)
-        run: node pipeline/doclint.mjs
+        run: node pipeline/lint-docs.mjs
 
       - name: fills.json / positions.json parse
         run: |
@@ -76,4 +76,4 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Browser DOM smoke
-        run: node pipeline/smoke.mjs
+        run: node pipeline/smoke-test.mjs

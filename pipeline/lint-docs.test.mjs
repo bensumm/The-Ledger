@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * doclint.test.mjs — acceptance for the DL1 structural doc-drift linter.
+ * lint-docs.test.mjs — acceptance for the DL1 structural doc-drift linter.
  *
  * Pins BOTH checks on synthetic fixtures (so the algorithm is proven independent of the live corpus)
  * AND the live regression guards (the real corpus must lint clean, and the denylist must STILL catch
@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {
   DENYLIST, runDenylist, normalizeWords, findDuplicateShingles, runDuplicatePhrase,
   SHINGLE_WORDS, POINTER_DOCS,
-} from './doclint.mjs';
+} from './lint-docs.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -88,4 +88,4 @@ ok('the real CLAUDE.md ⇆ README axis has NO non-allowlisted duplicate passages
   assert.deepEqual(dups, [], `unexpected copy-not-move: ${dups.map(d => `[${d.files.join('+')}] "${d.shingle.slice(0, 40)}…"`).join(' | ')}`);
 });
 
-console.log(`\n✓ doclint.test.mjs — ${pass} check(s) passed.`);
+console.log(`\n✓ lint-docs.test.mjs — ${pass} check(s) passed.`);

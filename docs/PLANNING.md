@@ -55,7 +55,7 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
 
 Lessons land fixture-first (failing fixture + the code change that passes it); skill prose is the
 tagged exception (`judgment:` tag or it's a defect); encoded rules leave pointers, not copies;
-enforced by `pipeline/skill-lint.mjs` (pipeline-v2 P7). Full protocol: PLAN.md's Pipeline-v2
+enforced by `pipeline/lint-skills.mjs` (pipeline-v2 P7). Full protocol: PLAN.md's Pipeline-v2
 "Encoding boundary" section. Plans that touch skills MUST run the three-way triage and ship the
 disposition table.
 

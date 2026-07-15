@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * skill-lint.mjs — a HEURISTIC linter for the four market SKILL.md files (Pipeline-v2 P7).
+ * lint-skills.mjs — a HEURISTIC linter for the four market SKILL.md files (Pipeline-v2 P7).
  *
  * WHY: Ben's standing rule (2026-07-08, memory `docs-small-encode-in-scripts`) — prefer
  * encoding judgment in scripts/validators over prose; keep prose honest about which kind it is.
@@ -31,7 +31,7 @@
  *   - It is a GROWTH-VISIBILITY guard, not proof of correctness. A green lint means "every
  *     rule-block is at least labelled", never "the skills are right".
  *
- * Run: `node pipeline/skill-lint.mjs`  (CI runs it in the cheap `checks` job).
+ * Run: `node pipeline/lint-skills.mjs`  (CI runs it in the cheap `checks` job).
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';

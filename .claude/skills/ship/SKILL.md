@@ -1,6 +1,6 @@
 ---
 name: ship
-version: 2.2
+version: 2.3
 description: Land a change on main (attended direct-push under the admin bypass today; PR + checks once the gh token is refreshed) and verify it — confirm the CI checks run and the Pages deploy are green; also holds the CI/workflow-editing and gh guardrails. Triggers — "ship it", "push this", "open a PR", "commit and push", "is it live", "check the deploy", "check CI", any change landing on main.
 ---
 
@@ -84,7 +84,7 @@ the auto-discovered acceptance fixtures `node pipeline/run-tests.mjs` — one ru
 recursively finds and runs every `pipeline/**/*.test.mjs`, so adding a test file needs no CI
 edit — and JSON-parse of `fills.json`/`positions.json`) and a
 separate **`smoke`** job (CI1) that installs Playwright chromium and runs
-`node pipeline/smoke.mjs` — a headless DOM smoke of `index.html` with all external network
+`node pipeline/smoke-test.mjs` — a headless DOM smoke of `index.html` with all external network
 stubbed, failing on any page error / app console error / empty pane. Split jobs so the cheap
 one fails fast. Constraints on any workflow change:
 
