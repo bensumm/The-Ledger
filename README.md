@@ -122,7 +122,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (TV1 — `classifyTrajectory`: knife/oscillating/based/rising/elevated/flat, attached as `ts.trajectory`);
   degrades to `hasData:false`/`unknown` on a short series. Consumed by `js/validate.mjs`'s floor+trajectory
   validators + `pipeline/screen.mjs`/`pipeline/quote.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
-  `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold niche:
+  `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold flip-niche:
   `valueRanges` (recency-anchored shape features) / `valueScore` (composite rank with a deployable-capital
   multiplier; `capGp` threaded from `screen.mjs --capital÷--slots`) / `valueGate` (amplitude floor +
   artifact-low guard + knife guard + coverage guard) / `valueTier` (buy-now vs watch). Consumed by
@@ -140,15 +140,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`),
-  `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR niches
+  `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR flip-niches
   (band/churn + scalp/value; the `spread` and `rising` specs were DELETED in Steps 3+4) as data-shaped
   specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,falling,gate,validators,defaultPath}`.
   `pipeline/lib/gatecandidates.mjs` looks up
   `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
-  / `spec.gate` instead of branching on the niche name — so a niche can be added or REMOVED by editing the
+  / `spec.gate` instead of branching on the flip-niche name — so a flip-niche can be added or REMOVED by editing the
   registry alone. P5's per-spec `falling` doctrine (`exclude`|`accept`|`knife-guard`), a `gate` selector
   (`band`|`value` — value routes to the term-structure `valueGate`), and the `scalp`/`value` specs (both
-  off-by-default). Steps 3+4: `pool.risingFloor` is now vestigial (all false — the rising niche that set it
+  off-by-default). Steps 3+4: `pool.risingFloor` is now vestigial (all false — the rising flip-niche that set it
   true is deleted) and `rank:'proxy'` is unused (rising's proxy ordering is absorbed into `rankAndSlice`'s
   rising reserve). `defaultPath` = the inferred DEFAULT ENTRY PATH the surfacing implies (band/churn/
   scalp → `scalp`, value → `value-hold` — a Ben-vetoable judgment proposal), written to
@@ -369,7 +369,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     stale declared-exit flag per held lot (`lib/staleexit.mjs` over a targeted TTL-cached 1h fetch —
     declared-exit lots only); behavior detail in CLAUDE.md "Script facts"), `screen.mjs`
     (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 a stdout-only
-    `Probes` column per niche; P6c re-runs an empty niche beneath the floor (`subFloorFallback` in
+    `Probes` column per flip-niche; P6c re-runs an empty flip-niche beneath the floor (`subFloorFallback` in
     `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
     two-sided gate and thesis edge are never relaxed)),
     `watch.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
@@ -420,19 +420,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`
     stamps `.cache/last-weekly-report` and the cheap standalone `--weekly-due` prints `weekly-due: yes|no`
     off the local Mon–Sun week so `/morning`'s weekly-read cadence is mechanical, not "ask Ben"),
-    `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-niche +
+    `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-flip-niche +
     per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
     buy offers. The SUGGESTION-keyed FORWARD counterpart to outcomes.mjs's campaign-keyed backward
     join; the ground-truth TTF calibrator for P6 and the input to the band/churn
-    consolidation question (the spread/rising niches were deleted in Steps 3+4). Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
+    consolidation question (the spread/rising flip-niches were deleted in Steps 3+4). Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
     n on every aggregate, deliberately NO grades/verdicts — the archive is weeks-cold and mostly
     not-taken),
     `analyze.mjs` (PLAN-ANALYZE AZ1 — the ANALYSIS ENGINE: read-only IO+print shell that AUDITS the
     dataset's health (ledger freshness/volume, field-DROP detection — an ALWAYS_FIELD that stopped being
     logged, fills⇆ledger un-attributed-buy coherence, a rebuildability PROXY = inputs parse + positions.json
     fresh vs fills.json, and forward-data recommendations), ORCHESTRATES the existing joins for a compact
-    per-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), a **DL2
+    per-flip-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), a **DL2
     dip-loop retro §4** (`dipLoopAudit` — joins the widened flush log against the retro rows, segments
     `alerted` (liquid) from `signal-only` (illiquid → DL3 input) rows, and computes fillable-vs-not
     separation over the alerted subset; candidate-surfacing → points at F1, never retunes; n≈0 placeholder),
@@ -507,7 +507,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     decision A — reuses intraday P(fill)/TTF but ranks the LAP via `churnLapUnits` = min(limit, feasible
     depth), so estimateRank multiplies net × lapUnits: on buy-limit-cycle commodities we always max the
     limit), `value` (P(fill)=floor-proximity, TTF=trough→recovery prior), and `rising` (regime/forecast
-    horizon — retained but no shipped spec uses it since the rising niche was deleted, Steps 3+4);
+    horizon — retained but no shipped spec uses it since the rising flip-niche was deleted, Steps 3+4);
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
     bundles pair/net/pFill/ttf/rank (Proposal A two-leg P via `askReachFactor` — SKIPPED for
@@ -531,7 +531,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the
     `risingPoolFloor` predicate (GC1's threshold-driven form, default `DEFAULT_THRESHOLDS`), the
     fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`) + the **rising reserve**
-    (Steps 3+4 — front-loads the highest-proxy risers, the absorbed `rising` niche mechanism), and the
+    (Steps 3+4 — front-loads the highest-proxy risers, the absorbed `rising` flip-niche mechanism), and the
     extracted post-fetch `surviveMode(mode,row,phase,opts)` — falling doctrine/`--phase-rescue`/the
     scalp falling-confirm (+ a vestigial rising-confirm)/overnight-posture, returning
     `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc` counters. **P5**:
@@ -542,8 +542,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     snapshot-replay acceptance ENGINE: `buildSnapshot()` expands five synthetic ARCHETYPES into a full
     raw market snapshot (`coffer-replay-snapshot/1`, a documented superset of D0's archive fixture —
     it also carries v24/band/latest/timeseries/daily so the whole funnel runs offline) anchored to a
-    fixed `ANCHOR_TS`; `runReplay(snapshot,opts)` drives the WHOLE per-niche funnel — `gateCandidates`
-    → `rankAndSlice` → `computeQuote`/`phase` → `surviveMode` — and returns the per-niche stage
+    fixed `ANCHOR_TS`; `runReplay(snapshot,opts)` drives the WHOLE per-flip-niche funnel — `gateCandidates`
+    → `rankAndSlice` → `computeQuote`/`phase` → `surviveMode` — and returns the per-flip-niche stage
     outputs (`gated`/`ranked`/`survivors`/`kept`/`dropped`) the golden pins. Pure/offline, no live API,
     no real SQLite), `suggestlog.mjs` (shared `suggestions.jsonl` appender + SR1
     rotation: `logSuggestions` rolls completed months into `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl`
@@ -561,7 +561,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     suggestion row's forward outcome (filled / filled-worse / not-taken), measures suggestion→fill
     latency + the FIFO-matched round-trip (realized net / hold time, reusing reconstruct.mjs's
     helpers — never re-implemented), with a NEAREST-PRIOR one-fill-one-suggestion dedup rule; and
-    `aggregateOutcomes(rows)` groups per niche + per path with n on every field. NAMED-placeholder
+    `aggregateOutcomes(rows)` groups per flip-niche + per path with n on every field. NAMED-placeholder
     per-mode horizons; no fs/fetch — caller feeds parsed rows). **`windowread.mjs` MOVED to `js/`** (P2 — see the `js/`
     inventory above; consumed here by `windowrange.mjs`/`watch.mjs`),
     `watchstate.mjs` (V1/V4/V7 — PURE cross-pass temporal memory for the watch loop: `computeDeltas`/
@@ -692,8 +692,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   - `doclint.mjs` (DL1 — a STRUCTURAL, offline doc-drift linter run in CI's cheap `checks` job +
     auto-discovered via `doclint.test.mjs`; the CI-encoded half of process rule 8. TWO checks:
     (1) a maintained **DENYLIST** of superseded terms/commands × the operating docs they'd mislead
-    (seeded: the deleted spread/rising niches listed as live, an unqualified global falling-exclusion,
-    and the removed per-niche mode flags — see the `DENYLIST` table in the source for the exact patterns)
+    (seeded: the deleted spread/rising flip-niches listed as live, an unqualified global falling-exclusion,
+    and the removed per-flip-niche mode flags — see the `DENYLIST` table in the source for the exact patterns)
     — a ruling that deletes a concept adds a line, CI then catches every future doc
     that resurrects it; an `xfail` records a KNOWN live violation owned elsewhere (index.html's stale
     Scan-intro = PLAN-APP-PARITY AP1) so CI stays green while the finding stays reported; and
@@ -777,7 +777,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `--phase-rescue` basing rescue, the scalp falling-confirm (+ vestigial rising-confirm), overnight-posture, and the load-bearing
     rescued-carries-through-a-later-posture-drop dual-counter invariant), `replay.test.mjs` (P1 — the
     snapshot-replay ACCEPTANCE harness: feeds the committed `fixtures/replay/snapshot.json` through the
-    full per-niche funnel (`lib/replay.mjs` `runReplay`) for band/churn (active) + scalp + band
+    full per-flip-niche funnel (`lib/replay.mjs` `runReplay`) for band/churn (active) + scalp + band
     (overnight posture) and compares each stage to `fixtures/replay/golden.json` — a DRIFT guard
     (`buildSnapshot()` still reproduces the fixture) + a GOLDEN guard (funnel output matches) + readable
     per-archetype path assertions; `--update` regenerates both fixtures for hand-review. Pins the CURRENT
@@ -815,14 +815,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `ctx.position.mv`), and the CONVICTION PIN (an armed-not-escalated Gate-D CUT-CANDIDATE is
     consistent on both surfaces, then escalates once the underwater streak persists ≥ `ALERT_PERSIST_MS`)),
     `subfloor.test.mjs` (P6c — the empty-result sub-floor fallback: `subFloorFallback`'s relaxation
-    ladder identifies WHICH floor emptied the niche (min-gpd vs liquidity), never relaxes the two-sided
+    ladder identifies WHICH floor emptied the flip-niche (min-gpd vs liquidity), never relaxes the two-sided
     gate or the thesis edge (null when those emptied it), the honest `subFloorLabel` wording, the
-    `SUBFLOOR_TOP` slice bound + `SUBFLOOR_GRADE_CAP` clamp, the value-niche scope-out, and the lean
+    `SUBFLOOR_TOP` slice bound + `SUBFLOOR_GRADE_CAP` clamp, the value-flip-niche scope-out, and the lean
     `subFloor` suggestions-ledger marker's absent-field byte-identity),
     `skill-lint.test.mjs` (P7 — the heuristic skill-linter's convention: `- **…**` rule-block
     detection, the two tag forms (code-pointer vs `judgment:`), frontmatter/fence exclusions, the
     counting, and the LIVE regression guard that all four committed SKILL.md files lint clean),
-    `doclint.test.mjs` (DL1 — the doc-drift linter's two checks: denylist pattern precision (live-niche
+    `doclint.test.mjs` (DL1 — the doc-drift linter's two checks: denylist pattern precision (live-flip-niche
     form hits, deletion prose does NOT), the live corpus has no hard denylist violations + STILL catches
     the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs
     (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), and the live
@@ -843,7 +843,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     expected outputs for `replay.test.mjs`. `snapshot.json` is a `coffer-replay-snapshot/1` synthetic
     market state (five archetypes — stable band, genuine dip, thin big ticket, decay-knife, falling
     wide-band; no PII, no live data), produced by `lib/replay.mjs` `buildSnapshot()`; `golden.json`
-    (`coffer-replay-golden/1`) is the per-niche funnel result `runReplay` must reproduce. Regenerate
+    (`coffer-replay-golden/1`) is the per-flip-niche funnel result `runReplay` must reproduce. Regenerate
     both with `node pipeline/replay.test.mjs --update` (hand-review the diff). Consumer: `replay.test.mjs`.
   - gitignored scratch is consolidated under `pipeline/.cache/` (OR2): the market caches plus
     `mapping.cache.json`, `.alerts-state.json`, the optional `held-override.json`, the FC1
@@ -926,7 +926,7 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs`, `pipeline/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
 | `js/paths.mjs` | `pipeline/lib/context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
-| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative niche registry; not yet app-imported) |
+| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
 
 ### Test-location convention
 

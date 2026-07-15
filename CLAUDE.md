@@ -70,7 +70,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   bullet below; the momentum tell keeps the true min/max). Mid is dropped from the table (redundant next to Guide + the live prices;
   the row model still exposes `row.mid` for `rating.mjs`/`watch.mjs`).
   - **CONSOLE default = `Est. buy`/`Est. sell` (PLAN-OUTPUT-TABLE, 2026-07-13 + REVISIONS same day).** On
-    `screen.mjs`'s niche tables + `quote.mjs`'s per-item read, the STDOUT default REPLACES Quick+Optimistic
+    `screen.mjs`'s flip-niche tables + `quote.mjs`'s per-item read, the STDOUT default REPLACES Quick+Optimistic
     with the reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators.mjs`
     `estimatePair` — the encoded by-hand Optimistic ∩ diurnal ∩ reach ∩ ⚓-anchor ∩ BE-floor synthesis):
     - **`Est. buy` is STRATEGY-AWARE** (`entryDoctrine(spec)`, off the existing spec fields): **scalp**
@@ -172,7 +172,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   drive `mom`). Full spec in the `robustBand` header; pinned by `pipeline/bandedge.test.mjs` + the
   `quotecore.test.mjs` Scope-B split. **This is a SYSTEM-WIDE discipline** — trim to a quantile on a dense
   side, keep the raw extremum on a sparse one, wherever a price EDGE comes from a bag of prints (the other
-  instance: the value niche's 7d week-edge twin in `valueAmplitudeValidator`, off `lookbackStat`'s
+  instance: the value flip-niche's 7d week-edge twin in `valueAmplitudeValidator`, off `lookbackStat`'s
   `qlow`/`qhigh`). Don't re-derive raw min/max for a new edge; follow this.
   - **Ask-headroom signal (PLAN Bar-E-signal, Ben 2026-07-11) — the raw residue is now SURFACED, not just
     audited.** When the robust p90 shaved a TRADED in-band top off the quoted Optimistic ask
@@ -181,7 +181,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     `quote.mjs --positions`; a breakup — the incident's own case — has no new number, its upside IS the
     existing `mom='breakup'` tell re-voiced as ladder guidance). It says "ladder the ask up, don't relist
     down" (cheap under the GE better-price rule); it **NEVER moves a quoted number, gates, drops, or
-    grades** — the robust band still sets every price, so Bar E's thin-flier protection and the value-niche
+    grades** — the robust band still sets every price, so Bar E's thin-flier protection and the value-flip-niche
     q15/q85 twin are UNCHANGED. Trust = the raw-top 5m BUCKET's own `highPriceVolume` (sharper than
     counting buckets), fallback item `volDay`; an untrusted gap is logged for audit, not surfaced. A lean
     `askHeadroom` field rides `suggestions.jsonl` → `analyze.mjs` §5 joins it to fills for F1. All three
@@ -237,7 +237,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     Finder margin bond-aware (`market.js` `bondMarginOpts`) — it used to filter it out entirely.
 - **Falling-regime handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5).** A faller is
   not necessarily a poor buy — "we cannot judge falling without its history and typical fluctuations."
-  Each niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/churn EXCLUDE
+  Each flip-niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/churn EXCLUDE
   fallers** (the default — don't show or mention them; the exception below still applies); **scalp ACCEPTS
   AND REQUIRES them** (a deliberate intraday flip EXPECTS a falling wide band; a non-falling scalp is a
   band flip → dropped `notFalling`; its stop lives in the path
@@ -245,12 +245,12 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   accept a flat/basing value-low — the term-structure `valueGate`). Likewise resting bids: `offerVerdict`
   is path-aware — a bid declared under a scalp/value-hold thesis no longer CANCEL-BIDs off the falling
   regime alone, only its own tripwire (scalp: a live 2h breakdown; value-hold: a floor break).
-  Exception (for the EXCLUDE niches): items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
+  Exception (for the EXCLUDE flip-niches): items Ben holds, asks about, **or watchlists** (S3) → always show, with price-to-clear
   guidance. `screen.mjs` appends a **Watchlist** section (from tracked repo-root `watchlist.json`)
   quoting every watchlisted item as a full standard row — exempt from every floor/gate, graded, with
   the reason a gate *would* have hidden it as a Note (below-floor / thin / one-sided / falling).
   Falling watchlist items ARE shown there, with the falling warning.
-- Screens: `screen.mjs` prints one table per niche, adding a Grade + a per-thesis `Rank net·P/ttf`
+- Screens: `screen.mjs` prints one table per flip-niche, adding a Grade + a per-thesis `Rank net·P/ttf`
   column to the canonical layout (P6b — Ben 2026-07-09: gp/d is OUT as the ranking metric; rank =
   `net after tax × P(fill at the quoted pair) ÷ TTF` from `pipeline/lib/estimators.mjs`, evaluated at
   the ONE price pair the thesis posts. `expGpDay` survives ONLY as the cheap pre-fetch pool orderer +
@@ -271,7 +271,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   behave exactly as specified here.)
   **CHURN IS EXEMPT from both** (Part II, Ben 2026-07-12 — `spec.fillShape:'symmetric'`, `js/strategies.mjs`):
   a lap exit sells into continuous two-sided flow near a tight band top, so the day-high reach read
-  mismeasures it; the discount + cap apply only to `fillShape:'asym'` niches (band/scalp).
+  mismeasures it; the discount + cap apply only to `fillShape:'asym'` flip-niches (band/scalp).
   **Asymmetric fill shape — Part II of PLAN-GRADE-REACH (Ben 2026-07-12: "I'd much rather hit a 2/14 buy
   and a 12/14 sell than 50/50 both sides").** The ideal flip is a RARE DEEP entry + a NEAR-CERTAIN exit;
   the symmetric p10/p90 band pair is structurally 50/50. SHIPPED (safe reframing): an inform-only
@@ -284,7 +284,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   (`ASYM_P_LO`/`ASYM_P_HI`) are n≈14 PLACEHOLDERS. Never touches the raw momentum tell, the ordering
   invariant (min/max guards), break-even, or the value q15/q85 twin; render-stage only (goldens hold).
   **Churn per-lap EXCEPTION (Step 6, Ben 2026-07-09, decision A):** the per-thesis rank is PER-UNIT for
-  every niche EXCEPT `churn`, which ranks the **LAP** — `net/u × min(limit, feasibleDepth) × P(fill) ÷
+  every flip-niche EXCEPT `churn`, which ranks the **LAP** — `net/u × min(limit, feasibleDepth) × P(fill) ÷
   TTF` via its own `churn` estimator family (we always max the buy limit on these commodities, so the
   exact `limit` is a fact, not the demoted `expGpDay` ×windows/day extrapolation). This supersedes the
   "rank is per-unit" rule above with a named churn carve-out. Honest limit: the `rating.mjs` grade cutoffs
@@ -350,7 +350,7 @@ deliberate):**
 | When Ben says something like… | Run |
 | --- | --- |
 | "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip pool line) |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<flip-niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip pool line) |
 | "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
@@ -358,7 +358,7 @@ deliberate):**
 | "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/loop-tick.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch.mjs` + `screen.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`cashderive.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/loop-tick.mjs --watch 30 --scan 15`) |
 | "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/watch.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
 | "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
-| "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/analyze.mjs` (read-only dataset audit + per-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
+| "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/analyze.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 
 Script facts the skills rely on (current behavior, not doctrine):
 - `quote.mjs` takes multiple items in one call; prints one combined table + a regime line
@@ -406,10 +406,10 @@ Script facts the skills rely on (current behavior, not doctrine):
   gate stack for value). A **render-stage net>0 surface gate** additionally drops any row whose after-tax
   net at the thesis's OWN posted pair is ≤ 0 (the bond retrade-fee / ROI-bind leak — counted `neg-net` in
   `--stats`; held/asked/watchlist rows never reach it, so they're exempt; it's a render drop, so the
-  replay goldens are unaffected). **Four niches** — `band` / `churn` / `scalp` / `value` — with **`--mode all`
+  replay goldens are unaffected). **Four flip-niches** — `band` / `churn` / `scalp` / `value` — with **`--mode all`
   running band/churn/value (Ben 2026-07-10 — value graduated into the default scan; still console-only +
   provisional); scalp stays off-by-default** (reach it with an explicit `--mode scalp`).
-  **The `spread` and `rising` niches were DELETED (Steps 3+4, Ben 2026-07-09** — git history is the reference;
+  **The `spread` and `rising` flip-niches were DELETED (Steps 3+4, Ben 2026-07-09** — git history is the reference;
   this supersedes the NY2/NY3 off-by-default framing). Why: spread's 24h-average edge is structurally
   narrower than the intraday band and surfaced ≈0 clean flips once the net>0 gate landed — and its ONE
   exclusive lane (thin big-tickets with a sparse 2h band) is already caught by band's thin path
@@ -423,13 +423,13 @@ Script facts the skills rely on (current behavior, not doctrine):
   flip band already owns → dropped `notFalling`), so scalp = fallers only. A wide fresh band clearing
   tax+scalp-margin (`SCALP_MIN_ROI`; the ROI-bind is caught by the render net>0 gate), reach-
   validated on today's high, flip-only/no-hold (an unsold lap migrates to `cut`, never `hold-recovery` —
-  encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold niche with its OWN
+  encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold flip-niche with its OWN
   term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
   replaces the 500k gp/day throughput floor, decay/downtrend knife-guard), ranked by
   `valueScore` (amplitude × proximity-to-low × floor-stability × deployable-capital multiplier) with a HARD
   top-N + buy-now/watch tiers (§F flood control); console-only, its own table, NOT in `screen.json` (no app
   tab yet → no APP_VERSION).
-  **Value niche rank + BUY-NOW gating (Ben 2026-07-09/10) — operating pointer; full spec in the
+  **Value flip-niche rank + BUY-NOW gating (Ben 2026-07-09/10) — operating pointer; full spec in the
   `js/valuescreen.mjs` header.** `valueScore` = amplitude × proximity-to-low × floor-stability × a
   **deployable-capital** multiplier (realizable after-tax gp/cycle on the capital you can park+exit;
   `capGp` = `screen.mjs --capital ÷ --slots`, a PLACEHOLDER input; absent `--capital` the default is the
@@ -446,19 +446,19 @@ Script facts the skills rely on (current behavior, not doctrine):
   `renderValueMode`; value-amplitude in `js/validate.mjs`. Value RUNS IN `--mode all` (`inAll:true`,
   `js/strategies.mjs`) but stays console-only + provisional (n≈0, PLACEHOLDER thresholds, no APP_VERSION).
   Resolved-history (%-amp → abs-gp → deployable-capital; NY2/NY3 spread/rising deletion): `docs/LORE.md`.
-  **P4c**: the niches are DECLARATIVE
+  **P4c**: the flip-niches are DECLARATIVE
   strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the
-  P1 replay goldens pin it; a new niche registers a spec, no gatecandidates/screen edit). Each surfaced
+  P1 replay goldens pin it; a new flip-niche registers a spec, no gatecandidates/screen edit). Each surfaced
   row gains a compact stdout entry-path annotation (`↳ <item> — scalp* 0.60 · …`: the spec's inferred
   default entry path `*` + the weighed js/paths.mjs menu) — decision SUPPORT, display-only, NOT in
   `screen.json`; and the spec's `defaultPath` is logged to `suggestions.jsonl` as a lean `path` field so a
   later fill can infer the entry thesis. The default-path map (band/churn/scalp→`scalp`, value→
-  `value-hold`) is a Ben-vetoable judgment proposal, not a gate. **P6c**: a niche whose gate is EMPTY at
+  `value-hold`) is a Ben-vetoable judgment proposal, not a gate. **P6c**: a flip-niche whose gate is EMPTY at
   the configured floors re-runs beneath the floor (`subFloorFallback` — a min-gpd→liquidity relaxation
   ladder; the two-sided gate + the thesis edge are NEVER relaxed) and prints the best ≤5 rows labeled
   `sub-floor — shown because nothing cleared <floor>`, grades capped `C (sub-floor)` — stdout-only,
-  never in `screen.json`, ledger rows carry a lean `subFloor` marker; a non-empty niche is untouched.
+  never in `screen.json`, ledger rows carry a lean `subFloor` marker; a non-empty flip-niche is untouched.
 - **P2/P3 validators (`js/validate.mjs`, run on EVERY surface):** a registry of PURE
   `(ctx)→{status:pass|caution|reject,reason,evidence}` validators. Screens DROP `reject` rows (counted
   in `--stats` + a `rejected: N (top reasons)` footer) and FLAG `caution`; explicit asks / held /
@@ -472,7 +472,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   noise reconciliation — only a thesis that GATES on a key lets it hide a row (so `scalp` INFORMS on
   trajectory: it accepts a falling wide band by thesis). ROLLOUT (rule 4, n≈0): the newly-activated
   `reach`/`value-amplitude` start **inform everywhere**; `floor`+`limit` gate; and **`trajectory` now GATES
-  in the `value` niche** (Ben 2026-07-09 — knife drops, the "buy the base, not the knife" + hold-asymmetry
+  in the `value` flip-niche** (Ben 2026-07-09 — knife drops, the "buy the base, not the knife" + hold-asymmetry
   case, see the Value trajectory-GATE note above) while staying **inform** on band/churn/scalp. `reachValidator` (P2) wraps `js/windowread.mjs`'s reach/touch + RC1 stale split (a rarely-reached
   level → caution, never-reached → reject, stale-optimistic bumps one step); it needs the 1h series —
   **`screen.mjs` now fetches it for surfaced SURVIVORS** (Leg B, 2026-07-09: `TS_TTL_1H`, survivor-only so
@@ -493,7 +493,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   pass, buy the local min), **based** (flat at the floor → pass), **elevated** (bought high → caution).
   `screen.mjs` feeds it a trajectory derived from the fetched **1h series** (`trajectoryFrom1h`, off the
   shared `richFrom1h` helper) so it fires NOW while the `loadDaily` archive is still cold.
-  `valueAmplitudeValidator` (2026-07-09, value niche, BUY-side) reads the recent-WEEK (7d) after-tax
+  `valueAmplitudeValidator` (2026-07-09, value flip-niche, BUY-side) reads the recent-WEEK (7d) after-tax
   amplitude + proximity-to-low off that **same warm 1h-derived term structure** (`richFrom1h`, `current`
   overridden to the live price so proximity is "is live near the week low right now?") — so it, too, fires
   now instead of degrading on the cold `loadDaily` 7d slice; `valueRanges`/`valueGate`/`floor` keep the
@@ -526,7 +526,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   **TV (0.58.0):** `js/trends.js` now imports `validate.mjs` (`reachValidator`,
   inform-only, beside the Trends Diurnal timing chart) — so `validate.mjs` IS app-imported now; edits to it
   ripple into the app, and an app-behavior change to it bumps `APP_VERSION`.
-- `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new niche): **overnight**
+- `screen.mjs --posture overnight|active|auto` (S2) TUNES that stack (not a new flip-niche): **overnight**
   keeps only flat/rising + confident-band + non-thin + non-breakdown rows, ranks by net edge over
   velocity, and drops items whose *yesterday overnight window* printed below the current bid
   (`overnightStaleRisk`); **auto** picks by the local clock (~22:00–06:00); **active** (default) =
@@ -584,7 +584,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   flush-bid captures ~one amplitude of gp/unit, so a 3% swing on a 2gp Feather is 0.06gp — worthless). The
   swing floor is what screens the pool down to meaningful mid/big tickets; it **SUPERSEDES the old "cheap
   high-throughput churn still passes" property** — cheap churn (runes/feather/seeds) is now excluded (its
-  home is the CHURN niche's buy-the-dip, not a flush alert). Suitable items split into a `liquid` track
+  home is the CHURN flip-niche's buy-the-dip, not a flush alert). Suitable items split into a `liquid` track
   (`limitVol ≥ DIP_LOOP_LIQUID_FLOOR` → the active FLUSH-alert set) and an `illiquid` track (DL3 standing-bid
   backlog); a survivor already flushing NOW (via `flushSignal` on its in-hand 5m series) gets a score bonus.
   **POOL HYGIENE (2026-07-12 — the 640-entry-in-a-day bloat fix):** the pool is no longer append-only.

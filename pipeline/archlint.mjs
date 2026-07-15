@@ -28,7 +28,7 @@ const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
 
 // Referenced files that intentionally don't exist YET (the doc must mark each "(proposed)"/"planned").
 // Removing a file's proposed status = deleting its line here once it ships (the acknowledgement gate).
-const PROPOSED = new Set(['docs/FLOW.md']);
+const PROPOSED = new Set(['docs/FLOW.md', 'flip-niches.mjs', 'held-item-strategy.mjs']);
 
 // A bare basename resolves against these dirs (repo-root-relative). '' = repo root (index.html, *.json).
 const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'docs', '.github/workflows', '.claude/skills'];

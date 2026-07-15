@@ -53,7 +53,7 @@ structurally prevented.
 | --- | --- | --- | --- |
 | E1 | Every pipeline entrypoint's imports resolve against real module exports | `pipeline/import-check.mjs` | an `import { x }` of a name a module doesn't export |
 | E2 | No export is kept alive only by its own test (no vestigial "kept-for-future" code) | `pipeline/dead-export-check.mjs` (+ `.test.mjs`) | an export with no non-test consumer and no `@test-only`/`@provisional-api` marker |
-| E3 | Docs carry no superseded terms; no single-source phrase is duplicated across the CLAUDE.md⇆README axis | `pipeline/doclint.mjs` (+ `.test.mjs`) | a denylisted term (e.g. a deleted niche as "live") or a duplicated invariant |
+| E3 | Docs carry no superseded terms; no single-source phrase is duplicated across the CLAUDE.md⇆README axis | `pipeline/doclint.mjs` (+ `.test.mjs`) | a denylisted term (e.g. a deleted flip-niche as "live") or a duplicated invariant |
 | E4 | Every SKILL.md rule-block is tagged (encoded-vs-judgment disposition) | `pipeline/skill-lint.mjs` | an untagged rule block |
 | E5 | The browser app loads and paints with all external network stubbed | `pipeline/smoke.mjs` (headless chromium) | any page/console error or empty pane |
 | E6 | The screen funnel is behaviour-stable across refactors | replay goldens (`pipeline/replay.test.mjs`, `@test-only` harness) | a gate/rank/render change that moves a pinned archetype |
@@ -76,7 +76,8 @@ important structural rule — it's what prevents the app and pipeline from diver
 | Quote computation | `js/quotecore.js` (`computeQuote`) | the app + `quote.mjs`/`screen.mjs` all call it |
 | Band/window/diurnal math | `js/windowread.mjs` (`windowStats`, `robustBand` via re-export, `hourProfile`, `windowClear`, `asymPair`) | the pure window-range math; `robustBand` itself lives in `quotecore.js` |
 | Verdict rendering (held lots) | `pipeline/lib/context.mjs` (`renderHeldVerdict`) | ended the quote↔watch verdict fork |
-| Strategy niches | `js/strategies.mjs` (`STRATEGY_LIST`) | declarative specs; consumers look up `STRATEGIES[mode]` |
+| Flip-niches (screen strategies) | `js/strategies.mjs` (`STRATEGY_LIST`) | declarative specs; consumers look up `STRATEGIES[mode]`. File/identifier → `flip-niches.mjs`/`FLIP_NICHES` is R2 |
+| Held-item strategies | `js/paths.mjs` (`enumeratePaths`/`weighPaths`) | "compare strategies" for a held lot; file → `held-item-strategy.mjs` is R2 |
 | Validators | `js/validate.mjs` | pure `(ctx) → {status, reason, evidence}` |
 | Rank / grade | `js/estimators.mjs` (`estimateRank`) + `js/rating.mjs` (`rateItem`) | `pipeline/lib/estimators.mjs`/`rating.mjs` are one-line re-export SHIMS, not forks |
 
@@ -125,9 +126,9 @@ can find them. Never oversell a placeholder as tuned; never gate a real decision
 constant without saying so. An intended-but-unwired API declares itself `@provisional-api` **citing a
 tracking item** — otherwise it's just vestigial rot (below).
 
-**Declarative strategy specs.** A niche is a spec in `js/strategies.mjs` (`{key, edge, rank, falling,
+**Declarative strategy specs.** A flip-niche is a spec in `js/strategies.mjs` (`{key, edge, rank, falling,
 gate, confirm, validators, …}`); `gatecandidates.mjs` drives behaviour off the spec fields, never off
-`if (mode === '…')`. A new niche registers a spec; it does not edit the gate stack. (N2 fixed the last
+`if (mode === '…')`. A new flip-niche registers a spec; it does not edit the gate stack. (N2 fixed the last
 `mode ===` leak — the lesson: a declared spec field must actually be *read*, or it's dead metadata.)
 
 **Validators are pure and inform-vs-gate is per-thesis.** Each validator is a pure `(ctx) → verdict`; its

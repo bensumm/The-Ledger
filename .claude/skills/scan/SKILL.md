@@ -1,7 +1,7 @@
 ---
 name: scan
-version: 1.50
-description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <niche>", "scan".
+version: 1.51
+description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
 # /scan — opportunity screen + the judgment layer over it
@@ -15,13 +15,13 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 node pipeline/screen.mjs [--mode band|churn|scalp|value|all] [--max-price …] [--publish]
 ```
 
-Map Ben's ask to args: niche mode → `--mode` (default `band`); a price cap → `--max-price`;
-a keyword/niche ("anything in herbs?") → **no script flag exists** — run the screen and
-filter the output rows by niche yourself; `--publish` only if Ben wants the app's Scan tab
+Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
+a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
+filter the output rows by flip-niche yourself; `--publish` only if Ben wants the app's Scan tab
 updated. The script already gates (two-sided liquidity, price window, per-spec falling doctrine)
 and grades (`rating.mjs`); your job is the judgment pass over what it prints.
 
-**P5 niches — scalp / value (both PROVISIONAL, n≈0).** `--mode scalp` stays OFF-by-default (explicit
+**P5 flip-niches — scalp / value (both PROVISIONAL, n≈0).** `--mode scalp` stays OFF-by-default (explicit
 `--mode scalp` only); **`--mode value` now RUNS IN `--mode all` by default (Ben 2026-07-10)** — still
 console-only (excluded from `screen.json`, no app tab) and provisional, but it surfaces on every default scan.
 - **`--mode scalp`** _(judgment: when to chase — desk-presence call)_ — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
@@ -61,9 +61,9 @@ console-only (excluded from `screen.json`, no app tab) and provisional, but it s
   week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
   timing/trajectory` notes + the footer drops, and verify the sell-leg reach by hand before quoting profit.
 
-**Niche set (Steps 3+4, 2026-07-09 — Ben's ruling; value added 2026-07-10).** `--mode all` runs **band +
+**Flip-niche set (Steps 3+4, 2026-07-09 — Ben's ruling; value added 2026-07-10).** `--mode all` runs **band +
 churn + value** (value graduated into the default scan 2026-07-10 — console-only, provisional). **The
-`spread` and `rising` niches were DELETED** (this supersedes NY2/NY3's "spread off-by-default,
+`spread` and `rising` flip-niches were DELETED** (this supersedes NY2/NY3's "spread off-by-default,
 rising kept"): spread's 24h-*average* edge is structurally narrower than the intraday band and
 surfaced ≈0 clean flips once the render net>0 gate landed (its only exclusive lane — thin
 big-tickets with an untraded 2h band — is already caught by band's thin path); `rising` ⊆ `band`
@@ -97,9 +97,9 @@ This is the tribal layer the script can't do — apply ALL of these:
   SCRIPT — `screen.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
-- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/gatecandidates.mjs`)_ If a niche prints `SUB-FLOOR
+- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/gatecandidates.mjs`)_ If a flip-niche prints `SUB-FLOOR
   FALLBACK` (zero candidates cleared the floors → the script re-ran beneath them and shows the best
-  ≤5, grades `C (sub-floor)`-capped), relay it AS sub-floor: name the floor that emptied the niche,
+  ≤5, grades `C (sub-floor)`-capped), relay it AS sub-floor: name the floor that emptied the flip-niche,
   never present a sub-floor row as a normal recommendation, and default to "nothing qualified today"
   unless Ben explicitly wants to fish below the bar. The bar itself was not lowered.
 - **24h-drift is a pre-filter only.** _(judgment: interpretation discipline)_ A current-vs-24h-avg read of "flat/slightly soft"
@@ -425,17 +425,17 @@ This is the tribal layer the script can't do — apply ALL of these:
 
 - Falling handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5 — memory
   `falling-exclusion-amended`, encoded in `js/strategies.mjs` `spec.falling`). The `band`/`churn`
-  niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
+  flip-niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
   or mention a falling row. But `--mode scalp` ACCEPTS fallers (a deliberate intraday flip expects a
   falling wide band) and `--mode value` KNIFE-GUARDS (rejects a decay knife, accepts a flat/basing
   value-low) — do NOT call a scalp/value faller a mistake; the spec surfaced it on purpose. Exception
-  for the EXCLUDE niches: items Ben holds, explicitly asks about, or **watchlists** → always show,
+  for the EXCLUDE flip-niches: items Ben holds, explicitly asks about, or **watchlists** → always show,
   with price-to-clear.
 - **Watchlist section (S3): always report, honestly.** The script appends a Watchlist table (from
   repo-root `watchlist.json`) that is exempt from every floor/gate; each row carries a Note saying
   what a gate would have hidden (below-floor / thin / one-sided / falling). Never silently drop a
   watchlist row and never hype one past its read — surface it with its Note and one honest line.
-  Falling watchlist items appear here with the falling warning (they're excluded from the niches).
+  Falling watchlist items appear here with the falling warning (they're excluded from the flip-niches).
 - Preserve the standard table columns exactly as printed (app-code canon).
 
 ## 4. Output
@@ -444,17 +444,17 @@ The judgment-filtered shortlist, one-line rationale per pick (why this edge is r
 a note of how many candidates the 500k floor eliminated. If a high-grade row was skipped,
 point at it and give the reason — that's the layer this skill exists for.
 
-**Cover every niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A
+**Cover every flip-niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A
 recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task — the dip-hunt
 — quietly becomes the *only* thing evaluated, and the broader mandate (candidates for the
 dry/committed capital) silently collapses to "nothing." The fix is structural, not
-willpower: the report must give an **explicit one-line read on EACH niche every pass** —
+willpower: the report must give an **explicit one-line read on EACH flip-niche every pass** —
 `Dips · Band big-tickets · Churn` — even when the answer is "nothing, because X".
 A slot you must fill can't be silently dropped (same principle as the ONE-LINE-PER-ITEM and
 recent-reach rules — make the output enforce the coverage). "No dips" ends the *dip* line,
 never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no new dips"
 while band big-tickets (bludgeon/sang/tassets class) went unmentioned for an hour — Ben had
-to ask "are we looking at other niches?"; the miss was omission, not a bad call.
+to ask "are we looking at other flip-niches?"; the miss was omission, not a bad call.
 
 **Every recommended price states its timing target (Ben, 2026-07-05):** a pick's bid and
 sell are each "X, targeting Y" — bind the number to the window/mechanism expected to fill
