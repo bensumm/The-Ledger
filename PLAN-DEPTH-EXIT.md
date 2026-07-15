@@ -193,15 +193,18 @@ with volume at-or-above the ask). Names provisional:
   (~15d reach). Bulk 5m accrual in the Tier-1 SQLite archive (pipeline-v2 D0) is the route to
   multi-day 5m depth curves — sharper distributions, smaller misattribution bias. Not scheduled
   until the archive has weeks of 5m and DE3's shadow data says the model earns it.
-- **DE6 — low-side symmetric `clearableBid` (Ben, 2026-07-15).** The mirror of DE1: `depthDaysLow`
-  reads `lowPriceVolume` at `avgLowPrice` (instasell flow), and `clearableBid` = the LOWEST bid P
-  with `clearFrac(P) ≥ targetFrac` — "how deep can I bid and still get filled." Same subsumption
-  proof (qty→0 ≡ `touchedDays`), same structural mirage guard (a thin book's clearableBid collapses
-  UP toward where flow trades, never below), same ceiling (never below the observed day low). This
-  gives the TWO-SIDED size-aware band — a deep bid AND a high ask both priced off real depth — which
-  is the honest version of the asym-fill (`asymEstimate`) deep-bid→high-ask shape. Consumers: DE2's
-  `--depth` inspector prints both edges; `quote-items` / `watch-positions` read the two-sided band.
-  Acceptance mirrors DE1 on the low side. Inform-only; no rank effect (that's DE7).
+- **DE6 — low-side symmetric `clearableBid` (LANDED 2026-07-15).** The mirror of DE1, off the ONE
+  side-generic engine (`clearableLevel`, module-internal — `depthDays side:'bid'` already read the
+  `lowPriceVolume`@`avgLowPrice` instasell flow): `clearableBid` = the LOWEST bid P with
+  `clearFrac(P) ≥ targetFrac` and ≥`minBuckets` support — "how deep can I bid and still get filled."
+  Same subsumption proof (qty→0 ≡ `touchedDays`, fixture-pinned), same collapse-with-reason guard,
+  same floor (a real bucket price — never below the observed data). DE2's `--depth` now prints BOTH
+  edges (`BOOK AT ≤ X` / `CATCH AT ≥ X`, + the per-day instasell flow table for a scored `--bid`).
+  Live-validated: Soul rune 50k → CATCH AT ≥ 384 (fills 86% of days; Ben's 381 is the slower tail —
+  touched 8/14, 0/3 recent) · Coal 100k → 148↔150 two-sided band · Ancient godsword → both edges
+  collapse with the named reason. Known DE1-inherited limitation: the clearable level carries no
+  recency split (a regime move inside the window contaminates it — the RC1 idiom rides `depthDays`
+  only); noted for the DE5-era refinement. Inform-only; no rank effect (that's DE7).
 - **DE7 — discovery reranking (F1-GATED — the Q2 destination, Ben 2026-07-15).** This is the
   *point* of the two-sided depth band: today `reachRelief` (Part A/B) and `asymEstimate` already
   WIDEN the effective band on liquid items but are inform-only, so they never rerank the screen or

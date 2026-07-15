@@ -33,14 +33,16 @@
  *                  B3 — maxBuyForExit, the tax-exact inverse of breakEven) + how reachable the exit is in
  *                  the window (a rarely-printed exit over-states the sell → the buy is optimistic)
  *   --margin <gp>  minimum after-tax net/u the back-solve must leave (default 0 = break-even-clearing)
- *   --depth <qty>  (PLAN-DEPTH-EXIT DE2) percentile-DEPTH read for a lot of <qty> units: the per-day
- *                  instabuy flow at/above the scored --ask, whether it clears qty×competition, and the
- *                  clearableAsk ("what can I actually book at?"). A thin book prints its COLLAPSE REASON,
- *                  never a bare null. Estimate from bucket AVERAGES, not an order book (inform-only, n≈0).
+ *   --depth <qty>  (PLAN-DEPTH-EXIT DE2 + DE6) percentile-DEPTH read for a lot of <qty> units, BOTH
+ *                  edges: the per-day instabuy flow at/above the scored --ask (clears qty×competition?),
+ *                  the clearableAsk ("BOOK AT ≤ X"), the per-day instasell flow at/below a scored --bid,
+ *                  and the clearableBid ("CATCH AT ≥ X" — how deep a bid still fills). A thin book prints
+ *                  its COLLAPSE REASON, never a bare null. Estimate from bucket AVERAGES, not an order
+ *                  book (inform-only, n≈0).
  */
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror)
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
@@ -164,9 +166,11 @@ for (const want of positionals) {
       }
     }
   }
-  // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: percentile-DEPTH read. Per-day instabuy flow at/above the
-  // scored ask (does it clear qty×competition?), then clearableAsk — the highest ask <qty> can actually
-  // book. A thin book collapses to a null WITH its reason (never a silent degrade — the surfacing rule).
+  // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: percentile-DEPTH read, BOTH edges (DE6 added the low
+  // side). Per-day instabuy flow at/above the scored ask (does it clear qty×competition?), then
+  // clearableAsk — the highest ask <qty> can actually book — and clearableBid — the deepest bid that
+  // still fills off the instasell flow (the two-sided size-aware band). A thin book collapses to a
+  // null WITH its reason (never a silent degrade — the surfacing rule).
   if (DEPTH_QTY != null) {
     const scoreAsk = ASK ?? EXIT ?? null;   // reuse a hand-given --ask/--exit for the per-day flow table
     if (scoreAsk != null) {
@@ -177,6 +181,14 @@ for (const want of positionals) {
         console.log(`    → clears the ${fmt(DEPTH_QTY)}u lot on ${dd.clearedDays}/${dd.nDays} day(s)${dd.recentFrac != null ? ` (recent-${RECENT_NIGHTS} ${dd.recentClears}/${dd.recentDays})` : ''}`);
       }
     }
+    if (BID != null) {   // DE6 — the low-side per-day flow table for a scored --bid
+      const db = depthDays(series, BID, { qty: DEPTH_QTY, side: 'bid', wStart: W_START, wEnd: W_END, nights: NIGHTS });
+      if (db) {
+        console.log(`  --depth ${fmt(DEPTH_QTY)}u @ bid ${fmt(BID)} — per-day instasell flow at/below the bid:`);
+        for (const d of db.perDay) console.log(`    ${d.key}  flow ${fmt(d.flow)} u  ${d.clears ? '✓ fills' : '· short'}`);
+        console.log(`    → fills the ${fmt(DEPTH_QTY)}u lot on ${db.clearedDays}/${db.nDays} day(s)${db.recentFrac != null ? ` (recent-${RECENT_NIGHTS} ${db.recentClears}/${db.recentDays})` : ''}`);
+      }
+    }
     const ca = clearableAsk(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
     const compTxt = `×${ca.competition} comp · ≥${Math.round(ca.targetFrac * 100)}% of ${ca.nDays}d · ≥${ca.minBuckets} buckets`;
     if (ca.price != null)
@@ -185,6 +197,14 @@ for (const want of positionals) {
       console.log(`  --depth ${fmt(DEPTH_QTY)}u → NO clearable ask — the book can't absorb ${fmt(ca.need)}u (${fmt(DEPTH_QTY)}×${ca.competition}) at any level in this window: LIQUIDITY collapse, reach fallback (${compTxt})`);
     else
       console.log(`  --depth ${fmt(DEPTH_QTY)}u → no read (${ca.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'}); reach fallback`);
+    // DE6 — the mirror edge: how deep a bid still fills off the instasell flow.
+    const cb = clearableBid(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
+    if (cb.price != null)
+      console.log(`  --depth ${fmt(DEPTH_QTY)}u → CATCH AT ≥ ${fmt(cb.price)}  (a bid this deep fills ${Math.round(cb.clearFrac * 100)}% of days at this size · ×${cb.competition} comp)`);
+    else if (cb.reason === 'insufficient-depth')
+      console.log(`  --depth ${fmt(DEPTH_QTY)}u → NO clearable bid — the instasell flow can't fill ${fmt(cb.need)}u (${fmt(DEPTH_QTY)}×${cb.competition}) at any level in this window; bid to live instead`);
+    else
+      console.log(`  --depth ${fmt(DEPTH_QTY)}u → no bid-side read (${cb.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'})`);
     console.log(`    (depth estimated from 1h bucket AVERAGES + volumes — NOT an order book; competition ×${ca.competition} is a PLACEHOLDER, n≈0 — inform-only)`);
   }
   console.log(`  (touched/reached ≠ limit filled — small sample, ~${scored.length} days; a guide, not a guarantee)`);

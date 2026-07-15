@@ -18,7 +18,7 @@
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
-import { depthDays, clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1
+import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
 
 let pass = 0;
@@ -342,6 +342,51 @@ ok('clearableAsk: minBuckets guard — a lone fat bucket at the top cannot set t
   for (let d = 11; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 398, volHi: 1000 }]));
   const r = clearableAsk(series, { qty: 10, ...dOpts });               // 420 is supported by 1 bucket (< minBuckets 2) → skipped
   assert.ok(r.price != null && r.price <= 400, 'the lone 420 flier does not set the ask — the dense top ≤400 does');
+});
+
+// --- clearableBid (PLAN-DEPTH-EXIT DE6): the low-side mirror — "how deep can I bid and still fill" --
+// Low-side point masses: dDay writes lo = hi−500 with volLo 10, so build a dedicated builder with
+// controlled (avgLowPrice, lowPriceVolume) buckets instead.
+const bDay = (d, buckets) => buckets.map(b => pt(ts(2026, 0, d, b.h), b.lo, b.lo + 500, b.volLo, 10));
+
+ok('depthDays side:bid — qty→0 clearedDays ≡ touchedDays (the touch count is the zero-size limit)', () => {
+  const series = [];
+  for (let d = 10; d <= 15; d++) series.push(...bDay(d, [{ h: 14, lo: 300, volLo: 50 }, { h: 15, lo: 304, volLo: 50 }]));
+  const stats = windowStats(series, dOpts);
+  for (const bid of [299, 301, 303, 305]) {
+    const dd = depthDays(series, bid, { qty: 0, side: 'bid', ...dOpts });
+    assert.equal(dd.clearedDays, touchedDays(stats.lows, bid), `qty→0 clears ≡ touchedDays @${bid}`);
+  }
+});
+
+ok('clearableBid: deep book + small size catches DEEP; a large lot must bid shallower (mirror-monotone)', () => {
+  const series = [];   // three low tiers/day: 290(800) · 300(400) · 310(200) — the dump is deepest at 290
+  for (let d = 10; d <= 16; d++) series.push(...bDay(d, [{ h: 14, lo: 290, volLo: 800 }, { h: 15, lo: 300, volLo: 400 }, { h: 16, lo: 310, volLo: 200 }]));
+  const small = clearableBid(series, { qty: 10, ...dOpts });      // need 40 → the 290 tier alone absorbs it
+  assert.equal(small.price, 290, 'a small lot catches the deepest printed tier');
+  assert.ok(small.clearFrac >= 0.75 && small.reason == null);
+  const p = q => clearableBid(series, { qty: q, ...dOpts }).price ?? Infinity;
+  assert.ok(p(10) <= p(150) && p(150) <= p(300), 'bid non-DEcreasing in qty — a big lot must bid SHALLOWER (cumulative flow at/below rises with the level)');
+  const byComp = c => clearableBid(series, { qty: 50, competition: c, ...dOpts }).price ?? Infinity;
+  assert.ok(byComp(1) <= byComp(4) && byComp(4) <= byComp(8), 'bid non-decreasing in competition');
+});
+
+ok('clearableBid: thin book collapses UP-or-null WITH a reason (mirage guard mirrored, surfaced)', () => {
+  const thin = [];
+  for (let d = 10; d <= 15; d++) thin.push(...bDay(d, [{ h: 14, lo: 290, volLo: 3 }, { h: 15, lo: 300, volLo: 3 }]));
+  const r = clearableBid(thin, { qty: 100, ...dOpts });           // need 400 ≫ 6 u/day
+  assert.equal(r.price, null);
+  assert.equal(r.reason, 'insufficient-depth', 'never a silent null — the liquidity collapse is named');
+  assert.ok(r.need === 400);
+  const few = bDay(10, [{ h: 14, lo: 300, volLo: 1000 }]).concat(bDay(11, [{ h: 14, lo: 300, volLo: 1000 }]));
+  assert.equal(clearableBid(few, { qty: 1, ...dOpts }).reason, 'thin-history', '< minDays scored → thin-history');
+});
+
+ok('clearableBid: minBuckets guard — a lone fat flush at the bottom cannot set the bid', () => {
+  const series = [...bDay(10, [{ h: 14, lo: 250, volLo: 100000 }])];   // one day, one huge 250 flush
+  for (let d = 11; d <= 16; d++) series.push(...bDay(d, [{ h: 14, lo: 290, volLo: 1000 }, { h: 15, lo: 292, volLo: 1000 }]));
+  const r = clearableBid(series, { qty: 10, ...dOpts });               // 250 has 1 supporting bucket (< 2) → skipped
+  assert.ok(r.price != null && r.price >= 290, 'the lone 250 flier does not set the bid — the dense floor ≥290 does');
 });
 
 // --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------

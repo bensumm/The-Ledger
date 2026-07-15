@@ -93,7 +93,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (PLAN-DEPTH-EXIT DE1 2026-07-15 — the percentile-DEPTH exit: reconstructs a per-day price→volume
   distribution from the 1h bucket point masses and answers "what can I actually BOOK at?" for a given lot
   size; the reach count is its qty→0 limit, and a thin book collapses to a null-with-`reason`; `@provisional-api`
-  until DE2/DE3 consume it, the `DEPTH_*` constants module-internal placeholders) + `demandPressure`/`reachableBand`
+  until DE2/DE3 consume it, the `DEPTH_*` constants module-internal placeholders) + `clearableBid`
+  (DE6 2026-07-15 — the low-side mirror off the same side-generic engine: the LOWEST bid whose instasell
+  flow at/below it fills `competition×qty` on ≥`targetFrac` of days — with `clearableAsk` the TWO-SIDED
+  size-aware band; same collapse-with-reason guard, qty→0 ≡ `touchedDays`) + `demandPressure`/`reachableBand`
   (PLAN-DEPTH-EXIT Extension A PB1 2026-07-15 — the pressure-driven reachable band: `s=ln(medVolHi/medVolLo)`
   sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
   + the daily-high/low IQR; a thin-VOLUME book collapses to the smoothed center via the sample-reliability
@@ -427,10 +430,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     SUMMARY reads),
     `read-window-range.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring; `--profile` = the hour-of-day diurnal dip/peak read
-    + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector:
-    per-day instabuy flow at/above the scored `--ask` + the `clearableAsk` "book at X" for a lot of that
-    size, with the collapse REASON surfaced on a thin book — inform-only, reads `js/windowread.mjs`
-    `depthDays`/`clearableAsk`), `limits.mjs` (LM1 — the buy-limit read:
+    + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector,
+    BOTH edges since DE6: per-day instabuy flow at/above the scored `--ask` + the `clearableAsk`
+    "BOOK AT ≤ X", and per-day instasell flow at/below a scored `--bid` + the `clearableBid`
+    "CATCH AT ≥ X" (the two-sided size-aware band), with the collapse REASON surfaced on a thin book —
+    inform-only, reads `js/windowread.mjs` `depthDays`/`clearableAsk`/`clearableBid`), `limits.mjs` (LM1 — the buy-limit read:
     `node pipeline/commands/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),

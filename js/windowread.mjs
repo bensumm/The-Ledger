@@ -269,33 +269,30 @@ export function depthDays(series, level, { qty = 0, competition = DEPTH_COMPETIT
   };
 }
 
-/* clearableAsk(series, opts) → { price, clearFrac, reason, nDays, competition, qty }.
- *   price  = the HIGHEST ask whose flow clears the lot on ≥ targetFrac of days AND has ≥ minBuckets
- *            distinct supporting buckets at/above it — "what I can actually book at" (null when none).
- *   reason = why price is null: 'thin-history' (< minDays scored), 'no-prints' (no traded buckets),
- *            'insufficient-depth' (the book can't absorb competition×qty at ANY level — the liquidity
- *            collapse Ben predicted; the caller MUST surface it, never silently fall back to reach).
- * Candidate levels = the distinct bucket prices only (no interpolation — that would invent data).
- * clearFrac is monotone non-increasing in the ask, so scanning high→low the FIRST clearing level is the
- * max. By construction price never exceeds the observed data (a real bucket price); the caller still
- * caps a rendered ask at dayHighFrom5m. (The low-side clearableBid mirror is DE6, off this same engine.) */
-// @provisional-api: PLAN-DEPTH-EXIT DE1 — the "book at X" ask, consumed by DE2 (--depth inspector) and
-// DE3 (watch-positions line/shadow log); F1 (DE4) later promotes it into estimatePair's held-lot sell.
-export function clearableAsk(series, { qty, competition = DEPTH_COMPETITION_MULT, targetFrac = DEPTH_TARGET_FRAC, minBuckets = DEPTH_MIN_BUCKETS, minDays = DEPTH_MIN_DAYS, wStart, wEnd, nights = 14, now = new Date() } = {}) {
+/* clearableLevel — the ONE side-generic engine behind clearableAsk (DE1) and clearableBid (DE6).
+ *   ask side: candidate levels = distinct hi-bucket prices scanned HIGH→LOW; flow-beyond = at/ABOVE.
+ *   bid side: distinct lo-bucket prices scanned LOW→HIGH; flow-beyond = at/BELOW (instasell flow).
+ * clearFrac is monotone toward the flow (non-increasing in the ask / non-decreasing in the bid), so
+ * the FIRST clearing level in scan order is the extreme one — the max bookable ask / min catchable
+ * bid. Both by construction stay inside the observed data (a real bucket price — the ask never above
+ * the max print, the bid never below the min print). Module-internal. */
+function clearableLevel(series, side, { qty, competition = DEPTH_COMPETITION_MULT, targetFrac = DEPTH_TARGET_FRAC, minBuckets = DEPTH_MIN_BUCKETS, minDays = DEPTH_MIN_DAYS, wStart, wEnd, nights = 14, now = new Date() } = {}) {
   const scored = windowBuckets(series, { nights, wStart, wEnd, now });
   const nDays = scored.length;
   // meta echoes the effective params so a caller can state "×4 comp, ≥75% target" without importing the consts.
   const res = (price, clearFrac, reason, extra = {}) => ({ price, clearFrac, reason, nDays, competition, qty, targetFrac, minBuckets, ...extra });
   if (nDays < minDays) return res(null, null, 'thin-history');
-  const levels = [...new Set(scored.flatMap(([, r]) => r.hi.map(b => b.p)))].sort((a, b) => b - a); // high→low
+  const pick = r => (side === 'bid' ? r.lo : r.hi);
+  const levels = [...new Set(scored.flatMap(([, r]) => pick(r).map(b => b.p)))]
+    .sort((a, b) => (side === 'bid' ? a - b : b - a));   // bid low→high, ask high→low: first clear = the extreme
   if (!levels.length) return res(null, null, 'no-prints');
   const need = competition * qty;
   for (const P of levels) {
     let supporting = 0, cleared = 0;
     for (const [, r] of scored) {
-      const atAbove = r.hi.filter(b => b.p >= P);
-      supporting += atAbove.length;
-      const flow = atAbove.reduce((s, b) => s + b.v, 0);
+      const beyond = pick(r).filter(b => (side === 'bid' ? b.p <= P : b.p >= P));
+      supporting += beyond.length;
+      const flow = beyond.reduce((s, b) => s + b.v, 0);
       if (flow > 0 && flow >= need) cleared++;
     }
     if (supporting < minBuckets) continue;                 // misattribution guard: too few prints to trust P
@@ -303,6 +300,30 @@ export function clearableAsk(series, { qty, competition = DEPTH_COMPETITION_MULT
   }
   return res(null, 0, 'insufficient-depth', { need });
 }
+
+/* clearableAsk(series, opts) → { price, clearFrac, reason, nDays, competition, qty }.
+ *   price  = the HIGHEST ask whose flow clears the lot on ≥ targetFrac of days AND has ≥ minBuckets
+ *            distinct supporting buckets at/above it — "what I can actually book at" (null when none).
+ *   reason = why price is null: 'thin-history' (< minDays scored), 'no-prints' (no traded buckets),
+ *            'insufficient-depth' (the book can't absorb competition×qty at ANY level — the liquidity
+ *            collapse Ben predicted; the caller MUST surface it, never silently fall back to reach).
+ * Candidate levels = the distinct bucket prices only (no interpolation — that would invent data).
+ * By construction price never exceeds the observed data (a real bucket price); the caller still
+ * caps a rendered ask at dayHighFrom5m. */
+// @provisional-api: PLAN-DEPTH-EXIT DE1 — the "book at X" ask, consumed by DE2 (--depth inspector) and
+// DE3 (watch-positions line/shadow log); F1 (DE4) later promotes it into estimatePair's held-lot sell.
+export function clearableAsk(series, opts = {}) { return clearableLevel(series, 'ask', opts); }
+
+/* clearableBid(series, opts) → the DE6 low-side mirror: the LOWEST bid P whose instasell flow at/
+ * BELOW it clears competition×qty on ≥ targetFrac of days (≥ minBuckets support) — "how deep can I
+ * bid and still get filled". Same subsumption proof (qty→0 ≡ touchedDays — depthDays side:'bid'),
+ * same structural mirage guard (a thin book's clearableBid collapses UP toward where flow trades,
+ * never below it), same floor (never below the observed data — a real bucket price). With
+ * clearableAsk this is the TWO-SIDED size-aware band: the honest version of the asym deep-bid →
+ * high-ask shape, priced off real depth instead of quantiles. Inform-only; rank effect is DE7. */
+// @provisional-api: PLAN-DEPTH-EXIT DE6 — consumed by DE2's --depth inspector (both edges) and the
+// DE3-era held-lot/quote surfaces; DE7 (F1-gated) later promotes the two-sided band into screen rank.
+export function clearableBid(series, opts = {}) { return clearableLevel(series, 'bid', opts); }
 
 // --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
 // THE GAP the depth model left open (the Soul-rune 394 problem): clearableAsk reads 1h bucket
