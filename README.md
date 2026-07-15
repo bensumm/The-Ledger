@@ -422,7 +422,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     SUMMARY reads),
     `read-window-range.mjs` (né `nightlows.mjs` — time-of-day
     range read / overnight fill-realism scoring; `--profile` = the hour-of-day diurnal dip/peak read
-    + derived stale-guarded bid/ask), `limits.mjs` (LM1 — the buy-limit read:
+    + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector:
+    per-day instabuy flow at/above the scored `--ask` + the `clearableAsk` "book at X" for a lot of that
+    size, with the collapse REASON surfaced on a thin book — inform-only, reads `js/windowread.mjs`
+    `depthDays`/`clearableAsk`), `limits.mjs` (LM1 — the buy-limit read:
     `node pipeline/commands/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),

@@ -166,13 +166,16 @@ with volume at-or-above the ask). Names provisional:
   qty/competition/targetFrac, and `clearFrac` monotone in the level; (5) minBuckets guard — a lone
   fat top-flier (1 supporting bucket < 2) cannot set the ask. No consumers touched — downstream
   byte-identical; console-only, no `APP_VERSION`.
-- **DE2 — `read-window-range.mjs --depth <qty>`** (CLI inspection first — the cheapest live
-  validation loop, mirroring how `--exit`/`--profile` landed). Prints the per-day depth-above
-  table at the scored ask + the `clearableAsk` line with its competition/targetFrac stated inline.
-  Acceptance: run against live Soul rune (clears) and a thin big-ticket (null/collapses); output
-  carries the "estimate from bucket averages, not an order book" honesty line — and the thin case
-  prints its COLLAPSE REASON (`book absorbs <4× your Nk lot`), never a bare null (the surfacing HARD
-  requirement above).
+- **DE2 — `read-window-range.mjs --depth <qty>` (LANDED 2026-07-15).** Prints the per-day instabuy
+  flow at/above the scored `--ask`/`--exit` (clears qty×competition? per day) + the `clearableAsk`
+  "BOOK AT ≤ X" line with `×comp · ≥N% of Md · ≥K buckets` stated inline; `clearableAsk` now echoes
+  `targetFrac`/`minBuckets` in its return so the CLI states them without importing the consts. Every
+  read carries the "estimate from bucket AVERAGES, not an order book · ×4 is a PLACEHOLDER n≈0"
+  honesty line. Live-validated: **Soul rune 25k → BOOK AT ≤ 394** (398 clears only 2/14 — a thin
+  percentile even on a deep book, the honest refinement of the reachRelief note's 87%); a small claws
+  lot clears with size-honesty (100u books lower than 2u); an oversized lot → `NO clearable ask —
+  the book can't absorb Nu … LIQUIDITY collapse, reach fallback` (the surfaced reason, never a bare
+  null). Inform-only; no consumer of a price/verdict.
 - **DE3 — watch-positions + shadow logging** (inform-only). The held-lot window line prefers the
   depth read ("clears 25k @ ≥396 on 6/7d (est, ×4 comp)") over the Task-2 reliefSuffix when
   non-null, and on a null read prints the collapse reason instead of silently keeping the old line;

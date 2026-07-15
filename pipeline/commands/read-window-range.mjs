@@ -33,10 +33,14 @@
  *                  B3 — maxBuyForExit, the tax-exact inverse of breakEven) + how reachable the exit is in
  *                  the window (a rarely-printed exit over-states the sell → the buy is optimistic)
  *   --margin <gp>  minimum after-tax net/u the back-solve must leave (default 0 = break-even-clearing)
+ *   --depth <qty>  (PLAN-DEPTH-EXIT DE2) percentile-DEPTH read for a lot of <qty> units: the per-day
+ *                  instabuy flow at/above the scored --ask, whether it clears qty×competition, and the
+ *                  clearableAsk ("what can I actually book at?"). A thin book prints its COLLAPSE REASON,
+ *                  never a bare null. Estimate from bucket AVERAGES, not an order book (inform-only, n≈0).
  */
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../../js/windowread.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
@@ -52,7 +56,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);
@@ -68,6 +72,9 @@ const EXIT = A.exit !== undefined ? parseGp(A.exit) : null;
 if (A.exit !== undefined && !Number.isFinite(EXIT)) { console.error('error: --exit is not a parseable gp amount'); process.exit(1); }
 const MARGIN = A.margin !== undefined ? parseGp(A.margin) : 0;
 if (A.margin !== undefined && !Number.isFinite(MARGIN)) { console.error('error: --margin is not a parseable gp amount'); process.exit(1); }
+// DE2 — --depth <qty>: the percentile-depth read for a lot of <qty> units.
+const DEPTH_QTY = A.depth !== undefined ? parseGp(A.depth) : null;
+if (A.depth !== undefined && (!Number.isFinite(DEPTH_QTY) || DEPTH_QTY <= 0)) { console.error('error: --depth expects a positive unit quantity'); process.exit(1); }
 
 const fmt = n => n == null ? '—' : n.toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
@@ -156,6 +163,29 @@ for (const want of positionals) {
         console.log(`    (no window highs to score the exit's reachability against — treat the buy as an upper bound)`);
       }
     }
+  }
+  // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: percentile-DEPTH read. Per-day instabuy flow at/above the
+  // scored ask (does it clear qty×competition?), then clearableAsk — the highest ask <qty> can actually
+  // book. A thin book collapses to a null WITH its reason (never a silent degrade — the surfacing rule).
+  if (DEPTH_QTY != null) {
+    const scoreAsk = ASK ?? EXIT ?? null;   // reuse a hand-given --ask/--exit for the per-day flow table
+    if (scoreAsk != null) {
+      const dd = depthDays(series, scoreAsk, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
+      if (dd) {
+        console.log(`  --depth ${fmt(DEPTH_QTY)}u @ ask ${fmt(scoreAsk)} — per-day instabuy flow at/above the ask:`);
+        for (const d of dd.perDay) console.log(`    ${d.key}  flow ${fmt(d.flow)} u  ${d.clears ? '✓ clears' : '· short'}`);
+        console.log(`    → clears the ${fmt(DEPTH_QTY)}u lot on ${dd.clearedDays}/${dd.nDays} day(s)${dd.recentFrac != null ? ` (recent-${RECENT_NIGHTS} ${dd.recentClears}/${dd.recentDays})` : ''}`);
+      }
+    }
+    const ca = clearableAsk(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
+    const compTxt = `×${ca.competition} comp · ≥${Math.round(ca.targetFrac * 100)}% of ${ca.nDays}d · ≥${ca.minBuckets} buckets`;
+    if (ca.price != null)
+      console.log(`  --depth ${fmt(DEPTH_QTY)}u → BOOK AT ≤ ${fmt(ca.price)}  (clears ${Math.round(ca.clearFrac * 100)}% of days at this size · ${compTxt})`);
+    else if (ca.reason === 'insufficient-depth')
+      console.log(`  --depth ${fmt(DEPTH_QTY)}u → NO clearable ask — the book can't absorb ${fmt(ca.need)}u (${fmt(DEPTH_QTY)}×${ca.competition}) at any level in this window: LIQUIDITY collapse, reach fallback (${compTxt})`);
+    else
+      console.log(`  --depth ${fmt(DEPTH_QTY)}u → no read (${ca.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'}); reach fallback`);
+    console.log(`    (depth estimated from 1h bucket AVERAGES + volumes — NOT an order book; competition ×${ca.competition} is a PLACEHOLDER, n≈0 — inform-only)`);
   }
   console.log(`  (touched/reached ≠ limit filled — small sample, ~${scored.length} days; a guide, not a guarantee)`);
 }

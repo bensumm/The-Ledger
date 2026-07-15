@@ -308,6 +308,7 @@ ok('clearableAsk: deep book + small size books HIGH; a large lot books lower (si
   const small = clearableAsk(series, { qty: 10, ...dOpts });     // need 40 → clears the very top
   assert.equal(small.price, 400);
   assert.ok(small.clearFrac >= 0.75 && small.reason == null);
+  assert.ok(small.competition === 4 && small.targetFrac === 0.75 && small.minBuckets === 2, 'return echoes the effective params (DE2 states them without importing the consts)');
   const large = clearableAsk(series, { qty: 400, ...dOpts });    // need 1600 → 400 alone (1000) can't; 396 cumulative (2000) can
   assert.ok(large.price != null && large.price < small.price, 'a large lot books LOWER (needs cumulative depth)');
 });

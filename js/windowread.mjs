@@ -284,9 +284,11 @@ export function depthDays(series, level, { qty = 0, competition = DEPTH_COMPETIT
 export function clearableAsk(series, { qty, competition = DEPTH_COMPETITION_MULT, targetFrac = DEPTH_TARGET_FRAC, minBuckets = DEPTH_MIN_BUCKETS, minDays = DEPTH_MIN_DAYS, wStart, wEnd, nights = 14, now = new Date() } = {}) {
   const scored = windowBuckets(series, { nights, wStart, wEnd, now });
   const nDays = scored.length;
-  if (nDays < minDays) return { price: null, clearFrac: null, reason: 'thin-history', nDays, competition, qty };
+  // meta echoes the effective params so a caller can state "×4 comp, ≥75% target" without importing the consts.
+  const res = (price, clearFrac, reason, extra = {}) => ({ price, clearFrac, reason, nDays, competition, qty, targetFrac, minBuckets, ...extra });
+  if (nDays < minDays) return res(null, null, 'thin-history');
   const levels = [...new Set(scored.flatMap(([, r]) => r.hi.map(b => b.p)))].sort((a, b) => b - a); // high→low
-  if (!levels.length) return { price: null, clearFrac: null, reason: 'no-prints', nDays, competition, qty };
+  if (!levels.length) return res(null, null, 'no-prints');
   const need = competition * qty;
   for (const P of levels) {
     let supporting = 0, cleared = 0;
@@ -297,9 +299,9 @@ export function clearableAsk(series, { qty, competition = DEPTH_COMPETITION_MULT
       if (flow > 0 && flow >= need) cleared++;
     }
     if (supporting < minBuckets) continue;                 // misattribution guard: too few prints to trust P
-    if (cleared / nDays >= targetFrac) return { price: P, clearFrac: cleared / nDays, reason: null, nDays, competition, qty };
+    if (cleared / nDays >= targetFrac) return res(P, cleared / nDays, null);
   }
-  return { price: null, clearFrac: 0, reason: 'insufficient-depth', nDays, competition, qty, need };
+  return res(null, 0, 'insufficient-depth', { need });
 }
 
 // --- hour-of-day diurnal profile (the peak-timing read) ---------------------------------------
