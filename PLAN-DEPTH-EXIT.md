@@ -281,3 +281,146 @@ F1-GATED for the same reason DE4 is — widening the effective band on liquidity
 uncalibrated model re-introduces mirages. So the whole "surface more, book higher" upside converges
 on the SAME gate: **F1.** DE1–DE3 + DE6's inform lines are what feed F1 the depth-priced
 alternatives to score, so building the inform phase now shortens, not competes with, that gate.
+
+---
+
+# Extension A — pressure-driven reachable band (PB, Ben 2026-07-15)
+
+## Why (the investigation that produced it)
+DE2 shipped and, on live Soul rune, `clearableAsk(25k)` returned **394** while Ben's real fills prove
+397 sells reliably and higher clears eventually. The diagnosis was NOT the competition multiplier
+(×1/×2/×4 gave the identical answer — a 25k position on a 10.6m/d book is never depth-bound) but
+**smoothing + a stale full-window count**: the model reads the 1h `avgHighPrice`, a bucket AVERAGE,
+which hides the peaks a resting limit ask actually fills at (the less-smoothed 5m peak read **399**;
+live instabuy sat at 399). The fix is NOT to cap at the observed peak — that makes a *prediction* into
+a backward-looking descriptor. The reachable price is set by the **buyer/seller balance**: you clear
+high when you're the lowest ask into impatient buyers; you buy deep when sellers dump into your bid.
+
+## The model
+The demand signal is already in `windowStats`: `medVolHi` (instabuy flow — buyers lifting offers) and
+`medVolLo` (instasell flow — sellers hitting bids). Let `pressure = medVolHi / medVolLo` and
+`s = ln(pressure)` (s>0 buy-heavy, s<0 sell-heavy). With one monotone curve `φ` (`φ(0)≈0.5`,
+increasing, clamped):
+
+```
+reachableAsk = baseHigh + bandHigh × φ(+s)      // buyers hungry (s>0) → reach a HIGH ask
+reachableBid = baseLow  − bandLow  × φ(−s)      // sellers dumping (s<0) → catch a DEEP bid
+  baseHigh/baseLow = recent CENTRAL avgHigh / avgLow (the smoothing-honest center, NOT the max)
+  bandHigh/bandLow = side-specific price DISPERSION (q75−q25 of the daily highs / lows — captures
+                     asymmetric volatility; band is CAPACITY, pressure is REALIZATION)
+```
+
+The ask keys on `+s`, the bid on `−s` — one reflection gives the whole coherent buy+sell doctrine, and
+the sign flips *for free*: buy-heavy favors the seller (high ask, shallow bid), sell-heavy favors the
+buyer (deep bid, shallow ask). No peak cap. `φ` keys off `log(pressure)` so 2× and 0.5× are symmetric.
+
+## The reconciliation that VALIDATES it (Ben's 50k/day correction)
+An earlier verbal claim — "Soul rune is buy-heavy so deep bids don't fill" — was WRONG: Ben fills 381
+at ~50k/day. The model still holds, and *why* it holds is the key refinement: **the reachable price is
+a DISTRIBUTION over days, not a point.** Pressure predicts the CENTER + DIRECTION + fill VELOCITY;
+size + dispersion predict how far into the tail a given size reaches. Soul rune's daily lows disperse
+378–386, so 381 sits in the fillable LOWER TAIL (lows touch ≤381 on ~half the days), and 50k is 0.5%
+of daily flow — small enough to catch that tail. Being buy-heavy correctly predicts these are SLOW,
+tail-dip TRICKLE fills (50k/day), not a sell-flush — which is exactly what Ben sees. So pressure is a
+fill-VELOCITY/direction read, not a binary fill/no-fill; the earlier binary reading was the error.
+**This UNIFIES with the DE depth-count model:** pressure-band sets the distribution's center + direction
++ velocity, DE's depth/qty sets the size-reachable tail. Two lenses on one reachable-price distribution.
+
+## Evidence (n≈0 — reasonableness, not fill-calibration)
+The pressure-driven **deep bid**, tested against real sell-heavy commodities (`φ = 0.5 + 0.43·s`, a
+PLACEHOLDER slope fit on Soul rune's ask), tracks where price actually traded — one slope, wildly
+different price scales: Coal 137 vs observed min 137 (exact) · Magic logs 795 vs 792 · Yew logs 109 vs
+106 · Adamantite 542 vs the 533–549 cluster · Raw shark 632 vs 620 (band 43 → correctly deep). It also
+correctly finds NO sell-heavy window on demand-dominated items (Soul rune all buy-heavy 1.26–2.49×,
+Pure essence 3.6–80×) → they are sell-into-demand/accumulation items, not dip-buy flips. HONEST bound:
+this matches where price *traded*, not verified *fills*, and captures the CYCLICAL dip, not event-driven
+macro lows (Soul rune 378, Adamantite 533 outliers). `φ` stays a placeholder until F1 scores real fills.
+
+## Code homes + naming (respecting the parity boundary + conventions)
+Pure math in **`js/windowread.mjs`** (shared node+app, beside `windowStats`/`clearableAsk`):
+- `demandPressure(stats)` → `{ ratio, reliability }` — `medVolHi/medVolLo` + an n-based reliability in
+  [0,1] (the sample-reliability guard — see below).
+- `reachableBand(stats, { qty, competition })` → `{ bid, ask, pressure, bandLow, bandHigh, reliability, sSigned }`
+  — the two-sided pressure-driven prices (camelCase like `clearableAsk`; returns both sides like a band).
+- Constants UPPER_SNAKE beside `DEPTH_*`: `PRESSURE_PHI_SLOPE` (φ slope placeholder), `PRESSURE_MIN_VOL`
+  (reliability floor), `PRESSURE_HEADROOM_MAX` (clamp — never more than one band of headroom absent F1).
+- `@provisional-api` on the exports until a surface consumes them (DE-style); no `APP_VERSION` (console
+  math). The RC1 recency split (recent-N vs full) applies to `base`/`band`/`pressure` here too — reuse
+  `recencySplit`, don't re-derive.
+
+**The sample-reliability guard REPLACES the thin-tier peak-cap (Ben, 2026-07-15).** The mirage risk on a
+thin book isn't the band — it's that `pressure` off a handful of units is noise (2 stray instabuys read
+"3×"). So `demandPressure.reliability` shrinks toward 0 as the volume behind the ratio thins
+(`PRESSURE_MIN_VOL`), and `reachableBand` blends the pressure headroom toward 0 (back to the smoothed
+center) as reliability falls — a thin book degrades to conservative WITHOUT a hard cap, and a liquid
+book predicts boldly (even above the last peak). One model, both tiers; noise, not the band, is the guard.
+
+## Chunks (each carries its own docs + test pass; inform-only until F1)
+- **PB1 — pure math + fixtures** (`js/windowread.mjs` + `windowread.test.mjs`). `demandPressure`,
+  `reachableBand`, the constants, the reliability blend. Acceptance: (1) sign symmetry — buy-heavy lifts
+  the ask + shallows the bid, sell-heavy mirrors; (2) `φ` monotone in `s`, clamped at `PRESSURE_HEADROOM_MAX`;
+  (3) thin-volume reliability → headroom collapses to the center (the guard, no peak-cap); (4) side-specific
+  band — asymmetric-volatility fixture gives `bandHigh ≠ bandLow`; (5) the Coal/Magic-logs/Soul-rune
+  reasonableness values pinned as fixtures so a φ/base/band change is visible. No consumer touched.
+- **PB2 — `read-window-range.mjs --pressure`** (CLI inspector, mirrors `--depth`). Prints `pressure`,
+  the regime label, and `reachableBid`/`reachableAsk` with the band + reliability inline + the honesty
+  line. Acceptance: live Soul rune (buy-heavy, ask ~399, shallow bid) and a sell-heavy commodity (deep
+  bid) render sensibly; a thin book shows the reliability degrade.
+- **PB3 — watch-positions inform line + shadow log.** A held lot's line gains a
+  `reachable ask ~399 / bid ~385 (pressure 1.6× buy-heavy)` note beside the depth read; shadow fields
+  (`pressure`, `reachableAsk`, `reachableBid`, `pressureReliability`, `bandHigh`, `bandLow`) ride
+  `suggestions.jsonl` so F1 scores the pressure-priced level against real fills. Acceptance: byte-identical
+  when the volume is too thin to read; golden diff on the note path.
+- **PB4 — estimatePair integration (F1-GATED, flag-off byte-identical).** On the liquid tier the
+  pressure-driven `reachableAsk`/`reachableBid` become the sell/buy reference (superseding the smoothed
+  band top / the DE depth ask where reliability is high), the DE depth read staying the thin-tier floor.
+  Held behind F1 exactly like DE4 — no price/verdict/grade moves until the retro-join scores it.
+
+## Open questions (rule 4)
+- `PRESSURE_PHI_SLOPE`, `PRESSURE_MIN_VOL`, `PRESSURE_HEADROOM_MAX` are all n≈0 placeholders — F1 owns them,
+  and the band-measure × φ-curve are COUPLED (they jointly set the magnitude; calibrate together).
+- `bandHigh`/`bandLow` measure: day-high/low dispersion (q75−q25) vs the avgHigh−avgLow spread vs Ben's
+  guide-distance. Start with **day-high/low dispersion** (self-contained, no guide dependency); revisit
+  under F1. Guide-distance is a candidate stable anchor if dispersion proves noisy.
+- Whole-day vs per-window pressure: PB uses the window's pooled pressure; the per-HOUR track is Extension B.
+
+---
+
+# Extension B — per-hour demand-cycle classifier (DC, Ben 2026-07-15)
+
+## Why
+Pressure is not static — it cycles by hour (Soul rune's per-hour pressure ran 1.26–2.49× across the day;
+sell-heavy commodities trough below 1). Two payoffs the pooled-window pressure hides:
+1. **Timing** — the high-buy-pressure hours are the SELL window; the sell-pressure hours are the BUY
+   window. This is the measured, demand-side complement to the price-shape diurnal read
+   (`hourProfile`/`deriveDiurnalRange`), which today reads only where price dips/peaks, not WHY.
+2. **A flip-SIDE classifier, for free** — an item's pressure regime says what kind of flip it even is:
+   **sell-heavy** (Adamantite ore 0.29×, Raw shark 0.22×, Coal, logs) = dip-buy flips (bids fill in the
+   dump); **buy-heavy** (Soul rune, Pure essence, Green dhide) = sell-into-demand / accumulation (deep
+   bids trickle, price the ask). We have no such axis today; it sharpens the scan directly.
+
+## The model
+Pure math in `js/windowread.mjs`, extending the hour bucketing `hourProfile` already does:
+- `hourlyPressure(series, { nights })` → per-local-hour `{ hour, pressure, reliability, nBuy, nSell }`
+  (the demand-cycle track; reuses `hourProfile`'s hour buckets + `demandPressure` from PB1).
+- `demandRegime(series)` → `{ regime: 'buy-heavy'|'sell-heavy'|'balanced', pooled, buyWindow, sellWindow }`
+  — the classification + the peak-buy-pressure (sell) and peak-sell-pressure (buy) hour windows.
+- `@provisional-api` until consumed; no `APP_VERSION`; RC1 recency applies.
+
+## Chunks (inform-only; the scan touch is the F1-gated payoff)
+- **DC1 — `hourlyPressure` + `demandRegime` + fixtures.** Acceptance: an all-buy-heavy synthetic (Soul
+  rune shape) classifies `buy-heavy` with no sell window; a troughing synthetic classifies `sell-heavy`
+  with the buy window at the trough hours; a flat one is `balanced`; thin hours degrade (low reliability).
+- **DC2 — surface it in `read-window-range.mjs --pressure` and the diurnal read.** The `--pressure`
+  inspector (PB2) gains the per-hour track + the buy/sell window labels; `deriveDiurnalRange` cross-checks
+  its price dip/peak windows against the pressure windows (a demand-confirmed timing read). Inform-only.
+- **DC3 — the scan flip-side classifier (F1-GATED for any rank effect).** `screen-flip-niches.mjs`
+  annotates each row with its `demandRegime` (dip-buy vs sell-the-demand) as an INFORM column first;
+  promoting it into gating/rank (e.g. routing sell-heavy items to the dip loop, buy-heavy to accumulation)
+  waits on F1 evidence, same discipline as DE7. Touches the scan + monitoring docs, not just depth.
+
+## Honesty (rule 4)
+All thresholds (`balanced` band, the reliability floor) are n≈0 placeholders. The per-hour pressure is a
+~14-day median per hour — a small sample per cell; treat the regime label as a lean, not a law, and never
+present a demand-window as a guaranteed fill time. The classifier reads where volume TRADED, not verified
+fills — F1's retro-join is the calibrator for any promotion into rank/timing.
