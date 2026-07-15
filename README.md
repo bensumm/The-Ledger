@@ -346,10 +346,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   guessing — that guessing is what emitted the recurring Windows "LF will be replaced by CRLF"
   warnings on commits touching `suggestions.jsonl`/`pipeline/.guide-history.jsonl`/`PLAN.md`
 - `pipeline/` — RuneLite fill-data pipeline + node analysis scripts; not served by
-  Pages, not part of the app. **CLI entrypoints live directly in `pipeline/`; the
-  imported-only libraries they share live in `pipeline/lib/`** (OR2 — the split makes the
-  CLI-vs-lib distinction structural, since the exec bit doesn't):
-  - **CLI entrypoints (`pipeline/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
+  Pages, not part of the app. **The top level holds only subdirectories** (R3 — the split
+  makes each role structural, since the exec bit doesn't): **`pipeline/commands/`** = the
+  workflow CLIs you run (screen-flip-niches, quote-items, watch-positions, sync-fills, …);
+  **`pipeline/ci/`** = the CI/dev guards + test runner (check-imports, check-dead-exports,
+  lint-arch/docs/skills, run-tests, smoke-test); **`pipeline/lib/`** = the imported-only
+  shared libraries; **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
+  `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
+  - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
     `fills.json`/`positions.json`/`offers.json`, commit + push; `--local` writes them with
     **zero git** for desk-side freshness — LW1, exported `regenerate()` core),
     `watch-log.mjs` (LW1 local daemon — `fs.watch` the exchange-logger dir + `regenerate()`
