@@ -27,7 +27,7 @@ import {
   computeDeltas, advanceState,
 } from './lib/watchstate.mjs';
 import { pathsStage, renderPathLine } from './lib/item-context.mjs';
-import { PATH_KEYS } from '../js/paths.mjs';
+import { PATH_KEYS } from '../js/held-item-strategy.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -16,7 +16,7 @@
  *   - A rule-block is TAGGED if its text (the bullet + everything until the next top-level
  *     bullet / heading) contains EITHER:
  *       1. a backticked CODE POINTER — a `…` span ending in a source extension
- *          (.mjs/.js/.yml/.yaml/.json), e.g. `js/strategies.mjs`, `rating.mjs`; OR
+ *          (.mjs/.js/.yml/.yaml/.json), e.g. `js/flip-niches.mjs`, `rating.mjs`; OR
  *       2. the explicit lowercase tag  `judgment:`  (the KEEP-AS-JUDGMENT marker).
  *   - Blocks inside ``` fenced code and the YAML frontmatter are ignored.
  *   - FAIL (exit 1) if any rule-block is untagged; print per-file + total counts always so

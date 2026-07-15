@@ -20,7 +20,7 @@
  * fs / no fetch. The caller feeds parsed suggestion rows + parsed fills events; tests feed SYNTHETIC
  * fixtures only (never the live fills.json).
  *
- * ⚠ ALL horizon constants below are NAMED PLACEHOLDERS (the same discipline as paths.mjs weights and
+ * ⚠ ALL horizon constants below are NAMED PLACEHOLDERS (the same discipline as held-item-strategy.mjs weights and
  * rating.mjs cutoffs). They encode the SHAPE of the judgment (a scalp-family suggestion's fill
  * window is intraday; a value/rising accumulation's is multi-day), NOT a calibrated magnitude — the
  * whole point of P6 is that this retro-join MEASURES the real latency so a later chunk can replace

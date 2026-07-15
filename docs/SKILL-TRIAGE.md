@@ -33,8 +33,8 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 
 | Rule-block | Disposition | Change / supersession |
 | --- | --- | --- |
-| `--mode scalp` / `--mode value` provisional niches | KEEP-AS-JUDGMENT | Spec is coded (`js/strategies.mjs`); "only chase at the desk" is the judgment. |
-| Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/strategies.mjs` `inAll` + `pipeline/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
+| `--mode scalp` / `--mode value` provisional niches | KEEP-AS-JUDGMENT | Spec is coded (`js/flip-niches.mjs`); "only chase at the desk" is the judgment. |
+| Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/flip-niches.mjs` `inAll` + `pipeline/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
 | Sync first (SY1) / run-from-main (SY1.2) | ENCODE | `pipeline/sync-fills.mjs`; the run-location rule is operational, stays as prose. |
 | 500k gp/day attention floor | ENCODE | `pipeline/screen-flip-niches.mjs` `--min-gpd` (default 500_000). |
 | SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/gatecandidates.mjs`; the relay-honestly rule is judgment. |
@@ -58,7 +58,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Peak-throughput sizing — one-window vs multi-day | KEEP-AS-JUDGMENT | Labeling discipline. |
 | Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen.mjs`/`quote.mjs`); `quote.mjs` regime line shows bought/left/next-frees; `node pipeline/read-buy-limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
 | Thin CURRENT 2h band ≠ no edge | KEEP-AS-JUDGMENT | Read via `pipeline/read-window-range.mjs`; the "proven lane" call is judgment. |
-| Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/strategies.mjs`; watchlist section + Note in `pipeline/screen-flip-niches.mjs` (S3); columns pinned in `js/quotecore.js`. |
+| Hard rules §3 (falling exclusion / watchlist section / preserve columns) | ENCODE | Falling doctrine per-spec in `js/flip-niches.mjs`; watchlist section + Note in `pipeline/screen-flip-niches.mjs` (S3); columns pinned in `js/quotecore.js`. |
 | Cover every niche each pass | KEEP-AS-JUDGMENT | Output-coverage discipline (memory `salient-subtask-crowds-out-mandate`). |
 | Every recommended price states its timing target | KEEP-AS-JUDGMENT | Tool `pipeline/read-window-range.mjs`; binding a number to a window is judgment. |
 | Position-context pass §5 (stale-bid / overlap / held-ask) | KEEP-AS-JUDGMENT | Cross-check over `pipeline/watch-positions.mjs`. |
@@ -126,7 +126,7 @@ skill); those are effectively already ENCODE-or-relocated and just need to stay 
 | two-sided-liquidity-gate | KEEP (pointer) | Already `→ /scan`; gate coded in `gatecandidates.mjs`. |
 | banded-liquid-item-beats-stable | KEEP (pointer) | Already `→ /scan`. |
 | analysis-output-table-format | ENCODE | Table shape pinned in `js/quotecore.js` `quoteCells`; the pointer row is fine. |
-| falling-exclusion-amended | ENCODE | Per-spec `falling` doctrine in `js/strategies.mjs` (P5). The authoritative amendment. |
+| falling-exclusion-amended | ENCODE | Per-spec `falling` doctrine in `js/flip-niches.mjs` (P5). The authoritative amendment. |
 | docs-small-encode-in-scripts | KEEP-AS-JUDGMENT | The meta-rule this whole chunk executes. |
 | fix-at-the-source-not-derived-view | KEEP-AS-JUDGMENT | Pipeline discipline; `add-manual-fill.mjs` is the writer. |
 | opportunity-cost-can-beat-patient-hold | KEEP (pointer) | Already `→ gate tree + /positions`. |

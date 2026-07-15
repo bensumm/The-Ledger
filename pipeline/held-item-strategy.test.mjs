@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * paths.test.mjs — acceptance fixtures for the PURE path engine core (js/paths.mjs, Pipeline v2 P4a).
+ * held-item-strategy.test.mjs — acceptance fixtures for the PURE path engine core (js/held-item-strategy.mjs, Pipeline v2 P4a).
  *
- * paths.mjs is DOM-free + dependency-free, so the whole enumerate/weigh model is fixture-testable with
+ * held-item-strategy.mjs is DOM-free + dependency-free, so the whole enumerate/weigh model is fixture-testable with
  * synthetic DERIVED contexts — NO live data (CLAUDE.md rule 4). The ctx here mirrors the shape the v2
  * context chain hands the path stage (regime/phase/underwater/aboveFloor/… already derived upstream),
  * so these are the archetypes' DERIVED shapes, not raw series.
@@ -17,12 +17,12 @@
  *   - degrade-not-throw: an empty/na ctx never throws; unprovable paths get low viability + a
  *     `no-data` evidence note (never zero, never decisive).
  *
- * Run: `node pipeline/paths.test.mjs` (exits non-zero on any failure). Auto-discovered by run-tests.mjs.
+ * Run: `node pipeline/held-item-strategy.test.mjs` (exits non-zero on any failure). Auto-discovered by run-tests.mjs.
  */
 import assert from 'node:assert/strict';
 import {
   enumeratePaths, weighPaths, PATH_KEYS, ACTIONS,
-} from '../js/paths.mjs';
+} from '../js/held-item-strategy.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

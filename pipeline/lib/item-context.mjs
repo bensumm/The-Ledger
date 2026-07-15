@@ -43,7 +43,7 @@ import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS 
 import { fmtP } from '../../js/money-format.js';
 import { computeDeltas, advanceState, convictionGate, pathPersistence,
   verdictPersistence, VERDICT_PERSIST_MS } from './watchstate.mjs';
-import { enumeratePaths, weighPaths } from '../../js/paths.mjs';
+import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';
 
 // ---------------------------------------------------------------------------
 // STAGE ENRICHERS — each (ctx, input) → ctx, mutating exactly one namespace and returning ctx so
@@ -276,7 +276,7 @@ export function positionStage(ctx, {
 }
 
 /* --- paths stage (V2-P4b) — the path-engine slice of the chain ------------------------------------
-   Derives the js/paths.mjs scoring context from the already-built namespaces (market row + history
+   Derives the js/held-item-strategy.mjs scoring context from the already-built namespaces (market row + history
    phase + position lot), enumerates + weighs the candidate paths, and runs the P4b PERSISTENCE GATE
    (pathPersistence, lib/watchstate.mjs — arm-then-confirm + hysteresis) against the prior watch-state
    entry so a flapping weight can never whiplash the headline path. PURE — no fetch, no fs; the caller
@@ -306,7 +306,7 @@ export function pathsStage(ctx, { watchStatePrior = null, nowMs = Date.now(), fr
   const ts = ctx.history ? ctx.history.termStructure : null;
   const floor = (ts && ts.hasData && ts.floor != null) ? ts.floor : null;
   const live = row ? (row.quickSell ?? row.mid ?? null) : null;
-  // the DERIVED scoring context js/paths.mjs speaks (all fields optional; absence degrades there)
+  // the DERIVED scoring context js/held-item-strategy.mjs speaks (all fields optional; absence degrades there)
   const derived = {
     held: !!p.held,
     regime: row ? (row.falling ? 'falling' : row.rising ? 'rising' : (row.regime && row.regime.ok ? 'flat' : null)) : null,

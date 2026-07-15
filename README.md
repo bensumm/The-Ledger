@@ -114,7 +114,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (DP1, BUY-side, INFORM-only/NEVER-REJECT) the dip DIRECTION read via `quotecore.js`'s `recentDirection`
   (a reverting dip → caution "cross or pass"; wired inform on band/churn). All degrade to pass on
   missing data and never throw. `runValidators(ctx,{specs})` drives a PER-THESIS plan (`{key,mode,window}`
-  from `js/strategies.mjs`) — `gate` (verdict stands) vs `inform` (`informFlags`: annotate-only, clamped to
+  from `js/flip-niches.mjs`) — `gate` (verdict stands) vs `inform` (`informFlags`: annotate-only, clamped to
   pass, would-have verdict logged via `leanValidators`). `worstStatus`/`flags`. Screens DROP reject + FLAG
   caution + SHOW inform notes; explicit asks/held/watchlist never hidden. NOT app-imported → no APP_VERSION),
   `termstructure.mjs` (P3 — pure DOM-free multi-day term structure over a daily-mid `[{ts,mid}]` series:
@@ -131,7 +131,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `screen.mjs`/`gatecandidates.mjs`; imports only `tax`. Full spec + all NAMED-PLACEHOLDER thresholds (n≈0)
   live in the module header; resolved rank-metric history in `docs/LORE.md`. NOT app-imported → no
   APP_VERSION. Fixture-pinned `pipeline/valuescreen.test.mjs`),
-  `paths.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
+  `held-item-strategy.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
   list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
   {dominant,weighed,enteredUnder,migration}` (viability-weighted ordering off PLACEHOLDER heuristics
@@ -141,12 +141,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   alert inputs; `migration` here is the RAW instantaneous flag — the persistence-gated
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
-  no APP_VERSION bump. Fixture-pinned `pipeline/paths.test.mjs`),
-  `strategies.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR flip-niches
+  no APP_VERSION bump. Fixture-pinned `pipeline/held-item-strategy.test.mjs`),
+  `flip-niches.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR flip-niches
   (band/churn + scalp/value; the `spread` and `rising` specs were DELETED in Steps 3+4) as data-shaped
   specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,falling,gate,validators,defaultPath}`.
   `pipeline/lib/gatecandidates.mjs` looks up
-  `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
+  `FLIP_NICHES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
   / `spec.gate` instead of branching on the flip-niche name — so a flip-niche can be added or REMOVED by editing the
   registry alone. P5's per-spec `falling` doctrine (`exclude`|`accept`|`knife-guard`), a `gate` selector
   (`band`|`value` — value routes to the term-structure `valueGate`), and the `scalp`/`value` specs (both
@@ -155,9 +155,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   rising reserve). `defaultPath` = the inferred DEFAULT ENTRY PATH the surfacing implies (band/churn/
   scalp → `scalp`, value → `value-hold` — a Ben-vetoable judgment proposal), written to
   `suggestions.jsonl` (lean `path` field) + shown as the screen's per-row entry-path annotation.
-  `validateStrategySpec` + `pipeline/strategies.test.mjs` are the CONFORMANCE suite (structural contract +
+  `validateNicheSpec` + `pipeline/flip-niches.test.mjs` are the CONFORMANCE suite (structural contract +
   no-throw + determinism over the replay archetypes). Imports only `tax` from money-math.js + `PATH_KEYS` from
-  paths.mjs. NOT yet app-imported → no APP_VERSION bump),
+  held-item-strategy.mjs. NOT yet app-imported → no APP_VERSION bump),
   `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
   Access API writer for `coffer-manual.log` + tombstones), `github.js` (M1 — mobile
@@ -236,7 +236,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   app-imported (watchlist.json is the app's, kept separate).
 - `hold-thesis.json` — tracked repo-root store (TG1, 2026-07-07): AGENT-WRITTEN declared hold plans,
   a flat array of `{id, exitPrice, tripwire, horizon, window, path, enteredUnder, ts}`
-  (`path`/`enteredUnder` added additively by P4a — the js/paths.mjs entry-path declaration; `window`
+  (`path`/`enteredUnder` added additively by P4a — the js/held-item-strategy.mjs entry-path declaration; `window`
   — the declared exit window, "h-h" local hours — added additively by VN-2; legacy entries without
   them stay valid). When Ben declares a patient/accumulation hold ("accumulate nest, exit 4,848,
   tripwire 4,678, multi-day") the agent appends/upserts an entry (the greenlist pattern — hand-edit,
@@ -634,7 +634,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `holdthesis.mjs` (TG1 — PURE declared-hold-thesis store: `loadHoldThesis`/`saveHoldThesis`/
     `thesisFor`/`upsertThesis`/`clearThesis`/`pruneHoldThesis` over the TRACKED root `hold-thesis.json`
     array of `{id,exitPrice,tripwire,horizon,path,enteredUnder,ts}` — **P4a** grew the additive optional
-    `path`/`enteredUnder` (the js/paths.mjs entry-path declaration; LEGACY entries without them stay
+    `path`/`enteredUnder` (the js/held-item-strategy.mjs entry-path declaration; LEGACY entries without them stay
     fully valid, both default null); watch.mjs reads it read-only and feeds it to `convictionGate` to
     SILENCE the expected-underwater headline while live holds above the declared tripwire — never
     touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
@@ -730,7 +730,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `lint-arch.test.mjs`),
   - `smoke-test.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
-    `paths.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
+    `held-item-strategy.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
     the exit-family, the genuine-dip counter-fixture, enteredUnder→migration, and the
     degrade-not-throw/no-data contract), `pathpersist.test.mjs` (P4b — the path-dominance
     persistence-gate acceptance: flapping weights never flip the persisted `currentPath`/headline
@@ -922,14 +922,14 @@ run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 | Module | Also imported by (pipeline) |
 | --- | --- |
 | `js/quotecore.js` | 13 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
-| `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote.mjs`/`screen.mjs` (`tax`) + js-side node imports `js/strategies.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
+| `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote.mjs`/`screen.mjs` (`tax`) + js-side node imports `js/flip-niches.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
 | `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs`, `cash.mjs` + `lib/analyze.mjs`/`item-context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
 | `js/windowread.mjs` | `pipeline/read-window-range.mjs`, `pipeline/watch-positions.mjs`, `pipeline/screen-flip-niches.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints) |
 | `js/forecast.mjs` | `pipeline/forecast.test.mjs`; **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs`, `pipeline/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
-| `js/paths.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/strategies.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/paths.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
-| `js/strategies.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/strategies.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
+| `js/held-item-strategy.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch.mjs` + `quote.mjs --positions` at runtime), `js/flip-niches.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/held-item-strategy.test.mjs`, `pipeline/pathpersist.test.mjs` (not yet app-imported) |
+| `js/flip-niches.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/flip-niches.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
 
 ### Test-location convention
 

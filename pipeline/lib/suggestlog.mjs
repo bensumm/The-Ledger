@@ -239,7 +239,7 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (thesis != null)        e.thesis = thesis;
   if (validators != null)    e.validators = validators;
   // P4c: `path` is the INFERRED default entry-path key from the surfacing strategy spec
-  // (js/strategies.mjs defaultPath — band/spread/churn → scalp, rising → value-hold). Lean-included
+  // (js/flip-niches.mjs defaultPath — band/spread/churn → scalp, rising → value-hold). Lean-included
   // exactly like the YS2 fields, so a caller that supplies no path (quote.mjs, watchlist rows) logs a
   // byte-identical shape. It lets a later fill attribute a position to a thesis when no explicit
   // `thesis.mjs set --path` was declared (the P4b fallback: explicit hold-thesis > inferred > null).

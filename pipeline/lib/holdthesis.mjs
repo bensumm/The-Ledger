@@ -33,7 +33,7 @@
  *     horizon      — free-text plan horizon ("multi-day", "overnight", …); display only
  *     window       — (VN-2, optional) the declared exit WINDOW, local hours "h-h" (e.g. "1-3" =
  *                    the diurnal peak window the exit targets); display/frame only, never gates
- *     path         — (P4a, optional) the CURRENT declared path key for the lot (js/paths.mjs
+ *     path         — (P4a, optional) the CURRENT declared path key for the lot (js/held-item-strategy.mjs
  *                    PATH_KEYS — 'value-hold' / 'hold-recovery' / …); null when undeclared
  *     enteredUnder — (P4a, optional) the path key the lot was ENTERED under; feeds the path
  *                    engine's MIGRATION flag (dominant ≠ enteredUnder); null when undeclared
@@ -44,7 +44,7 @@
  * BACK-COMPAT (P4a): path/enteredUnder are ADDITIVE + optional. LEGACY entries written before P4a
  * (no path/enteredUnder keys) stay fully valid everywhere — load/lookup/prune never read them, and
  * upsertThesis defaults both to null. The path engine treats a missing path/enteredUnder as
- * "undeclared" (no migration signal), exactly the degrade-not-throw contract js/paths.mjs relies on.
+ * "undeclared" (no migration signal), exactly the degrade-not-throw contract js/held-item-strategy.mjs relies on.
  * VN-2 adds `window` under the same contract: additive, optional, defaults null, never read by
  * load/lookup/prune — only the render frame displays it.
  */

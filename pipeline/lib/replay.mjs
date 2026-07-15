@@ -25,7 +25,7 @@
  * the thin/posture drop, and the staleness sub-check itself stays unit-pinned in survivemode.test.mjs.
  *
  * NICHE SET (Steps 3+4, Ben 2026-07-09): runReplay's default modes are now band + churn — the `spread`
- * and `rising` specs are DELETED (js/strategies.mjs). The falling doctrine is PER-SPEC (P5): band/churn
+ * and `rising` specs are DELETED (js/flip-niches.mjs). The falling doctrine is PER-SPEC (P5): band/churn
  * exclude fallers; the scalp scenario accepts AND requires them (spec.falling=accept + the scalp confirm);
  * value has its own term-structure gate. Each doctrine diff IS recorded by regenerating the golden.
  * No live data (CLAUDE.md rule 4).

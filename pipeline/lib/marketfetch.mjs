@@ -358,7 +358,7 @@ export async function loadAll24hRolling({ db } = {}) {
    Returns { [id]: { bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: #windows two-sided
    WITHIN one 5m bucket (display/quality signal), tradedWin: #windows with ANY trade (Bar D density),
    sawLow / sawHigh: did each side print ≥1× across the window (Bar D two-sidedness) } } for every item
-   seen in the windows. bandCore (js/strategies.mjs) gates on tradedWin + sawLow/sawHigh, not active5m. --- */
+   seen in the windows. bandCore (js/flip-niches.mjs) gates on tradedWin + sawLow/sawHigh, not active5m. --- */
 function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0, 10); } // UTC day
 // Band archive retention. Raised 7d→90d for O1: pipeline/join-outcomes.mjs reconstructs the trailing-2h
 // band at each historical trade PLACEMENT, so recent (weeks-old) windows must survive to be joinable.

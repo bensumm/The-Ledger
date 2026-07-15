@@ -111,12 +111,13 @@ export const DENYLIST = [
     id: 'niche-concept-word',
     // R1 rename (2026-07-14, PLAN-RENAME.md): the screen niches band/churn/scalp/value are FLIP-NICHES
     // now; the bare word "niche" is retired as the concept word in the operating docs. ("strategy" is
-    // reserved for the held-item level, js/paths.mjs.) The lookbehind spares `flip-niche`,
-    // `flip-niches.mjs`, and the `FLIP_NICHES` identifier (hyphen OR underscore). Scoped to the DOCS
-    // only — the ~600 code-comment uses are swept opportunistically, so the source tree is NOT listed.
-    // The definition + full codename history live in docs/GLOSSARY.md (not in `files`, so it doesn't
-    // self-trip). Case-insensitive so a capitalized "Niche" heading is caught too.
-    pattern: /(?<!flip[-_])niche/i,
+    // reserved for the held-item level, js/held-item-strategy.mjs.) The lookbehind matches the STANDALONE
+    // prose word only — `(?<![\w-])` spares any larger token: `flip-niche`, `flip-niches.mjs`, the
+    // `FLIP_NICHES` identifier (underscore), AND camelCase like `validateNicheSpec` (preceding letter).
+    // Scoped to the DOCS only — the ~600 code-comment uses are swept opportunistically, so the source
+    // tree is NOT listed. The definition + full codename history live in docs/GLOSSARY.md (not in
+    // `files`, so it doesn't self-trip). Case-insensitive so a capitalized "Niche" heading is caught too.
+    pattern: /(?<![\w-])niche/i,
     files: ['CLAUDE.md', 'README.md', 'docs/ARCHITECTURE.md',
             '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
             '.claude/skills/overnight/SKILL.md', '.claude/skills/morning/SKILL.md'],

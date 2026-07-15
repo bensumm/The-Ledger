@@ -26,7 +26,7 @@ import { fmtP, fmt, fmtHour } from '../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
 import { anchorNudge } from './probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
-import { STRATEGIES } from '../js/strategies.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
+import { FLIP_NICHES } from '../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { trajectoryFrom1h } from './lib/warm-term-structure.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from './lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
@@ -191,7 +191,7 @@ async function runItems() {
     // P_bid is "rest it as optionality", NEVER a rank weight (doctrine: js/estimators.mjs asymEstimate).
     const ast = inp.ts1h ? windowStats(inp.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const ap = ast ? asymPair(ast) : null;
-    const ae = ap ? asymEstimate(STRATEGIES.band, row, ap) : null;
+    const ae = ap ? asymEstimate(FLIP_NICHES.band, row, ap) : null;
     if (ae) {
       const hB = Math.round(ae.pBid * ap.nDays), hA = Math.round(ae.pAsk * ap.nDays);
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
@@ -232,11 +232,11 @@ async function runItems() {
     }
     // rev2 + FIX 1: a declared thesis exit anchors Est. sell ONLY when the id is an actual open lot
     // (a declared exit is a held-lot SELL plan; it must not inflate an ad-hoc read of an item we don't
-    // hold). spec stays STRATEGIES.band — an explicit "how's X" is a generic flip read.
+    // hold). spec stays FLIP_NICHES.band — an explicit "how's X" is a generic flip read.
     const declaredExit = heldIds.has(id) ? (thesisFor(holdThesisStore, id)?.exitPrice ?? null) : null;
     // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the in-hand ts5m —
     // Part B's de-bias reference; applied only when reachRelief > 0 (liquid + small limit÷flow).
-    const est = estimatePair(STRATEGIES.band, row, {
+    const est = estimatePair(FLIP_NICHES.band, row, {
       bidReach, askReach,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: ap, declaredExit,

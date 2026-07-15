@@ -102,8 +102,8 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | --- | --- | --- | --- |
 | DL2 | Reactive liquid-flush loop — `flushSignal` + `watch.mjs --dip` FLUSH alert (bid-into-the-fall, liquid-only, unit-flow fillability); widened SIGNAL log (liquid+illiquid, `alerted`/`gatedReason`) + `analyze.mjs §4` candidate-surfacing retro; PLACEHOLDERS n=2, ALERTS-never-places | `js/quotecore.js`, `pipeline/watch-positions.mjs`, `pipeline/lib/suggestlog.mjs`, `pipeline/lib/analyze.mjs`, `pipeline/analyze-record.mjs`, `dip-watchlist.json`, `pipeline/diploop.test.mjs` | ✅ `73eb65e` |
 | DL4 | Scan auto-nominates dip candidates ("B feeds A") — pure `nominateDip`/`selectNominations` (zero-fetch flush-suitability over the gate-tier universe) append flush-suitable picks to `dip-watchlist.json`; polymorphic `--dip` reader; PROPOSALS-to-watch, PLACEHOLDERS n=2 | `js/quotecore.js`, `pipeline/screen-flip-niches.mjs`, `pipeline/watch-positions.mjs`, `dip-watchlist.json`, `pipeline/dl4nominate.test.mjs` | ✅ `6c9abf2` |
-| DL3 | Flush-distribution → candidate discovery feeding the thesis layer (spec below) — DL4 already landed the `dip-watchlist.json` auto-feed half; DL3 adds the flush-distribution thesis layer on top | `pipeline/lib/analyze.mjs`, `js/strategies.mjs`, `dip-watchlist.json` (auto-fed by DL4), tests | OPEN (n-gated on DL2's widened log accruing, like F1) |
-| DP1 | Dip-posture entry classifier (dip DIRECTION, not just depth) — `recentDirection` + `dipPostureValidator`, inform on band/churn | `js/quotecore.js`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/dipposture.test.mjs` | ✅ `597f132` |
+| DL3 | Flush-distribution → candidate discovery feeding the thesis layer (spec below) — DL4 already landed the `dip-watchlist.json` auto-feed half; DL3 adds the flush-distribution thesis layer on top | `pipeline/lib/analyze.mjs`, `js/flip-niches.mjs`, `dip-watchlist.json` (auto-fed by DL4), tests | OPEN (n-gated on DL2's widened log accruing, like F1) |
+| DP1 | Dip-posture entry classifier (dip DIRECTION, not just depth) — `recentDirection` + `dipPostureValidator`, inform on band/churn | `js/quotecore.js`, `js/validate.mjs`, `js/flip-niches.mjs`, `pipeline/screen-flip-niches.mjs`, `pipeline/quote-items.mjs`, `pipeline/dipposture.test.mjs` | ✅ `597f132` |
 | PM1 | Probe-module system (dip/froth/anchor/decant theory plug-ins) | `pipeline/modules/*`, `pipeline/lib/probes.mjs` | ✅ `6aba80b` |
 | TG1 | Thesis-gated hold alerts | `hold-thesis.json`, `pipeline/lib/holdthesis.mjs`, `watch.mjs` | ✅ `b2634a1` |
 | T1 | Standard table v2 | `js/quotecore.js`, `pipeline/cli.mjs`, app | ✅ `c7b53e7` (0.34.0) |
@@ -175,16 +175,16 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 | V2-P1 | Surface extraction + replay harness | `lib/gatecandidates.mjs`, `lib/replay.mjs` | ✅ `f02fbf5`+`8db97bf` |
 | V2-P2 | Validate stage + reachValidator (every surface) | `js/validate.mjs`, `js/windowread.mjs` | ✅ `910bea1` |
 | V2-P3 | floorValidator + term structure | `js/termstructure.mjs` | ✅ `b55f895` |
-| V2-P4a | Path engine core (pure) | `js/paths.mjs` | ✅ `e2eed20` |
+| V2-P4a | Path engine core (pure) | `js/held-item-strategy.mjs` | ✅ `e2eed20` |
 | V2-P4b | Path persistence + migration | `lib/watchstate.mjs`, `watch.mjs`, `quote.mjs` | ✅ `ec425f7` |
-| V2-P4c | Declarative strategy specs | `js/strategies.mjs` | ✅ `cfcc624` |
-| V2-P5 | scalp/value specs + path-aware bids + falling doctrine | `js/strategies.mjs`, `js/valuescreen.mjs`, `js/quotecore.js` | ✅ `fe46f2e` (value-niche spec full text: `git show fe46f2e:PLAN-VALUE.md`) |
+| V2-P4c | Declarative strategy specs | `js/flip-niches.mjs` | ✅ `cfcc624` |
+| V2-P5 | scalp/value specs + path-aware bids + falling doctrine | `js/flip-niches.mjs`, `js/valuescreen.mjs`, `js/quotecore.js` | ✅ `fe46f2e` (value-niche spec full text: `git show fe46f2e:PLAN-VALUE.md`) |
 | V2-P6a | Retro-join calibrator (suggestion→fill ground truth) | `pipeline/lib/retrojoin.mjs`, `pipeline/report-retro.mjs` | ✅ `6c3f1b5` |
-| V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/strategies.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
+| V2-P6b | TTF estimators + per-thesis ranking (net × P(fill) ÷ TTF) | `pipeline/lib/estimators.mjs`, `js/flip-niches.mjs`, `screen.mjs`, `rating.mjs` | ✅ `a21f1bc` (expGpDay DEMOTED to pre-fetch orderer + 500k pre-filter; rank/price-basis doctrine lives in the `estimators.mjs` header) |
 | V2-P6c | Empty-result sub-floor fallback (zero candidates at floor → show best sub-floor rows, honestly labeled) | `lib/gatecandidates.mjs`, `screen.mjs` | ✅ `6432a05` (two-sided gate + thesis edge NEVER relaxed; sub-floor rows stdout-only, never screen.json; ledger rows carry a lean `subFloor` marker) |
 | V2-P7 | Docs/skills triage + skill-lint + CLAUDE.md diet | docs, skills, new `pipeline/lint-skills.mjs`, `docs/LORE.md` | ✅ `105326a` (skill-lint in CI — rule-blocks need a code pointer or `judgment:` tag). Lone RETIRE disposition executed `f8de508` (Ben 2026-07-09): `/overnight` v1.11 weekend-shift prose → one-line full-day check (v1.15) |
 | V2-P8 | Desk orchestrator | new `pipeline/desk.mjs` | OPEN (after P0–P5 harden) |
-| TV1 | Per-thesis validators (gate/inform) + trajectory (knife/oscillating/based) classifier + in-script windowrange (reach Leg B + 1h-derived trajectory) | `js/termstructure.mjs`, `js/validate.mjs`, `js/strategies.mjs`, `pipeline/screen-flip-niches.mjs`, tests | ✅ 2026-07-09 (Ben design session: separate validator COMPUTATION from per-thesis ACTION; `spec.validators`={key,mode,window}; reach/trajectory/value-amplitude start inform everywhere, floor+limit gate; trajectory off the fetched 1h series so it fires while loadDaily is cold — the Nightmare-staff knife catch; SKILL /scan v1.29; replay goldens untouched; no APP_VERSION) |
+| TV1 | Per-thesis validators (gate/inform) + trajectory (knife/oscillating/based) classifier + in-script windowrange (reach Leg B + 1h-derived trajectory) | `js/termstructure.mjs`, `js/validate.mjs`, `js/flip-niches.mjs`, `pipeline/screen-flip-niches.mjs`, tests | ✅ 2026-07-09 (Ben design session: separate validator COMPUTATION from per-thesis ACTION; `spec.validators`={key,mode,window}; reach/trajectory/value-amplitude start inform everywhere, floor+limit gate; trajectory off the fetched 1h series so it fires while loadDaily is cold — the Nightmare-staff knife catch; SKILL /scan v1.29; replay goldens untouched; no APP_VERSION) |
 | PF1 | Forecast: pure diurnal+trend 12h/24h projection module + `hourProfile` dispersion fields | `js/forecast.mjs` (new), `js/windowread.mjs` (additive), `pipeline/forecast.test.mjs` (new) | ✅ 2026-07-10 (`diurnalForecast`/`whenBuyable`/`whenSellable`; blood-rune golden pinned; loud degrades; band widens with horizon; INFORM-ONLY/console-only, n≈0 placeholders, no APP_VERSION. **PF2–PF8 remain OPEN** — surfaces (quote/screen/windowrange/watch), estimator/validator hooks, and the PF8 validation study that gates any graduation past inform-only; see `PLAN-FORECAST.md`) |
 | ARCH-1 | monitor.mjs applies REMOVE tombstones (no phantom holds) | `pipeline/monitor-offers.mjs`, `lib/reconstruct.mjs`, `monitor.test.mjs` | ✅ `a24d456` (routes monitor's in-memory FIFO through shared `buildTombstonedEvents`; PLAN-ARCH-DOCS-AUDIT A1) |
 | COD-1 | Quote-basis ordering invariant fixture | `pipeline/quotecore.test.mjs` | ✅ `55861d1` (test-only; `quoteOrdered(row)` across consistent-basis shapes; Q3-2) |
@@ -224,9 +224,9 @@ p25/p50 flush price, flush frequency/cadence, floor-stability. DL2's log schema 
 NOT a standalone illiquid-bid report — it is a candidate-**DISCOVERY** source that feeds the EXISTING
 machinery two ways: **(a)** auto-feeds the DL2 `dip-watchlist.json` pool (closes the discovery loop — the
 "B feeds A" screen/flush-history → curated-pool path); **(b)** surfaces an item into the relevant niche via
-the declarative `js/strategies.mjs` spec pattern (a predictably-deep recurring flusher is a standing-bid /
+the declarative `js/flip-niches.mjs` spec pattern (a predictably-deep recurring flusher is a standing-bid /
 value candidate the theses put forward, with the flush profile as supporting evidence). It integrates with
-`strategies.mjs`, not a separate silo.
+`flip-niches.mjs`, not a separate silo.
 
 Output = a suggested **RESTING-BID level + expected fill cadence** per illiquid item, where the bid
 PERCENTILE is **NOT a fixed p25** — it is a TUNABLE parameter CONDITIONED on item features (price × liquidity
@@ -300,7 +300,7 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
   evidence}` in `js/validate.mjs`, run on EVERY surface. Reject semantics (default, Ben-vetoable):
   screens DROP reject (counted in `--stats`) and FLAG caution; explicit asks/held/watchlist are
   NEVER hidden — full results printed.
-- **Path engine (`js/paths.mjs`):** Path = `{key, thesis, action∈BUY/HOLD/LIST/CUT/AVOID, levels,
+- **Path engine (`js/held-item-strategy.mjs`):** Path = `{key, thesis, action∈BUY/HOLD/LIST/CUT/AVOID, levels,
   tripwire, horizon, economics, viability, evidence}`; `enumeratePaths` + `weighPaths`; headline
   dominant + weighed alternatives (alternatives are decision support, NEVER alert inputs);
   `enteredUnder` tracked; MIGRATION flag when dominant ≠ enteredUnder. Dominance/migration are
@@ -310,7 +310,7 @@ Snapshot (D0) ─▶ Surface ─▶ Context chain ─▶ VALIDATE ─▶ PATH EN
   path?"). A resting bid IS a position → the path engine runs on bids; **CANCEL-BID becomes
   emergent** (no enumerated path validates the capital); falling→CANCEL-BID survives only as the
   path-less default.
-- **Strategy = declarative spec** (`js/strategies.mjs`): scripts iterate the registry, never name
+- **Strategy = declarative spec** (`js/flip-niches.mjs`): scripts iterate the registry, never name
   niches. Four module kinds with registries + a CONFORMANCE suite (every registered
   validator/path/spec auto-run against the shared archetype fixtures — decay-knife, genuine dip,
   stable band, thin big ticket, falling wide-band; contract shape + no-throw + determinism, or CI
@@ -464,12 +464,12 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   `valueGate`, not `runValidators`, so `limitValidator` doesn't reach it. Provisional/off-by-default
   (n≈0) — wire the limits stage in when the value path grows a validator pass, not before.
 - **Spread/rising consolidation — RESOLVED (Steps 3+4, Ben 2026-07-09):** `spread` AND `rising` specs
-  DELETED (`js/strategies.mjs`; git history is the reference). SUPERSEDES NY2/NY3. Rising's proxy-first
+  DELETED (`js/flip-niches.mjs`; git history is the reference). SUPERSEDES NY2/NY3. Rising's proxy-first
   fetch ordering absorbed into `rankAndSlice`'s rising reserve; residual thin-big-ticket lane caught by
   band's thin path. Detail: `git show f982a31` + the deletion commits.
 - **Traded-band gate (Bar D) — DONE `0ed7aa1` (Ben 2026-07-09).** Decoupled DENSITY (`tradedWin`) from
   TWO-SIDEDNESS (`sawLow && sawHigh`) so genuinely-liquid big tickets stop failing the old both-in-one-5m-
-  bucket `active5m` count. Invariant lives in the `bandCore` header (`js/strategies.mjs`); pinned by replay
+  bucket `active5m` count. Invariant lives in the `bandCore` header (`js/flip-niches.mjs`); pinned by replay
   archetype 2003.
 - **Band EDGE robustness (Bar E) — DONE `dba20b4` (Scope A) + `7056846` (Scope B, 0.55.0).** `robustBand`
   (home in `js/quotecore.js`) takes p90/p10 on a DENSE side, raw extremum on a SPARSE side, killing the

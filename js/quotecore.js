@@ -545,7 +545,7 @@ export function moveShape(ts5m){
    the tree degrades to Gate 0 + the original breakdown matrix. lotCtx (V3) is optional too —
    { buyTs (unix SECONDS the lot was bought), askFilling (bool: the held lot's own ask is
    transacting above the clear price),
-     path (P4a, OPTIONAL: the js/paths.mjs dominant path key this lot is being held under —
+     path (P4a, OPTIONAL: the js/held-item-strategy.mjs dominant path key this lot is being held under —
        'value-hold'/'hold-recovery'/'cut'/… ) } — when omitted, momVerdict is IDENTICAL to before
    (the ts5m/now optional-degradation precedent), so every existing caller is unaffected.
    P4a NOTE: `path` is PLUMBED THROUGH ONLY — NO gate reads it yet, so a lotCtx that carries a path
@@ -655,7 +655,7 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
    placement feedback. Fixture-pinned in pipeline/watchcore.test.mjs.
 
    P5 — PATH-AWARE (OPTIONAL third arg). `pathCtx` is the DECLARED thesis this resting bid was placed
-   under: a bare path key ('scalp' / 'value-hold', the js/paths.mjs PATH_KEYS values) OR an object
+   under: a bare path key ('scalp' / 'value-hold', the js/held-item-strategy.mjs PATH_KEYS values) OR an object
    { path, tripwire }. It is OPTIONAL and DEGRADES: when omitted (undefined/null), offerVerdict is
    BYTE-IDENTICAL to the pre-P5 gate — so the deployed app Watch tab, which calls
    offerVerdict(row, offerPrice), is unaffected (the ts5m/now optional-degradation precedent; pinned
@@ -671,7 +671,7 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
    Ben's memory anchor (patience-on-cancel-and-cut / falling-exclusion-amended): "no CANCEL-BID off
    falling regime alone for a deliberate scalp/value thesis." Every scalp/value threshold here is
    provisional (n≈0). NOTE: quotecore.js imports only money-math.js + money-format.js — the path keys are compared as string
-   literals (the frozen js/paths.mjs PATH_KEYS values) to keep that single-import invariant. */
+   literals (the frozen js/held-item-strategy.mjs PATH_KEYS values) to keep that single-import invariant. */
 export function offerVerdict(row, offerPrice, pathCtx){
   if(!row) return 'NO-QUOTE';
   const path = (pathCtx && typeof pathCtx==='object') ? pathCtx.path : pathCtx;

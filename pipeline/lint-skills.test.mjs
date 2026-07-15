@@ -25,7 +25,7 @@ ok('a top-level bold bullet is a rule-block; plain bullets are not', () => {
 
 // --- tag form 1: a backticked code pointer -------------------------------------------
 ok('a backticked source path tags the block (all extensions)', () => {
-  for (const ptr of ['`js/strategies.mjs`', '`rating.mjs`', '`checks.yml`', '`screen.json`']) {
+  for (const ptr of ['`js/flip-niches.mjs`', '`rating.mjs`', '`checks.yml`', '`screen.json`']) {
     const [b] = lintText(`- **Enforced rule.** enforced by ${ptr} at gate time`);
     assert.strictEqual(b.tagged, true, `${ptr} should tag`);
   }

@@ -27,7 +27,7 @@ import { clamp } from './money-math.js';   // shared clamp — was reimplemented
 
 // Regime stability. Flat = full marks; rising is discounted by froth magnitude (a +5% drift barely
 // dents, a +100% reprice is frothy → size-small territory); an unconfirmed regime takes a mild
-// haircut. Falling reaches here only via the falling-ACCEPTING specs (P5 scalp/value — `js/strategies.mjs`
+// haircut. Falling reaches here only via the falling-ACCEPTING specs (P5 scalp/value — `js/flip-niches.mjs`
 // `spec.falling`); the default band/spread/rising/churn niches still EXCLUDE fallers before rating.
 export function regimeFactor(row) {
   if (!row.regime || !row.regime.ok) return 0.85;                 // unconfirmed / too little history

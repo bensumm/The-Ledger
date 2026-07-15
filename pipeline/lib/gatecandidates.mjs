@@ -12,7 +12,7 @@
  *      gp-flow, price window, rising-pool noise floor, per-mode step-3 edge, 500k attention floor).
  *      Threshold-driven so fixtures drive it; defaults to DEFAULT_THRESHOLDS (the CLI defaults). P4c:
  *      the per-mode step-3 EDGE + the rising-pool rule + the rank mode are now DECLARATIVE strategy
- *      specs (js/strategies.mjs) this looks up by `mode` — byte-identical, but a new niche registers a
+ *      specs (js/flip-niches.mjs) this looks up by `mode` — byte-identical, but a new niche registers a
  *      spec instead of adding an `if (mode === …)` branch here.
  *   2. rankAndSlice(mode, cand, dailySeries, opts) + proxyDrift + softFactor — the fetch-pool
  *      ORDERING (never displayed): proxy-drift deprioritizes probable fallers (softFactor), a bounded
@@ -30,7 +30,7 @@
  * lands at P5 — the fixtures here will change then, and that diff IS the doctrine change.
  *
  * ALL numeric math (the spec edges' tax, overnightStaleRisk, median) is the shared impl (tax lives in
- * strategies.mjs's edge functions now, imported from js/money-math.js there), so the numbers stay
+ * flip-niches.mjs's edge functions now, imported from js/money-math.js there), so the numbers stay
  * byte-identical to screen.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
 import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
@@ -40,11 +40,11 @@ import { median } from './cli.mjs';
 import { termStructure } from '../../js/termstructure.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '../../js/valuescreen.mjs';
 // P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
-// js/strategies.mjs. gateCandidates/rankAndSlice look up STRATEGIES[mode] and call spec.edge / read
+// js/flip-niches.mjs. gateCandidates/rankAndSlice look up FLIP_NICHES[mode] and call spec.edge / read
 // spec.rank / spec.confirm instead of branching on the niche name — byte-identical behavior
 // (the P1 replay goldens pin it), but a new niche (P5 scalp/value) registers a spec instead of editing
-// this file. `tax` moved with the edge functions into strategies.mjs.
-import { STRATEGIES } from '../../js/strategies.mjs';
+// this file. `tax` moved with the edge functions into flip-niches.mjs.
+import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 
 // DEFAULT_THRESHOLDS: the gate-stack constants at their CLI defaults (screen.mjs builds its own
 // THRESHOLDS from parsed args and passes it explicitly; this default serves fixtures / import callers
@@ -152,7 +152,7 @@ export const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : dri
 // so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window, rising-pool
 // floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and `tax` are pure.
 export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
-  const spec = STRATEGIES[mode];
+  const spec = FLIP_NICHES[mode];
   if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
   if (spec.gate === 'value') return gateValueCandidates(ctx, t);   // P5 — the term-structure value gate
   const { v24, map, bands } = ctx;
@@ -173,7 +173,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
     const limit = map.byId[id]?.limit ?? null;
 
     // --- step 3: the DECLARATIVE spec's edge — P4c re-expressed the old inline per-mode branch as
-    // strategies.mjs edge functions (byte-identical: a `continue` is now a `return null`). Returns the
+    // flip-niches.mjs edge functions (byte-identical: a `continue` is now a `return null`). Returns the
     // after-tax { modeNet, modeRoi, activeWin } or null when the item fails this niche's edge/gate. ---
     const edge = spec.edge({ avgHigh, avgLow, band: bands ? bands[id] : undefined, limitVol, limit, thin }, t);
     if (!edge) continue;
@@ -248,7 +248,7 @@ function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS)
    term-structure amplitude gate (+ §F flood control with an admitted-vs-shown footer), not the
    MIN_GPD/GP_FLOOR pair this ladder relaxes — and it's provisional/off-by-default (n≈0). */
 export function subFloorFallback(mode, ctx, t = DEFAULT_THRESHOLDS) {
-  const spec = STRATEGIES[mode];
+  const spec = FLIP_NICHES[mode];
   if (!spec || spec.gate === 'value') return null;
   const ladder = [
     { key: 'min-gpd',
@@ -278,7 +278,7 @@ export function subFloorLabel(fb) {
 export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT } = {}) {
   // P5 value niche (§F): rank the WHOLE gated pool by the composite valueScore and take a HARD top-N.
   // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).
-  if (STRATEGIES[mode] && STRATEGIES[mode].gate === 'value') {
+  if (FLIP_NICHES[mode] && FLIP_NICHES[mode].gate === 'value') {
     return cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id)).slice(0, top);
   }
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
@@ -329,7 +329,7 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
 //                   (a non-falling scalp is a band flip → dropped 'notFalling'), so scalp = fallers only.
 export function surviveMode(mode, row, phase, opts = {}) {
   const { phaseRescue = false, posture = 'active', thin = false, series5m = null } = opts;
-  const spec = STRATEGIES[mode];
+  const spec = FLIP_NICHES[mode];
   const fallingDoctrine = spec ? spec.falling : 'exclude';
   let rescued = false;
   if (row.falling && fallingDoctrine !== 'accept') {

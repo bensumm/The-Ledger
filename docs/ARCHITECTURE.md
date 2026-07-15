@@ -76,8 +76,8 @@ important structural rule — it's what prevents the app and pipeline from diver
 | Quote computation | `js/quotecore.js` (`computeQuote`) | the app + `quote-items.mjs`/`screen-flip-niches.mjs` all call it |
 | Band/window/diurnal math | `js/windowread.mjs` (`windowStats`, `robustBand` via re-export, `hourProfile`, `windowClear`, `asymPair`) | the pure window-range math; `robustBand` itself lives in `quotecore.js` |
 | Verdict rendering (held lots) | `pipeline/lib/item-context.mjs` (`renderHeldVerdict`) | ended the quote↔watch verdict fork |
-| Flip-niches (screen strategies) | `js/strategies.mjs` (`STRATEGY_LIST`) | declarative specs; consumers look up `STRATEGIES[mode]`. File/identifier → `flip-niches.mjs`/`FLIP_NICHES` is R2 |
-| Held-item strategies | `js/paths.mjs` (`enumeratePaths`/`weighPaths`) | "compare strategies" for a held lot; file → `held-item-strategy.mjs` is R2 |
+| Flip-niches (screen strategies) | `js/flip-niches.mjs` (`FLIP_NICHE_LIST`) | declarative specs; consumers look up `FLIP_NICHES[mode]` |
+| Held-item strategies | `js/held-item-strategy.mjs` (`enumeratePaths`/`weighPaths`) | "compare strategies" for a held lot (a `path` = a held-item strategy) |
 | Validators | `js/validate.mjs` | pure `(ctx) → {status, reason, evidence}` |
 | Rank / grade | `js/estimators.mjs` (`estimateRank`) + `js/rating.mjs` (`rateItem`) | `pipeline/lib/estimators.mjs`/`rating.mjs` are one-line re-export SHIMS, not forks |
 
@@ -93,7 +93,7 @@ so know it explicitly. An edit to an **app-imported** module is an APP change (b
   `js/quotecore.js`, `js/money-math.js`, `js/money-format.js`, `js/estimators.mjs`, `js/rating.mjs`, `js/windowread.mjs`,
   `js/validate.mjs`, `js/termstructure.mjs`, `js/forecast.mjs`. Editing any of these **can** bump
   `APP_VERSION` — check whether app-visible behaviour changed.
-- **Node-only `.mjs`** (the app never imports them): `js/strategies.mjs`, `js/paths.mjs`,
+- **Node-only `.mjs`** (the app never imports them): `js/flip-niches.mjs`, `js/held-item-strategy.mjs`,
   `js/valuescreen.mjs`, and everything under `pipeline/`. Node-only stdout/logic changes ship without a
   bump.
 
@@ -126,7 +126,7 @@ can find them. Never oversell a placeholder as tuned; never gate a real decision
 constant without saying so. An intended-but-unwired API declares itself `@provisional-api` **citing a
 tracking item** — otherwise it's just vestigial rot (below).
 
-**Declarative strategy specs.** A flip-niche is a spec in `js/strategies.mjs` (`{key, edge, rank, falling,
+**Declarative strategy specs.** A flip-niche is a spec in `js/flip-niches.mjs` (`{key, edge, rank, falling,
 gate, confirm, validators, …}`); `gatecandidates.mjs` drives behaviour off the spec fields, never off
 `if (mode === '…')`. A new flip-niche registers a spec; it does not edit the gate stack. (N2 fixed the last
 `mode ===` leak — the lesson: a declared spec field must actually be *read*, or it's dead metadata.)

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.53
+version: 1.54
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -424,7 +424,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 ## 3. Hard rules (cited from CLAUDE.md's table contract — don't restate, don't violate)
 
 - Falling handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5 — memory
-  `falling-exclusion-amended`, encoded in `js/strategies.mjs` `spec.falling`). The `band`/`churn`
+  `falling-exclusion-amended`, encoded in `js/flip-niches.mjs` `spec.falling`). The `band`/`churn`
   flip-niches EXCLUDE fallers silently (`falling: 'exclude'`) — for those, never re-add
   or mention a falling row. But `--mode scalp` ACCEPTS fallers (a deliberate intraday flip expects a
   falling wide band) and `--mode value` KNIFE-GUARDS (rejects a decay knife, accepts a flat/basing

@@ -164,7 +164,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
 - **Traded-band gate — Bar D.** The 2h band edge must be TRADED, not a one-spike artifact: Bar D decouples
   DENSITY (`tradedWin`, one-sided OK) from TWO-SIDEDNESS (`sawLow && sawHigh` once across the window) so a
   scattered-print big ticket stops failing the old same-5m-bucket `active5m` count. ONE home: the `bandCore`
-  header in `js/strategies.mjs`; pinned by replay archetype 2003.
+  header in `js/flip-niches.mjs`; pinned by replay archetype 2003.
 - **Band EDGE robustness — Bar E.** A lone flier must not set a band edge and inflate ROI: `robustBand`
   (`js/quotecore.js`, the app+node shared home; `pipeline/lib/marketfetch.mjs` re-exports it) takes p90/p10
   on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE`), raw extremum on a SPARSE side, on BOTH surfacing paths
@@ -237,7 +237,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
     Finder margin bond-aware (`market.js` `bondMarginOpts`) — it used to filter it out entirely.
 - **Falling-regime handling is PER-STRATEGY, not global (Ben's 2026-07-08 amendment; P5).** A faller is
   not necessarily a poor buy — "we cannot judge falling without its history and typical fluctuations."
-  Each flip-niche declares its own `falling` doctrine (`js/strategies.mjs`): **band/churn EXCLUDE
+  Each flip-niche declares its own `falling` doctrine (`js/flip-niches.mjs`): **band/churn EXCLUDE
   fallers** (the default — don't show or mention them; the exception below still applies); **scalp ACCEPTS
   AND REQUIRES them** (a deliberate intraday flip EXPECTS a falling wide band; a non-falling scalp is a
   band flip → dropped `notFalling`; its stop lives in the path
@@ -269,7 +269,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   softening, see the Est. sell bullet above — but the RANK/GRADE path deliberately does NOT pass it:
   wiring relief into the published rank/letter is F1-gated, so the rank discount and `REACH_GRADE_CAP`
   behave exactly as specified here.)
-  **CHURN IS EXEMPT from both** (Part II, Ben 2026-07-12 — `spec.fillShape:'symmetric'`, `js/strategies.mjs`):
+  **CHURN IS EXEMPT from both** (Part II, Ben 2026-07-12 — `spec.fillShape:'symmetric'`, `js/flip-niches.mjs`):
   a lap exit sells into continuous two-sided flow near a tight band top, so the day-high reach read
   mismeasures it; the discount + cap apply only to `fillShape:'asym'` flip-niches (band/scalp).
   **Asymmetric fill shape — Part II of PLAN-GRADE-REACH (Ben 2026-07-12: "I'd much rather hit a 2/14 buy
@@ -423,7 +423,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   flip band already owns → dropped `notFalling`), so scalp = fallers only. A wide fresh band clearing
   tax+scalp-margin (`SCALP_MIN_ROI`; the ROI-bind is caught by the render net>0 gate), reach-
   validated on today's high, flip-only/no-hold (an unsold lap migrates to `cut`, never `hold-recovery` —
-  encoded in `js/paths.mjs`). **P5 value** (provisional, n≈0): a buy-hold flip-niche with its OWN
+  encoded in `js/held-item-strategy.mjs`). **P5 value** (provisional, n≈0): a buy-hold flip-niche with its OWN
   term-structure gate (`js/valuescreen.mjs` + `js/termstructure.mjs` — after-tax cycle-amplitude floor
   replaces the 500k gp/day throughput floor, decay/downtrend knife-guard), ranked by
   `valueScore` (amplitude × proximity-to-low × floor-stability × deployable-capital multiplier) with a HARD
@@ -444,14 +444,14 @@ Script facts the skills rely on (current behavior, not doctrine):
   base, never the knife" + the multi-week hold-asymmetry) and a value-amplitude would-caution DEMOTES the
   pick to WATCH (durable-floor proximity AND recent-week-not-elevated must both hold). Tier gating lives in
   `renderValueMode`; value-amplitude in `js/validate.mjs`. Value RUNS IN `--mode all` (`inAll:true`,
-  `js/strategies.mjs`) but stays console-only + provisional (n≈0, PLACEHOLDER thresholds, no APP_VERSION).
+  `js/flip-niches.mjs`) but stays console-only + provisional (n≈0, PLACEHOLDER thresholds, no APP_VERSION).
   Resolved-history (%-amp → abs-gp → deployable-capital; NY2/NY3 spread/rising deletion): `docs/LORE.md`.
   **P4c**: the flip-niches are DECLARATIVE
-  strategy specs (`js/strategies.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
+  strategy specs (`js/flip-niches.mjs` — `{key,pool,edge,rank,confirm,falling,gate,validators,defaultPath}`) that
   `gatecandidates.mjs` drives by `mode` lookup instead of `if (mode===…)` branches (byte-identical — the
   P1 replay goldens pin it; a new flip-niche registers a spec, no gatecandidates/screen edit). Each surfaced
   row gains a compact stdout entry-path annotation (`↳ <item> — scalp* 0.60 · …`: the spec's inferred
-  default entry path `*` + the weighed js/paths.mjs menu) — decision SUPPORT, display-only, NOT in
+  default entry path `*` + the weighed js/held-item-strategy.mjs menu) — decision SUPPORT, display-only, NOT in
   `screen.json`; and the spec's `defaultPath` is logged to `suggestions.jsonl` as a lean `path` field so a
   later fill can infer the entry thesis. The default-path map (band/churn/scalp→`scalp`, value→
   `value-hold`) is a Ben-vetoable judgment proposal, not a gate. **P6c**: a flip-niche whose gate is EMPTY at
@@ -465,7 +465,7 @@ Script facts the skills rely on (current behavior, not doctrine):
   watchlist rows are NEVER hidden (a fired flag is a NOTE + a lean `validators` field on the
   suggestions ledger). **Per-thesis GATE vs INFORM (2026-07-09):** a validator's COMPUTATION is
   thesis-agnostic (the swing/local-min/knife/reach analysis is useful to every buy) but its ACTION is
-  declared per-thesis in `spec.validators` (`js/strategies.mjs`) as `{key,mode,window}` — `gate` (the
+  declared per-thesis in `spec.validators` (`js/flip-niches.mjs`) as `{key,mode,window}` — `gate` (the
   verdict stands: caution flags, reject drops) or `inform` (COMPUTED + annotated as a `ℹ trajectory/reach`
   note, status clamped to pass, the would-have verdict logged for the track record; **never drops a row**).
   `screen.mjs` drives `runValidators(ctx,{specs})` off that plan (was: the whole registry). This is the

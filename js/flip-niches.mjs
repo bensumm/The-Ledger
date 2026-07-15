@@ -1,17 +1,17 @@
-/* strategies.mjs — the DECLARATIVE FLIP-NICHE REGISTRY (declarative flip-niche specs, chunk P4c).
+/* flip-niches.mjs — the DECLARATIVE FLIP-NICHE REGISTRY (declarative flip-niche specs, chunk P4c).
    VOCAB (see docs/GLOSSARY.md): band/churn/scalp/value are FLIP-NICHES — screen-level find-&-flip
-   styles. "strategy" now names the HELD-ITEM level (paths.mjs). The file + STRATEGIES/STRATEGY_LIST
-   identifier rename to flip-niches.mjs/FLIP_NICHES is R2 (PLAN-RENAME.md); prose says flip-niche now.
+   styles. "strategy" now names the HELD-ITEM level (held-item-strategy.mjs). The registry object is
+   `FLIP_NICHES` (keyed by `--mode` value) and the ordered list is `FLIP_NICHE_LIST`.
    DOM-free, near-dependency-free ESM (imports only the pure `tax` from money-math.js + the path
-   vocabulary from paths.mjs — no fetch/fs, no window/document), importable by BOTH the browser app
-   AND the node pipeline exactly like js/quotecore.js / js/paths.mjs. Keep it that way.
+   vocabulary from held-item-strategy.mjs — no fetch/fs, no window/document), importable by BOTH the browser app
+   AND the node pipeline exactly like js/quotecore.js / js/held-item-strategy.mjs. Keep it that way.
 
    WHAT THIS IS. Before P4c the screen's flip-niches lived as imperative `if (mode === 'spread') … else …`
    branches inside pipeline/lib/gatecandidates.mjs — the flip-niche name was a magic string threaded through
    the gate stack, the fetch-pool ranker, and the post-fetch survival doctrine. P4c re-expresses each
    flip-niche as a DATA-SHAPED SPEC here: the per-mode EDGE definition, the pre-fetch pool rule, the
    fetch-pool ranking mode, and the inferred DEFAULT ENTRY PATH the surfacing implies. gatecandidates.mjs
-   now looks up `STRATEGIES[mode]` and calls `spec.edge(...)` / reads `spec.pool` / `spec.rank` instead of
+   now looks up `FLIP_NICHES[mode]` and calls `spec.edge(...)` / reads `spec.pool` / `spec.rank` instead of
    branching on the name — so a flip-niche can be added or REMOVED by editing this registry alone, without
    touching gatecandidates.mjs or screen.mjs.
 
@@ -38,7 +38,7 @@
    It is NOT a gate and does not affect which rows surface. */
 
 import { tax } from './money-math.js';
-import { PATH_KEYS } from './paths.mjs';
+import { PATH_KEYS } from './held-item-strategy.mjs';
 
 // The entry (unheld) thesis vocabulary — the ONLY path keys enumeratePaths() offers a fresh candidate.
 // A surfacing spec's defaultPath must be one of these (a surfaced row is, by definition, unheld).
@@ -56,7 +56,7 @@ export const CHURN_MIN_VOL = 65000;
 // margin. Reach-validation against TODAY's high (is the sell level actually printing today?) is the
 // P2 reachValidator, which degrades to pass on the screen (no 1h fetch) exactly like every other
 // surface. Flip-only / no-hold / hard intraday stop — encoded in the path engine (SCALP_NO_HOLD_PENALTY
-// in js/paths.mjs) + offerVerdict's scalp tripwire. PLACEHOLDER (n≈0; the PM2/suggestions accrual tunes it).
+// in js/held-item-strategy.mjs) + offerVerdict's scalp tripwire. PLACEHOLDER (n≈0; the PM2/suggestions accrual tunes it).
 export const SCALP_MIN_ROI = 2.0;
 
 // scalp: a TRADED intraday band whose after-tax ROI clears the (wider) scalp margin. Unlike band it
@@ -69,7 +69,7 @@ function scalpEdge(inp, t) {
 }
 
 // value: an after-tax 24h-average amplitude proxy — a conformance-valid, deterministic edge so the
-// spec passes the strategies.test.mjs edge sweep. NOTE: the value NICHE does NOT select on this edge;
+// spec passes the flip-niches.test.mjs edge sweep. NOTE: the value NICHE does NOT select on this edge;
 // its selection is the term-structure `valueGate` (js/valuescreen.mjs), routed by `gate: 'value'` in
 // pipeline/lib/gatecandidates.mjs. This function is the "cheap cycle-amplitude proxy" kept only so the
 // registry contract (every spec has a callable edge) holds uniformly. Never gates.
@@ -135,7 +135,7 @@ function churnEdge(inp, t) {
 }
 
 /* --- the registry ---------------------------------------------------------------------------------
-   Each spec's SHAPE (validated by validateStrategySpec + the conformance suite):
+   Each spec's SHAPE (validated by validateNicheSpec + the conformance suite):
      key         stable flip-niche id (the --mode value)
      label       display name
      inAll       part of `--mode all` (Steps 3+4, Ben 2026-07-09: band + churn. spread + rising are
@@ -194,7 +194,7 @@ function churnEdge(inp, t) {
                                  ask-reach discount AND the reach grade cap) + value (its own
                                  term-structure pricing; never had an ask-reach read). Doctrine homes:
                                  js/estimators.mjs asymEstimate + js/windowread.mjs asymPair. */
-export const STRATEGY_LIST = Object.freeze([
+export const FLIP_NICHE_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,
     edge:bandEdge, rank: 'velocity', confirm: null,
@@ -256,13 +256,13 @@ export const STRATEGY_LIST = Object.freeze([
 
 // by-key map + the ordered mode-name lists screen.mjs derives from the registry (so the flip-niche names
 // live in ONE place — the registry — not as a magic-string array in screen.mjs).
-export const STRATEGIES = Object.freeze(Object.fromEntries(STRATEGY_LIST.map(s => [s.key, s])));
-export const MODE_KEYS = Object.freeze(STRATEGY_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
-export const ALL_MODE_KEYS = Object.freeze(STRATEGY_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/value in --mode all (Ben 2026-07-10 added value; spread + rising DELETED; scalp stays explicit-only)
+export const FLIP_NICHES = Object.freeze(Object.fromEntries(FLIP_NICHE_LIST.map(s => [s.key, s])));
+export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
+export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/value in --mode all (Ben 2026-07-10 added value; spread + rising DELETED; scalp stays explicit-only)
 
 /* --- conformance ----------------------------------------------------------------------------------
-   validateStrategySpec(spec) → string[] of structural violations (empty = conformant). The conformance
-   suite (strategies.test.mjs) iterates STRATEGY_LIST asserting no violations, feeds a deliberately
+   validateNicheSpec(spec) → string[] of structural violations (empty = conformant). The conformance
+   suite (flip-niches.test.mjs) iterates FLIP_NICHE_LIST asserting no violations, feeds a deliberately
    malformed spec to prove the checker BITES, and runs each edge over the replay archetypes for
    no-throw + determinism — so P5 registering scalp/value gets conformance-checked for free. */
 const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
@@ -298,8 +298,8 @@ function validatorEntryError(v) {
   return null;
 }
 
-// @test-only: spec conformance validator, run over STRATEGY_LIST by strategies.test.mjs (dev/CI schema check, not a production code path).
-export function validateStrategySpec(spec) {
+// @test-only: spec conformance validator, run over FLIP_NICHE_LIST by flip-niches.test.mjs (dev/CI schema check, not a production code path).
+export function validateNicheSpec(spec) {
   const errs = [];
   if (!spec || typeof spec !== 'object') return ['spec is not an object'];
   if (typeof spec.key !== 'string' || !spec.key) errs.push('key must be a non-empty string');
@@ -314,7 +314,7 @@ export function validateStrategySpec(spec) {
   if (!Array.isArray(spec.validators)) errs.push('validators must be an array');
   else for (const v of spec.validators) { const e = validatorEntryError(v); if (e) errs.push(e); }
   if (typeof spec.defaultPath !== 'string' || !VALID_PATH_KEYS.has(spec.defaultPath))
-    errs.push('defaultPath must be a key in paths.mjs PATH_KEYS');
+    errs.push('defaultPath must be a key in held-item-strategy.mjs PATH_KEYS');
   else if (!ENTRY_PATH_KEYS.includes(spec.defaultPath))
     errs.push('defaultPath must be an ENTRY (unheld-enumerable) path key: ' + ENTRY_PATH_KEYS.join('/'));
   if (!VALID_ESTIMATORS.has(spec.estimator)) errs.push(`estimator must be one of ${[...VALID_ESTIMATORS].join('/')}`);

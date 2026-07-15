@@ -15,7 +15,7 @@
  * DEFINITION + ranking. Shared gates: two-sided liquidity (highPriceVolume>0 && lowPriceVolume>0,
  * limiting side ≥ --floor — the ghost-spread lesson), --min-price/--max-price on mid, top-N per-item
  * regime confirm via computeQuote, per-spec falling doctrine (P5: band/churn EXCLUDE fallers, scalp
- * ACCEPTS + REQUIRES, value KNIFE-GUARDS — `js/strategies.mjs` `spec.falling`, NOT a global rule).
+ * ACCEPTS + REQUIRES, value KNIFE-GUARDS — `js/flip-niches.mjs` `spec.falling`, NOT a global rule).
  *
  * Fetch-pool ordering (the pre-filter rework): the expensive step is the per-item timeseries fetch,
  * so WHICH gated items make the top-N fetch pool matters. loadDaily() builds a BULK multi-day
@@ -87,10 +87,10 @@ import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from './lib/gatecandidates.mjs';
 import { valueRanges, valueScore, valueGate, valueTier } from '../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
 // P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
-// the registry (the names live in ONE place — strategies.mjs) and reads each spec's inferred default
+// the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
-import { STRATEGIES, MODE_KEYS, ALL_MODE_KEYS } from '../js/strategies.mjs';
-import { enumeratePaths, weighPaths } from '../js/paths.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
+import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS } from '../js/flip-niches.mjs';
+import { enumeratePaths, weighPaths } from '../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from './lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
 import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
@@ -323,7 +323,7 @@ const watchClosely = new Map();   // id -> { name, state, note }
 
 // P4c: the weighed ENTRY-path menu for a surfaced (unheld) candidate. Builds the DERIVED path-scoring
 // ctx from the computeQuote row + phase (the same shape item-context.mjs's pathsStage derives for held lots,
-// minus the position/floor fields a screen candidate doesn't have — those degrade in js/paths.mjs), then
+// minus the position/floor fields a screen candidate doesn't have — those degrade in js/held-item-strategy.mjs), then
 // enumerates + weighs the unheld theses (scalp / value-hold / avoid). Display-only, DECISION SUPPORT —
 // never a gate, never reorders/hides a row (the P4c contract). Viabilities are the P4a PLACEHOLDER
 // heuristics (shape, not calibration). Returns the weighPaths() `weighed` array (sorted by viability).
@@ -424,7 +424,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       },
       floor: { level: row.optBuy != null ? row.optBuy : null },
       limits: { window: limWin },
-    }, { specs: STRATEGIES[mode].validators });
+    }, { specs: FLIP_NICHES[mode].validators });
     const vworst = worstStatus(vres);
     if (vworst === 'reject') {
       disc.reject++;
@@ -487,10 +487,10 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // `asym` field on suggestions.jsonl beside the symmetric rank (the F1 shadow A/B). P_bid is surfaced
     // as "rest it as optionality", NEVER a rank multiplier (asymEstimate header is the doctrine home).
     let asymRead = null, asymEr = null;
-    if (STRATEGIES[mode].fillShape === 'asym' && series1h && series1h.get(s.id)) {
+    if (FLIP_NICHES[mode].fillShape === 'asym' && series1h && series1h.get(s.id)) {
       const st = windowStats(series1h.get(s.id), { nights: ASYM_NIGHTS, wStart: 0, wEnd: 0 });
       asymRead = st ? asymPair(st) : null;
-      if (asymRead) asymEr = asymEstimate(STRATEGIES[mode], row, asymRead);
+      if (asymRead) asymEr = asymEstimate(FLIP_NICHES[mode], row, asymRead);
     }
     // PLAN-OUTPUT-TABLE: the diurnal profile + the reconciliation estimate (Est. buy/sell) — computed
     // off the DEFAULT row (before any --asym reprice) from data ALREADY in hand (the Leg-B 1h series,
@@ -509,7 +509,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the SAME in-hand 5m
     // series (zero new fetch) — Part B's de-bias reference. estimatePair applies it (and the Part-A fold
     // softening) ONLY when reachRelief > 0 (liquid book, small limit÷flow); a thin book is byte-identical.
-    const est = estimatePair(STRATEGIES[mode], row, {
+    const est = estimatePair(FLIP_NICHES[mode], row, {
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: asymRead,
@@ -547,7 +547,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     if (ASYM && asymEr) row = { ...row, optBuy: asymEr.bid, optSell: asymEr.ask, optNet: asymEr.net };
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF all
     // evaluated at that same pair. reach = the BID-fill prob (entry); askReach = the two-leg exit discount.
-    let er = estimateRank(STRATEGIES[mode], row, { reach: reachExtra, askReach: askReachExtra });
+    let er = estimateRank(FLIP_NICHES[mode], row, { reach: reachExtra, askReach: askReachExtra });
     // --asym sort flip: rank = net(asym pair) × P_ask ÷ TTF — P_ask is the ONLY fill weight (§II.1; the
     // bid-reach P and the Part-I ask-reach discount both step aside), and r.score/sort follow the rank.
     if (ASYM && asymEr) er = { ...er, pFill: { value: asymEr.pAsk, n: asymRead.nDays, basis: 'ask-reach-asym' }, rank: rankScore({ net: er.net * er.lapUnits, pFill: asymEr.pAsk, ttfSec: er.ttf.value }) };
@@ -588,7 +588,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // number; this guarantees the LETTER an operator reads can't oversell it). Same capGrade site as above.
     // PART II churn exemption: a 'symmetric'-fillShape niche (churn) is exempt — its lap exit sells into
     // continuous two-sided flow, so the day-high reach read mismeasures it (mirrors estimateRank's askF skip).
-    if (STRATEGIES[mode].fillShape !== 'symmetric' && askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
+    if (FLIP_NICHES[mode].fillShape !== 'symmetric' && askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
       grade = capGrade(grade, REACH_GRADE_CAP);
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // Part A: fold an informative phase into the existing Regime cell (no new column — the canonical
@@ -647,7 +647,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
   // P4c: log the surfacing spec's inferred DEFAULT entry path on each row so a later fill can infer the
   // thesis a position was entered under when no explicit thesis.mjs --path was declared.
-  const defaultPath = STRATEGIES[mode].defaultPath;
+  const defaultPath = FLIP_NICHES[mode].defaultPath;
   // P6c: sub-floor rows ARE logged (a surfaced row Ben acts on must stay joinable to its fill for the
   // F1 calibration), but each carries a lean `subFloor: <'min-gpd'|'liquidity'>` marker (the YS2
   // absent-field pattern — normal rows stay byte-identical) so calibration can segment or exclude them
@@ -667,7 +667,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       winClear: r.winClear })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
-  const fallNote = STRATEGIES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
+  const fallNote = FLIP_NICHES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
   // P6c: the sub-floor banner replaces the normal header line — it states up front that ZERO candidates
   // cleared the configured floors, WHICH floor was relaxed and its value, the cap, and that these rows
   // are NOT qualified. The bar was re-run beneath the floor, never silently lowered.
@@ -805,7 +805,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     }
   }
   // P4c: the weighed ENTRY-PATH menu per surfaced row — the surfacing spec's inferred default path
-  // (marked `*`) + the weighed alternatives from js/paths.mjs (scalp / value-hold / avoid). Decision
+  // (marked `*`) + the weighed alternatives from js/held-item-strategy.mjs (scalp / value-hold / avoid). Decision
   // SUPPORT, not a gate: it never hides or reorders a row (the block prints in the SAME sorted order as
   // the table above). STDOUT-ONLY — deliberately NOT in the published screen.json cells, so the
   // canonical table + app contract stay byte-identical (same discipline as the phase/velocity folds).
@@ -840,12 +840,12 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   const valueInformNotes = [];   // 2026-07-09: value's reach-TIMING + trajectory/amplitude inform notes (never a drop — valueGate still selects)
   // value KEEPS reach as a daily-min TIMING read (Ben 2026-07-09): run ONLY the spec's inform validators
   // here so the note is added WITHOUT re-gating the value table (valueGate already selected these rows).
-  const valueInformSpecs = STRATEGIES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
+  const valueInformSpecs = FLIP_NICHES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
   // trajectory GATES in value (Ben 2026-07-09): a knife DROPS (named in the footer), elevated FLAGS. Scoped
   // to trajectory — the value spec's floor/limit are mode:'gate' too but stay dormant in this console path
   // (their gate home is valueGate + the absent 4h-limit window), so only trajectory is promoted to an
   // active drop here. Spec-driven: the gate fires only because the spec now says trajectory is 'gate'.
-  const valueTrajGate = STRATEGIES.value.validators.find(v => typeof v === 'object' && v.key === 'trajectory' && v.mode === 'gate') || null;
+  const valueTrajGate = FLIP_NICHES.value.validators.find(v => typeof v === 'object' && v.key === 'trajectory' && v.mode === 'gate') || null;
   let droppedKnife = 0;   // post-fetch phase() decay-knife drops
   let droppedArtifact = 0;   // post-fetch artifact-low drops (live implausibly below the durable floor)
   const droppedTrajKnife = [];   // trajectory-classified knife drops (named in the §F footer for auditability)
@@ -1028,7 +1028,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const thin = d ? (limitVol > 0 && limitVol < FLOOR) : false;
     // P6b: a watchlist row has no niche context, so rank it under the neutral band thesis (intraday
     // estimator, patient 2h-band pair) — a standard flip read. Same rank basis as the niche tables.
-    const er = estimateRank(STRATEGIES.band, row);
+    const er = estimateRank(FLIP_NICHES.band, row);
     const r = rateItem({ row, rank: er.rank, thin });
     const std = stdCells(name, row);
     const gradeCell = thin ? { t: r.grade, title: `thin: ~${limitVol}/day two-sided — size in units, expect slow fills` } : { t: r.grade };
@@ -1124,7 +1124,7 @@ async function main() {
   // DEEP (reclaimable → counts toward deployable) vs COMMITTED (near-live, expected to fill → excluded)
   // using its item's live instasell (latest[id].low). A resting-bid item absent from /latest → no ref →
   // COMMITTED (conservative). Only re-derives when value runs on a DERIVED (non-explicit) capital.
-  if (!VALUE_CAPITAL_EXPLICIT && VALUE_CAPITAL_DERIVED && RUN_MODES.some(m => STRATEGIES[m].gate === 'value')) {
+  if (!VALUE_CAPITAL_EXPLICIT && VALUE_CAPITAL_DERIVED && RUN_MODES.some(m => FLIP_NICHES[m].gate === 'value')) {
     const bidMarketRef = {};
     for (const o of readOffersSnapshot(join(REPO_ROOT, 'offers.json'))) {
       if (!o || o.side !== 'buy' || ((o.qty || 0) - (o.filled || 0)) <= 0) continue;
@@ -1150,7 +1150,7 @@ async function main() {
   const gated = {};
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx, THRESHOLDS);
-    const top = STRATEGIES[m].gate === 'value' ? VALUE_TOP_DEFAULT : TOP;
+    const top = FLIP_NICHES[m].gate === 'value' ? VALUE_TOP_DEFAULT : TOP;
     // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's
     // relaxation ladder) and surface the best SUBFLOOR_TOP honestly labeled — never an empty table with the
     // opportunity silently invisible, never a silently lowered bar. Fires ONLY on a zero-candidate niche
@@ -1158,7 +1158,7 @@ async function main() {
     // edge/market, not the floors, emptied it) the normal `_none_` output stands unchanged. The fallback
     // pool rides the same bulk data already loaded at gate time and the same per-item fetch path a normal
     // niche uses, capped at SUBFLOOR_TOP (≤5 — strictly fewer fetches than any non-empty niche's top-N).
-    if (!cand.length && STRATEGIES[m].gate !== 'value') {
+    if (!cand.length && FLIP_NICHES[m].gate !== 'value') {
       const fb = subFloorFallback(m, ctx, THRESHOLDS);
       if (fb) {
         gated[m] = { cand: fb.cand, survivors: rankAndSlice(m, fb.cand, daily, { thinReserve: THIN_RESERVE, top: SUBFLOOR_TOP }), subFloor: fb };
@@ -1210,7 +1210,7 @@ async function main() {
   // niches run together (--mode all) — so the two tables are disjoint. Standalone --mode churn is unpartitioned.
   const partitionChurn = RUN_MODES.includes('band') && RUN_MODES.includes('churn');
   const niches = {};
-  for (const m of RUN_MODES) niches[m] = STRATEGIES[m].gate === 'value'
+  for (const m of RUN_MODES) niches[m] = FLIP_NICHES[m].gate === 'value'
     ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
     : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn });
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
@@ -1235,7 +1235,7 @@ async function main() {
     // 4 — no app tab yet), so it is EXCLUDED from screen.json (which carries a single HEADERS set). An
     // app VALUE surface is a later, APP_VERSION-bumping step.
     const pubNiches = {};
-    for (const m of RUN_MODES) if (STRATEGIES[m].gate !== 'value') pubNiches[m] = niches[m];
+    for (const m of RUN_MODES) if (FLIP_NICHES[m].gate !== 'value') pubNiches[m] = niches[m];
     const payload = {
       app: 'the-coffer-screen',
       schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)

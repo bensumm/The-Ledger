@@ -5,13 +5,13 @@
    NO PII in a thesis string (the repo is public; the store is local but the discipline stands).
 
    P4a — `--path <key>` also DECLARES the path-engine entry path for the lot into the TRACKED
-   hold-thesis store (repo-root hold-thesis.json, the path-carrying store js/paths.mjs' enteredUnder
+   hold-thesis store (repo-root hold-thesis.json, the path-carrying store js/held-item-strategy.mjs' enteredUnder
    feeds off — NOT the gitignored session-thesis file). VN-2 widened that write: with `--path` the
    hold-thesis entry now ALSO takes a NUMERIC `--tripwire` (parseGp — the TG1 gating level),
    `--exit <gp>` (the declared target sell, the VN-2 render frame's exit price), and `--window`
    (the declared exit window, "h-h" local hours) — each preserved from the existing entry when the
    flag is omitted or unparseable. enteredUnder defaults to the declared path on FIRST declaration
-   (override with `--entered-under <key>`). A path key is one of js/paths.mjs' PATH_KEYS
+   (override with `--entered-under <key>`). A path key is one of js/held-item-strategy.mjs' PATH_KEYS
    ('value-hold'/'hold-recovery'/'scalp'/'be-escape'/'list-to-clear'/'cut').
    (Two-store note: session-thesis = free-text INTENT/reminder; hold-thesis = the declared, gating,
    path-carrying plan. `--path` is what routes the flags into the latter. `clear` removes the id from
@@ -98,7 +98,7 @@ async function main() {
     console.log(`set thesis for ${name} (${id}): ${thesisLine(store[id])}`);
     // P4a: `--path` ALSO declares the path-engine entry path into the tracked hold-thesis store,
     // preserving any existing declared plan fields (exitPrice/tripwire/horizon/enteredUnder). This
-    // is the ONLY store js/paths.mjs reads enteredUnder off; the session thesis above is display-only.
+    // is the ONLY store js/held-item-strategy.mjs reads enteredUnder off; the session thesis above is display-only.
     if (flags.path) {
       const hstore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));
       const prev = holdThesisFor(hstore, id) || {};

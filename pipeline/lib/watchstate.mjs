@@ -279,7 +279,7 @@ export function convictionGate({ verdict, gate,
 }
 
 // --- V2-P4b PATH DOMINANCE PERSISTENCE (arm-then-confirm + hysteresis) -----------------------
-// The path engine (js/paths.mjs) re-weighs an item's candidate theses EVERY pass; its `dominant`
+// The path engine (js/held-item-strategy.mjs) re-weighs an item's candidate theses EVERY pass; its `dominant`
 // is the INSTANTANEOUS top-ranked path and its `migration` flag is RAW (dominant ≠ enteredUnder,
 // no memory). On a choppy read two near-tied paths can trade the top spot pass-to-pass — surfacing
 // that as a fresh "migrated to X" headline every tick is exactly the whiplash the alert layer
@@ -288,8 +288,8 @@ export function convictionGate({ verdict, gate,
 // (b) hold the top spot for PATH_PERSIST_MS of WALL-CLOCK time before it becomes the persisted
 // `currentPath` (the one the headline renders). A flip back to the confirmed path while a
 // challenger is arming DISARMS it — so pure flapping never confirms. This lives HERE (not in the
-// dependency-free js/paths.mjs) because it is stateful cross-pass memory keyed on the watch-state
-// entry, exactly like convictionGate; it takes already-derived path KEYS (never imports paths.mjs),
+// dependency-free js/held-item-strategy.mjs) because it is stateful cross-pass memory keyed on the watch-state
+// entry, exactly like convictionGate; it takes already-derived path KEYS (never imports held-item-strategy.mjs),
 // so watchstate.mjs stays paths-agnostic and this stays a pure function.
 //
 // ⚠ PLACEHOLDERS (honesty rule 4): PATH_PERSIST_MS and PATH_HYSTERESIS_MARGIN encode the SHAPE of

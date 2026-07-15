@@ -12,7 +12,7 @@
  *
  * THE PRICE-BASIS PRINCIPLE (coordinator-ruled, Ben-vetoable). Every suggestion commits to ONE price
  * pair — the bid and ask the thesis itself would have Ben post — and net, P(fill) and TTF are all
- * evaluated at that SAME pair. Per thesis (see js/strategies.mjs `priceBasis`):
+ * evaluated at that SAME pair. Per thesis (see js/flip-niches.mjs `priceBasis`):
  *   spread → live quick pair (transact now); band/churn/scalp → 2h band edges; rising → near-current
  *   entry → forecast target (band edges are the best available forecast proxy today); value → durable
  *   floor entry → a recovery level the term structure says durably prints (NOT the raw ceiling).
@@ -284,11 +284,11 @@ export const ESTIMATORS = Object.freeze({
   rising:   { pFill: pFillRising,   ttf: ttfRising },
   churn:    { pFill: pFillIntraday, ttf: ttfIntraday, lapUnits: churnLapUnits },
 });
-// @test-only: estimator-family list; strategies.mjs VALID_ESTIMATORS mirrors it and strategies.test.mjs cross-checks the two so a family-name drift bites.
+// @test-only: estimator-family list; flip-niches.mjs VALID_ESTIMATORS mirrors it and flip-niches.test.mjs cross-checks the two so a family-name drift bites.
 export const ESTIMATOR_FAMILIES = Object.freeze(Object.keys(ESTIMATORS));
 
 // estimatorFor(spec) → the { pFill, ttf } pair for a strategy spec. Degrades to the intraday family for
-// an unknown/missing family (never throws) — strategies.mjs conformance separately pins the declared
+// an unknown/missing family (never throws) — flip-niches.mjs conformance separately pins the declared
 // family to ESTIMATOR_FAMILIES so a typo is caught at test time, not silently defaulted in production.
 export function estimatorFor(spec) {
   const key = spec && spec.estimator;
