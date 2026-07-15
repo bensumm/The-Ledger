@@ -176,13 +176,21 @@ with volume at-or-above the ask). Names provisional:
   lot clears with size-honesty (100u books lower than 2u); an oversized lot → `NO clearable ask —
   the book can't absorb Nu … LIQUIDITY collapse, reach fallback` (the surfaced reason, never a bare
   null). Inform-only; no consumer of a price/verdict.
-- **DE3 — watch-positions + shadow logging** (inform-only). The held-lot window line prefers the
-  depth read ("clears 25k @ ≥396 on 6/7d (est, ×4 comp)") over the Task-2 reliefSuffix when
-  non-null, and on a null read prints the collapse reason instead of silently keeping the old line;
-  lean shadow fields (`depthAsk`, `clearFrac`, `depthCompetition`, `depthCollapse` reason +
-  `liqClass`) ride `suggestions.jsonl` per the `estConfLean` absent-field pattern — so F1 can measure
-  the predicted thin-null / liquidity bias by class. Acceptance: thin/absent-data lots render the
-  reason line (never a bare fallback); a golden-fixture pass diffs the two paths.
+- **DE3 — watch-positions + shadow logging (LANDED 2026-07-15, WITH PB3's held-lot half folded in).**
+  The held-lot window clause renders TWO LENSES: the whole-day depth FLOOR (`depth floor: book 25ku @
+  ≤394 on ~79% of 14d (est ×4 comp — size-honest, smoothing-conservative)` — supersedes the Task-2
+  reliefSuffix when non-null; a collapsed read prints its REASON, never a bare fallback) BESIDE the
+  pressure-reachable band (`reachable ask ~401 / bid ~382 (pressure 1.7× buy-heavy)`), formatted by
+  the pure `depthReachClause` (`pipeline/lib/emit.mjs`, golden fixtures diff the two paths).
+  **SEQUENCING DECISION (the 394 tension, resolved):** because the depth floor UNDER-reads a liquid
+  book, DE3 deliberately landed AFTER PB1 so the floor never renders alone — the plan's separate PB3
+  chunk (held-lot line + pressure shadow) is therefore FOLDED into DE3 and is DONE for the watch
+  surface (PB2's `--pressure` inspector remains open). Lean shadow objects ride `suggestions.jsonl`
+  (schema in `suggestlog.mjs`): `depthExit { qty, competition, liqClass, ask?/clearFrac? | collapse? }`
+  — collapse reason + liquidity class on every read, so F1 can measure the predicted ×4 thin-null
+  bias by class — and `reachable { ask, bid, pressure, reliability, bandLow, bandHigh }`. Live pass
+  verified: Soul rune 25k renders floor 394 · reachable 401 beside the declared 397 exit (which sits
+  between the lenses); bid/target rows byte-identical. Inform-only throughout.
 - **DE4 — estimatePair held-lot integration (F1-GATED, flag-off).** Behind `--depth-exit` (or
   promoted by F1 evidence): on a held lot with a non-null depth read, the depth-derived ask
   replaces the relief-softened fold as the sell reference (BE floor, declaredExit anchor, and the
@@ -380,11 +388,10 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
   the regime label, and `reachableBid`/`reachableAsk` with the band + reliability inline + the honesty
   line. Acceptance: live Soul rune (buy-heavy, ask ~399, shallow bid) and a sell-heavy commodity (deep
   bid) render sensibly; a thin book shows the reliability degrade.
-- **PB3 — watch-positions inform line + shadow log.** A held lot's line gains a
-  `reachable ask ~399 / bid ~385 (pressure 1.6× buy-heavy)` note beside the depth read; shadow fields
-  (`pressure`, `reachableAsk`, `reachableBid`, `pressureReliability`, `bandHigh`, `bandLow`) ride
-  `suggestions.jsonl` so F1 scores the pressure-priced level against real fills. Acceptance: byte-identical
-  when the volume is too thin to read; golden diff on the note path.
+- **PB3 — watch-positions inform line + shadow log (FOLDED INTO DE3, LANDED 2026-07-15).** The
+  held-lot `reachable ask ~401 / bid ~382 (pressure 1.7× buy-heavy)` note + the `reachable` shadow
+  object shipped WITH DE3 (see the DE3 entry — the depth floor must never render alone on a liquid
+  book, so the two landed as one surface change). Nothing remains under this chunk id.
 - **PB4 — estimatePair integration (F1-GATED, flag-off byte-identical).** On the liquid tier the
   pressure-driven `reachableAsk`/`reachableBid` become the sell/buy reference (superseding the smoothed
   band top / the DE depth ask where reliability is high), the DE depth read staying the thin-tier floor.

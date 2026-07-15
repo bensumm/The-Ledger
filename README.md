@@ -286,7 +286,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources. A row may also
   carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
   off the quoted ask — `{gap, gapPct, rawTop, topBucketVol, netLever, trusted}`, logged trusted AND
-  audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A screen row also carries
+  audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A `watch` held row may
+  carry the lean **`depthExit`**/**`reachable`** pair (PLAN-DEPTH-EXIT DE3, 2026-07-15): the depth-floor
+  read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band — the F1
+  alternatives to score against realized exits (schema: the `suggestlog.mjs` header). A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the
@@ -398,7 +401,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `watch-positions.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
     Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
     the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
-    (`renderHeldVerdict`/`pathsStage`, `lib/item-context.mjs`). The ONE WRITER of the watch-state path fields
+    (`renderHeldVerdict`/`pathsStage`, `lib/item-context.mjs`). DE3 (PLAN-DEPTH-EXIT, 2026-07-15): each
+    held lot's window clause now carries the whole-day depth FLOOR (`clearableAsk` — supersedes the
+    relief note when non-null; a collapsed read prints its REASON) beside the pressure-reachable band
+    (`reachableBand`), formatted by `lib/emit.mjs depthReachClause` and shadow-logged as the lean
+    `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). The ONE WRITER of
+    the watch-state path fields
     and of `.guide-history.jsonl`; each pass appends the passive Tier-1 archive snapshot. Full output
     contract: `pipeline/MONITORING.md`),
     `monitor-offers.mjs`

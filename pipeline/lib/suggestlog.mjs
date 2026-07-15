@@ -15,6 +15,18 @@
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
+ *     depthExit?,  (PLAN-DEPTH-EXIT DE3 2026-07-15 — the held-lot percentile-DEPTH shadow:
+ *                 { qty, competition, liqClass, ask?, clearFrac?, collapse? }. `ask`/`clearFrac` =
+ *                 the clearableAsk "book at" read when non-null; `collapse` = the null-read REASON
+ *                 ('insufficient-depth' | 'thin-history' | 'no-prints'). liqClass rides EVERY row so
+ *                 F1 can measure whether the flat ×4 competition bar systematically nulls a
+ *                 liquidity class we'd want to price (the predicted bias). Lean-included; watch-positions.mjs
+ *                 held rows only.)
+ *     reachable?,  (PLAN-DEPTH-EXIT Extension A (PB shadow, DE3-folded) — the pressure-driven
+ *                 reachable band { ask, bid, pressure, reliability, bandLow, bandHigh } off
+ *                 js/windowread.mjs reachableBand, so F1 scores the pressure-priced levels against
+ *                 realized fills BESIDE the depth floor + reach/relief alternatives on the SAME row.
+ *                 Lean-included; absent when the pressure read degrades (thin days/volume).)
  *     dipLoop?,  (DL2 — a flush-SIGNAL component object {volDay,price,limit,depthPct,bucketVol,quickBuy,
  *                 optSell,afterTaxMargin,dipScore,alerted,gatedReason}; lean-included, present on watch
  *                 --dip flush rows (alerted=true → headline FLUSH · alerted=false → SIGNAL-ONLY, gated out
@@ -215,7 +227,7 @@ export function classAndSource(row, id, warmBulk) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, depthExit, reachable } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -299,6 +311,14 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // days-reach ≠ lap-clear divergence predicts an unfilled/slow ask. Lean-included (YS2): a caller with no
   // read (no ts1h / no peak window) supplies null → no field → byte-identical shape.
   if (winClear != null)      e.winClear = winClear;
+  // PLAN-DEPTH-EXIT DE3 (2026-07-15) — the held-lot depth-floor shadow ({ qty, competition, liqClass,
+  // ask?/clearFrac? | collapse? }) + the pressure-driven reachable band ({ ask, bid, pressure,
+  // reliability, bandLow, bandHigh }). Logged BESIDE the row's reach/relief-based fields so the F1
+  // retro-join scores all the exit-pricing alternatives against the SAME realized fill — including
+  // whether the ×4 competition bar nulls a liquidity class we'd want to price (collapse + liqClass).
+  // Lean-included (YS2 pattern): watch-positions.mjs held rows only; degraded reads → no field → byte-identical.
+  if (depthExit != null)     e.depthExit = depthExit;
+  if (reachable != null)     e.reachable = reachable;
   // DL2 — a flush SIGNAL (watch-positions.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/commands/analyze-record.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid

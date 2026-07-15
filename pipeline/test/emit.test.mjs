@@ -17,7 +17,7 @@
  * Synthetic fixtures only. Run: `node pipeline/test/emit.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { heldNoteBlock, heldListAt } from '../lib/emit.mjs';
+import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/emit.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -113,6 +113,33 @@ ok('no mv → band top when it clears break-even, else max(instabuy, BE), else B
   assert.equal(heldListAt({ quickSell: 125, optSell: 105 }, 120, null), 125);
   // nothing priceable → degrade to BE (never null)
   assert.equal(heldListAt({ quickSell: null, optSell: null }, 120, null), 120);
+});
+
+/* --- depthReachClause (PLAN-DEPTH-EXIT DE3): the two-lens depth/pressure clause ---------------- */
+// The golden diff of the two paths: a NON-NULL depth read renders the size-honest floor (framed as
+// a floor, never "the" price) beside the pressure-reachable; a COLLAPSED read renders its REASON —
+// never a bare fallback (Ben's hard requirement: a silent degrade is a defect).
+ok('DE3: a non-null depth read renders the floor + the pressure-reachable beside it (two lenses)', () => {
+  const ca = { price: 394, clearFrac: 0.7857, nDays: 14, competition: 4, qty: 25000 };
+  const rb = { ask: 401, bid: 383, pressure: 1.66, reliability: 1 };
+  const s = depthReachClause({ ca, rb, qty: 25000 });
+  assert.equal(s, 'depth floor: book 25ku @ ≤394 on ~79% of 14d (est ×4 comp — size-honest, smoothing-conservative) · reachable ask ~401 / bid ~383 (pressure 1.7× buy-heavy)');
+});
+
+ok('DE3: a collapsed depth read prints its REASON (never a silent fallback), per reason', () => {
+  const insuff = depthReachClause({ ca: { price: null, reason: 'insufficient-depth', competition: 4, qty: 100 }, qty: 100 });
+  assert.equal(insuff, 'depth n/a — book absorbs <4× your 100u lot; reach fallback');
+  const thin = depthReachClause({ ca: { price: null, reason: 'thin-history', competition: 4 }, qty: 50 });
+  assert.equal(thin, 'depth n/a — too little day history; reach fallback');
+  const none = depthReachClause({ ca: { price: null, reason: 'no-prints', competition: 4 }, qty: 50 });
+  assert.equal(none, 'depth n/a — no traded buckets; reach fallback');
+});
+
+ok('DE3: reachable alone renders (depth read absent); sub-1 reliability is stated; nothing → null', () => {
+  const rbOnly = depthReachClause({ rb: { ask: 1104, bid: 968, pressure: 0.5, reliability: 0.4 } });
+  assert.equal(rbOnly, 'reachable ask ~1,104 / bid ~968 (pressure 0.5× sell-heavy, rel 0.40)');
+  assert.equal(depthReachClause({}), null, 'no reads → null (the caller keeps its current line)');
+  assert.equal(depthReachClause({ rb: { ask: null } }), null);
 });
 
 console.log(`\nAll ${pass} checks passed.`);

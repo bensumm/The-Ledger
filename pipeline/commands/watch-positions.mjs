@@ -61,13 +61,13 @@ import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (fa
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readExchangeLog, activeOffers } from '../lib/offers.mjs';
-import { logSuggestions, suggestionEntry } from '../lib/suggestlog.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand)
+import { logSuggestions, suggestionEntry, liqClassOf } from '../lib/suggestlog.mjs';   // DE3: liqClassOf tags the depth-shadow rows so F1 can measure the ×4 liquidity bias by class
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
-import { heldNoteBlock, heldListAt } from '../lib/emit.mjs';   // V5 standardized per-held emit contract
+import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
 import { freedCapital } from '../lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
@@ -182,13 +182,21 @@ function classify(row) {
 // touched/reached ≠ filled, ~7 days is a small sample — context, never a verdict input.
 const WINDOW_HOURS = 8;
 const WINDOW_DAYS = 7;
-function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = null, volDay = null } = {}) {
+function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = null, volDay = null, depth = null, reachable = null } = {}) {
   if (!ts1h || !ts1h.length) return null;
   const h = new Date().getHours();
   const wStart = h, wEnd = (h + WINDOW_HOURS) % 24;
   const stats = windowStats(ts1h, { nights: WINDOW_DAYS, wStart, wEnd });
   if (!stats) return null;
   const { lows, his } = stats;
+  // DE3 (PLAN-DEPTH-EXIT): the held-lot depth floor + pressure-reachable clause (whole-day reads the
+  // caller computed off this same ts1h). When the depth read is NON-NULL it SUPERSEDES the Task-2
+  // reliefSuffix (the depth read measures directly what relief only proxied); a COLLAPSED read prints
+  // its reason and keeps the relief fallback. The two-lens framing lives in emit.depthReachClause.
+  const depthOk = depth && depth.price != null;
+  const depthClause = (heldQty != null && (depth || reachable))
+    ? depthReachClause({ ca: depth, rb: reachable, qty: heldQty }) : null;
+  const depthSuffix = depthClause ? ` · ${depthClause}` : '';
   // recency-split guard: a ⚠ marker when the full touched/reached count is concentrated in an
   // older price regime (recent nights don't dip to the bid / reach the ask) — see windowread.mjs
   const stale = (side, level) => recencySplit(stats.days, side, level, RECENT_NIGHTS).staleOptimistic ? ' ⚠stale' : '';
@@ -210,18 +218,19 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = n
   };
   if (compact) { // one short clause for the notes list (same numbers, no label/caveat prose)
     if (bid != null && lows.length) return `bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)}`;
-    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${reliefSuffix(ask)}`;
-    if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`;
-    return null;
+    if (ask != null && his.length) return `ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${depthOk ? '' : reliefSuffix(ask)}${depthSuffix}`;
+    if (his.length) return `${WINDOW_HOURS}h highs ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}${depthSuffix}`;
+    return depthClause;   // an unlisted lot with no window read still surfaces its depth/pressure read
   }
   const label = `next ${WINDOW_HOURS}h window (${String(wStart).padStart(2, '0')}–${String(wEnd).padStart(2, '0')}h × last ${stats.days.length}d)`;
   const bits = [];
   if (bid != null && lows.length)
     bits.push(`bid ${fmtP(bid)} touched ${touchedDays(lows, bid)}/${lows.length}d${stale('bid', bid)} · lows ~50% ${fmtP(quantLow(lows, 0.5))} / ~75% ${fmtP(quantLow(lows, 0.75))}`);
   if (ask != null && his.length)
-    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${reliefSuffix(ask)}`);
+    bits.push(`ask ${fmtP(ask)} reached ${reachedDays(his, ask)}/${his.length}d${stale('ask', ask)}${depthOk ? '' : reliefSuffix(ask)}`);
   if (his.length)
     bits.push(`highs reached ~75% ${fmtP(quantHigh(his, 0.75))} / ~50% ${fmtP(quantHigh(his, 0.5))}`);
+  if (depthClause) bits.push(depthClause);
   if (!bits.length) return null;
   return `${label}: ${bits.join(' · ')}  (touched ≠ filled; small sample)`;
 }
@@ -594,6 +603,17 @@ async function main() {
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
+    it._depthExit = null; it._reachable = null;
+    // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
+    // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
+    // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the window-line
+    // clause + the suggestions.jsonl shadow fields, never a verdict/alert/price. Guarded separately
+    // from the gating try so a depth failure can't cost the conviction read (and vice versa).
+    try {
+      it._depthExit = clearableAsk(it.ts1h, { qty: it.qty, wStart: 0, wEnd: 0, nights: 14 });
+      const dayStats = windowStats(it.ts1h, { nights: 14, wStart: 0, wEnd: 0 });
+      it._reachable = dayStats ? reachableBand(dayStats) : null;
+    } catch { /* inform-only — never block a pass */ }
     try {
       const key = 'held:' + it.id;
       const support = structuralSupport(dayLowsFrom(it.ts1h));
@@ -693,8 +713,27 @@ async function main() {
     : it.cls === 'LIQUID_RANGING_WIDE' ? 'SCALP-BUY' : 'BUY';
   const bidVerdict = it => offerVerdict(it.row, it.bid.offer, it._bidPathCtx);   // SHARED with the app Watch tab (js/quotecore.js); P5 path-aware
   const wPosture = isOvernightNow() ? 'overnight' : 'active';   // YS2: the posture this live read was made under
+  // DE3 (PLAN-DEPTH-EXIT) — lean shadow objects for the F1 retro-join (the estConfLean absent-field
+  // pattern: present only when a read was computed; normal rows byte-identical). depthExit ALWAYS
+  // carries either the booked ask or the collapse REASON + the liquidity class — that pair is exactly
+  // what F1 needs to measure whether the flat ×4 competition bar systematically nulls a class we'd
+  // want to price (the predicted liquidity bias). reachable carries the PB pressure-priced band so
+  // the retro can score it against realized fills beside the depth floor and the reach/relief lines.
+  const depthShadow = it => {
+    const ca = it._depthExit; if (!ca) return null;
+    const o = { qty: it.qty, competition: ca.competition, liqClass: liqClassOf(it.row.volDay) };
+    if (ca.price != null) { o.ask = ca.price; o.clearFrac = Math.round(ca.clearFrac * 100) / 100; }
+    else o.collapse = ca.reason;
+    return o;
+  };
+  const reachShadow = it => {
+    const rb = it._reachable; if (!rb) return null;
+    return { ask: rb.ask, bid: rb.bid, pressure: Math.round(rb.pressure * 100) / 100,
+      reliability: Math.round(rb.reliability * 100) / 100, bandLow: rb.bandLow, bandHigh: rb.bandHigh };
+  };
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
-    ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture })),
+    ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture,
+      depthExit: depthShadow(it), reachable: reachShadow(it) })),
     ...targets.map(it => { const sig = sigByTarget.get(it.id); return suggestionEntry(it.row, {
       itemId: it.id, cls: it.cls,
       // verdict: FLUSH (alerted) or FLUSH-SIGNAL (logged silently, gated out) or the normal target verdict.
@@ -795,7 +834,8 @@ async function main() {
     // guaranteed pieces (verdict, list-at, break-even, fill-progress) are computed OUTSIDE the
     // try so a context-field failure never drops the load-bearing sell line; the optional context
     // fields (V1 delta / V2 tripwire / V4 conviction) are computed inside, defaulting to null.
-    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay });
+    const wl = windowLine(it.ts1h, { ask: ask ? ask.offer : null, compact: true, heldQty: it.qty, volDay: it.row.volDay,
+      depth: it._depthExit, reachable: it._reachable });   // DE3: depth floor + pressure read ride the window clause
     const mvHeld = momVerdict(row, be, lotValue, ts5m, undefined, lotCtxOf(it));
     const verdictText = firstSentence(heldAction(row, be, lotValue, ts5m, mvHeld, it._display));
     let conviction = null, delta = null, tripwire = null, recovery = null;

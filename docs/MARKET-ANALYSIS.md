@@ -52,11 +52,22 @@ the raw table-v2 cells (byte-identical publish). Operating summary:
   0 (the Ancient-godsword mirage-exit protection). **The size input is the REAL held lot on a
   positions surface** — `quote-items --positions` and `watch-positions` pass the open qty
   (`extra.intendedUnits`); a bare discovery/per-item read with no held qty degrades to the buy-limit
-  proxy. So a held-lot ask reads its relief off the actual position, not an accumulation estimate
-  (`watch-positions` renders it as the `size-relieved fill ~N%` note beside the raw reach count).
+  proxy. So a held-lot ask reads its relief off the actual position, not an accumulation estimate.
   Full mechanism + thresholds + the F1 shadow fields: the `asymEstimate`/`reachRelief` headers in
-  `js/estimators.mjs`. (The principled successor — a percentile-depth exit off the window's
-  volume-by-price distribution — is scoped as PLAN-DEPTH-EXIT, folded into PLAN.md when it ships.)
+  `js/estimators.mjs`.
+- **The held-lot depth floor + pressure-reachable (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
+  `watch-positions` now renders TWO measured lenses beside the reach count: the **depth floor**
+  (`clearableAsk` — the highest ask whose at-or-above instabuy flow absorbs `×4` the lot on ≥75% of
+  days; strictly conservative, since 1h bucket AVERAGES smooth away the peaks a resting ask fills at)
+  and the **pressure-reachable band** (`reachableBand` — `base ± band·φ(ln medVolHi/medVolLo)`, the
+  buyer/seller-balance read that says how far beyond the smoothed center the tape realistically
+  reaches). The floor never renders alone (it under-reads a liquid book — the Soul-rune 394-vs-397
+  lesson); a collapsed depth read always prints its REASON (`depth n/a — book absorbs <4× your lot;
+  reach fallback`) — a silent degrade is a defect. The old `size-relieved fill ~N%` relief note
+  renders only when the depth read is null (it's the fallback proxy the depth read measures
+  directly). Both shadow-log to `suggestions.jsonl` (`depthExit` incl. collapse reason + liquidity
+  class, `reachable`) for the F1 retro-join; no verdict/price/grade moves off either until DE4/PB4.
+  All constants are n≈0 placeholders (`DEPTH_*`, `PRESSURE_*` — `js/windowread.mjs`).
 - **Confidence rides IN the price cell** as the recent-3 reach (`0/3`, `recencySplit`) — the
   freshness-honest signal and the fold basis; the full window shows beside it only on divergence
   (`0/3 · 12/14` = stale); `–` = no read.

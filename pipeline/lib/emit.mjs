@@ -26,7 +26,35 @@
  * structuralSupport / convictionGate) and decides NOTHING — it just orders + formats them. It
  * changes no verdict, no alert, no row selection (V5 is output-format-only).
  */
-import { fmtP } from '../../js/money-format.js';
+import { fmtP, fmt } from '../../js/money-format.js';
+
+/**
+ * depthReachClause — PLAN-DEPTH-EXIT DE3: the held-lot depth/pressure clause for the window line.
+ * PURE formatter over an already-computed clearableAsk result (`ca`) + reachableBand result (`rb`)
+ * (both js/windowread.mjs; either may be null). Returns one compact clause string, or null when
+ * there is nothing to say. THE TWO-LENS CONTRACT (the Soul-rune 394 lesson): the depth read is a
+ * strictly-conservative, size-honest FLOOR (bucket AVERAGES smooth away the peaks a resting ask
+ * fills at), so on a liquid book it under-reads — it must NEVER render alone as "the" exit price.
+ * When the pressure-driven reachable band is readable it renders BESIDE the floor; and a collapsed
+ * depth read ALWAYS prints its REASON (a silent degrade is a defect — Ben's hard requirement).
+ * Inform-only: this line changes no verdict, alert, or price.
+ */
+export function depthReachClause({ ca = null, rb = null, qty = null } = {}) {
+  const bits = [];
+  if (ca && ca.price != null) {
+    bits.push(`depth floor: book ${fmt(qty ?? ca.qty)}u @ ≤${fmtP(ca.price)} on ~${Math.round(ca.clearFrac * 100)}% of ${ca.nDays}d (est ×${ca.competition} comp — size-honest, smoothing-conservative)`);
+  } else if (ca) {
+    const why = ca.reason === 'insufficient-depth'
+      ? `book absorbs <${ca.competition}× your ${fmt(qty ?? ca.qty)}u lot`
+      : ca.reason === 'thin-history' ? 'too little day history' : 'no traded buckets';
+    bits.push(`depth n/a — ${why}; reach fallback`);
+  }
+  if (rb && rb.ask != null) {
+    const regime = rb.pressure >= 1.1 ? 'buy-heavy' : rb.pressure <= 0.9 ? 'sell-heavy' : 'balanced';
+    bits.push(`reachable ask ~${fmtP(rb.ask)} / bid ~${fmtP(rb.bid)} (pressure ${rb.pressure.toFixed(1)}× ${regime}${rb.reliability < 1 ? `, rel ${rb.reliability.toFixed(2)}` : ''})`);
+  }
+  return bits.length ? bits.join(' · ') : null;
+}
 
 /**
  * The canonical list-at sell price for a held lot. Prefers the shared momVerdict's `listAt` (the
