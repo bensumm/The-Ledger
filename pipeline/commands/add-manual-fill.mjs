@@ -13,14 +13,14 @@
  * removable — separate from plugin-captured ground truth.
  *
  * Usage:
- *   node pipeline/add-manual-fill.mjs --item "Abyssal bludgeon" --type buy  --qty 3 --price 18052000
- *   node pipeline/add-manual-fill.mjs --id 13263 --type sell --qty 2 --price 18375000 --net
- *   node pipeline/add-manual-fill.mjs --item "Crystal seed" --type sell --qty 2 --price 3439800 --net --time "2026-07-02T14:30"
- *   node pipeline/add-manual-fill.mjs --item "Abyssal bludgeon" --type withdraw --qty 1 --time "2026-07-03T12:00"
- *   node pipeline/add-manual-fill.mjs --item "Dragon claws" --type banked --qty 1 --price 40.2m
- *   node pipeline/add-manual-fill.mjs --id 566 --type buy --qty 25000 --price 381 --time "2026-07-09T12:00"            # window 1 (slot 8)
- *   node pipeline/add-manual-fill.mjs --id 566 --type buy --qty 25000 --price 381 --time "2026-07-09T16:00" --slot 9  # window 2 — distinct slot so it survives the re-emit guard
- *   node pipeline/add-manual-fill.mjs --remove a1b2c3d4e5f60718
+ *   node pipeline/commands/add-manual-fill.mjs --item "Abyssal bludgeon" --type buy  --qty 3 --price 18052000
+ *   node pipeline/commands/add-manual-fill.mjs --id 13263 --type sell --qty 2 --price 18375000 --net
+ *   node pipeline/commands/add-manual-fill.mjs --item "Crystal seed" --type sell --qty 2 --price 3439800 --net --time "2026-07-02T14:30"
+ *   node pipeline/commands/add-manual-fill.mjs --item "Abyssal bludgeon" --type withdraw --qty 1 --time "2026-07-03T12:00"
+ *   node pipeline/commands/add-manual-fill.mjs --item "Dragon claws" --type banked --qty 1 --price 40.2m
+ *   node pipeline/commands/add-manual-fill.mjs --id 566 --type buy --qty 25000 --price 381 --time "2026-07-09T12:00"            # window 1 (slot 8)
+ *   node pipeline/commands/add-manual-fill.mjs --id 566 --type buy --qty 25000 --price 381 --time "2026-07-09T16:00" --slot 9  # window 2 — distinct slot so it survives the re-emit guard
+ *   node pipeline/commands/add-manual-fill.mjs --remove a1b2c3d4e5f60718
  *
  * Flags:
  *   --item <name>    item name (resolved via the wiki mapping); OR
@@ -50,15 +50,15 @@
  *                    INCLUDING events already persisted in fills.json.
  *   --dry            print the line, don't write it.
  *
- * After writing, run:  node pipeline/sync-fills.mjs --dry   (verify), then without --dry.
+ * After writing, run:  node pipeline/commands/sync-fills.mjs --dry   (verify), then without --dry.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tax as GE_TAX, breakEven } from '../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + shared tax-capped inverse — no private copy
-import { parseArgs, parseGp } from './lib/cli.mjs';
-import { loadMapping } from './lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
+import { tax as GE_TAX, breakEven } from '../../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + shared tax-capped inverse — no private copy
+import { parseArgs, parseGp } from '../lib/cli.mjs';
+import { loadMapping } from '../lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
@@ -88,7 +88,7 @@ if (A.remove) {
   if (!fs.existsSync(LOG_DIR)) die('log dir not found: ' + LOG_DIR);
   fs.appendFileSync(OUT, line + '\n');
   console.log(`\nappended to ${OUT}`);
-  console.log('next: node pipeline/sync-fills.mjs --dry   (verify the event disappears), then run it without --dry.');
+  console.log('next: node pipeline/commands/sync-fills.mjs --dry   (verify the event disappears), then run it without --dry.');
   process.exit(0);
 }
 
@@ -155,4 +155,4 @@ if (A.dry) { console.log('\n[dry] not written.'); process.exit(0); }
 if (!fs.existsSync(LOG_DIR)) die('log dir not found: ' + LOG_DIR);
 fs.appendFileSync(OUT, line + '\n');
 console.log(`\nappended to ${OUT}`);
-console.log('next: node pipeline/sync-fills.mjs --dry   (verify), then run it without --dry to write + push.');
+console.log('next: node pipeline/commands/sync-fills.mjs --dry   (verify), then run it without --dry to write + push.');

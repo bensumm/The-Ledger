@@ -2,8 +2,8 @@
 /**
  * retrojoin.mjs — the RETRO-JOIN report (Pipeline v2, chunk P6a). The FOUNDATION slice of P6.
  *
- *   node pipeline/report-retro.mjs           per-niche + per-path outcome accounting (default)
- *   node pipeline/report-retro.mjs --json    dump the raw joined rows array to stdout (no aggregation)
+ *   node pipeline/commands/report-retro.mjs           per-niche + per-path outcome accounting (default)
+ *   node pipeline/commands/report-retro.mjs --json    dump the raw joined rows array to stdout (no aggregation)
  *
  * For EVERY suggestion row the tool ever logged (active suggestions.jsonl + pipeline/suggestions-
  * archive/*.jsonl, via the ONE shared readSuggestionLines), join FORWARD to fills.json BUY events
@@ -27,13 +27,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from './lib/cli.mjs';
-import { readSuggestionLines } from './lib/suggestlog.mjs';
-import { retroJoin, aggregateOutcomes } from './lib/retrojoin.mjs';
-import { fmt, fmtTurn } from '../js/money-format.js';
+import { parseArgs } from '../lib/cli.mjs';
+import { readSuggestionLines } from '../lib/suggestlog.mjs';
+import { retroJoin, aggregateOutcomes } from '../lib/retrojoin.mjs';
+import { fmt, fmtTurn } from '../../js/money-format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');
+const ROOT = path.join(HERE, '..', '..');
 const FILLS = path.join(ROOT, 'fills.json');
 
 const A = parseArgs(process.argv.slice(2));

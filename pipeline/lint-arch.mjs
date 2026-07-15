@@ -31,7 +31,7 @@ const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
 const PROPOSED = new Set(['docs/FLOW.md', 'flip-niches.mjs', 'held-item-strategy.mjs']);
 
 // A bare basename resolves against these dirs (repo-root-relative). '' = repo root (index.html, *.json).
-const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'pipeline/test', 'pipeline/probes', 'docs', '.github/workflows', '.claude/skills'];
+const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'pipeline/test', 'pipeline/commands', 'pipeline/probes', 'docs', '.github/workflows', '.claude/skills'];
 
 const EXT = /\.(mjs|js|json|jsonl|md|css|html|yml|yaml)$/;
 

@@ -53,13 +53,13 @@ import { homedir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 // LW1: offers.json emitter. readOfferRows reads the exchange-logger dir raw; offersSnapshot builds
 // the flat live-offer snapshot; nameLookupFromCache resolves display names offline (best-effort).
-import { readOfferRows, offersSnapshot, nameLookupFromCache } from './lib/offers.mjs';
+import { readOfferRows, offersSnapshot, nameLookupFromCache } from '../lib/offers.mjs';
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
-import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from './lib/reconstruct.mjs';
-import { loadIgnored, quarantineEvents } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
-import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
+import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct.mjs';
+import { loadIgnored, quarantineEvents } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
+import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
 
 /* ======================= CONFIG — edit these ======================= */
 // --log-dir / --repo-dir overrides exist for isolated fixture tests (see the
@@ -171,7 +171,7 @@ function syncMainToRemote() {
 // positions, and — when `write` is true — writes fills.json / positions.json / offers.json to
 // repoDir. Performs ZERO git operations: the multi-writer syncMainToRemote() guard and the
 // commit/push all live in the attended main() wrapper, NEVER here. This is exactly what
-// `sync-fills.mjs --local` runs and what pipeline/watch-log.mjs imports and calls in-process, so a
+// `sync-fills.mjs --local` runs and what pipeline/commands/watch-log.mjs imports and calls in-process, so a
 // phone/PC never risks an unattended write to main (FILLS-PIPELINE.md §12 invariant).
 //
 // logDir/repoDir override the module defaults so an isolated fixture test (offers emitter, no-git

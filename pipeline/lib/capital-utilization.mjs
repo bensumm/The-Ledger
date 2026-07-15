@@ -22,7 +22,7 @@ export function bookUtilization({ workingGp = 0, parkedGp = 0 } = {}) {
 /* totalCapital({ workingGp, parkedGp, cashGp }) -> the WHOLE pool, not just the committed split.
    committedGp = working + parked (capital in offers/inventory). cashGp = idle bank GP that earns
    nothing — the biggest efficiency leak, but NOT derivable from any log (the GE cash stack isn't in
-   fills/positions/offers), so it is a STATED figure (pipeline/derive-cash.mjs) or null when unknown.
+   fills/positions/offers), so it is a STATED figure (pipeline/commands/derive-cash.mjs) or null when unknown.
    cashGp null  -> totalGp/committedPct/idlePct all null (we only know the committed absolute; never
      fake an idle % we can't measure).
    cashGp given (incl. 0) -> totalGp = committed + cash; committedPct = committed/total; idlePct =

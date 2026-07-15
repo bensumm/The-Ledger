@@ -60,7 +60,7 @@ import path from 'node:path';
 import { collapseOffers, dedupeSnapshots, GE_TAX } from './reconstruct.mjs';
 import { readCash } from './cash-anchor.mjs';
 import { readOffersSnapshot } from './offers.mjs';
-import { REPO_DIR } from '../sync-fills.mjs';
+import { REPO_DIR } from '../commands/sync-fills.mjs';
 
 /* DEEP_BID_PCT — a resting BUY is DEEP (reclaimable) when its price is at least this fraction below the
  * market reference. PLACEHOLDER (start 5%, n≈0) pending calibration against realized fill data (process

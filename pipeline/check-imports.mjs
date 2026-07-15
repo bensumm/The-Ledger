@@ -30,8 +30,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // (guarded ones like screen.mjs/sync-fills.mjs AND unguarded ones like quote/watch/analyze alike — the
 // static parse means guardedness is irrelevant to safety here).
 const ENTRYPOINTS = [
-  'screen-flip-niches.mjs', 'quote-items.mjs', 'watch-positions.mjs', 'run-loop.mjs', 'analyze-record.mjs',
-  'monitor-offers.mjs', 'read-buy-limits.mjs', 'read-window-range.mjs', 'sync-fills.mjs', 'add-manual-fill.mjs',
+  'commands/screen-flip-niches.mjs', 'commands/quote-items.mjs', 'commands/watch-positions.mjs', 'commands/run-loop.mjs', 'commands/analyze-record.mjs',
+  'commands/monitor-offers.mjs', 'commands/read-buy-limits.mjs', 'commands/read-window-range.mjs', 'commands/sync-fills.mjs', 'commands/add-manual-fill.mjs',
 ].map(f => path.join(HERE, f)).filter(p => fs.existsSync(p));
 
 // Extract [{ specifier, names:Set, wantDefault:bool, nsOnly:bool }] for every RELATIVE from-import in src.

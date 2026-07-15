@@ -14,12 +14,12 @@ push to `main`).
   inventory is `README.md`** ("Files" + "Map of the repo") — the ONE registry; don't duplicate it
   here. Why it's split out of the old single `index.html`, and how localhost differs (the
   LW2/LW3/LW4 live desk — incl. the Scan tab's LOCAL "Refresh scan" that runs a real
-  `screen.mjs --publish` via `pipeline/dev-server.mjs`'s `POST /api/scan`, zero git): `docs/LORE.md`.
+  `screen.mjs --publish` via `pipeline/commands/dev-server.mjs`'s `POST /api/scan`, zero git): `docs/LORE.md`.
   Local testing needs `serve.cmd` (ES modules don't load over
   `file://`); see README "Local development".
 - **Fill-data pipeline**: closes the loop between the tool's suggestions and real GE trades,
   captured client-side via RuneLite's Exchange Logger. Lives in `pipeline/` (separate from the
-  deployed app root); design doc `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/sync-fills.mjs`
+  deployed app root); design doc `pipeline/FILLS-PIPELINE.md`, sync script `pipeline/commands/sync-fills.mjs`
   (**on-demand only** — the `CofferFillsSync` scheduler was eliminated 2026-07-04, §12). It reads
   `.runelite/exchange-logger/*` and writes/commits/pushes `fills.json` + the derived `positions.json`
   (+ `offers.json`, LW1). `positions.json` is the FIFO-reconstructed view (`collapseOffers` +
@@ -45,7 +45,7 @@ the codename dictionary — `flip-niche`/`held-item strategy`/`Bar E`/`DL4`…) 
 **`docs/LORE.md`**; each
 load-bearing "don’t-rebuild" invariant lives in the header of the module/test that governs it (e.g.
 the Gate-2-`CUT`-exempt rule in `pipeline/lib/watchstate.mjs`, the daemon’s zero-git rule in
-`pipeline/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/probes.mjs`).
+`pipeline/commands/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/probes.mjs`).
 Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`**, enforced by
 `pipeline/lint-skills.mjs` in CI. Before building something that feels new, check `git log` +
 `CHANGELOG.md` — much of it already exists; don’t work from a stale assumption that a capability is
@@ -349,16 +349,16 @@ deliberate):**
 
 | When Ben says something like… | Run |
 | --- | --- |
-| "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/quote-items.mjs "<item or id>" [...more]` |
-| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<flip-niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/screen-flip-niches.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip pool line) |
-| "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/quote-items.mjs --positions` + verdict interpretation → action plan |
+| "how's **`<item>`**?", "quote **X**", "what's **X** doing?", "check **X** [and **Y**]" | `node pipeline/commands/quote-items.mjs "<item or id>" [...more]` |
+| "find me flips", "any **opportunities**?", "what should I **buy**?", "**screen** the market", "anything in **`<flip-niche>`**?", "**scan**" | **`/scan` skill** — runs `node pipeline/commands/screen-flip-niches.mjs [--mode band\|churn\|scalp\|value\|all]` + the judgment pass (scalp/value are OFF-by-default, provisional; spread/rising were DELETED — Steps 3+4). In `--mode all` it also **auto-nominates dip candidates** into `dip-watchlist.json` (DL4; the "B feeds A" discovery half of the dip loop — relay the Dip pool line) |
+| "how are my **positions**?", "check the market against **what I hold**", "am I **underwater**?", "should I **cut/hold** anything?", "review my **holds**" | **`/positions` skill** — runs `node pipeline/commands/quote-items.mjs --positions` + verdict interpretation → action plan |
 | "set up for **overnight**", "what should I leave running overnight", "**going to bed**" | **`/overnight` skill** — two-phase: `/positions` → pause for stated capital → `/scan` + accumulation sizing |
 | "what happened **overnight**?", "**morning** review", "what **filled**?", "catch me up" | **`/morning` skill** — positions.json/fills.json + `monitor.mjs` + re-verdict stale bids |
-| "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/watch-positions.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
-| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch.mjs` + `screen.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/run-loop.mjs --watch 30 --scan 15`) |
-| "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
-| "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
-| "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
+| "watch/**monitor** my positions", "run a flipping **session**", "poll/keep an eye on **X**" | `node pipeline/commands/watch-positions.mjs ["<target>" …]`  (drive with `/loop`, see `pipeline/MONITORING.md`) |
+| "**loop** positions AND scan", "monitor **and** discover", "check positions every X **and** scan every Y" | `node pipeline/commands/run-loop.mjs [--watch <min>] [--scan <min>] [--min-idle <gp>] [--no-sync]` (multi-action `/loop` driver — time-gated multiplexer runs `watch.mjs` + `screen.mjs --mode all` on independent cadences from ONE loop; scan gated on DEPLOYABLE capital ≥ `--min-idle` (`derive-cash-tiers.mjs` `deployablePool` = free cash + reclaimable DEEP-bid escrow — the three-tier `availableCash ≤ deployablePool ≤ liquidCapital` model; the gate does a small live fetch of just the resting-bid ids to classify each bid deep-vs-committed, degrading to `availableCash` if that fetch fails). **A local book-refresh rides with the watch pass by default** — `sync-fills.mjs --local` rebuilds fills/positions/offers.json from the exchange logs (ZERO git, no push) so positions always reads a fresh book; the loop never pushes to `main` — publishing stays the overnight/on-demand `sync-fills.mjs`; `--no-sync` opts out. Drive with `/loop <gcd>m node pipeline/commands/run-loop.mjs --watch 30 --scan 15`) |
+| "watch for **dips/flushes**", "run the **dip loop**", "catch a **liquid flush**" | `node pipeline/commands/watch-positions.mjs --dip ["<target>" …]` (DL2 — folds `dip-watchlist.json`; fires a reactive FLUSH bid-into-the-fall alert on a LIQUID dumping item; 5m cadence floor) |
+| "can I **buy more** X?", "how much **buy limit** left [on X]?", "have I hit my **limit**?", "when does X's limit **reset**?" | `node pipeline/commands/read-buy-limits.mjs "<item or id>" [...]` (no args → every item bought in the last 4h) |
+| "**analyze** our track record", "**what should we tune?**", "did we **log everything**?", "run a **retro**", "how are our **suggestions** doing?" | **`/analyze` skill** — runs `node pipeline/commands/analyze-record.mjs` (read-only dataset audit + per-flip-niche retro rollup + n-gated tuning candidates; `--json` for the brief) then interprets it into a retro + F1-routed improvement proposals + a project-guidelines checklist over the session's edits |
 
 Script facts the skills rely on (current behavior, not doctrine):
 - `quote.mjs` takes multiple items in one call; prints one combined table + a regime line
@@ -755,7 +755,7 @@ freshness) is derived with the local-time `Date` getters (`getHours`/`getMonth`/
 `getDay`, `toLocaleTimeString`) — never `getUTC*`/`toISOString`. `UTC`/`ISO` is **storage and
 wire format only**: epoch-second `ts` fields, backup metadata (`exportedAt`), the backup
 filename slug. The manual-log `date`/`time` strings are written in local wall-clock time by
-both `fillsLogLine` (`js/fillslog.js`) and `pipeline/add-manual-fill.mjs`, so rendering them
+both `fillsLogLine` (`js/fillslog.js`) and `pipeline/commands/add-manual-fill.mjs`, so rendering them
 raw (e.g. the synced-line list in `editManualLog`, `js/ledger.js` — A3, was `js/ui.js`) is already local. Verified by
 the E1 audit (2026-07-04) with a near-midnight `periodKey` fixture — a local 23:55 dip buckets
 to that day, not the UTC-rolled next day. When adding a rendered timestamp, use the local

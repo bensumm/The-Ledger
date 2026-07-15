@@ -4,11 +4,11 @@
  * NEVER hand-write a `node -e` fetch for a market read again — this is the workflow.
  *
  * Two modes:
- *   node pipeline/quote-items.mjs "Abyssal bludgeon" 23959 "Crystal seed" ...
+ *   node pipeline/commands/quote-items.mjs "Abyssal bludgeon" 23959 "Crystal seed" ...
  *       Per-item read: resolves each name/id, fetches latest/5m/6h/24h + GE guide, and
  *       prints the standard Quick/Optimistic market table (one combined table, one regime
  *       line per item).
- *   node pipeline/quote-items.mjs --positions
+ *   node pipeline/commands/quote-items.mjs --positions
  *       Positions-vs-market: reads OPEN lots from repo-root positions.json, groups by item
  *       at weighted-avg cost, quotes each held item live, and prints the standard table
  *       PLUS Held@ / Break-even columns + a HOLD / list-at-X / CUT verdict per row.
@@ -20,36 +20,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice } from '../js/quotecore.js';
-import { tax } from '../js/money-math.js';
-import { fmtP, fmt, fmtHour } from '../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
-import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
-import { anchorNudge } from './probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
-import { FLIP_NICHES } from '../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
-import { trajectoryFrom1h } from './lib/warm-term-structure.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from './lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
-import { staleExitRead, STALE_EXIT_RECENT_FRAC } from './lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
-import { readOpenPositions } from './lib/positions.mjs';
-import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from './lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
-import { mdTable, stdCells } from './lib/cli.mjs';
-import { loadModules, runProbes, logFirings } from './lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
-import { logSuggestions, suggestionEntry, classAndSource } from './lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback)
-import { runValidators, flags, leanValidators } from '../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
-import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
-import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
-import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 advisory
-import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from './lib/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { loadState, ALERT_PERSIST_MS } from './lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
-import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice } from '../../js/quotecore.js';
+import { tax } from '../../js/money-math.js';
+import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
+import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
+import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
+import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
+import { trajectoryFrom1h } from '../lib/warm-term-structure.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from '../lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
+import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
+import { readOpenPositions } from '../lib/positions.mjs';
+import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
+import { mdTable, stdCells } from '../lib/cli.mjs';
+import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
+import { logSuggestions, suggestionEntry, classAndSource } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback)
+import { runValidators, flags, leanValidators } from '../../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
+import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
+import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
+import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 advisory
+import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
+import { loadState, ALERT_PERSIST_MS } from '../lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
+import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const POSITIONS = path.join(HERE, '..', 'positions.json');
-const OFFERS = path.join(HERE, '..', 'offers.json');   // P0: flat live-offer snapshot (LW1); the book for askFilling
-const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl');   // YP1: watch.mjs writes it, we read it advisory
-const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch.mjs (read-only here)
-const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
-const FILLS = path.join(HERE, '..', 'fills.json');   // LM1: RuneLite-logged fills → per-item 4h buy-limit windows (no fetch)
+const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
+const OFFERS = path.join(HERE, '..', '..', 'offers.json');   // P0: flat live-offer snapshot (LW1); the book for askFilling
+const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl');   // YP1: watch.mjs writes it, we read it advisory
+const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch.mjs (read-only here)
+const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
+const FILLS = path.join(HERE, '..', '..', 'fills.json');   // LM1: RuneLite-logged fills → per-item 4h buy-limit windows (no fetch)
 
 // Proposal C: the stale declared-exit read needs the 1h series, which this booked-lots view doesn't
 // otherwise fetch. The fetch is TARGETED (only lots with a declared numeric thesis exit — typically
@@ -97,7 +97,7 @@ function regimeLine(name, row, limit, win) {
 }
 
 async function runItems() {
-  if (!tokens.length) { console.error('usage: node pipeline/quote-items.mjs "<item or id>" [...more]  |  node pipeline/quote-items.mjs --positions'); process.exit(1); }
+  if (!tokens.length) { console.error('usage: node pipeline/commands/quote-items.mjs "<item or id>" [...more]  |  node pipeline/commands/quote-items.mjs --positions'); process.exit(1); }
   const map = await loadMapping();
   const guide = await loadGuide();
   const resolved = [];

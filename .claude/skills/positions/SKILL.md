@@ -12,7 +12,7 @@ NEVER bump `APP_VERSION` (that marks the deployed app, which skills never touch)
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/quote-items.mjs --positions
+node pipeline/commands/quote-items.mjs --positions
 ```
 
 That command IS the market read (reads `positions.json` open lots, quotes each held item,
@@ -21,11 +21,11 @@ already ran inside `momVerdict()` — your job is to *interpret* the printed ver
 to re-derive them.
 
 Freshness: there is **no scheduled sync** (the 20-min `CofferFillsSync` job was eliminated
-2026-07-04 — sync is on-demand only). **Sync first (SY1):** run `node pipeline/sync-fills.mjs`
+2026-07-04 — sync is on-demand only). **Sync first (SY1):** run `node pipeline/commands/sync-fills.mjs`
 before quoting so `positions.json` reflects every logged trade — including any phone-logged
 lines, since the sync ff-pulls `origin/main` (mobile `mobile-fills.log` writes) before
 reading the logs (the multi-writer contract, FILLS-PIPELINE §13.3) — then run `--positions`
-against the fresh file. (`node pipeline/monitor-offers.mjs` shows live exchange-log truth if a
+against the fresh file. (`node pipeline/commands/monitor-offers.mjs` shows live exchange-log truth if a
 just-made trade matters even more immediately.)
 
 **Run the sync from the MAIN checkout only (SY1.2):** `sync-fills.mjs` commits+pushes the
@@ -37,7 +37,7 @@ report that `positions.json` may be stale rather than pushing from the wrong bra
 
 **Act on the stale-book banner — re-sync, don't just note it (Ben, 2026-07-06).** When
 `watch.mjs`'s summary prints `held basis positions.json Nm old ⚠ stale` and the age keeps
-CLIMBING across passes, the banner is a prompt to ACT: run `node pipeline/sync-fills.mjs`
+CLIMBING across passes, the banner is a prompt to ACT: run `node pipeline/commands/sync-fills.mjs`
 (from the MAIN checkout) to refresh the book BEFORE trusting or reporting the held count —
 do not merely mention the banner and report off the stale file. Anchor (the failure this
 fixes): on 2026-07-06 the book sat frozen ~2+ hours (age climbed past 300m) while positions
@@ -47,7 +47,7 @@ localhost app's liveness signal; this is the operator's rule when reading `watch
 session.)
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
-`--positions` prints no open lots, the review isn't done: run `node pipeline/watch-positions.mjs` —
+`--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs` —
 its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
 and report the offer set as the position set.
 
@@ -140,7 +140,7 @@ marginal hold-vs-cut decision** — NOT on every quote (this ties to memory "siz
 diligence"). Method:
 
 1. **Use the FULL-DAY window, not the narrow demand slice:**
-   `node pipeline/read-window-range.mjs "<item>" --window 0-23 --nights 21`. The narrow 00-08
+   `node pipeline/commands/read-window-range.mjs "<item>" --window 0-23 --nights 21`. The narrow 00-08
    demand slice OVERSTATED a weekend→weekday fade that the full-day lows did not show
    (see the `/overnight` correction below) — read the whole day.
 2. **Pull enough history (2–3 weeks, `--nights 21`) to capture the PRE-SPIKE BASE** — so a
@@ -166,7 +166,7 @@ as a hypothesis to keep testing, not an established pattern.
 **Declare the thesis AT ENTRY — every deliberate diurnal/value hold (VN-0, Ben 2026-07-11):**
 a position entered on a plan (buy the dip window, sell the diurnal peak; a value-hold toward a
 multi-week level) gets its plan DECLARED the moment the bid is placed/filled:
-`node pipeline/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
+`node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
 The declared tripwire activates the TG1 headline silence and the thesis render frame
 (MONITORING.md step 4) — without it, the band-flip frame re-litigates the expected pre-peak
 trough as UNDERWATER/LIST-TO-CLEAR churn every pass (the 2026-07-11 Berserker/Masori session).
@@ -298,7 +298,7 @@ it's `uncertain` or conflicts, that's your signal to apply judgment, not to defe
   caution: `BIG_TICKET_GP` = 10m lot value is the whole-lot threshold).
 - If cuts free GE slots → **offer `/scan`** to redeploy the capital.
 - **Offer the watch loop:** print the ready-to-paste command per MONITORING.md, surfacing
-  `watch.mjs`'s own cadence suggestion, e.g. `/loop 2m node pipeline/watch-positions.mjs`.
+  `watch.mjs`'s own cadence suggestion, e.g. `/loop 2m node pipeline/commands/watch-positions.mjs`.
 
 **Composition note:** when invoked from `/overnight`, SKIP this tail — `/overnight` owns
 the pause-for-capital as its phase boundary. The tail is for standalone use.

@@ -2,7 +2,7 @@
    NOTE (PLAN-CASH-TRACKING): the GE cash stack is not in any log, but idle cash is no longer merely
    "stated" — the stored figure is the ANCHOR that lib/derive-cash-tiers.mjs runs FORWARD from (anchor +
    Σ sells-after-tax − Σ buys − resting-bid escrow). So this module stores the starting point;
-   derive-cash-tiers.mjs computes the current balance. A re-anchor (pipeline/derive-cash.mjs <amount>) is the manual
+   derive-cash-tiers.mjs computes the current balance. A re-anchor (pipeline/commands/derive-cash.mjs <amount>) is the manual
    reset — the first anchor, or the one DOWN correction when Ben is short / spent gp off-ledger (the
    only movement the log can't see). Stored in gitignored `.capital-state.json` at the repo root;
    read by cashderive, whose loadDerivedCash feeds watch.mjs's SUMMARY footer (availableCash) and
@@ -11,7 +11,7 @@
    / cashderive deriveCash so those stay fixture-testable. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { REPO_DIR } from '../sync-fills.mjs';
+import { REPO_DIR } from '../commands/sync-fills.mjs';
 
 const FILE = repoDir => path.join(repoDir, '.capital-state.json');
 

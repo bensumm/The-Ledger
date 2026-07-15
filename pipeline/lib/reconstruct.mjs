@@ -2,7 +2,7 @@
  * reconstruct.mjs — shared trade reconstruction for the fill pipeline.
  *
  * Pure functions extracted from sync-fills.mjs so both the pipeline AND the live
- * monitor (pipeline/monitor-offers.mjs) reconstruct positions the SAME way — the monitor
+ * monitor (pipeline/commands/monitor-offers.mjs) reconstruct positions the SAME way — the monitor
  * runs this in-memory over the live log for a rock-solid, real-time held-position
  * count (no positions.json lag, no naive-log-sum double-count). No side effects.
  *

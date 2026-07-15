@@ -52,7 +52,7 @@ gh pr merge --squash                # or --squash --auto (auto-merge on green)
 ```
 
 **On-demand data syncs always push direct to `main`** regardless — `node
-pipeline/sync-fills.mjs` writes `fills.json`/`positions.json`/`suggestions.jsonl`, riding the
+pipeline/commands/sync-fills.mjs` writes `fills.json`/`positions.json`/`suggestions.jsonl`, riding the
 admin bypass; the sync is on-demand (no unattended writer exists anymore — the 20-min
 `CofferFillsSync` job was eliminated, FILLS-PIPELINE.md §12), and its clobber-guard
 fast-forwards onto the current `main` before committing. On a rebase conflict on those files,
@@ -91,7 +91,7 @@ one fails fast. Constraints on any workflow change:
 - **Public repo → public logs.** No PII in output; no secrets in output — and none are
   currently needed anywhere in CI: keep it that way if at all possible.
 - **Nothing that reads `~/.runelite` can run in CI.** The fills sync runs on Ben's machine
-  on demand (`node pipeline/sync-fills.mjs`) — the scheduled job was eliminated
+  on demand (`node pipeline/commands/sync-fills.mjs`) — the scheduled job was eliminated
   (FILLS-PIPELINE.md §12), but CI still can never see the local logs.
 - **Keep CI seconds-fast.** Cheap invariants only on the hosted runner. A fixture test
   shipped without a CI hook is a wasted fixture — wire new ones into checks.yml.

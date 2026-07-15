@@ -17,25 +17,25 @@
    path-carrying plan. `--path` is what routes the flags into the latter. `clear` removes the id from
    BOTH stores — FIX 2, 2026-07-13 — so a cleared plan can't leave a gating exit/tripwire behind.)
 
-     node pipeline/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
-     node pipeline/declare-thesis.mjs clear "<item|id>"
-     node pipeline/declare-thesis.mjs list */
+     node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--exit "<gp>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]
+     node pipeline/commands/declare-thesis.mjs clear "<item|id>"
+     node pipeline/commands/declare-thesis.mjs list */
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadMapping } from './lib/marketfetch.mjs';
-import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';
-import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from './lib/holdthesis.mjs';
-import { parseGp } from './lib/cli.mjs';   // VN-2 — numeric tripwire/exit for the hold-thesis write
+import { loadMapping } from '../lib/marketfetch.mjs';
+import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from '../lib/sessionthesis.mjs';
+import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from '../lib/holdthesis.mjs';
+import { parseGp } from '../lib/cli.mjs';   // VN-2 — numeric tripwire/exit for the hold-thesis write
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json');
-const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json');   // TRACKED repo-root store (P4a path decl)
+const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json');
+const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json');   // TRACKED repo-root store (P4a path decl)
 
 function usage() {
   console.log('Usage:\n' +
-    '  node pipeline/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
-    '  node pipeline/declare-thesis.mjs clear "<item|id>"\n' +
-    '  node pipeline/declare-thesis.mjs list');
+    '  node pipeline/commands/declare-thesis.mjs set "<item|id>" "<thesis>" [--tripwire "<level>"] [--window "<h-h>"] [--path <key>] [--entered-under <key>]\n' +
+    '  node pipeline/commands/declare-thesis.mjs clear "<item|id>"\n' +
+    '  node pipeline/commands/declare-thesis.mjs list');
 }
 
 async function resolveId(token) {

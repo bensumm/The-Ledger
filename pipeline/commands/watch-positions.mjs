@@ -41,48 +41,48 @@
  *   Noise guard: offers under NOISE_OFFER_GP total value are collapsed to one ignored line.
  *
  * Usage:
- *   node pipeline/watch-positions.mjs                       # every position: held lots + active offers
- *   node pipeline/watch-positions.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
- *   node pipeline/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
- *   node pipeline/watch-positions.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
- *   node pipeline/watch-positions.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
+ *   node pipeline/commands/watch-positions.mjs                       # every position: held lots + active offers
+ *   node pipeline/commands/watch-positions.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
+ *   node pipeline/commands/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
+ *   node pipeline/commands/watch-positions.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
+ *   node pipeline/commands/watch-positions.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
-  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal } from '../js/quotecore.js';
-import { limitWindow, buysByItem } from './lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
-import { fmtP, fmt } from '../js/money-format.js';
-import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
-import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from './lib/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
-import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from './lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
-import { readOpenPositions } from './lib/positions.mjs';
-import { readExchangeLog, activeOffers } from './lib/offers.mjs';
-import { logSuggestions, suggestionEntry } from './lib/suggestlog.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand)
-import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
-import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from './lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
-import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from './lib/levels.mjs';   // V2 support/cut-trigger
-import { heldNoteBlock, heldListAt } from './lib/emit.mjs';   // V5 standardized per-held emit contract
-import { recoveryRead, recoveryLine, recoveryTrigger } from './lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
-import { freedCapital } from './lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
-import { bookUtilization, totalCapital } from './lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
-import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (cash.mjs anchor + log flow)
-import { loadThesis, pruneThesis, thesisLine } from './lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
-import { loadHoldThesis, pruneHoldThesis, thesisFor } from './lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
-import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from './lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
+  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal } from '../../js/quotecore.js';
+import { limitWindow, buysByItem } from '../lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
+import { fmtP, fmt } from '../../js/money-format.js';
+import { briefLine } from '../../js/watchcore.js';   // --brief compact book: format owned by the script
+import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
+import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
+import { readOpenPositions } from '../lib/positions.mjs';
+import { readExchangeLog, activeOffers } from '../lib/offers.mjs';
+import { logSuggestions, suggestionEntry } from '../lib/suggestlog.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand)
+import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
+import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
+import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
+import { heldNoteBlock, heldListAt } from '../lib/emit.mjs';   // V5 standardized per-held emit contract
+import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
+import { freedCapital } from '../lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
+import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
+import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (cash.mjs anchor + log flow)
+import { loadThesis, pruneThesis, thesisLine } from '../lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
+import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
+import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const POSITIONS = path.join(HERE, '..', 'positions.json');
-const FILLS = path.join(HERE, '..', 'fills.json');   // DL2 — logged buys for the FLUSH buy-limit clause
-const DIP_WATCHLIST = path.join(HERE, '..', 'dip-watchlist.json'); // DL2 tracked pool of LIQUID flush candidates (--dip)
-const GUIDE_HISTORY = path.join(HERE, '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
-const WATCH_STATE = path.join(HERE, '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
-const THESIS_PATH = path.join(HERE, '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
-const HOLD_THESIS_PATH = path.join(HERE, '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
+const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
+const FILLS = path.join(HERE, '..', '..', 'fills.json');   // DL2 — logged buys for the FLUSH buy-limit clause
+const DIP_WATCHLIST = path.join(HERE, '..', '..', 'dip-watchlist.json'); // DL2 tracked pool of LIQUID flush candidates (--dip)
+const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
+const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
+const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; thesis.mjs writes)
+const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
@@ -497,7 +497,7 @@ async function main() {
     try {
       const { rows, staleMin } = readExchangeLog();
       offersInfo = { staleMin };
-      for (const o of activeOffers(rows, loadIgnored(path.join(HERE, '..')))) {   // quarantine farm/loot offers (ignored-items.json)
+      for (const o of activeOffers(rows, loadIgnored(path.join(HERE, '..', '..')))) {   // quarantine farm/loot offers (ignored-items.json)
         if (o.max * o.offer < NOISE_OFFER_GP) { noise.push(o); continue; }
         (o.state === 'BUYING' ? bids : asks).push(o);
       }
@@ -958,7 +958,7 @@ async function main() {
       console.log(`  deployable ${fmtP(dc.deployablePool)} (free ${fmtP(dc.availableCash)} ${reclaim}) · liquid ${fmtP(dc.liquidCapital)} (all ${fmtP(dc.reserved)} bid escrow reclaimable)`);
     }
   } else if (exposure > 0 || committed > 0) {
-    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/derive-cash.mjs <amount>`);
+    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/commands/derive-cash.mjs <amount>`);
   }
   if (!TARGETS_ONLY) {
     console.log(posAge != null
@@ -968,7 +968,7 @@ async function main() {
           : ` · offer basis unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`)
       : '  held basis positions.json unavailable');
   }
-  console.log(`  loop /loop ${loopMin}m node pipeline/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
+  console.log(`  loop /loop ${loopMin}m node pipeline/commands/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
   console.log('  READ-ONLY decision support — exit at entry · never a stranded ask · cut on breakdown, not hope · you place every offer.');
 }
 

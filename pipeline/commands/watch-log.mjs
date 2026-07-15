@@ -14,7 +14,7 @@
  * the artifacts are byte-compatible with an attended sync (shared tombstones, dedupe, FIFO matcher)
  * and there is no second copy of the pipeline to drift.
  *
- * Started manually (`node pipeline/watch-log.mjs`, or the watch-log.cmd wrapper); dies with the
+ * Started manually (`node pipeline/commands/watch-log.mjs`, or the watch-log.cmd wrapper); dies with the
  * terminal. NO Task Scheduler job — that would reintroduce an unattended writer. Ctrl+C to stop.
  *
  * What it watches:
@@ -41,7 +41,7 @@
  */
 import fs from 'node:fs';
 import { join } from 'node:path';
-import { LOG_DIR } from './lib/offers.mjs';
+import { LOG_DIR } from '../lib/offers.mjs';
 import { regenerate, REPO_DIR } from './sync-fills.mjs';
 
 const DEBOUNCE_MS = 10_000; // coalesce a burst of fs.watch events (and Windows rename dupes) into one run

@@ -99,7 +99,7 @@ Claude is **not** in the runtime loop. The pipeline is plugin → file → git �
    `https://<pages-site>/fills.json` serves the file.
 7. ~~Register a Task Scheduler job~~ **— SUPERSEDED 2026-07-04 (G1, see §12).** The
    scheduled `CofferFillsSync` job was eliminated; **sync is now on-demand only** — run
-   `node pipeline/sync-fills.mjs` at session start (the skills do this) or when you want a
+   `node pipeline/commands/sync-fills.mjs` at session start (the skills do this) or when you want a
    manual push. The `--auto` amend/force-push flag was the scheduler's mechanism and was
    **excised** 2026-07-05 (chunk X2) — git history is the recovery story if a schedule is
    ever wanted again. Git auth is via SSH
@@ -270,7 +270,7 @@ Original roadmap — planned as the next tool feature, roughly in order:
   already ingests every `*.log` there and dedup is content-hashed, so injected lines flow
   through the real reconstruction into fills.json/positions.json and survive every re-sync.
   Two writers, same file/format:
-  - **CLI:** `node pipeline/add-manual-fill.mjs --item "…" --type buy|sell --qty N --price gp
+  - **CLI:** `node pipeline/commands/add-manual-fill.mjs --item "…" --type buy|sell --qty N --price gp
     [--net] [--time iso] [--dry]` (see its header). `--net` inverts the 2% tax (capped 5m)
     so an after-tax sell price becomes the gross listing the log stores.
   - **App (0.26.0; log-only since 0.27.0):** the Ledger's "Link fills log…" button grants the
@@ -386,7 +386,7 @@ detail is authoritative there; the operational rules below are the single home.
 - **Sync cadence: on-demand only (no scheduled job) — 2026-07-04, see §12.** The
   `CofferFillsSync` Task Scheduler job that ran `wscript.exe pipeline\run-fills-sync.vbs`
   every 20 min was **eliminated**; there is no longer any unattended writer **to `main`**. Run
-  `node pipeline/sync-fills.mjs` at session start (the session skills do this automatically)
+  `node pipeline/commands/sync-fills.mjs` at session start (the session skills do this automatically)
   or whenever a manual push is wanted. (The local `watch-log.mjs` daemon, §14, regenerates the
   root artifacts in the working tree with **zero git** — it is not a writer to `main`.) *(Historical: if a schedule is ever wanted again, it
   would be rebuilt from scratch — the `run-fills-sync.vbs`/`.cmd` wrappers and the `--auto`
@@ -506,8 +506,8 @@ that window. As insurance against re-fetching, the local `.cache/bands/` prune w
 90d** (`BANDS_RETENTION_DAYS` in `marketfetch.mjs`) — local + gitignored; **band data is never
 committed**.
 
-### 11.3 `pipeline/join-outcomes.mjs` — the join (DERIVED, gitignored)
-`node pipeline/join-outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
+### 11.3 `pipeline/commands/join-outcomes.mjs` — the join (DERIVED, gitignored)
+`node pipeline/commands/join-outcomes.mjs [--report] [--no-bands] [--json] [--min-n N] [--band-hours H]`. Writes
 gitignored `outcomes.json` (rebuildable any time; `outcomes.json` + `.cache/outcomes-bands/` are in
 `.gitignore`). A **campaign** = one intent to trade: a same-item/same-side chain of offers
 `placed → … → terminal`, with cancel-replace successions (re-place within `REPRICE_GAP`, 20 min)
@@ -564,7 +564,7 @@ separate machine/deploy-key bypass identity was created.**
   Refresh-positions button + eventual GitHub-as-backend writes), not the scheduler's. So
   eliminating the cadence costs the away-from-PC case nothing a schedule could have saved.
 - **`/morning` / `/overnight` / `/positions` reconstruction freshness.** These run on the PC
-  and now **invoke `node pipeline/sync-fills.mjs` at session start** (skills updated in G1) —
+  and now **invoke `node pipeline/commands/sync-fills.mjs` at session start** (skills updated in G1) —
   a forced sync gives them strictly fresher data than a ≤20-min-stale file ever did.
 - **`suggestions.jsonl` (O1) growth.** Append-only analytics that accrues with calendar time,
   but the ACTIVE root file is now bounded to the current month by SR1 rotation (§11.1) — completed
@@ -675,7 +675,7 @@ wrapper. `main()` is behind the standard `import.meta.url === pathToFileURL(argv
 guard, so importing `regenerate()` (the daemon, the tests) never triggers a sync — no live-log read
 side effect, and crucially **no git**.
 
-- `node pipeline/sync-fills.mjs --local` runs `regenerate()` and writes the three artifacts with
+- `node pipeline/commands/sync-fills.mjs --local` runs `regenerate()` and writes the three artifacts with
   **zero git** (no fetch/ff, no commit, no push, `syncMainToRemote` never called). It is desk-side
   freshness only.
 - **`--local` does NOT fold un-pulled phone writes.** `mobile-fills.log` is only as fresh as the
@@ -707,7 +707,7 @@ offers). `positions.json` still knows only booked fills — `offers.json` is wha
 committed-capital-in-open-offers gap for the app.
 
 ### 14.3 `watch-log.mjs` — the daemon
-`node pipeline/watch-log.mjs` (or the root `watch-log.cmd` wrapper) `fs.watch`es the exchange-logger
+`node pipeline/commands/watch-log.mjs` (or the root `watch-log.cmd` wrapper) `fs.watch`es the exchange-logger
 **directory** (not a single file, so log rotation is caught; `coffer-manual.log` is a sibling inside
 that same dir, so manual-fill / REMOVE-tombstone edits fire the same watcher — no second watch), and
 on every change runs `regenerate()` **in-process** after a ~10s debounce (which coalesces Windows'
@@ -744,7 +744,7 @@ them as verdict-tagged offer rows behind a staleness banner). It renders a **two
 stamp (LW3) **instead of** the M1 banner + Refresh button — the two never double-banner:
 - **`watcher live hh:mm`** from `heartbeat.json` (`STATE.heartbeatTs`, `fetchHeartbeat`) — the real
   daemon-liveness line. If the heartbeat is older than `HEARTBEAT_STALE_MS` (90s, ~3 missed beats) it
-  turns into a red **"watcher down? — restart node pipeline/watch-log.mjs"** warning. THIS line, not
+  turns into a red **"watcher down? — restart node pipeline/commands/watch-log.mjs"** warning. THIS line, not
   the book line, carries the liveness alarm now.
 - **`book synced hh:mm · N open offers`** from `positions.json` (`STATE.fillsTs`) — informational,
   **no age warning** (a frozen book is normal during quiet trading; the old ~10-min book-age warning

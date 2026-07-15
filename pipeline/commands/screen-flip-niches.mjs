@@ -2,7 +2,7 @@
 /**
  * screen.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *
- *   node pipeline/screen-flip-niches.mjs [--mode band|churn|scalp|value|all]
+ *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish]
  *
@@ -69,44 +69,44 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../js/quotecore.js';
-import { tax } from '../js/money-math.js';
-import { fmt, fmtP, fmtHour } from '../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
+import { tax } from '../../js/money-math.js';
+import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from './lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series
-import { anchorNudge } from './probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
-import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from './lib/marketfetch.mjs';
-import { parseArgs, parseGp, mdTable, stdCells } from './lib/cli.mjs';
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series
+import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
+import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
+import { parseArgs, parseGp, mdTable, stdCells } from '../lib/cli.mjs';
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
-import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from './lib/gatecandidates.mjs';
-import { valueRanges, valueScore, valueGate, valueTier } from '../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
+import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
+import { valueRanges, valueScore, valueGate, valueTier } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
 // P4c: the four niches are DECLARATIVE strategy specs now. screen.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
-import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS } from '../js/flip-niches.mjs';
-import { enumeratePaths, weighPaths } from '../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
-import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from './lib/rating.mjs';
-import { logSuggestions, suggestionEntry, liqClass } from './lib/suggestlog.mjs';
-import { PIPELINE_VERSION } from './lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
-import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (cash.mjs anchor + log flow)
-import { readOffersSnapshot } from './lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
-import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
-import { buysByItem, limitWindow } from './lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
-import { termStructure } from '../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
+import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS } from '../../js/flip-niches.mjs';
+import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
+import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from '../lib/rating.mjs';
+import { logSuggestions, suggestionEntry, liqClass } from '../lib/suggestlog.mjs';
+import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
+import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (cash.mjs anchor + log flow)
+import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
+import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
+import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
+import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
 // COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
 // logic) so quote.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
 // two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
 // value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the warm-term-structure.mjs header for why.
-import { richFrom1h, trajectoryFrom1h } from './lib/warm-term-structure.mjs';
-import { stateTransition } from './lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
-import { buildVelocityIndex, velocityTag } from './lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
-import { loadModules, runProbes, logFirings } from './lib/probes.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
+import { richFrom1h, trajectoryFrom1h } from '../lib/warm-term-structure.mjs';
+import { stateTransition } from '../lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
+import { buildVelocityIndex, velocityTag } from '../lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
+import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1255,7 +1255,7 @@ async function main() {
   }
 }
 
-// Run only when invoked directly (`node pipeline/screen-flip-niches.mjs …`); importing the module (e.g. the
+// Run only when invoked directly (`node pipeline/commands/screen-flip-niches.mjs …`); importing the module (e.g. the
 // NY2.1 risingPoolFloor unit check) must NOT fire a full screen / hit the API. process.argv[1] is
 // undefined under `node -e`, so guard it (an eval context is never a direct invocation).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

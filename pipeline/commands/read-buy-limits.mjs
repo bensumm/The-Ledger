@@ -2,9 +2,9 @@
 /**
  * limits.mjs — the BUY-LIMIT read for a Claude session. "Can I buy more X? / how much limit left?"
  *
- *   node pipeline/read-buy-limits.mjs "<item or id>" [...more]
+ *   node pipeline/commands/read-buy-limits.mjs "<item or id>" [...more]
  *       Per-item: limit, bought this 4h window, remaining, and when capacity next frees / fully resets.
- *   node pipeline/read-buy-limits.mjs
+ *   node pipeline/commands/read-buy-limits.mjs
  *       No args → report every item with a logged BUY in the last 4h.
  *
  * Reads the repo-root fills.json (the RuneLite-logged fills) + loadMapping (names/limits). NO market
@@ -15,11 +15,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadMapping } from './lib/marketfetch.mjs';
-import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from './lib/limits.mjs';
+import { loadMapping } from '../lib/marketfetch.mjs';
+import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FILLS = path.join(HERE, '..', 'fills.json');
+const FILLS = path.join(HERE, '..', '..', 'fills.json');
 
 const args = process.argv.slice(2);
 const tokens = args.filter(a => !a.startsWith('--'));

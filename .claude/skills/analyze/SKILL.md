@@ -9,7 +9,7 @@ description: Retro our own track record, audit that we're logging/storing the ri
 Skills-versioning note: this file's `version` bumps on material behavior change; skills NEVER
 bump `APP_VERSION` (that marks the deployed app, which this skill never touches).
 
-This is the JUDGMENT half of the analysis construct. The MECHANICAL half is `pipeline/analyze-record.mjs`
+This is the JUDGMENT half of the analysis construct. The MECHANICAL half is `pipeline/commands/analyze-record.mjs`
 (AZ1) — it audits the dataset, orchestrates the joins, and derives n-gated flags. Your job is to
 INTERPRET its brief into a retro + proposals and to run the guidelines checklist. The plan of record
 is `PLAN-ANALYZE.md`; the calibration home is F1 (PLAN.md).
@@ -17,9 +17,9 @@ is `PLAN-ANALYZE.md`; the calibration home is F1 (PLAN.md).
 ## 1. Run the engine — never hand-analyze
 
 ```
-node pipeline/analyze-record.mjs            # audit + per-niche retro rollup + n-gated candidates
-node pipeline/analyze-record.mjs --since 24 # restrict the freshness/window audit to the last N hours
-node pipeline/analyze-record.mjs --json     # the structured brief (parse it instead of re-deriving)
+node pipeline/commands/analyze-record.mjs            # audit + per-niche retro rollup + n-gated candidates
+node pipeline/commands/analyze-record.mjs --since 24 # restrict the freshness/window audit to the last N hours
+node pipeline/commands/analyze-record.mjs --json     # the structured brief (parse it instead of re-deriving)
 ```
 
 - **That command IS the analysis** — it reads `suggestions.jsonl` (+ archives), `fills.json`, and
@@ -49,7 +49,7 @@ Before interpreting, know what WE did this session so the retro is grounded, not
 
 - **Lead with the dataset-health flags, not the rollup** — `judgment:` a stale `positions.json`, a
   dropped log field, or a spike in un-attributed fills INVALIDATES the retro beneath it; surface and
-  (where you can) FIX the data problem first (e.g. run `node pipeline/sync-fills.mjs` for a stale book),
+  (where you can) FIX the data problem first (e.g. run `node pipeline/commands/sync-fills.mjs` for a stale book),
   then re-run `analyze.mjs`.
 - **Every claim carries its n, and a ~0% taken rate is the BASELINE, not a finding** —
   `judgment:` the sample is weeks-cold and mostly not-taken by design (`lib/retrojoin.mjs` header);
@@ -94,7 +94,7 @@ missed-rule incidents, not an enforcer — CI's `lint-docs.mjs`/`lint-skills.mjs
 
 ## What this skill does NOT do
 
-- **It does not re-run the slow campaign join** — `pipeline/join-outcomes.mjs` (`--report`) is the
+- **It does not re-run the slow campaign join** — `pipeline/commands/join-outcomes.mjs` (`--report`) is the
   band-percentile × liquidity fill-time view; point Ben there rather than duplicating it. The engine
   does a rebuildability PROXY only.
 - **It does not launder a thin sample into a confident claim, tune a constant, or write any artifact** —

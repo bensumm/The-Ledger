@@ -1,7 +1,7 @@
 /* Direct-to-fills-log writing via the File System Access API (Chromium: Edge/Chrome).
    The Coffer is a static page and can't silently touch disk, but with a user-granted file
    handle it can APPEND schema-correct lines to coffer-manual.log — the same sibling file
-   pipeline/add-manual-fill.mjs writes and sync-fills.mjs already ingests. So a manual entry
+   pipeline/commands/add-manual-fill.mjs writes and sync-fills.mjs already ingests. So a manual entry
    flows through the REAL reconstruction into positions.json and persists across every
    re-sync (it's a pipeline input, not a hand-edit of the derived view).
 
@@ -35,7 +35,7 @@ async function ensurePerm(request){
 }
 
 export async function linkFillsLog(){
-  if(!fsApiSupported()){ alert('Direct file writing needs Chrome or Edge on desktop (File System Access API). Use pipeline/add-manual-fill.mjs from the terminal instead.'); return false; }
+  if(!fsApiSupported()){ alert('Direct file writing needs Chrome or Edge on desktop (File System Access API). Use pipeline/commands/add-manual-fill.mjs from the terminal instead.'); return false; }
   try{
     const [fh]=await window.showOpenFilePicker({ multiple:false,
       types:[{description:'Exchange log', accept:{'text/plain':['.log','.txt']}}] });
@@ -51,7 +51,7 @@ export async function unlinkFillsLog(){ handle=null; loaded=true; if(idb){ try{ 
 // priceEach is the pre-tax GROSS listing (reconstruction re-applies the 2% tax itself).
 // type: 'buy' | 'sell' | 'withdraw' (inventory taken for personal use — price 0, consumes
 // open lots FIFO at realised 0) | 'banked' (pre-owned inventory entering the flip flow at a
-// declared basis). See the manual-line vocabulary in pipeline/sync-fills.mjs.
+// declared basis). See the manual-line vocabulary in pipeline/commands/sync-fills.mjs.
 // `slot` defaults to the desktop/CLI MANUAL_SLOT (8); mobile GitHub writes pass MOBILE_SLOT (9).
 export function fillsLogLine({type,itemId,qty,priceEach,ts,slot}){
   const d=new Date((ts||Math.floor(Date.now()/1000))*1000);

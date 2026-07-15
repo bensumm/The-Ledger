@@ -19,7 +19,7 @@
  * Run: `node pipeline/test/alerts.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { positionSignal, quietSuppresses, QUIET_EXEMPT_CLASSES } from '../trigger-alerts.mjs';
+import { positionSignal, quietSuppresses, QUIET_EXEMPT_CLASSES } from '../commands/trigger-alerts.mjs';
 import { isOvernightNow, MOM_STRONG_PCT } from '../../js/quotecore.js';
 
 let pass = 0;

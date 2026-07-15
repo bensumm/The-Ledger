@@ -59,7 +59,7 @@ export async function addTrade(){
   // saved. Neither available -> guidance, nothing created.
   const linked=await isLinked(), gh=ghConfigured();
   if(!linked && !gh){
-    fillsMsg('Nothing was logged — manual entries persist only through a source log. On desktop click “Link fills log…” (Edge/Chrome); on mobile save a GitHub token under “GitHub sync” below. (Or use pipeline/add-manual-fill.mjs from the terminal.)');
+    fillsMsg('Nothing was logged — manual entries persist only through a source log. On desktop click “Link fills log…” (Edge/Chrome); on mobile save a GitHub token under “GitHub sync” below. (Or use pipeline/commands/add-manual-fill.mjs from the terminal.)');
     return;
   }
   // Optional real trade time (chunk 1.2). Backdated trades MUST carry the time the trade
@@ -89,7 +89,7 @@ export async function addTrade(){
   let wrote=false;
   if(linked){
     wrote=await writeToFillsLog(mode, it, qty, each, ts);
-    if(!wrote){ fillsMsg('Couldn’t write to the fills log (permission denied?) — nothing was logged. Re-link the log or use pipeline/add-manual-fill.mjs.'); return; }
+    if(!wrote){ fillsMsg('Couldn’t write to the fills log (permission denied?) — nothing was logged. Re-link the log or use pipeline/commands/add-manual-fill.mjs.'); return; }
   } else {
     const res=await writeToMobileLog(mode, it, qty, each, ts);
     if(!res.ok){ fillsMsg('Couldn’t write to GitHub — nothing was logged. '+res.reason+'. Check the token under “GitHub sync”.'); return; }
@@ -162,7 +162,7 @@ async function delPending(pid){
    entry in the linked coffer-manual.log, pick one, rewrite/remove it. The old event id is
    always tombstoned so the correction propagates into fills.json on the next sync. */
 export async function editManualLog(){
-  if(!(await isLinked())){ fillsMsg('Link the fills log first — manual entries live in coffer-manual.log. (Or use pipeline/add-manual-fill.mjs --remove <eventId> from the terminal.)'); return; }
+  if(!(await isLinked())){ fillsMsg('Link the fills log first — manual entries live in coffer-manual.log. (Or use pipeline/commands/add-manual-fill.mjs --remove <eventId> from the terminal.)'); return; }
   const text=await readFillsLog();
   if(text===null){ fillsMsg('Couldn’t read the linked log (permission denied?).'); return; }
   const removes=new Set(), entries=[];
@@ -189,7 +189,7 @@ export async function editManualLog(){
   const res=await rewriteFillsLog(e.line, repl);
   if(!res.ok){ alert('Rewrite failed: '+res.reason); return; }
   logEvent('info','action',(r==='delete'?'delete manual log ':'edit manual log ')+nameOf(e.o.item));
-  fillsMsg((r==='delete'?'Entry removed':'Entry rewritten')+' + old event tombstoned. Re-sync to apply: run pipeline/sync-fills.mjs on the PC (sync is on-demand now), then refresh prices here.');
+  fillsMsg((r==='delete'?'Entry removed':'Entry rewritten')+' + old event tombstoned. Re-sync to apply: run pipeline/commands/sync-fills.mjs on the PC (sync is on-demand now), then refresh prices here.');
 }
 export async function delTrade(tid){
   const t=STATE.trades.find(x=>x.tid===tid);
@@ -287,7 +287,7 @@ export async function refreshPositions(){
 }
 
 /* LW2: localhost live-refresh. When served from a dev host (serve.cmd → localhost) the
-   pipeline/watch-log.mjs daemon rewrites positions.json/offers.json locally within ~10s of a
+   pipeline/commands/watch-log.mjs daemon rewrites positions.json/offers.json locally within ~10s of a
    RuneLite log change; this poll picks those rewrites up with NO keystrokes. On the deployed
    origin (bensumm.github.io) IS_LOCALHOST is false → startLocalPoll() is a no-op and none of
    this runs (the M1 banner + Refresh-positions button remain the mechanism there).
@@ -359,14 +359,14 @@ export function startLocalPoll(){
 function renderLocalStamp(el){
   if(!STATE.fillsTs){
     el.className='fillsfresh';
-    el.innerHTML='<span class="mini">Local watcher active — waiting for the first positions.json sync (run <b>node pipeline/watch-log.mjs</b>).</span>';
+    el.innerHTML='<span class="mini">Local watcher active — waiting for the first positions.json sync (run <b>node pipeline/commands/watch-log.mjs</b>).</span>';
     return;
   }
   const tm=ts=>new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   // Liveness line (heartbeat). A missing/stale heartbeat is the ONLY thing that warns now.
   const hbStale=!STATE.heartbeatTs || (Date.now()-STATE.heartbeatTs*1000)>HEARTBEAT_STALE_MS;
   const liveTxt=hbStale
-    ? '<span class="warn">watcher down? — restart <b>node pipeline/watch-log.mjs</b></span>'
+    ? '<span class="warn">watcher down? — restart <b>node pipeline/commands/watch-log.mjs</b></span>'
     : 'watcher live <b>'+tm(STATE.heartbeatTs)+'</b>';
   // Book line (positions.generatedAt) — informational only, no age warning.
   const nOff=(STATE.offers||[]).length, offTxt=' · <b>'+nOff+'</b> open offer'+(nOff===1?'':'s');
@@ -404,13 +404,13 @@ export async function toggleFillsLogLink(){
 export async function renderFillsLogLink(){
   const btn=document.getElementById('fillsLogLink'), st=document.getElementById('fillsLogStatus'); if(!btn) return;
   if(!fsApiSupported()){ btn.classList.add('hidden');
-    if(st){ st.classList.remove('hidden'); st.textContent='This browser can’t write files directly (needs Edge/Chrome). To persist a manual entry, use pipeline/add-manual-fill.mjs from the terminal.'; }
+    if(st){ st.classList.remove('hidden'); st.textContent='This browser can’t write files directly (needs Edge/Chrome). To persist a manual entry, use pipeline/commands/add-manual-fill.mjs from the terminal.'; }
     return; }
   const nm=await linkedName();
   if(nm){ btn.textContent='Unlink fills log'; btn.classList.add('linked');
     if(st){ st.classList.remove('hidden'); st.textContent='Manual entries write to '+nm+' → the pipeline folds them into the ledger on the next sync.'; }
   }else{ btn.textContent='Link fills log…'; btn.classList.remove('linked');
-    if(st){ st.classList.remove('hidden'); st.textContent='Manual entries need the fills log (single source of truth). Link coffer-manual.log to enable the form, or use pipeline/add-manual-fill.mjs from the terminal.'; } }
+    if(st){ st.classList.remove('hidden'); st.textContent='Manual entries need the fills log (single source of truth). Link coffer-manual.log to enable the form, or use pipeline/commands/add-manual-fill.mjs from the terminal.'; } }
 }
 export async function setLedgerWatchOnly(v){ STATE.ledgerWatchOnly=v; await sSet('ledgerWatchOnly',v); renderLedger(); }
 export async function setLedgerPeriod(p){ STATE.ledgerPeriod=p; STATE.ledgerBucket=null; /* LU1.3: changing granularity clears any active bucket filter */ await sSet('ledgerPeriod',p); renderLedger(); }
@@ -561,6 +561,6 @@ function renderLegacyBanner(){
   el.classList.remove('hidden');
   const rows=legacy.map(t=>{ const d=new Date(((t.closed||t.opened||0))*1000);
     return '<div class="lgrow">'+(t.sell===null?'open':'closed')+' · '+t.qty.toLocaleString()+' × '+t.name+' @ '+fmt(t.buy)+(t.sell!==null?' → '+fmt(t.sell):'')+' <span class="mini">('+pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+')</span> <button class="act danger" data-lgdel="'+t.tid+'">Delete</button></div>'; }).join('');
-  el.innerHTML='<b>'+legacy.length+' local-only manual '+(legacy.length===1?'entry':'entries')+' from before v0.27.</b> The browser-local entry path was removed — these never reached the fills pipeline and can double-display against pipeline rows. To keep one, re-inject it through the log (link the fills log and use the form with the <b>real trade time</b>, or pipeline/add-manual-fill.mjs), then delete it here.'+rows;
+  el.innerHTML='<b>'+legacy.length+' local-only manual '+(legacy.length===1?'entry':'entries')+' from before v0.27.</b> The browser-local entry path was removed — these never reached the fills pipeline and can double-display against pipeline rows. To keep one, re-inject it through the log (link the fills log and use the form with the <b>real trade time</b>, or pipeline/commands/add-manual-fill.mjs), then delete it here.'+rows;
   el.querySelectorAll('[data-lgdel]').forEach(b=>b.onclick=()=>delTrade(b.dataset.lgdel));
 }

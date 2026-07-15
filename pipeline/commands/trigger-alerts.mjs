@@ -5,7 +5,7 @@
  * DELIVERY-AGNOSTIC by design. This script only DETECTS market events worth a buzz and
  * EMITS them as structured JSON lines (plus a human-readable line) on stdout. It NEVER
  * sends a notification itself — the scheduled Claude Code background session (delivery
- * option (a), see pipeline/MONITORING.md "Push notifications") runs `node pipeline/trigger-alerts.mjs`
+ * option (a), see pipeline/MONITORING.md "Push notifications") runs `node pipeline/commands/trigger-alerts.mjs`
  * and calls ITS OWN PushNotification tool on this output. That keeps zero new infra in the
  * repo while the delivery mechanism is trialed live.
  *
@@ -32,22 +32,22 @@
  * Read-only w.r.t. trade data: never touches positions.json / fills.json / the exchange log
  * except to READ. The only file it writes is its own gitignored state file.
  *
- * Usage:  node pipeline/trigger-alerts.mjs            # detect + emit transitions
- *         node pipeline/trigger-alerts.mjs --dry-run  # detect + emit WITHOUT updating the state file
+ * Usage:  node pipeline/commands/trigger-alerts.mjs            # detect + emit transitions
+ *         node pipeline/commands/trigger-alerts.mjs --dry-run  # detect + emit WITHOUT updating the state file
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../js/quotecore.js';
-import { fmtP } from '../js/money-format.js';
-import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from './lib/marketfetch.mjs';
-import { readOpenPositions } from './lib/positions.mjs';
-import { readExchangeLog } from './lib/offers.mjs';
+import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../../js/quotecore.js';
+import { fmtP } from '../../js/money-format.js';
+import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from '../lib/marketfetch.mjs';
+import { readOpenPositions } from '../lib/positions.mjs';
+import { readExchangeLog } from '../lib/offers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const POSITIONS = path.join(HERE, '..', 'positions.json');
-const ALERTS = path.join(HERE, '..', 'alerts.json');          // TRACKED — named price alerts, edited in sessions
-const STATE_FILE = path.join(HERE, '.cache', '.alerts-state.json'); // GITIGNORED (pipeline/.cache/, OR2) — last-run state
+const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
+const ALERTS = path.join(HERE, '..', '..', 'alerts.json');          // TRACKED — named price alerts, edited in sessions
+const STATE_FILE = path.join(HERE, '..', '.cache', '.alerts-state.json'); // GITIGNORED (pipeline/.cache/, OR2) — last-run state
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -249,7 +249,7 @@ async function main() {
   console.error(`alerts: ${emitted.length} transition(s)${DRY_RUN ? ' [dry-run: state not written]' : ''}${isOvernightNow() ? ' [quiet hours: position/price suppressed, fills exempt]' : ''} @ ${nowIso}`);
 }
 
-// Run only when invoked directly (`node pipeline/trigger-alerts.mjs …`); importing the module (e.g. the
+// Run only when invoked directly (`node pipeline/commands/trigger-alerts.mjs …`); importing the module (e.g. the
 // TD2.3 positionSignal unit test) must NOT fire a full run / hit the API. process.argv[1] is
 // undefined under `node -e`, so guard it (an eval context is never a direct invocation).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

@@ -5,11 +5,11 @@
  * fills.json + suggestions.jsonl + historical market context, so the algorithm-feedback loop (F1)
  * becomes a query rather than a re-derivation.
  *
- *   node pipeline/join-outcomes.mjs            rebuild + write outcomes.json, print a summary
- *   node pipeline/join-outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile Ã— liquidity
+ *   node pipeline/commands/join-outcomes.mjs            rebuild + write outcomes.json, print a summary
+ *   node pipeline/commands/join-outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile Ã— liquidity
  *                                          class, n PER CELL, refusing to summarize below --min-n
- *   node pipeline/join-outcomes.mjs --no-bands  skip the historical band-percentile fetch (fast, offline)
- *   node pipeline/join-outcomes.mjs --json      dump the campaigns array to stdout (no file write)
+ *   node pipeline/commands/join-outcomes.mjs --no-bands  skip the historical band-percentile fetch (fast, offline)
+ *   node pipeline/commands/join-outcomes.mjs --json      dump the campaigns array to stdout (no file write)
  *   flags: --min-n <N> (report cell floor, default 8) Â· --band-hours <H> (band basis, default 2)
  *
  * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers,
@@ -36,23 +36,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collapseOffers, matchTrades, dedupeSnapshots } from './lib/reconstruct.mjs';
-import { loadMapping, loadAll24h, loadHistBands } from './lib/marketfetch.mjs';
-import { loadHistState, bandPercentile } from './lib/range-position.mjs';
-import { velocityClass } from './lib/velocity.mjs';
-import { parkedStats } from './lib/capital-utilization.mjs';
-import { parseArgs, median } from './lib/cli.mjs';
-import { liqClassOf, readSuggestionLines } from './lib/suggestlog.mjs';
-import { fmtP, fmt, fmtTurn } from '../js/money-format.js';
+import { collapseOffers, matchTrades, dedupeSnapshots } from '../lib/reconstruct.mjs';
+import { loadMapping, loadAll24h, loadHistBands } from '../lib/marketfetch.mjs';
+import { loadHistState, bandPercentile } from '../lib/range-position.mjs';
+import { velocityClass } from '../lib/velocity.mjs';
+import { parkedStats } from '../lib/capital-utilization.mjs';
+import { parseArgs, median } from '../lib/cli.mjs';
+import { liqClassOf, readSuggestionLines } from '../lib/suggestlog.mjs';
+import { fmtP, fmt, fmtTurn } from '../../js/money-format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');
+const ROOT = path.join(HERE, '..', '..');
 const FILLS = path.join(ROOT, 'fills.json');
 const OUT = path.join(ROOT, 'outcomes.json');
 // COD-3 — the /morning weekly descriptive-outcomes marker. `--report` stamps it; `--weekly-due` reads it
 // so /morning can mechanically tell whether this week's weekly read already ran instead of asking Ben.
 // Gitignored (under pipeline/.cache/, sibling of the market caches).
-const WEEKLY_STAMP = path.join(HERE, '.cache', 'last-weekly-report');
+const WEEKLY_STAMP = path.join(HERE, '..', '.cache', 'last-weekly-report');
 
 // --- tunable named constants (NOT magic numbers) ---------------------------------------------
 const REPRICE_GAP = 20 * 60;        // s: a re-place within this of a cancel = same campaign (a reprice)

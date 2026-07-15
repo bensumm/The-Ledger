@@ -24,10 +24,10 @@ what remains unbuilt is the in-app **break-even/regime deterioration check** on 
 today this doc + `monitor.mjs`/`watch.mjs` are still how the *judgment* half of the workflow
 runs; the app owns freshness.
 
-## The tool: `pipeline/monitor-offers.mjs`
+## The tool: `pipeline/commands/monitor-offers.mjs`
 
 ```
-node pipeline/monitor-offers.mjs
+node pipeline/commands/monitor-offers.mjs
 ```
 
 Print-only — it never writes trade data. Each run emits:
@@ -72,7 +72,7 @@ Print-only — it never writes trade data. Each run emits:
 
 ## The polling routine (per tick)
 
-1. Run `node pipeline/monitor-offers.mjs`.
+1. Run `node pipeline/commands/monitor-offers.mjs`.
 2. Report **only changes** vs the prior tick: new fills, cancels, newly placed offers,
    offers now stale vs market, newly closed flips (net after the 2% tax from actual fills).
    Ignore `EMPTY` slot housekeeping (`item:0`).
@@ -170,7 +170,7 @@ thesis horizon, not to the tightest class on the board.
 
 ---
 
-## Adaptive item-type-aware routine (`pipeline/watch-positions.mjs`)
+## Adaptive item-type-aware routine (`pipeline/commands/watch-positions.mjs`)
 
 `monitor.mjs`'s routine runs one flat cadence and one set of rules for every position. But a
 thin big-ticket volatile item and a liquid ranging scalp candidate demand **different**
@@ -179,9 +179,9 @@ and adapts cadence + playbook + alert thresholds to it. It's the driver for an a
 human-executed flipping session on a tight 1–3 min loop.
 
 ```
-node pipeline/watch-positions.mjs                        # every position: held lots + active GE offers
-node pipeline/watch-positions.mjs "Crystal seed" 23959   # also watch these targets (buy-side)
-node pipeline/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
+node pipeline/commands/watch-positions.mjs                        # every position: held lots + active GE offers
+node pipeline/commands/watch-positions.mjs "Crystal seed" 23959   # also watch these targets (buy-side)
+node pipeline/commands/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
 ```
 
 **Active offers are first-class positions** (see the definition at the top of this doc).
@@ -298,7 +298,7 @@ everything you're monitoring (so the most urgent item is polled often enough) an
 ready-to-paste `/loop` command:
 
 ```
-/loop 1m node pipeline/watch-positions.mjs "Crystal seed"
+/loop 1m node pipeline/commands/watch-positions.mjs "Crystal seed"
 ```
 
 `/loop <interval> <command>` (the `/loop` skill) re-runs on that fixed interval; report only
@@ -307,7 +307,7 @@ hours, so a sub-minute loop just burns API calls. **Operating default cadence is
 2026-07-10 — bounds the git churn `--sync` adds while staying inside GE fill dynamics); use a
 looser 10–15m for a book of only patient standing offers, tighter 1–3m only for an active chase.
 
-**`--sync` each pass (attended /loop, Ben 2026-07-10).** `node pipeline/watch-positions.mjs --sync` runs
+**`--sync` each pass (attended /loop, Ben 2026-07-10).** `node pipeline/commands/watch-positions.mjs --sync` runs
 `sync-fills.mjs` before the pass so the booked view (positions.json + realised P&L) and any
 mobile trades are current every tick — offers already read live off the log, so this refreshes
 the *held* basis and kills the stale-book banner mid-session. It NEVER blocks the pass on a
@@ -326,7 +326,7 @@ short window before it reverts. The knife thesis LAGS these and the diurnal fore
 unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH` alert telling you to
 **bid INTO the fall** and list at the patient band top.
 
-- **Enable with `--dip`.** `node pipeline/watch-positions.mjs --dip [targets…]` also folds the tracked repo-root
+- **Enable with `--dip`.** `node pipeline/commands/watch-positions.mjs --dip [targets…]` also folds the tracked repo-root
   **`dip-watchlist.json`** pool (an array of item names/ids, mirrors `watchlist.json`) into the buy-side
   target set. A firing prints as a headline alert:
   `FLUSH — <item> dumping (<depth%> below 24h floor, <N> units this bucket) · bid-into-the-fall @ <buy>
@@ -335,7 +335,7 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   Multiple firings sort by `dipScore` desc (highest priority first). The `--dip` reader is **polymorphic**
   — an entry is either a legacy plain name/id OR a DL4 `{ id, name, source, track, addedTs }` object.
 - **The SCAN feeds this pool (DL4 — the discovery half of the loop).** A flush is exogenous, so a hand-
-  curated `dip-watchlist.json` has a coverage gap. `node pipeline/screen-flip-niches.mjs --mode all` — which already
+  curated `dip-watchlist.json` has a coverage gap. `node pipeline/commands/screen-flip-niches.mjs --mode all` — which already
   fetches the whole liquid universe's 24h stats + 2h bands — runs a zero-fetch **nomination pass**
   (`nominateDip`) over that universe and re-scores flush-SUITABLE candidates into a **self-pruning** pool
   (`reconcileDipPool` — NOT append-only) so the reactive `--dip` loop always has a fresh, breadth-discovered,
@@ -368,7 +368,7 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
 - **HONEST LIMITS.** `DIP_LOOP_LIQUID_FLOOR` / `DIP_LOOP_FLUSH_PCT` / the `dipScore` weights are NAMED
   PLACEHOLDERS, n=2, none validated. Every signal is logged to `suggestions.jsonl` (`verdict` `FLUSH` when
   alerted / `FLUSH-SIGNAL` when signal-only, + the `dipLoop` object) so the DL2 retro (`node
-  pipeline/analyze-record.mjs` §4) can join firings against `fills.json` and **surface an n-gated re-fit candidate
+  pipeline/commands/analyze-record.mjs` §4) can join firings against `fills.json` and **surface an n-gated re-fit candidate
   to F1** — analyze SURFACES evidence, it never retunes a constant (F1 owns calibration, like every other
   placeholder). That retro is the calibration path, not these constants.
 
@@ -477,7 +477,7 @@ of the numbered signals, in more detail:
        via the shared display layer (`heldDisplay`), with the raw band-flip read demoted to the note.
        The frame exit is the DECLARED/diurnal level, never the 2h band top (the band top under-priced
        the diurnal exit — the 43.60m-vs-44.22m Masori leak). Declare it at entry:
-       `node pipeline/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
+       `node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
        **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
        silenced (or frame-masked) by a thesis; and
        absent a thesis (empty store) behavior is byte-identical to today. The thesis is a *declaration*
@@ -554,7 +554,7 @@ of the numbered signals, in more detail:
 
 ### Reporting a pass to Ben — the SCRIPT owns the format (`--brief`, Ben 2026-07-07)
 
-**The one-line-per-item book is now generated by `node pipeline/watch-positions.mjs --brief`, not
+**The one-line-per-item book is now generated by `node pipeline/commands/watch-positions.mjs --brief`, not
 hand-formatted by the agent.** The recurring format drift (collapsed lines, dropped sell
 prices) came from the layout living in the agent's head; it now lives in code
 (`js/watchcore.js` `briefLine`/`briefBook`, fixture-pinned in `watchcore.test.mjs`). `--brief`
@@ -635,10 +635,10 @@ redeploy.
 
 ---
 
-## Push notifications on market events (`pipeline/trigger-alerts.mjs`) — PLAN chunk N1
+## Push notifications on market events (`pipeline/commands/trigger-alerts.mjs`) — PLAN chunk N1
 
 Ben's phone should buzz on the market events that matter while he's away, and **stay silent
-otherwise**. This is the design contract; the trigger ENGINE ships as `pipeline/trigger-alerts.mjs`
+otherwise**. This is the design contract; the trigger ENGINE ships as `pipeline/commands/trigger-alerts.mjs`
 (delivery-agnostic — see the mechanism decision below). No app involvement: this is
 pipeline + a scheduled session only, exactly like the monitoring routine above.
 
@@ -707,7 +707,7 @@ The engine emits; *something* must run it and push the result. Three options, in
 recommended order:
 
 - **(a) Scheduled Claude Code background session + the harness `PushNotification` tool —
-  RECOMMENDED TRIAL.** A Cron/`/schedule` routine runs `node pipeline/trigger-alerts.mjs` every few
+  RECOMMENDED TRIAL.** A Cron/`/schedule` routine runs `node pipeline/commands/trigger-alerts.mjs` every few
   minutes and calls its own `PushNotification` on each emitted human line. **Zero new infra**
   (no topic, no server, no Actions), notifications land in Ben's Claude app, and the session
   can add judgment (e.g. collapse three alerts into one message). This is the intended path

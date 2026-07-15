@@ -2,10 +2,10 @@
 /**
  * analyze.mjs — the ANALYSIS ENGINE (PLAN-ANALYZE chunk AZ1). READ-ONLY. IO + print shell.
  *
- *   node pipeline/analyze-record.mjs                whole-history audit + retro rollup + tuning candidates
- *   node pipeline/analyze-record.mjs --since 24     restrict the freshness/window audit to the last N hours
- *   node pipeline/analyze-record.mjs --json         emit the structured brief object (for the /analyze skill)
- *   node pipeline/analyze-record.mjs --min-n 30     override the candidate n-floor (default MIN_N_CANDIDATE)
+ *   node pipeline/commands/analyze-record.mjs                whole-history audit + retro rollup + tuning candidates
+ *   node pipeline/commands/analyze-record.mjs --since 24     restrict the freshness/window audit to the last N hours
+ *   node pipeline/commands/analyze-record.mjs --json         emit the structured brief object (for the /analyze skill)
+ *   node pipeline/commands/analyze-record.mjs --min-n 30     override the candidate n-floor (default MIN_N_CANDIDATE)
  *
  * WHAT THIS IS — and is NOT. The mechanical half of the analysis construct: AUDIT the dataset's health,
  * ORCHESTRATE the already-built joins, derive FLAGGED tuning candidates. The `/analyze` skill (AZ2) is
@@ -27,13 +27,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from './lib/cli.mjs';
-import { readSuggestionLines } from './lib/suggestlog.mjs';
-import { retroJoin, aggregateOutcomes } from './lib/retrojoin.mjs';
-import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from './lib/analyze.mjs';
+import { parseArgs } from '../lib/cli.mjs';
+import { readSuggestionLines } from '../lib/suggestlog.mjs';
+import { retroJoin, aggregateOutcomes } from '../lib/retrojoin.mjs';
+import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from '../lib/analyze.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');
+const ROOT = path.join(HERE, '..', '..');
 const FILLS = path.join(ROOT, 'fills.json');
 const POSITIONS = path.join(ROOT, 'positions.json');
 
@@ -119,7 +119,7 @@ const line = r => r.map((c, i) => c.padEnd(w[i])).join('  ');
 console.log('  ' + line(rollupHead));
 console.log('  ' + w.map(x => '-'.repeat(x)).join('  '));
 for (const r of rollupRows) console.log('  ' + line(r));
-console.log(`  (full band-percentile × liquidity fill-time cells: node pipeline/join-outcomes.mjs --report)`);
+console.log(`  (full band-percentile × liquidity fill-time cells: node pipeline/commands/join-outcomes.mjs --report)`);
 
 console.log(`\n## 3. Tuning candidates (n ≥ ${minN}; each is a flag for F1, never applied here)`);
 const realCands = candidates.filter(c => c.kind === 'candidate');

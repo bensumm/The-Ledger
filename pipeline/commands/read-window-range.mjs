@@ -20,8 +20,8 @@
  * ~14 days is a small sample; treat the levels as a guide, not a guarantee.
  *
  * Usage:
- *   node pipeline/read-window-range.mjs "Soul rune" "Death rune"
- *   node pipeline/read-window-range.mjs 566 --nights 10 --window 0-8 --bid 371 --ask 395
+ *   node pipeline/commands/read-window-range.mjs "Soul rune" "Death rune"
+ *   node pipeline/commands/read-window-range.mjs 566 --nights 10 --window 0-8 --bid 371 --ask 395
  *
  * Flags:
  *   --nights <n>   how many recent local days to score (default 14, capped by history)
@@ -30,9 +30,9 @@
  *   --bid <gp>     score a specific candidate bid ("touched k/N days")
  *   --ask <gp>     score a specific candidate ask ("reached k/N days")
  */
-import { loadMapping, fetchTs, fetchLatest } from './lib/marketfetch.mjs';
-import { parseArgs, parseGp } from './lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../js/windowread.mjs';
+import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
+import { parseArgs, parseGp } from '../lib/cli.mjs';
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange } from '../../js/windowread.mjs';
 
 const argv = process.argv.slice(2);
 const A = parseArgs(argv);
@@ -43,7 +43,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);

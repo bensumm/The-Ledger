@@ -514,6 +514,6 @@ export function staleBookBanner(ageMin) {
   if (ageMin == null) return 'held basis positions.json unavailable';
   return `held basis positions.json ${ageMin}m old` +
     (ageMin > STALE_BOOK_MIN
-      ? ' ⚠ stale — a very recent trade may not show yet; re-sync (node pipeline/sync-fills.mjs from the MAIN checkout) before trusting the held count'
+      ? ' ⚠ stale — a very recent trade may not show yet; re-sync (node pipeline/commands/sync-fills.mjs from the MAIN checkout) before trusting the held count'
       : '');
 }

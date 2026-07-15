@@ -1,4 +1,4 @@
-/* watch.js — the Watch tab: a verdict-first, at-a-glance flipping desk. Where pipeline/watch-positions.mjs
+/* watch.js — the Watch tab: a verdict-first, at-a-glance flipping desk. Where pipeline/commands/watch-positions.mjs
    is the zero-lag CONSOLE authority (it reads the exchange log directly), this is the in-app DESK
    surface: the SAME shared momVerdict()/offerVerdict()/breakEven() decisions (js/quotecore.js),
    run in the browser against live marketfetch quotes, over the data the app already has (held book

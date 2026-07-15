@@ -13,20 +13,20 @@
  * It's the data source for the deterioration-watch polling routine documented in
  * pipeline/MONITORING.md (HOLD / WATCH / CUT with the evidence-gated 24h-cycle guard).
  *
- * Usage:  node pipeline/monitor-offers.mjs
+ * Usage:  node pipeline/commands/monitor-offers.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { reconstruct, buildTombstonedEvents } from './lib/reconstruct.mjs';
-import { readExchangeLog, activeOffers } from './lib/offers.mjs'; // shared log discovery + open-offer semantics
-import { breakEven } from '../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
-import { loadMapping } from './lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
-import { blindWarningLine } from './lib/logblind.mjs'; // LH2 restart-blindness header line
-import { loadIgnored, quarantineEvents, offerQuarantined } from './lib/ignored.mjs'; // MERCH-book quarantine (shared with positions.json/watch)
+import { reconstruct, buildTombstonedEvents } from '../lib/reconstruct.mjs';
+import { readExchangeLog, activeOffers } from '../lib/offers.mjs'; // shared log discovery + open-offer semantics
+import { breakEven } from '../../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
+import { loadMapping } from '../lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
+import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
+import { loadIgnored, quarantineEvents, offerQuarantined } from '../lib/ignored.mjs'; // MERCH-book quarantine (shared with positions.json/watch)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.join(HERE, '..');
+const REPO = path.join(HERE, '..', '..');
 
 // MERCH-book quarantine (Ben, 2026-07-12): the live-log reconstruction below double-counts farming
 // inputs / loot / personal-use consumables as "held" and their offers/fills as merch activity, so a
@@ -82,7 +82,7 @@ let held = pos.open.map(o => ({ item:o.itemId, qty:o.qty, cost:o.buyEach, be:bre
 //   { "<itemId>": "<ISO-or-unix since>" }  — "I hold 0 of this as of <since>; count only its log
 //   fills AFTER that time." Set it when you know a position is phantom; new trades after <since>
 //   still track normally.
-let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE,'.cache','held-override.json'),'utf8')); } catch {}
+let ov = {}; try { ov = JSON.parse(fs.readFileSync(path.join(HERE, '..', '.cache','held-override.json'),'utf8')); } catch {}
 for (const [idStr, since] of Object.entries(ov)) {
   const id = +idStr, sinceTs = typeof since==='number' ? since : Math.floor(Date.parse(since)/1000);
   held = held.filter(h => h.item !== id);

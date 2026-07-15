@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /* cash.mjs — DERIVE / re-anchor the idle-cash balance the total-capital footer uses (watch.mjs).
  *
- *   node pipeline/derive-cash.mjs          DERIVE cash now = anchor + Σ(sells after tax) − Σ(buys) − resting escrow
- *   node pipeline/derive-cash.mjs 16m      RE-ANCHOR to 16,000,000 (accepts k/m/b + commas) — the manual reset:
+ *   node pipeline/commands/derive-cash.mjs          DERIVE cash now = anchor + Σ(sells after tax) − Σ(buys) − resting escrow
+ *   node pipeline/commands/derive-cash.mjs 16m      RE-ANCHOR to 16,000,000 (accepts k/m/b + commas) — the manual reset:
  *                                   your first anchor, or the one DOWN correction when you're short / spent
  *                                   gp off-ledger (the only case the log can't see — PLAN-CASH-TRACKING)
- *   node pipeline/derive-cash.mjs clear    forget the anchor (footer reverts to committed-absolute only)
+ *   node pipeline/commands/derive-cash.mjs clear    forget the anchor (footer reverts to committed-absolute only)
  *
  * Cash is conserved (zero-sum): it only moves when a buy fills (out), a sell fills (in, after the 2% tax),
  * or you inject/withdraw. The fills log records the first two, so idle cash is DERIVED from a stored anchor
@@ -13,9 +13,9 @@
  * only be stated" model (cash-anchor.mjs). The INJECTION DETECTOR auto-raises the anchor when resting bids
  * exceed the tracked balance (you clearly added capital); the ONE thing it can't see is an off-ledger
  * outflow / missed log, which you correct with a bare re-anchor. Output-only — NEVER a verdict/alert input. */
-import { parseGp, fmtP } from '../js/money-format.js';
-import { writeCash, clearCash } from './lib/cash-anchor.mjs';
-import { loadDerivedCash } from './lib/derive-cash-tiers.mjs';
+import { parseGp, fmtP } from '../../js/money-format.js';
+import { writeCash, clearCash } from '../lib/cash-anchor.mjs';
+import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 
 const arg = process.argv[2];
 
@@ -30,7 +30,7 @@ function ageStr(statedAt) {
 if (arg == null) {
   const d = loadDerivedCash();
   if (!d.known) {
-    console.log('no cash anchor set — set one with:  node pipeline/derive-cash.mjs <amount>  (e.g. 16m)');
+    console.log('no cash anchor set — set one with:  node pipeline/commands/derive-cash.mjs <amount>  (e.g. 16m)');
     process.exit(0);
   }
   // headline: available now (coin stack) + liquid (incl. cancellable bids) when they differ

@@ -7,7 +7,7 @@
  * types — index.html can't load `js/main.js` over file://), AND it exposes ONE localhost-only
  * endpoint so the app's "Refresh scan" button can run a REAL scan on the local machine:
  *
- *   POST /api/scan  → runs `node pipeline/screen-flip-niches.mjs --mode all --publish` (which rewrites the
+ *   POST /api/scan  → runs `node pipeline/commands/screen-flip-niches.mjs --mode all --publish` (which rewrites the
  *                     repo-root screen.json with ZERO git — see screen.mjs), then responds
  *                     { ok:true, generatedAt } (the new snapshot's timestamp) once the file is
  *                     written, or { ok:false, error } / { ok:false, busy:true } (single-flight).
@@ -31,7 +31,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');            // repo root — the static docroot (same as GitHub Pages)
+const ROOT = path.join(HERE, '..', '..');            // repo root — the static docroot (same as GitHub Pages)
 const HOST = '127.0.0.1';                       // localhost ONLY — this endpoint runs a shell command
 const PORT = Number(process.env.COFFER_DEV_PORT) || 8000;
 
@@ -53,12 +53,12 @@ function readGeneratedAt() {
   catch { return null; }
 }
 
-// Run `node pipeline/screen-flip-niches.mjs --mode all --publish` and resolve when the file is (re)written.
+// Run `node pipeline/commands/screen-flip-niches.mjs --mode all --publish` and resolve when the file is (re)written.
 // ZERO git — screen.mjs --publish only writes the local screen.json.
 function runScan() {
   return new Promise(resolve => {
     const before = readGeneratedAt();
-    const child = spawn(process.execPath, ['pipeline/screen-flip-niches.mjs', '--mode', 'all', '--publish'],
+    const child = spawn(process.execPath, ['pipeline/commands/screen-flip-niches.mjs', '--mode', 'all', '--publish'],
       { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'] });
     child.on('error', e => resolve({ ok: false, error: 'spawn failed: ' + (e && e.message || e) }));
     child.on('close', code => {
