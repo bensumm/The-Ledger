@@ -327,6 +327,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     goldens/`archlint`) vs ⚖️ JUDGMENT principles. Its own file references are guarded by
     `pipeline/ci/lint-arch.mjs` (invariant E7). NOT the file inventory (this README is) — the "how it's
     organized + why".
+  - `FLOW.md` (2026-07-15) — the end-to-end flow/entity walkthrough companion to ARCHITECTURE.md: how a
+    price/trade/suggestion/verdict moves through the system (the two runtimes + shared `js/quotecore.js`
+    core; the market-read, opportunity-screen, held-verdict, fill-loop, and learning-loop flows; an
+    entities-in-flow-order table). POINTS to this README/ARCHITECTURE/GLOSSARY rather than restating them.
   - `GLOSSARY.md` (2026-07-14) — the plain-English lookup for the vocabulary: core concepts
     (flip-niche / held-item strategy, reach, diurnal, band, verdicts, cash tiers…) + the codename
     dictionary (the concept behind each plan-chunk shorthand like `Bar E` / `DL4`). The ONE home for

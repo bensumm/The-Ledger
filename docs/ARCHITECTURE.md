@@ -174,5 +174,5 @@ Full audit + findings: `PLAN-ARCH-DOCS-AUDIT.md` (Parts 1–5); the disposition 
   through the directory rename, when files move. Structural/existence only, never semantic.
 - **Judgment sections follow process rule 8:** the change that alters the behaviour updates the principle
   here in the same commit. A wave-start drift scan is the backstop.
-- This doc states *principles*; the **flow/entity walkthrough** (which module does what, in pipeline order)
-  is a separate companion built after the rename settles the names (`docs/FLOW.md`, planned).
+- This doc states *principles*; the **flow/entity walkthrough** (how a price/trade/suggestion/verdict
+  moves through the system, end to end) is its companion `docs/FLOW.md`.

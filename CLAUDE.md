@@ -39,8 +39,9 @@ that's where every editor of the view already is. (Moved out of CLAUDE.md by chu
 ## Where shipped work is documented (check before assuming something is new)
 Shipped changes + the "why" live in **`CHANGELOG.md`** + `git log`; the file/artifact registry is
 **`README.md`**; the general-rules architecture + load-bearing invariants (🔒 enforced-by-a-guard vs
-⚖️ judgment) are **`docs/ARCHITECTURE.md`**; the plain-English term lookup (core concepts +
-the codename dictionary — `flip-niche`/`held-item strategy`/`Bar E`/`DL4`…) is
+⚖️ judgment) are **`docs/ARCHITECTURE.md`**; the end-to-end **flow/entity walkthrough** (how a
+price/trade/suggestion/verdict moves through the system) is **`docs/FLOW.md`**; the plain-English
+term lookup (core concepts + the codename dictionary — `flip-niche`/`held-item strategy`/`Bar E`/`DL4`…) is
 **`docs/GLOSSARY.md`**; narrative/history + superseded-approach stories are
 **`docs/LORE.md`**; each
 load-bearing "don’t-rebuild" invariant lives in the header of the module/test that governs it (e.g.

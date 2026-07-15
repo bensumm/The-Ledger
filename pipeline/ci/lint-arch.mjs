@@ -28,7 +28,9 @@ const DOCS = ['docs/ARCHITECTURE.md', 'docs/GLOSSARY.md'];
 
 // Referenced files that intentionally don't exist YET (the doc must mark each "(proposed)"/"planned").
 // Removing a file's proposed status = deleting its line here once it ships (the acknowledgement gate).
-const PROPOSED = new Set(['docs/FLOW.md', 'flip-niches.mjs', 'held-item-strategy.mjs']);
+// Currently EMPTY — the last proposals shipped (docs/FLOW.md, js/flip-niches.mjs,
+// js/held-item-strategy.mjs); re-add a line here when a governed doc names a genuinely-future file.
+const PROPOSED = new Set();
 
 // A bare basename resolves against these dirs (repo-root-relative). '' = repo root (index.html, *.json).
 const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'pipeline/test', 'pipeline/commands', 'pipeline/ci', 'pipeline/probes', 'docs', '.github/workflows', '.claude/skills'];
@@ -51,8 +53,10 @@ export function extractRefs(md) {
   return refs;
 }
 
-export function resolveRef(ref) {
-  if (PROPOSED.has(ref)) return true;
+// `proposed` is injectable so the exemption path stays unit-testable even when the live PROPOSED set
+// is empty (all future files having shipped); main() uses the module default.
+export function resolveRef(ref, proposed = PROPOSED) {
+  if (proposed.has(ref)) return true;
   if (ref.includes('/')) return fs.existsSync(path.join(ROOT, ref));
   return SEARCH_DIRS.some(d => fs.existsSync(path.join(ROOT, d, ref)));   // bare basename → any known dir
 }

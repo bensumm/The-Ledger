@@ -36,10 +36,14 @@ ok('resolveRef: real path resolves; bare basename resolves against source dirs',
   assert.equal(resolveRef('quotecore.js'), true, 'bare basename resolves against js/');
 });
 
-ok('resolveRef: a PROPOSED future file is exempt; a missing file fails', () => {
-  assert.equal(resolveRef('docs/FLOW.md'), true, 'PROPOSED future file passes (marked (proposed) in the doc)');
-  assert.equal(resolveRef('js/does-not-exist-xyz.js'), false, 'a missing path fails');
-  assert.equal(resolveRef('totally-not-a-file.mjs'), false, 'a missing bare basename fails');
+ok('resolveRef: a PROPOSED (injected) future file is exempt; a missing non-proposed file fails', () => {
+  // The live PROPOSED set is currently empty (all proposals shipped), so inject a synthetic one to keep
+  // the exemption path tested: a genuinely-absent file passes ONLY because it is in the proposed set.
+  const proposed = new Set(['docs/__future__.md']);
+  assert.equal(resolveRef('docs/__future__.md', proposed), true, 'a proposed-and-absent file is exempt');
+  assert.equal(resolveRef('docs/__future__.md'), false, 'the SAME absent file fails when NOT proposed');
+  assert.equal(resolveRef('js/does-not-exist-xyz.js', proposed), false, 'a missing path fails');
+  assert.equal(resolveRef('totally-not-a-file.mjs', proposed), false, 'a missing bare basename fails');
 });
 
 console.log(`\nAll ${pass} archlint helper checks passed.`);
