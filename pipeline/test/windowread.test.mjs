@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { depthDays, clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1
+import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -341,6 +342,100 @@ ok('clearableAsk: minBuckets guard — a lone fat bucket at the top cannot set t
   for (let d = 11; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 398, volHi: 1000 }]));
   const r = clearableAsk(series, { qty: 10, ...dOpts });               // 420 is supported by 1 bucket (< minBuckets 2) → skipped
   assert.ok(r.price != null && r.price <= 400, 'the lone 420 flier does not set the ask — the dense top ≤400 does');
+});
+
+// --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
+// Build a windowStats-SHAPED object directly (days oldest→newest; lows/his ascending — the
+// windowStats contract) so each fixture controls base/band/pressure exactly. reachableBand is pure
+// over that shape; the live path always feeds it a real windowStats result.
+const pStats = (pairs, { volLo, volHi }) => ({
+  days: pairs.map(([low, hi], i) => [`d${String(i).padStart(2, '0')}`, { low, hi, volLo, volHi }]),
+  lows: pairs.map(([low]) => low).sort((a, b) => a - b),
+  his: pairs.map(([, hi]) => hi).sort((a, b) => a - b),
+  medVolLo: volLo, medVolHi: volHi,
+});
+
+ok('demandPressure: ratio + log-symmetry + volume-based reliability; null on a missing side', () => {
+  const buy = demandPressure({ medVolHi: 20000, medVolLo: 10000 });
+  const sell = demandPressure({ medVolHi: 10000, medVolLo: 20000 });
+  assert.ok(Math.abs(buy.ratio - 2) < 1e-9 && Math.abs(sell.ratio - 0.5) < 1e-9);
+  assert.ok(Math.abs(buy.s + sell.s) < 1e-12, 's is log-symmetric: 2× and 0.5× mirror');
+  assert.equal(buy.reliability, 1, 'both sides ≥ PRESSURE_MIN_VOL → fully trusted');
+  const thin = demandPressure({ medVolHi: 600, medVolLo: PRESSURE_MIN_VOL * 10 });
+  assert.ok(Math.abs(thin.reliability - 600 / PRESSURE_MIN_VOL) < 1e-9, 'reliability = thinner side ÷ minVol');
+  assert.equal(demandPressure({ medVolHi: 1000, medVolLo: 0 }), null, 'a zero/absent side → null (never Infinity)');
+  assert.equal(demandPressure(null), null);
+});
+
+ok('reachableBand: sign symmetry — buy-heavy lifts the ask + shallows the bid; sell-heavy mirrors', () => {
+  // 7 flat days, symmetric dispersion on both sides (lows 990–1010 around 1000; his 1190–1210 around 1200).
+  const pairs = [[1000, 1200], [995, 1205], [1005, 1195], [990, 1210], [1010, 1190], [1000, 1200], [1000, 1200]];
+  const buy = reachableBand(pStats(pairs, { volLo: 10000, volHi: 20000 }));   // pressure 2×
+  const sell = reachableBand(pStats(pairs, { volLo: 20000, volHi: 10000 }));  // pressure 0.5×
+  const bal = reachableBand(pStats(pairs, { volLo: 10000, volHi: 10000 }));   // balanced 1×
+  assert.ok(buy.phiAsk > bal.phiAsk && buy.phiBid < bal.phiBid, 'buy-heavy: MORE ask headroom, LESS bid depth');
+  assert.ok(sell.phiBid > bal.phiBid && sell.phiAsk < bal.phiAsk, 'sell-heavy mirrors');
+  assert.ok(Math.abs(buy.phiAsk - sell.phiBid) < 1e-12 && Math.abs(buy.phiBid - sell.phiAsk) < 1e-12,
+    'one reflection: φ_ask(2×) ≡ φ_bid(0.5×) exactly');
+  assert.ok(Math.abs(bal.phiAsk - 0.5) < 1e-12 && Math.abs(bal.phiBid - 0.5) < 1e-12, 'φ(0) = 0.5 — balanced sits half a band out');
+});
+
+ok('reachableBand: φ monotone in s and clamped at PRESSURE_HEADROOM_MAX (never > one band)', () => {
+  const pairs = Array.from({ length: 7 }, () => [1000, 1200]);
+  const mk = r => ({ ...pStats([[1000, 1200], [995, 1205], [1005, 1195], [990, 1210], [1010, 1190], [1000, 1200], [1000, 1200]], { volLo: 10000, volHi: Math.max(1, Math.round(10000 * r)) }) });
+  const phiAt = r => reachableBand(mk(r)).phiAsk;
+  assert.ok(phiAt(1) < phiAt(2) && phiAt(2) < phiAt(3), 'φ_ask monotone in pressure');
+  assert.equal(phiAt(1000), PRESSURE_HEADROOM_MAX, 'extreme pressure clamps at the headroom cap');
+  const crushed = reachableBand(mk(1e-6));
+  assert.equal(crushed.phiAsk, 0, 'φ floors at 0 — a crushed side never gets NEGATIVE headroom');
+  assert.ok(pairs.length === 7);   // (silence unused-var lint habits)
+});
+
+ok('reachableBand: thin volume collapses the headroom to the smoothed center (the guard, no peak-cap)', () => {
+  const pairs = [[1000, 1200], [995, 1205], [1005, 1195], [990, 1210], [1010, 1190], [1000, 1200], [1000, 1200]];
+  const thin = reachableBand(pStats(pairs, { volLo: 1, volHi: 3 }));   // "3×" off 3 units — noise
+  assert.ok(thin.reliability < 0.01, 'a handful of units → ~no reliability');
+  assert.equal(thin.ask, thin.baseHigh, 'ask collapses to the recent central high (no fake headroom)');
+  assert.equal(thin.bid, thin.baseLow, 'bid collapses to the recent central low');
+});
+
+ok('reachableBand: side-specific bands — asymmetric volatility gives bandHigh ≠ bandLow', () => {
+  // lows pinned tight at 1000; his disperse widely (1150…1280).
+  const pairs = [[1000, 1150], [1000, 1280], [1000, 1200], [1000, 1260], [1000, 1180], [1000, 1240], [1000, 1220]];
+  const r = reachableBand(pStats(pairs, { volLo: 10000, volHi: 10000 }));
+  assert.equal(r.bandLow, 0, 'flat lows → no bid-side band');
+  assert.ok(r.bandHigh > 0 && r.bandHigh !== r.bandLow, 'dispersed his → a real ask-side band');
+});
+
+ok('reachableBand: degrades to null on thin days / no pressure read (never a fake band)', () => {
+  const four = [[1000, 1200], [1000, 1200], [1000, 1200], [1000, 1200]];   // 4 < PRESSURE_MIN_DAYS (5)
+  assert.equal(reachableBand(pStats(four, { volLo: 10000, volHi: 10000 })), null, 'thin day sample → null');
+  const seven = Array.from({ length: 7 }, () => [1000, 1200]);
+  assert.equal(reachableBand(pStats(seven, { volLo: 0, volHi: 10000 })), null, 'no pressure read → null');
+  assert.equal(reachableBand(null), null);
+});
+
+ok('reachableBand: SOUL-RUNE reasonableness pin (buy-heavy: high ask, shallow bid) — a φ/base/band change is visible here', () => {
+  // Modeled on the real 2026-07-15 whole-day stats: daily lows 351…386 (IQR 4 here, recent-3 median
+  // 384), daily his 376…402 (IQR 2, recent-3 median 400), medVolLo 11.01M / medVolHi 18.30M (1.66×).
+  const lows = [351, 359, 367, 378, 378, 379, 380, 381, 382, 382, 384, 382, 384, 386];
+  const his = [376, 380, 390, 394, 394, 394, 395, 396, 396, 396, 397, 396, 400, 402];
+  const pairs = lows.map((l, i) => [l, his[i]]);
+  const r = reachableBand(pStats(pairs, { volLo: 11012548, volHi: 18297822 }));
+  assert.equal(r.ask, 401, 'reachable ask ~401 — ABOVE the smoothed depth floor (clearableAsk read 394; real 397 fills)');
+  assert.equal(r.bid, 383, 'shallow bid on a buy-heavy book — deep bids are slow tail-dip trickle fills');
+  assert.ok(r.pressure > 1.6 && r.pressure < 1.7 && r.reliability === 1);
+});
+
+ok('reachableBand: SELL-HEAVY commodity reasonableness pin (deep bid, shallow ask) — the Coal shape', () => {
+  // pressure 0.5× (s=−0.693): φ_bid = 0.5+0.43·0.693 = 0.798, φ_ask = 0.5−0.298 = 0.202.
+  // recent central low 1000, low-IQR 40 → bid 1000−40·0.798 ≈ 968; recent high 1100, hi-IQR 20 → ask ≈ 1104.
+  const pairs = [[950, 1080], [990, 1090], [1030, 1110], [1050, 1120], [1000, 1100], [1000, 1100], [1000, 1100]];
+  const r = reachableBand(pStats(pairs, { volLo: 20000, volHi: 10000 }));
+  assert.equal(r.baseLow, 1000); assert.equal(r.bandLow, 40);
+  assert.equal(r.bid, Math.round(1000 - 40 * (0.5 + PRESSURE_PHI_SLOPE * Math.log(2))), 'deep bid = center − band·φ(−s), exact');
+  assert.equal(r.ask, Math.round(1100 + 20 * Math.max(0, 0.5 - PRESSURE_PHI_SLOPE * Math.log(2))), 'shallow ask mirrors');
+  assert.ok(r.bid < r.baseLow && r.ask < r.baseHigh + r.bandHigh, 'sell-heavy: catch the dump deep, don\'t over-ask');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

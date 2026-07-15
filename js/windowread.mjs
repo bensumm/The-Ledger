@@ -304,6 +304,83 @@ export function clearableAsk(series, { qty, competition = DEPTH_COMPETITION_MULT
   return res(null, 0, 'insufficient-depth', { need });
 }
 
+// --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
+// THE GAP the depth model left open (the Soul-rune 394 problem): clearableAsk reads 1h bucket
+// AVERAGES, which smooth away the peaks a resting limit ask actually fills at — on a deep book the
+// depth read is a strictly-conservative FLOOR that under-prices the top. The reachable price is set
+// by the BUYER/SELLER BALANCE: you clear high when you're the lowest ask into impatient buyers; you
+// buy deep when sellers dump into your bid. That balance is already in windowStats: medVolHi
+// (instabuy flow) vs medVolLo (instasell flow). With s = ln(medVolHi/medVolLo) and one monotone
+// curve φ(x) = clamp(0.5 + PRESSURE_PHI_SLOPE·x, 0, PRESSURE_HEADROOM_MAX):
+//   reachableAsk = baseHigh + bandHigh·φ(+s)     · reachableBid = baseLow − bandLow·φ(−s)
+// base = the RECENT-N central daily high/low (recentQuant p=0.5 — the smoothing-honest center, RC1
+// reused not re-derived); band = the q75−q25 DISPERSION of the daily highs/lows (side-specific —
+// band is CAPACITY, pressure is REALIZATION). One reflection gives the whole coherent doctrine:
+// buy-heavy favors the seller (high ask, shallow bid), sell-heavy the buyer (deep bid, shallow ask).
+// PRESSURE IS A DISTRIBUTION READ, NOT A BINARY: it predicts the CENTER + DIRECTION + fill
+// VELOCITY; size/dispersion set how far into the tail a given size reaches (Ben's 50k/day 381
+// trickle-fills on buy-heavy Soul rune — slow tail-dip fills, exactly as the sign predicts).
+// GUARD — sample RELIABILITY replaces a peak-cap: the thin-book mirage risk here is that a ratio
+// off a handful of units is NOISE, so reliability shrinks toward 0 as the thinner side's median
+// daily volume falls under PRESSURE_MIN_VOL and the headroom blends back to the smoothed center.
+// A liquid book predicts boldly (even above the last peak); a thin one degrades to conservative.
+// VALIDATED FOR REASONABLENESS ONLY (2026-07-15, n≈0 fills): one slope across 2gp–10k gp
+// commodities lands the deep bid inside the daily-low lower tail ([min…q25]: Coal 137/min 137 exact,
+// Adamantite 535 vs 533–548 cluster, Raw lobster 113 vs 112–116, Runite 10038 vs 9980–10162, Wine of
+// zamorak 869 vs 831–861), and the buy-heavy ask on Soul rune reads ~397–401 vs real 397 fills where
+// the depth floor said 394. The IQR band beat the avgHigh−avgLow spread (the spread over-deepens a
+// wide-spread book BELOW anything that printed — Magic logs 769 < min 774; resolved open question).
+// It matches where price TRADED, not verified FILLS — φ/minVol are PLACEHOLDERS (n≈0), F1 owns them,
+// and the slope + band measure are COUPLED (they jointly set magnitude; calibrate together). It
+// captures the CYCLICAL tail, never the event-driven macro extreme (Soul 351, Magic logs 774).
+export const PRESSURE_PHI_SLOPE    = 0.43; // φ slope on s=ln(pressure) — PLACEHOLDER fit on Soul rune's ask, reasonableness-checked on 10 commodities (n≈0 fills)
+export const PRESSURE_MIN_VOL      = 2000; // thinner-side median daily volume at which the pressure ratio is fully trusted (reliability 1); below it the headroom shrinks linearly (PLACEHOLDER, n≈0)
+export const PRESSURE_HEADROOM_MAX = 1;    // φ clamp — never more than ONE band of headroom beyond the center absent F1 evidence
+export const PRESSURE_MIN_DAYS    = 5;     // thinner day sample than this ⇒ null (dispersion off <5 days is noise; mirrors ASYM_MIN_DAYS)
+
+/* demandPressure(stats) → { ratio, s, reliability, medVolHi, medVolLo } | null.
+ * ratio = medVolHi/medVolLo off a windowStats result (>1 buy-heavy, <1 sell-heavy); s = ln(ratio)
+ * so 2× and 0.5× are symmetric; reliability ∈ [0,1] = how much volume stands behind the ratio
+ * (min side ÷ PRESSURE_MIN_VOL, clamped — the noise guard). Null when either side is absent/zero. */
+// @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by reachableBand below and by DC1's
+// hourlyPressure (the per-hour demand-cycle track); PB2's --pressure inspector prints it directly.
+export function demandPressure(stats, { minVol = PRESSURE_MIN_VOL } = {}) {
+  if (!stats || !(stats.medVolHi > 0) || !(stats.medVolLo > 0)) return null;
+  const ratio = stats.medVolHi / stats.medVolLo;
+  const reliability = Math.max(0, Math.min(1, Math.min(stats.medVolHi, stats.medVolLo) / minVol));
+  return { ratio, s: Math.log(ratio), reliability, medVolHi: stats.medVolHi, medVolLo: stats.medVolLo };
+}
+
+const pressurePhi = (x, slope, cap) => Math.max(0, Math.min(cap, 0.5 + slope * x));
+
+/* reachableBand(stats, opts) → the two-sided pressure-driven reachable prices, or null (thin days /
+ * no pressure read / no priced side — degrade, never a fake band).
+ *   { bid, ask, pressure, sSigned, reliability, baseLow, baseHigh, bandLow, bandHigh, phiBid, phiAsk, nDays }
+ * The headroom each side adds/subtracts is band·φ(±s)·reliability — a thin-volume book collapses to
+ * the smoothed center (the guard above), a balanced liquid book sits half a band out, a one-sided
+ * liquid book reaches up to one full band (the clamp). Monotone in s on both sides by construction. */
+// @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by DE3's watch-positions held-lot
+// line + suggestions.jsonl shadow fields and PB2's read-window-range --pressure inspector; PB4
+// (F1-gated) later promotes it into estimatePair's liquid-tier sell/buy reference.
+export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax = PRESSURE_HEADROOM_MAX, minVol = PRESSURE_MIN_VOL, minDays = PRESSURE_MIN_DAYS, recentN = RECENT_NIGHTS } = {}) {
+  const dp = demandPressure(stats, { minVol });
+  if (!dp || !stats.days || !Array.isArray(stats.lows) || !Array.isArray(stats.his)) return null;
+  const nDays = stats.days.length;
+  if (nDays < minDays || stats.lows.length < minDays || stats.his.length < minDays) return null;
+  const baseLow = recentQuant(stats.days, 'bid', 0.5, recentN);
+  const baseHigh = recentQuant(stats.days, 'ask', 0.5, recentN);
+  const bandLow = iqr(stats.lows), bandHigh = iqr(stats.his);
+  if (baseLow == null || baseHigh == null || bandLow == null || bandHigh == null) return null;
+  const phiAsk = pressurePhi(+dp.s, slope, headroomMax) * dp.reliability;
+  const phiBid = pressurePhi(-dp.s, slope, headroomMax) * dp.reliability;
+  return {
+    bid: Math.round(baseLow - bandLow * phiBid),
+    ask: Math.round(baseHigh + bandHigh * phiAsk),
+    pressure: dp.ratio, sSigned: dp.s, reliability: dp.reliability,
+    baseLow, baseHigh, bandLow, bandHigh, phiBid, phiAsk, nDays,
+  };
+}
+
 // --- hour-of-day diurnal profile (the peak-timing read) ---------------------------------------
 // windowStats scores ONE fixed wall-clock window; hourProfile instead buckets the SAME 1h series by
 // LOCAL hour-of-day (0–23) across the last N days, so a caller can SEE where the daily dip and peak

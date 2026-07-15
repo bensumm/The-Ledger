@@ -356,12 +356,23 @@ center) as reliability falls — a thin book degrades to conservative WITHOUT a 
 book predicts boldly (even above the last peak). One model, both tiers; noise, not the band, is the guard.
 
 ## Chunks (each carries its own docs + test pass; inform-only until F1)
-- **PB1 — pure math + fixtures** (`js/windowread.mjs` + `windowread.test.mjs`). `demandPressure`,
-  `reachableBand`, the constants, the reliability blend. Acceptance: (1) sign symmetry — buy-heavy lifts
-  the ask + shallows the bid, sell-heavy mirrors; (2) `φ` monotone in `s`, clamped at `PRESSURE_HEADROOM_MAX`;
-  (3) thin-volume reliability → headroom collapses to the center (the guard, no peak-cap); (4) side-specific
-  band — asymmetric-volatility fixture gives `bandHigh ≠ bandLow`; (5) the Coal/Magic-logs/Soul-rune
-  reasonableness values pinned as fixtures so a φ/base/band change is visible. No consumer touched.
+- **PB1 — pure math + fixtures (LANDED 2026-07-15).** (`js/windowread.mjs` + `windowread.test.mjs`.)
+  `demandPressure` + `reachableBand` exported (`@provisional-api`, DE3/PB2 the tracked consumers);
+  `PRESSURE_PHI_SLOPE`/`PRESSURE_MIN_VOL`/`PRESSURE_HEADROOM_MAX`/`PRESSURE_MIN_DAYS` exported n≈0
+  placeholders. All five acceptance shapes shipped (sign symmetry · φ monotone+clamped · thin-volume
+  reliability collapse · side-specific bands · Soul-rune + sell-heavy reasonableness pins).
+  **INDEPENDENT RE-VALIDATION (pre-build, live data 2026-07-15, 10 commodities incl. 5 fresh picks):**
+  the deep bid (recent-central base − low-IQR·φ(−s), one slope) landed inside the daily-low lower tail
+  [min…q25] at every price scale — Coal 137/min 137 EXACT, Adamantite 535 (cluster 533–548), Raw
+  lobster 113 (112–116), Wine of zamorak 869 (831–861), Runite ore 10,038 (9,980–10,162), Iron ore
+  70 (68–71); Soul rune reconciliation reproduced (381 touched 8/14 days ≈ half; 50k = 0.45% of daily
+  sell flow; per-hour pressure 1.30–2.22 all-buy-heavy; whole-day `clearableAsk(25k)`=394 vs pressure
+  ask 397–401 vs real 397 fills). **TWO open questions RESOLVED by the diagnostic:** (a) band measure —
+  the daily-low/high IQR beats the avgHigh−avgLow spread (the spread over-deepens a wide-spread book
+  BELOW anything that printed: Magic logs 769 < observed min 774 — an unfillable bid); (b) the single
+  φ slope needs NO price-scale correction (band units carry the scale) — the residual noise is
+  EVENT-low driven (implied slopes to hit the exact macro min scatter 0.2–7.6 uncorrelated with
+  scale), confirming the model prices the CYCLICAL tail, never the event extreme. Still n≈0 on FILLS.
 - **PB2 — `read-window-range.mjs --pressure`** (CLI inspector, mirrors `--depth`). Prints `pressure`,
   the regime label, and `reachableBid`/`reachableAsk` with the band + reliability inline + the honesty
   line. Acceptance: live Soul rune (buy-heavy, ask ~399, shallow bid) and a sell-heavy commodity (deep
@@ -379,9 +390,10 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
 ## Open questions (rule 4)
 - `PRESSURE_PHI_SLOPE`, `PRESSURE_MIN_VOL`, `PRESSURE_HEADROOM_MAX` are all n≈0 placeholders — F1 owns them,
   and the band-measure × φ-curve are COUPLED (they jointly set the magnitude; calibrate together).
-- `bandHigh`/`bandLow` measure: day-high/low dispersion (q75−q25) vs the avgHigh−avgLow spread vs Ben's
-  guide-distance. Start with **day-high/low dispersion** (self-contained, no guide dependency); revisit
-  under F1. Guide-distance is a candidate stable anchor if dispersion proves noisy.
+- ~~`bandHigh`/`bandLow` measure~~ — **RESOLVED at PB1 (2026-07-15 diagnostic):** day-high/low
+  dispersion (q75−q25) IS the band. The avgHigh−avgLow spread over-deepens wide-spread books below
+  anything that printed (Magic logs 769 < min 774). Guide-distance stays a fallback candidate if F1
+  finds the IQR noisy on thin day-samples.
 - Whole-day vs per-window pressure: PB uses the window's pooled pressure; the per-HOUR track is Extension B.
 
 ---

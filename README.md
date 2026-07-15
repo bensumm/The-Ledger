@@ -93,7 +93,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (PLAN-DEPTH-EXIT DE1 2026-07-15 — the percentile-DEPTH exit: reconstructs a per-day price→volume
   distribution from the 1h bucket point masses and answers "what can I actually BOOK at?" for a given lot
   size; the reach count is its qty→0 limit, and a thin book collapses to a null-with-`reason`; `@provisional-api`
-  until DE2/DE3 consume it, the `DEPTH_*` constants module-internal placeholders); MOVED here from `pipeline/lib/`
+  until DE2/DE3 consume it, the `DEPTH_*` constants module-internal placeholders) + `demandPressure`/`reachableBand`
+  (PLAN-DEPTH-EXIT Extension A PB1 2026-07-15 — the pressure-driven reachable band: `s=ln(medVolHi/medVolLo)`
+  sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
+  + the daily-high/low IQR; a thin-VOLUME book collapses to the smoothed center via the sample-reliability
+  guard (no peak-cap); the `PRESSURE_*` constants are exported n≈0 placeholders and the Soul-rune/sell-heavy
+  reasonableness pins live in the test; `@provisional-api` until DE3/PB2 consume it); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/commands/read-window-range.mjs`,
   `pipeline/commands/watch-positions.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of
