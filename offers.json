@@ -1,1 +1,1 @@
-{"app":"the-coffer-offers","version":1,"generatedAt":"2026-07-15T19:25:20.943Z","offers":[]}
+{"app":"the-coffer-offers","version":1,"generatedAt":"2026-07-15T20:18:55.380Z","offers":[{"slot":0,"side":"buy","itemId":566,"item":"Soul rune","price":381,"qty":50000,"filled":25000,"lastUpdateTs":1784143958000},{"slot":3,"side":"buy","itemId":10925,"item":"Sanfew serum(4)","price":20351,"qty":1707,"filled":0,"lastUpdateTs":1784146028000},{"slot":4,"side":"sell","itemId":566,"item":"Soul rune","price":398,"qty":25000,"filled":0,"lastUpdateTs":1784145413000}]}
