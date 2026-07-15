@@ -192,7 +192,8 @@ const inner = fc => (fc && fc.forecast !== undefined ? fc.forecast : fc);
  * this model" — itself a useful answer). Scans the central projected low (the median dip), band exposed
  * so the caller sees the uncertainty. NOT a fill guarantee (touched ≠ filled — the standing caveat).
  */
-// @provisional-api: PF1 forecast fn — no surface consumes it yet (app uses diurnalForecast's return; the console PF2–8 forecast surface is unbuilt). Implement-vs-drop is tracked; keep pending that decision.
+// CONSUMED by pipeline/commands/quote-items.mjs (#6, Ben 2026-07-15) — the inform-only "not profitably
+// buyable now → buyable ~Xh" line off the in-hand hourProfile (the module's motivating ask, resolved).
 export function whenBuyable(fc, targetBid) {
   const f = inner(fc);
   if (!f || !f.series || targetBid == null) return null;
@@ -208,7 +209,10 @@ export function whenBuyable(fc, targetBid) {
  * whenSellable(fc, targetAsk) — mirror: the first horizon hour whose PROJECTED HIGH is at/above the
  * target ask (held-position sell timing). Returns the same shape | null.
  */
-// @provisional-api: PF1 forecast fn — twin of whenBuyable; no surface consumes it yet. Implement-vs-drop tracked; keep pending that decision.
+// @provisional-api: the sell-side twin of whenBuyable (held-lot sell timing) — KEPT (not dropped, #6
+// decision 2026-07-15) but not yet wired: its natural home is quote-items.mjs --positions, which doesn't
+// fetch the 1h series a forecast needs (line ~405). Follow-up: wire it once the held-lot path has the
+// hourProfile in hand. Pinned by pipeline/test/forecast.test.mjs (whenSellable + unreachable→null).
 export function whenSellable(fc, targetAsk) {
   const f = inner(fc);
   if (!f || !f.series || targetAsk == null) return null;

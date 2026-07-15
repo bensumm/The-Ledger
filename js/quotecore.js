@@ -54,10 +54,11 @@ export const breakEven = (buy, opts) => {
 // Returns null when no profitable buy exists (sell − margin below the smallest break-even). `margin`
 // defaults to 0 (the break-even-neutral max buy). Round-trip against breakEven is brute-force-pinned in
 // pipeline/test/quotecore.test.mjs.
-// @provisional-api: the tax-exact inverse of breakEven (PLAN-WINDOW-CLEAR B3), READY but not yet wired to
-// a consumer — the proper back-solve needs the WITHIN-WINDOW-REACHABLE exit price (optSell is the ask that
-// doesn't clear in-window, so it over-states the entry ceiling). Fast-follow: a `read-window-range.mjs --exit
-// <ask> --margin <gp>` CLI (PLAN-WINDOW-CLEAR open-Q4). The /scan skill says "do it by hand for now." Pinned by quotecore.test.mjs.
+// The tax-exact inverse of breakEven (PLAN-WINDOW-CLEAR B3). CONSUMED by quote-items.mjs's #6 forecast
+// line (the profitable-buy target for whenBuyable). CAVEAT for callers: the exact back-solve wants the
+// WITHIN-WINDOW-REACHABLE exit — optSell is the ask that doesn't clear in-window, so passing it OVER-states
+// the entry ceiling (conservative for an inform read). The dedicated exact surface is `read-window-range.mjs
+// --exit <ask> --margin <gp>` (#9 / PLAN-WINDOW-CLEAR open-Q4). Pinned by quotecore.test.mjs.
 export const maxBuyForExit = (sell, margin = 0, opts) => {
   const target = sell - margin;                                   // the largest break-even the exit can carry
   if (opts && opts.bond) { const b = target - bondFee(opts.guide); return b >= 0 ? Math.floor(b) : null; }
