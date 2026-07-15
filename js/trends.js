@@ -14,7 +14,7 @@ import { switchTab } from './main.js';
 import { regimeDrift, momVerdict, momCell, breakEven } from './quotecore.js';   // shared impls (regime + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 // TC1: the pure DOM-free analytics moved to js/trendcore.js (node-importable + fixture-tested in
-// pipeline/trendcore.test.mjs). trends.js re-imports what runTrends/renderPositionCard
+// pipeline/test/trendcore.test.mjs). trends.js re-imports what runTrends/renderPositionCard
 // render; the rest of trendcore's exports (bestWindow/median/seasonalFactors/factorStats/dayGroups/…)
 // stay pure helpers there. This was a straight MOVE — behavior is byte-identical.
 import { analyseHourly, analyseBroad, buildPlan, patientTargets, backtestPlan } from './trendcore.js';

@@ -3,8 +3,9 @@
  * run-tests.mjs — the auto-discovery test runner (TD1.0).
  *
  * BUSINESS REQUIREMENTS (what an agent can rely on):
- *   - Every `*.test.mjs` under `pipeline/` (recursively — colocated `lib/` tests included) is a
- *     suite; adding a test file is the WHOLE job, nothing else wires it in.
+ *   - Every `*.test.mjs` under `pipeline/` (recursively) is a suite; the test suites live in
+ *     `pipeline/test/` (R3), but discovery recurses so a suite anywhere under `pipeline/` still
+ *     runs — adding a test file is the WHOLE job, nothing else wires it in.
  *   - Each suite runs in its OWN child process (so one suite's `process.exit`/state can't taint
  *     another); the suite's full stdout/stderr is passed through verbatim.
  *   - The run FAILS (non-zero exit) if ANY suite fails, AND if ZERO suites are discovered (a glob

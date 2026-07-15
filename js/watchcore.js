@@ -1,6 +1,6 @@
 /* watchcore.js — PURE derivations for the in-app Watch tab (js/watch.js renders; this module
    DECIDES). DOM-free and node-importable, so every rule here is fixture-pinned in
-   pipeline/watchcore.test.mjs. The verdict VOCABULARY is momVerdict()'s (js/quotecore.js) and the
+   pipeline/test/watchcore.test.mjs. The verdict VOCABULARY is momVerdict()'s (js/quotecore.js) and the
    offer verdict is offerVerdict()'s — this module only MAPS those to card severity / alert
    membership and folds the summary/feed aggregates; it never recomputes a verdict. No imports
    from browser-only modules (keeps it pure + testable). */

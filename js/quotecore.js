@@ -29,7 +29,7 @@ export { tax, netMargin } from './money-math.js';   // re-export so node consume
 //                                       demanded 1.666b vs 1.638b true)
 //   • otherwise           → ceil(buy/0.98)   (uncapped region — unchanged legacy formula)
 // The crossover (buy > TAXCAP/0.02 − TAXCAP = 245m) and smallest-s correctness at every region
-// boundary are brute-force-proven in pipeline/quotecore.test.mjs (BE1 fixtures).
+// boundary are brute-force-proven in pipeline/test/quotecore.test.mjs (BE1 fixtures).
 // BOND exception (opts.bond, with opts.guide): bonds pay NO 2% sell tax, so the smallest sell that
 // recovers the flip's cost is just buy + the 10%-of-guide retrade fee (shared bondFee). Non-bond callers
 // pass no opts → the legacy tax-capped piecewise below (byte-identical).
@@ -53,7 +53,7 @@ export const breakEven = (buy, opts) => {
 // Bond exception via the same opts (bonds pay no sell tax; breakEven=buy+bondFee → buy=target−bondFee).
 // Returns null when no profitable buy exists (sell − margin below the smallest break-even). `margin`
 // defaults to 0 (the break-even-neutral max buy). Round-trip against breakEven is brute-force-pinned in
-// pipeline/quotecore.test.mjs.
+// pipeline/test/quotecore.test.mjs.
 // @provisional-api: the tax-exact inverse of breakEven (PLAN-WINDOW-CLEAR B3), READY but not yet wired to
 // a consumer — the proper back-solve needs the WITHIN-WINDOW-REACHABLE exit price (optSell is the ask that
 // doesn't clear in-window, so it over-states the entry ceiling). Fast-follow: a `windowrange.mjs --exit
@@ -652,7 +652,7 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
      BID-BEHIND  bid below the 2h band low → unlikely to fill soon
      BID-OK      resting inside the band
    Only CANCEL-BID is an ALERT (the sole state where a resting order needs action); the rest are
-   placement feedback. Fixture-pinned in pipeline/watchcore.test.mjs.
+   placement feedback. Fixture-pinned in pipeline/test/watchcore.test.mjs.
 
    P5 — PATH-AWARE (OPTIONAL third arg). `pathCtx` is the DECLARED thesis this resting bid was placed
    under: a bare path key ('scalp' / 'value-hold', the js/held-item-strategy.mjs PATH_KEYS values) OR an object
@@ -742,7 +742,7 @@ export function quoteCells(name, row){
    S2 — POSTURE HELPERS (overnight vs active screening). A SEPARATE, appended block: these are new,
    independently-named pure helpers and do NOT touch momVerdict / the PLAN-3 gate tree. They reuse
    the same 5m-series + DIURNAL_DIP_MARGIN machinery as diurnalRead. Fixture-tested in
-   pipeline/quotecore.test.mjs under the "S2 posture fixtures" header.
+   pipeline/test/quotecore.test.mjs under the "S2 posture fixtures" header.
    ============================================================================================ */
 // The overnight window is LOCAL wall-clock: an evening bid must survive unattended to morning.
 export const OVERNIGHT_START_HOUR = 22;   // local hour, inclusive
@@ -774,7 +774,7 @@ export function overnightStaleRisk(ts5m, bid, now, marginPct=DIURNAL_DIP_MARGIN)
 /* ============================================================================================
    COD-3 (2026-07-10) — CUT-AND-REBID advisory. A SEPARATE appended block of pure, DOM-free helpers
    (quotecore.js imports only money-math.js + money-format.js — kept that way): they do NOT touch momVerdict / the gate tree.
-   Fixture-pinned in pipeline/rebid.test.mjs.
+   Fixture-pinned in pipeline/test/rebid.test.mjs.
    ============================================================================================ */
 
 /* rebidBar(clear, spread) — the cut-and-rebid FRICTION BAR (was prose arithmetic in /positions §3).
@@ -835,7 +835,7 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
 /* ============================================================================================
    DP1 (2026-07-10) — recentDirection: dip DIRECTION, not just depth. A SEPARATE appended block of
    pure, DOM-free 5m-shape math (quotecore.js imports only money-math.js + money-format.js — kept that way); it does NOT
-   touch momVerdict / the gate tree. Fixture-pinned in pipeline/dipposture.test.mjs.
+   touch momVerdict / the gate tree. Fixture-pinned in pipeline/test/dipposture.test.mjs.
 
    WHY IT LIVES HERE. quotecore.js is the existing home for the 5m intraday-shape reads (bandCore,
    diurnalRead, overnightStaleRisk) — its natural neighbours. The 1h series is too coarse for this
@@ -901,7 +901,7 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
    appended block of pure, DOM-free math (quotecore.js imports only money-math.js + money-format.js — kept that way); it does
    NOT touch momVerdict / the gate tree. Consumed ONLY by pipeline/watch-positions.mjs's --dip loop (a node CLI
    surface); no app module imports it, so it ships without an APP_VERSION bump. Fixture-pinned in
-   pipeline/diploop.test.mjs.
+   pipeline/test/diploop.test.mjs.
 
    THE MECHANIC (this is the DL2 DOCTRINE HOME). Some dips are off-schedule EXOGENOUS FLUSHES — a holder
    dumps units into the book faster than buyers absorb them, so price gaps DOWN and stays fillable for a
@@ -990,7 +990,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
    DL4 (2026-07-11) — nominateDip + the pool-reconcile transforms: the "B feeds A" discovery half of the DL2
    dip-loop. Pure, DOM-free math (quotecore.js still imports only money-math.js + money-format.js). Consumed ONLY by node
    pipeline scripts (screen.mjs nominates; watch.mjs --dip polls) — NO app module imports this, so it
-   ships with NO APP_VERSION bump. Fixture-pinned in pipeline/dl4nominate.test.mjs.
+   ships with NO APP_VERSION bump. Fixture-pinned in pipeline/test/dl4nominate.test.mjs.
 
    THE PROBLEM DL4 SOLVES (this is the DL4 DOCTRINE HOME). A flush is EXOGENOUS — you cannot know in
    advance WHICH liquid item will gap down — so DL2's hand-curated dip-watchlist.json has a coverage

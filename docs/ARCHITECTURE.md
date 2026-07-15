@@ -56,8 +56,8 @@ structurally prevented.
 | E3 | Docs carry no superseded terms; no single-source phrase is duplicated across the CLAUDE.md⇆README axis | `pipeline/lint-docs.mjs` (+ `.test.mjs`) | a denylisted term (e.g. a deleted flip-niche as "live") or a duplicated invariant |
 | E4 | Every SKILL.md rule-block is tagged (encoded-vs-judgment disposition) | `pipeline/lint-skills.mjs` | an untagged rule block |
 | E5 | The browser app loads and paints with all external network stubbed | `pipeline/smoke-test.mjs` (headless chromium) | any page/console error or empty pane |
-| E6 | The screen funnel is behaviour-stable across refactors | replay goldens (`pipeline/replay.test.mjs`, `@test-only` harness) | a gate/rank/render change that moves a pinned archetype |
-| E7 | Every module/guard/path **this doc** names resolves on disk | `pipeline/lint-arch.mjs` (+ `pipeline/lint-arch.test.mjs`) | a `code-font` file path in ARCHITECTURE.md that doesn't exist |
+| E6 | The screen funnel is behaviour-stable across refactors | replay goldens (`pipeline/test/replay.test.mjs`, `@test-only` harness) | a gate/rank/render change that moves a pinned archetype |
+| E7 | Every module/guard/path **this doc** names resolves on disk | `pipeline/lint-arch.mjs` (+ `pipeline/test/lint-arch.test.mjs`) | a `code-font` file path in ARCHITECTURE.md that doesn't exist |
 | E8 | Tax/break-even math has exactly ONE home | *(proposed — a `no-tax-math-outside-quotecore/money-math` check)* | a `breakEven`/`netMargin`/`maxBuyForExit` defined outside `js/quotecore.js`/`js/money-math.js` |
 | E9 | The app-imported module set is known and acknowledged (APP_VERSION blast radius) | *(proposed — the RC-C app-import manifest test, ships with the directory hierarchy)* | a new app import of a shared module without updating the manifest |
 

@@ -419,12 +419,12 @@ slot is a state machine and cannot close twice with no offer placed between.
   double-terminal that DIFFERS in any field warns but is KEPT (fail toward preserving data). The loud
   warnings are gated to the attended sync (`warn:false` in the `--local`/`watch-log.mjs`/`monitor.mjs`
   callers, which re-read the whole log every run and would otherwise re-print months-old re-emits every
-  tick). Fixtures in `pipeline/validateslots.test.mjs`.
+  tick). Fixtures in `pipeline/test/validateslots.test.mjs`.
 - **`dedupeSnapshots()` — the SILENT DERIVATION backstop** (inside `reconstruct()`). Catches the same
   class at the positions.json layer, so a phantom ALREADY persisted in an older (pre-LH1) `fills.json`
   — which the ingest validator never re-reads — is still dropped from the derived view. Fixtures
   (a: blowpipe dup pair, b: genuine same-price repeat with a placement between → NOT deduped,
-  c: dup straddling an EMPTY-burst) live in `pipeline/reconstruct.test.mjs`.
+  c: dup straddling an EMPTY-burst) live in `pipeline/test/reconstruct.test.mjs`.
   **NB — no manual-slot exemption here** (unlike the loud validator above): `dedupeSnapshots` keys purely
   on slot, so two IDENTICAL manual `complete` terminals on the SAME slot 8 (or 9) silently collapse to one.
   A same-item/qty/price **multi-window backfill** must give each window a DISTINCT slot via
@@ -476,7 +476,7 @@ scripts sample `/24h` at different instants, so the same item could log a DIFFER
 launder it). `volSrc` lets F1 bucket/normalize the two sources; the warm read converges them for free
 when the data is on disk. Decided by the pure `classAndSource(row, id, warmBulkMap)` in
 `suggestlog.mjs`; `watch.mjs` supplies no `volSrc` (its `classify()` label isn't a `volDay` class) so
-its rows stay byte-identical. Pinned by `pipeline/sf3-volsrc.test.mjs`.
+its rows stay byte-identical. Pinned by `pipeline/test/sf3-volsrc.test.mjs`.
 No PII — ids/prices/timestamps only (the repo is public). `sync-fills.mjs`'s commit set now
 includes it when present (same add-only-these-files discipline as `screen.json`). NB: `watch.mjs`
 is still read-only w.r.t. the market/positions — this analytics append is the sole exception, and
@@ -493,7 +493,7 @@ discarded. The rows are F1's calibration data: **archived, never deleted.** Any 
 MUST read active + archives via `readSuggestionLines` — `outcomes.mjs`'s F1 join does — since after
 the first rotation the active file holds only the current month. `sync-fills.mjs` commits the
 `pipeline/suggestions-archive/` dir alongside `suggestions.jsonl`. The active-ledger path stays
-pinned to the repo root by `pipeline/lib/suggestlog.test.mjs` (only history relocates).
+pinned to the repo root by `pipeline/test/suggestlog.test.mjs` (only history relocates).
 
 ### 11.2 Historical market-context retention (`/5m?timestamp=`)
 Outcome analysis reconstructs the **trailing-2h band at each historical trade placement** (same

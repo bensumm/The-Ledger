@@ -94,7 +94,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
       ask fills at), NEVER above it. **The LOW-liquidity / thin-big-ticket mirage discount is UNTOUCHED,
       byte-for-byte** — a thin book or a large `size/volume` computes relief EXACTLY 0 (the
       Ancient-godsword 2/14 mirage-exit protection is the mechanism's reason to exist; pinned by the
-      gating fixture in `pipeline/estimators.test.mjs`). Est-view + stdout `reach-relief` notes only:
+      gating fixture in `pipeline/test/estimators.test.mjs`). Est-view + stdout `reach-relief` notes only:
       the rank/grade Proposal-A/B discounts and `reachValidator`'s computation are unchanged (promoting
       relief into the rank/letter is F1-gated). **NOW LIVE ON THE SCREEN SURFACE (PLAN-VOL24, 2026-07-13):**
       before the rolling-24h correction the broken `/24h` deflated a real 1.5m/d book to ~65k so relief was
@@ -169,7 +169,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   (`js/quotecore.js`, the app+node shared home; `pipeline/lib/marketfetch.mjs` re-exports it) takes p90/p10
   on a DENSE side (≥ `BAND_EDGE_MIN_SAMPLE`), raw extremum on a SPARSE side, on BOTH surfacing paths
   (`bandCore` edge + `computeQuote`'s Optimistic clamp). The momentum tell stays raw (`rawBandLo/rawBandHi`
-  drive `mom`). Full spec in the `robustBand` header; pinned by `pipeline/bandedge.test.mjs` + the
+  drive `mom`). Full spec in the `robustBand` header; pinned by `pipeline/test/bandedge.test.mjs` + the
   `quotecore.test.mjs` Scope-B split. **This is a SYSTEM-WIDE discipline** — trim to a quantile on a dense
   side, keep the raw extremum on a sparse one, wherever a price EDGE comes from a bag of prints (the other
   instance: the value flip-niche's 7d week-edge twin in `valueAmplitudeValidator`, off `lookbackStat`'s
@@ -215,7 +215,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   - **`maxBuyForExit(sell, margin, opts)` is its INVERSE (PLAN-WINDOW-CLEAR B3), beside it in `js/quotecore.js`:**
     the LARGEST buy whose `breakEven(buy) + margin ≤ sell` — the tax-exact back-solver for `/scan`'s
     WINDOW-CLEAR PRICING (bid ≤ what leaves BE+margin under the reachable-in-window exit). Piecewise-exact
-    against the same three regions + bond, brute-verified in `pipeline/quotecore.test.mjs`. An inverse
+    against the same three regions + bond, brute-verified in `pipeline/test/quotecore.test.mjs`. An inverse
     implemented anywhere else would be a second tax-math home — don't; call this.
 - **WINDOW-CLEAR: days-reach ≠ within-window clear (PLAN-WINDOW-CLEAR B1/B2).** `js/windowread.mjs`
   `windowClear(series1h, {ask, units, wStart, wEnd})` reads whether a quoted ask actually PRINTS inside its

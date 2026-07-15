@@ -39,7 +39,7 @@ Print-only — it never writes trade data. Each run emits:
   inventory: the post-restart state where the plugin has re-emitted nothing, so resting offers read
   as missing. It changes no verdict — it just names the failure so a session doesn't chase "vanished"
   offers (restart-check RuneLite or nudge a slot to force a re-emit). Pure line assembler in
-  `pipeline/lib/logblind.mjs` (`blindWarningLine`), fixtures in `pipeline/logblind.test.mjs`.
+  `pipeline/lib/logblind.mjs` (`blindWarningLine`), fixtures in `pipeline/test/logblind.test.mjs`.
 - **ACTIVE OFFERS** — offers open right now (per-slot latest `BUYING`/`SELLING` state),
   with filled/total and the offer price.
 - **FILLS / CANCELS (last 30m)** — recent terminal events with executed price.
@@ -385,7 +385,7 @@ line, and the exit-discipline reminder).
 **Per-held EMIT CONTRACT (V5 — the stable, ordered note block).** Each held lot's note block is
 ONE predictable block so a reader (human or LLM) always gets the same fields in the same order.
 **The authority is the `lib/emit.mjs` `heldNoteBlock()` header** (fixture-pinned in
-`pipeline/emit.test.mjs`) — it ORDERS + FORMATS already-computed pieces and decides nothing
+`pipeline/test/emit.test.mjs`) — it ORDERS + FORMATS already-computed pieces and decides nothing
 (output-format-only; no verdict/alert/row-selection change). Header line `- <name>: …`; every other
 field is a nested (4-space) sub-line. **Fixed field order:**
 
@@ -434,7 +434,7 @@ of the numbered signals, in more detail:
      Trends/Watch surfaces keep the instantaneous verdict (they are not the fast-cadence
      surface); with no watch loop running, `quote.mjs --positions` reads a stale/absent state
      file and honestly degrades to the instantaneous verdict. Pinned by
-     `pipeline/verdictpersist.test.mjs`.
+     `pipeline/test/verdictpersist.test.mjs`.
      **As of V7 the confirmation is WALL-CLOCK TIME, not a pass count** (`ALERT_PERSIST_MS`, 4-min
      placeholder): a condition must PERSIST for the window before it headlines, so a faster loop no
      longer manufactures faster alerts — sensitivity is independent of the /loop cadence (the fix for
@@ -542,7 +542,7 @@ of the numbered signals, in more detail:
    bid whose fill hinges on direction (`BID-BEHIND`), or (e) the lean CONFLICTS with the verdict (a
    green lot with a drop-lean — the highest-value case). SILENT on a cleanly-good position (comfortably
    green + filling + rising + clean momentum) — the naive action stands. Fixture-pinned in
-   `pipeline/recovery.test.mjs`.
+   `pipeline/test/recovery.test.mjs`.
 7. **FREED-CAPITAL prompt** (V6 Companion, SURFACE-ONLY — in the headline block), e.g.
    `⋯ freed ~7.4m this pass — consider a scan to redeploy`. When a SELL that FREED ≥
    `FREED_CAPITAL_SCAN_GP` (default 5m, a documented placeholder) is detected — a held lot whose qty
@@ -550,7 +550,7 @@ of the numbered signals, in more detail:
    redeploy prompt. It NEVER auto-places an offer and NEVER runs the scan (Ben places every offer; the
    LLM/Ben runs `/scan`). Anchor-free and guarded: a fresh/empty prior (startup), a stale-gap prior
    (overnight pause), or a lot that grew/is unchanged yields no prompt (no misfire). Fixture-pinned in
-   `pipeline/freed-capital.test.mjs`.
+   `pipeline/test/freed-capital.test.mjs`.
 
 ### Reporting a pass to Ben — the SCRIPT owns the format (`--brief`, Ben 2026-07-07)
 

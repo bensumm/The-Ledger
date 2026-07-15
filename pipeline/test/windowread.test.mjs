@@ -1,0 +1,287 @@
+#!/usr/bin/env node
+/**
+ * windowread.test.mjs — acceptance fixtures for the pure window-range math (js/windowread.mjs).
+ *
+ * windowread moved js/ (P2) so it is node- AND app-importable, like js/quotecore.js; this test lives
+ * in pipeline/ next to quotecore.test.mjs (the convention for js/-module tests). windowread is PURE
+ * over an already-fetched 1h /timeseries array — fixtures are synthetic points, no live data (rule 4).
+ * Run: `node pipeline/test/windowread.test.mjs`  (exits non-zero on any failure).
+ *
+ * BUSINESS REQUIREMENTS pinned here (diff a change against these):
+ *   - quantLow returns the bid level touched on ≥p of nights (a bid ≥ the p-quantile of window
+ *     lows fills on p of the nights); quantHigh mirrors it for asks (feeds /overnight fill-realism).
+ *   - inWindow wraps past midnight: a 22→6 window includes 23:00 and 02:00, excludes 06:00 and noon.
+ *   - windowStats buckets a cross-midnight window to the LOCAL morning it ENDS on (pre-midnight
+ *     22:00/23:00 points merge with the post-midnight hours into ONE night), skips daytime hours,
+ *     and returns null when the history has no traded window-hours.
+ */
+import assert from 'node:assert/strict';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
+import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
+
+let pass = 0;
+const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
+
+console.log('windowread.js window-range acceptance:');
+
+// --- 1. quantLow / quantHigh are the level touched/reached on ≥p of nights --------------------
+ok('quantLow: bid at the p-quantile of window lows is touched on ≥p of nights', () => {
+  const lows = [100, 200, 300, 400];                 // ascending, 4 nights
+  // p=0.5 → 200: exactly 2 of 4 nights dipped to/below it (≥50%)
+  assert.equal(quantLow(lows, 0.5), 200);
+  assert.equal(touchedDays(lows, 200), 2);
+  // p=1 → the max low (400): a bid ≥ that is touched EVERY night
+  assert.equal(quantLow(lows, 1), 400);
+  assert.equal(touchedDays(lows, 400), 4);
+  // p=0.25 → the min low (100): only the cheapest night
+  assert.equal(quantLow(lows, 0.25), 100);
+  assert.equal(touchedDays(lows, 100), 1);
+});
+ok('quantHigh: ask at the p-quantile of window highs is reached on ≥p of nights', () => {
+  const his = [100, 200, 300, 400];                  // ascending, 4 nights
+  assert.equal(quantHigh(his, 0.5), 300);            // 2 of 4 highs sit at/above 300 (≥50%)
+  assert.equal(reachedDays(his, 300), 2);
+  assert.equal(quantHigh(his, 1), 100);              // min high → reached every night
+  assert.equal(reachedDays(his, 100), 4);
+  assert.equal(quantHigh(his, 0.25), 400);           // only the richest night reaches the top ask
+  assert.equal(reachedDays(his, 400), 1);
+});
+
+// --- 2. inWindow wraps midnight --------------------------------------------------------------
+ok('inWindow: a normal 9→17 window is a simple half-open range', () => {
+  assert.equal(inWindow(9, 9, 17), true);            // start inclusive
+  assert.equal(inWindow(16, 9, 17), true);
+  assert.equal(inWindow(17, 9, 17), false);          // end exclusive
+  assert.equal(inWindow(8, 9, 17), false);
+});
+ok('inWindow: a 22→6 overnight window wraps past midnight', () => {
+  assert.equal(inWindow(22, 22, 6), true);           // start inclusive
+  assert.equal(inWindow(23, 22, 6), true);
+  assert.equal(inWindow(2, 22, 6), true);            // small hours
+  assert.equal(inWindow(5, 22, 6), true);
+  assert.equal(inWindow(6, 22, 6), false);           // end exclusive
+  assert.equal(inWindow(12, 22, 6), false);          // midday
+});
+
+// --- 3. windowStats buckets a cross-midnight night to the morning it ends on -----------------
+// Build a 1h series for one overnight (22→6). Local Date construction matches windowStats' local
+// getHours()/dayKey. `now` is set to a DAYTIME instant so no "today" bucket is skipped.
+const ts = (y, mo, d, h) => Math.floor(new Date(y, mo, d, h, 0, 0).getTime() / 1000);
+const pt = (t, low, hi, volLo = 10, volHi = 10) =>
+  ({ timestamp: t, avgLowPrice: low, avgHighPrice: hi, lowPriceVolume: volLo, highPriceVolume: volHi });
+
+ok('windowStats: pre- and post-midnight hours bucket to ONE night (the morning it ends on)', () => {
+  const series = [
+    pt(ts(2026, 0, 10, 22), 1000, 1010),   // Jan-10 22:00 (pre-midnight)
+    pt(ts(2026, 0, 10, 23), 980, 1005),    // Jan-10 23:00 (pre-midnight)
+    pt(ts(2026, 0, 11, 1), 950, 1002),     // Jan-11 01:00 — the lowest low
+    pt(ts(2026, 0, 11, 2), 970, 1020),     // Jan-11 02:00 — the highest high
+    pt(ts(2026, 0, 11, 12), 5, 5, 0, 0),   // Jan-11 12:00 — DAYTIME, must be excluded
+  ];
+  const now = new Date(2026, 0, 20, 12, 0, 0);       // daytime, well after the night → nothing skipped
+  const stats = windowStats(series, { wStart: 22, wEnd: 6, now });
+  assert.equal(stats.days.length, 1, 'all four window-hours collapse into one night');
+  const [key, night] = stats.days[0];
+  assert.equal(key, '2026-01-11', 'keyed to the morning the window ENDS on (not Jan-10)');
+  assert.equal(night.low, 950, 'min across the whole cross-midnight span');
+  assert.equal(night.hi, 1020, 'max across the whole cross-midnight span');
+  assert.equal(night.volLo, 40, 'daytime hour excluded from the volume sum (4 window-hours × 10)');
+});
+
+ok('windowStats: returns null when the history has no traded window-hours', () => {
+  const daytimeOnly = [pt(ts(2026, 0, 11, 12), 100, 110), pt(ts(2026, 0, 11, 14), 100, 110)];
+  const now = new Date(2026, 0, 20, 12, 0, 0);
+  assert.equal(windowStats(daytimeOnly, { wStart: 22, wEnd: 6, now }), null);
+});
+
+// --- 4. recencySplit: the reach-contamination guard (two-sided) ------------------------------
+// days shape = windowStats().days: [[key,{low,hi}], …] oldest→newest. Model the two live anchors.
+const day = (key, low, hi) => [key, { low, hi }];
+
+ok('recencySplit ASK: a falling/crashed item reaches the ask on OLD days only → stale-optimistic', () => {
+  // blood-rune shape: pre-crash highs 313–315 reach a 313 ask; recent recovery tops 299–310 do NOT.
+  const days = [
+    day('d1', 306, 313), day('d2', 305, 314), day('d3', 306, 315), day('d4', 300, 315), // old: reach 313
+    day('d5', 272, 286), day('d6', 269, 281), day('d7', 272, 283),                        // crash: don't
+    day('d8', 286, 299), day('d9', 290, 301), day('d10', 300, 310),                        // recent 3: don't
+  ];
+  const s = recencySplit(days, 'ask', 313);
+  assert.equal(s.fullHit, 4, '313 reached on the 4 pre-crash days');
+  assert.equal(s.recentHit, 0, 'the recent 3 nights top out 299–310 — none reach 313');
+  assert.equal(s.diverges, true);
+  assert.equal(s.staleOptimistic, true, 'full count (4/10) is rosier than recent (0/3) — the trap');
+});
+
+ok('recencySplit BID: a rising/repriced item was touched on OLD days only → stale-optimistic', () => {
+  // floor repriced UP: a 100 bid was touched on old cheap days; recent nights bottom at 130+.
+  const days = [
+    day('d1', 95, 110), day('d2', 98, 112), day('d3', 90, 111), day('d4', 100, 115), // old: dip ≤100
+    day('d5', 120, 140), day('d6', 128, 145), day('d7', 132, 150),                    // recent 3: don't
+  ];
+  const s = recencySplit(days, 'bid', 100);
+  assert.equal(s.fullHit, 4, '100 touched on the 4 old cheap days');
+  assert.equal(s.recentHit, 0, 'recent 3 nights bottom at 120+ — never dip to 100');
+  assert.equal(s.staleOptimistic, true, 'the bid looks reachable only off a stale cheaper regime');
+});
+
+ok('recencySplit: a STABLE item does not flag (recent frac ≈ full frac)', () => {
+  const days = [
+    day('d1', 100, 200), day('d2', 102, 198), day('d3', 99, 201), day('d4', 101, 199),
+    day('d5', 100, 200), day('d6', 98, 202), day('d7', 101, 199),
+  ];
+  const s = recencySplit(days, 'ask', 199);           // reached every day, old and recent alike
+  assert.equal(s.diverges, false, 'a stable item is reached consistently → no divergence, no ⚠');
+  assert.equal(s.staleOptimistic, false);
+});
+
+ok('recencySplit: too little history is unscored (no false ⚠ on a thin series)', () => {
+  const days = [day('d1', 100, 200), day('d2', 100, 300), day('d3', 100, 400)]; // fullN < recentN+2
+  const s = recencySplit(days, 'ask', 400);
+  assert.equal(s.diverges, false, 'not enough days behind the recent window to make the call');
+});
+
+ok('recentQuant: returns the recent-N slice quantile, not the full window', () => {
+  const days = [
+    day('d1', 90, 300), day('d2', 92, 305), day('d3', 88, 310),  // old (ignored by recent-3)
+    day('d4', 130, 200), day('d5', 132, 205), day('d6', 128, 210), // recent 3
+  ];
+  assert.equal(recentQuant(days, 'bid', 0.5, 3), 130, 'recent-3 median low, not the old ~90');
+});
+
+// --- 5. hourProfile: locate + CLUSTER the daily dip and peak windows -------------------------
+// Build a synthetic diurnal shape over 6 days: lows dip in the evening (21–23), highs peak in the
+// early morning (04–06); everything else flat. now is a daytime instant so nothing special-cases.
+function diurnal(days, { baseFn }) {
+  const s = [];
+  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
+    const base = baseFn(di);
+    const low = base + ([21, 22, 23].includes(h) ? -50 : 0);
+    const hi = base + ([4, 5, 6].includes(h) ? 70 : 10);
+    s.push(pt(ts(2026, 0, 5 + di, h), low, hi, 20, 20));
+  }
+  return s;
+}
+const noonNow = new Date(2026, 0, 20, 12, 0, 0);
+
+ok('hourProfile: finds the evening dip window and morning peak window, clustered', () => {
+  const prof = hourProfile(diurnal(6, { baseFn: () => 1000 }), { nights: 14, now: noonNow });
+  assert.ok(prof, 'a 6-day series is profilable');
+  assert.deepEqual(prof.dip.hours, [21, 22, 23], 'dip clusters the three evening hours');
+  assert.equal(prof.dip.startH, 21); assert.equal(prof.dip.endH, 0, 'dip window 21:00–00:00');
+  assert.deepEqual(prof.peak.hours, [4, 5, 6], 'peak clusters the three morning hours');
+  assert.equal(prof.peak.startH, 4); assert.equal(prof.peak.endH, 7, 'peak window 04:00–07:00');
+  assert.equal(prof.dip.level, 950, 'dip level = the recent dip-hour low');
+  assert.equal(prof.peak.level, 1070, 'peak level = the recent peak-hour high (base 1000 + 70)');
+  assert.equal(prof.trendDominates, false, 'a flat base has no dominating trend');
+});
+
+ok('hourProfile: a rising floor sets trendDominates when drift outpaces the intraday swing', () => {
+  const prof = hourProfile(diurnal(6, { baseFn: di => 900 + 50 * di }), { nights: 14, now: noonNow });
+  assert.ok(prof);
+  assert.deepEqual(prof.dip.hours, [21, 22, 23], 'shape survives the trend (dip still evening)');
+  assert.ok(prof.trendPerDay > 0, 'the daily-low slope is positive');
+  assert.equal(prof.trendDominates, true, '≈50/day drift ≥ 0.25×~120 amplitude → dominates');
+});
+
+ok('hourProfile: too little history is unprofilable (null, no false read)', () => {
+  assert.equal(hourProfile(diurnal(2, { baseFn: () => 1000 }), { nights: 14, now: noonNow }), null,
+    '2 days < HOURPROFILE_MIN_DAYS');
+});
+
+// --- 6. deriveDiurnalRange: the stale-to-live guard (the Ghrazi lesson) -----------------------
+const prof = (dipLevel, peakLevel, trendDominates) => ({
+  dip: { level: dipLevel, startH: 21, endH: 0 }, peak: { level: peakLevel, startH: 4, endH: 7 },
+  amplitude: peakLevel - dipLevel, amplitudePct: null, trendPerDay: trendDominates ? 50 : 0, trendDominates,
+});
+
+ok('deriveDiurnalRange: an erased dip (dip ≥ live) is priced to live, not to a stale low', () => {
+  const r = deriveDiurnalRange(prof(1000, 1080, true), { liveLo: 990 });
+  assert.equal(r.bid, 990, 'live instasell (990) is already below the stale 1000 dip → bid to live');
+  assert.equal(r.bidBasis, 'live');
+  assert.ok(r.notes.some(n => /trend-dominates/.test(n)));
+});
+
+ok('deriveDiurnalRange: a dip below live under a rising floor stays patient but is flagged may-miss', () => {
+  const r = deriveDiurnalRange(prof(1000, 1080, true), { liveLo: 1010 });
+  assert.equal(r.bid, 1000, 'the dip (1000) is genuinely below live (1010) → keep the patient bid');
+  assert.equal(r.bidBasis, 'patient-dip');
+  assert.ok(r.notes.some(n => /may miss/.test(n)), 'but warn the rising floor may starve it');
+});
+
+ok('deriveDiurnalRange: a clean dip below live with no trend is an unflagged patient bid', () => {
+  const r = deriveDiurnalRange(prof(1000, 1080, false), { liveLo: 1010 });
+  assert.equal(r.bid, 1000); assert.equal(r.bidBasis, 'patient-dip');
+  assert.equal(r.notes.length, 0, 'no trend, dip below live → nothing to warn about');
+  assert.equal(r.ask, 1080);
+});
+
+// --- PART II (PLAN-GRADE-REACH): asymPair — deep-buy / reliable-sell realizable pair ----------
+// 14 synthetic nights. lows/his ascending (windowStats' contract); days only carries the count here.
+const asymStats = (lows, his) => ({ days: Array.from({ length: Math.max(lows.length, his.length) }, (_, i) => [`d${i}`, {}]), lows: [...lows].sort((a, b) => a - b), his: [...his].sort((a, b) => a - b) });
+
+ok('asymPair: deep bid = the ASYM_P_LO low quantile (rare fill), ask = the ASYM_P_HI high quantile (near-certain print)', () => {
+  const lows = Array.from({ length: 14 }, (_, i) => 100 + i * 10);   // 100…230
+  const his = Array.from({ length: 14 }, (_, i) => 300 + i * 10);   // 300…430
+  const p = asymPair(asymStats(lows, his));
+  assert.equal(p.deepBid, quantLow(lows, ASYM_P_LO), 'deep bid is the flush quantile');
+  assert.equal(p.highReachAsk, quantHigh(his, ASYM_P_HI), 'ask is the high-reach quantile');
+  // the realized fractions are consistent with the quantile definitions (ties can only push them ≥ p)
+  assert.equal(p.pBid, touchedDays(lows, p.deepBid) / 14);
+  assert.equal(p.pAsk, reachedDays(his, p.highReachAsk) / 14);
+  assert.ok(p.pBid <= 0.5, 'the deep bid fills on a MINORITY of nights (the rare flush)');
+  assert.ok(p.pAsk >= 0.75, 'the ask prints on a large MAJORITY of nights (the near-certain exit)');
+  assert.equal(p.nDays, 14);
+});
+
+ok('asymPair degrades: null stats / empty sides / a sample thinner than ASYM_MIN_DAYS → null (never a fake pair)', () => {
+  assert.equal(asymPair(null), null);
+  assert.equal(asymPair({ days: [], lows: [], his: [] }), null);
+  const thinN = ASYM_MIN_DAYS - 1;
+  const thin = Array.from({ length: thinN }, (_, i) => 100 + i);
+  assert.equal(asymPair(asymStats(thin, thin)), null, 'thin day sample → null');
+});
+
+// --- windowClear (PLAN-WINDOW-CLEAR B1): within-window reach + absorption pool + clearRatio -----
+// one 15:00 point per day inside a 14–17 window; controlled window-high + high-side volume.
+const dayPt = (d, hi, volHi) => pt(ts(2026, 0, d, 15), hi - 20, hi, 10, volHi);
+const clearNow = new Date(2026, 0, 25, 12, 0, 0);   // daytime (hour 12 ∉ 14–17) → nothing skipped
+
+ok('windowClear: window-reach fraction + absorption pool + clearRatio off the target window', () => {
+  const series = [
+    dayPt(10, 1050, 100), dayPt(11, 1050, 100),                              // two days reach 1040
+    dayPt(12, 1020, 80), dayPt(13, 1020, 80), dayPt(14, 1020, 80), dayPt(15, 1020, 80),
+  ];
+  const opts = { wStart: 14, wEnd: 17, now: clearNow };
+  // ask under every window-high → reaches all 6 days
+  const dense = windowClear(series, { ask: 1000, units: 10, ...opts });
+  assert.equal(dense.nDays, 6);
+  assert.equal(dense.windowReach, 1, 'ask under every window-high → reaches all 6 days');
+  // ask above most window-highs → only the two 1050-days print inside the window
+  const thin = windowClear(series, { ask: 1040, units: 10, ...opts });
+  assert.equal(thin.reachedDays, 2);
+  assert.ok(Math.abs(thin.windowReach - 2 / 6) < 1e-9, 'low within-window reach even if all-day reach is fine');
+  assert.equal(thin.pool, 100, 'pool = median window volHi on the days the ask printed');
+  assert.ok(Math.abs(thin.clearRatio - 10 / 100) < 1e-9, 'clearRatio = units ÷ pool');
+  // ask above EVERYTHING → 0 reached, pool 0, clearRatio null (never divide by zero)
+  const none = windowClear(series, { ask: 2000, units: 10, ...opts });
+  assert.equal(none.windowReach, 0);
+  assert.equal(none.pool, 0);
+  assert.equal(none.clearRatio, null);
+  assert.equal(windowClear(series, { ask: null, ...opts }), null, 'no ask → no read');
+});
+
+ok('windowClear: null on a too-thin window; windowClearDiverges flags the two traps', () => {
+  const few = [dayPt(10, 1050, 100), dayPt(11, 1050, 100), dayPt(12, 1050, 100)];   // 3 < WINCLEAR_MIN_DAYS (4)
+  assert.equal(windowClear(few, { ask: 1000, wStart: 14, wEnd: 17, now: clearNow }), null, 'thin window → null');
+  // days-reach healthy but within-window reach low → windowShort (the days-reach ≠ lap-clear trap)
+  const short = windowClearDiverges({ windowReach: 0.2, clearRatio: 0.1 }, 0.9);
+  assert.ok(short.diverges && short.windowShort && !short.sizeShort);
+  // size ≫ pool → sizeShort even with a fine within-window reach
+  const big = windowClearDiverges({ windowReach: 0.9, clearRatio: 3 }, 0.9);
+  assert.ok(big.diverges && big.sizeShort && !big.windowShort);
+  // both fine → no divergence; null read → no divergence
+  assert.ok(!windowClearDiverges({ windowReach: 0.9, clearRatio: 0.1 }, 0.9).diverges);
+  assert.ok(!windowClearDiverges(null).diverges);
+});
+
+console.log(`\nAll ${pass} acceptance checks passed.`);

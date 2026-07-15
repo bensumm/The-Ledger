@@ -7,7 +7,7 @@ import { pad2 } from './money-format.js';
  * (renderLedger, the fills-write cluster, github.js) at import — which pinned two pure
  * functions behind an un-node-importable module. This is a straight MOVE into a pure module so
  * the day-boundary bucketing (`periodKey`) and per-item aggregation grouping (`groupTrades`)
- * can be fixture-tested in node (pipeline/ledgercore.test.mjs). ledger.js re-imports both.
+ * can be fixture-tested in node (pipeline/test/ledgercore.test.mjs). ledger.js re-imports both.
  *
  * TIME CONVENTION: `periodKey` uses LOCAL Date getters by design (project rule — every
  * RENDERED timestamp is local; UTC/ISO is storage/wire only). A local 23:55 dip buckets to

@@ -10,7 +10,7 @@
    surfaced as a real flip ONLY if it matches a `greenlisted` entry {id, qty, price, ts} that the
    AGENT appends when Ben confirms a recommended flip (Ben only flips these on a recommendation, so
    every legit flip passes that gate — the default-quarantine is safe). Config: repo-root
-   ignored-items.json. Pure + fixture-pinned (pipeline/ignored.test.mjs). */
+   ignored-items.json. Pure + fixture-pinned (pipeline/test/ignored.test.mjs). */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 

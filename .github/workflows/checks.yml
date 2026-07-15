@@ -24,7 +24,7 @@ jobs:
       - name: Syntax check all JS modules
         run: |
           set -e
-          for f in js/*.js pipeline/*.mjs pipeline/lib/*.mjs; do
+          for f in js/*.js $(find pipeline -name '*.mjs'); do
             node --check "$f"
           done
           echo "syntax OK"

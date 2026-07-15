@@ -8,7 +8,7 @@ import { regimeDrift } from './quotecore.js';   // shared 3d-vs-~2wk regime-drif
  * ui.js, main.js, marketfetch/state) at import — which pinned the decision-bearing analytics behind
  * an un-node-importable module. This is a straight MOVE into a pure module (mirrors TD2's ledgercore/
  * watchcore extractions) so the hourly/seasonal decomposition, the walk-forward backtest gate, and
- * patient-offer sizing can be fixture-tested in node (pipeline/trendcore.test.mjs). trends.js
+ * patient-offer sizing can be fixture-tested in node (pipeline/test/trendcore.test.mjs). trends.js
  * re-imports what it renders; the Trends-tab tier-structure doctrine stays in trends.js (its editors
  * live there). Nothing here touches the DOM, STATE, or a browser global — its only imports are the
  * node-safe money-math.js (tax/netMargin) and quotecore.js (regimeDrift).
