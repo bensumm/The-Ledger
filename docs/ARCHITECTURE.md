@@ -58,7 +58,7 @@ structurally prevented.
 | E5 | The browser app loads and paints with all external network stubbed | `pipeline/smoke.mjs` (headless chromium) | any page/console error or empty pane |
 | E6 | The screen funnel is behaviour-stable across refactors | replay goldens (`pipeline/replay.test.mjs`, `@test-only` harness) | a gate/rank/render change that moves a pinned archetype |
 | E7 | Every module/guard/path **this doc** names resolves on disk | `pipeline/archlint.mjs` (+ `pipeline/archlint.test.mjs`) | a `code-font` file path in ARCHITECTURE.md that doesn't exist |
-| E8 | Tax/break-even math has exactly ONE home | *(proposed — a `no-tax-math-outside-quotecore/format` check)* | a `breakEven`/`netMargin`/`maxBuyForExit` defined outside `js/quotecore.js`/`js/format.js` |
+| E8 | Tax/break-even math has exactly ONE home | *(proposed — a `no-tax-math-outside-quotecore/money-math` check)* | a `breakEven`/`netMargin`/`maxBuyForExit` defined outside `js/quotecore.js`/`js/money-math.js` |
 | E9 | The app-imported module set is known and acknowledged (APP_VERSION blast radius) | *(proposed — the RC-C app-import manifest test, ships with the directory hierarchy)* | a new app import of a shared module without updating the manifest |
 
 E8–E9 are *proposed*: their rule is real but the guard isn't built yet. Until then they're ⚖️ judgment.
@@ -72,7 +72,7 @@ important structural rule — it's what prevents the app and pipeline from diver
 
 | Concept | Home | Notes |
 | --- | --- | --- |
-| Tax / break-even / bond math | `js/quotecore.js` (`breakEven`, `maxBuyForExit`) + `js/format.js` (`netMargin`, `bondFee`, `tax`) | the ONE tax home (split across two files: quotecore = derived, format = primitives). *(E8 proposed)* |
+| Tax / break-even / bond math | `js/quotecore.js` (`breakEven`, `maxBuyForExit`) + `js/money-math.js` (`netMargin`, `bondFee`, `tax`) | the ONE tax home (quotecore = derived, money-math = primitives; `js/money-format.js` is display-only). *(E8 proposed)* |
 | Quote computation | `js/quotecore.js` (`computeQuote`) | the app + `quote.mjs`/`screen.mjs` all call it |
 | Band/window/diurnal math | `js/windowread.mjs` (`windowStats`, `robustBand` via re-export, `hourProfile`, `windowClear`, `asymPair`) | the pure window-range math; `robustBand` itself lives in `quotecore.js` |
 | Verdict rendering (held lots) | `pipeline/lib/context.mjs` (`renderHeldVerdict`) | ended the quote↔watch verdict fork |
@@ -90,7 +90,7 @@ so know it explicitly. An edit to an **app-imported** module is an APP change (b
 `js/state.js`, per process rule 5); an edit to a **node-only** module is not.
 
 - **App-imported shared modules** (reachable from `js/main.js` → `market.js`/`trends.js`/…):
-  `js/quotecore.js`, `js/format.js`, `js/estimators.mjs`, `js/rating.mjs`, `js/windowread.mjs`,
+  `js/quotecore.js`, `js/money-math.js`, `js/money-format.js`, `js/estimators.mjs`, `js/rating.mjs`, `js/windowread.mjs`,
   `js/validate.mjs`, `js/termstructure.mjs`, `js/forecast.mjs`. Editing any of these **can** bump
   `APP_VERSION` — check whether app-visible behaviour changed.
 - **Node-only `.mjs`** (the app never imports them): `js/strategies.mjs`, `js/paths.mjs`,

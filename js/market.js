@@ -1,6 +1,6 @@
 import { API, RATE_W, RATE_ROI_MAX, RATE_VOL_MAX, RATE_TURN_FAST, RATE_TURN_SLOW, MAXPART, DIV_FULL, Z_BAND, UP_RISK, MIN_PRICE, MIN_VOL, FRESH_S, STALE_S, STRAT, MARKET_TTL, GUIDE_TTL, GUIDE_DUMP, GUIDE_MODULE, GUIDE_HIST, STATE, sGet, sSet, logEvent, setHealth } from './state.js';
 import { jget, cached } from './marketfetch.js';
-import { netMargin, clamp, now, isBond } from './format.js';
+import { netMargin, clamp, now, isBond } from './money-math.js';
 import { estimateRank } from './estimators.mjs';   // AP4: the SAME per-thesis rank the console uses
 import { rateItem } from './rating.mjs';            // AP4: the SAME desirability score + letter grade
 import { showFinderError, renderAll } from './ui.js';
@@ -16,7 +16,7 @@ export async function getMapping(force){
   STATE.MAP=full.map(m=>({id:m.id,name:m.name,members:!!m.members,limit:m.limit||null}));
   await sSet('mapping',STATE.MAP); await sSet('mapping_ts',Date.now()); return true;
 }
-// BOND: the ONE tax exception (format.js). A bond flip's margin is sell − (buy + 10%×guide), tax-free.
+// BOND: the ONE tax exception (money-math.js). A bond flip's margin is sell − (buy + 10%×guide), tax-free.
 // The Finder builds margin from live low/high, so hand netMargin the bond opts (guide from STATE.GUIDE)
 // for the bond ONLY; every other item gets undefined → the normal after-tax margin (byte-identical).
 const bondMarginOpts = id => isBond(id) ? { bond: true, guide: (STATE.GUIDE[id] && STATE.GUIDE[id].price) || 0 } : undefined;

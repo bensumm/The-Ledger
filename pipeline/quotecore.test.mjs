@@ -403,13 +403,13 @@ ok('overnightStaleRisk: positive-evidence discipline (null bid / short series �
 
 // ============================================================================================
 // BE1 BREAK-EVEN FIXTURES — breakEven(buy) = smallest integer sell price s with s - tax(s) ≥ buy,
-// piecewise-consistent with format.js tax() across its THREE regions (exempt / uncapped / capped).
+// piecewise-consistent with money-math.js tax() across its THREE regions (exempt / uncapped / capped).
 // A local brute-force reference (independent of the implementation) proves smallest-s correctness
 // at every region boundary; explicit expected values pin the named cases.
 // ============================================================================================
 console.log('\nBE1 break-even acceptance:');
 const TAXCAP = 5_000_000;
-const taxRef = p => (!p || p < 50) ? 0 : Math.min(Math.floor(p * 0.02), TAXCAP);   // mirror format.js tax()
+const taxRef = p => (!p || p < 50) ? 0 : Math.min(Math.floor(p * 0.02), TAXCAP);   // mirror money-math.js tax()
 // smallest integer s ≥ 0 with s - taxRef(s) ≥ buy, by linear scan up from max(0,buy) (net ≤ s)
 const bruteMin = buy => { for (let s = Math.max(0, buy); ; s++) if (s - taxRef(s) >= buy) return s; };
 

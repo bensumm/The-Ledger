@@ -12,7 +12,7 @@
  * NAMED PLACEHOLDER; every aggregate carries n; the n-gates live HERE so a skill can't launder a thin
  * signal into a confident claim.
  */
-import { fmt, fmtTurn } from '../../js/format.js';
+import { fmt, fmtTurn } from '../../js/money-format.js';
 
 // --- NAMED PLACEHOLDER thresholds (audit SHAPE, not tuned magnitudes) --------------------------------
 export const MIN_N_CANDIDATE = 20;        // a tuning candidate needs at least this many suggestions in its group

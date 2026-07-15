@@ -34,7 +34,7 @@
 import { windowStats, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS } from './windowread.mjs';
 import { termStructure } from './termstructure.mjs';
 import { recentDirection, DIR_LOOKBACK_H } from './quotecore.js';
-import { tax, netMargin } from './format.js';
+import { tax, netMargin } from './money-math.js';
 
 // --- status algebra ---------------------------------------------------------------------------
 const SEVERITY = { pass: 0, caution: 1, reject: 2 };

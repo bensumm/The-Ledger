@@ -43,7 +43,7 @@ import { velocityClass } from './lib/velocity.mjs';
 import { parkedStats } from './lib/capitalutil.mjs';
 import { parseArgs, median } from './lib/cli.mjs';
 import { liqClassOf, readSuggestionLines } from './lib/suggestlog.mjs';
-import { fmtP, fmt, fmtTurn } from '../js/format.js';
+import { fmtP, fmt, fmtTurn } from '../js/money-format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');

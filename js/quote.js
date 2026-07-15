@@ -3,7 +3,7 @@
    the DOM-free quotecore, and renders the canonical HTML table. On-demand only — never
    bulk-fetch across the universe (rate limits). Node scripts (chunk 3) do their own
    fetching and reuse quotecore directly; this module is the browser half.
-   Deps: state.js, format.js, quotecore.js — deliberately NO import of trends.js/market.js
+   Deps: state.js, money-format.js, quotecore.js — deliberately NO import of trends.js/market.js
    so there's no import cycle (trends.js and ui.js import FROM here). */
 import { API, STATE } from './state.js';
 import { jget, fetchTs, fetch24h } from './marketfetch.js';   // A2: shared jget + one cached ts/24h store

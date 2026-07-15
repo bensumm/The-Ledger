@@ -1,5 +1,5 @@
 import { APP_VERSION, STRAT, STATE, applyCoffer, hasStore, ls, idb, sGet, sSet, logEvent, setHealth, clearLog, setLogFilter } from './state.js';
-import { fmt, parseGp } from './format.js';
+import { fmt, parseGp } from './money-format.js';
 import { loadAll } from './market.js';
 import { renderFinder, renderCoffer, recompute, renderScan, refreshScan, loadRepoWatchlist, loadRepoIgnored, finderSort } from './ui.js';
 import { addTrade, setLedgerWatchOnly, setLedgerPeriod, toggleFillsLogLink, renderFillsLogLink, editManualLog, renderGhSync, startLocalPoll } from './ledger.js';   // A3: ledger + fills-write cluster; LW2: localhost live-refresh poll

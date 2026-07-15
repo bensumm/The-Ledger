@@ -26,7 +26,7 @@
  * structuralSupport / convictionGate) and decides NOTHING — it just orders + formats them. It
  * changes no verdict, no alert, no row selection (V5 is output-format-only).
  */
-import { fmtP } from '../../js/format.js';
+import { fmtP } from '../../js/money-format.js';
 
 /**
  * The canonical list-at sell price for a held lot. Prefers the shared momVerdict's `listAt` (the

@@ -1,4 +1,4 @@
-import { pad2 } from './format.js';
+import { pad2 } from './money-format.js';
 
 /*
  * LEDGER CORE (TD2.1) — the pure Date/Map math behind the Ledger view.

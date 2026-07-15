@@ -54,7 +54,7 @@ import { execFileSync } from 'node:child_process';
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
   diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal } from '../js/quotecore.js';
 import { limitWindow, buysByItem } from './lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
-import { fmtP, fmt } from '../js/format.js';
+import { fmtP, fmt } from '../js/money-format.js';
 import { briefLine } from '../js/watchcore.js';   // --brief compact book: format owned by the script
 import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from './lib/context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from './lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view

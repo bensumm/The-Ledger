@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * format.test.mjs — acceptance fixtures for the money primitives in js/format.js.
+ * money-math.test.mjs — acceptance fixtures for the money primitives in js/money-math.js.
  *
- * js/format.js holds the shared tax/margin/parse helpers used by BOTH the browser and every
+ * js/money-math.js holds the shared tax/margin/parse helpers used by BOTH the browser and every
  * pipeline script; they had NO direct test. These are PURE (no DOM, no network), so they are
  * fixture-testable with synthetic values — no live data (CLAUDE.md rule 4).
- * Run: `node pipeline/format.test.mjs`  (exits non-zero on any failure).
+ * Run: `node pipeline/money-math.test.mjs`  (exits non-zero on any failure).
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - GE tax is 0 for any sell under 50gp (the sub-50 exemption).
@@ -18,12 +18,13 @@
  *     returns NaN for garbage (never a silent 0).
  */
 import assert from 'node:assert/strict';
-import { tax, netMargin, netMarginQty, parseGp, TAXCAP, BOND_ID, isBond, bondFee, BOND_RETRADE_PCT } from '../js/format.js';
+import { tax, netMargin, netMarginQty, TAXCAP, BOND_ID, isBond, bondFee, BOND_RETRADE_PCT } from '../js/money-math.js';
+import { parseGp } from '../js/money-format.js';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
 
-console.log('format.js money-primitive acceptance:');
+console.log('money-math.js money-primitive acceptance:');
 
 // --- 1. tax exemption under 50gp ----------------------------------------------------------
 ok('tax is 0 for any sell under 50gp (GE exemption)', () => {

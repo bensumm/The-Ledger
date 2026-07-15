@@ -1,6 +1,6 @@
 import { STRAT, STATE, mem, hasStore, idb, sGet, sSet, logEvent } from './state.js';
 import { clearTsCache } from './marketfetch.js';
-import { fmt } from './format.js';
+import { fmt } from './money-format.js';
 import { rebuildDatalist } from './market.js';
 import { renderAll, recompute } from './ui.js';
 

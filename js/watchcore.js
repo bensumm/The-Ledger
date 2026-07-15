@@ -4,7 +4,7 @@
    offer verdict is offerVerdict()'s — this module only MAPS those to card severity / alert
    membership and folds the summary/feed aggregates; it never recomputes a verdict. No imports
    from browser-only modules (keeps it pure + testable). */
-import { fmtP } from './format.js';   // format.js is DOM-free/shared — used to own the --brief line format
+import { fmtP } from './money-format.js';   // format.js is DOM-free/shared — used to own the --brief line format
 
 // Held-verdict → severity FAMILY for the card's left stripe + pill tint. Semantic colour encodes
 // STATE (green/amber/red); gold stays the accent, never good/bad (the design-system rule).

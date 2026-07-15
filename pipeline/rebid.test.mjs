@@ -14,7 +14,7 @@
  */
 import assert from 'node:assert/strict';
 import { rebidBar, rebidAdvice } from '../js/quotecore.js';
-import { tax } from '../js/format.js';
+import { tax } from '../js/money-math.js';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

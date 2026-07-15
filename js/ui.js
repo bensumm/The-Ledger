@@ -1,5 +1,6 @@
 import { API, STATE, sSet, logEvent, setHealth, IS_LOCALHOST } from './state.js';
-import { tax, netMargin, netMarginQty, fmt, fmtP, fmtTurn, parseGp, gradeCls, now, fmtHour, sgn, pad2 } from './format.js';
+import { tax, netMargin, netMarginQty, now } from './money-math.js';
+import { fmt, fmtP, fmtTurn, parseGp, gradeCls, fmtHour, sgn, pad2 } from './money-format.js';
 import { loadAll, resolveId, computeScores, TREND_BADGE, rawItem } from './market.js';
 import { openTrends } from './trends.js';
 import { switchTab } from './main.js';

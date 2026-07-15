@@ -1,4 +1,4 @@
-import { tax, netMargin } from './format.js';
+import { tax, netMargin } from './money-math.js';
 import { regimeDrift } from './quotecore.js';   // shared 3d-vs-~2wk regime-drift impl (also used by quote.mjs/positions)
 
 /*
@@ -11,7 +11,7 @@ import { regimeDrift } from './quotecore.js';   // shared 3d-vs-~2wk regime-drif
  * patient-offer sizing can be fixture-tested in node (pipeline/trendcore.test.mjs). trends.js
  * re-imports what it renders; the Trends-tab tier-structure doctrine stays in trends.js (its editors
  * live there). Nothing here touches the DOM, STATE, or a browser global — its only imports are the
- * node-safe format.js (tax/netMargin) and quotecore.js (regimeDrift).
+ * node-safe money-math.js (tax/netMargin) and quotecore.js (regimeDrift).
  *
  * TIME CONVENTION: localDayKey / hourOf use LOCAL Date getters by design (project rule — hour-of-day
  * seasonality and day grouping are read in local wall-clock, matching what the app renders). Do not

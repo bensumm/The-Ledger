@@ -30,7 +30,7 @@
  * lands at P5 — the fixtures here will change then, and that diff IS the doctrine change.
  *
  * ALL numeric math (the spec edges' tax, overnightStaleRisk, median) is the shared impl (tax lives in
- * strategies.mjs's edge functions now, imported from js/format.js there), so the numbers stay
+ * strategies.mjs's edge functions now, imported from js/money-math.js there), so the numbers stay
  * byte-identical to screen.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
 import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../js/quotecore.js';

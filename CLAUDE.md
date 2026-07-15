@@ -26,7 +26,7 @@ push to `main`).
   `matchTrades`): `closed` after-tax realised P/L, `open` inventory at real avg cost, `unmatched`
   pre-log sells. **`fills.json` and the derived artifacts are ROOT-LOCKED** (app fetches them
   same-origin — README "Map of the repo" has the full ROOT-LOCKED vs movable split + the
-  `js/quotecore.js`/`js/format.js` shared-module ripple map). **Read `pipeline/FILLS-PIPELINE.md`
+  `js/quotecore.js`/`js/money-math.js`/`js/money-format.js` shared-module ripple map). **Read `pipeline/FILLS-PIPELINE.md`
   §5.1 before touching the reconstruction, and the whole doc before either script path.** History of
   the pipeline's evolution: `docs/LORE.md`.
 
@@ -227,7 +227,7 @@ Every market read presented to Ben (screen, per-item quote, position review) is 
   mis-reads size on a continuously-clearing churn lap; F1 open question). Never a gate/drop/grade/
   `screen.json`/verdict input; a lean `winClear` rides `suggestions.jsonl`. New pure exports, node-only
   consumers → NO `APP_VERSION` bump. PLACEHOLDER thresholds (n≈0).
-  - **BOND exception (Ben 2026-07-09).** The Old School Bond (`BOND_ID`, `js/format.js`) is EXEMPT from the
+  - **BOND exception (Ben 2026-07-09).** The Old School Bond (`BOND_ID`, `js/money-math.js`) is EXEMPT from the
     2% GE tax, but a GP-bought bond is untradeable and costs **10% of guide** (`BOND_RETRADE_PCT`) to make
     re-tradeable — so a bond flip's net = `sell − (buy + bondFee(guide))`, tax-free, and its break-even =
     `buy + bondFee(guide)`. Encoded as the ONE exception in the tax math: `netMargin(low,high,{bond,guide})`

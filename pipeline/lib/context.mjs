@@ -40,7 +40,7 @@
  * functions so existing output stays byte-identical; only the shared source of `mv` changed.
  */
 import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../js/quotecore.js';
-import { fmtP } from '../../js/format.js';
+import { fmtP } from '../../js/money-format.js';
 import { computeDeltas, advanceState, convictionGate, pathPersistence,
   verdictPersistence, VERDICT_PERSIST_MS } from './watchstate.mjs';
 import { enumeratePaths, weighPaths } from '../../js/paths.mjs';

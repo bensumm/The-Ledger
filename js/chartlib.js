@@ -1,4 +1,4 @@
-import { fmt, fmtSig } from './format.js';
+import { fmt, fmtSig } from './money-format.js';
 
 /*
  * chartlib.js — a reusable INTERACTIVE SVG chart (CL, PLAN-APP-PARITY).

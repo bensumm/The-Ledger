@@ -70,7 +70,8 @@
  * fetches + gates + rates + renders.
  */
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../js/quotecore.js';
-import { tax, fmt, fmtP, fmtHour } from '../js/format.js';
+import { tax } from '../js/money-math.js';
+import { fmt, fmtP, fmtHour } from '../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges } from '../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +

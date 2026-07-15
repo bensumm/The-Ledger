@@ -45,10 +45,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `index.html` — the app shell (markup only)
 - `styles.css` — all styles
 - `js/` — app logic as ES modules: `state.js` (shared mutable state as one `STATE`
-  object + constants + persistence + diagnostics), `format.js` (formatting/tax —
-  the canonical `tax()`/`netMargin`/`netMarginQty` helpers + the ONE **BOND tax exception**
+  object + constants + persistence + diagnostics), `money-math.js` (the tax/margin/bond MATH —
+  canonical `tax()`/`netMargin`/`netMarginQty` + the ONE **BOND tax exception**
   `BOND_ID`/`isBond`/`bondFee`: a bond is tax-exempt but pays a 10%-of-guide retrade fee, so
-  `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free), `charts.js`
+  `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free; plus the generic `clamp`/`now`),
+  `money-format.js` (gp/number DISPLAY formatting — `fmt`/`fmtSig`/`fmtP`/`fmtTurn`/`fmtHour` +
+  `pad2`/`parseGp`/`sgn`/`grade`/`gradeCls`; split out of the old `format.js` in the R2 rename), `charts.js`
   (static inline SVG — `svgLine`/`svgBars`, fixed-size, no interaction; still used by the
   Trends hourly seasonality charts + the quote sparkline), `chartlib.js` (CL — the reusable
   **interactive** SVG chart: `createChart(container,{series,overlay,fillBetween,refs,bands,markers,
@@ -154,7 +156,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   scalp → `scalp`, value → `value-hold` — a Ben-vetoable judgment proposal), written to
   `suggestions.jsonl` (lean `path` field) + shown as the screen's per-row entry-path annotation.
   `validateStrategySpec` + `pipeline/strategies.test.mjs` are the CONFORMANCE suite (structural contract +
-  no-throw + determinism over the replay archetypes). Imports only `tax` from format.js + `PATH_KEYS` from
+  no-throw + determinism over the replay archetypes). Imports only `tax` from money-math.js + `PATH_KEYS` from
   paths.mjs. NOT yet app-imported → no APP_VERSION bump),
   `quote.js` (browser orchestrator that fetches one
   item's series and renders the standard quote table), `fillslog.js` (File System
@@ -878,7 +880,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     reproducible-by-accrual).
   - `FILLS-PIPELINE.md` (pipeline design + operations) and `MONITORING.md` (live-monitoring
     routine). The `quote.mjs`/`screen.mjs`/`watch.mjs` scripts import `js/quotecore.js` +
-    `js/format.js` so their tables match the app exactly.
+    `js/money-math.js`/`js/money-format.js` so their tables match the app exactly.
 
 ## Map of the repo
 
@@ -913,14 +915,15 @@ constant governs each, so these can move without touching the deployed app or ph
 
 ### Shared logic modules
 
-`js/quotecore.js` and `js/format.js` are served to the browser **and** imported by node —
+`js/quotecore.js`, `js/money-math.js` and `js/money-format.js` are served to the browser **and** imported by node —
 an edit ripples into the pipeline scripts and CI, not just the app. After editing either,
 run `pipeline/quotecore.test.mjs` + `pipeline/reconstruct.test.mjs`.
 
 | Module | Also imported by (pipeline) |
 | --- | --- |
 | `js/quotecore.js` | 13 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `monitor.mjs`, `alerts.mjs`, `lib/cli.mjs`, `lib/reconstruct.mjs`, `lib/retrojoin.mjs` (P6a — `tax` for suggested-net; SF-1 — `quantileOf` for the p25/p75 latency spread), `add-manual-fill.mjs`, `quotecore.test.mjs`, `watchcore.test.mjs` (`offerVerdict`, shared with the app Watch tab), `dipposture.test.mjs` (DP1 — `recentDirection`); plus the js/ side-imports `js/termstructure.mjs` (SF-1 — re-exports `quantileSorted` as `quantile`) + `js/validate.mjs` (DP1 — `recentDirection` for `dipPostureValidator`) |
-| `js/format.js` | 6 files: `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs` (P6a — `fmt`/`fmtTurn` for the report); also `js/strategies.mjs` (P4c — `tax` for the spec edges) + `js/estimators.mjs` (P6b — `netMargin`/`clamp` for the rank composite; moved from pipeline/lib 2026-07-10) |
+| `js/money-math.js` | the tax/margin/bond MATH (split from `format.js`, R2): `quote.mjs`/`screen.mjs` (`tax`) + js-side node imports `js/strategies.mjs` (`tax`), `js/estimators.mjs` (`netMargin`/`clamp`), `js/validate.mjs`/`js/trendcore.js` (`tax`/`netMargin`), `js/valuescreen.mjs`/`js/market.js`. Edit ⇒ re-run `quotecore.test`+`reconstruct.test` (byte-identical tax). |
+| `js/money-format.js` | gp/number DISPLAY (split from `format.js`, R2): `quote.mjs`, `screen.mjs`, `watch.mjs`, `alerts.mjs`, `outcomes.mjs`, `retrojoin.mjs`, `cash.mjs` + `lib/analyze.mjs`/`context.mjs`/`emit.mjs` (`fmt`/`fmtP`/`fmtTurn` for the reports) |
 | `js/windowread.mjs` | `pipeline/windowrange.mjs`, `pipeline/watch.mjs`, `pipeline/screen.mjs` (diurnal profile), `js/validate.mjs`, `js/forecast.mjs` (PF1 — consumes `hourProfile`), `pipeline/windowread.test.mjs` (P2 — moved from `pipeline/lib/`); **APP-IMPORTED by `js/trends.js`** (TV — the Trends Diurnal timing section, same `hourProfile`/`deriveDiurnalRange` the console prints) |
 | `js/forecast.mjs` | `pipeline/forecast.test.mjs`; **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF2 quote, PF3 screen, PF4 windowrange, PF5 watch/positions, PF6 estimators, PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/screen.mjs`, `pipeline/quote.mjs`, `pipeline/validate.test.mjs`, `pipeline/termstructure.test.mjs`, `pipeline/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |

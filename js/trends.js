@@ -1,6 +1,7 @@
 import { Z_BAND, ARCHIVE_MIN_GAP, STATE, sGet, sSet, logEvent } from './state.js';
 import { fetchTs } from './marketfetch.js';
-import { tax, netMargin, netMarginQty, fmt, fmtP, now, pad2, fmtHour, sgn, clamp } from './format.js';
+import { tax, netMargin, netMarginQty, now, clamp } from './money-math.js';
+import { fmt, fmtP, pad2, fmtHour, sgn } from './money-format.js';
 import { svgLine, svgBars } from './charts.js';
 import { createChart } from './chartlib.js';                                  // CL: interactive chart (diurnal viz)
 import { hourProfile, deriveDiurnalRange } from './windowread.mjs';           // shared diurnal peak-timing math (same module the console uses)

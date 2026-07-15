@@ -11,7 +11,7 @@
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - parseGp honors a k/m/b suffix + commas + a LEADING SIGN, passes a number through (rounded),
  *     and returns NaN on garbage. This is the PIPELINE parser — intentionally distinct from
- *     js/format.js's parseGp (which rejects a sign and passes numbers through un-rounded); that one
+ *     js/money-format.js's parseGp (which rejects a sign and passes numbers through un-rounded); that one
  *     is pinned in pipeline/format.test.mjs. The divergence is deliberate (PLAN Discovered note).
  *   - median = mean of the two middle values for an even length, the middle for odd, null for an
  *     empty/absent array, and NEVER mutates its input.

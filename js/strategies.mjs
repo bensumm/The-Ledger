@@ -2,7 +2,7 @@
    VOCAB (see docs/GLOSSARY.md): band/churn/scalp/value are FLIP-NICHES — screen-level find-&-flip
    styles. "strategy" now names the HELD-ITEM level (paths.mjs). The file + STRATEGIES/STRATEGY_LIST
    identifier rename to flip-niches.mjs/FLIP_NICHES is R2 (PLAN-RENAME.md); prose says flip-niche now.
-   DOM-free, near-dependency-free ESM (imports only the pure `tax` from format.js + the path
+   DOM-free, near-dependency-free ESM (imports only the pure `tax` from money-math.js + the path
    vocabulary from paths.mjs — no fetch/fs, no window/document), importable by BOTH the browser app
    AND the node pipeline exactly like js/quotecore.js / js/paths.mjs. Keep it that way.
 
@@ -37,7 +37,7 @@
    when no explicit `thesis.mjs set --path` was declared (the P4b fallback: explicit > inferred > null).
    It is NOT a gate and does not affect which rows surface. */
 
-import { tax } from './format.js';
+import { tax } from './money-math.js';
 import { PATH_KEYS } from './paths.mjs';
 
 // The entry (unheld) thesis vocabulary — the ONLY path keys enumeratePaths() offers a fresh candidate.

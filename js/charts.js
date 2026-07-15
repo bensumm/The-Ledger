@@ -1,4 +1,4 @@
-import { fmt } from './format.js';
+import { fmt } from './money-format.js';
 
 /* svg charts */
 export function svgLine(values,opt){

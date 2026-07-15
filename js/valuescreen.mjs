@@ -35,7 +35,7 @@
  * is to learn WHICH term-structure features predict a good hold, then re-weight. Do not cite any
  * constant here as validated.
  */
-import { tax } from './format.js';
+import { tax } from './money-math.js';
 
 // --- PLACEHOLDER constants (rule 4 — unvalidated; the firing/suggestions accrual would tune them) ---
 export const VALUE_MIN_CYCLE_PCT = 0.06;   // after-tax cycle amplitude must clear ~6% for one taxed sell to net meaningfully

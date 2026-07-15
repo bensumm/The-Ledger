@@ -16,7 +16,7 @@
  *   spread → live quick pair (transact now); band/churn/scalp → 2h band edges; rising → near-current
  *   entry → forecast target (band edges are the best available forecast proxy today); value → durable
  *   floor entry → a recovery level the term structure says durably prints (NOT the raw ceiling).
- * The net is ALWAYS the ONE shared js/format.js `netMargin` (= (ask − tax(ask)) − bid) — no new tax.
+ * The net is ALWAYS the ONE shared js/money-math.js `netMargin` (= (ask − tax(ask)) − bid) — no new tax.
  *
  * ESTIMATOR FAMILIES (registry keyed by a spec's `estimator` field):
  *   churn — P(fill)/TTF reuse the intraday family, but the rank is PER LAP: `lapUnits` (the exact buy
@@ -40,14 +40,15 @@
  * `{ value, n, basis }` so the honesty (what data, how many observations) travels WITH the number —
  * n:0 means "no observations, pure prior". Do NOT cite any constant here as validated.
  *
- * PURITY. DOM-free, fetch-free, fs-free ESM. Imports only the pure js/format.js helpers (the ONE
- * tax()/netMargin) plus js/quotecore.js's breakEven (itself pure, format.js-only — no cycle: quotecore
+ * PURITY. DOM-free, fetch-free, fs-free ESM. Imports only the pure js/money-math.js helpers (the ONE
+ * tax()/netMargin) plus js/quotecore.js's breakEven (itself pure, money-math.js-only — no cycle: quotecore
  * does not import this module). Every ctx field is optional; every estimator degrades to an honest wide prior,
  * never throws. Lives in js/ (2026-07-10 — moved out of pipeline/lib/) as the ONE shared home so the
  * app can rank/grade on it too (the app↔console parity boundary — shared logic in js/, node re-imports
  * via the pipeline/lib/estimators.mjs re-export shim, byte-identical). The Finder wiring is AP4.
  */
-import { netMargin, clamp, fmtP } from './format.js';
+import { netMargin, clamp } from './money-math.js';
+import { fmtP } from './money-format.js';
 import { breakEven } from './quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE model-free break-even (BE floor for estSell)
 import { RECENCY_DIVERGE } from './windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
 

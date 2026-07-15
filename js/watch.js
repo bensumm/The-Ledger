@@ -15,7 +15,8 @@
 import { API, STATE, IS_LOCALHOST, sGet, sSet, logEvent } from './state.js';
 import { jget, fetchTs, fetch24h } from './marketfetch.js';
 import { computeQuote, momVerdict, breakEven, momCell, offerVerdict } from './quotecore.js';
-import { fmt, fmtP, netMargin } from './format.js';
+import { netMargin } from './money-math.js';
+import { fmt, fmtP } from './money-format.js';
 import { resolveId } from './market.js';
 import { openTrends } from './trends.js';
 import { realised, fmtAge } from './ui.js';

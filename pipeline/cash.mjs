@@ -13,7 +13,7 @@
  * only be stated" model (cashstate.mjs). The INJECTION DETECTOR auto-raises the anchor when resting bids
  * exceed the tracked balance (you clearly added capital); the ONE thing it can't see is an off-ledger
  * outflow / missed log, which you correct with a bare re-anchor. Output-only — NEVER a verdict/alert input. */
-import { parseGp, fmtP } from '../js/format.js';
+import { parseGp, fmtP } from '../js/money-format.js';
 import { writeCash, clearCash } from './lib/cashstate.mjs';
 import { loadDerivedCash } from './lib/cashderive.mjs';
 

@@ -1,4 +1,5 @@
-import { now, pad2 } from './format.js';
+import { now } from './money-math.js';
+import { pad2 } from './money-format.js';
 
 /*
  * THE STATE OBJECT — read before adding shared mutable state.
@@ -19,7 +20,7 @@ import { now, pad2 } from './format.js';
  */
 
 export const API='https://prices.runescape.wiki/api/v1/osrs';
-export const APP_VERSION='0.64.1';
+export const APP_VERSION='0.64.2';
 // LW2: true only when the app is served from a local dev host (serve.cmd → localhost). Used to
 // gate the local live-refresh poll + freshness stamp; on the deployed origin (bensumm.github.io)
 // it's false and every LW2 behavior stays off (M1 banner + Refresh button remain the mechanism).

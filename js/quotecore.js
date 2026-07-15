@@ -1,5 +1,5 @@
 /* quotecore.js — DOM-free quote model + canonical market-table cells.
-   Pure ESM: imports only from format.js (also pure), references no window/document.
+   Pure ESM: imports only money-math.js + money-format.js (also pure), references no window/document.
    Importable by BOTH the browser app (js/quote.js, trends.js, ui.js) AND node
    pipeline scripts (chunk 3 quote.mjs/screen.mjs, chunk 5 bank.mjs) — keep it that way.
 
@@ -14,12 +14,13 @@
    live quotes). Here the optimistic edges are CLAMPED against the SAME live quote, so the
    optimistic side can never be worse than the quick side — the mixing can't happen. */
 
-import { tax, netMargin, fmtP, fmt, TAXCAP, isBond, bondFee } from './format.js';
-export { tax, netMargin } from './format.js';   // re-export so node consumers (chunk 4.1) get the ONE tax impl
+import { tax, netMargin, TAXCAP, isBond, bondFee } from './money-math.js';
+import { fmtP, fmt } from './money-format.js';
+export { tax, netMargin } from './money-math.js';   // re-export so node consumers (chunk 4.1) get the ONE tax impl
 // Break-even list price: the smallest sell price `s` that still nets ≥ `buy` after the GE tax —
 // i.e. the smallest integer s with s - tax(s) ≥ buy. The ONE definition shared by the app, the
 // pipeline monitor, and the analysis scripts (chunk 4.1) so tax/break-even math can never drift.
-// PIECEWISE, matching format.js tax() exactly (BE1) — the plain ceil(buy/0.98) is the *uncapped*
+// PIECEWISE, matching money-math.js tax() exactly (BE1) — the plain ceil(buy/0.98) is the *uncapped*
 // inverse and is wrong in tax()'s two flat regions:
 //   • buy < 50            → buy       (a sell under 50gp is tax-exempt: tax(s)=0, so s=buy clears)
 //   • buy > 250m − TAXCAP → buy+TAXCAP (the 2% cap binds: floor(s·0.02) hits TAXCAP=5m at
@@ -367,7 +368,7 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
   // Display-only (quote/watch regime+note lines); NOT a gate, verdict, or rating input.
   const hpv=vol24?(vol24.highPriceVolume||0):null, lpv=vol24?(vol24.lowPriceVolume||0):null;
   const pressure={hpv, lpv, ratio:(hpv>0 && lpv>0)?hpv/lpv:null};
-  // BOND cost model (the ONE tax exception — see format.js): a bond flip's net = sell − (buy + 10%×guide),
+  // BOND cost model (the ONE tax exception — see money-math.js): a bond flip's net = sell − (buy + 10%×guide),
   // tax-free. bopt carries that through netMargin for BOTH the quick and optimistic legs; retradeFee is
   // surfaced on the row so downstream (estimators rank, quote note) don't re-derive it. Non-bond → null.
   const bond=isBond(id), retradeFee=bond?bondFee(guide):null;
@@ -669,7 +670,7 @@ export function momVerdict(row, breakEvenPrice, lotValue, ts5m, now, lotCtx){
                    `tripwire` (when supplied) does.
    Ben's memory anchor (patience-on-cancel-and-cut / falling-exclusion-amended): "no CANCEL-BID off
    falling regime alone for a deliberate scalp/value thesis." Every scalp/value threshold here is
-   provisional (n≈0). NOTE: quotecore.js imports only format.js — the path keys are compared as string
+   provisional (n≈0). NOTE: quotecore.js imports only money-math.js + money-format.js — the path keys are compared as string
    literals (the frozen js/paths.mjs PATH_KEYS values) to keep that single-import invariant. */
 export function offerVerdict(row, offerPrice, pathCtx){
   if(!row) return 'NO-QUOTE';
@@ -772,7 +773,7 @@ export function overnightStaleRisk(ts5m, bid, now, marginPct=DIURNAL_DIP_MARGIN)
 
 /* ============================================================================================
    COD-3 (2026-07-10) — CUT-AND-REBID advisory. A SEPARATE appended block of pure, DOM-free helpers
-   (quotecore.js imports only format.js — kept that way): they do NOT touch momVerdict / the gate tree.
+   (quotecore.js imports only money-math.js + money-format.js — kept that way): they do NOT touch momVerdict / the gate tree.
    Fixture-pinned in pipeline/rebid.test.mjs.
    ============================================================================================ */
 
@@ -833,7 +834,7 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
 
 /* ============================================================================================
    DP1 (2026-07-10) — recentDirection: dip DIRECTION, not just depth. A SEPARATE appended block of
-   pure, DOM-free 5m-shape math (quotecore.js imports only format.js — kept that way); it does NOT
+   pure, DOM-free 5m-shape math (quotecore.js imports only money-math.js + money-format.js — kept that way); it does NOT
    touch momVerdict / the gate tree. Fixture-pinned in pipeline/dipposture.test.mjs.
 
    WHY IT LIVES HERE. quotecore.js is the existing home for the 5m intraday-shape reads (bandCore,
@@ -897,7 +898,7 @@ export function recentDirection(ts5m, { lookbackH = DIR_LOOKBACK_H, now = new Da
 
 /* ============================================================================================
    DL2 (2026-07-11) — flushSignal: the REACTIVE LIQUID-FLUSH → bid-into-the-fall detector. A SEPARATE
-   appended block of pure, DOM-free math (quotecore.js imports only format.js — kept that way); it does
+   appended block of pure, DOM-free math (quotecore.js imports only money-math.js + money-format.js — kept that way); it does
    NOT touch momVerdict / the gate tree. Consumed ONLY by pipeline/watch.mjs's --dip loop (a node CLI
    surface); no app module imports it, so it ships without an APP_VERSION bump. Fixture-pinned in
    pipeline/diploop.test.mjs.
@@ -987,7 +988,7 @@ export function flushSignal(row, ts5m, avgLow24, { now = new Date() } = {}) {
 
 /* ============================================================================================
    DL4 (2026-07-11) — nominateDip + the pool-reconcile transforms: the "B feeds A" discovery half of the DL2
-   dip-loop. Pure, DOM-free math (quotecore.js still imports only format.js). Consumed ONLY by node
+   dip-loop. Pure, DOM-free math (quotecore.js still imports only money-math.js + money-format.js). Consumed ONLY by node
    pipeline scripts (screen.mjs nominates; watch.mjs --dip polls) — NO app module imports this, so it
    ships with NO APP_VERSION bump. Fixture-pinned in pipeline/dl4nominate.test.mjs.
 

@@ -8,7 +8,8 @@
    logic changed. `realised`, `renderCoffer`, `FILLS_STALE_MS` and `fmtAge` stay in ui.js
    (shared with the Coffer/Scan surfaces) and are imported back here. */
 import { STATE, sSet, logEvent, setHealth, IS_LOCALHOST } from './state.js';
-import { tax, netMarginQty, fmt, fmtP, parseGp, now, pad2, sgn } from './format.js';
+import { tax, netMarginQty, now } from './money-math.js';
+import { fmt, fmtP, parseGp, pad2, sgn } from './money-format.js';
 import { resolveItem, resolveId } from './market.js';
 import { openTrends } from './trends.js';
 import { makeSortable } from './table.js';
