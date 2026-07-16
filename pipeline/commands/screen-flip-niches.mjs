@@ -880,7 +880,13 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
   // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).
   if (subFloor) return [];
-  return rows.map(r => ({ id: r.id, cells: r.cells }));
+  // PB4 app-display (2026-07-15): each published row ALSO carries the pressure-driven `reachable` band
+  // (reachableShadow — { ask, bid, pressure, reliability, bandLow, bandHigh }, already computed for the
+  // RC-S2 co-log on every survivor). This is ADDITIVE DISPLAY DATA ONLY — the `cells`, the Grade, the
+  // rank, and the NEUTRAL sort order are byte-unchanged, so screen.json's DECISION surface stays exactly
+  // F1-gated. The app renders this band as a `pressure (trial)` column; the console rerank/reprice TRIAL
+  // (--pressure-exit) stays a SEPARATE mechanism (still refused under --publish). No reachable read → omit.
+  return rows.map(r => { const rb = reachableShadow(r.reachable); return rb ? { id: r.id, cells: r.cells, reachable: rb } : { id: r.id, cells: r.cells }; });
 }
 
 // --- P5 VALUE niche render (PLAN-VALUE §D) -----------------------------------------------------
