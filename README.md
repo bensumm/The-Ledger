@@ -327,7 +327,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Created lazily on the first rotation (empty until a month completes); committed by
   `sync-fills.mjs` alongside `suggestions.jsonl`.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
-  `screen-flip-niches.mjs --publish`)
+  `screen-flip-niches.mjs --publish` to the REPO ROOT — the R3-rename REPO_ROOT regression that briefly
+  wrote it to `pipeline/` is fixed). Each flip-niche row is `{ id, cells }` PLUS (PB4 app-display, 2026-07-15)
+  an ADDITIVE `reachable` band `{ ask, bid, pressure, reliability, bandLow, bandHigh }` (`reachableShadow`).
+  The `cells`/Grade/rank/sort are the NEUTRAL F1-gated decision surface (unchanged); `reachable` is
+  display-only data the app's Scan tab renders as a `Pressure (trial)` column by default (`js/ui.js`
+  `scanPressureCell`/`scanTableHtml` + the `.scanplegend` legend; labeled un-calibrated, never a
+  rank/grade input). The console `--pressure-exit` rerank/reprice TRIAL is a SEPARATE mechanism (refused
+  under `--publish`, so it never reaches `screen.json`)
 - `PLAN-OUTPUT-TABLE.md` — in-flight per-topic plan: the reach-folded `Est. buy`/`Est. sell`
   console table (shipped 2026-07-13 as `js/estimators.mjs` `estimatePair` + the `screen-flip-niches.mjs`/
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no

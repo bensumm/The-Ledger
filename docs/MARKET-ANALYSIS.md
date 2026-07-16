@@ -35,8 +35,12 @@ Every read is ONE table, the **table v2** column set:
 On `screen-flip-niches.mjs` and `quote-items.mjs`, STDOUT replaces Quick+Optimistic with the
 reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators.mjs` `estimatePair`
 is the full synthesis: Optimistic ∩ diurnal ∩ reach ∩ anchor ∩ BE-floor). `--raw` restores the
-model-free Quick/Optimistic (and `--asym` implies `--raw`). The app + `screen.json` always render
-the raw table-v2 cells (byte-identical publish). Operating summary:
+model-free Quick/Optimistic (and `--asym` implies `--raw`). The app + `screen.json` render the raw
+table-v2 **decision** cells — the Grade, the rank, and the sort stay F1-gated on the NEUTRAL
+estimator — but (PB4 app-display, 2026-07-15) `screen.json` now ALSO carries an ADDITIVE per-row
+`reachable` band `{ ask, bid, pressure, reliability, … }`, and the **app's Scan tab renders a
+`Pressure (trial)` column by default** (deep reachable bid → bold ask) beside the neutral Optimistic
+reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Operating summary:
 
 - **`Est. buy` is strategy-aware** (`entryDoctrine(spec)`): **scalp** → near-live (bids the
   instasell to fill); **value** → the trough (band low, unfolded); **band/churn** → the band low

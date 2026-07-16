@@ -422,6 +422,16 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
   NEUTRAL estimate (declaredExit-null intrinsic ask) + the pressure `reachable` separately, so the
   head-to-head evidence keeps accruing unbiased while Ben trades on pressure. Console-only → no
   APP_VERSION. (The DE-depth sibling integration — DE4 — stays F1-gated; PB4 is the pressure leg only.)
+- **PB4 app-display — the DEPLOYED app on pressure, DEFAULT-ON (SHIPPED 2026-07-15, Ben-confirmed;
+  APP_VERSION 0.65.0).** `screen.json` gains an ADDITIVE per-row `reachable` band (`reachableShadow` —
+  `{ ask, bid, pressure, reliability, bandLow, bandHigh }`, off the survivor's already-computed
+  `reachableBand`); the app's Scan tab renders it as a `Pressure (trial)` column by default (deep bid →
+  bold ask) beside the neutral Optimistic reference, with a legend + tooltip flagging it un-calibrated
+  (rule 4). **The published DECISION surface stays F1-gated:** the `cells`, Grade, rank, and NEUTRAL sort
+  are byte-unchanged — `reachable` is display-only. The console `--pressure-exit` rerank/reprice TRIAL is a
+  SEPARATE mechanism, still REFUSED under `--publish`, so the pressure prices/rank never reach `screen.json`.
+  **Prerequisite bug fixed:** the R3-rename `REPO_ROOT` regression (screen.json was writing to `pipeline/`,
+  freezing the deployed Scan tab) was corrected. APP_VERSION bumped 0.64.5 → 0.65.0 (deployed-app change).
 
 ## Open questions (rule 4)
 - `PRESSURE_PHI_SLOPE`, `PRESSURE_MIN_VOL`, `PRESSURE_HEADROOM_MAX` are all n≈0 placeholders — F1 owns them,

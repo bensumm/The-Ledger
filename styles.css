@@ -170,6 +170,16 @@
   .scanhint{font-family:inherit; color:var(--muted); font-size:11px; letter-spacing:0; text-transform:none}
   .scantable thead th{cursor:default}
   .scannone{padding:16px 14px; color:var(--muted); font-size:13px; border:1px solid var(--line); border-radius:12px}
+  /* PB4 pressure (trial) column — visually distinct from the neutral cells so it never reads as the
+     ranked/graded decision (rule 4). Muted/italic + a small pressure meta chip; a thin read is ambered. */
+  .scantable th.pcol{color:var(--muted); font-style:italic}
+  .scantable th.pcol .ptrial{font-size:10px; letter-spacing:.3px; opacity:.8}
+  .scantable td.pressure-trial{color:var(--parch2); font-style:italic; white-space:nowrap; cursor:help}
+  .scantable td.pressure-trial .pmeta{color:var(--muted); font-size:10px; font-style:normal; margin-left:4px}
+  .scantable td.pressure-trial.pthin{opacity:.7}
+  .scantable td.pressure-trial.pthin .pmeta{color:var(--amber)}
+  .scanplegend{margin:0 0 12px; padding:9px 12px; border:1px solid var(--line); border-left:3px solid var(--gold);
+    border-radius:8px; background:rgba(0,0,0,.12); color:var(--parch2); font-size:11.5px; line-height:1.5}
 
   .empty{padding:42px 20px; text-align:center; color:var(--parch2)}
   .empty .big{font-family:'Cinzel',serif; color:var(--gold); font-size:18px; letter-spacing:.06em; margin-bottom:8px}
