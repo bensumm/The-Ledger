@@ -41,6 +41,7 @@ import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-it
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
+import { depthReachClause } from '../lib/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices)
 import { loadState, ALERT_PERSIST_MS } from '../lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
@@ -65,6 +66,13 @@ const POSITIONS_MODE = args.includes('--positions');
 // --raw restores the model-free Quick + Optimistic columns. --positions is INTENT-DIFFERENT (the
 // held-lot clear-price/list-at frame) and keeps Quick/Optimistic unconditionally — see runPositions.
 const RAW = args.includes('--raw');
+// PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in,
+// owner early-adopt). When set, Est. buy/sell are the pressure-driven reachableBand legs (still
+// BE-floored + clamped + nudged); the conservative depth floor renders beside as the reference; the
+// retro co-log stays on the NEUTRAL estimate (unbiased). Console-only — never touches screen.json/app.
+const PRESSURE_EXIT = args.includes('--pressure-exit');
+// LOUD trial banner (rule 4 — the prices must never read as the calibrated default).
+const PRESSURE_BANNER = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). --raw / drop the flag to restore the neutral estimate.';
 const tokens = args.filter(a => !a.startsWith('--'));
 
 // LM1: per-item 4h buy-limit windows, built ONCE per run from the repo-root fills.json (local file, no
@@ -269,9 +277,15 @@ async function runItems() {
     // (a declared exit is a held-lot SELL plan; it must not inflate an ad-hoc read of an item we don't
     // hold). spec stays FLIP_NICHES.band — an explicit "how's X" is a generic flip read.
     const declaredExit = heldIds.has(id) ? (thesisFor(holdThesisStore, id)?.exitPrice ?? null) : null;
+    // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): the pressure-driven reachable band + (held) depth floor off
+    // the SAME in-hand windowStats (`ast`)/1h series — the five-way head-to-head co-log AND (PB4) the
+    // pressure-exit price source. Computed BEFORE estimatePair so it can ride the est's extra.
+    const reachable = ast ? reachableBand(ast) : null;
+    const depthExit = (heldIds.has(id) && inp.ts1h && heldQty.get(id) != null)
+      ? clearableAsk(inp.ts1h, { qty: heldQty.get(id), wStart: 0, wEnd: 0, nights: 14 }) : null;
     // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the in-hand ts5m —
     // Part B's de-bias reference; applied only when reachRelief > 0 (liquid + small limit÷flow).
-    const est = estimatePair(FLIP_NICHES.band, row, {
+    const extraEst = {
       bidReach, askReach,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: ap, declaredExit,
@@ -279,23 +293,25 @@ async function runItems() {
       // PLAN-LIQUIDITY-REACH: on a held lot, the reach relief sizes off the REAL lot qty, not the buy-limit
       // proxy (absent → estimatePair degrades to row.limit, byte-identical for a bare "how's X" read).
       intendedUnits: heldIds.has(id) ? (heldQty.get(id) ?? null) : null,
-    }, { nudge: anchorNudge });
+      reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
+    };
+    // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is DISPLAY-ONLY.
+    const est = estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge });
+    const estShown = PRESSURE_EXIT ? estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge, pressureExit: true }) : est;
     // PLAN-LIQUIDITY-REACH inform line (never a table/verdict/price-column input): the relief that
     // counterweights the ⚠ reach caution above on a liquid small-relative-size book.
     if (est && est.confidence.relief) {
       const rl = est.confidence.relief;
       lines.push(`  ↥ reach relief: liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)`);
     }
-    rows.push(RAW ? std : [std[0], std[1], ...estPairCells(est), std[4], std[5], std[6]]);
+    // PB4: under the flag, a HELD item renders the conservative DEPTH FLOOR beside the pressure prices
+    // (the reference — don't drop it). depthReachClause is the shared two-lens formatter (emit.mjs).
+    if (PRESSURE_EXIT && estShown && estShown.confidence.pressureExit) {
+      const clause = depthReachClause({ ca: depthExit, rb: reachable, qty: heldQty.get(id) });
+      if (clause) lines.push(`  ◇ ${clause}`);
+    }
+    rows.push(RAW ? std : [std[0], std[1], ...estPairCells(estShown), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
-    // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): co-log the pressure-driven reachable band off the SAME
-    // in-hand windowStats (`ast`) — extends the five-way exit-estimator head-to-head to the per-item
-    // surface (reachRelief=estSell + asym already log here). On a HELD item the depth floor is ALSO free
-    // (real held qty + the 1h series in hand — the COD-4 budgeted fetch), so it co-logs too; a bare "how's
-    // X" read has no held qty → no depth (the DE7 fetch-budget rule keeps depth a held-lot tool).
-    const reachable = ast ? reachableBand(ast) : null;
-    const depthExit = (heldIds.has(id) && inp.ts1h && heldQty.get(id) != null)
-      ? clearableAsk(inp.ts1h, { qty: heldQty.get(id), wStart: 0, wEnd: 0, nights: 14 }) : null;
     sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
       estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear,
       reachable: reachableShadow(reachable), depthExit: depthExitShadow(depthExit, { qty: heldQty.get(id), volDay: row.volDay }), asym: asymShadow(ae) }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear + RC-S2 reachable/depthExit/asym ride the row
@@ -323,6 +339,7 @@ async function runItems() {
   const baseHeaders = RAW ? QUOTE_HEADERS : ['Item', 'Guide', ...EST_HEADERS, 'Vol/d', 'Momentum', 'Regime'];
   const headers = anyProbe ? [...baseHeaders, 'Probes'] : baseHeaders;
   const outRows = anyProbe ? rows.map((r, i) => [...r, { t: probeStrs[i], c: 'mini' }]) : rows;
+  if (PRESSURE_EXIT && !RAW) console.log(PRESSURE_BANNER + '\n');   // PB4 loud trial banner
   console.log(mdTable(headers, outRows));
   if (!RAW) console.log(`(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. Est. sell anchors to a DECLARED thesis exit when one exists ("(declared)"). BE is model-free and floors Est. sell. --raw restores the model-free Quick/Optimistic columns.)`);
   console.log('');
@@ -442,6 +459,31 @@ async function runPositions() {
         lines.push(`  ⚠ ${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via declare-thesis.mjs if you agree.`);
       }
     }
+    // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL line on a held
+    // lot: the pressure-driven list-at (Est. sell) + deep re-buy bid, BE-floored, WITH the conservative
+    // depth floor beside it (the reference). INFORM-ONLY — the Verdict column + the shared renderHeldVerdict
+    // are UNTOUCHED (app-parity safe); this is opt-in decision support. This booked-lots view doesn't fetch
+    // the 1h series by default, so under the flag we do a TARGETED, TTL-cached 1h fetch (the same pattern
+    // the declared-exit staleness read uses) — the cost the owner opts into with the flag. The retro
+    // co-log is unaffected (runPositions logs the neutral verdict; no est is logged here).
+    if (PRESSURE_EXIT) {
+      let ts1hP = inp.ts1h ?? null;
+      if (!ts1hP) { try { ts1hP = await fetchTsCached(itemId, '1h', TS_TTL_1H_EXIT); } catch { ts1hP = null; } }
+      const astP = ts1hP ? windowStats(ts1hP, { nights: 14, wStart: 0, wEnd: 0 }) : null;
+      const reachableP = astP ? reachableBand(astP) : null;
+      const depthP = ts1hP ? clearableAsk(ts1hP, { qty, wStart: 0, wEnd: 0, nights: 14 }) : null;
+      const estP = reachableP ? estimatePair(FLIP_NICHES.band, row, {
+        reachable: reachableP, dayHigh: dayHighFrom5m(inp.ts5m), intendedUnits: qty,
+        declaredExit: thesisEntry?.exitPrice ?? null,
+      }, { nudge: anchorNudge, pressureExit: true }) : null;
+      if (estP && estP.confidence.pressureExit) {
+        const pe = estP.confidence.pressureExit;
+        const clause = depthReachClause({ ca: depthP, rb: reachableP, qty });
+        lines.push(`  ◇ ${name}: pressure-exit — list @ ${fmtP(estP.estSell)}${estP.confidence.beFloored ? ' (BE-floored)' : ''} · re-buy bid ${fmtP(estP.estBuy)} (pressure ${pe.pressure.toFixed(1)}×${pe.reliability != null && pe.reliability < 1 ? ` rel ${pe.reliability.toFixed(2)}` : ''}, BE ${fmtP(estP.be)})${clause ? ` · ${clause}` : ''} — TRIAL, un-calibrated (n≈0)`);
+      } else if (!ts1hP) {
+        lines.push(`  ◇ ${name}: pressure-exit — no 1h series available this pass (targeted fetch failed); re-run watch for the pressure read.`);
+      }
+    }
     const ahHeld = askHeadroomText(row);
     if (ahHeld) lines.push(`  ⤴ ${name}: ask headroom — ${ahHeld}`);
     else if (row.mom === 'breakup' && row.optSell != null) lines.push(`  ⤴ ${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.`);
@@ -467,6 +509,7 @@ async function runPositions() {
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
   if (snap) { try { snap.archive.close(); } catch {} }   // P0: loadSnapshot leaves the archive open when it owns it
   console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
+  if (PRESSURE_EXIT) console.log(PRESSURE_BANNER + '\n');   // PB4 loud trial banner
   // COD-4: the SHARED stale-book banner (item-context.mjs staleBookBanner) — watch-positions.mjs already prints this off
   // positions.json's mtime; quote-items.mjs --positions read the same file silently, so the surface Ben uses
   // most never warned when the book was stale (the A4 inversion). Now both surfaces word it identically.
