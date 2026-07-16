@@ -177,11 +177,14 @@ per run:                                     markdown string(s)                 
 
 ## Staged chunks
 
-**Status (2026-07-16): VZ1 ✅ landed · VZ2a ✅ landed (fixed directly, not deferred — see below) ·
-VZ2b ✅ landed · VZ3/VZ4a/VZ4b/VZ5/VZ6 not started.** VZ2a's fixture confirmed a genuine
-convictionGate-vs-heldDisplay disagreement (see R9); Ben's ruling was heldDisplay stays authoritative
-for the verdict word, structural break surfaces as an appended warning clause — landed in
-`heldAlert()` directly since the fix was small and well-scoped once the ruling was made.
+**Status (2026-07-16): ALL CHUNKS ✅ landed — VZ1, VZ2a, VZ2b, VZ3, VZ4a, VZ4b, VZ5, VZ6.** VZ2a's
+fixture confirmed a genuine convictionGate-vs-heldDisplay disagreement (see R9); Ben's ruling was
+heldDisplay stays authoritative for the verdict word, structural break surfaces as an appended
+warning clause — landed in `heldAlert()` directly since the fix was small and well-scoped once the
+ruling was made. VZ3-VZ6 followed the same pattern established by VZ1/VZ2b, extended to
+`quote-items.mjs` and `screen-flip-niches.mjs`; all byte-identity-verified. Stage 1 of this plan
+(console/chat markdown render layer) is complete; Stage 2 (the live HTML dashboard, R6) remains
+unbuilt and out of scope.
 
 Order: prove the pattern on watch-positions (the script with the live bug), then quote-items
 (smallest), then screen (largest surface). Mechanical moves are separate from visible changes;

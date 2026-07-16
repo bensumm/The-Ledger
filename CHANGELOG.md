@@ -10,6 +10,24 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-VIZ-LAYER VZ3-VZ6 landed — quote-items.mjs + screen-flip-niches.mjs onto the render layer, skill relay rules, docs sweep (2026-07-16, `pipeline/lib/render.mjs`+`pipeline/commands/quote-items.mjs`+`pipeline/commands/screen-flip-niches.mjs`+4 skills — NO APP_VERSION)
+Completes the visualization-layer initiative's Stage-1 scope (`PLAN-VIZ-LAYER.md`). **VZ3**:
+`quote-items.mjs` (both per-item and `--positions` modes) now builds one report object printed via
+`renderReport`; the flat prose `lines[]` became typed note items, with the per-kind sigil moved into
+render.mjs's `NOTE_KINDS` registry. **VZ4a/VZ4b**: `screen-flip-niches.mjs`'s per-niche tables,
+footer notes, AND the loose info sections (diurnal timing, overnight-accumulation, entry-paths, etc.)
+now render through one `renderReport` call per niche instead of ad-hoc console.log calls scattered
+across the function; the `--publish` `screen.json` payload (schema 2) is untouched. **VZ5**: the
+render layer's tier registry (core/context/shadow, R10) is documented in `render.mjs`'s header as the
+ONE source; all four skills (`/scan`, `/positions`, `/overnight`, `/morning`) gained the two relay
+rules — never fence a script's table, and relay both `core` and `context` tiers by default (no
+speculative trimming). **VZ6**: docs reconciliation sweep (README inventory, MARKET-ANALYSIS.md
+pointer, superseded-phrase grep). All chunks byte-identity-verified against golden fixtures
+(`pipeline/test/render.test.mjs`, now 18 checks) plus live smoke runs; no gate/verdict/break-even/
+grade number changed anywhere (R5 held). Screen's footer notes (caution/trajectory/headroom/etc.)
+stayed pre-formatted strings rather than fully typed kinds — several carry mid-string variables so
+the sigil isn't a pure prefix; flagged as a possible follow-up, not done here.
+
 ### PLAN-VIZ-LAYER VZ1+VZ2b landed, VZ2a's headline/table mismatch fixed (2026-07-16, `pipeline/lib/render.mjs` new, `watch-positions.mjs`+`pipeline/lib/cli.mjs` — NO APP_VERSION)
 First landed chunk of the visualization-layer initiative (see `PLAN-VIZ-LAYER.md`). **VZ1**: a new
 `pipeline/lib/render.mjs` peer render layer — `watch-positions.mjs`'s entire output pass now builds

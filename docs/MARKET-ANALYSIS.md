@@ -13,6 +13,18 @@ summary. Term lookup: `docs/GLOSSARY.md`. Data-flow: `docs/FLOW.md`. Invariants:
 
 ## 1. The output — one table
 
+**The render layer (PLAN-VIZ-LAYER).** The three market-read scripts (watch/quote/screen) each build
+ONE plain, JSON-serializable **report object** (`{ kind, generatedAt, sections:[…] }`) beside their
+compute and print it via `renderReport` — the ONE render path, `pipeline/lib/render.mjs`. It formats
+already-computed facts and decides NOTHING (no numbers, no verdicts). Section types: `headline` /
+`alerts` / `table` (→ `mdTable`) / `lines` / `notes` (typed `{kind,tier,text}`, the per-kind sigil
+lives in render.mjs's `NOTE_KINDS`, not the push site). Every note family carries a **surfacing tier**
+— `core` vs `context`, a TRACKING label only: BOTH render AND relay by default (R10), there is no
+default-hidden tier; `shadow` (suggestions.jsonl analytics) never enters a report object. The tier
+registry + relay rules are in render.mjs's header (encoded) and the four SKILL.md files (the two
+`judgment:` relay rules — raw-unfenced tables, relay both tiers). Don't restate the format elsewhere;
+point here / at render.mjs.
+
 Every read is ONE table, the **table v2** column set:
 
 `Item | Guide | Quick | Optimistic | Vol/d | Momentum | Regime`

@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.31
+version: 1.32
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -16,6 +16,15 @@ fenced code block (a code fence forces the client to show literal `|`/`-` charac
 rendering an actual table — confirmed live, 2026-07-16). Ben reads the actual numbers/columns
 directly; a prose rollup alone hides the table he wants to see. Prose interpretation still
 follows (§3/§4) — it supplements the table, it doesn't replace it.
+
+**Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
+layer labels every note family a TRACKING tier — `core` (the held-lot verdict / list-at, alerts,
+the V5 held-note fields) and `context` (the inform-only families: ask headroom, conviction, paths,
+rebid advisory, stale-exit, pressure-exit). _judgment:_ **both render AND relay by default** — there
+is NO default-hidden middle tier, so surface the context notes (the Conviction / Paths / Rebid
+blocks) too, don't drop them to "keep it short." A note family only stops being surfaced once real
+sessions evidence it's consistently unused (a future ruling, never a per-pass call). The tier
+registry lives in `pipeline/lib/render.mjs`'s header — the ONE registry; don't restate tiers here.
 
 ## 1. Run the script — never hand-fetch
 

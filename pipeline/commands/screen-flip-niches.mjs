@@ -80,6 +80,7 @@ import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells } from '../lib/cli.mjs';
+import { renderReport } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence)
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
@@ -357,6 +358,35 @@ function weighEntryPaths(row, ph) {
 function pathLine(name, weighed, defaultPath) {
   const menu = weighed.map(w => `${w.key}${w.key === defaultPath ? '*' : ''} ${w.viability.toFixed(2)}`).join(' · ');
   return `  ↳ ${name} — ${menu}`;
+}
+
+// VZ4a (PLAN-VIZ-LAYER) — assemble a niche's table + footer notes into ONE plain screen-report object
+// (R4), rendered by render.mjs's renderReport. PURE (no fetch/fs/clock): it takes the ALREADY-computed
+// header lines, the table (headers+structured cells, or null → '_none_'), the Est. explainer (non-RAW),
+// and the footer note lines, and only decides section ORDER + the blank-line contract, so it is testable
+// off fixtures. Byte-identical to the pre-VZ4a console.log sequence (every line was its own console.log
+// with no inter-blank; the report emits them as flush lines / an mdTable section joined by '\n'). The
+// screen footer note families keep their compute-site wording (several carry a mid-string variable or a
+// suffix, so the sigil is not a pure prefix like quote's — they route through formatNote unchanged as
+// pre-formatted strings). The --publish screen.json payload is built SEPARATELY from `rows` (frozen
+// schema 2) and is NOT touched here. Consumed by renderMode; pinned by pipeline/test/render.test.mjs.
+// VZ4b extends this to ONE report per niche: `extraSections` (the diurnal / overnight-accumulation /
+// velocity / entry-paths / stats blocks + the trailing blank line) are appended AFTER the footer, so the
+// whole niche prints through a single renderReport call. Every section is blank:false (the pre-VZ4 output
+// was a flush console.log sequence with no inter-blank line); the trailing blank between niches rides as
+// the caller's final `{type:'lines', lines:[''] }` extra section.
+export function buildScreenNicheReport({ headerLines = [], table = null, estExplainer = null, footerLines = [], extraSections = [] } = {}) {
+  const sections = [];
+  sections.push({ type: 'lines', lines: headerLines, blank: false });
+  if (table) {
+    sections.push({ type: 'table', headers: table.headers, rows: table.rows, blank: false });
+    if (estExplainer) sections.push({ type: 'lines', lines: [estExplainer], blank: false });
+  } else {
+    sections.push({ type: 'lines', lines: ['_none_'], blank: false });
+  }
+  sections.push({ type: 'lines', lines: footerLines, blank: false });
+  sections.push(...extraSections);
+  return { kind: 'screen', generatedAt: null, sections };
 }
 
 // render one niche: filter the fetched pool, rate, sort by grade/score, print table + footer.
@@ -726,43 +756,51 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // P6c: the sub-floor banner replaces the normal header line — it states up front that ZERO candidates
   // cleared the configured floors, WHICH floor was relaxed and its value, the cap, and that these rows
   // are NOT qualified. The bar was re-run beneath the floor, never silently lowered.
+  // VZ4a (PLAN-VIZ-LAYER): the niche header + table + footer-note block is collected into ONE
+  // screen-report (buildScreenNicheReport) and printed via renderReport — byte-identical to the prior
+  // console.log sequence (every line was its own console.log with no inter-blank line). The
+  // diurnal/accumulation/velocity/entry-paths/stats blocks below stay inline (VZ4b folds them in).
+  const headerLines = [];
+  // P6c: the sub-floor banner replaces the normal header line — it states up front that ZERO candidates
+  // cleared the configured floors, WHICH floor was relaxed and its value, the cap, and that these rows
+  // are NOT qualified. The bar was re-run beneath the floor, never silently lowered.
   if (subFloor) {
-    console.log(`## ${mode.toUpperCase()} — SUB-FLOOR FALLBACK — 0 candidates cleared the configured floors`);
-    console.log(`⚠ ${subFloorLabel(subFloor)}. Best ${SUBFLOOR_TOP} max, grades capped at ${SUBFLOOR_GRADE_CAP} — these rows did NOT qualify.`);
-    console.log(`(${rows.length} rated from ${cand.length} sub-floor gated, top ${survivors.length} fetched; ${fallNote})`);
+    headerLines.push(`## ${mode.toUpperCase()} — SUB-FLOOR FALLBACK — 0 candidates cleared the configured floors`);
+    headerLines.push(`⚠ ${subFloorLabel(subFloor)}. Best ${SUBFLOOR_TOP} max, grades capped at ${SUBFLOOR_GRADE_CAP} — these rows did NOT qualify.`);
+    headerLines.push(`(${rows.length} rated from ${cand.length} sub-floor gated, top ${survivors.length} fetched; ${fallNote})`);
   } else {
-    console.log(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
+    headerLines.push(`## ${mode.toUpperCase()} — ${rows.length} rated (from ${cand.length} gated, top ${survivors.length} fetched; ${fallNote})`);
   }
-  console.log(PLAYBOOK[mode]);
-  console.log(`(band basis: ${BAND_HOURS}h, ≥${MIN_TRADED} traded windows any-side + two-sided; thin ≥${MIN_TRADED_THIN})`);
+  headerLines.push(PLAYBOOK[mode]);
+  headerLines.push(`(band basis: ${BAND_HOURS}h, ≥${MIN_TRADED} traded windows any-side + two-sided; thin ≥${MIN_TRADED_THIN})`);
   // PM1: the dedicated `Probes` column is appended to the PRINTED table ONLY when at least one row
   // fired a probe — so with no module present (or none firing) the table is BYTE-IDENTICAL to pre-PM1
   // (the removability guarantee). It is deliberately NOT added to the published cells (screen.json /
   // the app render) — an app Probes column is a separate, APP_VERSION-bumping step (out of PM1 scope).
   const anyProbe = rows.some(r => r.probeStr);
+  // PB4 loud trial banner (rule 4 — the prices/rank must never read as the calibrated default).
+  if (PRESSURE_EXIT) headerLines.push('⚠ --pressure-exit: Est. buy/sell + the RANK use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — NOT validated, NOT published). Reranked by pressure net. --raw / drop the flag to restore the neutral estimate + sort.');
   // PLAN-OUTPUT-TABLE: the DEFAULT print is the reconciliation-estimate view (Est. buy/sell replace
   // Quick+Optimistic; Grade moves after Regime); --raw (and --asym, which implies it) prints the
   // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
   // to screen.json either way, so the app contract is byte-identical regardless of the view.
-  // PB4 loud trial banner (rule 4 — the prices/rank must never read as the calibrated default).
-  if (PRESSURE_EXIT) console.log('⚠ --pressure-exit: Est. buy/sell + the RANK use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — NOT validated, NOT published). Reranked by pressure net. --raw / drop the flag to restore the neutral estimate + sort.');
+  let printHeaders, printCells, estExplainer = null;
   if (RAW) {
-    const printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
-    const printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
-    console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
+    printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
+    printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
   } else {
-    const printHeaders = anyProbe ? [...HEADERS_EST, 'Probes'] : HEADERS_EST;
+    printHeaders = anyProbe ? [...HEADERS_EST, 'Probes'] : HEADERS_EST;
     // r.cells layout: [item, grade, guide, quick, opt, vol, mom, regime, rank] — reuse the shared
     // structured cells (phase-suffixed regime, sub-floor grade label) and swap in the est pair cells.
-    const printCells = rows.map(r => {
+    printCells = rows.map(r => {
       const c = r.cells;
       const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], c[8]];   // PB4: estShown = pressure legs under the flag, else the neutral est
       return anyProbe ? [...base, { t: r.probeStr, c: 'mini' }] : base;
     });
-    console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');
-    if (rows.length) console.log(`(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band reach-folded), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. BE is model-free and floors Est. sell — a "(BE-floored)" ask means no profitable trade at model prices. --raw restores the model-free Quick/Optimistic columns.)`);
+    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band reach-folded), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. BE is model-free and floors Est. sell — a "(BE-floored)" ask means no profitable trade at model prices. --raw restores the model-free Quick/Optimistic columns.)`;
   }
-  console.log(`Grades: ${gradeDist(dist)}`);
+  const table = rows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
+  const footerLines = [`Grades: ${gradeDist(dist)}`];
   // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
   // the count + the top-3 reasons. reachValidator still degrades to pass here (no 1h series fetched);
   // P3's floorValidator CAN reject (a buy parked well above the durable multi-week floor) once the
@@ -770,18 +808,22 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // absent (default output byte-identical). Caution rows still show; each is flagged on its own line.
   if (disc.reject > 0) {
     const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
-    console.log(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
+    footerLines.push(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
   }
-  for (const c of cautionNotes) console.log(`⚠ caution — ${c}`);
-  for (const n of informNotes) console.log(`ℹ trajectory/reach — ${n}`);
-  for (const n of headroomNotes) console.log(`⤴ ask headroom — ${n}`);
-  for (const n of windowClearNotes) console.log(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
+  for (const c of cautionNotes) footerLines.push(`⚠ caution — ${c}`);
+  for (const n of informNotes) footerLines.push(`ℹ trajectory/reach — ${n}`);
+  for (const n of headroomNotes) footerLines.push(`⤴ ask headroom — ${n}`);
+  for (const n of windowClearNotes) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
-  for (const n of asymNotes) console.log(`◆ asym fill — ${n}`);
+  for (const n of asymNotes) footerLines.push(`◆ asym fill — ${n}`);
   // DC3 (INFORM HALF): the demand-regime flip-side classifier — decision support only (never a rank/gate/
   // grade/screen.json input; the routing/rank half is F1-gated). One line per clearly-tilted survivor.
-  for (const n of demandNotes) console.log(`◈ demand — ${n}`);
+  for (const n of demandNotes) footerLines.push(`◈ demand — ${n}`);
+  // VZ4b: the loose info blocks below (diurnal / overnight accumulation / velocity / entry paths / stats)
+  // are collected as report sections and appended to the SAME niche report, printed ONCE at the end —
+  // byte-identical to the prior inline console.log sequence (all flush, no inter-blank line).
+  const extraSections = [];
   // Diurnal timing (2026-07-09) — the peak-timing read auto-run on the top surfaced picks. FREE: the 1h
   // series is already in hand (Leg B fetched it per survivor), so this adds NO fetch. For each top pick it
   // derives the stale-guarded bid (dip-window level, priced to LIVE when a dominating trend erases the dip
@@ -810,8 +852,10 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     diurnalLines.push(`${candidate ? '★ ' : ''}${nm} — BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${edge}${trend}`);
   }
   if (diurnalLines.length) {
-    console.log(`Diurnal timing (peak-timing bid/ask off the in-hand 1h series — support, not a gate; ★ = clean diurnal candidate):`);
-    for (const l of diurnalLines) console.log(`  ↳ ${l}`);
+    extraSections.push({ type: 'lines', blank: false, lines: [
+      `Diurnal timing (peak-timing bid/ask off the in-hand 1h series — support, not a gate; ★ = clean diurnal candidate):`,
+      ...diurnalLines.map(l => `  ↳ ${l}`),
+    ] });
   }
   // COD-2 (2026-07-10) — the OVERNIGHT accumulation-and-capital table. Encoded from /overnight §6's
   // hand-computed sizing (the prose formula min(buyLimit×2, 8/24×0.10×volDay), now the shared
@@ -844,9 +888,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
         { t: total != null ? (total >= 0 ? '+' : '') + fmtP(total) : '—' },
       ]);
     });
-    console.log(`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`);
-    console.log(mdTable(accHeaders, accCells));
-    console.log(`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even.)`);
+    extraSections.push({ type: 'lines', blank: false, lines: [`Overnight accumulation & capital (~${OVERNIGHT_SPAN_H}h span; bid→sell + up-to units + running capital — take lines top-down until your stated capital runs out):`] });
+    extraSections.push({ type: 'table', blank: false, headers: accHeaders, rows: accCells });
+    extraSections.push({ type: 'lines', blank: false, lines: [`(Up-to units = min(buy limit × 2, 8/24 × 10% × Vol/d) — an UPPER BOUND: assumes fills at your bid, prorates daily volume flat across the quiet hours, prices in no fill probability. Pair it with the fill-realism / Diurnal read above. Sell never below break-even.)`] });
   }
   // Build 2 — per-row velocity tag: descriptive per-item velocity (fast/slow · median fill · %
   // unfilled) from the gitignored outcomes.json for rows in THIS niche with enough trade history.
@@ -861,7 +905,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     }
     if (tags.length) {
       const ageH = VEL.generatedAt ? Math.round((Date.now() - new Date(VEL.generatedAt).getTime()) / 3600000) : null;
-      console.log(`velocity (outcomes.json${ageH != null ? `, ${ageH}h old` : ''}; descriptive per-item history, not a rate): ${tags.join(' · ')}`);
+      extraSections.push({ type: 'lines', blank: false, lines: [`velocity (outcomes.json${ageH != null ? `, ${ageH}h old` : ''}; descriptive per-item history, not a rate): ${tags.join(' · ')}`] });
     }
   }
   // P4c: the weighed ENTRY-PATH menu per surfaced row — the surfacing spec's inferred default path
@@ -870,15 +914,20 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // the table above). STDOUT-ONLY — deliberately NOT in the published screen.json cells, so the
   // canonical table + app contract stay byte-identical (same discipline as the phase/velocity folds).
   if (rows.length) {
-    console.log(`Entry paths (surfacing default \`*\` + weighed menu; support, not a gate — placeholder weights):`);
-    for (const r of rows) console.log(pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath));
+    extraSections.push({ type: 'lines', blank: false, lines: [
+      `Entry paths (surfacing default \`*\` + weighed menu; support, not a gate — placeholder weights):`,
+      ...rows.map(r => pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath)),
+    ] });
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
     const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (partition ? `, band-lane partition ${disc.partition}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
-    console.log(`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`);
+    extraSections.push({ type: 'lines', blank: false, lines: [`stats: gated ${cand.length} | fetched ${fetched} | survivors ${kept} | yield ${fetched ? Math.round(kept / fetched * 100) : 0}% | discarded: ${reasons}`] });
   }
-  console.log('');
+  // The trailing blank line that separated niches (the pre-VZ4 `console.log('')`) rides as a final
+  // flush empty line, so the ONE renderReport call reproduces the whole niche's stdout byte-for-byte.
+  extraSections.push({ type: 'lines', blank: false, lines: [''] });
+  console.log(renderReport(buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections })));
   // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link).
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
   // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).

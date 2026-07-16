@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.60
+version: 1.61
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -18,6 +18,15 @@ actual numbers/columns directly. This applies to `screen-flip-niches.mjs` and to
 the table, it doesn't replace it. On a repeated/looped scan where nothing material changed,
 it's fine to note that and skip re-pasting — but when there IS something to report, paste the
 table, don't just describe it.
+
+**Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
+layer labels every note family a TRACKING tier — `core` (grades/verdicts, alerts, the WATCHLIST,
+the fired REJECT/CAUTION footer) and `context` (the inform-only families: diurnal, forecast, ask
+headroom, asym fill, window-clear, reach relief, demand). _judgment:_ **both render AND relay by
+default** — there is NO default-hidden middle tier, so surface the context footer notes too, don't
+drop them to "keep it short." A note family only stops being surfaced once real sessions evidence
+it's consistently unused (a future ruling, never a per-pass call). The tier registry lives in
+`pipeline/lib/render.mjs`'s header — the ONE registry; don't restate tiers here.
 
 ## 1. Run the script — never hand-fetch
 

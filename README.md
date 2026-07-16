@@ -571,13 +571,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     volume for `quote-items.mjs`/`watch-positions.mjs`: `rolling24FromTs1h` off the in-hand `ts1h`, reassigned onto `inp.vol24`
     so Vol/d + pressure + the dip reference read corrected volume; degrades to the `/24h` read when the 1h series
     is too short)), `cli.mjs` (shared arg/format/table
-    helpers), `render.mjs` (PLAN-VIZ-LAYER VZ1 — the ONE render layer between the pipeline's DATA and the
+    helpers), `render.mjs` (PLAN-VIZ-LAYER — the ONE render layer between the pipeline's DATA and the
     reader: a script builds a plain JSON-serializable **report object** `{kind, generatedAt, sections:[…]}`
     beside its compute, and `renderReport()` turns it into markdown/console text, DELEGATING to the existing
     pure formatters (`mdTable`, `heldNoteBlock`, `renderHeldVerdict`/`renderPathLine`) — it decides nothing +
-    computes no numbers. Consumer so far: `watch-positions.mjs` (`buildWatchReport`); quote/screen join in
-    later VZ chunks. Also holds the surfacing-TIER registry (R10 — a tracking label, not a render/relay gate).
-    Byte-identity + the VZ2b canonical-cell format pinned by `pipeline/test/render.test.mjs`).
+    computes no numbers. Consumers: `watch-positions.mjs` (`buildWatchReport`, VZ1), `quote-items.mjs`
+    (`buildQuoteReport`, both modes, VZ3), `screen-flip-niches.mjs` (`buildScreenNicheReport`, VZ4a/b). Notes
+    are typed `{kind,tier,text}`; the per-kind sigil lives in render.mjs's `NOTE_KINDS`, not the push site.
+    Also holds the surfacing-TIER registry (R10 — `core`/`context` both render+relay by default, a tracking
+    label not a gate; `shadow` never enters a report). Byte-identity + the VZ2b canonical-cell format +
+    quote/screen report assembly pinned by `pipeline/test/render.test.mjs`).
     **`rating.mjs` and `estimators.mjs` MOVED to `js/` (2026-07-10, app-parity Wave 2a)** —
     now **APP-IMPORTED by `js/market.js`** (AP4, 0.61.0 — the Finder Grade column + Rating bar + sort use
     the shared `estimateRank` + `rateItem`, replacing the old `RATE_W` profit/hr Risk model; coarse

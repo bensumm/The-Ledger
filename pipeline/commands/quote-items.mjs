@@ -19,7 +19,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit } from '../../js/quotecore.js';
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
@@ -34,7 +34,8 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadA
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
-import { mdTable, stdCells } from '../lib/cli.mjs';
+import { stdCells } from '../lib/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3)
+import { renderReport } from '../lib/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers
 import { runValidators, flags, leanValidators } from '../../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
@@ -106,6 +107,48 @@ function regimeLine(name, row, limit, win) {
   return `- ${name}: regime ${row.regimeLabel} ${drift}${lim}${press}${bnd}${inv}`;
 }
 
+// PLAN-OUTPUT-TABLE: the standing explainer under the estimated (non-RAW) items table (was an inline
+// string literal at the emission site; hoisted so buildQuoteReport can reference it as the estExplainer).
+const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. Est. sell anchors to a DECLARED thesis exit when one exists ("(declared)"). BE is model-free and floors Est. sell. --raw restores the model-free Quick/Optimistic columns.)`;
+
+// VZ3 (PLAN-VIZ-LAYER) — assemble the quote output pass into ONE plain report object (R4), rendered by
+// render.mjs's renderReport. PURE (no fetch/fs/clock): it takes ALREADY-computed pieces (the table
+// headers/rows, the typed note items, the banner/explainer flags) and only decides section ORDER + the
+// blank-line contract, so it is testable off fixtures. Byte-identical to the pre-VZ3 console.log
+// sequence (pinned by pipeline/test/render.test.mjs). `notes` are typed {kind,tier,text} items — the
+// per-kind sigil now lives in render.mjs's formatNote (NOTE_KINDS), not at the push site. The
+// keepEmpty:true notes section reproduces the pre-VZ3 pattern where the block was always two
+// unconditional console.log calls (a blank then the joined lines) even with zero notes.
+export function buildQuoteReport({
+  mode = 'items',
+  header = null,          // positions: the '# Open positions …\n' line (with its trailing \n)
+  pressureBanner = null,  // the loud --pressure-exit trial banner (already includes no trailing \n)
+  staleBanner = null,     // positions: the shared stale-book banner (with its trailing \n)
+  headers = [], rows = [],
+  estExplainer = null,    // items non-RAW: the standing Est. explainer line
+  notes = [],             // flat, ordered typed note items (strings also accepted)
+  convLines = [], pathLines = [], rebidLines = [], lateNightLine = null,   // positions extra blocks
+} = {}) {
+  const sections = [];
+  if (mode === 'positions') {
+    if (header) sections.push({ type: 'lines', lines: [header], blank: false });
+    if (pressureBanner) sections.push({ type: 'lines', lines: [pressureBanner + '\n'], blank: false });
+    if (staleBanner) sections.push({ type: 'lines', lines: [staleBanner + '\n'], blank: false });
+    sections.push({ type: 'table', headers, rows, blank: false });
+    sections.push({ type: 'notes', items: notes, blank: true, keepEmpty: true });
+    if (convLines.length) sections.push({ type: 'lines', lines: ['', 'Conviction (shared watch-state):', ...convLines], blank: false });
+    if (pathLines.length) sections.push({ type: 'lines', lines: ['', 'Paths (persistence-gated dominant per held lot — decision support, placeholder weights):', ...pathLines], blank: false });
+    if (rebidLines.length) sections.push({ type: 'lines', lines: ['', 'Rebid advisory (cut-and-rebid friction bar + multi-week trajectory — support, never overrides the verdict):', ...rebidLines], blank: false });
+    if (lateNightLine) sections.push({ type: 'lines', lines: ['', lateNightLine], blank: false });
+  } else {
+    if (pressureBanner) sections.push({ type: 'lines', lines: [pressureBanner + '\n'], blank: false });
+    sections.push({ type: 'table', headers, rows, blank: false });
+    if (estExplainer) sections.push({ type: 'lines', lines: [estExplainer], blank: false });
+    sections.push({ type: 'notes', items: notes, blank: true, keepEmpty: true });
+  }
+  return { kind: 'quote', generatedAt: null, sections };
+}
+
 async function runItems() {
   if (!tokens.length) { console.error('usage: node pipeline/commands/quote-items.mjs "<item or id>" [...more]  |  node pipeline/commands/quote-items.mjs --positions'); process.exit(1); }
   const map = await loadMapping();
@@ -136,7 +179,7 @@ async function runItems() {
   // volSrc:'bulk'; when cold it's null → classAndSource keeps the per-item volume, tags volSrc:'peritem'.
   // NEVER fetches — loadAll24hWarm is a pure file read; a 1-item ask never triggers the ~4000-item dump.
   const warm24h = loadAll24hWarm();
-  const rows = [], lines = [], sugg = [], probeStrs = [];
+  const rows = [], notes = [], sugg = [], probeStrs = [];
   for (const { id, name } of resolved) {
     // COD-4: BUDGETED ts1h fetch (1–2 items/invocation — cheap). Fixes the A4 asymmetry: the explicit-ask
     // surface used to fetch NO 1h series, so reach/trajectory DEGRADED to pass on exactly the surface Ben
@@ -155,9 +198,9 @@ async function runItems() {
     const row = computeQuote({ ...inp, id, guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true });
     const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
-    lines.push(regimeLine(name, row, map.byId[id]?.limit ?? null, limWin));
+    notes.push({ kind: 'regime', itemId: id, text: regimeLine(name, row, map.byId[id]?.limit ?? null, limWin) });
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
-    if (gl) lines.push('  ' + gl);
+    if (gl) notes.push({ kind: 'guideAnchor', itemId: id, text: gl });
     // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window — NOW it
     // FIRES because ts1h is fetched above (COD-4). P3's floorValidator scores the patient BUY (optBuy) —
     // a per-item quote IS a buy-interest read — against the durable multi-week floor from the read-only
@@ -179,7 +222,7 @@ async function runItems() {
       floor: { level: row.optBuy != null ? row.optBuy : null },
       limits: { window: limWin },   // LM1: a buy read — limitValidator flags an exhausted/near buy limit as a NOTE (never hides the row)
     });
-    for (const f of flags(vres)) lines.push(`  ⚠ ${f.key}: ${f.reason}`);
+    for (const f of flags(vres)) notes.push({ kind: 'validator', itemId: id, text: `${f.key}: ${f.reason}` });
     // COD-4: diurnal BID/ASK timing line — the SAME hourProfile/deriveDiurnalRange the screen's Diurnal
     // block uses, now feasible on quote because the 1h series is in hand. Support, not a gate; the bid is
     // stale-guarded to live (the Ghrazi lesson lives in deriveDiurnalRange). tax() nets the after-tax swing.
@@ -190,7 +233,7 @@ async function runItems() {
       const net = Math.round(dr.ask - tax(dr.ask) - dr.bid);
       const roi = dr.bid ? (net / dr.bid * 100) : null;
       const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
-      lines.push(`  ↳ diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}`);
+      notes.push({ kind: 'diurnal', itemId: id, text: `diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}` });
     }
     // #6 (PF1 forecast, Ben 2026-07-15): the module's motivating ask — "not buyable/sellable at a good
     // price NOW, but ~Xh from now." whenBuyable/whenSellable over ONE diurnalForecast (all js/forecast.mjs).
@@ -208,8 +251,8 @@ async function runItems() {
       if (targetBid != null && row.quickBuy > targetBid) {            // live buy doesn't clear BE at the reachable exit
         const wb = whenBuyable(fc, targetBid);
         const head = `not profitably buyable now (live ${fmt(row.quickBuy)} > ~${fmt(targetBid)} to clear BE at ${fmt(row.optSell)})`;
-        if (wb) lines.push(`  ℹ forecast: ${head} → buyable ${fmtEta(wb.etaH)} (${fmtHour(wb.atHours[0])}) @ ~${fmt(wb.projLevel)} [${fmt(wb.band.lo)}–${fmt(wb.band.hi)}] (provisional, n≈0 — diurnal+trend)`);
-        else lines.push(`  ℹ forecast: ${head} — NOT projected buyable within ${fc.horizonH}h on this model (provisional, n≈0)`);
+        if (wb) notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} → buyable ${fmtEta(wb.etaH)} (${fmtHour(wb.atHours[0])}) @ ~${fmt(wb.projLevel)} [${fmt(wb.band.lo)}–${fmt(wb.band.hi)}] (provisional, n≈0 — diurnal+trend)` });
+        else notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} — NOT projected buyable within ${fc.horizonH}h on this model (provisional, n≈0)` });
       }
     }
     // SELL timing (HELD lot only — a non-held read is a buy decision): when does the projected high reach
@@ -221,14 +264,14 @@ async function runItems() {
       if (targetAsk != null && row.quickSell < targetAsk) {          // can't sell at the target at the live instabuy now
         const ws = whenSellable(fc, targetAsk);
         const head = `not sellable at ${fmt(targetAsk)} now (live instabuy ${fmt(row.quickSell)})`;
-        if (ws) lines.push(`  ℹ forecast: ${head} → sellable ${fmtEta(ws.etaH)} (${fmtHour(ws.atHours[0])}) @ ~${fmt(ws.projLevel)} [${fmt(ws.band.lo)}–${fmt(ws.band.hi)}] (provisional, n≈0 — diurnal+trend)`);
-        else lines.push(`  ℹ forecast: ${head} — NOT projected sellable within ${fc.horizonH}h on this model (provisional, n≈0)`);
+        if (ws) notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} → sellable ${fmtEta(ws.etaH)} (${fmtHour(ws.atHours[0])}) @ ~${fmt(ws.projLevel)} [${fmt(ws.band.lo)}–${fmt(ws.band.hi)}] (provisional, n≈0 — diurnal+trend)` });
+        else notes.push({ kind: 'forecast', itemId: id, text: `forecast: ${head} — NOT projected sellable within ${fc.horizonH}h on this model (provisional, n≈0)` });
       }
     }
     // Bar E ask-headroom (inform-only): the robust p90 shaved a TRADED in-band top off the quoted ask —
     // ladder up, don't relist down (the GE better-price rule makes the ladder cheap). Null unless trusted.
     const ah = askHeadroomText(row);
-    if (ah) lines.push(`  ⤴ ask headroom: ${ah}`);
+    if (ah) notes.push({ kind: 'askHeadroom', itemId: id, text: `ask headroom: ${ah}` });
     // PART II (PLAN-GRADE-REACH): the asym-fill inform line — deep flush bid → high-reach ask off the
     // day-level quantiles of the SAME in-hand ts1h (zero new fetch; full-day window, ~14 nights). Same
     // inform pattern as the diurnal line above: decision support, never a table/verdict/price input.
@@ -239,7 +282,7 @@ async function runItems() {
     if (ae) {
       const hB = Math.round(ae.pBid * ap.nDays), hA = Math.round(ae.pAsk * ap.nDays);
       const roi = ae.bid > 0 ? (ae.net / ae.bid * 100).toFixed(1) : null;
-      lines.push(`  ◆ asym fill: deep-bid ${fmt(ae.bid)} (fills ~${hB}/${ap.nDays}d — rest as optionality) → ask ${fmt(ae.ask)} (prints ~${hA}/${ap.nDays}d) · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})`);
+      notes.push({ kind: 'asym', itemId: id, text: `asym fill: deep-bid ${fmt(ae.bid)} (fills ~${hB}/${ap.nDays}d — rest as optionality) → ask ${fmt(ae.ask)} (prints ~${hA}/${ap.nDays}d) · net ${fmt(ae.net)}/u${roi != null ? ` (${roi}%)` : ''} (placeholder quantiles, n≈${ap.nDays})` });
     }
     // PLAN-OUTPUT-TABLE: the reconciliation estimate off the SAME in-hand reads (windowStats touch/
     // reach at the patient pair, the diurnal dip/peak levels, the asym high-reach ask) — zero new
@@ -270,7 +313,7 @@ async function runItems() {
       // (PLAN-WINDOW-CLEAR open question). clearRatio/diverges still ride suggestions.jsonl for F1.
       if (wc && div.windowShort) {
         const dayTxt = dayFrac != null ? ` (vs ${askReach.reachedDays}/${askReach.nDays} all-day)` : '';
-        lines.push(`  ℹ window-clear: ask ${fmt(row.optSell)} prints ${wc.reachedDays}/${wc.nDays} in the ${fmtHour(dr.peakWindow.startH)}–${fmtHour(dr.peakWindow.endH)} peak window${dayTxt} — days-reach ≠ lap-clear (placeholder, n≈0)`);
+        notes.push({ kind: 'windowClear', itemId: id, text: `window-clear: ask ${fmt(row.optSell)} prints ${wc.reachedDays}/${wc.nDays} in the ${fmtHour(dr.peakWindow.startH)}–${fmtHour(dr.peakWindow.endH)} peak window${dayTxt} — days-reach ≠ lap-clear (placeholder, n≈0)` });
       }
       if (wc) winClear = { windowReach: wc.windowReach, reachedDays: wc.reachedDays, nDays: wc.nDays, pool: wc.pool, clearRatio: wc.clearRatio, wStart: wc.wStart, wEnd: wc.wEnd, diverges: div.diverges };
     }
@@ -303,13 +346,13 @@ async function runItems() {
     // counterweights the ⚠ reach caution above on a liquid small-relative-size book.
     if (est && est.confidence.relief) {
       const rl = est.confidence.relief;
-      lines.push(`  ↥ reach relief: liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)`);
+      notes.push({ kind: 'reachRelief', itemId: id, text: `reach relief: liquid book (${fmt(row.volDay)}/d, buy limit ~${(rl.sizeRatio * 100).toFixed(1)}% of flow) softens the ask-reach fold ${Math.round(rl.relief * 100)}%${rl.debiasedTop != null ? `; top de-biased to ${fmt(rl.debiasedTop)} (≤ observed 24h high)` : ''} (PLACEHOLDER, n=1)` });
     }
     // PB4: under the flag, a HELD item renders the conservative DEPTH FLOOR beside the pressure prices
     // (the reference — don't drop it). depthReachClause is the shared two-lens formatter (emit.mjs).
     if (PRESSURE_EXIT && estShown && estShown.confidence.pressureExit) {
       const clause = depthReachClause({ ca: depthExit, rb: reachable, qty: heldQty.get(id) });
-      if (clause) lines.push(`  ◇ ${clause}`);
+      if (clause) notes.push({ kind: 'pressureExit', itemId: id, text: clause });
     }
     rows.push(RAW ? std : [std[0], std[1], ...estPairCells(estShown), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
@@ -340,11 +383,17 @@ async function runItems() {
   const baseHeaders = RAW ? QUOTE_HEADERS : ['Item', 'Guide', ...EST_HEADERS, 'Vol/d', 'Momentum', 'Regime'];
   const headers = anyProbe ? [...baseHeaders, 'Probes'] : baseHeaders;
   const outRows = anyProbe ? rows.map((r, i) => [...r, { t: probeStrs[i], c: 'mini' }]) : rows;
-  if (PRESSURE_EXIT && !RAW) console.log(PRESSURE_BANNER + '\n');   // PB4 loud trial banner
-  console.log(mdTable(headers, outRows));
-  if (!RAW) console.log(`(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. Est. sell anchors to a DECLARED thesis exit when one exists ("(declared)"). BE is model-free and floors Est. sell. --raw restores the model-free Quick/Optimistic columns.)`);
-  console.log('');
-  console.log(lines.join('\n'));
+  // VZ3: build the report + render it ONCE — the ONE emission point (byte-identical to the prior
+  // console.log sequence: optional pressure banner, mdTable, the Est. explainer (non-RAW), then the
+  // typed note block; pinned by pipeline/test/render.test.mjs).
+  const report = buildQuoteReport({
+    mode: 'items',
+    pressureBanner: (PRESSURE_EXIT && !RAW) ? PRESSURE_BANNER : null,
+    headers, rows: outRows,
+    estExplainer: RAW ? null : EST_EXPLAINER,
+    notes,
+  });
+  console.log(renderReport(report));
 }
 
 async function runPositions() {
@@ -389,7 +438,7 @@ async function runPositions() {
   // (the arithmetic still governs). Best-effort: any archive error leaves it empty.
   let dailyPos = {};
   try { ({ series: dailyPos } = await loadDaily(28, 6, { noFetch: true })); } catch { dailyPos = {}; }
-  const rows = [], lines = [], sugg = [], staleRisk = [], convLines = [], pathLines = [], rebidLines = [];
+  const rows = [], notes = [], sugg = [], staleRisk = [], convLines = [], pathLines = [], rebidLines = [];
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const inp = await getInputs(itemId);
@@ -433,10 +482,10 @@ async function runPositions() {
     ctx.limits = { window: limWin };
     const vres = runValidators(ctx);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
-    lines.push(regimeLine(name, row, map.byId[itemId]?.limit ?? null, limWin));
+    notes.push({ kind: 'regime', itemId, text: regimeLine(name, row, map.byId[itemId]?.limit ?? null, limWin) });
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
-    if (gl) lines.push('  ' + gl);
-    for (const f of flags(vres)) lines.push(`  ⚠ ${name} ${f.key}: ${f.reason}`);
+    if (gl) notes.push({ kind: 'guideAnchor', itemId, text: gl });
+    for (const f of flags(vres)) notes.push({ kind: 'validator', itemId, text: `${name} ${f.key}: ${f.reason}` });
     const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
     sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // the emitted per-position verdict string
     // P0: conviction timers — surfaced as an informational line (the table's Verdict column is
@@ -474,7 +523,7 @@ async function runPositions() {
       const se = staleExitRead({ ts1h: ts1hExit, exitLevel: thesisEntry.exitPrice, now: new Date(nowMs) });
       if (se && se.stale) {
         const reach = se.reachable != null ? `; recent reachable peak ~${fmtP(se.reachable)}` : '';
-        lines.push(`  ⚠ ${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via declare-thesis.mjs if you agree.`);
+        notes.push({ kind: 'staleExit', itemId, text: `${name}: declared exit ${fmtP(thesisEntry.exitPrice)} looks STALE on reach — printed ${se.recentHit}/${se.recentDays} recent nights (${se.fullHit}/${se.fullN} over ~14d, bar <${Math.round(STALE_EXIT_RECENT_FRAC * 3)}/3 recent)${reach}. Inform-only (PLACEHOLDER threshold, n≈0; touched ≠ filled) — verdict/thesis unchanged; re-declare via declare-thesis.mjs if you agree.` });
       }
     }
     // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL line on a held
@@ -497,14 +546,14 @@ async function runPositions() {
       if (estP && estP.confidence.pressureExit) {
         const pe = estP.confidence.pressureExit;
         const clause = depthReachClause({ ca: depthP, rb: reachableP, qty });
-        lines.push(`  ◇ ${name}: pressure-exit — list @ ${fmtP(estP.estSell)}${estP.confidence.beFloored ? ' (BE-floored)' : ''} · re-buy bid ${fmtP(estP.estBuy)} (pressure ${pe.pressure.toFixed(1)}×${pe.reliability != null && pe.reliability < 1 ? ` rel ${pe.reliability.toFixed(2)}` : ''}, BE ${fmtP(estP.be)})${clause ? ` · ${clause}` : ''} — TRIAL, un-calibrated (n≈0)`);
+        notes.push({ kind: 'pressureExit', itemId, text: `${name}: pressure-exit — list @ ${fmtP(estP.estSell)}${estP.confidence.beFloored ? ' (BE-floored)' : ''} · re-buy bid ${fmtP(estP.estBuy)} (pressure ${pe.pressure.toFixed(1)}×${pe.reliability != null && pe.reliability < 1 ? ` rel ${pe.reliability.toFixed(2)}` : ''}, BE ${fmtP(estP.be)})${clause ? ` · ${clause}` : ''} — TRIAL, un-calibrated (n≈0)` });
       } else if (!ts1hP) {
-        lines.push(`  ◇ ${name}: pressure-exit — no 1h series available this pass (targeted fetch failed); re-run watch for the pressure read.`);
+        notes.push({ kind: 'pressureExit', itemId, text: `${name}: pressure-exit — no 1h series available this pass (targeted fetch failed); re-run watch for the pressure read.` });
       }
     }
     const ahHeld = askHeadroomText(row);
-    if (ahHeld) lines.push(`  ⤴ ${name}: ask headroom — ${ahHeld}`);
-    else if (row.mom === 'breakup' && row.optSell != null) lines.push(`  ⤴ ${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.`);
+    if (ahHeld) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: ask headroom — ${ahHeld}` });
+    else if (row.mom === 'breakup' && row.optSell != null) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.` });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid
@@ -526,35 +575,28 @@ async function runPositions() {
   // O1 suggestions ledger: log the position verdicts at emit time, unconditionally.
   logSuggestions('quote', { mode: null, params: { positions: true } }, sugg);
   if (snap) { try { snap.archive.close(); } catch {} }   // P0: loadSnapshot leaves the archive open when it owns it
-  console.log(`# Open positions vs market (${groups.length} items, ${openLots} lots)\n`);
-  if (PRESSURE_EXIT) console.log(PRESSURE_BANNER + '\n');   // PB4 loud trial banner
-  // COD-4: the SHARED stale-book banner (item-context.mjs staleBookBanner) — watch-positions.mjs already prints this off
-  // positions.json's mtime; quote-items.mjs --positions read the same file silently, so the surface Ben uses
-  // most never warned when the book was stale (the A4 inversion). Now both surfaces word it identically.
-  console.log(staleBookBanner(ageMin) + '\n');
-  console.log(mdTable(headers, rows));
-  console.log('');
-  console.log(lines.join('\n'));
-  if (convLines.length) {
-    console.log('');
-    console.log('Conviction (shared watch-state):');
-    console.log(convLines.join('\n'));
-  }
-  if (pathLines.length) {
-    console.log('');
-    console.log('Paths (persistence-gated dominant per held lot — decision support, placeholder weights):');
-    console.log(pathLines.join('\n'));
-  }
-  if (rebidLines.length) {
-    console.log('');
-    console.log('Rebid advisory (cut-and-rebid friction bar + multi-week trajectory — support, never overrides the verdict):');
-    console.log(rebidLines.join('\n'));
-  }
-  if (isOvernightNow() && staleRisk.length) {
-    console.log('');
-    console.log(`ℹ Late-night: ${staleRisk.length} held position(s) may be stale/underwater by morning — re-verdict at the morning liquid window (${staleRisk.join(', ')}).`);
-  }
+  // VZ3: build the report + render it ONCE (byte-identical to the prior console.log sequence). The
+  // header, the loud pressure banner, the SHARED stale-book banner (item-context.mjs staleBookBanner —
+  // COD-4, so watch/quote word the stale-book warning identically), the table, the typed note block,
+  // and the conviction/paths/rebid/late-night blocks all become ordered report sections.
+  const lateNightLine = (isOvernightNow() && staleRisk.length)
+    ? `ℹ Late-night: ${staleRisk.length} held position(s) may be stale/underwater by morning — re-verdict at the morning liquid window (${staleRisk.join(', ')}).`
+    : null;
+  const report = buildQuoteReport({
+    mode: 'positions',
+    header: `# Open positions vs market (${groups.length} items, ${openLots} lots)\n`,
+    pressureBanner: PRESSURE_EXIT ? PRESSURE_BANNER : null,
+    staleBanner: staleBookBanner(ageMin),
+    headers, rows,
+    notes,
+    convLines, pathLines, rebidLines, lateNightLine,
+  });
+  console.log(renderReport(report));
 }
 
-if (POSITIONS_MODE) await runPositions();
-else await runItems();
+// Entrypoint guard (matches watch-positions.mjs / screen-flip-niches.mjs): importing this module for a
+// unit test (buildQuoteReport off fixtures) must NOT fire a live market read / hit the API.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (POSITIONS_MODE) await runPositions();
+  else await runItems();
+}

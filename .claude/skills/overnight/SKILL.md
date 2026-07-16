@@ -1,10 +1,23 @@
 ---
 name: overnight
-version: 1.20
+version: 1.21
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
 # /overnight — two-phase interactive composer
+
+**Paste the raw markdown table verbatim, unfenced (Ben, 2026-07-16).** This flow runs `/positions`
+then `/scan`; relay each script's own markdown table (the positions table, the screen flip-niche
+tables, the overnight accumulation-and-capital table) as PLAIN markdown — NOT wrapped in a fenced code block
+(a code fence forces the client to show literal `|`/`-` characters instead of a real table —
+confirmed live, 2026-07-16). The sizing prose supplements the tables, it doesn't replace them.
+
+**Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render layer
+labels every note family a TRACKING tier — `core` (verdicts, alerts, the WATCHLIST, the accumulation
+table) and `context` (the inform-only families: diurnal, forecast, ask headroom, asym, window-clear,
+reach relief, demand). _judgment:_ **both render AND relay by default** — there is NO default-hidden
+middle tier, so surface the context notes too. The tier registry lives in `pipeline/lib/render.mjs`'s
+header — the ONE registry; don't restate tiers here.
 
 ## Time-geography of the overnight flip (v1.8, 2026-07-05 — Ben-endorsed)
 
