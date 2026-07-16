@@ -460,7 +460,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     "CATCH AT ≥ X" (the two-sided size-aware band), with the collapse REASON surfaced on a thin book —
     inform-only, reads `js/windowread.mjs` `depthDays`/`clearableAsk`/`clearableBid`; `--pressure` = the
     PB2 demand-balance read: `pressure` (medVolHi/medVolLo) + regime label + `reachableBid`/`reachableAsk`
-    (`base ± band·φ` inline) + reliability, off `demandPressure`/`reachableBand`, inform-only n≈0), `limits.mjs` (LM1 — the buy-limit read:
+    (`base ± band·φ` inline) + reliability, off `demandPressure`/`reachableBand`, inform-only n≈0; DC2
+    adds the per-hour demand cycle + the SELL/BUY timing windows (`demandRegime`) + a cross-check vs the
+    price dip/peak windows — `✓ demand-confirmed` / `✗ diverge`), `limits.mjs` (LM1 — the buy-limit read:
     `node pipeline/commands/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),

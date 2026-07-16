@@ -46,7 +46,7 @@
  */
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
@@ -233,6 +233,28 @@ for (const want of positionals) {
         console.log(`    reachable BID ${fmt(rb.bid)}  (center ${fmt(rb.baseLow)} − band ${fmt(rb.bandLow)} × φ ${rb.phiBid.toFixed(2)})`);
       } else {
         console.log(`    (too few scored days to form a band — need ≥5)`);
+      }
+      // DC2 (PLAN-DEPTH-EXIT Extension B) — the per-hour demand CYCLE + the buy/sell timing windows,
+      // cross-checked against the PRICE-shape diurnal read (hourProfile). The demand read says WHEN
+      // buyers are hungry / sellers dump; the price read says when price peaks/dips. When they AGREE the
+      // timing is demand-CONFIRMED; a divergence is a lean, not a contradiction (both are small-sample).
+      const dReg = demandRegime(series, { nights: NIGHTS });
+      if (dReg && dReg.hours) {
+        const cell = t => t.pressure == null ? `${pad2(t.hour)}:—` : `${pad2(t.hour)}:${t.pressure.toFixed(1)}${t.reliability < 0.5 ? '?' : ''}`;
+        console.log(`    per-hour pressure (local h · ? = thin): ${dReg.hours.map(cell).join(' ')}`);
+        const winTxt = w => w ? `${pad2(w.startH)}:00–${pad2(w.endH)}:00 (peak ${pad2(w.atHour)}h ${w.pressure.toFixed(2)}×)` : 'none';
+        console.log(`    SELL window (buyers hungry): ${winTxt(dReg.sellWindow)} · BUY window (sellers dump): ${winTxt(dReg.buyWindow)}`);
+        // cross-check the demand windows against the PRICE dip/peak windows (deriveDiurnalRange).
+        const prof = hourProfile(series, { nights: NIGHTS });
+        const dRange = prof ? deriveDiurnalRange(prof, {}) : null;
+        if (dRange) {
+          const expand = (a, b) => { const s = new Set(); if (a === b) { for (let h = 0; h < 24; h++) s.add(h); return s; } for (let h = a; h !== b; h = (h + 1) % 24) s.add(h); return s; };
+          const agrees = (pw, dw) => (!pw || !dw) ? null : dw.hours.some(h => expand(pw.startH, pw.endH).has(h));
+          const sellAgree = agrees(dRange.peakWindow, dReg.sellWindow);
+          const buyAgree = agrees(dRange.dipWindow, dReg.buyWindow);
+          const mark = a => a == null ? '(one side absent)' : a ? '✓ demand-confirmed' : '✗ diverge (lean only)';
+          console.log(`    cross-check vs price shape: SELL — price peak ${pad2(dRange.peakWindow.startH)}–${pad2(dRange.peakWindow.endH)}h ${mark(sellAgree)} · BUY — price dip ${pad2(dRange.dipWindow.startH)}–${pad2(dRange.dipWindow.endH)}h ${mark(buyAgree)}`);
+        }
       }
       console.log(`    (pressure = medVolHi/medVolLo; φ slope + PRESSURE_* are PLACEHOLDERS, n≈0 — the reachable price is where price TRADED, not a verified fill · inform-only)`);
     }

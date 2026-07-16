@@ -454,9 +454,14 @@ Pure math in `js/windowread.mjs`, extending the hour bucketing `hourProfile` alr
   "high-buy-pressure hours ARE the sell window" — so an all-buy-heavy item HAS a sell window (its best
   hours to sell) and lacks a BUY window (no genuine dip-buy hour). Implemented per the MODEL; the fixtures
   and the `demandRegime` header state it.
-- **DC2 — surface it in `read-window-range.mjs --pressure` and the diurnal read.** The `--pressure`
-  inspector (PB2) gains the per-hour track + the buy/sell window labels; `deriveDiurnalRange` cross-checks
-  its price dip/peak windows against the pressure windows (a demand-confirmed timing read). Inform-only.
+- **DC2 — surface it in `read-window-range.mjs --pressure` and the diurnal read (LANDED 2026-07-15).**
+  `--pressure` now prints the per-hour demand cycle (`00:1.5 01:1.3 …`, `?` marks a thin/low-reliability
+  hour) + the SELL window (buyers hungry) / BUY window (sellers dump) labels from `demandRegime`, then a
+  cross-check line: `deriveDiurnalRange`'s PRICE peak/dip windows vs the demand SELL/BUY windows —
+  `✓ demand-confirmed` when they overlap, `✗ diverge (lean only)` when they don't, `(one side absent)` when
+  a regime has no window. Live: Soul rune buyers hungriest 12–15h but price peaks 20–22h → honest SELL
+  divergence; Coal sellers dump 00–02h. Inform-only render; the underlying `demandRegime`/`deriveDiurnalRange`
+  are fixture-covered (DC1). Both are small-sample — a divergence is a lean, not a contradiction.
 - **DC3 — the scan flip-side classifier (F1-GATED for any rank effect).** `screen-flip-niches.mjs`
   annotates each row with its `demandRegime` (dip-buy vs sell-the-demand) as an INFORM column first;
   promoting it into gating/rank (e.g. routing sell-heavy items to the dip loop, buy-heavy to accumulation)
