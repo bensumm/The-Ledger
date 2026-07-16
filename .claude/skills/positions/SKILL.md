@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.27
+version: 1.28
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -12,8 +12,10 @@ NEVER bump `APP_VERSION` (that marks the deployed app, which skills never touch)
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/quote-items.mjs --positions
+node pipeline/commands/quote-items.mjs --positions --pressure-exit
 ```
+
+**`--pressure-exit` is ON by default (Ben 2026-07-15 — the pressure trial).** _(judgment: owner early-adopt; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ The held-lot list-at uses the pressure-reachable ask (trial banner + `(pressure N×)` marker), with the conservative depth floor shown beside it; a declared thesis exit still governs the sell leg, and the BE floor still binds. The retro logs the NEUTRAL estimate, so the head-to-head keeps accruing unbiased while you price off pressure. (Omit the flag for a neutral read.)
 
 That command IS the market read (reads `positions.json` open lots, quotes each held item,
 prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch. The gates
@@ -50,7 +52,7 @@ localhost app's liveness signal; this is the operator's rule when reading `watch
 session.)
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
-`--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs` —
+`--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs --pressure-exit` —
 its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
 and report the offer set as the position set.
 

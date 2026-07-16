@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.56
+version: 1.57
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -12,8 +12,10 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all] [--max-price …] [--publish]
+node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all] [--max-price …] --pressure-exit
 ```
+
+**`--pressure-exit` is ON by default (Ben 2026-07-15 — the pressure trial).** _(judgment: owner early-adopt; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ The console Est. buy/sell + the rerank use the pressure-reachable band (with the loud trial banner + the `(pressure N×)` cell marker); the conservative depth floor still shows beside it, and the retro still shadow-logs the NEUTRAL estimate so the head-to-head accrues unbiased. **DROP it whenever you `--publish`** — the two are mutually exclusive (the guard refuses the combo) so `screen.json` / the deployed app stay F1-gated. To reproduce a neutral console read, omit the flag.
 
 Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
 a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
@@ -467,7 +469,7 @@ requires and quote it — never a bare number.
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 
 A scan is not done until the picks are compared against where Ben's capital already sits.
-After the shortlist, run `node pipeline/commands/watch-positions.mjs` (positions = held inventory + every
+After the shortlist, run `node pipeline/commands/watch-positions.mjs --pressure-exit` (positions = held inventory + every
 active offer) and close the loop:
 
 - **Stale-bid displacement.** _(judgment: redeploy call)_ For each resting BUY offer, ask: does a shortlist pick offer
