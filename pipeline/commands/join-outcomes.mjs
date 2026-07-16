@@ -140,6 +140,11 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
     // YS2 forward-enrichment fields (null on legacy rows that predate the enrichment - never fabricated):
     posture: best.posture ?? null, tripwire: best.tripwire ?? null, fillWindowHrs: best.fillWindowHrs ?? null,
     thesis: best.thesis ?? null, velocityClassPredicted: best.velocityClass ?? null,
+    // RC (PLAN-REACHABILITY-CONSOLIDATION): did this read carry the five-way exit co-log? `reachable`
+    // (the pressure band) is logged on EVERY co-logged read (held + discovery), so it's the universal
+    // marker the readiness dashboard counts. Boolean only — the scorer reads the raw values off the
+    // suggestion itself, not this projection.
+    coLog: best.reachable != null,
     lagMin: Math.round((placementTs - best.ts) / 60) };
 }
 
@@ -348,6 +353,29 @@ function report(o) {
   console.log(`  Right now: ${f1Cells} cell(s) clear nâ‰¥${MIN_N_F1}. F1 ${f1Cells >= MIN_CELLS_F1 ? 'MAY open.' : `stays GATED (need â‰¥${MIN_CELLS_F1}). The pipeline + schema are validated; the sample is not yet large enough â€” let it accrue.`}`);
   // F1-gate progress (concise, reuses the same constants â€” never re-hardcode the thresholds)
   console.log(`  F1-gate progress: ${f1Cells}/${MIN_CELLS_F1} cells cleared (${f1Cells >= MIN_CELLS_F1 ? 'threshold met' : `${Math.max(0, MIN_CELLS_F1 - f1Cells)} more needed at nâ‰¥${MIN_N_F1}/cell`}).`);
+
+  // --- Reachability head-to-head readiness (RC — PLAN-REACHABILITY-CONSOLIDATION) --------------
+  // The SECOND gate, distinct from F1 above: the five-way exit-estimator co-log (reach·reachRelief·
+  // asym·depth·pressure) is scored by the future aggregateReachability against the realized sell. This
+  // is its ACCRUAL DASHBOARD — it counts the closed-sell round-trips whose nearest read carried the
+  // co-log (marker: the joined suggestion's `coLog`), bucketed into the scorer's (side × class × regime)
+  // cell, so we see WHEN the head-to-head is scorable without polling. The co-log clock started at RC-S1
+  // (2026-07-15), so most historical rows won't carry it — that's expected, and it means this gate LAGS
+  // F1. Reuses MIN_N (scorer floor) + MIN_N_F1 (robust) — no new thresholds. Honest bound: this is an
+  // accrual COUNT off join-outcomes campaigns; aggregateReachability (a retrojoin sibling) scores the
+  // exact per-cell |error| vs sellEach — build it once this line shows a scorable cell.
+  const rcRows = o.campaigns.filter(x => x.side === 'sell' && x.realised != null && x.suggestion && x.suggestion.coLog);
+  const rcCells = {};
+  for (const r of rcRows) {
+    const reg = (r.stateAtFill && r.stateAtFill.regime && r.stateAtFill.regime !== 'unknown') ? r.stateAtFill.regime
+      : (r.suggestion ? r.suggestion.regime : 'noreg');
+    const k = r.side + '|' + r.liqClass + '|' + reg; rcCells[k] = (rcCells[k] || 0) + 1; }
+  const rcScorable = Object.values(rcCells).filter(n => n >= MIN_N).length;
+  const rcRobust = Object.values(rcCells).filter(n => n >= MIN_N_F1).length;
+  console.log(`\n# Reachability head-to-head (RC — the five-way exit-estimator retirement evidence)`);
+  console.log(`  Closed sell round-trips whose read carried the co-log (reach·reachRelief·asym·depth·pressure): ${rcRows.length}`);
+  console.log(`  Cells (side × class × regime) at n≥${MIN_N} (scorable): ${rcScorable} · at n≥${MIN_N_F1} (robust): ${rcRobust}`);
+  console.log(`  → build+run aggregateReachability once a cell is SCORABLE; an RC1 retire needs a ROBUST cell sustained over a window. Status: ${rcScorable >= 1 ? 'SCORABLE — build the scorer' : 'gated — accruing (co-log clock started RC-S1)'}.`);
 
   // #3 velocity + capital efficiency (YV1) â€” a DESCRIPTIVE read off the MEASURED velocityClass /
   // parkedSec YS1 records. Makes visible that yield leaks to idle capital + slow fills, not just bad

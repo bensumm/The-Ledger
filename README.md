@@ -478,7 +478,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     measured `holdTimeSec`/`parkedSec`/`velocityClass`, and `predicted` (copied from the joined
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`
     stamps `.cache/last-weekly-report` and the cheap standalone `--weekly-due` prints `weekly-due: yes|no`
-    off the local Mon–Sun week so `/morning`'s weekly-read cadence is mechanical, not "ask Ben"),
+    off the local Mon–Sun week so `/morning`'s weekly-read cadence is mechanical, not "ask Ben". `--report`
+    prints TWO readiness gates: the F1-gate progress line (general calibration) and the **Reachability
+    head-to-head** accrual (RC, `PLAN-REACHABILITY-CONSOLIDATION`) — closed-sell round-trips carrying the
+    five-way exit co-log (`joinSuggestion`'s `coLog` marker), bucketed into the scorer's (side × class ×
+    regime) cells, so the weekly retro shows WHEN `aggregateReachability` becomes scorable without polling),
     `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-flip-niche +
     per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`

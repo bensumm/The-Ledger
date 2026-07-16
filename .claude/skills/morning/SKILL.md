@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.11
+version: 1.12
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -78,8 +78,17 @@ other morning, this check reads `no` — skip straight past this section.
 
 **What to run** — after the overnight review above is delivered (market work first, always):
 1. `node pipeline/commands/join-outcomes.mjs --report` — fill-time distributions by band-percentile ×
-   liquidity class with **n per cell**, plus the F1-gate progress line and the
-   concentration line (top item's share of closed lots / realised P/L).
+   liquidity class with **n per cell**, the concentration line (top item's share of closed lots /
+   realised P/L), and **TWO readiness gates** _(judgment: this is the dashboard, not a build trigger by itself)_:
+   - **Gate A — F1-gate progress** (`X/5 cells at n≥30`): the general fill-rate CALIBRATION gate.
+   - **Gate B — Reachability head-to-head** (RC, `PLAN-REACHABILITY-CONSOLIDATION`): the five-way
+     exit-estimator co-log (reach·reachRelief·asym·depth·pressure) accrual — closed-sell round-trips
+     carrying the co-log, bucketed into the scorer's (side × class × regime) cells. Its clock started
+     at RC-S1 (2026-07-15), so it LAGS Gate A. **When it shows a cell at n≥floor (`SCORABLE`), that is
+     the cue to build+run `aggregateReachability`** (the retrojoin sibling — designed, not yet built)
+     and, if a challenger (depth/pressure) beats the incumbent (reachRelief/asym) on median |error| vs
+     `sellEach` without worsening the exit-safe rate, sustained over a window, flip the RC1 retire flag.
+     Nothing retires off a single week (rule 4); the flags are attended + reversible.
 2. A **realized-P/L attribution** read over `positions.json` `closed` lots (and
    `join-outcomes.mjs`'s realised sell campaigns): per-item realised net after tax, **win rate**
    (share of closed lots in profit), **hold-time distribution** (buy→sell), and

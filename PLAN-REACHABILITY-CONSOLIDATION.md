@@ -193,6 +193,16 @@ rate** (did prices above the observed high actually clear?) before it can bind l
   the watch/screen/quote shadow shapes can't drift (watch's RC-S1 inline reshapers were refactored onto
   them). Inform-only; rendered output byte-identical. **The five-way head-to-head now spans held +
   discovery: complete.**
+- **RC-S3 — the readiness dashboard in the weekly retro (LANDED — see the commit).** `join-outcomes.mjs
+  --report` now prints a **Reachability head-to-head** gate beneath the F1-gate line: it counts the
+  closed-sell round-trips whose nearest read carried the five-way co-log (`joinSuggestion` gained a `coLog`
+  boolean off the suggestion's `reachable` marker — the projection dropped the raw field) and buckets them
+  into the scorer's `(side × liqClass × regime)` cells, reporting cells at `n≥MIN_N` (scorable) / `n≥MIN_N_F1`
+  (robust) — the SAME floors, no new thresholds. This makes "is the head-to-head scorable yet?" a MECHANICAL
+  weekly read (surfaced in `/morning §5`), not polling. It is an accrual COUNT (off join-outcomes campaigns);
+  `aggregateReachability` still owns the exact per-cell |error|-vs-`sellEach` scoring — the dashboard is the
+  cue to BUILD it. The co-log clock started at RC-S1, so this gate LAGS F1 by design and reads 0 until closed
+  sells accrue against co-logged reads. Inform-only; no `APP_VERSION` (console stdout).
 
 ## 6. HONESTY / ENTANGLEMENTS (rule 4 — surfaced, not forced)
 - **n≈0 on everything.** This doc designs the calibration; it claims none. Every promotion is gated on a
