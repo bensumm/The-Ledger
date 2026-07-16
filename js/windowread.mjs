@@ -594,3 +594,97 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
     trendDominates: profile.trendDominates, trendPerDay: profile.trendPerDay, notes,
   };
 }
+
+// --- per-hour demand-cycle classifier (PLAN-DEPTH-EXIT Extension B, DC1) -----------------------
+// Pressure is not static — it CYCLES by hour (Soul rune ran 1.26–2.49× across the day; sell-heavy
+// commodities trough below 1). hourlyPressure exposes that cycle; demandRegime classifies the item
+// and names the timing windows. Two payoffs the pooled-window pressure hides: (1) TIMING — the
+// high-buy-pressure hours are the SELL window, the sell-pressure hours are the BUY window (the
+// demand-side complement to hourProfile's PRICE-shape diurnal read); (2) a flip-SIDE classifier —
+// sell-heavy = dip-buy flips, buy-heavy = sell-into-demand/accumulation (DC3's inform column).
+//
+// THE AGGREGATION RULE (the design correction, Ben 2026-07-15): per-hour pressure is the ratio of
+// per-hour volume AGGREGATES (the MEDIAN across days of each hour's bucket volume), NOT the median
+// of per-day RATIOS — a zero-volume hour on some day would otherwise divide by zero and a single
+// noisy day would swing the ratio. hourProfile ALREADY computes exactly those per-hour median
+// volumes (its hours[].volHi/volLo), so hourlyPressure reuses them + demandPressure (PB1) — one
+// vocabulary, no re-bucketing. Per-cell reliability (demandPressure's volume floor) handles thin
+// hours: a handful of units reads reliability ~0, so the regime label degrades honestly.
+// n≈0 — the per-hour median is a ~14-day sample per cell; the regime label is a LEAN, not a law,
+// and a demand-window is NEVER a guaranteed fill time (rule 4). All thresholds are placeholders.
+const PRESSURE_REGIME_S   = 0.2;   // |ln pressure| below this ⇒ 'balanced' (ratio within ~0.82–1.22); PLACEHOLDER
+const DEMAND_CLUSTER_FRAC = 0.34;  // an hour within this fraction of the per-hour s-amplitude of the extreme joins the window (mirrors DIP_CLUSTER_FRAC)
+
+/* hourlyPressure(series, opts) → per-local-hour demand-balance track, or null (too thin to profile).
+ *   [{ hour, pressure, s, reliability, medVolHi, medVolLo, n }]  (hours with data, ascending)
+ * pressure/s/reliability come from demandPressure({medVolHi, medVolLo}) off hourProfile's per-hour
+ * MEDIAN volumes (the aggregate-then-ratio rule above); null pressure on an hour whose sell side never
+ * traded. REUSES hourProfile — same hour buckets, de-trend machinery, and MIN_DAYS degrade. */
+// @provisional-api: PLAN-DEPTH-EXIT Extension B (DC1) — consumed by demandRegime below + DC2's
+// read-window-range --pressure per-hour track and DC3's scan flip-side inform column.
+export function hourlyPressure(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
+  const prof = hourProfile(series, { nights, now, recentN });
+  if (!prof) return null;
+  return prof.hours.map(h => {
+    const dp = demandPressure({ medVolHi: h.volHi, medVolLo: h.volLo });
+    return {
+      hour: h.h,
+      pressure: dp ? dp.ratio : null, s: dp ? dp.s : null,
+      reliability: dp ? dp.reliability : 0,
+      medVolHi: h.volHi, medVolLo: h.volLo, n: h.n,
+    };
+  });
+}
+
+// Grow a circular-contiguous hour window out from the pressure extreme, but ONLY when that extreme
+// hour genuinely crosses into the regime the window names (a sell window needs a buy-heavy peak; a
+// buy window needs a sell-heavy trough) — so an all-buy-heavy item reports a SELL window and NO buy
+// window (there is no dip-buy hour), and vice versa. Reuses spanOf for the readable "HH–HH" label.
+function pressureWindow(track, side) {
+  const rel = track.filter(t => t.s != null && t.reliability > 0);
+  if (rel.length < 2) return null;
+  const ext = side === 'sell' ? rel.reduce((a, b) => b.s > a.s ? b : a) : rel.reduce((a, b) => b.s < a.s ? b : a);
+  // a genuine window only when the extreme hour actually crosses into the regime (else it's noise)
+  if (side === 'sell' ? ext.s < PRESSURE_REGIME_S : ext.s > -PRESSURE_REGIME_S) return null;
+  const sVals = rel.map(t => t.s), amp = Math.max(...sVals) - Math.min(...sVals);
+  const within = amp > 0 ? DEMAND_CLUSTER_FRAC * amp : 0;
+  const has = new Map(rel.map(t => [t.hour, t]));
+  const inC = t => side === 'sell' ? t.s >= ext.s - within : t.s <= ext.s + within;
+  const set = new Set([ext.hour]);
+  for (const dir of [1, -1]) for (let step = 1; step < 24; step++) {
+    const h = (ext.hour + dir * step + 24) % 24, t = has.get(h);
+    if (!t || !inC(t)) break;
+    set.add(h);
+  }
+  return { ...spanOf(set), hours: [...set].sort((a, b) => a - b), atHour: ext.hour, pressure: Math.exp(ext.s) };
+}
+
+/* demandRegime(series, opts) → { regime, pooled, s, reliability, buyWindow, sellWindow, hours } | null.
+ *   regime      — 'buy-heavy' | 'sell-heavy' | 'balanced' off the POOLED whole-window pressure.
+ *   pooled/s    — the pooled ratio + its ln (the classification basis).
+ *   sellWindow  — the peak-buy-pressure hours (buyers hungry → SELL here); null if no buy-heavy peak.
+ *   buyWindow   — the trough (sell-pressure) hours (sellers dump → BUY here); null if no sell-heavy trough.
+ *   hours       — the full hourlyPressure track (for the caller's per-hour render).
+ * DIVERGENCE FROM THE PLAN'S DC1 ONE-LINER (surfaced, resolved per Extension B's model): the plan bullet
+ * said an all-buy-heavy item has "no sell window", but Extension B's model is "high-buy-pressure hours ARE
+ * the sell window" — so an all-buy-heavy item HAS a sell window (its best hours to sell) and lacks a BUY
+ * window (no genuine dip-buy hour). Implemented per the model; the fixtures assert that. */
+// @provisional-api: PLAN-DEPTH-EXIT Extension B (DC1) — consumed by DC2 (--pressure regime + window
+// labels) and DC3 (scan flip-side inform column). No rank/gate effect (DC3's rank half is F1-gated).
+export function demandRegime(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
+  const stats = windowStats(series, { nights, wStart: 0, wEnd: 0, now });
+  const pooled = stats ? demandPressure(stats) : null;
+  const hours = hourlyPressure(series, { nights, now, recentN });
+  if (!pooled && !hours) return null;
+  const regime = !pooled ? 'balanced'
+    : pooled.s >= PRESSURE_REGIME_S ? 'buy-heavy'
+    : pooled.s <= -PRESSURE_REGIME_S ? 'sell-heavy' : 'balanced';
+  return {
+    regime,
+    pooled: pooled ? pooled.ratio : null, s: pooled ? pooled.s : null,
+    reliability: pooled ? pooled.reliability : 0,
+    sellWindow: hours ? pressureWindow(hours, 'sell') : null,
+    buyWindow: hours ? pressureWindow(hours, 'buy') : null,
+    hours,
+  };
+}

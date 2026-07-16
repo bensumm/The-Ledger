@@ -441,9 +441,19 @@ Pure math in `js/windowread.mjs`, extending the hour bucketing `hourProfile` alr
 - `@provisional-api` until consumed; no `APP_VERSION`; RC1 recency applies.
 
 ## Chunks (inform-only; the scan touch is the F1-gated payoff)
-- **DC1 — `hourlyPressure` + `demandRegime` + fixtures.** Acceptance: an all-buy-heavy synthetic (Soul
-  rune shape) classifies `buy-heavy` with no sell window; a troughing synthetic classifies `sell-heavy`
-  with the buy window at the trough hours; a flat one is `balanced`; thin hours degrade (low reliability).
+- **DC1 — `hourlyPressure` + `demandRegime` + fixtures (LANDED 2026-07-15).** `hourlyPressure(series)` →
+  the per-local-hour demand-balance track; `demandRegime(series)` → `{ regime, pooled, s, reliability,
+  buyWindow, sellWindow, hours }`. **The aggregation rule (the design correction) is honored: per-hour
+  pressure is the ratio of per-hour MEDIAN volumes, NOT the median of per-day ratios** — implemented by
+  reusing `hourProfile`'s per-hour median volumes + `demandPressure` (PB1); a zero-volume side yields a
+  null pressure for that hour (no divide-by-zero), and per-cell reliability degrades thin hours. Both
+  `@provisional-api` (DC2/DC3 the tracked consumers); `PRESSURE_REGIME_S`/`DEMAND_CLUSTER_FRAC` are
+  module-internal placeholders. Live: Soul rune → buy-heavy, sell window 12–15h; Coal → sell-heavy, buy
+  window 0–2h. **⚠ DIVERGENCE FROM THIS BULLET'S ORIGINAL WORDING (surfaced + resolved per Extension B's
+  model):** the bullet said an all-buy-heavy item has "no sell window", but Extension B's model is
+  "high-buy-pressure hours ARE the sell window" — so an all-buy-heavy item HAS a sell window (its best
+  hours to sell) and lacks a BUY window (no genuine dip-buy hour). Implemented per the MODEL; the fixtures
+  and the `demandRegime` header state it.
 - **DC2 — surface it in `read-window-range.mjs --pressure` and the diurnal read.** The `--pressure`
   inspector (PB2) gains the per-hour track + the buy/sell window labels; `deriveDiurnalRange` cross-checks
   its price dip/peak windows against the pressure windows (a demand-confirmed timing read). Inform-only.

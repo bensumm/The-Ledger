@@ -20,6 +20,7 @@ import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, r
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
+import { hourlyPressure, demandRegime } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension B (DC1)
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -481,6 +482,68 @@ ok('reachableBand: SELL-HEAVY commodity reasonableness pin (deep bid, shallow as
   assert.equal(r.bid, Math.round(1000 - 40 * (0.5 + PRESSURE_PHI_SLOPE * Math.log(2))), 'deep bid = center − band·φ(−s), exact');
   assert.equal(r.ask, Math.round(1100 + 20 * Math.max(0, 0.5 - PRESSURE_PHI_SLOPE * Math.log(2))), 'shallow ask mirrors');
   assert.ok(r.bid < r.baseLow && r.ask < r.baseHigh + r.bandHigh, 'sell-heavy: catch the dump deep, don\'t over-ask');
+});
+
+// --- per-hour demand-cycle classifier (PLAN-DEPTH-EXIT Extension B, DC1) -----------------------
+// Build a 6-day series with CONSTANT prices (so hourProfile is profilable) but a controlled per-hour
+// volume pattern, so pressure = per-hour medVolHi/medVolLo is exactly what volFn dictates.
+function demandSeries(days, volFn) {
+  const s = [];
+  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
+    const { volHi, volLo } = volFn(h, di);
+    s.push(pt(ts(2026, 0, 5 + di, h), 1000, 1010, volLo, volHi));   // flat prices; volumes carry the signal
+  }
+  return s;
+}
+const dcNow = new Date(2026, 0, 25, 12, 0, 0);
+
+ok('hourlyPressure: per-hour pressure is the ratio of per-hour MEDIAN volumes (aggregate, not median-of-ratios)', () => {
+  // hour 18 is doubly buy-heavy (volHi 6000), the rest 3000; sell side flat 2000.
+  const track = hourlyPressure(demandSeries(6, h => ({ volHi: (h >= 16 && h <= 20) ? 6000 : 3000, volLo: 2000 })), { nights: 14, now: dcNow });
+  assert.ok(track && track.length >= 20, 'a 6-day series profiles into a per-hour track');
+  const h18 = track.find(t => t.hour === 18), h3 = track.find(t => t.hour === 3);
+  assert.ok(Math.abs(h18.pressure - 3) < 1e-9, 'hour 18: 6000/2000 = 3×');
+  assert.ok(Math.abs(h3.pressure - 1.5) < 1e-9, 'hour 3: 3000/2000 = 1.5×');
+  assert.equal(h18.reliability, 1, 'thick hour → full reliability');
+});
+
+ok('hourlyPressure: a zero-volume side yields null pressure (no divide-by-zero — the aggregation rule)', () => {
+  const track = hourlyPressure(demandSeries(6, h => ({ volHi: 3000, volLo: (h === 4) ? 0 : 3000 })), { nights: 14, now: dcNow });
+  const h4 = track.find(t => t.hour === 4);
+  assert.equal(h4.pressure, null, 'hour 4 sell side never traded → null, never Infinity');
+  assert.ok(Number.isFinite(track.find(t => t.hour === 5).pressure), 'other hours are unaffected + finite');
+});
+
+ok('demandRegime: an all-buy-heavy item classifies buy-heavy with a SELL window and NO buy window', () => {
+  // (Extension B model: high-buy-pressure hours ARE the sell window; an all-buy-heavy item has no
+  // genuine dip-buy hour. This DIVERGES from the plan bullet's "no sell window" wording — see the
+  // demandRegime header. Implemented per the model.)
+  const dr = demandRegime(demandSeries(6, h => ({ volHi: (h >= 16 && h <= 20) ? 6000 : 3000, volLo: 2000 })), { nights: 14, now: dcNow });
+  assert.equal(dr.regime, 'buy-heavy');
+  assert.ok(dr.pooled > 1.1, 'pooled pressure is buy-heavy');
+  assert.ok(dr.sellWindow && dr.sellWindow.atHour >= 16 && dr.sellWindow.atHour <= 20, 'SELL window at the buy-pressure peak');
+  assert.equal(dr.buyWindow, null, 'no buy window — no hour is genuinely sell-heavy');
+});
+
+ok('demandRegime: a troughing item classifies sell-heavy with the BUY window at the trough hours', () => {
+  const dr = demandRegime(demandSeries(6, h => ({ volHi: 2000, volLo: (h >= 2 && h <= 6) ? 8000 : 3000 })), { nights: 14, now: dcNow });
+  assert.equal(dr.regime, 'sell-heavy');
+  assert.ok(dr.pooled < 0.9, 'pooled pressure is sell-heavy');
+  assert.ok(dr.buyWindow && dr.buyWindow.atHour >= 2 && dr.buyWindow.atHour <= 6, 'BUY window at the sell-pressure trough');
+  assert.equal(dr.sellWindow, null, 'no sell window — no hour is genuinely buy-heavy');
+});
+
+ok('demandRegime: a flat item is balanced with no windows; thin volume degrades reliability', () => {
+  const flat = demandRegime(demandSeries(6, () => ({ volHi: 3000, volLo: 3000 })), { nights: 14, now: dcNow });
+  assert.equal(flat.regime, 'balanced');
+  assert.equal(flat.buyWindow, null); assert.equal(flat.sellWindow, null);
+  const thin = demandRegime(demandSeries(6, h => ({ volHi: (h >= 16 && h <= 20) ? 6 : 3, volLo: 2 })), { nights: 14, now: dcNow });
+  assert.ok(thin.hours.every(t => t.reliability < 0.01), 'a handful of units per hour → ~0 reliability (the lean, not a law)');
+});
+
+ok('hourlyPressure / demandRegime: too-thin history degrades to null (no false read)', () => {
+  assert.equal(hourlyPressure(demandSeries(2, () => ({ volHi: 3000, volLo: 2000 })), { nights: 14, now: dcNow }), null, '2 days < HOURPROFILE_MIN_DAYS');
+  assert.equal(demandRegime([], { now: dcNow }), null, 'empty series → null');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

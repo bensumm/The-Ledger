@@ -101,7 +101,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
   + the daily-high/low IQR; a thin-VOLUME book collapses to the smoothed center via the sample-reliability
   guard (no peak-cap); the `PRESSURE_*` constants are exported n≈0 placeholders and the Soul-rune/sell-heavy
-  reasonableness pins live in the test; `@provisional-api` until DE3/PB2 consume it); MOVED here from `pipeline/lib/`
+  reasonableness pins live in the test; `@provisional-api` until DE3/PB2 consume it) + `hourlyPressure`/`demandRegime`
+  (PLAN-DEPTH-EXIT Extension B DC1 2026-07-15 — the per-hour demand-cycle classifier: `hourlyPressure`
+  reuses `hourProfile`'s per-hour MEDIAN volumes + `demandPressure` so per-hour pressure is the ratio of
+  volume AGGREGATES not median-of-ratios (no divide-by-zero on a dead hour); `demandRegime` → `{ regime:
+  buy-heavy|sell-heavy|balanced, pooled, buyWindow, sellWindow, hours }` where the sell window is the
+  peak-buy-pressure hours and the buy window is the sell-pressure trough; `@provisional-api` until DC2/DC3
+  consume it); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/commands/read-window-range.mjs`,
   `pipeline/commands/watch-positions.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of
