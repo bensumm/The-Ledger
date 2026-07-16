@@ -424,6 +424,11 @@ export function fmtTtf(sec) {
 // FULLY reachable (fold factor 1 → the robust band edge stands); below it the edge folds linearly toward
 // live. PLACEHOLDER (n≈3–14) — e.g. a recent 0/3 ⇒ fold 0 ⇒ the mirage top collapses fully to live.
 export const EST_REACH_SAT_FRAC = 0.75;
+// PB4 (PLAN-DEPTH-EXIT PB4 / PLAN-REACHABILITY-CONSOLIDATION): the reliability at/above which the
+// pressure-exit ask may exceed the observed 24h high (the ruled reliability-gated peak-cap decision).
+// reachableBand's reliability saturates to 1 on a liquid, well-sampled book; below it the dayHigh cap
+// binds (the thin-book mirage guard). PLACEHOLDER (n≈0) — F1 owns whether/where this relaxes.
+export const PRESSURE_EXIT_REL_FULL = 1;
 // Reconciliation weights: the reach-folded band edge and each present secondary source (diurnal
 // dip/peak level; asym high-reach ask) blend as an EQUAL-WEIGHT mean, clamped inside [live, band edge].
 // Deliberately the simplest documented default — PLACEHOLDER, no calibrated weighting exists yet.
@@ -471,7 +476,7 @@ function reachRead(r) {
    nudge: optional (side, price) → { price }|null — the ⚓ anchor round-number nudge (pipeline passes
    modules/anchor.mjs anchorNudge; injected so this module stays pure/app-importable). Final pricing step.
    `spec` drives the per-strategy entry doctrine (rev2). Returns null when there is no live pair. */
-export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) {
+export function estimatePair(spec, row = {}, extra = {}, { nudge = null, pressureExit = false } = {}) {
   const qb = num(row.quickBuy), qs = num(row.quickSell);
   if (qb == null || qs == null) return null;                    // no live pair → no estimate (degrade)
   const ob = num(row.optBuy) ?? qb, os = num(row.optSell) ?? qs;
@@ -532,16 +537,41 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
     if (relief > 0 && ((askR && f0 < 1) || topRef > bandTop))
       reliefApplied = { relief, sizeRatio, debiasedTop: topRef > bandTop ? topRef : null };
   }
+  // PB4 (PLAN-DEPTH-EXIT/PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL override. When the
+  // caller sets pressureExit AND passes a non-null reachableBand (extra.reachable), the pressure-driven
+  // band REPLACES both legs: Est. BUY = the deep reachable bid, Est. SELL = the bold reachable ask. Still
+  // BE-floored (below), still anchor-nudged, still ordering-clamped (bid ≤ live buy, sell ≥ live sell); a
+  // DECLARED exit still wins the sell leg (the operator's plan governs). The reliability guard already
+  // shrank a thin book's band toward the center, so a thin read is not bold. n≈0 — this is a TRIAL: the
+  // caller renders a LOUD banner and the shadow log stays on the NEUTRAL estimate (unbiased retro).
+  let pressureApplied = false;
+  const rbx = extra.reachable;
+  if (pressureExit && rbx && num(rbx.ask) != null && num(rbx.bid) != null) {
+    estBuy = rbx.bid;
+    if (!declaredAnchored) estSell = rbx.ask;
+    pressureApplied = true;
+  }
   // ⚓ anchor nudge (final step — nudge, never override), then re-clamp.
   if (typeof nudge === 'function') {
     const nb = nudge('bid', estBuy); if (nb && num(nb.price) != null) estBuy = nb.price;
     const na = nudge('ask', estSell); if (na && num(na.price) != null) estSell = na.price;
   }
-  estBuy = Math.round(clamp(estBuy, Math.min(ob, qb), qb));
+  // a pressure deep bid may sit BELOW the band low (that's the point) — ceiling it at live, no band-low
+  // floor; the reach-folded default keeps its [band-low, live] clamp.
+  estBuy = pressureApplied ? Math.round(Math.min(estBuy, qb)) : Math.round(clamp(estBuy, Math.min(ob, qb), qb));
   // a declared exit is floored to live (never below the live instabuy), but not ceiling-clamped to the band.
   // topRef == bandTop unless the liquidity/size relief de-biased it (Part B) — the ceiling is then the
   // observed 24h high (dayHigh), never anything above what actually printed.
-  estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, topRef));
+  // PB4 reliability-gated ceiling (the ruled peak-cap decision): a FULLY-reliable pressure ask may exceed
+  // the observed 24h high (reachableBand caps its own headroom at PRESSURE_HEADROOM_MAX bands); a
+  // reliability<1 read keeps the dayHigh cap (the thin-book mirage guard). The reach-folded default is
+  // unchanged (clamped to topRef).
+  if (declaredAnchored) estSell = Math.max(Math.round(estSell), qs);
+  else if (pressureApplied) {
+    const relFull = num(rbx.reliability) != null && rbx.reliability >= PRESSURE_EXIT_REL_FULL;
+    const capped = relFull ? estSell : (dayHi != null ? Math.min(estSell, dayHi) : estSell);
+    estSell = Math.max(qs, Math.round(capped));
+  } else estSell = Math.round(clamp(estSell, qs, topRef));
   // BE floor — MODEL-FREE and applied LAST: never emit estSell < breakEven(estBuy). The floor binding
   // is the estimate self-reporting "no profitable trade at model prices" (estNet collapses to ~0).
   const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
@@ -557,6 +587,9 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null } = {}) 
     // PLAN-LIQUIDITY-REACH: non-null ONLY when the relief changed the sell estimate (softened fold or
     // de-biased top) — { relief, sizeRatio, debiasedTop|null }. Feeds the stdout note + the lean shadow.
     relief: reliefApplied,
+    // PB4: non-null ONLY when the pressure-exit override drove the legs (the TRIAL marker) — the surface
+    // renders "(pressure N×)" in the cell so the number never reads as the calibrated default (rule 4).
+    pressureExit: pressureApplied ? { pressure: num(rbx.pressure), reliability: num(rbx.reliability) } : null,
   };
   return { estBuy, estSell, estNet, estRoi, be, confidence };
 }
@@ -579,15 +612,19 @@ function reachTok(info) {
 export function estPairCells(est) {
   if (!est) return [{ t: '—' }, { t: '—' }, { t: '—' }, { t: '—' }];
   const c = est.confidence;
+  // PB4: the pressure-exit TRIAL marker rides IN the cell (rule 4 — the price never reads as calibrated).
+  const pTag = c.pressureExit && c.pressureExit.pressure != null
+    ? ` pressure ${c.pressureExit.pressure.toFixed(1)}×${c.pressureExit.reliability != null && c.pressureExit.reliability < 1 ? ` rel ${c.pressureExit.reliability.toFixed(2)}` : ''}` : '';
   let sellSuffix;
-  if (c.beFloored) sellSuffix = ` (BE-floored${c.ask ? `, ${reachTok(c.ask)}` : ''})`;
+  if (c.beFloored) sellSuffix = ` (BE-floored${c.pressureExit ? ',' + pTag : c.ask ? `, ${reachTok(c.ask)}` : ''})`;
+  else if (c.pressureExit) sellSuffix = ` (${pTag.trim()})`;
   else if (c.declaredAnchored) sellSuffix = ' (declared)';
   else sellSuffix = ` (${reachTok(c.ask)})`;
   const netTxt = est.estNet == null ? '—'
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})`;
   return [
-    { t: `${fmtP(est.estBuy)} (${reachTok(c.bid)})` },
-    { t: `${fmtP(est.estSell)}${sellSuffix}`, c: c.beFloored ? 'amber' : (c.declaredAnchored ? 'gain' : undefined) },
+    { t: `${fmtP(est.estBuy)} (${c.pressureExit ? 'pressure' : reachTok(c.bid)})` },
+    { t: `${fmtP(est.estSell)}${sellSuffix}`, c: c.beFloored ? 'amber' : (c.pressureExit ? 'gain' : (c.declaredAnchored ? 'gain' : undefined)) },
     { t: netTxt, c: est.estNet == null ? undefined : (est.estNet >= 0 ? 'gain' : 'loss') },
     { t: fmtP(est.be), c: 'mini' },
   ];

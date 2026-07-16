@@ -350,6 +350,56 @@ ok('estimatePair BE FLOOR: a fully-collapsed ask is clamped UP to breakEven(estB
   assert.deepEqual(estConfLean(e), { askHit: 0, askDays: 14, beFloored: true });
 });
 
+// --- PB4: the pressure-exit TRIAL override (opt-in flag) ---------------------------------------
+ok('estimatePair PB4 flag-OFF: byte-identical even when a reachable band is present', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const extra = { askReach: { reachedDays: 12, nDays: 14 }, reachable: { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 } };
+  const off = estimatePair(FLIP_NICHES.band, row, extra);                       // no pressureExit
+  const noRb = estimatePair(FLIP_NICHES.band, row, { askReach: extra.askReach });
+  assert.equal(off.estBuy, noRb.estBuy, 'a reachable band with the flag OFF changes nothing (bid)');
+  assert.equal(off.estSell, noRb.estSell, 'a reachable band with the flag OFF changes nothing (sell)');
+  assert.equal(off.confidence.pressureExit, null, 'no pressure marker when the flag is off');
+});
+
+ok('estimatePair PB4 flag-ON (reliable): the reachable band drives BOTH legs, sell may exceed the band top', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const rb = { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 };            // ask 1200 > band top 1100
+  const e = estimatePair(FLIP_NICHES.band, row, { reachable: rb, dayHigh: 1150 }, { pressureExit: true });
+  assert.equal(e.estBuy, 900, 'Est. buy = the deep reachable bid (below the band low, ceiling live)');
+  assert.equal(e.estSell, 1200, 'Est. sell = the bold reachable ask, ABOVE the band top (reliability 1 → no dayHigh cap)');
+  assert.ok(e.confidence.pressureExit && Math.abs(e.confidence.pressureExit.pressure - 1.8) < 1e-9, 'the trial marker is set');
+});
+
+ok('estimatePair PB4 reliability-gated ceiling: a reliability<1 read keeps the dayHigh cap', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const rb = { bid: 940, ask: 1180, pressure: 1.4, reliability: 0.6 };
+  const e = estimatePair(FLIP_NICHES.band, row, { reachable: rb, dayHigh: 1120 }, { pressureExit: true });
+  assert.equal(e.estSell, 1120, 'reliability 0.6 < 1 → the pressure ask is capped at the observed 24h high');
+  const noCap = estimatePair(FLIP_NICHES.band, row, { reachable: { ...rb, reliability: 1 }, dayHigh: 1120 }, { pressureExit: true });
+  assert.equal(noCap.estSell, 1180, 'the SAME ask uncapped when the read is fully reliable');
+});
+
+ok('estimatePair PB4 invariants: BE-floored, sell ≥ live, declared exit still wins the sell leg', () => {
+  // a pressure ask below break-even is floored up (never a sell below BE)
+  const thin = { quickBuy: 99_000, quickSell: 98_000, optBuy: 97_000, optSell: 101_000 };
+  const beF = estimatePair(FLIP_NICHES.band, thin, { reachable: { bid: 97_500, ask: 98_500, pressure: 0.9, reliability: 1 } }, { pressureExit: true });
+  assert.equal(beF.estSell, beF.be, 'a pressure ask below BE is floored UP to break-even (never a sell below BE)');
+  assert.ok(beF.confidence.beFloored, 'the floor binding is surfaced');
+  // a declared exit still governs the sell leg under the flag (operator plan wins); the bid still goes pressure
+  const decl = estimatePair(FLIP_NICHES.band, { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 },
+    { reachable: { bid: 900, ask: 1300, pressure: 2, reliability: 1 }, declaredExit: 1150 }, { pressureExit: true });
+  assert.equal(decl.estSell, 1150, 'declared exit still wins the sell leg');
+  assert.equal(decl.estBuy, 900, 'the pressure deep bid still drives Est. buy');
+});
+
+ok('estimatePair PB4: a NULL reachable band under the flag degrades to the neutral estimate', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const on = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14 } }, { pressureExit: true });
+  const off = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14 } });
+  assert.equal(on.estSell, off.estSell, 'no reachable band ⇒ the flag is a no-op (byte-identical)');
+  assert.equal(on.confidence.pressureExit, null);
+});
+
 ok('rev3 the asym DEEP bid is NEVER folded into estBuy (optionality, not an expected entry)', () => {
   const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
   const withAsym = estimatePair(FLIP_NICHES.band, row, { asym: { deepBid: 700, highReachAsk: 1200 } });
