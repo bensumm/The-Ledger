@@ -27,6 +27,10 @@
  *                 js/windowread.mjs reachableBand, so F1 scores the pressure-priced levels against
  *                 realized fills BESIDE the depth floor + reach/relief alternatives on the SAME row.
  *                 Lean-included; absent when the pressure read degrades (thin days/volume).)
+ *     demandRegime?,  (DC3 INFORM 2026-07-15 — the per-item flip-side classification
+ *                 { regime, pooled, sellWin?, buyWin? } off js/windowread.mjs demandRegime; screen
+ *                 survivors only. INFORM-ONLY — F1 joins the dip-buy-vs-sell-into-demand axis against
+ *                 fills before any rank/routing promotion (the F1-gated DC3 rank half). Lean-included.)
  *     dipLoop?,  (DL2 — a flush-SIGNAL component object {volDay,price,limit,depthPct,bucketVol,quickBuy,
  *                 optSell,afterTaxMargin,dipScore,alerted,gatedReason}; lean-included, present on watch
  *                 --dip flush rows (alerted=true → headline FLUSH · alerted=false → SIGNAL-ONLY, gated out
@@ -253,7 +257,7 @@ export function asymShadow(ae) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, depthExit, reachable } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, depthExit, reachable, demandRegime } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -345,6 +349,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): watch-positions.mjs held rows only; degraded reads → no field → byte-identical.
   if (depthExit != null)     e.depthExit = depthExit;
   if (reachable != null)     e.reachable = reachable;
+  // DC3 (PLAN-DEPTH-EXIT Ext B, INFORM HALF 2026-07-15): the demand-regime flip-side classification
+  // { regime: buy-heavy|sell-heavy|balanced, pooled, sellWin?, buyWin? } — screen survivors only, so F1
+  // can later join the dip-buy-vs-sell-into-demand axis against realized fills BEFORE any rank/routing
+  // promotion (the F1-gated DC3 rank half). Lean-included; absent when no 1h series was in hand.
+  if (demandRegime != null)  e.demandRegime = demandRegime;
   // RC-S1/RC-S2 (PLAN-REACHABILITY-CONSOLIDATION 2026-07-15): estBuy/estSell/estConfidence + asym are the
   // reachRelief-family + fixed-quantile exit estimators, co-logged beside depthExit/reachable so all five
   // compete head-to-head against the realized sell. The head-to-head spans HELD (watch, quote --positions)

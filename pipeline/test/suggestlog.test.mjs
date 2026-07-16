@@ -120,6 +120,14 @@ ok('DE3 + RC-S1: the reachability head-to-head shadow fields are lean-included (
     'no reachability shadow keys when none supplied — bid/target/legacy rows stay byte-identical');
 });
 
+ok('DC3: the demandRegime flip-side classification is lean-included (inform-only F1 shadow)', () => {
+  const e = suggestionEntry({}, { itemId: 566, cls: 'liquid', verdict: 'A',
+    demandRegime: { regime: 'buy-heavy', pooled: 1.66, sellWin: [12, 15], buyWin: null } });
+  assert.deepEqual(e.demandRegime, { regime: 'buy-heavy', pooled: 1.66, sellWin: [12, 15], buyWin: null });
+  const none = suggestionEntry({}, { itemId: 7, cls: 'mid', verdict: 'B' });
+  assert.ok(!('demandRegime' in none), 'absent → byte-identical (quote/watch/legacy rows unaffected)');
+});
+
 ok('RC-S2: reachableShadow / depthExitShadow reshapers (shared, no drift across watch/screen/quote)', () => {
   const rb = { ask: 401, bid: 383, pressure: 1.6634, reliability: 1, bandLow: 6, bandHigh: 2, baseLow: 384 };
   assert.deepEqual(reachableShadow(rb), { ask: 401, bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },

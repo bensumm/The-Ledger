@@ -301,7 +301,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (watch, quote `--positions`) AND DISCOVERY (screen survivors, quote per-item): `reachable` rides every row
   with an in-hand 1h series; `depthExit` rides only held rows (real qty in hand — the DE7 fetch-budget rule
   keeps depth off the screen). All three shadow shapes come from ONE reshaper home
-  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). A screen row also carries
+  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). A screen survivor row also carries a
+  lean **`demandRegime`** `{ regime, pooled, sellWin?, buyWin? }` (PLAN-DEPTH-EXIT DC3 inform half,
+  2026-07-15 — the dip-buy-vs-sell-into-demand flip-side axis off `js/windowread.mjs demandRegime`, surfaced
+  as an `◈ demand` inform note for a clearly-tilted survivor; INFORM-ONLY, never a rank/gate/grade/`screen.json`
+  input — the routing/rank half is F1-gated). A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the

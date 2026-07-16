@@ -462,10 +462,16 @@ Pure math in `js/windowread.mjs`, extending the hour bucketing `hourProfile` alr
   a regime has no window. Live: Soul rune buyers hungriest 12–15h but price peaks 20–22h → honest SELL
   divergence; Coal sellers dump 00–02h. Inform-only render; the underlying `demandRegime`/`deriveDiurnalRange`
   are fixture-covered (DC1). Both are small-sample — a divergence is a lean, not a contradiction.
-- **DC3 — the scan flip-side classifier (F1-GATED for any rank effect).** `screen-flip-niches.mjs`
-  annotates each row with its `demandRegime` (dip-buy vs sell-the-demand) as an INFORM column first;
-  promoting it into gating/rank (e.g. routing sell-heavy items to the dip loop, buy-heavy to accumulation)
-  waits on F1 evidence, same discipline as DE7. Touches the scan + monitoring docs, not just depth.
+- **DC3 — the scan flip-side classifier. INFORM HALF LANDED 2026-07-15; RANK/ROUTING HALF F1-GATED.**
+  `screen-flip-niches.mjs` now annotates each survivor off the in-hand 1h series (zero new fetch): an
+  `◈ demand` inform note for a CLEARLY-tilted survivor — sell-heavy = `dip-buy (bid the flush)`,
+  buy-heavy = `sell-into-demand (price the ask; deep bids trickle)` — with the buy/sell timing window,
+  plus a lean `demandRegime { regime, pooled, sellWin?, buyWin? }` shadow field on `suggestions.jsonl`
+  for EVERY survivor (balanced included) so F1 can join the dip-buy-vs-sell-into-demand axis against
+  realized fills. **HARD LIMIT held: NEVER wired into the gate/rank/grade/`screen.json`** — routing
+  sell-heavy→dip-loop / buy-heavy→accumulation is the F1-gated rank half (out of scope, same discipline
+  as DE7). Live: Old school bond buy-heavy 1.9× sell-into-demand; Dragon arrowtips sell-heavy 0.2×
+  dip-buy. Compact-output respected — the note fires only for a clear, reliable tilt (balanced/thin skip).
 
 ## Honesty (rule 4)
 All thresholds (`balanced` band, the reliability floor) are n≈0 placeholders. The per-hour pressure is a

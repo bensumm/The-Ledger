@@ -72,7 +72,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -368,6 +368,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
   const windowClearNotes = []; // PLAN-WINDOW-CLEAR B2 (churn/scalp): the ask reaches on days but rarely IN its peak window / size ≫ window pool — sibling inform note, never a gate/drop/grade/screen.json input
   const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair + P_ask/P_bid split — sibling inform note, never a gate/drop/grade/screen.json input
+  const demandNotes = [];   // DC3 (PLAN-DEPTH-EXIT Ext B, INFORM HALF): the demand-regime flip-side classifier — sibling inform note, NEVER a gate/rank/grade/screen.json input (the rank/routing half is F1-gated)
   for (const s of survivors) {
     let row = qcache.get(s.id);   // PART II: reassigned to a repriced CLONE only under --asym (qcache never mutated)
     if (!row) continue;
@@ -507,6 +508,12 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // Inform-only: the `reachable` shadow field only (never a gate/drop/grade/screen.json input).
     const rbStats = (series1h && series1h.get(s.id)) ? windowStats(series1h.get(s.id), { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const reachable = rbStats ? reachableBand(rbStats) : null;
+    // DC3 (PLAN-DEPTH-EXIT Extension B, INFORM HALF ONLY) — the demand-regime flip-side classifier off
+    // the SAME in-hand 1h series (zero new fetch): sell-heavy = dip-buy flip (bid the flush), buy-heavy =
+    // sell-into-demand / accumulation (deep bids trickle, price the ask). Surfaced as an inform NOTE + a
+    // lean `demandRegime` shadow field for F1. HARD LIMIT: NEVER wired into the gate/rank/grade/screen.json
+    // — routing sell-heavy→dip-loop / buy-heavy→accumulation is the F1-gated half (DC3 rank), out of scope.
+    const demReg = (series1h && series1h.get(s.id)) ? demandRegime(series1h.get(s.id)) : null;
     // rev2: strategy-aware entry (estimatePair reads STRATEGY[mode]'s falling/priceBasis doctrine).
     // FIX 1 (2026-07-13): declared-exit anchoring is DELIBERATELY NOT applied on the discovery screen —
     // a bare candidate row is a "should I buy this" read, never a held lot, so a declared SELL exit
@@ -566,6 +573,15 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       const hB = Math.round(asymEr.pBid * nD), hA = Math.round(asymEr.pAsk * nD);
       const roi = asymEr.bid > 0 ? (asymEr.net / asymEr.bid * 100).toFixed(1) : null;
       asymNotes.push(`${name}: deep-bid ${fmt(asymEr.bid)} (fills ~${hB}/${nD}d — rest as optionality) → ask ${fmt(asymEr.ask)} (prints ~${hA}/${nD}d) · net ${fmt(asymEr.net)}/u${roi != null ? ` (${roi}%)` : ''} · asym-rank ${fmtP(Math.round(asymEr.rank))}${ASYM ? ' — QUOTED (--asym)' : ''}`);
+    }
+    // DC3 inform note — surface a CLEAR demand tilt only (skip balanced/thin, the compact-output rule):
+    // sell-heavy = dip-buy (bid the flush), buy-heavy = sell-into-demand (price the ask). NEVER a rank input.
+    if (demReg && demReg.regime !== 'balanced' && demReg.reliability >= 0.5) {
+      const buyHeavy = demReg.regime === 'buy-heavy';
+      const side = buyHeavy ? 'sell-into-demand (price the ask; deep bids only trickle)' : 'dip-buy (bid the flush; the dump fills you)';
+      const w = buyHeavy ? demReg.sellWindow : demReg.buyWindow;
+      const winTxt = w ? ` · ${buyHeavy ? 'sell' : 'buy'} window ${fmtHour(w.startH)}–${fmtHour(w.endH)}` : '';
+      demandNotes.push(`${name}: ${demReg.regime} ${demReg.pooled.toFixed(1)}× — ${side}${winTxt}`);
     }
     // Step 2 (2026-07-09): a RENDER-stage net>0 surface gate. er.net is the after-tax net at the thesis's
     // OWN posted price pair (spec.priceBasis; the BOND 10%-guide-retrade exception rides through via
@@ -642,7 +658,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -673,7 +689,11 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       // PLAN-WINDOW-CLEAR B2 shadow: the within-window clear read (churn/scalp; null elsewhere)
       winClear: r.winClear,
       // RC-S2 shadow: the pressure-driven reachable band (five-way head-to-head on the discovery surface)
-      reachable: reachableShadow(r.reachable) })));
+      reachable: reachableShadow(r.reachable),
+      // DC3 shadow (INFORM): the demand-regime flip-side classification for the F1 join (never a rank input)
+      demandRegime: r.demReg ? { regime: r.demReg.regime, pooled: r.demReg.pooled != null ? round2(r.demReg.pooled) : null,
+        sellWin: r.demReg.sellWindow ? [r.demReg.sellWindow.startH, r.demReg.sellWindow.endH] : null,
+        buyWin: r.demReg.buyWindow ? [r.demReg.buyWindow.startH, r.demReg.buyWindow.endH] : null } : null })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = FLIP_NICHES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
@@ -731,6 +751,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
   for (const n of asymNotes) console.log(`◆ asym fill — ${n}`);
+  // DC3 (INFORM HALF): the demand-regime flip-side classifier — decision support only (never a rank/gate/
+  // grade/screen.json input; the routing/rank half is F1-gated). One line per clearly-tilted survivor.
+  for (const n of demandNotes) console.log(`◈ demand — ${n}`);
   // Diurnal timing (2026-07-09) — the peak-timing read auto-run on the top surfaced picks. FREE: the 1h
   // series is already in hand (Leg B fetched it per survivor), so this adds NO fetch. For each top pick it
   // derives the stale-guarded bid (dip-window level, priced to LIVE when a dominating trend erases the dip
