@@ -392,10 +392,13 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
   φ slope needs NO price-scale correction (band units carry the scale) — the residual noise is
   EVENT-low driven (implied slopes to hit the exact macro min scatter 0.2–7.6 uncorrelated with
   scale), confirming the model prices the CYCLICAL tail, never the event extreme. Still n≈0 on FILLS.
-- **PB2 — `read-window-range.mjs --pressure`** (CLI inspector, mirrors `--depth`). Prints `pressure`,
-  the regime label, and `reachableBid`/`reachableAsk` with the band + reliability inline + the honesty
-  line. Acceptance: live Soul rune (buy-heavy, ask ~399, shallow bid) and a sell-heavy commodity (deep
-  bid) render sensibly; a thin book shows the reliability degrade.
+- **PB2 — `read-window-range.mjs --pressure` (LANDED 2026-07-15).** CLI inspector mirroring the `--depth`
+  flag idiom: prints `pressure` (medVolHi/medVolLo) + the regime label (buy-heavy favors the seller /
+  sell-heavy favors the buyer / balanced), the buy-vs-sell flow, and `reachableBid`/`reachableAsk` with
+  each side's `center ± band × φ` shown inline + the reliability + the n≈0 honesty line. Degrades to a
+  "no read" line when a side has no traded volume. Live-validated: Soul rune 1.64× buy-heavy → reachable
+  ask 401 (center 400, above the smoothed depth floor 394) / shallow bid 382; Coal 0.75× sell-heavy →
+  deep bid 137 (= observed min) / shallow ask 149. The manual φ-tuning surface (DC2's home). Inform-only.
 - **PB3 — watch-positions inform line + shadow log (FOLDED INTO DE3, LANDED 2026-07-15).** The
   held-lot `reachable ask ~401 / bid ~382 (pressure 1.7× buy-heavy)` note + the `reachable` shadow
   object shipped WITH DE3 (see the DE3 entry — the depth floor must never render alone on a liquid

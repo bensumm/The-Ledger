@@ -39,10 +39,14 @@
  *                  and the clearableBid ("CATCH AT ≥ X" — how deep a bid still fills). A thin book prints
  *                  its COLLAPSE REASON, never a bare null. Estimate from bucket AVERAGES, not an order
  *                  book (inform-only, n≈0).
+ *   --pressure     (PLAN-DEPTH-EXIT Extension A, PB2) the demand-balance reachable band: pressure =
+ *                  medVolHi/medVolLo (buy-heavy > 1 / sell-heavy < 1), the regime label, and the
+ *                  reachableBid/reachableAsk = base ± band·φ(±s)·reliability with the band + reliability
+ *                  inline. The manual φ-tuning surface. Inform-only, n≈0 — φ/PRESSURE_* are placeholders.
  */
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror)
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
@@ -58,7 +62,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);
@@ -77,6 +81,8 @@ if (A.margin !== undefined && !Number.isFinite(MARGIN)) { console.error('error: 
 // DE2 — --depth <qty>: the percentile-depth read for a lot of <qty> units.
 const DEPTH_QTY = A.depth !== undefined ? parseGp(A.depth) : null;
 if (A.depth !== undefined && (!Number.isFinite(DEPTH_QTY) || DEPTH_QTY <= 0)) { console.error('error: --depth expects a positive unit quantity'); process.exit(1); }
+// PB2 — --pressure: the pressure-driven reachable band (demand-balance read; no qty). A bare flag.
+const PRESSURE = A.pressure !== undefined && A.pressure !== false;
 
 const fmt = n => n == null ? '—' : n.toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
@@ -206,6 +212,30 @@ for (const want of positionals) {
     else
       console.log(`  --depth ${fmt(DEPTH_QTY)}u → no bid-side read (${cb.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'})`);
     console.log(`    (depth estimated from 1h bucket AVERAGES + volumes — NOT an order book; competition ×${ca.competition} is a PLACEHOLDER, n≈0 — inform-only)`);
+  }
+  // PB2 (PLAN-DEPTH-EXIT Extension A) — --pressure: the demand-balance reachable band. pressure =
+  // medVolHi/medVolLo drives one monotone φ(ln pressure); the band is the daily-high/low IQR; a
+  // thin-VOLUME book degrades to the smoothed center via the reliability guard (no peak-cap). The φ
+  // slope + PRESSURE_* are n≈0 placeholders — this is the manual tuning surface, inform-only.
+  if (PRESSURE) {
+    const dp = demandPressure(stats);
+    const rb = reachableBand(stats);
+    if (!dp) {
+      console.log(`  --pressure → no read (a window side has no traded volume — can't form the ratio)`);
+    } else {
+      const regime = dp.ratio >= 1.1 ? 'buy-heavy (favors the SELLER — high ask, shallow bid)'
+        : dp.ratio <= 0.9 ? 'sell-heavy (favors the BUYER — deep bid, shallow ask)' : 'balanced';
+      const relTxt = dp.reliability < 1 ? ` · reliability ${dp.reliability.toFixed(2)} (thin volume — headroom shrunk toward the center)` : ' · reliability 1.00';
+      console.log(`  --pressure → ${dp.ratio.toFixed(2)}× ${regime}${relTxt}`);
+      console.log(`    (buy flow ${fmt(dp.medVolHi)} u/d vs sell flow ${fmt(dp.medVolLo)} u/d · median over ${stats.days.length}d)`);
+      if (rb) {
+        console.log(`    reachable ASK ${fmt(rb.ask)}  (center ${fmt(rb.baseHigh)} + band ${fmt(rb.bandHigh)} × φ ${rb.phiAsk.toFixed(2)})`);
+        console.log(`    reachable BID ${fmt(rb.bid)}  (center ${fmt(rb.baseLow)} − band ${fmt(rb.bandLow)} × φ ${rb.phiBid.toFixed(2)})`);
+      } else {
+        console.log(`    (too few scored days to form a band — need ≥5)`);
+      }
+      console.log(`    (pressure = medVolHi/medVolLo; φ slope + PRESSURE_* are PLACEHOLDERS, n≈0 — the reachable price is where price TRADED, not a verified fill · inform-only)`);
+    }
   }
   console.log(`  (touched/reached ≠ limit filled — small sample, ~${scored.length} days; a guide, not a guarantee)`);
 }
