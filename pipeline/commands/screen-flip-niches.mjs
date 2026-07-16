@@ -1023,7 +1023,12 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
 // item as a full standard row, EXEMPT from all floors/gates, graded, with the reason a gate WOULD
 // have hidden it as a Note — and FALLING watchlist items ARE shown (the held/asked falling-exception
 // now extends to watchlisted items). The app takes union(localStorage, repo file); write-back is M1.
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// REPO ROOT = two levels up from pipeline/commands/ (this file's dir). The R3 rename (2026-07-15)
+// moved this CLI pipeline/ → pipeline/commands/ but left REPO_ROOT at ONE `..` (→ pipeline/), so the
+// scan silently read fills/watchlist/offers/outcomes from the wrong dir (degrading to empty) AND wrote
+// screen.json/dip-watchlist.json to pipeline/ instead of the ROOT the app/sync/dev-server all read —
+// the deployed Scan tab froze. Two `..` matches the sibling convention (watch-positions.mjs uses HERE/../..).
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // Build 2: per-item velocity index from the gitignored outcomes.json (YV1 campaigns), loaded ONCE.
 // Descriptive footnote source only — absent/unreadable/empty file → null → the footnote stays silent
@@ -1287,7 +1292,7 @@ async function main() {
   // rows so a stale published file can never mismatch app-side header code; cells are byte-identical
   // to the tables above (same stdCells / rating path) so the app renders exactly what the scan said.
   if (PUBLISH) {
-    const outPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'screen.json');
+    const outPath = join(REPO_ROOT, 'screen.json');   // the ROOT-LOCKED published snapshot (fixed by the REPO_ROOT R3 correction above)
     // P5: the VALUE niche has its OWN column set (VALUE_HEADERS) + is console-only (PLAN-VALUE decision
     // 4 — no app tab yet), so it is EXCLUDED from screen.json (which carries a single HEADERS set). An
     // app VALUE surface is a later, APP_VERSION-bumping step.
