@@ -409,11 +409,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     book, read-only watch-state + hold thesis, the shared `renderHeldVerdict`, and a read-only `pathsStage`
     `Paths` block — so it can't disagree with watch-positions.mjs; Proposal C (2026-07-12) adds the INFORM-ONLY
     stale declared-exit flag per held lot (`lib/staleexit.mjs` over a targeted TTL-cached 1h fetch —
-    declared-exit lots only); behavior detail in CLAUDE.md "Script facts"), `screen-flip-niches.mjs`
+    declared-exit lots only); behavior detail in CLAUDE.md "Script facts".
+    **`--pressure-exit`** (PB4 opt-in TRIAL, 2026-07-15) makes Est. buy/sell the pressure-driven
+    `reachableBand` legs (per-item cells + a `--positions` inform line, with the depth floor beside);
+    LOUD banner, retro co-log stays neutral, console-only — no screen.json), `screen-flip-niches.mjs`
     (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 a stdout-only
     `Probes` column per flip-niche; P6c re-runs an empty flip-niche beneath the floor (`subFloorFallback` in
     `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
-    two-sided gate and thesis edge are never relaxed)),
+    two-sided gate and thesis edge are never relaxed).
+    **`--pressure-exit`** (PB4 opt-in TRIAL) drives the console Est. buy/sell + a pressure-net RERANK off
+    `reachableBand`; **REFUSED under `--publish`** so the deployed app / `screen.json` stays F1-gated on the
+    neutral estimator; LOUD banner, retro co-log neutral, console-only),
     `watch-positions.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
     Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
     the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
@@ -421,7 +427,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     held lot's window clause now carries the whole-day depth FLOOR (`clearableAsk` — supersedes the
     relief note when non-null; a collapsed read prints its REASON) beside the pressure-reachable band
     (`reachableBand`), formatted by `lib/emit.mjs depthReachClause` and shadow-logged as the lean
-    `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). RC-S1
+    `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). PB4
+    **`--pressure-exit`** (opt-in TRIAL, 2026-07-15): under the flag the held list-at becomes the
+    pressure-driven est-sell (BE-floored; declared exit still wins), depth floor still beside; LOUD banner,
+    the retro co-log stays NEUTRAL (logs the intrinsic estimate, not the pressure display), console-only. RC-S1
     (PLAN-REACHABILITY-CONSOLIDATION, 2026-07-15): held rows ALSO co-log the two OLDER exit estimators —
     the reachRelief-family `estBuy`/`estSell`/`estConfidence` (`estimatePair`, `declaredExit` nulled so the
     scored number is the model's intrinsic ask) + the fixed-quantile `asym` pair — so all FIVE competing

@@ -204,7 +204,9 @@ with volume at-or-above the ask). Names provisional:
   replaces the relief-softened fold as the sell reference (BE floor, declaredExit anchor, and the
   qs clamp all unchanged). Acceptance: flag-off byte-identical everywhere; flag-on thin-book
   fixture byte-identical (the guard); flag-on soul-rune fixture lifts estSell toward clearableAsk,
-  never above dayHighFrom5m.
+  never above dayHighFrom5m. **NOTE:** PB4 (below) shipped the sibling PRESSURE integration first
+  (owner early-adopt); DE4 (the DEPTH-driven sell reference) remains F1-gated and unbuilt — the two
+  are separate flags, and the migration map (`PLAN-REACHABILITY-CONSOLIDATION.md` RC1) folds DE4 in.
 - **DE5 — 5m-grain / archive refinement (DEFERRED, note-only).** The 1h grain is the v1 basis
   (~15d reach). Bulk 5m accrual in the Tier-1 SQLite archive (pipeline-v2 D0) is the route to
   multi-day 5m depth curves — sharper distributions, smaller misattribution bias. Not scheduled
@@ -403,10 +405,23 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
   held-lot `reachable ask ~401 / bid ~382 (pressure 1.7× buy-heavy)` note + the `reachable` shadow
   object shipped WITH DE3 (see the DE3 entry — the depth floor must never render alone on a liquid
   book, so the two landed as one surface change). Nothing remains under this chunk id.
-- **PB4 — estimatePair integration (F1-GATED, flag-off byte-identical).** On the liquid tier the
-  pressure-driven `reachableAsk`/`reachableBid` become the sell/buy reference (superseding the smoothed
-  band top / the DE depth ask where reliability is high), the DE depth read staying the thin-tier floor.
-  Held behind F1 exactly like DE4 — no price/verdict/grade moves until the retro-join scores it.
+- **PB4 — estimatePair integration. SHIPPED behind the `--pressure-exit` opt-in TRIAL flag (owner
+  early-adopt; publish/screen.json stays F1-gated per PLAN-REACHABILITY-CONSOLIDATION), 2026-07-15.**
+  When `--pressure-exit` is set, `estimatePair` emits the pressure-driven `reachableBand` as BOTH legs
+  (Est. BUY = the deep reachable bid, Est. SELL = the bold reachable ask), surfaced across the four
+  console workflows — **scan** (`screen-flip-niches.mjs` console table + a pressure-net RERANK), **quote**
+  + **positions** (`quote-items.mjs` per-item cells + `--positions` inform line), **watch**
+  (`watch-positions.mjs` held list-at). The conservative depth floor renders BESIDE it (the `depthReachClause`
+  reference). Invariants preserved (PB4-1 core + fixtures): flag-off byte-identical; BE-floored; sell ≥
+  live; declared exit still wins the sell leg; the **reliability-gated ceiling** (the ruled peak-cap
+  decision — a fully-reliable read may exceed the observed 24h high, reliability<1 keeps the `dayHighFrom5m`
+  cap). A LOUD trial banner rides every surface (rule 4 — never reads as validated). **THE HARD GUARD:**
+  `--pressure-exit` is REFUSED under `--publish` (mirrors `--asym`), and since `screen.json` is written
+  ONLY under `--publish`, the pressure prices + rerank can NEVER reach `screen.json`/the deployed app — it
+  stays F1-gated on the NEUTRAL estimator. **The retro co-log is UNAFFECTED** — every surface logs the
+  NEUTRAL estimate (declaredExit-null intrinsic ask) + the pressure `reachable` separately, so the
+  head-to-head evidence keeps accruing unbiased while Ben trades on pressure. Console-only → no
+  APP_VERSION. (The DE-depth sibling integration — DE4 — stays F1-gated; PB4 is the pressure leg only.)
 
 ## Open questions (rule 4)
 - `PRESSURE_PHI_SLOPE`, `PRESSURE_MIN_VOL`, `PRESSURE_HEADROOM_MAX` are all n≈0 placeholders — F1 owns them,

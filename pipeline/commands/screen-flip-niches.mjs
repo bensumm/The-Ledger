@@ -211,6 +211,15 @@ const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'acti
 const PUBLISH = A.publish === true;
 // PART II safety: uncalibrated --asym prices must never reach screen.json/the app (F1 gates that step).
 if (PUBLISH && A.asym === true) { console.error('! --asym is experimental (F1-ungraduated) — refusing --publish under it.'); process.exit(1); }
+// PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
+// early-adopt). When set, the CONSOLE Est. buy/sell + the console RERANK use the pressure-driven
+// reachableBand; the retro co-log stays on the neutral estimate (unbiased). THE HARD GUARD: the deployed
+// app / screen.json stays F1-gated on the NEUTRAL estimator, so --pressure-exit is REFUSED under --publish
+// (mirrors --asym). Because screen.json is written ONLY under --publish (this refusal makes them mutually
+// exclusive), the pressure prices + the pressure rerank can NEVER reach screen.json / the app — a bare
+// --pressure-exit run is console-only and writes no screen.json. So no APP_VERSION bump (console-only).
+const PRESSURE_EXIT = A['pressure-exit'] === true;
+if (PUBLISH && PRESSURE_EXIT) { console.error('! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).'); process.exit(1); }
 // --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
 // default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
@@ -523,12 +532,17 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the SAME in-hand 5m
     // series (zero new fetch) — Part B's de-bias reference. estimatePair applies it (and the Part-A fold
     // softening) ONLY when reachRelief > 0 (liquid book, small limit÷flow); a thin book is byte-identical.
-    const est = estimatePair(FLIP_NICHES[mode], row, {
+    const estExtra = {
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: asymRead,
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
-    }, { nudge: anchorNudge });
+      reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
+    };
+    // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is CONSOLE-DISPLAY
+    // + console-RERANK only. No declaredExit on the discovery screen (a bare candidate is a buy read).
+    const est = estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge });
+    const estShown = PRESSURE_EXIT ? estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge, pressureExit: true }) : est;
     // PLAN-WINDOW-CLEAR B2 (churn/scalp only): does the quoted ask PRINT inside its diurnal peak window
     // (not just on N/M DAYS), and does that window absorb a buy-limit tranche? Inform-only (the askHeadroom/
     // asym pattern — never a gate/drop/grade/screen.json input); a divergence is the days-reach ≠ lap-clear
@@ -658,13 +672,22 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
   // unit (patient band-edge net/u) over velocity — you want the fattest unattended margin, not churn.
   if (POSTURE === 'overnight') rows.sort((a, b) => (b.row.optNet || 0) - (a.row.optNet || 0) || b.score - a.score);
   else rows.sort((a, b) => b.score - a.score);
+  // PB4: under the pressure-exit trial, RERANK the CONSOLE by the pressure NET (Est. sell − Est. buy of
+  // the reachableBand legs) so pressure-attractive picks surface — the reliability guard already keeps a
+  // thin book from getting a bold number. Rows WITHOUT a pressure read fall to the bottom (keep the base
+  // order among them). SAFE re screen.json: --publish is refused under --pressure-exit (the hard guard),
+  // so screen.json is never written on a pressure run — this reorder is console-only by construction.
+  if (PRESSURE_EXIT) {
+    const pNet = r => (r.estShown && r.estShown.confidence.pressureExit && r.estShown.estNet != null) ? r.estShown.estNet : -Infinity;
+    rows.sort((a, b) => pNet(b) - pNet(a));
+  }
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
@@ -718,6 +741,8 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // Quick+Optimistic; Grade moves after Regime); --raw (and --asym, which implies it) prints the
   // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
   // to screen.json either way, so the app contract is byte-identical regardless of the view.
+  // PB4 loud trial banner (rule 4 — the prices/rank must never read as the calibrated default).
+  if (PRESSURE_EXIT) console.log('⚠ --pressure-exit: Est. buy/sell + the RANK use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — NOT validated, NOT published). Reranked by pressure net. --raw / drop the flag to restore the neutral estimate + sort.');
   if (RAW) {
     const printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
     const printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
@@ -728,7 +753,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // structured cells (phase-suffixed regime, sub-floor grade label) and swap in the est pair cells.
     const printCells = rows.map(r => {
       const c = r.cells;
-      const base = [c[0], c[2], ...estPairCells(r.est), c[5], c[6], c[7], c[1], c[8]];
+      const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], c[8]];   // PB4: estShown = pressure legs under the flag, else the neutral est
       return anyProbe ? [...base, { t: r.probeStr, c: 'mini' }] : base;
     });
     console.log(rows.length ? mdTable(printHeaders, printCells) : '_none_');

@@ -45,6 +45,15 @@ the raw table-v2 cells (byte-identical publish). Operating summary:
 - **`Est. sell`** = a DECLARED thesis exit **only on a held lot** (floored to live, not clamped to
   the band), else the band top folded by reach + a diurnal/asym blend; **BE-floored always**. The
   pure discovery screen NEVER anchors to a declared exit (a bare candidate is a buy read).
+- **`--pressure-exit` (opt-in TRIAL, PB4 2026-07-15) makes both legs pressure-driven.** Under the flag,
+  Est. buy/sell become the `reachableBand` legs (deep reachable bid → bold reachable ask), reranking the
+  console scan by the pressure net; still BE-floored, sell ≥ live, declared exit still wins the sell leg,
+  and a **reliability-gated ceiling** lets a fully-reliable read exceed the observed 24h high (reliability<1
+  keeps the `dayHighFrom5m` cap). The conservative depth floor renders beside as the reference; a LOUD banner
+  flags every surface as un-calibrated (n≈0). **`--pressure-exit` is REFUSED under `--publish`** — the
+  deployed app + `screen.json` + the grade cutoffs stay F1-gated on the NEUTRAL estimator, and the retro
+  co-log logs the neutral estimate + the pressure `reachable` separately so the head-to-head stays unbiased
+  (`PLAN-REACHABILITY-CONSOLIDATION.md`). Off the flag: byte-identical.
 - **The ask-reach fold is liquidity/size-conditioned** (`reachRelief`): reach measures how often a
   price prints, not how much of *your* stock clears — so on a liquid book where your position is
   small vs flow the fold softens toward 1 and the sell reference de-biases toward the observed 24h
