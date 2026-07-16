@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit } from '../../js/quotecore.js';
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
@@ -347,6 +348,16 @@ async function runItems() {
 }
 
 async function runPositions() {
+  // ALWAYS sync first (Ben, 2026-07-16 — prose "sync before every read" was skipped repeatedly
+  // because it was only a doctrine, never enforced; a real position closed unnoticed as a result,
+  // see the anglerfish anchor incident). Local/zero-git, cheap, never blocks the read on failure.
+  try {
+    const out = execFileSync(process.execPath, [path.join(HERE, 'sync-fills.mjs')],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const summary = out.trim().split('\n').filter(l => /^positions:|nothing to/.test(l));
+    if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
+  } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — reading off the current book\n'); }
+
   const { err, groups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
   if (!groups.length) { console.log('No open positions in positions.json.'); return; }
@@ -382,6 +393,13 @@ async function runPositions() {
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const inp = await getInputs(itemId);
+    // PLAN-VOL24 parity fix: this booked-lots view was computing Vol/d + pressure off the raw, BROKEN
+    // /24h read (never corrected), while the single-item path above corrects it from a live 1h series —
+    // the two surfaces disagreed by ~10x on the same item. Budgeted, TTL-cached 1h fetch (same
+    // fetchTsCached mechanism the stale-exit/pressure-exit reads below already pay for on this lot;
+    // reused via inp.ts1h so this doesn't double the fetch) before computeQuote ever sees vol24.
+    if (!inp.ts1h) { try { inp.ts1h = await fetchTsCached(itemId, '1h', TS_TTL_1H_EXIT); } catch { inp.ts1h = null; } }
+    inp.vol24 = vol24FromInputs(inp).vol24;
     const thesisEntry = thesisFor(holdThesisStore, itemId);   // Proposal C reads it too (declared exit)
     // Build the shared item context: identity → market → history → intraday → position. The position
     // stage folds in the live ask (askFilling), the cross-pass state (conviction), and any hold thesis.

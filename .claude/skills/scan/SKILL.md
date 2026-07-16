@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.57
+version: 1.60
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -9,13 +9,30 @@ description: Screen the GE market for flip opportunities and apply Ben's judgmen
 Skills-versioning note: `version` here bumps on material behavior change; skills never bump
 `APP_VERSION`.
 
+**Paste the raw markdown table verbatim, unfenced (Ben, 2026-07-16).** Include the script's own
+printed table(s) in the reply as PLAIN markdown, not just a prose rollup of what changed — and
+NOT wrapped in a fenced code block (a code fence forces the client to show literal `|`/`-`
+characters instead of rendering an actual table — confirmed live, 2026-07-16). Ben reads the
+actual numbers/columns directly. This applies to `screen-flip-niches.mjs` and to
+`watch-positions.mjs --dip` when it's driving this skill. The judgment pass (§2) supplements
+the table, it doesn't replace it. On a repeated/looped scan where nothing material changed,
+it's fine to note that and skip re-pasting — but when there IS something to report, paste the
+table, don't just describe it.
+
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all] [--max-price …] --pressure-exit
+node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all] [--max-price …]
 ```
 
-**`--pressure-exit` is ON by default (Ben 2026-07-15 — the pressure trial).** _(judgment: owner early-adopt; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ The console Est. buy/sell + the rerank use the pressure-reachable band (with the loud trial banner + the `(pressure N×)` cell marker); the conservative depth floor still shows beside it, and the retro still shadow-logs the NEUTRAL estimate so the head-to-head accrues unbiased. **DROP it whenever you `--publish`** — the two are mutually exclusive (the guard refuses the combo) so `screen.json` / the deployed app stay F1-gated. To reproduce a neutral console read, omit the flag.
+**`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
+_(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the
+NEUTRAL screen (no flag) by default. The trial surfaced real divergence this session (Water orb's
+pressure list-at sat ~9% above the neutral number while the item was chopping through a false CUT alert)
+— un-calibrated (n≈0) is not just a disclaimer, it moved a real recommendation. Only add `--pressure-exit`
+when Ben explicitly asks to compare or price off it; it's still REFUSED under `--publish` regardless
+(mutually exclusive so `screen.json` / the deployed app stay F1-gated on the neutral estimator). The
+retro keeps shadow-logging both estimates either way.
 
 Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
 a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
@@ -79,15 +96,16 @@ the RANK number separates the runes even though the placeholder letter-cutoffs c
 In `--mode all`, churn is disjoint from band by margin (band shows the ROI ≥ min-roi rows; churn
 keeps the sub-min-roi high-volume ones). `--mode spread` / `--mode rising` now error cleanly.
 
-**Sync first — ALWAYS, and it's cheap (SY1, Ben 2026-07-15).** Run `node pipeline/commands/sync-fills.mjs`
-at the top of every scan so the §5 position-context pass reads Ben's current book. The DEFAULT is now
-**local / zero-git** (rebuilds `fills.json`/`positions.json`/`offers.json`, no fetch/commit/push) — so
-always run it; it's fast and never touches git. **Never infer the book is fresh from elapsed time** — Ben
-trades asynchronously, so a fill you didn't see may have happened regardless of how little time passed.
-Phone-trade caveat: the local default doesn't ff-pull, so an un-pulled *phone* trade only folds in at the
-once-a-day `/overnight` `sync-fills.mjs --publish`; desktop trades are always captured. No worktree concern
-(the default is git-free — the old main-checkout caveat only applies to `--publish`). When `/scan` runs
-inside `/overnight`, Phase 1 already synced — don't re-run it.
+**Sync is now CODE-ENFORCED, not just doctrine (SY1 2026-07-15; enforced 2026-07-16).**
+`screen-flip-niches.mjs` runs `sync-fills.mjs` unconditionally as its first step now — local/zero-git,
+never blocks the screen on failure, prints a one-line `sync ·` summary — so the §5 position-context
+pass and the held-item exception both read Ben's current book without a separate manual step. This
+closed a real gap: the prose "sync first, always" was skippable and got skipped (an agent — this
+one — declared a real closed position "just a bug" mid-session off a stale book; the anglerfish
+anchor incident, CHANGELOG 2026-07-16). Phone-trade caveat unchanged: the local sync doesn't ff-pull,
+so an un-pulled *phone* trade only folds in at the once-a-day `/overnight` `sync-fills.mjs --publish`;
+desktop trades are always captured. When `/scan` runs inside `/overnight`, Phase 1 already synced (and
+now the screen syncs again itself regardless — redundant but harmless, both are local/zero-git).
 
 ## 2. Judgment pass over the rated rows
 
@@ -469,7 +487,7 @@ requires and quote it — never a bare number.
 ## 5. Position-context pass (Ben, 2026-07-05) — read the shortlist against the current book
 
 A scan is not done until the picks are compared against where Ben's capital already sits.
-After the shortlist, run `node pipeline/commands/watch-positions.mjs --pressure-exit` (positions = held inventory + every
+After the shortlist, run `node pipeline/commands/watch-positions.mjs` (positions = held inventory + every
 active offer) and close the loop:
 
 - **Stale-bid displacement.** _(judgment: redeploy call)_ For each resting BUY offer, ask: does a shortlist pick offer

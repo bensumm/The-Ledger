@@ -56,6 +56,15 @@ export const BANDTOP_FLAT_PCT = 0.003;   // ±0.3%
 // (4 min) pending validation. The Gate-2 breakdown CUT is EXEMPT from this (see convictionGate #1).
 export const ALERT_PERSIST_MS = 4 * 60 * 1000;
 
+// PB-COPILOT-1: cumulative margin-reduction budget (idea ported from FlipSmart's `ActiveOfferAdvisorService` —
+// see the 2026-07-16 research note). A resting ask that gets stepped down pass after pass has no memory of
+// how much it has ALREADY given back — so a chase can silently surrender its whole edge one small step at a
+// time with no single step ever looking alarming. PLACEHOLDER thresholds (n≈0, no retro evidence yet): flag
+// once the ask has given back ≥5% of its ORIGINAL (this-hold) price, OR after 3 consecutive passes of
+// straight decreases (a fast chase, even if the total % is still small).
+export const MARGIN_BUDGET_PCT = 0.05;
+export const MARGIN_BUDGET_STREAK = 3;
+
 // A position is underwater when its live instabuy (clear-now price) is below its break-even.
 const isUnderwater = o => o != null && o.instabuy != null && o.breakEven != null && o.instabuy < o.breakEven;
 // A position is below structural support (V4) when its live instabuy prints under the V2 support
@@ -164,6 +173,21 @@ export function advanceState(prior, cur, now) {
   const breakdownSince = sinceOf(breakdown, prior && prior.breakdownSince, fresh, now);
   const priorHist = fresh ? [] : (prior.bandTopHist || []);
   const bandTopHist = (cur && cur.bandTop != null ? [...priorHist, cur.bandTop] : priorHist).slice(-BANDTOP_HIST);
+  // PB-COPILOT-1: the ask given-back tracker. `initialAsk` pins the FIRST resting-ask price seen this
+  // hold (a fresh episode resets it, same policy as everything else here); `cumulativeReductionPct`
+  // is how much of that original price has been given back since (increases are ignored — laddering
+  // UP never counts against the budget, only stepping down does); `consecutiveAskDecreases` counts a
+  // streak of straight decreases regardless of size (a fast chase trips this even before the % does).
+  const restingAsk = cur && cur.restingAsk != null ? cur.restingAsk : null;
+  const priorAsk = fresh ? null : (prior.lastAsk ?? null);
+  const initialAsk = restingAsk != null
+    ? ((fresh || prior?.initialAsk == null) ? restingAsk : prior.initialAsk)
+    : (fresh ? null : (prior?.initialAsk ?? null));
+  const askDecreased = (restingAsk != null && priorAsk != null) ? restingAsk < priorAsk : false;
+  const consecutiveAskDecreases = askDecreased ? ((fresh ? 0 : (prior?.consecutiveAskDecreases || 0)) + 1) : 0;
+  const cumulativeReductionPct = (restingAsk != null && initialAsk != null && initialAsk > 0)
+    ? Math.max(0, (initialAsk - restingAsk) / initialAsk)
+    : (fresh ? 0 : (prior?.cumulativeReductionPct ?? 0));
   return {
     ts: now ?? null,
     identity: cur && cur.identity != null ? cur.identity : null,
@@ -180,7 +204,25 @@ export function advanceState(prior, cur, now) {
     belowSupportSince,
     breakdownSince,
     bandTopHist,
+    initialAsk,
+    lastAsk: restingAsk,
+    consecutiveAskDecreases,
+    cumulativeReductionPct,
   };
+}
+
+/* PURE. `state` = a persisted watch-state entry (the object advanceState returns / that's stored under
+   newState[key]). Returns an inform-only note string when the margin-reduction budget is tripped, else
+   null — never a verdict/alert input, purely a "you've already given back a lot chasing this" prompt.
+   PLACEHOLDER thresholds (MARGIN_BUDGET_PCT/STREAK above), n≈0 — no retro evidence yet. */
+export function marginBudgetNote(state) {
+  if (!state) return null;
+  const pct = state.cumulativeReductionPct || 0;
+  const streak = state.consecutiveAskDecreases || 0;
+  if (pct < MARGIN_BUDGET_PCT && streak < MARGIN_BUDGET_STREAK) return null;
+  const pctTxt = (pct * 100).toFixed(1);
+  const from = state.initialAsk, to = state.lastAsk;
+  return `margin budget: given back ${pctTxt}% of the original ask (${from != null ? from : '?'} → ${to != null ? to : '?'}) across ${streak} straight step-down${streak === 1 ? '' : 's'} — consider stopping the chase (cut/hold) instead of another reprice. PLACEHOLDER threshold, n≈0.`;
 }
 
 /* PURE. The V4 arm-then-confirm ESCALATION decision — decides ONLY whether a held-lot verdict is

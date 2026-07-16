@@ -22,7 +22,7 @@
 import assert from 'node:assert/strict';
 import {
   computeDeltas, advanceState, classifyBandTop, shouldReset, convictionGate,
-  STALE_GAP_MS, BANDTOP_FLAT_PCT,
+  STALE_GAP_MS, BANDTOP_FLAT_PCT, marginBudgetNote, MARGIN_BUDGET_PCT, MARGIN_BUDGET_STREAK,
 } from '../lib/watchstate.mjs';
 
 let pass = 0;
@@ -340,6 +340,64 @@ ok('TG1: a thesis on a lot that is NOT underwater does not arm (nothing to silen
   const g = convictionGate({ verdict: 'HOLD', gate: null, price: 4700, underwater: false, thesis: NEST_THESIS });
   assert.equal(g.armed, false, 'a healthy lot has no expected-underwater signal to silence');
   assert.equal(g.reason, null);
+});
+
+/* --- PB-COPILOT-1: margin-reduction budget ----------------------------------------------------- */
+ok('margin budget: a fresh hold pins initialAsk, no note yet', () => {
+  const s = advanceState(undefined, obs({ restingAsk: 1000 }), T0);
+  assert.equal(s.initialAsk, 1000);
+  assert.equal(s.lastAsk, 1000);
+  assert.equal(s.consecutiveAskDecreases, 0);
+  assert.equal(s.cumulativeReductionPct, 0);
+  assert.equal(marginBudgetNote(s), null);
+});
+
+ok('margin budget: an ask INCREASE (laddering up) never counts against the budget', () => {
+  let s = advanceState(undefined, obs({ restingAsk: 1000 }), T0);
+  s = advanceState(s, obs({ restingAsk: 1050 }), T0 + 5 * MIN);
+  assert.equal(s.consecutiveAskDecreases, 0);
+  assert.equal(s.cumulativeReductionPct, 0, 'the budget only tracks give-back, never a step UP');
+  assert.equal(marginBudgetNote(s), null);
+});
+
+ok('margin budget: 3 straight decreases trips the streak threshold even below the % bar', () => {
+  let s = advanceState(undefined, obs({ restingAsk: 1000 }), T0);
+  s = advanceState(s, obs({ restingAsk: 995 }), T0 + 5 * MIN);
+  s = advanceState(s, obs({ restingAsk: 992 }), T0 + 10 * MIN);
+  s = advanceState(s, obs({ restingAsk: 990 }), T0 + 15 * MIN);
+  assert.equal(s.consecutiveAskDecreases, MARGIN_BUDGET_STREAK);
+  assert.ok(s.cumulativeReductionPct < MARGIN_BUDGET_PCT, 'only 1% given back — the % bar alone would not fire');
+  const note = marginBudgetNote(s);
+  assert.ok(note, 'the streak alone trips the note');
+  assert.match(note, /given back 1\.0%/);
+  assert.match(note, /3 straight step-downs/);
+});
+
+ok('margin budget: crossing the % threshold trips the note even with a broken streak', () => {
+  let s = advanceState(undefined, obs({ restingAsk: 1000 }), T0);
+  s = advanceState(s, obs({ restingAsk: 940 }), T0 + 5 * MIN);   // -6%, one big step
+  s = advanceState(s, obs({ restingAsk: 945 }), T0 + 10 * MIN);  // ticks back UP — streak resets
+  assert.equal(s.consecutiveAskDecreases, 0, 'an increase resets the streak counter');
+  assert.ok(s.cumulativeReductionPct >= MARGIN_BUDGET_PCT, 'still down ≥5% from the original 1000');
+  assert.ok(marginBudgetNote(s), 'the % bar fires independently of the streak');
+});
+
+ok('margin budget: a fresh episode (identity change / stale gap) resets initialAsk', () => {
+  let s = advanceState(undefined, obs({ restingAsk: 1000 }), T0);
+  s = advanceState(s, obs({ restingAsk: 900 }), T0 + 5 * MIN);   // -10%, budget tripped
+  assert.ok(marginBudgetNote(s));
+  // a stale gap (new hold episode) must NOT carry the old give-back forward
+  const fresh = advanceState(s, obs({ restingAsk: 900 }), T0 + 5 * MIN + STALE_GAP_MS + MIN);
+  assert.equal(fresh.initialAsk, 900, 'the new episode re-baselines off the current ask, not the old one');
+  assert.equal(fresh.cumulativeReductionPct, 0);
+  assert.equal(marginBudgetNote(fresh), null);
+});
+
+ok('margin budget: null-safe on a held lot with no resting ask (NOT LISTED)', () => {
+  const s = advanceState(undefined, obs({ restingAsk: null }), T0);
+  assert.equal(s.initialAsk, null);
+  assert.equal(marginBudgetNote(s), null);
+  assert.equal(marginBudgetNote(null), null);
 });
 
 console.log(`\nAll ${pass} checks passed.`);

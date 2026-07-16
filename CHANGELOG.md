@@ -10,6 +10,73 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-VIZ-LAYER VZ1+VZ2b landed, VZ2a's headline/table mismatch fixed (2026-07-16, `pipeline/lib/render.mjs` new, `watch-positions.mjs`+`pipeline/lib/cli.mjs` — NO APP_VERSION)
+First landed chunk of the visualization-layer initiative (see `PLAN-VIZ-LAYER.md`). **VZ1**: a new
+`pipeline/lib/render.mjs` peer render layer — `watch-positions.mjs`'s entire output pass now builds
+one plain report object (`buildWatchReport`) and prints it once via `renderReport`, delegating to the
+existing formatters (`mdTable` etc.) rather than hand-building console output inline; byte-identical
+to the prior output (fixture-pinned in new `pipeline/test/render.test.mjs`). **VZ2b**: the watch
+table's Quick/Optimistic cells adopt the canonical `js/quotecore.js` `quoteCells` composite
+(buy → sell · net (roi)) — a deliberate visible change (owner-approved: visual format may adapt).
+**VZ2a (the actual anchor bug)**: `heldAlert()`'s structural-break headline used to hardcode its
+verdict word to `CUT` regardless of what the table's persistence-gated verdict said — this is
+exactly the mismatch watched live and repeatedly this session (Water orb: headline "CUT — structural
+break", table "PARKED"/"HOLD"). Root cause (confirmed via a live fixture): `convictionGate` (raw price
+vs. support/cut-trigger, in `watchstate.mjs`) and `heldDisplay`/`momVerdict` (the full persistence-
+gated judgment) are two INDEPENDENT state machines that can legitimately disagree — not one signal
+rendered two ways. Ben's ruling (2026-07-16): `heldDisplay` stays authoritative for the verdict word;
+a structural support break still surfaces, but as an appended warning clause ("⚠ also broke
+structural support...; verdict unchanged, watch closely"), never as a contradicting verdict override.
+Landed directly (small, well-scoped fix, not deferred to a follow-up plan chunk). VZ3 (quote-items),
+VZ4a/b (screen-flip-niches), VZ5 (surfacing-tier registry + skill relay rules), VZ6 (docs sweep)
+remain queued in `PLAN-VIZ-LAYER.md`.
+
+### Sync-before-every-read is code-enforced, not just doctrine (2026-07-16, `watch-positions.mjs`+`quote-items.mjs`+`screen-flip-niches.mjs` — NO APP_VERSION)
+Same failure shape as the held-item exception below: "run sync-fills.mjs before every positions/scan
+read" was prose doctrine (CLAUDE.md, both skills, a Claude memory entry) that an agent — this one —
+kept skipping anyway, because nothing made it happen. Anchor incident: a real Raw anglerfish position
+(bought 2026-07-15 22:46, sold 2026-07-16 12:09, closed at a -98,900 loss) was declared "just a
+reconstruction bug, not a real position" mid-session because the book hadn't been re-synced before
+that call was made — the position was real, the book was stale, and the doctrine alone didn't catch
+it. Fixed by making the sync unconditional in code: `watch-positions.mjs`'s sync (previously gated
+behind an opt-in `--sync` flag, with a now-stale comment claiming it pushes to `main` on every
+filled pass — false since the 2026-07-15 local/zero-git default) now always runs; `quote-items.mjs
+--positions` and `screen-flip-niches.mjs` gained the same unconditional sync-first call, matching
+the pattern (local/zero-git `execFileSync` of `sync-fills.mjs`, never blocks the read on failure,
+quiet one-line summary). All three verified live post-change.
+
+### Held-item exception is code-enforced, both halves (2026-07-16, `pipeline/lib/gatecandidates.mjs`+`screen-flip-niches.mjs` — NO APP_VERSION)
+A `/scan` judgment-filter validation pass found the skill's own prose rule — "items Ben holds ...
+always show, with price-to-clear" — had zero code behind it, confirmed by grep twice: neither the
+falling-exclusion nor the 500k gp/day attention floor actually exempted a held item, they just
+happened to still pass today because neither held item's regime/liquidity had crossed the line yet.
+Fixed both: `surviveMode()` gains a `held` opt that bypasses ONLY the falling-exclusion drop
+(scoped to the stated exception, not `notFalling`/posture), flagging `heldFallingOverride` so the
+screen prints an explicit note rather than a silent appearance; `gateCandidates()` gains a
+`heldIds` param exempting a held item from `MIN_GPD` the same way the thin-gp-flow path already
+does, paired with an unbounded held reserve in `rankAndSlice()` (mirrors the existing thin/rising
+reserves) so a held item can't still vanish at the top-N fetch cutoff. Caught a real bug live-testing
+this — a module-scoping mistake (`heldIds` local to `main()`, unreachable from `renderMode()`) —
+fixed before shipping. `gatecandidates.test.mjs` 22→29 fixtures; `survivemode.test.mjs`'s 16
+exact-shape assertions updated for the new `heldFallingOverride` field. Full detail:
+`PLAN-COPILOT-IDEAS.md` chunk 3.
+
+### Margin-reduction budget on held-lot reprices — PB-COPILOT-1 (2026-07-16, `pipeline/lib/watchstate.mjs`+`emit.mjs`+`watch-positions.mjs` — NO APP_VERSION)
+Ported from a research read of Flipping Copilot / FlipSmart's open-source RuneLite plugin code
+(both are thin clients over proprietary backends, so their ranking/pricing algorithms aren't
+inspectable — but their client-side offer machinery is). FlipSmart's `ActiveOfferAdvisorService`
+tracks a cumulative give-back budget across a resting offer's repricings so a chase can't silently
+surrender its whole edge one small step at a time with no single step looking alarming. `advanceState()`
+now persists `initialAsk`/`lastAsk`/`consecutiveAskDecreases`/`cumulativeReductionPct` per held lot
+(reset on the same identity-change/stale-gap policy as the rest of the module; an ask INCREASE never
+counts against the budget); `marginBudgetNote()` fires an inform-only line once the give-back crosses
+5% (placeholder) or 3 straight step-downs (placeholder), rendered via a new optional `heldNoteBlock`
+field. Anchor: the same session's anglerfish position got stepped 2,579→2,489 over ~25 minutes chasing
+a live breakdown with no memory of the cumulative give-back. Restart-blindness FILL recovery (the
+plugins' other technique) was scoped down to a documented hard limitation rather than half-built —
+see `PLAN-COPILOT-IDEAS.md`. Honesty: both thresholds are placeholders (n≈0), ported from FlipSmart's
+own hardcoded constants, not derived from our retro data.
+
 ### Pressure band width is recency-gated — PB5 (2026-07-15, `js/windowread.mjs` — APP_VERSION 0.65.1)
 The first live default-on trial of the pressure model (four deliberate pressure-floor bids left to ride)
 surfaced Ben's theory: the model's proposed floors don't map to items that **changed regime inside the

@@ -45,14 +45,17 @@
  *   node pipeline/commands/watch-positions.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
  *   node pipeline/commands/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
  *   node pipeline/commands/watch-positions.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
- *   node pipeline/commands/watch-positions.mjs --sync                # sync-fills.mjs first (fresh booked view); ATTENDED /loop only
+ * Every run syncs fills first, unconditionally (2026-07-16) — local/zero-git, never blocks the pass
+ * on failure. `--sync` still parses (harmless no-op) for any external caller that still passes it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { renderReport } from '../lib/render.mjs';   // VZ1 (PLAN-VIZ-LAYER) — the ONE render layer; this output pass builds a report object and prints renderReport(buildWatchReport(...))
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
-  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal } from '../../js/quotecore.js';
+  diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal,
+  quoteCells as canonicalQuoteCells, cellText } from '../../js/quotecore.js';   // VZ2b — the ONE canonical table-v2 cell format for the watch Quick/Optimistic cells
 import { limitWindow, buysByItem } from '../lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../../js/money-format.js';
 import { briefLine } from '../../js/watchcore.js';   // --brief compact book: format owned by the script
@@ -60,14 +63,14 @@ import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDispla
 import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/positions.mjs';
-import { readExchangeLog, activeOffers } from '../lib/offers.mjs';
+import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote)
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
-import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating
+import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
@@ -453,8 +456,18 @@ function heldAlert(it) {
   }
   // Structural-break escalation (V4) — a CONVINCING break of the V2 tripwire (≥δ below support, or
   // 2 consecutive passes below support). Independent of the mom verdict; not gated by underwater.
-  if (gate && gate.escalate && gate.reason === 'structural')
-    return { level: 'CUT', msg: `CUT — structural break ${name} @ ${fmtP(instabuy)} — broke below structural support ${fmtP(it._support)} (cut-trigger ${fmtP(Math.round(it._cutTrigger))}); the level that held gave way. Price to clear at the instabuy.` };
+  // R9 (PLAN-VIZ-LAYER VZ2a, Ben ruling 2026-07-16): convictionGate (raw price vs. support/cut-trigger)
+  // and heldDisplay/momVerdict (the full persistence-gated judgment) are TWO SEPARATE state machines
+  // that can genuinely disagree — this branch used to hardcode the headline word to CUT regardless of
+  // what the table verdict said, which is exactly the mismatch bug watched live repeatedly (Water orb,
+  // 2026-07-16). Fix: heldDisplay stays authoritative for the verdict WORD (never overridden here); the
+  // structural break is real and must still surface, as an appended warning clause, not a contradicting
+  // verdict. `it._display` is set earlier this same pass (before `held.map(heldAlert)` runs), so the
+  // fallback to the raw mv token only matters if display computation itself failed.
+  if (gate && gate.escalate && gate.reason === 'structural') {
+    const label = (it._display && it._display.label) || (mv && mv.verdict) || 'WATCH';
+    return { level: label, msg: `${label} ${name} @ ${fmtP(instabuy)} — ⚠ also broke structural support ${fmtP(it._support)} (cut-trigger ${fmtP(Math.round(it._cutTrigger))}); verdict unchanged, watch closely.` };
+  }
   // An ARMED Gate-D candidate must NOT fall through to the immediate UNDERWATER alert — that would
   // defeat arm-then-confirm (an armed CUT-CANDIDATE is by definition underwater). A structural-armed
   // graze is purely additive and does NOT suppress the softer underwater/falling signals.
@@ -472,6 +485,37 @@ function heldAlert(it) {
   return null;
 }
 
+// VZ1 (PLAN-VIZ-LAYER) — assemble the watch output pass into ONE plain report object (R4), rendered by
+// render.mjs's renderReport. PURE: it takes ALREADY-computed, already-formatted pieces (the facts are
+// in hand in main(); the capital/derived-cash math + fs stays there) and only decides section ORDER +
+// the blank-line contract, so it is testable off fixtures with no live fetch. Byte-identical to the
+// pre-VZ1 console.log sequence (pinned by pipeline/test/render.test.mjs). The alert items keep the
+// pre-VZ1 {level, msg} shape here (VZ2a restructures them to render the verdict word from the shared
+// display state); the table goes through mdTable via render.mjs (was a hand-built string at :1018);
+// the local quoteCells cell format is UNCHANGED (VZ2b adopts the canonical composite cells).
+export function buildWatchReport({
+  generatedAt, headline, alerts = [], pressureExitWarning = null,
+  freedLine = null, blindLine = null,
+  brief = false, briefLines = [],
+  tableHeaders = null, tableRows = [], notes = [],
+  summaryLines = [],
+} = {}) {
+  const sections = [{ type: 'headline', text: headline }];
+  const pre = pressureExitWarning ? [pressureExitWarning] : [];
+  const post = [];
+  if (freedLine) post.push(freedLine);
+  if (blindLine) post.push(blindLine);
+  sections.push({ type: 'alerts', pre, items: alerts, post });
+  if (brief) {
+    sections.push({ type: 'lines', lines: briefLines, blank: true });
+  } else {
+    sections.push({ type: 'table', headers: tableHeaders, rows: tableRows });
+    if (notes.length) sections.push({ type: 'notes', items: notes });
+  }
+  sections.push({ type: 'lines', lines: summaryLines, blank: true });
+  return { kind: 'watch', generatedAt, sections };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const TARGETS_ONLY = args.includes('--targets-only');
@@ -484,13 +528,14 @@ async function main() {
   const PRESSURE_EXIT = args.includes('--pressure-exit');
   const tokens = args.filter(a => !a.startsWith('--'));
 
-  // --sync (LW-loop): refresh the booked view before this pass so held-basis/realised-P&L are current
-  // (the /loop attended-session convenience — offers already read live off the log, this refreshes
-  // positions.json + ff-pulls mobile trades). Runs sync-fills.mjs as a child; NEVER blocks the watch
-  // pass on failure (a network/git hiccup must not stop monitoring). ATTENDED-ONLY by contract — the
-  // on-demand-only rule (FILLS-PIPELINE §12) means this must not be left looping unattended, since it
-  // pushes to main on every filled pass. Quiet: only the sync's summary line is surfaced.
-  if (args.includes('--sync')) {
+  // ALWAYS sync first (Ben, 2026-07-16 — this was opt-in behind --sync, and "run sync-fills before
+  // every read" stayed a doctrine an agent could just forget; a real position (anglerfish) closed
+  // unnoticed as a result — see the anchor incident in CHANGELOG). Runs sync-fills.mjs as a child;
+  // NEVER blocks the watch pass on failure (a network/git hiccup must not stop monitoring). The bare
+  // (no --publish) call is LOCAL/ZERO-GIT by default since 2026-07-15 (FILLS-PIPELINE §12) — no
+  // commit/push here, so there's no reason this should ever have been opt-in. Quiet: only the sync's
+  // summary line is surfaced. `--sync` is kept as a harmless no-op alias for any external caller.
+  {
     try {
       const out = execFileSync(process.execPath, [path.join(HERE, 'sync-fills.mjs')],
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -526,14 +571,20 @@ async function main() {
   // active offers from the live exchange log (the other half of the position set).
   // Degrades gracefully: no log dir (other machine) → note it and watch held lots only.
   let asks = [], bids = [], noise = [], offersInfo = null;
+  let suspectAsks = [], suspectBids = [];   // LH2.4: restart-blindness wipes — never merged into asks/bids
   if (!TARGETS_ONLY) {
     try {
       const { rows, staleMin } = readExchangeLog();
       offersInfo = { staleMin };
-      for (const o of activeOffers(rows, loadIgnored(path.join(HERE, '..', '..')))) {   // quarantine farm/loot offers (ignored-items.json)
+      const ignoreCfgLocal = loadIgnored(path.join(HERE, '..', '..'));
+      for (const o of activeOffers(rows, ignoreCfgLocal)) {   // quarantine farm/loot offers (ignored-items.json)
         if (o.max * o.offer < NOISE_OFFER_GP) { noise.push(o); continue; }
         (o.state === 'BUYING' ? bids : asks).push(o);
       }
+      // LH2.4: a held lot's ask/bid that vanished in a mass log reset (not a real cancel) reads as
+      // "NOT LISTED" below otherwise — a false exit-discipline nudge to relist a lot that's still
+      // resting in-game. Kept in SEPARATE arrays, never folded into asks/bids (those stay "confirmed").
+      for (const o of restartBlindSuspects(rows, ignoreCfgLocal)) (o.state === 'BUYING' ? suspectBids : suspectAsks).push(o);
     } catch (e) { offersInfo = { err: (e && e.message) || String(e) }; }
   }
 
@@ -655,8 +706,11 @@ async function main() {
       const key = 'held:' + it.id;
       const support = structuralSupport(dayLowsFrom(it.ts1h));
       const trig = support != null ? cutTrigger(support) : null;
+      // PB-COPILOT-1: the resting ask price feeds the margin-reduction-budget tracker (advanceState) —
+      // a restart-blind suspect ask counts too (it's still the price you're chasing down from).
+      const restingAsk = (asks.find(a => a.item === it.id) || suspectAsks.find(a => a.item === it.id) || {}).offer ?? null;
       const cur = { identity: `hld:${it.qty}:${Math.round(it.avgCost)}`,
-        instabuy: it.row.quickSell, mom: it.row.mom, bandTop: it.row.rawBandHi, breakEven: it.be, support };
+        instabuy: it.row.quickSell, mom: it.row.mom, bandTop: it.row.rawBandHi, breakEven: it.be, support, restingAsk };
       const d = computeDeltas(priorState[key], cur, nowMs);
       newState[key] = advanceState(priorState[key], cur, nowMs);
       it._deltas = d; it._support = support; it._cutTrigger = trig;
@@ -804,9 +858,12 @@ async function main() {
   if (bidCount) counts.push(`${bidCount} bid${bidCount > 1 ? 's' : ''}`);
   if (orphanAsks.length) counts.push(`${orphanAsks.length} unbooked ask${orphanAsks.length > 1 ? 's' : ''}`);
   if (targets.length) counts.push(`${targets.length} target${targets.length > 1 ? 's' : ''}`);
-  console.log(`# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`);
-  if (PRESSURE_EXIT) console.log('⚠ --pressure-exit: held list-at uses the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). The depth floor renders beside as the conservative reference.');
-  for (const a of alerts) console.log(`  ⚠ ${a.msg}`);
+  // VZ1: the whole output pass is now collected into a report object (buildWatchReport) and printed
+  // ONCE via renderReport at pass end — byte-identical to the prior console.log sequence. Each piece
+  // below is COLLECTED into a local instead of printed inline; the report is assembled + rendered last.
+  const headlineText = `# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`;
+  const pressureExitWarning = PRESSURE_EXIT ? '⚠ --pressure-exit: held list-at uses the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). The depth floor renders beside as the conservative reference.' : null;
+  let freedLine = null, blindLine = null;
   // V6 COMPANION — capital awareness: a SELL that FREED ≥ threshold since last pass (a held lot's
   // qty dropped, detected via V1's prior-pass state) surfaces a redeploy prompt. Surface-ONLY — it
   // never auto-places and never runs the scan (Ben places every offer; the LLM/Ben runs /scan).
@@ -814,14 +871,14 @@ async function main() {
   try {
     const freed = freedCapital(priorState, held.map(it => ({ id: it.id, qty: it.qty, sellPrice: it.row.quickSell })), { now: nowMs });
     if (freed.prompt)
-      console.log(`  ⋯ freed ~${fmtP(freed.totalFreed)} this pass — consider a scan to redeploy (${freed.events.length} lot${freed.events.length > 1 ? 's' : ''} sold since last pass)`);
+      freedLine = `  ⋯ freed ~${fmtP(freed.totalFreed)} this pass — consider a scan to redeploy (${freed.events.length} lot${freed.events.length > 1 ? 's' : ''} sold since last pass)`;
   } catch { /* companion is surface-only observability — never break a pass */ }
   // LH2: restart-blindness heads-up — a stale log with held inventory but no visible offers is the
   // post-restart blind state (the plugin re-emits nothing until a slot next changes). No behavioral
   // change; just names the failure so a session doesn't chase "vanished" offers.
   if (!TARGETS_ONLY && offersInfo && !offersInfo.err) {
     const blind = blindWarningLine({ staleMin: offersInfo.staleMin, activeOfferCount: asks.length + bids.length, openLotCount: heldSpecs.length });
-    if (blind) console.log(`  ${blind}`);
+    if (blind) blindLine = `  ${blind}`;
   }
 
   // ---- TABLE: numbers only (one row per item/offer), notes carry the words ----
@@ -832,10 +889,13 @@ async function main() {
     ? `${row.regimeLabel} ${row.regime.driftPct >= 0 ? '+' : ''}${row.regime.driftPct.toFixed(0)}%` : '—';
   const volCell = row => row.volDay != null
     ? `${fmt(row.volDay)}/d${row.volDay < LIQUID_FLOOR_PER_DAY ? ' (thin)' : ''}` : '—';
-  const quoteCells = row => [
-    `${fmtP(row.quickBuy)} → ${fmtP(row.quickSell)}`,
-    `${fmtP(row.optBuy)} → ${fmtP(row.optSell)}`,
-  ];
+  // VZ2b (PLAN-VIZ-LAYER, R8 — deliberate, confirmed VISIBLE change): the Quick/Optimistic cells now
+  // adopt the CANONICAL composite cells from js/quotecore.js (`buy → sell · +net (roi)`) — the SAME
+  // cells quote-items/screen ship via stdCells. This makes MONITORING.md's "canonical table-v2 basis"
+  // claim literally true: ONE table-v2 cell format on every surface, net/roi included. canonicalQuoteCells
+  // returns the full T1 cell array; index 2 = Quick composite, index 3 = Optimistic composite (cellText
+  // → the plain markdown text, so stdout stays colorless while the app keeps the class).
+  const quoteCells = row => { const c = canonicalQuoteCells('', row); return [cellText(c[2]), cellText(c[3])]; };
   const firstSentence = s => { const m = s.match(/^.*?[.;](?=\s|$)/); return m ? m[0] : s; };
 
   const tableRows = [];   // [verdict, item, position, quick, opt, vol, mom, regime, be]
@@ -850,12 +910,19 @@ async function main() {
     const { row, be, qty, avgCost, lotValue, ts5m, name } = it;
     // pair with the live ask (exit-discipline visibility: an unlisted hold is a stranded lot)
     const ask = asks.find(a => a.item === it.id);
+    // LH2.4: before reporting NOT LISTED, check for a suspected restart-blindness wipe of THIS item's
+    // ask — a real cancel logs a terminal row first; a client restart skips straight to EMPTY, so the
+    // pre-wipe ask is still probably resting in-game. Never presented as confirmed — always ⚠-flagged.
+    const suspectAsk = !ask && suspectAsks.find(a => a.item === it.id);
     const listed = ask ? `ask ${ask.qty}/${fmt(ask.max)} @ ${fmtP(ask.offer)}`
+      : suspectAsk ? `ask possibly still @ ${fmtP(suspectAsk.offer)} ⚠ vanished without a cancel in a mass log reset, verify in-game`
       : (offersInfo && !offersInfo.err ? 'NOT LISTED' : '');
     // a held item's still-open BUY must stay visible (2026-07-05: a filled-then-booked lot
     // swallowed its live bid row and the bid looked cancelled) — annotate it here instead
     const openBid = bids.find(b => b.item === it.id);
-    const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)}` : '';
+    const suspectBid = !openBid && suspectBids.find(b => b.item === it.id);
+    const bidNote = openBid ? ` · bid ${openBid.qty}/${fmt(openBid.max)} @ ${fmtP(openBid.offer)}`
+      : suspectBid ? ` · bid possibly still @ ${fmtP(suspectBid.offer)} ⚠ mass log reset, verify in-game` : '';
     // VN-1: the TABLE cell renders the persistence-gated display label (falls back to the raw
     // token when the display read is unavailable); the ledger above logged the raw token.
     const heldVer = it._display ? it._display.label : heldVerdict(it);
@@ -912,11 +979,15 @@ async function main() {
     // here as `path MIGRATED <enteredUnder> → <current>` (never a new alert class).
     let pathLine = null;
     try { pathLine = it._pathCtx ? renderPathLine(it._pathCtx) : null; } catch { /* support-only */ }
+    // PB-COPILOT-1: the margin-reduction-budget note (watchstate.mjs) — reads the SAME newState[key]
+    // entry advanceState just persisted for this lot's conviction pass; never a fresh computation here.
+    let marginBudget = null;
+    try { marginBudget = marginBudgetNote(newState['held:' + it.id]); } catch { /* support-only */ }
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
       pressure: pressureText(row.pressure, { compact: true }),
       reliableReason: row.reliable ? null : row.reliableReason,
-      conviction, delta, tripwire, recovery, path: pathLine,
+      conviction, delta, tripwire, recovery, path: pathLine, marginBudget,
       listAt: heldLa, breakEven: be,
       fillProgress: listed || null,
     }));
@@ -988,31 +1059,21 @@ async function main() {
     notes.push(`- ${name}: ${firstSentence(targetAction(row, cls, be))}${tgtPress ? ` · pressure ${tgtPress}` : ''}`);
   }
 
-  if (BRIEF) {
-    // --brief: the compact one-line-per-item book. Format is OWNED BY watchcore.briefLine (stable,
-    // fixture-pinned) — the agent relays this verbatim and only ADDS judgment notes. Headline
-    // (alerts) above and SUMMARY below still print; the verbose table + per-item notes are skipped.
-    console.log('');
-    for (const b of briefRows) console.log(briefLine(b));
-  } else {
-    console.log('\n| Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime | Break-even |');
-    console.log('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
-    for (const r of tableRows) console.log(`| ${r.join(' | ')} |`);
-
-    if (notes.length) {
-      console.log('');
-      for (const n of notes) console.log(n);
-    }
-  }
+  // --brief: the compact one-line-per-item book. Format is OWNED BY watchcore.briefLine (stable,
+  // fixture-pinned) — the agent relays this verbatim and only ADDS judgment notes. Headline
+  // (alerts) above and SUMMARY below still render; the verbose table + per-item notes are skipped.
+  const briefLines = BRIEF ? briefRows.map(briefLine) : [];
 
   // V1: persist THIS pass's state (rebuilt fresh from current items) for the next pass's deltas.
-  // Guarded — a save failure is silent; it must never break the pass output.
+  // Guarded — a save failure is silent; it must never break the pass output. (VZ1: no output ordering
+  // dependence — the whole report is rendered once below, after this side-effecting save.)
   try { saveState(WATCH_STATE, newState); } catch { /* observability only */ }
 
-  // ---- SUMMARY: totals + provenance + loop + discipline ----
+  // ---- SUMMARY: totals + provenance + loop + discipline ---- (collected into summaryLines; the
+  // capital/derived-cash math + fs read stay HERE, in main's I/O; the report renders it as text)
   const exposure = held.reduce((n, it) => n + (it.lotValue || 0), 0);
   const committed = bidItems.reduce((n, it) => n + it.bids.reduce((m, o) => m + o.max * o.offer, 0), 0);
-  console.log('\n=== SUMMARY ===');
+  const summaryLines = ['=== SUMMARY ==='];
   const sumBits = [];
   if (held.length) sumBits.push(`held exposure ${fmtP(exposure)} (${held.length} lot${held.length > 1 ? 's' : ''}${asks.length ? `, ${asks.length} listed` : ''})`);
   if (bidCount) sumBits.push(`bid capital ${fmtP(committed)} (${bidCount} offer${bidCount > 1 ? 's' : ''})`);
@@ -1021,7 +1082,7 @@ async function main() {
   const util = bookUtilization({ workingGp: exposure, parkedGp: committed });
   if (util.utilizationPct != null) sumBits.push(`capital ${util.utilizationPct}% working / ${100 - util.utilizationPct}% parked`);
   sumBits.push(alerts.length ? `⚠ ${alerts.length} alert${alerts.length > 1 ? 's need' : ' needs'} action` : 'no alerts');
-  console.log(`  ${sumBits.join(' · ')}`);
+  summaryLines.push(`  ${sumBits.join(' · ')}`);
   // Total capital = committed (working+parked) + DERIVED idle cash (lib/derive-cash-tiers.mjs, PLAN-CASH-TRACKING).
   // Idle GP isn't in any log, so it's DERIVED FORWARD from a stored anchor (anchor + Σsells−Σbuys−escrow),
   // not a stated snapshot that ages the moment you trade. We feed `availableCash` (the FREE coin stack,
@@ -1042,28 +1103,40 @@ async function main() {
     const flowTxt = dc.netFlow ? ` ${dc.netFlow > 0 ? '+' : ''}${fmtP(dc.netFlow)} since` : '';
     const prov = min != null ? ` · idle derived from anchor ${ageTxt} ago${flowTxt}` : '';
     const inj = dc.inferredInjection > 0 ? ` ⚠ +${fmtP(dc.inferredInjection)} inferred injection — re-anchor to confirm (derive-cash.mjs)` : '';
-    console.log(`  total capital ~${fmtP(tc.totalGp)} · committed ${fmtP(tc.committedGp)} (${tc.committedPct}%) / idle cash ~${fmtP(tc.cashGp)} (${tc.idlePct}%)${prov}${inj}`);
+    summaryLines.push(`  total capital ~${fmtP(tc.totalGp)} · committed ${fmtP(tc.committedGp)} (${tc.committedPct}%) / idle cash ~${fmtP(tc.cashGp)} (${tc.idlePct}%)${prov}${inj}`);
     // Three-tier deployable capital — never a silent binary. Printed only when something is resting (else all
     // three tiers equal availableCash). deployablePool = free stack + reclaimable DEEP-bid escrow; liquid =
     // + every resting bid's escrow (the loosest "cancel everything" pool). NEVER a verdict/alert input.
     if (dc.reserved > 0) {
       const dn = dc.restingDeepN || 0;
       const reclaim = dn > 0 ? `+ reclaimable ${fmtP(dc.reservedDeep)} from ${dn} deep bid${dn > 1 ? 's' : ''}` : '· no reclaimable deep bids';
-      console.log(`  deployable ${fmtP(dc.deployablePool)} (free ${fmtP(dc.availableCash)} ${reclaim}) · liquid ${fmtP(dc.liquidCapital)} (all ${fmtP(dc.reserved)} bid escrow reclaimable)`);
+      summaryLines.push(`  deployable ${fmtP(dc.deployablePool)} (free ${fmtP(dc.availableCash)} ${reclaim}) · liquid ${fmtP(dc.liquidCapital)} (all ${fmtP(dc.reserved)} bid escrow reclaimable)`);
     }
   } else if (exposure > 0 || committed > 0) {
-    console.log(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/commands/derive-cash.mjs <amount>`);
+    summaryLines.push(`  committed capital ${fmtP(tc.committedGp)} · idle cash not derived — set an anchor: node pipeline/commands/derive-cash.mjs <amount>`);
   }
   if (!TARGETS_ONLY) {
-    console.log(posAge != null
+    summaryLines.push(posAge != null
       ? `  held basis positions.json ${posAge}m old${posAge > 25 ? ' ⚠ stale — a very recent trade may not show yet' : ''}` +
         (offersInfo && !offersInfo.err
           ? ` · offer basis live log, newest line ${offersInfo.staleMin}m ago${noise.length ? ` · noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total` : ''}`
           : ` · offer basis unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`)
       : '  held basis positions.json unavailable');
   }
-  console.log(`  loop /loop ${loopMin}m node pipeline/commands/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
-  console.log('  READ-ONLY decision support — exit at entry · never a stranded ask · cut on breakdown, not hope · you place every offer.');
+  summaryLines.push(`  loop /loop ${loopMin}m node pipeline/commands/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
+  summaryLines.push('  READ-ONLY decision support — exit at entry · never a stranded ask · cut on breakdown, not hope · you place every offer.');
+
+  // VZ1: assemble the report object + render it ONCE — the ONE emission point (byte-identical to the
+  // prior console.log sequence, pinned by pipeline/test/render.test.mjs).
+  const report = buildWatchReport({
+    generatedAt: stamp, headline: headlineText, alerts, pressureExitWarning, freedLine, blindLine,
+    brief: BRIEF, briefLines,
+    tableHeaders: ['Verdict', 'Item', 'Position', 'Quick', 'Optimistic', 'Vol/d', 'Mom', 'Regime', 'Break-even'],
+    tableRows, notes, summaryLines,
+  });
+  console.log(renderReport(report));
 }
 
-await main();
+// Entrypoint guard (matches screen-flip-niches.mjs / quote-items.mjs): importing this module for a
+// unit test (buildWatchReport off fixtures) must NOT fire a full watch pass / hit the API.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

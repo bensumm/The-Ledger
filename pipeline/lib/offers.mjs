@@ -124,3 +124,46 @@ export function activeOffers(rows, ignoredCfg = null) {
   }
   return out;
 }
+
+/** LH2.4 — restart-blindness for slots the WHOLE-log staleness check (logblind.mjs) can't see.
+ *  THE GAP (2026-07-16): the Exchange Logger plugin only emits on a slot state change, so after a
+ *  client restart/relog it silently reports EMPTY for every slot it hasn't seen touched since — even
+ *  though the underlying GE offer is still resting in-game (LH2's original finding). logblind.mjs
+ *  catches this when the WHOLE log goes stale, but a live probe/flip touching even ONE slot keeps the
+ *  log looking fresh while OTHER slots go dark right alongside it (the 2026-07-16 ladder-probe
+ *  incident: 4 bulk sells vanished from monitor-offers.mjs while 2 micro-clip slots kept the log
+ *  "fresh").
+ *
+ *  THE INVARIANT (simpler than the first cut of this fix, and strictly more general): the GE offer
+ *  state machine has exactly one path into EMPTY — through a TERMINAL row (CANCELLED_BUY /
+ *  CANCELLED_SELL / BOUGHT / SOLD). A real fill always logs partial -> complete before EMPTY; a real
+ *  cancel always logs CANCELLED_* before EMPTY. There is no legitimate transition straight from
+ *  BUYING/SELLING to EMPTY. So the check needs no cross-slot corroboration ("did N other slots also go
+ *  empty at this instant") at all — just walk each slot backward past any run of trailing EMPTY rows
+ *  (a slot can go blind more than once before ever being re-touched) to the last REAL row. If that row
+ *  is BUYING/SELLING rather than a terminal state, the EMPTY has no explanation and the offer is
+ *  presumed still resting in-game. This is both simpler than (and a superset of) the original
+ *  same-timestamp-multi-slot heuristic — it also catches a SINGLE slot going blind on its own, which a
+ *  "3+ slots at once" threshold would have missed.
+ *  Returns the SUSPECT slots' pre-wipe offer, `{ ...row, ts, resetTs, suspectRestartBlind:true }` —
+ *  ONLY for slots whose wipe is still the LAST thing logged for that slot (a later real placement or
+ *  cancel supersedes the suspicion). Never mutates `activeOffers()`'s own semantics — this is an
+ *  ADDITIONAL, separately-rendered list a caller merges in beside the confirmed-active ones. */
+export function restartBlindSuspects(rows, ignoredCfg = null) {
+  const bySlotRows = new Map();
+  for (const r of rows) { if (!bySlotRows.has(r.slot)) bySlotRows.set(r.slot, []); bySlotRows.get(r.slot).push(r); }
+  const suspects = [];
+  for (const srows of bySlotRows.values()) {
+    if (!srows.length) continue;
+    let i = srows.length - 1;
+    if (srows[i].state !== 'EMPTY') continue;   // slot's current state isn't even EMPTY — not a suspect
+    let earliestEmpty = srows[i];
+    while (i >= 0 && srows[i].state === 'EMPTY') { earliestEmpty = srows[i]; i--; }
+    if (i < 0) continue;                        // no row before the EMPTY run at all — nothing to be suspicious of
+    const cur = srows[i];
+    if (cur.state !== 'BUYING' && cur.state !== 'SELLING') continue;   // preceded by a real terminal state — a genuine cancel/fill
+    if (ignoredCfg && offerQuarantined(ignoredCfg, cur.item, cur.offer)) continue;
+    suspects.push({ ...cur, ts: Date.parse(cur.date + 'T' + cur.time), resetTs: Date.parse(earliestEmpty.date + 'T' + earliestEmpty.time), suspectRestartBlind: true });
+  }
+  return suspects;
+}

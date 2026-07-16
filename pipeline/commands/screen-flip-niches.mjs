@@ -96,6 +96,7 @@ import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow 
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
+import { readOpenPositions } from '../lib/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
@@ -110,6 +111,7 @@ import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
@@ -394,11 +396,12 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // rising-mode confirm, overnight-posture filters) is the pure surviveMode() in gatecandidates.mjs.
     // Byte-identical to the old inline chain: `rescued` still increments disc.rescued at the point of
     // rescue (even if a later gate drops the row), and discardReason maps 1:1 onto the disc counters.
-    const sv = surviveMode(mode, row, ph, { phaseRescue: PHASE_RESCUE, posture: POSTURE, thin: s.thin, series5m: series5m && series5m.get(s.id) });
+    const sv = surviveMode(mode, row, ph, { phaseRescue: PHASE_RESCUE, posture: POSTURE, thin: s.thin, series5m: series5m && series5m.get(s.id), held: HELD_IDS.has(s.id) });
     if (sv.rescued) disc.rescued++;
     if (!sv.keep) { disc[sv.discardReason]++; continue; }
     const rescued = sv.rescued;
     const name = map.byId[s.id]?.name || ('#' + s.id);
+    if (sv.heldFallingOverride) informNotes.push(`⚠ ${name}: shown despite falling (${mode} normally excludes fallers) — you HOLD this item; price-to-clear, not a buy signal`);
     // P2/P3 validators. reachValidator (via the spec plan) scores the patient ask (optSell) against the
     // reach window off the Leg-B 1h series; a SECOND inform-only reach call below scores the patient BID
     // (optBuy) reachability — the 2h band min is an artifact-prone floor and an unreachable bid inflates
@@ -1117,6 +1120,9 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
 // file, no fetch) and read by renderMode's validator ctx (`limits` stage). Empty map ⇒ every item has
 // zero in-window buys ⇒ limitValidator passes ⇒ byte-identical output (the degrade contract).
 let BUYS_BY_ITEM = new Map();
+// held-item ids (2026-07-16) — same module-level-let-set-in-main pattern as BUYS_BY_ITEM above, so
+// renderMode (a separate function) can read what main() loaded. Empty set ⇒ no override ⇒ byte-identical.
+let HELD_IDS = new Set();
 function loadBuysByItem() {
   try { return buysByItem(JSON.parse(readFileSync(join(REPO_ROOT, 'fills.json'), 'utf8')).events || []); }
   catch { return new Map(); }   // absent/unreadable fills.json → no limit context (validator degrades to pass)
@@ -1176,8 +1182,25 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
 }
 
 async function main() {
+  // ALWAYS sync first (Ben, 2026-07-16 — the /scan skill's "sync first, always" was doctrine an
+  // agent could just forget; a real closed position went unnoticed as a result). Local/zero-git,
+  // cheap, never blocks the screen on failure — this is the held-item exception's freshness input
+  // too (HELD_IDS below reads positions.json right after this).
+  try {
+    const out = execFileSync(process.execPath, [join(REPO_ROOT, 'pipeline', 'commands', 'sync-fills.mjs')],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const summary = out.trim().split('\n').filter(l => /^positions:|nothing to/.test(l));
+    if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
+  } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — screening off the current book\n'); }
+
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx
+  // CODE-ENFORCED held-item exception (2026-07-16 — was a /scan skill prose rule Ben had to remember to
+  // apply manually every pass; moved here so a held item can't silently vanish from band/churn the
+  // moment its regime flips to falling). Read-only, no fetch — degrades to an empty set on any error so
+  // a positions.json problem never breaks the screen itself.
+  try { const { groups } = readOpenPositions(join(REPO_ROOT, 'positions.json')); HELD_IDS = new Set((groups || []).map(g => g.itemId)); }
+  catch { /* no positions.json → nothing held → no override, exactly today's behavior */ }
   const map = await loadMapping();
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
@@ -1217,7 +1240,7 @@ async function main() {
   // valueScore and takes a HARD top-N (VALUE_TOP_DEFAULT §F) — a bounded shortlist off a large pool.
   const gated = {};
   for (const m of RUN_MODES) {
-    const cand = gateCandidates(m, ctx, THRESHOLDS);
+    const cand = gateCandidates(m, ctx, THRESHOLDS, HELD_IDS);
     const top = FLIP_NICHES[m].gate === 'value' ? VALUE_TOP_DEFAULT : TOP;
     // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's
     // relaxation ladder) and surface the best SUBFLOOR_TOP honestly labeled — never an empty table with the

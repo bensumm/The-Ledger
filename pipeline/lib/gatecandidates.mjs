@@ -151,7 +151,7 @@ export const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : dri
 // used to close over is now a named field of the `t` thresholds object (default DEFAULT_THRESHOLDS),
 // so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window, rising-pool
 // floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and `tax` are pure.
-export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
+export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new Set()) {
   const spec = FLIP_NICHES[mode];
   if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
   if (spec.gate === 'value') return gateValueCandidates(ctx, t);   // P5 — the term-structure value gate
@@ -193,9 +193,14 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS) {
     const expGpDay = Math.round(expUnits(limit, limitVol, capPerWindow) * modeNet);
     const expGpDayLegacy = Math.round(expUnits(limit, limitVol) * modeNet);
     // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
-    // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note).
-    if (!thin && expGpDay < t.MIN_GPD) continue;
-    cand.push({ id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin });
+    // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note). A HELD item is
+    // EXEMPT too (2026-07-16 — was a prose-only "held/asked items are exempt" comment right here with
+    // no code behind it, confirmed by grep; now code-enforced, same held-item exception as surviveMode's
+    // falling bypass below). Held items never reach this file with a real gp-flow reading if the market
+    // moved against them — dropping them here would be the exact "silently vanishes" failure this fixes.
+    const held = heldIds.has(id);
+    if (!thin && !held && expGpDay < t.MIN_GPD) continue;
+    cand.push({ id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held });
   }
   return cand;
 }
@@ -302,9 +307,15 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   // by design; a riser already high on expGpDay is a no-op (it was already at the front).
   const risers = nonThin.filter(c => (c.proxyDrift ?? 0) > 0).sort((a, b) => b.proxyDrift - a.proxyDrift).slice(0, risingReserve);
   const riserIds = new Set(risers.map(c => c.id));
-  const rest = nonThin.filter(c => !riserIds.has(c.id));
-  const reserved = cand.filter(c => c.thin).sort((a, b) => (b.limitVol * b.mid) - (a.limitVol * a.mid)).slice(0, thinReserve);
-  return [...reserved, ...risers, ...rest].slice(0, top);
+  // HELD RESERVE (2026-07-16, same family as thin/rising above): a held item that cleared the gate
+  // above must not still vanish here just for ranking below the velocity cutoff. UNBOUNDED by design —
+  // there are only ever a handful of held lots at once (never a flood risk like the thin/rising pools),
+  // so every held survivor gets a guaranteed slot rather than a capped reserve.
+  const heldSurvivors = cand.filter(c => c.held && !riserIds.has(c.id));
+  const heldIdsInPool = new Set(heldSurvivors.map(c => c.id));
+  const rest = nonThin.filter(c => !riserIds.has(c.id) && !heldIdsInPool.has(c.id));
+  const reserved = cand.filter(c => c.thin && !heldIdsInPool.has(c.id)).sort((a, b) => (b.limitVol * b.mid) - (a.limitVol * a.mid)).slice(0, thinReserve);
+  return [...heldSurvivors, ...reserved, ...risers, ...rest].slice(0, top + heldSurvivors.length);
 }
 
 // --- post-fetch doctrine: does this fetched+quoted row SURVIVE its niche/posture? ------------------
@@ -320,21 +331,30 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
 // P5 — the falling doctrine is now PER-SPEC (Ben's 2026-07-08 amendment: a faller is not necessarily a
 // poor buy — "we cannot judge falling without its history and typical fluctuations"). surviveMode reads
 // spec.falling instead of a hardcoded global exclusion:
-//   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing). The four original niches keep
-//                   this → byte-identical (the replay goldens pin it). 'knife-guard' (value) also lands
-//                   here defensively, but value never reaches surviveMode — its knife guard is valueGate.
+//   'exclude'     — falling ⇒ dropped (unless --phase-rescue basing, OR opts.held — see below). The
+//                   four original niches keep this → byte-identical (the replay goldens pin it) for a
+//                   NON-held row. 'knife-guard' (value) also lands here defensively, but value never
+//                   reaches surviveMode — its knife guard is valueGate.
 //   'accept'      — falling is a VALID candidate (scalp EXPECTS a falling wide band); not dropped for
 //                   the regime alone. Its intraday tripwire lives in offerVerdict/the path engine.
 //                   Step 5 (2026-07-09): scalp goes further — a scalp-mode CONFIRM below REQUIRES falling
 //                   (a non-falling scalp is a band flip → dropped 'notFalling'), so scalp = fallers only.
 export function surviveMode(mode, row, phase, opts = {}) {
-  const { phaseRescue = false, posture = 'active', thin = false, series5m = null } = opts;
+  const { phaseRescue = false, posture = 'active', thin = false, series5m = null, held = false } = opts;
   const spec = FLIP_NICHES[mode];
   const fallingDoctrine = spec ? spec.falling : 'exclude';
   let rescued = false;
-  if (row.falling && fallingDoctrine !== 'accept') {
+  let heldFallingOverride = false;
+  // HELD-ITEM EXCEPTION (was prose-only in the /scan skill: "items Ben holds ... always show, with
+  // price-to-clear" — moved to code 2026-07-16 so it can't silently depend on the agent remembering
+  // to check). A held item's regime can flip to 'falling' between one pass and the next with NO
+  // warning otherwise — this is the ONLY bypass the exception covers; posture/notFalling drops below
+  // are untouched (the exception is specifically about the exclude-fallers doctrine, not every gate).
+  if (row.falling && fallingDoctrine !== 'accept' && held) {
+    heldFallingOverride = true;
+  } else if (row.falling && fallingDoctrine !== 'accept') {
     if (phaseRescue && phase && phase.phase === 'basing') rescued = true;   // decayed off a spike, lows flattened
-    else return { keep: false, discardReason: 'falling', rescued: false };  // screen rule: never surface fallers
+    else return { keep: false, discardReason: 'falling', rescued: false, heldFallingOverride: false };  // screen rule: never surface fallers
   }
   // Post-fetch CONFIRM — SPEC-DRIVEN (P4c → N2, 2026-07-14: was `mode === 'scalp'` plus a dead
   // `mode === 'rising'` branch for the deleted niche; `spec.confirm` was declared+validated but unread).
@@ -343,14 +363,14 @@ export function surviveMode(mode, row, phase, opts = {}) {
   // NON-falling row ('notFalling') — a scalp on a non-falling item is just a band flip band already owns.
   // Its ROI-bind (a fresh wide band clearing −ROI once tax is paid) is caught by renderMode's Step-2 net>0
   // surface gate, so it isn't re-checked here.
-  if (spec && spec.confirm === 'falling' && !row.falling) return { keep: false, discardReason: 'notFalling', rescued };
+  if (spec && spec.confirm === 'falling' && !row.falling) return { keep: false, discardReason: 'notFalling', rescued, heldFallingOverride };
   if (posture === 'overnight') {
     // overnight posture: only a confident, patient, non-thin edge that won't be stale by morning.
-    if (thin) return { keep: false, discardReason: 'posture', rescued };                                      // no thin fast-lane
-    if (!(row.regimeLabel === 'flat' || row.rising)) return { keep: false, discardReason: 'posture', rescued }; // confident flat/rising only (drops unknown)
-    if (!row.reliable) return { keep: false, discardReason: 'posture', rescued };                              // needs a trustworthy band
-    if (row.mom === 'breakdown') return { keep: false, discardReason: 'posture', rescued };                    // no active pullback overnight
-    if (overnightStaleRisk(series5m, row.optBuy)) return { keep: false, discardReason: 'posture', rescued };   // stale/underwater by morning
+    if (thin) return { keep: false, discardReason: 'posture', rescued, heldFallingOverride };                                      // no thin fast-lane
+    if (!(row.regimeLabel === 'flat' || row.rising)) return { keep: false, discardReason: 'posture', rescued, heldFallingOverride }; // confident flat/rising only (drops unknown)
+    if (!row.reliable) return { keep: false, discardReason: 'posture', rescued, heldFallingOverride };                              // needs a trustworthy band
+    if (row.mom === 'breakdown') return { keep: false, discardReason: 'posture', rescued, heldFallingOverride };                    // no active pullback overnight
+    if (overnightStaleRisk(series5m, row.optBuy)) return { keep: false, discardReason: 'posture', rescued, heldFallingOverride };   // stale/underwater by morning
   }
-  return { keep: true, discardReason: null, rescued };
+  return { keep: true, discardReason: null, rescued, heldFallingOverride };
 }

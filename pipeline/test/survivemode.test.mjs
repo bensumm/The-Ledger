@@ -40,46 +40,46 @@ console.log('surviveMode() acceptance:');
 /* --- falling-exclusion (+ phase rescue) --------------------------------------------------- */
 ok('a clean (non-falling) band row survives with no discard reason', () => {
   const sv = surviveMode('band', row(), { phase: 'base' }, {});
-  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false });
+  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false, heldFallingOverride: false });
 });
 
 ok('a falling row is dropped (discardReason "falling"), rescue OFF', () => {
   const sv = surviveMode('band', row({ falling: true }), { phase: 'decay' }, { phaseRescue: false });
-  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false, heldFallingOverride: false });
 });
 
 ok('--phase-rescue + basing shape RESCUES a faller (kept, rescued:true)', () => {
   const sv = surviveMode('band', row({ falling: true }), { phase: 'basing' }, { phaseRescue: true });
-  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: true });
+  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: true, heldFallingOverride: false });
 });
 
 ok('--phase-rescue but NOT basing (decay) still drops the faller', () => {
   const sv = surviveMode('band', row({ falling: true }), { phase: 'decay' }, { phaseRescue: true });
-  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false, heldFallingOverride: false });
 });
 
 ok('--phase-rescue with a null phase drops the faller (no basing to read)', () => {
   const sv = surviveMode('band', row({ falling: true }), null, { phaseRescue: true });
-  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false, heldFallingOverride: false });
 });
 
 /* --- P5: the falling doctrine is PER-SPEC (Ben's 2026-07-08 amendment) --------------------- */
 ok('scalp (spec.falling="accept") KEEPS a falling row — falling is the scalp thesis, not a veto', () => {
   const sv = surviveMode('scalp', row({ falling: true }), { phase: 'decay' }, {});
-  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false });
+  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false, heldFallingOverride: false });
 });
 ok('band still EXCLUDES the same falling row (existing niches unchanged — byte-identical)', () => {
   const sv = surviveMode('band', row({ falling: true }), { phase: 'decay' }, {});
-  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'falling', rescued: false, heldFallingOverride: false });
 });
 // Step 5 (Ben 2026-07-09): scalp is STRICT falling-only — a non-falling scalp is a band flip band owns.
 ok('scalp DROPS a non-falling row ("notFalling") — scalp requires falling, not just accepts it', () => {
   const sv = surviveMode('scalp', row({ falling: false }), { phase: 'base' }, {});
-  assert.deepEqual(sv, { keep: false, discardReason: 'notFalling', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'notFalling', rescued: false, heldFallingOverride: false });
 });
 ok('scalp still applies overnight posture (accept ≠ bypass every gate) — a thin scalp drops overnight', () => {
   const sv = surviveMode('scalp', row({ falling: true, thin: true }), { phase: 'decay' }, { posture: 'overnight', thin: true });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false, heldFallingOverride: false });
 });
 
 /* --- N2 (2026-07-14): confirm is SPEC-DRIVEN; the "rising" niche + its hardcoded confirm are DELETED --- */
@@ -99,12 +99,12 @@ ok('band (confirm:null) applies no confirm — a non-falling band row survives',
 /* --- overnight posture filters ------------------------------------------------------------ */
 ok('overnight drops a thin row (no thin fast-lane)', () => {
   const sv = surviveMode('band', row(), { phase: 'base' }, { posture: 'overnight', thin: true });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false, heldFallingOverride: false });
 });
 
 ok('overnight drops an unknown-regime, non-rising row (needs confident flat/rising)', () => {
   const sv = surviveMode('band', row({ regimeLabel: 'unknown', rising: false }), { phase: 'base' }, { posture: 'overnight' });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false, heldFallingOverride: false });
 });
 
 ok('overnight keeps a rising row even when regimeLabel isn\'t flat', () => {
@@ -114,22 +114,22 @@ ok('overnight keeps a rising row even when regimeLabel isn\'t flat', () => {
 
 ok('overnight drops an unreliable-band row', () => {
   const sv = surviveMode('band', row({ reliable: false }), { phase: 'base' }, { posture: 'overnight' });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false, heldFallingOverride: false });
 });
 
 ok('overnight drops a breakdown row', () => {
   const sv = surviveMode('band', row({ mom: 'breakdown' }), { phase: 'base' }, { posture: 'overnight' });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false, heldFallingOverride: false });
 });
 
 ok('overnight drops a row whose overnight window would be stale/underwater by morning', () => {
   const sv = surviveMode('band', row({ optBuy: 1000 }), { phase: 'base' }, { posture: 'overnight', series5m: stale5m(1000) });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: false, heldFallingOverride: false });
 });
 
 ok('overnight keeps a confident flat/reliable/non-breakdown row with a non-stale (null) series', () => {
   const sv = surviveMode('band', row(), { phase: 'base' }, { posture: 'overnight', thin: false, series5m: null });
-  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false });
+  assert.deepEqual(sv, { keep: true, discardReason: null, rescued: false, heldFallingOverride: false });
 });
 
 ok('active posture (default) applies NONE of the overnight filters', () => {
@@ -142,7 +142,7 @@ ok('a rescued faller later dropped by posture returns rescued:true AND discardRe
   // In renderMode this increments BOTH disc.rescued (at rescue) and disc.posture (at the drop) —
   // the caller does `if (sv.rescued) disc.rescued++;` then `if (!sv.keep) disc[sv.discardReason]++`.
   const sv = surviveMode('band', row({ falling: true }), { phase: 'basing' }, { phaseRescue: true, posture: 'overnight', thin: true });
-  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: true });
+  assert.deepEqual(sv, { keep: false, discardReason: 'posture', rescued: true, heldFallingOverride: false });
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

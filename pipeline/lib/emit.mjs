@@ -78,7 +78,7 @@ export function heldListAt(row, be, mv) {
  */
 export function heldNoteBlock({
   name, verdict, window: win, reliableReason, pressure,
-  conviction, delta, tripwire, recovery, path,
+  conviction, delta, tripwire, recovery, path, marginBudget,
   listAt, breakEven, fillProgress,
 }) {
   const lines = [];
@@ -100,6 +100,10 @@ export function heldNoteBlock({
   // 4b. DOMINANT PATH (V2-P4b) — the persistence-gated path read (renderPathLine, lib/item-context.mjs).
   //     Decision SUPPORT alongside the verdict — never an alert input; omitted when no path read.
   if (path) lines.push(`    ${path}`);
+  // 4c. MARGIN-REDUCTION BUDGET (PB-COPILOT-1) — how much of the original ask has been given back
+  //     across reprices this hold (watchstate.mjs marginBudgetNote). ADVISORY only — never an alert
+  //     input; surfaced so a chase doesn't silently surrender its whole edge one small step at a time.
+  if (marginBudget) lines.push(`    ${marginBudget}`);
   // 5. SELL/LIST-AT (+ break-even) + fill-progress — GUARANTEED (the standing user rule above).
   const sellBits = [`sell: list @ ${fmtP(listAt)}`, `break-even ${fmtP(breakEven)}`];
   if (fillProgress) sellBits.push(fillProgress);

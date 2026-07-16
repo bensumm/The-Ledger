@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.28
+version: 1.31
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -9,28 +9,43 @@ description: Review Ben's held GE positions against the live market and produce 
 Skills-versioning note: this file's `version` bumps on material behavior change; skills
 NEVER bump `APP_VERSION` (that marks the deployed app, which skills never touch).
 
+**Paste the raw markdown table verbatim, unfenced (Ben, 2026-07-16).** Whether the read comes
+from `quote-items.mjs --positions` or `watch-positions.mjs`, include the script's own markdown
+table in the reply as PLAIN markdown — not just a prose summary of it, and NOT wrapped in a
+fenced code block (a code fence forces the client to show literal `|`/`-` characters instead of
+rendering an actual table — confirmed live, 2026-07-16). Ben reads the actual numbers/columns
+directly; a prose rollup alone hides the table he wants to see. Prose interpretation still
+follows (§3/§4) — it supplements the table, it doesn't replace it.
+
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/quote-items.mjs --positions --pressure-exit
+node pipeline/commands/quote-items.mjs --positions
 ```
 
-**`--pressure-exit` is ON by default (Ben 2026-07-15 — the pressure trial).** _(judgment: owner early-adopt; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ The held-lot list-at uses the pressure-reachable ask (trial banner + `(pressure N×)` marker), with the conservative depth floor shown beside it; a declared thesis exit still governs the sell leg, and the BE floor still binds. The retro logs the NEUTRAL estimate, so the head-to-head keeps accruing unbiased while you price off pressure. (Omit the flag for a neutral read.)
+**`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
+_(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the
+NEUTRAL read (no flag) by default. The trial surfaced real divergence this session — on Water orb the
+pressure list-at (1,672) sat ~9% above the neutral number (1,531) while the item was chopping through a
+false CUT alert — un-calibrated (n≈0) is not just a disclaimer, it moved a real recommendation. Only add
+`--pressure-exit` when Ben explicitly asks to compare or price off it; the retro keeps shadow-logging the
+neutral estimate either way, so nothing about the head-to-head depends on running the flag by default.
 
 That command IS the market read (reads `positions.json` open lots, quotes each held item,
 prints the standard table + Held@/Break-even/Verdict). Never hand-write a fetch. The gates
 already ran inside `momVerdict()` — your job is to *interpret* the printed verdicts, never
 to re-derive them.
 
-**Sync first — ALWAYS, and it's now cheap (SY1, Ben 2026-07-15).** Run `node pipeline/commands/sync-fills.mjs`
-at the top of **every** positions read, unconditionally. The DEFAULT is now **local / zero-git** — it
-rebuilds `positions.json`/`fills.json`/`offers.json` from the exchange logs with no fetch/commit/push, so
-there's no reason NOT to run it: it's fast, it never touches git, and it's the only thing that makes the
-book current. **Never infer freshness from elapsed time** — Ben trades asynchronously in-game, so "only a
-few minutes passed" tells you nothing; a fill you didn't see may have happened (this is the exact miss the
-2026-07-15 empty-book report made). Then run `--positions` against the fresh file. (`node
-pipeline/commands/monitor-offers.mjs` reads the live exchange log — zero git — if a just-made trade matters
-even more immediately.)
+**Sync is now CODE-ENFORCED, not just doctrine (SY1 2026-07-15; enforced 2026-07-16).**
+`quote-items.mjs --positions` and `watch-positions.mjs` both run `sync-fills.mjs` unconditionally as
+their first step now — local/zero-git, never blocks the read on failure, prints a one-line `sync ·`
+summary. This closed a real gap: the prose "run sync-fills before every read" was skippable and got
+skipped (an agent — this one — declared a real closed position "just a bug" mid-session because the
+book was stale and hadn't been re-synced first; the anglerfish anchor incident, CHANGELOG 2026-07-16).
+You no longer need to separately invoke `sync-fills.mjs` before these two commands — they do it
+themselves. **Still never infer freshness from elapsed time** for anything that ISN'T one of these two
+auto-synced commands (`monitor-offers.mjs` reads the live exchange log directly — zero git — if a
+just-made trade matters even more immediately than the synced book).
 
 - **Phone trades caveat:** the local default of `pipeline/commands/sync-fills.mjs` does NOT ff-pull
   `origin/main`, so an un-pulled *phone* (`mobile-fills.log`) trade won't fold in until the once-a-day
@@ -52,7 +67,7 @@ localhost app's liveness signal; this is the operator's rule when reading `watch
 session.)
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
-`--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs --pressure-exit` —
+`--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs` —
 its default pass covers active bids/asks (BID-OK / BID-BEHIND / CROSSING / CANCEL-BID) —
 and report the offer set as the position set.
 

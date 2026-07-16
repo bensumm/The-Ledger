@@ -20,18 +20,21 @@
  *     admission sets `thin`.
  *   - the per-mode step-3 edge (band/scalp = traded band, %-ROI ≥ MIN_ROI OR thin&abs-gp; churn swaps in
  *     a volume+limit gate).
- *   - the 500k/day attention floor (expGpDay ≥ MIN_GPD), from which THIN gp-flow qualifiers are EXEMPT.
+ *   - the 500k/day attention floor (expGpDay ≥ MIN_GPD), from which THIN gp-flow qualifiers AND a HELD
+ *     item (heldIds param, 2026-07-16) are both EXEMPT — the held exemption was prose-only before this
+ *     date (a comment claiming it right next to the floor check, with no code behind it); confirmed
+ *     missing by grep and fixed here + in rankAndSlice's held reserve (unbounded, mirrors thin/rising).
  *
  * WHAT gateCandidates DOES NOT OWN (so it's not fixtured HERE): the POST-fetch survival doctrine —
  * falling-regime EXCLUSION, the rising-CONFIRM, and the overnight-posture filters — runs off the real
  * computeQuote row (row.falling / row.rising / row.reliable / …), not in gateCandidates. P1 extracted
  * that doctrine into the pure surviveMode() (same lib/gatecandidates.mjs) and it IS fixtured now — in
- * the sibling survivemode.test.mjs. Held/asked/watchlist EXEMPTIONS never reach gateCandidates either —
- * the S3 watchlist path bypasses the gate stack entirely (runWatchlist). The only exemption inside
- * gateCandidates is the thin-gp-flow exemption from the attention floor, pinned below.
+ * the sibling survivemode.test.mjs (that file also pins surviveMode's OWN held exemption, the
+ * falling-exclusion bypass — a second, independent held exemption from this one). The S3 watchlist path
+ * still bypasses the gate stack entirely (runWatchlist) — unrelated to either held exemption above.
  */
 import assert from 'node:assert/strict';
-import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT } from '../lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT, surviveMode } from '../lib/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -94,6 +97,29 @@ ok('attention floor drops a sub-floor LIQUID row; thin gp-flow qualifiers are EX
   const cand = gateCandidates('band', ctx(thinBig, {}, tbands), { ...baseT, MIN_GPD: 10_000_000 });
   assert.equal(cand.length, 1, 'thin gp-flow qualifier ignores the attention floor');
   assert.equal(cand[0].thin, true);
+});
+
+/* --- held-item attention-floor exemption (2026-07-16) — was prose-only, now code-enforced --- */
+ok('attention floor: a HELD sub-floor liquid item is EXEMPT, same as thin — and gains no thin flag', () => {
+  const liquid = { 300: rec(1000, 1100, 200) };
+  const lbands = { 300: band(1000, 1100, 10) };
+  const T = { ...baseT, MIN_GPD: 5000 };   // the same floor that dropped this row above
+  const notHeld = gateCandidates('band', ctx(liquid, {}, lbands), T, new Set());
+  assert.equal(notHeld.length, 0, 'unheld, still dropped by the floor (unchanged default)');
+  const held = gateCandidates('band', ctx(liquid, {}, lbands), T, new Set([300]));
+  assert.equal(held.length, 1, 'held bypasses the attention floor');
+  assert.equal(held[0].held, true);
+  assert.equal(held[0].thin, false, 'the held exemption is NOT the thin path — it stays a normal liquid row');
+});
+
+ok('rankAndSlice: a held survivor gets an UNBOUNDED reserved slot — never crowded out by the top-N cutoff', () => {
+  // a held row with a deliberately terrible expGpDay so raw velocity rank would bury it past a tiny top.
+  const heldRow = { id: 999, expGpDay: 1, thin: false, held: true };
+  const goodRows = Array.from({ length: 5 }, (_, i) => ({ id: i, expGpDay: 1_000_000 - i, thin: false, held: false }));
+  const cand = [heldRow, ...goodRows];
+  const sliced = rankAndSlice('band', cand, {}, { top: 3 });   // top-3 would normally bury id 999 entirely
+  assert.ok(sliced.some(c => c.id === 999), 'the held row survives a top-N far smaller than its rank would allow');
+  assert.equal(sliced.length, 4, 'top(3) + the 1 held reserve — held rows ADD to the budget, never steal from it');
 });
 
 /* --- PLAN-CAPITAL-THROUGHPUT: capital-aware expGpDay (Ben 2026-07-14) --------------------- */
@@ -307,6 +333,43 @@ ok('§F FLOOD CONTROL: a large gated pool ranks by valueScore and is HARD-capped
   // sorted by valueScore DESC — the nearest-the-low (id 1000) leads, and scores are monotonic non-increasing.
   for (let i = 1; i < sliced.length; i++) assert.ok(sliced[i - 1].valueScore >= sliced[i].valueScore, 'ranked by valueScore desc');
   assert.equal(sliced[0].id, 1000, 'the item at the floor (best proximity) ranks first');
+});
+
+/* --- held-item exception (2026-07-16): code-enforced version of the /scan skill's "items Ben
+   holds always show" prose rule — was NOT enforced anywhere before this, confirmed by grep. --- */
+ok('surviveMode: a falling row in an EXCLUDE-falling mode is dropped when NOT held (byte-identical default)', () => {
+  const sv = surviveMode('band', { falling: true }, null, { held: false });
+  assert.equal(sv.keep, false);
+  assert.equal(sv.discardReason, 'falling');
+  assert.equal(sv.heldFallingOverride, false);
+});
+
+ok('surviveMode: the SAME falling row is KEPT when held:true, and flags heldFallingOverride', () => {
+  const sv = surviveMode('band', { falling: true }, null, { held: true });
+  assert.equal(sv.keep, true);
+  assert.equal(sv.discardReason, null);
+  assert.equal(sv.heldFallingOverride, true);
+  assert.equal(sv.rescued, false, 'the held override is not the --phase-rescue path — distinct mechanism');
+});
+
+ok('surviveMode: held:true on a NON-falling row is a no-op (nothing to override)', () => {
+  const sv = surviveMode('band', { falling: false }, null, { held: true });
+  assert.equal(sv.keep, true);
+  assert.equal(sv.heldFallingOverride, false);
+});
+
+ok('surviveMode: held:true does NOT bypass scalp\'s notFalling confirm (the exception is falling-exclusion only)', () => {
+  const sv = surviveMode('scalp', { falling: false }, null, { held: true });
+  assert.equal(sv.keep, false, 'scalp REQUIRES falling — held does not manufacture a falling regime');
+  assert.equal(sv.discardReason, 'notFalling');
+});
+
+ok('surviveMode: held has no effect when the niche already ACCEPTS falling (scalp) — kept either way', () => {
+  const heldSv = surviveMode('scalp', { falling: true }, null, { held: true });
+  const notHeldSv = surviveMode('scalp', { falling: true }, null, { held: false });
+  assert.equal(heldSv.keep, true);
+  assert.equal(notHeldSv.keep, true);
+  assert.equal(heldSv.heldFallingOverride, false, 'no override needed — scalp never excluded this row to begin with');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

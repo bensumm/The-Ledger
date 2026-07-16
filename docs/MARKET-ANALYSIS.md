@@ -231,6 +231,14 @@ DAYS but rarely IN its peak window. Band-is-the-edge: on a liquid stable-regime 
 buys at band lows / sell at band tops (never below break-even). Full judgment: the `/scan` skill's
 WINDOW-CLEAR PRICING step.
 
+**Multiple offers on the SAME item are a queue, not independent rungs (Ben, 2026-07-16).** The GE
+matches a buyer against the cheapest compatible offer first, so a higher-priced ask on an item you
+also have a lower ask resting on is structurally queued behind it — it cannot fill first, and its
+"time to fill" measures queue position, not that price level's own demand. Design a multi-price
+test (or any deliberate ladder) as a **rolling 2-deep queue** — the front rung live + the next
+queued behind it by price, advancing one step each time the front clears — never as several
+simultaneous independent rungs on one item.
+
 ---
 
 ## 5. Time-of-day & forecast

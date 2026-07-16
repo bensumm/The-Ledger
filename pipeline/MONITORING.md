@@ -380,7 +380,13 @@ TABLE** (`Verdict | Item | Position | Quick | Optimistic | Vol/d | Mom | Regime 
 Break-even` — Quick/Optimistic cells on the canonical table-v2 basis; one row per held
 lot, resting offer, or target) → a compact **note block per item** → a **SUMMARY** footer
 (held exposure + bid capital totals, alert count, positions/log provenance, the `/loop`
-line, and the exit-discipline reminder).
+line, and the exit-discipline reminder). Since VZ2b (PLAN-VIZ-LAYER) the Quick/Optimistic
+cells are LITERALLY the canonical `js/quotecore.js` composite cells (`buy → sell · +net
+(roi)`) — the same cell `quote-items`/`screen` ship — so "canonical table-v2 basis" is now
+exact, not just close. Since VZ1 the whole output pass is a plain **report object** built by
+`buildWatchReport` and rendered ONCE by `pipeline/lib/render.mjs` `renderReport` (the ONE
+render layer between data and reader); the section format lives in render.mjs's header, not
+inline console.log loops.
 
 **Per-held EMIT CONTRACT (V5 — the stable, ordered note block).** Each held lot's note block is
 ONE predictable block so a reader (human or LLM) always gets the same fields in the same order.

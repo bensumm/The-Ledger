@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reconstruct, buildTombstonedEvents } from '../lib/reconstruct.mjs';
-import { readExchangeLog, activeOffers } from '../lib/offers.mjs'; // shared log discovery + open-offer semantics
+import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/offers.mjs'; // shared log discovery + open-offer semantics; LH2.4 restart-blindness suspects
 import { breakEven } from '../../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
 import { loadMapping } from '../lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
@@ -51,6 +51,12 @@ const ep = l => Date.parse(l.date+'T'+l.time);            // local wall-clock ->
 const now = Date.now();                                    // real wall clock — detects a stalled log
 const activeAll = activeOffers(rows);
 const active = activeAll.filter(r => !quarantined(r.item, r.offer)); // merch-view: hide ignored-item offers by default
+// LH2.4: slots that went EMPTY in a mass restart-blindness wipe (never re-touched since) — a real
+// cancel logs an intermediate CANCELLED_*/SOLD row first, a client restart skips straight to EMPTY.
+// These are rendered SEPARATELY (never merged into `active`) so a caller can't mistake a suspicion for
+// a confirmed live offer.
+const suspectAll = restartBlindSuspects(rows);
+const suspects = suspectAll.filter(r => !quarantined(r.item, r.offer));
 
 const WIN_MIN = 30;
 const terminalAll = rows.filter(r => /BOUGHT|SOLD|CANCELLED/.test(r.state) && (now-ep(r)) <= WIN_MIN*60000);
@@ -97,10 +103,15 @@ console.log(`log freshness: newest line ${staleMin}m ago (wall-clock)`);
 const blind = blindWarningLine({ staleMin, activeOfferCount: active.length, openLotCount: held.length });
 if (blind) console.log(blind);
 console.log('=== ACTIVE OFFERS (open now) ===');
-if (!active.length) console.log('(none — no live buy/sell offers)');
+if (!active.length && !suspects.length) console.log('(none — no live buy/sell offers)');
 for (const r of active) {
   const side = r.state === 'BUYING' ? 'BUY ' : 'SELL';
   console.log(`slot${r.slot} ${side} ${nm(r.item)} (#${r.item})  ${r.qty}/${r.max} @ ${gp(r.offer)}  · last update ${ago(r)}`);
+}
+for (const r of suspects) {
+  const side = r.state === 'BUYING' ? 'BUY ' : 'SELL';
+  const resetAgo = Math.max(0, Math.round((now - r.resetTs) / 60000));
+  console.log(`slot${r.slot} ${side} ${nm(r.item)} (#${r.item})  ${r.qty}/${r.max} @ ${gp(r.offer)}  ⚠ possibly still listed — vanished without a cancel in a mass log reset ${resetAgo}m ago; verify in-game`);
 }
 console.log('\n=== FILLS / CANCELS (last '+WIN_MIN+'m) ===');
 if (!terminal.length) console.log('(none)');

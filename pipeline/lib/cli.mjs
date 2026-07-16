@@ -44,7 +44,9 @@ export function parseGp(s) {
    (band medians) and join-outcomes.mjs (fill-time cells) (X1 dedup). Does not mutate its input. --- */
 export const median = a => { if (!a || !a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
-/* --- mdTable(headers, rows): generic markdown table (rows = array of cells).
+/* --- mdTable(headers, rows): generic markdown table (rows = array of cells). R7 (PLAN-VIZ-LAYER):
+   this is a DELEGATE of the render layer — `pipeline/lib/render.mjs` `renderReport` calls mdTable for
+   its `table` sections; the formatter stays here (avoids a churn-only move), render.mjs is the entry point.
    Generic on purpose — both consumers APPEND columns to the standard set (quote-items.mjs
    --positions adds Held@/Break-even/Verdict; screen-flip-niches.mjs adds Grade + the per-thesis Rank net·P/ttf), which is
    why quotecore's fixed-column quoteMarkdown() can't serve them. A cell may be a plain

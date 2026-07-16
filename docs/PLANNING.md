@@ -61,6 +61,12 @@ disposition table.
 
 ## Anti-patterns (each one has bitten this repo)
 
+- **A stated skill exception isn't automatically real (2026-07-16).** The `/scan` skill said in
+  prose "items Ben holds always show" — grep found zero code enforcing it, twice (the
+  falling-exclusion AND the gp/day floor both had a comment claiming the exemption right next to
+  the check, with nothing behind it). Both only "worked" because neither held item had yet crossed
+  the line that would expose the gap. Spot-check that a stated prose exception is still
+  code-enforced occasionally — a rule being written down is not evidence it's real.
 - Appending a new rule while an old contradictory one stands (the 0.30.0→0.33.0 reconciliation
   lesson) — grep-and-fix in place.
 - A plan chunk that "wraps existing X" where X is actually spec-only — verify shipped vs specced.
