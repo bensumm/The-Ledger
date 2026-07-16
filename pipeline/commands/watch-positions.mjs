@@ -477,6 +477,11 @@ async function main() {
   const TARGETS_ONLY = args.includes('--targets-only');
   const BRIEF = args.includes('--brief');   // compact one-line-per-item book (stable, script-owned format)
   const DIP = args.includes('--dip');       // DL2 — also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
+  // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
+  // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (still BE-floored
+  // + clamped; declared exit still wins); the depth floor + reachable clause still renders beside it. The
+  // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only; no screen.json/app path here.
+  const PRESSURE_EXIT = args.includes('--pressure-exit');
   const tokens = args.filter(a => !a.startsWith('--'));
 
   // --sync (LW-loop): refresh the booked view before this pass so held-basis/realised-P&L are current
@@ -605,7 +610,7 @@ async function main() {
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
-    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null;
+    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null;
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
     // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the window-line
@@ -631,13 +636,18 @@ async function main() {
           ? { reachedDays: touchedDays(dayStats.lows, it.row.optBuy), nDays: dayStats.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
         const prof = hourProfile(it.ts1h, { nights: 14 });
         const dr = prof ? deriveDiurnalRange(prof, { liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null }) : null;
-        it._estShadow = estimatePair(FLIP_NICHES.band, it.row, {
+        const estBase = {
           bidReach, askReach,
           diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
-          asym: ap, declaredExit: null,
-          dayHigh: dayHighFrom5m(it.ts5m),
-          intendedUnits: it.qty,
-        });
+          asym: ap, dayHigh: dayHighFrom5m(it.ts5m),
+          intendedUnits: it.qty, reachable: it._reachable,   // reachable ignored unless pressureExit is on
+        };
+        // NEUTRAL shadow (declaredExit:null → the model's intrinsic ask) — the retro co-log scores this.
+        it._estShadow = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: null });
+        // PB4: the DISPLAY pressure est (only when the trial flag is on) — declared exit still wins the
+        // sell leg (operator plan), so it passes the REAL declared exit; drives the held list-at below.
+        if (PRESSURE_EXIT)
+          it._estPressure = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: thesisFor(holdThesisStore, it.id)?.exitPrice ?? null }, { pressureExit: true });
         it._asymShadow = ap ? asymEstimate(FLIP_NICHES.band, it.row, ap) : null;
       }
     } catch { /* inform-only — never block a pass */ }
@@ -795,6 +805,7 @@ async function main() {
   if (orphanAsks.length) counts.push(`${orphanAsks.length} unbooked ask${orphanAsks.length > 1 ? 's' : ''}`);
   if (targets.length) counts.push(`${targets.length} target${targets.length > 1 ? 's' : ''}`);
   console.log(`# watch ${stamp} — ${alerts.length ? `⚠ ${alerts.length} ALERT${alerts.length > 1 ? 'S' : ''}` : 'all quiet'} · ${counts.join(' · ') || 'empty board'}`);
+  if (PRESSURE_EXIT) console.log('⚠ --pressure-exit: held list-at uses the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). The depth floor renders beside as the conservative reference.');
   for (const a of alerts) console.log(`  ⚠ ${a.msg}`);
   // V6 COMPANION — capital awareness: a SELL that FREED ≥ threshold since last pass (a held lot's
   // qty dropped, detected via V1's prior-pass state) surfaces a redeploy prompt. Surface-ONLY — it
@@ -891,7 +902,11 @@ async function main() {
       else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
         conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support ~${persistMin}m.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
-    const heldLa = heldListAt(row, be, mvHeld);
+    // PB4: under the pressure-exit trial, the list-at is the pressure-driven est-sell (BE-floored,
+    // declared-exit-respecting — all in _estPressure); else the shared momVerdict list-at (unchanged).
+    // The depth floor still renders in the window clause beside it (depthReachClause — the reference).
+    const heldLa = (PRESSURE_EXIT && it._estPressure && it._estPressure.confidence.pressureExit)
+      ? it._estPressure.estSell : heldListAt(row, be, mvHeld);
     // V2-P4b: the persistence-gated dominant-path line (shared renderPathLine) — decision support
     // rendered ALONGSIDE the verdict in the note block; a CONFIRMED migration surfaces prominently
     // here as `path MIGRATED <enteredUnder> → <current>` (never a new alert class).
