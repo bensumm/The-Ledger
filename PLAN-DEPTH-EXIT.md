@@ -1,6 +1,6 @@
 # PLAN-DEPTH-EXIT — percentile-depth-aware exit pricing (the reach count's principled successor)
 
-Status: **DRAFT — DE1/DE2/DE6/PB1/DE3 LANDED (see per-chunk statuses); DE4/DE5/DE7/PB2/PB4 open.**
+Status: **DRAFT — DE1/DE2/DE6/PB1/PB2/DE3/PB4/PB4-app-display/PB5 LANDED (see per-chunk statuses); DE4/DE5/DE7 open.**
 Per-topic working doc (PLANNING.md lifecycle step 1–2); folds into `PLAN.md` and is deleted when its
 last chunk ships. Builds ON TOP of the Task 1+2 baseline (real held-lot `intendedUnits` → `reachRelief`
 in `estimatePair` + the watch-positions size-relieved fill note) — that baseline is the CURRENT
@@ -432,6 +432,50 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
   SEPARATE mechanism, still REFUSED under `--publish`, so the pressure prices/rank never reach `screen.json`.
   **Prerequisite bug fixed:** the R3-rename `REPO_ROOT` regression (screen.json was writing to `pipeline/`,
   freezing the deployed Scan tab) was corrected. APP_VERSION bumped 0.64.5 → 0.65.0 (deployed-app change).
+- **PB5 — recency-gate the band WIDTH (LANDED 2026-07-15, off the first live trial; APP_VERSION 0.65.0→0.65.1).**
+  **Shipped:** `reachableBand` now measures `bandLow`/`bandHigh` over the recent `PRESSURE_BAND_RECENT_N`
+  (=7) nights instead of the full window (`js/windowread.mjs`), with a graceful fall back to the full
+  arrays when the recent slice is <2 points. The band window is WIDER than the 3-night base center on
+  purpose — a median is stable at n=3 but an IQR is not, so dispersion needs more points; 7 ≈ the recent
+  half of the 14-night default, enough to keep a real band while excluding a stale-regime dip/reprice
+  older than a week (a 3-night IQR collapses to ~0 on flat recent nights and would kill the sell-heavy
+  deep-bid — the Coal-shape behavior — so recent-3 was rejected). New `windowread.test.mjs` PB5 case
+  proves the old-dip exclusion (a 14-day fixture with a deep old-half dip → tight recent band → shallow
+  bid, vs a `bandRecentN:14` override reproducing the deep pre-PB5 bid); the Soul-rune pin moved 401→403
+  (recent-7 his IQR 4 vs old full-window 2). **Live-verified:** anglerfish's deep bid moved 2,251→2,432
+  (up to the recent floor 2,465), Ranarr 5,555→5,609, Soul rune unchanged — the regime-changed floors
+  pull back toward where the item currently trades while the stable churner is untouched. Inform-only /
+  trial still (the co-log keeps accruing the NEUTRAL estimate); n≈0 on fills. **Superseded PROPOSAL text:**
+  **The finding (Ben's theory, live 2026-07-15):** with the trial default-on, four pressure-floor bids
+  were placed at the model's Est. buy and left to ride — Soul rune 381, Black chinchompa 2,841, Raw
+  anglerfish 2,251, Ranarr potion (unf) 5,555. Across ~45 min / 9 loop passes **all four filled 0** (an
+  un-crossing market, not a data point on the floor's *correctness* yet — absence of evidence, the bids
+  could still catch a later flush). But the *placement pattern* is the tell. Soul's bid sits **0.5% below
+  its band low** (381 vs 383) on a **10.65m/d** book — barely a pressure bid at all, it's the band floor
+  on a firehose, and the constant buy-heavy flow nibbles it (the ~50k/day trickle from PB1's
+  reconciliation). The other three sit **2–9% below their CURRENT band** — Black chin 2.0%, Ranarr 3.8%,
+  anglerfish 9% — on books **20–40× thinner** (264–530k/d) that can't deliver a flush that deep.
+  **Root cause (the mechanism, not just the symptom):** PB1 anchors the *base* to the recent central
+  (`recentQuant` via `recencySplit`), but sizes the *band width* (`bandLow`/`bandHigh` = day-low/high IQR)
+  over the **FULL window**. So a regime shift INSIDE the window still widens the IQR and pushes
+  `reachableBid` below where the item currently trades: **Ranarr** — 5,555 was a one-off *dip* in the
+  window, not a level it cycles through (it now oscillates 5,772–5,945); **anglerfish** — rising +10%
+  reprice, the floor anchored to pre-spike levels it's climbing away from (`touched 0/7d`, not even stale,
+  just gone). The `⚠stale` flag ALREADY fires on exactly these (recent nights sat ABOVE the pressure
+  floor) — the model simply isn't feeding recency into the band WIDTH, only the base. Soul carries the
+  stale flag too but escapes the consequence because its bid is trivially close to the band AND the
+  liquidity fills anything near the floor. **Diagnosis:** pressure maps well ONLY on a regime-stable,
+  liquid churner where the historical band = the live band; it mis-maps whenever the item changed regime
+  inside the measurement window. **Proposed fix (two candidates, F1 to choose):** (a) measure `bandLow`/
+  `bandHigh` over the RECENT-N distribution (extend `recencySplit` from the base to the band width — the
+  minimal change, keeps the model shape); or (b) clamp `reachableBid` UP to the recent-3 floor when the
+  stale condition holds (`recentFloor > pressureFloor`) — refuse the deep catch rather than propose a
+  stale-dip level. This is the recency doctrine (RC1) applied to the band's WIDTH, not just its centre —
+  fully consistent with the existing `⚠stale`/`recencySplit` idiom. **Honesty (rule 4):** one session,
+  four bids, 0 fills = a directional read consistent with the mechanism, NOT a calibrated result; the
+  liquidity confound (thin books) and the regime confound (dip/reprice) co-occur here, so the trial can't
+  yet separate "floor too deep" from "book too thin". Keep the bids riding + the co-log accruing; PB5 is
+  the model refinement F1 will test the fix against.
 
 ## Open questions (rule 4)
 - `PRESSURE_PHI_SLOPE`, `PRESSURE_MIN_VOL`, `PRESSURE_HEADROOM_MAX` are all n≈0 placeholders — F1 owns them,
@@ -439,7 +483,10 @@ book predicts boldly (even above the last peak). One model, both tiers; noise, n
 - ~~`bandHigh`/`bandLow` measure~~ — **RESOLVED at PB1 (2026-07-15 diagnostic):** day-high/low
   dispersion (q75−q25) IS the band. The avgHigh−avgLow spread over-deepens wide-spread books below
   anything that printed (Magic logs 769 < min 774). Guide-distance stays a fallback candidate if F1
-  finds the IQR noisy on thin day-samples.
+  finds the IQR noisy on thin day-samples. **REFINED at PB5 (2026-07-15 live trial):** the IQR is the
+  right measure but must be taken over the RECENT-N window — a full-window IQR inflates the width when a
+  dip or reprice inside the window has since been left, pushing the floor below the live cycle (Ranarr/
+  anglerfish). The band WIDTH needs the same `recencySplit` gate the base already has; see PB5.
 - Whole-day vs per-window pressure: PB uses the window's pooled pressure; the per-HOUR track is Extension B.
 
 ---

@@ -10,6 +10,23 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Pressure band width is recency-gated — PB5 (2026-07-15, `js/windowread.mjs` — APP_VERSION 0.65.1)
+The first live default-on trial of the pressure model (four deliberate pressure-floor bids left to ride)
+surfaced Ben's theory: the model's proposed floors don't map to items that **changed regime inside the
+measurement window**. Root cause — `reachableBand` anchored its band *center* to the recent nights
+(`recentQuant`) but sized the band *width* (day-low/high IQR) over the **full** window, so a dip-and-recover
+(Ranarr: 5,555 was a one-off dip, not a cycled level) or a reprice-up (anglerfish, rising +10%, its floor
+anchored to pre-spike lows it had climbed away from) still widened the IQR and pushed the deep bid below
+where the item currently trades. The `⚠stale` flag was already warning about exactly this — the model just
+wasn't feeding recency into the *width*. **Fix:** the width now measures over the recent `PRESSURE_BAND_RECENT_N`
+(=7) nights — wider than the 3-night center because a median is stable at n=3 but an IQR is not (a 3-night IQR
+collapses to ~0 on flat recent nights and would kill the sell-heavy deep-bid, so recent-3 was rejected);
+falls back to the full window when the recent slice is too thin. Live-verified: anglerfish's deep bid moved
+2,251→2,432 (up to the recent floor), Ranarr 5,555→5,609, Soul rune (genuinely stable) unchanged — the
+regime-changed floors pull back toward the live cycle while the stable churner is untouched. Still
+inform-only/trial (the retro co-log keeps accruing the NEUTRAL estimate); n≈0 on fills. Full design +
+per-chunk detail: `PLAN-DEPTH-EXIT.md` PB5.
+
 ### `docs/ARCHITECTURE.md` + the `archlint` doc-reference guard (2026-07-14, docs+pipeline — NO APP_VERSION)
 The audit's core finding was that fragmentation persists because no single home states what the system IS
 or why. `docs/ARCHITECTURE.md` is that home — the general-rules layer, deliberately split into **🔒 ENFORCED**

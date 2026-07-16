@@ -468,9 +468,25 @@ ok('reachableBand: SOUL-RUNE reasonableness pin (buy-heavy: high ask, shallow bi
   const his = [376, 380, 390, 394, 394, 394, 395, 396, 396, 396, 397, 396, 400, 402];
   const pairs = lows.map((l, i) => [l, his[i]]);
   const r = reachableBand(pStats(pairs, { volLo: 11012548, volHi: 18297822 }));
-  assert.equal(r.ask, 401, 'reachable ask ~401 — ABOVE the smoothed depth floor (clearableAsk read 394; real 397 fills)');
-  assert.equal(r.bid, 383, 'shallow bid on a buy-heavy book — deep bids are slow tail-dip trickle fills');
+  assert.equal(r.ask, 403, 'reachable ask ~403 — ABOVE the smoothed depth floor (clearableAsk read 394; real 397 fills); PB5 band = recent-7 his IQR 4 (was full-window IQR 2 → 401)');
+  assert.equal(r.bid, 383, 'shallow bid on a buy-heavy book — deep bids are slow tail-dip trickle fills (unchanged: recent-7 low IQR 2)');
   assert.ok(r.pressure > 1.6 && r.pressure < 1.7 && r.reliability === 1);
+});
+
+ok('reachableBand: PB5 — a stale OLD dip outside the recent-N band window no longer over-deepens the floor', () => {
+  // 14 days: a deep dip regime in the OLD half (lows ~880–900), then a RECOVERED recent half that
+  // cycles tight at ~1000 (lows 995–1005). The full-window low-IQR is wide (spans the old dip); the
+  // recent-7 low-IQR is tight. Balanced pressure so the change is purely the band, not φ.
+  const oldDip  = [[880, 1100], [900, 1100], [890, 1100], [885, 1100], [895, 1100], [900, 1100], [905, 1100]];
+  const recent  = [[1000, 1100], [995, 1100], [1005, 1100], [1000, 1100], [998, 1100], [1002, 1100], [1000, 1100]];
+  const pairs = [...oldDip, ...recent];   // oldest→newest
+  const r = reachableBand(pStats(pairs, { volLo: 10000, volHi: 10000 }));
+  // recent-7 lows = 995…1005 → IQR small; the full-window IQR would span down to ~885.
+  assert.ok(r.bandLow <= 10, `PB5: band tracks the tight recent regime (got IQR ${r.bandLow}), not the old dip`);
+  assert.ok(r.bid >= 990, `PB5: bid sits near the recent floor ~1000, not deep in the stale-dip tail (got ${r.bid})`);
+  // Contrast: the OLD full-window behavior would have used all 14 lows → a wide band → a much deeper bid.
+  const fullWindowBandLow = reachableBand(pStats(pairs, { volLo: 10000, volHi: 10000 }), { bandRecentN: 14 }).bandLow;
+  assert.ok(fullWindowBandLow > r.bandLow + 50, `full-window band (${fullWindowBandLow}) is far wider than the recency-gated one (${r.bandLow}) — PB5 is what pulls the floor in`);
 });
 
 ok('reachableBand: SELL-HEAVY commodity reasonableness pin (deep bid, shallow ask) — the Coal shape', () => {

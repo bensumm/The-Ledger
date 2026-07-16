@@ -335,8 +335,10 @@ export function clearableBid(series, opts = {}) { return clearableLevel(series, 
 // curve φ(x) = clamp(0.5 + PRESSURE_PHI_SLOPE·x, 0, PRESSURE_HEADROOM_MAX):
 //   reachableAsk = baseHigh + bandHigh·φ(+s)     · reachableBid = baseLow − bandLow·φ(−s)
 // base = the RECENT-N central daily high/low (recentQuant p=0.5 — the smoothing-honest center, RC1
-// reused not re-derived); band = the q75−q25 DISPERSION of the daily highs/lows (side-specific —
-// band is CAPACITY, pressure is REALIZATION). One reflection gives the whole coherent doctrine:
+// reused not re-derived); band = the q75−q25 DISPERSION of the RECENT-N daily highs/lows (PB5: the
+// SAME recency window as the base, so a stale-regime dip/reprice outside it can't inflate the width
+// and over-deepen the floor — side-specific: band is CAPACITY, pressure is REALIZATION). One
+// reflection gives the whole coherent doctrine:
 // buy-heavy favors the seller (high ask, shallow bid), sell-heavy the buyer (deep bid, shallow ask).
 // PRESSURE IS A DISTRIBUTION READ, NOT A BINARY: it predicts the CENTER + DIRECTION + fill
 // VELOCITY; size/dispersion set how far into the tail a given size reaches (Ben's 50k/day 381
@@ -358,6 +360,7 @@ export const PRESSURE_PHI_SLOPE    = 0.43; // φ slope on s=ln(pressure) — PLA
 export const PRESSURE_MIN_VOL      = 2000; // thinner-side median daily volume at which the pressure ratio is fully trusted (reliability 1); below it the headroom shrinks linearly (PLACEHOLDER, n≈0)
 export const PRESSURE_HEADROOM_MAX = 1;    // φ clamp — never more than ONE band of headroom beyond the center absent F1 evidence
 export const PRESSURE_MIN_DAYS    = 5;     // thinner day sample than this ⇒ null (dispersion off <5 days is noise; mirrors ASYM_MIN_DAYS)
+export const PRESSURE_BAND_RECENT_N = 7;   // PB5: the band WIDTH (dispersion) is measured over the RECENT-N nights, not the full window — a dip/reprice older than this can't inflate the band and over-deepen the floor (the Ranarr/anglerfish trial finding). WIDER than the 3-night base center on purpose: a median is stable at n=3 but an IQR is not, so dispersion needs more points (7 ≈ the recent half of the 14-night default). Falls back to the full window when the recent slice is too thin. PLACEHOLDER, n≈0.
 
 /* demandPressure(stats) → { ratio, s, reliability, medVolHi, medVolLo } | null.
  * ratio = medVolHi/medVolLo off a windowStats result (>1 buy-heavy, <1 sell-heavy); s = ln(ratio)
@@ -383,14 +386,26 @@ const pressurePhi = (x, slope, cap) => Math.max(0, Math.min(cap, 0.5 + slope * x
 // @provisional-api: PLAN-DEPTH-EXIT Extension A (PB1) — consumed by DE3's watch-positions held-lot
 // line + suggestions.jsonl shadow fields and PB2's read-window-range --pressure inspector; PB4
 // (F1-gated) later promotes it into estimatePair's liquid-tier sell/buy reference.
-export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax = PRESSURE_HEADROOM_MAX, minVol = PRESSURE_MIN_VOL, minDays = PRESSURE_MIN_DAYS, recentN = RECENT_NIGHTS } = {}) {
+export function reachableBand(stats, { slope = PRESSURE_PHI_SLOPE, headroomMax = PRESSURE_HEADROOM_MAX, minVol = PRESSURE_MIN_VOL, minDays = PRESSURE_MIN_DAYS, recentN = RECENT_NIGHTS, bandRecentN = PRESSURE_BAND_RECENT_N } = {}) {
   const dp = demandPressure(stats, { minVol });
   if (!dp || !stats.days || !Array.isArray(stats.lows) || !Array.isArray(stats.his)) return null;
   const nDays = stats.days.length;
   if (nDays < minDays || stats.lows.length < minDays || stats.his.length < minDays) return null;
   const baseLow = recentQuant(stats.days, 'bid', 0.5, recentN);
   const baseHigh = recentQuant(stats.days, 'ask', 0.5, recentN);
-  const bandLow = iqr(stats.lows), bandHigh = iqr(stats.his);
+  // PB5 (2026-07-15 live trial): the band WIDTH tracks the RECENT regime's dispersion, NOT the full
+  // window — a dip or reprice OLDER than the recent window must not inflate the band and push the floor
+  // below where the item currently trades (the Ranarr/anglerfish finding: full-window IQR anchored the
+  // deep bid to a stale dip/pre-reprice level the item had left). bandRecentN (7) is WIDER than the
+  // 3-night base center — a median is stable at n=3 but an IQR needs more points — so the width uses the
+  // recent HALF of the window while the center stays at recent-3. Falls back to the full-window arrays
+  // when the recent slice is too thin for an IQR (<2 points), so a short history degrades to the pre-PB5
+  // behavior rather than nulling.
+  const recentDays = stats.days.slice(-bandRecentN);
+  const recentLows = recentDays.map(([, n]) => n.low).filter(v => v != null);
+  const recentHis  = recentDays.map(([, n]) => n.hi).filter(v => v != null);
+  const bandLow = iqr(recentLows.length >= 2 ? recentLows : stats.lows);
+  const bandHigh = iqr(recentHis.length >= 2 ? recentHis : stats.his);
   if (baseLow == null || baseHigh == null || bandLow == null || bandHigh == null) return null;
   const phiAsk = pressurePhi(+dp.s, slope, headroomMax) * dp.reliability;
   const phiBid = pressurePhi(-dp.s, slope, headroomMax) * dp.reliability;
