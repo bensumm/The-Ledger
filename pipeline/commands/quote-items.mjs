@@ -24,7 +24,7 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -35,7 +35,7 @@ import { readOpenPositions } from '../lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { mdTable, stdCells } from '../lib/cli.mjs';
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
-import { logSuggestions, suggestionEntry, classAndSource } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback)
+import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers
 import { runValidators, flags, leanValidators } from '../../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
@@ -288,8 +288,17 @@ async function runItems() {
     }
     rows.push(RAW ? std : [std[0], std[1], ...estPairCells(est), std[4], std[5], std[6]]);
     const cs = classAndSource(row, id, warm24h);   // SF-3: class + volSrc ('bulk' when warm24h had it, else 'peritem')
+    // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): co-log the pressure-driven reachable band off the SAME
+    // in-hand windowStats (`ast`) — extends the five-way exit-estimator head-to-head to the per-item
+    // surface (reachRelief=estSell + asym already log here). On a HELD item the depth floor is ALSO free
+    // (real held qty + the 1h series in hand — the COD-4 budgeted fetch), so it co-logs too; a bare "how's
+    // X" read has no held qty → no depth (the DE7 fetch-budget rule keeps depth a held-lot tool).
+    const reachable = ast ? reachableBand(ast) : null;
+    const depthExit = (heldIds.has(id) && inp.ts1h && heldQty.get(id) != null)
+      ? clearableAsk(inp.ts1h, { qty: heldQty.get(id), wStart: 0, wEnd: 0, nights: 14 }) : null;
     sugg.push(suggestionEntry(row, { itemId: id, cls: cs.cls, volSrc: cs.volSrc, verdict: null, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres),
-      estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear ride the row
+      estBuy: est ? est.estBuy : null, estSell: est ? est.estSell : null, estConfidence: estConfLean(est), winClear,
+      reachable: reachableShadow(reachable), depthExit: depthExitShadow(depthExit, { qty: heldQty.get(id), volDay: row.volDay }), asym: asymShadow(ae) }));  // per-item read has no verdict; PLAN-OUTPUT-TABLE shadow pair + PLAN-WINDOW-CLEAR winClear + RC-S2 reachable/depthExit/asym ride the row
     // PM1: probes over this per-item read (OUTPUT-ONLY — no verdict/gate/rating input). ctx carries the
     // 24h avg (dip) + the phase trajectory (froth) + an advisory ask price (anchor). decant stays silent
     // here (no whole-market map on the per-item surface — see probes.mjs NEEDS).

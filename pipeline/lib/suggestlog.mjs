@@ -214,6 +214,32 @@ export function classAndSource(row, id, warmBulk) {
   return { cls: liqClass(row), volSrc: 'peritem' };
 }
 
+// --- reachability head-to-head ledger-shadow reshapers (RC-S1/RC-S2, PLAN-REACHABILITY-CONSOLIDATION) --
+// ONE home for the `reachable`/`depthExit` shadow-field SHAPE so the watch/screen/quote co-logs can't
+// drift (the five-way exit-estimator head-to-head scores these against the realized sell). Each takes a
+// RAW js/windowread result and returns the lean ledger object, or null when there is nothing to log.
+export function reachableShadow(rb) {
+  if (!rb || rb.ask == null) return null;
+  const r2 = x => x == null ? null : Math.round(x * 100) / 100;
+  return { ask: rb.ask, bid: rb.bid, pressure: r2(rb.pressure), reliability: r2(rb.reliability), bandLow: rb.bandLow, bandHigh: rb.bandHigh };
+}
+// depthExit ALWAYS carries the booked ask OR the collapse REASON + the liquidity class (so F1 can
+// measure whether the flat ×4 competition bar systematically nulls a class we'd want to price).
+export function depthExitShadow(ca, { qty, volDay } = {}) {
+  if (!ca) return null;
+  const o = { qty, competition: ca.competition, liqClass: liqClassOf(volDay) };
+  if (ca.price != null) { o.ask = ca.price; o.clearFrac = Math.round(ca.clearFrac * 100) / 100; }
+  else o.collapse = ca.reason;
+  return o;
+}
+// the fixed-quantile asym pair (js/estimators.mjs asymEstimate result) → the lean `asym` shadow field;
+// the same shape screen/quote/watch all log for the head-to-head. Null when there is no pair.
+export function asymShadow(ae) {
+  if (!ae || ae.ask == null) return null;
+  const r2 = x => x == null ? null : Math.round(x * 100) / 100;
+  return { bid: ae.bid, ask: ae.ask, pAsk: r2(ae.pAsk), pBid: r2(ae.pBid), n: ae.nDays, rank: ae.rank == null ? null : Math.round(ae.rank) };
+}
+
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate
 // from logSuggestions so a caller can assemble a batch, then log once.
 //
@@ -319,11 +345,15 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included (YS2 pattern): watch-positions.mjs held rows only; degraded reads → no field → byte-identical.
   if (depthExit != null)     e.depthExit = depthExit;
   if (reachable != null)     e.reachable = reachable;
-  // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION 2026-07-15): estBuy/estSell/estConfidence + asym are the
-  // reachRelief-family + fixed-quantile exit estimators, co-logged on watch HELD rows beside depthExit/
-  // reachable so all five compete head-to-head against the realized sell. On watch the shadow est uses
-  // declaredExit:null (the model's intrinsic ask is the scored quantity). estBuy/estSell/estConfidence/
-  // asym are the SAME fields screen/quote already log (handled just below / above) — no new field shape.
+  // RC-S1/RC-S2 (PLAN-REACHABILITY-CONSOLIDATION 2026-07-15): estBuy/estSell/estConfidence + asym are the
+  // reachRelief-family + fixed-quantile exit estimators, co-logged beside depthExit/reachable so all five
+  // compete head-to-head against the realized sell. The head-to-head spans HELD (watch, quote --positions)
+  // AND DISCOVERY (screen survivors, quote per-item) surfaces: `reachable` (pressure) rides EVERY row with
+  // an in-hand 1h series; `depthExit` (depth) rides only HELD rows (real qty + 1h in hand) — a bare
+  // discovery row omits it (the DE7 fetch-budget rule). On watch the shadow est uses declaredExit:null (the
+  // model's intrinsic ask is the scored quantity). All shaped by the reachableShadow/depthExitShadow/
+  // asymShadow reshapers above (ONE home, no drift). estBuy/estSell/estConfidence/asym are handled by the
+  // existing lean blocks above — no new field shape.
   // DL2 — a flush SIGNAL (watch-positions.mjs --dip) carries its full component object so the DL2 retro-join
   // (pipeline/commands/analyze-record.mjs §4) can join it against fills.json and, over enough history, SURFACE a re-fit
   // candidate to F1 (analyze never mutates a constant). Logged for EVERY genuine flush signal — liquid

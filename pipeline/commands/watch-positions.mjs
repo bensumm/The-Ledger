@@ -61,7 +61,7 @@ import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (fa
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readExchangeLog, activeOffers } from '../lib/offers.mjs';
-import { logSuggestions, suggestionEntry, liqClassOf } from '../lib/suggestlog.mjs';   // DE3: liqClassOf tags the depth-shadow rows so F1 can measure the ×4 liquidity bias by class
+import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote)
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
@@ -746,34 +746,16 @@ async function main() {
   // what F1 needs to measure whether the flat ×4 competition bar systematically nulls a class we'd
   // want to price (the predicted liquidity bias). reachable carries the PB pressure-priced band so
   // the retro can score it against realized fills beside the depth floor and the reach/relief lines.
-  const depthShadow = it => {
-    const ca = it._depthExit; if (!ca) return null;
-    const o = { qty: it.qty, competition: ca.competition, liqClass: liqClassOf(it.row.volDay) };
-    if (ca.price != null) { o.ask = ca.price; o.clearFrac = Math.round(ca.clearFrac * 100) / 100; }
-    else o.collapse = ca.reason;
-    return o;
-  };
-  const reachShadow = it => {
-    const rb = it._reachable; if (!rb) return null;
-    return { ask: rb.ask, bid: rb.bid, pressure: Math.round(rb.pressure * 100) / 100,
-      reliability: Math.round(rb.reliability * 100) / 100, bandLow: rb.bandLow, bandHigh: rb.bandHigh };
-  };
-  // RC-S1 — the fixed-quantile asym pair as a lean shadow object (same shape screen logs), so the
-  // head-to-head scorer reads asym.ask beside depthExit.ask / reachable.ask / estSell on ONE row.
-  const round2 = x => x == null ? null : Math.round(x * 100) / 100;
-  const asymShadow = it => {
-    const a = it._asymShadow; if (!a) return null;
-    return { bid: a.bid, ask: a.ask, pAsk: round2(a.pAsk), pBid: round2(a.pBid), n: a.nDays, rank: Math.round(a.rank) };
-  };
+  // RC-S1 — all five competing exit estimators co-log on ONE held row via the SHARED reshapers
+  // (lib/suggestlog.mjs — one home, no drift across watch/screen/quote): depthExit (depth) · reachable
+  // (pressure) · estSell (reachRelief) · asym (fixed-quantile); reach rides estConfidence.
   logSuggestions('watch', { mode: null, params: { targetsOnly: TARGETS_ONLY } }, [
     ...held.map(it => suggestionEntry(it.row, { itemId: it.id, cls: it.cls, verdict: heldVerdict(it), posture: wPosture,
-      depthExit: depthShadow(it), reachable: reachShadow(it),
-      // RC-S1: the reachRelief-family estSell + the asym pair — the two OLDER estimators co-logged
-      // beside depth/pressure so all five compete on the same row against the realized sell (F1).
+      depthExit: depthExitShadow(it._depthExit, { qty: it.qty, volDay: it.row.volDay }), reachable: reachableShadow(it._reachable),
       estBuy: it._estShadow ? it._estShadow.estBuy : null,
       estSell: it._estShadow ? it._estShadow.estSell : null,
       estConfidence: estConfLean(it._estShadow),
-      asym: asymShadow(it) })),
+      asym: asymShadow(it._asymShadow) })),
     ...targets.map(it => { const sig = sigByTarget.get(it.id); return suggestionEntry(it.row, {
       itemId: it.id, cls: it.cls,
       // verdict: FLUSH (alerted) or FLUSH-SIGNAL (logged silently, gated out) or the normal target verdict.

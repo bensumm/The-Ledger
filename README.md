@@ -288,10 +288,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   off the quoted ask — `{gap, gapPct, rawTop, topBucketVol, netLever, trusted}`, logged trusted AND
   audit-only, joined to fills by `analyze.mjs` §5 (`askHeadroomAudit`) for F1. A `watch` held row may
   carry the lean **`depthExit`**/**`reachable`** pair (PLAN-DEPTH-EXIT DE3, 2026-07-15): the depth-floor
-  read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band; RC-S1
-  (PLAN-REACHABILITY-CONSOLIDATION) adds the reachRelief-family **`estBuy`/`estSell`/`estConfidence`** +
-  the **`asym`** pair on the SAME held row, so all five competing exit estimators score head-to-head
-  against the realized `sellEach` (schema: the `suggestlog.mjs` header). A screen row also carries
+  read incl. its collapse REASON + liquidity class, and the pressure-driven reachable band. RC-S1/RC-S2
+  (PLAN-REACHABILITY-CONSOLIDATION) co-log all five competing exit estimators — reach (`estConfidence`) ·
+  reachRelief (**`estBuy`/`estSell`/`estConfidence`**) · **`asym`** · depth (**`depthExit`**) · pressure
+  (**`reachable`**) — for the F1 head-to-head against the realized `sellEach`. The head-to-head spans HELD
+  (watch, quote `--positions`) AND DISCOVERY (screen survivors, quote per-item): `reachable` rides every row
+  with an in-hand 1h series; `depthExit` rides only held rows (real qty in hand — the DE7 fetch-budget rule
+  keeps depth off the screen). All three shadow shapes come from ONE reshaper home
+  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the

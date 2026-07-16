@@ -182,10 +182,17 @@ rate** (did prices above the observed high actually clear?) before it can bind l
   DE3 `depthExit`/`reachable`. Zero new fetch (reuses the in-hand ts1h/ts5m). Inform-only — no rendered
   verdict/price/table/alert changes; a compute failure degrades to no shadow (guarded). This is what makes
   the head-to-head start accruing on the richest surface.
-- **RC-S2 — pressure co-log on screen survivors / quote (NOT built — cheap follow-on).** screen already
-  fetches 1h for survivors, so `reachableBand` is free there; quote/positions likewise. Deferred as its own
-  small chunk so RC-S1 lands clean. Depth co-log on screen is the DE7 fetch-budget decision, NOT free —
-  do not fold it in.
+- **RC-S2 — pressure co-log on screen survivors + quote (LANDED — see the commit).** Every screen
+  survivor and every quote row now co-logs the pressure-driven `reachable` band off the in-hand 1h
+  `windowStats` (zero new fetch), so the head-to-head accrues on the DISCOVERY surfaces too, not just held
+  lots. `estSell` (reachRelief) + `asym` already logged there; reach rides `estConfidence`. On a HELD quote
+  row (`--positions` / a held item's per-item read) the depth floor is ALSO free (real held qty + the 1h
+  series in hand) so `depthExit` co-logs there too — a bare "how's X" read has no held qty → no depth (the
+  DE7 fetch-budget rule keeps depth OFF the screen and off bare per-item reads). The three co-logs now share
+  ONE reshaper home — `reachableShadow`/`depthExitShadow`/`asymShadow` in `pipeline/lib/suggestlog.mjs` — so
+  the watch/screen/quote shadow shapes can't drift (watch's RC-S1 inline reshapers were refactored onto
+  them). Inform-only; rendered output byte-identical. **The five-way head-to-head now spans held +
+  discovery: complete.**
 
 ## 6. HONESTY / ENTANGLEMENTS (rule 4 — surfaced, not forced)
 - **n≈0 on everything.** This doc designs the calibration; it claims none. Every promotion is gated on a

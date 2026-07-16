@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey } from '../lib/suggestlog.mjs';
+import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow } from '../lib/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }
@@ -118,6 +118,21 @@ ok('DE3 + RC-S1: the reachability head-to-head shadow fields are lean-included (
   const none = suggestionEntry({ quickBuy: 100 }, { itemId: 7, cls: 'mid', verdict: 'BID-OK' });
   assert.ok(!('depthExit' in none) && !('reachable' in none) && !('estSell' in none) && !('asym' in none),
     'no reachability shadow keys when none supplied — bid/target/legacy rows stay byte-identical');
+});
+
+ok('RC-S2: reachableShadow / depthExitShadow reshapers (shared, no drift across watch/screen/quote)', () => {
+  const rb = { ask: 401, bid: 383, pressure: 1.6634, reliability: 1, bandLow: 6, bandHigh: 2, baseLow: 384 };
+  assert.deepEqual(reachableShadow(rb), { ask: 401, bid: 383, pressure: 1.66, reliability: 1, bandLow: 6, bandHigh: 2 },
+    'pressure/reliability rounded to 2dp; base* dropped (lean)');
+  assert.equal(reachableShadow(null), null);
+  assert.equal(reachableShadow({ ask: null }), null, 'a degraded (null-ask) band logs nothing');
+  const ca = { price: 394, clearFrac: 0.7857, competition: 4, reason: null };
+  assert.deepEqual(depthExitShadow(ca, { qty: 25000, volDay: 1_200_000 }),
+    { qty: 25000, competition: 4, liqClass: 'liquid', ask: 394, clearFrac: 0.79 });
+  const collapsed = { price: null, competition: 4, reason: 'insufficient-depth' };
+  assert.deepEqual(depthExitShadow(collapsed, { qty: 100, volDay: 40 }),
+    { qty: 100, competition: 4, liqClass: 'thin', collapse: 'insufficient-depth' }, 'collapse + liqClass, no fake ask');
+  assert.equal(depthExitShadow(null, { qty: 1, volDay: 1 }), null);
 });
 
 ok('liqClassOf thresholds', () => {

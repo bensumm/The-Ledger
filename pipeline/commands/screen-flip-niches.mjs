@@ -72,7 +72,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -92,7 +92,7 @@ import { valueRanges, valueScore, valueGate, valueTier } from '../../js/valuescr
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS } from '../../js/flip-niches.mjs';
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from '../lib/rating.mjs';
-import { logSuggestions, suggestionEntry, liqClass } from '../lib/suggestlog.mjs';
+import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow } from '../lib/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
@@ -500,6 +500,13 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // (--raw restores Quick/Optimistic); it never touches the published screen.json cells.
     const prof = hourProfile(series1h && series1h.get(s.id), { nights: DIURNAL_NIGHTS });
     const dr = prof ? deriveDiurnalRange(prof, { liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null }) : null;
+    // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): the pressure-driven reachable band off the SAME in-hand
+    // 1h series (zero new fetch) — extends the five-way exit-estimator head-to-head from held lots to the
+    // discovery surface (reachRelief=estSell + asym already log here; reach rides estConfidence). DEPTH
+    // stays OFF the screen — a per-row clearableAsk read is the DE7 fetch-budget decision, out of scope.
+    // Inform-only: the `reachable` shadow field only (never a gate/drop/grade/screen.json input).
+    const rbStats = (series1h && series1h.get(s.id)) ? windowStats(series1h.get(s.id), { nights: 14, wStart: 0, wEnd: 0 }) : null;
+    const reachable = rbStats ? reachableBand(rbStats) : null;
     // rev2: strategy-aware entry (estimatePair reads STRATEGY[mode]'s falling/priceBasis doctrine).
     // FIX 1 (2026-07-13): declared-exit anchoring is DELIBERATELY NOT applied on the discovery screen —
     // a bare candidate row is a "should I buy this" read, never a held lot, so a declared SELL exit
@@ -635,7 +642,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -655,7 +662,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
     rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er),
       // PART II shadow field: the asymmetric estimate BESIDE the symmetric rank (same row → the F1 A/B join)
-      asym: r.asymEr ? { bid: r.asymEr.bid, ask: r.asymEr.ask, pAsk: round2(r.asymEr.pAsk), pBid: round2(r.asymEr.pBid), n: r.asymEr.nDays, rank: Math.round(r.asymEr.rank) } : null,
+      asym: asymShadow(r.asymEr),
       // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
       estBuy: r.est ? r.est.estBuy : null, estSell: r.est ? r.est.estSell : null, estConfidence: estConfLean(r.est),
       // PLAN-VOL24 shadow: the corrected /1h-composed trailing-24h volume beside the active (broken) /24h volDay
@@ -664,7 +671,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       // capital-blind expGpDayLegacy, so --stats/analyze/F1 can diff old-vs-new surfacing on real rows.
       expGpDay: r.expGpDay, expGpDayLegacy: r.expGpDayLegacy,
       // PLAN-WINDOW-CLEAR B2 shadow: the within-window clear read (churn/scalp; null elsewhere)
-      winClear: r.winClear })));
+      winClear: r.winClear,
+      // RC-S2 shadow: the pressure-driven reachable band (five-way head-to-head on the discovery surface)
+      reachable: reachableShadow(r.reachable) })));
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
   const fallNote = FLIP_NICHES[mode].falling === 'accept' ? 'fallers INCLUDED (the thesis)' : 'fallers excluded';
