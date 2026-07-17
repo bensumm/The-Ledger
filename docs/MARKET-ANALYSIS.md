@@ -33,7 +33,10 @@ Every read is ONE table, the **table v2** column set:
   net after the 2% tax (colored gain/loss in the app). **Quick** = transact now (buy the live
   instasell, sell the live instabuy). **Optimistic** = the patient 2h-band edges (last 24×5m
   points), **Bar-E robustified** (see §3). Mid is dropped from the table (redundant beside Guide
-  + the live prices); the row model still exposes `row.mid`.
+  + the live prices); the row model still exposes `row.mid`. **Quick is a recent-averaged read,
+  not a literal top-of-book snapshot** — a small same-day live-fill check (n=4, 2026-07-17) found
+  it can sit on the wrong side of the live spread at execution time; full writeup + evidence is
+  the header comment in `js/quotecore.js` (the one home), not restated here.
 - **Ordering invariant.** On ONE consistent basis, `optBuy ≤ quickBuy ≤ quickSell ≤ optSell`. A
   break on MIXED bases is a bug — fix the script. On consistent bases a break is a real **momentum
   tell** (the live price left its own 2h band), surfaced as the **Momentum** column off the

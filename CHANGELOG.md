@@ -10,6 +10,30 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Two pricing-optimism findings encoded from real fills (2026-07-17, `js/quotecore.js`+`js/estimators.mjs`+`docs/MARKET-ANALYSIS.md`+`/scan` skill — NO APP_VERSION)
+Two facts kept getting re-derived session after session because nothing durable recorded them.
+(1) **Quick can be the wrong way round vs a true instant cross.** `quickBuy`/`quickSell` (`js/quotecore.js`
+`computeQuote`) are built from the wiki `/latest` endpoint's recent AVERAGED low/high, not the literal
+top-of-book price at the moment of a click. Ben ran five real 1-unit instant buy→sell round trips
+(RuneLite, logged in fills.json/positions.json) and compared them against `Quick`'s own quoted net;
+four of five were clean comparisons (blood rune was mid-move) and all four showed the model's legs
+reversed relative to the real fill order, with the true round-trip loss running 3–5× worse than
+Quick's quoted net (n=4, same-day — not a calibrated multiplier). Full writeup: the header comment
+above `computeQuote` in `js/quotecore.js`; one-line pointer in `docs/MARKET-ANALYSIS.md` §1.
+(2) **The reach-relief "small clip clears at a better price" premium collapses as tranche size grows
+relative to daily volume.** Cross-referencing real closed lots (positions.json vs fills.json) across
+Soul rune, Blood rune, Prayer potion(4), Super restore(4), Ruby dragon bolts (e), and Raw anglerfish
+found a rough knee: clean fills below ~0.5% of daily volume, visible degradation by ~0.7–1%
+(Prayer potion(4), Super restore(4)), and the premium fully gone by ~5–7% (Raw anglerfish's
+9,890-unit tranche sold at a net loss after tax despite nominally selling above the buy price — its
+own 15,000-unit buy limit is ~10.4% of its daily volume, structurally oversized for its own liquidity
+depth). This is the real-data explanation for why `--pressure-exit` (`js/estimators.mjs`
+`estimatePair`) was found too optimistic this session (Water orb) and stays opt-in/`--publish`-refused.
+Full writeup + numbers: the `/scan` SKILL.md "Asymmetric ask-reach read" bullet (v1.63); one-line
+pointer in `js/estimators.mjs`'s `reachRelief` header. Both findings are prose-only, small-n
+(n=4 / n≈6), explicitly not folded into any threshold or gate — evidence to score against, not a
+calibration.
+
 ### screen-flip-niches.mjs publishes by default now — was opt-in behind --publish (2026-07-16, `pipeline/commands/screen-flip-niches.mjs`+`/scan` skill — NO APP_VERSION)
 Ben noticed his local Scan tab was 2 days stale and asked why, given this session had been running
 `/scan` repeatedly — root cause: `--publish` (the flag that writes repo-root `screen.json`, what the

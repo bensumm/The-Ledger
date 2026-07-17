@@ -12,7 +12,25 @@
    INVARIANT (guaranteed by construction below): optBuy ≤ quickBuy ≤ quickSell ≤ optSell.
    The 2026-07-03 bug that inflated an edge 2.5× came from mixing bases (24h percentiles vs
    live quotes). Here the optimistic edges are CLAMPED against the SAME live quote, so the
-   optimistic side can never be worse than the quick side — the mixing can't happen. */
+   optimistic side can never be worse than the quick side — the mixing can't happen.
+
+   ⚠ "Quick" is NOT "what I'll get if I click right now" (2026-07-17, Ben's 5-item live-fill
+   check). quickBuy/quickSell are built from the wiki `/latest` endpoint's recent AVERAGED
+   low/high, not the literal top-of-book price at the instant of a real click — so at execution
+   time the two legs can sit on the WRONG SIDE of the live spread from what the label implies.
+   Evidence: Ben ran five real 1-unit instant buy→sell round trips (RuneLite, logged in
+   fills.json/positions.json `closed`) and compared them against `Quick`'s own net pulled via
+   `quote-items.mjs --raw` moments later. Four of five were clean comparisons (the fifth, blood
+   rune, was mid-move and not comparable) and all four showed the model's quickBuy/quickSell
+   reversed relative to the real fill order, with the true round-trip loss (spread minus 2% tax)
+   running 3–5× worse than Quick's own quoted net — e.g. Prayer potion(4) modeled net −80 vs
+   actual −276; Super restore(4) modeled net 0 vs actual −417; Ruby dragon bolts (e) modeled −25
+   vs actual −93; Raw anglerfish modeled −15 vs actual −81. HONESTY (process rule 4): this is
+   n=4, same-day, one account — NOT a calibrated multiplier, just an observed "3–5× worse in a
+   small sample." Practical takeaway: before treating Quick's net as an achievable immediacy
+   baseline, do a literal instant-cross test (buy then immediately sell, 1 unit, check the real
+   fill in fills.json) rather than trusting the averaged quote. Pointer: `docs/MARKET-ANALYSIS.md`
+   §1 for the one-line cross-reference; this header is the full writeup — don't duplicate it. */
 
 import { tax, netMargin, TAXCAP, isBond, bondFee } from './money-math.js';
 import { fmtP, fmt } from './money-format.js';

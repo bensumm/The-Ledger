@@ -122,7 +122,13 @@ export function pFillIntraday(ctx = {}) {
    --positions, watch-positions) passes the REAL lot size (positions.json qty) via extra.intendedUnits;
    a discovery/per-item read with no held qty degrades to the BUY LIMIT (the standard per-window
    accumulation proxy). ALL constants are PLACEHOLDERS (n=1 — the soul-rune anchor); F1 owns the
-   magnitudes. Relief is monotone in volDay and monotone-decreasing in intendedUnits (pinned by tests). */
+   magnitudes. Relief is monotone in volDay and monotone-decreasing in intendedUnits (pinned by tests).
+   REAL-FILL FOLLOWUP (2026-07-17, n≈6 items): a same-session cross-check of positions.json closed
+   lots against fills.json suggests the relief-collapse point tracks tranche-size-as-%-of-daily-volume
+   more tightly than these thresholds currently encode (clean under ~0.5%, visibly degraded ~0.7–1%,
+   gone by ~5–7% — Raw anglerfish's oversized tranche was a net loss after tax). Small-n, not yet
+   folded into these constants; full writeup + numbers: `/scan` SKILL.md's "Asymmetric ask-reach
+   read" bullet — don't duplicate here, this is a pointer only. */
 export const REACH_RELIEF_MIN_VOL   = 100_000;   // limiting-side vol/d floor — below it relief is EXACTLY 0 (the mirage guard)
 export const REACH_RELIEF_FULL_VOL  = 1_000_000; // vol/d at which the liquidity factor saturates to 1
 export const REACH_RELIEF_SIZE_FULL = 0.02;      // sizeRatio at/below which the size factor is 1 (position ≪ flow)

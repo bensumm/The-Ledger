@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.62
+version: 1.63
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -359,6 +359,31 @@ This is the tribal layer the script can't do — apply ALL of these:
   profit until `--ask` confirms the reach. (Decided against re-scoring the screen off a reachable sell:
   the cheap ts6h proxy understates reach → false negatives that HIDE good sells, worse than the
   problem; run `--ask` on the handful you actually pitch instead — accurate + cheap.)
+  - **Tranche-size-as-%-of-daily-volume is the variable that predicts when the reach-relief
+    premium collapses (2026-07-17, real-fill evidence, n≈6 items).** `reachRelief`
+    (`js/estimators.mjs`) softens the ask-reach fold on the theory that a position small vs daily
+    flow can clear at an elevated price — but it currently conditions on `sizeRatio` at the
+    THRESHOLDS already in that module (`REACH_RELIEF_SIZE_FULL`/`REACH_RELIEF_SIZE_ZERO`), not on
+    a validated real-fill curve. Cross-referencing positions.json `closed` lots against fills.json
+    for Soul rune, Blood rune, Prayer potion(4), Super restore(4), Ruby dragon bolts (e), and Raw
+    anglerfish found a rough knee: **below ~0.5% of daily volume** a tranche reliably clears close
+    to the best available price (Blood rune 25k/lap ≈0.28%, Soul rune 25k/lap ≈0.56% — both clean
+    across every tested lot); **~0.7–1%** already shows visible degradation (Prayer potion(4)
+    1,799 units ≈0.71% sold 8,684 vs ~8,744 on same-day tiny ladder-top lots; Super restore(4)
+    1,044 units ≈0.71% sold 10,698 vs ~10,774); **by ~5–7%** the premium is gone and you're pricing
+    near the bulk-clearing level (Raw anglerfish 9,890 units ≈6.6% sold 2,449 vs 2,480–2,498 on
+    tiny same-day lots — a NET LOSS after tax despite nominally selling above the buy). Raw
+    anglerfish's own full buy limit (15,000 units) is ~10.4% of its daily volume — structurally
+    oversized for its own liquidity depth, not just an unlucky trade. This is the real-data
+    explanation for why `--pressure-exit` (`js/estimators.mjs` `estimatePair`) was found too
+    optimistic this session (Water orb) and stays opt-in/`--publish`-refused: the theory
+    (small clips get better prices) is directionally right, but neither `reachRelief` nor the
+    pressure estimator yet SCALES the effect down by tranche-size-as-%-of-volume, so both
+    overstate achievable price as a position approaches its own buy limit on a lower-volume item.
+    HONESTY (rule 4): n≈6 items, same-session, real fills but not a controlled experiment — a
+    rough knee-in-the-curve observation, not a calibrated threshold; don't hardcode 0.5%/1%/5% as
+    gates off this alone. Full numbers live here; `js/estimators.mjs`'s `reachRelief` header
+    carries a one-line pointer, don't duplicate.
 - **Fresh-repricer flag.** _(judgment: sizing call)_ A large multi-day regime move = the item was recently repriced
   → overnight-retrace risk. Size small; skip for unattended holds.
 - **Phase tag on the Regime cell (2026-07-06).** `screen-flip-niches.mjs` annotates each Regime cell with a
