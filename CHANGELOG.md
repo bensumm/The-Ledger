@@ -10,6 +10,20 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### screen-flip-niches.mjs publishes by default now — was opt-in behind --publish (2026-07-16, `pipeline/commands/screen-flip-niches.mjs`+`/scan` skill — NO APP_VERSION)
+Ben noticed his local Scan tab was 2 days stale and asked why, given this session had been running
+`/scan` repeatedly — root cause: `--publish` (the flag that writes repo-root `screen.json`, what the
+app actually reads) was opt-in, and every `/scan` read this whole session correctly ran WITHOUT it
+per the then-current skill doctrine, so nothing had refreshed the file since the last manual publish.
+Fixed by flipping the default: `screen-flip-niches.mjs` now writes `screen.json` on every run unless
+`--no-publish` is passed. **Publishing here is the local file write only — it is NOT a git commit**;
+committing/pushing `screen.json` to `main` remains a separate, deliberate step (the once-a-day
+`/overnight` `sync-fills.mjs --publish` is the only thing that does that, and is unrelated to this
+flag). The `--asym`/`--pressure-exit` F1-gates (screen.json must stay on the neutral estimator) now
+degrade gracefully under the new default — running either just silently skips the write that pass
+instead of erroring; an EXPLICIT `--publish --asym`/`--publish --pressure-exit` combo still hard-
+refuses, since that's a real conflict, not an accidental default.
+
 ### PLAN-VIZ-LAYER VZ3-VZ6 landed — quote-items.mjs + screen-flip-niches.mjs onto the render layer, skill relay rules, docs sweep (2026-07-16, `pipeline/lib/render.mjs`+`pipeline/commands/quote-items.mjs`+`pipeline/commands/screen-flip-niches.mjs`+4 skills — NO APP_VERSION)
 Completes the visualization-layer initiative's Stage-1 scope (`PLAN-VIZ-LAYER.md`). **VZ3**:
 `quote-items.mjs` (both per-item and `--positions` modes) now builds one report object printed via

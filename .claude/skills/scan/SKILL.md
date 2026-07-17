@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.61
+version: 1.62
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -39,15 +39,26 @@ _(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressure
 NEUTRAL screen (no flag) by default. The trial surfaced real divergence this session (Water orb's
 pressure list-at sat ~9% above the neutral number while the item was chopping through a false CUT alert)
 — un-calibrated (n≈0) is not just a disclaimer, it moved a real recommendation. Only add `--pressure-exit`
-when Ben explicitly asks to compare or price off it; it's still REFUSED under `--publish` regardless
-(mutually exclusive so `screen.json` / the deployed app stay F1-gated on the neutral estimator). The
-retro keeps shadow-logging both estimates either way.
+when Ben explicitly asks to compare or price off it; running it just silently skips the publish
+write that pass (screen.json / the deployed app stay on the neutral estimator — no error, no flag
+juggling needed). The retro keeps shadow-logging both estimates either way.
+
+**Publishing (writing `screen.json`) is now the DEFAULT, every run (Ben, 2026-07-16 — was opt-in
+behind `--publish`).** Publishing here means the LOCAL FILE WRITE only — it is NOT a git commit;
+committing/pushing `screen.json` to `main` stays a wholly separate, deliberate step (the once-a-day
+`/overnight` `sync-fills.mjs --publish` is the only thing that commits it, unrelated to this flag).
+So a bare `screen-flip-niches.mjs` run now keeps the local app's Scan tab (and a future git commit,
+whenever one happens) current with zero extra step. Use `--no-publish` for a throwaway filtered
+console read you don't want left written to disk. `--asym`/`--pressure-exit` still keep screen.json
+F1-gated on the neutral estimator — running either just silently skips the write that pass instead
+of erroring (only an EXPLICIT `--publish --asym`/`--publish --pressure-exit` combo still hard-refuses,
+since that's a real conflict, not an accidental default).
 
 Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
 a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
-filter the output rows by flip-niche yourself; `--publish` only if Ben wants the app's Scan tab
-updated. The script already gates (two-sided liquidity, price window, per-spec falling doctrine)
-and grades (`rating.mjs`); your job is the judgment pass over what it prints.
+filter the output rows by flip-niche yourself. The script already gates (two-sided liquidity, price
+window, per-spec falling doctrine) and grades (`rating.mjs`); your job is the judgment pass over
+what it prints.
 
 **P5 flip-niches — scalp / value (both PROVISIONAL, n≈0).** `--mode scalp` stays OFF-by-default (explicit
 `--mode scalp` only); **`--mode value` now RUNS IN `--mode all` by default (Ben 2026-07-10)** — still

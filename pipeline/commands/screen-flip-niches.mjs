@@ -207,22 +207,35 @@ const THRESHOLDS = {
 const POSTURE_ARG = A.posture != null && A.posture !== true ? String(A.posture).toLowerCase() : 'active';
 if (!['overnight', 'active', 'auto'].includes(POSTURE_ARG)) { console.error(`! unknown --posture "${A.posture}". Use overnight, active, or auto.`); process.exit(1); }
 const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'active') : POSTURE_ARG;
-// --publish: also write repo-root screen.json so the app's Scan tab renders the SAME per-niche
-// graded scan a Claude session produces (byte-parity via the shared stdCells / rating path). The
-// file is self-describing (its own `headers` travel with the rows) and each row keeps its itemId
-// for the Item→Trends deep link. sync-fills.mjs commits it alongside fills/positions when present.
-const PUBLISH = A.publish === true;
+// --publish (DEFAULT ON, 2026-07-16 — was opt-in): also write repo-root screen.json so the app's
+// Scan tab renders the SAME per-niche graded scan a Claude session produces (byte-parity via the
+// shared stdCells / rating path). The file is self-describing (its own `headers` travel with the
+// rows) and each row keeps its itemId for the Item→Trends deep link. PUBLISHING (this local file
+// write) is now the default every run — COMMITTING screen.json to git is a wholly separate,
+// deliberate step (nothing here touches git); sync-fills.mjs commits it alongside fills/positions
+// only when its own --publish flag runs (once-a-day /overnight). Opt out with --no-publish (e.g. a
+// throwaway filtered console read you don't want to leave written to disk).
+const PUBLISH_EXPLICIT = A.publish === true;
+let PUBLISH = A['no-publish'] === true ? false : true;
 // PART II safety: uncalibrated --asym prices must never reach screen.json/the app (F1 gates that step).
-if (PUBLISH && A.asym === true) { console.error('! --asym is experimental (F1-ungraduated) — refusing --publish under it.'); process.exit(1); }
+// Explicit --publish + --asym is a hard user error (refuse loudly); default-on publish just quietly
+// skips the write so an --asym exploration run doesn't need --no-publish tacked on to avoid a crash.
+if (PUBLISH && A.asym === true) {
+  if (PUBLISH_EXPLICIT) { console.error('! --asym is experimental (F1-ungraduated) — refusing --publish under it.'); process.exit(1); }
+  else PUBLISH = false;
+}
 // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
 // early-adopt). When set, the CONSOLE Est. buy/sell + the console RERANK use the pressure-driven
 // reachableBand; the retro co-log stays on the neutral estimate (unbiased). THE HARD GUARD: the deployed
-// app / screen.json stays F1-gated on the NEUTRAL estimator, so --pressure-exit is REFUSED under --publish
-// (mirrors --asym). Because screen.json is written ONLY under --publish (this refusal makes them mutually
-// exclusive), the pressure prices + the pressure rerank can NEVER reach screen.json / the app — a bare
-// --pressure-exit run is console-only and writes no screen.json. So no APP_VERSION bump (console-only).
+// app / screen.json stays F1-gated on the NEUTRAL estimator, so --pressure-exit + publish is REFUSED
+// (mirrors --asym) — explicit --publish --pressure-exit is a hard user error; under the new default-on
+// publish, a --pressure-exit run just silently skips the write instead (console-only either way, so the
+// pressure prices/rerank still never reach screen.json/the app — no APP_VERSION bump).
 const PRESSURE_EXIT = A['pressure-exit'] === true;
-if (PUBLISH && PRESSURE_EXIT) { console.error('! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).'); process.exit(1); }
+if (PUBLISH && PRESSURE_EXIT) {
+  if (PUBLISH_EXPLICIT) { console.error('! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).'); process.exit(1); }
+  else PUBLISH = false;
+}
 // --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
 // default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
