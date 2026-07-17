@@ -951,7 +951,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the last run of each market-read CLI built, written EVERY run (overwritten, "last run" semantics),
     for an agent to read instead of re-parsing stdout. Producer: `screen-flip-niches.mjs` /
     `quote-items.mjs` / `watch-positions.mjs` (via `writeLastReport`, `pipeline/lib/cli.mjs`); consumer:
-    agent analysis passes (the `--quiet` path). Shape `{kind, generatedAt, reports:[…]}`; screen
+    agent analysis passes — quiet-and-dump-only is now the DEFAULT (an agent must read this file for
+    the data, not a stdout summary line); `--verbose` opts into the markdown table for a human paste.
+    Shape `{kind, generatedAt, reports:[…]}`; screen
     accumulates its per-flip-niche reports into the one file (the VALUE flip-niche is console-only,
     excluded, same as screen.json). Local, disposable — deleting it just loses the last run's dump.
   - `pipeline/.guide-history.jsonl` (**tracked** as of 2026-07-06 — Ben's call: it's an accruing

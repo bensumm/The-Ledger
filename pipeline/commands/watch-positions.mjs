@@ -19,9 +19,10 @@
  * and open-offer semantics are SHARED via offers.mjs (one owner, both import it).
  * Run monitor-offers.mjs for the raw log state; run watch-positions.mjs to decide what to do.
  *
- * --quiet: suppress the markdown stdout (Ben's terminal read), print ONE summary line + the dump path —
- * for an agent read. The report object is ALWAYS written (quiet or not) to
- * pipeline/.cache/last-report/watch.json (gitignored, overwritten per run). AO1.
+ * DEFAULT is quiet: prints ONE summary line + the last-report dump path, not the markdown table.
+ * The report object is ALWAYS written to pipeline/.cache/last-report/watch.json (gitignored,
+ * overwritten per run) — read THAT file for the actual data, never the summary line. Pass
+ * --verbose for the markdown table (Ben's terminal read / the "paste this" case). AO1.
  *
  * GUARDRAILS (hard):
  *   - HUMAN-EXECUTED DECISION SUPPORT ONLY. This tool NEVER places or cancels a GE offer —
@@ -531,13 +532,12 @@ async function main() {
   // + clamped; declared exit still wins); the depth floor + reachable clause still renders beside it. The
   // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only; no screen.json/app path here.
   const PRESSURE_EXIT = args.includes('--pressure-exit');
-  // AO1 (PLAN-REACH-CALIBRATION Part 2): --quiet suppresses the markdown stdout for an agent read (one
-  // summary line + the dump path instead); the report object is ALWAYS written to the last-report dump,
-  // quiet or not. Default stdout stays byte-identical. Implemented by no-op'ing console.log under --quiet
-  // (keeps `realLog` for the summary); the report is captured for the dump at the renderReport emission point.
-  const QUIET = args.includes('--quiet');
+  // AO1 (default flipped post-review — see quote-items.mjs header for why): --verbose opts INTO the
+  // markdown stdout; the report object is ALWAYS written to the last-report dump either way, and quiet
+  // (the default) is what forces the JSON dump to be the actual read rather than an optional extra.
+  const VERBOSE = args.includes('--verbose');
   const realLog = console.log;
-  if (QUIET) console.log = () => {};
+  if (!VERBOSE) console.log = () => {};
   const tokens = args.filter(a => !a.startsWith('--'));
 
   // ALWAYS sync first (Ben, 2026-07-16 — this was opt-in behind --sync, and "run sync-fills before
@@ -1146,9 +1146,9 @@ async function main() {
     tableHeaders: ['Verdict', 'Item', 'Position', 'Quick', 'Optimistic', 'Vol/d', 'Mom', 'Regime', 'Break-even'],
     tableRows, notes, summaryLines,
   });
-  console.log(renderReport(report));   // no-op under --quiet
+  console.log(renderReport(report));   // no-op unless --verbose
   const rel = writeLastReport('watch', report);   // AO1: always dump the report object for an agent read
-  if (QUIET) realLog(`# watch (--quiet) — ${tableRows.length} row(s) → ${rel}`);
+  if (!VERBOSE) realLog(`# watch (quiet default; --verbose for the table) — ${tableRows.length} row(s) → ${rel}`);
 }
 
 // Entrypoint guard (matches screen-flip-niches.mjs / quote-items.mjs): importing this module for a

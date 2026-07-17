@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.64
+version: 1.65
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -19,10 +19,12 @@ the table, it doesn't replace it. On a repeated/looped scan where nothing materi
 it's fine to note that and skip re-pasting — but when there IS something to report, paste the
 table, don't just describe it.
 
-**Agent-only analysis pass (AO1):** when you need the scan's DATA for your own analysis rather than
-to paste it, run `screen-flip-niches.mjs --quiet` and read `pipeline/.cache/last-report/screen.json`
-(the render-object dump, always written) instead of re-parsing the ~480-line stdout — far cheaper on
-context. This is for the agent's own reasoning; Ben's reply still gets the raw table from a normal run.
+**Quiet is now the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
+for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
+`screen-flip-niches.mjs` run prints one summary line + writes `pipeline/.cache/last-report/screen.json`
+(the render-object dump) — read THAT file for the data. **Pass `--verbose` whenever this skill's job is
+to paste the table to Ben** (the §1 "paste the raw markdown table" rule above) — without it there is no
+table to paste. Bare/quiet is for the agent's own reasoning passes only.
 
 **Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
 layer labels every note family a TRACKING tier — `core` (grades/verdicts, alerts, the WATCHLIST,
@@ -36,8 +38,11 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all] [--max-price …]
+node pipeline/commands/screen-flip-niches.mjs --verbose [--mode band|churn|scalp|value|all] [--max-price …]
 ```
+
+`--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
+is now the default (AO1) and without `--verbose` there is no table in stdout to paste.
 
 **`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
 _(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the

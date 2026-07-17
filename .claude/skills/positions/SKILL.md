@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.33
+version: 1.34
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -17,11 +17,12 @@ rendering an actual table — confirmed live, 2026-07-16). Ben reads the actual 
 directly; a prose rollup alone hides the table he wants to see. Prose interpretation still
 follows (§3/§4) — it supplements the table, it doesn't replace it.
 
-**Agent-only analysis pass (AO1):** when you need the read's DATA for your own analysis rather than
-to paste it, run `quote-items.mjs --positions --quiet` (or `watch-positions.mjs --quiet`) and read
-`pipeline/.cache/last-report/quote.json` (or `watch.json`) — the render-object dump, always written —
-instead of re-parsing stdout. This is for the agent's own reasoning; Ben's reply still gets the raw
-table from a normal run.
+**Quiet is now the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
+for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
+`quote-items.mjs --positions` (or `watch-positions.mjs`) run prints one summary line + writes
+`pipeline/.cache/last-report/quote.json` (or `watch.json`) — read THAT file for the data. **Pass
+`--verbose` whenever this skill's job is to paste the table to Ben** (the § above) — without it there
+is no table to paste. Bare/quiet is for the agent's own reasoning passes only.
 
 **Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
 layer labels every note family a TRACKING tier — `core` (the held-lot verdict / list-at, alerts,
@@ -35,8 +36,11 @@ registry lives in `pipeline/lib/render.mjs`'s header — the ONE registry; don't
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/quote-items.mjs --positions
+node pipeline/commands/quote-items.mjs --positions --verbose
 ```
+
+`--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet is
+now the default (AO1) and without `--verbose` there is no table in stdout to paste.
 
 **`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
 _(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the

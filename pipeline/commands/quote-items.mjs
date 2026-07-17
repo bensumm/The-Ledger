@@ -11,9 +11,12 @@
  *   node pipeline/commands/quote-items.mjs --positions
  *       Positions-vs-market: reads OPEN lots from repo-root positions.json, groups by item
  *
- *   --quiet (either mode): suppress the markdown stdout, print ONE summary line + the dump path —
- *       for an agent read. The report object is ALWAYS written (quiet or not) to
- *       pipeline/.cache/last-report/quote.json (gitignored, overwritten per run). AO1.
+ *   DEFAULT is now quiet: prints ONE summary line + the last-report dump path, not the markdown
+ *       table. The report object is ALWAYS written to pipeline/.cache/last-report/quote.json
+ *       (gitignored, overwritten per run) — read THAT file for the actual data; the summary line
+ *       carries none. Pass --verbose for the markdown table (the "paste this to Ben" case). AO1,
+ *       default flipped after Ben's correction: an agent must not treat the summary line as the
+ *       read — quiet-by-default forces the JSON to be the only source, so it can't be skipped.
  *       at weighted-avg cost, quotes each held item live, and prints the standard table
  *       PLUS Held@ / Break-even columns + a HOLD / list-at-X / CUT verdict per row.
  *
@@ -80,14 +83,15 @@ const PRESSURE_EXIT = args.includes('--pressure-exit');
 // LOUD trial banner (rule 4 — the prices must never read as the calibrated default).
 const PRESSURE_BANNER = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). --raw / drop the flag to restore the neutral estimate.';
 const tokens = args.filter(a => !a.startsWith('--'));
-// AO1 (PLAN-REACH-CALIBRATION Part 2): --quiet suppresses the markdown stdout for an agent read (one
-// summary line + the dump path instead); the report object is ALWAYS written to the last-report dump,
-// quiet or not. Default (no --quiet) stdout stays byte-identical — Ben's terminal read is untouched.
-// Implemented by no-op'ing console.log under --quiet (keeps `realLog` for the summary); the report is
-// captured for the dump at the single renderReport emission point.
-const QUIET = args.includes('--quiet');
+// AO1 (PLAN-REACH-CALIBRATION Part 2; default flipped post-review — Ben: an agent running the quiet
+// path must read the JSON dump, not the summary line, so quiet has to be the DEFAULT or that habit
+// is optional). --verbose opts INTO the markdown stdout (the "paste this to Ben" case); the report
+// object is ALWAYS written to the last-report dump either way. Implemented by no-op'ing console.log
+// unless --verbose (keeps `realLog` for the summary); the report is captured for the dump at the
+// single renderReport emission point.
+const VERBOSE = args.includes('--verbose');
 const realLog = console.log;
-if (QUIET) console.log = () => {};
+if (!VERBOSE) console.log = () => {};
 
 // LM1: per-item 4h buy-limit windows, built ONCE per run from the repo-root fills.json (local file, no
 // fetch). Empty map (absent/unreadable) ⇒ every item has zero in-window buys ⇒ byte-identical output.
@@ -405,9 +409,9 @@ async function runItems() {
     estExplainer: RAW ? null : EST_EXPLAINER,
     notes,
   });
-  console.log(renderReport(report));   // no-op under --quiet
+  console.log(renderReport(report));   // no-op unless --verbose
   const rel = writeLastReport('quote', report);   // AO1: always dump the report object for an agent read
-  if (QUIET) realLog(`# quote (--quiet) — ${outRows.length} item(s) → ${rel}`);
+  if (!VERBOSE) realLog(`# quote (quiet default; --verbose for the table) — ${outRows.length} item(s) → ${rel}`);
 }
 
 async function runPositions() {
@@ -605,9 +609,9 @@ async function runPositions() {
     notes,
     convLines, pathLines, rebidLines, lateNightLine,
   });
-  console.log(renderReport(report));   // no-op under --quiet
+  console.log(renderReport(report));   // no-op unless --verbose
   const rel = writeLastReport('quote', report);   // AO1: always dump the report object for an agent read
-  if (QUIET) realLog(`# positions (--quiet) — ${groups.length} item(s), ${openLots} lot(s) → ${rel}`);
+  if (!VERBOSE) realLog(`# positions (quiet default; --verbose for the table) — ${groups.length} item(s), ${openLots} lot(s) → ${rel}`);
 }
 
 // Entrypoint guard (matches watch-positions.mjs / screen-flip-niches.mjs): importing this module for a
