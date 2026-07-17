@@ -5,6 +5,29 @@
    Consumers: screen-flip-niches.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote-items.mjs,
    screen-flip-niches.mjs (mdTable/stdCells). */
 import { quoteCells, cellText } from '../../js/quotecore.js';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/* --- writeLastReport(kind, reports): the AO1 agent-readable dump (PLAN-REACH-CALIBRATION Part 2).
+   The three market-read CLIs (screen/quote/watch) print a human markdown table + note footers to
+   stdout — load-bearing for Ben's terminal read, but a per-run context tax for an AGENT (a --mode all
+   scan is ~480 lines to redirect + re-read). Each already builds render.mjs report objects; this
+   serialises the object(s) already in hand to `pipeline/.cache/last-report/<kind>.json` (compact, NOT
+   pretty), overwritten every run — "last run from this command" semantics, mirroring join-outcomes.mjs's
+   `.cache/last-weekly-report` marker. Gitignored (the whole `.cache/` tree is). `kind` = the report's own
+   `kind` field ('screen'|'quote'|'watch'); screen accumulates its N per-niche reports into the ONE file
+   per pass. Wrapped as `{kind, generatedAt, reports:[…]}` so a consumer reads a single predictable shape
+   (`.reports[]` of render.mjs section objects) regardless of how many the pass produced. Best-effort:
+   never throws (a dump-write failure must not break the read). Returns the repo-relative display path.
+   PURE of side effects on import (only writes when CALLED), so it's safe in a test-imported entrypoint. --- */
+const LAST_REPORT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '.cache', 'last-report');
+export function writeLastReport(kind, reports) {
+  const payload = { kind, generatedAt: new Date().toISOString(), reports: Array.isArray(reports) ? reports : [reports] };
+  try { mkdirSync(LAST_REPORT_DIR, { recursive: true }); writeFileSync(join(LAST_REPORT_DIR, kind + '.json'), JSON.stringify(payload)); }
+  catch { /* dump is best-effort — a write failure never breaks the market read */ }
+  return `pipeline/.cache/last-report/${kind}.json`;
+}
 
 /* --- parseArgs(argv): the `--flag value` / bare-`--flag` loop.
    argv = process.argv.slice(2). A bare flag (no value, or followed by another --flag)

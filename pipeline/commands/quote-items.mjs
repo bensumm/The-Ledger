@@ -10,6 +10,10 @@
  *       line per item).
  *   node pipeline/commands/quote-items.mjs --positions
  *       Positions-vs-market: reads OPEN lots from repo-root positions.json, groups by item
+ *
+ *   --quiet (either mode): suppress the markdown stdout, print ONE summary line + the dump path —
+ *       for an agent read. The report object is ALWAYS written (quiet or not) to
+ *       pipeline/.cache/last-report/quote.json (gitignored, overwritten per run). AO1.
  *       at weighted-avg cost, quotes each held item live, and prints the standard table
  *       PLUS Held@ / Break-even columns + a HOLD / list-at-X / CUT verdict per row.
  *
@@ -34,7 +38,7 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadA
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
-import { stdCells } from '../lib/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3)
+import { stdCells, writeLastReport } from '../lib/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3); writeLastReport — AO1 agent-readable dump
 import { renderReport } from '../lib/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers
@@ -76,6 +80,14 @@ const PRESSURE_EXIT = args.includes('--pressure-exit');
 // LOUD trial banner (rule 4 — the prices must never read as the calibrated default).
 const PRESSURE_BANNER = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). --raw / drop the flag to restore the neutral estimate.';
 const tokens = args.filter(a => !a.startsWith('--'));
+// AO1 (PLAN-REACH-CALIBRATION Part 2): --quiet suppresses the markdown stdout for an agent read (one
+// summary line + the dump path instead); the report object is ALWAYS written to the last-report dump,
+// quiet or not. Default (no --quiet) stdout stays byte-identical — Ben's terminal read is untouched.
+// Implemented by no-op'ing console.log under --quiet (keeps `realLog` for the summary); the report is
+// captured for the dump at the single renderReport emission point.
+const QUIET = args.includes('--quiet');
+const realLog = console.log;
+if (QUIET) console.log = () => {};
 
 // LM1: per-item 4h buy-limit windows, built ONCE per run from the repo-root fills.json (local file, no
 // fetch). Empty map (absent/unreadable) ⇒ every item has zero in-window buys ⇒ byte-identical output.
@@ -393,7 +405,9 @@ async function runItems() {
     estExplainer: RAW ? null : EST_EXPLAINER,
     notes,
   });
-  console.log(renderReport(report));
+  console.log(renderReport(report));   // no-op under --quiet
+  const rel = writeLastReport('quote', report);   // AO1: always dump the report object for an agent read
+  if (QUIET) realLog(`# quote (--quiet) — ${outRows.length} item(s) → ${rel}`);
 }
 
 async function runPositions() {
@@ -591,7 +605,9 @@ async function runPositions() {
     notes,
     convLines, pathLines, rebidLines, lateNightLine,
   });
-  console.log(renderReport(report));
+  console.log(renderReport(report));   // no-op under --quiet
+  const rel = writeLastReport('quote', report);   // AO1: always dump the report object for an agent read
+  if (QUIET) realLog(`# positions (--quiet) — ${groups.length} item(s), ${openLots} lot(s) → ${rel}`);
 }
 
 // Entrypoint guard (matches watch-positions.mjs / screen-flip-niches.mjs): importing this module for a

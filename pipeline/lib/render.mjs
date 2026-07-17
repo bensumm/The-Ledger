@@ -41,11 +41,13 @@
  * render a single leading blank line. `renderReport` returns ONE string (sections' line-arrays joined
  * by '\n') meant to be printed with ONE console.log — byte-identical to the old console.log sequence.
  *
- * STAGE-2 SEAM (R6, noted not built): because a report object is plain JSON, a later chunk can write it
- * to a root artifact (the screen.json pattern) and an app module can render it with an HTML
- * section-renderer instead of this markdown one. So: never put pre-rendered markdown as the ONLY
- * representation of a structured fact, never bake console widths/ANSI into cells, and keep render.mjs
- * pipeline-only (the SHAPE is the cross-surface contract, not this file).
+ * STAGE-2 SEAM (R6, now EXERCISED by AO1): because a report object is plain JSON, a consumer can write it
+ * out and re-render it elsewhere. Two live consumers now do: renderHtmlTable below (the app's Scan tab,
+ * from screen.json) and AO1's `writeLastReport` (pipeline/lib/cli.mjs), which dumps the exact report
+ * object(s) each of the three market-read CLIs builds to pipeline/.cache/last-report/<kind>.json for an
+ * agent read (the `--quiet` path). So: never put pre-rendered markdown as the ONLY representation of a
+ * structured fact, never bake console widths/ANSI into cells, and keep render.mjs pipeline-only (the SHAPE
+ * is the cross-surface contract, not this file).
  *
  * PURE: no fetch, no fs, no clock. Consumers: watch-positions.mjs (VZ1). quote-items.mjs and
  * screen-flip-niches.mjs join in later chunks. Fixture-pinned by pipeline/test/render.test.mjs.

@@ -946,7 +946,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh
     each pass by `watch-positions.mjs` so vanished positions drop out; counters reset on identity change or a
     gap > `STALE_GAP_MS`. Local, disposable —
-    deleting it just loses one pass of delta history)
+    deleting it just loses one pass of delta history), and the AO1 `last-report/<kind>.json`
+    dumps (`screen.json`/`quote.json`/`watch.json`) — the compact-JSON render.mjs report object(s)
+    the last run of each market-read CLI built, written EVERY run (overwritten, "last run" semantics),
+    for an agent to read instead of re-parsing stdout. Producer: `screen-flip-niches.mjs` /
+    `quote-items.mjs` / `watch-positions.mjs` (via `writeLastReport`, `pipeline/lib/cli.mjs`); consumer:
+    agent analysis passes (the `--quiet` path). Shape `{kind, generatedAt, reports:[…]}`; screen
+    accumulates its per-flip-niche reports into the one file (the VALUE flip-niche is console-only,
+    excluded, same as screen.json). Local, disposable — deleting it just loses the last run's dump.
   - `pipeline/.guide-history.jsonl` (**tracked** as of 2026-07-06 — Ben's call: it's an accruing
     observation record, so it lives in the repo to survive a lost machine; kept OUTSIDE `.cache/`
     so cache pruning never touches it) — change-only GE guide-price observations for watched items,

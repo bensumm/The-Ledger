@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.32
+version: 1.33
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -16,6 +16,12 @@ fenced code block (a code fence forces the client to show literal `|`/`-` charac
 rendering an actual table — confirmed live, 2026-07-16). Ben reads the actual numbers/columns
 directly; a prose rollup alone hides the table he wants to see. Prose interpretation still
 follows (§3/§4) — it supplements the table, it doesn't replace it.
+
+**Agent-only analysis pass (AO1):** when you need the read's DATA for your own analysis rather than
+to paste it, run `quote-items.mjs --positions --quiet` (or `watch-positions.mjs --quiet`) and read
+`pipeline/.cache/last-report/quote.json` (or `watch.json`) — the render-object dump, always written —
+instead of re-parsing stdout. This is for the agent's own reasoning; Ben's reply still gets the raw
+table from a normal run.
 
 **Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
 layer labels every note family a TRACKING tier — `core` (the held-lot verdict / list-at, alerts,

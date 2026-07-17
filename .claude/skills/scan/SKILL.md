@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.63
+version: 1.64
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -18,6 +18,11 @@ actual numbers/columns directly. This applies to `screen-flip-niches.mjs` and to
 the table, it doesn't replace it. On a repeated/looped scan where nothing material changed,
 it's fine to note that and skip re-pasting — but when there IS something to report, paste the
 table, don't just describe it.
+
+**Agent-only analysis pass (AO1):** when you need the scan's DATA for your own analysis rather than
+to paste it, run `screen-flip-niches.mjs --quiet` and read `pipeline/.cache/last-report/screen.json`
+(the render-object dump, always written) instead of re-parsing the ~480-line stdout — far cheaper on
+context. This is for the agent's own reasoning; Ben's reply still gets the raw table from a normal run.
 
 **Relay both surfacing tiers — nothing trimmed speculatively (R10, 2026-07-16).** The render
 layer labels every note family a TRACKING tier — `core` (grades/verdicts, alerts, the WATCHLIST,

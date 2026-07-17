@@ -4,7 +4,11 @@
  *
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
- *     [--band-hours 2] [--min-traded 6] [--stats] [--publish]
+ *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--quiet]
+ *
+ *   --quiet suppresses the markdown stdout (Ben's terminal read) and prints ONE summary line + the
+ *   dump path — for an agent read. The per-niche report objects are ALWAYS written (quiet or not) to
+ *   pipeline/.cache/last-report/screen.json (gitignored, overwritten per run). AO1.
  *
  *   --publish ALSO writes repo-root screen.json: a self-describing per-niche graded snapshot
  *   { app, generatedAt, mode, params, headers, niches:{band,churn} } that the app's
@@ -79,7 +83,7 @@ import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, wi
 import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
-import { parseArgs, parseGp, mdTable, stdCells } from '../lib/cli.mjs';
+import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { renderReport } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence)
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
@@ -215,6 +219,14 @@ const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'acti
 // deliberate step (nothing here touches git); sync-fills.mjs commits it alongside fills/positions
 // only when its own --publish flag runs (once-a-day /overnight). Opt out with --no-publish (e.g. a
 // throwaway filtered console read you don't want to leave written to disk).
+// AO1 (PLAN-REACH-CALIBRATION Part 2): --quiet suppresses the markdown stdout for an agent read (one
+// summary line + the dump path instead); the per-niche report objects are ALWAYS accumulated into REPORTS
+// and written to the last-report dump, quiet or not. Default stdout stays byte-identical — Ben's terminal
+// read is untouched. Under --quiet main() no-op's console.log; emitReport still captures every niche report
+// (the VALUE niche renders raw, has no report object, so it's excluded from the dump — same as screen.json).
+const QUIET = A.quiet === true;
+const REPORTS = [];   // per-niche screen-report objects for this pass (renderMode niches only)
+function emitReport(report) { REPORTS.push(report); console.log(renderReport(report)); }   // console.log is a no-op under --quiet
 const PUBLISH_EXPLICIT = A.publish === true;
 let PUBLISH = A['no-publish'] === true ? false : true;
 // PART II safety: uncalibrated --asym prices must never reach screen.json/the app (F1 gates that step).
@@ -940,7 +952,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // The trailing blank line that separated niches (the pre-VZ4 `console.log('')`) rides as a final
   // flush empty line, so the ONE renderReport call reproduces the whole niche's stdout byte-for-byte.
   extraSections.push({ type: 'lines', blank: false, lines: [''] });
-  console.log(renderReport(buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections })));
+  emitReport(buildScreenNicheReport({ headerLines, table, estExplainer, footerLines, extraSections }));   // AO1: accumulate into REPORTS + render (no-op stdout under --quiet)
   // publishable rows (sorted-by-grade, byte-identical cells + itemId for the app's deep link).
   // P6c: sub-floor rows are STDOUT-ONLY — publish [] so screen.json/the app see exactly what a
   // pre-P6c empty niche published (byte-identical app contract, no APP_VERSION bump).
@@ -1244,6 +1256,10 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
 }
 
 async function main() {
+  // AO1: under --quiet, no-op console.log for the whole pass (keeps `realLog` for the closing summary);
+  // every renderMode niche is still captured into REPORTS for the dump via emitReport.
+  const realLog = console.log;
+  if (QUIET) console.log = () => {};
   // ALWAYS sync first (Ben, 2026-07-16 — the /scan skill's "sync first, always" was doctrine an
   // agent could just forget; a real closed position went unnoticed as a result). Local/zero-git,
   // cheap, never blocks the screen on failure — this is the held-item exception's freshness input
@@ -1406,6 +1422,10 @@ async function main() {
     writeFileSync(outPath, JSON.stringify(payload, null, 2) + '\n');
     console.log(`(published → screen.json: ${Object.keys(pubNiches).map(m => `${m} ${pubNiches[m].length}`).join(', ') || 'none'}${IS_VALUE ? ' — value niche is console-only, excluded from screen.json' : ''}${watchlist ? `, watchlist ${watchlist.rows.length}` : ''})`);
   }
+  // AO1: always write the pass's report objects to the last-report dump (one file per invocation), then
+  // under --quiet surface the ONE summary line + path in place of the suppressed markdown.
+  const rel = writeLastReport('screen', REPORTS);
+  if (QUIET) realLog(`# screen (--quiet) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value niche is console-only, excluded)`);
 }
 
 // Run only when invoked directly (`node pipeline/commands/screen-flip-niches.mjs …`); importing the module (e.g. the
