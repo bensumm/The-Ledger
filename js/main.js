@@ -9,15 +9,28 @@ import { runTrends, reviewPositions } from './trends.js';
 import './backup.js'; // side-effect import: wires up the Export/Import buttons' own event handlers; nothing else references its exports directly
 
 /* tabs + events */
-export function switchTab(name){
+const TAB_NAMES=['finder','scan','trends','watchlist','ignore','watch','ledger','logs'];
+// Each tab is now a real URL path (Ben, 2026-07-16) — #<tab> in the hash, so a browser reload
+// (e.g. "Refresh scan" doing a full location.reload() after a local re-scan) lands back on the
+// SAME tab instead of always resetting to Finder. `push` writes the hash (a genuine tab-click);
+// `false` is used on load/hashchange-driven calls so restoring from the URL doesn't itself write
+// a redundant history entry.
+export function switchTab(name, push=true){
+  if(!TAB_NAMES.includes(name)) return;
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  ['finder','scan','trends','watchlist','ignore','watch','ledger','logs'].forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  TAB_NAMES.forEach(t=>document.getElementById('panel-'+t).classList.toggle('hidden', t!==name));
+  if(push && location.hash.slice(1)!==name) location.hash=name;
   if(name==='scan') renderScan();   // lazy: fetch the published screen.json on first open (cached after)
   if(name==='watch') enterWatch(); else leaveWatch();   // WATCH: re-quote loop runs only while the tab is visible
 }
 // L1 action logging: instrument at the event handler (a genuine user click), NOT inside the
 // shared switchTab/loadAll functions — those also run on programmatic/init paths we don't log.
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{ logEvent('info','action','tab → '+b.dataset.tab); switchTab(b.dataset.tab); });
+// Restore the tab from the URL on load (a fresh load OR a location.reload() from a refresh
+// button) and on back/forward navigation between tabs. An absent/invalid hash keeps the
+// HTML-default (Finder, the only panel not marked `hidden` in index.html) untouched.
+{ const h=location.hash.slice(1); if(TAB_NAMES.includes(h)) switchTab(h, false); }
+window.addEventListener('hashchange', ()=>{ const h=location.hash.slice(1); if(TAB_NAMES.includes(h)) switchTab(h, false); });
 document.getElementById('refreshBtn').onclick=()=>{ logEvent('info','action','manual price refresh'); loadAll(false,true); };
 document.getElementById('statusBanner').onclick=()=>document.getElementById('statusBanner').classList.toggle('open');
 document.getElementById('cofferToggle').onclick=async()=>{ STATE.cofferCollapsed=!STATE.cofferCollapsed; await sSet('cofferCollapsed',STATE.cofferCollapsed); applyCoffer(); };

@@ -379,6 +379,15 @@ export async function renderScan(force){
   if(pv){ const pipe=(typeof scan.pipeline==='string' && scan.pipeline)?('v'+scan.pipeline):'v?';
     const stamp=isNaN(genMs)?'':(' (scan '+new Date(genMs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+')');
     pv.textContent=' · pipeline '+pipe+stamp; }
+  // Analysis — a short judgment blurb ABOVE the tables, separate from the raw scan data (rendered
+  // only when screen.json carries one; an older/pipeline-only snapshot has none, so this stays
+  // hidden rather than showing an empty box).
+  const analysisEl=document.getElementById('scanAnalysis');
+  if(analysisEl){
+    if(typeof scan.analysis==='string' && scan.analysis.trim()){
+      analysisEl.classList.remove('hidden'); analysisEl.innerHTML=scan.analysis;
+    } else { analysisEl.classList.add('hidden'); analysisEl.innerHTML=''; }
+  }
   const headers=scan.headers||[], niches=scan.niches||{};
   // present = the known niches in canonical order, then any unknown/future niche key in the payload
   // (tolerant rendering — a screen.json niche absent from NICHE_ORDER still renders, labeled by its
@@ -391,16 +400,25 @@ export async function renderScan(force){
   const pLegend=anyPressure
     ? '<div class="scanplegend">⚗ <b>Pressure (trial)</b> = the demand-balance reachable band (deep bid → bold ask), shown by default. It is <b>un-calibrated</b> (n≈0, retro still scoring) and does <b>not</b> drive the Grade, rank, or sort — those stay on the neutral estimator. The Optimistic column is the conservative reference.</div>'
     : '';
+  // Niches start COLLAPSED (Ben, 2026-07-16) — a <details>/<summary> per niche so the page opens
+  // compact; clicking a niche's header expands just that table. Watchlist (below) stays a plain
+  // always-open section — it's the small always-shown exception, not one of the collapsible niches.
+  // Stage-2 (2026-07-16): prefer the PIPELINE-rendered HTML (`scan.html[n]`, render.mjs
+  // `renderHtmlTable` — the app-only twin of this file's own scanTableHtml) when present; fall back
+  // to client-side scanTableHtml for an older screen.json published before this field existed. Both
+  // paths must stay visually identical — scanTableHtml is the fallback, not a second design.
+  const nicheHtml=scan.html||{};
+  const tableFor=(hdrs, rows, key)=> (typeof nicheHtml[key]==='string') ? nicheHtml[key] : scanTableHtml(hdrs, rows);
   let html = present.length
     ? pLegend+present.map(n=>{ const m=NICHE_META[n]||{label:n,hint:''};
-        return '<div class="scantier">'+m.label+(m.hint?' <span class="scanhint">— '+m.hint+'</span>':'')+'</div>'+scanTableHtml(headers, niches[n]); }).join('')
+        return '<details class="scansection"><summary class="scantier">'+m.label+(m.hint?' <span class="scanhint">— '+m.hint+'</span>':'')+'</summary>'+tableFor(headers, niches[n], n)+'</details>'; }).join('')
     : '<div class="scannone">— no niches in this scan —</div>';
   // S3: the always-scanned Watchlist section (its own headers carry the extra Note column). Falling
   // watchlist items ARE shown here (with a warning note) — the held/asked exception extends to them.
   const wl=scan.watchlist;
   if(wl && Array.isArray(wl.rows) && wl.rows.length){
     html += '<div class="scantier scanwatch">Watchlist <span class="scanhint">— always shown, exempt from floors/gates; the Note says what a gate would have hidden</span></div>'+
-      scanTableHtml(wl.headers||headers, wl.rows);
+      tableFor(wl.headers||headers, wl.rows, 'watchlist');
   }
   tablesEl.innerHTML = html;
   tablesEl.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>openTrends(+b.dataset.trend));
@@ -427,7 +445,7 @@ export async function refreshScan(btn){
     try{
       const r=await fetch('/api/scan',{method:'POST',signal:ctrl.signal});
       const j=await r.json().catch(()=>({}));
-      if(r.ok && j && j.ok){ ranLocal=true; logEvent('info','scan','local scan ran → '+(j.generatedAt||'?')); }
+      if(r.ok && j && j.ok){ ranLocal=true; logEvent('info','scan','local scan ran → '+(j.generatedAt||'?')); location.reload(); return; }
       else if(j && j.busy){ logEvent('info','scan','local scan already running — showing latest'); }
       else { logEvent('warn','scan','local scan endpoint error — falling back to published snapshot'); }
     }catch(e){

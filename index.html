@@ -100,7 +100,7 @@
 
   <!-- SCAN (Finder v2 — the screen.mjs opportunity scan, in the app) -->
   <section class="panel hidden" id="panel-scan">
-    <div class="scanintro mini">The same opportunity scan a Claude session runs (<code>screen.mjs</code>) — identical gates and numbers, one table per <b>niche</b> (<b>Band</b> · <b>Churn</b>), each ranked by a letter <b>Grade</b> so the best flips sort to the top. Falling handling is per-strategy — band/churn skip fallers, but anything you hold, ask about, or watchlist still shows with price-to-clear guidance. On the deployed site this is a <b>published snapshot</b> (Refresh re-reads the committed <code>screen.json</code>); on the <b>local dev server</b> Refresh runs a <b>real scan</b> and regenerates the file live. Click any item for its live Trends.</div>
+    <div id="scanAnalysis" class="scananalysis hidden"></div>
     <div class="scanhead">
       <div class="scanmeta" id="scanMeta"></div>
       <button id="scanRefresh" class="ghostbtn sm" type="button">Refresh scan</button>
@@ -108,6 +108,7 @@
     <div id="scanStale" class="scanstale hidden"></div>
     <div id="scanTables"></div>
     <div id="scanEmpty" class="empty hidden"></div>
+    <div class="scanintro mini">The same opportunity scan a Claude session runs (<code>screen.mjs</code>) — identical gates and numbers, one table per <b>niche</b> (<b>Band</b> · <b>Churn</b>), each ranked by a letter <b>Grade</b> so the best flips sort to the top. Falling handling is per-strategy — band/churn skip fallers, but anything you hold, ask about, or watchlist still shows with price-to-clear guidance. On the deployed site this is a <b>published snapshot</b> (Refresh re-reads the committed <code>screen.json</code>); on the <b>local dev server</b> Refresh runs a <b>real scan</b> and regenerates the file live. Click any item for its live Trends.</div>
   </section>
 
   <!-- TRENDS -->

@@ -86,7 +86,7 @@ import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the 
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard (replaces the per-flag inline copies)
-import { renderReport } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence)
+import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
@@ -1414,6 +1414,19 @@ async function main() {
     // app VALUE surface is a later, APP_VERSION-bumping step.
     const pubNiches = {};
     for (const m of RUN_MODES) if (FLIP_NICHES[m].gate !== 'value') pubNiches[m] = niches[m];
+    // Stage-2 HTML (2026-07-16): a PRE-RENDERED html string per niche (+ watchlist), the pipeline-side
+    // twin of js/ui.js's client-side scanTableHtml — additive sibling to `cells`, never a replacement
+    // (an older app build that doesn't know about `html` still works off `cells` unchanged).
+    const pubHtml = {};
+    for (const m of Object.keys(pubNiches)) pubHtml[m] = renderHtmlTable(HEADERS, pubNiches[m]);
+    if (watchlist) pubHtml.watchlist = renderHtmlTable(watchlist.headers, watchlist.rows);
+    // Carry forward any existing `analysis` blurb (2026-07-16) — it's a judgment overlay set
+    // separately via set-scan-analysis.mjs (the /scan skill's judgment PASS OVER a published
+    // scan), not part of this script's own deterministic output, so a routine re-publish (e.g.
+    // the recurring /scan loop) must not silently wipe it. Best-effort: a missing/corrupt prior
+    // file just means no analysis to carry, never a publish failure.
+    let priorAnalysis;
+    try { priorAnalysis = JSON.parse(readFileSync(outPath, 'utf8')).analysis; } catch { priorAnalysis = undefined; }
     const payload = {
       app: 'the-coffer-screen',
       schema: 2,                       // 2 = T1 structured cells ({t,c}); 1 = legacy plain-string cells (app reads both)
@@ -1424,9 +1437,11 @@ async function main() {
       params: { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE },
       headers: HEADERS,
       niches: pubNiches,
+      html: pubHtml,                   // Stage-2: pre-rendered per-niche (+watchlist) HTML, additive
       // S3 watchlist section — its own headers (adds a Note column) travel with it so the app renders
       // it as a distinct always-shown section; null when watchlist.json is empty/absent.
       watchlist: watchlist ? { headers: watchlist.headers, rows: watchlist.rows } : null,
+      ...(typeof priorAnalysis === 'string' && priorAnalysis ? { analysis: priorAnalysis } : {}),
     };
     writeFileSync(outPath, JSON.stringify(payload, null, 2) + '\n');
     console.log(`(published → screen.json: ${Object.keys(pubNiches).map(m => `${m} ${pubNiches[m].length}`).join(', ') || 'none'}${IS_VALUE ? ' — value niche is console-only, excluded from screen.json' : ''}${watchlist ? `, watchlist ${watchlist.rows.length}` : ''})`);
@@ -1434,7 +1449,7 @@ async function main() {
   // AO1: always write the pass's report objects to the last-report dump (one file per invocation), then
   // unless --verbose surface the ONE summary line + path in place of the suppressed markdown.
   const rel = writeLastReport('screen', REPORTS);
-  if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(", ")} → ${rel} (value niche is console-only, excluded)`);
+  if (!VERBOSE) realLog(`# screen (quiet default; --verbose for the table) — mode ${MODE}: ${RUN_MODES.map(m => `${m} ${Array.isArray(niches[m]) ? niches[m].length : 0}`).join(', ')} → ${rel} (value niche is console-only, excluded)`);
 }
 
 // Run only when invoked directly (`node pipeline/commands/screen-flip-niches.mjs …`); importing the module (e.g. the

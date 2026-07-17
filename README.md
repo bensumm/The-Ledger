@@ -342,7 +342,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   display-only data the app's Scan tab renders as a `Pressure (trial)` column by default (`js/ui.js`
   `scanPressureCell`/`scanTableHtml` + the `.scanplegend` legend; labeled un-calibrated, never a
   rank/grade input). The console `--pressure-exit` rerank/reprice TRIAL is a SEPARATE mechanism (refused
-  under `--publish`, so it never reaches `screen.json`)
+  under `--publish`, so it never reaches `screen.json`). Also carries a top-level `html` field
+  (2026-07-16, PLAN-VIZ-LAYER Stage-2) — one pre-rendered HTML string per flip-niche + watchlist
+  (`pipeline/lib/render.mjs` `renderHtmlTable`, the server-side twin of `js/ui.js`'s client-side
+  `scanTableHtml`), ADDITIVE beside `cells` (never a replacement); the app prefers `html[key]` when
+  present, falling back to client-side rendering for a screen.json published before this field
+  existed. **Publishing is now the DEFAULT every run**
+  (2026-07-16, `--no-publish` opts out) — the local file write only, never a git commit (that stays the
+  once-a-day `/overnight` `sync-fills.mjs --publish`). Also carries an OPTIONAL top-level `analysis`
+  string (2026-07-16) — a judgment blurb rendered above the tables on the Scan tab (`#scanAnalysis`,
+  `js/ui.js` `renderScan`), set via `pipeline/commands/set-scan-analysis.mjs` (a separate, zero-refetch
+  patch command — the analysis is the judgment PASS OVER an already-published scan, not part of the
+  scan itself); absent → the section stays hidden, never an empty box.
+- `pipeline/commands/set-scan-analysis.mjs` — patches repo-root `screen.json`'s optional `analysis`
+  field (or `--clear`s it) without re-running the scan. CLI-only, trusted-input (the app renders it as
+  raw HTML) — never wire an untrusted input path to this.
 - `PLAN-OUTPUT-TABLE.md` — in-flight per-topic plan: the reach-folded `Est. buy`/`Est. sell`
   console table (shipped 2026-07-13 as `js/estimators.mjs` `estimatePair` + the `screen-flip-niches.mjs`/
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no

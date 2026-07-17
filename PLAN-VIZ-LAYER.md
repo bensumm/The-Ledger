@@ -183,8 +183,15 @@ heldDisplay stays authoritative for the verdict word, structural break surfaces 
 warning clause — landed in `heldAlert()` directly since the fix was small and well-scoped once the
 ruling was made. VZ3-VZ6 followed the same pattern established by VZ1/VZ2b, extended to
 `quote-items.mjs` and `screen-flip-niches.mjs`; all byte-identity-verified. Stage 1 of this plan
-(console/chat markdown render layer) is complete; Stage 2 (the live HTML dashboard, R6) remains
-unbuilt and out of scope.
+(console/chat markdown render layer) is complete.
+
+**Stage 2 update (2026-07-16, same day, Ben's follow-up ask):** the Scan-tab HTML seam is now BUILT
+— `render.mjs` gained `renderHtmlTable`, the server-side twin of `js/ui.js`'s client-side
+`scanTableHtml`, publishing pre-rendered HTML into `screen.json`'s new `html` field (additive beside
+`cells`). This is a first Stage-2 slice, not the full "live HTML dashboard" R6 envisioned (that would
+be a genuinely live-updating in-app surface, not a per-scan static publish) — the broader dashboard
+idea remains unbuilt. See CHANGELOG's "Scan tab: PLAN-VIZ-LAYER's Stage-2 HTML seam built…" entry for
+the full detail.
 
 Order: prove the pattern on watch-positions (the script with the live bug), then quote-items
 (smallest), then screen (largest surface). Mechanical moves are separate from visible changes;
@@ -274,8 +281,10 @@ every chunk is independently shippable and fixture-pinned.
   confirmation. No code.
 
 Out of scope, explicitly (R5/R6): any convictionGate/verdictPersistence reconciliation VZ2a
-surfaces; Stage-2 app dashboard (report-object publish artifact, app renderer, APP_VERSION bump);
-changing which notes are computed; retiring any note family.
+surfaces; changing which notes are computed; retiring any note family. (The Scan-tab HTML seam —
+"Stage-2 app dashboard, report-object publish artifact, app renderer, APP_VERSION bump" — was
+originally scoped out here but was landed same-day per Ben's follow-up ask; see the Stage-2 update
+note above and CHANGELOG.)
 
 ## Encoding boundary
 

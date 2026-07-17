@@ -53,6 +53,7 @@
  * screen-flip-niches.mjs join in later chunks. Fixture-pinned by pipeline/test/render.test.mjs.
  */
 import { mdTable } from './cli.mjs';
+import { gradeCls, fmtP } from '../../js/money-format.js';
 
 /* --- SURFACING-TIER REGISTRY (R10 — TRACKING label, NOT a render/relay gate; VZ5 = the ONE registry) --
    Every note kind carries a tier so a later iteration pass can see which kinds are actually read vs
@@ -171,4 +172,44 @@ export function renderReport(report) {
     out.push(...r(s));
   }
   return out.join('\n');
+}
+
+/* --- renderHtmlTable(headers, rows): the STAGE-2 SEAM, now built (Ben, 2026-07-16 — "make it app
+   only... it should encode HTML tables for the app to display in the scan tab"). Pipeline-side twin
+   of js/ui.js's client-side `scanTableHtml`/`scanPressureCell` — same T1 `{t,c,title}` cell shape,
+   same markup, so screen.json can carry a PRE-RENDERED `html` string per niche and the app just
+   injects it (`.innerHTML =`) instead of re-deriving HTML from raw cells client-side. This does NOT
+   replace the `cells` data in screen.json (kept for back-compat / any other consumer) — `html` is an
+   ADDITIVE sibling field. A console box-drawing table (an earlier same-session prototype in
+   `pipeline/lib/cli.mjs` `consoleTable`/`consoleCards`) was explicitly ruled OUT as a dead end for
+   this surface — the app is the one and only target for this renderer, never a bare terminal. Kept
+   BYTE-IDENTICAL in shape to the client version deliberately (a visual diff between the two would be
+   a regression, not a style choice) — if `js/ui.js`'s `scanTableHtml` ever changes, mirror the change
+   here too (cross-pointer in both files' headers). --- */
+const scText = c => (c && typeof c === 'object' && 't' in c) ? c.t : c;
+const scCls = c => (c && typeof c === 'object' && c.c) ? c.c : '';
+const scTitle = c => (c && typeof c === 'object' && c.title) ? c.title : '';
+const htmlAttr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const htmlPressureCell = rb => {
+  if (!rb || rb.ask == null || rb.bid == null) return '<td class="pressure-trial"></td>';
+  const rel = (typeof rb.reliability === 'number') ? rb.reliability : null, low = rel != null && rel < 0.5;
+  const px = (typeof rb.pressure === 'number') ? rb.pressure.toFixed(1) + '×' : '?';
+  const ttl = 'pressure ' + px + (rel != null ? ', reliability ' + rel.toFixed(2) : '') + ' — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.';
+  return '<td class="pressure-trial' + (low ? ' pthin' : '') + '" title="' + htmlAttr(ttl) + '">' + fmtP(rb.bid) + ' → ' + fmtP(rb.ask) +
+    ' <span class="pmeta">' + px + (low ? ' ⚠thin' : '') + '</span></td>';
+};
+export function renderHtmlTable(headers, rows) {
+  if (!rows || !rows.length) return '<div class="scannone">— none —</div>';
+  const hasP = rows.some(r => r.reachable && r.reachable.ask != null);
+  const head = '<thead><tr>' + headers.map((h, i) => '<th' + (i === 0 ? ' class="left"' : '') + '>' + h + '</th>').join('') +
+    (hasP ? '<th class="pcol" title="Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.">Pressure <span class="ptrial">(trial)</span></th>' : '') + '</tr></thead>';
+  const body = '<tbody>' + rows.map(r => { const cells = r.cells || [];
+    const tds = cells.map((c, i) => {
+      const ttl = scTitle(c), t = ttl ? ' title="' + htmlAttr(ttl) + '"' : '';
+      if (i === 0) return '<td class="left"><span class="linkname" data-trend="' + r.id + '">' + scText(c) + '</span></td>';
+      if (headers[i] === 'Grade') { const g = scText(c); return '<td' + t + '><span class="grade ' + gradeCls(g) + '"' + (ttl ? ' title="' + htmlAttr(ttl) + '"' : '') + '>' + g + '</span>' + (ttl ? '<span class="thinflag" title="' + htmlAttr(ttl) + '">thin</span>' : '') + '</td>'; }
+      return '<td class="' + scCls(c) + '"' + t + '>' + scText(c) + '</td>';
+    }).join('');
+    return '<tr>' + tds + (hasP ? htmlPressureCell(r.reachable) : '') + '</tr>'; }).join('') + '</tbody>';
+  return '<div class="tablewrap"><table class="scantable">' + head + body + '</table></div>';
 }

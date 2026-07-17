@@ -157,8 +157,12 @@
   .scorebar .fillb{height:100%; background:linear-gradient(90deg,var(--gold),var(--gold2))}
   .scorebar .n{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--parch2); width:24px; text-align:right}
 
-  .scanintro{margin-bottom:12px; line-height:1.55; color:var(--parch2); max-width:820px}
+  .scanintro{margin-top:20px; padding-top:14px; border-top:1px solid var(--line); line-height:1.55; color:var(--parch2); max-width:820px}
   .scanintro code{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--parch)}
+  .scananalysis{margin:0 0 16px; padding:12px 14px; border:1px solid var(--line); border-left:3px solid var(--gold);
+    border-radius:8px; background:rgba(0,0,0,.14); color:var(--parch2); font-size:13px; line-height:1.55; max-width:820px}
+  .scananalysis :first-child{margin-top:0}
+  .scananalysis :last-child{margin-bottom:0}
   .scanhead{display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap}
   .scanmeta{flex:1; min-width:200px; font-size:12px; color:var(--parch2); letter-spacing:.02em}
   .scanmeta b{color:var(--gold); font-weight:700}
@@ -168,6 +172,14 @@
   .scantier{font-family:'Cinzel',serif; color:var(--gold); font-size:13px; letter-spacing:.06em; margin:16px 0 8px}
   .scantier:first-child{margin-top:0}
   .scanhint{font-family:inherit; color:var(--muted); font-size:11px; letter-spacing:0; text-transform:none}
+  /* Niches start collapsed (Ben, 2026-07-16) — <details>/<summary>, summary reuses .scantier's look
+     with a cursor + open/closed marker; the table only exists in the DOM once expanded is irrelevant
+     here (it's already rendered, just hidden by <details> — cheap, no re-fetch on expand). */
+  details.scansection{margin:0}
+  details.scansection > summary.scantier{cursor:pointer; list-style:none; user-select:none}
+  details.scansection > summary.scantier::-webkit-details-marker{display:none}
+  details.scansection > summary.scantier::before{content:'▸ '; display:inline-block; font-size:10px; transition:transform .12s}
+  details.scansection[open] > summary.scantier::before{transform:rotate(90deg)}
   .scantable thead th{cursor:default}
   .scannone{padding:16px 14px; color:var(--muted); font-size:13px; border:1px solid var(--line); border-radius:12px}
   /* PB4 pressure (trial) column — visually distinct from the neutral cells so it never reads as the

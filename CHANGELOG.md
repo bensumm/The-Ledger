@@ -93,6 +93,48 @@ offer noise) unless the item is on the watchlist, BEFORE it reaches the table/ve
 no row, no alert. Collapsed into one `incidental inventory, ignored: X, Y` line instead. Watchlist
 membership remains the exemption regardless of value.
 
+### Tabs are real URL paths; scan analysis survives a re-publish (0.65.3, `js/main.js`+`pipeline/commands/screen-flip-niches.mjs`)
+Two fixes from live use of the same-day Scan-tab work. (1) **Tab routing**: `switchTab` now writes
+`#<tab>` to the URL hash on every genuine navigation (a tab click, or a programmatic jump like
+"buy" → Ledger or an item name → Trends), and the app restores the tab from the hash on load/
+`hashchange`. Ben's ask: "Refresh scan → should take us back to the Scan tab with the new info, not
+the Finder tab" — before this, "Refresh scan"'s `location.reload()` always landed back on Finder
+(the HTML-default panel), since nothing recorded which tab you'd been on. (2) **Analysis
+persistence**: `screen-flip-niches.mjs --publish` was building its payload as a fresh object literal
+every run, silently WIPING any `analysis` blurb set via `set-scan-analysis.mjs` on the very next
+scan (including the recurring `/scan` loop's routine re-publishes, seconds later) — now reads the
+existing `screen.json`'s `analysis` field first and carries it forward unless a fresh one overwrites
+it. Caught because Ben set an analysis, then a routine `/scan` loop pass republished and erased it
+before he'd even seen it on the page.
+
+
+### Scan tab: PLAN-VIZ-LAYER's Stage-2 HTML seam built, collapsed niches, analysis blurb, real refresh, blurb moved to bottom (0.65.3, `pipeline/lib/render.mjs`+`pipeline/commands/screen-flip-niches.mjs`+`index.html`+`js/ui.js`+`styles.css`+`pipeline/commands/set-scan-analysis.mjs` new)
+Several Scan-tab requests in one pass, the biggest being the Stage-2 seam PLAN-VIZ-LAYER explicitly
+deferred (R6/the honesty note "nothing Stage-2 is built") — now built: **`render.mjs` gained
+`renderHtmlTable(headers, rows)`**, a pipeline-side twin of `js/ui.js`'s client-side `scanTableHtml`/
+`scanPressureCell` (same T1 cell shape, same markup, imports `gradeCls`/`fmtP` from
+`js/money-format.js` for byte-parity). `screen-flip-niches.mjs --publish` now writes a `html` field
+into `screen.json` (one pre-rendered string per niche + watchlist) as an ADDITIVE sibling to the
+existing `cells` data (never a replacement — an older app build ignoring `html` still works).
+`js/ui.js`'s `renderScan` now prefers `scan.html[niche]` when present, falling back to client-side
+`scanTableHtml` for a screen.json published before this field existed — the fallback must stay
+visually identical to the pipeline path, not a second design. An earlier same-session console
+box-drawing table prototype (`pipeline/lib/cli.mjs` `consoleTable`/`consoleCards`) was explicitly
+ruled OUT as a dead end for this — the app is the only target surface, never a bare terminal; those
+two prototype exports remain in cli.mjs, unused, pending a decision on whether to remove them.
+
+Also: (1) the explanatory `.scanintro` blurb moved from the top of the panel to the bottom. (2) Each
+niche (Band/Churn) now renders inside a `<details>`/`<summary>` and starts COLLAPSED — the page opens
+compact, click a niche's header to expand just that table (Watchlist stays a plain always-open
+section — the small always-shown exception, not a collapsible niche). (3) "Refresh scan" now does a
+full `location.reload()` once the local dev-server's `/api/scan` run succeeds, instead of only
+re-rendering the scan panel's DOM in place. (4) A new `#scanAnalysis` mount point at the TOP of the
+panel renders an optional `screen.json.analysis` HTML string — a short judgment blurb separate from
+the raw tables, hidden when absent. Populated via a new small command,
+`pipeline/commands/set-scan-analysis.mjs "<html>"` (or `--clear`) — a zero-refetch patch of just that
+one field, since the analysis is the judgment PASS OVER an already-published scan (the `/scan`
+skill's §2), not part of the scan's own deterministic output; written manually by the session doing
+the read, never auto-generated.
 
 ### screen-flip-niches.mjs publishes by default now — was opt-in behind --publish (2026-07-16, `pipeline/commands/screen-flip-niches.mjs`+`/scan` skill — NO APP_VERSION)
 Ben noticed his local Scan tab was 2 days stale and asked why, given this session had been running
