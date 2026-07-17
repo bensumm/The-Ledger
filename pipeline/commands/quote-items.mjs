@@ -68,6 +68,21 @@ const FILLS = path.join(HERE, '..', '..', 'fills.json');   // LM1: RuneLite-logg
 // 0–2 items) and TTL-cached (same fetchTsCached mechanism as screen-flip-niches.mjs's Leg-B survivor fetch), so
 // a re-run inside the TTL is fetch-free. Same 15-min TTL as screen's TS_TTL_1H.
 const TS_TTL_1H_EXIT = 15 * 60 * 1000;
+// Incidental-inventory filter — shared threshold + watchlist exemption with watch-positions.mjs
+// (the /positions skill's incidental-inventory rule, code-enforced 2026-07-16).
+const NOISE_OFFER_GP = 100_000;
+const WATCHLIST_PATH_Q = path.join(HERE, '..', '..', 'watchlist.json');
+function loadWatchlistIds(map) {
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(WATCHLIST_PATH_Q, 'utf8')); } catch { return new Set(); }
+  if (!Array.isArray(raw)) return new Set();
+  const ids = new Set();
+  for (const entry of raw) {
+    const hit = map.resolve(typeof entry === 'number' ? String(entry) : entry);
+    if (hit) ids.add(hit.id);
+  }
+  return ids;
+}
 
 const args = process.argv.slice(2);
 const POSITIONS_MODE = args.includes('--positions');
@@ -428,17 +443,29 @@ async function runPositions() {
     if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
   } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — reading off the current book\n'); }
 
-  const { err, groups, openLots, ageMin } = readOpenPositions(POSITIONS);
+  const { err, groups: allGroups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
-  if (!groups.length) { console.log('No open positions in positions.json.'); return; }
+  if (!allGroups.length) { console.log('No open positions in positions.json.'); return; }
   // P0: one loadSnapshot() per pass — the position surface's mapping/guide + the passive Tier-1
   // archive append (quote-items.mjs is, with watch-positions.mjs, loadSnapshot's first consumer). Robust fallback:
   // if the archive/snapshot can't open, degrade to the plain loaders so the read never breaks.
-  const ids = groups.map(g => g.itemId);
+  const ids = allGroups.map(g => g.itemId);
   let snap = null;
   try { snap = await loadSnapshot({ budgetIds: ids }); } catch { snap = null; }
   const map = snap ? snap.mapping : await loadMapping();
   const guide = snap ? snap.guide : await loadGuide();
+  // Incidental-inventory filter (code-enforced 2026-07-16, matches watch-positions.mjs — was
+  // /positions skill prose only): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
+  // reaches the table/verdict loop at all. Collapsed into one summary line instead.
+  const watchlistIds = loadWatchlistIds(map);
+  const incidentalNames = [];
+  const groups = allGroups.filter(g => {
+    if (g.cost < NOISE_OFFER_GP && !watchlistIds.has(g.itemId)) {
+      incidentalNames.push(map.byId[g.itemId]?.name || ('#' + g.itemId)); return false;
+    }
+    return true;
+  });
+  if (!groups.length) { console.log('Only incidental inventory in positions.json — ignored: ' + incidentalNames.join(', ')); return; }
   const getInputs = async id => (snap ? (await snap.series(id)) : null) ?? await fetchItemInputs(id);
   // SF-3: the bulk /24h map for the logged liquidity `class` (converges with screen-flip-niches.mjs). On the normal
   // path loadSnapshot ALREADY fetched the whole-market /24h (snap.v24) — reusing it adds ZERO fetch and
@@ -605,7 +632,8 @@ async function runPositions() {
     : null;
   const report = buildQuoteReport({
     mode: 'positions',
-    header: `# Open positions vs market (${groups.length} items, ${openLots} lots)\n`,
+    header: `# Open positions vs market (${groups.length} items, ${openLots} lots)\n`
+      + (incidentalNames.length ? `incidental inventory, ignored: ${incidentalNames.join(', ')}\n` : ''),
     pressureBanner: PRESSURE_EXIT ? PRESSURE_BANNER : null,
     staleBanner: staleBookBanner(ageMin),
     headers, rows,

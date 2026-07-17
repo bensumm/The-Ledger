@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.34
+version: 1.36
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -102,16 +102,19 @@ it for a new/test lane.)
 
 ## 2. Separate flip targets from incidental inventory
 
-Open lots include loot/supplies that were never flip targets (e.g. a stray Defence potion,
-molten glass). Do NOT spend verdict/action lines on sub-noise lots. Tests, in order:
-
-1. **Watchlist membership** — the natural positive signal (same idea as the Ledger
-   watchlist filter in CLAUDE.md's open followups).
-2. Absent watchlist data in-session, judgment: tiny total lot value (well under any sizing
-   threshold), consumable/loot character, never traded as a flip in `fills.json` history.
-
-Report incidentals in ONE collapsed line — "incidental inventory, ignored: X, Y" — and
-exclude them from the action plan. **Never CUT-recommend an incidental lot.**
+**Code-enforced (2026-07-16, was prose-only doctrine an agent had to remember every pass).**
+Three ×1 rune-drop loot lots (Steam/Sunfire/Aether rune) kept re-earning a full CUT-CANDIDATE/
+UNDERWATER headline every single watch pass because nothing in the pipeline actually applied
+this test — it was written down here but never checked in code, the same failure shape as the
+sync-enforcement and held-item-exception gaps found earlier the same session. Fixed: both
+`watch-positions.mjs` and `quote-items.mjs --positions` now filter a lot whose total value
+(`qty × avgCost`) is under `NOISE_OFFER_GP` (100,000 gp — same constant that already governed
+tiny offers) UNLESS it's on the watchlist, BEFORE it ever reaches the table/verdict loop — no
+row, no alert, just a collapsed `incidental inventory, ignored: X, Y` line in the summary/header.
+**Watchlist membership is still the exemption** — a deliberately-tracked item is never filtered
+by value alone, however small the lot. You should rarely need to apply this test yourself now;
+if you ever see an incidental-looking lot still drawing a verdict, that's a gap in the value
+threshold or the watchlist read, not a missing manual judgment call — flag it as a bug.
 
 ## 3. Interpret each verdict
 
@@ -217,7 +220,7 @@ whether the thesis premise still holds; if you agree the peak has moved, re-decl
 via `declare-thesis.mjs set … --exit` (the flag never edits the thesis or the verdict itself).
 
 **Thesis-appropriate cadence (VN-0):** a parked-at-break-even hold with a declared exit window
-wants a check NEAR ITS PEAK WINDOW plus ~2–3 passes/day — not the 1–3m hair-trigger class
+wants a check NEAR ITS PEAK WINDOW plus ~2–3 passes/day — not the 3m hair-trigger class
 cadence. Nothing actionable happens in 3 minutes on a lot moving ~1%/hour; oversampling
 manufactures flip-flop reads (MONITORING.md "Cadence"). The tight cadence is for FALLING /
 thin-big-ticket hazard classes, not a declared multi-hour hold.

@@ -96,6 +96,21 @@ const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl'); // TRACKED 
 const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
 const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; declare-thesis.mjs writes)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
+const WATCHLIST_PATH = path.join(HERE, '..', '..', 'watchlist.json'); // TRACKED at repo root, read-only — exempts a deliberately-tracked item from the incidental-lot filter regardless of value
+
+// A watchlisted item's id set — read-only, best-effort (absent/unreadable → empty, so the
+// incidental filter degrades to value-only rather than ever crashing the pass).
+function loadWatchlistIds(map) {
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(WATCHLIST_PATH, 'utf8')); } catch { return new Set(); }
+  if (!Array.isArray(raw)) return new Set();
+  const ids = new Set();
+  for (const entry of raw) {
+    const hit = map.resolve(typeof entry === 'number' ? String(entry) : entry);
+    if (hit) ids.add(hit.id);
+  }
+  return ids;
+}
 
 /* Append one line per watched item whose GE guide price CHANGED since the last logged value
    (first sighting logs too). Each line is an observed guide-update event: pinning WHEN an
@@ -141,17 +156,24 @@ function logGuideChanges(items, guide) {
 const LIQUID_FLOOR_PER_DAY = 100;
 const BIG_TICKET_UNIT_GP   = 1_000_000;
 const WIDE_SPREAD_PCT      = 3;
-// Offers below this TOTAL value (max × price) are noise, not positions — collapsed to one
-// ignored line so a stray 2k-gp supply order never earns a verdict (the /positions skill's
-// incidental-inventory rule, applied to offers).
+// Offers/HELD LOTS below this TOTAL value (max × price, or qty × avgCost) are noise, not
+// positions — collapsed to one ignored line so a stray 2k-gp supply order or a ×1 rune-drop
+// loot lot never earns a verdict (the /positions skill's incidental-inventory rule — was
+// prose-only for held lots until 2026-07-16: three loot drops kept re-earning CUT-CANDIDATE/
+// UNDERWATER headlines every pass, Ben asked for the code fix). Applied to offers AND held lots;
+// a WATCHLISTED item is NEVER filtered by value alone (it's deliberately tracked regardless of
+// size — same exemption precedent as screen-flip-niches.mjs's held/watchlist rows).
 const NOISE_OFFER_GP       = 100_000;
 
 // Attention cadence (minutes) the /loop should re-check an item at. The loop runs at ONE
 // interval; we recommend the TIGHTEST cadence across everything monitored so the most urgent
-// item is polled often enough. 1–3 min matches the plan (GE fills over minutes→hours).
-const CADENCE_TIGHT = 1;   // hair-trigger: falling, or thin big-ticket volatile
-const CADENCE_MED   = 2;   // active watch: ranging scalp, thin, or unconfirmed regime
-const CADENCE_LOOSE = 3;   // glance: stable liquid narrow-band
+// item is polled often enough. Re-scaled (Ben, 2026-07-16 — the 1/2/3 tiers were all "hair-
+// trigger" by GE standards; a fill takes minutes→hours, not seconds, so even the tight tier
+// didn't need to be that tight): 3/5/15 — tight is for actively MANAGING a live situation
+// (a real breakdown/cut candidate you're watching resolve), not just "something's held."
+const CADENCE_TIGHT = 3;   // actively managing: falling, or thin big-ticket volatile
+const CADENCE_MED   = 5;   // active watch: ranging scalp, thin, or unconfirmed regime
+const CADENCE_LOOSE = 15;  // glance: stable liquid narrow-band
 
 // class -> {cadence, scalp(is market-making the playbook?), label}
 const CLASSES = {
@@ -570,16 +592,26 @@ async function main() {
   // archive/sqlite failure can never break a watch pass.
   try { const snap = await loadSnapshot({ budgetIds: [] }); snap.archive.close(); } catch { /* archive accrual is best-effort — never block a pass */ }
 
-  // held items from positions.json (grouped at weighted-avg cost) unless --targets-only
+  // held items from positions.json (grouped at weighted-avg cost) unless --targets-only.
+  // Incidental-inventory filter (code-enforced 2026-07-16 — was /positions skill prose only,
+  // which meant a tiny loot lot like a ×1 rune drop kept re-earning a CUT-CANDIDATE/UNDERWATER
+  // headline every single pass): a lot worth < NOISE_OFFER_GP and NOT on the watchlist never
+  // becomes a held item at all — no table row, no alert, no verdict. Collapsed into one summary
+  // line instead (below, near the other footer notes).
   const heldSpecs = [];
+  const incidentalNames = [];
   let posAge = null;
   if (!TARGETS_ONLY) {
     const { groups, ageMin, err } = readOpenPositions(POSITIONS);
     if (err) { console.error('cannot read positions.json: ' + err); }
     else {
       posAge = ageMin;
-      for (const { itemId, qty, avgCost, buyTs } of groups)
-        heldSpecs.push({ id: itemId, name: map.byId[itemId]?.name || ('#' + itemId), qty, avgCost, buyTs });
+      const watchlistIds = loadWatchlistIds(map);
+      for (const { itemId, qty, avgCost, buyTs } of groups) {
+        const name = map.byId[itemId]?.name || ('#' + itemId);
+        if (qty * avgCost < NOISE_OFFER_GP && !watchlistIds.has(itemId)) { incidentalNames.push(name); continue; }
+        heldSpecs.push({ id: itemId, name, qty, avgCost, buyTs });
+      }
     }
   }
 
@@ -1137,6 +1169,7 @@ async function main() {
           ? ` · offer basis live log, newest line ${offersInfo.staleMin}m ago${noise.length ? ` · noise ignored: ${noise.length} offer(s) under ${fmtP(NOISE_OFFER_GP)} total` : ''}`
           : ` · offer basis unavailable (${offersInfo ? offersInfo.err : 'skipped'}) — active offers not covered this pass`)
       : '  held basis positions.json unavailable');
+    if (incidentalNames.length) summaryLines.push(`  incidental inventory, ignored: ${incidentalNames.join(', ')}`);
   }
   summaryLines.push(`  loop /loop ${loopMin}m node pipeline/commands/watch-positions.mjs${tokens.length ? ' ' + tokens.map(t => `"${t}"`).join(' ') : ''}  (tightest cadence across ${all.length} item${all.length > 1 ? 's' : ''})`);
   summaryLines.push('  READ-ONLY decision support — exit at entry · never a stranded ask · cut on breakdown, not hope · you place every offer.');

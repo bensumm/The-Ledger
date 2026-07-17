@@ -163,7 +163,7 @@ safe to poll as often as you like; the only cost is API calls in step 3–4.
 **Thesis-appropriate cadence (VN-0, Ben 2026-07-11).** The class cadences below are for the
 HAZARD cases (falling, thin big-ticket). A parked-at-break-even hold with a DECLARED exit
 window (`declare-thesis.mjs set … --window`) wants a check **near its peak window plus ~2–3
-passes/day**, not a 1–3m loop — nothing actionable happens in 3 minutes on a lot moving
+passes/day**, not a 3m hair-trigger loop — nothing actionable happens in 3 minutes on a lot moving
 ~1%/hour, and oversampling manufactures flip-flop reads (the 2026-07-11 verdict-churn
 session: ~12 label flips in 30 min at a 3m cadence on a ~2% band). Match the cadence to the
 thesis horizon, not to the tightest class on the board.
@@ -176,7 +176,9 @@ thesis horizon, not to the tightest class on the board.
 thin big-ticket volatile item and a liquid ranging scalp candidate demand **different**
 attention and **different** playbooks. `watch-positions.mjs` classifies each held/target item by TYPE
 and adapts cadence + playbook + alert thresholds to it. It's the driver for an active,
-human-executed flipping session on a tight 1–3 min loop.
+human-executed flipping session on a 3/5/15-minute cadence (Ben, 2026-07-16 — re-scaled from the
+original 1/2/3; GE fills take minutes→hours, and "tight" should mean actively managing a live
+situation, not just anything held).
 
 ```
 node pipeline/commands/watch-positions.mjs                        # every position: held lots + active GE offers
@@ -286,26 +288,31 @@ attach to a trending item:
 
 | Class | Trigger | Cadence | Playbook |
 |---|---|---|---|
-| `FALLING` | regime falling **or** (`mom==='breakdown'` **and** the quote is reliable — PLAN-3 Gate 0) | **1m** | cut/clear discipline; targets → SKIP (don't buy a drop) — **but see the DL2 FLUSH carve-out below** |
-| `THIN_BIG_TICKET_VOLATILE` | thin (`vol<floor`) & unit ≥ 1m | **1m** | hair-trigger cut; strong adverse-selection warning |
-| `LIQUID_RANGING_WIDE` | liquid & flat regime & spread ≥ 3% | **2m** | **SCALP** — ladder band low→top; the only class that gets market-making |
-| `STABLE_LIQUID` | liquid & confirmed regime, narrow band | **3m** | ordinary patient flip; glance |
-| `THIN_OTHER` | thin, not big-ticket | **2m** | caution; small size; adverse-selection warning |
-| `UNKNOWN` | liquid but regime unconfirmed / vol unknown | **2m** | caution until regime confirms |
+| `FALLING` | regime falling **or** (`mom==='breakdown'` **and** the quote is reliable — PLAN-3 Gate 0) | **3m** | cut/clear discipline; targets → SKIP (don't buy a drop) — **but see the DL2 FLUSH carve-out below** |
+| `THIN_BIG_TICKET_VOLATILE` | thin (`vol<floor`) & unit ≥ 1m | **3m** | hair-trigger cut; strong adverse-selection warning |
+| `LIQUID_RANGING_WIDE` | liquid & flat regime & spread ≥ 3% | **5m** | **SCALP** — ladder band low→top; the only class that gets market-making |
+| `STABLE_LIQUID` | liquid & confirmed regime, narrow band | **15m** | ordinary patient flip; glance |
+| `THIN_OTHER` | thin, not big-ticket | **5m** | caution; small size; adverse-selection warning |
+| `UNKNOWN` | liquid but regime unconfirmed / vol unknown | **5m** | caution until regime confirms |
+
+(Re-scaled 2026-07-16, was 1m/2m/3m — Ben's call: even the old "tight" tier wasn't tight relative to
+GE fill dynamics, and 3-minute-cadence "tight" should mean actively managing a live situation, not
+just anything held.)
 
 The loop runs at **one** interval; `watch-positions.mjs` recommends the **tightest** cadence across
 everything you're monitoring (so the most urgent item is polled often enough) and prints the
 ready-to-paste `/loop` command:
 
 ```
-/loop 1m node pipeline/commands/watch-positions.mjs "Crystal seed"
+/loop 3m node pipeline/commands/watch-positions.mjs "Crystal seed"
 ```
 
 `/loop <interval> <command>` (the `/loop` skill) re-runs on that fixed interval; report only
-what changed vs the prior tick. 1–3 min matches GE fill dynamics — offers fill over minutes to
+what changed vs the prior tick. 3–15 min matches GE fill dynamics — offers fill over minutes to
 hours, so a sub-minute loop just burns API calls. **Operating default cadence is 5m** (Ben,
 2026-07-10 — bounds the git churn `--sync` adds while staying inside GE fill dynamics); use a
-looser 10–15m for a book of only patient standing offers, tighter 1–3m only for an active chase.
+looser 15m for a book of only patient standing offers, tighter 3m only for actively managing a
+live situation (a real breakdown/cut candidate you're watching resolve).
 
 **`--sync` each pass (attended /loop, Ben 2026-07-10).** `node pipeline/commands/watch-positions.mjs --sync` runs
 `sync-fills.mjs` before the pass so the booked view (positions.json + realised P&L) and any

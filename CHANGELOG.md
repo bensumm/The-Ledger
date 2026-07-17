@@ -72,6 +72,28 @@ pointer in `js/estimators.mjs`'s `reachRelief` header. Both findings are prose-o
 (n=4 / n≈6), explicitly not folded into any threshold or gate — evidence to score against, not a
 calibration.
 
+### watch-positions.mjs cadence tiers re-scaled 1/2/3 → 3/5/15 (2026-07-16, `pipeline/commands/watch-positions.mjs`+`pipeline/MONITORING.md`+`/positions` skill — NO APP_VERSION)
+Ben's call: the old TIGHT/MED/LOOSE tiers (1m/2m/3m) were all "hair-trigger" by GE fill-time
+standards — even the loosest tier matched what should be the tight one. Re-scaled so `CADENCE_TIGHT`
+(actively managing a live situation — falling/thin-big-ticket-volatile) = 3m, `CADENCE_MED` (ranging
+scalp / thin / unconfirmed regime) = 5m, `CADENCE_LOOSE` (stable liquid, narrow band — the ordinary
+glance case) = 15m. Reconciled the matching table + example command in `pipeline/MONITORING.md` and
+the two "not the old hair-trigger cadence" cross-references (`MONITORING.md`, `/positions` skill).
+
+
+### Incidental-inventory filter is code-enforced, both surfaces (2026-07-16, `pipeline/commands/watch-positions.mjs`+`pipeline/commands/quote-items.mjs`+`/positions` skill — NO APP_VERSION)
+Same failure shape as the sync-enforcement and held-item-exception fixes earlier this session: the
+`/positions` skill's incidental-inventory rule ("a stray loot lot never earns a verdict") was prose
+an agent had to apply manually every pass, and it wasn't — three ×1 rune-drop loot lots (Steam
+rune, Sunfire rune, Aether rune) kept re-earning full CUT-CANDIDATE/UNDERWATER headline alerts every
+single watch pass because nothing in the pipeline actually checked lot value. Fixed: both
+`watch-positions.mjs` and `quote-items.mjs --positions` now filter any lot whose total value
+(`qty × avgCost`) is under `NOISE_OFFER_GP` (100,000 gp — the same constant already governing tiny
+offer noise) unless the item is on the watchlist, BEFORE it reaches the table/verdict loop at all —
+no row, no alert. Collapsed into one `incidental inventory, ignored: X, Y` line instead. Watchlist
+membership remains the exemption regardless of value.
+
+
 ### screen-flip-niches.mjs publishes by default now — was opt-in behind --publish (2026-07-16, `pipeline/commands/screen-flip-niches.mjs`+`/scan` skill — NO APP_VERSION)
 Ben noticed his local Scan tab was 2 days stale and asked why, given this session had been running
 `/scan` repeatedly — root cause: `--publish` (the flag that writes repo-root `screen.json`, what the
