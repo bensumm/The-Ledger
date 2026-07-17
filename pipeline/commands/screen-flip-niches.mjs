@@ -85,6 +85,7 @@ import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
+import { resolve, loadPipelineConfig, refusePublishIfNonNeutral } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard (replaces the per-flag inline copies)
 import { renderReport } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence)
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
@@ -121,9 +122,14 @@ import { execFileSync } from 'node:child_process';
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
+// PC1 (PLAN-PIPELINE-COMPOSITION): the OPTIONAL pipeline/pipeline-config.json, read once. Absent by
+// default ⇒ {} ⇒ every resolve() below falls through to its hardcoded fallback (byte-identical to the
+// pre-PC1 inline ternaries). Every flag routed through resolve('<cat>', { flag, config, fallback })
+// so a future config file can set the same default without editing each script.
+const CONFIG = loadPipelineConfig();
 const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/churn/scalp/value — spread+rising deleted, Steps 3+4)
 const ALL_MODES = ALL_MODE_KEYS; // --mode all runs the inAll specs — band/churn/value (Ben 2026-07-10 added value; scalp explicit-only)
-const MODE = A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : 'band';
+const MODE = resolve('mode', { flag: A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : undefined, config: CONFIG.mode, fallback: 'band' }).active;
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (count-matched to the old 50/legacy selectivity; the /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units). Band `thin` (limitVol < FLOOR) auto-follows.
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
@@ -231,32 +237,19 @@ const REPORTS = [];   // per-niche screen-report objects for this pass (renderMo
 function emitReport(report) { REPORTS.push(report); console.log(renderReport(report)); }   // console.log is a no-op unless --verbose
 const PUBLISH_EXPLICIT = A.publish === true;
 let PUBLISH = A['no-publish'] === true ? false : true;
-// PART II safety: uncalibrated --asym prices must never reach screen.json/the app (F1 gates that step).
-// Explicit --publish + --asym is a hard user error (refuse loudly); default-on publish just quietly
-// skips the write so an --asym exploration run doesn't need --no-publish tacked on to avoid a crash.
-if (PUBLISH && A.asym === true) {
-  if (PUBLISH_EXPLICIT) { console.error('! --asym is experimental (F1-ungraduated) — refusing --publish under it.'); process.exit(1); }
-  else PUBLISH = false;
-}
 // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
 // early-adopt). When set, the CONSOLE Est. buy/sell + the console RERANK use the pressure-driven
-// reachableBand; the retro co-log stays on the neutral estimate (unbiased). THE HARD GUARD: the deployed
-// app / screen.json stays F1-gated on the NEUTRAL estimator, so --pressure-exit + publish is REFUSED
-// (mirrors --asym) — explicit --publish --pressure-exit is a hard user error; under the new default-on
-// publish, a --pressure-exit run just silently skips the write instead (console-only either way, so the
-// pressure prices/rerank still never reach screen.json/the app — no APP_VERSION bump).
-const PRESSURE_EXIT = A['pressure-exit'] === true;
-if (PUBLISH && PRESSURE_EXIT) {
-  if (PUBLISH_EXPLICIT) { console.error('! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).'); process.exit(1); }
-  else PUBLISH = false;
-}
+// reachableBand; the retro co-log stays on the neutral estimate (unbiased). THE HARD GUARD lives in the
+// shared refusePublishIfNonNeutral() below (mirrors --asym): the deployed app / screen.json stays
+// F1-gated on the NEUTRAL estimator, so a non-neutral estimator never reaches the published cells.
+const PRESSURE_EXIT = resolve('pressureExit', { flag: A['pressure-exit'] === true ? true : undefined, config: CONFIG.pressureExit, fallback: false }).active;
 // --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
 // default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
 // would normally DROP but whose phase()==='basing' (decayed off a spike, lows flattened) is instead
 // SURFACED, capped to PHASE_BASING_GRADE_CAP and flagged provisional. Conservative, gated trial —
 // thresholds are unvalidated placeholders. capGrade is reused from rating.mjs (no rating.mjs change).
-const PHASE_RESCUE = A['phase-rescue'] === true;
+const PHASE_RESCUE = resolve('phaseRescue', { flag: A['phase-rescue'] === true ? true : undefined, config: CONFIG.phaseRescue, fallback: false }).active;
 const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-rescue surface
 // --- PART II (PLAN-GRADE-REACH, opt-in): --asym flips the 'asym'-fillShape niches (band/scalp) to the
 // asymmetric deep-buy/reliable-sell objective AS THE QUOTED PRICES AND SORT — optBuy→the flush bid,
@@ -266,7 +259,21 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // suggestions.jsonl `asym` field until the shadow A/B graduates it). --publish is refused under --asym
 // so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
 // gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
-const ASYM = A.asym === true;
+const ASYM = resolve('asym', { flag: A.asym === true ? true : undefined, config: CONFIG.asym, fallback: false }).active;
+// PC1: the ONE shared publish-refusal guard (replaces the two inline per-flag copies that used to sit
+// beside the PUBLISH declaration). An UN-CALIBRATED / F1-ungraduated estimator (--asym, --pressure-exit,
+// or a config that enables either) must never reach screen.json / the deployed app: an EXPLICIT
+// --publish under one is a hard user error (loud stderr + exit); a default-on publish is quietly
+// downgraded to off (so an exploration run needs no --no-publish). Order = asym then pressure (matches
+// the removed inline order, so an explicit-publish conflict prints the same first message). Byte-identical
+// to the two removed blocks when no config is present.
+PUBLISH = refusePublishIfNonNeutral({
+  publish: PUBLISH, publishExplicit: PUBLISH_EXPLICIT,
+  checks: [
+    { on: ASYM, message: '! --asym is experimental (F1-ungraduated) — refusing --publish under it.' },
+    { on: PRESSURE_EXIT, message: '! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).' },
+  ],
+});
 // --- PLAN-VOL24 (2026-07-13): --vol-source rolling|legacy. The wiki /24h endpoint is BROKEN (it serves a
 // frozen ~1–3h slice of a stale UTC day, under-reporting the true rolling 24h ~10–27× — see PLAN-VOL24.md).
 // The DEFAULT is now `rolling` (step 2, Ben-validated): the corrected trailing-24h volume composed from the
@@ -278,7 +285,7 @@ const ASYM = A.asym === true;
 // `volDayRolling` shadow field regardless of this flag (from the in-hand 1h series → no new fetch).
 // NOTE: MIN_GPD (the 500k gp/day ATTENTION floor) was deliberately KEPT at 500k (Ben's call) — it is a
 // real-world NET-throughput quantity, so 500k of TRUE throughput is the honest floor; it now admits more.
-const VOL_SOURCE = A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : 'rolling';
+const VOL_SOURCE = resolve('volSource', { flag: A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : undefined, config: CONFIG.volSource, fallback: 'rolling' }).active;
 if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use rolling (default) or legacy.`); process.exit(1); }
 // --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-
 // estimator pair — Est. buy / Est. sell / Net/u (ROI) / BE with confidence riding in the price cells

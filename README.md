@@ -285,6 +285,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   The app never applies the quarantine itself — it only curates the file; the pipeline applies the
   filter on its next sync. `js/github.js IGNORED_PATH`; handlers + `loadRepoIgnored`/`renderIgnore` in
   `js/ui.js`; `STATE.ignored`/`STATE.ignoredMeta` in `js/state.js`.
+- `pipeline/pipeline-config.json` — **OPTIONAL, absent by default** (PC1, PLAN-PIPELINE-COMPOSITION).
+  When present, sets pipeline-wide DEFAULTS the CLI flags can still override — the middle tier of the
+  `pipeline/lib/compose.mjs` `resolve()` precedence chain (**CLI flag > this file > hardcoded fallback**).
+  Its ABSENCE is the default state and produces byte-identical behavior to the pre-PC1 inline defaults;
+  do not commit one just to have it. Read (once, cached) by `loadPipelineConfig()`. Minimal shape:
+  `{ "mode": "band", "volSource": "rolling", "pressureExit": false, "asym": false, "phaseRescue": false }`
+  (any subset — an unset key falls through to the hardcoded fallback). Consumer: `compose.mjs`, via
+  `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote-items.mjs`/`screen-flip-niches.mjs`/`watch-positions.mjs`
   via `pipeline/lib/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
@@ -571,7 +579,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     volume for `quote-items.mjs`/`watch-positions.mjs`: `rolling24FromTs1h` off the in-hand `ts1h`, reassigned onto `inp.vol24`
     so Vol/d + pressure + the dip reference read corrected volume; degrades to the `/24h` read when the 1h series
     is too short)), `cli.mjs` (shared arg/format/table
-    helpers), `render.mjs` (PLAN-VIZ-LAYER — the ONE render layer between the pipeline's DATA and the
+    helpers), `compose.mjs` (PC1, PLAN-PIPELINE-COMPOSITION — the thin COMPOSITION resolver: `resolve(category,
+    {flag, config, fallback})` → `{active, shadow:[]}` with precedence **CLI flag > `pipeline/pipeline-config.json`
+    > hardcoded fallback**, ACTIVE-PLUS-SHADOW not exclusive-or (`shadow` is always `[]` for PC1 — the shape
+    exists so PC3's sell-model registry can add members without changing the contract) + `loadPipelineConfig()`
+    (the OPTIONAL config, read once + cached, absent ⇒ `{}` ⇒ every default stands byte-identically) + the ONE
+    shared `refusePublishIfNonNeutral({publish, publishExplicit, checks})` guard (replaces the per-flag inline
+    `--asym`/`--pressure-exit` publish-refusal copies in `screen-flip-niches.mjs`). No fetch/clock; pure of side
+    effects on import (config read is lazy). Consumers: `screen-flip-niches.mjs` (mode/vol-source/asym/phase-rescue/
+    pressure-exit), `quote-items.mjs` + `watch-positions.mjs` (pressure-exit). Pinned by `compose.test.mjs`),
+    `render.mjs` (PLAN-VIZ-LAYER — the ONE render layer between the pipeline's DATA and the
     reader: a script builds a plain JSON-serializable **report object** `{kind, generatedAt, sections:[…]}`
     beside its compute, and `renderReport()` turns it into markdown/console text, DELEGATING to the existing
     pure formatters (`mdTable`, `heldNoteBlock`, `renderHeldVerdict`/`renderPathLine`) — it decides nothing +

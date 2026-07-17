@@ -42,6 +42,7 @@ import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { stdCells, writeLastReport } from '../lib/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3); writeLastReport — AO1 agent-readable dump
+import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { renderReport } from '../lib/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers
@@ -79,7 +80,9 @@ const RAW = args.includes('--raw');
 // owner early-adopt). When set, Est. buy/sell are the pressure-driven reachableBand legs (still
 // BE-floored + clamped + nudged); the conservative depth floor renders beside as the reference; the
 // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only — never touches screen.json/app.
-const PRESSURE_EXIT = args.includes('--pressure-exit');
+// PC1: routed through the shared flag>config>default resolver (the OPTIONAL pipeline-config.json can set
+// the same default). Absent config ⇒ byte-identical to the old `args.includes('--pressure-exit')`.
+const PRESSURE_EXIT = resolve('pressureExit', { flag: args.includes('--pressure-exit') ? true : undefined, config: loadPipelineConfig().pressureExit, fallback: false }).active;
 // LOUD trial banner (rule 4 — the prices must never read as the calibrated default).
 const PRESSURE_BANNER = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). --raw / drop the flag to restore the neutral estimate.';
 const tokens = args.filter(a => !a.startsWith('--'));

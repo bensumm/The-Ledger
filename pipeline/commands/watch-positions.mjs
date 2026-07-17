@@ -76,6 +76,7 @@ import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m } from '../lib/e
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
+import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
@@ -531,7 +532,9 @@ async function main() {
   // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (still BE-floored
   // + clamped; declared exit still wins); the depth floor + reachable clause still renders beside it. The
   // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only; no screen.json/app path here.
-  const PRESSURE_EXIT = args.includes('--pressure-exit');
+  // PC1: routed through the shared flag>config>default resolver (the OPTIONAL pipeline-config.json can
+  // set the same default). Absent config ⇒ byte-identical to the old `args.includes('--pressure-exit')`.
+  const PRESSURE_EXIT = resolve('pressureExit', { flag: args.includes('--pressure-exit') ? true : undefined, config: loadPipelineConfig().pressureExit, fallback: false }).active;
   // AO1 (default flipped post-review — see quote-items.mjs header for why): --verbose opts INTO the
   // markdown stdout; the report object is ALWAYS written to the last-report dump either way, and quiet
   // (the default) is what forces the JSON dump to be the actual read rather than an optional extra.
