@@ -10,6 +10,24 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Agent-readable market-read dump (quiet-by-default, `--verbose` opt-in) + the Finding-3 reach-count docs guard (2026-07-17, `pipeline/lib/cli.mjs`+the three market-read CLIs+`docs/MARKET-ANALYSIS.md`+`/scan`+`/positions` skills — NO APP_VERSION, PLAN-REACH-CALIBRATION AO1+AC-0)
+Two small, independent fixes riding the first two steps of the reach-calibration roadmap
+(`PLAN-REACH-CALIBRATION.md`). **AO1:** `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`
+now always write their render.mjs report object to a gitignored `pipeline/.cache/last-report/<kind>.json`
+(`writeLastReport`, `pipeline/lib/cli.mjs`) — the exact structured data the markdown table is rendered
+from, so an agent reading the pipeline no longer has to re-parse a ~480-line stdout dump. Shipped with
+`--quiet` as the opt-in flag, then revised same-day after review: a flag an agent can forget to pass
+doesn't force the habit of actually reading the dump, so the default is flipped — quiet-and-dump-only is
+now what a bare run does, and `--verbose` opts INTO the markdown table (the "paste this to Ben" case,
+which `/scan` §1 and `/positions` §1's canonical invocations now pass explicitly). **AC-0:** Finding 3
+(from the same session's live pricing work) had no written home — "reached N/14" off
+`read-window-range.mjs --ask/--bid` counts days where the hourly bucket AVERAGE crossed a level, which is
+stricter than what a resting order needs; Soul rune's own ~20+ closed lots fill routinely at 397-399
+despite a "reached 1/14, recent 0/3" read. A guard paragraph in `docs/MARKET-ANALYSIS.md` §4 (judge by
+liquidity — distrust only near the historical extreme on a deep book, stay near center on a thin one —
+never by the raw count alone) plus a pointer from `/scan`'s RC1 bullet stop the next session re-rejecting
+a normal above-average ask. Placeholder until AC4a's percentile-placement read replaces it.
+
 ### Two pricing-optimism findings encoded from real fills (2026-07-17, `js/quotecore.js`+`js/estimators.mjs`+`docs/MARKET-ANALYSIS.md`+`/scan` skill — NO APP_VERSION)
 Two facts kept getting re-derived session after session because nothing durable recorded them.
 (1) **Quick can be the wrong way round vs a true instant cross.** `quickBuy`/`quickSell` (`js/quotecore.js`

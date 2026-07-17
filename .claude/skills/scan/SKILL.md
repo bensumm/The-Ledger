@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.65
+version: 1.66
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -63,6 +63,14 @@ console read you don't want left written to disk. `--asym`/`--pressure-exit` sti
 F1-gated on the neutral estimator — running either just silently skips the write that pass instead
 of erroring (only an EXPLICIT `--publish --asym`/`--publish --pressure-exit` combo still hard-refuses,
 since that's a real conflict, not an accidental default).
+
+**After the judgment pass (§2), write a short analysis blurb for the app's Scan tab (Ben, 2026-07-16)
+when Ben wants the tab updated:** `node pipeline/commands/set-scan-analysis.mjs "<html>"` patches
+repo-root `screen.json`'s `analysis` field (no re-scan, zero refetch) — it renders at the TOP of the
+Scan tab, separate from the tables below it (`#scanAnalysis`). This is the judgment READ over the
+scan you just ran, written in your own words — not a template, not auto-generated. Keep it short (a
+few sentences); `--clear` removes it if it goes stale. Skip this entirely on a console-only /scan
+pass — it's for when the app tab is the actual deliverable.
 
 Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
 a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
@@ -342,6 +350,13 @@ This is the tribal layer the script can't do — apply ALL of these:
     price off the `recent-3 ~50%` quantile instead. It is NOT a looser gate (the band-top-artifact SKIP
     above still stands); it stops the count fooling you on a regime-change item. A stable item never
     flags. Do NOT re-derive a reach number by hand — read the split the script prints.
+    - **Above-average is not a warning sign (Finding 3, 2026-07-17; full guard:
+      `docs/MARKET-ANALYSIS.md` §4).** RC1 above catches regime contamination on the reach COUNT; a
+      separate failure is treating a low raw reach count itself as alarming — "reached" only means the
+      1h bucket AVERAGE crossed the level, and pricing an ask above that average is the normal way a
+      flip earns money. Judge a level by liquidity (deep book → distrust only near the historical
+      extreme; thin book → stay near center), never by the raw N/14 alone. Don't re-reject a Soul-rune-
+      shaped case (397-399 filled routinely on ~20+ real lots against a "reached 1/14, recent 0/3" read).
     - **A `⚠ stale` flag on a BID means "don't assert the fill" — price to live instead (Ben,
       2026-07-08, first live save).** The stale flag exists on the bid side precisely to stop you
       claiming a fill the recent regime won't give. When `--bid X` shows `⚠ stale` (recent nights sat

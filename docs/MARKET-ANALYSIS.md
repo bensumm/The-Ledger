@@ -246,6 +246,19 @@ DAYS but rarely IN its peak window. Band-is-the-edge: on a liquid stable-regime 
 buys at band lows / sell at band tops (never below break-even). Full judgment: the `/scan` skill's
 WINDOW-CLEAR PRICING step.
 
+**"Reached" is the 1h bucket AVERAGE crossing a level — not a ceiling on a resting order (Finding
+3, 2026-07-17).** `reachedDays`/`touchedDays` (`read-window-range.mjs --ask/--bid`) count days where
+the hourly average print touched the level, which is a stricter bar than what a small resting order
+actually needs to fill. Pricing an ask ABOVE the recent average is how a flip makes money, not an
+anomaly — a low raw reach count alone is not grounds to reject a level. Judge by liquidity instead: on
+a LIQUID/deep book, distrust only a level AT OR ABOVE the item's own historical extreme; on a THIN
+book, stay close to the center of the distribution (a single artifact print is easy to mistake for a
+real level there). Anchor: Soul rune's own ~20+ closed lots filled at 397–399 while `--ask 398`
+reported "reached 1/14, recent 0/3" — the raw count read as a warning on a liquid, thick book where the
+real fill risk was near zero. AC4a (`PLAN-REACH-CALIBRATION.md`) will replace this with a
+percentile-placement read; until it ships, this paragraph is the guard against re-rejecting a normal
+above-average ask off the raw reach count.
+
 **Multiple offers on the SAME item are a queue, not independent rungs (Ben, 2026-07-16).** The GE
 matches a buyer against the cheapest compatible offer first, so a higher-priced ask on an item you
 also have a lower ask resting on is structurally queued behind it — it cannot fill first, and its
