@@ -72,7 +72,7 @@ import { readOpenPositions } from '../lib/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote)
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log
-import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head
+import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
@@ -554,9 +554,17 @@ async function main() {
   // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (still BE-floored
   // + clamped; declared exit still wins); the depth floor + reachable clause still renders beside it. The
   // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only; no screen.json/app path here.
-  // PC1: routed through the shared flag>config>default resolver (the OPTIONAL pipeline-config.json can
-  // set the same default). Absent config ⇒ byte-identical to the old `args.includes('--pressure-exit')`.
-  const PRESSURE_EXIT = resolve('pressureExit', { flag: args.includes('--pressure-exit') ? true : undefined, config: loadPipelineConfig().pressureExit, fallback: false }).active;
+  // PC3: routed through the shared flag>config>default resolver as a NAMED sell-top model
+  // (--est-sell=reach-fold|pressure, the `=value` form since targets are bare positionals); `--pressure-exit`
+  // stays the legacy sugar for `--est-sell=pressure` (explicit --est-sell wins). Absent flag+config ⇒
+  // 'reach-fold'. PRESSURE_EXIT stays the boolean this script branches on, DERIVED from the active model.
+  const estSellArg = args.find(a => a.startsWith('--est-sell='));
+  const SELL_MODEL = resolve('sellModel', {
+    flag: estSellArg ? estSellArg.slice('--est-sell='.length).toLowerCase() : (args.includes('--pressure-exit') ? 'pressure' : undefined),
+    config: loadPipelineConfig().sellModel, fallback: 'reach-fold',
+  }).active;
+  if (!SELL_TOP_MODELS[SELL_MODEL]) { console.error(`! unknown --est-sell. Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}.`); process.exit(1); }
+  const PRESSURE_EXIT = SELL_MODEL === 'pressure';
   // AO1 (default flipped post-review — see quote-items.mjs header for why): --verbose opts INTO the
   // markdown stdout; the report object is ALWAYS written to the last-report dump either way, and quiet
   // (the default) is what forces the JSON dump to be the actual read rather than an optional extra.
@@ -745,7 +753,7 @@ async function main() {
         // PB4: the DISPLAY pressure est (only when the trial flag is on) — declared exit still wins the
         // sell leg (operator plan), so it passes the REAL declared exit; drives the held list-at below.
         if (PRESSURE_EXIT)
-          it._estPressure = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: thesisFor(holdThesisStore, it.id)?.exitPrice ?? null }, { pressureExit: true });
+          it._estPressure = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: thesisFor(holdThesisStore, it.id)?.exitPrice ?? null }, { sellModel: 'pressure' });
         it._asymShadow = ap ? asymEstimate(FLIP_NICHES.band, it.row, ap) : null;
       }
     } catch { /* inform-only — never block a pass */ }

@@ -81,11 +81,11 @@ import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, wi
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
-import { resolve, loadPipelineConfig, refusePublishIfNonNeutral } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard (replaces the per-flag inline copies)
+import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
@@ -128,7 +128,13 @@ const A = parseArgs(process.argv.slice(2));
 // so a future config file can set the same default without editing each script.
 const CONFIG = loadPipelineConfig();
 const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the strategy registry (band/churn/scalp/value — spread+rising deleted, Steps 3+4)
-const ALL_MODES = ALL_MODE_KEYS; // --mode all runs the inAll specs — band/churn/value (Ben 2026-07-10 added value; scalp explicit-only)
+// --mode all runs the inAll specs — band/churn/value (Ben 2026-07-10 added value; scalp explicit-only).
+// PC3 pickup: the niche SET for `--mode all` is config-overridable via pipeline-config.json "modes":[…]
+// — an ARRAY, distinct from the scalar `mode` selection above. Resolved through the SAME precedence
+// resolver (no CLI flag — `--mode all` is the trigger — so config-or-default only); unknown entries are
+// filtered against the registry and an empty/absent list falls through to ALL_MODE_KEYS byte-identically.
+const CFG_MODES = Array.isArray(CONFIG.modes) ? CONFIG.modes.map(m => String(m).toLowerCase()).filter(m => MODE_KEYS.includes(m)) : null;
+const ALL_MODES = resolve('modes', { flag: undefined, config: (CFG_MODES && CFG_MODES.length) ? CFG_MODES : undefined, fallback: ALL_MODE_KEYS }).active;
 const MODE = resolve('mode', { flag: A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : undefined, config: CONFIG.mode, fallback: 'band' }).active;
 if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (count-matched to the old 50/legacy selectivity; the /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units). Band `thin` (limitVol < FLOOR) auto-follows.
@@ -237,12 +243,24 @@ const REPORTS = [];   // per-niche screen-report objects for this pass (renderMo
 function emitReport(report) { REPORTS.push(report); console.log(renderReport(report)); }   // console.log is a no-op unless --verbose
 const PUBLISH_EXPLICIT = A.publish === true;
 let PUBLISH = A['no-publish'] === true ? false : true;
-// PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
-// early-adopt). When set, the CONSOLE Est. buy/sell + the console RERANK use the pressure-driven
-// reachableBand; the retro co-log stays on the neutral estimate (unbiased). THE HARD GUARD lives in the
-// shared refusePublishIfNonNeutral() below (mirrors --asym): the deployed app / screen.json stays
-// F1-gated on the NEUTRAL estimator, so a non-neutral estimator never reaches the published cells.
-const PRESSURE_EXIT = resolve('pressureExit', { flag: A['pressure-exit'] === true ? true : undefined, config: CONFIG.pressureExit, fallback: false }).active;
+// PC3 — the SELL-TOP MODEL selection (--est-sell reach-fold|pressure). Replaces the bespoke --pressure-exit
+// boolean with a NAMED model routed through the resolver; `--pressure-exit` is kept as LEGACY SUGAR for
+// `--est-sell pressure` (an explicit --est-sell wins). shadowPool = the default-shadow models
+// (reach-fold), so when pressure is ACTIVE the neutral reach-fold rides `SELL_MODEL.shadow` and still
+// logs the unbiased retro co-log (estBuy/estSell/estConfidence). The PB4 pressure model is a TRIAL: its
+// number drives the CONSOLE display + rerank only; THE HARD GUARD (refusePublishIfNonNeutral below,
+// mirrors --asym) keeps a non-neutral model out of screen.json / the deployed app. Absent flag+config ⇒
+// 'reach-fold' (byte-identical to the pre-PC3 default). PRESSURE_EXIT stays the boolean the rest of this
+// script branches on (banner/rerank/publish-guard) — now DERIVED from the active model.
+const SELL_MODEL = resolve('sellModel', {
+  flag: A['est-sell'] != null && A['est-sell'] !== true ? String(A['est-sell']).toLowerCase()
+      : (A['pressure-exit'] === true ? 'pressure' : undefined),
+  config: CONFIG.sellModel,
+  fallback: 'reach-fold',
+  shadowPool: shadowModelsOf(SELL_TOP_MODELS),
+});
+if (!SELL_TOP_MODELS[SELL_MODEL.active]) { console.error(`! unknown --est-sell "${A['est-sell']}". Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}.`); process.exit(1); }
+const PRESSURE_EXIT = SELL_MODEL.active === 'pressure';
 // --- Part B (opt-in): basing-rescue. OFF by default → default output is byte-identical (the only
 // default change is Part A's display annotation, which only APPENDS phase text to an existing Regime
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
@@ -606,10 +624,16 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
       reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
     };
-    // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is CONSOLE-DISPLAY
-    // + console-RERANK only. No declaredExit on the discovery screen (a bare candidate is a buy read).
-    const est = estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge });
-    const estShown = PRESSURE_EXIT ? estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge, pressureExit: true }) : est;
+    // PC3: the ACTIVE sell-model drives the DISPLAY/rerank (estShown); every DEFAULT-SHADOW model
+    // (SELL_MODEL.shadow — reach-fold today) runs each pass and rides suggestions.jsonl as the unbiased
+    // retro co-log. `est` is the neutral reach-fold in BOTH the ledger slot (estBuy/estSell/estConfidence)
+    // and the degrade case, whether it is active OR a shadow beside the pressure trial — byte-identical to
+    // the pre-PC3 "neutral always logged, pressure only displayed". A future registered shadow (safe-
+    // quantile, AC3) loops here off SELL_MODEL.shadow into its own ledger field, no shell change. No
+    // declaredExit on the discovery screen (a bare candidate is a buy read).
+    const estFor = name => estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge, sellModel: name });
+    const estShown = estFor(SELL_MODEL.active);
+    const est = SELL_MODEL.active === 'reach-fold' ? estShown : estFor('reach-fold');
     // PLAN-WINDOW-CLEAR B2 (churn/scalp only): does the quoted ask PRINT inside its diurnal peak window
     // (not just on N/M DAYS), and does that window absorb a buy-limit tranche? Inform-only (the askHeadroom/
     // asym pattern — never a gate/drop/grade/screen.json input); a divergence is the days-reach ≠ lap-clear

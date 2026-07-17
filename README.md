@@ -594,14 +594,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     so Vol/d + pressure + the dip reference read corrected volume; degrades to the `/24h` read when the 1h series
     is too short)), `cli.mjs` (shared arg/format/table
     helpers), `compose.mjs` (PC1, PLAN-PIPELINE-COMPOSITION — the thin COMPOSITION resolver: `resolve(category,
-    {flag, config, fallback})` → `{active, shadow:[]}` with precedence **CLI flag > `pipeline/pipeline-config.json`
-    > hardcoded fallback**, ACTIVE-PLUS-SHADOW not exclusive-or (`shadow` is always `[]` for PC1 — the shape
-    exists so PC3's sell-model registry can add members without changing the contract) + `loadPipelineConfig()`
+    {flag, config, fallback, shadowPool?})` → `{active, shadow:[names]}` with precedence **CLI flag > `pipeline/pipeline-config.json`
+    > hardcoded fallback**, ACTIVE-PLUS-SHADOW not exclusive-or — `shadow` is the optional `shadowPool` minus
+    `active` (a variant never shadows itself; absent pool ⇒ `[]`, byte-identical to PC1). PC3 adds
+    `shadowModelsOf(registry)` (pools a registry's `defaultShadow:true` model names for the pool) + `loadPipelineConfig()`
     (the OPTIONAL config, read once + cached, absent ⇒ `{}` ⇒ every default stands byte-identically) + the ONE
     shared `refusePublishIfNonNeutral({publish, publishExplicit, checks})` guard (replaces the per-flag inline
     `--asym`/`--pressure-exit` publish-refusal copies in `screen-flip-niches.mjs`). No fetch/clock; pure of side
     effects on import (config read is lazy). Consumers: `screen-flip-niches.mjs` (mode/vol-source/asym/phase-rescue/
-    pressure-exit), `quote-items.mjs` + `watch-positions.mjs` (pressure-exit). Pinned by `compose.test.mjs`),
+    `sellModel` via `--est-sell` + the `modes` config array driving `--mode all`'s flip-niche set), `quote-items.mjs` +
+    `watch-positions.mjs` (`sellModel` via `--est-sell=…`, `--pressure-exit` = legacy sugar). Pinned by `compose.test.mjs`),
     `render.mjs` (PLAN-VIZ-LAYER — the ONE render layer between the pipeline's DATA and the
     reader: a script builds a plain JSON-serializable **report object** `{kind, generatedAt, sections:[…]}`
     beside its compute, and `renderReport()` turns it into markdown/console text, DELEGATING to the existing
@@ -620,7 +622,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Their descriptions (retained here for the pipeline reader): `rating.mjs` (grade/score model — P6b:
     the reward basis is the per-thesis RANK
     `net × P(fill) ÷ TTF` from `estimators.mjs`, NOT the demoted expGpDay; cutoffs are on that rank
-    scale, still PLACEHOLDERS), `estimators.mjs` (**PC2, 2026-07-17 — now the BARREL: a pure `export *` re-export of the four split files under `js/estimators/`, so the app (`js/market.js`) + pipeline-shim (`pipeline/lib/estimators.mjs`) import paths are unchanged. The split: `js/estimators/families.mjs` = the P(fill)/TTF family estimators (`pFillIntraday`/`pFillValue`/`pFillRising`, `ttfIntraday`/`ttfValue`/`ttfRising`, `churnLapUnits`) + the `ESTIMATORS` registry/`estimatorFor`, `quotedPair`, `rankScore`, `estimateRank`, `fmtTtf`, the priors block + the module's founding header; `js/estimators/reach.mjs` = the reach-conditioning helpers `reachRelief` (+ its `REACH_RELIEF_*`/`REACH_DEBIAS_MAX_FRAC` constants), `dayHighFrom5m`, `askReachFactor`, `asymEstimate`; `js/estimators/pair.mjs` = the reconciliation price estimator `entryDoctrine` + `estimatePair` (the ordering spine) + its `EST_REACH_SAT_FRAC`/`PRESSURE_EXIT_REL_FULL`/`EST_BLEND_EQUAL_WEIGHTS` constants; `js/estimators/cells.mjs` = the render/shadow projections `EST_HEADERS`, `estPairCells`, `estConfLean`. families↔reach is a runtime function-reference cycle (ESM-safe). The description below is the full doctrine, unchanged.**) P6b — the PURE per-thesis P(fill)+TTF estimators +
+    scale, still PLACEHOLDERS), `estimators.mjs` (**PC2, 2026-07-17 — now the BARREL: a pure `export *` re-export of the four split files under `js/estimators/`, so the app (`js/market.js`) + pipeline-shim (`pipeline/lib/estimators.mjs`) import paths are unchanged. The split: `js/estimators/families.mjs` = the P(fill)/TTF family estimators (`pFillIntraday`/`pFillValue`/`pFillRising`, `ttfIntraday`/`ttfValue`/`ttfRising`, `churnLapUnits`) + the `ESTIMATORS` registry/`estimatorFor`, `quotedPair`, `rankScore`, `estimateRank`, `fmtTtf`, the priors block + the module's founding header; `js/estimators/reach.mjs` = the reach-conditioning helpers `reachRelief` (+ its `REACH_RELIEF_*`/`REACH_DEBIAS_MAX_FRAC` constants), `dayHighFrom5m`, `askReachFactor`, `asymEstimate`; `js/estimators/pair.mjs` = the reconciliation price estimator `entryDoctrine` + `estimatePair` (PC3: now the ordering SHELL/spine ONLY — it preps shared inputs, delegates the buy+sell PROPOSAL to a named `SELL_TOP_MODELS` entry, then applies the non-skippable floors: declared-exit anchor → nudge → ordering clamps → BE floor; re-exports the `EST_REACH_SAT_FRAC`/`EST_BLEND_EQUAL_WEIGHTS`/`PRESSURE_EXIT_REL_FULL` constants + `SELL_TOP_MODELS` for the barrel); `js/estimators/sell-models/` = the PC3 sell-top model registry — `index.mjs` (`SELL_TOP_MODELS` keyed by name, `Object.freeze`d), `reach-fold.mjs` (the neutral fold — DEFAULT + always-on shadow, `defaultShadow:true`; owns the SELL-MODEL CONTRACT header + `EST_REACH_SAT_FRAC`/`EST_BLEND_EQUAL_WEIGHTS`), `pressure.mjs` (the PB4 pressure-exit trial, `defaultShadow:false`; owns `PRESSURE_EXIT_REL_FULL`; degrades to reach-fold when no reachable band). A new sell-top variant (later `safe-quantile`, PLAN-REACH-CALIBRATION AC3) is a file + one registry line, NOT a boolean threading through `estimatePair`; `js/estimators/cells.mjs` = the render/shadow projections `EST_HEADERS`, `estPairCells`, `estConfLean`. families↔reach is a runtime function-reference cycle (ESM-safe). The description below is the full doctrine, unchanged.**) P6b — the PURE per-thesis P(fill)+TTF estimators +
     the `rankScore` composite that REPLACED expGpDay as the displayed/graded metric (Ben 2026-07-09:
     "gp/d is out"). Families keyed by a spec's `estimator` field — `intraday` (band/scalp: P(fill) from
     band-depth / a real windowread reach when fetched, TTF from volume velocity), `churn` (Step 6,
@@ -634,7 +636,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `fillShape:'symmetric'` specs, the PART II churn exemption); `asymEstimate(spec,row,asymPair)`
     (PART II PLAN-GRADE-REACH — the asymmetric deep-buy/reliable-sell estimate: rank = net × P_ask ÷ TTF,
     P_bid is annotation-only, ordering guards; feeds the inform line + the `asym` ledger shadow field +
-    `screen-flip-niches.mjs --asym`); `estimatePair(spec,row,extra,{nudge})` + `entryDoctrine`/`estPairCells`/`estConfLean`/
+    `screen-flip-niches.mjs --asym`); `estimatePair(spec,row,extra,{nudge,sellModel})` + `entryDoctrine`/`estPairCells`/`estConfLean`/
     `EST_HEADERS` (PLAN-OUTPUT-TABLE 2026-07-13 + REVISIONS — the RECONCILIATION estimator behind the
     console-default `Est. buy`/`Est. sell` columns: `Est. buy` is STRATEGY-AWARE (`entryDoctrine(spec)` off
     the existing falling/priceBasis fields — scalp near-live · value trough · band/churn reach-folded; the

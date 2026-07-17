@@ -1,17 +1,29 @@
 /**
- * estimators/pair.mjs (PC2, 2026-07-17) — the RECONCILIATION PRICE ESTIMATOR (Est. buy / Est. sell),
- * split out of the estimator monolith: entryDoctrine, reachRead (internal), estimatePair + its EST_*
- * constants. estimatePair is the ordering SPINE (per-strategy entry → reach-fold / declared-exit sell →
- * pressure override → anchor nudge → ordering clamps → BE floor LAST); the render cells that consume its
- * output live in ./cells.mjs. PURE: imports the money-math helpers, quotecore's breakEven (the ONE
- * model-free BE floor), windowread's RECENCY_DIVERGE (a leaf), and reach.mjs's reachRelief +
- * REACH_DEBIAS_MAX_FRAC. See the js/estimators.mjs barrel header for the full doctrine; every constant
- * here is an unvalidated PLACEHOLDER (rule 4).
+ * estimators/pair.mjs (PC2, 2026-07-17; PC3 sell-model split 2026-07-17) — the RECONCILIATION PRICE
+ * ESTIMATOR (Est. buy / Est. sell): entryDoctrine, reachRead (internal), estimatePair. estimatePair is
+ * now the ordering SPINE / SHELL ONLY — it prepares the shared inputs, delegates the buy+sell PROPOSAL to
+ * a named model from SELL_TOP_MODELS (js/estimators/sell-models/), then applies the NON-SKIPPABLE floors
+ * a model can't bypass: the declared-exit anchor → anchor nudge → ordering clamps (buy ≤ live, sell ≥ live)
+ * → BE floor LAST. The sell-top variants (neutral reach-fold, PB4 pressure, and later safe-quantile) are
+ * named files + one registry line, NOT boolean options threading through this function (PC3 — the
+ * composition seam). The render cells that consume the output live in ./cells.mjs. PURE: imports the
+ * money-math helpers, quotecore's breakEven (the ONE model-free BE floor), windowread's RECENCY_DIVERGE (a
+ * leaf), reach.mjs's reachRelief + REACH_DEBIAS_MAX_FRAC, and the sell-model registry. Every constant here
+ * is an unvalidated PLACEHOLDER (rule 4). See the js/estimators.mjs barrel header for the full doctrine and
+ * ./sell-models/reach-fold.mjs for the model contract.
  */
 import { netMargin, clamp } from '../money-math.js';
 import { breakEven } from '../quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE model-free break-even (BE floor for estSell)
 import { RECENCY_DIVERGE } from '../windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
 import { reachRelief, REACH_DEBIAS_MAX_FRAC } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap
+import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named sell-top proposal models (reach-fold / pressure / …)
+
+// PC3: re-export the sell-model registry + each model's PLACEHOLDER constants through this module so the
+// js/estimators.mjs barrel (export * from ./pair.mjs) keeps every existing import path valid byte-for-byte
+// (estimators.test.mjs imports EST_REACH_SAT_FRAC from the barrel; the app/pipeline shim import the barrel).
+export { SELL_TOP_MODELS } from './sell-models/index.mjs';
+export { EST_REACH_SAT_FRAC, EST_BLEND_EQUAL_WEIGHTS } from './sell-models/reach-fold.mjs';
+export { PRESSURE_EXIT_REL_FULL } from './sell-models/pressure.mjs';
 
 const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -22,33 +34,23 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    operator reconciles BY HAND into the one number he posts (Optimistic ∩ diurnal ∩ reach ∩ anchor ∩
    BE-floor, synthesized every pass). estimatePair promotes that synthesis into first-class numbers.
 
-   estSELL — the price you'll ACTUALLY clear at:
-     • DECLARED-EXIT-ANCHORED (rev2, thesis-aware): when `extra.declaredExit` is passed, estSell anchors
-       to THAT — the operator's stated target governs, NOT the generic band top (and it may sit ABOVE the
-       band top, so it is NOT ceiling-clamped to the band — only floored to live + break-even). CALLER
-       CONTRACT (FIX 1, 2026-07-13): a declared exit is a HELD-LOT sell plan, so a caller passes
-       `declaredExit` ONLY for an item it actually HOLDS (an open lot in positions.json). The pure
-       DISCOVERY screen (screen-flip-niches.mjs band/churn/value) NEVER passes it — a bare candidate is a buy read,
-       not a held lot; anchoring it would inflate its Est. sell/net off a plan that doesn't apply.
-     • else the band top DISCOUNTED BY REACH so a mirage exit collapses toward the live instabuy, blended
-       with the diurnal peak ask + the asymPair high-reach ask. PLAN-LIQUIDITY-REACH (2026-07-13): the
-       fold is liquidity/size-CONDITIONED — reachRelief softens it (and de-biases the top toward the
-       observed 24h high, extra.dayHigh) ONLY on a liquid book with a small position÷flow ratio; a thin
-       book keeps the FULL discount byte-identically (the mirage guard is the mechanism's reason to exist).
-     • BE-FLOORED always (never < breakEven — the ONE model-free honesty anchor; the floor binding IS the
-       estimate saying "no trade").
+   PC3 (2026-07-17): the buy+sell PROPOSAL is now a NAMED MODEL (js/estimators/sell-models/) the shell
+   dispatches to — the neutral reach-fold, the PB4 pressure trial, and later safe-quantile. What each
+   model proposes (the per-strategy entry doctrine, the reach-folded/relief-softened band-top sell, the
+   pressure override) is documented in its own file + the SELL-MODEL CONTRACT header in
+   ./sell-models/reach-fold.mjs. What stays HERE, in the shell, is the ordering spine every model obeys:
 
-   estBUY — STRATEGY-AWARE (rev2, `entryDoctrine(spec)` off EXISTING spec fields, no new field):
-     • scalp (falling:'accept') → NEAR-LIVE: a deliberate intraday flip bids at the live instasell to
-       FILL — the band low is not its entry (it accepts a falling tape and wants the fill).
-     • value (priceBasis:'term') → TROUGH: a buy-hold bids the durable floor (the band low proxy), never
-       folded toward live — a value entry wants the low, not a quick fill.
-     • band/churn (priceBasis:'opt', falling:'exclude') → REACH-FOLD: the band low folded toward live by
-       how rarely it TOUCHES, blended with the diurnal dip bid (the original behaviour).
-   The asymPair DEEP bid is NEVER folded into estBuy (rev3) — DERIVED FROM THE STRATEGY MODEL: no
-   strategy posts a ~4/14-flush deep bid as its EXPECTED entry (scalp bids to fill, value bids the floor,
-   band ladders the low). A deep flush bid is rest-and-see OPTIONALITY, so it stays the separate `◆ asym`
-   line, never inside an expected-price number.
+     estSELL — DECLARED-EXIT anchor is the SHELL's, not a model's: when `extra.declaredExit` is passed the
+       operator's stated target governs the sell leg for EVERY model (it may sit ABOVE the band top — not
+       ceiling-clamped, only floored to live + break-even). CALLER CONTRACT (FIX 1, 2026-07-13): a declared
+       exit is a HELD-LOT sell plan, so a caller passes it ONLY for an item it HOLDS; the pure DISCOVERY
+       screen (band/churn/value) NEVER passes it.
+     estSELL is BE-FLOORED always (never < breakEven — the ONE model-free honesty anchor; the floor binding
+       IS the estimate saying "no trade") and ORDERING-CLAMPED (≥ the live instasell). A model chooses only
+       its outer ceiling (sellHi); the live floor + BE floor are the shell's and non-negotiable.
+     estBUY is ORDERING-CLAMPED (≤ the live instabuy). A model chooses only its outer floor (buyLo).
+     The asymPair DEEP bid is NEVER folded into estBuy (rev3) — a deep flush bid is rest-and-see
+       OPTIONALITY (the separate `◆ asym` line), never inside an expected-price number.
 
    CONFIDENCE (rev1) — carried WITH the price as the RECENT-3 reach idiom, not the full window: the
    godsword read `2/14` fine but its RECENT reach was `0/3` = the mirage. Recent-3 (`recencySplit`,
@@ -57,28 +59,15 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    stale flag). The `(live)` span-0 fallback is dropped.
 
    CONSOLE-ONLY consumer set today (screen-flip-niches.mjs / quote-items.mjs stdout — --raw restores Quick/Optimistic);
-   the app Finder/screen.json never call this → no APP_VERSION bump. PURE over the already-computed
-   row/ctx — ZERO new fetch; every missing input degrades to the model-free edge (absent evidence ⇒ no
-   discount, the askReachFactor absent→1 precedent). Quoted momentum tell, break-even, ordering
-   invariant, and the value q15/q85 twin are all untouched.
-   HONESTY (rule 4): EVERY constant/weight/per-strategy placement below is a NAMED PLACEHOLDER, n≈14 per
-   item at best; the F1 retro-join (estBuy/estSell/estConfidence shadow fields on suggestions.jsonl) owns
-   calibration.
+   the app Finder/screen.json never call estimatePair. PURE over the already-computed row/ctx — ZERO new
+   fetch; every missing input degrades to the model-free edge (absent evidence ⇒ no discount, the
+   askReachFactor absent→1 precedent). Quoted momentum tell, break-even, ordering invariant, and the value
+   q15/q85 twin are all untouched.
+   HONESTY (rule 4): EVERY constant/weight/per-strategy placement in the models is a NAMED PLACEHOLDER,
+   n≈14 per item at best; the F1 retro-join (estBuy/estSell/estConfidence shadow fields on
+   suggestions.jsonl) owns calibration. EST_REACH_SAT_FRAC / EST_BLEND_EQUAL_WEIGHTS (reach-fold.mjs) and
+   PRESSURE_EXIT_REL_FULL (pressure.mjs) are re-exported through this module for the barrel.
    ============================================================================================ */
-// Reach saturation: an edge reached on ≥ this fraction of the (recent-3, else full) days is treated as
-// FULLY reachable (fold factor 1 → the robust band edge stands); below it the edge folds linearly toward
-// live. PLACEHOLDER (n≈3–14) — e.g. a recent 0/3 ⇒ fold 0 ⇒ the mirage top collapses fully to live.
-export const EST_REACH_SAT_FRAC = 0.75;
-// PB4 (PLAN-DEPTH-EXIT PB4 / PLAN-REACHABILITY-CONSOLIDATION): the reliability at/above which the
-// pressure-exit ask may exceed the observed 24h high (the ruled reliability-gated peak-cap decision).
-// reachableBand's reliability saturates to 1 on a liquid, well-sampled book; below it the dayHigh cap
-// binds (the thin-book mirage guard). PLACEHOLDER (n≈0) — F1 owns whether/where this relaxes.
-export const PRESSURE_EXIT_REL_FULL = 1;
-// Reconciliation weights: the reach-folded band edge and each present secondary source (diurnal
-// dip/peak level; asym high-reach ask) blend as an EQUAL-WEIGHT mean, clamped inside [live, band edge].
-// Deliberately the simplest documented default — PLACEHOLDER, no calibrated weighting exists yet.
-// @provisional-api: F1-pending placeholder — the est-blend weights each signal equally until the F1 retro sets real per-signal weights; exported so the choice is greppable and the retro can cite it.
-export const EST_BLEND_EQUAL_WEIGHTS = true;
 
 /* entryDoctrine(spec) → 'near-live' | 'trough' | 'reach-fold' — the per-strategy ENTRY placement
    (rev2). DERIVED from existing spec fields so no new declarative field is added (and the app-parity
@@ -104,7 +93,8 @@ function reachRead(r) {
   return { frac, rec, full, diverges };
 }
 
-/* estimatePair(spec, row, extra, { nudge }) → { estBuy, estSell, estNet, estRoi, be, confidence } | null.
+/* estimatePair(spec, row, extra, { nudge, sellModel, pressureExit }) → { estBuy, estSell, estNet, estRoi,
+   be, confidence } | null.
    extra (ALL optional — zero new fetch; the caller passes only what it already computed):
      bidReach  { reachedDays, nDays, recentHit?, recentDays? }  patient bid TOUCH counts (full + recent-3)
      askReach  { reachedDays, nDays, recentHit?, recentDays? }  patient ask REACH counts (full + recent-3)
@@ -116,43 +106,25 @@ function reachRead(r) {
                                    high the wiki exposes). With a positive liquidity/size relief the SELL
                                    top reference widens toward it (never above it); thin book / large
                                    size / absent → the band top stands byte-identically.
+     reachable { ask, bid, pressure, reliability }  the pressure model's price source (ignored by reach-fold).
    nudge: optional (side, price) → { price }|null — the ⚓ anchor round-number nudge (pipeline passes
    modules/anchor.mjs anchorNudge; injected so this module stays pure/app-importable). Final pricing step.
-   `spec` drives the per-strategy entry doctrine (rev2). Returns null when there is no live pair. */
-export function estimatePair(spec, row = {}, extra = {}, { nudge = null, pressureExit = false } = {}) {
+   sellModel: PC3 — which SELL_TOP_MODELS entry proposes the buy+sell legs ('reach-fold' default,
+   'pressure', later 'safe-quantile'). pressureExit:true is LEGACY SUGAR for sellModel:'pressure' (kept so
+   the three call sites + tests read identically); an explicit sellModel wins. An unknown name degrades to
+   'reach-fold'. `spec` drives the per-strategy entry doctrine (rev2). Returns null when there is no live pair. */
+export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellModel = null, pressureExit = false } = {}) {
   const qb = num(row.quickBuy), qs = num(row.quickSell);
   if (qb == null || qs == null) return null;                    // no live pair → no estimate (degrade)
   const ob = num(row.optBuy) ?? qb, os = num(row.optSell) ?? qs;
   const bidR = reachRead(extra.bidReach), askR = reachRead(extra.askReach);
-  const fold = f => f == null ? 1 : Math.min(1, f / EST_REACH_SAT_FRAC);   // absent read ⇒ 1 (no discount)
   const doctrine = entryDoctrine(spec);
-  // --- BUY: per-strategy entry doctrine (rev2) ---
-  let estBuy, buyReach = bidR;   // buyReach = the reach read that ANNOTATES the buy cell (null for near-live)
-  if (doctrine === 'near-live') {
-    estBuy = qb;                 // scalp bids the live instasell to FILL — the band-low reach doesn't apply
-    buyReach = null;             // a live bid needs no cross-day touch caveat
-  } else {
-    // trough (value) anchors the band-low WITHOUT folding toward live; reach-fold (band/churn) folds it.
-    const anchor = doctrine === 'trough' ? ob : Math.round(qb - (qb - ob) * fold(bidR ? bidR.frac : null));
-    const bCands = [anchor];
-    const dBid = extra.diurnal ? num(extra.diurnal.bid) : null;
-    if (dBid != null) bCands.push(Math.round(clamp(dBid, Math.min(ob, qb), qb)));
-    estBuy = Math.round(bCands.reduce((s, x) => s + x, 0) / bCands.length);
-  }
-  // --- SELL: declared-exit-anchored (thesis-aware, rev2) OR reach-folded band top ---
-  // PLAN-LIQUIDITY-REACH (2026-07-13, ASK side only): on a LIQUID book where the position is small vs
-  // flow (reachRelief > 0 — intendedUnits = the real held lot size on a positions surface, else the buy
-  // limit proxy — the per-surface PLACEHOLDER deciding point):
-  //   Part A — the reach fold SOFTENS toward 1 (fold' = fold + relief×(1−fold)): depth clears a small
-  //     position at the top more readily than raw reach-frequency implies.
-  //   Part B — the top REFERENCE de-biases from the smoothed band top toward extra.dayHigh (the observed
-  //     trailing-24h 5m-bucket max — avgHighPrice averaging hides the peaks a resting LIMIT ask fills
-  //     at), by REACH_DEBIAS_MAX_FRAC×relief of the gap, NEVER above dayHigh (the real ceiling).
-  // THE MIRAGE GUARD IS UNTOUCHED: a thin book / large size / absent inputs ⇒ relief 0 ⇒ this whole
-  // block is byte-identical to the flat fold (the Ancient-godsword protection). PLACEHOLDERS, n=1.
-  // intendedUnits: a held-lot surface passes the REAL lot size (extra.intendedUnits — positions.json qty);
-  // absent it (a discovery/per-item read with no held qty) we degrade to the buy limit, the standard
-  // per-window accumulation proxy — byte-identical to the pre-override behaviour.
+  // --- shared PREP (model-independent; computed once, handed to the model via ctx) ------------------
+  // PLAN-LIQUIDITY-REACH (2026-07-13): the liquidity/size relief + the Part-B de-biased top reference the
+  // reach-fold model folds on. intendedUnits: a held-lot surface passes the REAL lot size
+  // (extra.intendedUnits — positions.json qty); absent it (a discovery/per-item read) we degrade to the
+  // buy limit, the standard per-window accumulation proxy. THE MIRAGE GUARD: a thin book / large size /
+  // absent inputs ⇒ relief 0 ⇒ topRef == bandTop ⇒ the model is byte-identical to the flat fold.
   const iu = num(extra.intendedUnits);
   const intendedUnits = iu != null ? iu : num(row.limit);
   const relief = reachRelief({ intendedUnits, volDay: num(row.volDay) });
@@ -162,61 +134,38 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, pressur
   const topRef = (relief > 0 && dayHi != null && dayHi > bandTop)
     ? Math.min(dayHi, Math.round(bandTop + REACH_DEBIAS_MAX_FRAC * relief * (dayHi - bandTop)))
     : bandTop;
+  // --- MODEL PROPOSAL: the named sell-top model proposes both legs + its clamp bounds + confidence ----
+  // (js/estimators/sell-models/). An explicit sellModel wins; else pressureExit:true is legacy sugar for
+  // 'pressure'; else the neutral reach-fold. An unknown name degrades to reach-fold (never throws).
+  const modelName = sellModel != null ? sellModel : (pressureExit ? 'pressure' : 'reach-fold');
+  const model = SELL_TOP_MODELS[modelName] || SELL_TOP_MODELS['reach-fold'];
+  const ctx = { spec, row, extra, qb, qs, ob, os, bidR, askR, doctrine, relief, sizeRatio, bandTop, dayHi, topRef };
+  const prop = model.propose(ctx);
+  let estBuy = prop.estBuy, estSell = prop.estSell;
+  const buyLo = prop.buyLo;
+  let sellHi = prop.sellHi;
+  let { bid: cBid, ask: cAsk, relief: cRelief, pressureExit: cPressure } = prop.confidence;
+  // --- SHELL SPINE (the non-skippable floors — a model can propose a price, never bypass these) -------
+  // DECLARED-EXIT anchor: the operator's stated target governs the SELL leg for EVERY model (NOT
+  // ceiling-clamped to the band; floored to live + break-even). A declared exit suppresses the generic
+  // ask-reach token + the relief note (they describe a fold that no longer drives the sell).
   const declared = num(extra.declaredExit);
-  let estSell, declaredAnchored = false, reliefApplied = null;
+  let declaredAnchored = false;
   if (declared != null && declared > 0) {
-    estSell = declared;          // the operator's stated target governs — NOT ceiling-clamped to the band
-    declaredAnchored = true;
-  } else {
-    const f0 = fold(askR ? askR.frac : null);
-    const fR = relief > 0 ? f0 + relief * (1 - f0) : f0;
-    const sCands = [Math.round(qs + (topRef - qs) * fR)];
-    const dAsk = extra.diurnal ? num(extra.diurnal.ask) : null;
-    if (dAsk != null) sCands.push(Math.round(clamp(dAsk, qs, bandTop)));
-    const aAsk = extra.asym ? num(extra.asym.highReachAsk) : null;
-    if (aAsk != null) sCands.push(Math.round(clamp(aAsk, qs, bandTop)));
-    estSell = Math.round(sCands.reduce((s, x) => s + x, 0) / sCands.length);
-    // surface the relief only when it had an EFFECT (a softened fold or a de-biased top) — lean discipline.
-    if (relief > 0 && ((askR && f0 < 1) || topRef > bandTop))
-      reliefApplied = { relief, sizeRatio, debiasedTop: topRef > bandTop ? topRef : null };
+    estSell = declared; declaredAnchored = true; sellHi = Infinity; cAsk = null; cRelief = null;
   }
-  // PB4 (PLAN-DEPTH-EXIT/PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL override. When the
-  // caller sets pressureExit AND passes a non-null reachableBand (extra.reachable), the pressure-driven
-  // band REPLACES both legs: Est. BUY = the deep reachable bid, Est. SELL = the bold reachable ask. Still
-  // BE-floored (below), still anchor-nudged, still ordering-clamped (bid ≤ live buy, sell ≥ live sell); a
-  // DECLARED exit still wins the sell leg (the operator's plan governs). The reliability guard already
-  // shrank a thin book's band toward the center, so a thin read is not bold. n≈0 — this is a TRIAL: the
-  // caller renders a LOUD banner and the shadow log stays on the NEUTRAL estimate (unbiased retro).
-  let pressureApplied = false;
-  const rbx = extra.reachable;
-  if (pressureExit && rbx && num(rbx.ask) != null && num(rbx.bid) != null) {
-    estBuy = rbx.bid;
-    if (!declaredAnchored) estSell = rbx.ask;
-    pressureApplied = true;
-  }
-  // ⚓ anchor nudge (final step — nudge, never override), then re-clamp.
+  // ⚓ anchor nudge (final proposal step — nudge, never override), then the ordering clamps.
   if (typeof nudge === 'function') {
     const nb = nudge('bid', estBuy); if (nb && num(nb.price) != null) estBuy = nb.price;
     const na = nudge('ask', estSell); if (na && num(na.price) != null) estSell = na.price;
   }
-  // a pressure deep bid may sit BELOW the band low (that's the point) — ceiling it at live, no band-low
-  // floor; the reach-folded default keeps its [band-low, live] clamp.
-  estBuy = pressureApplied ? Math.round(Math.min(estBuy, qb)) : Math.round(clamp(estBuy, Math.min(ob, qb), qb));
-  // a declared exit is floored to live (never below the live instabuy), but not ceiling-clamped to the band.
-  // topRef == bandTop unless the liquidity/size relief de-biased it (Part B) — the ceiling is then the
-  // observed 24h high (dayHigh), never anything above what actually printed.
-  // PB4 reliability-gated ceiling (the ruled peak-cap decision): a FULLY-reliable pressure ask may exceed
-  // the observed 24h high (reachableBand caps its own headroom at PRESSURE_HEADROOM_MAX bands); a
-  // reliability<1 read keeps the dayHigh cap (the thin-book mirage guard). The reach-folded default is
-  // unchanged (clamped to topRef).
-  if (declaredAnchored) estSell = Math.max(Math.round(estSell), qs);
-  else if (pressureApplied) {
-    const relFull = num(rbx.reliability) != null && rbx.reliability >= PRESSURE_EXIT_REL_FULL;
-    const capped = relFull ? estSell : (dayHi != null ? Math.min(estSell, dayHi) : estSell);
-    estSell = Math.max(qs, Math.round(capped));
-  } else estSell = Math.round(clamp(estSell, qs, topRef));
-  // BE floor — MODEL-FREE and applied LAST: never emit estSell < breakEven(estBuy). The floor binding
-  // is the estimate self-reporting "no profitable trade at model prices" (estNet collapses to ~0).
+  // ORDERING clamps — the shell's, non-negotiable: buy ≤ the live instabuy (qb); sell ≥ the live
+  // instasell (qs). A model only chose the OUTER bound (buyLo can dip below the band low for a pressure
+  // deep bid; sellHi can be Infinity for a fully-reliable pressure ask or a declared exit above the band).
+  estBuy = Math.round(clamp(estBuy, buyLo, qb));
+  estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, sellHi));
+  // BE floor — MODEL-FREE and applied LAST: never emit estSell < breakEven(estBuy). The floor binding is
+  // the estimate self-reporting "no profitable trade at model prices" (estNet collapses to ~0).
   const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
   const be = breakEven(estBuy, bopt);
   const beFloored = estSell < be;
@@ -224,15 +173,14 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, pressur
   const estNet = netMargin(estBuy, estSell, bopt);
   const estRoi = (estNet != null && estBuy > 0) ? estNet / estBuy * 100 : null;
   const confidence = {
-    bid: buyReach ? { rec: buyReach.rec, full: buyReach.full, diverges: buyReach.diverges } : null,
-    ask: (!declaredAnchored && askR) ? { rec: askR.rec, full: askR.full, diverges: askR.diverges } : null,
+    bid: cBid, ask: cAsk,
     beFloored, declaredAnchored, doctrine,
     // PLAN-LIQUIDITY-REACH: non-null ONLY when the relief changed the sell estimate (softened fold or
     // de-biased top) — { relief, sizeRatio, debiasedTop|null }. Feeds the stdout note + the lean shadow.
-    relief: reliefApplied,
-    // PB4: non-null ONLY when the pressure-exit override drove the legs (the TRIAL marker) — the surface
-    // renders "(pressure N×)" in the cell so the number never reads as the calibrated default (rule 4).
-    pressureExit: pressureApplied ? { pressure: num(rbx.pressure), reliability: num(rbx.reliability) } : null,
+    relief: cRelief,
+    // PB4: non-null ONLY when the pressure model drove the legs (the TRIAL marker) — the surface renders
+    // "(pressure N×)" in the cell so the number never reads as the calibrated default (rule 4).
+    pressureExit: cPressure,
   };
   return { estBuy, estSell, estNet, estRoi, be, confidence };
 }

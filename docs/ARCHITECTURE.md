@@ -135,6 +135,17 @@ gate, confirm, validators, …}`); `gatecandidates.mjs` drives behaviour off the
 COMPUTATION is thesis-agnostic but its ACTION (gate vs inform) is declared per-spec. No validator fetches
 or mutates.
 
+**Estimator variants register; they don't thread a boolean.** A swappable estimator model — today the
+`estimatePair` sell-top models (`js/estimators/sell-models/`: `reach-fold`, `pressure`) — is a named file
++ one line in a keyed registry (`SELL_TOP_MODELS`), selected through the `compose.mjs` resolver
+(`--est-sell` / the optional pipeline config); the shell (`estimatePair`) keeps the non-skippable floors (ordering
+clamps, BE floor, declared-exit anchor) so a model only PROPOSES a price, never bypasses them.
+Active-plus-shadow: the active model displays/publishes, every `defaultShadow` model still runs + logs to
+`suggestions.jsonl` each pass (the unbiased F1 co-log). A **boolean mode-flag threading through a shared
+function** (the pre-PC3 `{pressureExit:true}` that overrode both legs mid-function) is the anti-pattern this
+replaced — a new variant (safe-quantile, PLAN-REACH-CALIBRATION AC3) lands as a registry line, not a third
+boolean. Same shape as declarative specs below: composition lives in a registry + a resolver, not in `if`s.
+
 **Provisional/app-parity drift is tracked, not silent.** Where the console is deliberately ahead of the
 app (`screen.json` frozen while stdout gets richer), that's a known deferral with an owning plan, not an
 accident — say so at the seam.

@@ -17,10 +17,13 @@
      - `active`  — the single selection that feeds the DISPLAYED / PUBLISHED number.
      - `shadow`  — names of variants that should still RUN each pass and log to suggestions.jsonl
                    (the existing asym/estConfLean/pressure shadow-field convention) WITHOUT touching
-                   the display. For PC1 nothing populates `shadow` yet (it is always `[]`); the shape
-                   exists from day one so PC3's sell-model registry can add members WITHOUT changing
-                   this resolver's contract. Callers loop the shadow names through the same registry
-                   call they make for `active` — there is no orchestration layer here.
+                   the display. Populated (PC3) from the optional `shadowPool` argument, minus whatever
+                   is `active` (a model never shadows itself). No `shadowPool` ⇒ `shadow` is `[]`
+                   (byte-identical to PC1). Callers derive the pool from a model registry via
+                   shadowModelsOf() below, then loop the shadow names through the same registry call
+                   they make for `active` — there is no orchestration layer here. This is what lets a
+                   future registered shadow model (safe-quantile, PLAN-REACH-CALIBRATION AC3) accrue
+                   side-by-side ledger rows against the active/neutral WITHOUT touching this resolver.
 
    pipeline-config.json is OPTIONAL and absent by default. Its absence MUST leave every current
    default standing (see PRECEDENCE above). It is read lazily + cached on first `loadPipelineConfig()`
@@ -55,15 +58,29 @@ export function resetPipelineConfigCache() { _configCache = undefined; }
 
 const provided = v => v !== undefined && v !== null;
 
-/* resolve(category, { flag, config, fallback }) → { active, shadow: [] }.
-   `category` is a label for the thing being selected (e.g. 'mode', 'volSource', 'pressureExit') —
-   carried for readability + future logging, it does not change the precedence. `flag` is the value
-   the CLI supplied (undefined when the user did not set it — the caller does the same extraction it
-   did inline before), `config` the pipeline-config.json value (undefined when absent), `fallback`
-   the hardcoded default. Winner: flag > config > fallback. */
-export function resolve(category, { flag, config, fallback } = {}) {
+/* resolve(category, { flag, config, fallback, shadowPool }) → { active, shadow: [names] }.
+   `category` is a label for the thing being selected (e.g. 'mode', 'volSource', 'sellModel') — carried
+   for readability + future logging, it does not change the precedence. `flag` is the value the CLI
+   supplied (undefined when the user did not set it — the caller does the same extraction it did inline
+   before), `config` the pipeline-config.json value (undefined when absent), `fallback` the hardcoded
+   default. Winner: flag > config > fallback. `shadowPool` (optional, PC3) is the list of variant names
+   that should RUN + log every pass; `shadow` is that pool minus `active` (a variant never shadows
+   itself). Absent ⇒ `shadow` is `[]` (byte-identical to PC1). Precedence is unaffected by shadows. */
+export function resolve(category, { flag, config, fallback, shadowPool = [] } = {}) {
   const active = provided(flag) ? flag : provided(config) ? config : fallback;
-  return { active, shadow: [] };
+  const shadow = (Array.isArray(shadowPool) ? shadowPool : []).filter(n => n !== active);
+  return { active, shadow };
+}
+
+/* shadowModelsOf(registry) → the names of the registry's DEFAULT-SHADOW models (each model object's
+   `defaultShadow === true`), for passing as resolve()'s `shadowPool`. A "default shadow" is a model
+   that should RUN + log to suggestions.jsonl on EVERY pass regardless of which model is active (the
+   neutral reach-fold today; a future safe-quantile) — so its number always reaches the F1 retro co-log.
+   A trial model that only runs when explicitly active (pressure) sets defaultShadow:false and is absent
+   here. Pure: reads the registry object the caller already imported; no fetch, no registry knowledge
+   baked into this module. */
+export function shadowModelsOf(registry) {
+  return Object.values(registry || {}).filter(m => m && m.defaultShadow).map(m => m.name);
 }
 
 /* refusePublishIfNonNeutral({ publish, publishExplicit, checks }) → the (possibly downgraded) publish

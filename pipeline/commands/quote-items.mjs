@@ -33,7 +33,7 @@ import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/for
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log
-import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic)
+import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { trajectoryFrom1h } from '../lib/warm-term-structure.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
@@ -95,9 +95,19 @@ const RAW = args.includes('--raw');
 // owner early-adopt). When set, Est. buy/sell are the pressure-driven reachableBand legs (still
 // BE-floored + clamped + nudged); the conservative depth floor renders beside as the reference; the
 // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only — never touches screen.json/app.
-// PC1: routed through the shared flag>config>default resolver (the OPTIONAL pipeline-config.json can set
-// the same default). Absent config ⇒ byte-identical to the old `args.includes('--pressure-exit')`.
-const PRESSURE_EXIT = resolve('pressureExit', { flag: args.includes('--pressure-exit') ? true : undefined, config: loadPipelineConfig().pressureExit, fallback: false }).active;
+// PC3: routed through the shared flag>config>default resolver as a NAMED sell-top model
+// (--est-sell reach-fold|pressure); `--pressure-exit` is LEGACY SUGAR for `--est-sell pressure` (explicit
+// --est-sell wins). Absent flag+config ⇒ 'reach-fold' (byte-identical to the old `--pressure-exit`
+// boolean). PRESSURE_EXIT stays the boolean this script branches on, DERIVED from the active model.
+// --est-sell takes the `=value` form (a bare positional would be swallowed as an item target by `tokens`
+// below); `--pressure-exit` stays the space-free legacy sugar.
+const estSellArg = args.find(a => a.startsWith('--est-sell='));
+const SELL_MODEL = resolve('sellModel', {
+  flag: estSellArg ? estSellArg.slice('--est-sell='.length).toLowerCase() : (args.includes('--pressure-exit') ? 'pressure' : undefined),
+  config: loadPipelineConfig().sellModel, fallback: 'reach-fold',
+}).active;
+if (!SELL_TOP_MODELS[SELL_MODEL]) { console.error(`! unknown --est-sell. Use one of: ${Object.keys(SELL_TOP_MODELS).join(', ')}.`); process.exit(1); }
+const PRESSURE_EXIT = SELL_MODEL === 'pressure';
 // LOUD trial banner (rule 4 — the prices must never read as the calibrated default).
 const PRESSURE_BANNER = '⚠ --pressure-exit: Est. buy/sell + rank use the UN-CALIBRATED pressure model (TRIAL; retro still scoring — not validated). --raw / drop the flag to restore the neutral estimate.';
 const tokens = args.filter(a => !a.startsWith('--'));
@@ -374,8 +384,10 @@ async function runItems() {
       reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
     };
     // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is DISPLAY-ONLY.
-    const est = estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge });
-    const estShown = PRESSURE_EXIT ? estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge, pressureExit: true }) : est;
+    // PC3: `est` = the NEUTRAL reach-fold (the retro co-log, per-item read has no verdict); `estShown` =
+    // the ACTIVE model (pressure trial when --est-sell pressure / --pressure-exit, else the same neutral).
+    const est = estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge, sellModel: 'reach-fold' });
+    const estShown = SELL_MODEL === 'reach-fold' ? est : estimatePair(FLIP_NICHES.band, row, extraEst, { nudge: anchorNudge, sellModel: SELL_MODEL });
     // PLAN-LIQUIDITY-REACH inform line (never a table/verdict/price-column input): the relief that
     // counterweights the ⚠ reach caution above on a liquid small-relative-size book.
     if (est && est.confidence.relief) {
@@ -590,7 +602,7 @@ async function runPositions() {
       const estP = reachableP ? estimatePair(FLIP_NICHES.band, row, {
         reachable: reachableP, dayHigh: dayHighFrom5m(inp.ts5m), intendedUnits: qty,
         declaredExit: thesisEntry?.exitPrice ?? null,
-      }, { nudge: anchorNudge, pressureExit: true }) : null;
+      }, { nudge: anchorNudge, sellModel: 'pressure' }) : null;
       if (estP && estP.confidence.pressureExit) {
         const pe = estP.confidence.pressureExit;
         const clause = depthReachClause({ ca: depthP, rb: reachableP, qty });

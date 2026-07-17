@@ -22,7 +22,7 @@ import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,
   pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
   quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
-  estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_HEADERS,
+  estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_HEADERS, SELL_TOP_MODELS,
   reachRelief, dayHighFrom5m, REACH_RELIEF_MAX, REACH_DEBIAS_MAX_FRAC,   // PLAN-LIQUIDITY-REACH
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
@@ -398,6 +398,37 @@ ok('estimatePair PB4: a NULL reachable band under the flag degrades to the neutr
   const off = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14 } });
   assert.equal(on.estSell, off.estSell, 'no reachable band ⇒ the flag is a no-op (byte-identical)');
   assert.equal(on.confidence.pressureExit, null);
+});
+
+// --- PC3: the SELL_TOP_MODELS registry + the sellModel selection (byte-identical to the flag path) ---
+ok('PC3 SELL_TOP_MODELS: the registry keys are exactly {reach-fold, pressure}, each with the model contract', () => {
+  assert.deepEqual(Object.keys(SELL_TOP_MODELS).sort(), ['pressure', 'reach-fold']);
+  for (const [name, m] of Object.entries(SELL_TOP_MODELS)) {
+    assert.equal(m.name, name, `${name} carries its own name`);
+    assert.equal(typeof m.propose, 'function', `${name} exposes propose()`);
+    assert.equal(typeof m.defaultShadow, 'boolean', `${name} declares defaultShadow`);
+  }
+  // reach-fold is the always-on shadow (the unbiased retro co-log); pressure is a trial, never a default shadow.
+  assert.equal(SELL_TOP_MODELS['reach-fold'].defaultShadow, true);
+  assert.equal(SELL_TOP_MODELS['pressure'].defaultShadow, false);
+});
+
+ok('PC3 sellModel selection: {sellModel:reach-fold} ≡ default; {sellModel:pressure} ≡ {pressureExit:true}; unknown → reach-fold', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const extra = { askReach: { reachedDays: 12, nDays: 14 }, reachable: { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 }, dayHigh: 1150 };
+  const nudge = (side, p) => side === 'ask' ? { price: p - 1 } : null;   // exercise the shell nudge on both paths
+  // reach-fold (explicit) is byte-identical to the legacy no-option default.
+  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'reach-fold' }),
+                   estimatePair(FLIP_NICHES.band, row, extra, { nudge }));
+  // pressure (explicit) is byte-identical to the legacy pressureExit:true sugar.
+  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'pressure' }),
+                   estimatePair(FLIP_NICHES.band, row, extra, { nudge, pressureExit: true }));
+  // an explicit sellModel WINS over the legacy boolean (sellModel:'reach-fold' ignores pressureExit:true).
+  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'reach-fold', pressureExit: true }),
+                   estimatePair(FLIP_NICHES.band, row, extra, { nudge }));
+  // an unknown model name degrades to reach-fold (never throws).
+  assert.deepEqual(estimatePair(FLIP_NICHES.band, row, extra, { nudge, sellModel: 'nope' }),
+                   estimatePair(FLIP_NICHES.band, row, extra, { nudge }));
 });
 
 ok('rev3 the asym DEEP bid is NEVER folded into estBuy (optionality, not an expected entry)', () => {

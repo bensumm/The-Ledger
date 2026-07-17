@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { resolve, refusePublishIfNonNeutral } from '../lib/compose.mjs';
+import { resolve, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/compose.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -41,8 +41,33 @@ ok('null is "not provided" (falls through), false is a real value', () => {
   // an explicit boolean false from a flag is a provided value and MUST win over config/fallback true
   assert.equal(resolve('x', { flag: false, config: true, fallback: true }).active, false);
 });
-ok('shadow is always an empty array (PC1 — nothing populates it yet)', () => {
+ok('shadow is empty when no shadowPool is passed (byte-identical to PC1)', () => {
   assert.deepEqual(resolve('anything', { flag: 'a', config: 'b', fallback: 'c' }).shadow, []);
+});
+
+/* --- PC3: shadowPool → shadow = pool minus active; shadowModelsOf(registry) ---------------------- */
+ok('PC3 shadowPool: shadow is the pool minus the active selection (a variant never shadows itself)', () => {
+  // active reach-fold (default) ⇒ nothing shadows it (it IS the display number).
+  assert.deepEqual(resolve('sellModel', { flag: undefined, config: undefined, fallback: 'reach-fold', shadowPool: ['reach-fold'] }),
+    { active: 'reach-fold', shadow: [] });
+  // active pressure ⇒ the neutral reach-fold moves to shadow (still logged as the unbiased retro co-log).
+  assert.deepEqual(resolve('sellModel', { flag: 'pressure', config: undefined, fallback: 'reach-fold', shadowPool: ['reach-fold'] }),
+    { active: 'pressure', shadow: ['reach-fold'] });
+  // a multi-member pool drops only the active member; order preserved.
+  assert.deepEqual(resolve('sellModel', { flag: 'pressure', fallback: 'reach-fold', shadowPool: ['reach-fold', 'safe-quantile'] }).shadow,
+    ['reach-fold', 'safe-quantile']);
+  assert.deepEqual(resolve('sellModel', { flag: 'safe-quantile', fallback: 'reach-fold', shadowPool: ['reach-fold', 'safe-quantile'] }).shadow,
+    ['reach-fold']);
+});
+ok('PC3 shadowModelsOf: only defaultShadow:true models are pooled', () => {
+  const registry = {
+    'reach-fold': { name: 'reach-fold', defaultShadow: true },
+    'pressure': { name: 'pressure', defaultShadow: false },
+    'safe-quantile': { name: 'safe-quantile', defaultShadow: true },
+  };
+  assert.deepEqual(shadowModelsOf(registry).sort(), ['reach-fold', 'safe-quantile']);
+  assert.deepEqual(shadowModelsOf({}), []);
+  assert.deepEqual(shadowModelsOf(null), []);
 });
 
 /* --- BYTE-IDENTITY: absent config ⇒ resolve() == the pre-PC1 inline ternary --------------------- */

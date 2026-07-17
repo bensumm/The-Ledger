@@ -10,6 +10,35 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The `estimatePair` sell-top proposal became a named model registry (0.65.3 → 0.65.4, PLAN-PIPELINE-COMPOSITION PC3, 2026-07-17)
+The one DESIGN chunk of the composition wave (PC1 = the resolver, PC2 = the mechanical file split; this
+lands on top). The sell-top proposal step of `estimatePair` — previously the neutral fold as inline math
+plus the PB4 pressure trial as a `{pressureExit:true}` boolean that overrode both legs mid-function — is
+now a named, registered MODEL under `js/estimators/sell-models/`: `reach-fold.mjs` (the neutral fold,
+verbatim; DEFAULT + always-on shadow) and `pressure.mjs` (the PB4 trial, verbatim), keyed in
+`SELL_TOP_MODELS` (index.mjs). `estimatePair` is now the SHELL/spine only — it preps shared inputs,
+delegates the buy+sell proposal to the active model, then applies the non-skippable floors a model CANNOT
+bypass (declared-exit anchor → anchor nudge → ordering clamps [buy ≤ live, sell ≥ live] → BE floor last).
+A model chooses only its outer clamp bound (a pressure deep bid below the band low, a fully-reliable
+pressure ask above the 24h high); the live floor + BE floor are the shell's. **Byte-identical**: the full
+suite stays green (`estimators.test.mjs` unchanged assertions pass under `reach-fold` active; new PC3
+assertions pin `{sellModel:'reach-fold'} ≡ default` and `{sellModel:'pressure'} ≡ {pressureExit:true}`),
+and the barrel re-exports the `EST_*`/`PRESSURE_EXIT_REL_FULL` constants + `SELL_TOP_MODELS` so every
+import path resolves unchanged (check-imports: 353 imports). Selection is wired through PC1's resolver:
+**`--est-sell reach-fold|pressure`** (new), **`--pressure-exit` = legacy sugar** for `--est-sell pressure`
+at all three call sites (an explicit `--est-sell` wins). **Active-plus-shadow, generalized**: `resolve()`
+gained an optional `shadowPool` (→ `shadow` = pool minus active) + `compose.shadowModelsOf(registry)` pools
+the `defaultShadow:true` models; when `pressure` is active the neutral `reach-fold` rides `SELL_MODEL.shadow`
+and still logs the unbiased retro co-log to `suggestions.jsonl` — the mechanism that lets `safe-quantile`
+(PLAN-REACH-CALIBRATION AC3) ship later as ONE registry line + a shadow model, no shell change. Also folded
+the PC1 pickup: `--mode all`'s flip-niche set is now config-overridable via `pipeline-config.json`
+`"modes":[…]` (an ARRAY resolved through the same precedence resolver; absent ⇒ `ALL_MODE_KEYS`,
+byte-identical). `APP_VERSION` bumped because the browser-fetched `js/estimators/` module graph changed
+(new files in the `export *` graph the app's `js/market.js` pulls), even though app-visible behavior is
+unchanged — same convention as PC2. Docs: README "Map of the repo" (compose + the sell-models directory),
+`docs/ARCHITECTURE.md` (the composition invariant — register a variant, don't thread a boolean),
+`docs/MARKET-ANALYSIS.md` (the named-model framing, reconciled in place).
+
 ### `js/estimators.mjs` split into a directory behind a barrel (0.65.1 → 0.65.2, PLAN-PIPELINE-COMPOSITION PC2, 2026-07-17)
 A PURE MECHANICAL file split — zero behavior change, proven by the full suite (all 66 test suites incl.
 `estimators.test.mjs` + the acceptance/replay goldens that pin exact estimator output) staying green, a

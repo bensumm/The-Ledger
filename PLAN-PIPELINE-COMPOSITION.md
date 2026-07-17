@@ -236,7 +236,25 @@ becomes the barrel. Zero call-site changes (pipeline shim + app import path unch
 `estimators.test.mjs` + check-imports + smoke pass unchanged. APP_VERSION bump (deployed
 js/ file set changes) + README map update.
 
-### PC3 — the sell-model registry (the one design chunk, ~a day)
+### PC3 — the sell-model registry (the one design chunk, ~a day) — **DONE (2026-07-17)**
+Shipped `js/estimators/sell-models/` — `reach-fold.mjs` (the neutral fold, verbatim; DEFAULT +
+`defaultShadow:true` always-on retro co-log), `pressure.mjs` (the PB4 trial, verbatim; `defaultShadow:false`,
+degrades to reach-fold with no reachable band), `index.mjs` (`SELL_TOP_MODELS`, frozen). `estimatePair`
+became the SHELL/spine only: prep → active model proposes buy+sell + its outer clamp bounds + confidence →
+the non-skippable floors (declared-exit anchor → nudge → ordering clamps → BE floor last) a model can't
+bypass. Selection routes through PC1's resolver: `--est-sell reach-fold|pressure` (new), `--pressure-exit`
+kept as legacy sugar for `--est-sell pressure` at all three call sites (`screen-flip-niches.mjs`,
+`quote-items.mjs`, `watch-positions.mjs`); `pressureExit:true` stays a synonym at the `estimatePair` level.
+Active-plus-shadow generalized: `resolve()` gained `shadowPool` (`shadow` = pool − active) +
+`compose.shadowModelsOf()`; the neutral reach-fold logs `estBuy/estSell/estConfidence` every pass whether
+active or shadow (byte-identical to the pre-PC3 "neutral always logged, pressure only displayed"). Gate met:
+`estimators.test.mjs` byte-identical under `reach-fold` active (39 pre-existing checks unchanged) + new PC3
+assertions pinning `{sellModel:'reach-fold'} ≡ default {}` and `{sellModel:'pressure'} ≡ {pressureExit:true}`;
+`compose.test.mjs` gained shadowPool/`shadowModelsOf` cases; full suite (66) + check-imports (353) + arch/doc
+lints green. `APP_VERSION` 0.65.3 → 0.65.4 (the browser-fetched `js/estimators/` graph changed, per the PC2
+convention). **Pickup RESOLVED (below): `compose.mjs`/`screen-flip-niches.mjs` now resolve the `modes` config
+ARRAY for `--mode all`.** Docs: README map, `docs/ARCHITECTURE.md` composition invariant, `docs/MARKET-ANALYSIS.md`
+named-model reframe (in place), CHANGELOG. Left as the pre-PC3 spec:
 Extract the sell-top proposal step of `estimatePair` into named `SELL_TOP_MODELS`
 ('reach-fold' = today's neutral fold verbatim; 'pressure' = the PB4 trial verbatim),
 selected via PC1's resolver (`--est-sell`, `--pressure-exit` as synonym). The shell keeps
@@ -262,13 +280,13 @@ then ships as `js/estimators/safe-quantile.mjs` + one registry line, not another
 Gate: existing estimatePair tests byte-identical under 'reach-fold' active with today's
 shadow set.
 
-**Pickup item carried from PC1 (Ben, not yet executed):** PC1's resolver only handles a
-single-value `mode` selection (`--mode band|churn|scalp|value|all`, one active string). It does
-NOT yet support the `pipeline-config.json` `"modes": ["band","churn","value"]` ARRAY shape shown
-in the config example above, which is what `screen-flip-niches.mjs --mode all`'s niche-expansion
-set (currently hardcoded to band+churn+value) would need to become config-driven. PC3 must extend
-`compose.mjs`/`screen-flip-niches.mjs` to resolve that array — not just the scalar `mode` — before
-PC3 is considered complete.
+**Pickup item carried from PC1 — DONE (2026-07-17, with PC3):** PC1's resolver only handled a
+single-value `mode` selection. It now ALSO resolves the `pipeline-config.json` `"modes":
+["band","churn","value"]` ARRAY for `--mode all`'s flip-niche-expansion set. `resolve()` is value-agnostic
+(it just picks flag>config>fallback), so `screen-flip-niches.mjs` filters `CONFIG.modes` against
+`MODE_KEYS` (dropping unknown entries; an empty/absent list ⇒ `undefined`) and passes it as the resolver's
+`config` with `fallback: ALL_MODE_KEYS`. No CLI flag for the set — `--mode all` stays the trigger — so it's
+config-or-default only; absent config is byte-identical to the pre-PC3 hardcoded band+churn+value.
 
 ### PC4 — split `js/validate.mjs` into `js/validators/` (mechanical, opportunistic)
 One file per validator key; validate.mjs keeps the registry/runner/status algebra.
