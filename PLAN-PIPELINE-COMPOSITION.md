@@ -262,6 +262,14 @@ then ships as `js/estimators/safe-quantile.mjs` + one registry line, not another
 Gate: existing estimatePair tests byte-identical under 'reach-fold' active with today's
 shadow set.
 
+**Pickup item carried from PC1 (Ben, not yet executed):** PC1's resolver only handles a
+single-value `mode` selection (`--mode band|churn|scalp|value|all`, one active string). It does
+NOT yet support the `pipeline-config.json` `"modes": ["band","churn","value"]` ARRAY shape shown
+in the config example above, which is what `screen-flip-niches.mjs --mode all`'s niche-expansion
+set (currently hardcoded to band+churn+value) would need to become config-driven. PC3 must extend
+`compose.mjs`/`screen-flip-niches.mjs` to resolve that array — not just the scalar `mode` — before
+PC3 is considered complete.
+
 ### PC4 — split `js/validate.mjs` into `js/validators/` (mechanical, opportunistic)
 One file per validator key; validate.mjs keeps the registry/runner/status algebra.
 Independent of PC1–PC3 — can ride along with any chunk that touches a validator, or land
