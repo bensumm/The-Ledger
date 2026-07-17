@@ -10,6 +10,26 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### `js/estimators.mjs` split into a directory behind a barrel (0.65.1 → 0.65.2, PLAN-PIPELINE-COMPOSITION PC2, 2026-07-17)
+A PURE MECHANICAL file split — zero behavior change, proven by the full suite (all 66 test suites incl.
+`estimators.test.mjs` + the acceptance/replay goldens that pin exact estimator output) staying green, a
+byte-identical live `quote-items` A/B (HEAD monolith vs the split), and the headless smoke. The 659-line
+`js/estimators.mjs` god-module (the N6 note in PLAN-ARCH-DOCS-AUDIT) held three distinct sub-concepts;
+it is now the BARREL (`export *`) over four one-concept files under `js/estimators/`:
+`families.mjs` (the P(fill)/TTF family estimators + the `ESTIMATORS` registry, `estimateRank`/`rankScore`/
+`quotedPair`/`fmtTtf` + the founding header), `reach.mjs` (the reach-conditioning helpers `reachRelief`/
+`dayHighFrom5m`/`askReachFactor`/`asymEstimate` + their constants), `pair.mjs` (the reconciliation price
+estimator `estimatePair` + `entryDoctrine` + its `EST_*` constants), and `cells.mjs` (`EST_HEADERS`/
+`estPairCells`/`estConfLean`). **Every existing import path is unchanged** — the app's `js/market.js`
+(`import { estimateRank }`) and the pipeline shim `pipeline/lib/estimators.mjs` (`export * from
+'../../js/estimators.mjs'`) both resolve exactly as before (check-imports: 348 imports across 10
+entrypoints resolve). families↔reach is a runtime function-reference cycle (asymEstimate needs
+estimatorFor/rankScore; estimateRank needs askReachFactor) — ESM-safe since both uses are at call time.
+`APP_VERSION` bumped because the deployed `js/` file set changed (browser-fetched ES modules, no build),
+even though behavior is byte-identical. This is the mechanical relocation PC2 promised; PC3 (the named
+sell-model registry that replaces the `pressureExit` boolean) lands the one design change on top of this
+structure. README "Map of the repo" carries the barrel + four-file entries.
+
 ### Agent-readable market-read dump (quiet-by-default, `--verbose` opt-in) + the Finding-3 reach-count docs guard (2026-07-17, `pipeline/lib/cli.mjs`+the three market-read CLIs+`docs/MARKET-ANALYSIS.md`+`/scan`+`/positions` skills — NO APP_VERSION, PLAN-REACH-CALIBRATION AO1+AC-0)
 Two small, independent fixes riding the first two steps of the reach-calibration roadmap
 (`PLAN-REACH-CALIBRATION.md`). **AO1:** `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`
