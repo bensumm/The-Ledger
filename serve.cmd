@@ -7,13 +7,13 @@ rem Start the LW1 log-watcher daemon alongside the server (same console via star
 rem so one Ctrl+C stops both) -- the localhost app polls its regenerated
 rem positions/offers.json (LW2), making serve.cmd the live desk experience.
 rem Running serve.cmd twice would start a second (harmless, idempotent) watcher.
-start /b node pipeline/watch-log.mjs
+start /b node pipeline/commands/watch-log.mjs
 echo Serving http://localhost:8000/ -- Ctrl+C to stop (also stops the log-watcher)
 rem LW4: the node dev-server serves the repo-root static files (ES modules, correct MIME) AND
 rem exposes POST /api/scan (bound 127.0.0.1 only) so the app's "Refresh scan" button runs a REAL
 rem local scan -- screen-flip-niches.mjs --mode all --publish rewrites screen.json with ZERO git, then the app
 rem re-reads it. If node is unavailable, fall back to a static-only server (no local scan endpoint).
-node pipeline/dev-server.mjs
+node pipeline/commands/dev-server.mjs
 if errorlevel 1 (
   echo dev-server failed to start -- falling back to a static-only server (no /api/scan endpoint).
   py -m http.server 8000 2>nul

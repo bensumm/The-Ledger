@@ -49,8 +49,8 @@ export function loadPipelineConfig() {
   return _configCache;
 }
 
-/* resetPipelineConfigCache(): test-only hook so a suite can point the resolver at a fresh config
-   file (or clear it) between cases. Not used by any command path. */
+/* resetPipelineConfigCache(): @test-only: exists so a suite can point the resolver at a fresh
+   config file (or clear it) between cases. Not used by any command path. */
 export function resetPipelineConfigCache() { _configCache = undefined; }
 
 const provided = v => v !== undefined && v !== null;
