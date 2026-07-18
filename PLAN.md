@@ -203,15 +203,39 @@ Detail per ✅ row = the landing commit message (`git show <sha>`) + `CHANGELOG.
 
 ## Open chunk specs
 
-### F1 — Algorithm feedback loop (GATED on O1's n thresholds)
+### F1 — Algorithm feedback loop (INVESTIGATION done 2026-07-17; CALIBRATION ungraduated, pending Ben)
 
 The payoff of O1. Fill-probability/fill-time curves by band-percentile × item class →
 replace `patientTargets`' fixed 20th/80th percentiles with class-conditional choices;
 observed time-to-fill replaces `Exp gp/d`'s cycle-time assumptions; realized-vs-suggested
 calibration report (the O1 suggestion join makes it a query). Known confound: regime mix —
-bucket outcomes by regime label before believing any curve. Do not start until O1's
-documented sample thresholds clear (n≥30 per side×pctl×class×regime cell, ≥5 cells —
-currently 1; process rule 4). Realistically weeks of accrual away at ~20 lots/day.
+bucket outcomes by regime label before believing any curve.
+
+**Gate cleared numerically 2026-07-17: 5/5 cells at n≥30** (was "currently 1"). The
+INVESTIGATION half is done — `pipeline/commands/f1-calibrate.mjs` (read-only over
+`outcomes.json`; test `pipeline/test/f1-calibrate.test.mjs`). Honest findings:
+- **The gate IS computed correctly per its own spec.** `join-outcomes.mjs`'s F1-gate line keys
+  on (side × pctBucket × class × **regime**), and all 5 cleared cells are sourced 100% from
+  reconstructed `stateAtFill.regime` — **0 from the `'noreg'` fallback**. Regime is genuinely a
+  bucketing dimension, not just labeled. (Minor: the `--report` 2D table's "cells clearing the F1
+  floor" side-totals line is regime-COLLAPSED and prints a DIFFERENT count (2+2) than the real
+  4D gate (5) — display-only, the gate verdict line itself is right.)
+- **But the 5 cells are lopsided: 4 flat + 1 rising + 0 falling.** The confound is controlled only
+  within `flat`. The lone `rising` cell (`buy|0-20|mid`, n=31, barely over the floor) is **68% one
+  item (Abyssal bludgeon)** — not broad evidence. The 4 flat cells are healthier (28–36% top item,
+  12–19 items each) but still one-tool/one-trader/months-not-years.
+- **Directional proposals (trustworthy):** thin buys UNDER-fill at the 0.20 percentile (P≈41% vs
+  mid/liquid ≈72–75%) → thin needs a shallower percentile; sell 0.80 is well-placed (P≈94–100% all
+  classes); `TTF_INTRADAY_PRIOR_SEC` (12h) is ~10–100× too slow (realized intraday first-fill 7–27m,
+  round-trip hold median 0.9h). **Not trustworthy at magnitude:** precise per-class percentiles
+  (placements cluster at one band bucket per side), `PFILL_PRIOR`/`DEPTH_SLOPE` (proxy-based, weak n),
+  `TTF_REF_VOL` (volDay bimodal, sqrt scaling too steep), `TTF_MULTIDAY_PRIOR_SEC` (UNTESTABLE — max
+  observed hold 23.5h, no multi-day lots), `PFILL_BREAKDOWN_PENALTY`/`ASKREACH_FLOOR` (n<floor).
+
+**CALIBRATION remains a separate, ungraduated decision — F1/Ben OWN the actual constant changes**
+(the "analyze surfaces with n; F1/Ben calibrate" boundary). Do NOT mark F1 done as if the algorithm
+change shipped — no live constant in `trendcore.js`/`families.mjs` has moved. Recommend accruing
+falling/rising regime coverage before graduating any single magnitude; more lots at ~20/day.
 
 ### DL3 — flush-distribution → candidate discovery feeding the thesis layer (n-gated on DL2's log)
 

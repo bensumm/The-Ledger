@@ -10,6 +10,91 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### AC4a — percentile-placement + grain-aware reach rendering on `read-window-range.mjs` + `--json` (pipeline-only, 2026-07-17)
+`PLAN-REACH-CALIBRATION` AC4a (+ AO2). A scored `--bid`/`--ask`/`--exit` on `read-window-range.mjs` now
+reports its PERCENTILE PLACEMENT in the trailing daily-low/high distribution BESIDE the existing reach
+count — e.g. `--ask 398 → would have been reached on 1/14 day(s) · recent 0/3 · placement p93 of the
+14-day daily-HIGH distribution`. This is the descriptive reframe of Finding 3: "reached k/N" only asks
+whether the 1h-bucket AVERAGE crossed a level, so a low count on a liquid book read as a false mirage
+warning (Soul rune's ~20+ real 397–399 fills vs "reached 1/14"); the placement says WHERE the level sits
+historically, with n stated (process rule 4). The price→percentile primitive is a new pure
+`placement(sortedAsc, x)` in **`js/windowread.mjs`** — the shared js/ home beside `quantLow`/`quantHigh`
+(the inverse direction), chosen over reaching into `pipeline/lib/fill-placement.mjs`'s `cdf` (calibration
+code built for AC1's study, a different module layer); `cdf` now DELEGATES to `placement` so there is ONE
+implementation. Where the Tier-1 archive (`lib/archive.mjs`, read-only + best-effort) has ≥3 covered
+window-days, a less-smoothed **5m-grain** reach/placement rides ALONGSIDE the 1h figure (labeled, a LOWER
+BOUND on the true gap per AC2), degrading cleanly to 1h-only otherwise — in testing it fired for liquid
+items over a broad window (Soul rune 398 → 5m reached 3/7 · p57, materially less alarming than the 1h
+1/14 · p93) and cleanly went 1h-only on a narrow/off-peak window. AO2's `--json` folded in on the same
+touch: it dumps the assembled per-item result objects to stdout (the `analyze-record`/`analyze-fill-placement`
+non-render `--json`→stdout convention, NOT `writeLastReport` — this command builds no render.mjs sections);
+default markdown stdout is byte-identical when `--json` is absent (the console→`log` gate, same pattern
+`analyze-fill-placement.mjs` uses). **NOT built, explicitly out of scope:** any "safe ≈ pXX" threshold or
+recommendation — the placement is PURELY DESCRIPTIVE. AC3's calibrated liquidity-scaled safe quantile did
+not proceed: AC1's evidence gate FAILED (the Finding-2 size-share knee is unobservable on our own fills,
+"GATE RESULT: NOT MET"), so there is no calibrated basis for a "safe" annotation; the trust judgment (distrust
+near the historical extreme on a thin book, trust deeper into the tail on a deep book) stays in the
+human/skill + `docs/MARKET-ANALYSIS.md` layer. New tests in `pipeline/test/windowread.test.mjs` pin
+`placement`. No `APP_VERSION` bump: `js/windowread.mjs` gained a new pure export no app code calls yet, so
+no browser-visible behavior change. `docs/MARKET-ANALYSIS.md` Finding-3 guard reconciled in place (the
+reach-count-only framing is superseded by placement, not appended-to); `README.md` inventory + PLAN updated.
+
+### AC1/AC2 fill-placement calibration study — the knee does NOT replicate on our own fills (INVESTIGATION only, pipeline-only, 2026-07-17)
+PLAN-REACH-CALIBRATION's evidence gate. New READ-ONLY command `pipeline/commands/analyze-fill-placement.mjs`
+(pure core `pipeline/lib/fill-placement.mjs`, tested by `pipeline/test/fill-placement.test.mjs`) joins every
+closed sell lot to same-day 1h bucket data and measures WHERE realized `sellEach`/`buyEach` cleared in the
+trailing daily-high/low distribution (the `quantHigh`/`quantLow` percentile machinery) as a function of
+volDay (→ `qEvidence`) and `sizeShare` = qty ÷ the CORRECTED composed rolling-24h volume (`rolling24FromTs1h`,
+NEVER the broken `/24h`). AC2 rides along — the 1h `avgHighPrice` vs same-hour archive-5m max smoothing bias.
+A NEW file, not an `analyze-record.mjs` mode: that command's contract is "no fetch, no writes, never a
+commit/sync path", and this study fetches live `/timeseries?1h` + reads the archive. Builds NONE of
+`safeQuantile`/`qEvidence`/`impactFold` (AC3) and touches NO live pricing/gating surface.
+
+**Honest finding (rule 4 — the whole point of this chunk): the Finding-2 size-share knee does NOT replicate,
+and CANNOT be tested on our own fills.** (1) Finding 2's shares were computed on the broken `/24h` denominator
+and are inflated ~6–16×; on the corrected rolling-24h volume every placeable lot sits **below ~0.74% share**
+(Soul rune 25k = 0.07%, Raw anglerfish 10k = 0.41%, not the 0.56%/6.6% Finding 2 reported). We have ZERO fills
+in the ≥1% "impact" regime the knee describes — the only >1%-share lots are qty-1–5 lots of thin items, not
+large tranches. (2) Within the observed 0–0.74% band there is no monotone degradation: pooled
+Spearman ρ(share, placement) = +0.02 (≈0, wrong sign for a knee); the p80 bump in one share bucket is just the
+one liquid item (Soul rune) we sold aggressively — a liquidity effect, not a share effect. The per-item
+cross-item ρ = −0.30 (n=28) is weak, small-n, and confounded with liquidity. **AC2:** the 5m-max-vs-1h-avg
+smoothing bias is tiny and flat (median 0.36–0.56% across all volume buckets, ρ=+0.09), and is only a LOWER
+BOUND (the 5m value is itself an average). **Gate result: NOT MET** — the knee is unobservable on our ground
+truth. The plan should stop at AC1 + AC4a's descriptive percentile rendering; AC3's calibrated SAFE threshold
+should not proceed on this evidence (a coordinator + Ben ruling owns the go/no-go). Coverage caveats: only
+102/227 sells placeable (the early period 07-02→07-07 exceeds the live 1h's ~15d reach), and the sample is
+heavily clustered (top items 25/25/23/19/12 lots). No `APP_VERSION` bump (pipeline-only, no deployed-app
+change). Docs: README "Map of the repo" (command + lib), PLAN-REACH-CALIBRATION AC1/AC2 marked DONE with the
+finding.
+
+### F1 calibration study — the gate cleared, the evidence is thin (INVESTIGATION only, no constant graduated; pipeline-only, 2026-07-17)
+F1's documented sample gate (n≥30 per side×pctl×class×regime cell, ≥5 cells) cleared for the first time
+(`join-outcomes.mjs --report`: "5 cell(s) clear n≥30. F1 MAY open" — PLAN.md's "currently 1" was stale).
+Ben asked for an F1 investigation kicked off now. Delivered `pipeline/commands/f1-calibrate.mjs` — a
+**read-only, PROPOSAL-ONLY** calibration study over the derived `outcomes.json` that touches NO live
+pricing/gating code (`trendcore.js` and `js/estimators/families.mjs` are unchanged). It (1) re-audits the
+gate, (2) prints P(fill)/median-TTF curves by side × class × band-percentile, and (3) proposes
+class-conditional `patientTargets` percentiles + fitted `PFILL_*` / `TTF_*` magnitudes, each with
+supporting n + a confidence label. Test: `pipeline/test/f1-calibrate.test.mjs` (9 checks, incl. a
+drift-guard tying `MIN_N_F1`/`MIN_CELLS_F1` to `join-outcomes.mjs`).
+
+**Honest findings (rule 4 — this chunk is entirely about this).** The gate IS computed correctly against
+its own spec: the F1-gate line keys on regime, and all 5 cleared cells are 100% reconstructed
+`stateAtFill.regime`, ZERO from the `'noreg'` fallback — regime is genuinely controlled, not just labeled.
+(The `--report` 2D table's regime-COLLAPSED "cells clearing" side-totals differ from the 4D gate count —
+display-only; the verdict line is right.) BUT the 5 cells are lopsided: **4 flat + 1 rising + 0 falling**,
+and the lone rising cell (`buy|0-20|mid`, n=31) is **68% one item (Abyssal bludgeon)** — not broad. So
+the confound is controlled only within `flat`. Directional proposals are trustworthy — thin buys under-fill
+at the 0.20 percentile (P≈41% vs mid/liquid ≈72–75%, so thin needs a shallower percentile), sell 0.80 is
+well-placed (P≈94–100%), and `TTF_INTRADAY_PRIOR_SEC` (12h) is ~10–100× too slow (realized intraday
+first-fill 7–27m, round-trip hold median 0.9h). Magnitudes are NOT trustworthy: `TTF_MULTIDAY_PRIOR_SEC` is
+UNTESTABLE (no multi-day lots, max hold 23.5h), `TTF_REF_VOL` unfittable (bimodal volume), and per-class
+percentiles/`PFILL_*` rest on weak or proxy-based n. **CALIBRATION (the actual constant changes) remains a
+separate, ungraduated decision pending Ben** — no live constant moved; no `APP_VERSION` bump (pipeline-only,
+no deployed-app change). Docs: README "Map of the repo", PLAN.md F1 (stale count corrected, findings recorded,
+F1 explicitly NOT marked done).
+
 ### The `estimatePair` sell-top proposal became a named model registry (0.65.3 → 0.65.4, PLAN-PIPELINE-COMPOSITION PC3, 2026-07-17)
 The one DESIGN chunk of the composition wave (PC1 = the resolver, PC2 = the mechanical file split; this
 lands on top). The sell-top proposal step of `estimatePair` — previously the neutral fold as inline math

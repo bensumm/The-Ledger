@@ -16,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
@@ -48,6 +48,32 @@ ok('quantHigh: ask at the p-quantile of window highs is reached on ≥p of night
   assert.equal(reachedDays(his, 100), 4);
   assert.equal(quantHigh(his, 0.25), 400);           // only the richest night reaches the top ask
   assert.equal(reachedDays(his, 400), 1);
+});
+
+// --- 1b. placement: price→percentile (AC4a) — the descriptive inverse of quantLow/quantHigh -----
+ok('placement: empirical CDF — fraction of the ascending sample at or below x; 0 below all, 1 above all; null empty', () => {
+  const his = [100, 200, 300, 400];
+  assert.equal(placement(his, 250), 0.5);       // 100,200 ≤ 250 → 2/4
+  assert.equal(placement(his, 400), 1);          // all ≤ 400
+  assert.equal(placement(his, 99), 0);           // none
+  assert.equal(placement(his, 1000), 1);         // above every printed value → p100 (a tail outlier, DESCRIPTIVE only)
+  assert.equal(placement([], 5), null);          // empty sample → null (never a fake percentile)
+  assert.equal(placement(null, 5), null);
+});
+ok('placement is the descriptive inverse of quantHigh/quantLow (same distribution, opposite direction)', () => {
+  const his = [100, 200, 300, 400];              // ascending daily HIGHS
+  // an ASK at the every-day-reached level (min high) sits at p25 of the daily-high distribution (1 of 4 ≤ it)
+  assert.equal(placement(his, his[0]), 0.25);
+  // placement counts AT-OR-BELOW (≤) while reachedDays counts AT-OR-ABOVE (≥) — DIFFERENT questions on the
+  // SAME distribution: quantHigh(his,0.5)=300 is reached on 2/4 days (≥300), but placement(his,300)=3/4=p75
+  // (≤300). An ask at p75 sits in the upper-middle of the printed band — the normal home of a resting ask.
+  assert.equal(quantHigh(his, 0.5), 300);
+  assert.equal(reachedDays(his, 300), 2);
+  assert.equal(placement(his, 300), 0.75);
+  const lows = [100, 200, 300, 400];             // ascending daily LOWS
+  assert.equal(placement(lows, 50), 0);          // a BID below every daily low → p0 (a deep entry)
+  assert.equal(placement(lows, 250), 0.5);
+  // matches cdf (the AC1 study's name for this same computation — now a delegate, so they can't drift)
 });
 
 // --- 2. inWindow wraps midnight --------------------------------------------------------------

@@ -30,6 +30,26 @@ export const quantHigh = (sortedHis, p) =>
 export const touchedDays = (lows, bid) => lows.filter(l => l <= bid).length;
 export const reachedDays = (his, ask) => his.filter(h => h >= ask).length;
 
+// placement(sortedAsc, x) — price→PERCENTILE, the INVERSE of quantLow/quantHigh (which map
+// percentile→price). Returns the fraction of the ascending sample AT OR BELOW x (the empirical CDF):
+//   • ASK vs the daily-HIGH distribution — p62 = "62% of trailing daily highs sat at/below this ask"
+//     (upper-middle of the historically-printed band; the normal place a small resting ask lives).
+//   • BID vs the daily-LOW distribution — a LOW placement = "below most daily lows" (a deep entry).
+// PURELY DESCRIPTIVE — it says WHERE a level sits in the printed distribution, NOT what is "achievable"
+// or "safe". Whether an upper-percentile placement is trustworthy is a liquidity-conditioned judgment
+// that lives in the human/skill layer (distrust near the historical extreme on a thin book; trust
+// deeper into the tail on a deep book). The calibrated liquidity-scaled "safe ≈ pXX" threshold (AC3)
+// did NOT ship — its gate failed (the Finding-2 knee is unobservable on our own fills; see
+// PLAN-REACH-CALIBRATION AC1 "GATE RESULT: NOT MET"). This is the ONE price→percentile home the reach
+// CLIs use; fill-placement.mjs's `cdf` (AC1's calibration core) is the same computation and delegates
+// here, so there is a single definition. null on an empty sample. Same ceil-index-free CDF convention
+// as the AC1 study (count ≤ x, divide by n).
+export const placement = (sortedAsc, x) => {
+  if (!sortedAsc || !sortedAsc.length) return null;
+  let c = 0; for (const v of sortedAsc) if (v <= x) c++;
+  return c / sortedAsc.length;
+};
+
 // --- recency split (reach-contamination guard) ------------------------------------------------
 // The touched/reached COUNT above is over the whole N-night window, so on an item that changed
 // price REGIME inside the window the count is dominated by stale days and misdescribes the level's

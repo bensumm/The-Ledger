@@ -495,7 +495,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch-positions.mjs`'s
     SUMMARY reads),
     `read-window-range.mjs` (né `nightlows.mjs` — time-of-day
-    range read / overnight fill-realism scoring; `--profile` = the hour-of-day diurnal dip/peak read
+    range read / overnight fill-realism scoring; a scored `--bid`/`--ask`/`--exit` now reports its
+    PERCENTILE PLACEMENT in the trailing daily-low/high distribution (AC4a — `js/windowread.mjs`
+    `placement`, the price→percentile inverse of `quantLow`/`quantHigh`; n stated) BESIDE the reach
+    count — purely descriptive, no "safe ≈ pXX" threshold (AC3's calibrated safe quantile did NOT ship,
+    its gate failed; `PLAN-REACH-CALIBRATION.md` AC1); where the Tier-1 archive (`lib/archive.mjs`,
+    read-only) has ≥3 covered window-days it adds a less-smoothed 5m-grain reach/placement ALONGSIDE
+    (labeled, a LOWER BOUND per AC2), degrading cleanly to 1h-only otherwise. `--json` (AO2) dumps the
+    assembled per-item result objects to stdout (the `analyze-record`/`analyze-fill-placement`
+    `--json`→stdout convention, NOT `writeLastReport` — this command builds no render.mjs sections);
+    default markdown stdout is byte-identical when absent. `--profile` = the hour-of-day diurnal dip/peak read
     + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector,
     BOTH edges since DE6: per-day instabuy flow at/above the scored `--ask` + the `clearableAsk`
     "BOOK AT ≤ X", and per-day instasell flow at/below a scored `--bid` + the `clearableBid`
@@ -521,6 +530,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     head-to-head** accrual (RC, `PLAN-REACHABILITY-CONSOLIDATION`) — closed-sell round-trips carrying the
     five-way exit co-log (`joinSuggestion`'s `coLog` marker), bucketed into the scorer's (side × class ×
     regime) cells, so the weekly retro shows WHEN `aggregateReachability` becomes scorable without polling),
+    `f1-calibrate.mjs` (F1 calibration STUDY — read-only over the derived `outcomes.json` (run
+    `join-outcomes.mjs --report` first). PROPOSAL-ONLY, mutates nothing and touches no live pricing/gating
+    code: (1) re-audits the F1 gate the way its spec documents (side × pctBucket × class × regime cells
+    clearing n≥30, regime bucketed from reconstructed `stateAtFill`), reporting each cleared cell's regime
+    SOURCE (real vs the `'noreg'` unknown pile) + top-item concentration; (2) prints P(fill)/median-TTF
+    curves by side × class × band-percentile; (3) proposes class-conditional `patientTargets` percentiles
+    (`js/trendcore.js`) + fitted `PFILL_*` / `TTF_*` magnitudes (`js/estimators/families.mjs`), each with
+    supporting n + an explicit confidence label — surfacing evidence for Ben, NOT graduating a constant.
+    `--json` dumps the proposal bundle. Pure analysis fns pinned by `test/f1-calibrate.test.mjs`, incl. a
+    drift-guard tying `MIN_N_F1`/`MIN_CELLS_F1` to `join-outcomes.mjs`),
     `retrojoin.mjs` (P6a — the SUGGESTION→FILL retro-join REPORT: read-only, prints per-flip-niche +
     per-path outcome accounting — filled / filled-worse / not-taken counts, realized TTF median/
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
@@ -546,11 +565,26 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     n-gated TUNING CANDIDATES that are FLAGS for F1, never applied here; a ~0% taken rate is treated as the
     documented BASELINE, not a finding. `--since <hrs>`/`--json`/`--min-n`. Pure core is `lib/analyze.mjs`,
     fixture-tested by `analyze.test.mjs`; consumed by the `/analyze` skill (AZ2). READ-ONLY — never in a
-    commit/sync path)
+    commit/sync path),
+    `analyze-fill-placement.mjs` (PLAN-REACH-CALIBRATION AC1/AC2 — READ-ONLY calibration STUDY, the gate
+    for §A's `safeQuantile`: joins every closed lot (`positions.json`) to same-day bucket data and measures
+    WHERE realized `sellEach`/`buyEach` cleared in the trailing daily-high/low distribution (the
+    `quantHigh`/`quantLow` percentile machinery) vs volDay (→ `qEvidence`) and `sizeShare` = qty ÷ the
+    CORRECTED composed rolling-24h volume (`vol24FromInputs`/`rolling24FromTs1h`, never the broken `/24h`),
+    with per-bucket n + a lot-count concentration + pooled/per-item Spearman ρ; AC2 rides along — the 1h
+    `avgHighPrice` vs same-hour archive-5m max smoothing bias by a volume proxy for prints-per-bucket.
+    Fetches live `/timeseries?1h` per distinct closed-lot item (the only dense ~15d source) + reads the
+    Tier-1 archive 5m read-only; `--json`/`--nights`/`--offline`. Builds NONE of
+    `safeQuantile`/`qEvidence`/`impactFold` (AC3). Pure core `lib/fill-placement.mjs`, fixture-tested by
+    `fill-placement.test.mjs`. READ-ONLY — writes no artifact, never in a commit/sync path)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `analyze.mjs` (AZ1 — the PURE audit +
     tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence`/`dipLoopAudit`/`askHeadroomAudit`
     + the NAMED-PLACEHOLDER
     thresholds; no fs/no fetch, the honesty n-gates live here so a skill can't launder a thin signal),
+    `fill-placement.mjs` (AC1/AC2 — the PURE calibration core for `analyze-fill-placement.mjs`:
+    `lotPlacement` (per-lot daily-high/low percentile placement + `sizeShare`/`shareHpv` on the corrected
+    rolling-24h denom, coverage-degrading + future-leak-guarded), `smoothingBias` (the AC2 5m-max vs 1h-avg
+    join), and `cdf`/`spearman`/`median`/`quant`; no fs/no fetch, fixture-tested by `fill-placement.test.mjs`),
     `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →
     tombstone-filtered event list monitor-offers.mjs reconstructs from, mirroring sync's inline REMOVE-tombstone

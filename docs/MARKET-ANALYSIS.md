@@ -250,18 +250,26 @@ DAYS but rarely IN its peak window. Band-is-the-edge: on a liquid stable-regime 
 buys at band lows / sell at band tops (never below break-even). Full judgment: the `/scan` skill's
 WINDOW-CLEAR PRICING step.
 
-**"Reached" is the 1h bucket AVERAGE crossing a level — not a ceiling on a resting order (Finding
-3, 2026-07-17).** `reachedDays`/`touchedDays` (`read-window-range.mjs --ask/--bid`) count days where
-the hourly average print touched the level, which is a stricter bar than what a small resting order
-actually needs to fill. Pricing an ask ABOVE the recent average is how a flip makes money, not an
-anomaly — a low raw reach count alone is not grounds to reject a level. Judge by liquidity instead: on
-a LIQUID/deep book, distrust only a level AT OR ABOVE the item's own historical extreme; on a THIN
-book, stay close to the center of the distribution (a single artifact print is easy to mistake for a
-real level there). Anchor: Soul rune's own ~20+ closed lots filled at 397–399 while `--ask 398`
-reported "reached 1/14, recent 0/3" — the raw count read as a warning on a liquid, thick book where the
-real fill risk was near zero. AC4a (`PLAN-REACH-CALIBRATION.md`) will replace this with a
-percentile-placement read; until it ships, this paragraph is the guard against re-rejecting a normal
-above-average ask off the raw reach count.
+**"Reached" is the 1h bucket AVERAGE crossing a level — not a ceiling on a resting order; read the
+PERCENTILE PLACEMENT alongside it (Finding 3, 2026-07-17; AC4a shipped the placement read).**
+`reachedDays`/`touchedDays` (`read-window-range.mjs --ask/--bid`) count days where the hourly average
+print touched the level, which is a stricter bar than what a small resting order actually needs to
+fill. Pricing an ask ABOVE the recent average is how a flip makes money, not an anomaly — a low raw
+reach count alone is not grounds to reject a level. **`read-window-range.mjs` now reports the level's
+placement in the trailing daily-high/low distribution beside the reach count** (e.g. `--ask 398 →
+reached 1/14 · placement p93 of the 14-day daily-HIGH distribution`), and, where the archive has 5m
+coverage, a less-smoothed 5m-grain reach/placement alongside (labeled; a LOWER BOUND on the true gap
+per AC2). The placement is PURELY DESCRIPTIVE — it says where a price sits historically, NOT that it is
+"achievable" or "safe". There is deliberately **no "safe ≈ pXX" threshold**: AC3's calibrated
+liquidity-scaled safe quantile did NOT ship — its gate failed (the Finding-2 size-share knee is
+unobservable on our own fills; `PLAN-REACH-CALIBRATION.md` AC1 "GATE RESULT: NOT MET"). So the trust
+judgment stays in this layer: on a LIQUID/deep book, distrust only a level AT OR ABOVE the item's own
+historical extreme (near p100), and trust deeper into the upper tail; on a THIN book, stay close to the
+center of the distribution (a single artifact print is easy to mistake for a real level there). Anchor:
+Soul rune's own ~20+ closed lots filled at 397–399 while `--ask 398` reads "reached 1/14, recent 0/3"
+on the smoothed 1h grain — yet placement p93 and, on the less-smoothed 5m grain, reached 3/7 · p57
+(upper-middle of the printed band): the raw 1h count read as a warning on a liquid, thick book where
+the real fill risk was near zero, exactly the trap the placement read now surfaces.
 
 **Multiple offers on the SAME item are a queue, not independent rungs (Ben, 2026-07-16).** The GE
 matches a buyer against the cheapest compatible offer first, so a higher-priced ask on an item you
