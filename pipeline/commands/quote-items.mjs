@@ -32,7 +32,7 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -340,6 +340,22 @@ async function runItems() {
       ? { reachedDays: touchedDays(ast.lows, row.optBuy), nDays: ast.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
     const askReach = (ast && ast.his && ast.his.length && row.optSell != null)
       ? { reachedDays: reachedDays(ast.his, row.optSell), nDays: ast.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
+    // PLAN-QUOTE-PLACEMENT (Ben 2026-07-17): fold read-window-range.mjs's --bid/--ask placement percentile
+    // onto the quote itself — Ben had to fall back to a manual read-window-range.mjs run for this on every
+    // overnight-listing decision. Zero new fetch: reuses the SAME ast.lows/ast.his + bidReach/askReach
+    // already computed above for the patient pair (row.optBuy/row.optSell). Mirrors read-window-range.mjs's
+    // wording exactly (touched/reached k/N · recent m/3 · placement pXX of the N-day daily-LOW/HIGH
+    // distribution); degrades to whichever side has usable data, and is skipped entirely when neither does
+    // (same guard shape as the asym-fill note above). Inform-only — never a table/verdict/price input.
+    const bidPlace = bidReach ? placement(ast.lows, row.optBuy) : null;
+    const askPlace = askReach ? placement(ast.his, row.optSell) : null;
+    if (bidPlace != null || askPlace != null) {
+      const pct = f => 'p' + Math.round(f * 100);
+      const parts = [];
+      if (bidPlace != null) parts.push(`bid ${fmt(row.optBuy)} touched ${bidReach.reachedDays}/${bidReach.nDays}d (recent ${bidReach.recentHit ?? '—'}/${bidReach.recentDays ?? '—'}) · placement ${pct(bidPlace)} of the ${bidReach.nDays}-day daily-LOW distribution`);
+      if (askPlace != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReach.reachedDays}/${askReach.nDays}d (recent ${askReach.recentHit ?? '—'}/${askReach.recentDays ?? '—'}) · placement ${pct(askPlace)} of the ${askReach.nDays}-day daily-HIGH distribution`);
+      notes.push({ kind: 'reachPlacement', itemId: id, text: `reach/placement: ${parts.join(' — ')}` });
+    }
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
@@ -614,6 +630,23 @@ async function runPositions() {
     const ahHeld = askHeadroomText(row);
     if (ahHeld) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: ask headroom — ${ahHeld}` });
     else if (row.mom === 'breakup' && row.optSell != null) notes.push({ kind: 'askHeadroom', itemId, text: `${name}: list @ ${fmtP(row.optSell)} is a FLOOR, not a target — live broke +${(row.momPct * 100).toFixed(1)}% above the 2h band; step the ask above the live print (the GE better-price rule fills higher if depth is there). Inform-only, n=1.` });
+    // PLAN-QUOTE-PLACEMENT (Ben 2026-07-17): the same reach/placement fold as the plain-quote path above,
+    // on the held-lot view — inp.ts1h is already fetched unconditionally for this booked-lots row (the
+    // PLAN-VOL24 parity fix above), so this is zero new fetch. Degrades/skips the same way.
+    const astHeld = inp.ts1h ? windowStats(inp.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
+    const bidReachHeld = (astHeld && astHeld.lows && astHeld.lows.length && row.optBuy != null)
+      ? { reachedDays: touchedDays(astHeld.lows, row.optBuy), nDays: astHeld.lows.length, ...recencySplit(astHeld.days, 'bid', row.optBuy) } : null;
+    const askReachHeld = (astHeld && astHeld.his && astHeld.his.length && row.optSell != null)
+      ? { reachedDays: reachedDays(astHeld.his, row.optSell), nDays: astHeld.his.length, ...recencySplit(astHeld.days, 'ask', row.optSell) } : null;
+    const bidPlaceHeld = bidReachHeld ? placement(astHeld.lows, row.optBuy) : null;
+    const askPlaceHeld = askReachHeld ? placement(astHeld.his, row.optSell) : null;
+    if (bidPlaceHeld != null || askPlaceHeld != null) {
+      const pct = f => 'p' + Math.round(f * 100);
+      const parts = [];
+      if (bidPlaceHeld != null) parts.push(`bid ${fmt(row.optBuy)} touched ${bidReachHeld.reachedDays}/${bidReachHeld.nDays}d (recent ${bidReachHeld.recentHit ?? '—'}/${bidReachHeld.recentDays ?? '—'}) · placement ${pct(bidPlaceHeld)} of the ${bidReachHeld.nDays}-day daily-LOW distribution`);
+      if (askPlaceHeld != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReachHeld.reachedDays}/${askReachHeld.nDays}d (recent ${askReachHeld.recentHit ?? '—'}/${askReachHeld.recentDays ?? '—'}) · placement ${pct(askPlaceHeld)} of the ${askReachHeld.nDays}-day daily-HIGH distribution`);
+      notes.push({ kind: 'reachPlacement', itemId, text: `${name}: reach/placement — ${parts.join(' — ')}` });
+    }
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid
