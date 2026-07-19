@@ -269,6 +269,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `momVerdict` is untouched (the raw verdict stays honest in the ledger). The Gate-2
   breakdown `CUT` is never silenced or frame-masked. Ships empty (`[]`); fixture-pinned in
   `pipeline/test/holdthesis.test.mjs` + `pipeline/test/watchstate.test.mjs` + `pipeline/test/verdictpersist.test.mjs`.
+- `pipeline/experiments/` — **deliberately removable** standalone probe logs, isolated from the main
+  pipeline on purpose (nothing under `pipeline/commands/`, `js/quotecore.js`, `suggestions.jsonl`, or
+  `positions.json` reads it — delete a file or the whole dir and nothing else breaks). `README.md`
+  documents each probe; `ladder-probe-2026-07-16.jsonl` is Ben's 2026-07-16 sell-ladder fill-time probe
+  (rung/price/timeToFillSec per offer on two thin books) — real fill-time-vs-price data to replace guessed
+  reliability-discount constants, honest n=1. Retire by deleting the dir.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
   `items` are dropped from the DERIVED merch views (`positions.json` phantom lots + unmatched-harvest
