@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.39
+version: 1.40
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -315,14 +315,21 @@ filling".
 
 **Verify the SELL leg before quoting a profit — MANDATORY, not judgment (Ben, 2026-07-07, the
 DHCB overpitch).** Whenever you pitch a dip-bid's or a hold's expected profit off a band top /
-optimistic sell, **run `read-window-range.mjs --ask <sell target>` first and quote the REACHABLE sell
-(the ~50–75%-day reach level), never the raw 2h band top.** The band top is a CANDIDATE (input),
-not the pitched number — on a thin + wide-band item it is an artifact that never reaches. This is a
-hard checklist step (like `/overnight`'s fill-realism check), because the failure was a *skipped
-step*, not a bad call: DHCB's band-top sell 36.21m reached **0/7 days**, I quoted +690–810k off it
-without running `--ask`, and the reachable sell was ~35.6m (+80k, which then went underwater). No
-edge is real until BOTH legs are verified — the buy (trajectory / dip-vs-knife) AND the sell
-(`--ask` reach).
+optimistic sell, **run `read-window-range.mjs --ask <sell target>` first (the verification TRIO
+below) — running it stays mandatory; only the INTERPRETATION of the result is liquidity-conditioned.**
+A low raw reach count is NOT by itself grounds to reject a sell level: "reached" only means the 1h-bucket
+AVERAGE crossed it, and pricing an ask above that average is how a flip earns money (full doctrine
+`docs/MARKET-ANALYSIS.md` §4 — don't restate it here). Judge the level by LIQUIDITY and its placement
+percentile, not the raw N/14: on a deep/liquid book the upper tail is fine — distrust only a level
+at/near the historical extreme (≈p100); on a thin book stay near center. This session the old "step
+down to the ~50–75%-day reach level, never above" framing produced TWO false "won't clear" reads on
+liquid items (soul rune, dragon bones) that then cleared at the higher price. The band top is a
+CANDIDATE (input), not the pitched number — on a thin + wide-band item it is an artifact that never
+reaches — but on a liquid book do not reflexively step it down. This is a hard checklist step (like
+`/overnight`'s fill-realism check), because the failure mode is a *skipped step*, not a bad call:
+DHCB's band-top sell 36.21m reached **0/7 days**, I quoted +690–810k off it without running `--ask`,
+and the reachable sell was ~35.6m (+80k, which then went underwater). No edge is real until BOTH legs
+are verified — the buy (trajectory / dip-vs-knife) AND the sell (`--ask` reach).
 
 **The verification TRIO — mandatory for every top pick/action price, ONE combined call, every time
 (Ben, 2026-07-18 — supersedes running these ad hoc/"on the handful you actually pitch"; revised

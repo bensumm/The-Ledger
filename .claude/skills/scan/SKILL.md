@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.73
+version: 1.74
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -406,9 +406,16 @@ This is the tribal layer the script can't do — apply ALL of these:
   **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
-  `read-window-range.mjs --ask <sell target>` and quote the REACHABLE sell (the ~50–75%-day reach level),
-  NEVER the raw 2h band top** — the raw `Optimistic`/`Rank` pricing sells at the band top, which on a
-  thin + wide-band item is an artifact that never reaches. (PLAN-OUTPUT-TABLE 2026-07-13 + revisions: the
+  `read-window-range.mjs --ask <sell target>` (the verification TRIO below) — the RUN stays mandatory;
+  what changed is the INTERPRETATION of the result.** Read it the liquidity-conditioned, placement-informed
+  way — a low raw reach count is NOT by itself grounds to reject a level (see the "Above-average is not a
+  warning sign" bullet above; full doctrine `docs/MARKET-ANALYSIS.md` §4, don't restate it here). Judge the
+  sell level by LIQUIDITY and its placement percentile, not the raw N/14: on a deep/liquid book the upper
+  tail is fine — distrust only a level at/near the historical extreme (≈p100); on a thin book stay near
+  center. This session the old "step down to the ~50–75%-day reach level, never above" rule produced TWO
+  false "won't clear" reads on liquid items (soul rune, dragon bones) that then cleared at the higher price.
+  The raw `Optimistic`/`Rank` band top remains a CANDIDATE, not the pitched number — on a thin + wide-band
+  item it is an artifact that never reaches — but on a liquid book do not reflexively step it down. (PLAN-OUTPUT-TABLE 2026-07-13 + revisions: the
   screen's DEFAULT table now renders the reach-folded `Est. sell` — the fold (on the RECENT-3 reach) already
   collapses a mirage top and the cell carries its recent reach token (`0/3`, full window beside it on
   divergence) — but it is a PLACEHOLDER model, so the `--ask` confirmation on what you actually pitch STAYS
@@ -475,9 +482,11 @@ This is the tribal layer the script can't do — apply ALL of these:
     oversized for its own liquidity depth, not just an unlucky trade. This is the real-data
     explanation for why `--pressure-exit` (`js/estimators.mjs` `estimatePair`) was found too
     optimistic this session (Water orb) and stays opt-in/`--publish`-refused: the theory
-    (small clips get better prices) is directionally right, but neither `reachRelief` nor the
-    pressure estimator yet SCALES the effect down by tranche-size-as-%-of-volume, so both
-    overstate achievable price as a position approaches its own buy limit on a lower-volume item.
+    (small clips get better prices) is directionally right, and `reachRelief` DOES scale the
+    effect down by size (it conditions on `sizeRatio`) — but its full-relief threshold
+    (`REACH_RELIEF_SIZE_FULL` = 2% of daily flow) sits ABOVE the measured degradation knee
+    (~0.5–1%), so it grants full relief across a mid-size range that the real fills show already
+    degrading — i.e. it OVER-CREDITS mid-size positions rather than not scaling at all.
     HONESTY (rule 4): n≈6 items, same-session, real fills but not a controlled experiment — a
     rough knee-in-the-curve observation, not a calibrated threshold; don't hardcode 0.5%/1%/5% as
     gates off this alone. Full numbers live here; `js/estimators.mjs`'s `reachRelief` header
