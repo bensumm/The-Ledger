@@ -878,6 +878,33 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // DC3 (INFORM HALF): the demand-regime flip-side classifier — decision support only (never a rank/gate/
   // grade/screen.json input; the routing/rank half is F1-gated). One line per clearly-tilted survivor.
   for (const n of demandNotes) footerLines.push(`◈ demand — ${n}`);
+  // AC3 (PLAN-ESTIMATOR-POSTURE, 2026-07-18) — the patient-vs-fill-now divergence footer, BAND niche ONLY.
+  // When the FOLDED Est. pair BE-floored (r.est.confidence.beFloored — the fill-now buy leg folded up to
+  // near-live and killed the margin) but the RAW patient band pair (optBuy→optSell) still clears a
+  // meaningfully positive after-tax net, name those rows so the board doesn't read "dead" when a real
+  // patient band flip was sitting there the whole time (the verified Abyssal-bludgeon / Ancient-godsword
+  // anchors). INFORM-ONLY, `context`-tier (render.mjs registry): it never gates, re-ranks, or hides a row.
+  // Reuses numbers ALREADY on the row — r.est.confidence.beFloored + r.row.optNet (= netMargin(optBuy,
+  // optSell,bopt), the model-free raw patient net computed in quotecore) — so ZERO new fetch/compute. It is
+  // CONSOLE/STDOUT-ONLY: footerLines is rendered to stdout by renderReport and NEVER enters the published
+  // screen.json cells (built separately from `rows` below), so the app contract is byte-unchanged. churn is
+  // legitimately a fill-now lane (buy every limit, flip fast), so it is NOT flagged — the split routes off
+  // `mode`, not a global rule. THRESHOLD: the same MIN_NET_GP (100k) "worth one offer" absolute net floor
+  // used for thin items — a percent-ROI floor (MIN_ROI 1.5%) would DROP the anchor case (bludgeon +209k on
+  // a 17.18m bid = 1.2% ROI), so the absolute gp floor is deliberate. PLACEHOLDER model, n≈3–14 (rule 4).
+  if (mode === 'band') {
+    const patientEdges = rows.filter(r =>
+      r.est && r.est.confidence.beFloored === true &&
+      r.row.optBuy != null && r.row.optSell != null &&
+      r.row.optNet != null && r.row.optNet >= MIN_NET_GP);
+    if (patientEdges.length) {
+      const parts = patientEdges.map(r => {
+        const nm = map.byId[r.id]?.name || ('#' + r.id);
+        return `${nm} +${fmt(r.row.optNet)} (deep bid ${fmtP(r.row.optBuy)} · patient ask ${fmtP(r.row.optSell)})`;
+      });
+      footerLines.push(`ℹ patient band edge — the fill-now fold hid a positive band flip on ${patientEdges.length} row(s): ${parts.join(', ')} (deep bid at the band low + patient ask at the band top; inform-only, n≈3–14)`);
+    }
+  }
   // VZ4b: the loose info blocks below (diurnal / overnight accumulation / velocity / entry paths / stats)
   // are collected as report sections and appended to the SAME niche report, printed ONCE at the end —
   // byte-identical to the prior inline console.log sequence (all flush, no inter-blank line).
