@@ -1,11 +1,13 @@
 # PLAN-GATE-NOISE — magnitude-blind momentum tell fires Gate 2 on noise (plan only)
 
-Status: **DRAFT 2026-07-16** — nothing below is implemented. Sibling of `PLAN-VERDICT-NOISE.md`
-(IMPLEMENTED 2026-07-11): that wave fixed the *display/persistence* layer (node-only, momVerdict
-untouched) and explicitly deferred "promoting any of this INTO momVerdict itself" until post-retro.
-This plan is that deferred layer — but one step further upstream: it changes WHETHER `mom`
-classifies a break at all, in the shared classifier, not when a verdict headlines. Different layer,
-different file (VERDICT-NOISE is a closed shipped record); executor adds a cross-pointer there.
+Status: **DRAFT 2026-07-16** — nothing below is implemented. Sibling of the SHIPPED verdict-noise
+wave (VN-1/VN-2/VN-3, implemented 2026-07-11 — see `CHANGELOG.md` VN-1/2/3 entries + `git log`; the
+plan file `PLAN-VERDICT-NOISE.md` was folded away and deleted after shipping): that wave fixed the
+*display/persistence* layer (node-only, momVerdict untouched) and explicitly deferred "promoting any
+of this INTO momVerdict itself" until post-retro. This plan is that deferred layer — but one step
+further upstream: it changes WHETHER `mom` classifies a break at all, in the shared classifier, not
+when a verdict headlines. Different layer (the verdict-noise wave is a closed shipped record in the
+CHANGELOG + git history).
 
 ## 1. Context / diagnosis
 
@@ -97,8 +99,8 @@ false Gate-2 CUT without touching the protected exemption is the classifier itse
   `analyze-record.mjs` (`/analyze`) join the ledger to realized outcomes. Adding the magnitude
   fields makes false-positive rates measurable retroactively.
 - **Prior art checked**: no prior attempt at a momentum-magnitude floor in `git log`/`CHANGELOG.md`
-  (grep `momentum.*(threshold|noise)` / `graze` — no hits). `PLAN-VERDICT-NOISE.md` is the adjacent
-  shipped wave (display layer; deferred this layer explicitly).
+  (grep `momentum.*(threshold|noise)` / `graze` — no hits). The verdict-noise wave (VN-1/2/3,
+  `CHANGELOG.md` + git history) is the adjacent shipped wave (display layer; deferred this layer explicitly).
 
 ## 4. Options considered → target architecture
 
@@ -178,7 +180,7 @@ any consumer.
   Momentum column + Trends verdicts change behavior).
 - Docs pass: `docs/MARKET-ANALYSIS.md` momentum-tell paragraph (:37-44) gains the noise threshold
   (reconcile "a break IS a real momentum tell" phrasing — grep for superseded absolutes);
-  `CHANGELOG.md`; `PLAN-VERDICT-NOISE.md` gets a one-line cross-pointer.
+  `CHANGELOG.md` (a one-line cross-pointer from the verdict-noise VN-1/2/3 entries to this classifier layer).
 
 **GN-1 — calibration plumbing (node-only, no APP_VERSION).**
 - `pipeline/lib/suggestlog.mjs`: additive `momPct`, `momNoiseGp`, `momGraze` fields (JSONL is

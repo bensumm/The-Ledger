@@ -1,8 +1,10 @@
 # PLAN-ESTIMATOR-POSTURE — the reach-fold buy leg collapses patient band flips
 
-Status: DRAFT (2026-07-18, Ben-directed via `/analyze`). Owner: next session.
-Console/estimator-only, provisional. Folds into `PLAN.md` and is deleted the moment its last
-chunk ships (per CLAUDE.md's plan-file rule). Direct continuation/**amendment** of
+Status: **most chunks shipped; AC4 open (F1-gated)** (2026-07-18, Ben-directed via `/analyze`).
+AC1/AC2/AC3/AC5/AC6/AC7/AC8/AC9 all SHIPPED (see the per-chunk status tables below + the `/scan`
+skill); **AC4 — the buy-leg would-have-filled counterfactual log — is F1-gated (gated on O1) and
+still OPEN**, so this file is NOT yet deletable. Console/estimator-only, provisional. Folds into
+`PLAN.md` and is deleted the moment its last chunk (AC4) ships (per CLAUDE.md's plan-file rule). Direct continuation/**amendment** of
 `PLAN-OUTPUT-TABLE.md` — read that first; this corrects one premise in it.
 
 ## Motive (Ben, 2026-07-18)
