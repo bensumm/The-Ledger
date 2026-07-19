@@ -10,6 +10,29 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PERF-1 + LOCAL-FILE1 — `loadBands` off flat files onto the SQLite archive; local watchlist/ignore write-back (0.65.5, 2026-07-19)
+Two independent fixes from the same session. **PERF-1**: `loadBands` (`pipeline/lib/marketfetch.mjs`)
+was reading EVERY retained day-file under `.cache/bands/` (90-day retention, grown to 359MB/17 files)
+on every single `/scan` pass just to pull the ~24 needed 5-minute windows — measured at 45-70% of
+total wall time. Migrated onto the Tier-1 SQLite archive (`marketAt('5m', w)`, mirroring
+`loadAll24hRolling`'s check-before-fetch pattern) — cut a warm `--mode all` pass from ~3-5s to
+~1.9s, and removes the unbounded future growth (the flat-file cache was on track to get 5x worse
+over the next couple months). `loadHistBands` (the outcome-join's own reduced per-item cache) is
+untouched — separate function, separate cache. The dead `.cache/bands/` directory was deleted;
+`BANDS_RETENTION_DAYS`/`BANDS_DIR` are gone (the archive is append-forever by policy, no retention
+pruning needed). New coverage: `pipeline/test/loadbands.test.mjs`.
+
+**LOCAL-FILE1**: Ben's watchlist toggles in the browser (`pushWatchlist`/`pushIgnored`, `js/ui.js`)
+only wrote back to the tracked `watchlist.json`/`ignored-items.json` when a GitHub token was
+configured (the mobile/Pages path) — on localhost, with no token, additions lived only in
+`localStorage` and were invisible to the pipeline/console screen, causing a silent 1-vs-23-item
+mismatch Ben caught by comparing the app's Watchlist tab to the console output. Since "the local
+server IS the app" (Pages was the early proof of concept), `dev-server.mjs` now exposes `POST
+/api/local-file?path=<allowlisted file>` — a zero-git local write, same discipline as the existing
+`/api/scan` — and the two push functions try it first on localhost, falling through to the GitHub
+path unchanged everywhere else. `watchlist.json` backfilled to the 23 items already in Ben's
+browser state as a one-time manual sync.
+
 ### AC4a — percentile-placement + grain-aware reach rendering on `read-window-range.mjs` + `--json` (pipeline-only, 2026-07-17)
 `PLAN-REACH-CALIBRATION` AC4a (+ AO2). A scored `--bid`/`--ask`/`--exit` on `read-window-range.mjs` now
 reports its PERCENTILE PLACEMENT in the trailing daily-low/high distribution BESIDE the existing reach

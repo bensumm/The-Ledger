@@ -130,12 +130,30 @@ export async function toggleWatch(id){ const i=STATE.watchlist.indexOf(id), it=r
   if(i>=0){ STATE.watchlist.splice(i,1); logEvent('info','action','unwatch '+nm); } else { STATE.watchlist.push(id); logEvent('info','action','watch '+nm); }
   await sSet('watchlist',STATE.watchlist); renderAll();
   pushWatchlist(); }   // M1.4: best-effort write-back to repo watchlist.json (only when a GitHub token is set)
+/* LOCAL-FILE1 (2026-07-19, Ben: "the local server IS the app" — GitHub Pages was the early proof
+   of concept): on localhost, write STATE.watchlist / STATE.ignored straight to the repo-root file
+   through dev-server.mjs's POST /api/local-file — ZERO git, same discipline as /api/scan — instead
+   of silently depending on a GitHub token just to persist a browser toggle. Best-effort/silent
+   (mirrors pushWatchlist/pushIgnored's existing "never alert" contract): logs a warn on failure,
+   never blocks the UI. Returns {ok:false, reason:'not-localhost'} off-localhost so callers fall
+   through to the existing GitHub path unchanged (the deployed Pages app is untouched by this). */
+async function pushLocalFile(relPath, data){
+  if(!IS_LOCALHOST) return {ok:false, reason:'not-localhost'};
+  try{
+    const r=await fetch('/api/local-file?path='+encodeURIComponent(relPath), {method:'POST', body: JSON.stringify(data)});
+    return await r.json().catch(()=>({ok:false, reason:'bad-json-response'}));
+  } catch(e){ return {ok:false, reason:String((e&&e.message)||e)}; }
+}
 /* M1.4: write STATE.watchlist (the local+repo union, as ids) back to the tracked repo-root
-   watchlist.json through the same contents-API path, so a phone's add/remove persists to the
-   source of truth the pipeline reads. No-op (and silent) when no token is configured — the S3
-   in-memory union still applies. Best-effort/fire-and-forget: never blocks the UI, warns on
-   failure but never alerts (the watchlist is low-stakes). */
+   watchlist.json — locally via /api/local-file on localhost (LOCAL-FILE1), else through the
+   GitHub contents-API path so a phone's add/remove persists to the source of truth the pipeline
+   reads. No-op (and silent) when neither is available — the S3 in-memory union still applies.
+   Best-effort/fire-and-forget: never blocks the UI, warns on failure but never alerts (the
+   watchlist is low-stakes). */
 export async function pushWatchlist(){
+  const local=await pushLocalFile(WATCHLIST_PATH, STATE.watchlist);
+  if(local.ok){ logEvent('info','action','watchlist saved locally ('+STATE.watchlist.length+' items)'); return; }
+  if(IS_LOCALHOST){ logEvent('warn','watchlist','local write-back failed: '+local.reason); return; }
   if(!ghConfigured()) return;
   const res=await putJsonFile(WATCHLIST_PATH, STATE.watchlist, 'mobile: watchlist ('+STATE.watchlist.length+' items)');
   if(res.ok){ if(!res.noop) logEvent('info','action','watchlist synced to repo ('+STATE.watchlist.length+')'); }
@@ -199,12 +217,16 @@ export async function setIgnoreReason(id, reason){
   e.reason=reason; await sSet('ignored',STATE.ignored); pushIgnored();
 }
 /* Write STATE.ignored back to ignored-items.json, PRESERVING _doc + greenlisted (only the items list is
-   app-editable). Best-effort/silent when no token is set — like the watchlist. */
+   app-editable). Local write-back on localhost (LOCAL-FILE1), else the GitHub path; silent when
+   neither applies — like the watchlist. */
 export async function pushIgnored(){
-  if(!ghConfigured()) return;
   const obj={ items: STATE.ignored.map(e=>({ id:+e.id, name:e.name, reason:e.reason })), greenlisted: STATE.ignoredMeta.greenlisted||[] };
   if(STATE.ignoredMeta._doc) obj._doc=STATE.ignoredMeta._doc;   // keep the doc string as the first key when present
   const ordered=STATE.ignoredMeta._doc ? { _doc:STATE.ignoredMeta._doc, items:obj.items, greenlisted:obj.greenlisted } : obj;
+  const local=await pushLocalFile(IGNORED_PATH, ordered);
+  if(local.ok){ logEvent('info','action','ignore list saved locally ('+STATE.ignored.length+' items)'); return; }
+  if(IS_LOCALHOST){ logEvent('warn','ignore','local write-back failed: '+local.reason); return; }
+  if(!ghConfigured()) return;
   const res=await putJsonFile(IGNORED_PATH, ordered, 'app: ignore list ('+STATE.ignored.length+' items)');
   if(res.ok){ if(!res.noop) logEvent('info','action','ignore list synced to repo ('+STATE.ignored.length+')'); }
   else logEvent('warn','ignore','repo write-back failed: '+res.reason);

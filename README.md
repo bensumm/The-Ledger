@@ -608,7 +608,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `createRequire` load — no global `--no-warnings` flag on any script. CLI: `node
     pipeline/lib/archive.mjs [--prune-before <ts>]` (prune shipped, unused by default)), `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
-    `loadHistDaily` (YF1) + `loadDaily` re-pointed at the D0 archive (byte-identical `{ts,mid}` output,
+    `loadHistDaily` (YF1) + `loadBands(hours,{db})` — the whole-market 5m intraday band read, PERF-1
+    (2026-07-19) re-pointed at the D0 SQLite archive (`marketAt('5m',w)`, check-before-fetch,
+    optional shared `db` handle) off the retired `.cache/bands/` flat-file day-cache that was read in
+    full every scan pass; `BANDS_DIR`/`BANDS_RETENTION_DAYS` gone (archive is append-forever). Pinned
+    by `pipeline/test/loadbands.test.mjs`. `loadHistBands` (its own per-item outcomes-band cache) is a
+    SEPARATE function, untouched + `loadDaily` re-pointed at the D0 archive (byte-identical `{ts,mid}` output,
     proven vs the old cache) + `loadSnapshot()` — the D0 per-pass immutable context `{ts, latest, v24,
     mapping, guide, archive, series(id)}` composed from the existing loaders, passively accruing the
     archive (appends the current bulk `/1h`+`/5m` buckets, check-before-fetch) + the FC1 opt-in cross-invocation fetch
@@ -1128,6 +1133,17 @@ operations (mirroring `watch-log.mjs`'s zero-git rule) and is never reachable of
 (it runs a shell command). On deployed GitHub Pages there is no endpoint, so Refresh
 degrades to re-fetching the committed `screen.json` (and surfaces an honest "run the
 pipeline" hint if that snapshot isn't newer) — the deployed behavior is unchanged.
+
+**`POST /api/local-file?path=<watchlist.json|ignored-items.json>`** (LOCAL-FILE1, 2026-07-19 —
+Ben: "the local server IS the app," GitHub Pages was the early proof of concept) — writes the
+POST body (a JSON array/object) straight to that repo-root file, ZERO git, allowlisted by
+basename. This is the localhost counterpart to `js/github.js`'s `putJsonFile`: toggling the
+Watchlist/Ignore list in the app (`pushWatchlist`/`pushIgnored`, `js/ui.js`) now persists
+immediately on localhost without needing a GitHub token configured — previously that write-back
+only fired on the token-configured (mobile/Pages) path, so a localhost browser session's
+watchlist additions lived only in `localStorage` and were invisible to the pipeline/console
+screen until someone noticed the mismatch. Silent/best-effort like the GitHub path it complements;
+falls through to that path automatically off-localhost.
 
 `serve.cmd` is also the **live desk experience** (LW2): it now `start /b`s the
 `watch-log.mjs` daemon in the same console (one Ctrl+C stops both, commit `74e437a`), so no

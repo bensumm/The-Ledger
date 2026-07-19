@@ -12,6 +12,14 @@
  *                     { ok:true, generatedAt } (the new snapshot's timestamp) once the file is
  *                     written, or { ok:false, error } / { ok:false, busy:true } (single-flight).
  *
+ *   POST /api/local-file?path=<watchlist.json|ignored-items.json>
+ *                   → writes the request body (a JSON array) to that repo-root file, ZERO git — the
+ *                     localhost counterpart to js/github.js's `putJsonFile` (Ben, 2026-07-19: "the
+ *                     local server IS the app" — GitHub Pages was the early proof of concept, so a
+ *                     browser action like toggling the watchlist shouldn't silently depend on a
+ *                     GitHub token just to persist locally). `path` is allowlisted below; nothing
+ *                     else is writable through this endpoint.
+ *
  * WHY this is safe / why zero-git: on the LOCAL dev server the browser reads screen.json off local
  * disk (this server serves the repo root; screen.json is ROOT-LOCKED). So a fresh LOCAL scan is
  * purely a local file write — it has NOTHING to do with git. This endpoint therefore does NO git
@@ -83,6 +91,29 @@ async function handleScan(res) {
   }
 }
 
+// --- /api/local-file — local, zero-git write-back for small app-editable JSON files -----------
+// Allowlisted by basename (never an arbitrary path — this server binds 127.0.0.1 only, but stay
+// strict anyway): the app's own config files, the same two `putJsonFile` already targets on GitHub.
+const LOCAL_FILE_ALLOW = new Set(['watchlist.json', 'ignored-items.json']);
+
+function handleLocalFileWrite(req, res, query) {
+  const rel = query.get('path') || '';
+  if (!LOCAL_FILE_ALLOW.has(rel)) { sendJson(res, 400, { ok: false, error: 'path not allowlisted: ' + rel }); return; }
+  let body = '';
+  req.on('data', chunk => { body += chunk; if (body.length > 1_000_000) req.destroy(); });
+  req.on('end', () => {
+    let parsed;
+    try { parsed = JSON.parse(body); } catch (e) { sendJson(res, 400, { ok: false, error: 'invalid JSON body: ' + (e.message || e) }); return; }
+    try {
+      fs.writeFileSync(path.join(ROOT, rel), JSON.stringify(parsed, null, 2) + '\n');
+      console.log(`${hhmm()} /api/local-file — wrote ${rel} (${Array.isArray(parsed) ? parsed.length + ' items' : 'object'})`);
+      sendJson(res, 200, { ok: true, path: rel });
+    } catch (e) {
+      sendJson(res, 500, { ok: false, error: 'write failed: ' + (e.message || e) });
+    }
+  });
+}
+
 // --- static file serving (repo root) --------------------------------------------------------
 function serveStatic(req, res) {
   let rel = decodeURIComponent((req.url || '/').split('?')[0]);
@@ -95,10 +126,16 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer((req, res) => {
-  const url = (req.url || '/').split('?')[0];
+  const fullUrl = new URL(req.url || '/', `http://${HOST}:${PORT}`);
+  const url = fullUrl.pathname;
   if (url === '/api/scan') {
     if (req.method !== 'POST') { sendJson(res, 405, { ok: false, error: 'POST only' }); return; }
     handleScan(res);
+    return;
+  }
+  if (url === '/api/local-file') {
+    if (req.method !== 'POST') { sendJson(res, 405, { ok: false, error: 'POST only' }); return; }
+    handleLocalFileWrite(req, res, fullUrl.searchParams);
     return;
   }
   serveStatic(req, res);

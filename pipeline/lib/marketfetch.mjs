@@ -18,7 +18,6 @@ import { open as openArchive } from './archive.mjs';   // D0: Tier-1 SQLite mark
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = path.join(HERE, '..', '.cache'); // pipeline/.cache/ — this file lives in pipeline/lib/ (OR2)
-const BANDS_DIR = path.join(CACHE_DIR, 'bands');       // whole-market 5m window archive (gitignored via .cache/)
 const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
 const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
 const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (join-outcomes.mjs; tiny)
@@ -189,8 +188,9 @@ export async function fetchItemInputs(id, { ts1h = false } = {}) {
    fine and re-running the screen shouldn't re-hammer the API — the "avoid needless re-fetches"
    rule). quote-items.mjs --positions deliberately keeps the UNcached fetchTs (position management wants
    live). Files are overwritten per (id,step); prune old ones with pruneCache('ts', …). --- */
+let tsDirEnsured = false;   // PERF: the TS_DIR mkdir is idempotent — do it ONCE per process, not per call.
 export async function fetchTsCached(id, step, ttlMs) {
-  ensureCacheDir(); try { fs.mkdirSync(TS_DIR, { recursive: true }); } catch {}
+  if (!tsDirEnsured) { ensureCacheDir(); try { fs.mkdirSync(TS_DIR, { recursive: true }); } catch {} tsDirEnsured = true; }
   const p = path.join(TS_DIR, id + '-' + step + '.json');
   try { const o = JSON.parse(fs.readFileSync(p, 'utf8')); if (o && Date.now() - o.ts < ttlMs) return o.data; } catch {}
   const data = await fetchTs(id, step);
@@ -344,11 +344,20 @@ export async function loadAll24hRolling({ db } = {}) {
 /* --- loadBands(hours): whole-market intraday band data for EVERY item, zero per-item
    timeseries calls (chunk 9.1). The wiki /5m endpoint is a bulk whole-market snapshot and
    accepts ?timestamp=<unix, divisible by 300> to fetch a past 5m window. We walk the last
-   `hours` of 5m windows, reading each from a local per-day archive under .cache/bands/ when
-   present else fetching it once and appending it. First cold 2h run ≈ 24 bulk calls (~70ms
-   apart); every later run only backfills the windows minted since. Files older than the retention
-   window (BANDS_RETENTION_DAYS, raised 7d→90d for O1 — outcome analysis reads historical bands at
-   trade-placement time) are pruned.
+   `hours` of 5m windows, reading each from the Tier-1 SQLite archive (PERF-1, 2026-07-19 —
+   migrated off a flat-file-per-day cache under .cache/bands/) when present, else fetching it
+   once and appending it. First cold 2h run ≈ 24 bulk calls (~70ms apart); every later run only
+   backfills the windows minted since — mirrors loadAll24hRolling's check-before-fetch pattern.
+
+   PERF-1: the old .cache/bands/*.json day-files were read IN FULL (every retained day, up to
+   BANDS_RETENTION_DAYS=90) on every single call just to pull the ~24 needed windows — measured at
+   45-70% of a whole `/scan` pass's wall time once the cache grew past a couple weeks (359MB / 17
+   files at the time of the fix), and only getting worse as it accreted toward the 90d cap. The
+   SQLite archive already indexes by (grain, ts) — `marketAt('5m', w)` reads exactly the requested
+   window, no linear scan, no retention pruning needed (the archive is append-forever by policy,
+   ~30-35GB/yr, same as every other grain it stores). `loadHistBands` (below) is a SEPARATE
+   function with its own per-item reduced cache (.cache/outcomes-bands/) for the outcome-join's
+   past-window reconstruction — untouched by this change, do not conflate the two.
 
    Window alignment (verified live 2026-07-03 against id 560): `latest = floor(now/300)*300 - 300`
    is the last COMPLETE 5m window and equals the last point of /timeseries?timestep=5m; the 24
@@ -358,12 +367,10 @@ export async function loadAll24hRolling({ db } = {}) {
    Returns { [id]: { bandLo: min avgLowPrice, bandHi: max avgHighPrice, active5m: #windows two-sided
    WITHIN one 5m bucket (display/quality signal), tradedWin: #windows with ANY trade (Bar D density),
    sawLow / sawHigh: did each side print ≥1× across the window (Bar D two-sidedness) } } for every item
-   seen in the windows. bandCore (js/flip-niches.mjs) gates on tradedWin + sawLow/sawHigh, not active5m. --- */
-function dayKey(unixSec) { return new Date(unixSec * 1000).toISOString().slice(0, 10); } // UTC day
-// Band archive retention. Raised 7d→90d for O1: pipeline/commands/join-outcomes.mjs reconstructs the trailing-2h
-// band at each historical trade PLACEMENT, so recent (weeks-old) windows must survive to be joinable.
-// Local + gitignored (.cache/) — band data is NEVER committed. 90d is the enrichable outcome window.
-export const BANDS_RETENTION_DAYS = 90;
+   seen in the windows. bandCore (js/flip-niches.mjs) gates on tradedWin + sawLow/sawHigh, not active5m.
+
+   `db`: an already-open archive handle to share (mirrors loadAll24hRolling/loadSnapshot) — when
+   omitted, loadBands opens and closes its own. --- */
 
 /* --- Bar E (Ben 2026-07-10) — robustify the band EDGES so a lone flier print can't set bandHi/bandLo.
    robustBand + the three BAND_EDGE_* placeholders now live in js/quotecore.js (app+node shared home,
@@ -378,77 +385,54 @@ export const BANDS_RETENTION_DAYS = 90;
 import { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q } from '../../js/quotecore.js';
 export { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q };   // re-export: callers/tests import from here
 
-export async function loadBands(hours = 2) {
-  ensureCacheDir();
-  try { fs.mkdirSync(BANDS_DIR, { recursive: true }); } catch {}
-  const step = 300;
-  const now = Math.floor(Date.now() / 1000);
-  const latest = Math.floor(now / step) * step - step;       // last complete 5m window
-  const nWin = Math.max(1, Math.ceil(hours * 3600 / step));
-  const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
+export async function loadBands(hours = 2, { db } = {}) {
+  const archive = db || openArchive();
+  const ownArchive = !db;
+  try {
+    const step = 300;
+    const now = Math.floor(Date.now() / 1000);
+    const latest = Math.floor(now / step) * step - step;       // last complete 5m window
+    const nWin = Math.max(1, Math.ceil(hours * 3600 / step));
+    const windows = []; for (let i = 0; i < nWin; i++) windows.push(latest - i * step);
 
-  // load existing per-day archive, pruning files whose day is entirely older than retention
-  const cutoff = now - BANDS_RETENTION_DAYS * 86400;
-  const archive = new Map();                                  // windowUnix -> {id:{...}}
-  let files = []; try { files = fs.readdirSync(BANDS_DIR); } catch {}
-  for (const f of files) {
-    if (!f.endsWith('.json')) continue;
-    const dayStart = Date.parse(f.slice(0, 10) + 'T00:00:00Z') / 1000;
-    if (Number.isFinite(dayStart) && dayStart + 86400 < cutoff) {
-      try { fs.unlinkSync(path.join(BANDS_DIR, f)); } catch {}
-      continue;
+    // backfill only the /5m buckets the archive lacks (bulk fetch each once, append RAW — idempotent PK)
+    for (const w of windows) {
+      if (archive.hasBucket('5m', w)) continue;
+      let data = null;
+      try { data = (await jget(API + '/5m?timestamp=' + w)).data || null; } catch { data = null; }
+      await sleep(70);
+      if (!data) continue;
+      try { archive.append('5m', w, data); } catch {}
     }
-    try {
-      const obj = JSON.parse(fs.readFileSync(path.join(BANDS_DIR, f), 'utf8'));
-      for (const w in obj) archive.set(+w, obj[w]);
-    } catch {}
-  }
 
-  // backfill only the missing windows (bulk fetch each once, append to its day file)
-  const touched = new Map();                                  // dayKey -> {window:data}
-  for (const w of windows) {
-    if (archive.has(w)) continue;
-    let data = null;
-    try { data = (await jget(API + '/5m?timestamp=' + w)).data || {}; } catch { data = null; }
-    await sleep(70);
-    if (!data) continue;
-    archive.set(w, data);
-    const dk = dayKey(w);
-    if (!touched.has(dk)) {
-      let cur = {}; try { cur = JSON.parse(fs.readFileSync(path.join(BANDS_DIR, dk + '.json'), 'utf8')); } catch {}
-      touched.set(dk, cur);
+    // aggregate per item across the requested windows (matches computeQuote min/max over ts.slice(-24))
+    const bands = {};
+    for (const w of windows) {
+      const snap = archive.marketAt('5m', w);
+      for (const id in snap) {
+        const e = snap[id]; if (!e) continue;
+        let b = bands[id]; if (!b) b = bands[id] = { los: [], his: [], active5m: 0, tradedWin: 0, sawLow: false, sawHigh: false };
+        if (e.avgLowPrice)  b.los.push(e.avgLowPrice);   // Bar E: collect each side's prints; robustBand sets the edge below
+        if (e.avgHighPrice) b.his.push(e.avgHighPrice);
+        const lv = e.lowPriceVolume || 0, hv = e.highPriceVolume || 0;
+        if (lv > 0 && hv > 0) b.active5m++;   // both sides in the SAME 5m window (a quality/display signal, no longer the gate)
+        if (lv > 0 || hv > 0) b.tradedWin++;  // Bar D DENSITY: any trade this window (one-sided OK)
+        if (lv > 0) b.sawLow = true;          // Bar D TWO-SIDEDNESS: each side printed ≥1× across the whole window
+        if (hv > 0) b.sawHigh = true;
+      }
     }
-    touched.get(dk)[w] = data;
-  }
-  for (const [dk, obj] of touched) {
-    try { fs.writeFileSync(path.join(BANDS_DIR, dk + '.json'), JSON.stringify(obj)); } catch {}
-  }
-
-  // aggregate per item across the requested windows (matches computeQuote min/max over ts.slice(-24))
-  const bands = {};
-  for (const w of windows) {
-    const snap = archive.get(w); if (!snap) continue;
-    for (const id in snap) {
-      const e = snap[id]; if (!e) continue;
-      let b = bands[id]; if (!b) b = bands[id] = { los: [], his: [], active5m: 0, tradedWin: 0, sawLow: false, sawHigh: false };
-      if (e.avgLowPrice)  b.los.push(e.avgLowPrice);   // Bar E: collect each side's prints; robustBand sets the edge below
-      if (e.avgHighPrice) b.his.push(e.avgHighPrice);
-      const lv = e.lowPriceVolume || 0, hv = e.highPriceVolume || 0;
-      if (lv > 0 && hv > 0) b.active5m++;   // both sides in the SAME 5m window (a quality/display signal, no longer the gate)
-      if (lv > 0 || hv > 0) b.tradedWin++;  // Bar D DENSITY: any trade this window (one-sided OK)
-      if (lv > 0) b.sawLow = true;          // Bar D TWO-SIDEDNESS: each side printed ≥1× across the whole window
-      if (hv > 0) b.sawHigh = true;
+    // Bar E — set each band's edges from the collected prints (robust p90/p10 on a dense side, raw
+    // extremum on a sparse one); rawBandLo/rawBandHi kept for audit. Drop the working arrays.
+    for (const id in bands) {
+      const b = bands[id];
+      const r = robustBand(b.los, b.his);
+      b.bandLo = r.bandLo; b.bandHi = r.bandHi; b.rawBandLo = r.rawBandLo; b.rawBandHi = r.rawBandHi;
+      delete b.los; delete b.his;
     }
+    return bands;
+  } finally {
+    if (ownArchive) archive.close();
   }
-  // Bar E — set each band's edges from the collected prints (robust p90/p10 on a dense side, raw
-  // extremum on a sparse one); rawBandLo/rawBandHi kept for audit. Drop the working arrays.
-  for (const id in bands) {
-    const b = bands[id];
-    const r = robustBand(b.los, b.his);
-    b.bandLo = r.bandLo; b.bandHi = r.bandHi; b.rawBandLo = r.rawBandLo; b.rawBandHi = r.rawBandHi;
-    delete b.los; delete b.his;
-  }
-  return bands;
 }
 
 /* --- loadDaily(days, stepHours): a BULK multi-day mid-price series for EVERY item, zero per-item
