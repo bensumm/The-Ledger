@@ -92,6 +92,7 @@ import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PL
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
+import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
@@ -199,6 +200,12 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
+// ADMISSION (PLAN-SCREEN-ARCHITECTURE, 2026-07-18): the fetch-pool admission path. UNIFIED is now the
+// default — pickFetchPool (pipeline/lib/admission.mjs) ranks the thin lane on its after-tax realistic
+// edge instead of raw gp-flow, adds a bounded rotating exploration reserve, folds in the track-record
+// boost, and reports every excluded candidate. `--admission legacy` restores rankAndSlice byte-for-byte
+// (gatecandidates.mjs is unchanged and still fixture/golden-pinned) for rollback/comparison.
+const ADMISSION = A['admission'] === 'legacy' ? 'legacy' : 'unified';
 // GC1: the CLI-derived thresholds gateCandidates consumes, grouped into ONE object so the gate stack
 // takes them as an argument (fixtures can drive it) instead of closing over module-level CLI state.
 // main() passes THRESHOLDS; nothing about the values or ordering changed — this is a pure refactor.
@@ -451,7 +458,7 @@ export function buildScreenNicheReport({ headerLines = [], table = null, estExpl
 // (the app contract stays byte-identical — a previously-empty niche still publishes []). Everything else
 // — validators (reject still DROPS), per-spec falling doctrine, posture — runs UNCHANGED on the fallback
 // rows: a sub-floor pass relaxes floors, never doctrine. subFloor==null ⇒ byte-identical to pre-P6c.
-function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily, { partition = false } = {}) {
+function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily, { partition = false } = {}) {
   const rows = [];
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
@@ -1012,6 +1019,19 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       ...rows.map(r => pathLine(map.byId[r.id]?.name || ('#' + r.id), r.pathWeighed, defaultPath)),
     ] });
   }
+  // SC1 (PLAN-SCREEN-ARCHITECTURE, 2026-07-18) — exclusion visibility. UNCONDITIONAL (not behind
+  // --stats): the bludgeon/sanguinesti anchor incident was invisible for months because nothing
+  // reported that a real edge lost its fetch slot to a higher-gp-flow big ticket; this line exists
+  // so that class of silent starvation can't happen again without being named every single pass.
+  // Empty under `--admission legacy` (rankAndSlice never returns excluded) and on the value niche
+  // (its own §F admitted/shown footer already covers this).
+  if (excluded.length) {
+    const best = excluded[0];   // pre-sorted desc by expGpDay in admission.mjs
+    const bestName = map.byId[best.id]?.name || ('#' + best.id);
+    extraSections.push({ type: 'lines', blank: false, lines: [
+      `crowded out: ${excluded.length} gated candidate(s) never got a fetch slot (best excluded: ${bestName}, ~${fmt(best.expGpDay || 0)}/d expected net, reason: ${best.reason})`,
+    ] });
+  }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
     const reasons = `falling ${disc.falling}` + (mode === 'scalp' ? `, not-falling ${disc.notFalling}` : '') + (partition ? `, band-lane partition ${disc.partition}` : '') + (POSTURE === 'overnight' ? `, posture ${disc.posture}` : '') + (PHASE_RESCUE ? `, basing-rescued ${disc.rescued}` : '') + `, validator-reject ${disc.reject}, validator-caution ${disc.caution}, neg-net ${disc.negNet}`;
@@ -1265,6 +1285,7 @@ let BUYS_BY_ITEM = new Map();
 // held-item ids (2026-07-16) — same module-level-let-set-in-main pattern as BUYS_BY_ITEM above, so
 // renderMode (a separate function) can read what main() loaded. Empty set ⇒ no override ⇒ byte-identical.
 let HELD_IDS = new Set();
+let TRACK_INDEX = null;   // admission.mjs track-record boost index (built from positions.json closed lots)
 function loadBuysByItem() {
   try { return buysByItem(JSON.parse(readFileSync(join(REPO_ROOT, 'fills.json'), 'utf8')).events || []); }
   catch { return new Map(); }   // absent/unreadable fills.json → no limit context (validator degrades to pass)
@@ -1345,8 +1366,14 @@ async function main() {
   // apply manually every pass; moved here so a held item can't silently vanish from band/churn the
   // moment its regime flips to falling). Read-only, no fetch — degrades to an empty set on any error so
   // a positions.json problem never breaks the screen itself.
-  try { const { groups } = readOpenPositions(join(REPO_ROOT, 'positions.json')); HELD_IDS = new Set((groups || []).map(g => g.itemId)); }
-  catch { /* no positions.json → nothing held → no override, exactly today's behavior */ }
+  try {
+    const { groups, pos } = readOpenPositions(join(REPO_ROOT, 'positions.json'));
+    HELD_IDS = new Set((groups || []).map(g => g.itemId));
+    // Track-record admission boost (R4, Ben 2026-07-18): built from the SAME positions.json read —
+    // no new fs/fetch. Absent/unparseable positions.json → empty index → boostOf degrades to 1
+    // everywhere (byte-identical to no boost at all).
+    TRACK_INDEX = buildTrackIndex(pos && pos.closed);
+  } catch { /* no positions.json → nothing held, no track record → no override, exactly today's behavior */ }
   const map = await loadMapping();
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
@@ -1382,6 +1409,16 @@ async function main() {
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
   const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure
 
+  // ADMIT: the fetch-pool admission call — dispatches on ADMISSION (default 'unified', PLAN-SCREEN-
+  // ARCHITECTURE). `legacy` calls rankAndSlice exactly as before (excluded always [], byte-identical);
+  // `unified` calls pickFetchPool (admission.mjs) — same shape, but the thin lane ranks on realistic
+  // after-tax edge instead of raw gp-flow, a bounded exploration reserve rotates in starved candidates,
+  // the track-record boost folds into every lane's sort key, and every non-admitted candidate comes
+  // back with a reason instead of silently vanishing.
+  const admit = (m, cand, opts) => ADMISSION === 'legacy'
+    ? { survivors: rankAndSlice(m, cand, daily, opts), excluded: [] }
+    : pickFetchPool(m, cand, daily, { ...opts, trackIndex: TRACK_INDEX });
+
   // gate every mode, then proxy-rank its gated pool and take the top-N fetch pool. P5 value ranks by
   // valueScore and takes a HARD top-N (VALUE_TOP_DEFAULT §F) — a bounded shortlist off a large pool.
   const gated = {};
@@ -1398,11 +1435,13 @@ async function main() {
     if (!cand.length && FLIP_NICHES[m].gate !== 'value') {
       const fb = subFloorFallback(m, ctx, THRESHOLDS);
       if (fb) {
-        gated[m] = { cand: fb.cand, survivors: rankAndSlice(m, fb.cand, daily, { thinReserve: THIN_RESERVE, top: SUBFLOOR_TOP }), subFloor: fb };
+        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: THIN_RESERVE, top: SUBFLOOR_TOP });
+        gated[m] = { cand: fb.cand, survivors, excluded, subFloor: fb };
         continue;
       }
     }
-    gated[m] = { cand, survivors: rankAndSlice(m, cand, daily, { thinReserve: THIN_RESERVE, top }) };
+    const { survivors, excluded } = admit(m, cand, { thinReserve: THIN_RESERVE, top });
+    gated[m] = { cand, survivors, excluded };
   }
 
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it.
@@ -1436,7 +1475,7 @@ async function main() {
     await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, ids.size) || 1 }, worker));
   }
 
-  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche`);
+  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche, admission ${ADMISSION.toUpperCase()}`);
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
   if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);
