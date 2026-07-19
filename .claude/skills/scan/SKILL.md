@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.66
+version: 1.73
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -18,6 +18,18 @@ actual numbers/columns directly. This applies to `screen-flip-niches.mjs` and to
 the table, it doesn't replace it. On a repeated/looped scan where nothing material changed,
 it's fine to note that and skip re-pasting — but when there IS something to report, paste the
 table, don't just describe it.
+
+**"Verbatim" means the NUMBERS aren't altered — it does NOT mean dumping every dust-tier row
+(Ben, 2026-07-19 — reconciles this rule against the standing `actionable-first-dead-last`
+memory, which this skipped in practice).** _(judgment: relay discipline)_ A D-grade row with a
+few-gp net (Sunfire splinters net 9, Amethyst arrowtips net 27 — real anchor, 2026-07-19) is
+noise, not a candidate; pasting the WHOLE script table including its D-grade/BE-floored tail
+every pass is what made a reply "unreadable" in practice. **Trim before pasting**: keep every
+row that's genuinely gradeable (roughly B- and above, or any row you're about to discuss in the
+judgment pass), and collapse the rest into ONE line — `Skipped: N D-grade/BE-floored rows
+(negligible net): Item, Item, …` — at the bottom, per `actionable-first-dead-last`. This is a
+row-count trim, not a column/number edit — nothing about a KEPT row's numbers changes, and
+nothing is silently dropped (the skipped names are still named, just not as full rows).
 
 **Quiet is now the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
 for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
@@ -64,13 +76,20 @@ F1-gated on the neutral estimator — running either just silently skips the wri
 of erroring (only an EXPLICIT `--publish --asym`/`--publish --pressure-exit` combo still hard-refuses,
 since that's a real conflict, not an accidental default).
 
-**After the judgment pass (§2), write a short analysis blurb for the app's Scan tab (Ben, 2026-07-16)
-when Ben wants the tab updated:** `node pipeline/commands/set-scan-analysis.mjs "<html>"` patches
-repo-root `screen.json`'s `analysis` field (no re-scan, zero refetch) — it renders at the TOP of the
-Scan tab, separate from the tables below it (`#scanAnalysis`). This is the judgment READ over the
-scan you just ran, written in your own words — not a template, not auto-generated. Keep it short (a
-few sentences); `--clear` removes it if it goes stale. Skip this entirely on a console-only /scan
-pass — it's for when the app tab is the actual deliverable.
+**After the judgment pass (§2), write a short analysis blurb for the app's Scan tab — ALWAYS,
+every publishing run (Ben, 2026-07-18 — supersedes the 2026-07-16 "when Ben wants the tab updated"
+gate).** `node pipeline/commands/set-scan-analysis.mjs "<html>"` patches repo-root `screen.json`'s
+`analysis` field (no re-scan, zero refetch) — it renders at the TOP of the Scan tab, separate from
+the tables below it (`#scanAnalysis`). Ben was missing this on the app almost every session because
+the step was conditional and kept getting skipped; it is now a mandatory last step of every `/scan`
+pass that publishes (i.e. every run except `--no-publish`), not something to remember to offer. This
+is the judgment READ over the scan you just ran, written in your own words — not a template, not
+auto-generated. Keep it short (a few sentences); `--clear` removes it if it goes stale, and a fresh
+`set-scan-analysis.mjs` call on the next pass simply overwrites it — no manual clear needed between
+runs. Because publishing is a local file write straight into repo-root `screen.json`, and
+`dev-server.mjs`/`serve.cmd` serve that same file same-origin, the analysis reaches the localhost
+app the moment it's written — no extra step to "push it to the local server." Skip this ONLY on an
+explicit `--no-publish` throwaway console read.
 
 Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
 a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
@@ -368,6 +387,22 @@ This is the tribal layer the script can't do — apply ALL of these:
       ⚠ stale) as a dip-fill; live instasell was 13.53m, ~90k above the bid — it needed the pullback
       to *deepen*, which recent history argued against. Repriced to 13.50m (near live) to actually
       fill. The reachable-ASK side (3/3 recent) was genuine; it was the bid fill I got ahead of.
+    - **A low BAND buy-reach is "patient/deep," NOT "dead" — the Est. buy now PRICES the band low
+      (PLAN-ESTIMATOR-POSTURE AC1, 2026-07-18).** The band flip-niche's `Est. buy` no longer folds up toward
+      live when its recent touch-reach is low (that fold was collapsing real patient band flips to
+      "+1 BE-floored" and reading the board dead). It now prices the band low and CARRIES the fill-signal
+      in the cell: `17.30m (0/3 · 9/14 · p93)` = the reach token PLUS a **placement percentile** (`pXX` =
+      where that bid sits in the 14-day daily-LOW distribution; a **low pXX = below most daily lows = a
+      deep/patient entry**). So a band-low bid with a low recent reach is a rest-it-as-optionality patient
+      bid (it fills on the next real dip), NOT a dead row — the Est. net now shows its true patient edge.
+      The RANK still discounts it (low bid-reach → low P(fill) → it ranks BELOW an equal-net fill-now flip),
+      so a rarely-filling deep bid shows its real edge without out-ranking a printer. **CHURN now behaves
+      the SAME (PLAN-ESTIMATOR-POSTURE AC5/AC6, 2026-07-18)** — churn's `Est. buy` AND `Est. sell` are now
+      unfolded band-edge prices too (the day-level reach mismeasures a tight symmetric lap; the codebase
+      already skipped it for rank + grade). So a churn row's Est. cells carry no reach caution token —
+      **read the RANK/GRADE for churn fill risk, not the Est. cell**. This un-floored Super restore(4)-class
+      churn rows from `+1 (BE-floored)` to a real net. The reach-FOLD now lives in the VALIDATION step
+      (`read-window-range.mjs`'s `fold:` line — the trio below), not the churn discovery price.
   **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run
@@ -384,6 +419,44 @@ This is the tribal layer the script can't do — apply ALL of these:
   profit until `--ask` confirms the reach. (Decided against re-scoring the screen off a reachable sell:
   the cheap ts6h proxy understates reach → false negatives that HIDE good sells, worse than the
   problem; run `--ask` on the handful you actually pitch instead — accurate + cheap.)
+  - **The verification TRIO — mandatory for every top pick, ONE combined call, every time (Ben,
+    2026-07-18 — supersedes "run `--profile` on the handful you actually pitch" being optional;
+    revised same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit`/`--depth`
+    instead of short-circuiting the rest of the per-item read).**
+    The sell-leg-only rule above is the FLOOR, not the whole bundle. Before naming a bid/ask on
+    anything you're about to recommend, run ONE `read-window-range.mjs` call bundling all three
+    checks — cheap (no new fetch beyond the archive), each catching a different failure mode
+    already seen this session:
+    ```
+    node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window <hours> --profile --json --out pipeline/.cache/last-report/verify.json
+    ```
+    1. **`--ask <sell>` / `--bid <buy>` (percentile + reach, AC4a).** Read both numbers printed,
+       not just the day-count: `reached N/14d · recent M/3 · placement pXX of the 14-day daily-
+       HIGH/LOW distribution`. A level can have solid N/14 reach and still be an aggressive ask if
+       its placement percentile is high (near the top of the distribution) — the percentile is
+       what the raw reach count hides.
+    2. **`--exit <ask> [--window <hours>] [--margin <gp>]` (tax-exact back-solve).** Gives the real
+       breakeven BUY for that sell (`maxBuyForExit`, already tax-net) — margin is this value MINUS
+       the actual bid, never a raw ask-minus-bid subtraction (the Tormented synapse correction,
+       2026-07-17: a naive subtraction on an already-tax-net value overstated margin ~4x, and part
+       of the "safe" bid range actually crossed into a loss).
+    3. **`--profile` (hour-by-hour diurnal sweep).** Don't stop at the auto Diurnal-timing line —
+       pull the full 24-row hour-of-day table and read the printed DIP/PEAK windows + amplitude/
+       trend yourself before stating a timing target. Same underlying data as the auto-note, full
+       resolution, so "targets the 20:00–21:00 dip" is backed by the actual numbers, not a
+       summarized guess.
+    Each scored `--ask`/`--bid`/`--exit` also prints a **`fold:` data-point line** (PLAN-ESTIMATOR-POSTURE
+    AC8): `best-case ask X → reach-folded Y (recent a/b · full c/d) · net at folded pair …`. This is where
+    the reach-fold moved — discovery shows best-case, validation shows what the estimator's fold makes of
+    the level you're about to pitch. Read both numbers: a big gap between best-case and folded = a
+    stale-top mirage. Inform-only, a PLACEHOLDER — never gates; `--niche churn` shows churn's exempt fold
+    (≈ best-case). None of these move the grade or the gate tree — they're the confirmation pass on the
+    specific number about to get said out loud. Skipping one is exactly the DHCB/Tormented-synapse failure
+    shape: the tool existed, wasn't run, and the pitched number was wrong in a way it would have
+    caught. **Dump it with `--out`** for any candidate `/scan` is elevating — a top pick per
+    flip-niche, or one specifically pitched in the analysis blurb — so `set-scan-analysis.mjs` and
+    `/positions`' deep-dive step can read `pipeline/.cache/last-report/verify.json` instead of
+    re-running the checks by hand or re-deriving the numbers.
   - **Tranche-size-as-%-of-daily-volume is the variable that predicts when the reach-relief
     premium collapses (2026-07-17, real-fill evidence, n≈6 items).** `reachRelief`
     (`js/estimators.mjs`) softens the ask-reach fold on the theory that a position small vs daily
@@ -457,6 +530,17 @@ This is the tribal layer the script can't do — apply ALL of these:
   heading, run the same full-day multi-week trajectory read — `/positions` "trajectory read for
   confidence on a marginal/big-ticket hold" (`read-window-range.mjs --window 0-23 --nights 21`,
   phase-mapped). Point to it; don't copy the method here.
+- **A "crowded out: N (best excluded: X)" footer line means a real edge lost its fetch slot — read
+  it, don't skip past it (PLAN-SCREEN-ARCHITECTURE, 2026-07-18).** _(judgment: relay discipline; mechanic in `pipeline/lib/admission.mjs` `pickFetchPool`)_
+  The fetch pool is bounded (API-fetch cost) — only so many gated candidates get priced each pass.
+  Since the anchor incident (Abyssal bludgeon / Sanguinesti staff never surfacing despite real
+  profitable history — the raw-gp-flow-ranked thin reserve was silently starving them out every
+  single pass), the DEFAULT admission path ranks the thin/big-ticket lane on real after-tax edge
+  instead of raw turnover, rotates in starved candidates on a bounded exploration reserve, and
+  reports every excluded candidate with a reason instead of dropping it silently. When you see this
+  line, name the best-excluded item to Ben if it's genuinely close — that's the whole point of the
+  line existing. `--admission legacy` restores the old raw-gp-flow reserve (rollback/comparison
+  only, never the default). Full diagnosis + design: `PLAN-SCREEN-ARCHITECTURE.md`.
 - **"Skip despite high grade."** Grade cutoffs are placeholders (`rating.mjs`); a good
   letter on a ghost-spread / thin / tax-eaten row is still a skip — say why in one line.
 - **Lane management — scale what's printing, rotate what's stalling (v1.8, 2026-07-05,
