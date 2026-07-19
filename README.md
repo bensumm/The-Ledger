@@ -682,10 +682,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `screen-flip-niches.mjs --asym`); `estimatePair(spec,row,extra,{nudge,sellModel})` + `entryDoctrine`/`estPairCells`/`estConfLean`/
     `EST_HEADERS` (PLAN-OUTPUT-TABLE 2026-07-13 + REVISIONS — the RECONCILIATION estimator behind the
     console-default `Est. buy`/`Est. sell` columns: `Est. buy` is STRATEGY-AWARE (`entryDoctrine(spec)` off
-    the existing falling/priceBasis fields — scalp near-live · value trough · band/churn reach-folded; the
-    asym DEEP bid is never folded in — rev3); `Est. sell` anchors to a declared `hold-thesis.json` exit
-    ONLY on a HELD lot (FIX 1 — an open lot in positions.json; the discovery screen never anchors), else
-    the reach-folded band top + diurnal/asym blend; confidence is the RECENT-3 reach
+    the existing falling/priceBasis fields — scalp near-live · value trough · **band + churn both price the
+    band low** (PLAN-ESTIMATOR-POSTURE AC1 un-folded band, AC6 un-folded churn — the retired `'reach-fold'`
+    entry doctrine now has NO producer; the deleted buy-fold branch left every non-scalp doctrine emitting
+    the same `ob` anchor); the asym DEEP bid is never folded in — rev3); `Est. sell` anchors to a declared
+    `hold-thesis.json` exit ONLY on a HELD lot (FIX 1 — an open lot in positions.json; the discovery screen
+    never anchors), else the reach-folded band top + diurnal/asym blend — **churn EXEMPT** (AC5: a
+    `foldExempt:'symmetric'` marker forces the sell fold factor to 1 so churn's Est. sell/buy are the
+    unfolded band-edge prices, its reach caution token suppressed; the fold surfaces instead as a
+    validation datapoint in `read-window-range.mjs`, AC8); confidence is the RECENT-3 reach
     (`recencySplit`, the fold basis) with the full window shown on divergence — rev1; ⚓ nudge, BE-floored;
     `--raw` restores Quick/Optimistic; consumed by `screen-flip-niches.mjs`+`quote-items.mjs` stdout only — never the
     `screen.json` publish cells). ALL constants are NAMED PLACEHOLDERS, n≈0 — retrojoin.mjs is the

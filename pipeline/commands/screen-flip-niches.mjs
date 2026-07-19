@@ -641,13 +641,15 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     const estFor = name => estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge, sellModel: name });
     const estShown = estFor(SELL_MODEL.active);
     const est = SELL_MODEL.active === 'reach-fold' ? estShown : estFor('reach-fold');
-    // PLAN-ESTIMATOR-POSTURE AC1: the band-low buy carries a PLACEMENT PERCENTILE beside its touch-reach —
+    // PLAN-ESTIMATOR-POSTURE AC1/AC6: the band-low buy carries a PLACEMENT PERCENTILE beside its touch-reach —
     // where estBuy sits in the 14-day daily-LOW distribution (rbStats.lows, already computed above for
     // reachableBand → ZERO new fetch). A low pXX = "below most daily lows" = a deep/patient entry (the
-    // js/windowread.mjs placement doctrine). BAND NICHE ONLY (doctrine 'band-low'; churn/scalp/value never
-    // reach it), so churn stays byte-identical. Attached to the est confidence so estPairCells renders
-    // `(4/14 · p36)` and estConfLean shadows it for the F1 join. estShown (a pressure trial under --est-sell)
-    // renders 'pressure' in the cell regardless, so its placement is a harmless shadow.
+    // js/windowread.mjs placement doctrine). BAND + CHURN (AC6 routed churn's entry to 'band-low' too, so it
+    // now qualifies — placement is a distribution position, not the invalidated reach signal; churn's reach
+    // token is suppressed by foldExempt but the percentile stays). scalp/value never reach it. Attached to
+    // the est confidence so estPairCells renders `(4/14 · p36)` and estConfLean shadows it for the F1 join.
+    // estShown (a pressure trial under --est-sell) renders 'pressure' in the cell regardless, so its
+    // placement is a harmless shadow.
     if (est && est.confidence.doctrine === 'band-low' && rbStats && rbStats.lows && rbStats.lows.length) {
       est.confidence.buyPlacement = placement(rbStats.lows, est.estBuy);
       if (estShown && estShown !== est && estShown.estBuy != null)
