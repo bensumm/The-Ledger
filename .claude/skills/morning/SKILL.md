@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.13
+version: 1.14
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -21,6 +21,16 @@ labels every note family a TRACKING tier — `core` (verdicts, alerts, the V5 he
 `context` (the inform-only families). _judgment:_ **both render AND relay by default** — there is NO
 default-hidden middle tier, so surface the context notes too. The tier registry lives in
 `pipeline/lib/render.mjs`'s header — the ONE registry; don't restate tiers here.
+
+## 0. Ensure the local desk is up (Ben, 2026-07-18)
+
+Run `node pipeline/commands/ensure-server.mjs` first, every morning pass — it checks whether the
+local dev server (`dev-server.mjs`, :8000) and the log-watcher daemon (`watch-log.mjs`, via its
+`heartbeat.json` liveness signal) are already running, and starts `serve.cmd` (detached) if
+either is down. This used to be a manual "did you run serve.cmd?" assumption; now the morning
+routine checks instead of assuming. Report its one/two status lines, then continue to §1 — don't
+wait around for a freshly-started server, the rest of the review doesn't depend on it (only Ben's
+browser tab does).
 
 ## 1. What filled vs didn't — two sources, two jobs
 
@@ -71,11 +81,13 @@ fixed V5 EMIT CONTRACT — verdict → conviction → Δ → tripwire → **guar
 `sell: list @ X · break-even Y` line** → fill-progress (`MONITORING.md` "What each tick
 surfaces"); the sell line is where you read every held item's list-at without re-deriving it.
 
-## 4. Book the realized P/L narrative
+## 4. Book the realized P/L narrative, then run `/scan`
 
 Summarize `closed` trades since the last session (after-tax), what the overnight offers
-achieved vs the plan Ben recalls, and what to redeploy freed capital into — **offer
-`/scan`** for the redeploy.
+achieved vs the plan Ben recalls, and what to redeploy freed capital into. Then **invoke `/scan`**
+(via the Skill tool — the same composition pattern `/overnight` uses to invoke its children) to
+cover the day's opportunities, so `/morning` ends with both an overnight reconstruction AND a
+fresh opportunity read for the freed capital — not a dangling "you could run /scan" offer.
 
 ## 5. Weekly descriptive-outcomes read (once a week, not every morning)
 

@@ -432,6 +432,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     all --publish` (rewrites `screen.json` with **ZERO git**), single-flight-guarded, so the app's
     Scan-tab "Refresh scan" button runs a REAL local scan; never reachable off-localhost, no git
     ops — see README "Local development"),
+    `ensure-server.mjs` (2026-07-18 — liveness-check-and-nudge for the local live desk: probes the
+    daemon `heartbeat.json` (>90s = stale) + an HTTP GET of `:8000`, and spawns `serve.cmd` detached
+    if EITHER is down. NOT a supervisor — no retries/polling; `/morning` §0 runs it first so the
+    morning pass checks the desk is up instead of assuming it. Consumed by `.claude/skills/morning`),
     `add-manual-fill.mjs` (inject/tombstone
     manual fills), `quote-items.mjs` (per-item / `--positions` market table; PM1 stdout-only `Probes`
     column when a probe fires. `--positions` builds the shared `item-context.mjs` chain per lot — offers.json
