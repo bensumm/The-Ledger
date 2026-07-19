@@ -81,7 +81,7 @@ import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, wi
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
@@ -775,12 +775,32 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
     const pathWeighed = weighEntryPaths(row, ph);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg });
+    // AC9(b): the FILL-PROBABILITY WEIGHT for the overnight sort (below). The overnight board is what
+    // Ben sizes UNATTENDED capital on, so it must lead with edges that will actually FILL overnight —
+    // P(fill) has to DOMINATE. The first cut multiplied optNet by askReachFactor, but that floors at
+    // PFILL_ASKREACH_FLOOR=0.25 and reads the ASK leg ONLY, so a rank-0 / P~0.00 row (its P is driven to
+    // zero by the BID-side reach in estimateRank's pFill, not the ask) kept ≥25% of its raw net and still
+    // sorted high (Extended stamina(4): rank 0, P~0.00, sorted #2). The fix: use the rank's full two-leg
+    // P(fill) — `er.pFill.value` = family/entry (bid) reach × askF (ask reach, churn-exempt per
+    // families.mjs:251). A P~0.00 row now weights ~0 and sinks; a reachable high-P edge leads. Symmetric
+    // niches (churn) stay EXEMPT at weight 1 — the reach read mismeasures a tight two-sided churn band
+    // (Ben 2026-07-12), so churn's overnight order stays raw-optNet, UNCHANGED from the first AC9(b) cut.
+    const ovWeight = (FLIP_NICHES[mode].fillShape === 'symmetric') ? 1 : (er.pFill?.value ?? 0);
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
   // unit (patient band-edge net/u) over velocity — you want the fattest unattended margin, not churn.
-  if (POSTURE === 'overnight') rows.sort((a, b) => (b.row.optNet || 0) - (a.row.optNet || 0) || b.score - a.score);
+  // AC9(b) (PLAN-ESTIMATOR-POSTURE): the overnight primary key is FILL-PROBABILITY-WEIGHTED net edge —
+  // optNet × P(fill) — so the unattended-capital board leads with edges that will actually FILL overnight
+  // and a rank-0 / P~0.00 row (a bid that won't reach, a stale-top mirage) sorts to the BOTTOM, not the
+  // top. This supersedes the first AC9(b) cut (optNet × askReachFactor), which floored at 0.25 and read
+  // the ask leg only, so a P~0.00 row kept ≥25% of its net and still sorted high (Extended stamina(4) #2).
+  // Using the rank's full two-leg pFill (bid×ask) makes P(fill) dominate the way the overnight posture
+  // needs — you're away, the offer MUST fill. Symmetric niches (churn) carry ovWeight=1 → their order is
+  // raw optNet, UNCHANGED (the reach signal is invalid for a tight two-sided churn band). Console-only
+  // (POSTURE never enters the published screen.json cells). CAUTION: this INTENTIONALLY reorders overnight.
+  if (POSTURE === 'overnight') rows.sort((a, b) => ((b.row.optNet || 0) * (b.ovWeight ?? 1)) - ((a.row.optNet || 0) * (a.ovWeight ?? 1)) || b.score - a.score);
   else rows.sort((a, b) => b.score - a.score);
   // PB4: under the pressure-exit trial, RERANK the CONSOLE by the pressure NET (Est. sell − Est. buy of
   // the reachableBand legs) so pressure-attractive picks surface — the reliability guard already keeps a
