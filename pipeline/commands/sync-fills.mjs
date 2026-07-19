@@ -353,20 +353,32 @@ function main() {
   // clobbering a phone push or a PR-merged main — a plain push here is safely rejected on any
   // race it didn't already catch.
   try {
-    // Commit set: fills + positions always; offers.json (LW1 live-offer snapshot), screen.json
-    // (PLAN-2 C1 published scan) and suggestions.jsonl (O1 append-only suggestions ledger) only
-    // when they exist on disk — same add-only-these-files discipline, never a blanket `git add -A`.
-    // When present but unchanged they simply contribute nothing to the porcelain status below.
+    // Commit set: fills + positions always; the rest are OTHER pipeline-derived, git-tracked
+    // state — never a blanket `git add -A` (that would also sweep in in-progress code/doc edits),
+    // just this named list, added only when the file exists on disk. When present but unchanged
+    // they simply contribute nothing to the porcelain status below.
+    // Ben 2026-07-18: "nothing valuable can be lost" — dip-watchlist.json (DL4 auto-nominations),
+    // hold-thesis.json (declared thesis state) and alerts.json (trigger-alerts.mjs) are all
+    // pipeline-WRITTEN derived state that was previously left to accumulate uncommitted between
+    // sessions; folded in here alongside the pre-existing offers/screen/suggestions set. Deliberately
+    // EXCLUDED: watchlist.json / ignored-items.json — those are Ben's own hand-maintained config,
+    // not pipeline output, so they stay under his own manual git control, never auto-committed here.
     const SCREEN_REL = 'screen.json';
     const SUGGEST_REL = 'suggestions.jsonl';
     // SR1: suggestions.jsonl rotation moves completed months into pipeline/suggestions-archive/;
     // commit that dir too (scoped path, never a blanket `git add -A`) so archived history is published.
     const SUGGEST_ARCHIVE_REL = 'pipeline/suggestions-archive';
+    const DIP_WATCHLIST_REL = 'dip-watchlist.json';
+    const HOLD_THESIS_REL = 'hold-thesis.json';
+    const ALERTS_REL = 'alerts.json';
     const commitFiles = [FILLS_REL, POSITIONS_REL];
     if (existsSync(join(REPO_DIR, OFFERS_REL))) commitFiles.push(OFFERS_REL);
     if (existsSync(join(REPO_DIR, SCREEN_REL))) commitFiles.push(SCREEN_REL);
     if (existsSync(join(REPO_DIR, SUGGEST_REL))) commitFiles.push(SUGGEST_REL);
     if (existsSync(join(REPO_DIR, SUGGEST_ARCHIVE_REL))) commitFiles.push(SUGGEST_ARCHIVE_REL);
+    if (existsSync(join(REPO_DIR, DIP_WATCHLIST_REL))) commitFiles.push(DIP_WATCHLIST_REL);
+    if (existsSync(join(REPO_DIR, HOLD_THESIS_REL))) commitFiles.push(HOLD_THESIS_REL);
+    if (existsSync(join(REPO_DIR, ALERTS_REL))) commitFiles.push(ALERTS_REL);
     const fileArgs = commitFiles.join(' ');
     git(`add ${fileArgs}`);
     const status = git(`status --porcelain ${fileArgs}`);

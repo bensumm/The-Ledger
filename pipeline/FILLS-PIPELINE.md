@@ -638,7 +638,11 @@ path (`putJsonFile` → `watchlist.json`, ids) when a token is set.
 ### 13.3 Multi-writer sync (see §12 + `sync-fills.mjs` `syncMainToRemote`)
 The PC sync and the phone are two writers to `origin/main` with **disjoint** file sets (the PC
 commits `fills.json` / `positions.json` / `offers.json` / `screen.json` / `suggestions.jsonl` (+ its
-`pipeline/suggestions-archive/` when rotation has produced it); the
+`pipeline/suggestions-archive/` when rotation has produced it) — and, since 2026-07-18,
+`dip-watchlist.json` / `hold-thesis.json` / `alerts.json` when present (all pipeline-WRITTEN derived
+state that was previously left to accumulate uncommitted between sessions; `watchlist.json` /
+`ignored-items.json` are DELIBERATELY excluded — those are Ben's own hand-maintained config, under
+his manual git control, never auto-committed here); the
 phone appends only `mobile-fills.log`), so a phone
 push only moves `origin/main` ahead. The sync fast-forwards local main onto the moved remote BEFORE
 reading logs (so the phone's line is read this run) and lands a **fresh commit** on top — never
