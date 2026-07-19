@@ -29,7 +29,10 @@ function buyTok(c) {
   if (c.pressureExit) return 'pressure';
   const toks = [];
   const rt = reachTok(c.bid);
-  if (rt !== '–') toks.push(rt);
+  // AC6: a churn fold-exempt row drops the bid-reach caution token (the day-level touch-reach mismeasures a
+  // tight symmetric lap on the BUY leg too — same doctrine as the sell). The PLACEMENT percentile is kept —
+  // it is a distribution position, not the invalidated reach signal (AC6). The bid counts still shadow.
+  if (rt !== '–' && !c.foldExempt) toks.push(rt);
   if (c.buyPlacement != null) toks.push('p' + Math.round(c.buyPlacement * 100));
   return toks.length ? toks.join(' · ') : '–';
 }
@@ -45,11 +48,15 @@ export function estPairCells(est) {
   // PB4: the pressure-exit TRIAL marker rides IN the cell (rule 4 — the price never reads as calibrated).
   const pTag = c.pressureExit && c.pressureExit.pressure != null
     ? ` pressure ${c.pressureExit.pressure.toFixed(1)}×${c.pressureExit.reliability != null && c.pressureExit.reliability < 1 ? ` rel ${c.pressureExit.reliability.toFixed(2)}` : ''}` : '';
+  // AC5: a churn fold-exempt row drops the ask reach caution token — the day-level reach signal is declared
+  // invalid for a symmetric lap, so it must not ride the cell as an implied caution (the reach counts still
+  // reach the F1 shadow via estConfLean). Every non-exempt branch keeps today's EXACT rendering, so band
+  // (asym, never exempt) is byte-identical; foldExempt only removes the token that would otherwise show.
   let sellSuffix;
-  if (c.beFloored) sellSuffix = ` (BE-floored${c.pressureExit ? ',' + pTag : c.ask ? `, ${reachTok(c.ask)}` : ''})`;
+  if (c.beFloored) sellSuffix = ` (BE-floored${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
   else if (c.pressureExit) sellSuffix = ` (${pTag.trim()})`;
   else if (c.declaredAnchored) sellSuffix = ' (declared)';
-  else sellSuffix = ` (${reachTok(c.ask)})`;
+  else sellSuffix = c.foldExempt ? '' : ` (${reachTok(c.ask)})`;
   const netTxt = est.estNet == null ? '—'
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})`;
   return [
@@ -71,6 +78,10 @@ export function estConfLean(est) {
   if (c.bid) { if (c.bid.rec) { o.bidRecHit = c.bid.rec.hit; o.bidRecDays = c.bid.rec.days; } if (c.bid.full) { o.bidHit = c.bid.full.hit; o.bidDays = c.bid.full.days; } }
   if (c.declaredAnchored) o.declaredAnchored = true;
   if (c.beFloored) o.beFloored = true;
+  // AC5/AC6: the churn fold-exemption marker so the F1 retro can segment the un-folded churn rows (the
+  // reach counts above STAY logged — they are the data the exemption will be tested against). YS2: present
+  // only when it fired.
+  if (c.foldExempt) o.foldExempt = c.foldExempt;
   if (c.doctrine && c.doctrine !== 'reach-fold') o.doctrine = c.doctrine;
   // PLAN-ESTIMATOR-POSTURE AC1 shadow: the band-low buy's placement percentile within the 14-day daily-LOW
   // distribution (present only on band rows the screen annotates — the YS2 absent-field pattern).

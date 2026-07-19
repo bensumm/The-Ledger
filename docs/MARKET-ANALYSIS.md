@@ -63,14 +63,23 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   sell the band top" play — non-immediate fill is the strategy, so the buy PRICES the band low and
   ANNOTATES its fill-probability instead of folding up), carrying a **reach token + placement percentile**
   in the cell (`4/14 · p36` — where `p36` = the percentile of the band-low bid within the 14-day daily-LOW
-  distribution; a low pXX = a deep/patient entry); **churn** → the band low **reach-folded toward live**
-  (churn is a genuine fill-now lane — buy every limit, flip fast — so it KEEPS the fold). The asym deep bid
+  distribution; a low pXX = a deep/patient entry); **churn** → the band low too (PLAN-ESTIMATOR-POSTURE
+  AC6: churn's buy leg NO LONGER folds toward live either — the day-level reach mismeasures a tight
+  symmetric lap on both legs, so churn prices the same band-low pair as band, carrying a placement
+  percentile but with its reach caution token suppressed by `foldExempt`). The asym deep bid
   is never folded in — it stays the `◆ asym` line (rest-and-see optionality). The rank absorbs the
   fill-probability the band buy price no longer hides: the bid reach feeds `pFillIntraday` (a rarely-filling
   deep band-low bid gets low P and ranks BELOW an equal-net fill-now flip).
 - **`Est. sell`** = a DECLARED thesis exit **only on a held lot** (floored to live, not clamped to
-  the band), else the band top folded by reach + a diurnal/asym blend; **BE-floored always**. The
-  pure discovery screen NEVER anchors to a declared exit (a bare candidate is a buy read).
+  the band), else the **band** top folded by reach + a diurnal/asym blend; **churn is EXEMPT** (AC5:
+  `fillShape:'symmetric'` forces the sell fold factor to 1, so churn's Est. sell is the band-top blend
+  the rank already prices on — un-floors Super restore(4)-class rows from `+1 (BE-floored)` to a real
+  net; the diurnal-ask timing blend still applies, so it lands NEAR the band top, not exactly at it);
+  **BE-floored always**. The pure discovery screen NEVER anchors to a declared exit (a bare candidate is
+  a buy read). The band sell fold is deliberately KEPT (AC7, the crux verdict — the rank's soft-floored
+  ask-reach P is not yet a sufficient mirage guard); its removal is re-decidable when AC4/F1 scores
+  raw-top vs folded against realized sells. The **reach-fold itself now surfaces as a validation DATA
+  POINT** in `read-window-range.mjs` (AC8, below), not as a discovery-price mutation on churn.
 - **The sell-top proposal is a NAMED, swappable MODEL** (PC3, `js/estimators/sell-models/`): the neutral
   **`reach-fold`** (default) above, and the opt-in TRIAL **`pressure`** (PB4). `--est-sell reach-fold|pressure`
   selects it (**`--pressure-exit` = legacy sugar for `--est-sell pressure`**); the model only PROPOSES a
@@ -220,9 +229,12 @@ placeholder cutoffs.
 - **P(fill) is two-leg:** `P = P_bid × askReachFactor(askReach)` — the entry fill discounted by the
   cross-day ASK reach (a robust p90 top can reach only ~2/14 days; the same inform-mode reach number,
   zero new fetch). Paired with a `REACH_GRADE_CAP` so a rarely-reaching ask can't oversell the LETTER.
-- **Churn is EXEMPT** from both (`fillShape:'symmetric'` — a lap sells into continuous two-sided flow,
-  so the day-high reach read mismeasures it); the discount + cap apply only to `fillShape:'asym'`
-  (band/scalp).
+- **Churn is EXEMPT** from the ask-reach discount, the grade cap, AND — since PLAN-ESTIMATOR-POSTURE
+  AC5/AC6 — BOTH `estimatePair` PRICE legs (`fillShape:'symmetric'` — a lap sells into continuous
+  two-sided flow, so the day-high reach read mismeasures it on every surface). The rank discount, the
+  grade cap, and both Est. price folds apply only to `fillShape:'asym'` (band/scalp); churn's Est.
+  buy/sell are the unfolded band-edge prices, and its rows carry a `foldExempt` shadow so F1 can segment.
+  Read the rank/grade (not the Est. reach token) for a churn row's fill risk.
 - **Churn ranks the LAP, not the unit:** `net/u × min(limit, feasibleDepth) × P(fill) ÷ TTF` (we max
   the buy limit on commodities, so the exact limit is a fact). In `--mode all`, churn (volume lane) and
   band (per-unit lane) are DISJOINT by margin — churn drops any row clearing `--min-roi`, band shows it.
@@ -251,6 +263,13 @@ that's already behind you today. So price every entry backward from the exit:
    (`maxBuyForExit`) AND how often that exit prints in the window; a low reach means the exit
    over-states the sell, so pick a lower one.
 4. **Project today** — is the window ahead or already printed? (the forecast eta, §5.)
+
+Any scored `--bid`/`--ask`/`--exit` run also prints a **`fold:` data-point line** (PLAN-ESTIMATOR-POSTURE
+AC8): `best-case ask X → reach-folded Y (recent a/b · full c/d) · net at folded pair …`. Discovery shows
+the best-case price; the reach-FOLD moved here into validation as an inform-only datapoint (the SHARED
+`estimatePair`, zero new fetch — byte-parity with the screen's fold). `--niche band|churn|scalp` (default
+band) picks the spec; churn inherits the AC5/AC6 exemption so its line reads fold ≈ best-case. Rides
+`--json`/`--out` as `result.fold`. Never gates — pair it with the reach/placement/depth reads.
 
 `windowClear` (`js/windowread.mjs`) fires an inform-only `ℹ window-clear` note when an ask reaches on
 DAYS but rarely IN its peak window. Band-is-the-edge: on a liquid stable-regime wide-band item, ladder

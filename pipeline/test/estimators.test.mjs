@@ -259,6 +259,22 @@ ok('PART II churn exemption: a symmetric-fillShape spec skips the Proposal-A ask
   assert.ok(bandWith.pFill.value < bandNo.pFill.value, 'band (asym fillShape) still takes the Part-I discount');
 });
 
+ok('AC9 RANK GUARDRAIL PIN: a band rank with a LOW ask-reach ranks BELOW an EQUAL-net high-ask-reach row', () => {
+  // PLAN-ESTIMATOR-POSTURE AC9 (a): the reachability-aware rank is the mirage guard the "best-case price"
+  // principle leans on — pin that a low ask-reach band row (a stale-top exit) ranks strictly below an
+  // otherwise-identical high-ask-reach row, so no future "show best-case" pass can quietly drop the ask
+  // discount. Same net by construction (identical pair); only the ask-reach differs.
+  const row = { optBuy: 100, optSell: 110, quickBuy: 101, quickSell: 109, volDay: 100_000, limit: 20_000, mid: 105 };
+  const highReach = estimateRank(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14 } });
+  const lowReach  = estimateRank(FLIP_NICHES.band, row, { askReach: { reachedDays: 2, nDays: 14 } });   // stale top
+  assert.equal(highReach.net, lowReach.net, 'equal net by construction (same pair)');
+  assert.ok(lowReach.pFill.value < highReach.pFill.value, 'the stale-top exit takes a bigger P discount');
+  assert.ok(lowReach.rank < highReach.rank, 'AC9: the mirage exit ranks strictly below the reachable one');
+  // and the soft floor holds — a 0/14 exit is discounted HARD but never zeroed (PFILL_ASKREACH_FLOOR).
+  const dead = estimateRank(FLIP_NICHES.band, row, { askReach: { reachedDays: 0, nDays: 14 } });
+  assert.ok(dead.rank > 0 && dead.rank < lowReach.rank, 'a 0/14 exit is floored (soft), not zeroed');
+});
+
 /* --- PLAN-OUTPUT-TABLE + REVISIONS: the reconciliation estimator (Est. buy / Est. sell) ------------- */
 ok('estimatePair MIRAGE EXIT (full-window only, no recent split): a 4/14d ask folds estSell below the raw top', () => {
   const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
@@ -306,11 +322,12 @@ ok('estimatePair CLEAN DENSE: a 12/14d + 3/3-recent ask keeps estSell at the ban
   assert.equal(e.estBuy, row.optBuy, 'clean touch ⇒ the band bid stands');
 });
 
-ok('rev2/AC1 STRATEGY-AWARE entry: scalp near-live, value + band both price the band low, churn reach-folds → distinct estBuy', () => {
-  // PLAN-ESTIMATOR-POSTURE AC1: band NO LONGER folds its buy toward live — it PRICES the band low (like
-  // value's trough); churn keeps the fill-now fold. The split routes off fillShape (band asym / churn symmetric).
+ok('rev2/AC1 + AC6 STRATEGY-AWARE entry: scalp near-live; value + band + churn ALL price the band low (churn no longer folds)', () => {
+  // PLAN-ESTIMATOR-POSTURE AC1: band prices the band low (like value's trough). AC6: churn's buy leg no
+  // longer folds toward live either — it prices the SAME band low (the day-level reach mismeasures a tight
+  // symmetric lap on both legs). scalp alone bids to fill (near-live).
   const row = { quickBuy: 1000, quickSell: 1010, optBuy: 900, optSell: 1100 };
-  const reach = { bidReach: { reachedDays: 7, nDays: 14 } };   // a mid touch-reach: churn folds partway, band does NOT
+  const reach = { bidReach: { reachedDays: 7, nDays: 14 } };   // a mid touch-reach: NEITHER band nor churn folds now
   const scalp = estimatePair(FLIP_NICHES.scalp, row, reach);
   const value = estimatePair(FLIP_NICHES.value, row, reach);
   const band  = estimatePair(FLIP_NICHES.band,  row, reach);
@@ -318,15 +335,56 @@ ok('rev2/AC1 STRATEGY-AWARE entry: scalp near-live, value + band both price the 
   assert.equal(scalp.estBuy, row.quickBuy, 'scalp → near-live (the live instasell)');
   assert.equal(value.estBuy, row.optBuy, 'value → the trough (band low, unfolded)');
   assert.equal(band.estBuy, row.optBuy, 'AC1: band → the band low (no fold toward live)');
-  assert.ok(churn.estBuy > band.estBuy && churn.estBuy < scalp.estBuy, `churn still reach-folds between the two: ${churn.estBuy}`);
-  // scalp's buy cell carries NO reach caveat (a live bid fills); value/band/churn do.
+  assert.equal(churn.estBuy, row.optBuy, 'AC6: churn → the band low too (its buy-fold branch was deleted)');
+  assert.equal(churn.estBuy, band.estBuy, 'AC6: churn buy is byte-identical to band');
+  // scalp's buy cell carries NO reach caveat (a live bid fills); value/band still annotate the touch-reach;
+  // churn keeps the reach COUNTS in confidence for the shadow but foldExempt suppresses the cell token (AC6).
   assert.equal(scalp.confidence.bid, null);
-  assert.ok(value.confidence.bid && band.confidence.bid && churn.confidence.bid, 'value/band/churn annotate the touch-reach');
-  // the entry doctrine is surfaced in the lean shadow (non-default only; churn's reach-fold is the default → omitted).
+  assert.ok(value.confidence.bid && band.confidence.bid && churn.confidence.bid, 'value/band/churn keep the bid counts');
+  // the entry doctrine is surfaced in the lean shadow; churn now emits 'band-low' + its foldExempt marker.
   assert.equal(estConfLean(scalp).doctrine, 'near-live');
   assert.equal(estConfLean(value).doctrine, 'trough');
   assert.equal(estConfLean(band).doctrine, 'band-low', 'AC1: band emits its own band-low doctrine');
-  assert.equal(estConfLean(churn).doctrine, undefined, 'reach-fold (churn) is the default → omitted');
+  assert.equal(estConfLean(churn).doctrine, 'band-low', 'AC6: churn now prices the band low too');
+  assert.equal(estConfLean(churn).foldExempt, 'symmetric', 'AC5/AC6: churn carries the fold-exemption marker for F1 segmentation');
+  assert.equal(estConfLean(band).foldExempt, undefined, 'band (asym) is never fold-exempt');
+});
+
+ok('AC5 CHURN SELL-FOLD EXEMPTION: a low ask-reach does NOT fold a symmetric spec\'s estSell; band (asym) still folds', () => {
+  // PLAN-ESTIMATOR-POSTURE AC5: churn (fillShape symmetric) sells into continuous two-sided flow near a
+  // tight band top, so the day-level ask-reach read is declared invalid for it (rank + grade already skip
+  // it). The PRICE was the last surface still folding — now fR is forced to 1, so estSell = the band-top
+  // blend the rank prices on. The reach COUNTS stay in confidence (F1 shadow) but the cell drops the token.
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const ar = { askReach: { reachedDays: 2, nDays: 14 } };   // a 2/14 mirage exit
+  const churn = estimatePair(FLIP_NICHES.churn, row, ar);
+  const band  = estimatePair(FLIP_NICHES.band,  row, ar);
+  // band still folds the stale top down (asym); churn holds the band top (no fold on a clean-blend row).
+  const fold = Math.min(1, (2 / 14) / EST_REACH_SAT_FRAC);
+  assert.equal(band.estSell, Math.round(row.quickSell + (row.optSell - row.quickSell) * fold), 'band folds the 2/14 top down (unchanged)');
+  assert.equal(churn.estSell, row.optSell, 'AC5: churn holds the band top (fR forced to 1, no diurnal/asym blend present)');
+  assert.ok(churn.estSell > band.estSell, 'the churn exit is no longer folded below the band');
+  // the exemption is surfaced + shadowed; the ask reach counts are STILL logged (the data the exemption is tested on).
+  assert.equal(churn.confidence.foldExempt, 'symmetric');
+  assert.equal(estConfLean(churn).foldExempt, 'symmetric');
+  assert.equal(estConfLean(churn).askHit, 2, 'ask reach counts still shadow-logged for F1');
+  assert.equal(estConfLean(churn).askDays, 14);
+  // the sell CELL drops the caution token on the exempt row; band keeps it.
+  const churnCells = estPairCells(churn), bandCells = estPairCells(band);
+  assert.ok(!/\d+\/\d+/.test(churnCells[1].t.replace(/[\d,]+/, '')), `churn sell cell has no reach token: ${churnCells[1].t}`);
+  assert.ok(!/\(/.test(churnCells[1].t), `churn sell cell has no reach-caution parenthetical: ${churnCells[1].t}`);
+  assert.ok(/\(2\/14\)/.test(bandCells[1].t), `band sell cell keeps the reach token: ${bandCells[1].t}`);
+});
+
+ok('AC5 diurnal-ask blend SURVIVES the churn exemption: fR=1 lands NEAR the band top, blended with the peak-ask timing model', () => {
+  // AC5 keeps the sCands diurnal-ask/asym blend — it is a TIMING model, not the invalidated reach signal.
+  // With a diurnal ask present, the churn estSell is the mean of the (unfolded) band top and the peak ask.
+  const row = { quickBuy: 10_000, quickSell: 10_100, optBuy: 9_900, optSell: 10_800 };
+  const extra = { askReach: { reachedDays: 0, nDays: 14 }, diurnal: { bid: null, ask: 10_600 } };
+  const churn = estimatePair(FLIP_NICHES.churn, row, extra);
+  // sCands = [ round(qs + (topRef - qs) * 1) = optSell=10800, clamp(diurnalAsk 10600, qs, bandTop) = 10600 ]
+  assert.equal(churn.estSell, Math.round((10_800 + 10_600) / 2), 'the diurnal-ask timing blend still applies (fold factor 1)');
+  assert.equal(churn.confidence.foldExempt, 'symmetric');
 });
 
 ok('AC1 placement annotation: a band-low buy cell renders the percentile token (4/14 · p36) + shadows it', () => {
@@ -338,10 +396,16 @@ ok('AC1 placement annotation: a band-low buy cell renders the percentile token (
   const cells = estPairCells(band);
   assert.ok(/4\/14 · p36/.test(cells[0].t), `buy cell shows reach + percentile: ${cells[0].t}`);
   assert.equal(estConfLean(band).buyPlacement, 0.36, 'placement shadowed for the F1 join');
-  // absent placement (churn / no attach) → the buy cell is byte-identical to before (reach token only).
+  // AC6: churn ALSO prices the band low, so it qualifies for the same placement percentile (the screen
+  // attaches it). But its foldExempt suppresses the bid-REACH token — the percentile stays (it is a
+  // distribution position, not the invalidated reach signal), the reach caveat goes.
   const churn = estimatePair(FLIP_NICHES.churn, row, { bidReach: { reachedDays: 4, nDays: 14 } });
-  assert.ok(!/p\d/.test(estPairCells(churn)[0].t), 'no placement attached ⇒ no percentile token');
-  assert.equal(estConfLean(churn).buyPlacement, undefined, 'no placement shadow when unset');
+  assert.equal(churn.confidence.doctrine, 'band-low', 'AC6: churn is a band-low entry now (qualifies for placement)');
+  assert.ok(!/4\/14/.test(estPairCells(churn)[0].t), 'AC6: churn drops the bid-reach token (foldExempt)');
+  churn.confidence.buyPlacement = 0.20;
+  const cCells = estPairCells(churn);
+  assert.ok(/p20/.test(cCells[0].t) && !/4\/14/.test(cCells[0].t), `churn keeps ONLY the placement percentile: ${cCells[0].t}`);
+  assert.equal(estConfLean(churn).buyPlacement, 0.20, 'churn placement shadowed too');
 });
 
 ok('rev2 DECLARED-EXIT anchors estSell to the thesis target (above the band top), not the reach-folded ask', () => {

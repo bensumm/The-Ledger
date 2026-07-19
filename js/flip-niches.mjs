@@ -191,9 +191,13 @@ function churnEdge(inp, t) {
                    'symmetric' — fill-every-lap / own-pricing. churn (sells into continuous two-sided
                                  flow near a tight band top; the day-level ask-reach read mismeasures
                                  it and a deep-flush bid is anti-churn — EXEMPT from the Part-I
-                                 ask-reach discount AND the reach grade cap) + value (its own
-                                 term-structure pricing; never had an ask-reach read). Doctrine homes:
-                                 js/estimators.mjs asymEstimate + js/windowread.mjs asymPair. */
+                                 ask-reach discount, the reach grade cap, AND (PLAN-ESTIMATOR-POSTURE
+                                 AC5/AC6) BOTH estimatePair price legs: churn's Est. sell no longer
+                                 folds a stale top down and its Est. buy no longer folds toward live —
+                                 it prices the band-low pair, carrying a `foldExempt:'symmetric'`
+                                 marker) + value (its own term-structure pricing; never had an ask-reach
+                                 read). Doctrine homes: js/estimators.mjs asymEstimate + js/windowread.mjs
+                                 asymPair; the fold-as-datapoint lives in read-window-range.mjs (AC8). */
 export const FLIP_NICHE_LIST = Object.freeze([
   {
     key: 'band', label: 'Band', inAll: true,

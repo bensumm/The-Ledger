@@ -69,27 +69,26 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    PRESSURE_EXIT_REL_FULL (pressure.mjs) are re-exported through this module for the barrel.
    ============================================================================================ */
 
-/* entryDoctrine(spec) → 'near-live' | 'trough' | 'band-low' | 'reach-fold' — the per-strategy ENTRY
-   placement (rev2; PLAN-ESTIMATOR-POSTURE AC1 split the last two). DERIVED from existing spec fields so no
-   new declarative field is added (and the app-parity registry stays untouched): a faller-ACCEPTING thesis
-   (scalp) bids to fill (near-live); a term-basis thesis (value) bids the durable floor (trough); and the two
-   remaining opt-basis flip niches (band/churn) split by their FILL SHAPE —
-     • band (fillShape 'asym' — a deep bid at the band low, a near-certain ask at the band top) PRICES the
-       band low and annotates its fill-probability ('band-low'); the fill-now fold is REMOVED from its buy
-       leg (AC1 — a quiet-band day was collapsing real patient band flips to "+1 (BE-floored)"). estBuy is the
-       same `ob` (band low, diurnal-dip blended) the value 'trough' branch emits — 'band-low' is a distinct
-       LABEL (for the shadow doctrine field + the buy-cell reach/percentile annotation), not distinct math.
-     • churn (fillShape 'symmetric' — buy every limit, flip fast) is a genuine FILL-NOW lane, so it KEEPS the
-       reach-fold that folds the buy toward the live instabuy on a low recent touch-reach ('reach-fold').
-   Routing off fillShape (not the key) keeps this derived-from-declarative-fields, and churn's numbers are
-   BYTE-IDENTICAL to before (symmetric → reach-fold → the unchanged fold). scalp is 'asym' too but returns
-   'near-live' above, so only band reaches the 'band-low' branch. PLACEHOLDER mapping — F1 calibrates each
-   niche's real entry aggression. */
+/* entryDoctrine(spec) → 'near-live' | 'trough' | 'band-low' — the per-strategy ENTRY placement (rev2;
+   PLAN-ESTIMATOR-POSTURE AC1 split band off the fold, AC6 folded churn's buy in with it). DERIVED from
+   existing spec fields so no new declarative field is added (the app-parity registry stays untouched): a
+   faller-ACCEPTING thesis (scalp) bids to fill (near-live); a term-basis thesis (value) bids the durable
+   floor (trough); everything else (the opt-basis flip niches band + churn) PRICES the band low ('band-low').
+     • band (fillShape 'asym') — AC1 removed the fill-now fold from its buy leg (a quiet-band day was
+       collapsing real patient band flips to "+1 (BE-floored)"); estBuy is `ob` (band low, diurnal-dip
+       blended), the same anchor value's 'trough' branch emits — 'band-low' is a distinct LABEL (shadow
+       doctrine field + the buy-cell reach/percentile annotation), not distinct math.
+     • churn (fillShape 'symmetric') — AC6: the day-level reach read mismeasures a tight symmetric lap on
+       BOTH legs (rank/families.mjs:251 + grade already skip it), so churn's BUY leg no longer folds toward
+       live either — it prices the same band low. The 'reach-fold' entry doctrine now has NO producer (the
+       buy-fold branch was deleted from reach-fold.mjs); churn carries a `foldExempt:'symmetric'` marker so
+       the cell drops the invalidated reach caution while the shadow keeps logging the counts.
+   Routing off falling/priceBasis keeps this derived-from-declarative-fields; scalp is 'asym' too but returns
+   'near-live' above. PLACEHOLDER mapping — F1 calibrates each niche's real entry aggression. */
 export function entryDoctrine(spec) {
   if (spec && spec.falling === 'accept') return 'near-live';   // scalp — a deliberate flip bids to FILL
   if (spec && spec.priceBasis === 'term') return 'trough';     // value — a buy-hold bids the durable floor
-  if (spec && spec.fillShape === 'symmetric') return 'reach-fold';   // churn — a fill-now lane KEEPS the fold
-  return 'band-low';                                           // band — price the band low, annotate reach (AC1)
+  return 'band-low';   // band + churn (AC6) — price the band low, annotate reach/placement; churn adds foldExempt
 }
 
 /* reachRead({ reachedDays, nDays, recentHit, recentDays }) → { frac, rec, full, diverges } | null.
@@ -157,6 +156,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   const buyLo = prop.buyLo;
   let sellHi = prop.sellHi;
   let { bid: cBid, ask: cAsk, relief: cRelief, pressureExit: cPressure } = prop.confidence;
+  const cFoldExempt = prop.confidence.foldExempt || null;   // AC5: churn sell-fold exemption marker (pressure model omits it → null)
   // --- SHELL SPINE (the non-skippable floors — a model can propose a price, never bypass these) -------
   // DECLARED-EXIT anchor: the operator's stated target governs the SELL leg for EVERY model (NOT
   // ceiling-clamped to the band; floored to live + break-even). A declared exit suppresses the generic
@@ -187,6 +187,10 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   const confidence = {
     bid: cBid, ask: cAsk,
     beFloored, declaredAnchored, doctrine,
+    // AC5/AC6: the churn fold-exemption marker ('symmetric') — the cell suppresses the reach caution token
+    // and the shadow segments on it. A declared exit already nulled cAsk above, but foldExempt is orthogonal
+    // (a declared churn lot still folds nothing) so it rides regardless.
+    foldExempt: cFoldExempt,
     // PLAN-LIQUIDITY-REACH: non-null ONLY when the relief changed the sell estimate (softened fold or
     // de-biased top) — { relief, sizeRatio, debiasedTop|null }. Feeds the stdout note + the lean shadow.
     relief: cRelief,

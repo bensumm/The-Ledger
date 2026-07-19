@@ -28,6 +28,23 @@
  *
  * PURE: imports only clamp (money-math). Every constant here is an unvalidated PLACEHOLDER (rule 4);
  * calibration is the F1 retro-join over the shadow fields. See js/estimators/pair.mjs for the shell.
+ *
+ * PLAN-ESTIMATOR-POSTURE AC7 — THE BAND SELL FOLD IS DELIBERATELY KEPT IN THE DISCOVERY PRICE (the crux
+ * verdict). AC5/AC6 un-folded churn (its fold is measurement noise on a tight symmetric lap — rank + grade
+ * already skipped it), and AC8 surfaces the fold as a validation datapoint for every niche. But the band
+ * (asym) SELL leg still folds a stale top down here, because discovery's "best-case price" is only safe if
+ * the RANK is a sufficient mirage guard, and today it is NOT, for two structural reasons:
+ *   (a) the rank's ask-reach P discount is SOFT-floored — reach.mjs's askReachFactor maps a 0/N exit to
+ *       PFILL_ASKREACH_FLOOR=0.25, never lower (the intentional n≈14 false-negative guard). A big-net stale
+ *       top keeps ≥25% of its P and can still out-rank a genuine smaller edge; a grade CAP (REACH_GRADE_CAP)
+ *       caps the LETTER but does not reorder.
+ *   (b) the overnight posture sort was reach-BLIND pre-AC9 (raw optNet). AC9 made it reach-AWARE
+ *       (optNet × askReachFactor), which is the PREREQUISITE for ever revisiting this.
+ * RE-DECISION PATH: this fold's removal is re-decidable when AC4/F1 (the buy-leg would-have-filled
+ * counterfactual, gated on O1 sample thresholds) scores raw-top vs reach-folded against realized sells —
+ * with AC9 already in place. If the fold predicts nothing it dies everywhere; if it predicts fills it has
+ * earned its place. Until then the band sell fold stays: a judgment call from code structure + the
+ * Crimson-kisten / Masori-body mirage anchors, explicitly provisional, NOT a calibrated claim.
  */
 import { clamp } from '../../money-math.js';
 
@@ -60,19 +77,29 @@ export const reachFoldModel = {
   // active, so its number always reaches the ledger's estBuy/estSell/estConfidence slot.
   defaultShadow: true,
   propose(ctx) {
-    const { qb, qs, ob, os, bidR, askR, doctrine, relief, sizeRatio, bandTop, topRef, extra } = ctx;
+    const { spec, qb, qs, ob, os, bidR, askR, doctrine, relief, sizeRatio, bandTop, topRef, extra } = ctx;
     const fold = f => f == null ? 1 : Math.min(1, f / EST_REACH_SAT_FRAC);   // absent read ⇒ 1 (no discount)
+    // PLAN-ESTIMATOR-POSTURE AC5 — churn sell-fold exemption: a 'symmetric' fillShape (churn) sells into
+    // continuous two-sided flow near a tight band top, so the day-level ask-reach read mismeasures it (the
+    // same doctrine rank/families.mjs:251 + grade/screen-flip-niches.mjs:738 already skip). The PRICE is the
+    // last surface still folding on that invalidated signal — force the sell fold factor to 1 so estSell is
+    // the band-top blend the rank already prices on (the sCands diurnal-ask/asym blend stays — that is a
+    // TIMING model, not the reach signal, so estSell lands NEAR, not exactly at, the raw band top). The ask
+    // reach counts stay POPULATED in confidence (the F1 shadow must keep logging them — they are the very
+    // data that will test this exemption); `foldExempt` tells the cell/shadow to drop the caution token.
+    const foldExempt = (spec && spec.fillShape === 'symmetric') ? 'symmetric' : null;
     // --- BUY: per-strategy entry doctrine (rev2) ---
     let estBuy, buyReach = bidR;   // buyReach ANNOTATES the buy cell (null for near-live)
     if (doctrine === 'near-live') {
       estBuy = qb;                 // scalp bids the live instasell to FILL — the band-low reach doesn't apply
       buyReach = null;             // a live bid needs no cross-day touch caveat
     } else {
-      // trough (value) + band-low (band, AC1) anchor the band-low WITHOUT folding toward live; reach-fold
-      // (churn — the fill-now lane) folds it toward the live instabuy by the band-low's recent touch-reach.
-      // trough and band-low emit the SAME `ob` anchor — the split is a LABEL (shadow doctrine + the AC1 buy
-      // cell reach/percentile annotation), not distinct math. See js/estimators/pair.mjs entryDoctrine.
-      const anchor = (doctrine === 'trough' || doctrine === 'band-low') ? ob : Math.round(qb - (qb - ob) * fold(bidR ? bidR.frac : null));
+      // trough (value) + band-low (band + churn) anchor the band low WITHOUT folding toward live. AC6
+      // deleted the churn buy-fold branch (`Math.round(qb - (qb - ob) * fold(...))`) — its 'reach-fold' entry
+      // doctrine now has no producer, so every non-scalp doctrine emits the SAME `ob` anchor; the split is a
+      // LABEL (shadow doctrine + the buy-cell reach/percentile annotation) + churn's foldExempt marker, not
+      // distinct math. See js/estimators/pair.mjs entryDoctrine.
+      const anchor = ob;
       const bCands = [anchor];
       const dBid = extra.diurnal ? num(extra.diurnal.bid) : null;
       if (dBid != null) bCands.push(Math.round(clamp(dBid, Math.min(ob, qb), qb)));
@@ -82,7 +109,7 @@ export const reachFoldModel = {
     // PLAN-LIQUIDITY-REACH Part A — the reach fold SOFTENS toward 1 (fold' = fold + relief×(1−fold)) on a
     // liquid book with a small position÷flow ratio; Part B (the de-biased topRef) is already folded into
     // ctx.topRef by the shell. Thin book / large size / absent ⇒ relief 0 ⇒ byte-identical to the flat fold.
-    const f0 = fold(askR ? askR.frac : null);
+    const f0 = foldExempt ? 1 : fold(askR ? askR.frac : null);   // AC5: churn (symmetric) never folds the sell
     const fR = relief > 0 ? f0 + relief * (1 - f0) : f0;
     const sCands = [Math.round(qs + (topRef - qs) * fR)];
     const dAsk = extra.diurnal ? num(extra.diurnal.ask) : null;
@@ -102,6 +129,10 @@ export const reachFoldModel = {
         ask: askR ? { rec: askR.rec, full: askR.full, diverges: askR.diverges } : null,
         relief: reliefApplied,
         pressureExit: null,
+        // AC5/AC6: 'symmetric' when the churn fold-exemption fired — the reach counts stay in `bid`/`ask`
+        // for the F1 shadow, but the cell drops the caution token (the invalidated signal must not ride the
+        // cell as an implied caution) and the shadow logs foldExempt so the retro can segment.
+        foldExempt,
       },
     };
   },
