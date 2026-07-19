@@ -69,15 +69,27 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    PRESSURE_EXIT_REL_FULL (pressure.mjs) are re-exported through this module for the barrel.
    ============================================================================================ */
 
-/* entryDoctrine(spec) → 'near-live' | 'trough' | 'reach-fold' — the per-strategy ENTRY placement
-   (rev2). DERIVED from existing spec fields so no new declarative field is added (and the app-parity
-   registry stays untouched): a faller-ACCEPTING thesis (scalp) bids to fill (near-live); a term-basis
-   thesis (value) bids the durable floor (trough); everything else (band/churn, opt basis) reach-folds.
-   PLACEHOLDER mapping — F1 calibrates each niche's real entry aggression. */
+/* entryDoctrine(spec) → 'near-live' | 'trough' | 'band-low' | 'reach-fold' — the per-strategy ENTRY
+   placement (rev2; PLAN-ESTIMATOR-POSTURE AC1 split the last two). DERIVED from existing spec fields so no
+   new declarative field is added (and the app-parity registry stays untouched): a faller-ACCEPTING thesis
+   (scalp) bids to fill (near-live); a term-basis thesis (value) bids the durable floor (trough); and the two
+   remaining opt-basis flip niches (band/churn) split by their FILL SHAPE —
+     • band (fillShape 'asym' — a deep bid at the band low, a near-certain ask at the band top) PRICES the
+       band low and annotates its fill-probability ('band-low'); the fill-now fold is REMOVED from its buy
+       leg (AC1 — a quiet-band day was collapsing real patient band flips to "+1 (BE-floored)"). estBuy is the
+       same `ob` (band low, diurnal-dip blended) the value 'trough' branch emits — 'band-low' is a distinct
+       LABEL (for the shadow doctrine field + the buy-cell reach/percentile annotation), not distinct math.
+     • churn (fillShape 'symmetric' — buy every limit, flip fast) is a genuine FILL-NOW lane, so it KEEPS the
+       reach-fold that folds the buy toward the live instabuy on a low recent touch-reach ('reach-fold').
+   Routing off fillShape (not the key) keeps this derived-from-declarative-fields, and churn's numbers are
+   BYTE-IDENTICAL to before (symmetric → reach-fold → the unchanged fold). scalp is 'asym' too but returns
+   'near-live' above, so only band reaches the 'band-low' branch. PLACEHOLDER mapping — F1 calibrates each
+   niche's real entry aggression. */
 export function entryDoctrine(spec) {
   if (spec && spec.falling === 'accept') return 'near-live';   // scalp — a deliberate flip bids to FILL
   if (spec && spec.priceBasis === 'term') return 'trough';     // value — a buy-hold bids the durable floor
-  return 'reach-fold';                                         // band/churn — the original reach-folded edge
+  if (spec && spec.fillShape === 'symmetric') return 'reach-fold';   // churn — a fill-now lane KEEPS the fold
+  return 'band-low';                                           // band — price the band low, annotate reach (AC1)
 }
 
 /* reachRead({ reachedDays, nDays, recentHit, recentDays }) → { frac, rec, full, diverges } | null.

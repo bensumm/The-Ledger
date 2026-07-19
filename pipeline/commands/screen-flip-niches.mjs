@@ -77,7 +77,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -634,6 +634,18 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
     const estFor = name => estimatePair(FLIP_NICHES[mode], row, estExtra, { nudge: anchorNudge, sellModel: name });
     const estShown = estFor(SELL_MODEL.active);
     const est = SELL_MODEL.active === 'reach-fold' ? estShown : estFor('reach-fold');
+    // PLAN-ESTIMATOR-POSTURE AC1: the band-low buy carries a PLACEMENT PERCENTILE beside its touch-reach —
+    // where estBuy sits in the 14-day daily-LOW distribution (rbStats.lows, already computed above for
+    // reachableBand → ZERO new fetch). A low pXX = "below most daily lows" = a deep/patient entry (the
+    // js/windowread.mjs placement doctrine). BAND NICHE ONLY (doctrine 'band-low'; churn/scalp/value never
+    // reach it), so churn stays byte-identical. Attached to the est confidence so estPairCells renders
+    // `(4/14 · p36)` and estConfLean shadows it for the F1 join. estShown (a pressure trial under --est-sell)
+    // renders 'pressure' in the cell regardless, so its placement is a harmless shadow.
+    if (est && est.confidence.doctrine === 'band-low' && rbStats && rbStats.lows && rbStats.lows.length) {
+      est.confidence.buyPlacement = placement(rbStats.lows, est.estBuy);
+      if (estShown && estShown !== est && estShown.estBuy != null)
+        estShown.confidence.buyPlacement = placement(rbStats.lows, estShown.estBuy);
+    }
     // PLAN-WINDOW-CLEAR B2 (churn/scalp only): does the quoted ask PRINT inside its diurnal peak window
     // (not just on N/M DAYS), and does that window absorb a buy-limit tranche? Inform-only (the askHeadroom/
     // asym pattern — never a gate/drop/grade/screen.json input); a divergence is the days-reach ≠ lap-clear
@@ -855,7 +867,7 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
       const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], c[8]];   // PB4: estShown = pressure legs under the flag, else the neutral est
       return anyProbe ? [...base, { t: r.probeStr, c: 'mini' }] : base;
     });
-    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band reach-folded), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. BE is model-free and floors Est. sell — a "(BE-floored)" ask means no profitable trade at model prices. --raw restores the model-free Quick/Optimistic columns.)`;
+    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell carries the RECENT-3 reach, full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. BE is model-free and floors Est. sell — a "(BE-floored)" ask means no profitable trade at model prices. --raw restores the model-free Quick/Optimistic columns.)`;
   }
   const table = rows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
   const footerLines = [`Grades: ${gradeDist(dist)}`];
@@ -878,33 +890,9 @@ function renderMode(mode, { cand, survivors, subFloor = null }, qcache, map, ser
   // DC3 (INFORM HALF): the demand-regime flip-side classifier — decision support only (never a rank/gate/
   // grade/screen.json input; the routing/rank half is F1-gated). One line per clearly-tilted survivor.
   for (const n of demandNotes) footerLines.push(`◈ demand — ${n}`);
-  // AC3 (PLAN-ESTIMATOR-POSTURE, 2026-07-18) — the patient-vs-fill-now divergence footer, BAND niche ONLY.
-  // When the FOLDED Est. pair BE-floored (r.est.confidence.beFloored — the fill-now buy leg folded up to
-  // near-live and killed the margin) but the RAW patient band pair (optBuy→optSell) still clears a
-  // meaningfully positive after-tax net, name those rows so the board doesn't read "dead" when a real
-  // patient band flip was sitting there the whole time (the verified Abyssal-bludgeon / Ancient-godsword
-  // anchors). INFORM-ONLY, `context`-tier (render.mjs registry): it never gates, re-ranks, or hides a row.
-  // Reuses numbers ALREADY on the row — r.est.confidence.beFloored + r.row.optNet (= netMargin(optBuy,
-  // optSell,bopt), the model-free raw patient net computed in quotecore) — so ZERO new fetch/compute. It is
-  // CONSOLE/STDOUT-ONLY: footerLines is rendered to stdout by renderReport and NEVER enters the published
-  // screen.json cells (built separately from `rows` below), so the app contract is byte-unchanged. churn is
-  // legitimately a fill-now lane (buy every limit, flip fast), so it is NOT flagged — the split routes off
-  // `mode`, not a global rule. THRESHOLD: the same MIN_NET_GP (100k) "worth one offer" absolute net floor
-  // used for thin items — a percent-ROI floor (MIN_ROI 1.5%) would DROP the anchor case (bludgeon +209k on
-  // a 17.18m bid = 1.2% ROI), so the absolute gp floor is deliberate. PLACEHOLDER model, n≈3–14 (rule 4).
-  if (mode === 'band') {
-    const patientEdges = rows.filter(r =>
-      r.est && r.est.confidence.beFloored === true &&
-      r.row.optBuy != null && r.row.optSell != null &&
-      r.row.optNet != null && r.row.optNet >= MIN_NET_GP);
-    if (patientEdges.length) {
-      const parts = patientEdges.map(r => {
-        const nm = map.byId[r.id]?.name || ('#' + r.id);
-        return `${nm} +${fmt(r.row.optNet)} (deep bid ${fmtP(r.row.optBuy)} · patient ask ${fmtP(r.row.optSell)})`;
-      });
-      footerLines.push(`ℹ patient band edge — the fill-now fold hid a positive band flip on ${patientEdges.length} row(s): ${parts.join(', ')} (deep bid at the band low + patient ask at the band top; inform-only, n≈3–14)`);
-    }
-  }
+  // (PLAN-ESTIMATOR-POSTURE AC3 — the interim patient-band-edge divergence footer — was REMOVED once AC1
+  // landed: the band buy leg now PRICES the band low natively (doctrine 'band-low'), so the real patient
+  // edge shows in the Est. buy/sell/net columns directly and the compensating footer is redundant.)
   // VZ4b: the loose info blocks below (diurnal / overnight accumulation / velocity / entry paths / stats)
   // are collected as report sections and appended to the SAME niche report, printed ONCE at the end —
   // byte-identical to the prior inline console.log sequence (all flush, no inter-blank line).

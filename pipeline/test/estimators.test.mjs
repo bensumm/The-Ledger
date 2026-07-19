@@ -306,22 +306,42 @@ ok('estimatePair CLEAN DENSE: a 12/14d + 3/3-recent ask keeps estSell at the ban
   assert.equal(e.estBuy, row.optBuy, 'clean touch ⇒ the band bid stands');
 });
 
-ok('rev2 STRATEGY-AWARE entry: scalp bids near-live, value bids the trough, band reach-folds → three different estBuy', () => {
+ok('rev2/AC1 STRATEGY-AWARE entry: scalp near-live, value + band both price the band low, churn reach-folds → distinct estBuy', () => {
+  // PLAN-ESTIMATOR-POSTURE AC1: band NO LONGER folds its buy toward live — it PRICES the band low (like
+  // value's trough); churn keeps the fill-now fold. The split routes off fillShape (band asym / churn symmetric).
   const row = { quickBuy: 1000, quickSell: 1010, optBuy: 900, optSell: 1100 };
-  const reach = { bidReach: { reachedDays: 7, nDays: 14 } };   // a mid touch-reach so band folds partway
+  const reach = { bidReach: { reachedDays: 7, nDays: 14 } };   // a mid touch-reach: churn folds partway, band does NOT
   const scalp = estimatePair(FLIP_NICHES.scalp, row, reach);
   const value = estimatePair(FLIP_NICHES.value, row, reach);
   const band  = estimatePair(FLIP_NICHES.band,  row, reach);
+  const churn = estimatePair(FLIP_NICHES.churn, row, reach);
   assert.equal(scalp.estBuy, row.quickBuy, 'scalp → near-live (the live instasell)');
   assert.equal(value.estBuy, row.optBuy, 'value → the trough (band low, unfolded)');
-  assert.ok(band.estBuy > value.estBuy && band.estBuy < scalp.estBuy, `band reach-folds between the two: ${band.estBuy}`);
-  // scalp's buy cell carries NO reach caveat (a live bid fills); value/band do.
+  assert.equal(band.estBuy, row.optBuy, 'AC1: band → the band low (no fold toward live)');
+  assert.ok(churn.estBuy > band.estBuy && churn.estBuy < scalp.estBuy, `churn still reach-folds between the two: ${churn.estBuy}`);
+  // scalp's buy cell carries NO reach caveat (a live bid fills); value/band/churn do.
   assert.equal(scalp.confidence.bid, null);
-  assert.ok(value.confidence.bid && band.confidence.bid, 'value/band annotate the trough touch-reach');
-  // the entry doctrine is surfaced in the lean shadow (non-default only).
+  assert.ok(value.confidence.bid && band.confidence.bid && churn.confidence.bid, 'value/band/churn annotate the touch-reach');
+  // the entry doctrine is surfaced in the lean shadow (non-default only; churn's reach-fold is the default → omitted).
   assert.equal(estConfLean(scalp).doctrine, 'near-live');
   assert.equal(estConfLean(value).doctrine, 'trough');
-  assert.equal(estConfLean(band).doctrine, undefined, 'reach-fold is the default → omitted');
+  assert.equal(estConfLean(band).doctrine, 'band-low', 'AC1: band emits its own band-low doctrine');
+  assert.equal(estConfLean(churn).doctrine, undefined, 'reach-fold (churn) is the default → omitted');
+});
+
+ok('AC1 placement annotation: a band-low buy cell renders the percentile token (4/14 · p36) + shadows it', () => {
+  // the screen attaches confidence.buyPlacement (placement of estBuy in the 14-day daily-low distribution).
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 900, optSell: 1100 };
+  const band = estimatePair(FLIP_NICHES.band, row, { bidReach: { reachedDays: 4, nDays: 14 } });
+  assert.equal(band.confidence.doctrine, 'band-low');
+  band.confidence.buyPlacement = 0.36;   // as the screen sets it, zero-fetch off rbStats.lows
+  const cells = estPairCells(band);
+  assert.ok(/4\/14 · p36/.test(cells[0].t), `buy cell shows reach + percentile: ${cells[0].t}`);
+  assert.equal(estConfLean(band).buyPlacement, 0.36, 'placement shadowed for the F1 join');
+  // absent placement (churn / no attach) → the buy cell is byte-identical to before (reach token only).
+  const churn = estimatePair(FLIP_NICHES.churn, row, { bidReach: { reachedDays: 4, nDays: 14 } });
+  assert.ok(!/p\d/.test(estPairCells(churn)[0].t), 'no placement attached ⇒ no percentile token');
+  assert.equal(estConfLean(churn).buyPlacement, undefined, 'no placement shadow when unset');
 });
 
 ok('rev2 DECLARED-EXIT anchors estSell to the thesis target (above the band top), not the reach-folded ask', () => {
@@ -347,7 +367,8 @@ ok('estimatePair BE FLOOR: a fully-collapsed ask is clamped UP to breakEven(estB
   assert.equal(e.estSell, breakEven(99_000), 'estSell clamped to the model-free break-even');
   assert.equal(e.confidence.beFloored, true, 'the floor binding is surfaced in the confidence');
   assert.ok(e.estNet >= 0 && e.estNet <= 2, 'net collapses to ~0 — the estimate self-reports "no trade"');
-  assert.deepEqual(estConfLean(e), { askHit: 0, askDays: 14, beFloored: true });
+  // AC1: a band row now carries its 'band-low' entry doctrine in the shadow (was the default reach-fold pre-AC1).
+  assert.deepEqual(estConfLean(e), { askHit: 0, askDays: 14, beFloored: true, doctrine: 'band-low' });
 });
 
 // --- PB4: the pressure-exit TRIAL override (opt-in flag) ---------------------------------------

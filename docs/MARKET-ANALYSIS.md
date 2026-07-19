@@ -57,10 +57,17 @@ estimator — but (PB4 app-display, 2026-07-15) `screen.json` now ALSO carries a
 `Pressure (trial)` column by default** (deep reachable bid → bold ask) beside the neutral Optimistic
 reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Operating summary:
 
-- **`Est. buy` is strategy-aware** (`entryDoctrine(spec)`): **scalp** → near-live (bids the
-  instasell to fill); **value** → the trough (band low, unfolded); **band/churn** → the band low
-  reach-folded toward live. The asym deep bid is never folded in — it stays the `◆ asym` line
-  (rest-and-see optionality).
+- **`Est. buy` is strategy-aware** (`entryDoctrine(spec)`, routed off `spec.fillShape`): **scalp** →
+  near-live (bids the instasell to fill); **value** → the trough (band low, unfolded); **band** → the
+  band low, NOT folded (doctrine `band-low`, PLAN-ESTIMATOR-POSTURE AC1: band is a "ladder the band low,
+  sell the band top" play — non-immediate fill is the strategy, so the buy PRICES the band low and
+  ANNOTATES its fill-probability instead of folding up), carrying a **reach token + placement percentile**
+  in the cell (`4/14 · p36` — where `p36` = the percentile of the band-low bid within the 14-day daily-LOW
+  distribution; a low pXX = a deep/patient entry); **churn** → the band low **reach-folded toward live**
+  (churn is a genuine fill-now lane — buy every limit, flip fast — so it KEEPS the fold). The asym deep bid
+  is never folded in — it stays the `◆ asym` line (rest-and-see optionality). The rank absorbs the
+  fill-probability the band buy price no longer hides: the bid reach feeds `pFillIntraday` (a rarely-filling
+  deep band-low bid gets low P and ranks BELOW an equal-net fill-now flip).
 - **`Est. sell`** = a DECLARED thesis exit **only on a held lot** (floored to live, not clamped to
   the band), else the band top folded by reach + a diurnal/asym blend; **BE-floored always**. The
   pure discovery screen NEVER anchors to a declared exit (a bare candidate is a buy read).

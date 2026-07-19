@@ -44,8 +44,11 @@ export const EST_REACH_SAT_FRAC = 0.75;
 export const EST_BLEND_EQUAL_WEIGHTS = true;
 
 /* reachFoldModel — the neutral fold. estBUY is the per-strategy entry doctrine (scalp near-live / value
-   trough / band reach-fold), blended with the diurnal dip. estSELL is the band top DISCOUNTED BY REACH
-   (a mirage exit collapses toward live), softened + de-biased toward the observed 24h high by the
+   trough / band band-low / churn reach-fold — PLAN-ESTIMATOR-POSTURE AC1 split band off churn: band PRICES
+   the band low + annotates reach, churn keeps the fill-now fold), blended with the diurnal dip. estSELL is
+   the band top DISCOUNTED BY REACH — a mirage exit collapses toward live (UNCHANGED by AC1: AC1 un-folds only
+   the BUY leg; the SELL leg still folds a stale top down, the Crimson-kisten guard) — softened + de-biased
+   toward the observed 24h high by the
    liquidity/size relief (ctx.relief > 0 on a liquid book with a small position÷flow ratio; a thin book
    keeps the FULL discount byte-identically — the Ancient-godsword mirage guard), blended with the
    diurnal peak ask + the asym high-reach ask. All shared inputs (reads, doctrine, relief, topRef) are
@@ -65,8 +68,11 @@ export const reachFoldModel = {
       estBuy = qb;                 // scalp bids the live instasell to FILL — the band-low reach doesn't apply
       buyReach = null;             // a live bid needs no cross-day touch caveat
     } else {
-      // trough (value) anchors the band-low WITHOUT folding toward live; reach-fold (band/churn) folds it.
-      const anchor = doctrine === 'trough' ? ob : Math.round(qb - (qb - ob) * fold(bidR ? bidR.frac : null));
+      // trough (value) + band-low (band, AC1) anchor the band-low WITHOUT folding toward live; reach-fold
+      // (churn — the fill-now lane) folds it toward the live instabuy by the band-low's recent touch-reach.
+      // trough and band-low emit the SAME `ob` anchor — the split is a LABEL (shadow doctrine + the AC1 buy
+      // cell reach/percentile annotation), not distinct math. See js/estimators/pair.mjs entryDoctrine.
+      const anchor = (doctrine === 'trough' || doctrine === 'band-low') ? ob : Math.round(qb - (qb - ob) * fold(bidR ? bidR.frac : null));
       const bCands = [anchor];
       const dBid = extra.diurnal ? num(extra.diurnal.bid) : null;
       if (dBid != null) bCands.push(Math.round(clamp(dBid, Math.min(ob, qb), qb)));

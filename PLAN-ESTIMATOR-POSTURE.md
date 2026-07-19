@@ -74,7 +74,14 @@ alone. Verify `rank = net × P(fill) ÷ TTF` actually feeds the **bid** reach in
 doesn't today, wire it. This is what keeps the mirage (Crimson kisten's stale top) from ranking
 like a real edge once the raw price is shown.
 
-### AC3 — surface the patient-vs-fill-now divergence explicitly (the cheap interim, ship first)
+### AC3 — REMOVED 2026-07-18 (superseded by AC1)
+The interim patient-band-edge divergence footer shipped as a stopgap, then was DELETED the moment AC1
+landed: once the band buy leg prices the band low natively, the real patient edge shows in the
+Est. buy/sell/net columns directly, so the compensating footer was redundant. Removed from
+`screen-flip-niches.mjs` renderMode + the `patient-band-edge` mention in `pipeline/lib/render.mjs`'s
+tier-registry comment. Original spec kept below for the record:
+
+### AC3 (original) — surface the patient-vs-fill-now divergence explicitly (the cheap interim, ship first)
 A footer/inform line when the folded pair is BE-floored but the raw band pair clears: `patient band
 edge (deep bid + patient ask): Abyssal bludgeon +209k, Ancient godsword +640k — N rows the fill-now
 fold hid`. This is the low-risk change that stops the board reading dead TODAY, independent of
@@ -105,9 +112,9 @@ the data gap. (Owner: F1 / O1 sample thresholds.)
 | Chunk | What | Owner |
 | --- | --- | --- |
 | AC3 | patient-edge divergence footer (interim, ship first) | ✅ SHIPPED 2026-07-18 — a `context`-tier stdout footer in `screen-flip-niches.mjs` renderMode (BAND niche only): when the folded Est. pair is BE-floored but the RAW patient pair (`optBuy→optSell`, reusing `row.optNet`) clears ≥ MIN_NET_GP (100k), one `ℹ patient band edge` line names those rows + their patient net. Console-only (never enters screen.json — verified byte-identical), inform-only, no gate/rank/grade touch, no APP_VERSION bump. |
-| AC1 | band buy leg: band-low price + reach annotation, per-niche split | next session |
-| AC2 | verify/wire bid-reach into rank P(fill)/TTF | next session |
-| AC4 | buy-leg would-have-filled counterfactual log | F1 (gated on O1) |
+| AC1 | band buy leg: band-low price + reach annotation, per-niche split | ✅ SHIPPED 2026-07-18 — `entryDoctrine` (js/estimators/pair.mjs) now splits band off churn by fillShape: band ('asym') → the new `'band-low'` doctrine (prices `ob`, the band low, no fold — same math as value's 'trough', a distinct LABEL); churn ('symmetric') KEEPS `'reach-fold'` (fill-now fold, BYTE-IDENTICAL — proven over the replay archetypes). The band buy cell carries the reach token + a PLACEMENT PERCENTILE `(4/14 · pXX)` — `placement(rbStats.lows, estBuy)` computed ZERO-FETCH off the screen's in-hand 14-day daily lows and threaded via `est.confidence.buyPlacement` into `estPairCells`. Console/shadow-only (app never calls estimatePair; screen.json publishes the raw cells) → NO APP_VERSION bump. Verified: BE-floored band rows dropped 4→1; same-item pairs un-fold (Superior dragon bones +56→+256, Ranging potion +27→+117). |
+| AC2 | verify/wire bid-reach into rank P(fill)/TTF | ✅ SHIPPED (verify-only, already wired) 2026-07-18 — the rank (`estimateRank`, quotedPair = optBuy/optSell = the band low) already feeds the BID reach into `pFillIntraday` via `extra.reach`; a low-reach band-low bid gets low P and ranks DOWN. Evidence: Masori body net +542k/u but bid-reach 0/3 (1/14) → P~0.04, rank 24,859 (far below Nightmare staff P~0.29, rank 217.2k); Weapon poison / Dragon dart tip 0/14 bids → P~0.00, rank 0 (bottom). No code change needed. The SELL leg keeps its reach-fold (un-folded ONLY the buy) — the stale-top mirage stays buried (Masori sell 42.90m folded, not the raw asym 43.12m). |
+| AC4 | buy-leg would-have-filled counterfactual log | F1 (gated on O1) — still OPEN |
 
 ## Docs to reconcile when this ships (rule 8)
 
