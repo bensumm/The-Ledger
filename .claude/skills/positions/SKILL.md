@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.37
+version: 1.39
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -323,6 +323,40 @@ step*, not a bad call: DHCB's band-top sell 36.21m reached **0/7 days**, I quote
 without running `--ask`, and the reachable sell was ~35.6m (+80k, which then went underwater). No
 edge is real until BOTH legs are verified — the buy (trajectory / dip-vs-knife) AND the sell
 (`--ask` reach).
+
+**The verification TRIO — mandatory for every top pick/action price, ONE combined call, every time
+(Ben, 2026-07-18 — supersedes running these ad hoc/"on the handful you actually pitch"; revised
+same day once `--profile` was fixed to COMPOSE with `--ask`/`--bid`/`--exit`/`--depth` instead of
+short-circuiting the rest of the per-item read).** The sell-leg-only rule above is now the FLOOR,
+not the whole bundle. Before naming an action price on anything you're recommending (a new bid, a
+list-at, a rebid), run ONE `read-window-range.mjs` call bundling all three checks on it — cheap
+(zero new fetch beyond the archive) and each catches a different failure mode seen this session:
+```
+node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window <hours> --profile --json --out pipeline/.cache/last-report/verify.json
+```
+1. **`--ask <sell>` / `--bid <buy>` (percentile + reach, AC4a).** Read BOTH numbers it prints, not
+   just the day-count: `reached N/14d · recent M/3 · placement pXX of the 14-day daily-HIGH/LOW
+   distribution`. The placement percentile tells you WHERE in the distribution the level sits (p86
+   = near the top, rare; p7 = near the bottom, routine) — a level can have decent N/14 reach and
+   still be an aggressive ask if its placement is high. Never quote a level off Est./Optimistic
+   alone without pulling this.
+2. **`--exit <ask> [--window <hours>] [--margin <gp>]` (tax-exact back-solve).** This gives the
+   real breakeven BUY for that sell (`maxBuyForExit`, already tax-net) — margin is this value MINUS
+   the actual bid, never a raw ask-minus-bid subtraction (the Tormented synapse correction,
+   2026-07-17: naive subtraction on a value that was already tax-net produced a margin ~4x too
+   high, and part of the "safe" bid range actually crossed into a loss).
+3. **`--profile` (hour-by-hour diurnal sweep).** Don't trust the screen's/quote's auto diurnal note
+   as the final word on timing — pull the full 24-row hour-of-day table and read the printed DIP/
+   PEAK windows plus the amplitude/trend line yourself before naming a timing target. This is the
+   same data the auto-note derives from, at full resolution, and it's what lets you say "targets
+   the 20:00–21:00 dip" with the actual numbers behind it rather than a summarized guess.
+None of these change the verdict or the gate tree — they're the confirmation pass on the specific
+number you're about to say out loud. Skipping one is exactly the failure class the DHCB and
+Tormented-synapse anchors both are: a real tool existed, wasn't run, and the pitched number was
+wrong in a way the tool would have caught. **Dump it with `--out`** for the deep-dive candidates
+this pass singles out, so a later pass — this skill's own re-check, or `/scan`'s
+`set-scan-analysis.mjs` — can read `pipeline/.cache/last-report/verify.json` instead of re-running
+the checks by hand or re-deriving the numbers.
 
 Preserve the standard 10-column
 `--positions` table exactly as the script printed it —

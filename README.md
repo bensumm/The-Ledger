@@ -517,7 +517,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     PB2 demand-balance read: `pressure` (medVolHi/medVolLo) + regime label + `reachableBid`/`reachableAsk`
     (`base ± band·φ` inline) + reliability, off `demandPressure`/`reachableBand`, inform-only n≈0; DC2
     adds the per-hour demand cycle + the SELL/BUY timing windows (`demandRegime`) + a cross-check vs the
-    price dip/peak windows — `✓ demand-confirmed` / `✗ diverge`), `limits.mjs` (LM1 — the buy-limit read:
+    price dip/peak windows — `✓ demand-confirmed` / `✗ diverge`. PLAN-ESTIMATOR-POSTURE AC8: a scored
+    `--bid`/`--ask`/`--exit` now also prints a **`fold:` data-point line** — the SHARED `estimatePair`
+    reach-fold on the in-hand data (`best-case X → reach-folded Y · net at folded pair`), zero new fetch,
+    inform-only; `--niche band|churn|scalp` (default band) picks the spec (churn inherits the AC5/AC6
+    fold exemption); it rides `--json`/`--out` as `result.fold`), `limits.mjs` (LM1 — the buy-limit read:
     `node pipeline/commands/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),

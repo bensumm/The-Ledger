@@ -39,16 +39,30 @@
  *                  and the clearableBid ("CATCH AT ≥ X" — how deep a bid still fills). A thin book prints
  *                  its COLLAPSE REASON, never a bare null. Estimate from bucket AVERAGES, not an order
  *                  book (inform-only, n≈0).
+ *   --niche <n>    (PLAN-ESTIMATOR-POSTURE AC8) which strategy spec the reach-FOLD data point is computed
+ *                  against — band (default) | churn | scalp. With a scored --bid/--ask/--exit + a live
+ *                  pair, prints one `fold: best-case X → reach-folded Y` line (the estimator's fold, moved
+ *                  out of the discovery price into validation) + a `result.fold` in --json/--out. churn
+ *                  inherits the AC5/AC6 fold exemption (fold ≈ best-case). Zero new fetch; inform-only.
  *   --pressure     (PLAN-DEPTH-EXIT Extension A, PB2) the demand-balance reachable band: pressure =
  *                  medVolHi/medVolLo (buy-heavy > 1 / sell-heavy < 1), the regime label, and the
  *                  reachableBid/reachableAsk = base ± band·φ(±s)·reliability with the band + reliability
  *                  inline. The manual φ-tuning surface. Inform-only, n≈0 — φ/PRESSURE_* are placeholders.
+ *   --out <path>   ALWAYS write JSON.stringify(results, null, 2) (the same array --json prints) to this
+ *                  path, regardless of whether --json was also passed — combine with normal markdown
+ *                  stdout to keep the human read while also saving a machine-readable dump for a later
+ *                  interpretation pass (e.g. pipeline/.cache/last-report/verify.json). Creates parent
+ *                  directories as needed. Default (no --out) is unchanged.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
+import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
+import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -63,7 +77,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);
@@ -84,10 +98,19 @@ const DEPTH_QTY = A.depth !== undefined ? parseGp(A.depth) : null;
 if (A.depth !== undefined && (!Number.isFinite(DEPTH_QTY) || DEPTH_QTY <= 0)) { console.error('error: --depth expects a positive unit quantity'); process.exit(1); }
 // PB2 — --pressure: the pressure-driven reachable band (demand-balance read; no qty). A bare flag.
 const PRESSURE = A.pressure !== undefined && A.pressure !== false;
+// AC8 — --niche <band|churn|scalp>: which strategy spec the fold-datapoint is computed against (default
+// band). churn inherits AC5/AC6's fold exemption, so its fold line reads fold ≈ best-case (itself
+// informative). value is term-basis (no opt band pair) → excluded here.
+const NICHE = (A.niche !== undefined ? String(A.niche) : 'band').toLowerCase();
+if (!['band', 'churn', 'scalp'].includes(NICHE)) { console.error('error: --niche expects band, churn, or scalp'); process.exit(1); }
 // AO2 — --json: emit the assembled result object(s) as JSON instead of markdown; default stdout stays
 // byte-identical when absent (the analyze-record/analyze-fill-placement `--json`→stdout convention, NOT
 // writeLastReport — this command builds no render.mjs section objects). A bare flag.
 const JSON_OUT = A.json !== undefined && A.json !== false;
+// --out <path>: always write the plain results array to this path, independent of --json (which
+// stays stdout-only, wrapped with kind/generatedAt/window metadata). A different, simpler shape —
+// not the writeLastReport {kind,generatedAt,reports:[...]} convention.
+const OUT_PATH = A.out !== undefined ? String(A.out) : null;
 
 const fmt = n => n == null ? '—' : n.toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
@@ -132,27 +155,35 @@ for (const want of positionals) {
     const prof = hourProfile(series, { nights: NIGHTS });
     result.mode = 'profile';
     log(`\n## ${r.name} — diurnal profile, last ${prof ? prof.nights : 0} day(s) (local hour-of-day, 1h series)`);
-    if (!prof) { log('  too thin to profile — need ≥4 traded days of hourly history.'); result.profile = null; continue; }
-    const inDip = new Set(prof.dip.hours), inPeak = new Set(prof.peak.hours);
-    for (const x of prof.hours) {
-      const tag = inDip.has(x.h) ? ' ⬇dip' : inPeak.has(x.h) ? ' ⬆peak' : '';
-      log(`  ${pad2(x.h)}:00  low ${fmt(x.lowRecent)} · high ${fmt(x.hiRecent)}  · n ${x.n}${tag}`);
+    if (!prof) {
+      log('  too thin to profile — need ≥4 traded days of hourly history.');
+      result.profile = null;
+    } else {
+      const inDip = new Set(prof.dip.hours), inPeak = new Set(prof.peak.hours);
+      for (const x of prof.hours) {
+        const tag = inDip.has(x.h) ? ' ⬇dip' : inPeak.has(x.h) ? ' ⬆peak' : '';
+        log(`  ${pad2(x.h)}:00  low ${fmt(x.lowRecent)} · high ${fmt(x.hiRecent)}  · n ${x.n}${tag}`);
+      }
+      const win = (w) => `${pad2(w.startH)}:00–${pad2(w.endH)}:00`;
+      log(`  ---`);
+      log(`  DIP window ${win(prof.dip)} — recent level ${fmt(prof.dip.level)}`);
+      log(`  PEAK window ${win(prof.peak)} — recent level ${fmt(prof.peak.level)}`);
+      log(`  intraday amplitude ~${fmt(prof.amplitude)}${prof.amplitudePct != null ? ` (${(prof.amplitudePct * 100).toFixed(1)}%)` : ''} · trend ${prof.trendPerDay == null ? '—' : (prof.trendPerDay >= 0 ? '+' : '') + fmt(Math.round(prof.trendPerDay)) + '/day'}${prof.trendDominates ? ' ⚠ trend-dominates' : ''}`);
+      if (latest && latest.low != null) log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
+      const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });
+      if (dr) {
+        log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})`);
+        for (const n of dr.notes) log(`    ⓘ ${n}`);
+      }
+      log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);
+      result.profile = { nights: prof.nights, dip: prof.dip, peak: prof.peak, amplitude: prof.amplitude, amplitudePct: prof.amplitudePct, trendPerDay: prof.trendPerDay, trendDominates: prof.trendDominates };
+      result.diurnalRange = dr ? { bid: dr.bid, ask: dr.ask, bidBasis: dr.bidBasis, notes: dr.notes } : null;
     }
-    const win = (w) => `${pad2(w.startH)}:00–${pad2(w.endH)}:00`;
-    log(`  ---`);
-    log(`  DIP window ${win(prof.dip)} — recent level ${fmt(prof.dip.level)}`);
-    log(`  PEAK window ${win(prof.peak)} — recent level ${fmt(prof.peak.level)}`);
-    log(`  intraday amplitude ~${fmt(prof.amplitude)}${prof.amplitudePct != null ? ` (${(prof.amplitudePct * 100).toFixed(1)}%)` : ''} · trend ${prof.trendPerDay == null ? '—' : (prof.trendPerDay >= 0 ? '+' : '') + fmt(Math.round(prof.trendPerDay)) + '/day'}${prof.trendDominates ? ' ⚠ trend-dominates' : ''}`);
-    if (latest && latest.low != null) log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
-    const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });
-    if (dr) {
-      log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})`);
-      for (const n of dr.notes) log(`    ⓘ ${n}`);
-    }
-    log(`  (hour-of-day medians, small sample — a guide, not a guarantee)`);
-    result.profile = { nights: prof.nights, dip: prof.dip, peak: prof.peak, amplitude: prof.amplitude, amplitudePct: prof.amplitudePct, trendPerDay: prof.trendPerDay, trendDominates: prof.trendDominates };
-    result.diurnalRange = dr ? { bid: dr.bid, ask: dr.ask, bidBasis: dr.bidBasis, notes: dr.notes } : null;
-    continue;
+    // compose: only short-circuit the rest of the per-item loop (window-range table + ask/bid/exit/depth
+    // blocks below) when NONE of those flags were also given — a bare --profile keeps today's exact
+    // profile-only output, while --profile combined with --ask/--bid/--exit/--depth falls through so
+    // this same `result` object also picks up the window-range read.
+    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null) continue;
   }
 
   const stats = windowStats(series, { nights: NIGHTS, wStart: W_START, wEnd: W_END });
@@ -243,6 +274,49 @@ for (const want of positionals) {
       } else {
         log(`    (no window highs to score the exit's reachability against — treat the buy as an upper bound)`);
       }
+    }
+  }
+  // PLAN-ESTIMATOR-POSTURE AC8 — the reach-FOLD as a VALIDATION DATA POINT (its new home). Discovery
+  // (the screen) now shows the BEST-CASE price; the fold moved OUT of that price and INTO this validation
+  // flow. From the live pair + the window reach counts ALREADY in hand (ZERO new fetch), build a synthetic
+  // estimator row and call the SHARED estimatePair (sellModel 'reach-fold') — reusing the estimator, not
+  // re-deriving the fold math, guarantees byte-parity with what the screen would fold. The operator sees
+  // `best-case X → reach-folded Y` at the moment capital is committed and picks with BOTH numbers in hand.
+  // Inform-only PLACEHOLDER (n≈14) — the estimator's fold, NOT a verdict; never gates/overrides the
+  // reach/placement/depth reads. churn inherits AC5/AC6's exemption, so its fold line reads fold ≈ best-case.
+  if (latest && latest.high != null && latest.low != null && (BID != null || ASK != null || EXIT != null)) {
+    const askScoreLevel = ASK != null ? ASK : (EXIT != null ? EXIT : null);   // an explicit sell/exit level
+    // synthetic row: live pair from latest; opt edges from the scored levels (or the window ~50% quantile).
+    const synthRow = {
+      quickBuy: latest.high, quickSell: latest.low,
+      optBuy: BID != null ? BID : (lows.length ? quantLow(lows, 0.5) : latest.high),
+      optSell: askScoreLevel != null ? askScoreLevel : (his.length ? quantHigh(his, 0.5) : latest.low),
+    };
+    const extra = {};
+    // ask/exit reach → askReach (full hit + recent split); same field remap the screen does at its :583.
+    if (askScoreLevel != null && his.length) {
+      const rc = recencySplit(scored, 'ask', askScoreLevel, RECENT_NIGHTS);
+      extra.askReach = { reachedDays: reachedDays(his, askScoreLevel), nDays: his.length, recentHit: rc.recentHit, recentDays: rc.recentDays };
+    }
+    // bid touch → bidReach (only the buy leg of a faller-accepting 'scalp' niche folds it; band/churn price the band low).
+    if (BID != null && lows.length) {
+      const rc = recencySplit(scored, 'bid', BID, RECENT_NIGHTS);
+      extra.bidReach = { reachedDays: touchedDays(lows, BID), nDays: lows.length, recentHit: rc.recentHit, recentDays: rc.recentDays };
+    }
+    const est = estimatePair(FLIP_NICHES[NICHE], synthRow, extra, { sellModel: 'reach-fold' });
+    if (est) {
+      const nicheTag = NICHE === 'band' ? '' : ` [--niche ${NICHE}]`;
+      const recFull = r => r ? ` (recent ${r.recentHit != null ? r.recentHit : '—'}/${r.recentDays != null ? r.recentDays : '—'} · full ${r.reachedDays}/${r.nDays})` : '';
+      // the SELL fold line (the mirage guard's home): best-case ask → the estimator's reach-folded exit.
+      if (askScoreLevel != null) {
+        const net = est.estNet, sign = net != null && net > 0 ? '+' : '';
+        log(`  fold${nicheTag}: best-case ask ${fmt(askScoreLevel)} → reach-folded ${fmt(est.estSell)}${recFull(extra.askReach)} · net at folded pair ${sign}${fmt(net)} (BE ${fmt(est.be)})`);
+      }
+      // a BUY fold line ONLY when the entry doctrine actually folds it (scalp bids-to-fill toward live) —
+      // band/churn price the band low unfolded (AC1/AC6), so there is nothing to show there.
+      if (BID != null && est.estBuy !== synthRow.optBuy)
+        log(`  fold${nicheTag}: best-case bid ${fmt(BID)} → reach-folded ${fmt(est.estBuy)}${recFull(extra.bidReach)}`);
+      result.fold = { niche: NICHE, estBuy: est.estBuy, estSell: est.estSell, estNet: est.estNet, be: est.be, confidence: estConfLean(est) };
     }
   }
   // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: percentile-DEPTH read, BOTH edges (DE6 added the low
@@ -347,3 +421,9 @@ if (archive) { try { archive.close(); } catch { /* best-effort */ } }
 // convention (this command has no render.mjs sections); the analyze-record/analyze-fill-placement
 // `--json`→stdout convention for non-render analysis commands. Default (markdown) stdout is untouched.
 if (JSON_OUT) console.log(JSON.stringify({ kind: 'windowrange', generatedAt: new Date().toISOString(), nights: NIGHTS, window: { start: W_START, end: W_END }, items: results }, null, 2));
+// --out: always dump the plain results array (regardless of --json), for a later interpretation
+// pass to read without re-running/re-deriving the checks by hand.
+if (OUT_PATH) {
+  fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
+  fs.writeFileSync(OUT_PATH, JSON.stringify(results, null, 2));
+}
