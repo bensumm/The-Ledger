@@ -48,7 +48,7 @@ Every read is ONE table, the **table v2** column set:
 
 ### Console default — `Est. buy` / `Est. sell`
 On `screen-flip-niches.mjs` and `quote-items.mjs`, STDOUT replaces Quick+Optimistic with the
-reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators.mjs` `estimatePair`
+reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators/pair.mjs` `estimatePair`
 is the full synthesis: Optimistic ∩ diurnal ∩ reach ∩ anchor ∩ BE-floor). `--raw` restores the
 model-free Quick/Optimistic (and `--asym` implies `--raw`). The app + `screen.json` render the raw
 table-v2 **decision** cells — the Grade, the rank, and the sort stay F1-gated on the NEUTRAL
@@ -89,7 +89,9 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   net; still BE-floored, sell ≥ live, declared exit still wins the sell leg, and a **reliability-gated ceiling**
   lets a fully-reliable read exceed the observed 24h high (reliability<1 keeps the `dayHighFrom5m` cap). The
   conservative depth floor renders beside as the reference; a LOUD banner flags every surface as un-calibrated
-  (n≈0). **The `pressure` model is REFUSED under `--publish`** — the deployed app + `screen.json` + the grade
+  (n≈0). **The `pressure` model keeps its uncalibrated prices out of `screen.json`** — since publishing is
+  default-on, a `pressure` (or `--asym`) pass **silently downgrades** the publish to off (skips it); only an
+  EXPLICIT `--publish` alongside it hard-REFUSES (loud stderr + exit). Either way the deployed app + `screen.json` + the grade
   cutoffs stay F1-gated on the NEUTRAL estimator, and the neutral `reach-fold` runs as a SHADOW every pass
   (the resolver's `shadow` list) so the retro co-log logs it + the pressure `reachable` separately and the
   head-to-head stays unbiased (`PLAN-REACHABILITY-CONSOLIDATION.md`). Off the trial: byte-identical.
@@ -102,7 +104,7 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   (`extra.intendedUnits`); a bare discovery/per-item read with no held qty degrades to the buy-limit
   proxy. So a held-lot ask reads its relief off the actual position, not an accumulation estimate.
   Full mechanism + thresholds + the F1 shadow fields: the `asymEstimate`/`reachRelief` headers in
-  `js/estimators.mjs`.
+  `js/estimators/reach.mjs` (both live there after the PC2 split — `js/estimators.mjs` is the barrel).
 - **The held-lot depth floor + pressure-reachable (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
   `watch-positions` now renders TWO measured lenses beside the reach count: the **depth floor**
   (`clearableAsk` — the highest ask whose at-or-above instabuy flow absorbs `×4` the lot on ≥75% of
@@ -223,7 +225,7 @@ bumps `APP_VERSION`.
 
 ### Rank + grade
 The per-thesis column is `Rank net·P/ttf` (P6b): **rank = net after tax × P(fill at the quoted pair)
-÷ TTF** (`pipeline/lib/estimators.mjs`), at the ONE pair the thesis posts. `expGpDay` survives only
+÷ TTF** (`estimateRank`/`rankScore` in `js/estimators/families.mjs`), at the ONE pair the thesis posts. `expGpDay` survives only
 as the cheap pre-fetch pool orderer + the 500k pre-filter. Grade letters (`rating.mjs`) are
 placeholder cutoffs.
 - **P(fill) is two-leg:** `P = P_bid × askReachFactor(askReach)` — the entry fill discounted by the
@@ -241,8 +243,9 @@ placeholder cutoffs.
 - **Asymmetric fill (inform):** the ideal flip is a rare deep entry + a near-certain exit; the
   symmetric p10/p90 pair is 50/50. A `◆ asym fill` line shows the day-level deep-bid → high-reach-ask
   pair (`asymPair`) with `P_ask` (the rank weight) and `P_bid` as "rest as optionality" (never a rank
-  multiplier). `--asym` flips the whole objective but is F1-gated OFF (refuses `--publish`). Doctrine:
-  the `asymEstimate` header in `js/estimators.mjs`.
+  multiplier). `--asym` flips the whole objective but is F1-gated OFF (it silently downgrades the
+  default-on publish; an explicit `--publish --asym` hard-refuses). Doctrine:
+  the `asymEstimate` header in `js/estimators/reach.mjs`.
 
 `--posture overnight|active|auto` (S2) TUNES the stack (not a new flip-niche): overnight keeps only
 flat/rising + confident-band + non-thin + non-breakdown, ranks net-over-velocity, drops
@@ -343,8 +346,13 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   net>0 surface gate drops any row whose after-tax net at its posted pair is ≤ 0 (held/asked/watchlist
   exempt). `--posture` tunes the stack (§3). `--mode all` also runs the DL4 dip-nomination pass
   (`nominateDip` → `dip-watchlist.json`, the "B feeds A" half). A flip-niche empty at the floors re-runs
-  beneath it (`subFloorFallback`, grade-capped `C (sub-floor)`, stdout-only). `--publish` writes
-  `screen.json` (the app Scan tab).
+  beneath it (`subFloorFallback`, grade-capped `C (sub-floor)`, stdout-only). Writing repo-root
+  `screen.json` (the app Scan tab) is **DEFAULT-ON every run** (2026-07-16) — `--no-publish` opts out
+  (a throwaway filtered console read). An un-calibrated estimator DOWNGRADES that write: `--asym` or
+  `--pressure-exit` (`--est-sell pressure`) **silently skip** the publish so an exploration run needs no
+  `--no-publish`; only an EXPLICIT `--publish --asym` / `--publish --pressure-exit` combo hard-REFUSES
+  (loud stderr + exit — `refusePublishIfNonNeutral`). Committing `screen.json` to git is a separate step
+  (`sync-fills.mjs --publish`, once-a-day `/overnight`); the local write itself touches no git.
 - **`watch-positions.mjs`** — watches every position = any committed capital (held inventory PLUS every
   active GE offer). Output: headline alerts → numbers-only table → per-item note block → summary footer.
   Load-bearing: the **sell/list-at + break-even line is ALWAYS emitted on a held lot** (a fill you

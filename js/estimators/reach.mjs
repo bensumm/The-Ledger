@@ -35,7 +35,9 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
    more tightly than these thresholds currently encode (clean under ~0.5%, visibly degraded ~0.7–1%,
    gone by ~5–7% — Raw anglerfish's oversized tranche was a net loss after tax). Small-n, not yet
    folded into these constants; full writeup + numbers: `/scan` SKILL.md's "Asymmetric ask-reach
-   read" bullet — don't duplicate here, this is a pointer only. */
+   read" bullet — don't duplicate here, this is a pointer only.
+   POINTER: that measured degradation knee (~0.5–1% of daily volume, n≈6 study) sits BELOW the coded
+   REACH_RELIEF_SIZE_FULL of 2% — i.e. the constant is looser than the evidence; F1 owns tightening it. */
 export const REACH_RELIEF_MIN_VOL   = 100_000;   // limiting-side vol/d floor — below it relief is EXACTLY 0 (the mirage guard)
 export const REACH_RELIEF_FULL_VOL  = 1_000_000; // vol/d at which the liquidity factor saturates to 1
 export const REACH_RELIEF_SIZE_FULL = 0.02;      // sizeRatio at/below which the size factor is 1 (position ≪ flow)

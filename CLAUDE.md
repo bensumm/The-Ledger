@@ -23,8 +23,11 @@ push to `main`).
   (**on-demand only** — the `CofferFillsSync` scheduler was eliminated 2026-07-04, §12). It reads
   `.runelite/exchange-logger/*` and rebuilds `fills.json` + the derived `positions.json`
   (+ `offers.json`, LW1). **The DEFAULT is now LOCAL / ZERO-GIT (Ben 2026-07-15)** — a bare run writes
-  the artifacts with no fetch/commit/push, so it's the cheap always-fresh in-session read (run it at the
-  top of every `/scan` and `/positions`). **Publishing is ONCE A DAY at `/overnight` via `sync-fills.mjs
+  the artifacts with no fetch/commit/push, so it's the cheap always-fresh in-session read. The `/scan`
+  and `/positions` read commands (`screen-flip-niches.mjs`, `quote-items.mjs --positions`) now **auto-run
+  this local sync themselves before the read** (SY1, 2026-07-16 — enforced in-code, was a repeatedly-skipped
+  doctrine); run it MANUALLY only for OTHER surfaces that don't (e.g. a bare quote, `/morning`, a hand
+  read of `positions.json`). **Publishing is ONCE A DAY at `/overnight` via `sync-fills.mjs
   --publish`** (the only path that fetches/ff-pulls phone trades + commits + pushes) — so the deployed
   app's book updates nightly while the localhost desk reads the fresh rebuild all day. `positions.json` is the FIFO-reconstructed view (`collapseOffers` +
   `matchTrades`): `closed` after-tax realised P/L, `open` inventory at real avg cost, `unmatched`
