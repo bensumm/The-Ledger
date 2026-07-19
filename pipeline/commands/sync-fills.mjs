@@ -339,7 +339,13 @@ function main() {
     if (changed) console.log('[dry] --publish would fetch/ff + write + commit + push (a bare run writes locally with no git)');
     return;
   }
-  if (!changed) return;
+  // NOTE: --publish must NOT gate the commit on `changed` (the fresh-merge-vs-disk diff). In-session
+  // /scan & /positions local syncs (§14) already rewrite fills/positions/offers.json all day, so by
+  // the nightly --publish the merge shows zero DISK diff → `changed=false` even though those daily
+  // rewrites are sitting uncommitted vs HEAD. Gating on `changed` here silently no-op'd the publish
+  // and froze the deployed app's book (audit finding 1, 2026-07-19). The ONLY correct commit gate is
+  // the `git status --porcelain` check below (diff vs HEAD/index), which the `git add` block reaches
+  // unconditionally. `changed` now serves solely the --dry preview message above.
 
   // fills.json / positions.json / offers.json already written by regenerate({ write: true }) above.
 

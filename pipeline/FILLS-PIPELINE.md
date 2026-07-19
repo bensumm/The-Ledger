@@ -691,10 +691,16 @@ side effect, and crucially **no git**.
   pulled is invisible until the next **attended** sync (which ff's origin/main before reading logs).
   That is acceptable: local mode serves the person sitting at the PC, who never needs the phone's
   un-pulled lines. The daemon inherits the same property.
-- The attended (no-flag) path is unchanged byte-for-byte (same multi-writer guard, tombstone line,
-  summaries, change-gating) **plus `offers.json` now joins its commit set** (added only when present
-  on disk, alongside `fills.json`/`positions.json`/`screen.json`/`suggestions.jsonl` — never a
-  blanket `git add -A`).
+- The attended (`--publish`) path shares the same multi-writer guard, tombstone line, and summaries,
+  **plus `offers.json` now joins its commit set** (added only when present on disk, alongside
+  `fills.json`/`positions.json`/`screen.json`/`suggestions.jsonl` — never a blanket `git add -A`).
+  **Commit gating (corrected 2026-07-19, audit finding 1):** the publish commit fires whenever
+  ANYTHING in the commit set is uncommitted vs `HEAD` — the `git add <files>` + `git status
+  --porcelain` check is the ONE gate. It does NOT gate on the fresh-merge-vs-disk diff (`changed`):
+  in-session `/scan` & `/positions` local syncs (§14) rewrite `fills`/`positions`/`offers.json` all
+  day, so by the nightly `--publish` the merge shows zero *disk* diff (`changed=false`) even though
+  those daily rewrites sit uncommitted vs `HEAD`. Gating on `changed` there silently no-op'd the
+  commit and froze the deployed app's book; `changed` now feeds only the `--dry` preview message.
 
 ### 14.2 `offers.json` (TRACKED root artifact, written in BOTH modes)
 A flat snapshot of the live GE offer slots, app-fetched same-origin like `positions.json`:
