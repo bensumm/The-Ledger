@@ -102,6 +102,9 @@ Print-only — it never writes trade data. Each run emits:
      the instabuy: **controlled loss-taking** to free the capital, never "staying ahead of the
      drop" (you can't outrun a fall by chasing your own ask down — the sell-side framing below).
      **LIST-TO-CLEAR** = list at the instabuy to clear (a softer clear when the book can absorb it).
+     A Gate-2 breakdown **CUT** on a lot with a declared thesis still ABOVE its tripwire is *annotated*
+     with the tripwire context (VN-4 — still fires + headlines + escalates, never silenced; see the
+     thesis-silence invariant block below for the exact rendered form).
    - **D-escalation — persistence.** Clean `mom` but the band has printed below break-even
      **through a liquid (busy-hour) window** → **CUT-CANDIDATE**: a genuine daily trough
      recovers when the book fills, so this is persistence, not the clock. This is what stops a
@@ -492,8 +495,18 @@ of the numbered signals, in more detail:
        the diurnal exit — the 43.60m-vs-44.22m Masori leak). Declare it at entry:
        `node pipeline/commands/declare-thesis.mjs set "<item>" "<plan>" --tripwire <gp> --exit <gp> --window <h-h> --path <key>`.
        **Invariants:** the Gate-2 breakdown `CUT` is checked FIRST, so a real breakdown is NEVER
-       silenced (or frame-masked) by a thesis; and
-       absent a thesis (empty store) behavior is byte-identical to today. The thesis is a *declaration*
+       silenced (or frame-masked) by a thesis — it still fires, headlines, and escalates unchanged.
+       **VN-4 ANNOTATE, don't hide (render-only):** when that breakdown `CUT` fires on a declared-thesis
+       lot whose live clear still sits **ABOVE** the declared tripwire, the two console surfaces
+       *annotate* the CUT string with the tripwire context instead of the bare "free capital" tag —
+       `CUT (2h breakdown) — live <X> still ~<gap> ABOVE declared abort <tripwire>; within plan — your
+       call` (`breakdownThesisAnnotation`, `lib/item-context.mjs`, applied in BOTH `heldVerdictCompact`
+       and `heldActionVerbose`). This is NOT silencing: verdict/action/gate and the alert escalation are
+       byte-unchanged (`immediate` stays true, `momVerdict` + the ledger token untouched); only the
+       rendered text differs, and it's a PURE function of `mv` + `thesis.tripwire` + `live` (safe on the
+       stateless `quote-items.mjs` surface). When live ≤ the tripwire (a real breach) there is NO
+       softening — the hard `CUT @ <price> (2h breakdown & underwater — free capital)` text stands.
+       Absent a thesis (empty store) behavior is byte-identical to today. The thesis is a *declaration*
        Ben makes — never a market claim; it silences a known-expected signal, never manufactures a new
        one. The store is TRACKED (`hold-thesis.json` at repo root, agent-written like the greenlist,
        14-day TTL); watch reads it READ-ONLY.

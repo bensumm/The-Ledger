@@ -161,6 +161,11 @@ export function heldDisplay({ row = null, be = null, mv = null, prior = null,
   // money leak). The Gate-2 breakdown CUT ALWAYS overrides the frame (`immediate` above — same
   // precedence convictionGate #1 encodes); live at/below the tripwire → frame off, normal
   // escalation resumes. Display-only: momVerdict + the raw ledger token are untouched.
+  // VN-4 (annotate, don't hide): the Gate-2 breakdown CUT is NOT frame-masked here — `immediate`
+  // still forces frameActive off, the CUT still headlines + escalates. When such a CUT fires on a
+  // declared-thesis lot whose live still sits ABOVE the tripwire, the RENDERERS (heldVerdictCompact
+  // / heldActionVerbose, via breakdownThesisAnnotation) add tripwire context to the CUT string —
+  // the verdict/gate/escalation are byte-unchanged; only the rendered text differs.
   const live = row ? row.quickSell : null;
   const frameActive = !immediate && thesis && thesis.tripwire != null && live != null && live > thesis.tripwire;
   let frameLabel = null;
@@ -372,12 +377,33 @@ export function heldMomVerdict(ctx) {
   return ctx && ctx.position ? ctx.position.mv : null;
 }
 
+/* breakdownThesisAnnotation — VN-4 (ANNOTATE, don't hide): a Gate-2 breakdown CUT on a lot with a
+   DECLARED thesis whose live price still sits ABOVE the declared tripwire renders the tripwire
+   context INSTEAD of the bare "free capital" text. The CUT is NOT softened, silenced, or routed
+   through the thesis frame — it still fires + headlines + escalates exactly as before (`immediate`
+   stays true in heldDisplay; watchstate convictionGate #1's Gate-2 exemption is untouched). This is
+   a RENDER annotation ONLY: a PURE function of `mv` + `thesis.tripwire` + `live` (no persisted state
+   → safe on the stateless quote-items.mjs surface). Returns the annotated string, or null when it
+   does NOT apply — no thesis / no numeric tripwire / live ≤ tripwire / not a Gate-2 breakdown CUT.
+   When live ≤ tripwire the thesis IS invalidating (a real breach), so there is NO softening
+   annotation: the hard CUT text stands. ONE home for both compact + verbose so the surfaces agree. */
+export function breakdownThesisAnnotation(mv, thesis, live) {
+  if (!(mv && mv.action === 'CUT' && mv.gate === 2)) return null;
+  if (!thesis || thesis.tripwire == null || live == null || !(live > thesis.tripwire)) return null;
+  const gap = live - thesis.tripwire;
+  return `CUT (2h breakdown) — live ${fmtP(live)} still ~${fmtP(Math.round(gap))} ABOVE declared abort ${fmtP(thesis.tripwire)}; within plan — your call`;
+}
+
 /* COMPACT — the quote-items.mjs `--positions` table Verdict cell. Body reproduced VERBATIM from the pre-P0
    quote-items.mjs verdict() so booked-lots output stays byte-identical; the only change is that `mv` now
-   carries the askFilling softening (the HOLD — ask filling case quote could not previously reach). */
-function heldVerdictCompact(row, be, mv) {
+   carries the askFilling softening (the HOLD — ask filling case quote could not previously reach). VN-4:
+   a Gate-2 breakdown CUT on a declared-thesis lot ABOVE its tripwire gets the tripwire annotation
+   (breakdownThesisAnnotation) instead of the bare "free capital" tag — verdict/gate/escalation unchanged. */
+function heldVerdictCompact(row, be, mv, thesis = null) {
   const instabuy = row ? row.quickSell : null;
   if (mv) {
+    const ann = breakdownThesisAnnotation(mv, thesis, instabuy);
+    if (ann) return ann;
     const at = mv.listAt != null ? ` @ ${fmtP(mv.listAt)}` : '';
     const tag = mv.action === 'NO_READ'       ? ` (unreliable: ${row.reliableReason} — no action, keep ask ≥ break-even)`
               : mv.action === 'DIURNAL_WATCH' ? ' (quiet-hour trough; dipped+recovered yesterday — hold ≥ break-even, re-check at a liquid hour)'
@@ -403,10 +429,16 @@ function heldVerdictCompact(row, be, mv) {
 }
 
 /* VERBOSE — the watch-positions.mjs per-held action line. Body reproduced VERBATIM from the pre-P0 watch-positions.mjs
-   heldAction() (it now takes the shared `mv` rather than recomputing it — same inputs, same result). */
-function heldActionVerbose(row, be, lotValue, ts5m, mv) {
+   heldAction() (it now takes the shared `mv` rather than recomputing it — same inputs, same result). VN-4:
+   the Gate-2 breakdown CUT on a declared-thesis lot ABOVE its tripwire gets the SAME tripwire annotation
+   the compact cell does (breakdownThesisAnnotation) so the two surfaces agree — the CUT still fires +
+   headlines + escalates unchanged; the annotation only records that live is above the declared abort. */
+function heldActionVerbose(row, be, lotValue, ts5m, mv, thesis = null) {
   const instabuy = row ? row.quickSell : null;
   if (mv) {
+    const ann = breakdownThesisAnnotation(mv, thesis, instabuy);
+    if (ann)
+      return `${ann}. A real 2h breakdown still fired and still headlines/escalates — it is never thesis-silenced; the annotation only notes the live clear is above your declared abort, so the plan is not yet invalidated. Not out-running the drop; chasing the ask lower just sells cheaper.`;
     if (mv.action === 'NO_READ')
       return `NO-READ (${row.reliableReason}) — the quote isn't a reliable price right now (Gate 0). No price action; keep any ask ≥ break-even ${fmtP(be)} and re-check at the next liquid window.`;
     if (mv.action === 'DIURNAL_WATCH')
@@ -466,9 +498,10 @@ export function renderHeldVerdict(ctx, { mode = 'compact' } = {}) {
       : mv.verdict;
   }
   const ts5m = ctx && ctx.intraday ? ctx.intraday.ts5m : null;
+  const thesis = p.thesis || null;   // VN-4: the declared thesis annotates a Gate-2 breakdown CUT above its tripwire
   return mode === 'verbose'
-    ? heldActionVerbose(row, p.be, p.lotValue, ts5m, mv)
-    : heldVerdictCompact(row, p.be, mv);
+    ? heldActionVerbose(row, p.be, p.lotValue, ts5m, mv, thesis)
+    : heldVerdictCompact(row, p.be, mv, thesis);
 }
 
 /* renderPathLine(ctx) — the ONE shared dominant-path line (V2-P4b), rendered ALONGSIDE the verdict

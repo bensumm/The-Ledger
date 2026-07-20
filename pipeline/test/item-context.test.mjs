@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 import {
   identityStage, marketStage, historyStage, intradayStage, positionStage,
   buildItemContext, heldMomVerdict, renderHeldVerdict, staleBookBanner, STALE_BOOK_MIN,
+  breakdownThesisAnnotation,
 } from '../lib/item-context.mjs';
 import { ALERT_PERSIST_MS } from '../lib/watchstate.mjs';
 
@@ -201,6 +202,67 @@ ok('CONVICTION PIN: once the underwater streak has persisted ≥ ALERT_PERSIST_M
   });
   assert.equal(ctx.position.gate.escalate, true);
   assert.equal(ctx.position.gate.reason, 'cut-candidate');
+});
+
+// ============================================================================================
+// VN-4 — the ANNOTATE-DON'T-HIDE tripwire annotation on a Gate-2 breakdown CUT.
+// A real breakdown CUT still fires/headlines/escalates unchanged (the invariant); the RENDERED
+// string just gains tripwire context when a declared thesis's abort level is nowhere near yet.
+// The godsword shape: live instabuy 39.99m, declared abort 38.90m — CUT fired ~1.09m ABOVE the abort.
+// ============================================================================================
+// momVerdict sets a breakdown CUT's listAt to the live instabuy (the clear-now price), so the mv's
+// listAt tracks quickSell — matched here so the hard-CUT `@ <listAt>` branch reads the real price.
+const breakdownCutMv = (listAt = 39_990_000) => ({ action: 'CUT', verdict: 'CUT', gate: 2, listAt });
+const gswThesis = { id: 26233, exitPrice: 44_000_000, tripwire: 38_900_000,
+  horizon: 'multi-day', window: '18-22', path: 'value-hold', enteredUnder: 'value-hold' };
+// a ctx with NO display (the stateless quote-items.mjs shape) → renderHeldVerdict reads ctx.position.mv directly
+const cutCtx = (quickSell, thesis) => ({
+  market: { row: heldRow({ quickSell, mom: 'breakdown', falling: false }) },
+  intraday: { ts5m: [] },
+  position: { be: 40_000_000, lotValue: 400_000_000, mv: breakdownCutMv(quickSell), thesis },
+});
+
+ok('VN-4 pure: breakdownThesisAnnotation annotates a Gate-2 CUT above the tripwire; null otherwise', () => {
+  const ann = breakdownThesisAnnotation(breakdownCutMv(), gswThesis, 39_990_000);
+  assert.equal(ann, 'CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m; within plan — your call');
+  // live ≤ tripwire → no softening (the thesis IS invalidating)
+  assert.equal(breakdownThesisAnnotation(breakdownCutMv(), gswThesis, 38_900_000), null, 'live == tripwire → null');
+  assert.equal(breakdownThesisAnnotation(breakdownCutMv(), gswThesis, 38_000_000), null, 'live < tripwire → null');
+  // no thesis / no numeric tripwire → null
+  assert.equal(breakdownThesisAnnotation(breakdownCutMv(), null, 39_990_000), null);
+  assert.equal(breakdownThesisAnnotation(breakdownCutMv(), { tripwire: null }, 39_990_000), null);
+  // a Gate-D CUT (not a Gate-2 breakdown) is NOT annotated — only the breakdown invariant is
+  assert.equal(breakdownThesisAnnotation({ action: 'CUT', verdict: 'CUT', gate: 'D', listAt: 39_990_000 }, gswThesis, 39_990_000), null);
+  // a LIST-TO-CLEAR (also gate 2, but action CLEAR) is NOT a breakdown CUT → null
+  assert.equal(breakdownThesisAnnotation({ action: 'CLEAR', verdict: 'LIST-TO-CLEAR', gate: 2, listAt: 39_990_000 }, gswThesis, 39_990_000), null);
+});
+
+ok('VN-4: thesis + live > tripwire → BOTH surfaces render the tripwire annotation, verdict/gate unchanged', () => {
+  const ctx = cutCtx(39_990_000, gswThesis);
+  const compact = renderHeldVerdict(ctx, { mode: 'compact' });
+  const verbose = renderHeldVerdict(ctx, { mode: 'verbose' });
+  assert.equal(compact, 'CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m; within plan — your call');
+  assert.ok(verbose.startsWith('CUT (2h breakdown) — live 39.99m still ~1.09m ABOVE declared abort 38.90m; within plan — your call'),
+    `verbose leads with the same annotation (got: ${verbose})`);
+  assert.match(verbose, /never thesis-silenced/);   // the invariant is spelled out, not silenced
+  // the verdict object is byte-unchanged — this is a render-only annotation
+  assert.equal(ctx.position.mv.action, 'CUT');
+  assert.equal(ctx.position.mv.gate, 2);
+  assert.equal(heldMomVerdict(ctx).verdict, 'CUT');
+});
+
+ok('VN-4: live ≤ tripwire → the HARD CUT text stands (no softening), on both surfaces', () => {
+  const ctx = cutCtx(38_000_000, gswThesis);   // 38.0m < 38.9m abort → a real breach
+  assert.equal(renderHeldVerdict(ctx, { mode: 'compact' }),
+    'CUT @ 38m (2h breakdown & underwater — free capital)');
+  assert.ok(renderHeldVerdict(ctx, { mode: 'verbose' }).startsWith('CUT @ 38m — controlled loss-taking'));
+});
+
+ok('VN-4: NO thesis → the bare breakdown-CUT text is byte-unchanged, on both surfaces', () => {
+  const ctx = cutCtx(39_990_000, null);
+  assert.equal(renderHeldVerdict(ctx, { mode: 'compact' }),
+    'CUT @ 39.99m (2h breakdown & underwater — free capital)');
+  assert.ok(renderHeldVerdict(ctx, { mode: 'verbose' }).startsWith('CUT @ 39.99m — controlled loss-taking'));
 });
 
 // --- COD-4: staleBookBanner (the shared positions.json-age banner) --------------------------
