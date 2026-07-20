@@ -1,228 +1,336 @@
 [
   {
-    "id": 22124,
-    "name": "Superior dragon bones",
+    "id": 9342,
+    "name": "Onyx bolts",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783936372540,
-    "lastQualTs": 1783936372540,
-    "score": 7714787793.124651
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 6792302680.880988
   },
   {
-    "id": 31916,
-    "name": "Dragon cannonball",
+    "id": 6693,
+    "name": "Crushed nest",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783948944946,
-    "lastQualTs": 1783950095020,
-    "score": 12539925.794426879
+    "addedTs": 1784442375166,
+    "lastQualTs": 1784442375166,
+    "score": 6660967874.166215
   },
   {
-    "id": 121,
-    "name": "Attack potion(3)",
+    "id": 1745,
+    "name": "Green dragon leather",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783947234454,
-    "lastQualTs": 1783960706225,
-    "score": 171.28117156508816
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 2026815113.5089667
   },
   {
-    "id": 32325,
-    "name": "Raw yellowfin",
+    "id": 10034,
+    "name": "Red chinchompa",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783953241135,
-    "lastQualTs": 1783960706225,
-    "score": 119.71307433576055
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1894288712.414694
   },
   {
-    "id": 29458,
-    "name": "Adamant seeds",
+    "id": 21347,
+    "name": "Amethyst",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783927377804,
-    "lastQualTs": 1783928080826,
-    "score": 11.266299386695197
+    "addedTs": 1784488325573,
+    "lastQualTs": 1784508068289,
+    "score": 1878541403.4111156
   },
   {
-    "id": 1609,
-    "name": "Opal",
+    "id": 1601,
+    "name": "Diamond",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783957521739,
-    "lastQualTs": 1783960706225,
-    "score": 7.373383797832304
+    "addedTs": 1784331743930,
+    "lastQualTs": 1784331743930,
+    "score": 1043808180.5368987
   },
   {
-    "id": 33571,
-    "name": "Seeking mithril arrow",
+    "id": 824,
+    "name": "Rune dart tip",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783901240423,
-    "lastQualTs": 1783960706225,
-    "score": 5.964210335576879
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 898535185.0750206
   },
   {
-    "id": 6024,
-    "name": "Willow leaves",
+    "id": 8782,
+    "name": "Mahogany plank",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783928950253,
-    "lastQualTs": 1783960706225,
-    "score": 5.467283668699095
+    "addedTs": 1784442375166,
+    "lastQualTs": 1784508068289,
+    "score": 306941509.28682286
   },
   {
-    "id": 33583,
-    "name": "Seeking rune arrow",
+    "id": 2485,
+    "name": "Grimy lantadyme",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783893130220,
-    "lastQualTs": 1783900332531,
-    "score": 4.703228865097776
+    "addedTs": 1784458167680,
+    "lastQualTs": 1784492059179,
+    "score": 175836746.46459696
   },
   {
-    "id": 29218,
-    "name": "Jaguar fur",
+    "id": 5321,
+    "name": "Watermelon seed",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783901240423,
-    "lastQualTs": 1783952660085,
-    "score": 4.20826151203338
+    "addedTs": 1784440642511,
+    "lastQualTs": 1784508068289,
+    "score": 18.21345555868673
   },
   {
-    "id": 10115,
-    "name": "Dark kebbit fur",
+    "id": 91,
+    "name": "Guam potion (unf)",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783942948264,
-    "lastQualTs": 1783949802945,
-    "score": 3.981101072165594
+    "addedTs": 1784435393210,
+    "lastQualTs": 1784435393210,
+    "score": 7.950425611983593
   },
   {
-    "id": 9338,
-    "name": "Emerald bolts",
+    "id": 407,
+    "name": "Oyster",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783908431665,
-    "lastQualTs": 1783921095369,
-    "score": 3.4698180066844304
+    "addedTs": 1784326705799,
+    "lastQualTs": 1784326705799,
+    "score": 5.729838808335388
   },
   {
-    "id": 68,
-    "name": "Yew shortbow (u)",
+    "id": 22597,
+    "name": "Urt salt",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783928369160,
-    "lastQualTs": 1783940945394,
-    "score": 3.353537016145265
+    "addedTs": 1784421197066,
+    "lastQualTs": 1784421942979,
+    "score": 4.396714080039748
   },
   {
-    "id": 29307,
-    "name": "Quetzal feed",
+    "id": 31668,
+    "name": "Umbral potion (unf)",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783960592398,
-    "lastQualTs": 1783960706225,
-    "score": 1.6678114537891287
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.2252000214747396
   },
   {
-    "id": 33651,
-    "name": "Stymphike feather",
+    "id": 27272,
+    "name": "Lily of the sands",
     "source": "auto",
     "track": "liquid",
-    "addedTs": 1783958668794,
-    "lastQualTs": 1783960706225,
-    "score": 1.4594235610321191
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 0.9309542604524867
   },
   {
-    "id": 21015,
-    "name": "Dinh's bulwark",
+    "id": 11785,
+    "name": "Armadyl crossbow",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783960419388,
-    "lastQualTs": 1783960706225,
-    "score": 3940470211282.7036
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 261200585931480.9
   },
   {
-    "id": 25416,
-    "name": "Bloodbark legs",
+    "id": 21012,
+    "name": "Dragon hunter crossbow",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783960642117,
-    "lastQualTs": 1783960706225,
-    "score": 21453054526.156197
+    "addedTs": 1784399556970,
+    "lastQualTs": 1784399578450,
+    "score": 260178033892628.4
   },
   {
-    "id": 30813,
-    "name": "Contract of sensory clouding",
+    "id": 13652,
+    "name": "Dragon claws",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783960125772,
-    "lastQualTs": 1783960125772,
-    "score": 13781421624.353235
+    "addedTs": 1784458167680,
+    "lastQualTs": 1784458167680,
+    "score": 238637014010862.88
   },
   {
-    "id": 33074,
-    "name": "Facility bottle (empty)",
+    "id": 33631,
+    "name": "Crimson kisten",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783954947768,
-    "lastQualTs": 1783960706225,
-    "score": 5553474202.588975
+    "addedTs": 1784492059179,
+    "lastQualTs": 1784508068289,
+    "score": 203681217209957.56
   },
   {
-    "id": 32017,
-    "name": "Dragon keel parts",
+    "id": 26245,
+    "name": "Virtus robe bottom",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783945516728,
-    "lastQualTs": 1783960706225,
-    "score": 4469267964.378039
+    "addedTs": 1784458167680,
+    "lastQualTs": 1784492059179,
+    "score": 58396368826068.11
   },
   {
-    "id": 30810,
-    "name": "Contract of glyphic attenuation",
+    "id": 27235,
+    "name": "Masori mask (f)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783960642117,
-    "lastQualTs": 1783960706225,
-    "score": 2791708869.5931706
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 47376989586489.266
   },
   {
-    "id": 10047,
-    "name": "Graahk legs",
+    "id": 11834,
+    "name": "Bandos tassets",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783901240423,
-    "lastQualTs": 1783960706225,
-    "score": 973.6588693957115
+    "addedTs": 1784414273628,
+    "lastQualTs": 1784414273628,
+    "score": 37608177944061.73
   },
   {
-    "id": 4302,
-    "name": "Ham hood",
+    "id": 29782,
+    "name": "Spider cave teleport",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783899409047,
-    "lastQualTs": 1783926803152,
-    "score": 286.7753399869515
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 30425922093.482132
   },
   {
-    "id": 1027,
-    "name": "Green cape",
+    "id": 28896,
+    "name": "Rum",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783912070984,
-    "lastQualTs": 1783918243080,
-    "score": 25.70467727372903
+    "addedTs": 1784331743930,
+    "lastQualTs": 1784358269761,
+    "score": 566016962.2476264
   },
   {
-    "id": 8872,
-    "name": "Bone dagger",
+    "id": 29107,
+    "name": "Raw dashing kebbit",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783916245073,
-    "lastQualTs": 1783921955391,
-    "score": 19.111482959654822
+    "addedTs": 1784488325573,
+    "lastQualTs": 1784508068289,
+    "score": 495948151.6622523
+  },
+  {
+    "id": 27629,
+    "name": "Forgotten brew(4)",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 330614194.0870297
+  },
+  {
+    "id": 32892,
+    "name": "Cupronickel bar",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 56046295.05243459
+  },
+  {
+    "id": 12405,
+    "name": "Lunar isle teleport",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784458167680,
+    "lastQualTs": 1784508068289,
+    "score": 3155674.372667641
+  },
+  {
+    "id": 355,
+    "name": "Mackerel",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784365952232,
+    "lastQualTs": 1784365952232,
+    "score": 8110.765448856553
+  },
+  {
+    "id": 5496,
+    "name": "Apple sapling",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784492059179,
+    "lastQualTs": 1784492059179,
+    "score": 748.2056033731764
+  },
+  {
+    "id": 1951,
+    "name": "Redberries",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784440642511,
+    "lastQualTs": 1784442375166,
+    "score": 675.1279577629547
+  },
+  {
+    "id": 4308,
+    "name": "Ham gloves",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 100.56010232409358
+  },
+  {
+    "id": 31472,
+    "name": "Bolt of linen",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784488325573,
+    "lastQualTs": 1784508068289,
+    "score": 49.25051640912685
+  },
+  {
+    "id": 19570,
+    "name": "Bronze javelin tips",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784326705799,
+    "lastQualTs": 1784326705799,
+    "score": 38.84376437822081
+  },
+  {
+    "id": 13389,
+    "name": "Xerician robe",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784339216795,
+    "lastQualTs": 1784339216795,
+    "score": 8.27391122779549
+  },
+  {
+    "id": 31928,
+    "name": "Rune chainshot cannonball",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784453583146,
+    "lastQualTs": 1784458167680,
+    "score": 6.478638324324147
+  },
+  {
+    "id": 12780,
+    "name": "Lassar teleport (tablet)",
+    "source": "auto",
+    "track": "illiquid",
+    "addedTs": 1784339216795,
+    "lastQualTs": 1784508068289,
+    "score": 5.2167696030625565
   },
   {
     "id": 13481,
@@ -230,313 +338,205 @@
     "source": "auto",
     "track": "illiquid",
     "addedTs": 1783891589313,
-    "lastQualTs": 1783900332531,
-    "score": 8.635071693985187
+    "lastQualTs": 1784326705799,
+    "score": 3.537942023203352
   },
   {
-    "id": 31502,
-    "name": "Camphor sapling",
+    "id": 1696,
+    "name": "Emerald amulet",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783881521607,
-    "lastQualTs": 1783900332531,
-    "score": 4.702141281906233
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 3.2998857773401036
   },
   {
-    "id": 33275,
-    "name": "Demonic robe top (t2)",
+    "id": 7418,
+    "name": "Mole skin",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783881521607,
-    "lastQualTs": 1783900332531,
-    "score": 4.5369841152019
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 2.152053209026565
   },
   {
-    "id": 6522,
-    "name": "Toktz-xil-ul",
+    "id": 5372,
+    "name": "Maple sapling",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783894982706,
-    "lastQualTs": 1783899421113,
-    "score": 3.154686329110653
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.8890891344947232
   },
   {
-    "id": 20062,
-    "name": "Torture ornament kit",
+    "id": 13169,
+    "name": "Armadyl dragonhide set",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783944371382,
-    "lastQualTs": 1783960706225,
-    "score": 3.1241780554746748
+    "addedTs": 1784420921412,
+    "lastQualTs": 1784424843262,
+    "score": 1.882908757654959
   },
   {
-    "id": 1989,
-    "name": "Half full wine jug",
+    "id": 32005,
+    "name": "Steel keel parts",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783960592398,
-    "lastQualTs": 1783960706225,
-    "score": 2.149955104736349
-  },
-  {
-    "id": 4101,
-    "name": "Mystic robe top (dark)",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783958668794,
-    "lastQualTs": 1783960706225,
-    "score": 1.6002255445029117
-  },
-  {
-    "id": 23348,
-    "name": "Tormented ornament kit",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783883233479,
-    "lastQualTs": 1783897637938,
-    "score": 1.4774052316093695
-  },
-  {
-    "id": 9731,
-    "name": "Mind shield",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783942086561,
-    "lastQualTs": 1783960706225,
-    "score": 1.3407063436154392
-  },
-  {
-    "id": 12506,
-    "name": "Armadyl bracers",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783908431665,
-    "lastQualTs": 1783960706225,
-    "score": 1.3376887714720225
-  },
-  {
-    "id": 31547,
-    "name": "Camphor seed",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783881521607,
-    "lastQualTs": 1783900332531,
-    "score": 1.3047472346019915
-  },
-  {
-    "id": 32008,
-    "name": "Mithril keel parts",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783946374500,
-    "lastQualTs": 1783960706225,
-    "score": 1.279048464903054
-  },
-  {
-    "id": 19627,
-    "name": "Cemetery teleport (tablet)",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783957803727,
-    "lastQualTs": 1783960706225,
-    "score": 1.2544813796745444
-  },
-  {
-    "id": 5288,
-    "name": "Papaya tree seed",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783951803038,
-    "lastQualTs": 1783960706225,
-    "score": 1.0131947654308284
-  },
-  {
-    "id": 1959,
-    "name": "Pumpkin",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783898550647,
-    "lastQualTs": 1783900332531,
-    "score": 1.0086748023390388
-  },
-  {
-    "id": 1301,
-    "name": "Adamant longsword",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783891589313,
-    "lastQualTs": 1783900332531,
-    "score": 0.9937237338663709
-  },
-  {
-    "id": 33362,
-    "name": "Demonic pacts throne scroll",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783951234214,
-    "lastQualTs": 1783954947768,
-    "score": 0.9883674468094659
-  },
-  {
-    "id": 19613,
-    "name": "Arceuus library teleport (tablet)",
-    "source": "auto",
-    "track": "illiquid",
-    "addedTs": 1783897637938,
-    "lastQualTs": 1783900332531,
-    "score": 0.9498823618874862
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.718585041502921
   },
   {
     "id": 33287,
     "name": "Demonic robe top (t3)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783909336368,
-    "lastQualTs": 1783960706225,
-    "score": 0.9448494105970082
+    "addedTs": 1784488325573,
+    "lastQualTs": 1784488325573,
+    "score": 1.4853549088542801
   },
   {
-    "id": 13389,
-    "name": "Xerician robe",
+    "id": 10386,
+    "name": "Saradomin d'hide body",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783888629777,
-    "lastQualTs": 1783900332531,
-    "score": 0.9426227236127426
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.4571890017566276
   },
   {
-    "id": 3753,
-    "name": "Warrior helm",
+    "id": 21177,
+    "name": "Expeditious bracelet",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783885032552,
-    "lastQualTs": 1783890549637,
-    "score": 0.8757490147387115
+    "addedTs": 1784488325573,
+    "lastQualTs": 1784508068289,
+    "score": 1.381147567583583
   },
   {
-    "id": 5396,
-    "name": "Oranges(5)",
+    "id": 7416,
+    "name": "Mole claw",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783960592398,
-    "lastQualTs": 1783960706225,
-    "score": 0.8745770227946709
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.302320896061556
   },
   {
-    "id": 21126,
-    "name": "Ring of pursuit",
+    "id": 25857,
+    "name": "Amethyst dart(p++)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783881521607,
-    "lastQualTs": 1783890549637,
-    "score": 0.8633338041506549
+    "addedTs": 1784458167680,
+    "lastQualTs": 1784508068289,
+    "score": 1.2724293488450604
   },
   {
-    "id": 22783,
-    "name": "Drake bones",
+    "id": 21123,
+    "name": "Topaz bracelet",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783941800182,
-    "lastQualTs": 1783948662515,
-    "score": 0.8411938801008071
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.2334894466759405
   },
   {
-    "id": 32364,
-    "name": "Camphor crate",
+    "id": 31946,
+    "name": "Echo pearl",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783930936495,
-    "lastQualTs": 1783931794701,
-    "score": 0.8140180073197812
+    "addedTs": 1784339216795,
+    "lastQualTs": 1784365952232,
+    "score": 1.2022652107595564
   },
   {
-    "id": 5503,
-    "name": "Calquat sapling",
+    "id": 31940,
+    "name": "Adamant incendiary cannonball",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783955523417,
-    "lastQualTs": 1783960706225,
-    "score": 0.7943199101326865
+    "addedTs": 1784399556970,
+    "lastQualTs": 1784399578450,
+    "score": 1.2021627574150402
   },
   {
-    "id": 20739,
-    "name": "Mystic dust staff",
+    "id": 24288,
+    "name": "Dagon'hai hat",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783958984261,
-    "lastQualTs": 1783960706225,
-    "score": 0.7876274099298576
+    "addedTs": 1784420921412,
+    "lastQualTs": 1784492059179,
+    "score": 1.1892099522199664
   },
   {
-    "id": 28790,
-    "name": "Kourend castle teleport (tablet)",
+    "id": 5416,
+    "name": "Bananas(5)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783951234214,
-    "lastQualTs": 1783960706225,
-    "score": 0.7782755900313778
+    "addedTs": 1784354121231,
+    "lastQualTs": 1784354121231,
+    "score": 1.1878257620019153
   },
   {
-    "id": 19615,
-    "name": "Draynor manor teleport (tablet)",
+    "id": 5940,
+    "name": "Weapon poison(++)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783937800509,
-    "lastQualTs": 1783960706225,
-    "score": 0.7347788182090128
+    "addedTs": 1784492059179,
+    "lastQualTs": 1784508068289,
+    "score": 1.0903386992353505
   },
   {
-    "id": 20143,
-    "name": "Dragon defender ornament kit",
+    "id": 29305,
+    "name": "Hunter's spear",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783942086561,
-    "lastQualTs": 1783960706225,
-    "score": 0.7321811685932426
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.0797399022161043
   },
   {
-    "id": 13502,
-    "name": "Ensouled demon head",
+    "id": 30840,
+    "name": "Contract of familiar acquisition",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783923379484,
-    "lastQualTs": 1783926518001,
-    "score": 0.727259826520087
+    "addedTs": 1784492059179,
+    "lastQualTs": 1784492059179,
+    "score": 1.0500325735983902
   },
   {
-    "id": 3801,
-    "name": "Keg of beer",
+    "id": 30619,
+    "name": "Bounty supply crate (anglerfish)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783959269795,
-    "lastQualTs": 1783960706225,
-    "score": 0.718180123723504
+    "addedTs": 1784508068289,
+    "lastQualTs": 1784508068289,
+    "score": 1.0297882465097488
   },
   {
-    "id": 1085,
-    "name": "Mithril plateskirt",
+    "id": 29307,
+    "name": "Quetzal feed",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783950662758,
-    "lastQualTs": 1783960706225,
-    "score": 0.7074028434045906
+    "addedTs": 1784410539326,
+    "lastQualTs": 1784508068289,
+    "score": 1.0196394337203272
   },
   {
-    "id": 25096,
-    "name": "Trailblazer rug",
+    "id": 19490,
+    "name": "Dragon javelin(p++)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783924234217,
-    "lastQualTs": 1783960706225,
-    "score": 0.6949152542372882
+    "addedTs": 1784492059179,
+    "lastQualTs": 1784508068289,
+    "score": 1.018784288359365
   },
   {
-    "id": 21090,
-    "name": "Opal necklace",
+    "id": 19631,
+    "name": "Ape atoll teleport (tablet)",
     "source": "auto",
     "track": "illiquid",
-    "addedTs": 1783956376609,
-    "lastQualTs": 1783960706225,
-    "score": 0.680793530958706
+    "addedTs": 1784442375166,
+    "lastQualTs": 1784508068289,
+    "score": 1.0123697345612939
   }
 ]
