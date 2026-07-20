@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.74
+version: 1.75
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -264,19 +264,34 @@ This is the tribal layer the script can't do — apply ALL of these:
   lots (bludgeon 22% of closed), and F1 is still gated — it is a LEAN to test against the
   accruing never-filled-bid count, NOT a hard gate. Liquid items and passive/overnight deep
   band-floor bids are unaffected (there the deep bid is the intended play).
-- **Velocity beats magnitude AT CURRENT CAPITAL — but the crossover comes with size (HYPOTHESIS,
-  2026-07-06 — Ben's framing, backed by the YV1 record).** _(judgment: unproven lean, crossover unmeasured)_ The measured record so far says
-  high-liquidity fast-cyclers have been the most capital-efficient play *by far* at our current
-  investment level: a liquid item cycles in minutes for a given % gain, while a mid-liquidity
-  big-ticket waits ~half a day for a *similar* % — so the big-ticket's slower lap is pure
-  opportunity cost when both return ~the same percentage. **So default the pick toward the liquid
-  fast-cycle lane at this capital level** (thin margin × huge volume × fast turns), not the patient
-  big-ticket. **The crossover:** as capital grows and you play items whose *absolute* per-unit swings
-  are millions (bigger fluctuation magnitude), the patient big-ticket flip's absolute upside outgrows
-  the velocity edge — at higher variance/risk. So the velocity preference is REGIME-DEPENDENT on
-  position size, not absolute. **Honesty (process rule 4):** this is a lean off a small, concentrated
-  record (bludgeon ~21% of closed lots) — the crossover point is unmeasured; track it as sizes climb,
-  don't treat it as a fixed rule. Companion to the parked-capital-leak hypothesis above.
+- **Velocity vs magnitude — it's a CAPACITY + ATTENTION call, NOT a per-gp efficiency one (HYPOTHESIS,
+  2026-07-06; sharpened 2026-07-20 — Ben's framing).** _(judgment: unproven lean, crossover unmeasured)_
+  **At current capital the per-gp %-return of churn and big-ticket flips is roughly EQUAL** — ~1–2%/day
+  both (a mask/godsword lap is +1–2.2% but takes ~a day on a thin item; a churn lap is +0.4–0.8% × 2–3
+  laps/day). Since the returns tie, **churn wins on a risk-adjusted basis** — same reward, lower risk,
+  and it exits in a crash (you can walk away). So a big-ticket is **NOT "more efficient per gp"; never
+  pick it for return.** The old framing ("big-ticket absolute upside outgrows the velocity edge as
+  capital grows") was wrong on the mechanism — it's not that big-tickets get more efficient.
+  **What actually drives the crossover is CHURN'S CAPACITY.** Churn is capped by buy limits + the
+  tranche-size knee (can't deploy faster than ~0.5–1% of an item's daily volume without pricing into
+  your own edge — the reachRelief knee). Clean churn capacity across the ~10 liquid lanes (rune staples,
+  bones, super restore/combat, divine, bolts…) is on the order of **~150–200m per 4h window** — so around
+  ~160m total capital you're APPROACHING but not clearly PAST it: you can still fit most capital in churn
+  cleanly, it just takes running ~10 lanes and babysitting the laps.
+  **So a big-ticket's real value is LOW ATTENTION, not higher return** — park 40m in one set-and-forget
+  bid+ask vs managing 10 churn lanes for the same %. You pay for that convenience in **TAIL RISK**: a
+  big-ticket can't exit a crash (illiquid, no fast door), so you walk away from the *effort* but not from
+  the *downside*.
+  **Therefore allocate by ATTENTION + CRASH-TOLERANCE, not efficiency:** capital you'll be hands-off on
+  (stepping away, don't want to manage lanes) → big-tickets, sized to what you can afford stuck; capital
+  you want safe + liquid → churn, run more lanes. **Ben's away-horizon is the posture signal** — when he
+  states "back in 1h" vs "back in 8h" vs "overnight", weight the churn↔big-ticket mix by it (short/present
+  → churn; long/hands-off → big-tickets); if he hasn't said, ASK the horizon before sizing a big-ticket
+  tilt. This rides on the existing "Entry aggression follows posture" rule, not a separate standing rule.
+  **Honesty (rule 4):** the ~equal-%-return and the ~150–200m churn ceiling are ESTIMATES, and the
+  big-ticket realized sample is n=1 (one godsword) — the crossover is still UNMEASURED. When the RC
+  co-log accrues enough closed big-ticket round-trips, compare realized %/day churn-vs-big-ticket instead
+  of estimating. Companion to the parked-capital-leak hypothesis above.
 - **Band-top artifact detection.** _(judgment: artifact spotting; `--min-traded` supports; Bar E trims at source)_ A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd. **Bar E (2026-07-10) now trims this at SOURCE on
   BOTH surfacing paths:** `robustBand` takes the p90 high / p10 low on a DENSE band (≥8 prints/side), so a
