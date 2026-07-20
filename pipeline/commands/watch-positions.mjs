@@ -70,8 +70,8 @@ import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (fa
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/offers.mjs';
-import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote)
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log
+import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair, askExitRead } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
@@ -713,10 +713,11 @@ async function main() {
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // TG1 read-only: agent-declared hold plans (gate the expected-underwater headline)
   const guideHist = loadGuideHistory(GUIDE_HISTORY);          // YP1 (#2) advisory: guide re-anchor history (gated → silent until it accrues)
   const newState = {};
+  const wlWindow = loadWatchlistIds(map);   // WC1: big-ticket force-include (mirrors the incidental filter's watchlist test) for the window-clear rung shadow
   for (const it of held) {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
-    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null;
+    it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null; it._windowExit = null;
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
     // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the window-line
@@ -755,6 +756,21 @@ async function main() {
         if (PRESSURE_EXIT)
           it._estPressure = estimatePair(FLIP_NICHES.band, it.row, { ...estBase, declaredExit: thesisFor(holdThesisStore, it.id)?.exitPrice ?? null }, { sellModel: 'pressure' });
         it._asymShadow = ap ? asymEstimate(FLIP_NICHES.band, it.row, ap) : null;
+        // WC1 (PLAN-WINDOW-CLEAR-OUTCOMES): the window-clear ask-RUNG forward record for a BIG-TICKET held
+        // lot (lotValue ≥ BIG_TICKET_GP or a watchlist member — the same force-include the incidental filter
+        // uses). Records the surfaced rung (declared exit ?? optSell) + the diurnal peak window it targets +
+        // both reach signals via the SHARED askExitRead (zero new fetch — reuses dayStats/dr). HONESTY (WC1
+        // core item 5): the 5m grain is null here — watch keeps no 14-night 5m archive open this pass (it
+        // closes the snapshot after the accrual append), so fiveReach is honestly null, never faked; the
+        // quote --positions surface carries the 5m grain. Inform-only — nothing rendered.
+        if (it.lotValue != null && (it.lotValue >= BIG_TICKET_GP || wlWindow.has(it.id))) {
+          const list = (thesisFor(holdThesisStore, it.id)?.exitPrice ?? null) ?? (it.row.optSell ?? null);
+          const aer = askExitRead(dayStats, { ask: list, stats5m: null });
+          it._windowExit = windowExitShadow(aer, {
+            list, live: it.row.quickSell ?? null,
+            peakWindow: (dr && dr.peakWindow) ? [dr.peakWindow.startH, dr.peakWindow.endH] : null,
+          });
+        }
       }
     } catch { /* inform-only — never block a pass */ }
     try {
@@ -874,7 +890,7 @@ async function main() {
       estBuy: it._estShadow ? it._estShadow.estBuy : null,
       estSell: it._estShadow ? it._estShadow.estSell : null,
       estConfidence: estConfLean(it._estShadow),
-      asym: asymShadow(it._asymShadow) })),
+      asym: asymShadow(it._asymShadow), windowExit: it._windowExit })),   // WC1: the window-clear ask-rung shadow rides big-ticket held rows
     ...targets.map(it => { const sig = sigByTarget.get(it.id); return suggestionEntry(it.row, {
       itemId: it.id, cls: it.cls,
       // verdict: FLUSH (alerted) or FLUSH-SIGNAL (logged silently, gated out) or the normal target verdict.

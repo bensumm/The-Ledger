@@ -341,6 +341,15 @@ review answers "will this list clear soon, in which window?" without a manual `r
 call (PLAN-POSITIONS-WINDOW-READ). One shared assembly (`js/windowread.mjs` `askExitRead`) computes it for
 both surfaces; the held-lot note is zero-extra-fetch (the 1h series is already in hand) and degrades to
 `window read unavailable` if that series is missing — never blocking the table/verdict.
+The surfaced rung is no longer discarded after rendering: WC1 (PLAN-WINDOW-CLEAR-OUTCOMES, 2026-07-20)
+shadow-logs a lean **`windowExit`** field to `suggestions.jsonl` on every big-ticket held row — the
+surfaced list level, the diurnal peak window, and BOTH competing reach signals side-by-side (daily-HIGH
+1h reach AND the less-smoothed 5m-grain reach, each with its placement; `fiveReach:null` when the 5m
+archive is thin — never faked). So the question the two signals pose — for a resting ask into a peak
+window, is daily-high reach or 5m-grain reach the better fill predictor? — becomes ANSWERABLE: a later
+WC2 join against `fills.json` marks whether the placed rung actually filled inside its window (it did NOT
+before — the note was rendered to the human and thrown away). This is data accrual only (n≈0, weeks to
+accrue); it moves no price/verdict/grade and endorses NEITHER signal — F1/Ben own that call.
 
 **Multiple offers on the SAME item are a queue, not independent rungs (Ben, 2026-07-16).** The GE
 matches a buyer against the cheapest compatible offer first, so a higher-priced ask on an item you

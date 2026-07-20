@@ -45,7 +45,7 @@ import { stdCells, writeLastReport } from '../lib/cli.mjs';   // mdTable is no l
 import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { renderReport } from '../lib/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
-import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers
+import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers; WC1 — windowExitShadow (the window-clear ask-rung forward record)
 import { runValidators, flags, leanValidators } from '../../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
@@ -562,8 +562,12 @@ async function runPositions() {
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) notes.push({ kind: 'guideAnchor', itemId, text: gl });
     for (const f of flags(vres)) notes.push({ kind: 'validator', itemId, text: `${name} ${f.key}: ${f.reason}` });
-    const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
-    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres) }));  // the emitted per-position verdict string
+    // WC1 (PLAN-WINDOW-CLEAR-OUTCOMES): this held lot's O1 suggestion push is DEFERRED to after the
+    // big-ticket windowExit note block below, so the window-clear ask-rung shadow (`windowExit`) can ride
+    // the SAME row — the note block computes the askExitRead the shadow reshapes (zero extra fetch). The
+    // deferral moves NO stdout and reads nothing from `sugg` in between; windowExitShadowVal stays null for
+    // a non-big-ticket lot (→ byte-identical row).
+    let windowExitShadowVal = null;
     // P0: conviction timers — surfaced as an informational line (the table's Verdict column is
     // unchanged). Mirrors watch-positions.mjs's armed/escalated read off the SAME shared watch-state, so the
     // two surfaces agree on how long a lot has been underwater / whether an escalation has confirmed.
@@ -685,12 +689,21 @@ async function runPositions() {
           if (aer.grain5m) parts.push(`5m-grain reached ${aer.grain5m.reachedDays}/${aer.grain5m.nDays} · ${pct(aer.grain5m.placement)}`);
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window-clear — ${parts.join(' · ')}${peakTxt}  (touched ≠ filled, ~${aer.nDays}d — a guide)`,
             data: { list, live: row.quickSell ?? null, peakWindow: (drH && drH.peakWindow) ? drH.peakWindow : null, ...aer } });
+          // WC1: the lean forward record for F1 — the surfaced rung + both reach signals off the SAME aer.
+          windowExitShadowVal = windowExitShadow(aer, {
+            list, live: row.quickSell ?? null,
+            peakWindow: (drH && drH.peakWindow) ? [drH.peakWindow.startH, drH.peakWindow.endH] : null,
+          });
           windowExitDone = true;
         }
       } catch (e) {
         notes.push({ kind: 'windowExit', itemId, text: `${name}: window read unavailable (${(e && e.message || 'error').split('\n')[0]})` });
       }
     }
+    // WC1: the deferred O1 suggestion push (moved down from above so the big-ticket `windowExit` rung shadow
+    // rides this row). windowExitShadowVal is null for a non-big-ticket lot → byte-identical to the prior row.
+    const cs = classAndSource(row, itemId, warm24h);   // SF-3: class + volSrc ('bulk' via snap.v24 on the normal path)
+    sugg.push(suggestionEntry(row, { itemId, cls: cs.cls, volSrc: cs.volSrc, verdict: v, posture: isOvernightNow() ? 'overnight' : 'active', validators: leanValidators(vres), windowExit: windowExitShadowVal }));  // the emitted per-position verdict string
     // reachPlacement — the existing bid+ask percentile note. For a big-ticket lot the ASK clause is now
     // carried by the richer windowExit note above, so keep only the BID clause here (no redundancy); a
     // non-big-ticket lot keeps both, unchanged.

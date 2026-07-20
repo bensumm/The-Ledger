@@ -27,6 +27,14 @@
  *                 js/windowread.mjs reachableBand, so F1 scores the pressure-priced levels against
  *                 realized fills BESIDE the depth floor + reach/relief alternatives on the SAME row.
  *                 Lean-included; absent when the pressure read degrades (thin days/volume).)
+ *     windowExit?,  (WC1 PLAN-WINDOW-CLEAR-OUTCOMES 2026-07-20 — the window-clear ask-RUNG forward record on a
+ *                 big-ticket held lot: { list, live, peakWindow:[startH,endH], hiReach:{reached,n,recentHit,
+ *                 recentDays,placement}, fiveReach:{reached,n,placement}|null } off js/windowread.mjs
+ *                 askExitRead. Records the surfaced list level + the diurnal peak window it targets + the TWO
+ *                 competing reach signals (daily-HIGH 1h reach AND the less-smoothed 5m-grain reach) side-by-
+ *                 side, so WC2 can join it against fills.json and score which signal predicts a resting-ask
+ *                 fill. Lean-included; quote --positions / watch big-ticket held rows only. fiveReach null when
+ *                 the 5m archive is thin — never faked.)
  *     demandRegime?,  (DC3 INFORM 2026-07-15 — the per-item flip-side classification
  *                 { regime, pooled, sellWin?, buyWin? } off js/windowread.mjs demandRegime; screen
  *                 survivors only. INFORM-ONLY — F1 joins the dip-buy-vs-sell-into-demand axis against
@@ -266,6 +274,27 @@ export function asymShadow(ae) {
   return { bid: ae.bid, ask: ae.ask, pAsk: r2(ae.pAsk), pBid: r2(ae.pBid), n: ae.nDays, rank: ae.rank == null ? null : Math.round(ae.rank) };
 }
 
+// WC1 (PLAN-WINDOW-CLEAR-OUTCOMES) — the window-clear ask-rung FORWARD record. A big-ticket held lot is
+// exited with a resting ask priced to catch a DIURNAL PEAK window; this captures, at the moment that rung
+// is surfaced, the surfaced list level + the live instabuy anchor + the peak window it targets, PLUS the
+// two competing reachability signals SIDE-BY-SIDE for that level: daily-HIGH (1h avgHigh) reach and the
+// less-smoothed 5m-grain reach, each with its placement. WC2 later joins this forward record against
+// fills.json to answer "for a resting ask into a peak window, is daily-high or 5m-grain reach the better
+// fill predictor?" — a question that today has NO dataset (the rendered ↗ windowExit note is discarded).
+// Takes a js/windowread.mjs askExitRead result (aer) + the surface context; null when there is no scored
+// ask read (list null / no window highs — nothing to log). HONESTY (WC1 core item 5): fiveReach is null
+// when the 5m archive is thin/absent — NEVER fabricated. Maps aer's reachedDays→reached, nDays→n;
+// recentHit/recentDays come from aer.ask.recency (a recencySplit result).
+export function windowExitShadow(aer, { list = null, live = null, peakWindow = null } = {}) {
+  if (!aer || !aer.ask) return null;
+  const r2 = x => x == null ? null : Math.round(x * 100) / 100;
+  const a = aer.ask, rc = a.recency || {};
+  const hiReach = { reached: a.reachedDays, n: a.nDays, recentHit: rc.recentHit ?? null, recentDays: rc.recentDays ?? null, placement: r2(a.placement) };
+  const g = aer.grain5m;
+  const fiveReach = g ? { reached: g.reachedDays, n: g.nDays, placement: r2(g.placement) } : null;
+  return { list, live, peakWindow, hiReach, fiveReach };
+}
+
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate
 // from logSuggestions so a caller can assemble a batch, then log once.
 //
@@ -279,7 +308,7 @@ export function asymShadow(ae) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, depthExit, reachable, demandRegime, amplitude } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, demandRegime, amplitude } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -363,6 +392,15 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // days-reach ≠ lap-clear divergence predicts an unfilled/slow ask. Lean-included (YS2): a caller with no
   // read (no ts1h / no peak window) supplies null → no field → byte-identical shape.
   if (winClear != null)      e.winClear = winClear;
+  // WC1 (PLAN-WINDOW-CLEAR-OUTCOMES 2026-07-20) — the window-clear ask-RUNG forward record for a big-ticket
+  // held lot: { list, live, peakWindow:[startH,endH], hiReach:{reached,n,recentHit,recentDays,placement},
+  // fiveReach:{reached,n,placement}|null } off windowExitShadow(askExitRead(...)). Records the ACTUAL surfaced
+  // rung (thesisEntry.exitPrice ?? optSell) with the daily-HIGH and 5m-grain reach signals SIDE-BY-SIDE, so
+  // WC2 can join it against fills.json and ask which signal predicts a resting-ask fill. DISTINCT from winClear
+  // (that keys the within-window lap-clear on optSell; this keys the rung's two reach signals + placement).
+  // Lean-included (YS2 pattern): quote-items.mjs --positions / watch-positions.mjs big-ticket held rows only —
+  // every other row (and a non-big-ticket lot) logs a byte-identical shape. Honesty: fiveReach null when thin.
+  if (windowExit != null)    e.windowExit = windowExit;
   // PLAN-DEPTH-EXIT DE3 (2026-07-15) — the held-lot depth-floor shadow ({ qty, competition, liqClass,
   // ask?/clearFrac? | collapse? }) + the pressure-driven reachable band ({ ask, bid, pressure,
   // reliability, bandLow, bandHigh }). Logged BESIDE the row's reach/relief-based fields so the F1

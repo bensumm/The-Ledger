@@ -350,6 +350,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   diurnal peak window — `{windowReach, reachedDays, nDays, pool, clearRatio, wStart, wEnd, diverges}` — so
   F1 can test whether the days-reach ≠ lap-clear divergence predicts an unfilled/slow ask (the note fires
   on the window-reach leg only; `clearRatio`/`sizeShort` ride the shadow for calibration).
+  A **BIG-TICKET held row** (`quote-items.mjs --positions` / `watch-positions.mjs`, lot ≥ `BIG_TICKET_GP`
+  or watchlisted) also carries a lean **`windowExit`** object (WC1, PLAN-WINDOW-CLEAR-OUTCOMES,
+  2026-07-20) — the FORWARD record of the surfaced window-clear ask RUNG: `{ list, live, peakWindow:
+  [startH,endH], hiReach:{reached,n,recentHit,recentDays,placement}, fiveReach:{reached,n,placement}|null }`
+  off `js/windowread.mjs askExitRead` (reshaped by `suggestlog.mjs windowExitShadow`). It logs the surfaced
+  list level, the diurnal peak window it targets, and the TWO competing reach signals SIDE-BY-SIDE — daily-
+  HIGH (1h avgHigh) reach and the less-smoothed 5m-grain reach — so a later WC2 join against `fills.json`
+  (and F1 accrual) can measure which signal predicts whether the resting ask actually FILLED in its window.
+  `fiveReach` is `null` when the 5m archive is thin/absent — never faked (honesty). Distinct from `winClear`
+  (that keys the within-window lap-clear on `optSell`; `windowExit` keys the rung's two reach signals +
+  placement). Producer: the two positions/watch held-lot surfaces; consumer: F1 accrual / the future WC2 join.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

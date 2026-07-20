@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow } from '../lib/suggestlog.mjs';
+import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow } from '../lib/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }
@@ -141,6 +141,47 @@ ok('RC-S2: reachableShadow / depthExitShadow reshapers (shared, no drift across 
   assert.deepEqual(depthExitShadow(collapsed, { qty: 100, volDay: 40 }),
     { qty: 100, competition: 4, liqClass: 'thin', collapse: 'insufficient-depth' }, 'collapse + liqClass, no fake ask');
   assert.equal(depthExitShadow(null, { qty: 1, volDay: 1 }), null);
+});
+
+ok('WC1: the windowExit ask-rung shadow is lean-included (present only when supplied)', () => {
+  const we = { list: 12_000_000, live: 11_600_000, peakWindow: [1, 3],
+    hiReach: { reached: 9, n: 14, recentHit: 1, recentDays: 3, placement: 0.62 },
+    fiveReach: { reached: 5, n: 11, placement: 0.55 } };
+  const withWE = suggestionEntry({ quickSell: 11_600_000 }, { itemId: 27_226, cls: 'liquid', verdict: 'HOLD', windowExit: we });
+  assert.deepEqual(withWE.windowExit, we, 'both reach signals + peakWindow + list/live serialize as supplied');
+  const none = suggestionEntry({ quickSell: 11_600_000 }, { itemId: 27_226, cls: 'liquid', verdict: 'HOLD' });
+  assert.ok(!('windowExit' in none), 'absent windowExit → byte-identical (non-big-ticket / every other row)');
+});
+
+ok('WC1: fiveReach:null is PRESERVED, never dropped or faked, when the 5m read is absent', () => {
+  const thin = { list: 44_340_000, live: 43_000_000, peakWindow: [2, 3],
+    hiReach: { reached: 4, n: 14, recentHit: 0, recentDays: 3, placement: 0.71 }, fiveReach: null };
+  const e = suggestionEntry({}, { itemId: 27_235, cls: 'liquid', verdict: 'HOLD', windowExit: thin });
+  assert.ok('fiveReach' in e.windowExit, 'the fiveReach key is present (honesty: says "no 5m read", not silence)');
+  assert.equal(e.windowExit.fiveReach, null, 'and it is explicitly null — never a fabricated 5m reach');
+});
+
+ok('WC1: windowExitShadow maps askExitRead fields (reachedDays→reached, nDays→n; recency→recentHit/Days)', () => {
+  // shape mirrors js/windowread.mjs askExitRead: ask:{level,reachedDays,nDays,placement,recency}, grain5m:{...}
+  const aer = {
+    nDays: 14, askSide: {},
+    ask: { level: 12_000_000, reachedDays: 9, nDays: 14, placement: 0.6234,
+      recency: { recentHit: 1, recentDays: 3, fullFrac: 0.64, recentFrac: 0.33 } },
+    grain5m: { reachedDays: 5, nDays: 11, placement: 0.5487 },
+  };
+  const s = windowExitShadow(aer, { list: 12_000_000, live: 11_600_000, peakWindow: [1, 3] });
+  assert.deepEqual(s, { list: 12_000_000, live: 11_600_000, peakWindow: [1, 3],
+    hiReach: { reached: 9, n: 14, recentHit: 1, recentDays: 3, placement: 0.62 },
+    fiveReach: { reached: 5, n: 11, placement: 0.55 } }, 'placement rounded to 2dp; both signals side-by-side');
+  // no scored ask (list null → askExitRead returns ask:null) ⇒ nothing to log
+  assert.equal(windowExitShadow({ nDays: 14, ask: null, grain5m: null }, { list: null }), null);
+  assert.equal(windowExitShadow(null, {}), null, 'no read → null (degrade, never a fake record)');
+  // 5m absent ⇒ fiveReach null (honesty item 5), the hi signal still logs
+  const noFive = windowExitShadow({ ask: { reachedDays: 4, nDays: 14, placement: 0.7, recency: {} }, grain5m: null },
+    { list: 1, live: 1, peakWindow: [2, 3] });
+  assert.equal(noFive.fiveReach, null);
+  assert.deepEqual(noFive.hiReach, { reached: 4, n: 14, recentHit: null, recentDays: null, placement: 0.7 },
+    'a missing recency sub-object degrades recentHit/Days to null, not a throw');
 });
 
 ok('liqClassOf thresholds', () => {
