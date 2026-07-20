@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.76
+version: 1.77
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -50,7 +50,7 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs --verbose [--mode band|churn|scalp|value|all] [--max-price …]
+node pipeline/commands/screen-flip-niches.mjs --verbose [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 1|1.5] [--capital <gp> --slots N]
 ```
 
 `--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
@@ -97,17 +97,38 @@ filter the output rows by flip-niche yourself. The script already gates (two-sid
 window, per-spec falling doctrine) and grades (`rating.mjs`); your job is the judgment pass over
 what it prints.
 
-**P5 flip-niches — scalp / value (both PROVISIONAL, n≈0).** `--mode scalp` stays OFF-by-default (explicit
-`--mode scalp` only); **`--mode value` now RUNS IN `--mode all` by default (Ben 2026-07-10)** — still
-console-only (excluded from `screen.json`, no app tab) and provisional, but it surfaces on every default scan.
+**Provisional flip-niches — scalp / value(invest) / amplitude (all PROVISIONAL, n≈0).** `--mode scalp`
+stays OFF-by-default. **THE SWAP (PLAN-AMPLITUDE-SCAN §3, 2026-07-19): `--mode all` now runs
+band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); value is explicit-only via
+`--mode value` / `--mode invest` (relabelled Invest).** amplitude is console-only (excluded from
+`screen.json`, no app tab) + provisional, but it surfaces on every default scan now.
 - **`--mode scalp`** _(judgment: when to chase — desk-presence call)_ — a DELIBERATE intraday flip on a FALLING market (Ben's 2026-07-08 amendment: a
   faller isn't auto-bad). It surfaces ONLY fallers (Step 5, Ben 2026-07-09: a scalp REQUIRES falling — a
   non-falling row is a band flip band already owns → dropped `notFalling`). Flip-only/no-hold, HARD intraday
   stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
   never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
+- **`--mode amplitude`** _(judgment: PROVISIONAL n≈0 — don't trade on it yet; patient, never act-now)_ —
+  the 24h-cycle lane (THE SWAP put it in `--mode all`): buy the daily TROUGH, sell the daily PEAK, hold
+  ~a day, cycle. Its own daily-cycle table (trough→peak swing · both-leg recent-3 daily reach · net/cycle ·
+  hold horizon · deploy units · grade). Surfaces the big-ticket-that-oscillates-daily class band is blind
+  to (Masori-body class: Inquisitor's mace / Arcane sigil / Torva / Nightmare staff / Bellator ring
+  surfaced on the live trial). **Judgment layer:** (1) these are PATIENT multi-hour plays — list them
+  under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) The make-or-break
+  read is the **Both-leg reach (bid·ask, recent-3)** column: the daily low/high ARE reached each day but
+  not at predictable *times*, so a `1/3` recent leg means the round trip is NOT guaranteed same-day —
+  trust a `2/3`+ or `3/3` leg far more, and treat a stale/low-recent leg as "the level printed historically
+  but recent days abandoned it." (3) These are **thin-class by construction** (big tickets enter via
+  gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
+  row — never size like a liquid flip. (4) Pass **`--capital <gp>` / `--slots N`** for real deploy sizing
+  (absent a cash anchor the deploy-units column reads ~1u). (5) `--hold-days 1.5` runs the day-crossing
+  experiment (adds a day-of-week seasonality note — n≈3–4/weekday, a lean not a law). Every threshold is a
+  PLACEHOLDER; the "do both legs actually FILL?" question is measured by `join-amplitude-outcomes.mjs` (an
+  UPPER BOUND) + the retro-join in `/analyze`. Don't pitch an amplitude buy off the table blind — verify
+  the recent-3 reach and quote fresh.
 - **`--mode value`** _(judgment: still PROVISIONAL — don't trade on it yet)_ — buy-hold near a multi-week
-  low, hold for the cycle (ONE tax-paid sell of a big move). Its own term-structure table (buy-now vs watch
-  tiers, hold horizon stated). CONSOLE-ONLY (no app tab). Every pick is provisional; state the multi-week
+  low, hold for the cycle (ONE tax-paid sell of a big move). Runnable via `--mode value` / `--mode invest`;
+  **no longer in `--mode all`** (THE SWAP handed its slot to amplitude). Its own term-structure table
+  (buy-now vs watch tiers, hold horizon stated). CONSOLE-ONLY (no app tab). Every pick is provisional; state the multi-week
   hold horizon at entry. The daily archive is backfilled to ~20d, so this surfaces items now; a
   newly-tracked item with a thin slice still degrades to no-data. **Artifact/liquidity hardening (Ben
   2026-07-09):** `valueGate` rejects an **artifact-low** (live >15% below the durable q15 floor — a broken
@@ -137,8 +158,9 @@ console-only (excluded from `screen.json`, no app tab) and provisional, but it s
   week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
   timing/trajectory` notes + the footer drops, and verify the sell-leg reach by hand before quoting profit.
 
-**Flip-niche set (Steps 3+4, 2026-07-09 — Ben's ruling; value added 2026-07-10).** `--mode all` runs **band +
-churn + value** (value graduated into the default scan 2026-07-10 — console-only, provisional). **The
+**Flip-niche set (Steps 3+4, 2026-07-09; THE SWAP, 2026-07-19).** `--mode all` runs **band +
+churn + amplitude** (THE SWAP, PLAN-AMPLITUDE-SCAN §3 — amplitude took value's default slot; value stays
+runnable via `--mode value`/`--mode invest`, console-only, provisional). **The
 `spread` and `rising` flip-niches were DELETED** (this supersedes NY2/NY3's "spread off-by-default,
 rising kept"): spread's 24h-*average* edge is structurally narrower than the intraday band and
 surfaced ≈0 clean flips once the render net>0 gate landed (its only exclusive lane — thin
@@ -647,7 +669,7 @@ recurring scan (esp. inside a watch loop) drifts narrow: one salient sub-task �
 — quietly becomes the *only* thing evaluated, and the broader mandate (candidates for the
 dry/committed capital) silently collapses to "nothing." The fix is structural, not
 willpower: the report must give an **explicit one-line read on EACH flip-niche every pass** —
-`Dips · Band big-tickets · Churn` — even when the answer is "nothing, because X".
+`Dips · Band big-tickets · Churn · Amplitude (daily-cycle big tickets)` — even when the answer is "nothing, because X".
 A slot you must fill can't be silently dropped (same principle as the ONE-LINE-PER-ITEM and
 recent-reach rules — make the output enforce the coverage). "No dips" ends the *dip* line,
 never the scan. Anchor (2026-07-07): several watch-loop passes reported only "no new dips"

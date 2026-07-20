@@ -236,6 +236,28 @@ export function depthExitShadow(ca, { qty, volDay } = {}) {
   else o.collapse = ca.reason;
   return o;
 }
+// A5 (PLAN-AMPLITUDE-SCAN §4/§A5) — the amplitude lane shadow block: the printed daily trough-bid /
+// peak-ask levels, the both-leg RECENT-3 daily reach (the make-or-break viability read), the hold
+// horizon, and the diurnal dip/peak windows. join-amplitude-outcomes.mjs replays each pick against the
+// NEXT holdDays of the 1h archive to measure the would-have-fill rate as an UPPER BOUND (a printed level
+// ≠ your fill). Null when the amplitude read degraded. Takes a js/amplitudescreen.mjs amplitudeRanges
+// result + { holdDays, profile } (an hourProfile, optional — for the dip/peak windows).
+export function amplitudeShadow(ar, { holdDays = 1, profile = null } = {}) {
+  if (!ar || !ar.hasData || ar.ampBid == null || ar.ampAsk == null) return null;
+  const o = {
+    ampBid: ar.ampBid, ampAsk: ar.ampAsk, holdDays,
+    bidTouchRecent: ar.bidTouch.recentHit, bidTouchDays: ar.bidTouch.recentDays,
+    askReachRecent: ar.askReach.recentHit, askReachDays: ar.askReach.recentDays,
+    nDays: ar.nDays,
+    medAmpPct: ar.medAmpPct == null ? null : Math.round(ar.medAmpPct * 10000) / 10000,
+  };
+  if (profile && profile.dip && profile.peak) {
+    o.dipWindow = [profile.dip.startH, profile.dip.endH];
+    o.peakWindow = [profile.peak.startH, profile.peak.endH];
+  }
+  return o;
+}
+
 // the fixed-quantile asym pair (js/estimators.mjs asymEstimate result) → the lean `asym` shadow field;
 // the same shape screen/quote/watch all log for the head-to-head. Null when there is no pair.
 export function asymShadow(ae) {
@@ -257,7 +279,7 @@ export function asymShadow(ae) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, depthExit, reachable, demandRegime } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, depthExit, reachable, demandRegime, amplitude } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -371,6 +393,11 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Schema: { volDay, price, limit, depthPct, bucketVol, quickBuy, optSell, afterTaxMargin, dipScore,
   // alerted, gatedReason }; joinable against fills.json via the row's itemId + ts.
   if (dipLoop != null)       e.dipLoop = dipLoop;
+  // A5 (PLAN-AMPLITUDE-SCAN) — the amplitude lane shadow block { ampBid, ampAsk, holdDays,
+  // bidTouchRecent/Days, askReachRecent/Days, nDays, medAmpPct, dipWindow?, peakWindow? }. screen
+  // amplitude rows only; the shadow both-leg replay (join-amplitude-outcomes.mjs) reads it to measure the
+  // would-have-fill UPPER BOUND against the 1h archive. Lean-included (YS2 pattern): absent on every other row.
+  if (amplitude != null)     e.amplitude = amplitude;
   // Bar E ask-headroom signal (PLAN Bar-E-signal, Ben 2026-07-11): the robust p90 shaved a TRADED in-band
   // top off the quoted ask (row.askHeadroom, computeQuote). Logged whenever present — TRUSTED (surfaced as
   // a note) AND UNTRUSTED (audit only) — so analyze.mjs/F1 can join it to realized fills (does the raw top

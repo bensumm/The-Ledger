@@ -77,7 +77,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -91,9 +91,11 @@ import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PL
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
-import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
 import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
+import { amplitudeRanges, amplitudeGate, AMP_HOLD_DAYS_DEFAULT } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default
+import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
@@ -136,8 +138,13 @@ const MODES = MODE_KEYS;         // P4c: valid explicit --mode values, from the 
 // filtered against the registry and an empty/absent list falls through to ALL_MODE_KEYS byte-identically.
 const CFG_MODES = Array.isArray(CONFIG.modes) ? CONFIG.modes.map(m => String(m).toLowerCase()).filter(m => MODE_KEYS.includes(m)) : null;
 const ALL_MODES = resolve('modes', { flag: undefined, config: (CFG_MODES && CFG_MODES.length) ? CFG_MODES : undefined, fallback: ALL_MODE_KEYS }).active;
-const MODE = resolve('mode', { flag: A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : undefined, config: CONFIG.mode, fallback: 'band' }).active;
-if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, all (or omit for band).`); process.exit(1); }
+// A4 (THE SWAP, PLAN-AMPLITUDE-SCAN §3) — `invest` is the DISPLAY alias for the `value` KEY (value is
+// relabelled Invest; the ledger key stays `value` so the suggestions ledger/goldens don't fork). Map the
+// alias to the key here so `--mode invest` runs the value niche.
+const MODE_ALIASES = { invest: 'value' };
+const rawMode = resolve('mode', { flag: A.mode != null && A.mode !== true ? String(A.mode).toLowerCase() : undefined, config: CONFIG.mode, fallback: 'band' }).active;
+const MODE = MODE_ALIASES[rawMode] || rawMode;
+if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "${A.mode}". Use one of: ${MODES.join(', ')}, invest, all (or omit for band).`); process.exit(1); }
 const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (count-matched to the old 50/legacy selectivity; the /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units). Band `thin` (limitVol < FLOOR) auto-follows.
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
 const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
@@ -172,6 +179,12 @@ let VALUE_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
   : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.deployablePool : 100_000_000);
 const VALUE_SLOTS = A.slots != null ? Math.max(1, +A.slots) : 5;
 let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
+// A3 (PLAN-AMPLITUDE-SCAN §2.4): the amplitude hold horizon — 1 (default: buy the trough, sell the peak
+// same local day) or the 1.5-day experiment (fill day-1's trough, sell into day-2's peak). Feeds the
+// amplitude family's ttf, the deployable-units accumulation leg, and the §A5 shadow-replay horizon. A
+// flag, not a fork. PLACEHOLDER (n≈0). The amplitude niche reuses VALUE_CAP_GP as its per-position
+// bankroll cap (deployablePool ÷ slots — the same derived pool the value niche uses).
+const AMP_HOLD_DAYS = A['hold-days'] != null ? Math.max(1, +A['hold-days']) : AMP_HOLD_DAYS_DEFAULT;
 // --- S1 screening economics (gp-flow gate + 500k attention floor) ------------------------------
 // GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
 // lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
@@ -1190,6 +1203,94 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));
 }
 
+// --- A2 (PLAN-AMPLITUDE-SCAN): the AMPLITUDE niche's own daily-cycle table -----------------------
+// A dedicated console-only table (like the value niche): the amplitude lane does NOT use the fast-flip
+// grade/verdict stack the same way — it prints the DAILY trough→peak swing, the both-leg recent-3 daily
+// reach (the make-or-break viability read, §4), the hold horizon, net-per-cycle, and the deployable
+// units, ranked by the EXISTING rank spine (net × P(fill) ÷ TTF via the 'amplitude' estimator family —
+// NOT a bespoke composite). Every row is flagged PROVISIONAL (n≈0). Picks accrue via the O1 suggestions
+// ledger (mode 'amplitude') with the §A5 shadow both-leg-replay block. OFF the app (excluded from
+// screen.json); surfaces under deploy/accumulate, never as act-now rows (patient multi-hour plays).
+const AMP_HEADERS = ['Item', 'Guide', 'Live', 'Daily swing (trough→peak)', 'Both-leg reach (bid·ask, recent-3)', 'Net/cycle (after-tax)', 'Hold horizon', 'Deploy units', 'Grade'];
+const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wStart:0,wEnd:0)
+function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) {
+  const rows = [], sugg = [];
+  const informNotes = [];
+  const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0 };
+  const DROP_KEY = { 'no-history': 'noHistory', 'amp-below-floor': 'ampFloor', 'bid-unreachable': 'bidReach', 'ask-unreachable': 'askReach', 'trend': 'trend', 'knife': 'knife' };
+  for (const s of survivors) {
+    const row = qcache.get(s.id);
+    if (!row) continue;
+    const name = map.byId[s.id]?.name || ('#' + s.id);
+    const live = row.quickBuy ?? row.mid ?? s.mid;
+    const ts1h = series1h && series1h.get(s.id);
+    // Stage 2 (§2.1): the EXACT daily amplitude off ONE full-day windowStats call over the in-hand 1h series.
+    const stats = ts1h ? windowStats(ts1h, { nights: AMP_NIGHTS, wStart: 0, wEnd: 0 }) : null;
+    const ar = amplitudeRanges(stats, live, { holdDays: AMP_HOLD_DAYS });
+    if (!ar.hasData) { dropped.noHistory++; continue; }
+    // trend / knife guard: hourProfile's trendDominates (the "amplitude is drift" test) + the warm 1h
+    // trajectory shape ('knife' = monotone decline). Oscillation around a flat level is the thesis.
+    const prof = hourProfile(ts1h, { nights: DIURNAL_NIGHTS });
+    const traj = trajectoryFrom1h(ts1h);
+    const trendDominates = !!(prof && prof.trendDominates);
+    const knife = !!(traj && traj.shape === 'knife');
+    const g = amplitudeGate(ar, { trendDominates, knife });
+    if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; continue; }
+    // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = two-leg daily reach, ttf =
+    // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = the derived per-position pool.
+    const capGp = VALUE_CAP_GP;
+    const lapUnits = ESTIMATORS.amplitude.lapUnits({ capGp, ampBid: ar.ampBid, limitVol: s.limitVol, limit: s.limit, holdDays: AMP_HOLD_DAYS });
+    const pFill = ESTIMATORS.amplitude.pFill({ amplitudeRanges: ar });
+    const ttf = ESTIMATORS.amplitude.ttf({ holdDays: AMP_HOLD_DAYS });
+    const rank = rankScore({ net: ar.netPerCycle * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
+    const r = rateItem({ row, rank, thin: s.thin });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1)
+    const grade = r.grade;
+    const ampPct = (ar.ampPct != null) ? (ar.ampPct * 100) : null;
+    const reachCell = `${ar.bidTouch.recentHit}/${ar.bidTouch.recentDays || AMP_HOLD_DAYS} · ${ar.askReach.recentHit}/${ar.askReach.recentDays || AMP_HOLD_DAYS}`;
+    const cells = [
+      { t: name }, { t: guide && guide[s.id] != null ? fmtP(guide[s.id]) : '—' }, { t: fmtP(live) },
+      { t: `${fmtP(ar.ampBid)} → ${fmtP(ar.ampAsk)}` },
+      { t: reachCell, c: 'mini' },
+      { t: `+${fmtP(Math.round(ar.netPerCycle))}${ampPct != null ? ` (${ampPct.toFixed(1)}%)` : ''}`, c: 'gain' },
+      { t: `~${AMP_HOLD_DAYS}d hold`, c: 'mini' },
+      { t: `~${Math.round(lapUnits)}u`, c: 'mini' },
+      s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket, size in units, expect slow day-long fills` } : { t: grade },
+    ];
+    rows.push({ id: s.id, cells, score: rank });
+    // A3: the 1.5-day experiment's day-of-week seasonality read (net-new — no day-of-week tooling existed).
+    // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.
+    if (AMP_HOLD_DAYS > 1) {
+      const wp = weekdayProfile(ts1h, { nights: 28 });
+      if (wp && wp.best && wp.worst) informNotes.push(`${name}: weekday amplitude — widest ${wp.best.label} (~${(wp.best.ampPct * 100).toFixed(1)}%, n=${wp.best.n}), thinnest ${wp.worst.label} (~${(wp.worst.ampPct * 100).toFixed(1)}%, n=${wp.worst.n}) — n≈3–4/cell, a lean not a law`);
+    }
+    // §A5 — log the pick with the amplitude lane shadow block (the printed levels + both-leg recent reach
+    // + dip/peak windows + holdDays), so the shadow both-leg replay joiner can measure the would-have-fill
+    // rate as an UPPER BOUND, and the retro-join attributes realized round trips.
+    sugg.push(suggestionEntry(row, {
+      itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: 'AMP-CYCLE', grade, posture: POSTURE, path: 'scalp',
+      bid: ar.ampBid, ask: ar.ampAsk, pFill: round2(pFill.value), ttfSec: ttf.value, rank: Math.round(rank),
+      estBasis: `${pFill.basis}/${ttf.basis}`, estN: ar.nDays,
+      amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof }),
+      volDayRolling: rollShadow(series1h, s.id),
+    }));
+  }
+  rows.sort((a, b) => b.score - a.score);
+  logSuggestions('screen', { mode: 'amplitude', params: SCREEN_PARAMS }, sugg);
+
+  const shown = rows.length;
+  console.log(`## AMPLITUDE — ${shown} daily-cycle candidate(s) (PROVISIONAL — unproven 24h-swing theory, n≈0)`);
+  console.log('Playbook: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle. The edge is a big-ticket that oscillates ~a few % DAILY — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-hour plays that surface under deploy/accumulate, NEVER as act-now rows.');
+  console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(both-leg daily reach) ÷ hold-horizon — the standard rank at the amplitude estimator family; every threshold PLACEHOLDER, n≈0)`);
+  console.log(`(deployable cap ${fmtP(VALUE_CAP_GP)}/position = ${fmtP(VALUE_CAPITAL)} ÷ ${VALUE_SLOTS} slots · hold horizon ${AMP_HOLD_DAYS}d${AMP_HOLD_DAYS > 1 ? ' (1.5-day experiment — crosses a day boundary; day-of-week read below)' : ''})`);
+  if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
+  else console.log('_none_');
+  for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);
+  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}`);
+  console.log('⚠ make-or-break (§4, n≈0): the gate measures the levels PRINTED; whether BOTH legs actually FILL within the hold horizon is the open question the shadow both-leg replay (join-amplitude-outcomes.mjs) + realized retro-join measure. Do not trade on this yet.');
+  console.log('');
+  return rows.map(r => ({ id: r.id, cells: r.cells }));
+}
+
 // --- S3: watchlist always scanned -------------------------------------------------------------
 // The pipeline can't read the browser's localStorage, so the watchlist source of truth is tracked
 // repo-root watchlist.json (array of item names/ids). Every scan ALWAYS quotes every watchlisted
@@ -1390,7 +1491,9 @@ async function main() {
   // DEEP (reclaimable → counts toward deployable) vs COMMITTED (near-live, expected to fill → excluded)
   // using its item's live instasell (latest[id].low). A resting-bid item absent from /latest → no ref →
   // COMMITTED (conservative). Only re-derives when value runs on a DERIVED (non-explicit) capital.
-  if (!VALUE_CAPITAL_EXPLICIT && VALUE_CAPITAL_DERIVED && RUN_MODES.some(m => FLIP_NICHES[m].gate === 'value')) {
+  // A2 — amplitude reuses the same derived deployable pool for its lapUnits bankroll cap, so re-derive
+  // the market-ref-refined figure when EITHER the value OR the amplitude gate runs.
+  if (!VALUE_CAPITAL_EXPLICIT && VALUE_CAPITAL_DERIVED && RUN_MODES.some(m => FLIP_NICHES[m].gate === 'value' || FLIP_NICHES[m].gate === 'amplitude')) {
     const bidMarketRef = {};
     for (const o of readOffersSnapshot(join(REPO_ROOT, 'offers.json'))) {
       if (!o || o.side !== 'buy' || ((o.qty || 0) - (o.filled || 0)) <= 0) continue;
@@ -1426,7 +1529,8 @@ async function main() {
   const gated = {};
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx, THRESHOLDS, HELD_IDS);
-    const top = FLIP_NICHES[m].gate === 'value' ? VALUE_TOP_DEFAULT : TOP;
+    const top = FLIP_NICHES[m].gate === 'value' ? VALUE_TOP_DEFAULT
+      : FLIP_NICHES[m].gate === 'amplitude' ? AMP_TOP_DEFAULT : TOP;
     // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's
     // relaxation ladder) and surface the best SUBFLOOR_TOP honestly labeled — never an empty table with the
     // opportunity silently invisible, never a silently lowered bar. Fires ONLY on a zero-candidate niche
@@ -1434,7 +1538,7 @@ async function main() {
     // edge/market, not the floors, emptied it) the normal `_none_` output stands unchanged. The fallback
     // pool rides the same bulk data already loaded at gate time and the same per-item fetch path a normal
     // niche uses, capped at SUBFLOOR_TOP (≤5 — strictly fewer fetches than any non-empty niche's top-N).
-    if (!cand.length && FLIP_NICHES[m].gate !== 'value') {
+    if (!cand.length && FLIP_NICHES[m].gate === 'band') {
       const fb = subFloorFallback(m, ctx, THRESHOLDS);
       if (fb) {
         const { survivors, excluded } = admit(m, fb.cand, { thinReserve: THIN_RESERVE, top: SUBFLOOR_TOP });
@@ -1490,6 +1594,8 @@ async function main() {
   const niches = {};
   for (const m of RUN_MODES) niches[m] = FLIP_NICHES[m].gate === 'value'
     ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
+    : FLIP_NICHES[m].gate === 'amplitude'
+    ? renderAmplitudeMode(gated[m], qcache, map, series1h, guide)                // A2 — the amplitude niche's own daily-cycle table
     : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn });
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
@@ -1513,7 +1619,9 @@ async function main() {
     // 4 — no app tab yet), so it is EXCLUDED from screen.json (which carries a single HEADERS set). An
     // app VALUE surface is a later, APP_VERSION-bumping step.
     const pubNiches = {};
-    for (const m of RUN_MODES) if (FLIP_NICHES[m].gate !== 'value') pubNiches[m] = niches[m];
+    // value + amplitude are console-only (their own column sets; no app tab yet) → excluded from
+    // screen.json (which carries a single HEADERS set). An app surface is a later, APP_VERSION-bumping step.
+    for (const m of RUN_MODES) if (FLIP_NICHES[m].gate === 'band') pubNiches[m] = niches[m];
     // Stage-2 HTML (2026-07-16): a PRE-RENDERED html string per niche (+ watchlist), the pipeline-side
     // twin of js/ui.js's client-side scanTableHtml — additive sibling to `cells`, never a replacement
     // (an older app build that doesn't know about `html` still works off `cells` unchanged).

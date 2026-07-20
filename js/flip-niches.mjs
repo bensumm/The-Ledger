@@ -79,6 +79,17 @@ function valueEdge({ avgHigh, avgLow }, t) {
   return { modeNet, modeRoi, activeWin: null };
 }
 
+// amplitude (A2, PLAN-AMPLITUDE-SCAN): same conformance-only deterministic edge shape as valueEdge — the
+// amplitude NICHE does NOT select on this. Its two-stage selection is the daily-amplitude proxy (Stage 1,
+// pre-fetch) + amplitudeGate off windowStats (Stage 2, post-fetch) in js/amplitudescreen.mjs, routed by
+// `gate: 'amplitude'` (gatecandidates.mjs → gateAmplitudeCandidates; renderAmplitudeMode confirms). Kept
+// only so the registry contract (every spec has a callable edge) holds uniformly. Never gates.
+function amplitudeEdge({ avgHigh, avgLow }, t) {
+  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
+  const modeRoi = avgLow ? modeNet / avgLow * 100 : 0;
+  return { modeNet, modeRoi, activeWin: null };
+}
+
 /* --- edge functions (pure; the spec's step-3 edge, re-expressed verbatim from gatecandidates.mjs) ---
    Each takes ({ avgHigh, avgLow, band, limitVol, limit, thin }, thresholds) and returns either
      { modeNet, modeRoi, activeWin }   (the row's after-tax edge + traded-window count, or null win)
@@ -233,7 +244,14 @@ export const FLIP_NICHE_LIST = Object.freeze([
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
-    key: 'value', label: 'Value', inAll: true,   // Ben 2026-07-10: value runs in --mode all by default (was explicit-only). Still console-only (excluded from screen.json) + provisional (n≈0); a bare `all` runs it on placeholder --capital/--slots.
+    // THE SWAP (A4, PLAN-AMPLITUDE-SCAN §3, Ben 2026-07-19): value's inAll flips to FALSE — amplitude
+    // takes value's slot in the `--mode all` default (cost-neutral: they share the same two-stage
+    // fetch-then-confirm structure). value stays FULLY runnable via explicit `--mode value` / `--mode
+    // invest` (nothing removed; the `value` KEY + retro history + replay goldens are untouched — reverting
+    // is one word). Its display LABEL is 'Invest' now (§3 — it IS a multi-week capital-commitment bet; the
+    // ledger key stays 'value' so the suggestions ledger/goldens don't fork). Decide value's fate on the
+    // head-to-head per-attention after amplitude has a few weeks of record.
+    key: 'value', label: 'Invest', inAll: false,
     edge:valueEdge, rank: 'value', confirm: null,
     // value KEEPS reach — as a full-day week+ daily-min TIMING read (windowHours 24 / 14 nights), not an
     // 8h flip check: it finds WHEN the recent-week low prints so the entry is timed (Hydra/Berserker).
@@ -256,13 +274,42 @@ export const FLIP_NICHE_LIST = Object.freeze([
     ],
     defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term', fillShape: 'symmetric',
   },
+  {
+    // amplitude (A2 + THE SWAP, PLAN-AMPLITUDE-SCAN) — the 24h-cycle discovery lane: buy the daily
+    // TROUGH, sell the daily PEAK, hold ~a day, cycle (the godsword playbook onto a big-ticket that
+    // oscillates ~4% DAILY — the swing the band screen's 2h grain + net×P÷TTF rank is structurally blind
+    // to). inAll:true — it takes value's slot in `--mode all` (THE SWAP). Console-only + inform-first at
+    // launch (excluded from screen.json, no app tab), like value/scalp were — every threshold is a
+    // PLACEHOLDER (n≈0). gate:'amplitude' routes gateCandidates → gateAmplitudeCandidates (Stage-1 proxy)
+    // and renderAmplitudeMode confirms Stage-2 off windowStats; estimator:'amplitude' is the two-leg
+    // daily-reach family. falling:'knife-guard' — the trend/knife guard lives in amplitudeGate (Stage 2),
+    // exactly as value's knife guard lives in valueGate (amplitude never reaches surviveMode).
+    key: 'amplitude', label: 'Amplitude', inAll: true,
+    edge:amplitudeEdge, rank: 'amplitude', confirm: null,
+    falling: 'knife-guard', gate: 'amplitude',
+    // Validators are a PLAN (the ledger shape + conformance); renderAmplitudeMode's Stage-2 gate is
+    // self-contained (amplitudeGate + the hourProfile trend / trajectory knife guard), so — like value's
+    // floor/limit — these sit dormant in the console path. reach is a full-day daily TIMING read (24h /
+    // 14 nights, from the spec), all inform in the n≈0 rollout.
+    validators: [
+      { key: 'floor', mode: 'gate' },
+      { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
+      { key: 'trajectory', mode: 'inform' },
+      { key: 'limit', mode: 'gate' },
+    ],
+    // priceBasis 'daily' — amplitude posts DAILY-quantile levels (trough-bid / peak-ask) the surface
+    // computes itself (like value's 'term'), NOT the row's 2h band edges. fillShape 'symmetric' — the
+    // family pFill IS the two-leg product, so estimateRank's ask-reach discount is skipped (no double
+    // count), exactly as churn/value are exempt.
+    defaultPath: PATH_KEYS.SCALP, estimator: 'amplitude', priceBasis: 'daily', fillShape: 'symmetric',
+  },
 ]);
 
 // by-key map + the ordered mode-name lists screen-flip-niches.mjs derives from the registry (so the flip-niche names
 // live in ONE place — the registry — not as a magic-string array in screen-flip-niches.mjs).
 export const FLIP_NICHES = Object.freeze(Object.fromEntries(FLIP_NICHE_LIST.map(s => [s.key, s])));
-export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value']
-export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/value in --mode all (Ben 2026-07-10 added value; spread + rising DELETED; scalp stays explicit-only)
+export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value','amplitude']
+export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/amplitude in --mode all (THE SWAP, PLAN-AMPLITUDE-SCAN: value.inAll flipped OFF, amplitude.inAll ON; scalp/value stay explicit-only; spread+rising DELETED)
 
 /* --- conformance ----------------------------------------------------------------------------------
    validateNicheSpec(spec) → string[] of structural violations (empty = conformant). The conformance
@@ -270,14 +317,14 @@ export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).
    malformed spec to prove the checker BITES, and runs each edge over the replay archetypes for
    no-throw + determinism — so P5 registering scalp/value gets conformance-checked for free. */
 const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
-const VALID_RANKS = new Set(['velocity', 'proxy', 'value']);
+const VALID_RANKS = new Set(['velocity', 'proxy', 'value', 'amplitude']);   // A2 — amplitude ranks its Stage-1 pool by ampProxy
 const VALID_FALLING = new Set(['exclude', 'accept', 'knife-guard']);   // P5 per-spec falling doctrine
-const VALID_GATE = new Set(['band', 'value']);                          // P5 gate-stack selector
+const VALID_GATE = new Set(['band', 'value', 'amplitude']);             // P5 gate-stack selector (+ A2 amplitude)
 // P6b — the estimator family + price-basis vocabularies. VALID_ESTIMATORS mirrors pipeline/lib/
 // estimators.mjs's ESTIMATOR_FAMILIES (the runtime registry there is the home; this Set exists so a
 // typo'd family name is caught by conformance instead of silently defaulting to intraday in production).
-const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising', 'churn']);   // Step 6 — churn per-lap rank
-const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term']);
+const VALID_ESTIMATORS = new Set(['intraday', 'value', 'rising', 'churn', 'amplitude']);   // Step 6 — churn per-lap rank; A2 — amplitude family
+const VALID_PRICE_BASIS = new Set(['quick', 'opt', 'term', 'daily']);   // A2 — 'daily' = amplitude's daily-quantile pair (surface-computed, like 'term')
 // PART II — the fill SHAPE the thesis targets (see the fillShape doc in the header): 'asym' = deep-buy/
 // reliable-sell (band/scalp, the Part-I ask-reach discount applies); 'symmetric' = fill-every-lap /
 // own-pricing (churn/value — EXEMPT from the discount + the reach grade cap).

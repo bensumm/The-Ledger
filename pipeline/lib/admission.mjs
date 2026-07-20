@@ -107,6 +107,14 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     const sorted = cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id));
     return { survivors: sorted.slice(0, top), excluded: sorted.slice(top).map(c => ({ ...c, reason: 'value-top-n' })) };
   }
+  // A2 (PLAN-AMPLITUDE-SCAN) — the amplitude niche keeps its own Stage-1 gate + hard top-N by the
+  // daily-amplitude PROXY (mirrors value's own-gate branch); the throughput/thin/exploration lanes below
+  // don't apply (amplitude candidates carry no expGpDay — they're ranked by ampProxy, not gp/day velocity).
+  const isAmplitude = cand.length && cand[0].ampProxy !== undefined;
+  if (isAmplitude) {
+    const sorted = cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id));
+    return { survivors: sorted.slice(0, top), excluded: sorted.slice(top).map(c => ({ ...c, reason: 'amplitude-top-n' })) };
+  }
 
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   const boostOf = c => trackIndex ? trackBoost(trackIndex.get(c.id)) : 1;

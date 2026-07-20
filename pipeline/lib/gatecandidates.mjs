@@ -39,6 +39,10 @@ import { median } from './cli.mjs';
 // a `gate:'value'` spec here instead of the shared band/spread liquidity+edge stack.
 import { termStructure } from '../../js/termstructure.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '../../js/valuescreen.mjs';
+// A2 (PLAN-AMPLITUDE-SCAN) — the amplitude niche's Stage-1 pre-fetch proxy + its price window.
+// gateCandidates routes a `gate:'amplitude'` spec to gateAmplitudeCandidates (below), mirroring the
+// `gate:'value'` seam. Stage 2 (the exact amplitudeGate off windowStats) runs post-fetch in renderAmplitudeMode.
+import { amplitudeProxy, AMP_MIN_PRICE, AMP_MAX_PRICE, AMP_STAGE1_MIN_PCT } from '../../js/amplitudescreen.mjs';
 // P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
 // js/flip-niches.mjs. gateCandidates/rankAndSlice look up FLIP_NICHES[mode] and call spec.edge / read
 // spec.rank / spec.confirm instead of branching on the niche name — byte-identical behavior
@@ -87,6 +91,9 @@ export const RISING_RESERVE_DEFAULT = 6;
 export const TOP_DEFAULT = 40;
 // P5 — the value niche's HARD top-N (§F flood control: the gated pool WILL be large; never dump it).
 export const VALUE_TOP_DEFAULT = 25;
+// A2 — the amplitude niche's HARD top-N (same flood-control shape as value; the Stage-1 proxy pool can be
+// large, so rank by ampProxy and take a bounded shortlist to fetch the per-item 1h series for). PLACEHOLDER.
+export const AMP_TOP_DEFAULT = 25;
 
 // P6c — empty-result sub-floor fallback sizing + honesty cap (Ben, 2026-07-09: when a niche's floors
 // leave ZERO candidates, re-run BENEATH the floor and show the best few HONESTLY LABELED — never
@@ -151,12 +158,15 @@ export const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : dri
 // used to close over is now a named field of the `t` thresholds object (default DEFAULT_THRESHOLDS),
 // so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window, rising-pool
 // floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and `tax` are pure.
-export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new Set()) {
-  const spec = FLIP_NICHES[mode];
-  if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
-  if (spec.gate === 'value') return gateValueCandidates(ctx, t);   // P5 — the term-structure value gate
-  const { v24, map, bands } = ctx;
-  const cand = [];
+// A6 (PLAN-AMPLITUDE-SCAN §6.2 — the one real dedup) — the shared candidate-loop boilerplate all three
+// gate stacks (band, value, amplitude) repeat: iterate v24, the two-sided-liquidity gate (hpv>0 && lpv>0,
+// NON-NEGOTIABLE), the mid price window, and the thin/gp-flow classification. `fn` receives the survivor
+// context ({ id, d, hpv, lpv, limitVol, avgHigh, avgLow, mid, thin }) and returns a candidate object or
+// null (a per-gate `continue`); non-null results are collected. BYTE-IDENTITY: this is a MECHANICAL
+// extraction — the iteration order (`for … in`), the exact gate order + `continue` points, and the mid/
+// thin math are unchanged, so the P1 replay goldens must pass UNCHANGED (they pin the band path here).
+export function eachLiquidCandidate({ v24 }, { minPrice = 0, maxPrice = Infinity, floorVol, gpFloor }, fn) {
+  const out = [];
   for (const idStr in v24) {
     const id = +idStr; const d = v24[idStr]; if (!d) continue;
     const hpv = d.highPriceVolume || 0, lpv = d.lowPriceVolume || 0;
@@ -165,20 +175,33 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
     if (!avgHigh || !avgLow) continue;
     const mid = (avgHigh + avgLow) / 2;
-    if (mid < t.MIN_PRICE || mid > t.MAX_PRICE) continue;   // price window (shared)
+    if (mid < minPrice || mid > maxPrice) continue;     // price window (shared)
     // liquidity: raw UNIT floor OR the gp-flow floor (thin big-ticket path). `thin` = qualified via
     // gp-flow only (below the unit floor) → honestly marked downstream (grade cap + tooltip).
-    const thin = limitVol < t.FLOOR;
-    if (thin && limitVol * mid < t.GP_FLOOR) continue;    // fails BOTH the unit floor and the gp-flow floor
+    const thin = limitVol < floorVol;
+    if (thin && limitVol * mid < gpFloor) continue;     // fails BOTH the unit floor and the gp-flow floor
+    const c = fn({ id, d, hpv, lpv, limitVol, avgHigh, avgLow, mid, thin });
+    if (c) out.push(c);
+  }
+  return out;
+}
+
+export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new Set()) {
+  const spec = FLIP_NICHES[mode];
+  if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
+  if (spec.gate === 'value') return gateValueCandidates(ctx, t);           // P5 — the term-structure value gate
+  if (spec.gate === 'amplitude') return gateAmplitudeCandidates(ctx, t);   // A2 — the daily-amplitude Stage-1 proxy gate
+  const { map, bands } = ctx;
+  return eachLiquidCandidate(ctx, { minPrice: t.MIN_PRICE, maxPrice: t.MAX_PRICE, floorVol: t.FLOOR, gpFloor: t.GP_FLOOR }, ({ id, limitVol, avgHigh, avgLow, mid, thin }) => {
     const limit = map.byId[id]?.limit ?? null;
 
     // --- step 3: the DECLARATIVE spec's edge — P4c re-expressed the old inline per-mode branch as
     // flip-niches.mjs edge functions (byte-identical: a `continue` is now a `return null`). Returns the
     // after-tax { modeNet, modeRoi, activeWin } or null when the item fails this niche's edge/gate. ---
     const edge = spec.edge({ avgHigh, avgLow, band: bands ? bands[id] : undefined, limitVol, limit, thin }, t);
-    if (!edge) continue;
+    if (!edge) return null;
     const { modeNet, activeWin } = edge;
-    if (modeNet <= 0) continue;
+    if (modeNet <= 0) return null;
     // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): expGpDay is CAPITAL-AWARE — the PER-WINDOW buy is capped by
     // what the deployable bankroll affords one tranche of at this price (capPerWindow = pool / mid; mid is
     // the gp-flow price proxy this gate already uses at line ~155). THROUGHPUT_MODE 'legacy' or a null cap
@@ -199,10 +222,9 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     // falling bypass below). Held items never reach this file with a real gp-flow reading if the market
     // moved against them — dropping them here would be the exact "silently vanishes" failure this fixes.
     const held = heldIds.has(id);
-    if (!thin && !held && expGpDay < t.MIN_GPD) continue;
-    cand.push({ id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held });
-  }
-  return cand;
+    if (!thin && !held && expGpDay < t.MIN_GPD) return null;
+    return { id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held };
+  });
 }
 
 /* P5 — the VALUE niche's own candidate gate (PLAN-VALUE §A). Keeps the two-sided liquidity gate + the
@@ -212,28 +234,40 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
    daily-mid archive (screen-flip-niches.mjs's loadDaily) already loaded at gate time — the term structure is
    computed from it with NO per-item fetch. Each survivor carries its valueScore + valueRanges + tier so
    rankAndSlice can hard top-N by score (§F) and renderMode can print the term-structure row. */
-function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS) {
-  const floorVol = t.VALUE_LIQ_FLOOR ?? DEFAULT_THRESHOLDS.VALUE_LIQ_FLOOR;
-  const cand = [];
-  for (const idStr in v24) {
-    const id = +idStr; const d = v24[idStr]; if (!d) continue;
-    const hpv = d.highPriceVolume || 0, lpv = d.lowPriceVolume || 0;
-    if (hpv <= 0 || lpv <= 0) continue;                 // two-sided liquidity (KEPT — must be exitable)
-    const limitVol = Math.min(hpv, lpv);
-    const avgHigh = d.avgHighPrice, avgLow = d.avgLowPrice;
-    if (!avgHigh || !avgLow) continue;
-    const mid = (avgHigh + avgLow) / 2;
-    if (mid < Math.max(t.MIN_PRICE, VALUE_MIN_PRICE) || mid > t.MAX_PRICE) continue;   // price window + value capital-deployment floor
-    const thin = limitVol < floorVol;                       // LOWERED value liquidity floor OR gp-flow
-    if (thin && limitVol * mid < t.GP_FLOOR) continue;
+function gateValueCandidates(ctx, t = DEFAULT_THRESHOLDS) {
+  const { map, daily } = ctx;
+  const floorVol = t.VALUE_LIQ_FLOOR ?? DEFAULT_THRESHOLDS.VALUE_LIQ_FLOOR;   // LOWERED value liquidity floor OR gp-flow
+  // A6: the two-sided / price-window / thin classification is the shared helper; value's own gate
+  // (mid ≥ VALUE_MIN_PRICE, the term-structure amplitude floor + knife) is the fn body.
+  return eachLiquidCandidate(ctx, { minPrice: Math.max(t.MIN_PRICE, VALUE_MIN_PRICE), maxPrice: t.MAX_PRICE, floorVol, gpFloor: t.GP_FLOOR }, ({ id, limitVol, mid, thin }) => {
     const ts = termStructure(daily && daily[id]);            // 1/3/7/14/28d structure (no per-item fetch)
     const vr = valueRanges(ts, mid);                        // mid = live proxy pre-fetch
     const g = valueGate(vr, {});                            // amplitude floor + term-structure knife guard
-    if (!g.pass) continue;
+    if (!g.pass) return null;
     const limit = map.byId[id]?.limit ?? null;
-    cand.push({ id, limitVol, mid, limit, thin, valueScore: valueScore(vr, { limitVol, limit, capGp: t.VALUE_CAP_GP ?? null }), valueRanges: vr, tier: valueTier(vr) });
-  }
-  return cand;
+    return { id, limitVol, mid, limit, thin, valueScore: valueScore(vr, { limitVol, limit, capGp: t.VALUE_CAP_GP ?? null }), valueRanges: vr, tier: valueTier(vr) };
+  });
+}
+
+/* A2 (PLAN-AMPLITUDE-SCAN §2.1) — the AMPLITUDE niche's Stage-1 pre-fetch gate. Keeps the shared
+   two-sided liquidity gate + the thin/gp-flow classification (via eachLiquidCandidate), but uses
+   amplitude's OWN price window (min AMP_MIN_PRICE, no upper cap — the default 45m clips Masori≈42m) and
+   REPLACES the 500k gp/day throughput floor with the cheap ATTENUATED daily-amplitude PROXY off the bulk
+   6h-spaced archive (js/amplitudescreen.mjs amplitudeProxy). The proxy's ONLY job is picking the fetch
+   pool — the EXACT gate (amplitudeGate off the per-item 1h windowStats) runs post-fetch in
+   renderAmplitudeMode (the two-stage split, exactly like value's proxy→confirm). `ctx.daily` is the bulk
+   archive already loaded at gate time (no per-item fetch). Each survivor carries `ampProxy` so
+   rankAndSlice can hard top-N by it. A cold/short archive slice → null proxy → not a candidate (the
+   honest degrade — never a fake amplitude). */
+function gateAmplitudeCandidates(ctx, t = DEFAULT_THRESHOLDS) {
+  const { map, daily } = ctx;
+  const floorVol = t.FLOOR;   // amplitude's big tickets mostly enter via the gp-flow THIN path (§2.1)
+  return eachLiquidCandidate(ctx, { minPrice: Math.max(t.MIN_PRICE, AMP_MIN_PRICE), maxPrice: AMP_MAX_PRICE, floorVol, gpFloor: t.GP_FLOOR }, ({ id, limitVol, mid, thin }) => {
+    const ampProxy = amplitudeProxy(daily && daily[id]);     // Stage-1 attenuated proxy off the 6h archive
+    if (ampProxy == null || ampProxy < AMP_STAGE1_MIN_PCT) return null;
+    const limit = map.byId[id]?.limit ?? null;
+    return { id, limitVol, mid, limit, thin, ampProxy };
+  });
 }
 
 /* --- P6c: empty-result sub-floor fallback --------------------------------------------------------
@@ -254,7 +288,9 @@ function gateValueCandidates({ v24, map, bands, daily }, t = DEFAULT_THRESHOLDS)
    MIN_GPD/GP_FLOOR pair this ladder relaxes — and it's provisional/off-by-default (n≈0). */
 export function subFloorFallback(mode, ctx, t = DEFAULT_THRESHOLDS) {
   const spec = FLIP_NICHES[mode];
-  if (!spec || spec.gate === 'value') return null;
+  // Only the shared band gate stack has the MIN_GPD/GP_FLOOR ladder this relaxes. value + amplitude own
+  // their own floors (term-structure / daily-amplitude gate) and are provisional/off-app — out of scope.
+  if (!spec || spec.gate !== 'band') return null;
   const ladder = [
     { key: 'min-gpd',
       floorDesc: `the ${(t.MIN_GPD / 1e3).toLocaleString()}k gp/day attention floor (--min-gpd)`,
@@ -285,6 +321,11 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).
   if (FLIP_NICHES[mode] && FLIP_NICHES[mode].gate === 'value') {
     return cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id)).slice(0, top);
+  }
+  // A2 — the amplitude niche: rank the whole Stage-1 pool by the attenuated daily-amplitude PROXY and take
+  // a HARD top-N to fetch (the exact Stage-2 gate confirms per survivor in renderAmplitudeMode).
+  if (FLIP_NICHES[mode] && FLIP_NICHES[mode].gate === 'amplitude') {
+    return cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id)).slice(0, top);
   }
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   // Thin gp-flow qualifiers are held OUT of the main ranking and given a bounded RESERVE instead.

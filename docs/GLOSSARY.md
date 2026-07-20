@@ -15,14 +15,26 @@ definition rather than re-explaining it. When a term's meaning changes, fix it h
 ### The two "strategy" levels
 These are different things at different levels — kept as two words on purpose.
 
-- **flip-niche** — a *screen-level* style for finding & flipping items. The four are:
-  - **band** — flip the 2h intraday price band: bid the band low, ask the band top on a liquid item
-    with a stable regime. The default niche.
+- **flip-niche** — a *screen-level* style for finding & flipping items. The frame (PLAN-AMPLITUDE-SCAN
+  §1): band / **amplitude** / invest are ONE operation — *buy the low of the N-period cycle, sell the
+  high, capture the amplitude minus tax* — at three cycle periods (2h / 24h / multi-week); churn + scalp
+  sit off that axis (a volume-throttled lap and a directional regime bet). The niches:
+  - **band** — flip the ~2h intraday price band: bid the band low, ask the band top on a liquid item
+    with a stable regime. The default niche. (cycle period ~2h.)
   - **churn** — high-volume commodity flipping (runes, etc.): thin per-unit edge × huge volume ×
-    fast turns; ranked by the whole *lap* (a full buy-limit's worth), not per unit.
+    fast turns; ranked by the whole *lap* (a full buy-limit's worth), not per unit. (off the amplitude axis.)
+  - **amplitude** — buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle: a big-ticket that
+    oscillates ~a few % *daily* — the swing the band screen's 2h grain + `net×P÷TTF` rank is
+    structurally blind to (Masori-body class). Its gate is two-stage (a cheap daily-range proxy off the
+    6h archive → the exact `amplitudeGate` off the per-item 1h `windowStats`); ranked by the standard
+    `net × P(both-leg daily reach) ÷ hold-horizon` at the `amplitude` estimator family. In `--mode all`
+    (THE SWAP — took value's slot). Console-only, provisional, n≈0. (cycle period ~24h.)
   - **scalp** — a deliberate intraday flip on a *falling* market; flip-only, hard stop, no hold.
-    Provisional, off by default.
-  - **value** — buy-and-hold near a multi-week low, sell one big move up the cycle. Provisional.
+    Provisional, off by default. (off the amplitude axis — a regime bet.)
+  - **invest** (spec KEY `value`) — buy-and-hold near a multi-week low, sell one big move up the cycle.
+    Provisional; runnable via `--mode invest` / `--mode value`. Relabelled **Invest** (it IS a multi-week
+    capital-commitment bet); the ledger key stays `value` so the retro history/goldens don't fork. NO
+    LONGER in `--mode all` (THE SWAP handed its slot to amplitude). (cycle period ~7d+.)
 - **held-item strategy** — a *position-level* approach for a lot you already hold, produced by the
   path engine (`held-item-strategy.mjs`, "compare strategies"). The options: **hold-recovery** (wait for the
   thesis to play out), **cut** (take the loss, redeploy), **break-even-escape** (get out at cost),

@@ -154,6 +154,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `screen-flip-niches.mjs`/`gatecandidates.mjs`; imports only `tax`. Full spec + all NAMED-PLACEHOLDER thresholds (n≈0)
   live in the module header; resolved rank-metric history in `docs/LORE.md`. NOT app-imported → no
   APP_VERSION. Fixture-pinned `pipeline/test/valuescreen.test.mjs`),
+  `amplitudescreen.mjs` (PLAN-AMPLITUDE-SCAN A1 — the PURE, DOM-free two-stage gate + range math for the
+  `--mode amplitude` 24h-cycle flip-niche: `amplitudeProxy` (Stage-1 attenuated daily-range proxy off the
+  6h archive → picks the fetch pool) / `amplitudeRanges` (the exact per-day trough/peak + both-leg recent
+  reach off a `windowStats` result) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
+  trend/knife guard) / `amplitudeDeployUnits` (the deployable-units three-way min the `amplitude`
+  estimator family reads). Imports only `tax` + the `windowread.mjs` reach helpers; consumed by
+  `screen-flip-niches.mjs`/`gatecandidates.mjs`/`js/estimators/families.mjs`. All thresholds NAMED
+  PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
+  `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never
+  rendered). Fixture-pinned `pipeline/test/amplitudescreen.test.mjs`),
   `held-item-strategy.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
   list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
@@ -165,9 +175,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/test/held-item-strategy.test.mjs`),
-  `flip-niches.mjs` (P4c/P5 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FOUR flip-niches
-  (band/churn + scalp/value; the `spread` and `rising` specs were DELETED in Steps 3+4) as data-shaped
-  specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,falling,gate,validators,defaultPath}`.
+  `flip-niches.mjs` (P4c/P5/A2 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FIVE
+  flip-niches (band/churn + scalp/value + **amplitude**; the `spread` and `rising` specs were DELETED in
+  Steps 3+4) as data-shaped specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,falling,gate,
+  validators,defaultPath,estimator,priceBasis,fillShape}`. THE SWAP (PLAN-AMPLITUDE-SCAN §3): `amplitude`
+  is `inAll:true` (in `--mode all`) and `value` is now `inAll:false` (relabelled **Invest**, KEY unchanged,
+  runnable via `--mode value`/`--mode invest`). `gate:'amplitude'` routes to `gateAmplitudeCandidates`;
+  `estimator:'amplitude'` is the two-leg daily-reach family; `priceBasis:'daily'` = a surface-computed
+  daily-quantile pair.
   `pipeline/lib/gatecandidates.mjs` looks up
   `FLIP_NICHES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
   / `spec.gate` instead of branching on the flip-niche name — so a flip-niche can be added or REMOVED by editing the
@@ -549,6 +564,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     head-to-head** accrual (RC, `PLAN-REACHABILITY-CONSOLIDATION`) — closed-sell round-trips carrying the
     five-way exit co-log (`joinSuggestion`'s `coLog` marker), bucketed into the scorer's (side × class ×
     regime) cells, so the weekly retro shows WHEN `aggregateReachability` becomes scorable without polling),
+    `join-amplitude-outcomes.mjs` (PLAN-AMPLITUDE-SCAN A5 — the amplitude lane's SHADOW BOTH-LEG REPLAY,
+    read-only: for every `mode:'amplitude'` pick logged to `suggestions.jsonl` (the `amplitude` shadow
+    block — printed trough-bid/peak-ask + hold horizon), replays against the NEXT `holdDays` of the
+    per-item 1h SQLite archive (`lib/archive.mjs` `seriesFor`) and reports the would-have-fill rate as an
+    UPPER BOUND (a printed level ≠ your fill; daily buckets can't order intra-day). The cheap n-rich
+    falsifier for the §4 make-or-break question; the realized truth is `retrojoin.mjs`→`/analyze`. Pure
+    core `replayAmplitudePick`/`dayBuckets` fixture-pinned `pipeline/test/join-amplitude.test.mjs`; `--json`
+    dumps the per-pick array),
     `f1-calibrate.mjs` (F1 calibration STUDY — read-only over the derived `outcomes.json` (run
     `join-outcomes.mjs --report` first). PROPOSAL-ONLY, mutates nothing and touches no live pricing/gating
     code: (1) re-audits the F1 gate the way its spec documents (side × pctBucket × class × regime cells

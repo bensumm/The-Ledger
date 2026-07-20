@@ -56,6 +56,7 @@
  */
 import { netMargin, clamp } from '../money-math.js';
 import { askReachFactor } from './reach.mjs';   // PC2: the two-leg ask-reach discount (moved to reach.mjs); estimateRank calls it at runtime
+import { amplitudeDeployUnits, AMP_HOLD_DAYS_DEFAULT } from '../amplitudescreen.mjs';   // A2 (PLAN-AMPLITUDE-SCAN): the amplitude family's lapUnits min()
 
 const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -121,6 +122,39 @@ export function pFillValue(ctx = {}) {
   return estR(PFILL_PRIOR, 0, 'prior');
 }
 
+// amplitude family (A2, PLAN-AMPLITUDE-SCAN §2.2) — P(fill) IS the two-leg recent-reach PRODUCT at the
+// quoted daily pair (bid-touch × ask-reach), computed by js/amplitudescreen.mjs amplitudeRanges and
+// handed in via ctx.amplitudeRanges.pFill2leg. This makes the honest "will the round trip complete?"
+// number the FIRST-CLASS rank input from day one; it self-reports its thinness (n = scored days). Note
+// this REPLACES the Proposal-A ask-reach discount (it already folds the exit leg) rather than stacking
+// on it — the amplitude spec's fillShape is 'symmetric' so estimateRank's askReach discount is skipped
+// (families.mjs:~251), exactly as churn/value are exempt. Basis 'daily-reach-2leg'. Prior when no read.
+export function pFillAmplitude(ctx = {}) {
+  const ar = (ctx && ctx.amplitudeRanges) || null;
+  if (ar && ar.hasData && num(ar.pFill2leg) != null) return estR(clamp01(ar.pFill2leg), num(ar.nDays) ?? 0, 'daily-reach-2leg');
+  return estR(PFILL_PRIOR, 0, 'prior');
+}
+
+// amplitude family TTF = the hold-horizon prior in seconds (holdDays × 86400). holdDays is a spec/CLI
+// parameter (default 1, experiment 1.5 — §2.4). PLACEHOLDER until the retro-join measures realized cycle
+// time (§A5). Reads ctx.holdDays; defaults to AMP_HOLD_DAYS_DEFAULT.
+export function ttfAmplitude(ctx = {}) {
+  const hd = num(ctx && ctx.holdDays) ?? AMP_HOLD_DAYS_DEFAULT;
+  return estR(Math.round(hd * 86400), 0, 'hold-horizon-prior');
+}
+
+// amplitude family lapUnits = the deployable-units min() (§2.2) — bankroll ÷ trough-bid, vol-share ×
+// limiting-side volume × hold, buy-limit accumulation × hold. Delegates to amplitudeDeployUnits (the ONE
+// home in js/amplitudescreen.mjs) so the rank is realizable after-tax gp/cycle of PARKED capital, per
+// unit net staying the displayed honest margin — the same hook churn's lapUnits exercises.
+export function amplitudeLapUnits(ctx = {}) {
+  const c = ctx || {};
+  return amplitudeDeployUnits({
+    capGp: num(c.capGp), buyLow: num(c.ampBid),
+    limitVol: num(c.limitVol), limit: num(c.limit), holdDays: num(c.holdDays) ?? AMP_HOLD_DAYS_DEFAULT,
+  });
+}
+
 // rising family — entry is near current so P(fill) is high when the uptrend is confirmed and not
 // breaking down; the forecast target's reach is the real risk (captured in TTF, not here). Prior-only.
 export function pFillRising(ctx = {}) {
@@ -178,10 +212,13 @@ export function churnLapUnits(ctx = {}) {
 // `lapUnits` is OPTIONAL — only churn declares it; estimateRank multiplies the per-unit net by
 // lapUnits(ctx) for the rank (families without it rank per unit, i.e. lapUnits ≡ 1 → byte-identical).
 export const ESTIMATORS = Object.freeze({
-  intraday: { pFill: pFillIntraday, ttf: ttfIntraday },
-  value:    { pFill: pFillValue,    ttf: ttfValue },
-  rising:   { pFill: pFillRising,   ttf: ttfRising },
-  churn:    { pFill: pFillIntraday, ttf: ttfIntraday, lapUnits: churnLapUnits },
+  intraday:  { pFill: pFillIntraday,  ttf: ttfIntraday },
+  value:     { pFill: pFillValue,     ttf: ttfValue },
+  rising:    { pFill: pFillRising,    ttf: ttfRising },
+  churn:     { pFill: pFillIntraday,  ttf: ttfIntraday,  lapUnits: churnLapUnits },
+  // A2 (PLAN-AMPLITUDE-SCAN §2.2) — the 24h-cycle family: two-leg daily-reach pFill, hold-horizon ttf,
+  // deployable-units lapUnits. Rank/grade/suggestions machinery carries amplitude unchanged.
+  amplitude: { pFill: pFillAmplitude, ttf: ttfAmplitude, lapUnits: amplitudeLapUnits },
 });
 // @test-only: estimator-family list; flip-niches.mjs VALID_ESTIMATORS mirrors it and flip-niches.test.mjs cross-checks the two so a family-name drift bites.
 export const ESTIMATOR_FAMILIES = Object.freeze(Object.keys(ESTIMATORS));
@@ -202,6 +239,9 @@ export function quotedPair(spec, row = {}) {
   const basis = spec && spec.priceBasis;
   if (basis === 'quick') return { bid: row.quickBuy ?? null, ask: row.quickSell ?? null, basis: 'quick' };
   if (basis === 'term')  return { bid: null, ask: null, basis: 'term' };
+  // A2 — amplitude posts daily-quantile trough/peak levels the surface computes itself (renderAmplitudeMode),
+  // like 'term'; a null pair here means estimateRank isn't the amplitude rank path (the surface is).
+  if (basis === 'daily') return { bid: null, ask: null, basis: 'daily' };
   return { bid: row.optBuy ?? null, ask: row.optSell ?? null, basis: 'opt' };   // 'opt' default — 2h band edges
 }
 

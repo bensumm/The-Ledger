@@ -160,9 +160,38 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 
 ## 3. How a pick is found — the screen pipeline
 
-`screen-flip-niches.mjs` prints one table per **flip-niche** (band / churn / scalp / value — declarative
-specs in `js/flip-niches.mjs`; `--mode` selects which run, `all` = band+churn+value). A candidate
+`screen-flip-niches.mjs` prints one table per **flip-niche** (band / churn / scalp / value(invest) /
+**amplitude** — declarative specs in `js/flip-niches.mjs`; `--mode` selects which run, `all` =
+**band+churn+amplitude** as of THE SWAP, PLAN-AMPLITUDE-SCAN §3 — amplitude took value's `--mode all`
+slot; value is now explicit-only via `--mode value`/`--mode invest`, relabelled **Invest**). A candidate
 survives: **gate → validate → rank/grade → render**.
+
+**The cycle-period frame (PLAN-AMPLITUDE-SCAN §1).** band / **amplitude** / invest are ONE operation —
+buy the low of the N-period cycle, sell the high, capture the amplitude minus tax — at three cycle
+periods (2h / 24h / multi-week); the longer the hold, the more the pricing leans on historical
+trajectory. churn (a buy-limit-throttled volume×spread lap) and scalp (a falling-regime directional bet)
+sit OFF that axis. The three amplitude-axis lanes share a shape: an amplitude-of-cycle edge, a
+two-sided-liquidity + reach viability test, a trough-entry/peak-exit pricing doctrine, a knife/trend
+guard scaled to the period, and a capital-aware rank — they differ only in WHICH data grain defines the
+cycle (band's 5m band walk / amplitude's per-item 1h daily range / invest's daily-archive term structure).
+
+**The amplitude lane (`--mode amplitude`, console-only, provisional n≈0).** A big-ticket that oscillates
+~a few % *daily* (Masori-body class) never surfaces in band: band prices the 2h band (so the ~day-long
+swing reads ~0% at the 2h grain) and ranks `net × P(fill) ÷ TTF` (which buries a day-long fill at
+P~0.06 / ttf~26h). Amplitude sees it. **Two-stage gate** (`js/amplitudescreen.mjs`): Stage-1 a cheap
+ATTENUATED daily-range proxy off the bulk 6h archive picks the fetch pool (exactly like `proxyDrift`);
+Stage-2 the exact `amplitudeGate` off ONE full-day `windowStats(series1h)` — the recent-median after-tax
+daily amplitude floor (~2% PLACEHOLDER, on the taxed median-per-day basis, which reads lower than the raw
+hi↔lo range), the both-leg daily reach (the quoted trough-bid TOUCHED and peak-ask REACHED on ≥2 of
+recent-3 days OR ≥ half the full window, `staleOptimistic`-guarded — the load-bearing viability read),
+and a trend/knife guard (`hourProfile().trendDominates` + the warm 1h trajectory — a trending item's
+"amplitude" is drift). **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
+(`js/estimators/families.mjs`: `pFill` = the two-leg daily-reach product, `ttf` = the `--hold-days`
+horizon prior (1, or 1.5 for the day-crossing experiment), `lapUnits` = the deployable-units min) — NOT a
+bespoke composite. Amplitude picks are patient multi-hour plays → they surface under deploy/accumulate,
+NEVER as act-now rows. Every threshold is a PLACEHOLDER; the make-or-break "do both legs actually FILL
+within the hold horizon?" is measured by the shadow both-leg replay (`join-amplitude-outcomes.mjs`, an
+UPPER BOUND) + the realized retro-join (`/analyze`). Console-only (excluded from `screen.json`, no app tab).
 
 ### Gates
 - **Two-sided liquidity (S1).** `hpv>0 && lpv>0` (the non-negotiable ghost-spread lesson) AND
@@ -237,6 +266,10 @@ placeholder cutoffs.
   grade cap, and both Est. price folds apply only to `fillShape:'asym'` (band/scalp); churn's Est.
   buy/sell are the unfolded band-edge prices, and its rows carry a `foldExempt` shadow so F1 can segment.
   Read the rank/grade (not the Est. reach token) for a churn row's fill risk.
+- **Value + amplitude compute their own pair** (`fillShape:'symmetric'`, surface-computed, so the
+  ask-reach discount isn't double-applied). Amplitude's `pFill` IS the two-leg daily-reach product, so
+  it's the honest "round trip completes" number as the first-class rank input; amplitude rows are
+  thin-class by construction (big tickets enter via gp-flow) so they carry `THIN_GRADE_CAP` (A-).
 - **Churn ranks the LAP, not the unit:** `net/u × min(limit, feasibleDepth) × P(fill) ÷ TTF` (we max
   the buy limit on commodities, so the exact limit is a fact). In `--mode all`, churn (volume lane) and
   band (per-unit lane) are DISJOINT by margin — churn drops any row clearing `--min-roi`, band shows it.

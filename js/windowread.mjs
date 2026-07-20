@@ -132,6 +132,40 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
   };
 }
 
+// --- day-of-week seasonality (A3, PLAN-AMPLITUDE-SCAN §2.4 — GENUINELY NEW) ---------------------
+// The 1.5-day amplitude hold crosses a day boundary (fill day-1's trough, sell into day-2's peak), so
+// the leg-2 sell lands on a DIFFERENT weekday — and weekday rhythm (the UK weekly cycle, weekend→weekday
+// transitions) can matter. §1's honesty correction: NO day-of-week tooling existed anywhere in the repo
+// (hourProfile is hour-of-day only) — this is the net-new weekday sibling. It buckets the per-day daily
+// range by LOCAL weekday over ~3–4 weeks of the 1h archive and reports the per-weekday MEDIAN amplitude %
+// with the n PER CELL (n≈3–4/weekday over 28 nights — state it EVERY print; a lean, not a law, rule 4).
+// PURE over an already-fetched 1h series (reuses windowStats — the same full-day per-day hi/lo buckets).
+export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const WEEKDAY_MIN_DAYS = 7;   // fewer scored days than this ⇒ null (can't bucket a week across weekdays)
+
+export function weekdayProfile(series, { nights = 28, now = new Date() } = {}) {
+  const stats = windowStats(series, { nights, wStart: 0, wEnd: 0, now });
+  if (!stats || !Array.isArray(stats.days) || stats.days.length < WEEKDAY_MIN_DAYS) return null;
+  const byDow = new Map();   // dow(0–6) → [ampPct, …]
+  for (const [key, n] of stats.days) {
+    if (n.low == null || n.hi == null || n.low <= 0) continue;
+    const d = new Date(key + 'T00:00:00');            // key is local 'YYYY-MM-DD' (windowStats dayKey)
+    const dow = d.getDay();
+    if (Number.isNaN(dow)) continue;
+    const amp = (n.hi - n.low) / n.low;               // RAW daily amplitude % (tax-agnostic — the caller frames it)
+    if (!byDow.has(dow)) byDow.set(dow, []);
+    byDow.get(dow).push(amp);
+  }
+  const cells = [];
+  for (const [dow, amps] of byDow) {
+    const s = amps.slice().sort((a, b) => a - b);
+    cells.push({ dow, label: WEEKDAY_LABELS[dow], ampPct: s[Math.floor(s.length / 2)], n: s.length });
+  }
+  if (cells.length < 2) return null;
+  cells.sort((a, b) => b.ampPct - a.ampPct);          // widest amplitude first
+  return { cells, best: cells[0], worst: cells[cells.length - 1], nDays: stats.days.length };
+}
+
 // --- ask-side "typical exit" read (PLAN-POSITIONS-WINDOW-READ) ---------------------------------
 // The ONE assembly of the ask-side window-clear read that read-window-range.mjs's `--ask <level>`
 // block prints (the daily-HIGH typical-exit levels + the scored list-price reach/placement + the

@@ -55,8 +55,8 @@ ok('estimatorFor returns a { pFill, ttf } pair for every registered spec', () =>
   assert.equal(estimatorFor(null), ESTIMATORS.intraday);
 });
 
-ok('the registry families are exactly {intraday, value, rising, churn}', () => {
-  assert.deepEqual([...ESTIMATOR_FAMILIES].sort(), ['churn', 'intraday', 'rising', 'value']);
+ok('the registry families are exactly {intraday, value, rising, churn, amplitude}', () => {
+  assert.deepEqual([...ESTIMATOR_FAMILIES].sort(), ['amplitude', 'churn', 'intraday', 'rising', 'value']);
 });
 
 ok('every spec estimator runs over every archetype WITHOUT throwing + returns the {value,n,basis} shape', () => {

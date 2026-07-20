@@ -10,6 +10,33 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-AMPLITUDE-SCAN — the `amplitude` 24h-cycle discovery lane + THE SWAP (console-only, no APP_VERSION, 2026-07-19)
+A new `--mode amplitude` flip-niche: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle — the
+big-ticket-that-oscillates-daily class (Masori-body class) the band screen is structurally blind to (band
+prices the 2h band so a ~day-long ~4% swing reads ~0% at the 2h grain, and its `net×P÷TTF` rank buries a
+day-long fill at P~0.06/ttf~26h). Built as a 4th DECLARATIVE spec over the existing machinery, NOT a
+`cycle=t` engine (§6 verdict): **A1** a pure `js/amplitudescreen.mjs` — two-stage gate (Stage-1 attenuated
+daily-range proxy off the 6h archive picks the fetch pool → Stage-2 exact `amplitudeGate` off one full-day
+`windowStats(series1h)`: after-tax daily-amplitude floor, both-leg recent-3 daily reach + full-window
+fallback (staleOptimistic-guarded), trend/knife guard) + the deployable-units min; fixture-tested, no
+fetch. **A2** the `amplitude` spec in `FLIP_NICHES` (`gate:'amplitude'`→`gateAmplitudeCandidates`,
+`estimator:'amplitude'` = the two-leg daily-reach family so the STANDARD `net×P÷TTF` rank/grade/suggestions
+carry it, `priceBasis:'daily'`) + `renderAmplitudeMode`'s daily-cycle console table. **A3** a `--hold-days`
+parameter (1 / the 1.5-day day-crossing experiment) + `weekdayProfile` (js/windowread.mjs — the genuinely-new
+day-of-week seasonality read; no day-of-week tooling existed). **A4 / THE SWAP** value→**Invest** label
+rename + `--mode invest` alias (the `value` KEY stays — a key rename forks the suggestions ledger/goldens);
+**`amplitude.inAll=true` and `value.inAll=false`** so `--mode all` runs band+churn+amplitude (value stays
+runnable via `--mode value`/`--mode invest`). **A5** the make-or-break measurement — the `amplitude` shadow
+block on `suggestions.jsonl` + `join-amplitude-outcomes.mjs` (replays each pick against the next `holdDays`
+of the 1h archive for a would-have-fill UPPER BOUND) + the retro-join lane rollup into `/analyze`. **A6** the
+one real dedup — `eachLiquidCandidate` extracts the shared candidate-loop boilerplate all three gate stacks
+(band/value/amplitude) repeated; replay goldens pin band/churn/value byte-identity. Launch is console-only +
+inform-first (excluded from `screen.json`, no app tab); every threshold is a PLACEHOLDER (n≈0) — the lane is
+a hypothesis until the shadow replay + realized retro-join earn it. Live trial: amplitude surfaces the class
+(Inquisitor's mace / Arcane sigil / Torva / Nightmare staff / Bellator ring) and `--mode all` runs amplitude
+not value. No `APP_VERSION` bump (console-only pipeline; the registry addition is app-safe — verified the app
+module graph evaluates and estimateRank on the amplitude spec returns a harmless null 'daily' pair).
+
 ### PERF-1 + LOCAL-FILE1 — `loadBands` off flat files onto the SQLite archive; local watchlist/ignore write-back (0.65.5, 2026-07-19)
 Two independent fixes from the same session. **PERF-1**: `loadBands` (`pipeline/lib/marketfetch.mjs`)
 was reading EVERY retained day-file under `.cache/bands/` (90-day retention, grown to 359MB/17 files)

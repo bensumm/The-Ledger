@@ -35,28 +35,38 @@ console.log('flip-niches.mjs conformance:');
 
 /* --- registry shape ------------------------------------------------------------------------------- */
 ok('the registry holds the four niches (Steps 3+4 deleted spread/rising), in order, keyed correctly', () => {
-  assert.deepEqual(MODE_KEYS, ['band', 'churn', 'scalp', 'value']);
+  assert.deepEqual(MODE_KEYS, ['band', 'churn', 'scalp', 'value', 'amplitude']);
   assert.deepEqual(FLIP_NICHE_LIST.map(s => s.key), MODE_KEYS);
   for (const s of FLIP_NICHE_LIST) assert.equal(FLIP_NICHES[s.key], s, `${s.key} indexed by key`);
   // the deleted specs are truly gone from the registry.
   for (const k of ['spread', 'rising']) assert.equal(FLIP_NICHES[k], undefined, `${k} spec deleted`);
 });
 
-ok('--mode all is the inAll specs (band/churn/value) — scalp stays off-by-default (Ben 2026-07-10: value graduated into the default scan)', () => {
-  assert.deepEqual(ALL_MODE_KEYS, ['band', 'churn', 'value']);
+ok('--mode all is the inAll specs (band/churn/amplitude) — THE SWAP: value.inAll flipped OFF, amplitude ON; scalp stays off-by-default', () => {
+  assert.deepEqual(ALL_MODE_KEYS, ['band', 'churn', 'amplitude']);
   assert.equal(FLIP_NICHES.scalp.inAll, false, 'scalp is off-by-default');
+  assert.equal(FLIP_NICHES.value.inAll, false, 'THE SWAP: value is out of --mode all (still runnable via --mode value/invest)');
+  assert.equal(FLIP_NICHES.amplitude.inAll, true, 'THE SWAP: amplitude takes value\'s slot in --mode all');
   assert.deepEqual(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key), ALL_MODE_KEYS);
 });
 
-ok('P5 per-spec falling doctrine + gate selector are registered as designed', () => {
+ok('value is relabelled Invest (label-only; the KEY stays value so the suggestions ledger/goldens don\'t fork)', () => {
+  assert.equal(FLIP_NICHES.value.label, 'Invest', 'value display label is Invest (§3)');
+  assert.equal(FLIP_NICHES.value.key, 'value', 'the value KEY is untouched (§3 — a key rename forks the retro history)');
+});
+
+ok('P5/A2 per-spec falling doctrine + gate selector are registered as designed', () => {
   for (const k of ['band', 'churn']) assert.equal(FLIP_NICHES[k].falling, 'exclude', `${k} keeps the falling exclusion`);
   assert.equal(FLIP_NICHES.scalp.falling, 'accept', 'scalp EXPECTS a falling wide band');
   assert.equal(FLIP_NICHES.value.falling, 'knife-guard', 'value rejects the knife but accepts a value-low');
+  assert.equal(FLIP_NICHES.amplitude.falling, 'knife-guard', 'amplitude rejects the trend/knife (guard in amplitudeGate)');
   for (const k of ['band', 'churn', 'scalp']) assert.equal(FLIP_NICHES[k].gate, 'band', `${k} uses the shared gate stack`);
   assert.equal(FLIP_NICHES.value.gate, 'value', 'value routes to the term-structure gate');
+  assert.equal(FLIP_NICHES.amplitude.gate, 'amplitude', 'amplitude routes to the daily-amplitude gate');
   assert.equal(FLIP_NICHES.scalp.defaultPath, PATH_KEYS.SCALP);
   assert.equal(FLIP_NICHES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
   assert.equal(FLIP_NICHES.value.rank, 'value', 'value ranks by valueScore');
+  assert.equal(FLIP_NICHES.amplitude.rank, 'amplitude', 'amplitude ranks its Stage-1 pool by ampProxy');
 });
 
 ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/churn/scalp keep it inform', () => {
@@ -70,9 +80,11 @@ ok('P6b per-thesis estimator family + price-basis fields are registered as desig
   for (const k of ['band', 'scalp']) assert.equal(FLIP_NICHES[k].estimator, 'intraday', `${k} → intraday estimator`);
   assert.equal(FLIP_NICHES.churn.estimator, 'churn', 'churn → churn estimator (per-lap rank, Step 6)');
   assert.equal(FLIP_NICHES.value.estimator, 'value', 'value → value estimator');
-  // price basis: band/churn/scalp post the 2h band edges; value computes its own term-structure pair.
+  assert.equal(FLIP_NICHES.amplitude.estimator, 'amplitude', 'amplitude → amplitude estimator (two-leg daily reach)');
+  // price basis: band/churn/scalp post the 2h band edges; value/amplitude compute their own surface pair.
   for (const k of ['band', 'churn', 'scalp']) assert.equal(FLIP_NICHES[k].priceBasis, 'opt', `${k} = patient 2h band edges`);
   assert.equal(FLIP_NICHES.value.priceBasis, 'term', 'value = term-structure pair');
+  assert.equal(FLIP_NICHES.amplitude.priceBasis, 'daily', 'amplitude = daily-quantile trough/peak pair');
   // and every declared family is one the estimators registry actually serves (no typo).
   for (const s of FLIP_NICHE_LIST) assert.ok(ESTIMATOR_FAMILIES.includes(s.estimator), `${s.key} family in the registry`);
 });
@@ -106,6 +118,7 @@ ok('no shipped spec ranks by proxy (rising deleted); ranks are velocity/value', 
   // rising reserve (proxyDrift-based). band/churn/scalp rank by velocity; value ranks by valueScore.
   for (const k of ['band', 'churn', 'scalp']) assert.equal(FLIP_NICHES[k].rank, 'velocity', `${k} ranks by velocity`);
   assert.equal(FLIP_NICHES.value.rank, 'value');
+  assert.equal(FLIP_NICHES.amplitude.rank, 'amplitude');
 });
 
 /* --- the checker BITES on a malformed spec (so P5 additions can't ship broken) --------------------- */

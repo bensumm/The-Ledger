@@ -38,9 +38,10 @@ import { tax, quantileOf } from '../../js/quotecore.js';   // quantileOf = the O
 export const HORIZON_INTRADAY_SEC = 12 * 3600;        // scalp / band / spread / churn — intraday flip family
 export const HORIZON_MULTIDAY_SEC = 7 * 24 * 3600;    // rising / value — patient multi-day accumulation
 export const HORIZON_DEFAULT_SEC  = 24 * 3600;        // mode-less rows (quote / --positions) — one day
+export const HORIZON_AMPLITUDE_SEC = 2 * 24 * 3600;   // amplitude — the 24h-cycle round trip (buy trough day-1, sell peak day-1/2); a 2-day claim window covers the 1.5-day experiment (PLAN-AMPLITUDE-SCAN §A5). PLACEHOLDER.
 export const HORIZON_BY_MODE = Object.freeze({
   scalp: HORIZON_INTRADAY_SEC, band: HORIZON_INTRADAY_SEC, spread: HORIZON_INTRADAY_SEC, churn: HORIZON_INTRADAY_SEC,
-  rising: HORIZON_MULTIDAY_SEC, value: HORIZON_MULTIDAY_SEC,
+  rising: HORIZON_MULTIDAY_SEC, value: HORIZON_MULTIDAY_SEC, amplitude: HORIZON_AMPLITUDE_SEC,
 });
 export function horizonFor(mode, byMode = HORIZON_BY_MODE) {
   return (mode != null && byMode[mode] != null) ? byMode[mode] : HORIZON_DEFAULT_SEC;
