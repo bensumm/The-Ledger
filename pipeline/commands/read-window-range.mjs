@@ -63,6 +63,7 @@ import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
+import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -166,8 +167,8 @@ for (const want of positionals) {
       }
       const win = (w) => `${pad2(w.startH)}:00–${pad2(w.endH)}:00`;
       log(`  ---`);
-      log(`  DIP window ${win(prof.dip)} — recent level ${fmt(prof.dip.level)}`);
-      log(`  PEAK window ${win(prof.peak)} — recent level ${fmt(prof.peak.level)}`);
+      log(`  DIP window ${fmtHourRange(prof.dip.startH, prof.dip.endH)} — recent level ${fmt(prof.dip.level)}`);
+      log(`  PEAK window ${fmtHourRange(prof.peak.startH, prof.peak.endH)} — recent level ${fmt(prof.peak.level)}`);
       log(`  intraday amplitude ~${fmt(prof.amplitude)}${prof.amplitudePct != null ? ` (${(prof.amplitudePct * 100).toFixed(1)}%)` : ''} · trend ${prof.trendPerDay == null ? '—' : (prof.trendPerDay >= 0 ? '+' : '') + fmt(Math.round(prof.trendPerDay)) + '/day'}${prof.trendDominates ? ' ⚠ trend-dominates' : ''}`);
       if (latest && latest.low != null) log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
       const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });

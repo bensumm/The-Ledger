@@ -49,8 +49,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   canonical `tax()`/`netMargin`/`netMarginQty` + the ONE **BOND tax exception**
   `BOND_ID`/`isBond`/`bondFee`: a bond is tax-exempt but pays a 10%-of-guide retrade fee, so
   `netMargin(low,high,{bond,guide})` = `sell − (buy + fee)`, tax-free; plus the generic `clamp`/`now`),
-  `money-format.js` (gp/number DISPLAY formatting — `fmt`/`fmtSig`/`fmtP`/`fmtTurn`/`fmtHour` +
-  `pad2`/`parseGp`/`sgn`/`grade`/`gradeCls`; split out of the old `format.js` in the R2 rename), `charts-static.js`
+  `money-format.js` (gp/number DISPLAY formatting — `fmt`/`fmtSig`/`fmtP`/`fmtTurn`/`fmtHour`/`fmtHourRange` +
+  `ukHourOffset`/`localTzAbbrev`/`pad2`/`parseGp`/`sgn`/`grade`/`gradeCls`; split out of the old `format.js` in the R2
+  rename. `fmtHourRange(startH,endH)` labels a diurnal hour-of-day window in BOTH the runner's local zone AND the UK —
+  e.g. `01:00–03:00 PDT / 09:00–11:00 UK` — so peak/dip window narration can't slip between the Pacific-local hours the
+  tools emit and the UK-driven demand basis; the offset is Intl-derived per instant, DST-correct for both zones), `charts-static.js`
   (static inline SVG — `svgLine`/`svgBars`, fixed-size, no interaction; still used by the
   Trends hourly seasonality charts + the quote sparkline), `charts-interactive.js` (CL — the reusable
   **interactive** SVG chart: `createChart(container,{series,overlay,fillBetween,refs,bands,markers,

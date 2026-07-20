@@ -10,6 +10,21 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Diurnal windows labelled in BOTH local + UK zones — `fmtHourRange` (pipeline stdout, no APP_VERSION, 2026-07-20)
+Every diurnal window the tools emit (the `↗ windowExit` peak-window note on `quote-items.mjs --positions`, the
+DIP/PEAK headers in `read-window-range.mjs`'s hour-of-day profile) is an hour-of-day computed with LOCAL getters —
+so it reads in the runner's zone (Pacific for Ben) while OSRS demand is UK-driven. Stating a window in one basis
+and reasoning in the other was a **recurring narration error** (Ben, 2026-07-20: a buy-limit note read off a stale
+cached dump got blamed on GMT/Pacific — the limit math was fine, but the underlying window-basis confusion is real).
+Fix: `fmtHourRange(startH,endH)` in `js/money-format.js` renders both — e.g. `01:00–03:00 PDT / 09:00–11:00 UK`. The
+local⇄UK offset is Intl-derived per instant (`ukHourOffset`), so it's DST-correct for **both** zones (≈+8h most of the
+year, ±1h during the ~2-week transition mismatch) rather than a hardcoded +8; `localTzAbbrev` names the local side.
+Wired into `quote-items.mjs` (windowExit note) and `read-window-range.mjs` (DIP/PEAK headers); the compact `→ BID/ASK`
+recommendation line stays local-only to avoid bloat. No app-behavior change (the browser doesn't call the new
+export yet) → no `APP_VERSION` bump. **Immediately surfaced a live mislabel:** the `godsword-uk-day-peak` thesis
+resolves to a 17:00–21:00 PDT peak = **01:00–05:00 UK** (UK small hours, not UK day) — the name's basis is wrong,
+flagged for re-derivation.
+
 ### PLAN-AMPLITUDE-SCAN — the `amplitude` 24h-cycle discovery lane + THE SWAP (console-only, no APP_VERSION, 2026-07-19)
 A new `--mode amplitude` flip-niche: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle — the
 big-ticket-that-oscillates-daily class (Masori-body class) the band screen is structurally blind to (band

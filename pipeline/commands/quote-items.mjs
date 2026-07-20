@@ -31,7 +31,7 @@ import { execFileSync } from 'node:child_process';
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
-import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
+import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
@@ -677,7 +677,7 @@ async function runPositions() {
           // which diurnal window the level prints in (zero-fetch off the in-hand series).
           const profH = hourProfile(inp.ts1h, { nights: 14 });
           const drH = profH ? deriveDiurnalRange(profH, {}) : null;
-          const peakTxt = (drH && drH.peakWindow) ? ` · peak window ${fmtHour(drH.peakWindow.startH)}–${fmtHour(drH.peakWindow.endH)}` : '';
+          const peakTxt = (drH && drH.peakWindow) ? ` · peak window ${fmtHourRange(drH.peakWindow.startH, drH.peakWindow.endH)}` : '';
           const as = aer.askSide;
           const parts = [];
           if (aer.ask) {

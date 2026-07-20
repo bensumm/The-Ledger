@@ -33,6 +33,39 @@ export function fmtP(n){
 }
 export function fmtTurn(h){ if(h===null||h===undefined) return '—'; return h<1?'~'+Math.round(h*60)+'m':'~'+h.toFixed(1)+'h'; }
 export const fmtHour=h=>pad2(h)+':00';
+// ── Local⇄UK hour-of-day conversion (kills the recurring GMT/Pacific narration mismatch) ──────────────
+// Every diurnal window the tools emit (peak/dip, windowExit) is an hour-of-day computed with LOCAL
+// getters — so it reads in the RUNNER's zone (Pacific for Ben), while OSRS demand is UK-driven. Stating a
+// window in one basis and reasoning about it in the other is a repeated error, so `fmtHourRange` prints
+// BOTH: "HH:00–HH:00 PDT / HH:00–HH:00 UK". The offset is computed from Intl for the given instant, so it
+// stays correct across BOTH zones' DST (≈+8h most of the year, ±1h during the ~2-week transition mismatch)
+// rather than hardcoding +8.
+function tzOffsetMin(at, timeZone){
+  const parts = new Intl.DateTimeFormat('en-US',{ timeZone, hour12:false,
+    year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' }).formatToParts(at);
+  const m={}; for(const p of parts) m[p.type]=p.value;
+  const h = m.hour==='24' ? 0 : +m.hour;               // Intl can emit '24' for midnight
+  const asUTC = Date.UTC(+m.year, +m.month-1, +m.day, h, +m.minute, +m.second);
+  return Math.round((asUTC - at.getTime())/60000);     // minutes the zone sits east of UTC
+}
+// ukHourOffset(at) — whole hours to ADD to a LOCAL hour-of-day to get the Europe/London hour-of-day.
+export function ukHourOffset(at=new Date()){
+  try { return Math.round((tzOffsetMin(at,'Europe/London') - (-at.getTimezoneOffset()))/60); }
+  catch { return 8; }                                   // Intl unavailable → summer default (PDT↔BST)
+}
+// localTzAbbrev(at) — the runner's short local zone name (e.g. "PDT"/"PST"); "local" if Intl can't say.
+export function localTzAbbrev(at=new Date()){
+  try {
+    const tn = new Intl.DateTimeFormat('en-US',{ timeZoneName:'short' }).formatToParts(at).find(p=>p.type==='timeZoneName');
+    return tn ? tn.value : 'local';
+  } catch { return 'local'; }
+}
+// fmtHourRange(startH, endH) — an hour-of-day window labelled in BOTH the local and UK zones.
+export function fmtHourRange(startH, endH, at=new Date()){
+  const off = ukHourOffset(at);
+  const uk = h => (((h + off) % 24) + 24) % 24;
+  return `${fmtHour(startH)}–${fmtHour(endH)} ${localTzAbbrev(at)} / ${fmtHour(uk(startH))}–${fmtHour(uk(endH))} UK`;
+}
 // parseGp — app-form gp parser. Deliberately NOT identical to pipeline/lib/cli.mjs's parseGp:
 // that CLI copy accepts a leading '-' sign and rounds a numeric passthrough; this app copy accepts
 // leading-dot decimals (".5m"), strips internal spaces, and passes a number through unrounded.
