@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.41
+version: 1.42
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -369,6 +369,39 @@ wrong in a way the tool would have caught. **Dump it with `--out`** for the deep
 this pass singles out, so a later pass — this skill's own re-check, or `/scan`'s
 `set-scan-analysis.mjs` — can read `pipeline/.cache/last-report/verify.json` instead of re-running
 the checks by hand or re-deriving the numbers.
+
+**The REACH-MARGIN FADE check — price against where the recent distribution ACTUALLY reaches, not
+its tail (Ben, 2026-07-20 — the godsword/mask pair).** This is a named diligence read over the TRIO's
+`--ask`/`--bid` output that repeatedly catches us AIMING TOO HIGH (a sell parked at the greedy tail of
+a distribution the item is drifting away from). For any price you're about to set on a big-ticket/held
+lot, read the per-day extremes the window table already prints (`read-window-range.mjs … --window 0-23
+--nights 21`, the per-day `high`/`low` column) plus the `--ask`/`--bid` placement percentile, and answer
+three questions:
+1. **Reached vs not — and the split's SHAPE.** Flag each recent day's high ≥ your ask (or low ≤ your
+   bid). A high `reachedDays` is not enough: check WHETHER the reaching days are a stable band or a
+   FADING one. On the godsword, 40.60m "reached 7/15, recent 3/3" — but the recent highs stepped
+   41.90m → 40.77m → 40.70m, so the cushion over the ask had collapsed from ~1.3m to ~100k: the peak
+   was settling ONTO the ask, and "rising +6.5%" (vs the 2-week base) masked a cooling recent peak.
+2. **Placement percentile = how greedy the level is.** The `--ask` line prints `placement pXX of the
+   14-day daily-HIGH distribution`. A high p (p50+) means you're pricing near the top of the recent
+   range — fine on a genuine riser with an EXTENDING peak, dangerous on a fader (the margin check in #1
+   is the tie-breaker). A low p (≤ ~p15, the mask's 20.59m was p7) is a conservative near-every-day
+   clear — the certain-clear level [[falling-item-exit-certain-clear]] wants on a cooling item.
+3. **Today's PACE vs the reaching-day median at THIS hour.** Compare the live instabuy/instasell now
+   against the hour-of-day median high/low (`--profile`) for the current hour. Running materially below
+   the reaching-day median for this hour (godsword: live 39.78m vs the 16:00 median high 40.58m, ~800k
+   light going into the peak window) is a same-day caution that today may fall short — don't treat
+   "recent 3/3" as a lock when today is already lagging pace.
+The rule this encodes: the tool's `Optimistic` / windowExit "typical exit ~50%/recent-50%" number is a
+CANDIDATE at the distribution's tail, not the number to quote — price to the level the recent (possibly
+fading) distribution still reliably reaches, and let the margin-trend + placement + today's-pace decide
+how far below the tail that is. Symmetric on the BID side (via `--bid`): a bid at a low-touch/deep
+placement (mask re-entry bid 19.57m touched 3/14, recent 0/3, p21) is aiming too DEEP to fill — the same
+"price to where it actually prints" discipline, mirrored. **Honesty (rule 4):** ~14–21 days is a small
+sample and the median profile blends reaching + non-reaching days; this is a read that TEMPERS a tail
+price toward a reachable one, not a fill model. **Followup (not yet built):** fold the per-day
+reached/not flag + the recent-margin trend + today's-pace line into `read-window-range.mjs`'s `--ask`
+output directly, so the check is one printed block instead of a hand-read of the per-day table.
 
 Preserve the standard 10-column
 `--positions` table exactly as the script printed it —
