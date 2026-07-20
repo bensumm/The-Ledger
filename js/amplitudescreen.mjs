@@ -31,8 +31,10 @@
  *   pFill    = the two-leg recent-reach PRODUCT at the quoted daily pair (bid-touch × ask-reach) — the
  *              honest "will the round trip complete?" number as a first-class rank input from day one.
  *   ttf      = the hold-horizon prior (holdDays × 86400).
- *   lapUnits = the deployable-units min() (bankroll ÷ trough-bid, vol-share, buy-limit accumulation).
- * amplitudeDeployUnits() below is that min(); the family reads it. No parallel ranking composite.
+ *   lapUnits = the deployable-units min() (bankroll ÷ trough-bid, vol-share, buy-limit accumulation) —
+ *              bankroll = TOTAL REALIZABLE capital (liquidCapital) UNDIVIDED (concentration lane, no ÷slots).
+ * amplitudeDeployUnits() below is that min(), floored honestly (0 = unaffordable → caller drops the pick);
+ * the family reads it. No parallel ranking composite.
  *
  * HONESTY (rule 4 — n≈0). EVERY threshold below is a NAMED PLACEHOLDER. The lane is a hypothesis
  * surfaced inform-first until it has a record (§4): the make-or-break question — do BOTH legs actually
@@ -180,16 +182,21 @@ export function amplitudeGate(ar, { trendDominates = false, knife = false, recen
   return { pass: true, reason: null };
 }
 
-/* amplitudeDeployUnits({ capGp, buyLow, limitVol, limit, holdDays }) → the deployable units bound —
-   the three-way min() valueScore already uses (bankroll per position ÷ trough-bid, market-share/exit
-   over the hold, buy-limit accumulation over the hold). Any bound whose input is missing is skipped;
-   with NONE known it degrades to 1 (a single unit). PLACEHOLDERS (rule 4): an UPPER bound (assumes you
-   catch the full swing + transact your whole volume share both sides). */
+/* amplitudeDeployUnits({ capGp, buyLow, limitVol, limit, holdDays }) → the deployable units bound, floored
+   HONESTLY to an integer (0 when you can't afford even ONE unit). Amplitude is a big-ticket CONCENTRATION
+   lane (Ben 2026-07-19), NOT value's diversify-across-N-slots lane: `capGp` is TOTAL REALIZABLE capital
+   (liquidCapital — free cash + liquidation value of every hold), used UNDIVIDED — there is NO ÷slots
+   divisor. The owner's rule: "the only sizing gate that matters is — can you afford ≥1 unit if all your
+   lots were liquid." So the min() bounds are bankroll ÷ trough-bid, vol-share × limiting-side vol × hold,
+   buy-limit accumulation × hold; and Math.floor makes an UNAFFORDABLE pick (capGp < buyLow) 0 units — the
+   caller DROPS it as `unaffordable` rather than showing a phantom 1u. With no bound known (no capGp) it
+   degrades to 1. PLACEHOLDERS (rule 4): an UPPER bound (assumes you catch the full swing + transact your
+   whole volume share both sides). */
 export function amplitudeDeployUnits({ capGp = null, buyLow = null, limitVol = null, limit = null, holdDays = AMP_HOLD_DAYS_DEFAULT } = {}) {
   const bounds = [];
   if (capGp != null && buyLow != null && buyLow > 0) bounds.push(capGp / buyLow);
   if (limitVol != null) bounds.push(AMP_VOL_SHARE * limitVol * Math.max(1, holdDays));
   if (limit != null) bounds.push(limit * AMP_WINDOWS_PER_DAY * Math.max(1, holdDays));
   if (!bounds.length) return 1;
-  return Math.max(1, Math.min(...bounds));
+  return Math.floor(Math.min(...bounds));    // honest floor: 0 when capGp can't cover even one unit
 }

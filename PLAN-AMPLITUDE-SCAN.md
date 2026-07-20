@@ -252,13 +252,24 @@ and let `estimateRank`/`rateItem`/suggestions logging work unchanged:
 - **`ttf`** = the hold-horizon prior in seconds (`holdDays × 86400`, holdDays a spec/CLI
   parameter, default 1, experiment 1.5 — §2.4). PLACEHOLDER until the retro join measures
   realized cycle time.
-- **`lapUnits`** = deployable units — `min(capGp/ampBid, volShare × limitVol, limit-accumulation)`
-  (value's three-way min; capGp = derived `deployablePool ÷ slots`, the existing `--capital`/
-  `--slots` flow). This uses the hook churn already exercises (`estimateRank` multiplies
-  `net × lapUnits`), so the rank is realizable after-tax gp/day of parked capital — the draft's
-  intent — while per-unit net stays the displayed honest margin. Prefer raw bounded units over
-  value's clamped-log `deployMult`: the min() is already bounded by the vol-share leg, and raw
-  units keep the rank a gp-denominated quantity comparable with churn's lap rank.
+- **`lapUnits`** = deployable units — `min(capGp/ampBid, volShare × limitVol, limit-accumulation)`,
+  floored **honestly to an integer** (0 when you can't afford one unit). This uses the hook churn
+  already exercises (`estimateRank` multiplies `net × lapUnits`), so the rank is realizable
+  after-tax gp/day of parked capital — the draft's intent — while per-unit net stays the displayed
+  honest margin. Prefer raw bounded units over value's clamped-log `deployMult`: the min() is already
+  bounded by the vol-share leg, and raw units keep the rank a gp-denominated quantity comparable with
+  churn's lap rank.
+  - **SIZING AMENDMENT (Ben 2026-07-19 — supersedes the draft's `deployablePool ÷ slots` above).**
+    Amplitude is a big-ticket **CONCENTRATION** lane (the owner would put his whole bankroll into a
+    single ~345m item), NOT a diversify-across-N-slots lane like value. So `capGp` is **TOTAL
+    REALIZABLE capital** — the "if all lots were liquid" yardstick = free cash + liquidation value of
+    holds = the LOOSER **`liquidCapital`** from `derive-cash-tiers.mjs` (NOT value's tighter
+    `deployablePool`) — used **UNDIVIDED**. `--slots` is **IGNORED** for `--mode amplitude`; a bare
+    run defaults `capGp` to derived `liquidCapital`, and `--capital <gp>` overrides it as the whole
+    pool (not `÷slots`). **The one sizing gate: `totalCapital ≥ buyLow` (can afford ≥1 unit).** A pick
+    that fails it is genuinely unaffordable at this capital → the render **DROPS it** (Stage-2 drop
+    tally `unaffordable`), never shows a phantom `~1u`. `amplitudeDeployUnits` floors with
+    `Math.floor` so the unaffordable case is 0; the caller drops on `lapUnits < 1`.
 
 Grade falls out of `rateItem` as usual (with the thin-cap consequence stated in §2.1;
 `capitalFactor`'s big-ticket haircut also applies — fine, it's mild and honest).

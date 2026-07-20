@@ -182,9 +182,17 @@ let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
 // A3 (PLAN-AMPLITUDE-SCAN §2.4): the amplitude hold horizon — 1 (default: buy the trough, sell the peak
 // same local day) or the 1.5-day experiment (fill day-1's trough, sell into day-2's peak). Feeds the
 // amplitude family's ttf, the deployable-units accumulation leg, and the §A5 shadow-replay horizon. A
-// flag, not a fork. PLACEHOLDER (n≈0). The amplitude niche reuses VALUE_CAP_GP as its per-position
-// bankroll cap (deployablePool ÷ slots — the same derived pool the value niche uses).
+// flag, not a fork. PLACEHOLDER (n≈0).
 const AMP_HOLD_DAYS = A['hold-days'] != null ? Math.max(1, +A['hold-days']) : AMP_HOLD_DAYS_DEFAULT;
+// AMP sizing (PLAN-AMPLITUDE-SCAN sizing fix, Ben 2026-07-19). Amplitude is a big-ticket CONCENTRATION
+// lane — the owner would put his whole bankroll into a single ~345m item — NOT a diversify-across-slots
+// lane like value. So it does NOT use value's per-position (÷slots) cap: it sizes against TOTAL REALIZABLE
+// capital (the "if all lots sold" yardstick = free cash + liquidation value of holds = the LOOSER
+// liquidCapital, NOT value's tighter deployablePool), used UNDIVIDED. --slots is IGNORED for amplitude.
+// Explicit --capital <gp> overrides as the whole pool. Re-derived in main() with the derived cash record
+// (liquidCapital is marketRef-independent, but DERIVED_CASH is reassigned there, so re-read it).
+let AMP_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
+  : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.liquidCapital : 100_000_000);
 // --- S1 screening economics (gp-flow gate + 500k attention floor) ------------------------------
 // GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
 // lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
@@ -1216,7 +1224,7 @@ const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wS
 function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) {
   const rows = [], sugg = [];
   const informNotes = [];
-  const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0 };
+  const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0, unaffordable: 0 };
   const DROP_KEY = { 'no-history': 'noHistory', 'amp-below-floor': 'ampFloor', 'bid-unreachable': 'bidReach', 'ask-unreachable': 'askReach', 'trend': 'trend', 'knife': 'knife' };
   for (const s of survivors) {
     const row = qcache.get(s.id);
@@ -1237,9 +1245,14 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     const g = amplitudeGate(ar, { trendDominates, knife });
     if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; continue; }
     // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = two-leg daily reach, ttf =
-    // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = the derived per-position pool.
-    const capGp = VALUE_CAP_GP;
+    // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = TOTAL REALIZABLE capital
+    // (liquidCapital), UNDIVIDED — amplitude is a concentration lane, NOT ÷slots like value (Ben 2026-07-19).
+    const capGp = AMP_CAPITAL;
     const lapUnits = ESTIMATORS.amplitude.lapUnits({ capGp, ampBid: ar.ampBid, limitVol: s.limitVol, limit: s.limit, holdDays: AMP_HOLD_DAYS });
+    // The ONLY sizing gate that matters (Ben 2026-07-19): can you afford ≥1 unit if all lots were liquid?
+    // lapUnits floors to 0 when capGp < the trough-bid → the pick is genuinely UNAFFORDABLE at this capital.
+    // DROP it (don't show a phantom ~1u); these thin big-tickets legitimately need a bigger pool.
+    if (!(lapUnits >= 1)) { dropped.unaffordable++; continue; }
     const pFill = ESTIMATORS.amplitude.pFill({ amplitudeRanges: ar });
     const ttf = ESTIMATORS.amplitude.ttf({ holdDays: AMP_HOLD_DAYS });
     const rank = rankScore({ net: ar.netPerCycle * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
@@ -1253,8 +1266,8 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
       { t: reachCell, c: 'mini' },
       { t: `+${fmtP(Math.round(ar.netPerCycle))}${ampPct != null ? ` (${ampPct.toFixed(1)}%)` : ''}`, c: 'gain' },
       { t: `~${AMP_HOLD_DAYS}d hold`, c: 'mini' },
-      { t: `~${Math.round(lapUnits)}u`, c: 'mini' },
-      s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket, size in units, expect slow day-long fills` } : { t: grade },
+      { t: `${lapUnits}u`, c: 'mini' },
+      s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade },
     ];
     rows.push({ id: s.id, cells, score: rank });
     // A3: the 1.5-day experiment's day-of-week seasonality read (net-new — no day-of-week tooling existed).
@@ -1281,11 +1294,12 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
   console.log(`## AMPLITUDE — ${shown} daily-cycle candidate(s) (PROVISIONAL — unproven 24h-swing theory, n≈0)`);
   console.log('Playbook: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle. The edge is a big-ticket that oscillates ~a few % DAILY — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-hour plays that surface under deploy/accumulate, NEVER as act-now rows.');
   console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(both-leg daily reach) ÷ hold-horizon — the standard rank at the amplitude estimator family; every threshold PLACEHOLDER, n≈0)`);
-  console.log(`(deployable cap ${fmtP(VALUE_CAP_GP)}/position = ${fmtP(VALUE_CAPITAL)} ÷ ${VALUE_SLOTS} slots · hold horizon ${AMP_HOLD_DAYS}d${AMP_HOLD_DAYS > 1 ? ' (1.5-day experiment — crosses a day boundary; day-of-week read below)' : ''})`);
+  console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d${AMP_HOLD_DAYS > 1 ? ' (1.5-day experiment — crosses a day boundary; day-of-week read below)' : ''})`);
   if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
   else console.log('_none_');
   for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);
-  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}`);
+  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
+  console.log('⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
   console.log('⚠ make-or-break (§4, n≈0): the gate measures the levels PRINTED; whether BOTH legs actually FILL within the hold horizon is the open question the shadow both-leg replay (join-amplitude-outcomes.mjs) + realized retro-join measure. Do not trade on this yet.');
   console.log('');
   return rows.map(r => ({ id: r.id, cells: r.cells }));
@@ -1504,6 +1518,7 @@ async function main() {
     VALUE_CAPITAL = DERIVED_CASH.deployablePool;
     VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
     THRESHOLDS.VALUE_CAP_GP = VALUE_CAP_GP;   // gateCandidates/valueScore read the cap from THRESHOLDS
+    AMP_CAPITAL = DERIVED_CASH.liquidCapital; // amplitude sizes against the LOOSER total-realizable pool, undivided
   }
   // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): sync the band/churn capital cap to the current deployable
   // pool (the market-ref-refined VALUE_CAPITAL if value ran above; else the conservative pre-derive pool,

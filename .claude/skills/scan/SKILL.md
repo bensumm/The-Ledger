@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.77
+version: 1.78
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -119,8 +119,15 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   trust a `2/3`+ or `3/3` leg far more, and treat a stale/low-recent leg as "the level printed historically
   but recent days abandoned it." (3) These are **thin-class by construction** (big tickets enter via
   gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
-  row — never size like a liquid flip. (4) Pass **`--capital <gp>` / `--slots N`** for real deploy sizing
-  (absent a cash anchor the deploy-units column reads ~1u). (5) `--hold-days 1.5` runs the day-crossing
+  row — never size like a liquid flip. **Thin-exit caveat (INFORM, not a gate):** thin BY CONSTRUCTION is
+  exactly why a large concentrated amplitude position CANNOT be exited fast if the thesis breaks — surface
+  that reality on every big-ticket row (the footer prints it), but don't block: Ben is risk-tolerant and
+  WILL concentrate. (4) **Sizing is a CONCENTRATION model, NOT value's ÷slots** (Ben 2026-07-19): amplitude
+  sizes against **TOTAL REALIZABLE capital** (`liquidCapital` — free cash + liquidation value of all holds,
+  the "if all lots sold" pool), used **UNDIVIDED**. **`--slots` is IGNORED** for `--mode amplitude`; pass
+  **`--capital <gp>`** to set the whole pool (absent a cash anchor it defaults to a 100m placeholder). The
+  one sizing gate is affordability — an item you can't afford ≥1 unit of at the current capital is **DROPPED
+  as `unaffordable`** (no phantom `~1u`), so a 345m item needs a ≥345m pool to appear. (5) `--hold-days 1.5` runs the day-crossing
   experiment (adds a day-of-week seasonality note — n≈3–4/weekday, a lean not a law). Every threshold is a
   PLACEHOLDER; the "do both legs actually FILL?" question is measured by `join-amplitude-outcomes.mjs` (an
   UPPER BOUND) + the retro-join in `/analyze`. Don't pitch an amplitude buy off the table blind — verify

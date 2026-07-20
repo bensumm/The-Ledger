@@ -159,7 +159,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   6h archive → picks the fetch pool) / `amplitudeRanges` (the exact per-day trough/peak + both-leg recent
   reach off a `windowStats` result) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
   trend/knife guard) / `amplitudeDeployUnits` (the deployable-units three-way min the `amplitude`
-  estimator family reads). Imports only `tax` + the `windowread.mjs` reach helpers; consumed by
+  estimator family reads — floored HONESTLY to an integer, 0 when unaffordable: amplitude is a
+  CONCENTRATION lane so `capGp` is TOTAL REALIZABLE `liquidCapital` used UNDIVIDED, NOT value's
+  `deployablePool ÷ slots`; the caller drops a `lapUnits < 1` pick as `unaffordable`). Imports only `tax` + the `windowread.mjs` reach helpers; consumed by
   `screen-flip-niches.mjs`/`gatecandidates.mjs`/`js/estimators/families.mjs`. All thresholds NAMED
   PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
   `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never

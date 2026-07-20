@@ -97,4 +97,18 @@ ok('amplitudeDeployUnits is the three-way min() (bankroll / vol-share / buy-limi
   assert.equal(amplitudeDeployUnits({}), 1, 'no inputs → a single unit');
 });
 
+ok('an UNAFFORDABLE big-ticket (price > total capital) sizes to 0 units — the caller drops it', () => {
+  // A 345m item on a 100m pool: 100m/345m = 0.29 → honest floor → 0 (NOT a phantom 1u).
+  assert.equal(amplitudeDeployUnits({ capGp: 100_000_000, buyLow: 345_000_000 }), 0, 'unaffordable → 0');
+});
+
+ok('an affordable big-ticket sizes UNDIVIDED (no ÷slots) and honors the min()', () => {
+  // 345m mace on a 400m pool: 400m/345m = 1.16 → floor 1 (a ÷5-slots cap would have given 0 — proves undivided).
+  assert.equal(amplitudeDeployUnits({ capGp: 400_000_000, buyLow: 345_000_000 }), 1, 'affordable → 1, undivided');
+  // and the min() still binds on the buy-limit accumulation, not the (looser) bankroll.
+  const u = amplitudeDeployUnits({ capGp: 400_000_000, buyLow: 345_000_000, limitVol: 40, limit: 2, holdDays: 1 });
+  // bankroll 1.16 · vol-share 0.10×40=4 · limit 2×6=12 → min 1.16 → floor 1.
+  assert.equal(u, 1, `min bound honored, got ${u}`);
+});
+
 console.log(`\namplitudescreen.mjs: ${pass} assertions passed.`);
