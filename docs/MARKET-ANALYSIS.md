@@ -300,6 +300,15 @@ on the smoothed 1h grain — yet placement p93 and, on the less-smoothed 5m grai
 (upper-middle of the printed band): the raw 1h count read as a warning on a liquid, thick book where
 the real fill risk was near zero, exactly the trap the placement read now surfaces.
 
+For a **big-ticket HELD lot** (lot value ≥ `BIG_TICKET_GP` = 10m, or a watchlist member), this whole
+ask-side "typical exit" read is **auto-surfaced on `quote-items.mjs --positions`** as the `↗ windowExit`
+note — the list-price reach/placement, the daily-HIGH typical-exit levels (~50%/~75%/every-day + recent-3),
+live-instabuy-vs-list, the 5m-grain reach, and the diurnal peak window the level prints in — so a positions
+review answers "will this list clear soon, in which window?" without a manual `read-window-range.mjs --ask`
+call (PLAN-POSITIONS-WINDOW-READ). One shared assembly (`js/windowread.mjs` `askExitRead`) computes it for
+both surfaces; the held-lot note is zero-extra-fetch (the 1h series is already in hand) and degrades to
+`window read unavailable` if that series is missing — never blocking the table/verdict.
+
 **Multiple offers on the SAME item are a queue, not independent rungs (Ben, 2026-07-16).** The GE
 matches a buyer against the cheapest compatible offer first, so a higher-priced ask on an item you
 also have a lower ask resting on is structurally queued behind it — it cannot fill first, and its

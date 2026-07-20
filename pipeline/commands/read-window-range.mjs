@@ -58,7 +58,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); FIVE_MIN_MIN_DAYS moved into windowread as its one home
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
@@ -127,7 +127,7 @@ const log = (...a) => { if (!JSON_OUT) console.log(...a); };
 // 1h average (its per-day max sits ~0.4–0.6% above per AC2 — and that is itself a LOWER BOUND, since a 5m
 // value is a 5-minute average, not a raw tick). We surface the 5m figure ALONGSIDE the 1h one, labeled,
 // never replacing it, and gate it on ≥ FIVE_MIN_MIN_DAYS covered days so a one-off snapshot can't fake a read.
-const FIVE_MIN_MIN_DAYS = 3;   // fewer scored 5m-grain window-days than this ⇒ don't surface (too sparse to read)
+// FIVE_MIN_MIN_DAYS is imported from js/windowread.mjs (its one home, shared with askExitRead).
 let archive = null;
 try { archive = openArchive(undefined, { readonly: true }); } catch { archive = null; }
 function fiveMinStats(id) {
@@ -200,6 +200,10 @@ for (const want of positionals) {
   // AC4a — 5m-grain (less-smoothed) window stats where the archive has coverage; sparse, null when not.
   const fiveStats = (BID != null || ASK != null || EXIT != null) ? fiveMinStats(r.id) : null;
   const fiveOk = fiveStats && (fiveStats.his.length >= FIVE_MIN_MIN_DAYS || fiveStats.lows.length >= FIVE_MIN_MIN_DAYS);
+  // PLAN-POSITIONS-WINDOW-READ: the ask-side typical-exit read assembled ONCE via the shared askExitRead
+  // (the same call quote-items.mjs --positions makes) — the ASK-side summary line + the scored --ask
+  // reach/placement + the 5m-grain block below all render from its fields (was inline primitives).
+  const aer = askExitRead(stats, { ask: ASK, stats5m: fiveStats });
 
   log(`  ---`);
   const rq = (side, p) => { const v = recentQuant(scored, side, p, RECENT_NIGHTS); return v == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(v)}`; };
@@ -208,10 +212,12 @@ for (const want of positionals) {
     log(`    median window instasell volume: ${fmt(medVolLo)} u (the pool a resting bid competes for)`);
     result.bidSide = { q50: quantLow(lows, 0.5), q75: quantLow(lows, 0.75), everyDay: lows[lows.length - 1], recent50: recentQuant(scored, 'bid', 0.5, RECENT_NIGHTS), medVol: medVolLo, nDays: lows.length };
   }
-  if (his.length) {
-    log(`  ASK side — reached on ~50% of days: ${fmt(quantHigh(his, 0.5))} · ~75%: ${fmt(quantHigh(his, 0.75))} · every day: ${fmt(his[0])}${rq('ask', 0.5)}`);
-    log(`    median window instabuy volume: ${fmt(medVolHi)} u (the pool a resting ask competes for)`);
-    result.askSide = { q50: quantHigh(his, 0.5), q75: quantHigh(his, 0.75), everyDay: his[0], recent50: recentQuant(scored, 'ask', 0.5, RECENT_NIGHTS), medVol: medVolHi, nDays: his.length };
+  if (aer) {
+    const as = aer.askSide;
+    const rqa = as.recent50 == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(as.recent50)}`;
+    log(`  ASK side — reached on ~50% of days: ${fmt(as.q50)} · ~75%: ${fmt(as.q75)} · every day: ${fmt(as.everyDay)}${rqa}`);
+    log(`    median window instabuy volume: ${fmt(as.medVol)} u (the pool a resting ask competes for)`);
+    result.askSide = { q50: as.q50, q75: as.q75, everyDay: as.everyDay, recent50: as.recent50, medVol: as.medVol, nDays: aer.nDays };
   }
   if (latest && latest.low != null) { log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`); result.live = { instasell: latest.low, instabuy: latest.high != null ? latest.high : null }; }
   // recency split on the scored candidate: recent-N hit rate beside the full count, ⚠ when the
@@ -241,14 +247,14 @@ for (const want of positionals) {
       result.bid.grain5m = { touchedDays: t5, nDays: fiveStats.lows.length, placement: p5 };
     }
   }
-  if (ASK != null && his.length) {
-    const askPlace = placement(his, ASK);
-    log(`  --ask ${fmt(ASK)} → would have been reached on ${reachedDays(his, ASK)}/${his.length} day(s)${splitNote('ask', ASK)} · placement ${pctStr(askPlace)} of the ${his.length}-day daily-HIGH distribution`);
-    result.ask = { level: ASK, reachedDays: reachedDays(his, ASK), nDays: his.length, placement: askPlace, recency: recencySplit(scored, 'ask', ASK, RECENT_NIGHTS), grain5m: null };
-    if (fiveStats && fiveStats.his.length >= FIVE_MIN_MIN_DAYS) {
-      const r5 = reachedDays(fiveStats.his, ASK), p5 = placement(fiveStats.his, ASK);
-      log(`    ↳ 5m-grain (archive, less-smoothed; a LOWER BOUND on the true gap per AC2): reached ${r5}/${fiveStats.his.length} · placement ${pctStr(p5)} (n=${fiveStats.his.length} days)`);
-      result.ask.grain5m = { reachedDays: r5, nDays: fiveStats.his.length, placement: p5 };
+  if (ASK != null && aer && aer.ask) {
+    const a = aer.ask;
+    log(`  --ask ${fmt(ASK)} → would have been reached on ${a.reachedDays}/${a.nDays} day(s)${splitNote('ask', ASK)} · placement ${pctStr(a.placement)} of the ${a.nDays}-day daily-HIGH distribution`);
+    result.ask = { level: ASK, reachedDays: a.reachedDays, nDays: a.nDays, placement: a.placement, recency: a.recency, grain5m: null };
+    if (aer.grain5m) {
+      const g5 = aer.grain5m;
+      log(`    ↳ 5m-grain (archive, less-smoothed; a LOWER BOUND on the true gap per AC2): reached ${g5.reachedDays}/${g5.nDays} · placement ${pctStr(g5.placement)} (n=${g5.nDays} days)`);
+      result.ask.grain5m = { reachedDays: g5.reachedDays, nDays: g5.nDays, placement: g5.placement };
     }
   }
   if (!fiveOk && (BID != null || ASK != null)) log(`    (no 5m-grain reach: the archive has <${FIVE_MIN_MIN_DAYS} covered window-days overlapping this ${winLabel} — 5m accrual is opportunistic per time-of-day, so a narrow/off-peak window often has none; 1h-only)`);

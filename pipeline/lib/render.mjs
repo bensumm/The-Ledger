@@ -70,7 +70,7 @@ import { gradeCls, fmtP } from '../../js/money-format.js';
                guaranteed held-note fields (emit.mjs `heldNoteBlock`). Also `regime` + `validator`
                (a fired gate flag) below — a screen/quote row's regime line + any REJECT/CAUTION note.
      context = every inform-only family: diurnal, forecast, ask-headroom, asym, window-clear,
-               reach-relief, pressure-exit, guide-anchor, stale-exit, reach-placement, and screen's footer inform
+               reach-relief, pressure-exit, guide-anchor, stale-exit, reach-placement, window-exit, and screen's footer inform
                families (caution / trajectory-reach / headroom / window-clear / asym / demand — those
                ride as PRE-FORMATTED strings, not typed kinds, so they carry no NOTE_KINDS entry; their
                tier is context by this doctrine). Rendered + relayed by default, same as core.
@@ -99,6 +99,7 @@ export const NOTE_KINDS = {
   reachRelief:  { prefix: '  ↥ ',  tier: TIER.context },  // PLAN-LIQUIDITY-REACH reach-fold relief
   pressureExit: { prefix: '  ◇ ',  tier: TIER.context },  // PB4 pressure-exit TRIAL line (opt-in flag)
   reachPlacement: { prefix: '  ⊙ ', tier: TIER.context }, // PLAN-QUOTE-PLACEMENT — the read-window-range.mjs placement percentile folded onto the quote
+  windowExit:   { prefix: '  ↗ ',  tier: TIER.context },  // PLAN-POSITIONS-WINDOW-READ — the auto-surfaced ask-side typical-exit read on a big-ticket held lot (read-window-range.mjs --ask, folded in)
 };
 
 /* formatNote(item) — render ONE note item to its line. A plain string passes through UNCHANGED (the V5

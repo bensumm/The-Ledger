@@ -84,7 +84,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quantileSorted` (pre-sorted input) + `quantileOf`/`median` (sort a copy) — `termstructure.mjs`
   re-exports it as `quantile`, `retrojoin.mjs` aliases `quantileOf`), `windowread.mjs` (P2 — pure window-range/reach math:
   `windowStats`/`quantLow`/`quantHigh`/`touchedDays`/`reachedDays` + the RC1
-  `recencySplit`/`recentQuant` reach-contamination guard + the **hour-of-day diurnal profile**
+  `recencySplit`/`recentQuant` reach-contamination guard + **`askExitRead`** (PLAN-POSITIONS-WINDOW-READ
+  2026-07-18 — the ONE ask-side "typical exit" assembly: daily-HIGH q50/q75/every-day levels + the scored
+  list-price reach/placement + the ≥`FIVE_MIN_MIN_DAYS` 5m-grain reach; pure over already-computed
+  `windowStats` results, so `read-window-range.mjs`'s `--ask` block and `quote-items.mjs --positions`'
+  auto-surfaced big-ticket `↗ windowExit` note render from ONE definition instead of re-sequencing the
+  primitives) + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
   `windowrange --profile` prints) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level

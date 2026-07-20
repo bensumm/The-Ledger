@@ -28,11 +28,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit } from '../../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
+import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -640,12 +640,65 @@ async function runPositions() {
       ? { reachedDays: reachedDays(astHeld.his, row.optSell), nDays: astHeld.his.length, ...recencySplit(astHeld.days, 'ask', row.optSell) } : null;
     const bidPlaceHeld = bidReachHeld ? placement(astHeld.lows, row.optBuy) : null;
     const askPlaceHeld = askReachHeld ? placement(astHeld.his, row.optSell) : null;
-    if (bidPlaceHeld != null || askPlaceHeld != null) {
-      const pct = f => 'p' + Math.round(f * 100);
+    const pct = f => 'p' + Math.round(f * 100);
+    // PLAN-POSITIONS-WINDOW-READ (Ben, 2026-07-18): for a BIG-TICKET held lot (lot value ≥ BIG_TICKET_GP,
+    // or a watchlist member — the same force-include the incidental filter uses), auto-surface the full
+    // ask-side window-clear / "typical exit" read that used to require a manual `read-window-range.mjs
+    // "<item>" --ask <level>` — the daily-HIGH typical-exit levels, the list-price reach/placement, the
+    // less-smoothed 5m-grain reach, live-instabuy-vs-list, and which diurnal window the level prints in.
+    // ONE assembly via the shared askExitRead (byte-parity with read-window-range's --ask block); ZERO new
+    // fetch (inp.ts1h is already in hand; the 5m grain is a best-effort local archive read via snap). The
+    // whole block is fetch-resilient: a null 1h series (its fetch failed above) or any throw degrades to a
+    // single "window read unavailable" note — the table/verdict is the critical output, this is enrichment.
+    // The ask-side placement is folded into this richer note, so reachPlacement drops its ASK clause here
+    // (kept for non-big-ticket lots); the BID clause still rides on reachPlacement (ask-side-only per the plan).
+    const bigTicket = cost >= BIG_TICKET_GP || watchlistIds.has(itemId);
+    let windowExitDone = false;
+    if (bigTicket) {
+      try {
+        const list = (thesisEntry?.exitPrice ?? null) ?? (row.optSell ?? null);   // the intended list-at level
+        // 5m-grain window stats off the read-only archive snap already open this pass (best-effort, null-safe).
+        let stats5m = null;
+        try {
+          const rows5 = (snap && snap.archive) ? snap.archive.seriesFor(itemId, '5m') : null;
+          if (rows5 && rows5.length) {
+            const mapped = rows5.map(x => ({ timestamp: x.ts, avgLowPrice: x.avgLowPrice, avgHighPrice: x.avgHighPrice, lowPriceVolume: x.lowPriceVolume, highPriceVolume: x.highPriceVolume }));
+            stats5m = windowStats(mapped, { nights: 14, wStart: 0, wEnd: 0 });
+          }
+        } catch { stats5m = null; }
+        const aer = astHeld ? askExitRead(astHeld, { ask: list, stats5m }) : null;
+        if (!aer) {
+          notes.push({ kind: 'windowExit', itemId, text: `${name}: window read unavailable — no 1h series this pass` });
+        } else {
+          // which diurnal window the level prints in (zero-fetch off the in-hand series).
+          const profH = hourProfile(inp.ts1h, { nights: 14 });
+          const drH = profH ? deriveDiurnalRange(profH, {}) : null;
+          const peakTxt = (drH && drH.peakWindow) ? ` · peak window ${fmtHour(drH.peakWindow.startH)}–${fmtHour(drH.peakWindow.endH)}` : '';
+          const as = aer.askSide;
+          const parts = [];
+          if (aer.ask) {
+            const rc = aer.ask.recency || {};
+            parts.push(`list ${fmt(aer.ask.level)} reached ${aer.ask.reachedDays}/${aer.ask.nDays}d (recent ${rc.recentHit ?? '—'}/${rc.recentDays ?? '—'}) · placement ${pct(aer.ask.placement)} of the ${aer.ask.nDays}-day daily-HIGH distribution`);
+          }
+          parts.push(`typical exit ~50% ${fmt(as.q50)} / ~75% ${fmt(as.q75)} / every-day ${fmt(as.everyDay)}${as.recent50 != null ? ` · recent-3 ~50% ${fmt(as.recent50)}` : ''}`);
+          if (row.quickSell != null) parts.push(`live instabuy ${fmt(row.quickSell)}`);
+          if (aer.grain5m) parts.push(`5m-grain reached ${aer.grain5m.reachedDays}/${aer.grain5m.nDays} · ${pct(aer.grain5m.placement)}`);
+          notes.push({ kind: 'windowExit', itemId, text: `${name}: window-clear — ${parts.join(' · ')}${peakTxt}  (touched ≠ filled, ~${aer.nDays}d — a guide)`,
+            data: { list, live: row.quickSell ?? null, peakWindow: (drH && drH.peakWindow) ? drH.peakWindow : null, ...aer } });
+          windowExitDone = true;
+        }
+      } catch (e) {
+        notes.push({ kind: 'windowExit', itemId, text: `${name}: window read unavailable (${(e && e.message || 'error').split('\n')[0]})` });
+      }
+    }
+    // reachPlacement — the existing bid+ask percentile note. For a big-ticket lot the ASK clause is now
+    // carried by the richer windowExit note above, so keep only the BID clause here (no redundancy); a
+    // non-big-ticket lot keeps both, unchanged.
+    {
       const parts = [];
       if (bidPlaceHeld != null) parts.push(`bid ${fmt(row.optBuy)} touched ${bidReachHeld.reachedDays}/${bidReachHeld.nDays}d (recent ${bidReachHeld.recentHit ?? '—'}/${bidReachHeld.recentDays ?? '—'}) · placement ${pct(bidPlaceHeld)} of the ${bidReachHeld.nDays}-day daily-LOW distribution`);
-      if (askPlaceHeld != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReachHeld.reachedDays}/${askReachHeld.nDays}d (recent ${askReachHeld.recentHit ?? '—'}/${askReachHeld.recentDays ?? '—'}) · placement ${pct(askPlaceHeld)} of the ${askReachHeld.nDays}-day daily-HIGH distribution`);
-      notes.push({ kind: 'reachPlacement', itemId, text: `${name}: reach/placement — ${parts.join(' — ')}` });
+      if (!windowExitDone && askPlaceHeld != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReachHeld.reachedDays}/${askReachHeld.nDays}d (recent ${askReachHeld.recentHit ?? '—'}/${askReachHeld.recentDays ?? '—'}) · placement ${pct(askPlaceHeld)} of the ${askReachHeld.nDays}-day daily-HIGH distribution`);
+      if (parts.length) notes.push({ kind: 'reachPlacement', itemId, text: `${name}: reach/placement — ${parts.join(' — ')}` });
     }
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):

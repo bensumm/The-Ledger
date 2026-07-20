@@ -132,6 +132,51 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
   };
 }
 
+// --- ask-side "typical exit" read (PLAN-POSITIONS-WINDOW-READ) ---------------------------------
+// The ONE assembly of the ask-side window-clear read that read-window-range.mjs's `--ask <level>`
+// block prints (the daily-HIGH typical-exit levels + the scored list-price reach/placement + the
+// less-smoothed 5m-grain reach). Factored here so BOTH read-window-range.mjs (the manual CLI read)
+// and quote-items.mjs --positions (the auto-surfaced big-ticket held-lot note) render from ONE
+// definition instead of re-sequencing the primitives (quantHigh/recentQuant/reachedDays/placement)
+// per surface. PURE: it takes ALREADY-computed windowStats results (each caller has one in hand —
+// zero re-bucketing, zero fetch) and returns structured numbers; the caller owns the wording.
+// The 5m-grain figure is the archive's less-smoothed per-day max (a LOWER BOUND on the true gap per
+// AC2) — surfaced ALONGSIDE the 1h number, labeled, never replacing it, and gated on ≥ FIVE_MIN_MIN_DAYS
+// covered days so a one-off snapshot can't fake a read. n≈14 nights — a guide, not a guarantee (rule 4).
+export const FIVE_MIN_MIN_DAYS = 3;   // fewer scored 5m-grain window-days than this ⇒ don't surface (too sparse)
+
+/**
+ * askExitRead(stats, opts) — the ask-side typical-exit read off a windowStats result.
+ * @param {object|null} stats     a windowStats() result over the 1h series (or null)
+ * @param {object} opts { ask=null, stats5m=null, recentN=RECENT_NIGHTS, minFiveDays=FIVE_MIN_MIN_DAYS }
+ *   ask      — the list/exit level to score (null ⇒ summary-only, no scored/grain block)
+ *   stats5m  — a windowStats() result over the 5m archive series (or null ⇒ no grain block)
+ * @returns {null | { nDays, askSide:{q50,q75,everyDay,recent50,medVol}, ask:null|{level,reachedDays,nDays,placement,recency}, grain5m:null|{reachedDays,nDays,placement} }}
+ *   null when the 1h series has no traded window-highs (nothing to read — degrade, never a fake read).
+ */
+export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECENT_NIGHTS, minFiveDays = FIVE_MIN_MIN_DAYS } = {}) {
+  if (!stats || !Array.isArray(stats.his) || !stats.his.length) return null;
+  const his = stats.his;   // ascending
+  const askSide = {
+    q50: quantHigh(his, 0.5),
+    q75: quantHigh(his, 0.75),
+    everyDay: his[0],                                    // min daily high = reached every scored day
+    recent50: recentQuant(stats.days, 'ask', 0.5, recentN),
+    medVol: stats.medVolHi,
+  };
+  const scored = (ask != null) ? {
+    level: ask,
+    reachedDays: reachedDays(his, ask),
+    nDays: his.length,
+    placement: placement(his, ask),
+    recency: recencySplit(stats.days, 'ask', ask, recentN),
+  } : null;
+  const grain5m = (ask != null && stats5m && Array.isArray(stats5m.his) && stats5m.his.length >= minFiveDays)
+    ? { reachedDays: reachedDays(stats5m.his, ask), nDays: stats5m.his.length, placement: placement(stats5m.his, ask) }
+    : null;
+  return { nDays: his.length, askSide, ask: scored, grain5m };
+}
+
 // --- asymmetric realizable pair (PART II, PLAN-GRADE-REACH — deep-buy / reliable-sell) ---------
 // Ben's mandate: "I'd much rather hit a 2/14 buy and a 12/14 sell than 50/50 both sides." The ideal
 // flip is a RARE DEEP entry (a bid that fills only on a genuine flush) paired with a NEAR-CERTAIN

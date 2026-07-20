@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.40
+version: 1.41
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -28,10 +28,15 @@ sections plus your own prose:
   it fully, fold the substance into your own prose, don't paste the bulleted block.**
   _(judgment: display format, Ben-ruled)_ Nothing in it gets silently dropped (R10's spirit
   stands — read both tiers, miss nothing that's decision-relevant) but it's relayed in your own
-  words, not the script's formatting. Cross-check a held/bid item's reach/placement against
-  AC4a's `read-window-range.mjs --ask`/`--bid` rendering (percentile placement + grain-aware 5m
-  reach, PLAN-REACH-CALIBRATION) when it adds something the notes block didn't already cover —
-  fold that in too.
+  words, not the script's formatting. The ask-side window-clear / "typical exit" read is now
+  **AUTO-SURFACED for big-ticket held lots** (lot value ≥ `BIG_TICKET_GP` = 10m, or a watchlist
+  member) as the `↗ windowExit` note — the list-price reach/placement, the daily-HIGH typical-exit
+  levels (~50%/~75%/every-day + recent-3), live-instabuy-vs-list, the grain-aware 5m reach, and which
+  diurnal peak window the level prints in — the same block a manual `read-window-range.mjs "<item>"
+  --ask <level>` printed, folded in with zero extra fetch (PLAN-POSITIONS-WINDOW-READ, 2026-07-18). Read
+  that note; a manual `read-window-range.mjs --ask` is only needed for a NON-big-ticket lot, a different
+  window/level, or the bid side. (A null 1h series this pass degrades the note to `window read
+  unavailable` — the table/verdict is unaffected.)
 
 Anchor (2026-07-17, the format that got approved): a positions read that pasted just the table,
 then three short prose paragraphs each naming what changed/mattered per item (a resolved CUT, an
