@@ -775,6 +775,37 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
   };
 }
 
+// --- diurnal-phase entry-timing (INFORM-ONLY PLACEHOLDER, n≈0) ---------------------------------
+// WHERE does NOW sit in this item's daily demand cycle relative to its peak WINDOW? The reach/asym/
+// windowClear reads all say WHERE a level prints; this says WHEN in today's cycle you're ENTERING —
+// the miss that stranded 5 blowpipe units: we maxed the 8/8 buy limit as the 03–09 peak was CLOSING,
+// caught the tail-of-peak fast fills, then it cooled with the next peak ~16h away. Had the screen said
+// "post-peak — cooling, next peak ~16h" at entry we'd have sized a starter, not the full limit.
+// PURE over the profile's peak window + the wall clock (LOCAL hours — the peak startH/endH are already
+// local, and inWindow's wrap convention handles a midnight-crossing peak, so NO timezone math here —
+// the displayed-times-are-LOCAL convention holds). Phase off the LOCAL current hour vs the peak
+// [startH,endH):
+//   in-peak    — inside the window (hoursToPeakClose = forward hours to endH).
+//   pre-peak   — outside, and NEARER the next OPEN than the last CLOSE (the ramp is approaching).
+//   post-peak  — outside, and NEARER the last CLOSE (cooling; the next peak is a cycle away).
+// hoursToNextPeak = forward hours to the window's next open (always defined outside the window).
+// INFORM-ONLY: n≈0, NO threshold — it NEVER gates/drops a pick or moves grade/rank (a placeholder
+// timing read pending F1, rule 4). The screen prints it as the ⏲ token appended to the Diurnal timing
+// line; stdout-only (the diurnal block never reaches screen.json), so no APP_VERSION dependence.
+export function diurnalPhase(profile, { now = new Date() } = {}) {
+  if (!profile || !profile.peak || profile.peak.startH == null || profile.peak.endH == null) return null;
+  const { startH, endH } = profile.peak;
+  const h = now.getHours();
+  const hoursToNextPeak = ((startH - h + 24) % 24) || 24;   // forward hours to the next window open
+  if (inWindow(h, startH, endH)) {
+    const hoursToPeakClose = ((endH - h + 24) % 24) || 24;  // forward hours to this window's close
+    return { phase: 'in-peak', hoursToPeakClose, hoursToNextPeak, startH, endH };
+  }
+  const hoursSinceClose = ((h - endH + 24) % 24);
+  const phase = hoursToNextPeak <= hoursSinceClose ? 'pre-peak' : 'post-peak';
+  return { phase, hoursToPeakClose: null, hoursToNextPeak, hoursSinceClose, startH, endH };
+}
+
 // --- per-hour demand-cycle classifier (PLAN-DEPTH-EXIT Extension B, DC1) -----------------------
 // Pressure is not static — it CYCLES by hour (Soul rune ran 1.26–2.49× across the day; sell-heavy
 // commodities trough below 1). hourlyPressure exposes that cycle; demandRegime classifies the item

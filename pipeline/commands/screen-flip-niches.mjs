@@ -77,7 +77,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
+import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -972,7 +972,16 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     const candidate = net != null && net > 0 && !prof.trendDominates && concentrated && roi != null && roi >= MIN_ROI;
     const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
     const edge = net != null ? ` · ~${fmt(net)}/u (${roi.toFixed(1)}%)` : '';
-    diurnalLines.push(`${candidate ? '★ ' : ''}${nm} — BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${edge}${trend}`);
+    // ⏲ diurnal-PHASE entry-timing token (INFORM-ONLY PLACEHOLDER, n≈0 — js/windowread.mjs diurnalPhase):
+    // where NOW sits in today's cycle vs the peak window, so a post-peak/cooling entry (the blowpipe miss —
+    // maxed the buy limit as the peak closed → 5u stranded ~16h) is flagged AT entry, not discovered hours
+    // later. Never gates/drops/regrades — a stdout support token only.
+    const ph = diurnalPhase(prof);
+    const phaseTok = !ph ? ''
+      : ph.phase === 'in-peak' ? ` · ⏲ in-peak (closes ~${ph.hoursToPeakClose}h)`
+      : ph.phase === 'pre-peak' ? ` · ⏲ pre-peak (opens ~${ph.hoursToNextPeak}h)`
+      : ` · ⏲ post-peak — cooling, next peak ~${ph.hoursToNextPeak}h → starter size / hold-to-next-peak`;
+    diurnalLines.push(`${candidate ? '★ ' : ''}${nm} — BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${edge}${trend}${phaseTok}`);
   }
   if (diurnalLines.length) {
     extraSections.push({ type: 'lines', blank: false, lines: [

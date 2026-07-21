@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.78
+version: 1.79
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -250,6 +250,13 @@ This is the tribal layer the script can't do — apply ALL of these:
   22.5m locked at breakeven. **Honesty (rule 4):** order-clustering microstructure is well-established;
   our fills are n=2 (one each side) — the anchor DIRECTION holds both ways, the tight-band + liquid-
   fills-fast guards are the cost side; keep scoring.
+  - **Ladder rungs STRADDLE the anchor — nothing in the dead zone just OVER it (Ben, 2026-07-21).** On
+    a big-ticket SELL ladder near a round-million anchor, place a base chunk just UNDER the round million
+    (the fillable side, where base buyers cross up) and jump the next chunk CLEAR OVER the resistance to
+    where real daily-high prints land (the `⚓`-probe q50 daily-high). A rung parked in the dead zone —
+    over the round million but under the real peak-demand prints — reaches NEITHER side and stalls. Anchor:
+    blowpipe units at 11.098m stalled (over the 11.000m wall, under the ~11.14m+ daily highs); moving to
+    just-under-11.0m cleared, with the real upside at ~11.19m+.
 - **Entry aggression follows posture (Ben, 2026-07-05).** _(judgment: posture call)_ When Ben is ACTIVELY flipping
   (at the client, watch loop running), price entries to FILL: recommend bids at or near
   the live instasell — or the upper half of the band — accepting a thinner per-unit edge
@@ -382,6 +389,12 @@ This is the tribal layer the script can't do — apply ALL of these:
      forward from the band low.
   4. **Project TODAY** — is the window ahead or already printed? (`diurnalForecast` eta / the Hydra
      stale-window rule). A spike window behind you today means price the 4h-lap exit or wait for the next.
+  - **Diurnal-phase entry sizing** — read the `⏲` phase token the Diurnal timing block now prints
+    (`js/windowread.mjs` `diurnalPhase` — inform-only, n≈0, never gates). Entering `post-peak`/cooling
+    (peak already closed today, next peak ~Yh away) → REDUCE entry size + label it hold-to-next-peak, don't
+    max the buy limit into a fading window. Anchor: maxed the blowpipe limit 8/8 as its peak was CLOSING →
+    5 units stranded ~16h to the next peak. `pre-peak (opens ~Xh)`/`in-peak (closes ~Xh)` are the ramp/full
+    windows; the token computes the phase, don't re-derive it by hand.
   Anchor (2026-07-14, anglerfish): bought 2,735, but to clear the volume you EITHER hold the ask for the
   14:00–17:00 spike (~2,899, prints 3/3 recent) OR clear-in-4h just under live instabuy (~2,815); the
   next rebuy back-solves to ~2,710 (BE ~2,760) so both exits carry real margin. This is the ONE home for

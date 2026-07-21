@@ -367,8 +367,15 @@ simultaneous independent rungs on one item.
   `deriveDiurnalRange` on every surfaced pick (zero extra fetch) and prints a **Diurnal timing** block:
   the stale-guarded BID (recent dip-window level, priced to LIVE when a dominating trend erases the dip
   — the Ghrazi lesson) and the ASK (recent peak-window level), with the after-tax swing; a clean read
-  is starred `★`. The shape is de-trended so the trend can't fool the dip/peak detection. `quote-items.mjs`
-  prints the same line; `read-window-range.mjs --profile` prints the full hour-by-hour table. The app
+  is starred `★`. The shape is de-trended so the trend can't fool the dip/peak detection. Each line also
+  carries a **`⏲` diurnal-PHASE entry-timing token** (`js/windowread.mjs` `diurnalPhase`) — where NOW
+  sits in today's cycle vs the peak window: `in-peak (closes ~Xh)` / `pre-peak (opens ~Xh)` /
+  `post-peak — cooling, next peak ~Yh → starter size` (only the cooling case appends the sizing hint).
+  INFORM-ONLY, n≈0 placeholder — it never gates/regrades a pick; it flags a post-peak/cooling entry AT
+  entry so a full-limit buy into a fading window is caught (the blowpipe miss — maxed the limit as the
+  peak closed → 5u stranded ~16h). STDOUT-only (the diurnal block never reaches `screen.json`).
+  `quote-items.mjs`
+  prints the same BID/ASK line; `read-window-range.mjs --profile` prints the full hour-by-hour table. The app
   renders it in Trends (TV). This is the ENCODED form of the manual windowrange dance — read the block;
   the manual read is now a CONFIRMATION.
 - **Forward forecast (PF1, inform-only, n≈0).** `js/forecast.mjs` `diurnalForecast(profile, ctx)` projects
