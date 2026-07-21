@@ -147,11 +147,18 @@ NOT raw %). Raw `capEff` is SCALE-FREE, so ranking on it alone let dust-tier che
 1072%/d on ~60k of deployable capital) sweep the top and bury the big-ticket deploys the digest exists to
 surface — the SAME failure `valueScore`'s deployable-capital blend already solved, so the digest REUSES its
 `deployUnits` three-way min (`js/valuescreen.mjs` — bankroll ÷ buy price, 10% market-share over 2 days,
-buy-limit accumulation) against the FULL deployable pool (`--capital`, NOT ÷slots). `capEff` stays a
-DISPLAYED column (still meaningful per-unit info); the `deploy` column shows the deployable capital so the
-ordering is legible. It is an anti-overwhelm TRIAGE VIEW ("which N do I look closer at"), ADDITIVE and
-opt-in: it never trims or replaces the per-niche tables + context footers, and the per-niche table's own
-`rank` sort is untouched (the deployable-throughput ordering is digest-only). The
+buy-limit accumulation) against the FULL deployable pool (`--capital`, NOT ÷slots). `capEff` is a REALIZABLE
+sustained rate, not a raw per-day extrapolation: its laps/day are buy-limit-bounded at the deployed size
+(`lapsCap = limit × windows/day ÷ deployUnits`), so a fast-selling cheap item reads ~13%/d, not the ~198%/d
+fantasy you can't actually cycle the whole deployed position at. `capEff` stays a DISPLAYED column; the
+`deploy` column shows the deployable capital so the ordering is legible. A GUARANTEED big-ticket slice
+(POLISH 1) protects visibility: pure deployable-gp/day tops the digest with high-throughput churn, so if
+fewer than 2 big-ticket rows (`mid ≥ BIG_TICKET_GP`) made the visible top-8, a small `— big-ticket lane —`
+sub-section is APPENDED (top few big-tickets by the same rank key) — additive visibility for the
+attention/risk trade-off, NOT a re-ranking of the main block. It is an anti-overwhelm TRIAGE VIEW ("which N
+do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
+footers, and the per-niche table's own `rank` sort is untouched (the deployable-throughput ordering is
+digest-only). The
 `verdict` word is deterministic, first-match-wins over a rule table (`sell unreliable` / `mirage top` /
 `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
 calibrated. **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn

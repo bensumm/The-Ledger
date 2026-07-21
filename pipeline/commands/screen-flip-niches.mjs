@@ -423,25 +423,41 @@ const MIRAGE_REACH_FRAC = 0.70;    // PLACEHOLDER (n≈0, freshly invented) — 
 function roiPct(er) {
   return (er && er.net != null && er.pair && er.pair.bid > 0) ? er.net / er.pair.bid * 100 : null;
 }
-// holdDays(spec, er): the fraction of a day this pick ties capital up. A churn lane frees + re-commits the
-// SAME capital up to LAPS_PER_DAY_CEIL (6)×/day, bounded ALSO by how long one lap takes to sell (86400/ttf)
-// — the achievable laps/day is the SLOWER of the two constraints; holdDays is its reciprocal. Every other
-// family is single-turn: TTF in days, floored at 1h (mirrors TTF_FLOOR_DAYS's spirit — no divide-by-tiny).
-function holdDays(spec, er) {
+// holdDays(spec, er, lapsCap): the fraction of a day this pick ties capital up. A churn lane frees +
+// re-commits the SAME capital up to LAPS_PER_DAY_CEIL (6)×/day, bounded ALSO by how long one lap takes to
+// sell (86400/ttf) — the achievable laps/day is the SLOWER of the two constraints; holdDays is its
+// reciprocal. Every other family is single-turn: TTF in days, floored at 1h (mirrors TTF_FLOOR_DAYS's
+// spirit — no divide-by-tiny).
+// POLISH 2 — REALIZABLE-THROUGHPUT bound (buy-limit at the deployed size): a raw 86400/ttf laps/day is a
+// FANTASY for a fast-selling cheap item (Sunfire splinters read 198%/d) — you can't cycle the whole
+// deployed position that fast because the 4h buy limit caps how many units you can RE-BUY per day. When the
+// caller passes `lapsCap` (= limit × windows/day ÷ deployUnits — the position-level buy-limit throughput,
+// computed in collectDigestRow off the SAME deployUnits the deployable-capital weight uses), holdDays is
+// LENGTHENED to at least 1/lapsCap. It can only ever SLOW the rate, never grant a free speed-up; null (no
+// limit / no size, e.g. the lean-log call) → unchanged (backward-compatible — the fixtures pin this).
+function holdDays(spec, er, lapsCap = null) {
   const ttfSec = (er && er.ttf && er.ttf.value != null) ? er.ttf.value : 0;
+  let hd;
   if (spec && spec.estimator === 'churn') {
     const lapsPerDay = Math.min(LAPS_PER_DAY_CEIL, Math.max(1, 86400 / Math.max(ttfSec, 1)));
-    return 1 / lapsPerDay;
+    hd = 1 / lapsPerDay;
+  } else {
+    hd = Math.max(ttfSec, 3600) / 86400;
   }
-  return Math.max(ttfSec, 3600) / 86400;
+  if (lapsCap != null && lapsCap > 0) hd = Math.max(hd, 1 / lapsCap);   // more windows to recycle the position ⇒ LONGER holdDays
+  return hd;
 }
-// capEfficiency(spec, er) = after-tax ROI% earned per DAY of capital tied up (%/day). The RANKING metric —
-// it ties efficiency to time so a fast small win can out-rank a slow big one, and rewards a recycling churn
-// lane via its small holdDays. null (never throws) when roiPct is unavailable. INFORM/lean-only, never a gate.
-export function capEfficiency(spec, er) {
+// capEfficiency(spec, er, { lapsCap }) = after-tax ROI% earned per DAY of capital tied up (%/day). The
+// digest's DISPLAYED + RANKING metric — it ties efficiency to time so a fast small win can out-rank a slow
+// big one, and rewards a recycling churn lane via its small holdDays. With `lapsCap` (POLISH 2) it reads as
+// a SUSTAINED rate you could actually hold, not a raw per-day extrapolation off a tiny TTF. null (never
+// throws) when roiPct is unavailable. INFORM/lean-only, never a gate. The lean suggestions.jsonl log calls
+// it WITHOUT lapsCap (the intrinsic per-turn efficiency, size-independent → calibration-friendly + the
+// backward-compatible shape); the digest calls it WITH lapsCap (the realizable, deployed-size-aware rate).
+export function capEfficiency(spec, er, { lapsCap = null } = {}) {
   const roi = roiPct(er);
   if (roi == null) return null;
-  const hd = holdDays(spec, er);
+  const hd = holdDays(spec, er, lapsCap);
   return hd > 0 ? roi / hd : null;
 }
 // isBigTicket(row): the pre-buy per-unit analogue of BIG_TICKET_GP (the lot-value threshold momVerdict uses).
@@ -491,29 +507,31 @@ function digestReachFrac(spec, askReachExtra) {
   if (askReachExtra.recentDays) return askReachExtra.recentHit / askReachExtra.recentDays;
   return askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
 }
-// digestDeployable(er, row): the DEPLOYABLE CAPITAL (gp) for this candidate — how much of the bankroll you
-// can realistically park in it, reusing valueScore's EXACT three-way-min deployUnits (bankroll ÷ buy price,
-// 10% market-share over 2 days, buy-limit accumulation) × the buy price. capGp = the FULL deployable pool
+// collectDigestRow(...): compute the realizable capEff + the deployable-throughput RANK KEY + the verdict for
+// one surfaced candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and
+// held rows (Workstream B's positions read owns those). rankKey = capEff × deployable capital ≈ after-tax
+// deployable gp/day (raw capEff is SCALE-FREE, so dust-tier cheap high-% items swept the top-N and buried the
+// big-ticket deploys the digest exists to surface — the SAME failure valueScore's deployable-capital blend
+// already solved; we reuse its deployUnits three-way min). deployUnits = valueScore's EXACT min(bankroll ÷
+// buy price, 10% market-share over 2 days, buy-limit accumulation), capGp = the FULL deployable pool
 // (VALUE_CAPITAL — --capital or the derived deployablePool, NOT ÷slots: the digest triages a single
-// concentrated deploy, and ÷slots would push a 50m big-ticket below 1 unit and demote exactly the class the
-// follow-up exists to surface). Null when no buy price. PLACEHOLDER shape reused from the value niche (n≈0).
-function digestDeployable(er, row) {
-  const buyLow = (er && er.pair && er.pair.bid != null) ? er.pair.bid : null;
-  const units = deployUnits({ buyLow, limitVol: row ? (row.volDay ?? null) : null, limit: row ? (row.limit ?? null) : null, capGp: VALUE_CAPITAL });
-  return (units != null && buyLow != null) ? units * buyLow : null;
-}
-// collectDigestRow(...): compute capEff + the deployable-throughput RANK KEY + the verdict for one surfaced
-// candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and held rows
-// (Workstream B's positions read owns those). rankKey = capEff × deployable capital ≈ after-tax deployable
-// gp/day (the follow-up fix: raw capEff is SCALE-FREE, so dust-tier cheap high-% items swept the top-N and
-// buried the big-ticket deploys the digest exists to surface — the SAME failure valueScore's deployable-
-// capital blend already solved; we reuse its deployUnits). INFORM-ONLY: it only reorders the presented view.
+// concentrated deploy, and ÷slots would push a 50m big-ticket below 1 unit and demote exactly that class).
+// POLISH 2: capEff is bounded to a REALIZABLE rate — lapsCap = limit × windows/day ÷ deployUnits, the
+// position-level buy-limit throughput (you can only re-buy `limit` units per 4h window, so a big deployed
+// position recycles slowly). INFORM-ONLY: it only reorders the presented view. bigTicket (row.mid ≥
+// BIG_TICKET_GP) is stored for the guaranteed-visibility slice (POLISH 1) — an ordering AID, never a re-rank.
 function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, prof, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
-  const capEff = capEfficiency(spec, er);
-  const deployable = digestDeployable(er, row);
+  const buyLow = (er && er.pair && er.pair.bid != null) ? er.pair.bid : null;
+  const units = deployUnits({ buyLow, limitVol: row ? (row.volDay ?? null) : null, limit: row ? (row.limit ?? null) : null, capGp: VALUE_CAPITAL });
+  const deployable = (units != null && buyLow != null) ? units * buyLow : null;
+  // POLISH 2 buy-limit lap cap: the deployed position recycles at most limit×(windows/day) units per day, so
+  // its laps/day of the WHOLE position is (limit × LAPS_PER_DAY_CEIL) ÷ deployUnits. Only binds when the
+  // position is large vs the limit; a small (big-ticket) position keeps its ttf-driven rate. Null → no bound.
+  const lapsCap = (row && row.limit != null && units != null && units > 0) ? (row.limit * LAPS_PER_DAY_CEIL) / units : null;
+  const capEff = capEfficiency(spec, er, { lapsCap });
   DIGEST_ROWS.push({
     name,
     capEff,
@@ -523,32 +541,52 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     reachFrac,
     phase: ph,
     grade,
+    bigTicket: isBigTicket(row),
     verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase: ph }),
   });
 }
-// buildDigestBlock(): the rendered digest string (top ~8 across ALL niches this pass, ranked by the
-// DEPLOYABLE-THROUGHPUT rank key — capEff × deployable capital ≈ after-tax deployable gp/day — desc, ties
-// broken by capEff then rank). capEff stays a DISPLAYED column (still meaningful per-unit info); a `deploy`
-// column shows the deployable capital so the ordering is legible (why a big-ticket you can park 40m into
-// out-ranks a dust flip you can only put 100k into, even at a higher raw %). A VIEW — every candidate is
-// still in screen.json / the per-niche table. Degrades, never throws: a null rank key sorts last, '—' cells.
+// buildDigestBlock(): the rendered digest string. The MAIN block = top ~8 across ALL niches this pass, ranked
+// by the DEPLOYABLE-THROUGHPUT rank key (capEff × deployable capital ≈ after-tax deployable gp/day) desc,
+// ties broken by capEff then rank. capEff stays a DISPLAYED column (realizable %/day per POLISH 2); a
+// `deploy` column shows the deployable capital so the ordering is legible (why a big-ticket you can park 40m
+// into out-ranks a dust flip you can only put 100k into, even at a higher raw %).
+// POLISH 1 — GUARANTEED BIG-TICKET SLICE (visibility, NOT a re-rank): pure deployable-gp/day tops the digest
+// with high-throughput churn, so the low-fuss big-ticket lane (mid ≥ BIG_TICKET_GP) can miss the visible
+// top-8 and the judgment layer can't see it to weigh it. If fewer than BIG_TICKET_MIN big-ticket rows made
+// the main block, APPEND a small labeled sub-section with the next BIG_TICKET_SLICE big-tickets (same columns,
+// same rankKey order within the slice) — additive, mirroring how the value niche surfaces a MIX. The MAIN
+// ordering is untouched. A VIEW — every candidate is still in screen.json / the per-niche table.
 const DIGEST_TOP = 8;
+const BIG_TICKET_MIN = 2;     // if the visible top-8 has fewer than this many big-tickets, append the slice
+const BIG_TICKET_SLICE = 3;   // how many extra big-tickets the guaranteed-visibility slice shows
+const digestCells = r => [
+  { t: r.name },
+  { t: r.capEff != null ? `${round2(r.capEff).toFixed(2)}%/d` : '—' },
+  { t: r.deployable != null ? fmtP(Math.round(r.deployable)) : '—' },
+  { t: r.reachFrac == null ? '—' : (r.reachFrac >= REACH_GRADE_CAP_FRAC ? '✓' : '✗') },
+  { t: r.phase || '—' },
+  { t: r.grade },
+  { t: r.verdict },
+];
 export function buildDigestBlock(pool = DIGEST_ROWS) {
-  const lines = ['## DECISION DIGEST — deployable-throughput triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by capEff × deployable capital ≈ after-tax deployable gp/day, NOT raw %; capEff = after-tax ROI%/day of capital tied up)'];
+  const lines = ['## DECISION DIGEST — deployable-throughput triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by capEff × deployable capital ≈ after-tax deployable gp/day, NOT raw %; capEff = realizable ROI%/day, buy-limit-bounded)'];
   if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
   const key = r => (r.rankKey != null ? r.rankKey : (r.capEff != null ? r.capEff : -Infinity));
   const sorted = [...pool].sort((a, b) =>
     (key(b) - key(a)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
-  const rows = sorted.slice(0, DIGEST_TOP).map(r => [
-    { t: r.name },
-    { t: r.capEff != null ? `${round2(r.capEff).toFixed(2)}%/d` : '—' },
-    { t: r.deployable != null ? fmtP(Math.round(r.deployable)) : '—' },
-    { t: r.reachFrac == null ? '—' : (r.reachFrac >= REACH_GRADE_CAP_FRAC ? '✓' : '✗') },
-    { t: r.phase || '—' },
-    { t: r.grade },
-    { t: r.verdict },
-  ]);
-  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'phase', 'grade', 'verdict'], rows));
+  const main = sorted.slice(0, DIGEST_TOP);
+  const tableRows = main.map(digestCells);
+  // POLISH 1: guaranteed big-ticket slice, appended only when the main block under-represents them.
+  const bigInMain = main.filter(r => r.bigTicket).length;
+  if (bigInMain < BIG_TICKET_MIN) {
+    const shown = new Set(main);
+    const bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
+    if (bigExtra.length) {
+      tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
+      for (const r of bigExtra) tableRows.push(digestCells(r));
+    }
+  }
+  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'phase', 'grade', 'verdict'], tableRows));
   return lines.join('\n');
 }
 

@@ -67,7 +67,12 @@ gp/day, NOT raw %) — the "which of these do I look closer at" triage pass. Ran
 dust-tier cheap high-% flips bury the big-ticket deploys, so the digest weights capEff by the deployable
 capital (reusing the value flip-niche's `deployUnits` against the full `--capital` pool) — `capEff` stays a shown
 column, and the `deploy` column shows the parkable capital so the ordering reads honestly (a big-ticket you
-can park 40m into out-ranks a dust flip you can only put 100k into, even at a lower %). It
+can park 40m into out-ranks a dust flip you can only put 100k into, even at a lower %). `capEff` is a
+REALIZABLE sustained %/day — buy-limit-bounded at the deployed size, so a fast-churn cheap item reads
+~13%/d, not a ~198%/d fantasy you can't actually cycle. A `— big-ticket lane —` sub-section is APPENDED when
+fewer than 2 big-tickets (`mid ≥ BIG_TICKET_GP`) made the visible top-8, so the low-fuss big-ticket class
+(Magus/Osmumten/godsword) is ALWAYS visible for the away-horizon trade-off (see "Velocity vs magnitude") —
+additive visibility, never a re-rank of the main block. It
 is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
 footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
 the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two

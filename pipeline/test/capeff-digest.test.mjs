@@ -54,6 +54,25 @@ ok('ttf 0 single-turn floors at 1h — no divide-by-zero', () => {
   assert.ok(approx(c, 5 / (3600 / 86400)), `expected ${5 / (3600 / 86400)}, got ${c}`);
 });
 
+// --- 1b. POLISH 2 — buy-limit-bounded realizable capEff ----------------------------------------
+ok('fast-churn item: a tight lapsCap bounds capEff to a realizable rate (198%/d fantasy → ~4%/d)', () => {
+  // single-turn band, ttf 1h (floored) → UNBOUNDED holdDays 1/24 → capEff = 8% × 24 = 192%/d (the fantasy)
+  const unbounded = capEfficiency(BAND, er(80, 1000, 3600));
+  assert.ok(approx(unbounded, 192), `expected 192, got ${unbounded}`);
+  // a big deployed position that can only recycle 0.5×/day (lapsCap 0.5) → holdDays 2d → capEff 8/2 = 4%/d
+  const bounded = capEfficiency(BAND, er(80, 1000, 3600), { lapsCap: 0.5 });
+  assert.ok(approx(bounded, 4), `expected 4, got ${bounded}`);
+  assert.ok(bounded < unbounded, 'the buy-limit bound must SLOW the realizable rate, never speed it up');
+});
+ok('a lapsCap ABOVE the natural rate never speeds it up (only ever lengthens holdDays)', () => {
+  const natural = capEfficiency(CHURN, er(50, 1000, 1800));                 // churn laps 6 → capEff 30
+  const withLooseCap = capEfficiency(CHURN, er(50, 1000, 1800), { lapsCap: 20 });  // 20 > 6 → no change
+  assert.ok(approx(natural, withLooseCap), `loose cap must not change capEff: ${natural} vs ${withLooseCap}`);
+});
+ok('lapsCap null → unchanged (backward-compatible; the lean suggestions.jsonl log path)', () => {
+  assert.ok(approx(capEfficiency(BAND, er(50, 1000, 43200)), capEfficiency(BAND, er(50, 1000, 43200), { lapsCap: null })));
+});
+
 // --- 2. weakDeploy ------------------------------------------------------------------------------
 const bigMid = { mid: 50_000_000 };
 const hugeMid = { mid: 85_000_000 };
@@ -120,8 +139,8 @@ ok('deployUnits → null when buyLow is missing (degrade, no throw)', () => {
 // rankKey = capEff × deployable capital ≈ after-tax deployable gp/day (the follow-up fix — raw capEff is
 // scale-free, so dust-tier cheap high-% items swept the top). mkRow keeps deployable EQUAL by default so the
 // legacy capEff-order + rank tie-break assertions still hold (rankKey ∝ capEff when deployable is constant).
-const mkRow = (name, capEff, rank = 0, deployable = 1) =>
-  ({ name, capEff, deployable, rankKey: (capEff != null && deployable != null) ? capEff * deployable : null, rank, reachFrac: 0.9, phase: 'in-peak', grade: 'A', verdict: 'fill-now' });
+const mkRow = (name, capEff, rank = 0, deployable = 1, bigTicket = false) =>
+  ({ name, capEff, deployable, rankKey: (capEff != null && deployable != null) ? capEff * deployable : null, rank, reachFrac: 0.9, phase: 'in-peak', grade: 'A', bigTicket, verdict: 'fill-now' });
 ok('empty pool → the honest one-liner, not an empty table', () => {
   const out = buildDigestBlock([]);
   assert.match(out, /\(no candidates this pass\)/);
@@ -158,6 +177,32 @@ ok('the deploy column renders the deployable capital (legibility)', () => {
   const out = buildDigestBlock([mkRow('Big', 5, 0, 140_000_000)]);
   assert.match(out, /\| deploy \|/);           // the new column header
   assert.match(out, /140m/);                    // the deployable capital cell
+});
+
+// --- 6. POLISH 1 — guaranteed big-ticket visibility slice ---------------------------------------
+ok('big-ticket slice APPEARS when fewer than 2 big-tickets made the main top-8', () => {
+  // 8 high-throughput non-big-ticket rows sweep the main block; 2 low-throughput big-tickets miss it
+  const main = Array.from({ length: 8 }, (_, i) => mkRow(`Churn${i}`, 100 - i, 0, 100_000_000, false));
+  const bigA = mkRow('Osmumtens fang', 4, 0, 140_000_000, true);   // rankKey 560M ≪ any Churn (≥9.3B)
+  const bigB = mkRow('Bandos godsword', 3, 0, 140_000_000, true);
+  const out = buildDigestBlock([...main, bigA, bigB]);
+  assert.match(out, /— big-ticket lane/);                          // the divider appears
+  const divIdx = out.indexOf('— big-ticket lane');
+  assert.ok(out.indexOf('Osmumtens fang') > divIdx, 'the big-ticket appears in the appended slice, below the divider');
+  assert.ok(out.indexOf('Bandos godsword') > divIdx);
+  // the main block is UNTOUCHED — a high-throughput churn row still leads
+  assert.ok(out.indexOf('Churn0') < divIdx, 'the main throughput ranking is not reordered');
+});
+ok('NO big-ticket slice when ≥2 big-tickets already made the main top-8 (no redundant section)', () => {
+  const bigA = mkRow('BigA', 100, 0, 140_000_000, true);   // huge rankKey → in the top-8
+  const bigB = mkRow('BigB', 90, 0, 140_000_000, true);
+  const rest = Array.from({ length: 6 }, (_, i) => mkRow(`Mid${i}`, 50 - i, 0, 100_000_000, false));
+  const out = buildDigestBlock([bigA, bigB, ...rest]);
+  assert.doesNotMatch(out, /— big-ticket lane/);
+});
+ok('no big-tickets at all → no slice, no divider (nothing to guarantee)', () => {
+  const out = buildDigestBlock(Array.from({ length: 5 }, (_, i) => mkRow(`R${i}`, 10 - i)));
+  assert.doesNotMatch(out, /— big-ticket lane/);
 });
 
 console.log(`\n${n} assertions passed.`);

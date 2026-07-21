@@ -374,9 +374,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, 2026-07-21): `capEff` = after-tax ROI%/day of capital tied up
   (`roiPct ÷ holdDays`, a churn lane's `holdDays` reflecting its laps/day), `weakDeploy` = the big-ticket
   single-turn (non-churn) thin-per-turn flag (mid ≥ `BIG_TICKET_GP`, roiPct < ~0.5% PLACEHOLDER). Computed
-  inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`) — displayed in the console-only `--digest`
-  decision block (which RANKS by deployable throughput = `capEff × deployable capital` via the reused
-  `valuescreen.mjs deployUnits`, so scale-free % can't bury big-ticket deploys) + `weakDeploy` a flag;
+  inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`). The LEAN-LOGGED `capEff` is the INTRINSIC
+  per-turn-efficiency (size-independent, calibration-friendly); the console-only `--digest` decision block
+  DISPLAYS a REALIZABLE, buy-limit-bounded `capEff` (laps/day capped at the deployed size) and RANKS by
+  deployable throughput = `capEff × deployable capital` (via the reused `valuescreen.mjs deployUnits`, so
+  scale-free % can't bury big-ticket deploys; a guaranteed `— big-ticket lane —` slice keeps them visible).
   INFORM-ONLY (n≈0), never a gate/`screen.json` field. Consumer: the future retro-join calibration.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
