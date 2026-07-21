@@ -15,7 +15,7 @@
  * 4. buildDigestBlock is a VIEW: top-8 cap, capEff-desc sort (null last), and an honest empty fallback.
  */
 import assert from 'node:assert/strict';
-import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock } from '../commands/screen-flip-niches.mjs';
+import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock, digestReachAndPlacement } from '../commands/screen-flip-niches.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { BIG_TICKET_GP } from '../../js/quotecore.js';
 import { deployUnits } from '../../js/valuescreen.mjs';
@@ -203,6 +203,38 @@ ok('NO big-ticket slice when ≥2 big-tickets already made the main top-8 (no re
 ok('no big-tickets at all → no slice, no divider (nothing to guarantee)', () => {
   const out = buildDigestBlock(Array.from({ length: 5 }, (_, i) => mkRow(`R${i}`, 10 - i)));
   assert.doesNotMatch(out, /— big-ticket lane/);
+});
+
+// --- 7. POLISH 3 — stale-live-print guard on the digest's reach/placement -----------------------
+// A quoted optSell can be pinned to a STALE live instabuy print; the ask-reach read scored at that stale
+// level is a FALSE positive. When the sell-side live print is stale (row.quickStale.sell — the same source
+// quote-items.mjs's staleLive note reads), reach + placement recompute against the FRESHER instasell.
+const ASYM_SPEC = { fillShape: 'asym' };
+const HIS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59];              // 14-day daily-HIGH distribution (sorted)
+const REACH_23 = { recentHit: 2, recentDays: 3, reachedDays: 8, nDays: 14 };   // un-guarded recent → 0.667 = ✓
+ok('non-stale row: reach = the validator recent-3 frac, placement off optSell (unchanged path)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 52, quickStale: { sell: false, buy: false }, quickBuy: 57 }, askReachExtra: REACH_23, his: HIS });
+  assert.ok(approx(r.reachFrac, 2 / 3), `expected 0.667, got ${r.reachFrac}`);
+  assert.equal(r.staleGuarded, false);
+  assert.ok(r.reachFrac >= 0.5, 'non-stale reads ✓');
+});
+ok('STALE sell-side row: digest reach FLIPS from a false ✓ to the honest ✗ (recomputed at the fresher instasell)', () => {
+  // optSell 52 was pinned to a stale instabuy; the fresher instasell is 57, and only 3/10 daily highs reach 57
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 52, quickStale: { sell: true, buy: false }, quickBuy: 57 }, askReachExtra: REACH_23, his: HIS });
+  assert.equal(r.staleGuarded, true);
+  assert.ok(approx(r.reachFrac, 0.3), `expected 0.3, got ${r.reachFrac}`);
+  assert.ok(r.reachFrac < 0.5, 'the honest read is ✗ (sell unreliable), not the stale ✓');
+  // placement is also recomputed at the fresher reference (mirage-aware): 57 sits high in the daily-HIGH dist
+  assert.ok(r.askPlacement > 0.5, `placement should reflect the fresher reference, got ${r.askPlacement}`);
+});
+ok('stale guard is SCOPED: a symmetric (reach-exempt) niche still reads — even when stale', () => {
+  const r = digestReachAndPlacement({ spec: { fillShape: 'symmetric' }, row: { optSell: 52, quickStale: { sell: true }, quickBuy: 57 }, askReachExtra: REACH_23, his: HIS });
+  assert.equal(r.reachFrac, null);   // churn/amplitude never assert reach, stale or not (no false '✗')
+});
+ok('stale guard no-ops when there is no distinct fresher level (degrades to the normal path)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 52, quickStale: { sell: true }, quickBuy: null }, askReachExtra: REACH_23, his: HIS });
+  assert.equal(r.staleGuarded, false);
+  assert.ok(approx(r.reachFrac, 2 / 3), 'no fresher instasell → unchanged validator reach');
 });
 
 console.log(`\n${n} assertions passed.`);

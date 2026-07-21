@@ -155,7 +155,12 @@ fantasy you can't actually cycle the whole deployed position at. `capEff` stays 
 (POLISH 1) protects visibility: pure deployable-gp/day tops the digest with high-throughput churn, so if
 fewer than 2 big-ticket rows (`mid ≥ BIG_TICKET_GP`) made the visible top-8, a small `— big-ticket lane —`
 sub-section is APPENDED (top few big-tickets by the same rank key) — additive visibility for the
-attention/risk trade-off, NOT a re-ranking of the main block. It is an anti-overwhelm TRIAGE VIEW ("which N
+attention/risk trade-off, NOT a re-ranking of the main block. The reach ✓/✗ + mirage read is STALE-LIVE
+guarded (POLISH 3): when a row's sell-side live print is stale (`row.quickStale`, the same QUICK_FRESH_MIN
+freshness flags `quote-items.mjs`'s `staleLive` note reads), a quoted `optSell` pinned to that stale
+instabuy can fake a reach ✓, so reach + placement recompute against the fresher instasell off the daily-HIGH
+distribution — digest-scoped, never touching the screen's own reach validator, `screen.json`, or
+`quote-items` output. It is an anti-overwhelm TRIAGE VIEW ("which N
 do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
 footers, and the per-niche table's own `rank` sort is untouched (the deployable-throughput ordering is
 digest-only). The

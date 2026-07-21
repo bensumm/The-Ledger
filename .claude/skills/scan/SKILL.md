@@ -72,7 +72,9 @@ REALIZABLE sustained %/day — buy-limit-bounded at the deployed size, so a fast
 ~13%/d, not a ~198%/d fantasy you can't actually cycle. A `— big-ticket lane —` sub-section is APPENDED when
 fewer than 2 big-tickets (`mid ≥ BIG_TICKET_GP`) made the visible top-8, so the low-fuss big-ticket class
 (Magus/Osmumten/godsword) is ALWAYS visible for the away-horizon trade-off (see "Velocity vs magnitude") —
-additive visibility, never a re-rank of the main block. It
+additive visibility, never a re-rank of the main block. The reach ✓/✗ + mirage read is stale-live guarded:
+a quoted ask pinned to a STALE live instabuy print (the `staleLive` case `quote-items.mjs` flags) can't fake
+a reach ✓ — reach/placement recompute against the fresher instasell, digest-scoped. It
 is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
 footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
 the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two

@@ -507,6 +507,34 @@ function digestReachFrac(spec, askReachExtra) {
   if (askReachExtra.recentDays) return askReachExtra.recentHit / askReachExtra.recentDays;
   return askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
 }
+// POLISH 3 — STALE-LIVE GUARD for the digest's reach ✓/✗ + mirage read. A row's quoted optSell can be
+// pinned to a STALE live instabuy print (an old /latest tick, not a live one — the SAME failure quote-
+// items.mjs's `staleLiveNote` catches off `row.quickStale`, the QUICK_FRESH_MIN freshness flags computeQuote
+// sets). When the SELL-side live print is stale, the ask-reach read (scored at that stale optSell) is a
+// FALSE positive — the honest reference is the FRESHER instasell (row.quickBuy). This recomputes reach +
+// placement against that fresher level off the 14-day daily-HIGH distribution (rbStats.his, already in hand),
+// so a stale-inflated reach ✓ flips to the honest read. DIGEST-SCOPED: it touches ONLY the digest's
+// reach/placement/mirage — never the screen's own reach validator notes, screen.json, or quote-items output.
+// Non-stale rows fall straight through to the unchanged askReachExtra/optSell path (byte-identical).
+export function digestReachAndPlacement({ spec, row, askReachExtra, his } = {}) {
+  const symmetric = !!(spec && spec.fillShape === 'symmetric');
+  const optSell = (row && row.optSell != null) ? row.optSell : null;
+  // reuse row.quickStale (the staleLiveNote source): sell-side live print stale → the fresher instasell is
+  // the honest current reference. Only guards when a distinct fresher level exists.
+  const staleSell = !!(row && row.quickStale && row.quickStale.sell);
+  const fresher = (row && row.quickBuy != null) ? row.quickBuy : null;
+  const guarded = staleSell && optSell != null && fresher != null && fresher !== optSell;
+  const refLevel = guarded ? fresher : optSell;
+  const askPlacement = (his && his.length && refLevel != null) ? placement(his, refLevel) : null;
+  let reachFrac;
+  if (symmetric) reachFrac = null;
+  else if (guarded && his && his.length)
+    // recompute reach off the daily-HIGH distribution at the honest (fresher) reference — the validator's
+    // recent-3 reach was scored against the stale optSell, so it can't be trusted here.
+    reachFrac = his.filter(h => h != null && h >= refLevel).length / his.length;
+  else reachFrac = digestReachFrac(spec, askReachExtra);
+  return { reachFrac, askPlacement, staleGuarded: guarded };
+}
 // collectDigestRow(...): compute the realizable capEff + the deployable-throughput RANK KEY + the verdict for
 // one surfaced candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and
 // held rows (Workstream B's positions read owns those). rankKey = capEff × deployable capital ≈ after-tax
@@ -1015,8 +1043,9 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // ALREADY in hand (zero new fetch) — the RECENT ask-reach fraction (symmetric niches → null → '—') and
     // the quoted ask's placement in the 14-day daily-HIGH distribution (rbStats.his, same rbStats the band-low
     // placement token already reads). Stored on the row; the digest is collected after the sort below.
-    const digestReach = digestReachFrac(FLIP_NICHES[mode], askReachExtra);
-    const digestAskPlacement = (rbStats && rbStats.his && rbStats.his.length && row.optSell != null) ? placement(rbStats.his, row.optSell) : null;
+    // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
+    // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
+    const { reachFrac: digestReach, askPlacement: digestAskPlacement } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his });
     rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement });
     dist[grade] = (dist[grade] || 0) + 1;
   }
