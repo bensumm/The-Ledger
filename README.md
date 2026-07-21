@@ -368,6 +368,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `fiveReach` is `null` when the 5m archive is thin/absent — never faked (honesty). Distinct from `winClear`
   (that keys the within-window lap-clear on `optSell`; `windowExit` keys the rung's two reach signals +
   placement). Producer: the two positions/watch held-lot surfaces; consumer: F1 accrual / the future WC2 join.
+  A screen flip-niche/amplitude row also carries the lean **`capEff`**/**`weakDeploy`** shadow pair
+  (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, 2026-07-21): `capEff` = after-tax ROI%/day of capital tied up
+  (`roiPct ÷ holdDays`, a churn lane's `holdDays` reflecting its laps/day), `weakDeploy` = the big-ticket
+  single-turn (non-churn) thin-per-turn flag (mid ≥ `BIG_TICKET_GP`, roiPct < ~0.5% PLACEHOLDER). Computed
+  inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`) — the console-only `--digest` decision
+  block's ranking metric + flag; INFORM-ONLY (n≈0), never a gate/`screen.json` field. Consumer: the future
+  retro-join calibration.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

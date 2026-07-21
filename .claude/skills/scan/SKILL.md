@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.79
+version: 1.80
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -29,7 +29,10 @@ row that's genuinely gradeable (roughly B- and above, or any row you're about to
 judgment pass), and collapse the rest into ONE line — `Skipped: N D-grade/BE-floored rows
 (negligible net): Item, Item, …` — at the bottom, per `actionable-first-dead-last`. This is a
 row-count trim, not a column/number edit — nothing about a KEPT row's numbers changes, and
-nothing is silently dropped (the skipped names are still named, just not as full rows).
+nothing is silently dropped (the skipped names are still named, just not as full rows). **The
+`--digest` block (§1) does NOT replace this trim rule** — the digest is a SEPARATE, narrower
+cross-niche triage VIEW that sits above the per-niche tables; this trim still governs the FULL
+per-niche table you paste. Two surfaces, two reads.
 
 **Quiet is now the DEFAULT (AO1, default flipped post-review — Ben: an agent must read the JSON dump
 for the data, not lean on a stdout summary line, so quiet can't be optional).** A bare
@@ -50,11 +53,36 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs --verbose [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 1|1.5] [--capital <gp> --slots N]
+node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 1|1.5] [--capital <gp> --slots N]
 ```
 
 `--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
 is now the default (AO1) and without `--verbose` there is no table in stdout to paste.
+
+**`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
+_(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
+ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | reach | phase | grade |
+verdict`, top ~8 ranked by capital-efficiency — the "which of these do I look closer at" triage pass. It
+is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
+footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
+the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two
+different reads (digest = cross-niche triage; the trimmed table = the per-niche detail). CONSOLE-ONLY (never
+in `screen.json` / the app), and every column is INFORM-ONLY, PLACEHOLDER (n≈0) — the `verdict` word is a
+deterministic triage prompt (`fill-now` / `weak deploy` / `sell unreliable` / `mirage top` / `starter /
+hold-to-next-peak` / `low-conviction`), NOT a calibrated order. Off by default for a bare/scripted run.
+
+**Positions check every pass (Workstream B — mandatory, cheap).** _(judgment: session-local relay; no stored
+state)_ After syncing/scanning, run `node pipeline/commands/quote-items.mjs --positions` (bare/quiet — read
+`pipeline/.cache/last-report/quote.json`, don't re-paste the whole table) and surface ONLY lines whose
+verdict CHANGED since your last look THIS session: a new `BID-BEHIND` (a resting BUY sitting below
+`row.optBuy`, unlikely to fill), a stalled resting ASK (sitting well above where the item is actually
+printing), or a fill. "Changed since last look" is a comparison YOU make by eye across two consecutive
+`/scan` runs in one session — there is NO stored diff/snapshot (by design); it degrades silently to "nothing
+to compare against" on the FIRST scan of a session, which is correct (no false "nothing changed"). Don't
+re-paste `/positions`' whole table — that's its own ask's job. The DURABLE fix for "positions read every loop
+pass" is running `run-loop.mjs --watch <min> --scan <min>` together so `watch-positions.mjs` (the richer,
+alert-raising positions surface) rides its own cadence alongside the scan (CLAUDE.md's `/loop` row) — prefer
+that for an unattended session; this manual step covers a one-shot `/scan`.
 
 **`--pressure-exit` is OPT-IN, not default (Ben 2026-07-16 — reverted off the 2026-07-15 early-adopt).**
 _(judgment: owner call; mechanic in `js/estimators.mjs` `estimatePair({ pressureExit })`, PB4)_ Run the
@@ -327,6 +355,19 @@ This is the tribal layer the script can't do — apply ALL of these:
   big-ticket realized sample is n=1 (one godsword) — the crossover is UNMEASURED. When the RC co-log
   accrues enough closed big-ticket round-trips, compare realized %/day directly instead of estimating.
   Companion to the parked-capital-leak hypothesis above.
+- **Capital-efficiency ordering — read the digest's `capEff` column, not just Grade/Rank (PLACEHOLDER,
+  n≈0).** _(judgment: the NUMERIC companion to "Velocity vs magnitude" above — inform-only ordering)_
+  `capEff` = after-tax ROI%/day of capital tied up (`roiPct ÷ holdDays`; a recycling churn lane's `holdDays`
+  reflects its laps/day, so a fast small win can out-rank a slow big one). A thin big-ticket clearing its
+  sell verification can still be a **weak deploy**: the digest's `⚠ weak deploy` verdict flags a BIG-TICKET
+  (mid ≥ `BIG_TICKET_GP`, 10m) single-turn (non-churn) pick under ~0.5% PER TURN — Magus (+160k/50m, ~0.3%,
+  cancelled) vs blowpipe (~+960k/~85m, ~1.1%, clears on margin alone) is the anchor. Churn is the ONLY lane
+  exempt from the flag (its recycling is rewarded in `capEff`'s ranking via `holdDays`, not by exempting the
+  per-turn flag); amplitude big-tickets DO flag. This is inform-only ordering/flagging — it NEVER gates or
+  drops a row, and every threshold is unvalidated until the retro-join measures real single-turn big-ticket
+  fills. This is a NEW numeric signal that FEEDS the "Velocity vs magnitude" decision above without replacing
+  its attention/risk framing — read them together (that bullet is Ben's directional preference; `capEff` is
+  the number).
 - **Band-top artifact detection.** _(judgment: artifact spotting; `--min-traded` supports; Bar E trims at source)_ A single outlier print inflating the band (one lone
   100k print against a 59k mid) makes ROI look absurd. **Bar E (2026-07-10) now trims this at SOURCE on
   BOTH surfacing paths:** `robustBand` takes the p90 high / p10 low on a DENSE band (≥8 prints/side), so a

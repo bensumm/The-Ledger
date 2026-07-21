@@ -319,7 +319,7 @@ export function windowExitShadow(aer, { list = null, live = null, peakWindow = n
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, demandRegime, amplitude } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, demandRegime, amplitude, capEff, weakDeploy } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -463,6 +463,13 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // Lean-included: no /24h read → no field → byte-identical shape.
   if (row.pressure && (row.pressure.hpv != null || row.pressure.lpv != null))
     e.depth = { hpv: row.pressure.hpv ?? null, lpv: row.pressure.lpv ?? null };
+  // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (2026-07-21) — the capital-efficiency shadow pair: capEff =
+  // after-tax ROI%/day of capital tied up (roiPct ÷ holdDays; a churn lane's holdDays reflects its
+  // laps/day), weakDeploy = a big-ticket single-turn pick under the ~0.5%/turn PLACEHOLDER bar. Both
+  // INFORM-ONLY (n≈0) — the retro-join calibrates them later; never a gate/screen.json field. Lean-
+  // included (YS2 pattern): a caller that supplies neither (quote/watch/watchlist) logs a byte-identical shape.
+  if (capEff != null)        e.capEff = capEff;
+  if (weakDeploy != null)    e.weakDeploy = weakDeploy;
   return e;
 }
 

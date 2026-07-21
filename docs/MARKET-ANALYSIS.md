@@ -139,6 +139,24 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 - **Net/u** = after the 2% tax. **Regime** = the multi-day `regimeDrift` (flat/rising/falling), with
   a display-only **phase tag** folded in (`spike`/`decay`/`basing`, from `phase()`) — NOT a gate.
 
+### The decision digest — a THIRD console view (`--digest`)
+`screen-flip-niches.mjs --digest` prints ONE compact cross-niche block ABOVE the per-niche tables (and
+above `--raw`): `Item | capEff | reach | phase | grade | verdict` — top ~8 across all flip-niches this pass,
+ranked by **capEff** (after-tax ROI%/day of capital tied up). It is an anti-overwhelm TRIAGE VIEW ("which N
+do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
+footers, and the per-niche table's own `rank` sort is untouched (capEff-ordering is digest-only). The
+`verdict` word is deterministic, first-match-wins over a rule table (`sell unreliable` / `mirage top` /
+`weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
+calibrated. **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn
+exempt, amplitude not) live inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`/`digestVerdict`,
+reusing `BIG_TICKET_GP` from `js/quotecore.js`, `LIMIT_WINDOW_SEC` from `pipeline/lib/limits.mjs` for the 6
+laps/day ceiling, and `placement`/`diurnalPhase` from `js/windowread.mjs` + `GRADE_CUTOFFS`/
+`REACH_GRADE_CAP_FRAC` from `js/rating.mjs`); a lean `capEff`/`weakDeploy` shadow rides `suggestions.jsonl`
+for the retro-join. Everything here is **INFORM-ONLY, PLACEHOLDER (n≈0), never gates**, and — critically —
+**the digest NEVER reaches `screen.json`** (CONSOLE-ONLY, no `APP_VERSION` bump), so don't go looking for it
+in the app. Companion judgment framing: `/scan` SKILL.md's "Capital-efficiency ordering" + "Velocity vs
+magnitude" bullets.
+
 ---
 
 ## 2. Tax & break-even — the one home

@@ -74,7 +74,7 @@
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
  */
-import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText } from '../../js/quotecore.js';
+import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
@@ -108,7 +108,7 @@ import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche
 import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
 import { readOpenPositions } from '../lib/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
-import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side)
+import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
 // COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
 // logic) so quote-items.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
@@ -267,6 +267,13 @@ const POSTURE = POSTURE_ARG === 'auto' ? (isOvernightNow() ? 'overnight' : 'acti
 // emitReport still captures every niche report (the VALUE niche renders raw, has no report object,
 // so it's excluded from the dump — same as screen.json).
 const VERBOSE = A.verbose === true;
+// --digest (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST Workstream C): an ADDITIVE, opt-in decision digest —
+// ONE compact cross-niche block (Item | capEff | reach | phase | grade | verdict) printed ONCE after
+// the niche tables, ranked by capital-efficiency. OFF by default (protects the AO1 quiet-default + the
+// --verbose firehose contract, both untouched). It prints REGARDLESS of --verbose (an agent asking for
+// the digest wants stdout) via `realLog` in main(), on its own `if (DIGEST)` gate independent of VERBOSE.
+// CONSOLE-ONLY: never written to screen.json / the last-report dump — no APP_VERSION bump (scope lock).
+const DIGEST = A.digest === true;
 const REPORTS = [];   // per-niche screen-report objects for this pass (renderMode niches only)
 function emitReport(report) { REPORTS.push(report); console.log(renderReport(report)); }   // console.log is a no-op unless --verbose
 const PUBLISH_EXPLICIT = A.publish === true;
@@ -393,6 +400,132 @@ function estFields(er) {
     pFill: round2(er.pFill.value), ttfSec: er.ttf.value, rank: Math.round(er.rank),
     estBasis: `${er.pFill.basis}/${er.ttf.basis}`, estN: Math.min(er.pFill.n, er.ttf.n),
   };
+}
+
+// =====================================================================================================
+// PLAN-CAPITAL-EFFICIENCY-AND-DIGEST — capital-efficiency ranking, the weak-deploy flag, and the
+// decision-digest verdict rule table. EVERYTHING here is INFORM-ONLY, PLACEHOLDER (n≈0), and NEVER
+// gates/drops a row or changes a grade/rank/screen.json: capEff re-orders the DIGEST view only (§1.4 —
+// the per-niche table's `rank` sort is untouched); weakDeploy is a lean suggestions.jsonl flag + a
+// digest token; the verdict strings are a deterministic (NOT calibrated) triage word. None of these
+// thresholds may graduate to a gate without a retro-join measurement first (§7). CONSOLE-ONLY.
+// -----------------------------------------------------------------------------------------------------
+const WEAK_DEPLOY_ROI_PCT = 0.5;   // PLACEHOLDER (n≈0) — Magus (~0.3%, flagged) vs blowpipe (~1.1%, clears
+                                   // on margin alone) anchor; a real bar needs the big-ticket single-turn
+                                   // retro-join (§9). Per-TURN %, deliberately NOT capEff's per-day %.
+const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the 4h buy-limit refill ceiling; a
+                                   // churn lane can re-lap at most this many times/day (LIMIT_WINDOW_SEC is the SoT).
+const MIRAGE_PLACEMENT = 0.85;     // PLACEHOLDER (n≈0, freshly invented per §10 Q3) — "mirage top" ask-side placement bar
+const MIRAGE_REACH_FRAC = 0.70;    // PLACEHOLDER (n≈0, freshly invented) — "still mediocre" recent-reach bar for the mirage rule
+
+// roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
+// ONE formula for every price basis (band/churn/amplitude/…), null-guarded; never reads a per-basis row field.
+function roiPct(er) {
+  return (er && er.net != null && er.pair && er.pair.bid > 0) ? er.net / er.pair.bid * 100 : null;
+}
+// holdDays(spec, er): the fraction of a day this pick ties capital up. A churn lane frees + re-commits the
+// SAME capital up to LAPS_PER_DAY_CEIL (6)×/day, bounded ALSO by how long one lap takes to sell (86400/ttf)
+// — the achievable laps/day is the SLOWER of the two constraints; holdDays is its reciprocal. Every other
+// family is single-turn: TTF in days, floored at 1h (mirrors TTF_FLOOR_DAYS's spirit — no divide-by-tiny).
+function holdDays(spec, er) {
+  const ttfSec = (er && er.ttf && er.ttf.value != null) ? er.ttf.value : 0;
+  if (spec && spec.estimator === 'churn') {
+    const lapsPerDay = Math.min(LAPS_PER_DAY_CEIL, Math.max(1, 86400 / Math.max(ttfSec, 1)));
+    return 1 / lapsPerDay;
+  }
+  return Math.max(ttfSec, 3600) / 86400;
+}
+// capEfficiency(spec, er) = after-tax ROI% earned per DAY of capital tied up (%/day). The RANKING metric —
+// it ties efficiency to time so a fast small win can out-rank a slow big one, and rewards a recycling churn
+// lane via its small holdDays. null (never throws) when roiPct is unavailable. INFORM/lean-only, never a gate.
+export function capEfficiency(spec, er) {
+  const roi = roiPct(er);
+  if (roi == null) return null;
+  const hd = holdDays(spec, er);
+  return hd > 0 ? roi / hd : null;
+}
+// isBigTicket(row): the pre-buy per-unit analogue of BIG_TICKET_GP (the lot-value threshold momVerdict uses).
+const isBigTicket = row => !!(row && row.mid != null && row.mid >= BIG_TICKET_GP);
+// weakDeploy(spec, row, er): a BIG-TICKET single-turn (non-churn) pick whose per-TURN margin barely clears the
+// risk of parking that much capital in ONE item — flags at roiPct < WEAK_DEPLOY_ROI_PCT. Fires for ALL
+// non-churn families ALIKE (band/scalp/value/amplitude) — churn is the ONLY exempt lane (its recycling is
+// rewarded in capEff's RANKING via holdDays, not by exempting the per-turn FLAG). Keyed on roiPct (per-turn),
+// deliberately NOT capEff (per-day). INFORM-only: a lean suggestions field + a digest token, never a gate.
+export function weakDeploy(spec, row, er) {
+  const roi = roiPct(er);
+  return !!(isBigTicket(row) && spec && spec.estimator !== 'churn' && roi != null && roi < WEAK_DEPLOY_ROI_PCT);
+}
+// gradeAtLeast(grade, floor): grade is at least as good as `floor` on the GRADE_CUTOFFS scale (lower index = better).
+function gradeAtLeast(grade, floor) {
+  const order = GRADE_CUTOFFS.map(([g]) => g);
+  const gi = order.indexOf(grade), fi = order.indexOf(floor);
+  return gi >= 0 && fi >= 0 && gi <= fi;
+}
+// digestVerdict(...): the ONE new computed digest field — a deterministic triage WORD, evaluated top-to-bottom,
+// first match wins (§3.2 rule table). All thresholds PLACEHOLDER (n≈0), inform-only — the shape of the
+// judgment, not a calibrated cutoff. `reachFrac` is the RECENT ask-reach fraction (null for a reach-exempt
+// symmetric niche or a no-read row); `askPlacement` is the quoted ask's percentile in the 14-day daily-HIGH
+// distribution (null when no read); `phase` is the diurnalPhase phase string (null when no diurnal profile).
+// `low-conviction` is the honest fallback — "nothing cleared a positive signal," NOT "bad."
+export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase } = {}) {
+  const reachExists = reachFrac != null;
+  if (reachExists && reachFrac < REACH_GRADE_CAP_FRAC) return 'sell unreliable';                       // 1: a bad sell you can't realize beats a thin margin
+  if (askPlacement != null && askPlacement > MIRAGE_PLACEMENT && reachExists && reachFrac < MIRAGE_REACH_FRAC) return 'mirage top';   // 2: high in its own distribution AND still-mediocre recent reach
+  if (weakDeploy(spec, row, er)) return 'weak deploy';                                                 // 3: thin per-turn margin on a big-ticket single-turn
+  if (phase === 'post-peak') return 'starter / hold-to-next-peak';                                     // 4: cooling → size/entry-timing is the point, never fill-now
+  if (gradeAtLeast(grade, 'B-')) return 'fill-now';                                                    // 5: nothing worse fired and the grade holds
+  return 'low-conviction';                                                                              // 6: no positive signal cleared — check the full row
+}
+
+// PLAN-CAPITAL-EFFICIENCY-AND-DIGEST Workstream C — the cross-niche digest candidate pool, collected during
+// each renderMode/renderAmplitudeMode pass (the watchClosely precedent: a Map/array filled while niches
+// render, printed ONCE after the RUN_MODES loop in main() via realLog). STDOUT-ONLY, --digest-gated — never
+// a screen.json/last-report field. Each entry: { name, capEff, rank, reachFrac, phase, grade, verdict }.
+const DIGEST_ROWS = [];
+// digestReachFrac(spec, askReachExtra): the RECENT ask-reach fraction for the digest's reach ✓/✗ column and
+// verdict rules 1/2. A reach-exempt symmetric niche (churn/amplitude — fillShape 'symmetric') → null (renders
+// '—', NOT '✗' — a false alarm, per §3.4); no reach read → null. Prefers the RC1 recent-3 count, full window fallback.
+function digestReachFrac(spec, askReachExtra) {
+  if (spec && spec.fillShape === 'symmetric') return null;
+  if (!askReachExtra) return null;
+  if (askReachExtra.recentDays) return askReachExtra.recentHit / askReachExtra.recentDays;
+  return askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
+}
+// collectDigestRow(...): compute capEff + the verdict for one surfaced candidate and push it into DIGEST_ROWS.
+// Skips sub-floor rows (NOT qualified picks, §3.4) and held rows (Workstream B's positions read owns those).
+function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, prof, subFloor }) {
+  if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
+  if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
+  const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
+  DIGEST_ROWS.push({
+    name,
+    capEff: capEfficiency(spec, er),
+    rank: er && er.rank != null ? er.rank : null,
+    reachFrac,
+    phase: ph,
+    grade,
+    verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase: ph }),
+  });
+}
+// buildDigestBlock(): the rendered digest string (top ~8 across ALL niches this pass, ranked by capEff desc,
+// ties broken by rank desc). A VIEW — every candidate is still in screen.json / the per-niche table. Degrades,
+// never throws: a null capEff sorts last and renders '—'. Zero rows → the honest one-liner.
+const DIGEST_TOP = 8;
+export function buildDigestBlock(pool = DIGEST_ROWS) {
+  const lines = ['## DECISION DIGEST — capital-efficiency triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; capEff = after-tax ROI%/day of capital tied up)'];
+  if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
+  const sorted = [...pool].sort((a, b) =>
+    ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
+  const rows = sorted.slice(0, DIGEST_TOP).map(r => [
+    { t: r.name },
+    { t: r.capEff != null ? `${round2(r.capEff).toFixed(2)}%/d` : '—' },
+    { t: r.reachFrac == null ? '—' : (r.reachFrac >= REACH_GRADE_CAP_FRAC ? '✓' : '✗') },
+    { t: r.phase || '—' },
+    { t: r.grade },
+    { t: r.verdict },
+  ]);
+  lines.push(mdTable(['Item', 'capEff', 'reach', 'phase', 'grade', 'verdict'], rows));
+  return lines.join('\n');
 }
 
 // PLAN-VOL24 shadow: the CORRECTED trailing-24h volume {hpv,lpv} for one surfaced row, composed from its
@@ -816,7 +949,13 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // niches (churn) stay EXEMPT at weight 1 — the reach read mismeasures a tight two-sided churn band
     // (Ben 2026-07-12), so churn's overnight order stays raw-optNet, UNCHANGED from the first AC9(b) cut.
     const ovWeight = (FLIP_NICHES[mode].fillShape === 'symmetric') ? 1 : (er.pFill?.value ?? 0);
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight });
+    // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): the digest's reach ✓/✗ + verdict inputs, off data
+    // ALREADY in hand (zero new fetch) — the RECENT ask-reach fraction (symmetric niches → null → '—') and
+    // the quoted ask's placement in the 14-day daily-HIGH distribution (rbStats.his, same rbStats the band-low
+    // placement token already reads). Stored on the row; the digest is collected after the sort below.
+    const digestReach = digestReachFrac(FLIP_NICHES[mode], askReachExtra);
+    const digestAskPlacement = (rbStats && rbStats.his && rbStats.his.length && row.optSell != null) ? placement(rbStats.his, row.optSell) : null;
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -842,6 +981,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     rows.sort((a, b) => pNet(b) - pNet(a));
   }
 
+  // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): feed this niche's SORTED, surfaced rows into the
+  // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
+  // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
+  // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, prof: r.prof, subFloor });
+
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
   // P4c: log the surfacing spec's inferred DEFAULT entry path on each row so a later fill can infer the
@@ -862,6 +1007,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // PLAN-CAPITAL-THROUGHPUT shadow pair: the ACTIVE (capital-aware, default) expGpDay + the legacy
       // capital-blind expGpDayLegacy, so --stats/analyze/F1 can diff old-vs-new surfacing on real rows.
       expGpDay: r.expGpDay, expGpDayLegacy: r.expGpDayLegacy,
+      // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST lean shadow (YS2 absent-field pattern — old rows stay byte-identical):
+      // capEff = after-tax ROI%/day of capital tied up; weakDeploy = the big-ticket thin-per-turn flag. INFORM-
+      // ONLY (PLACEHOLDER n≈0) — never a gate/screen.json field; here so the retro-join can later calibrate them.
+      capEff: (er => er != null ? round2(er) : undefined)(capEfficiency(FLIP_NICHES[mode], r.er)), weakDeploy: weakDeploy(FLIP_NICHES[mode], r.row, r.er) || undefined,
       // PLAN-WINDOW-CLEAR B2 shadow: the within-window clear read (churn/scalp; null elsewhere)
       winClear: r.winClear,
       // RC-S2 shadow: the pressure-driven reachable band (five-way head-to-head on the discovery surface)
@@ -1279,6 +1428,13 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
       s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade },
     ];
     rows.push({ id: s.id, cells, score: rank });
+    // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): feed the amplitude pick into the decision digest.
+    // amplitude is the big-ticket CONCENTRATION lane, so its weak-deploy flag (§1.1 resolution 1 — NO
+    // recycling carve-out) is exactly where a thin per-turn margin on a huge single-turn hold matters. Build
+    // an estimateRank-shaped `er` from the amplitude family's own pair/net/ttf/pFill/rank so capEfficiency +
+    // digestVerdict read it uniformly. reach column '—' (fillShape 'symmetric' → reach-exempt, §3.4).
+    const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: ar.netPerCycle, ttf, pFill, rank, lapUnits };
+    collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, subFloor: null });
     // A3: the 1.5-day experiment's day-of-week seasonality read (net-new — no day-of-week tooling existed).
     // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.
     if (AMP_HOLD_DAYS > 1) {
@@ -1621,6 +1777,11 @@ async function main() {
     : FLIP_NICHES[m].gate === 'amplitude'
     ? renderAmplitudeMode(gated[m], qcache, map, series1h, guide)                // A2 — the amplitude niche's own daily-cycle table
     : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn });
+  // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): print the ONE cross-niche decision digest, collected
+  // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it
+  // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
+  // --verbose. CONSOLE-ONLY: never written to screen.json / the last-report dump (the console-only scope lock).
+  if (DIGEST) realLog('\n' + buildDigestBlock() + '\n');
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).
