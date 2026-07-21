@@ -32,7 +32,7 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
+import { hourProfile, deriveDiurnalRange, windowStats, trajectoryRead, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -179,6 +179,23 @@ const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDE
 // per-kind sigil now lives in render.mjs's formatNote (NOTE_KINDS), not at the push site. The
 // keepEmpty:true notes section reproduces the pre-VZ3 pattern where the block was always two
 // unconditional console.log calls (a blank then the joined lines) even with zero notes.
+// Fold the multi-day trajectory read onto EVERY quote surface (Ben 2026-07-21 — the fang under-read
+// fix). The exact under-read the fang exposed: reach/placement read "fill-now A-" while the
+// `days` array (already in hand from windowStats) showed an oscillator sitting at its 2-week floor.
+// Renders the full DAILY TRAJECTORY block (per-day low/high, oldest→newest) + the trajectoryRead shape
+// synthesis — the SAME shared helper read-window-range.mjs's --ask/--bid/--exit trio prints, so both
+// surfaces read byte-identically. Data rows ride as plain strings (the V5-block pattern), the read:
+// line as a typed `trajectory` note (context tier). ZERO new fetch — `days` is already in hand. `label`
+// prefixes the header on the multi-item positions surface so each block stays tied to its item.
+function pushTrajectory(notes, days, { liveRef = null, label = '' } = {}) {
+  const tr = trajectoryRead(days, { liveRef });
+  if (!tr) return;
+  notes.push(`  ${label ? label + ': ' : ''}trajectory (14d window low/high, oldest→newest):`);
+  for (const [key, n] of tr.scored) notes.push(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
+  const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
+  notes.push({ kind: 'trajectory', text: `read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)` });
+}
+
 export function buildQuoteReport({
   mode = 'items',
   header = null,          // positions: the '# Open positions …\n' line (with its trailing \n)
@@ -373,6 +390,8 @@ async function runItems() {
       if (askPlace != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReach.reachedDays}/${askReach.nDays}d (recent ${askReach.recentHit ?? '—'}/${askReach.recentDays ?? '—'}) · placement ${pct(askPlace)} of the ${askReach.nDays}-day daily-HIGH distribution`);
       notes.push({ kind: 'reachPlacement', itemId: id, text: `reach/placement: ${parts.join(' — ')}` });
     }
+    // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
+    pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell });
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
@@ -749,6 +768,8 @@ async function runPositions() {
       if (!windowExitDone && askPlaceHeld != null) parts.push(`ask ${fmt(row.optSell)} reached ${askReachHeld.reachedDays}/${askReachHeld.nDays}d (recent ${askReachHeld.recentHit ?? '—'}/${askReachHeld.recentDays ?? '—'}) · placement ${pct(askPlaceHeld)} of the ${askReachHeld.nDays}-day daily-HIGH distribution`);
       if (parts.length) notes.push({ kind: 'reachPlacement', itemId, text: `${name}: reach/placement — ${parts.join(' — ')}` });
     }
+    // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
+    pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid

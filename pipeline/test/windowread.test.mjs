@@ -21,6 +21,7 @@ import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/wi
 import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
 import { hourlyPressure, demandRegime } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension B (DC1)
+import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-read fix — shared multi-day shape read (read-window-range + quote-items render from ONE definition)
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -648,6 +649,43 @@ ok('demandRegime: a flat item is balanced with no windows; thin volume degrades 
 ok('hourlyPressure / demandRegime: too-thin history degrades to null (no false read)', () => {
   assert.equal(hourlyPressure(demandSeries(2, () => ({ volHi: 3000, volLo: 2000 })), { nights: 14, now: dcNow }), null, '2 days < HOURPROFILE_MIN_DAYS');
   assert.equal(demandRegime([], { now: dcNow }), null, 'empty series → null');
+});
+
+// --- trajectoryRead — the shared multi-day shape read (both read-window-range + quote-items) --------
+// days shape: [[key, {low, hi}], …] oldest→newest (windowStats().days). Pure heuristic, inform-only.
+const zigzag = [   // mids alternate up/down (4 flips over 4 → oscFrac 1.0), floor 100 (d1), ceiling 140 (d2)
+  ['2026-07-01', { low: 100, hi: 120 }],
+  ['2026-07-02', { low: 110, hi: 140 }],
+  ['2026-07-03', { low: 100, hi: 120 }],
+  ['2026-07-04', { low: 115, hi: 135 }],
+  ['2026-07-05', { low: 105, hi: 125 }],
+  ['2026-07-06', { low: 112, hi: 132 }],
+];
+ok('trajectoryRead: floor/ceiling + the day each printed', () => {
+  const tr = trajectoryRead(zigzag);
+  assert.equal(tr.floor, 100); assert.equal(tr.ceiling, 140);
+  assert.equal(tr.floorKey, '2026-07-01');   // first day the min low printed
+  assert.equal(tr.ceilKey, '2026-07-02');
+});
+ok('trajectoryRead: many direction flips ⇒ oscillating (not rising/falling on a flat drift)', () => {
+  assert.equal(trajectoryRead(zigzag).shape, 'oscillating floor↔ceiling');
+});
+ok('trajectoryRead: a steady climb reads rising, a steady drop falling', () => {
+  const up = [0, 1, 2, 3, 4, 5].map(i => [`d${i}`, { low: 100 + i * 20, hi: 130 + i * 20 }]);
+  const down = [0, 1, 2, 3, 4, 5].map(i => [`d${i}`, { low: 200 - i * 20, hi: 230 - i * 20 }]);
+  assert.equal(trajectoryRead(up).shape, 'rising');
+  assert.equal(trajectoryRead(down).shape, 'falling');
+});
+ok('trajectoryRead: livePos buckets the live print into FLOOR / mid / CEILING of the window', () => {
+  assert.equal(trajectoryRead(zigzag, { liveRef: 101 }).livePos, 'at the FLOOR');   // (101-100)/40 ≈ 0.03
+  assert.equal(trajectoryRead(zigzag, { liveRef: 120 }).livePos, 'mid-band');       // 0.5
+  assert.equal(trajectoryRead(zigzag, { liveRef: 138 }).livePos, 'at the CEILING'); // 0.95
+  assert.equal(trajectoryRead(zigzag).livePos, null);                                // no live ref ⇒ no note
+});
+ok('trajectoryRead: no usable data ⇒ null (never a false read)', () => {
+  assert.equal(trajectoryRead([]), null);
+  assert.equal(trajectoryRead(null), null);
+  assert.equal(trajectoryRead([['d0', { low: null, hi: null }]]), null);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

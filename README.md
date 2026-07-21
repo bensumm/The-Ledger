@@ -119,7 +119,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   volume AGGREGATES not median-of-ratios (no divide-by-zero on a dead hour); `demandRegime` → `{ regime:
   buy-heavy|sell-heavy|balanced, pooled, buyWindow, sellWindow, hours }` where the sell window is the
   peak-buy-pressure hours and the buy window is the sell-pressure trough; `@provisional-api` until DC2/DC3
-  consume it); MOVED here from `pipeline/lib/`
+  consume it) + **`trajectoryRead`** (2026-07-21, the fang under-read fix — the shared multi-day SHAPE read
+  over a `windowStats().days` series: classifies rising/falling/oscillating/based/elevated + the window
+  floor/ceiling (with the day each printed) + where a `liveRef` sits between them; HEURISTIC/inform-only,
+  never gates; `read-window-range.mjs`'s `read:` line AND `quote-items.mjs`'s `⌁ read:` note on every quote
+  + `--positions` held lot render from THIS ONE definition, so both surfaces are byte-identical); MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/commands/read-window-range.mjs`,
   `pipeline/commands/watch-positions.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of
@@ -569,7 +573,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     array, plus a one-line `read:` (shape rising/falling/oscillating/based/elevated + window
     floor/ceiling + where live sits) and, when `--profile` wasn't passed, a compact `diurnal:` line;
     HEURISTIC + inform-only (the shape label never gates), the console-only fix for the trajectory
-    being read-past in favour of just the reach/placement fields. `--json` (AO2) dumps the
+    being read-past in favour of just the reach/placement fields. The `read:` synthesis is the SHARED
+    `js/windowread.mjs` `trajectoryRead(days,{liveRef})` helper (2026-07-21) — `quote-items.mjs`
+    renders the SAME `DAILY TRAJECTORY` block + `⌁ read:` note on every quote AND `--positions` held
+    lot (zero new fetch — `days` already in hand), so the two surfaces are byte-identical. `--json` (AO2) dumps the
     assembled per-item result objects to stdout (the `analyze-record`/`analyze-fill-placement`
     `--json`→stdout convention, NOT `writeLastReport` — this command builds no render.mjs sections);
     default markdown stdout is byte-identical when absent (the `DAILY TRAJECTORY`/`read:`/`diurnal:`

@@ -58,7 +58,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home
+import { windowStats, trajectoryRead, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
@@ -246,40 +246,14 @@ for (const want of positionals) {
   if (isVerifyRun && scored.length) {
     log(`  --- DAILY TRAJECTORY (window low/high per day, oldest→newest)`);
     for (const [key, n] of scored) log(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
-    // window floor / ceiling (min daily low / max daily high) + the day each printed.
-    const floor = lows.length ? lows[0] : null;
-    const ceiling = his.length ? his[his.length - 1] : null;
-    const floorKey = floor != null ? (scored.find(([, n]) => n.low === floor) || [])[0] : null;
-    const ceilKey = ceiling != null ? (scored.find(([, n]) => n.hi === ceiling) || [])[0] : null;
-    // one-line shape classification off the chronological daily MIDs — rising / falling /
-    // oscillating / based / elevated. HEURISTIC (n≈0), inform-only — never gates, never a verdict.
-    const mids = scored.map(([, n]) => (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low ?? n.hi)).filter(v => v != null);
-    let shape = 'ranging';
-    if (mids.length >= 3 && floor != null && ceiling != null && ceiling > floor) {
-      const range = ceiling - floor;
-      const third = Math.max(1, Math.floor(mids.length / 3));
-      const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
-      const drift = (mean(mids.slice(-third)) - mean(mids.slice(0, third))) / range;   // recent-third vs oldest-third, in range-units
-      let flips = 0;   // direction changes → oscillation density
-      for (let i = 2; i < mids.length; i++) { const a = Math.sign(mids[i - 1] - mids[i - 2]), b = Math.sign(mids[i] - mids[i - 1]); if (a && b && a !== b) flips++; }
-      const oscFrac = flips / (mids.length - 2);
-      const pos = (mids[mids.length - 1] - floor) / range;   // where the latest day's mid sits in the band
-      if (drift >= 0.33) shape = 'rising';
-      else if (drift <= -0.33) shape = 'falling';
-      else if (oscFrac >= 0.4) shape = 'oscillating floor↔ceiling';
-      else if (pos <= 0.34) shape = 'based (sitting near the floor)';
-      else if (pos >= 0.66) shape = 'elevated (sitting near the ceiling)';
-      else shape = 'ranging (mid-band)';
-    }
-    // where the LIVE print sits between the window floor and ceiling — floor / ceiling / mid.
+    // window floor/ceiling + heuristic shape + where the live print sits — the ONE shared
+    // trajectoryRead helper (windowread.mjs), so this CLI and quote-items.mjs render byte-identically.
     const liveRef = latest ? (latest.low ?? latest.high ?? null) : null;
-    let liveNote = '';
-    if (liveRef != null && floor != null && ceiling != null && ceiling > floor) {
-      const lp = (liveRef - floor) / (ceiling - floor);
-      const where = lp <= 0.34 ? 'at the FLOOR' : lp >= 0.66 ? 'at the CEILING' : 'mid-band';
-      liveNote = ` · live ${fmt(liveRef)} ${where}`;
+    const tr = trajectoryRead(scored, { liveRef });
+    if (tr) {
+      const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
+      log(`    read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)`);
     }
-    log(`    read: ${shape} · floor ${fmt(floor)}${floorKey ? ` (${floorKey})` : ''} → ceiling ${fmt(ceiling)}${ceilKey ? ` (${ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)`);
     // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.
     if (A.profile === undefined && profMargin) {
       const tr = profMargin.trendPerDay;

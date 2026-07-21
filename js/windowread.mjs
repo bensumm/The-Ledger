@@ -132,6 +132,55 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
   };
 }
 
+// --- multi-day trajectory shape read (the fang under-read fix) -----------------------------------
+// The heuristic SHAPE classification over a windowStats().days series — the exact under-read the fang
+// incident exposed: reach/placement said "fill-now A-" while the multi-day `days` array (in the same
+// dump) showed an oscillator sitting at its 2-week floor. Extracted here as ONE pure helper so BOTH
+// read-window-range.mjs (the manual trio) AND quote-items.mjs (every quote surface) render an
+// identical trajectory read from the same numbers — no re-derivation, no fetch. HEURISTIC (n≈0),
+// inform-only — never gates, never a verdict; a shape label + the window floor/ceiling + where the
+// live print sits between them.
+//   days:    windowStats().days — [[key, {low, hi}], …] oldest→newest.
+//   liveRef: the live price to position against the window floor/ceiling (or null → no live note).
+// Returns null when the series can't be read; otherwise
+//   { scored, shape, floor, ceiling, floorKey, ceilKey, liveRef, livePos }
+//   livePos ∈ 'at the FLOOR' | 'mid-band' | 'at the CEILING' | null.
+export function trajectoryRead(days, { liveRef = null } = {}) {
+  const scored = Array.isArray(days) ? days.filter(([, n]) => n && (n.low != null || n.hi != null)) : [];
+  if (!scored.length) return null;
+  const lowsAll = scored.map(([, n]) => n.low).filter(v => v != null);
+  const hisAll = scored.map(([, n]) => n.hi).filter(v => v != null);
+  const floor = lowsAll.length ? Math.min(...lowsAll) : null;
+  const ceiling = hisAll.length ? Math.max(...hisAll) : null;
+  const floorKey = floor != null ? (scored.find(([, n]) => n.low === floor) || [])[0] || null : null;
+  const ceilKey = ceiling != null ? (scored.find(([, n]) => n.hi === ceiling) || [])[0] || null : null;
+  // one-line shape off the chronological daily MIDs — rising / falling / oscillating / based / elevated.
+  const mids = scored.map(([, n]) => (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low ?? n.hi)).filter(v => v != null);
+  let shape = 'ranging';
+  if (mids.length >= 3 && floor != null && ceiling != null && ceiling > floor) {
+    const range = ceiling - floor;
+    const third = Math.max(1, Math.floor(mids.length / 3));
+    const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+    const drift = (mean(mids.slice(-third)) - mean(mids.slice(0, third))) / range;   // recent-third vs oldest-third, in range-units
+    let flips = 0;   // direction changes → oscillation density
+    for (let i = 2; i < mids.length; i++) { const a = Math.sign(mids[i - 1] - mids[i - 2]), b = Math.sign(mids[i] - mids[i - 1]); if (a && b && a !== b) flips++; }
+    const oscFrac = flips / (mids.length - 2);
+    const pos = (mids[mids.length - 1] - floor) / range;   // where the latest day's mid sits in the band
+    if (drift >= 0.33) shape = 'rising';
+    else if (drift <= -0.33) shape = 'falling';
+    else if (oscFrac >= 0.4) shape = 'oscillating floor↔ceiling';
+    else if (pos <= 0.34) shape = 'based (sitting near the floor)';
+    else if (pos >= 0.66) shape = 'elevated (sitting near the ceiling)';
+    else shape = 'ranging (mid-band)';
+  }
+  let livePos = null;
+  if (liveRef != null && floor != null && ceiling != null && ceiling > floor) {
+    const lp = (liveRef - floor) / (ceiling - floor);
+    livePos = lp <= 0.34 ? 'at the FLOOR' : lp >= 0.66 ? 'at the CEILING' : 'mid-band';
+  }
+  return { scored, shape, floor, ceiling, floorKey, ceilKey, liveRef, livePos };
+}
+
 // --- day-of-week seasonality (A3, PLAN-AMPLITUDE-SCAN §2.4 — GENUINELY NEW) ---------------------
 // The 1.5-day amplitude hold crosses a day boundary (fill day-1's trough, sell into day-2's peak), so
 // the leg-2 sell lands on a DIFFERENT weekday — and weekday rhythm (the UK weekly cycle, weekend→weekday

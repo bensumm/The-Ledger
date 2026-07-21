@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.45
+version: 1.46
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -37,6 +37,17 @@ sections plus your own prose:
   that note; a manual `read-window-range.mjs --ask` is only needed for a NON-big-ticket lot, a different
   window/level, or the bid side. (A null 1h series this pass degrades the note to `window read
   unavailable` — the table/verdict is unaffected.)
+
+- **Read the `⌁ read:` trajectory line on EVERY held lot, not just the verdict (2026-07-21, the fang
+  under-read fix).** _(judgment: interpretation discipline)_ Each lot now auto-prints a `DAILY
+  TRAJECTORY` block (per-day window low/high, oldest→newest) + a one-line `⌁ read:` synthesis —
+  shape (rising/falling/oscillating/based/elevated) · window floor/ceiling · **where live sits between
+  them** (at the FLOOR / mid-band / at the CEILING). This is the exact read that was getting missed:
+  a fill-now-A- reach/placement can hide an oscillator sitting at its 2-week floor (price to the swing,
+  don't cut) or an elevated item near its ceiling (don't chase the buy). Interpret the verdict AGAINST
+  the shape — "at the FLOOR + oscillating" is a hold-for-the-swing, "elevated + falling" is a clear.
+  HEURISTIC (n≈0), inform-only — it never gates, it frames. Same shared `trajectoryRead` the manual
+  `read-window-range.mjs` trio prints, zero extra fetch.
 
 Anchor (2026-07-17, the format that got approved): a positions read that pasted just the table,
 then three short prose paragraphs each naming what changed/mattered per item (a resolved CUT, an
