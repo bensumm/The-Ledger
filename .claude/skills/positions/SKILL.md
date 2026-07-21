@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.43
+version: 1.44
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -99,6 +99,19 @@ had actually changed; the held count was reported as ×2/×1 off a stale book wh
 position had already half-closed. (This complements the LW3 heartbeat — the heartbeat is the
 localhost app's liveness signal; this is the operator's rule when reading `watch-positions.mjs` in a
 session.)
+
+**A stale LIVE PRINT ≠ a stale book — and it's now flagged in-code (Ben, 2026-07-21).** Distinct from
+the stale-book banner above (that's the reconstructed `positions.json` age): a single `/latest` SIDE can
+be an old print while the book is current, because the wiki serves the last actual instabuy/instasell
+trade — which on a thin big-ticket item can be an HOUR old even as the price moves. The quote now emits a
+`⚠ stale live print` note (and the windowExit/watch surfaces tag the age) whenever a displayed live
+instabuy/instasell is past `QUICK_FRESH_MIN` (~15m) but under the 90-min reliability floor, and the pace
+read prints `pace n/a (live stale)` instead of a false lagging read. **When you see it: do NOT quote or
+pitch a profit off the flagged number — read the fresher side it points at, and re-fetch before naming a
+price.** This is the code enforcement of the fresh-read rule for the exact failure this session hit: a
+64-min-old godsword instabuy (39.75m) was reported as live and drove a "lagging pace" read while the true
+price had already fallen ~500k to 39.25m. The number under the 90-min floor is still *reliable* (not a
+NO-READ) — it just isn't a live tick, so treat its age as the signal to re-quote.
 
 **Position = held inventory + active GE offers** (Ben's definition, 2026-07-04). If
 `--positions` prints no open lots, the review isn't done: run `node pipeline/commands/watch-positions.mjs` —

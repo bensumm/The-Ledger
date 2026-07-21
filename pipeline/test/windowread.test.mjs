@@ -211,6 +211,25 @@ ok('reachMargin: pace compares live-now to the reaching-day median at THIS hour 
   assert.equal(reachMargin(days, 'ask', 100, { marginN: 6 }).pace, null);
 });
 
+ok('reachMargin: a STALE live side yields a {stale} pace marker, never a false lagging/on-pace read (the 64-min godsword)', () => {
+  const days = [day('d1', 90, 120), day('d2', 90, 121), day('d3', 90, 122), day('d4', 90, 123)];
+  const profile = { hours: [{ h: 16, lowRecent: 90, hiRecent: 130, n: 15 }] };
+  const now = new Date(2026, 0, 20, 16, 0, 0);
+  // ask side driven by a stale instabuy (staleHi) ⇒ pace is a stale marker carrying the age, not a comparison
+  const stale = reachMargin(days, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120, staleHi: true, hiAgeMin: 64 }, now });
+  assert.equal(stale.pace.stale, true, 'stale instabuy ⇒ pace.stale');
+  assert.equal(stale.pace.ageMin, 64, 'the print age rides on the marker');
+  assert.equal(stale.pace.gap, undefined, 'NO gap computed off a stale print (that was the false-lagging bug)');
+  // the SAME numbers with the side marked fresh ⇒ the real comparison returns (guard only fires on stale)
+  const fresh = reachMargin(days, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120, staleHi: false }, now });
+  assert.equal(fresh.pace.stale, undefined, 'fresh side ⇒ real pace, no stale marker');
+  assert.equal(fresh.pace.gap, -10, 'fresh instabuy 120 vs the 16:00 median 130 ⇒ −10');
+  // bid side reads its OWN freshness (staleLo), independent of the ask side
+  const bidStale = reachMargin(days, 'bid', 100, { marginN: 6, profile, live: { lo: 85, hi: 120, staleLo: true, loAgeMin: 40 }, now });
+  assert.equal(bidStale.pace.stale, true, 'stale instasell ⇒ bid pace stale');
+  assert.equal(bidStale.pace.ageMin, 40, 'bid side carries the instasell age');
+});
+
 ok('reachMargin: fewer than MARGIN_MIN_DAYS recent days ⇒ trend null (no false classification)', () => {
   const days = [day('d1', 90, 120), day('d2', 90, 121)];
   const rm = reachMargin(days, 'ask', 100, { marginN: 6 });

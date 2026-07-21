@@ -390,6 +390,14 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
 - **`quote-items.mjs`** — multiple items in one call; a combined table + a per-item regime line with
   the buy limit (`· buy limit N/4h`, LM1 in-window count), buy/sell pressure (a flow proxy off the
   same 24h fetch — never a gate input), and a `⚠ feed inversion` footnote when the basis is unreliable.
+  A **`⚠ stale live print`** note fires when a displayed live instabuy/instasell is an OLD `/latest`
+  print rather than a live tick — aged past `QUICK_FRESH_MIN` (~15m, the DISPLAY/PACE freshness bar)
+  but still under the 90-min `STALE_QUOTE_MIN` reliability floor, so the quote stays reliable while
+  the number carries its age and points at the fresher side. This is a distinct signal from the
+  reliability gate: the floor answers "is this even a price?" (→ NO-READ); the fresh bar answers "is
+  this a live tick I can quote / pace off as-is?" (the 64-min godsword that rendered as live and drove
+  a false lagging-pace read, 2026-07-21). The reach-margin `pace` read prints `pace n/a (live Nm stale)`
+  rather than a bogus comparison when the driving side is stale (spec: `js/quotecore.js` `QUICK_FRESH_MIN`).
   `--positions` adds Held@/Break-even/Verdict + the shared `item-context.mjs` chain (offers book,
   read-only watch-state + hold thesis, `renderHeldVerdict`, the read-only `Paths` block, the rebid
   advisory, the stale-declared-exit flag). Verdict vocabulary: `pipeline/MONITORING.md` step 4.

@@ -10,6 +10,26 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### STALE-LIVE-PRINT guard — `QUICK_FRESH_MIN` freshness bar, distinct from the reliability floor (pipeline stdout, no APP_VERSION, 2026-07-21)
+The failure: a positions read reported "live instabuy 39.75m" on Ancient godsword and drove a `pace … ⚠
+lagging` read off it — but that `/latest` instabuy was **64 minutes old**. The wiki serves the last actual
+instabuy/instasell TRADE, and on a thin big-ticket item a side can sit an hour stale while the price moves
+(the true live instabuy had fallen ~500k to 39.25m). Nothing surfaced the age because GATE 0's only staleness
+consumer is the **90-min `STALE_QUOTE_MIN` reliability floor** ("is this even a price?" → NO-READ) — anything
+under 90m rendered as a live tick. Fix: a SECOND, much shorter **`QUICK_FRESH_MIN` (~15m) DISPLAY/PACE
+freshness bar** in `js/quotecore.js`. `computeQuote` now exposes `quickStale:{buy,sell}` on the row (a side
+past the fresh bar but under the reliability floor — so the quote stays *reliable*, it just isn't a live
+tick). Consumers: (1) `js/windowread.mjs` `reachMargin`'s `pace()` returns a `{stale, ageMin}` marker instead
+of a false lagging/on-pace comparison when the driving side is stale; (2) `quote-items.mjs` renders the age on
+the windowExit "live instabuy" clause, prints `pace n/a (live Nm stale)`, and emits a per-item `⚠ stale live
+print` note (core tier, `render.mjs` NOTE_KINDS) on ANY lot — naming the stale side + age and pointing at the
+fresher side as the truer current level; (3) `watch-positions.mjs`'s held-note block carries the same flag via
+`emit.mjs heldNoteBlock`'s new `staleLive` field; (4) `read-window-range.mjs` tags "live now" lines and the
+reach-margin pace line. Tests: `quotecore.test.mjs` (a 64-min print is display-stale yet reliable),
+`windowread.test.mjs` (stale side → `{stale}` marker, ask/bid symmetric, fresh side → real pace). This is the
+in-code enforcement of the fresh-read rule for a class the reliability gate structurally couldn't catch —
+`docs/MARKET-ANALYSIS.md` (`quote-items.mjs` facts) + `/positions` SKILL (v1.44) carry the doctrine.
+
 ### The REACH-MARGIN FADE check — `reachMargin`, folded into `askExitRead` (pipeline stdout, no APP_VERSION, 2026-07-20)
 The reach COUNT + placement percentile say "does this level print" but not whether the CUSHION over (ask) /
 under (bid) the level is FADING — the signal that a "recent 3/3 reached" ask is quietly settling ONTO a cooling

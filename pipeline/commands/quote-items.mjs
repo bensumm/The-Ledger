@@ -130,6 +130,22 @@ function loadBuysByItem() {
 // LOCAL wall-clock HH:MM for a unix-SECONDS instant (repo rule: rendered times are local).
 function hhmm(tsSec) { return tsSec == null ? '—' : new Date(tsSec * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 
+// STALE-LIVE guard note (QUICK_FRESH_MIN, quotecore): fires on ANY lot whose displayed "live"
+// instabuy/instasell is an OLD /latest print rather than a live tick — the class of error where a
+// 64-min-old godsword instabuy (39.75m) rendered as live and drove a false pace read while the true
+// price had fallen ~500k (2026-07-21). Names the stale side + its age and points at the fresher side
+// as the truer current level, so no surface can quote a stale number without the age attached.
+function staleLiveNote(name, itemId, row) {
+  const qs = row.quickStale; if (!qs || (!qs.buy && !qs.sell)) return null;
+  const age = s => Math.round(s ?? 0);
+  const bits = [];
+  if (qs.sell) bits.push(`instabuy ${fmt(row.quickSell)} is ${age(row.quoteAgeMin?.sell)}m old`);
+  if (qs.buy)  bits.push(`instasell ${fmt(row.quickBuy)} is ${age(row.quoteAgeMin?.buy)}m old`);
+  const fresher = (!qs.sell && row.quickSell != null) ? `instabuy ${fmt(row.quickSell)}`
+                : (!qs.buy && row.quickBuy != null) ? `instasell ${fmt(row.quickBuy)}` : null;
+  return { kind: 'staleLive', itemId, text: `${name}: ⚠ stale live print — ${bits.join(', ')}; an old print, not a live tick — ${fresher ? `read the fresher ${fresher} as the current level and ` : ''}re-quote before pricing off it.` };
+}
+
 function regimeLine(name, row, limit, win) {
   const r = row.regime;
   const drift = (r && r.ok) ? `${r.driftPct >= 0 ? '+' : ''}${r.driftPct.toFixed(1)}% (3d vs prior ~2wk median)` : 'insufficient history';
@@ -243,6 +259,7 @@ async function runItems() {
     const std = stdCells(name, row);   // PLAN-OUTPUT-TABLE: the row is pushed AFTER the est pair is computed below (view-dependent cells)
     const limWin = limitWindow({ buys: buysByItemMap.get(id) || [], limit: map.byId[id]?.limit ?? null });
     notes.push({ kind: 'regime', itemId: id, text: regimeLine(name, row, map.byId[id]?.limit ?? null, limWin) });
+    { const s = staleLiveNote(name, id, row); if (s) notes.push(s); }
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, id)), guide[id] ?? null);
     if (gl) notes.push({ kind: 'guideAnchor', itemId: id, text: gl });
     // P2/P3 validators. reachValidator scores the patient ask (optSell) against the reach window — NOW it
@@ -559,6 +576,7 @@ async function runPositions() {
     const vres = runValidators(ctx);
     rows.push([...stdCells(name + ` ×${qty}`, row), fmtP(Math.round(avgCost)), fmtP(be), v]);
     notes.push({ kind: 'regime', itemId, text: regimeLine(name, row, map.byId[itemId]?.limit ?? null, limWin) });
+    { const s = staleLiveNote(name, itemId, row); if (s) notes.push(s); }
     const gl = guideAnchorLine(guideAnchorModel(guideUpdates(hist, itemId)), guide[itemId] ?? null);
     if (gl) notes.push({ kind: 'guideAnchor', itemId, text: gl });
     for (const f of flags(vres)) notes.push({ kind: 'validator', itemId, text: `${name} ${f.key}: ${f.reason}` });
@@ -674,7 +692,12 @@ async function runPositions() {
         // profH is computed BEFORE askExitRead so the reach-margin pace read has the hour profile in hand.
         const profH = hourProfile(inp.ts1h, { nights: 14 });
         const drH = profH ? deriveDiurnalRange(profH, {}) : null;
-        const aer = astHeld ? askExitRead(astHeld, { ask: list, stats5m, profile: profH, live: { lo: row.quickBuy ?? null, hi: row.quickSell ?? null } }) : null;
+        // thread the /latest print AGE + staleness (row.quoteAgeMin/row.quickStale) into the live object so
+        // the reach-margin pace read refuses to run off a stale tick (the 64-min godsword anchor, 2026-07-21).
+        const aerLive = { lo: row.quickBuy ?? null, hi: row.quickSell ?? null,
+          staleLo: !!row.quickStale?.buy, staleHi: !!row.quickStale?.sell,
+          loAgeMin: row.quoteAgeMin?.buy ?? null, hiAgeMin: row.quoteAgeMin?.sell ?? null };
+        const aer = astHeld ? askExitRead(astHeld, { ask: list, stats5m, profile: profH, live: aerLive }) : null;
         if (!aer) {
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window read unavailable — no 1h series this pass` });
         } else {
@@ -686,7 +709,9 @@ async function runPositions() {
             parts.push(`list ${fmt(aer.ask.level)} reached ${aer.ask.reachedDays}/${aer.ask.nDays}d (recent ${rc.recentHit ?? '—'}/${rc.recentDays ?? '—'}) · placement ${pct(aer.ask.placement)} of the ${aer.ask.nDays}-day daily-HIGH distribution`);
           }
           parts.push(`typical exit ~50% ${fmt(as.q50)} / ~75% ${fmt(as.q75)} / every-day ${fmt(as.everyDay)}${as.recent50 != null ? ` · recent-3 ~50% ${fmt(as.recent50)}` : ''}`);
-          if (row.quickSell != null) parts.push(`live instabuy ${fmt(row.quickSell)}`);
+          // live instabuy — carry its AGE when the print is stale (past QUICK_FRESH_MIN), so the number is
+          // never read as a live tick when it's an hour-old print (the godsword 39.75m@64m lesson).
+          if (row.quickSell != null) parts.push(`live instabuy ${fmt(row.quickSell)}${row.quickStale?.sell ? ` ⚠ ${Math.round(row.quoteAgeMin?.sell ?? 0)}m old` : ''}`);
           if (aer.grain5m) parts.push(`5m-grain reached ${aer.grain5m.reachedDays}/${aer.grain5m.nDays} · ${pct(aer.grain5m.placement)}`);
           // reach-margin FADE clause — the cushion trend + today's pace, compact (full per-day read is read-window-range's job)
           const rm = aer.ask && aer.ask.reachMargin;
@@ -694,7 +719,8 @@ async function runPositions() {
             const sg = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
             let c = `margin ${sg(rm.cushionNow)} today`;
             if (rm.trend) c += ` · cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend} ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} (${rm.nRecent}d)`;
-            if (rm.pace) c += ` · pace ${sg(rm.pace.gap)} vs ${fmtHour(rm.pace.hour)} median${rm.pace.onPace ? '' : ' ⚠ lagging'}`;
+            if (rm.pace && rm.pace.stale) c += ` · pace n/a (live ${rm.pace.ageMin != null ? Math.round(rm.pace.ageMin) + 'm' : ''} stale)`;
+            else if (rm.pace) c += ` · pace ${sg(rm.pace.gap)} vs ${fmtHour(rm.pace.hour)} median${rm.pace.onPace ? '' : ' ⚠ lagging'}`;
             parts.push(c);
           }
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window-clear — ${parts.join(' · ')}${peakTxt}  (touched ≠ filled, ~${aer.nDays}d — a guide)`,

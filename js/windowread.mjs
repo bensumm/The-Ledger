@@ -257,11 +257,17 @@ export function reachMargin(days, side, level, { recentN = RECENT_NIGHTS, margin
   return { side, level, trend, cushionNow, cushionFrom, cushionTo, reachedRecent, nRecent: recent.length, perDay: recent, pace: pace() };
 
   // today's pace vs the reaching-day median at THIS hour-of-day (closure over side/level/live/profile/now)
+  // STALE-LIVE GUARD: `live` may carry the driving side's freshness (staleLo/staleHi + loAgeMin/hiAgeMin,
+  // set by the caller from row.quickStale/row.quoteAgeMin). A pace read off a stale /latest print is a
+  // FALSE "lagging/ahead" signal — the number isn't today's live price (the 64-min godsword anchor,
+  // 2026-07-21). When the driving side is stale we return a {stale} marker instead of a bogus comparison.
   function pace() {
     if (!profile || !Array.isArray(profile.hours) || !live) return null;
     const h = now.getHours();
     const row = profile.hours.find(x => x.h === h);
     if (!row || !(row.n > 0)) return null;
+    const stale = side === 'bid' ? live.staleLo : live.staleHi;
+    if (stale) return { hour: h, stale: true, ageMin: side === 'bid' ? (live.loAgeMin ?? null) : (live.hiAgeMin ?? null), n: row.n };
     const liveNow = side === 'bid' ? live.lo : live.hi;
     const medianAtHour = side === 'bid' ? row.lowRecent : row.hiRecent;
     if (liveNow == null || medianAtHour == null) return null;

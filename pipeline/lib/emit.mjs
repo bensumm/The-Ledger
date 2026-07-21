@@ -77,18 +77,21 @@ export function heldListAt(row, be, mv) {
  * sub-line. Optional fields are dropped when null/empty; the sell line is ALWAYS emitted last.
  */
 export function heldNoteBlock({
-  name, verdict, window: win, reliableReason, pressure,
+  name, verdict, window: win, reliableReason, pressure, staleLive,
   conviction, delta, tripwire, recovery, path, marginBudget,
   listAt, breakEven, fillProgress,
 }) {
   const lines = [];
   // 1. VERDICT — action first sentence, + window context + buy/sell pressure (the compact
   //    pressureText string, OPTIONAL — trailing-24h flow imbalance, display-only context; see
-  //    the SHORTCOMINGS comment in js/quotecore.js computeQuote) + a reliability flag when soft.
+  //    the SHORTCOMINGS comment in js/quotecore.js computeQuote) + a reliability flag when soft
+  //    + a stale-live-print flag (QUICK_FRESH_MIN): the displayed live instabuy/instasell is an old
+  //    /latest print, not a live tick (below the 90-min reliableReason floor — the 64-min godsword).
   lines.push(`- ${name}: ${verdict}`
     + (win ? ` · window ${win}` : '')
     + (pressure ? ` · pressure ${pressure}` : '')
-    + (reliableReason ? ` · ⚠ ${reliableReason}` : ''));
+    + (reliableReason ? ` · ⚠ ${reliableReason}` : '')
+    + (staleLive ? ` · ⚠ ${staleLive}` : ''));
   // 2. CONVICTION-STATE (V4) — the armed note, when applicable.
   if (conviction) lines.push(`    ${conviction}`);
   // 3. Δ-SINCE-LAST (V1) — when a cross-pass signal is informative.

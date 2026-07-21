@@ -1054,10 +1054,18 @@ async function main() {
     // entry advanceState just persisted for this lot's conviction pass; never a fresh computation here.
     let marginBudget = null;
     try { marginBudget = marginBudgetNote(newState['held:' + it.id]); } catch { /* support-only */ }
+    // stale-live flag (QUICK_FRESH_MIN): displayed instabuy/instasell is an old /latest print, not a
+    // live tick (below the 90-min reliableReason floor — the 64-min godsword anchor, 2026-07-21).
+    const qs = row.quickStale;
+    const staleLive = (qs && (qs.buy || qs.sell))
+      ? [qs.sell ? `instabuy ${Math.round(row.quoteAgeMin?.sell ?? 0)}m old` : null,
+         qs.buy ? `instasell ${Math.round(row.quoteAgeMin?.buy ?? 0)}m old` : null].filter(Boolean).join(', ') + ' — not a live tick, re-quote'
+      : null;
     notes.push(...heldNoteBlock({
       name, verdict: verdictText, window: wl,
       pressure: pressureText(row.pressure, { compact: true }),
       reliableReason: row.reliable ? null : row.reliableReason,
+      staleLive,
       conviction, delta, tripwire, recovery, path: pathLine, marginBudget,
       listAt: heldLa, breakEven: be,
       fillProgress: listed || null,

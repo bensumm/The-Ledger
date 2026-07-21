@@ -90,6 +90,7 @@ export const NOTE_KINDS = {
   regime:       { prefix: '',      tier: TIER.core },     // the per-item regime line (already '- name: …')
   guideAnchor:  { prefix: '  ',    tier: TIER.context },  // YP1 guide-anchor advisory (already indented)
   validator:    { prefix: '  ⚠ ',  tier: TIER.core },     // a fired P2/P3 validator flag (annotates, never hides)
+  staleLive:    { prefix: '  ⚠ ',  tier: TIER.core },     // QUICK_FRESH_MIN — a displayed live instabuy/instasell that's an old /latest print, not a live tick (the 64-min godsword anchor)
   staleExit:    { prefix: '  ⚠ ',  tier: TIER.context },  // Proposal C stale declared-exit flag (inform)
   diurnal:      { prefix: '  ↳ ',  tier: TIER.context },  // COD-4 diurnal BID/ASK timing
   forecast:     { prefix: '  ℹ ',  tier: TIER.context },  // PF1 buyable/sellable-in-~Xh forecast

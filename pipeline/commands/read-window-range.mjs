@@ -59,7 +59,7 @@ import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home
-import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
+import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
@@ -149,6 +149,13 @@ for (const want of positionals) {
   const [series, latest] = await Promise.all([fetchTs(r.id, '1h'), fetchLatest(r.id)]);
   const result = { item: r.name, id: r.id, window: { start: W_START, end: W_END } };
   results.push(result);
+  // live-now line WITH each side's /latest print age flagged past QUICK_FRESH_MIN — a stale print is an
+  // old tick, not the current price (the 64-min godsword anchor). Shared by both render spots below.
+  const _liveAge = t => (t != null && Number.isFinite(t)) ? (Date.now() / 1000 - t) / 60 : null;
+  const _liveTag = age => (age != null && age > QUICK_FRESH_MIN) ? ` ⚠ ${Math.round(age)}m old` : '';
+  const liveNowLine = () => (latest && latest.low != null)
+    ? `  live instasell now: ${fmt(latest.low)}${_liveTag(_liveAge(latest.lowTime))}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}${_liveTag(_liveAge(latest.highTime))}` : ''}`
+    : null;
 
   // --profile: the hour-of-day diurnal read (peak-timing) — locates the daily dip/peak WINDOWS and
   // derives a stale-guarded bid/ask, instead of scoring one hand-picked --window. Same 1h series.
@@ -170,7 +177,7 @@ for (const want of positionals) {
       log(`  DIP window ${fmtHourRange(prof.dip.startH, prof.dip.endH)} — recent level ${fmt(prof.dip.level)}`);
       log(`  PEAK window ${fmtHourRange(prof.peak.startH, prof.peak.endH)} — recent level ${fmt(prof.peak.level)}`);
       log(`  intraday amplitude ~${fmt(prof.amplitude)}${prof.amplitudePct != null ? ` (${(prof.amplitudePct * 100).toFixed(1)}%)` : ''} · trend ${prof.trendPerDay == null ? '—' : (prof.trendPerDay >= 0 ? '+' : '') + fmt(Math.round(prof.trendPerDay)) + '/day'}${prof.trendDominates ? ' ⚠ trend-dominates' : ''}`);
-      if (latest && latest.low != null) log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`);
+      { const l = liveNowLine(); if (l) log(l); }
       const dr = deriveDiurnalRange(prof, { liveLo: latest && latest.low != null ? latest.low : null, liveHi: latest && latest.high != null ? latest.high : null });
       if (dr) {
         log(`  → BID ${fmt(dr.bid)} (${dr.bidBasis}, ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (${win(dr.peakWindow)})`);
@@ -207,7 +214,13 @@ for (const want of positionals) {
   // reachMargin (the fade check) needs the hour profile (for today's pace) + live; compute once here so
   // both the ask-side (via aer) and the --bid render below share it. PURE — no fetch (series already in hand).
   const profMargin = hourProfile(series, { nights: NIGHTS });
-  const liveNow = latest ? { lo: latest.low ?? null, hi: latest.high ?? null } : null;
+  // thread /latest print ages + staleness so the reachMargin pace read refuses a stale tick (the
+  // 64-min godsword anchor, 2026-07-21) — same QUICK_FRESH_MIN bar quote-items.mjs uses.
+  const _ageOf = t => (t != null && Number.isFinite(t)) ? (Date.now() / 1000 - t) / 60 : null;
+  const _loAge = latest ? _ageOf(latest.lowTime) : null, _hiAge = latest ? _ageOf(latest.highTime) : null;
+  const liveNow = latest ? { lo: latest.low ?? null, hi: latest.high ?? null,
+    staleLo: _loAge != null && _loAge > QUICK_FRESH_MIN, staleHi: _hiAge != null && _hiAge > QUICK_FRESH_MIN,
+    loAgeMin: _loAge, hiAgeMin: _hiAge } : null;
   const aer = askExitRead(stats, { ask: ASK, stats5m: fiveStats, profile: profMargin, live: liveNow });
   // logReachMargin — the FULL fade block (cushion trend + per-day cushion + today's pace). Compact-clause
   // rendering is quote-items.mjs's job; the manual read prints the whole thing.
@@ -219,7 +232,8 @@ for (const want of positionals) {
       : `cushion (thin — <${MARGIN_MIN_DAYS} recent days)`;
     log(`    reach-margin: ${t} · now ${sgm(rm.cushionNow)} · reached ${rm.reachedRecent}/${rm.nRecent} recent`);
     if (rm.perDay && rm.perDay.length) log(`      per-day cushion: ${rm.perDay.map(d => `${d.key.slice(5)} ${sgm(d.cushion)}${d.reached ? '✓' : '✗'}`).join(' · ')}`);
-    if (rm.pace) log(`      pace: live ${fmt(rm.pace.liveNow)} vs ${pad2(rm.pace.hour)}:00 median ${fmt(rm.pace.medianAtHour)} → ${sgm(rm.pace.gap)}${rm.pace.onPace ? ' on pace' : ' ⚠ lagging'} (n ${rm.pace.n})`);
+    if (rm.pace && rm.pace.stale) log(`      pace: n/a — live print ${rm.pace.ageMin != null ? Math.round(rm.pace.ageMin) + 'm' : ''} stale (not a live tick; no pace read off an old print)`);
+    else if (rm.pace) log(`      pace: live ${fmt(rm.pace.liveNow)} vs ${pad2(rm.pace.hour)}:00 median ${fmt(rm.pace.medianAtHour)} → ${sgm(rm.pace.gap)}${rm.pace.onPace ? ' on pace' : ' ⚠ lagging'} (n ${rm.pace.n})`);
   };
 
   log(`  ---`);
@@ -236,7 +250,7 @@ for (const want of positionals) {
     log(`    median window instabuy volume: ${fmt(as.medVol)} u (the pool a resting ask competes for)`);
     result.askSide = { q50: as.q50, q75: as.q75, everyDay: as.everyDay, recent50: as.recent50, medVol: as.medVol, nDays: aer.nDays };
   }
-  if (latest && latest.low != null) { log(`  live instasell now: ${fmt(latest.low)}${latest.high != null ? ` · live instabuy now: ${fmt(latest.high)}` : ''}`); result.live = { instasell: latest.low, instabuy: latest.high != null ? latest.high : null }; }
+  if (latest && latest.low != null) { const l = liveNowLine(); if (l) log(l); result.live = { instasell: latest.low, instabuy: latest.high != null ? latest.high : null }; }
   // recency split on the scored candidate: recent-N hit rate beside the full count, ⚠ when the
   // full count is rosier than recent (stale-regime contamination — don't trust the full number)
   const splitNote = (side, level) => {

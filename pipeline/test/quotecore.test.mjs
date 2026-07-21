@@ -91,6 +91,18 @@ ok('stale-quote → NO-READ (never CUT)', () => {
   assert.notEqual(mv.action, 'CUT');
 });
 
+ok('quickStale: a print past QUICK_FRESH_MIN but under the 90-min reliability floor is DISPLAY-stale, still reliable (the 64-min godsword)', () => {
+  const ts5m = mk5m(() => ({ low: 990, high: 1010, vol: 500 }));   // dense, liquid → reliability floor = 90m
+  // instabuy 64m old (> QUICK_FRESH_MIN 15, < 90m floor), instasell fresh
+  const latest = { low: 980, high: 1010, lowTime: NOW_SEC - 5 * 60, highTime: NOW_SEC - 64 * 60 };
+  const row = rowOf(latest, ts5m);
+  assert.equal(row.reliable, true, 'under the 90-min floor ⇒ the quote is still reliable (not NO-READ)');
+  assert.equal(row.reliableReason, 'ok');
+  assert.equal(row.quickStale.sell, true, 'the 64-min instabuy is DISPLAY-stale');
+  assert.equal(row.quickStale.buy, false, 'the fresh instasell is not');
+  assert.ok(Math.abs(row.quoteAgeMin.sell - 64) < 0.1, 'the instabuy age is exposed for the flag text');
+});
+
 // --- 2. Seed-incident replica → DIURNAL-WATCH; liquid variant → CUT ------------------------
 // Two liquidity troughs (now, and ~24h ago) with a busy, higher-priced day between them.
 function seedSeries(currentWindowBusy) {

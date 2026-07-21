@@ -106,6 +106,15 @@ export const FRESH_HOURS = 1;
 // liquid book is stale, while the same age on an item that trades twice a day is normal).
 export const STALE_QUOTE_MIN     = 90;
 export const STALE_INTERVAL_MULT = 3;
+// QUICK_FRESH_MIN — the DISPLAY/PACE freshness bar, deliberately MUCH shorter than the 90-min
+// reliability floor above. The reliability floor answers "is this even a price?" (→ NO-READ); this
+// answers "is this a LIVE tick, or an old print I'd be wrong to quote as-is / run a pace comparison
+// off?". A /latest side aged past this is not stale enough to void the quote, but it IS stale enough
+// that (a) any rendered "live instabuy/instasell" must carry its age, and (b) the reach-margin pace
+// read must NOT treat it as today's live price. Anchor: a 64-min-old godsword instabuy (39.75m) sat
+// under the 90-min floor, rendered as live, and drove a false "lagging pace" read while the true live
+// price had fallen ~500k (2026-07-21). PLACEHOLDER pending F1 — same honesty note as the gate consts.
+export const QUICK_FRESH_MIN     = 15;
 // minimum populated 5m windows in the 2h band to trust it as a real two-sided price.
 export const MIN_BAND_WINDOWS    = 3;
 // GATE 1 (diurnal). current 2h activity < QUIET_RATIO × the series' median 2h activity ⇒ a quiet
@@ -428,6 +437,10 @@ export function computeQuote({latest, ts5m, ts6h, vol24, guide, limit, held, ask
     regime, regimeLabel:rl.label, falling, rising:rl.rising, held:!!held, asked:!!asked,
     mom, momPct, rawBandLo, rawBandHi, askHeadroom,
     reliable, reliableReason, quoteAgeMin:{buy:buyAgeMin, sell:sellAgeMin},
+    // quickStale — the DISPLAY/PACE freshness flags (QUICK_FRESH_MIN, ~15m): a side whose last
+    // /latest print is older than the short bar is a stale tick that must NOT be rendered/paced as
+    // live, even though it's under the 90-min reliability floor (so `reliable` can still be true).
+    quickStale:{ buy: buyAgeMin!=null && buyAgeMin>QUICK_FRESH_MIN, sell: sellAgeMin!=null && sellAgeMin>QUICK_FRESH_MIN },
     band:{lo:bandLo, hi:bandHi, n:recent.length} };
   row.ordered=quoteOrdered(row);
   return row;
