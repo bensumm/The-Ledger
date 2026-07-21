@@ -720,7 +720,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     volume for `quote-items.mjs`/`watch-positions.mjs`: `rolling24FromTs1h` off the in-hand `ts1h`, reassigned onto `inp.vol24`
     so Vol/d + pressure + the dip reference read corrected volume; degrades to the `/24h` read when the 1h series
     is too short)), `cli.mjs` (shared arg/format/table
-    helpers), `compose.mjs` (PC1, PLAN-PIPELINE-COMPOSITION — the thin COMPOSITION resolver: `resolve(category,
+    helpers), `sync-invoke.mjs` (AR1, PLAN-ARCHITECTURE-COHERENCE — the ONE home for the SY1 "always sync
+    first" invocation: `runLocalSync({offBookNote})` shells out to a BARE (local/zero-git) `sync-fills.mjs`
+    before a read, prints the single `positions:`/`nothing to`/`Pushed` summary line (unified superset regex —
+    a local sync never prints `Pushed`, so the union is a no-op on observed output), and NEVER blocks the read
+    on failure. Was copy-pasted byte-for-byte across `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`
+    — those three are now its only consumers, one call each. Node-only, not app-imported), `compose.mjs` (PC1, PLAN-PIPELINE-COMPOSITION — the thin COMPOSITION resolver: `resolve(category,
     {flag, config, fallback, shadowPool?})` → `{active, shadow:[names]}` with precedence **CLI flag > `pipeline/pipeline-config.json`
     > hardcoded fallback**, ACTIVE-PLUS-SHADOW not exclusive-or — `shadow` is the optional `shadowPool` minus
     `active` (a variant never shadows itself; absent pool ⇒ `[]`, byte-identical to PC1). PC3 adds

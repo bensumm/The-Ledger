@@ -56,7 +56,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 import { renderReport } from '../lib/render.mjs';   // VZ1 (PLAN-VIZ-LAYER) — the ONE render layer; this output pass builds a report object and prints renderReport(buildWatchReport(...))
 import { writeLastReport } from '../lib/cli.mjs';   // AO1 — agent-readable last-report dump (pipeline/.cache/last-report/watch.json)
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
@@ -580,14 +580,7 @@ async function main() {
   // (no --publish) call is LOCAL/ZERO-GIT by default since 2026-07-15 (FILLS-PIPELINE §12) — no
   // commit/push here, so there's no reason this should ever have been opt-in. Quiet: only the sync's
   // summary line is surfaced. `--sync` is kept as a harmless no-op alias for any external caller.
-  {
-    try {
-      const out = execFileSync(process.execPath, [path.join(HERE, 'sync-fills.mjs')],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-      const summary = out.trim().split('\n').filter(l => /^positions:|^Pushed|nothing to/.test(l));
-      if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
-    } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — watching off the current book\n'); }
-  }
+  runLocalSync({ offBookNote: 'watching off the current book' });   // AR1: the ONE shared invocation
 
   const map = await loadMapping();
   const guide = await loadGuide();

@@ -121,7 +121,7 @@ import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
@@ -1725,13 +1725,8 @@ async function main() {
   // ALWAYS sync first (Ben, 2026-07-16 — the /scan skill's "sync first, always" was doctrine an
   // agent could just forget; a real closed position went unnoticed as a result). Local/zero-git,
   // cheap, never blocks the screen on failure — this is the held-item exception's freshness input
-  // too (HELD_IDS below reads positions.json right after this).
-  try {
-    const out = execFileSync(process.execPath, [join(REPO_ROOT, 'pipeline', 'commands', 'sync-fills.mjs')],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const summary = out.trim().split('\n').filter(l => /^positions:|nothing to/.test(l));
-    if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
-  } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — screening off the current book\n'); }
+  // too (HELD_IDS below reads positions.json right after this). AR1: the ONE shared invocation.
+  runLocalSync({ offBookNote: 'screening off the current book' });
 
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx

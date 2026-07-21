@@ -27,7 +27,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
@@ -500,12 +500,8 @@ async function runPositions() {
   // ALWAYS sync first (Ben, 2026-07-16 — prose "sync before every read" was skipped repeatedly
   // because it was only a doctrine, never enforced; a real position closed unnoticed as a result,
   // see the anglerfish anchor incident). Local/zero-git, cheap, never blocks the read on failure.
-  try {
-    const out = execFileSync(process.execPath, [path.join(HERE, 'sync-fills.mjs')],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const summary = out.trim().split('\n').filter(l => /^positions:|nothing to/.test(l));
-    if (summary.length) console.log('sync · ' + summary.join(' · ') + '\n');
-  } catch (e) { console.log('sync · ⚠ skipped (' + (e.message || 'failed').split('\n')[0] + ') — reading off the current book\n'); }
+  // AR1: the ONE shared invocation (pipeline/lib/sync-invoke.mjs).
+  runLocalSync({ offBookNote: 'reading off the current book' });
 
   const { err, groups: allGroups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }

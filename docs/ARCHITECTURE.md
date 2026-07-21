@@ -80,6 +80,7 @@ important structural rule — it's what prevents the app and pipeline from diver
 | Held-item strategies | `js/held-item-strategy.mjs` (`enumeratePaths`/`weighPaths`) | "compare strategies" for a held lot (a `path` = a held-item strategy) |
 | Validators | `js/validate.mjs` | pure `(ctx) → {status, reason, evidence}` |
 | Rank / grade | `js/estimators.mjs` (`estimateRank`) + `js/rating.mjs` (`rateItem`) | `pipeline/lib/estimators.mjs`/`rating.mjs` are one-line re-export SHIMS, not forks |
+| Sync-before-read invocation (SY1) | `pipeline/lib/sync-invoke.mjs` (`runLocalSync`) | `screen-flip-niches.mjs`, `quote-items.mjs`, `watch-positions.mjs` each call it once (AR1 — was copy-pasted byte-for-byte, with a hairline regex divergence, across all three) |
 
 A second implementation of any of these anywhere is drift — call the home, don't re-derive.
 
