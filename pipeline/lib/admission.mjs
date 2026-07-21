@@ -92,7 +92,9 @@ function pickExploration(pool, n, now) {
    Mirrors rankAndSlice's signature and the held-item unbounded guarantee, but:
      - thin lane ranks on expGpDay (the after-tax realistic edge) × trackBoost, not raw gp-flow
      - adds a small deterministically-rotating exploration reserve over the thin candidates that
-       lost that ranking, so a real edge can't be permanently starved out
+       lost that ranking, so a real edge can't be permanently starved out; each such survivor is
+       tagged `via:'explore'` (AR2) so a renderer CAN mark a lottery-slotted row vs a ranked-in one
+       (the screen table surfaces it as a small 🎲 token) — inform-only, never gates/ranks/grades
      - folds trackBoost into the non-thin/rising lane's sort key too
      - returns every non-admitted candidate with a reason (SC1) instead of silently dropping it
    The value niche keeps its own gate + hard top-N by valueScore (already has an honest
@@ -145,11 +147,19 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   // exploration budget so BOTH lanes rotate — half (min 1) each, rounded toward the thin lane since
   // that's the anchor incident's lane; a lane with nothing to explore just forfeits its half.
   const thinExploreN = Math.ceil(exploreReserve / 2), velExploreN = Math.floor(exploreReserve / 2);
-  const exploredThin = pickExploration(thinRemainder, thinExploreN, now);
+  // AR2 (PLAN-ARCHITECTURE-COHERENCE, the MARKER option): tag every exploration-admitted survivor
+  // with `via:'explore'` so the render site can tell a rotating-lottery slot from a ranked-in pick
+  // (the exploration reserve is Date.now()-bucketed, so a row can be admitted THIS pass purely
+  // because it's this 30-min window's rotation turn — honest to mark it, not hide the fact). The
+  // rotation logic is DELIBERATELY unchanged (Ben's call — mark, don't de-non-determinize). The tag
+  // is a CLONE (spread `{...c}`) applied AFTER pickExploration, so it can't clobber the candidate's
+  // own fields and the originals in `cand` stay unmarked — a non-exploration survivor carries no
+  // `via` at all (byte-identical shape to before; JSON is unchanged when exploreReserve is 0).
+  const exploredThin = pickExploration(thinRemainder, thinExploreN, now).map(c => ({ ...c, via: 'explore' }));
   const nonThinBudget = Math.max(0, top - thinAdmitted.length - exploredThin.length - risers.length);
   const velocityAdmitted = velocityPool.slice(0, nonThinBudget);
   const velocityRemainder = velocityPool.slice(nonThinBudget);
-  const exploredVelocity = pickExploration(velocityRemainder, velExploreN, now);
+  const exploredVelocity = pickExploration(velocityRemainder, velExploreN, now).map(c => ({ ...c, via: 'explore' }));
 
   const survivors = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity];
 

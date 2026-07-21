@@ -122,6 +122,26 @@ test('pickFetchPool: every non-admitted candidate is returned with a reason (SC1
   for (const e of excluded) assert.ok(typeof e.reason === 'string' && e.reason.length > 0);
 });
 
+// --- AR2: exploration-rotation marker (PLAN-ARCHITECTURE-COHERENCE) ------------------------------
+
+test('pickFetchPool AR2: an exploration-admitted survivor carries via:"explore"; a ranked-in one does not', () => {
+  // "strong" wins the sole thinReserve slot on score (ranked in — no marker); "weak" is the only
+  // remainder, so it fills the exploration slot (rotating lottery pick — marked).
+  const strong = mkCand('strong', { thin: true, expGpDay: 100 });
+  const weak = mkCand('weak', { thin: true, expGpDay: 1 });
+  const { survivors } = pickFetchPool('band', [strong, weak], {}, { thinReserve: 1, risingReserve: 0, exploreReserve: 1, top: 2, now: 0 });
+  const strongS = survivors.find(c => c.id === 'strong');
+  const weakS = survivors.find(c => c.id === 'weak');
+  assert.equal(strongS.via, undefined, 'a ranked-in survivor carries no via field (byte-identical shape to before)');
+  assert.equal(weakS.via, 'explore', 'the exploration-slotted survivor is tagged via:"explore"');
+});
+
+test('pickFetchPool AR2: with exploreReserve 0 no survivor carries via — JSON shape unchanged from before the marker', () => {
+  const cand = [mkCand('a', { expGpDay: 100 }), mkCand('b', { expGpDay: 50 }), mkCand('c', { thin: true, expGpDay: 10 })];
+  const { survivors } = pickFetchPool('band', cand, {}, { top: 3, thinReserve: 1, risingReserve: 0, exploreReserve: 0 });
+  for (const s of survivors) assert.ok(!('via' in s), 'no exploration ⇒ no via field on any survivor (common case, byte-parity)');
+});
+
 test('pickFetchPool: value-niche candidates pass through unchanged (own valueScore top-N, out of scope)', () => {
   const cand = [{ id: 1, valueScore: 5 }, { id: 2, valueScore: 9 }, { id: 3, valueScore: 1 }];
   const { survivors, excluded } = pickFetchPool('value', cand, {}, { top: 2 });

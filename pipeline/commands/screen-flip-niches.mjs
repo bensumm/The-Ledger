@@ -984,6 +984,14 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     if (FLIP_NICHES[mode].fillShape !== 'symmetric' && askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
       grade = capGrade(grade, REACH_GRADE_CAP);
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
+    // AR2 (PLAN-ARCHITECTURE-COHERENCE, MARKER option): if admission.mjs pulled this row into the
+    // FETCH pool via its Date.now()-bucketed exploration reserve (s.via==='explore'), it's a rotating
+    // "lottery" slot for THIS pass, not a ranked-in pick — surface a small 🎲 token on the Item cell so
+    // the reader can tell the two apart (honest about WHY the row appears). Inform-only: the row still
+    // went through the identical rate/gate/render path as every other survivor, so this touches no
+    // gate/rank/grade/screen.json number. Mutates only this call's fresh std copy (quoteCells returns a
+    // new array each call); the app-side tooltip rides on `title` (cellText ignores it — stdout stays clean).
+    if (s.via === 'explore') std[0] = { ...std[0], t: std[0].t + ' 🎲', title: 'exploration-rotation slot — pulled into the fetch pool by the rotating reserve this pass (not ranked in); inform-only' };
     // Part A: fold an informative phase into the existing Regime cell (no new column — the canonical
     // width/contract is untouched). A rescued row gets an explicit provisional note; other spike/decay/
     // basing rows get a ` · <phase>` suffix; base/unknown add nothing. Mutates only this call's fresh
