@@ -93,7 +93,7 @@ import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PL
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
 import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
-import { valueRanges, valueScore, valueGate, valueTier } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier
+import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
 import { amplitudeRanges, amplitudeGate, AMP_HOLD_DAYS_DEFAULT } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default
 import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
@@ -491,15 +491,34 @@ function digestReachFrac(spec, askReachExtra) {
   if (askReachExtra.recentDays) return askReachExtra.recentHit / askReachExtra.recentDays;
   return askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
 }
-// collectDigestRow(...): compute capEff + the verdict for one surfaced candidate and push it into DIGEST_ROWS.
-// Skips sub-floor rows (NOT qualified picks, §3.4) and held rows (Workstream B's positions read owns those).
+// digestDeployable(er, row): the DEPLOYABLE CAPITAL (gp) for this candidate — how much of the bankroll you
+// can realistically park in it, reusing valueScore's EXACT three-way-min deployUnits (bankroll ÷ buy price,
+// 10% market-share over 2 days, buy-limit accumulation) × the buy price. capGp = the FULL deployable pool
+// (VALUE_CAPITAL — --capital or the derived deployablePool, NOT ÷slots: the digest triages a single
+// concentrated deploy, and ÷slots would push a 50m big-ticket below 1 unit and demote exactly the class the
+// follow-up exists to surface). Null when no buy price. PLACEHOLDER shape reused from the value niche (n≈0).
+function digestDeployable(er, row) {
+  const buyLow = (er && er.pair && er.pair.bid != null) ? er.pair.bid : null;
+  const units = deployUnits({ buyLow, limitVol: row ? (row.volDay ?? null) : null, limit: row ? (row.limit ?? null) : null, capGp: VALUE_CAPITAL });
+  return (units != null && buyLow != null) ? units * buyLow : null;
+}
+// collectDigestRow(...): compute capEff + the deployable-throughput RANK KEY + the verdict for one surfaced
+// candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and held rows
+// (Workstream B's positions read owns those). rankKey = capEff × deployable capital ≈ after-tax deployable
+// gp/day (the follow-up fix: raw capEff is SCALE-FREE, so dust-tier cheap high-% items swept the top-N and
+// buried the big-ticket deploys the digest exists to surface — the SAME failure valueScore's deployable-
+// capital blend already solved; we reuse its deployUnits). INFORM-ONLY: it only reorders the presented view.
 function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, prof, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
+  const capEff = capEfficiency(spec, er);
+  const deployable = digestDeployable(er, row);
   DIGEST_ROWS.push({
     name,
-    capEff: capEfficiency(spec, er),
+    capEff,
+    deployable,
+    rankKey: (capEff != null && deployable != null) ? capEff * deployable : null,
     rank: er && er.rank != null ? er.rank : null,
     reachFrac,
     phase: ph,
@@ -507,24 +526,29 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase: ph }),
   });
 }
-// buildDigestBlock(): the rendered digest string (top ~8 across ALL niches this pass, ranked by capEff desc,
-// ties broken by rank desc). A VIEW — every candidate is still in screen.json / the per-niche table. Degrades,
-// never throws: a null capEff sorts last and renders '—'. Zero rows → the honest one-liner.
+// buildDigestBlock(): the rendered digest string (top ~8 across ALL niches this pass, ranked by the
+// DEPLOYABLE-THROUGHPUT rank key — capEff × deployable capital ≈ after-tax deployable gp/day — desc, ties
+// broken by capEff then rank). capEff stays a DISPLAYED column (still meaningful per-unit info); a `deploy`
+// column shows the deployable capital so the ordering is legible (why a big-ticket you can park 40m into
+// out-ranks a dust flip you can only put 100k into, even at a higher raw %). A VIEW — every candidate is
+// still in screen.json / the per-niche table. Degrades, never throws: a null rank key sorts last, '—' cells.
 const DIGEST_TOP = 8;
 export function buildDigestBlock(pool = DIGEST_ROWS) {
-  const lines = ['## DECISION DIGEST — capital-efficiency triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; capEff = after-tax ROI%/day of capital tied up)'];
+  const lines = ['## DECISION DIGEST — deployable-throughput triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by capEff × deployable capital ≈ after-tax deployable gp/day, NOT raw %; capEff = after-tax ROI%/day of capital tied up)'];
   if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
+  const key = r => (r.rankKey != null ? r.rankKey : (r.capEff != null ? r.capEff : -Infinity));
   const sorted = [...pool].sort((a, b) =>
-    ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
+    (key(b) - key(a)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
   const rows = sorted.slice(0, DIGEST_TOP).map(r => [
     { t: r.name },
     { t: r.capEff != null ? `${round2(r.capEff).toFixed(2)}%/d` : '—' },
+    { t: r.deployable != null ? fmtP(Math.round(r.deployable)) : '—' },
     { t: r.reachFrac == null ? '—' : (r.reachFrac >= REACH_GRADE_CAP_FRAC ? '✓' : '✗') },
     { t: r.phase || '—' },
     { t: r.grade },
     { t: r.verdict },
   ]);
-  lines.push(mdTable(['Item', 'capEff', 'reach', 'phase', 'grade', 'verdict'], rows));
+  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'phase', 'grade', 'verdict'], rows));
   return lines.join('\n');
 }
 

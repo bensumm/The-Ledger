@@ -190,30 +190,38 @@ export function valueRanges(ts, live) {
    near-undeployable %-monster is discounted — the capital-parking objective, not "prefer expensive". Takes
    the per-candidate liquidity inputs { limitVol, limit, capGp }; absent them it degrades to shape-only.
    Returns 0 when there's no amplitude. PLACEHOLDER weights (§F). */
+/* deployUnits({ buyLow, limitVol, limit, capGp }) → the realistic DEPLOYABLE position size (units), the
+   three-way GE physics min: bankroll cap (capGp/buyLow), market share (VALUE_VOL_SHARE of the limiting-side
+   daily volume over VALUE_ACCUM_DAYS), and buy-limit accumulation (limit × windows/day × days). Any bound
+   whose input is missing is skipped; NONE known → null (a bare call degrades). A null limit ≠ zero units —
+   it just drops that bound (mirrors expUnits). Null when buyLow is missing/≤0. EXTRACTED from valueScore
+   (byte-identical) so the screen's decision digest can reuse the SAME deployable-capital shape for its
+   capEff × deployable-throughput ranking (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) — ONE home, no fork. */
+export function deployUnits({ buyLow, limitVol = null, limit = null, capGp = null } = {}) {
+  const b = num(buyLow);
+  if (!(b && b > 0)) return null;
+  const bounds = [];
+  if (capGp != null)    bounds.push(capGp / b);                                    // bankroll cap per position
+  if (limitVol != null) bounds.push(VALUE_VOL_SHARE * limitVol * VALUE_ACCUM_DAYS);   // market-share / exit bound
+  if (limit != null)    bounds.push(limit * VALUE_WINDOWS_PER_DAY * VALUE_ACCUM_DAYS); // buy-limit accumulation
+  return bounds.length ? Math.min(...bounds) : null;
+}
+
 export function valueScore(vr, { limitVol = null, limit = null, capGp = null } = {}) {
   if (!vr || !vr.hasData) return 0;
   const amp = Math.max(0, vr.afterTaxAmpPct || 0);
   const proxMult = VALUE_PROX_FLOOR_W + (1 - VALUE_PROX_FLOOR_W) * (vr.proximity ?? 0);
   const stabMult = VALUE_STAB_FLOOR_W + (1 - VALUE_STAB_FLOOR_W) * (vr.stability ?? 0);
-  // DEPLOYABLE-CAPITAL multiplier: realizable after-tax gp/cycle on the capital you can PARK and EXIT. The
-  // three-way min is the real GE physics — bankroll (capGp/buyLow), market share (VALUE_VOL_SHARE of the
-  // limiting-side daily volume, over VALUE_ACCUM_DAYS), and buy-limit accumulation (limit × windows/day ×
-  // days). Any bound whose input is missing is skipped; if NONE are known (a bare score call), deployMult
-  // degrades to 1 (shape-only). A null limit ≠ zero units — it just drops that bound (a null limit is not
-  // "no accumulation"), mirroring expUnits.
+  // DEPLOYABLE-CAPITAL multiplier: realizable after-tax gp/cycle on the capital you can PARK and EXIT.
+  // deployUnits() (extracted above, byte-identical) is the three-way-min position size; if it degrades to
+  // null (no buyLow, or no bound input) deployMult stays 1 (shape-only).
   const buyLow = num(vr.buyLow);
   let deployMult = 1;
-  if (buyLow && buyLow > 0) {
-    const bounds = [];
-    if (capGp != null)    bounds.push(capGp / buyLow);                                  // bankroll cap per position
-    if (limitVol != null) bounds.push(VALUE_VOL_SHARE * limitVol * VALUE_ACCUM_DAYS);   // market-share / exit bound
-    if (limit != null)    bounds.push(limit * VALUE_WINDOWS_PER_DAY * VALUE_ACCUM_DAYS); // buy-limit accumulation
-    if (bounds.length) {
-      const deployUnits = Math.min(...bounds);
-      const realProfit = amp * deployUnits * buyLow;   // realizable after-tax gp per cycle
-      deployMult = clamp(1 + VALUE_DEPLOY_W * Math.log10(Math.max(realProfit, 1) / VALUE_DEPLOY_REF_GP),
-                         VALUE_DEPLOY_MULT_MIN, VALUE_DEPLOY_MULT_MAX);
-    }
+  const units = deployUnits({ buyLow, limitVol, limit, capGp });
+  if (units != null) {
+    const realProfit = amp * units * buyLow;   // realizable after-tax gp per cycle
+    deployMult = clamp(1 + VALUE_DEPLOY_W * Math.log10(Math.max(realProfit, 1) / VALUE_DEPLOY_REF_GP),
+                       VALUE_DEPLOY_MULT_MIN, VALUE_DEPLOY_MULT_MAX);
   }
   return amp * proxMult * stabMult * deployMult * 100;   // ×100 → a readable score
 }

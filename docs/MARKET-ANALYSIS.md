@@ -141,10 +141,17 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 
 ### The decision digest — a THIRD console view (`--digest`)
 `screen-flip-niches.mjs --digest` prints ONE compact cross-niche block ABOVE the per-niche tables (and
-above `--raw`): `Item | capEff | reach | phase | grade | verdict` — top ~8 across all flip-niches this pass,
-ranked by **capEff** (after-tax ROI%/day of capital tied up). It is an anti-overwhelm TRIAGE VIEW ("which N
-do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
-footers, and the per-niche table's own `rank` sort is untouched (capEff-ordering is digest-only). The
+above `--raw`): `Item | capEff | deploy | reach | phase | grade | verdict` — top ~8 across all flip-niches
+this pass, ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable gp/day,
+NOT raw %). Raw `capEff` is SCALE-FREE, so ranking on it alone let dust-tier cheap high-% flips (Lead ore
+1072%/d on ~60k of deployable capital) sweep the top and bury the big-ticket deploys the digest exists to
+surface — the SAME failure `valueScore`'s deployable-capital blend already solved, so the digest REUSES its
+`deployUnits` three-way min (`js/valuescreen.mjs` — bankroll ÷ buy price, 10% market-share over 2 days,
+buy-limit accumulation) against the FULL deployable pool (`--capital`, NOT ÷slots). `capEff` stays a
+DISPLAYED column (still meaningful per-unit info); the `deploy` column shows the deployable capital so the
+ordering is legible. It is an anti-overwhelm TRIAGE VIEW ("which N do I look closer at"), ADDITIVE and
+opt-in: it never trims or replaces the per-niche tables + context footers, and the per-niche table's own
+`rank` sort is untouched (the deployable-throughput ordering is digest-only). The
 `verdict` word is deterministic, first-match-wins over a rule table (`sell unreliable` / `mirage top` /
 `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
 calibrated. **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn

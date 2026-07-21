@@ -61,8 +61,13 @@ is now the default (AO1) and without `--verbose` there is no table in stdout to 
 
 **`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
 _(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
-ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | reach | phase | grade |
-verdict`, top ~8 ranked by capital-efficiency — the "which of these do I look closer at" triage pass. It
+ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | deploy | reach | phase | grade |
+verdict`, top ~8 ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable
+gp/day, NOT raw %) — the "which of these do I look closer at" triage pass. Ranking by raw capEff alone let
+dust-tier cheap high-% flips bury the big-ticket deploys, so the digest weights capEff by the deployable
+capital (reusing the value flip-niche's `deployUnits` against the full `--capital` pool) — `capEff` stays a shown
+column, and the `deploy` column shows the parkable capital so the ordering reads honestly (a big-ticket you
+can park 40m into out-ranks a dust flip you can only put 100k into, even at a lower %). It
 is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
 footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
 the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two
@@ -355,10 +360,15 @@ This is the tribal layer the script can't do — apply ALL of these:
   big-ticket realized sample is n=1 (one godsword) — the crossover is UNMEASURED. When the RC co-log
   accrues enough closed big-ticket round-trips, compare realized %/day directly instead of estimating.
   Companion to the parked-capital-leak hypothesis above.
-- **Capital-efficiency ordering — read the digest's `capEff` column, not just Grade/Rank (PLACEHOLDER,
-  n≈0).** _(judgment: the NUMERIC companion to "Velocity vs magnitude" above — inform-only ordering)_
-  `capEff` = after-tax ROI%/day of capital tied up (`roiPct ÷ holdDays`; a recycling churn lane's `holdDays`
-  reflects its laps/day, so a fast small win can out-rank a slow big one). A thin big-ticket clearing its
+- **Deployable-throughput ordering — read the digest's `capEff`/`deploy` columns, not just Grade/Rank
+  (PLACEHOLDER, n≈0).** _(judgment: the NUMERIC companion to "Velocity vs magnitude" above — inform-only
+  ordering)_ The digest ranks by **deployable throughput** = `capEff × deployable capital` (≈ after-tax
+  deployable gp/day), NOT raw capEff — because raw `capEff` is scale-free and let dust-tier cheap high-%
+  flips bury the big-ticket deploys. `capEff` = after-tax ROI%/day of capital tied up (`roiPct ÷ holdDays`;
+  a recycling churn lane's `holdDays` reflects its laps/day, so a fast small win can out-rank a slow big
+  one); the `deploy` column is the parkable capital (the value flip-niche's `deployUnits` × buy price, against
+  the full `--capital` pool) — a big-ticket you can park 40m into out-ranks a dust flip you can only put
+  100k into. A thin big-ticket clearing its
   sell verification can still be a **weak deploy**: the digest's `⚠ weak deploy` verdict flags a BIG-TICKET
   (mid ≥ `BIG_TICKET_GP`, 10m) single-turn (non-churn) pick under ~0.5% PER TURN — Magus (+160k/50m, ~0.3%,
   cancelled) vs blowpipe (~+960k/~85m, ~1.1%, clears on margin alone) is the anchor. Churn is the ONLY lane

@@ -156,7 +156,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   validators + `pipeline/commands/screen-flip-niches.mjs`/`pipeline/commands/quote-items.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
   `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold flip-niche:
   `valueRanges` (recency-anchored shape features) / `valueScore` (composite rank with a deployable-capital
-  multiplier; `capGp` threaded from `screen-flip-niches.mjs --capital÷--slots`) / `valueGate` (amplitude floor +
+  multiplier; `capGp` threaded from `screen-flip-niches.mjs --capital÷--slots`) / `deployUnits` (the extracted
+  three-way-min deployable position size `valueScore` blends in — ALSO reused by the `--digest` decision
+  block's deployable-throughput ranking, PLAN-CAPITAL-EFFICIENCY-AND-DIGEST) / `valueGate` (amplitude floor +
   artifact-low guard + knife guard + coverage guard) / `valueTier` (buy-now vs watch). Consumed by
   `screen-flip-niches.mjs`/`gatecandidates.mjs`; imports only `tax`. Full spec + all NAMED-PLACEHOLDER thresholds (n≈0)
   live in the module header; resolved rank-metric history in `docs/LORE.md`. NOT app-imported → no
@@ -372,9 +374,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, 2026-07-21): `capEff` = after-tax ROI%/day of capital tied up
   (`roiPct ÷ holdDays`, a churn lane's `holdDays` reflecting its laps/day), `weakDeploy` = the big-ticket
   single-turn (non-churn) thin-per-turn flag (mid ≥ `BIG_TICKET_GP`, roiPct < ~0.5% PLACEHOLDER). Computed
-  inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`) — the console-only `--digest` decision
-  block's ranking metric + flag; INFORM-ONLY (n≈0), never a gate/`screen.json` field. Consumer: the future
-  retro-join calibration.
+  inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`) — displayed in the console-only `--digest`
+  decision block (which RANKS by deployable throughput = `capEff × deployable capital` via the reused
+  `valuescreen.mjs deployUnits`, so scale-free % can't bury big-ticket deploys) + `weakDeploy` a flag;
+  INFORM-ONLY (n≈0), never a gate/`screen.json` field. Consumer: the future retro-join calibration.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock } from '../commands/screen-flip-niches.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { BIG_TICKET_GP } from '../../js/quotecore.js';
+import { deployUnits } from '../../js/valuescreen.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }
@@ -106,8 +107,21 @@ ok('ORDER: a row matching rule 1 AND rule 3 reports rule 1 (bad sell beats thin 
   assert.equal(digestVerdict({ spec: BAND, row: bigMid, er: er(3, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.9, phase: 'in-peak' }), 'sell unreliable');
 });
 
-// --- 4. buildDigestBlock (the VIEW) -------------------------------------------------------------
-const mkRow = (name, capEff, rank = 0) => ({ name, capEff, rank, reachFrac: 0.9, phase: 'in-peak', grade: 'A', verdict: 'fill-now' });
+// --- 4. deployUnits reuse (the shared value-niche three-way min) ---------------------------------
+ok('deployUnits reuses the value three-way min: capGp/buyLow when the bankroll binds', () => {
+  // capGp 140m / buyLow 50m = 2.8 units (bankroll bound); vol-share 0.1×50×2=10, limit 8×6×2=96 — both above
+  assert.ok(approx(deployUnits({ buyLow: 50_000_000, limitVol: 50, limit: 8, capGp: 140_000_000 }), 2.8, 1e-3));
+});
+ok('deployUnits → null when buyLow is missing (degrade, no throw)', () => {
+  assert.equal(deployUnits({ buyLow: null, capGp: 140_000_000 }), null);
+});
+
+// --- 5. buildDigestBlock (the VIEW: ranked by deployable throughput = capEff × deployable) -------
+// rankKey = capEff × deployable capital ≈ after-tax deployable gp/day (the follow-up fix — raw capEff is
+// scale-free, so dust-tier cheap high-% items swept the top). mkRow keeps deployable EQUAL by default so the
+// legacy capEff-order + rank tie-break assertions still hold (rankKey ∝ capEff when deployable is constant).
+const mkRow = (name, capEff, rank = 0, deployable = 1) =>
+  ({ name, capEff, deployable, rankKey: (capEff != null && deployable != null) ? capEff * deployable : null, rank, reachFrac: 0.9, phase: 'in-peak', grade: 'A', verdict: 'fill-now' });
 ok('empty pool → the honest one-liner, not an empty table', () => {
   const out = buildDigestBlock([]);
   assert.match(out, /\(no candidates this pass\)/);
@@ -119,16 +133,31 @@ ok('caps the display at 8 rows (a VIEW, not a data cap)', () => {
   const dataRows = out.split('\n').filter(l => l.startsWith('| ') && !/\| Item \|/.test(l) && !/---/.test(l));
   assert.equal(dataRows.length, 8, `expected 8 rendered rows, got ${dataRows.length}`);
 });
-ok('sorts by capEff descending, null capEff sorts last', () => {
+ok('at equal deployable, sorts by capEff descending, null last', () => {
   const pool = [mkRow('Low', 5), mkRow('High', 100), mkRow('Mid', 50), mkRow('Null', null)];
   const out = buildDigestBlock(pool);
   const order = ['High', 'Mid', 'Low', 'Null'].map(nm => out.indexOf(nm));
   assert.ok(order[0] < order[1] && order[1] < order[2] && order[2] < order[3], `bad order: ${order}`);
 });
-ok('tie on capEff breaks by rank descending', () => {
-  const pool = [mkRow('Alpha', 10, 1), mkRow('Bravo', 10, 9)];
+ok('tie on the rank key breaks by capEff then rank descending', () => {
+  const pool = [mkRow('Alpha', 10, 1), mkRow('Bravo', 10, 9)];   // equal capEff+deployable → equal rankKey → rank breaks
   const out = buildDigestBlock(pool);
-  assert.ok(out.indexOf('Bravo') < out.indexOf('Alpha'), 'higher rank should sort first on a capEff tie');
+  assert.ok(out.indexOf('Bravo') < out.indexOf('Alpha'), 'higher rank should sort first on a rank-key tie');
+});
+ok('DEPLOYABLE WEIGHT demotes a cheap high-% row below a big-ticket at large deployable capital', () => {
+  // the exact failure the follow-up fixes: Lead-ore-shaped dust (capEff 1072%/d, but only ~60k deployable)
+  // must sort BELOW a Magus-shaped big-ticket (capEff 2.1%/d, but the whole 140m bankroll deployable).
+  const dust = mkRow('Dust', 1072, 0, 60_000);          // rankKey ≈ 1072 × 60k = 64.3M
+  const big  = mkRow('BigTicket', 2.1, 0, 140_000_000); // rankKey ≈ 2.1 × 140m = 294M
+  const out = buildDigestBlock([dust, big]);
+  assert.ok(out.indexOf('BigTicket') < out.indexOf('Dust'), 'big-ticket deployable must out-rank dust despite far lower capEff');
+  // and capEff is STILL a displayed column (not dropped) — the dust's raw % is visible, just not the sort
+  assert.match(out, /1072\.00%\/d/);
+});
+ok('the deploy column renders the deployable capital (legibility)', () => {
+  const out = buildDigestBlock([mkRow('Big', 5, 0, 140_000_000)]);
+  assert.match(out, /\| deploy \|/);           // the new column header
+  assert.match(out, /140m/);                    // the deployable capital cell
 });
 
 console.log(`\n${n} assertions passed.`);
