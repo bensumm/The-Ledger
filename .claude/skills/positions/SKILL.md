@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.44
+version: 1.45
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -420,6 +420,28 @@ on the `/positions` `↗ windowExit` note it's the compact `margin +X today · c
 vs HH:00 median` clause. Symmetric ask/bid, inform-only (tier `context`), placeholder thresholds
 (`MARGIN_FADE_FRAC` 0.3%, pace tol 0.1%) pending F1; a lean summary rides `suggestions.jsonl`. Read the
 clause/block; you no longer build this by hand.
+
+**ACT on the fade — a stepping-down daily-HIGH is a leading COOLING signal; treat `fading` as a
+price-to-sell-EARLY trigger, not an inform note (Ben, 2026-07-21 — the godsword exit retro).** The
+reach-margin block above DETECTS the fade; the repeated failure is UNDER-ACTING on it (this session the
+`cushion ⚠ fading +979k→+384k` flag was reported, then the fix was framed as a reactive "step down to
+~40.15m" while a rising-floor read got called a near-lock — the signal was on the page and got
+under-weighted). The daily-HIGHS trajectory is the LEADING tell that demand is cooling: the highs step
+down BEFORE the reactive "not filling" shows up, and BEFORE a rising-floor frame catches up. On the
+godsword the highs stepped **42.14m → 40.19m over 7 days (−5%)** while the rising floor (+298k/day) masked
+it; by the time the cushion had already collapsed, the reachable-and-profitable ask was gone. The rule:
+**when the daily highs are stepping down (or `reachMargin` prints `fading`), that is the trigger to price a
+reachable +profit ask NOW / at entry — do NOT anchor at the tail and step down reactively into fading
+demand.** In a cooling regime the profitable-exit window closes from ABOVE as the ceiling descends toward
+your ask — a level that is reachable-and-profitable today can sit ABOVE the daily high in 1–2 days, at
+which point the only exits left are sub-BE. So read the daily HIGHS explicitly (the `--window 0-23
+--nights 21` per-day `high` column), not just the rising floor — the floor LAGS and can tell a falsely
+bullish story. Ties to [[falling-item-exit-certain-clear]]. **Honesty:** the *entry* can be fine (bought
+on the rising floor, low risk) — the miss is purely pricing/timing; and "demand faded faster than the
+floor rose" is a real read that went against us, not a dumb hold. When you do exit a cooling lot at a
+small loss, LADDER rather than dump: one unit at the near-BE reachable level (the committed small-loss
+exit) + one patient unit a rung higher, and never the instasell (the panic price — on the godsword the
+instasell was −1.46m/unit vs −59k at a 39.95m rested ask).
 
 Preserve the standard 10-column
 `--positions` table exactly as the script printed it —
