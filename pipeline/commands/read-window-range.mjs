@@ -236,6 +236,57 @@ for (const want of positionals) {
     else if (rm.pace) log(`      pace: live ${fmt(rm.pace.liveNow)} vs ${pad2(rm.pace.hour)}:00 median ${fmt(rm.pace.medianAtHour)} → ${sgm(rm.pace.gap)}${rm.pace.onPace ? ' on pace' : ' ⚠ lagging'} (n ${rm.pace.n})`);
   };
 
+  // ── DAILY TRAJECTORY (was JSON-only until this block) — the multi-day price path + a heuristic
+  // shape read, surfaced by DEFAULT so a scored/verify read can't skip the trajectory in favour of
+  // just the reach/placement fields (the exact under-read this fixes: an agent read reach/placement
+  // and ignored the `days` series sitting in the same dump). PURELY ADDITIVE console rendering of
+  // data already in `result.days`/`profMargin` — no new computation, no JSON/number change. Gated on
+  // a scored/verify run (a bid/ask/exit/depth level or --profile), matching the trio's intent.
+  const isVerifyRun = BID != null || ASK != null || EXIT != null || DEPTH_QTY != null || A.profile !== undefined;
+  if (isVerifyRun && scored.length) {
+    log(`  --- DAILY TRAJECTORY (window low/high per day, oldest→newest)`);
+    for (const [key, n] of scored) log(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
+    // window floor / ceiling (min daily low / max daily high) + the day each printed.
+    const floor = lows.length ? lows[0] : null;
+    const ceiling = his.length ? his[his.length - 1] : null;
+    const floorKey = floor != null ? (scored.find(([, n]) => n.low === floor) || [])[0] : null;
+    const ceilKey = ceiling != null ? (scored.find(([, n]) => n.hi === ceiling) || [])[0] : null;
+    // one-line shape classification off the chronological daily MIDs — rising / falling /
+    // oscillating / based / elevated. HEURISTIC (n≈0), inform-only — never gates, never a verdict.
+    const mids = scored.map(([, n]) => (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low ?? n.hi)).filter(v => v != null);
+    let shape = 'ranging';
+    if (mids.length >= 3 && floor != null && ceiling != null && ceiling > floor) {
+      const range = ceiling - floor;
+      const third = Math.max(1, Math.floor(mids.length / 3));
+      const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+      const drift = (mean(mids.slice(-third)) - mean(mids.slice(0, third))) / range;   // recent-third vs oldest-third, in range-units
+      let flips = 0;   // direction changes → oscillation density
+      for (let i = 2; i < mids.length; i++) { const a = Math.sign(mids[i - 1] - mids[i - 2]), b = Math.sign(mids[i] - mids[i - 1]); if (a && b && a !== b) flips++; }
+      const oscFrac = flips / (mids.length - 2);
+      const pos = (mids[mids.length - 1] - floor) / range;   // where the latest day's mid sits in the band
+      if (drift >= 0.33) shape = 'rising';
+      else if (drift <= -0.33) shape = 'falling';
+      else if (oscFrac >= 0.4) shape = 'oscillating floor↔ceiling';
+      else if (pos <= 0.34) shape = 'based (sitting near the floor)';
+      else if (pos >= 0.66) shape = 'elevated (sitting near the ceiling)';
+      else shape = 'ranging (mid-band)';
+    }
+    // where the LIVE print sits between the window floor and ceiling — floor / ceiling / mid.
+    const liveRef = latest ? (latest.low ?? latest.high ?? null) : null;
+    let liveNote = '';
+    if (liveRef != null && floor != null && ceiling != null && ceiling > floor) {
+      const lp = (liveRef - floor) / (ceiling - floor);
+      const where = lp <= 0.34 ? 'at the FLOOR' : lp >= 0.66 ? 'at the CEILING' : 'mid-band';
+      liveNote = ` · live ${fmt(liveRef)} ${where}`;
+    }
+    log(`    read: ${shape} · floor ${fmt(floor)}${floorKey ? ` (${floorKey})` : ''} → ceiling ${fmt(ceiling)}${ceilKey ? ` (${ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)`);
+    // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.
+    if (A.profile === undefined && profMargin) {
+      const tr = profMargin.trendPerDay;
+      log(`    diurnal: dip ${fmtHourRange(profMargin.dip.startH, profMargin.dip.endH)} ${fmt(profMargin.dip.level)} · peak ${fmtHourRange(profMargin.peak.startH, profMargin.peak.endH)} ${fmt(profMargin.peak.level)} · amp ${profMargin.amplitudePct != null ? (profMargin.amplitudePct * 100).toFixed(1) + '%' : '—'} · trend ${tr == null ? '—' : (tr >= 0 ? '+' : '') + fmt(Math.round(tr)) + '/day'}`);
+    }
+  }
+
   log(`  ---`);
   const rq = (side, p) => { const v = recentQuant(scored, side, p, RECENT_NIGHTS); return v == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(v)}`; };
   if (lows.length) {

@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.80
+version: 1.81
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -566,6 +566,14 @@ This is the tribal layer the script can't do — apply ALL of these:
        trend yourself before stating a timing target. Same underlying data as the auto-note, full
        resolution, so "targets the 20:00–21:00 dip" is backed by the actual numbers, not a
        summarized guess.
+    4. **`DAILY TRAJECTORY` + `read:` (the multi-day path — now surfaced by DEFAULT, 2026-07-21).**
+       The scored trio now prints the per-day window low/high trajectory and a one-line `read:`
+       (shape — rising/falling/oscillating/based/elevated — with the window floor + ceiling and
+       where LIVE sits: at the floor / ceiling / mid) plus a compact `diurnal:` line. You MUST read
+       the trajectory (floor/ceiling/shape), not just the reach/placement fields — the exact
+       under-read this surfaces: a level can look fine on reach/placement while the trajectory shows
+       price falling into it or live already pinned at the ceiling. The `read:` shape is a HEURISTIC
+       (n≈0, inform-only, never gates) — the raw per-day rows are the signal; the label is a prompt.
     Each scored `--ask`/`--bid`/`--exit` also prints a **`fold:` data-point line** (PLAN-ESTIMATOR-POSTURE
     AC8): `best-case ask X → reach-folded Y (recent a/b · full c/d) · net at folded pair …`. This is where
     the reach-fold moved — discovery shows best-case, validation shows what the estimator's fold makes of

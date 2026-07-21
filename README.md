@@ -563,10 +563,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     count — purely descriptive, no "safe ≈ pXX" threshold (AC3's calibrated safe quantile did NOT ship,
     its gate failed; `PLAN-REACH-CALIBRATION.md` AC1); where the Tier-1 archive (`lib/archive.mjs`,
     read-only) has ≥3 covered window-days it adds a less-smoothed 5m-grain reach/placement ALONGSIDE
-    (labeled, a LOWER BOUND per AC2), degrading cleanly to 1h-only otherwise. `--json` (AO2) dumps the
+    (labeled, a LOWER BOUND per AC2), degrading cleanly to 1h-only otherwise. A scored/verify run
+    (a `--bid`/`--ask`/`--exit`/`--depth` level or `--profile`) also prints a **`DAILY TRAJECTORY`**
+    block by DEFAULT (2026-07-21) — the per-day window low/high path already in the `--json` `days`
+    array, plus a one-line `read:` (shape rising/falling/oscillating/based/elevated + window
+    floor/ceiling + where live sits) and, when `--profile` wasn't passed, a compact `diurnal:` line;
+    HEURISTIC + inform-only (the shape label never gates), the console-only fix for the trajectory
+    being read-past in favour of just the reach/placement fields. `--json` (AO2) dumps the
     assembled per-item result objects to stdout (the `analyze-record`/`analyze-fill-placement`
     `--json`→stdout convention, NOT `writeLastReport` — this command builds no render.mjs sections);
-    default markdown stdout is byte-identical when absent. `--profile` = the hour-of-day diurnal dip/peak read
+    default markdown stdout is byte-identical when absent (the `DAILY TRAJECTORY`/`read:`/`diurnal:`
+    lines are console-only — `--json` output is unchanged). `--profile` = the hour-of-day diurnal dip/peak read
     + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector,
     BOTH edges since DE6: per-day instabuy flow at/above the scored `--ask` + the `clearableAsk`
     "BOOK AT ≤ X", and per-day instasell flow at/below a scored `--bid` + the `clearableBid`
