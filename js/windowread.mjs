@@ -188,7 +188,7 @@ export const FIVE_MIN_MIN_DAYS = 3;   // fewer scored 5m-grain window-days than 
  * @returns {null | { nDays, askSide:{q50,q75,everyDay,recent50,medVol}, ask:null|{level,reachedDays,nDays,placement,recency}, grain5m:null|{reachedDays,nDays,placement} }}
  *   null when the 1h series has no traded window-highs (nothing to read — degrade, never a fake read).
  */
-export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECENT_NIGHTS, minFiveDays = FIVE_MIN_MIN_DAYS } = {}) {
+export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECENT_NIGHTS, minFiveDays = FIVE_MIN_MIN_DAYS, profile = null, live = null, now = new Date() } = {}) {
   if (!stats || !Array.isArray(stats.his) || !stats.his.length) return null;
   const his = stats.his;   // ascending
   const askSide = {
@@ -204,11 +204,71 @@ export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECEN
     nDays: his.length,
     placement: placement(his, ask),
     recency: recencySplit(stats.days, 'ask', ask, recentN),
+    reachMargin: reachMargin(stats.days, 'ask', ask, { recentN, profile, live, now }),   // the fade check, folded in (zero extra fetch)
   } : null;
   const grain5m = (ask != null && stats5m && Array.isArray(stats5m.his) && stats5m.his.length >= minFiveDays)
     ? { reachedDays: reachedDays(stats5m.his, ask), nDays: stats5m.his.length, placement: placement(stats5m.his, ask) }
     : null;
   return { nDays: his.length, askSide, ask: scored, grain5m };
+}
+
+// --- reach-margin FADE check (the godsword/mask pair, 2026-07-20) -------------------------------
+// The reach COUNT + placement percentile say "does this level print", but not whether the CUSHION over
+// (ask) / under (bid) the level is FADING — the signal that a "recent 3/3 reached" ask is quietly
+// settling ONTO a cooling peak (godsword: 40.6m reached 3/3 recent while the cushion collapsed +1.3m→
+// +0.1m; "rising vs the 2-week base" masked it). reachMargin folds three reads off the SAME per-day
+// windowStats buckets (zero new fetch) + the in-hand hourProfile:
+//   trend        fading|stable|extending — the sign of (newer-half mean cushion − older-half mean) over
+//                the recent marginN days, thresholded at MARGIN_FADE_FRAC × level (a placeholder).
+//   cushionNow   the most-recent day's cushion (how much room is left over/under the level TODAY).
+//   pace         today's live vs the reaching-day median for THIS hour-of-day (from hourProfile) — a
+//                same-day "is today tracking the days that reached?" read; null when there's no live or
+//                no current-hour row (honest — no pace read at an unsampled hour). Emitted whenever data
+//                exists, sparse or not: sparse still informs a low-liquidity item, and it's a strong
+//                signal on a liquid one (Ben, 2026-07-20).
+// SYMMETRIC: side='ask' scores dayHigh−level cushions + the high side; side='bid' scores level−dayLow +
+// the low side (a bid running too DEEP to fill is the mirror error). INFORM-ONLY (tier: context) — like
+// windowClear/askHeadroom it never moves the verdict, the quoted price, or a gate. n≈small, thresholds
+// are PLACEHOLDERS pending F1 (rule 4); it TEMPERS a tail price toward a reachable one, not a fill model.
+export const MARGIN_NIGHTS = 7;      // recent days considered for the cushion trend
+export const MARGIN_MIN_DAYS = 4;    // fewer scored recent days than this ⇒ trend null (can't split halves)
+export const MARGIN_FADE_FRAC = 0.003; // |older→newer cushion delta| ≥ this × level flips stable→fading/extending (PLACEHOLDER, F1; 0.3% keeps night-to-night noise from over-firing "fading")
+export const PACE_TOL_FRAC = 0.001;  // live within this × level of the hour median counts as on-pace (PLACEHOLDER)
+
+export function reachMargin(days, side, level, { recentN = RECENT_NIGHTS, marginN = MARGIN_NIGHTS, minDays = MARGIN_MIN_DAYS, profile = null, live = null, now = new Date() } = {}) {
+  if (!Array.isArray(days) || !days.length || level == null) return null;
+  const extremeOf = n => side === 'bid' ? n.low : n.hi;
+  const cushionOf = e => side === 'bid' ? (level - e) : (e - level);
+  const all = days.map(([key, n]) => { const e = extremeOf(n); return e == null ? null : { key, extreme: e, cushion: cushionOf(e), reached: cushionOf(e) >= 0 }; })
+    .filter(Boolean);
+  if (!all.length) return { side, level, trend: null, cushionNow: null, cushionFrom: null, cushionTo: null, reachedRecent: 0, nRecent: 0, perDay: [], pace: pace() };
+  const recent = all.slice(-marginN);                    // days is oldest→newest ⇒ tail = most recent
+  const cushionNow = recent[recent.length - 1].cushion;
+  const reachedRecent = recent.filter(d => d.reached).length;
+  const mean = xs => xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : null;
+  let trend = null, cushionFrom = null, cushionTo = null;
+  if (recent.length >= minDays) {
+    const half = Math.floor(recent.length / 2);
+    cushionFrom = Math.round(mean(recent.slice(0, half).map(d => d.cushion)));
+    cushionTo = Math.round(mean(recent.slice(recent.length - half).map(d => d.cushion)));
+    const delta = cushionTo - cushionFrom, thresh = level * MARGIN_FADE_FRAC;
+    trend = delta <= -thresh ? 'fading' : delta >= thresh ? 'extending' : 'stable';
+  }
+  return { side, level, trend, cushionNow, cushionFrom, cushionTo, reachedRecent, nRecent: recent.length, perDay: recent, pace: pace() };
+
+  // today's pace vs the reaching-day median at THIS hour-of-day (closure over side/level/live/profile/now)
+  function pace() {
+    if (!profile || !Array.isArray(profile.hours) || !live) return null;
+    const h = now.getHours();
+    const row = profile.hours.find(x => x.h === h);
+    if (!row || !(row.n > 0)) return null;
+    const liveNow = side === 'bid' ? live.lo : live.hi;
+    const medianAtHour = side === 'bid' ? row.lowRecent : row.hiRecent;
+    if (liveNow == null || medianAtHour == null) return null;
+    const gap = liveNow - medianAtHour, tol = level * PACE_TOL_FRAC;
+    const onPace = side === 'bid' ? gap <= tol : gap >= -tol;   // ask: live at/above median = on pace; bid: at/below
+    return { hour: h, liveNow: Math.round(liveNow), medianAtHour: Math.round(medianAtHour), gap: Math.round(gap), onPace, n: row.n };
+  }
 }
 
 // --- asymmetric realizable pair (PART II, PLAN-GRADE-REACH — deep-buy / reliable-sell) ---------

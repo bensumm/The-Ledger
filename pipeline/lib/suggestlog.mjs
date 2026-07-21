@@ -29,7 +29,8 @@
  *                 Lean-included; absent when the pressure read degrades (thin days/volume).)
  *     windowExit?,  (WC1 PLAN-WINDOW-CLEAR-OUTCOMES 2026-07-20 — the window-clear ask-RUNG forward record on a
  *                 big-ticket held lot: { list, live, peakWindow:[startH,endH], hiReach:{reached,n,recentHit,
- *                 recentDays,placement}, fiveReach:{reached,n,placement}|null } off js/windowread.mjs
+ *                 recentDays,placement}, fiveReach:{reached,n,placement}|null, reachMargin:{trend,cushionNow,
+ *                 cushionFrom,cushionTo,reachedRecent,nRecent,pace:{gap,onPace,hour,n}|null}|null } off js/windowread.mjs
  *                 askExitRead. Records the surfaced list level + the diurnal peak window it targets + the TWO
  *                 competing reach signals (daily-HIGH 1h reach AND the less-smoothed 5m-grain reach) side-by-
  *                 side, so WC2 can join it against fills.json and score which signal predicts a resting-ask
@@ -292,7 +293,17 @@ export function windowExitShadow(aer, { list = null, live = null, peakWindow = n
   const hiReach = { reached: a.reachedDays, n: a.nDays, recentHit: rc.recentHit ?? null, recentDays: rc.recentDays ?? null, placement: r2(a.placement) };
   const g = aer.grain5m;
   const fiveReach = g ? { reached: g.reachedDays, n: g.nDays, placement: r2(g.placement) } : null;
-  return { list, live, peakWindow, hiReach, fiveReach };
+  // reach-margin fade summary (the cushion TREND + today's pace) — lean: scalars only, the per-day
+  // cushion array is dropped so suggestions.jsonl stays compact (SR1). Null when no margin read.
+  const rm = a.reachMargin;
+  const reachMargin = rm ? {
+    trend: rm.trend, cushionNow: rm.cushionNow == null ? null : Math.round(rm.cushionNow),
+    cushionFrom: rm.cushionFrom == null ? null : Math.round(rm.cushionFrom),
+    cushionTo: rm.cushionTo == null ? null : Math.round(rm.cushionTo),
+    reachedRecent: rm.reachedRecent, nRecent: rm.nRecent,
+    pace: rm.pace ? { gap: Math.round(rm.pace.gap), onPace: rm.pace.onPace, hour: rm.pace.hour, n: rm.pace.n } : null,
+  } : null;
+  return { list, live, peakWindow, hiReach, fiveReach, reachMargin };
 }
 
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate

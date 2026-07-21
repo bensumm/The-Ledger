@@ -10,6 +10,24 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The REACH-MARGIN FADE check — `reachMargin`, folded into `askExitRead` (pipeline stdout, no APP_VERSION, 2026-07-20)
+The reach COUNT + placement percentile say "does this level print" but not whether the CUSHION over (ask) /
+under (bid) the level is FADING — the signal that a "recent 3/3 reached" ask is quietly settling ONTO a cooling
+peak. The godsword taught it live: 40.60m reached 3/3 recent while the cushion over it collapsed +1.3m→+0.1m,
+and "rising +6.5% vs the 2-week base" masked the fade; the mask was the counterexample (20.59m at p7, ~+450k
+cushion, correctly conservative). Now computed, not hand-read: **`reachMargin(days, side, level, …)` in
+`js/windowread.mjs`**, folded INTO the shared `askExitRead` so it rides BOTH surfaces automatically (zero new
+fetch — reuses the per-day `windowStats` buckets + the in-hand `hourProfile`). Three reads: (1) `trend`
+`fading|stable|extending` — sign of the newer-vs-older-half mean-cushion delta over the recent `MARGIN_NIGHTS`
+(7) days at `MARGIN_FADE_FRAC` (0.3%, placeholder); (2) `cushionNow`; (3) `pace` — today's live vs the
+reaching-day median at THIS hour-of-day, emitted whenever there's data (sparse still informs a low-liquidity
+item, strong on a liquid one — Ben's call), null at an unsampled hour. **Symmetric** ask/bid (a bid running too
+deep to fill is the mirror). Renders as the full `reach-margin:` block on `read-window-range.mjs --ask/--bid`
+and a compact clause on the `/positions` `↗ windowExit` note; a lean summary rides `suggestions.jsonl` via
+`windowExitShadow` for F1. **Inform-only** (tier `context`) — never moves the verdict/price/gate; thresholds are
+placeholders (rule 4). `/positions` v1.43 documents the read; `js/windowread.mjs` owns the constants. No
+`APP_VERSION` bump (the browser doesn't call it yet).
+
 ### Diurnal windows labelled in BOTH local + UK zones — `fmtHourRange` (pipeline stdout, no APP_VERSION, 2026-07-20)
 Every diurnal window the tools emit (the `↗ windowExit` peak-window note on `quote-items.mjs --positions`, the
 DIP/PEAK headers in `read-window-range.mjs`'s hour-of-day profile) is an hour-of-day computed with LOCAL getters —

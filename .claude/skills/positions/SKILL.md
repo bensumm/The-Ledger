@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.42
+version: 1.43
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -399,9 +399,14 @@ how far below the tail that is. Symmetric on the BID side (via `--bid`): a bid a
 placement (mask re-entry bid 19.57m touched 3/14, recent 0/3, p21) is aiming too DEEP to fill — the same
 "price to where it actually prints" discipline, mirrored. **Honesty (rule 4):** ~14–21 days is a small
 sample and the median profile blends reaching + non-reaching days; this is a read that TEMPERS a tail
-price toward a reachable one, not a fill model. **Followup (not yet built):** fold the per-day
-reached/not flag + the recent-margin trend + today's-pace line into `read-window-range.mjs`'s `--ask`
-output directly, so the check is one printed block instead of a hand-read of the per-day table.
+price toward a reachable one, not a fill model. **BUILT (2026-07-20):** this is now the `reachMargin`
+computation folded into `js/windowread.mjs`'s `askExitRead` — it prints automatically, no hand-read of the
+per-day table. On `read-window-range.mjs --ask/--bid` it's the full `reach-margin:` block (cushion
+`fading|stable|extending` trend + per-day cushion + today's pace vs the reaching-day median at this hour);
+on the `/positions` `↗ windowExit` note it's the compact `margin +X today · cushion <trend> A→B · pace ±Y
+vs HH:00 median` clause. Symmetric ask/bid, inform-only (tier `context`), placeholder thresholds
+(`MARGIN_FADE_FRAC` 0.3%, pace tol 0.1%) pending F1; a lean summary rides `suggestions.jsonl`. Read the
+clause/block; you no longer build this by hand.
 
 Preserve the standard 10-column
 `--positions` table exactly as the script printed it —

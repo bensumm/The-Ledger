@@ -92,7 +92,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   list-price reach/placement + the ≥`FIVE_MIN_MIN_DAYS` 5m-grain reach; pure over already-computed
   `windowStats` results, so `read-window-range.mjs`'s `--ask` block and `quote-items.mjs --positions`'
   auto-surfaced big-ticket `↗ windowExit` note render from ONE definition instead of re-sequencing the
-  primitives) + the **hour-of-day diurnal profile**
+  primitives) + **`reachMargin`** (the fade check, 2026-07-20 — folded INTO `askExitRead`, so it rides both
+  surfaces: the cushion TREND `fading|stable|extending` over the recent `MARGIN_NIGHTS` days at
+  `MARGIN_FADE_FRAC`, the current-day cushion, and today's `pace` — live-now vs the reaching-day median at
+  this hour-of-day off the in-hand `hourProfile`; symmetric ask/bid, inform-only, placeholders pending F1;
+  the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
   `windowrange --profile` prints) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level

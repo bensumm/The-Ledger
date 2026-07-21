@@ -172,7 +172,17 @@ ok('WC1: windowExitShadow maps askExitRead fields (reachedDays→reached, nDays�
   const s = windowExitShadow(aer, { list: 12_000_000, live: 11_600_000, peakWindow: [1, 3] });
   assert.deepEqual(s, { list: 12_000_000, live: 11_600_000, peakWindow: [1, 3],
     hiReach: { reached: 9, n: 14, recentHit: 1, recentDays: 3, placement: 0.62 },
-    fiveReach: { reached: 5, n: 11, placement: 0.55 } }, 'placement rounded to 2dp; both signals side-by-side');
+    fiveReach: { reached: 5, n: 11, placement: 0.55 }, reachMargin: null },
+    'placement rounded to 2dp; both signals side-by-side; reachMargin null when the aer carries none');
+  // reachMargin present on the aer ⇒ summarized (scalars only, perDay dropped, cushions rounded, pace kept)
+  const withRm = windowExitShadow({ ask: { reachedDays: 9, nDays: 14, placement: 0.6, recency: {},
+      reachMargin: { side: 'ask', level: 12_000_000, trend: 'fading', cushionNow: 100_100.7, cushionFrom: 900_400.2,
+        cushionTo: 600_200.9, reachedRecent: 6, nRecent: 6, perDay: [{ key: '2026-07-19', cushion: 100_100, reached: true }],
+        pace: { hour: 16, liveNow: 11_600_000, medianAtHour: 12_400_000, gap: -800_000.4, onPace: false, n: 15 } } },
+      grain5m: null }, { list: 12_000_000, live: 11_600_000, peakWindow: [1, 3] });
+  assert.deepEqual(withRm.reachMargin, { trend: 'fading', cushionNow: 100_101, cushionFrom: 900_400, cushionTo: 600_201,
+    reachedRecent: 6, nRecent: 6, pace: { gap: -800_000, onPace: false, hour: 16, n: 15 } },
+    'reachMargin summarized: cushions rounded, perDay dropped, pace kept');
   // no scored ask (list null → askExitRead returns ask:null) ⇒ nothing to log
   assert.equal(windowExitShadow({ nDays: 14, ask: null, grain5m: null }, { list: null }), null);
   assert.equal(windowExitShadow(null, {}), null, 'no read → null (degrade, never a fake record)');

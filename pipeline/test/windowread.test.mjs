@@ -16,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS } from '../../js/windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
@@ -175,6 +175,49 @@ ok('recentQuant: returns the recent-N slice quantile, not the full window', () =
     day('d4', 130, 200), day('d5', 132, 205), day('d6', 128, 210), // recent 3
   ];
   assert.equal(recentQuant(days, 'bid', 0.5, 3), 130, 'recent-3 median low, not the old ~90');
+});
+
+// --- reachMargin: the cushion-fade check (ask/bid symmetric) + today's pace ------------------
+ok('reachMargin ASK: a collapsing cushion over the ask reads FADING (the godsword shape)', () => {
+  const days = [day('d1', 90, 130), day('d2', 90, 128), day('d3', 90, 125),
+                day('d4', 90, 122), day('d5', 90, 121), day('d6', 90, 120)];   // highs stepping toward the 100 ask
+  const rm = reachMargin(days, 'ask', 100, { marginN: 6 });
+  assert.equal(rm.trend, 'fading', 'newer-half cushion < older-half by > threshold ⇒ fading');
+  assert.equal(rm.cushionNow, 20, 'most-recent cushion = 120 − 100');
+  assert.equal(rm.reachedRecent, 6, 'all 6 recent highs still clear the ask (reached), but the cushion is shrinking');
+  assert.ok(rm.cushionFrom > rm.cushionTo, 'older-half cushion is larger than newer-half (the collapse)');
+});
+
+ok('reachMargin ASK: a steady cushion reads STABLE; BID mirror scores level−low', () => {
+  const flat = [day('d1', 90, 125), day('d2', 90, 125), day('d3', 90, 125),
+                day('d4', 90, 125), day('d5', 90, 125), day('d6', 90, 125)];
+  assert.equal(reachMargin(flat, 'ask', 100, { marginN: 6 }).trend, 'stable', 'cushion flat ⇒ stable');
+  // BID side: cushion = level − dayLow; a low well under the bid is a comfortable fill
+  const bidDays = [day('d1', 70, 130), day('d2', 72, 130), day('d3', 71, 130)];
+  const rb = reachMargin(bidDays, 'bid', 100, { marginN: 6 });
+  assert.equal(rb.cushionNow, 29, 'bid cushion = 100 − 71');
+  assert.equal(rb.reachedRecent, 3, 'all lows dip below the bid (touched)');
+});
+
+ok('reachMargin: pace compares live-now to the reaching-day median at THIS hour (lagging when light)', () => {
+  const days = [day('d1', 90, 120), day('d2', 90, 121), day('d3', 90, 122), day('d4', 90, 123)];
+  const profile = { hours: [{ h: 16, lowRecent: 90, hiRecent: 130, n: 15 }] };
+  const now = new Date(2026, 0, 20, 16, 0, 0);
+  const rm = reachMargin(days, 'ask', 100, { marginN: 6, profile, live: { lo: 85, hi: 120 }, now });
+  assert.equal(rm.pace.gap, -10, 'live instabuy 120 vs the 16:00 median high 130 ⇒ −10');
+  assert.equal(rm.pace.onPace, false, 'running below the reaching-day median at this hour ⇒ lagging');
+  assert.equal(rm.pace.n, 15, 'the hour sample size rides along (honesty: sparse still surfaces)');
+  // no profile / no live ⇒ pace null, the rest still computes
+  assert.equal(reachMargin(days, 'ask', 100, { marginN: 6 }).pace, null);
+});
+
+ok('reachMargin: fewer than MARGIN_MIN_DAYS recent days ⇒ trend null (no false classification)', () => {
+  const days = [day('d1', 90, 120), day('d2', 90, 121)];
+  const rm = reachMargin(days, 'ask', 100, { marginN: 6 });
+  assert.equal(rm.trend, null, 'too thin to split halves ⇒ no trend');
+  assert.equal(rm.cushionNow, 21, 'but the current cushion still reports');
+  assert.equal(reachMargin([], 'ask', 100), null, 'empty days ⇒ null (degrade, never a fake read)');
+  assert.equal(reachMargin([day('d1', 90, 120)], 'ask', null), null, 'null level ⇒ null');
 });
 
 // --- 5. hourProfile: locate + CLUSTER the daily dip and peak windows -------------------------

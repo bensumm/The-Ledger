@@ -670,13 +670,14 @@ async function runPositions() {
             stats5m = windowStats(mapped, { nights: 14, wStart: 0, wEnd: 0 });
           }
         } catch { stats5m = null; }
-        const aer = astHeld ? askExitRead(astHeld, { ask: list, stats5m }) : null;
+        // which diurnal window the level prints in + the pace read (zero-fetch off the in-hand series);
+        // profH is computed BEFORE askExitRead so the reach-margin pace read has the hour profile in hand.
+        const profH = hourProfile(inp.ts1h, { nights: 14 });
+        const drH = profH ? deriveDiurnalRange(profH, {}) : null;
+        const aer = astHeld ? askExitRead(astHeld, { ask: list, stats5m, profile: profH, live: { lo: row.quickBuy ?? null, hi: row.quickSell ?? null } }) : null;
         if (!aer) {
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window read unavailable — no 1h series this pass` });
         } else {
-          // which diurnal window the level prints in (zero-fetch off the in-hand series).
-          const profH = hourProfile(inp.ts1h, { nights: 14 });
-          const drH = profH ? deriveDiurnalRange(profH, {}) : null;
           const peakTxt = (drH && drH.peakWindow) ? ` · peak window ${fmtHourRange(drH.peakWindow.startH, drH.peakWindow.endH)}` : '';
           const as = aer.askSide;
           const parts = [];
@@ -687,6 +688,15 @@ async function runPositions() {
           parts.push(`typical exit ~50% ${fmt(as.q50)} / ~75% ${fmt(as.q75)} / every-day ${fmt(as.everyDay)}${as.recent50 != null ? ` · recent-3 ~50% ${fmt(as.recent50)}` : ''}`);
           if (row.quickSell != null) parts.push(`live instabuy ${fmt(row.quickSell)}`);
           if (aer.grain5m) parts.push(`5m-grain reached ${aer.grain5m.reachedDays}/${aer.grain5m.nDays} · ${pct(aer.grain5m.placement)}`);
+          // reach-margin FADE clause — the cushion trend + today's pace, compact (full per-day read is read-window-range's job)
+          const rm = aer.ask && aer.ask.reachMargin;
+          if (rm && (rm.trend || rm.pace)) {
+            const sg = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
+            let c = `margin ${sg(rm.cushionNow)} today`;
+            if (rm.trend) c += ` · cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend} ${sg(rm.cushionFrom)}→${sg(rm.cushionTo)} (${rm.nRecent}d)`;
+            if (rm.pace) c += ` · pace ${sg(rm.pace.gap)} vs ${fmtHour(rm.pace.hour)} median${rm.pace.onPace ? '' : ' ⚠ lagging'}`;
+            parts.push(c);
+          }
           notes.push({ kind: 'windowExit', itemId, text: `${name}: window-clear — ${parts.join(' · ')}${peakTxt}  (touched ≠ filled, ~${aer.nDays}d — a guide)`,
             data: { list, live: row.quickSell ?? null, peakWindow: (drH && drH.peakWindow) ? drH.peakWindow : null, ...aer } });
           // WC1: the lean forward record for F1 — the surfaced rung + both reach signals off the SAME aer.

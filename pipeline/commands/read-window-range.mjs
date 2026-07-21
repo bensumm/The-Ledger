@@ -58,7 +58,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); FIVE_MIN_MIN_DAYS moved into windowread as its one home
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home
 import { maxBuyForExit, breakEven } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
@@ -204,7 +204,23 @@ for (const want of positionals) {
   // PLAN-POSITIONS-WINDOW-READ: the ask-side typical-exit read assembled ONCE via the shared askExitRead
   // (the same call quote-items.mjs --positions makes) — the ASK-side summary line + the scored --ask
   // reach/placement + the 5m-grain block below all render from its fields (was inline primitives).
-  const aer = askExitRead(stats, { ask: ASK, stats5m: fiveStats });
+  // reachMargin (the fade check) needs the hour profile (for today's pace) + live; compute once here so
+  // both the ask-side (via aer) and the --bid render below share it. PURE — no fetch (series already in hand).
+  const profMargin = hourProfile(series, { nights: NIGHTS });
+  const liveNow = latest ? { lo: latest.low ?? null, hi: latest.high ?? null } : null;
+  const aer = askExitRead(stats, { ask: ASK, stats5m: fiveStats, profile: profMargin, live: liveNow });
+  // logReachMargin — the FULL fade block (cushion trend + per-day cushion + today's pace). Compact-clause
+  // rendering is quote-items.mjs's job; the manual read prints the whole thing.
+  const sgm = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
+  const logReachMargin = (rm) => {
+    if (!rm) return;
+    const t = rm.trend
+      ? `cushion ${rm.trend === 'fading' ? '⚠ ' : ''}${rm.trend.toUpperCase()} ${sgm(rm.cushionFrom)}→${sgm(rm.cushionTo)} (last ${rm.nRecent}d)`
+      : `cushion (thin — <${MARGIN_MIN_DAYS} recent days)`;
+    log(`    reach-margin: ${t} · now ${sgm(rm.cushionNow)} · reached ${rm.reachedRecent}/${rm.nRecent} recent`);
+    if (rm.perDay && rm.perDay.length) log(`      per-day cushion: ${rm.perDay.map(d => `${d.key.slice(5)} ${sgm(d.cushion)}${d.reached ? '✓' : '✗'}`).join(' · ')}`);
+    if (rm.pace) log(`      pace: live ${fmt(rm.pace.liveNow)} vs ${pad2(rm.pace.hour)}:00 median ${fmt(rm.pace.medianAtHour)} → ${sgm(rm.pace.gap)}${rm.pace.onPace ? ' on pace' : ' ⚠ lagging'} (n ${rm.pace.n})`);
+  };
 
   log(`  ---`);
   const rq = (side, p) => { const v = recentQuant(scored, side, p, RECENT_NIGHTS); return v == null ? '' : ` · recent-${RECENT_NIGHTS} ~50%: ${fmt(v)}`; };
@@ -247,6 +263,9 @@ for (const want of positionals) {
       log(`    ↳ 5m-grain (archive, less-smoothed; a LOWER BOUND on the true gap per AC2): touched ${t5}/${fiveStats.lows.length} · placement ${pctStr(p5)} (n=${fiveStats.lows.length} days)`);
       result.bid.grain5m = { touchedDays: t5, nDays: fiveStats.lows.length, placement: p5 };
     }
+    const bidRm = reachMargin(scored, 'bid', BID, { profile: profMargin, live: liveNow });
+    logReachMargin(bidRm);
+    result.bid.reachMargin = bidRm;
   }
   if (ASK != null && aer && aer.ask) {
     const a = aer.ask;
@@ -257,6 +276,8 @@ for (const want of positionals) {
       log(`    ↳ 5m-grain (archive, less-smoothed; a LOWER BOUND on the true gap per AC2): reached ${g5.reachedDays}/${g5.nDays} · placement ${pctStr(g5.placement)} (n=${g5.nDays} days)`);
       result.ask.grain5m = { reachedDays: g5.reachedDays, nDays: g5.nDays, placement: g5.placement };
     }
+    logReachMargin(a.reachMargin);
+    result.ask.reachMargin = a.reachMargin;
   }
   if (!fiveOk && (BID != null || ASK != null)) log(`    (no 5m-grain reach: the archive has <${FIVE_MIN_MIN_DAYS} covered window-days overlapping this ${winLabel} — 5m accrual is opportunistic per time-of-day, so a narrow/off-peak window often has none; 1h-only)`);
   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solve — the LARGEST buy whose break-even+margin still clears
