@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.81
+version: 1.82
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -61,7 +61,7 @@ is now the default (AO1) and without `--verbose` there is no table in stdout to 
 
 **`--digest` is part of the STANDARD invocation (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST, Workstream C).**
 _(judgment: triage-read discipline; mechanic in `screen-flip-niches.mjs` `buildDigestBlock`)_ It prints
-ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | deploy | reach | phase | grade |
+ONE compact cross-niche block ABOVE the per-niche tables — `Item | capEff | deploy | reach | phase | soft-buy | grade |
 verdict`, top ~8 ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable
 gp/day, NOT raw %) — the "which of these do I look closer at" triage pass. Ranking by raw capEff alone let
 dust-tier cheap high-% flips bury the big-ticket deploys, so the digest weights capEff by the deployable
@@ -74,7 +74,10 @@ fewer than 2 big-tickets (`mid ≥ BIG_TICKET_GP`) made the visible top-8, so th
 (Magus/Osmumten/godsword) is ALWAYS visible for the away-horizon trade-off (see "Velocity vs magnitude") —
 additive visibility, never a re-rank of the main block. The reach ✓/✗ + mirage read is stale-live guarded:
 a quoted ask pinned to a STALE live instabuy print (the `staleLive` case `quote-items.mjs` flags) can't fake
-a reach ✓ — reach/placement recompute against the fresher instasell, digest-scoped. It
+a reach ✓ — reach/placement recompute against the fresher instasell, digest-scoped. The `soft-buy` column is
+the BUY-timing complement of `phase` (which is the peak/sell-cycle window): the diurnal DIP window + where
+live sits vs the dip floor (`HH:00–HH:00 · @floor` = soft NOW · `+X%` = live above the dip, wait for the
+window) — so you don't buy into a peak; relay it when a pick reads `@floor` or is deep into its dip window. It
 is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
 footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
 the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two

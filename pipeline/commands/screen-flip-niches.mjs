@@ -548,6 +548,25 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his } = {}) 
 // position-level buy-limit throughput (you can only re-buy `limit` units per 4h window, so a big deployed
 // position recycles slowly). INFORM-ONLY: it only reorders the presented view. bigTicket (row.mid ≥
 // BIG_TICKET_GP) is stored for the guaranteed-visibility slice (POLISH 1) — an ordering AID, never a re-rank.
+// SOFT-BUY WINDOW (INFORM-ONLY PLACEHOLDER, n≈0 — same status as phase/reach/verdict): the diurnal DIP
+// window (the cheapest hours of day to BUY) + where the LIVE instabuy currently sits vs that dip FLOOR
+// (prof.dip.level). The digest is a BUY-triage surface, but its only timing cell was `phase` — which reads
+// the PEAK (sell-cycle) window, not the buy window — so a buy decision couldn't see WHEN the item is soft
+// or whether NOW is a good entry (the blowpipe miss: bought 10.67m while the 00:00–02:00 dip prints ~10.40m).
+// Reuses the footer Diurnal-timing idiom (fmtHour dip window) off the SAME in-hand `prof` — zero new fetch,
+// no `dr` threading needed. STDOUT-ONLY: never gates/drops/regrades and never enters screen.json (frozen
+// schema 2). Returns null when no diurnal profile / dip window exists (→ '—' cell).
+const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within 0.5% of (or below) the dip floor → it's soft NOW ("@floor")
+function digestSoftBuy(prof, row) {
+  if (!prof || !prof.dip || prof.dip.startH == null || prof.dip.endH == null) return null;
+  const win = `${fmtHour(prof.dip.startH)}–${fmtHour(prof.dip.endH)}`;
+  const floor = prof.dip.level, live = row ? (row.quickBuy ?? null) : null;
+  if (floor == null || floor === 0 || live == null) return win;   // window known, live-vs-floor unavailable
+  const pct = (live - floor) / floor * 100;
+  // @floor = you can buy at/near the dip floor right now; +X% = live sits X% above the dip → wait for the window.
+  const mark = pct <= SOFT_BUY_AT_FLOOR_PCT ? '@floor' : `+${pct.toFixed(pct < 10 ? 1 : 0)}%`;
+  return `${win} · ${mark}`;
+}
 function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, prof, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
@@ -568,6 +587,7 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     rank: er && er.rank != null ? er.rank : null,
     reachFrac,
     phase: ph,
+    softBuy: digestSoftBuy(prof, row),   // inform-only n≈0 diurnal dip window + live-vs-floor marker (stdout-only)
     grade,
     bigTicket: isBigTicket(row),
     verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase: ph }),
@@ -593,6 +613,7 @@ const digestCells = r => [
   { t: r.deployable != null ? fmtP(Math.round(r.deployable)) : '—' },
   { t: r.reachFrac == null ? '—' : (r.reachFrac >= REACH_GRADE_CAP_FRAC ? '✓' : '✗') },
   { t: r.phase || '—' },
+  { t: r.softBuy || '—' },   // SOFT-BUY WINDOW — inform-only n≈0 dip window + live-vs-floor (sits BESIDE phase: buy-window vs peak-cycle)
   { t: r.grade },
   { t: r.verdict },
 ];
@@ -610,11 +631,11 @@ export function buildDigestBlock(pool = DIGEST_ROWS) {
     const shown = new Set(main);
     const bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
     if (bigExtra.length) {
-      tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
+      tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
       for (const r of bigExtra) tableRows.push(digestCells(r));
     }
   }
-  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'phase', 'grade', 'verdict'], tableRows));
+  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
   return lines.join('\n');
 }
 

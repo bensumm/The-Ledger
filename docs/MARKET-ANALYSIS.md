@@ -141,7 +141,7 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 
 ### The decision digest — a THIRD console view (`--digest`)
 `screen-flip-niches.mjs --digest` prints ONE compact cross-niche block ABOVE the per-niche tables (and
-above `--raw`): `Item | capEff | deploy | reach | phase | grade | verdict` — top ~8 across all flip-niches
+above `--raw`): `Item | capEff | deploy | reach | phase | soft-buy | grade | verdict` — top ~8 across all flip-niches
 this pass, ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable gp/day,
 NOT raw %). Raw `capEff` is SCALE-FREE, so ranking on it alone let dust-tier cheap high-% flips (Lead ore
 1072%/d on ~60k of deployable capital) sweep the top and bury the big-ticket deploys the digest exists to
@@ -156,7 +156,12 @@ fantasy you can't actually cycle the whole deployed position at. `capEff` stays 
 fewer than 2 big-ticket rows (`mid ≥ BIG_TICKET_GP`) made the visible top-8, a small `— big-ticket lane —`
 sub-section is APPENDED (top few big-tickets by the same rank key) — additive visibility for the
 attention/risk trade-off, NOT a re-ranking of the main block. The reach ✓/✗ + mirage read is STALE-LIVE
-guarded (POLISH 3): when a row's sell-side live print is stale (`row.quickStale`, the same QUICK_FRESH_MIN
+guarded (POLISH 3). The `soft-buy` column is the BUY-timing complement of `phase` (which reads the peak /
+sell-cycle window): the diurnal DIP window (cheapest hours to buy) + where the LIVE instabuy sits vs the dip
+floor — `HH:00–HH:00 · @floor` (live at/near the dip → soft NOW) or `· +X%` (live X% above the dip → wait
+for the window). Inform-only PLACEHOLDER (n≈0), stdout-only — never gates/drops/regrades and never enters
+`screen.json`; it exists so a buy decision can see WHEN the item is soft instead of buying into a peak (the
+blowpipe-at-10.67m-into-a-10.40m-dip miss). When a row's sell-side live print is stale (`row.quickStale`, the same QUICK_FRESH_MIN
 freshness flags `quote-items.mjs`'s `staleLive` note reads), a quoted `optSell` pinned to that stale
 instabuy can fake a reach ✓, so reach + placement recompute against the fresher instasell off the daily-HIGH
 distribution — digest-scoped, never touching the screen's own reach validator, `screen.json`, or
