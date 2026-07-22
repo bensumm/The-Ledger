@@ -216,13 +216,12 @@ for (const want of positionals) {
       const nowT = new Date();
       const todayKeyT = `${nowT.getFullYear()}-${pad2(nowT.getMonth() + 1)}-${pad2(nowT.getDate())}`;
       const liveRef = latest ? (latest.low ?? latest.high ?? null) : null;
+      // R6 (PLAN-SIGNAL-RECENCY): trajectoryRead's SHAPE `read:` line is RETIRED (weaker than / could
+      // contradict floorCeilingTrack's independent-slope classification). Its unique floor/ceiling band +
+      // livePos fold into the fc note below; the oscillation read rides fc.oscillating. One combined note.
       const tr = trajectoryRead(tdays, { liveRef });
-      if (tr) {
-        const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
-        log(`  read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}`);
-      }
       const fc = floorCeilingTrack(tdays, { todayKey: todayKeyT });
-      const fcText = formatFloorCeiling(fc, fmt);
+      const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling } } : {});
       if (fcText) log(`  ${fcText}`);
       // forward projection: fc.floor/fc.ceiling ARE projectTrajectory results (floorCeilingTrack wraps the
       // primitive), so their `.projected` fields already hold the next-day values — read them directly and
@@ -236,6 +235,7 @@ for (const want of positionals) {
       result.trajectory = {
         days: tdays.map(([key, n]) => ({ key, low: n.low, hi: n.hi })),
         classification: fc ? fc.classification : null,
+        oscillating: fc ? !!fc.oscillating : null,   // R6: the ranging-bounce qualifier (fc.oscillating)
         floor: fc ? { dir: fc.floor.dir, slope: fc.floor.slope, projected: pf ? pf.value : null } : null,
         ceiling: fc ? { dir: fc.ceiling.dir, slope: fc.ceiling.slope, projected: pc ? pc.value : null } : null,
       };
@@ -298,14 +298,11 @@ for (const want of positionals) {
   if (isVerifyRun && scored.length) {
     log(`  --- DAILY TRAJECTORY (window low/high per day, oldest→newest)`);
     for (const [key, n] of scored) log(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
-    // window floor/ceiling + heuristic shape + where the live print sits — the ONE shared
-    // trajectoryRead helper (windowread.mjs), so this CLI and quote-items.mjs render byte-identically.
+    // R6 (PLAN-SIGNAL-RECENCY): trajectoryRead's SHAPE `read:` line is RETIRED here too — its floor/ceiling
+    // band + livePos fold into the fc note (via formatFloorCeiling's `live` opt) + the oscillation qualifier
+    // rides fc.oscillating, so this CLI and quote-items.mjs render the SAME one combined note.
     const liveRef = latest ? (latest.low ?? latest.high ?? null) : null;
     const tr = trajectoryRead(scored, { liveRef });
-    if (tr) {
-      const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
-      log(`    read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)`);
-    }
     // PLAN-DRIFT-VS-CRASH: the floor/ceiling slope-asymmetry + floor-break read (the drift-vs-crash
     // classifier), from the SAME shared floorCeilingTrack helper quote-items.mjs folds under its
     // trajectory note — so both surfaces render byte-identically. Forming-day guard: scored is already
@@ -313,7 +310,7 @@ for (const want of positionals) {
     const pad2fc = n => String(n).padStart(2, '0');
     const nowFc = new Date();
     const fc = floorCeilingTrack(scored, { todayKey: `${nowFc.getFullYear()}-${pad2fc(nowFc.getMonth() + 1)}-${pad2fc(nowFc.getDate())}` });
-    const fcText = formatFloorCeiling(fc, fmt);
+    const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling } } : {});
     if (fcText) log(`    ${fcText}`);
     // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.
     if (A.profile === undefined && profMargin) {

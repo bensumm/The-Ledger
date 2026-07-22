@@ -21,7 +21,7 @@ window, no recency split.
 | `quantLow`/`quantHigh`/`placement` | price↔percentile over the whole day-bucket sample | 1h, ~14d | on demand | ❌ whole-window quantile | reach, `askExitRead`, digest `askPlacement`, `read-window-range` |
 | `touchedDays`/`reachedDays` | raw hit-count vs a level | 1h, ~14d | on demand | ❌ | `reachValidator`, `askExitRead`, estimator `pFillIntraday`(reach), digest |
 | `recencySplit` (RC1) | full-window hit-frac vs recent-3 hit-frac, flags `staleOptimistic` | 1h, ~14d + recent-3 | always alongside a reach read | ✅ | `reachValidator`, `askExitRead`, `estimatePair` confidence, digest reach ✓/✗ |
-| `trajectoryRead` | one-shot SHAPE label (rising/falling/oscillating/based/elevated) off blended daily mids | 1h, ~14d | quote + `--positions` (auto) | ⚠️ recent-third vs oldest-third drift, but MEAN-blended mids | quote-items notes |
+| `trajectoryRead` (R6: shape retired) | ~~one-shot SHAPE label~~ NO LONGER PRINTED; only floor/ceiling band + `livePos` survive (folded into the fcTrack note); oscillation migrated to `fc.oscillating` | 1h, ~14d | quote + `--positions` (auto) — via the fcTrack note now | ✅ shape retired; unique fields folded (R6) | quote-items / read-window-range notes (fcTrack) |
 | `floorCeilingTrack` (PLAN-DRIFT-VS-CRASH) | floor(lows)/ceiling(highs) tracked SEPARATELY: least-squares slope over recent-N + a floor-BREAK vs prior lookback | 1h, ~14d, recent-5 slope window | quote + `--positions` (auto) | ✅ (best trend primitive in the repo — see §4) | quote-items notes only |
 | `reachMargin` (2026-07-20; R4/R4b slope+wired) | cushion-over/under-level TREND (`projectTrajectory` least-squares SLOPE of the cushion over the last 7 days — R4, was mean-of-halves) + today's live pace vs the reaching-day median | 1h, 7-day recent window, `projectTrajectory` slope | folded automatically into `askExitRead` whenever an ask is scored | ✅ slope-based (R4 fixed the mean-of-halves) | `askExitRead` → quote-items (`quote` + `--positions`) + `read-window-range --ask/--bid`; **now ALSO the digest `trend` column (R4b — the ask-side cushion trend beside reach ✓/✗)** |
 | `asymPair` | day-level deep-bid (p25 quantile) / high-reach-ask (p80 quantile) pair | 1h, ~14d | quote (`asym` note), screen `--asym` (opt-in, unpublished) | ❌ whole-window quantile | quote notes, `asymEstimate` |
@@ -124,12 +124,16 @@ read burns, worst first:
    24h-max that is itself a **backward high-water mark**, not a forward-looking read; it is gated
    on liquidity+size (a reasonable guard) but the widening logic itself has no trend awareness — a
    24h high set on a now-collapsing peak still widens the quoted top.
-8. **`trajectoryRead`'s blended-mid shape** (used only in quote-items' stdout note) — MEAN-blends
-   the whole 14-day mid series into thirds to call rising/falling; this is the exact "mean-of-halves"
-   shape the mandate calls out for `reachMargin`, except `trajectoryRead` computes it over the WHOLE
-   window (not just a recent slice) and was superseded in spirit by `floorCeilingTrack` (per-track
-   least-squares slope) — but `trajectoryRead`'s note still prints and can disagree with
-   `floorCeilingTrack`'s note in the same output (see §3 redundancy map).
+8. **`trajectoryRead`'s blended-mid shape** — **FIXED (R6, PLAN-SIGNAL-RECENCY): the `shape` line is no
+   longer printed by any surface.** It MEAN-blended the whole 14-day mid series into thirds to call
+   rising/falling — the exact "mean-of-halves" weakness, computed over the WHOLE window — and was
+   superseded by `floorCeilingTrack`'s per-track least-squares slopes, which it could visibly contradict
+   in the same output. R6 retired the printed shape and folded `trajectoryRead`'s unique fields
+   (floor/ceiling band + `livePos`) into the surviving `fcTrack` note (`formatFloorCeiling`'s `live` opt);
+   the ONE signal `shape` had that fc's slope-direction classifier can't express — oscillation DENSITY —
+   migrated into `floorCeilingTrack` as `fc.oscillating` (rendered as a `ranging (oscillating floor↔ceiling)`
+   qualifier). `trajectoryRead`'s code is kept (no programmatic consumer read `shape`; the fields stay
+   available), it just no longer prints. One combined note per pass now (see §3 redundancy map).
 
 ### Tier 3 — real damage but already-recency-aware or low-frequency
 
@@ -163,14 +167,16 @@ band, per PB5).
 
 | Signal | Question it answers | Scope | Trend math |
 |---|---|---|---|
-| `trajectoryRead` | "what SHAPE is the 14-day mid series" | whole window, BLENDED mids | thirds-mean drift |
-| `floorCeilingTrack` | "are the floor and ceiling tracks rising/flat/falling, INDEPENDENTLY, and did the floor BREAK" | recent-5-day slope + 13-day break lookback | least-squares slope + discrete break |
+| `trajectoryRead` (R6 shape retired) | ~~"what SHAPE is the 14-day mid series"~~ — shape NO LONGER PRINTED; only floor/ceiling/livePos survive (folded into fcTrack) | whole window, BLENDED mids | thirds-mean drift (retired) |
+| `floorCeilingTrack` (R6 +oscillating) | "are the floor and ceiling tracks rising/flat/falling, INDEPENDENTLY, did the floor BREAK, and — R6 — is a ranging item actually OSCILLATING between them" | recent-5-day slope + 13-day break lookback + mid-flip density | least-squares slope + discrete break + oscillation flag |
 | `reachMargin` | "is the CUSHION over/under a specific level fading" | recent-7-day, split at the midpoint | mean-of-older-half vs mean-of-newer-half |
 | `regimeDrift`/`regimeLabel` | "has the price LEVEL moved" (gate/rank driver) | last-3d median vs prior-14d median | single delta, no slope |
 
 **Verdict: consolidate to `floorCeilingTrack`'s slope method as canonical; keep `reachMargin` as
 the LEVEL-CONDITIONED specialization; retire `trajectoryRead`'s shape label; promote
-`floorCeilingTrack`'s classification to replace `regimeDrift`'s gate role.** Detail:
+`floorCeilingTrack`'s classification to replace `regimeDrift`'s gate role.** Status: `trajectoryRead`'s
+shape label is RETIRED (R6), `reachMargin` is slope-based (R4), and `regimeDrift`→`floorCeilingTrack`
+classification landed (R2). Detail:
 
 - `floorCeilingTrack` is objectively the best-engineered trend primitive in the repo: independent
   floor/ceiling least-squares slopes, a discrete floor-break trigger, a `run` field that reports

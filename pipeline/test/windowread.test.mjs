@@ -821,4 +821,43 @@ ok('formatFloorCeiling: compact one-line note; null passes through; floor-break 
   assert.ok(/inform-only, never gates/.test(line), 'the honesty rail rides on every line');
 });
 
+// --- R6 (PLAN-SIGNAL-RECENCY): the oscillation flag + the live-band fold on floorCeilingTrack --------
+// fc.oscillating preserves trajectoryRead's one unique signal (dead range vs actively bouncing) that fc's
+// slope-direction classifier can't otherwise express; formatFloorCeiling folds the retired shape line's
+// floor/ceiling band + livePos in via the `live` opt.
+ok('R6 floorCeilingTrack: a flat-floor/flat-ceiling series with hard MID flips reads ranging + oscillating', () => {
+  // floor ~100 flat, ceiling ~140 flat, but the daily MIDS alternate hard (near-floor / near-ceiling days)
+  const lows = [100, 101, 100, 101, 100, 101, 100];
+  const his  = [110, 179, 111, 178, 110, 179, 111];   // mid alternates ~105/140 → high flip density
+  const fc = floorCeilingTrack(lows.map((l, i) => fcDay(`2026-07-0${i + 1}`, l, his[i])));
+  assert.equal(fc.classification, 'ranging', 'flat floor + flat ceiling → ranging');
+  assert.equal(fc.oscillating, true, 'the hard mid-flips flag oscillating (the bounce fc slopes miss)');
+});
+ok('R6 floorCeilingTrack: a DEAD flat range (no flips) is ranging but NOT oscillating', () => {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => fcDay(`2026-07-0${i + 1}`, 100 + (i % 2), 140 - (i % 2)));
+  const fc = floorCeilingTrack(days);
+  assert.equal(fc.classification, 'ranging');
+  assert.equal(fc.oscillating, false, 'a monotone-ish dead band is not an oscillator');
+});
+ok('R6 floorCeilingTrack: a TRENDING item is never flagged oscillating (only ranging qualifies)', () => {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => fcDay(`2026-07-0${i + 1}`, 30000000 + i * 300000, 32000000 + i * 350000));
+  const fc = floorCeilingTrack(days);
+  assert.equal(fc.classification, 'healthy-trend');
+  assert.equal(fc.oscillating, false, 'oscillating only qualifies a ranging classification');
+});
+ok('R6 formatFloorCeiling: renders the oscillating qualifier + the live band fold; omits band when no live', () => {
+  const idfmt = n => String(n);
+  const lows = [100, 101, 100, 101, 100, 101, 100];
+  const his  = [110, 179, 111, 178, 110, 179, 111];
+  const fc = floorCeilingTrack(lows.map((l, i) => fcDay(`2026-07-0${i + 1}`, l, his[i])));
+  // with a live band read folded in
+  const withLive = formatFloorCeiling(fc, idfmt, { live: { ref: 105, pos: 'at the FLOOR', floor: 100, ceiling: 179 } });
+  assert.match(withLive, /oscillating floor↔ceiling/, 'the oscillation qualifier rides the ranging classification');
+  assert.match(withLive, /band 100→179 · live 105 at the FLOOR/, 'the floor/ceiling band + livePos fold in (the retired shape fields)');
+  // no live → the band clause is omitted (the shape line is gone entirely, not replaced by an empty one)
+  const noLive = formatFloorCeiling(fc, idfmt);
+  assert.doesNotMatch(noLive, /band /, 'no live read ⇒ no band clause');
+  assert.match(noLive, /oscillating floor↔ceiling/, 'the oscillation qualifier still shows without a live read');
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);

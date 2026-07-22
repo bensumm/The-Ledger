@@ -140,6 +140,12 @@ export function windowStats(series, { nights = 14, wStart, wEnd, now = new Date(
 // identical trajectory read from the same numbers — no re-derivation, no fetch. HEURISTIC (n≈0),
 // inform-only — never gates, never a verdict; a shape label + the window floor/ceiling + where the
 // live print sits between them.
+// R6 (PLAN-SIGNAL-RECENCY): the `shape` field is NO LONGER PRINTED by any surface — its blended-mid
+// rising/falling/based/elevated verdict was weaker than (and could visibly contradict) floorCeilingTrack's
+// independent-slope classification, which supersedes it. The code is KEPT (the unique floor/ceiling/livePos
+// fields still ride the fcTrack note via formatFloorCeiling's `live` opt, and `shape` stays available for a
+// future programmatic consumer — today none reads it). The one genuinely-unique read `shape` had, oscillation
+// DENSITY, migrated INTO floorCeilingTrack as fc.oscillating so it survives the retire.
 //   days:    windowStats().days — [[key, {low, hi}], …] oldest→newest.
 //   liveRef: the live price to position against the window floor/ceiling (or null → no live note).
 // Returns null when the series can't be read; otherwise
@@ -225,6 +231,7 @@ export const FC_MIN_DAYS = 5;          // fewer COMPLETED days than this ⇒ nul
 export const FC_RECENT_N = 5;          // the recent completed-day window the slope is fit over
 export const FC_FLAT_FRAC = 0.005;     // |slope|/latest-level per day below this ⇒ 'flat' (0.5%/day; PLACEHOLDER, F1)
 export const FC_BREAK_LOOKBACK = 13;   // floor-break = latest low vs the min of the prior N lows (the rest of a 14-day window)
+export const FC_OSC_FRAC = 0.4;        // R6: daily-mid direction-flip fraction ≥ this on a 'ranging' item ⇒ 'oscillating' (PLACEHOLDER, F1; carried over from trajectoryRead's retired shape read — the one signal fc's slope-direction classifier can't express)
 export const PT_PROJECT_N = 1;         // forward-projection horizon in periods (days); 1 = "next period". PLACEHOLDER, F1
 
 // projectTrajectory(days, extractFn, opts) — THE ONE recency-weighted trajectory primitive (PLAN-SIGNAL-RECENCY R1).
@@ -335,25 +342,47 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
     : floor.dir === 'falling' && ceiling.dir === 'falling' ? 'cooling'
     : 'ranging';
 
-  return { completed, forming, nDays, floor, ceiling, floorBreak, classification };
+  // R6 (PLAN-SIGNAL-RECENCY): the ONE signal fc's slope-DIRECTION classifier structurally cannot express —
+  // oscillation DENSITY. fc's `ranging` lumps a DEAD range together with an item actively BOUNCING between a
+  // known floor and ceiling (the amplitude-hold setup this codebase cares about). Preserve trajectoryRead's
+  // flip-fraction test here, so retiring its printed shape (R6) doesn't silently lose it: count daily-MID
+  // direction changes over the completed days; a flip fraction ≥ FC_OSC_FRAC on a `ranging` item flags
+  // `oscillating`. INFORM-only (n≈0, never gates) — formatFloorCeiling renders it as a `ranging` qualifier.
+  const mids = completed.map(([, n]) => (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low ?? n.hi)).filter(v => v != null);
+  let flips = 0;
+  for (let i = 2; i < mids.length; i++) { const a = Math.sign(mids[i - 1] - mids[i - 2]), b2 = Math.sign(mids[i] - mids[i - 1]); if (a && b2 && a !== b2) flips++; }
+  const oscillating = classification === 'ranging' && mids.length >= 3 && (flips / (mids.length - 2)) >= FC_OSC_FRAC;
+
+  return { completed, forming, nDays, floor, ceiling, floorBreak, classification, oscillating };
 }
 
 /* formatFloorCeiling(fc, fmt, opts) — the ONE compact one-line render of a floorCeilingTrack result, so
  * read-window-range.mjs and quote-items.mjs (via render.mjs) print it byte-identically (the same
  * one-owner rule the trajectory read follows). PURE: `fmt` (money-format) is INJECTED so windowread
- * stays dependency-free. Returns the note TEXT (no sigil — the caller's NOTE_KIND owns that). */
-export function formatFloorCeiling(fc, fmt, { label = '' } = {}) {
+ * stays dependency-free. Returns the note TEXT (no sigil — the caller's NOTE_KIND owns that).
+ * R6 (PLAN-SIGNAL-RECENCY): this note now ALSO carries what trajectoryRead's retired `shape` line used to —
+ * the `oscillating` qualifier on a ranging item (fc.oscillating) + the absolute 2-week band and where the
+ * live price sits in it (`live` opt = { ref, pos, floor, ceiling } from trajectoryRead), so ONE combined
+ * note per pass replaces the two that could visibly disagree. `live` absent ⇒ the band clause is omitted. */
+export function formatFloorCeiling(fc, fmt, { label = '', live = null } = {}) {
   if (!fc) return null;
   const dirStep = t => t.dir == null ? 'n/a'
     : `${t.dir}${t.step == null ? '' : ` ${t.step >= 0 ? '+' : '−'}${fmt(Math.abs(t.step))}/d`}`;
   const soft = t => (t.run && t.run.dir && t.run.dir !== t.dir && t.run.len >= 2) ? ` (${t.run.dir} ${t.run.len}d)` : '';
+  // R6: the classification, qualified with `(oscillating floor↔ceiling)` when the ranging item is actually
+  // bouncing between its floor and ceiling — the one read fc's slope-direction classifier can't otherwise say.
+  const classTxt = fc.oscillating ? `${fc.classification} (oscillating floor↔ceiling)` : fc.classification;
   const parts = [
     `floor ${dirStep(fc.floor)} over ${fc.floor.nUsed}d${soft(fc.floor)}`,
     `ceiling ${dirStep(fc.ceiling)}${soft(fc.ceiling)}`,
-    fc.classification,
+    classTxt,
   ];
   if (fc.floorBreak.broke) parts.push(`⚠ floor BROKE prior ${fc.floorBreak.lookback}d low by ${fmt(Math.abs(fc.floorBreak.gap))}`);
   if (fc.forming) parts.push(`today forming low ${fmt(fc.forming.low)}/high ${fmt(fc.forming.hi)} (provisional)`);
+  // R6: the absolute 2-week band + where the live print sits in it (folded from trajectoryRead's retired
+  // shape line — nothing else computes livePos). Rendered only when a usable live band read was passed.
+  if (live && live.pos && live.floor != null && live.ceiling != null)
+    parts.push(`band ${fmt(live.floor)}→${fmt(live.ceiling)}${live.ref != null ? ` · live ${fmt(live.ref)} ${live.pos}` : ''}`);
   return `${label ? label + ': ' : ''}floor/ceiling: ${parts.join(' · ')}  (heuristic, n≈0 — inform-only, never gates)`;
 }
 

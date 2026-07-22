@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.47
+version: 1.48
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -38,15 +38,19 @@ sections plus your own prose:
   window/level, or the bid side. (A null 1h series this pass degrades the note to `window read
   unavailable` — the table/verdict is unaffected.)
 
-- **Read the `⌁ read:` trajectory line on EVERY held lot, not just the verdict (2026-07-21, the fang
-  under-read fix).** _(judgment: interpretation discipline)_ Each lot now auto-prints a `DAILY
-  TRAJECTORY` block (per-day window low/high, oldest→newest) + a one-line `⌁ read:` synthesis —
-  shape (rising/falling/oscillating/based/elevated) · window floor/ceiling · **where live sits between
-  them** (at the FLOOR / mid-band / at the CEILING). This is the exact read that was getting missed:
-  a fill-now-A- reach/placement can hide an oscillator sitting at its 2-week floor (price to the swing,
-  don't cut) or an elevated item near its ceiling (don't chase the buy). Interpret the verdict AGAINST
-  the shape — "at the FLOOR + oscillating" is a hold-for-the-swing, "elevated + falling" is a clear.
-  HEURISTIC (n≈0), inform-only — it never gates, it frames. Same shared `trajectoryRead` the manual
+- **Read the floor/ceiling trajectory note on EVERY held lot, not just the verdict (2026-07-21, the fang
+  under-read fix; R6 folded it into ONE note, 2026-07-22).** _(judgment: interpretation discipline)_ Each
+  lot auto-prints a `DAILY TRAJECTORY` block (per-day window low/high, oldest→newest) + a one-line
+  **floor/ceiling** synthesis: the floor and ceiling SLOPES (rising/flat/falling, independently) + the
+  drift-vs-crash `classification` (crash-risk / cooling / mild-cooldown / healthy-trend / compressing-up /
+  ranging, with a `ranging (oscillating floor↔ceiling)` qualifier when it's bouncing) · the 2-week `band
+  X→Y` · **where live sits in it** (at the FLOOR / mid-band / at the CEILING). _(R6 retired the older weaker
+  blended-mid `⌁ read:` shape line — its floor/ceiling/livePos folded into this note; the oscillation read
+  is now the `classification` qualifier.)_ This is the exact read that was getting missed: a fill-now-A-
+  reach/placement can hide an oscillator sitting at its 2-week floor (price to the swing, don't cut) or an
+  elevated item near its ceiling (don't chase the buy). Interpret the verdict AGAINST it — "at the FLOOR +
+  oscillating" is a hold-for-the-swing, "at the CEILING + cooling" is a clear. HEURISTIC (n≈0), inform-only
+  — it never gates, it frames. The SAME shared `floorCeilingTrack`/`trajectoryRead` note the manual
   `read-window-range.mjs` trio prints, zero extra fetch.
 - **Read the `⏳ soft-buy:` line before deciding whether to ADD to a lot (2026-07-22, the
   buy-soft-while-holding rule).** _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: dip

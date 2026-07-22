@@ -182,22 +182,23 @@ const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDE
 // Fold the multi-day trajectory read onto EVERY quote surface (Ben 2026-07-21 — the fang under-read
 // fix). The exact under-read the fang exposed: reach/placement read "fill-now A-" while the
 // `days` array (already in hand from windowStats) showed an oscillator sitting at its 2-week floor.
-// Renders the full DAILY TRAJECTORY block (per-day low/high, oldest→newest) + the trajectoryRead shape
-// synthesis — the SAME shared helper read-window-range.mjs's --ask/--bid/--exit trio prints, so both
-// surfaces read byte-identically. Data rows ride as plain strings (the V5-block pattern), the read:
-// line as a typed `trajectory` note (context tier). ZERO new fetch — `days` is already in hand. `label`
-// prefixes the header on the multi-item positions surface so each block stays tied to its item.
+// Renders the full DAILY TRAJECTORY block (per-day low/high, oldest→newest) + ONE combined floor/ceiling
+// note. R6 (PLAN-SIGNAL-RECENCY): the trajectoryRead SHAPE synthesis line is RETIRED — its blended-mid
+// rising/falling/based/elevated verdict was weaker than (and could visibly contradict) floorCeilingTrack's
+// independent-slope classification, which uses the same inputs. Its UNIQUE fields survive: floor/ceiling +
+// livePos fold into the fcTrack note (via formatFloorCeiling's `live` opt), and the oscillation-density read
+// rides fc.oscillating (the one signal fc's classifier can't otherwise express). Data rows ride as plain
+// strings (the V5-block pattern). ZERO new fetch — `days` is already in hand. `label` prefixes the header
+// on the multi-item positions surface so each block stays tied to its item.
 function pushTrajectory(notes, days, { liveRef = null, label = '' } = {}) {
   const tr = trajectoryRead(days, { liveRef });
   if (!tr) return;
   notes.push(`  ${label ? label + ': ' : ''}trajectory (14d window low/high, oldest→newest):`);
   for (const [key, n] of tr.scored) notes.push(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
-  const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
-  notes.push({ kind: 'trajectory', text: `read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)` });
-  // PLAN-DRIFT-VS-CRASH: the floor/ceiling slope-asymmetry + floor-break read, folded directly under the
-  // trajectory read (the crash-vs-cooldown discriminator the single min-low/max-high collapse washes out).
+  // PLAN-DRIFT-VS-CRASH + R6: the floor/ceiling slope-asymmetry + floor-break read, now ALSO carrying
+  // trajectoryRead's retired floor/ceiling band + livePos + the oscillation qualifier — one combined note.
   const fc = floorCeilingTrack(days, { todayKey: localDayKey() });
-  const fcText = formatFloorCeiling(fc, fmt, { label });
+  const fcText = formatFloorCeiling(fc, fmt, { label, live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling } });
   if (fcText) notes.push({ kind: 'fcTrack', text: fcText });
 }
 // local 'YYYY-MM-DD' of now — matches windowStats' dayKey (wStart=0) so the forming-day guard lines up.
