@@ -205,6 +205,19 @@ function localDayKey(d = new Date()) {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+// The ADD-while-holding SOFT-BUY timing note — "when is it cheapest to add, and is now that time?" off the
+// SAME hourProfile the diurnal note derives. SHARED so BOTH surfaces push it identically: runItems passes the
+// already-computed `prof` (zero new fetch); runPositions passes `ts1h` (in hand from the vol24 parity fetch)
+// and this computes the profile. This helper exists because the note originally lived ONLY in runItems, so
+// `--positions` — the held-lot surface the whole feature is FOR — silently never rendered it; centralizing the
+// push is what keeps the two surfaces from drifting again (the same shared-helper discipline as pushTrajectory).
+// `live` = the live buy-side (the instabuy Ben would pay to add now). Inform-only, never a gate; null profile → no note.
+function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null } = {}) {
+  const p = prof || (ts1h ? hourProfile(ts1h, { nights: 7 }) : null);
+  if (!p) return;
+  const sbTxt = formatSoftBuy(softBuyRead(p, { live }), { fmtHour });
+  if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
+}
 
 export function buildQuoteReport({
   mode = 'items',
@@ -323,13 +336,9 @@ async function runItems() {
       const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
       notes.push({ kind: 'diurnal', itemId: id, text: `diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}` });
     }
-    // The ADD-while-holding SOFT-BUY timing read — "when is it cheapest to add, and is now that time?" off
-    // the SAME hourProfile the diurnal note derived (zero new fetch). live = the live buy-side price (the
-    // instabuy Ben would pay to add now, the same reference deriveDiurnalRange guards the bid against).
-    // Renders on held lots (where the ADD decision lives) AND bare quotes; inform-only, never a gate.
-    const sb = softBuyRead(prof, { live: row.quickBuy ?? null });
-    const sbTxt = formatSoftBuy(sb, { fmtHour });
-    if (sbTxt) notes.push({ kind: 'softBuy', itemId: id, text: sbTxt });
+    // The ADD-while-holding SOFT-BUY timing read — pushed via the shared pushSoftBuy so the bare-quote and
+    // --positions surfaces stay identical (reuse the prof already computed for the diurnal note; zero new fetch).
+    pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id });
     // #6 (PF1 forecast, Ben 2026-07-15): the module's motivating ask — "not buyable/sellable at a good
     // price NOW, but ~Xh from now." whenBuyable/whenSellable over ONE diurnalForecast (all js/forecast.mjs).
     // Inform-only, provisional (n≈0, diurnal+trend only) — zero new fetch (reuses the in-hand prof); never
@@ -783,6 +792,9 @@ async function runPositions() {
     }
     // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
     pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name });
+    // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
+    // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.
+    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid
