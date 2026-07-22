@@ -41,3 +41,18 @@ export function trajectoryFrom1h(ts1h, nights = 28) {
   const rich = richFrom1h(ts1h, nights);
   return rich && rich.trajectory && rich.trajectory.shape !== 'unknown' ? rich.trajectory : null;
 }
+
+/* warmOverride(ts, ts1h, nights) → patch a loadDaily-based `ts` IN PLACE with the warm 1h-derived
+   .trajectory (shape ≠ unknown) AND .recentTrend (R3), from ONE richFrom1h computation, so BOTH the
+   trajectory shape AND the floorValidator recency-trend gate fire off the deeper 1h read while the
+   loadDaily archive is cold — instead of a warm trajectory sitting next to a cold/thin recentTrend
+   (the inconsistency Fable flagged). No-op when the 1h series is thin; returns `ts`. The durable
+   floor/swing on `ts` are intentionally left on the loadDaily proxy (their tuned multi-week basis). */
+export function warmOverride(ts, ts1h, nights = 28) {
+  if (!ts) return ts;
+  const rich = richFrom1h(ts1h, nights);
+  if (!rich) return ts;
+  if (rich.trajectory && rich.trajectory.shape !== 'unknown') ts.trajectory = rich.trajectory;
+  if (rich.recentTrend) ts.recentTrend = rich.recentTrend;
+  return ts;
+}

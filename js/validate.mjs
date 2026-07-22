@@ -124,6 +124,10 @@ export function reachValidator(ctx) {
 // govern how far above the durable floor a BUY is allowed to sit before we caution/reject it.
 export const FLOOR_CAUTION_RANGES = 1.0;   // buy > this many typical swings above the durable floor ⇒ caution
 export const FLOOR_REJECT_RANGES = 2.0;    // buy > this many typical swings above the durable floor ⇒ reject
+// R3 (PLAN-SIGNAL-RECENCY): a falling recentTrend TIGHTENS the level check (additive-only — never relaxes).
+// A `pass` only escalates to caution once the bid is already within this fraction of the caution line
+// (borderline-elevated); a clean low pass with real headroom is NEVER touched by the trend alone. PLACEHOLDER.
+export const FLOOR_TREND_BORDERLINE_FRAC = 0.75;
 //   VALIDATE (F1/P6): the walk-forward loss rate of buying at N typical-swings above the durable
 //   floor vs the base rate — the point at which "elevated above support" actually predicts a bleed.
 
@@ -166,16 +170,25 @@ export function floorValidator(ctx) {
   if (level == null) return degrade(key, 'no-buy-candidate');
 
   const ranges = (level - floor) / swing;   // how many typical swings above the durable floor the bid sits
+  // R3: the durable floor is recency-BLIND (a q15 over the whole lookback). recentTrend adds "is the level
+  // FALLING right now" as a SECOND, additive-only input: it can TIGHTEN an already-elevated buy (elevated
+  // INTO a decline = a knife, not a dip) but never relaxes, and never overrides a clean low pass with headroom.
+  const trendDir = ts.recentTrend ? ts.recentTrend.dir : null;
   const evidence = {
     level, floor: round2(floor), typicalSwing: round2(swing),
-    floorLookback: ts.floorLookback, ranges: round2(ranges), current: ts.current,
+    floorLookback: ts.floorLookback, ranges: round2(ranges), current: ts.current, recentTrend: trendDir,
   };
-  const status = ranges > FLOOR_REJECT_RANGES ? 'reject'
-               : ranges > FLOOR_CAUTION_RANGES ? 'caution'
-               : 'pass';
-  const reason = status === 'pass'
+  let status = ranges > FLOOR_REJECT_RANGES ? 'reject'
+             : ranges > FLOOR_CAUTION_RANGES ? 'caution'
+             : 'pass';
+  let trendNote = '';
+  if (trendDir === 'falling') {
+    if (status === 'caution') { status = 'reject'; trendNote = ' + recent trend falling (elevated INTO a decline — a knife)'; }
+    else if (status === 'pass' && ranges >= FLOOR_CAUTION_RANGES * FLOOR_TREND_BORDERLINE_FRAC) { status = 'caution'; trendNote = ' + recent trend falling (borderline-elevated & softening)'; }
+  }
+  const reason = (status === 'pass'
     ? `buy ${level} near ${ts.floorLookback}d floor ${Math.round(floor)} (${round2(ranges)}× swing)`
-    : `buy ${level} is ${round2(ranges)}× typical swing above the ${ts.floorLookback}d floor ${Math.round(floor)} — not near durable support`;
+    : `buy ${level} is ${round2(ranges)}× typical swing above the ${ts.floorLookback}d floor ${Math.round(floor)} — not near durable support`) + trendNote;
   return { key, status, reason, evidence };
 }
 

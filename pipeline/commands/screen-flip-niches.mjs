@@ -114,7 +114,7 @@ import { termStructure } from '../../js/termstructure.mjs';   // P3 — term str
 // logic) so quote-items.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
 // two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
 // value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the warm-term-structure.mjs header for why.
-import { richFrom1h, trajectoryFrom1h } from '../lib/warm-term-structure.mjs';
+import { richFrom1h, trajectoryFrom1h, warmOverride } from '../lib/warm-term-structure.mjs';
 import { stateTransition } from '../lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
 import { buildVelocityIndex, velocityTag } from '../lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
@@ -767,8 +767,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // A cold/absent daily series degrades to pass (the common case until the archive warms). Explicit
     // asks/held/watchlist are handled on their own surfaces where nothing is ever hidden.
     const ts = termStructure(daily && daily[s.id]);
-    const richTraj = trajectoryFrom1h(series1h && series1h.get(s.id));   // warm trajectory off the 1h series while loadDaily is cold
-    if (richTraj) ts.trajectory = richTraj;
+    warmOverride(ts, series1h && series1h.get(s.id));   // warm .trajectory AND .recentTrend (R3) off the 1h series while loadDaily is cold
     // LM1: the buy-limit window for this candidate — limitValidator DISQUALIFIES a suggested buy with
     // no room left in the rolling 4h window (reject → dropped + counted) and CAUTIONs a nearly-spent
     // one. Zero in-window buys ⇒ remaining==limit ⇒ pass (byte-identical). Absent limit ⇒ degrade.

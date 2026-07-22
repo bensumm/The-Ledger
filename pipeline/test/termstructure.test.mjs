@@ -180,6 +180,49 @@ ok('a HELD lot is a SELL decision → PASS (held-lot-sell-side), even parked abo
   assert.equal(r.reason, 'held-lot-sell-side');
 });
 
+// --- 4b. R3 (PLAN-SIGNAL-RECENCY): recentTrend TIGHTENS an elevated buy that is ALSO falling ----
+// hand-built ts so the ranges + trend are exact (ranges = (level−floor)/swing). recentTrend is the
+// projectTrajectory read termStructure now attaches; here we set its `dir` directly to exercise the gate.
+const tsWith = (dir) => ({ hasData: true, floor: 1000, typicalSwing: 100, floorLookback: 28, current: 1000, recentTrend: dir ? { dir, slope: dir === 'falling' ? -50 : 50, run: { dir, len: 3 } } : null });
+ok('R3: a caution-range buy (ranges 1.5) + FALLING recent trend → escalates to REJECT (elevated into a decline = a knife)', () => {
+  const r = floorValidator(screenCtx({ optBuy: 1150 }, tsWith('falling'), 1150));
+  assert.equal(r.status, 'reject');
+  assert.match(r.reason, /recent trend falling/);
+});
+ok('R3: the SAME caution-range buy with a RISING trend stays CAUTION — only falling tightens (recovery ≠ knife)', () => {
+  const r = floorValidator(screenCtx({ optBuy: 1150 }, tsWith('rising'), 1150));
+  assert.equal(r.status, 'caution');
+});
+ok('R3: a borderline-elevated PASS (ranges 0.8 ≥ 0.75×caution) + FALLING → nudged to CAUTION', () => {
+  const r = floorValidator(screenCtx({ optBuy: 1080 }, tsWith('falling'), 1080));
+  assert.equal(r.status, 'caution');
+});
+ok('R3: a clean LOW pass (ranges 0.5 < 0.75×caution) + FALLING is NOT touched — the headroom guard', () => {
+  const r = floorValidator(screenCtx({ optBuy: 1050 }, tsWith('falling'), 1050));
+  assert.equal(r.status, 'pass');
+});
+ok('R3: a re-priced-up recovery is not false-tightened — a borderline buy with a RISING trend stays a PASS', () => {
+  const r = floorValidator(screenCtx({ optBuy: 1080 }, tsWith('rising'), 1080));
+  assert.equal(r.status, 'pass');
+});
+ok('R3: real termStructure emits recentTrend (dir over the daily-mid series)', () => {
+  const rising = termStructure(seriesFrom([100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 110, 120, 130, 140, 150].map(x => x * 1000)));
+  assert.ok(rising.recentTrend && rising.recentTrend.dir === 'rising', `recentTrend rises over a climbing tail (got ${JSON.stringify(rising.recentTrend)})`);
+});
+ok('R3: recentTrend buckets a 6h-STEP series to DAYS — not 5 raw points (the Fable calibration bug)', () => {
+  // every real caller feeds a 6h-step archive (≤4 pts/day). A rising tail spread over 6h steps must still
+  // read as a per-DAY rise, and minDays must gate on DAYS. Build ~12 daily levels, 4 points each (6h apart).
+  const levels = [100, 100, 100, 100, 100, 100, 100, 110, 120, 130, 140, 150].map(x => x * 1000);
+  const sixH = [];
+  const N = levels.length;
+  for (let d = 0; d < N; d++) for (let h = 0; h < 4; h++) sixH.push({ ts: NOW - (N - 1 - d) * DAY + h * 6 * 3600 - 3 * DAY, mid: levels[d] });
+  const ts = termStructure(sixH);
+  assert.ok(ts.recentTrend && ts.recentTrend.dir === 'rising', `the 6h-step rise reads as a per-day rise (got ${JSON.stringify(ts.recentTrend)})`);
+  // min-days gates on DAYS, not raw points: 4 daily-spaced points ⇒ null (a 6h path would have ≥16 points,
+  // which the OLD unbucketed code would have wrongly treated as > minDays and produced a fake read).
+  assert.equal(termStructure(seriesFrom([1, 2, 3, 4].map(x => x * 100000))).recentTrend, null, '4 daily points ⇒ null (< 5 days)');
+});
+
 // --- 5. registry wiring: floor is registered and runs alongside reach (+ limit, LM1) -----------
 ok('runValidators runs reach + floor + limit (registry has all keys)', () => {
   const res = runValidators({ intraday: { ts1h: null } });   // all degrade with no inputs

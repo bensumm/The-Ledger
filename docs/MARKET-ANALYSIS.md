@@ -289,7 +289,7 @@ reconciliation. The registry:
 | --- | --- | --- |
 | `reachValidator` | the 1h series (reach/touch + RC1 stale split) | rarely-reached → caution, never → reject; scores BOTH legs (patient ask + patient bid) |
 | `trajectoryValidator` | the daily-mid SHAPE (`classifyTrajectory`) | **knife** → reject · **oscillating**/**based** → pass · **elevated** → caution |
-| `floorValidator` | the durable multi-week floor (`termStructure`) | parked well above durable support → reject, marginally-elevated → caution |
+| `floorValidator` | the durable multi-week floor (`termStructure`) + (R3) the daily-mid `recentTrend` | parked well above durable support → reject, marginally-elevated → caution; (R3, additive-only) a falling `recentTrend` TIGHTENS an already-elevated buy (caution→reject, borderline-pass→caution) — never relaxes a clean low pass |
 | `valueAmplitudeValidator` | the recent-week after-tax amplitude + proximity-to-low (robust q15/q85) | value flip-niche BUY-side; inform |
 | `limitValidator` (LM1) | the rolling-4h buy-limit window | exhausted → reject, nearly-spent → caution; a null limit is never "unlimited" |
 | `dipPostureValidator` (DP1) | the last-3h 5m low DIRECTION (`recentDirection`) | inform-only, band+churn: still-falling/flat → pass, reverting → caution "cross or pass" |

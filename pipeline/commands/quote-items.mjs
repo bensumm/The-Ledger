@@ -36,7 +36,7 @@ import { hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, windowStat
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
-import { trajectoryFrom1h } from '../lib/warm-term-structure.mjs';   // COD-4 — warm trajectory off ts1h so trajectoryValidator FIRES on the explicit-ask surface
+import { warmOverride } from '../lib/warm-term-structure.mjs';   // COD-4 + R3 — warm .trajectory AND .recentTrend off ts1h so trajectoryValidator + floorValidator's recency gate FIRE on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from '../lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from '../lib/positions.mjs';
@@ -309,8 +309,7 @@ async function runItems() {
     // (trajectoryFrom1h, the same warm-term-structure.mjs helper screen-flip-niches.mjs uses) so trajectoryValidator fires too.
     // An explicit ask is NEVER hidden: a fired flag is a NOTE + logged; the table row is untouched.
     const ts = termStructure(daily[id]);
-    const richTraj = trajectoryFrom1h(inp.ts1h);
-    if (richTraj) ts.trajectory = richTraj;
+    warmOverride(ts, inp.ts1h);   // warm .trajectory AND .recentTrend (R3) off the 1h series while loadDaily is cold
     const vres = runValidators({
       market: { row },
       history: { termStructure: ts },

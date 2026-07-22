@@ -26,6 +26,8 @@
  * F1/P6's walk-forward calibration). Each is named + commented with what would validate it.
  */
 
+import { projectTrajectory } from './windowread.mjs';   // R3 (PLAN-SIGNAL-RECENCY): the recency-weighted slope over the daily-mid series — a SECOND floorValidator input beside the recency-BLIND q15 durable floor (windowread imports nothing from here — no cycle)
+
 // --- PLACEHOLDER constants (rule 4 — unvalidated; F1/P6 would tune against realized outcomes) ----
 export const DEFAULT_LOOKBACKS = [1, 3, 7, 14, 28];   // the term-structure horizons (days)
 // Which lookback defines "durable multi-week support": prefer 28d, fall back to the longest that has
@@ -144,12 +146,33 @@ export function termStructure(series, { now = null, lookbacks = DEFAULT_LOOKBACK
 
   const trajectory = classifyTrajectory(s, { lookbacks: lk, floor, ceiling, current, nowSec });
 
+  // R3: the recency-weighted trend over the daily-mid series. The durable floor above is a recency-BLIND
+  // quantile (a q15 over the whole lookback — a re-price a fortnight ago keeps citing stale-cheap prints);
+  // recentTrend adds "which way is the level moving NOW", so floorValidator can tighten an ELEVATED buy
+  // that is ALSO falling (a knife) without touching a clean low pass. CRITICAL (the R2 wrinkle, re-applied):
+  // `s` is the 6h-step archive (≤4 points/local day), but projectTrajectory's recentN/minDays are
+  // POINT-based and FC_FLAT_FRAC is per-DAY — so `s` MUST be bucketed to one mid per LOCAL day first
+  // (median-of-day, robust to a single 6h outlier), exactly as regimeDrift buckets ts6h via windowStats.
+  // Feeding raw 6h points would gate on ~5 points (~30h) and compare a per-6h slope to a per-day band.
+  const byDay = new Map();
+  for (const p of s) {
+    const dt = new Date(p.ts * 1000);
+    const key = `${dt.getFullYear()}-${dt.getMonth() + 1}-${dt.getDate()}`;   // local Y-M-D
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(p.mid);
+  }
+  // median-of-day (all ~4 of the day's 6h samples) — robust to a single volatile 6h print, consistent with
+  // projectTrajectory's own single-noisy-sample resistance (the "maul" lesson). Map order = chronological.
+  const dailyMids = [...byDay.entries()].map(([key, ms]) => [key, { mid: median(ms.slice().sort((a, b) => a - b)) }]);
+  const rt = projectTrajectory(dailyMids, n => n.mid);   // recentN/minDays now gate on DAYS; slope is per-DAY (FC_FLAT_FRAC basis)
+  const recentTrend = rt ? { dir: rt.dir, slope: rt.slope, run: rt.run } : null;
+
   return {
     hasData: true, now: nowSec, current, coverageDays,
     lookbacks: lk,
     floor, ceiling, floorLookback: floorDays, floorQuantile: FLOOR_QUANTILE,
     typicalSwing, typicalSwingFrac,
-    trajectory,
+    trajectory, recentTrend,
   };
 }
 
