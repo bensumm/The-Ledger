@@ -382,6 +382,46 @@ unscheduled/exogenous), so DL2 adds a **reactive** detector that fires a `FLUSH`
   to F1** — analyze SURFACES evidence, it never retunes a constant (F1 owns calibration, like every other
   placeholder). That retro is the calibration path, not these constants.
 
+### `--cycle` — the adaptive cycle-expectation loop (PLAN-OSCILLATION-CYCLE Chunk 4)
+
+For a multi-week OSCILLATOR item (Osmumten's fang / Toxic blowpipe — a ~6–8-day ~10% swing riding a
+slowly drifting floor/ceiling), `--cycle` tracks a per-item **cycle expectation** across passes and
+CORRECTS it against the live read. It is **opt-in and purely additive**: without the flag the watch
+output is byte-identical to today; with it, each held lot that has a readable drift-adjusted prior
+gets a nested `cycle — <item>:` note pushed AFTER the standard per-held emit-contract block (it never
+displaces the guaranteed sell/list-at line).
+
+```
+node pipeline/commands/watch-positions.mjs --cycle          # add the cycle-expectation notes to the held rows
+```
+
+- **The prior** = Chunk 1's `driftAdjustedTrough`/`driftAdjustedPeak` (`js/forecast.mjs`
+  `driftExitFrom` — the SAME composition the amplitude lane uses, REUSED not forked), recorded per
+  item at the first observation of a cycle into the gitignored repo-root sibling **`cycle-watch.json`**
+  (keyed by item id; persisted via the SHARED `loadState`/`saveState` from `lib/watchstate.mjs`, the
+  pure logic in `lib/cyclewatch.mjs`). The map is rebuilt fresh each pass (a vanished item drops out)
+  and saved once at pass end — the same arm-then-confirm persistence idiom the V4/P4b state uses.
+- **Each tick** compares the cycle's running realized min/max to the stored expectation via the ONE
+  direction-agnostic comparator (`trackError` — it branches on `sign(actual − expected)`, **never** on
+  the sign of the drift; the drift is already a number baked into the recorded level), and emits:
+  - **dip SHALLOWER** than expected Te → *bid the shallower level to still fill*; the expected trough
+    is revised UP. **dip DEEPER** → *drop the bid to catch the flush* (no upward revision).
+  - **peak WEAKER** than expected Pe → the **sell-velocity step-DOWN** to the confident-reachable level
+    (the `/positions` step-down doctrine). **peak STRONGER** → the **ask-headroom ladder-UP** (the
+    Bar-E ask-headroom read).
+  - each fired side appends an `{expected, actual, adjustment}` triple to the item's history for later
+    calibration.
+- **Band-breach → an INFORM-ONLY `⚠ ABORT-WATCH` note** (the live read diverged beyond the placeholder
+  confidence band → the cycle likely rolled over — re-read, don't lean on the stale prior). It is a
+  NOTE the operator reads, **never** an auto-cancel/auto-place at first landing — the same
+  ALERTS-never-places guardrail the `--dip`/`flushSignal` alert honors. This loop places/cancels nothing.
+- **HONEST LIMITS (n≈0).** Every threshold (`CYCLE_CONF_BAND_FRAC`, `CYCLE_TRACK_ERR_FRAC`,
+  `CYCLE_STALE_GAP_MS`, the confidence-band multiplier) is a NAMED PLACEHOLDER with no retro behind it;
+  every cycle note carries the "expectation is a PRIOR, not a validated forecast — do not trade on it
+  yet" caveat. The `{expected, actual, adjustment}` history in `cycle-watch.json` is the raw material a
+  future F1 retro would calibrate these against — the loop SURFACES a correction, it never tunes a
+  constant.
+
 ### What each tick surfaces
 
 Output shape (2026-07-05): a one-line **HEADLINE** (`all quiet` / `⚠ N ALERTS`, plus the

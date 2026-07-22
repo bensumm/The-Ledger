@@ -17,3 +17,7 @@ pipeline/probes/*.log
 pipeline/.market-archive.sqlite
 pipeline/.market-archive.sqlite-wal
 pipeline/.market-archive.sqlite-shm
+
+# PLAN-OSCILLATION-CYCLE Chunk 4: per-item cycle-expectation state for watch-positions.mjs --cycle.
+# Desk-side runtime state (like pipeline/.cache/watch-state.json), rebuilt fresh each pass — NEVER committed.
+cycle-watch.json

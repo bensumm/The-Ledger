@@ -50,6 +50,7 @@
  *   node pipeline/commands/watch-positions.mjs "Crystal seed" 23959  # also watch these target items (buy-side)
  *   node pipeline/commands/watch-positions.mjs --targets-only "Ranarr weed"   # skip held+offers, watch only these
  *   node pipeline/commands/watch-positions.mjs --dip "Searing page"  # DL2: also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
+ *   node pipeline/commands/watch-positions.mjs --cycle              # Chunk 4: adaptive per-item cycle-expectation notes (INFORM-ONLY; opt-in, additive)
  * Every run syncs fills first, unconditionally (2026-07-16) — local/zero-git, never blocks the pass
  * on failure. `--sync` still parses (harmless no-op) for any external caller that still passes it.
  */
@@ -78,6 +79,8 @@ import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
+import { cycleTick, cycleNoteLines } from '../lib/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
+import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/recovery.mjs';   // V6 advisory recover-vs-drop forecast
@@ -94,6 +97,7 @@ const FILLS = path.join(HERE, '..', '..', 'fills.json');   // DL2 — logged buy
 const DIP_WATCHLIST = path.join(HERE, '..', '..', 'dip-watchlist.json'); // DL2 tracked pool of LIQUID flush candidates (--dip)
 const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl'); // TRACKED change-only guide log (accruing record; kept OUTSIDE .cache/)
 const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json'); // gitignored, V1 cross-pass state (.cache/ ignored)
+const CYCLE_WATCH = path.join(HERE, '..', '..', 'cycle-watch.json'); // gitignored repo-root sibling, Chunk 4 per-item cycle-expectation state (--cycle)
 const THESIS_PATH = path.join(HERE, '..', '.cache', 'session-thesis.json'); // gitignored, YT1 session thesis (read-only here; declare-thesis.mjs writes)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json'); // TRACKED at repo root, TG1 declared-hold-thesis store (agent-written; read-only here)
 const WATCHLIST_PATH = path.join(HERE, '..', '..', 'watchlist.json'); // TRACKED at repo root, read-only — exempts a deliberately-tracked item from the incidental-lot filter regardless of value
@@ -550,6 +554,13 @@ async function main() {
   const TARGETS_ONLY = args.includes('--targets-only');
   const BRIEF = args.includes('--brief');   // compact one-line-per-item book (stable, script-owned format)
   const DIP = args.includes('--dip');       // DL2 — also watch dip-watchlist.json for LIQUID flushes (bid-into-the-fall)
+  // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in ADAPTIVE CYCLE loop. OFF by default and purely
+  // ADDITIVE: when set, each held lot with a readable drift-adjusted prior gets a per-item cycle
+  // expectation tracked across passes in cycle-watch.json (repo-root, gitignored) and a NESTED
+  // `cycle — …` note is pushed AFTER the standard emit-contract block (never displaces a field, never
+  // changes the table, verdict, alert, or any price). INFORM-ONLY; ALERTS-never-places. Without the
+  // flag the output is byte-identical to today for every item (no cycle-watch load/save happens).
+  const CYCLE = args.includes('--cycle');
   // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
   // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (still BE-floored
   // + clamped; declared exit still wins); the depth floor + reachable clause still renders beside it. The
@@ -702,6 +713,10 @@ async function main() {
   // pass (so vanished positions drop out), and save at pass end. now = ms; guarded per item.
   const nowMs = Date.now();
   const priorState = loadState(WATCH_STATE);
+  // Chunk 4 (--cycle): the per-item cycle-expectation prior map + the fresh map rebuilt this pass.
+  // Loaded ONLY under --cycle so the default path does zero extra IO and stays byte-identical.
+  const cyclePrior = CYCLE ? loadState(CYCLE_WATCH) : {};
+  const newCycleState = {};
   const thesisStore = pruneThesis(loadThesis(THESIS_PATH));   // YT1 (#4) read-only: the agent's recorded intent per lane
   const holdThesisStore = pruneHoldThesis(loadHoldThesis(HOLD_THESIS_PATH));   // TG1 read-only: agent-declared hold plans (gate the expected-underwater headline)
   const guideHist = loadGuideHistory(GUIDE_HISTORY);          // YP1 (#2) advisory: guide re-anchor history (gated → silent until it accrues)
@@ -711,6 +726,7 @@ async function main() {
     it.gate = { escalate: false, armed: false, reason: null };
     it._deltas = null; it._support = null; it._cutTrigger = null; it._thesis = null; it._pathCtx = null; it._display = null;
     it._depthExit = null; it._reachable = null; it._estShadow = null; it._asymShadow = null; it._estPressure = null; it._windowExit = null;
+    it._cycle = null;   // Chunk 4 (--cycle): the per-item cycle-expectation tick result (null unless --cycle)
     // DE3 (PLAN-DEPTH-EXIT): the held lot's WHOLE-DAY depth floor (clearableAsk — what this qty can
     // book at, the plan's v1 whole-day decision) + pressure-driven reachable band (reachableBand),
     // both off the ALREADY-fetched ts1h (zero new fetch). Inform-only: they feed the window-line
@@ -818,6 +834,28 @@ async function main() {
         position: { held: true, be: it.be, deltas: d, thesis: it._thesis, newStateEntry: newState[key] },
       }, { watchStatePrior: priorState[key], nowMs, fresh: d.firstSeen || d.reset });
     } catch { /* gating/state are observability-adjacent — degrade to no-escalation, never break a pass */ }
+    // PLAN-OSCILLATION-CYCLE Chunk 4 — the adaptive cycle-expectation tick (opt-in, --cycle). Builds
+    // the drift-adjusted trough/peak PRIOR via the SHARED driftExitFrom (js/forecast.mjs — Chunk 1/2,
+    // REUSED not forked) off data already in hand (hourProfile + windowStats days off ts1h; the ceiling/
+    // floor slopes are sourced inside driftExitFrom — NO new fetch), then compares the live spread to the
+    // stored expectation and stashes the revision notes on it._cycle. INFORM-ONLY; ALERTS-never-places.
+    // Fully guarded + gated so the default (no --cycle) path is byte-identical and a failure can't break a pass.
+    if (CYCLE) {
+      try {
+        const prof = hourProfile(it.ts1h, { nights: 14 });
+        const days = (windowStats(it.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) || {}).days || null;
+        const dae = driftExitFrom(prof, days, {
+          liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null,
+          phase: it.ts6h ? phase(it.ts6h) : undefined, mom: it.row.mom, reliable: it.row.reliable, now: new Date(),
+        });
+        const tick = cycleTick(cyclePrior[String(it.id)], {
+          identity: `cyc:${it.id}`, troughActual: it.row.quickBuy ?? null, peakActual: it.row.quickSell ?? null,
+          dae, now: nowMs,
+        });
+        it._cycle = tick;
+        newCycleState[String(it.id)] = tick.state;
+      } catch { /* inform-only — never block a pass */ }
+    }
   }
 
   const targets = [];
@@ -1072,6 +1110,10 @@ async function main() {
     // updates), output-only, never a verdict input. Price asks against the POST-update guide.
     const ga = guideAnchorLine(guideAnchorModel(guideUpdates(guideHist, it.id)), guide[it.id] ?? null);
     if (ga) notes.push(`    ${ga}`);
+    // Chunk 4 (--cycle): the adaptive cycle-expectation notes, pushed AFTER the guaranteed emit-contract
+    // block (never displaces the sell/list-at line; INFORM-ONLY, never a verdict/alert input). Empty
+    // (nothing pushed) on a first-seen / on-prior pass, so a quiet cycle adds no noise.
+    if (CYCLE && it._cycle) for (const l of cycleNoteLines(name, it._cycle)) notes.push(l);
   }
 
   // asks with no booked lot yet (fresh buy still inside the sync window) — honest gap, no fake basis
@@ -1140,6 +1182,9 @@ async function main() {
   // Guarded — a save failure is silent; it must never break the pass output. (VZ1: no output ordering
   // dependence — the whole report is rendered once below, after this side-effecting save.)
   try { saveState(WATCH_STATE, newState); } catch { /* observability only */ }
+  // Chunk 4 (--cycle): persist the freshly-rebuilt cycle-expectation map (vanished items drop out).
+  // Guarded + gated — a save failure is silent and the default path never touches the file.
+  if (CYCLE) { try { saveState(CYCLE_WATCH, newCycleState); } catch { /* observability only */ } }
 
   // ---- SUMMARY: totals + provenance + loop + discipline ---- (collected into summaryLines; the
   // capital/derived-cash math + fs read stay HERE, in main's I/O; the report renders it as text)

@@ -307,6 +307,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `positions.json`'s `generatedAt` only advances on a fill and legitimately freezes during
   quiet no-fill stretches. Does zero git; a stale heartbeat (>90s) is what trips the
   "watcher down?" warning
+- `cycle-watch.json` — **gitignored, repo-root, desk-side runtime state** (PLAN-OSCILLATION-CYCLE
+  Chunk 4). Per-item cycle-EXPECTATION state keyed by item id: the recorded drift-adjusted
+  trough/peak PRIOR (Chunk 1's `driftAdjustedTrough`/`driftAdjustedPeak` + a placeholder confidence
+  band), the running realized min/max this cycle, and a bounded history of `{expected, actual,
+  adjustment}` calibration triples. PRODUCED + CONSUMED by `pipeline/commands/watch-positions.mjs
+  --cycle` ONLY (opt-in; the default watch pass never touches the file) — rebuilt fresh each pass via
+  the SHARED `loadState`/`saveState` (`pipeline/lib/watchstate.mjs`), the pure logic in
+  `pipeline/lib/cyclewatch.mjs`. INFORM-ONLY (n≈0 placeholders); it drives a nested `cycle — …` note,
+  never a verdict/alert/price. NOT app-imported. Gitignored like `pipeline/.cache/watch-state.json`
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
   with local `STATE.watchlist` and `screen-flip-niches.mjs` always scans it (S3); app writes it back via
   the GitHub contents API (`js/github.js`)
