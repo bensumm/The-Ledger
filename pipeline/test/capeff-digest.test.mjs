@@ -280,4 +280,45 @@ ok('R4b: buildDigestBlock renders a `trend` column + the ↓ fade token', () => 
   assert.match(out, /↓ fade/);             // the fading token renders
 });
 
+// --- 9. R5 — the digest mirage-rule ESCALATION (placement divergence + falling trend) ------------
+// The base 'mirage top' rule (high placement AND mediocre recent reach) stays. R5 ESCALATES it to a
+// HIGH-confidence 'mirage top!' ONLY when BOTH extra confirmations hold: the recent-vs-full placement
+// divergence AND a `fading` ask cushion trend. Either alone keeps the base caution word; the base
+// placement/reach condition still gates (no wider blast radius).
+// mirage base: askPlacement > MIRAGE_PLACEMENT (0.85) AND REACH_GRADE_CAP_FRAC (0.5) ≤ reachFrac < MIRAGE_REACH_FRAC (0.70)
+const MIRAGE_BASE = { spec: ASYM_SPEC, grade: 'B', reachFrac: 0.6, askPlacement: 0.9 };
+ok('R5 mirage: placement-diverges AND fading → HIGH-confidence "mirage top!"', () => {
+  assert.equal(digestVerdict({ ...MIRAGE_BASE, placementDiverges: true, marginTrend: 'fading' }), 'mirage top!');
+});
+ok('R5 mirage: placement-diverges ALONE (no fade) stays the base "mirage top"', () => {
+  assert.equal(digestVerdict({ ...MIRAGE_BASE, placementDiverges: true, marginTrend: 'stable' }), 'mirage top');
+});
+ok('R5 mirage: fading ALONE (no divergence) stays the base "mirage top"', () => {
+  assert.equal(digestVerdict({ ...MIRAGE_BASE, placementDiverges: false, marginTrend: 'fading' }), 'mirage top');
+});
+ok('R5 mirage: neither confirmation → the base "mirage top" (unchanged from pre-R5)', () => {
+  assert.equal(digestVerdict({ ...MIRAGE_BASE, placementDiverges: false, marginTrend: null }), 'mirage top');
+});
+ok('R5 mirage: the escalation NEVER widens the blast radius — a clean reach never becomes any mirage', () => {
+  // reachFrac 0.9 (clean) fails the base mirage condition; even with BOTH confirmations it must NOT fire mirage
+  const v = digestVerdict({ spec: ASYM_SPEC, grade: 'A', reachFrac: 0.9, askPlacement: 0.95, placementDiverges: true, marginTrend: 'fading', phase: 'in-peak' });
+  assert.ok(v !== 'mirage top' && v !== 'mirage top!', `clean reach must not be a mirage, got ${v}`);
+});
+
+// digestReachAndPlacement computes placementDiverges DIRECTIONALLY: recent days' highs sitting BELOW the
+// full window (the level is harder to reach recently) → recentPlacement − fullPlacement ≥ RECENCY_DIVERGE.
+const FULL_HIS = [85, 86, 87, 120, 121, 122, 123, 124, 125, 126];   // level 100 sits ~30th pct of the full window
+ok('R5 placementDiverges TRUE: recent highs abandoned the top (all below the level)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: FULL_HIS, days: mkDays([200, 200, 200, 85, 86, 87]) });
+  assert.equal(r.placementDiverges, true);
+});
+ok('R5 placementDiverges FALSE: recent highs still clear the level (no stale-optimism)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: FULL_HIS, days: mkDays([200, 200, 200, 120, 121, 122]) });
+  assert.equal(r.placementDiverges, false);
+});
+ok('R5 placementDiverges is FALSE without day buckets (degrade, never a fake divergence)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: FULL_HIS });
+  assert.equal(r.placementDiverges, false);
+});
+
 console.log(`\n${n} assertions passed.`);

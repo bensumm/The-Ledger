@@ -56,7 +56,9 @@ export function estPairCells(est) {
   if (c.beFloored) sellSuffix = ` (BE-floored${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
   else if (c.pressureExit) sellSuffix = ` (${pTag.trim()})`;
   else if (c.declaredAnchored) sellSuffix = ' (declared)';
-  else sellSuffix = c.foldExempt ? '' : ` (${reachTok(c.ask)})`;
+  // R5: a `fading` ask cushion tightened the sell fold even on a clean reach — surface it as a caution beside
+  // the reach token so the number never reads as an un-caveated band top (the mirage the fade guards against).
+  else sellSuffix = c.foldExempt ? '' : ` (${reachTok(c.ask)}${c.fade ? ', fading↓' : ''})`;
   const netTxt = est.estNet == null ? '—'
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})`;
   return [
@@ -82,6 +84,9 @@ export function estConfLean(est) {
   // reach counts above STAY logged — they are the data the exemption will be tested against). YS2: present
   // only when it fired.
   if (c.foldExempt) o.foldExempt = c.foldExempt;
+  // R5 shadow (F1 retro-join: did the fade-tightened top predict the realized sell better than the raw top?)
+  // — present only when a fading cushion actually discounted the sell (YS2 absent-field pattern).
+  if (c.fade) o.fade = c.fade.discount;
   if (c.doctrine && c.doctrine !== 'reach-fold') o.doctrine = c.doctrine;
   // PLAN-ESTIMATOR-POSTURE AC1 shadow: the band-low buy's placement percentile within the 14-day daily-LOW
   // distribution (present only on band rows the screen annotates — the YS2 absent-field pattern).

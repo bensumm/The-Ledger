@@ -77,7 +77,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile, reachMargin } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
+import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -483,10 +483,16 @@ function gradeAtLeast(grade, floor) {
 // symmetric niche or a no-read row); `askPlacement` is the quoted ask's percentile in the 14-day daily-HIGH
 // distribution (null when no read); `phase` is the diurnalPhase phase string (null when no diurnal profile).
 // `low-conviction` is the honest fallback — "nothing cleared a positive signal," NOT "bad."
-export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase } = {}) {
+export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, phase } = {}) {
   const reachExists = reachFrac != null;
   if (reachExists && reachFrac < REACH_GRADE_CAP_FRAC) return 'sell unreliable';                       // 1: a bad sell you can't realize beats a thin margin
-  if (askPlacement != null && askPlacement > MIRAGE_PLACEMENT && reachExists && reachFrac < MIRAGE_REACH_FRAC) return 'mirage top';   // 2: high in its own distribution AND still-mediocre recent reach
+  // 2: MIRAGE TOP — high in its own distribution AND still-mediocre recent reach. R5 (PLAN-SIGNAL-RECENCY)
+  // ESCALATES to a HIGH-confidence 'mirage top!' when BOTH extra confirmations hold: the recent-vs-full
+  // placement DIVERGENCE (recent days abandoned the top) AND a `fading` ask cushion trend. Either signal
+  // ALONE keeps the base caution word — the escalation never WIDENS what fires mirage top (the base
+  // placement/reach condition still gates), it only sharpens confidence within it (don't over-fire, rule 4).
+  if (askPlacement != null && askPlacement > MIRAGE_PLACEMENT && reachExists && reachFrac < MIRAGE_REACH_FRAC)
+    return (placementDiverges && marginTrend === 'fading') ? 'mirage top!' : 'mirage top';
   if (weakDeploy(spec, row, er)) return 'weak deploy';                                                 // 3: thin per-turn margin on a big-ticket single-turn
   if (phase === 'post-peak') return 'starter / hold-to-next-peak';                                     // 4: cooling → size/entry-timing is the point, never fill-now
   if (gradeAtLeast(grade, 'B-')) return 'fill-now';                                                    // 5: nothing worse fired and the grade holds
@@ -544,7 +550,21 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
   // to null (→ '—') on a symmetric niche, a thin day sample, or no in-hand buckets — never a fake read.
   const marginTrend = (!symmetric && Array.isArray(days) && days.length && refLevel != null)
     ? (reachMargin(days, 'ask', refLevel)?.trend ?? null) : null;
-  return { reachFrac, askPlacement, staleGuarded: guarded, marginTrend };
+  // R5: the recent-vs-full placement DIVERGENCE (the whole-window-CDF analogue of RC1's recencySplit hit-count
+  // idiom). askPlacement is the level's percentile in the FULL 14-day daily-HIGH distribution; recentPlacement
+  // is its percentile in just the recent-3 days' highs. When the level sits HIGHER in the recent CDF than the
+  // full one by ≥ RECENCY_DIVERGE (recent days abandoned that top), it's a stale-optimistic top — the SECOND
+  // confirming signal the mirage rule ANDs with a falling cushion trend to escalate confidence. Directional
+  // (recent − full ≥ threshold), not |diff|: a level that got EASIER recently is the opposite of a mirage.
+  let placementDiverges = false;
+  if (!symmetric && Array.isArray(days) && days.length && refLevel != null && askPlacement != null) {
+    const recentHis = days.slice(-RECENT_NIGHTS).map(([, n]) => n && n.hi).filter(x => x != null).sort((a, b) => a - b);
+    if (recentHis.length) {
+      const recentPlacement = placement(recentHis, refLevel);
+      placementDiverges = (recentPlacement - askPlacement) >= RECENCY_DIVERGE;
+    }
+  }
+  return { reachFrac, askPlacement, staleGuarded: guarded, marginTrend, placementDiverges };
 }
 // collectDigestRow(...): compute the realizable capEff + the deployable-throughput RANK KEY + the verdict for
 // one surfaced candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and
@@ -578,7 +598,7 @@ function digestSoftBuy(prof, row) {
   const mark = pct <= SOFT_BUY_AT_FLOOR_PCT ? '@floor' : `+${pct.toFixed(pct < 10 ? 1 : 0)}%`;
   return `${win} · ${mark}`;
 }
-function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, prof, subFloor }) {
+function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
@@ -602,7 +622,7 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     softBuy: digestSoftBuy(prof, row),   // inform-only n≈0 diurnal dip window + live-vs-floor marker (stdout-only)
     grade,
     bigTicket: isBigTicket(row),
-    verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, phase: ph }),
+    verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, marginTrend, placementDiverges, phase: ph }),
   });
 }
 // buildDigestBlock(): the rendered digest string. The MAIN block = top ~8 across ALL niches this pass, ranked
@@ -905,12 +925,20 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // PLAN-LIQUIDITY-REACH: dayHigh = the observed trailing-24h 5m-bucket max off the SAME in-hand 5m
     // series (zero new fetch) — Part B's de-bias reference. estimatePair applies it (and the Part-A fold
     // softening) ONLY when reachRelief > 0 (liquid book, small limit÷flow); a thin book is byte-identical.
+    // R5 (PLAN-SIGNAL-RECENCY): the ask-side reachMargin CUSHION trend at the quoted band top (row.optSell),
+    // off the SAME in-hand per-day rbStats buckets (zero new fetch). estimatePair's reach-fold reads only
+    // .trend — a `fading` cushion tightens the sell fold even when the raw reach is a clean 3/3 (the +412k
+    // bludgeon / godsword mirage). Null (no buckets / no optSell / thin) ⇒ no fade ⇒ byte-identical. This is
+    // a DIFFERENT read from R4b's digest trend (that's scored at the stale-guarded refLevel for the display
+    // column; this is scored at the band top the fold actually folds down from).
+    const askMargin = (rbStats && rbStats.days && row.optSell != null) ? reachMargin(rbStats.days, 'ask', row.optSell) : null;
     const estExtra = {
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
       asym: asymRead,
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
       reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
+      askMargin,   // R5: the ask cushion trend — a fading top tightens the sell fold (mirage fix)
     };
     // PC3: the ACTIVE sell-model drives the DISPLAY/rerank (estShown); every DEFAULT-SHADOW model
     // (SELL_MODEL.shadow — reach-fold today) runs each pass and rides suggestions.jsonl as the unbiased
@@ -1090,8 +1118,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // placement token already reads). Stored on the row; the digest is collected after the sort below.
     // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
     // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
-    const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement, digestMarginTrend });
+    const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1121,7 +1149,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
   // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
-  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, prof: r.prof, subFloor });
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, subFloor });
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.

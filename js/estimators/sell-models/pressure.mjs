@@ -49,6 +49,12 @@ export const pressureModel = {
       estSell: rbx.ask, sellHi,
       confidence: {
         ...base.confidence,   // keep the neutral buy-reach / ask-reach / relief evidence under the override
+        // The override REPLACES estSell with rbx.ask — a price the reach/fade fold never touched. So the
+        // markers that assert "the emitted sell was fold-processed" must NOT ride the pressure confidence
+        // (they'd describe a discount/exemption applied to a different number): null them, honouring
+        // pair.mjs's stated "pressure model omits it → null" invariant for both. (relief/ask/bid stay — they
+        // are descriptive EVIDENCE of the neutral read the cell shows alongside, not applied-to-emit claims.)
+        fade: null, foldExempt: null,
         pressureExit: { pressure: num(rbx.pressure), reliability: num(rbx.reliability) },
       },
     };

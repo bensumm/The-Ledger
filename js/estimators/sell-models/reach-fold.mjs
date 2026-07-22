@@ -54,6 +54,16 @@ const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 // FULLY reachable (fold factor 1 → the robust band edge stands); below it the edge folds linearly toward
 // live. PLACEHOLDER (n≈3–14) — e.g. a recent 0/3 ⇒ fold 0 ⇒ the mirage top collapses fully to live.
 export const EST_REACH_SAT_FRAC = 0.75;
+// R5 (PLAN-SIGNAL-RECENCY) — the CUSHION-FADE discount. The reach fraction says "does this top PRINT"; it
+// does NOT say whether the cushion OVER the top is decaying day-over-day. A `fading` ask-side reachMargin
+// trend (R4's slope-based cushion trend, passed in via extra.askMargin) means the top is settling ONTO a
+// cooling peak EVEN when the raw reach is a clean 3/3 (the godsword / bludgeon +412k mirage shape: reach 3/3
+// today, cushion collapsing +1.3m→+0.1m). When it fires, multiply the sell fold factor by this to tighten
+// the top-ref candidate toward live. ADDITIVE to the reach/relief fold (never removes it); gated on
+// extra.askMargin being present + trend==='fading' → absent/stable/extending ⇒ 1 ⇒ byte-identical to today.
+// PLACEHOLDER (n≈0) — F1 owns the real value; 0.6 folds ~40% of the remaining top→live gap, a meaningful
+// but non-total pull (a genuine 3/3 reach is not a 0/3 mirage, so it should not collapse fully to live).
+export const EST_FADE_DISCOUNT = 0.6;
 // Reconciliation weights: the reach-folded band edge and each present secondary source (diurnal
 // dip/peak level; asym high-reach ask) blend as an EQUAL-WEIGHT mean, clamped inside [live, band edge].
 // Deliberately the simplest documented default — PLACEHOLDER, no calibrated weighting exists yet.
@@ -111,7 +121,13 @@ export const reachFoldModel = {
     // ctx.topRef by the shell. Thin book / large size / absent ⇒ relief 0 ⇒ byte-identical to the flat fold.
     const f0 = foldExempt ? 1 : fold(askR ? askR.frac : null);   // AC5: churn (symmetric) never folds the sell
     const fR = relief > 0 ? f0 + relief * (1 - f0) : f0;
-    const sCands = [Math.round(qs + (topRef - qs) * fR)];
+    // R5: the cushion-fade discount — a `fading` ask-side reachMargin trend tightens the top EVEN on a clean
+    // reach (the reach fold left fR at ~1). foldExempt (churn/symmetric) is exempt for the SAME reason the
+    // reach fold is (the day-level cushion trend mismeasures a tight two-sided lap). Absent askMargin /
+    // stable / extending ⇒ fade 1 ⇒ fF == fR ⇒ byte-identical to the pre-R5 sell candidate.
+    const fade = (!foldExempt && extra.askMargin && extra.askMargin.trend === 'fading') ? EST_FADE_DISCOUNT : 1;
+    const fF = fR * fade;
+    const sCands = [Math.round(qs + (topRef - qs) * fF)];
     const dAsk = extra.diurnal ? num(extra.diurnal.ask) : null;
     if (dAsk != null) sCands.push(Math.round(clamp(dAsk, qs, bandTop)));
     const aAsk = extra.asym ? num(extra.asym.highReachAsk) : null;
@@ -121,6 +137,8 @@ export const reachFoldModel = {
     let reliefApplied = null;
     if (relief > 0 && ((askR && f0 < 1) || topRef > bandTop))
       reliefApplied = { relief, sizeRatio, debiasedTop: topRef > bandTop ? topRef : null };
+    // R5: surface the fade ONLY when it fired (an effect), so the cell/shadow can caution + the F1 retro segments.
+    const fadeApplied = fade < 1 ? { trend: 'fading', discount: EST_FADE_DISCOUNT } : null;
     return {
       estBuy, buyLo: Math.min(ob, qb),
       estSell, sellHi: topRef,
@@ -128,6 +146,7 @@ export const reachFoldModel = {
         bid: buyReach ? { rec: buyReach.rec, full: buyReach.full, diverges: buyReach.diverges } : null,
         ask: askR ? { rec: askR.rec, full: askR.full, diverges: askR.diverges } : null,
         relief: reliefApplied,
+        fade: fadeApplied,
         pressureExit: null,
         // AC5/AC6: 'symmetric' when the churn fold-exemption fired — the reach counts stay in `bid`/`ask`
         // for the F1 shadow, but the cell drops the caution token (the invalidated signal must not ride the

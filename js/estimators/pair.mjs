@@ -22,7 +22,7 @@ import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named s
 // js/estimators.mjs barrel (export * from ./pair.mjs) keeps every existing import path valid byte-for-byte
 // (estimators.test.mjs imports EST_REACH_SAT_FRAC from the barrel; the app/pipeline shim import the barrel).
 export { SELL_TOP_MODELS } from './sell-models/index.mjs';
-export { EST_REACH_SAT_FRAC, EST_BLEND_EQUAL_WEIGHTS } from './sell-models/reach-fold.mjs';
+export { EST_REACH_SAT_FRAC, EST_BLEND_EQUAL_WEIGHTS, EST_FADE_DISCOUNT } from './sell-models/reach-fold.mjs';
 export { PRESSURE_EXIT_REL_FULL } from './sell-models/pressure.mjs';
 
 const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
@@ -111,6 +111,9 @@ function reachRead(r) {
      askReach  { reachedDays, nDays, recentHit?, recentDays? }  patient ask REACH counts (full + recent-3)
      diurnal   { bid, ask }        deriveDiurnalRange's dip/peak-window levels
      asym      { highReachAsk }    asymPair's near-certain exit level (deepBid is NEVER consumed — rev3)
+     askMargin { trend }          R5: the ask-side reachMargin CUSHION trend (fading|stable|extending) — a
+                                   `fading` trend tightens the sell fold even on a clean reach (the mirage
+                                   fix). Absent → no fade (byte-identical). reach-fold reads only .trend.
      declaredExit  number|null     the lot's declared thesis exit (hold-thesis.json) — anchors estSell
      dayHigh   number|null         PLAN-LIQUIDITY-REACH Part B: the observed trailing-24h high (the
                                    caller's dayHighFrom5m over its in-hand 5m series — the least-smoothed
@@ -157,6 +160,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   let sellHi = prop.sellHi;
   let { bid: cBid, ask: cAsk, relief: cRelief, pressureExit: cPressure } = prop.confidence;
   const cFoldExempt = prop.confidence.foldExempt || null;   // AC5: churn sell-fold exemption marker (pressure model omits it → null)
+  let cFade = prop.confidence.fade || null;   // R5: cushion-fade marker (pressure model omits it → null)
   // --- SHELL SPINE (the non-skippable floors — a model can propose a price, never bypass these) -------
   // DECLARED-EXIT anchor: the operator's stated target governs the SELL leg for EVERY model (NOT
   // ceiling-clamped to the band; floored to live + break-even). A declared exit suppresses the generic
@@ -164,7 +168,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   const declared = num(extra.declaredExit);
   let declaredAnchored = false;
   if (declared != null && declared > 0) {
-    estSell = declared; declaredAnchored = true; sellHi = Infinity; cAsk = null; cRelief = null;
+    estSell = declared; declaredAnchored = true; sellHi = Infinity; cAsk = null; cRelief = null; cFade = null;
   }
   // ⚓ anchor nudge (final proposal step — nudge, never override), then the ordering clamps.
   if (typeof nudge === 'function') {
@@ -194,6 +198,9 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     // PLAN-LIQUIDITY-REACH: non-null ONLY when the relief changed the sell estimate (softened fold or
     // de-biased top) — { relief, sizeRatio, debiasedTop|null }. Feeds the stdout note + the lean shadow.
     relief: cRelief,
+    // R5: non-null ONLY when a fading ask cushion tightened the sell fold — { trend:'fading', discount }.
+    // Feeds the F1 shadow (segments the mirage-discounted sells) + a caution token; nulled by a declared exit.
+    fade: cFade,
     // PB4: non-null ONLY when the pressure model drove the legs (the TRIAL marker) — the surface renders
     // "(pressure N×)" in the cell so the number never reads as the calibrated default (rule 4).
     pressureExit: cPressure,

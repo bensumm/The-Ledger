@@ -22,7 +22,7 @@ import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,
   pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
   quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
-  estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_HEADERS, SELL_TOP_MODELS,
+  estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_FADE_DISCOUNT, EST_HEADERS, SELL_TOP_MODELS,
   reachRelief, dayHighFrom5m, REACH_RELIEF_MAX, REACH_DEBIAS_MAX_FRAC,   // PLAN-LIQUIDITY-REACH
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
@@ -320,6 +320,67 @@ ok('estimatePair CLEAN DENSE: a 12/14d + 3/3-recent ask keeps estSell at the ban
   const e = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc });
   assert.equal(e.estSell, row.optSell, 'clean reach ⇒ the robust band top stands');
   assert.equal(e.estBuy, row.optBuy, 'clean touch ⇒ the band bid stands');
+});
+
+// --- R5 (PLAN-SIGNAL-RECENCY): the cushion-fade discount (the Est-sell mirage fix) ----------------
+// The literal +412k bludgeon / godsword shape: a CLEAN 3/3 reach whose ask cushion is FADING day-over-day.
+// The reach fold left estSell at the band top (CLEAN DENSE above); a `fading` askMargin.trend tightens it.
+ok('R5 FADE: a clean 3/3 reach + a FADING ask cushion folds estSell BELOW the band top', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const clean = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc });
+  const faded = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc, askMargin: { trend: 'fading' } });
+  assert.ok(faded.estSell < clean.estSell, `fade must tighten: ${faded.estSell} !< ${clean.estSell}`);
+  // fF = fR(1) × EST_FADE_DISCOUNT applied to the (topRef − live) gap: 24.0m + 440k×0.6 = 24.264m
+  const expected = Math.round(24_000_000 + (24_440_000 - 24_000_000) * EST_FADE_DISCOUNT);
+  assert.equal(faded.estSell, expected, `fade estSell should be ${expected}, got ${faded.estSell}`);
+  assert.ok(faded.confidence.fade && faded.confidence.fade.trend === 'fading', 'the fade marker rides confidence');
+  assert.equal(clean.confidence.fade, null, 'no fade marker on the clean (unfaded) read');
+});
+ok('R5 FADE is DIRECTIONAL: a stable/extending cushion is byte-identical to the unfaded read', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const clean = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc });
+  for (const trend of ['stable', 'extending']) {
+    const e = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc, askMargin: { trend } });
+    assert.equal(e.estSell, clean.estSell, `${trend} must not discount the sell`);
+    assert.equal(e.confidence.fade, null, `${trend} carries no fade marker`);
+  }
+});
+ok('R5 FADE is EXEMPT for churn (symmetric): the day-level cushion trend mismeasures a tight lap', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const noFade = estimatePair(FLIP_NICHES.churn, row, { askReach: rc, bidReach: rc });
+  const faded  = estimatePair(FLIP_NICHES.churn, row, { askReach: rc, bidReach: rc, askMargin: { trend: 'fading' } });
+  assert.equal(faded.estSell, noFade.estSell, 'churn (foldExempt) never applies the fade');
+  assert.equal(faded.confidence.fade, null, 'no fade marker on a foldExempt niche');
+});
+ok('R5 FADE is nulled by a DECLARED exit (the operator plan governs the sell leg)', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const e = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc, askMargin: { trend: 'fading' }, declaredExit: 25_000_000 });
+  assert.equal(e.estSell, 25_000_000, 'the declared exit governs the sell, above the band top');
+  assert.equal(e.confidence.fade, null, 'a declared exit nulls the fade marker (the fold no longer drives the sell)');
+});
+ok('R5 FADE SURFACES: the fade rides the F1 shadow (estConfLean) + a caution token in the sell cell (Fable #1)', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const faded = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc, askMargin: { trend: 'fading' } });
+  const lean = estConfLean(faded);
+  assert.equal(lean.fade, EST_FADE_DISCOUNT, 'the fade discount is logged to the shadow (F1 can calibrate it)');
+  assert.match(estPairCells(faded)[1].t, /fading↓/, 'the sell cell carries the fade caution token');
+  // clean (no fade): neither surfaces
+  const clean = estimatePair(FLIP_NICHES.band, row, { askReach: rc, bidReach: rc });
+  assert.equal(estConfLean(clean).fade, undefined, 'no fade field on a clean read');
+  assert.doesNotMatch(estPairCells(clean)[1].t, /fading/, 'no fade token on a clean read');
+});
+ok('R5 FADE does NOT leak into the pressure model (Fable #2: pressure replaces the sell the fold never touched)', () => {
+  const row = { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 };
+  const rb = { bid: 900, ask: 1200, pressure: 1.8, reliability: 1 };
+  const rc = { reachedDays: 12, nDays: 14, recentHit: 3, recentDays: 3 };
+  const e = estimatePair(FLIP_NICHES.band, row, { reachable: rb, askReach: rc, askMargin: { trend: 'fading' } }, { pressureExit: true });
+  assert.equal(e.estSell, 1200, 'the pressure ask still drives the sell (unchanged by a fading neutral cushion)');
+  assert.equal(e.confidence.fade, null, 'the fade marker does NOT ride the pressure confidence');
 });
 
 ok('rev2/AC1 + AC6 STRATEGY-AWARE entry: scalp near-live; value + band + churn ALL price the band low (churn no longer folds)', () => {

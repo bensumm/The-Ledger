@@ -55,7 +55,7 @@ window, no recency split.
 | `dipPostureValidator` | wraps `recentDirection` into pass/caution | live + 5m/3h | dip buy candidates | n/a (3h) | validator registry |
 | `diurnalForecast` (PF1) | forward 12-24h trough/peak projection: baseline anchored to live, + trend×Δt, + cumulative-max dispersion band | `hourProfile` + regime/phase/mom gates | quote-items `#6` forecast line | ✅ (explicitly refuses on `spike`/`decay`/band-violation) | quote-items notes |
 | `whenBuyable`/`whenSellable` | first horizon hour whose projected low/high clears a target | `diurnalForecast` | quote-items forecast line | inherits forecast | quote-items notes |
-| `estimatePair`/`reachFoldModel` | reconciliation Est.buy/Est.sell: buy = band-low/live/trough per doctrine; **sell = live + (bandTop−live)×reach-FOLD FACTOR** | reach-fold factor = `min(1, askFrac/0.75)` where askFrac prefers **recent-3**, else full window | default table column on quote + screen | ✅ (via `reachRead` — recent-3 primary, full backstop) at the FOLD level, but the fold is a linear map of a POINT-IN-TIME hit fraction, not a trend | quote-items, screen niche tables, digest indirectly (via `er` for capEff) |
+| `estimatePair`/`reachFoldModel` (R5 trend-aware) | reconciliation Est.buy/Est.sell: buy = band-low/live/trough per doctrine; **sell = live + (bandTop−live)×reach-FOLD FACTOR × R5 fade** | reach-fold factor = `min(1, askFrac/0.75)` (askFrac prefers **recent-3**), **× `EST_FADE_DISCOUNT` when the ask-side `reachMargin.trend` is `fading`** (R5 — via `extra.askMargin`, screen-wired) | default table column on quote + screen | ✅ recent-3 fold AND (R5) a slope-based cushion-fade tighten a clean-reach mirage | quote-items (no fade yet), screen niche tables + digest |
 | `reachRelief`/`reachRelief`-softened topRef | liquidity/size-conditioned softening of the reach-fold, + Part-B de-biased top toward the observed 24h high | `dayHighFrom5m` (24h max of 5m) + reach fraction | large-liquid-book sells only | n/a (softens the fold, doesn't add a trend read) | `estimatePair` |
 | `pressureModel` (PB4) | swaps Est.buy/sell for `reachableBand`'s pressure-driven pair | `reachableBand` | `--est-sell pressure` (trial, never published) | ✅ (recency-windowed base+band) | quote-items, screen (console only) |
 | `estimateRank`/`rankScore` | net × P(fill) ÷ TTF, per estimator family | family-specific (mostly 2h band / live) | every candidate's grade/rank | varies by family (see families table) | `rateItem`, screen ranking, digest `rank` |
@@ -87,12 +87,17 @@ read burns, worst first:
    read by `floorValidator` itself (it's a separate validator key, informational by default). This
    is the single most under-protected stale-read surface in the repo, and it directly gates BUY
    decisions on value/big-ticket holds.
-2. **`digestVerdict`'s "mirage top" rule (`askPlacement`)** — `placement()` is a **whole-window
-   CDF** (no recency split at all). The rule only fires when RECENT reach (`reachFrac`) is ALSO
-   poor, so the two-signal AND partially protects it — but a genuinely fading top that still
-   clears the RC1 recent-3 bar (a fresh 2/3 that's about to become 0/3, exactly the godsword shape)
-   sails through both digest checks. This is the literal Est.-sell-mirage failure mode Ben cited
-   (Searing page "+7.3%" reaching p100/never-prints) reproduced one layer up in the digest verdict.
+2. **`digestVerdict`'s "mirage top" rule (`askPlacement`)** — **FIXED (R5, PLAN-SIGNAL-RECENCY).** Two
+   layers now close it: (a) the PRICE — `estimatePair`'s reach-fold gained a `fading`-cushion discount
+   (`EST_FADE_DISCOUNT`, fed by R4's slope-based `reachMargin.trend` via `extra.askMargin`), so a clean
+   3/3 reach whose cushion is decaying folds the Est-sell down EVEN when the raw hit-count reads full
+   (the godsword / +412k bludgeon shape); absent the trend it's byte-identical. (b) the VERDICT —
+   `digestVerdict` escalates the base "mirage top" to a HIGH-confidence `mirage top!` only when BOTH the
+   recent-vs-full placement DIVERGENCE (`digestReachAndPlacement`'s directional `placementDiverges`, the
+   whole-window-CDF analogue of RC1's recencySplit) AND a `fading` trend hold; either alone stays the base
+   caution word, and the base placement/reach condition still gates (no wider blast radius). Kept for
+   history: the pre-R5 rule was a whole-window CDF with no recency split, so a fading top still clearing
+   the recent-3 bar sailed through — the Searing-page "+7.3% reaching p100/never-prints" shape.
 3. **`asymPair`'s deep-bid/high-reach-ask** — both legs are **whole-14-day quantiles**
    (`quantLow`/`quantHigh`), with no recency check at all before `asymEstimate` ranks off them. On
    a regime-shifted item the p80 "reaches 11/14 days" ask can be entirely pre-shift days, same
@@ -203,12 +208,11 @@ the LEVEL-CONDITIONED specialization; retire `trajectoryRead`'s shape label; pro
   repo is defined as a transform of this pair.**
 - **`estimatePair`/`reachFoldModel`** is the "what would Ben actually post" synthesis — genuinely
   useful (it's the documented motive: stop hand-reconciling Optimistic∩diurnal∩reach∩anchor∩BE by
-  eye every pass) but its reach-fold is a POINT-IN-TIME hit-fraction fold, not a trajectory read —
-  it doesn't know a reach that is 3/3 today was 1/3 last week and heading for 0/3 next week. **Keep
-  as the default table view, but its sell-top fold should consume the same trend primitive
-  recommended in §4 (not just the static reach fraction) — that is the single biggest lever on the
-  Est.-sell mirage problem named in the mandate, because `estimatePair` is what BOTH quote-items
-  and screen render as the headline number.**
+  eye every pass). **FIXED (R5): its sell-top fold now consumes the trend primitive** — a `fading`
+  ask-side `reachMargin.trend` (R4's slope, passed via `extra.askMargin`) applies `EST_FADE_DISCOUNT`
+  to tighten the top even on a clean 3/3 reach, closing the point-in-time-only gap (a 3/3-today reach
+  that was 1/3 last week and heading for 0/3). The screen wires it; quote-items degrades byte-identical
+  (no askMargin passed) until wired. Absent the trend the fold is byte-identical to pre-R5.
 - **`pressureModel`** is a genuinely distinct idea (demand-BALANCE, not reach-count) and is
   correctly gated as a trial (never published, always shadow-logged against the neutral model). No
   action — keep as-is, it is the cleanest-scoped experimental surface in the estimator stack.

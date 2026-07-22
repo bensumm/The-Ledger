@@ -105,6 +105,14 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   proxy. So a held-lot ask reads its relief off the actual position, not an accumulation estimate.
   Full mechanism + thresholds + the F1 shadow fields: the `asymEstimate`/`reachRelief` headers in
   `js/estimators/reach.mjs` (both live there after the PC2 split — `js/estimators.mjs` is the barrel).
+- **The sell fold is also TREND-aware (R5, PLAN-SIGNAL-RECENCY).** The reach fraction says a top PRINTS;
+  it does not say the cushion OVER it is decaying. When the ask-side `reachMargin.trend` is `fading`
+  (R4's slope-based cushion trend, passed to `estimatePair` via `extra.askMargin` — the screen wires it;
+  quote-items degrades byte-identical until wired), the sell fold factor is multiplied by
+  `EST_FADE_DISCOUNT` to tighten the Est-sell EVEN on a clean 3/3 reach — the godsword / +412k-bludgeon
+  mirage (reach 3/3 today, cushion collapsing). It's ADDITIVE to the reach/relief fold, exempt on a
+  symmetric (churn) lap, nulled by a declared exit, and byte-identical when the trend is absent/stable/
+  extending. INFORM-only, n≈0 PLACEHOLDER; a `fade` marker rides `confidence` for the F1 shadow.
 - **The held-lot depth floor + pressure-reachable (PLAN-DEPTH-EXIT, inform-only).** On a held lot,
   `watch-positions` now renders TWO measured lenses beside the reach count: the **depth floor**
   (`clearableAsk` — the highest ask whose at-or-above instabuy flow absorbs `×4` the lot on ≥75% of
@@ -183,7 +191,11 @@ footers, and the per-niche table's own `rank` sort is untouched (the deployable-
 digest-only). The
 `verdict` word is deterministic, first-match-wins over a rule table (`sell unreliable` / `mirage top` /
 `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
-calibrated. **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn
+calibrated. **R5 (PLAN-SIGNAL-RECENCY)** escalates the base `mirage top` to a HIGH-confidence `mirage top!`
+only when BOTH the recent-vs-full placement DIVERGENCE (`placementDiverges` — the whole-window-CDF analogue
+of RC1's recencySplit: recent-3 days abandoned the top by ≥ `RECENCY_DIVERGE`) AND a `fading` ask cushion
+trend hold; either alone stays the base word, and the base placement/reach condition still gates (the
+escalation sharpens confidence within the existing rule, it never widens what fires mirage top). **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn
 exempt, amplitude not) live inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`/`digestVerdict`,
 reusing `BIG_TICKET_GP` from `js/quotecore.js`, `LIMIT_WINDOW_SEC` from `pipeline/lib/limits.mjs` for the 6
 laps/day ceiling, and `placement`/`diurnalPhase` from `js/windowread.mjs` + `GRADE_CUTOFFS`/
