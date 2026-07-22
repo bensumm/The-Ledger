@@ -32,7 +32,7 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, windowStats, trajectoryRead, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
+import { hourProfile, deriveDiurnalRange, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -194,6 +194,16 @@ function pushTrajectory(notes, days, { liveRef = null, label = '' } = {}) {
   for (const [key, n] of tr.scored) notes.push(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
   const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
   notes.push({ kind: 'trajectory', text: `read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}  (heuristic, n≈0 — inform-only, never gates)` });
+  // PLAN-DRIFT-VS-CRASH: the floor/ceiling slope-asymmetry + floor-break read, folded directly under the
+  // trajectory read (the crash-vs-cooldown discriminator the single min-low/max-high collapse washes out).
+  const fc = floorCeilingTrack(days, { todayKey: localDayKey() });
+  const fcText = formatFloorCeiling(fc, fmt, { label });
+  if (fcText) notes.push({ kind: 'fcTrack', text: fcText });
+}
+// local 'YYYY-MM-DD' of now — matches windowStats' dayKey (wStart=0) so the forming-day guard lines up.
+function localDayKey(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export function buildQuoteReport({

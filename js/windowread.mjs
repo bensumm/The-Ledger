@@ -181,6 +181,127 @@ export function trajectoryRead(days, { liveRef = null } = {}) {
   return { scored, shape, floor, ceiling, floorKey, ceilKey, liveRef, livePos };
 }
 
+// --- phase-aligned floor + ceiling track (PLAN-DRIFT-VS-CRASH — the drift-vs-crash classifier) ---
+// trajectoryRead (above) collapses the window to ONE min-low `floor` + ONE max-high `ceiling` and reads
+// `shape` off the blended daily MIDS — which WASHES OUT the exact signal a crash-vs-cooldown call needs:
+// the FLOOR track (daily lows) and the CEILING track (daily highs) moving INDEPENDENTLY. Three real cases
+// this session's blend could not tell apart:
+//   • FANG (crash)       — ceiling stepping DOWN ~376k/day while the floor BROKE its 14-day low (17.46m):
+//                          decaying peaks + a floor break.
+//   • GODSWORD (crash)   — daily highs stepped 42.1m→40.2m over a week and the floor broke 39m→37.2m.
+//   • MAUL (cooldown)    — floor ROSE 7 days (116.5k→125.0k) then PLATEAUED + ticked down 2 days; highs
+//                          eased ~2k/day. NOT a crash — the floor still sits far above its prior trough.
+//                          A 2-day wiggle is NOT a trend (the robustness lesson this helper must encode).
+//   • SOULREAPER (trend) — floor AND ceiling rising hard, new highs daily → healthy.
+// floorCeilingTrack reads the two tracks SEPARATELY — a robust recent-window LEAST-SQUARES slope on each,
+// classified rising|flat|falling with a per-day gp step — and combines the two slopes + a discrete
+// FLOOR-BREAK flag into an asymmetry label. THE CLASSIFIER'S DISCRIMINATORS ARE floor/ceiling slope
+// ASYMMETRY + the floor-break; that IS the drift-vs-crash trajectory classifier.
+//
+// CLASSIFICATION LABELS (floor-break DOMINATES; documented here as the load-bearing spec home):
+//   crash-risk      floorBreak fires (latest completed low < the prior-lookback floor) — the discrete crash trigger
+//   healthy-trend   floor rising  &  ceiling rising
+//   compressing-up  floor rising  &  ceiling flat|falling   (band tightening from below)
+//   mild-cooldown   floor flat    &  ceiling falling         (the maul — peaks ease, floor holds)
+//   cooling         floor falling &  ceiling falling         (both tracks decaying, no break yet)
+//   ranging         any other combo (flat/flat, flat/rising, falling/rising|flat) — nothing decisive
+//
+// REQUIREMENT #1 — PHASE ALIGNMENT (the forming-day guard): the live/incomplete current day must NEVER
+// feed the slope fit or the floor-break test (an incomplete bucket can fake a break or a slope). Pass
+// `todayKey` (local 'YYYY-MM-DD'); if the NEWEST day matches it, that day is DROPPED from the completed
+// series and surfaced SEPARATELY as `forming` (provisional low/high). Only complete daily buckets,
+// compared like-for-like, feed the slopes + break. (windowStats already excludes today while inside its
+// window, so on the live surfaces `forming` is usually null already — this guard is belt-and-suspenders
+// AND the contract a raw caller who passes an includes-today series relies on.)
+//
+// HONESTY RAILS (rule 4, same discipline as trajectoryRead): HEURISTIC, n≈0, INFORM-ONLY — never gates,
+// never a verdict, never a screen.json / rank input. Needs ≥ FC_MIN_DAYS COMPLETED days for a slope (null
+// below that — degrade, never a fake read). `dir` is off a recent-window least-squares slope, NOT the
+// last two days, so a 2-day wiggle CANNOT flip the classification (the maul); each track ALSO carries
+// `run` (the trailing consecutive-same-direction micro-run, raw-sign) + `nUsed` so a caller reports
+// DURATION ("floor flat over 5d, softened 2d") instead of a verdict that flips on one day. All FC_*
+// thresholds are PLACEHOLDERS pending F1.
+export const FC_MIN_DAYS = 5;          // fewer COMPLETED days than this ⇒ null (can't fit a robust slope)
+export const FC_RECENT_N = 5;          // the recent completed-day window the slope is fit over
+export const FC_FLAT_FRAC = 0.005;     // |slope|/latest-level per day below this ⇒ 'flat' (0.5%/day; PLACEHOLDER, F1)
+export const FC_BREAK_LOOKBACK = 13;   // floor-break = latest low vs the min of the prior N lows (the rest of a 14-day window)
+
+export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N, minDays = FC_MIN_DAYS, flatFrac = FC_FLAT_FRAC, breakLookback = FC_BREAK_LOOKBACK } = {}) {
+  const usable = Array.isArray(days) ? days.filter(([, n]) => n && (n.low != null || n.hi != null)) : [];
+  if (!usable.length) return null;
+  // REQUIREMENT #1: split off the forming (incomplete) current day so it never feeds a slope / the break.
+  let forming = null, completed = usable;
+  if (todayKey != null && usable[usable.length - 1][0] === todayKey) {
+    const [key, n] = usable[usable.length - 1];
+    forming = { key, low: n.low ?? null, hi: n.hi ?? null };
+    completed = usable.slice(0, -1);
+  }
+  const nDays = completed.length;
+  if (nDays < minDays) return null;
+  const lows = completed.map(([, n]) => n.low).filter(v => v != null);
+  const his = completed.map(([, n]) => n.hi).filter(v => v != null);
+  if (lows.length < minDays || his.length < minDays) return null;
+
+  // per-track read: robust recent-window slope → dir, plus the raw-sign trailing micro-run for duration.
+  const track = series => {
+    const ref = series[series.length - 1] || 0;                 // latest level = the relative-threshold ref
+    const window = series.slice(-recentN);
+    const slope = slopePerStep(window);                         // least-squares gp/day over the recent window
+    const band = Math.abs(ref) * flatFrac;
+    const dir = slope == null ? null : slope >= band ? 'rising' : slope <= -band ? 'falling' : 'flat';
+    // trailing micro-run: consecutive steps from the newest end sharing a RAW-SIGN direction. Raw sign
+    // (not the flat band) on purpose — the run's job is to expose a fresh softening/strengthening under a
+    // robust trend (the maul's "flat over 5d, softened 2d"); the flat band lives on `dir`, the trend read.
+    const catOf = d => d > 0 ? 'rising' : d < 0 ? 'falling' : 'flat';
+    let run = { dir: null, len: 0 };
+    for (let i = series.length - 1; i >= 1; i--) {
+      const c = catOf(series[i] - series[i - 1]);
+      if (run.dir == null) run = { dir: c, len: 1 };
+      else if (c === run.dir) run.len++;
+      else break;
+    }
+    return { series, slope, step: slope == null ? null : Math.round(slope), dir, run, nUsed: window.length, latest: ref };
+  };
+  const floor = track(lows);
+  const ceiling = track(his);
+
+  // FLOOR-BREAK: the latest COMPLETED daily low vs the min of the prior-lookback lows — the discrete
+  // crash trigger (the fang/godsword shape: a floor that steps UNDER its multi-day trough).
+  const latestLow = lows[lows.length - 1];
+  const priorLows = lows.slice(Math.max(0, lows.length - 1 - breakLookback), lows.length - 1);
+  const priorFloor = priorLows.length ? Math.min(...priorLows) : null;
+  const broke = priorFloor != null && latestLow < priorFloor;
+  const floorBreak = { broke, latest: latestLow, priorFloor, gap: priorFloor != null ? latestLow - priorFloor : null, lookback: priorLows.length };
+
+  const classification = broke ? 'crash-risk'
+    : floor.dir === 'rising' && ceiling.dir === 'rising' ? 'healthy-trend'
+    : floor.dir === 'rising' && (ceiling.dir === 'flat' || ceiling.dir === 'falling') ? 'compressing-up'
+    : floor.dir === 'flat' && ceiling.dir === 'falling' ? 'mild-cooldown'
+    : floor.dir === 'falling' && ceiling.dir === 'falling' ? 'cooling'
+    : 'ranging';
+
+  return { completed, forming, nDays, floor, ceiling, floorBreak, classification };
+}
+
+/* formatFloorCeiling(fc, fmt, opts) — the ONE compact one-line render of a floorCeilingTrack result, so
+ * read-window-range.mjs and quote-items.mjs (via render.mjs) print it byte-identically (the same
+ * one-owner rule the trajectory read follows). PURE: `fmt` (money-format) is INJECTED so windowread
+ * stays dependency-free. Returns the note TEXT (no sigil — the caller's NOTE_KIND owns that). */
+export function formatFloorCeiling(fc, fmt, { label = '' } = {}) {
+  if (!fc) return null;
+  const dirStep = t => t.dir == null ? 'n/a'
+    : `${t.dir}${t.step == null ? '' : ` ${t.step >= 0 ? '+' : '−'}${fmt(Math.abs(t.step))}/d`}`;
+  const soft = t => (t.run && t.run.dir && t.run.dir !== t.dir && t.run.len >= 2) ? ` (${t.run.dir} ${t.run.len}d)` : '';
+  const parts = [
+    `floor ${dirStep(fc.floor)} over ${fc.floor.nUsed}d${soft(fc.floor)}`,
+    `ceiling ${dirStep(fc.ceiling)}${soft(fc.ceiling)}`,
+    fc.classification,
+  ];
+  if (fc.floorBreak.broke) parts.push(`⚠ floor BROKE prior ${fc.floorBreak.lookback}d low by ${fmt(Math.abs(fc.floorBreak.gap))}`);
+  if (fc.forming) parts.push(`today forming low ${fmt(fc.forming.low)}/high ${fmt(fc.forming.hi)} (provisional)`);
+  return `${label ? label + ': ' : ''}floor/ceiling: ${parts.join(' · ')}  (heuristic, n≈0 — inform-only, never gates)`;
+}
+
 // --- day-of-week seasonality (A3, PLAN-AMPLITUDE-SCAN §2.4 — GENUINELY NEW) ---------------------
 // The 1.5-day amplitude hold crosses a day boundary (fill day-1's trough, sell into day-2's peak), so
 // the leg-2 sell lands on a DIFFERENT weekday — and weekday rhythm (the UK weekly cycle, weekend→weekday

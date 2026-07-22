@@ -123,7 +123,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   over a `windowStats().days` series: classifies rising/falling/oscillating/based/elevated + the window
   floor/ceiling (with the day each printed) + where a `liveRef` sits between them; HEURISTIC/inform-only,
   never gates; `read-window-range.mjs`'s `read:` line AND `quote-items.mjs`'s `⌁ read:` note on every quote
-  + `--positions` held lot render from THIS ONE definition, so both surfaces are byte-identical); MOVED here from `pipeline/lib/`
+  + `--positions` held lot render from THIS ONE definition, so both surfaces are byte-identical) + **`floorCeilingTrack`/`formatFloorCeiling`**
+  (PLAN-DRIFT-VS-CRASH, 2026-07-22 — the phase-aligned floor+ceiling **slope-asymmetry** classifier that
+  `trajectoryRead`'s single min-low/max-high collapse washes out: reads the daily-LOW track and daily-HIGH
+  track SEPARATELY, each a robust recent-window least-squares slope classified `rising|flat|falling` + a
+  raw-sign trailing micro-`run` for duration, plus a discrete **floor-break** flag (latest completed low vs
+  the prior-lookback floor); combines the two slopes + the break into `crash-risk` (break dominates) /
+  `healthy-trend` / `compressing-up` / `mild-cooldown` / `cooling` / `ranging`. REQUIREMENT #1 phase-alignment:
+  a `todayKey` forming/incomplete day is DROPPED from the slope/break and surfaced separately as provisional.
+  HEURISTIC/n≈0/inform-only, never gates; `formatFloorCeiling` (fmt injected — windowread stays dependency-free)
+  is the ONE line-render both `read-window-range.mjs`'s trajectory block and `quote-items.mjs`'s `⇅` note use);
+  MOVED here from `pipeline/lib/`
   so it is node- AND app-importable like `quotecore.js`; consumed by `pipeline/commands/read-window-range.mjs`,
   `pipeline/commands/watch-positions.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `js/validate.mjs` and `js/forecast.mjs` (both now app-imported via `js/trends.js`, TV).
   PF1 (2026-07-10) added additive per-hour dispersion fields `devMid`/`devLowSpread`/`devHiSpread` (IQR of

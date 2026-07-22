@@ -101,6 +101,7 @@ export const NOTE_KINDS = {
   pressureExit: { prefix: '  ◇ ',  tier: TIER.context },  // PB4 pressure-exit TRIAL line (opt-in flag)
   reachPlacement: { prefix: '  ⊙ ', tier: TIER.context }, // PLAN-QUOTE-PLACEMENT — the read-window-range.mjs placement percentile folded onto the quote
   trajectory:   { prefix: '  ⌁ ',  tier: TIER.context }, // the multi-day shape read (trajectoryRead) folded onto the quote (fang under-read fix); the DAILY TRAJECTORY rows above it ride as plain strings (V5-block pattern)
+  fcTrack:      { prefix: '  ⇅ ',  tier: TIER.context }, // PLAN-DRIFT-VS-CRASH — the phase-aligned floor/ceiling slope-asymmetry + floor-break read (floorCeilingTrack), folded directly under the trajectory read
   windowExit:   { prefix: '  ↗ ',  tier: TIER.context },  // PLAN-POSITIONS-WINDOW-READ — the auto-surfaced ask-side typical-exit read on a big-ticket held lot (read-window-range.mjs --ask, folded in)
 };
 

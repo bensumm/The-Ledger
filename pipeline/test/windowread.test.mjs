@@ -22,6 +22,7 @@ import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
 import { hourlyPressure, demandRegime } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension B (DC1)
 import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-read fix — shared multi-day shape read (read-window-range + quote-items render from ONE definition)
+import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -686,6 +687,91 @@ ok('trajectoryRead: no usable data ⇒ null (never a false read)', () => {
   assert.equal(trajectoryRead([]), null);
   assert.equal(trajectoryRead(null), null);
   assert.equal(trajectoryRead([['d0', { low: null, hi: null }]]), null);
+});
+
+// --- floorCeilingTrack (PLAN-DRIFT-VS-CRASH): the phase-aligned floor+ceiling slope-asymmetry read ----
+// days shape: [[key, {low, hi}], …] oldest→newest (windowStats().days). The FOUR real cases this session
+// exposed as synthetic series (rule 4 — no live data): crash (floor break + falling ceiling), mild-cooldown
+// (flat/softening floor + easing ceiling — the maul), healthy-trend (both rising), and the forming-day
+// guard (an incomplete latest day must not trip a false floor-break). fcDay mirrors `day` above.
+const fcDay = (key, low, hi) => [key, { low, hi }];
+
+ok('floorCeilingTrack: CRASH — a floor BREAK dominates → crash-risk (the fang/godsword shape)', () => {
+  // ceiling steps DOWN ~376k/day; the floor holds ~17.58-17.60m then BREAKS to 17.46m on the last day.
+  const lows = [17600000, 17590000, 17600000, 17580000, 17590000, 17600000, 17580000, 17460000];
+  const his  = [19000000, 18624000, 18248000, 17872000, 17496000, 17120000, 16744000, 16368000];
+  const days = lows.map((l, i) => fcDay(`2026-07-0${i + 1}`, l, his[i]));
+  const fc = floorCeilingTrack(days);
+  assert.equal(fc.floorBreak.broke, true, 'the last low 17.46m < the prior-window floor 17.58m');
+  assert.equal(fc.floorBreak.gap, 17460000 - 17580000, 'gap = latest − prior floor (negative = broken)');
+  assert.equal(fc.classification, 'crash-risk', 'a floor break DOMINATES the label');
+  assert.equal(fc.ceiling.dir, 'falling', 'the ceiling is stepping down independently');
+});
+
+ok('floorCeilingTrack: MILD-COOLDOWN — flat/softening floor + easing ceiling (the maul, NOT a crash)', () => {
+  // floor ROSE 7 days then plateaued + ticked down 2 (116.5k→125.0k→124.5k); highs ease ~1k/day.
+  const lows = [116500, 118500, 120500, 122500, 124000, 125000, 125500, 124800, 124500];
+  const his  = [135800, 134800, 133800, 132800, 131800, 130800, 129800, 128800, 127800];
+  const days = lows.map((l, i) => fcDay(`2026-07-0${i + 1}`, l, his[i]));
+  const fc = floorCeilingTrack(days);
+  assert.equal(fc.floorBreak.broke, false, 'the floor sits far above its prior trough — no break');
+  assert.equal(fc.floor.dir, 'flat', 'the recent-window LSQ floor slope is flat — the 2-day dip does NOT flip it');
+  assert.equal(fc.ceiling.dir, 'falling', 'highs ease ~1k/day → falling');
+  assert.equal(fc.classification, 'mild-cooldown', 'flat floor + falling ceiling = mild cooldown, not a crash');
+  // DURATION/confidence: the flat trend is the read, but the trailing softening is visible (rule 4 — a
+  // 2-day wiggle is NOT a trend; the caller reports "floor flat over 5d, softened 2d", never a flip).
+  assert.equal(fc.floor.run.dir, 'falling', 'the trailing micro-run captures the 2-day softening');
+  assert.equal(fc.floor.run.len, 2, 'exactly 2 down-ticks at the end (125.5→124.8→124.5)');
+});
+
+ok('floorCeilingTrack: HEALTHY-TREND — both floor and ceiling rising, new highs (the soulreaper shape)', () => {
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => fcDay(`2026-07-0${i + 1}`, 30000000 + i * 300000, 32000000 + i * 350000));
+  const fc = floorCeilingTrack(days);
+  assert.equal(fc.floor.dir, 'rising');
+  assert.equal(fc.ceiling.dir, 'rising');
+  assert.equal(fc.floorBreak.broke, false, 'the latest low is the HIGHEST low — a rising floor never breaks down');
+  assert.equal(fc.classification, 'healthy-trend');
+});
+
+ok('floorCeilingTrack: FORMING-DAY GUARD (req #1) — an incomplete latest day never trips a false break', () => {
+  // 6 COMPLETED flat days at a ~1000 floor, then a forming (mid-session) day whose low dipped to 500.
+  const completed = [0, 1, 2, 3, 4, 5].map(i => fcDay(`2026-07-0${i + 1}`, 1000 + (i % 2), 1200));
+  const forming = fcDay('2026-07-07', 500, 1150);   // incomplete — a deep intraday print, NOT a real daily low
+  const days = [...completed, forming];
+  // WITH the guard: the forming day is dropped from the completed series + surfaced separately.
+  const fc = floorCeilingTrack(days, { todayKey: '2026-07-07' });
+  assert.equal(fc.forming.key, '2026-07-07', 'the forming day is split off, not fed to the slope/break');
+  assert.equal(fc.forming.low, 500);
+  assert.equal(fc.nDays, 6, 'only the 6 completed days feed the read');
+  assert.equal(fc.floorBreak.broke, false, 'the 500 forming dip is EXCLUDED → no false floor break');
+  assert.ok(fc.floor.series.every(v => v >= 1000), 'the completed floor series never sees the forming 500');
+  // WITHOUT the guard (no todayKey): the 500 IS counted as the latest low → a FALSE break. Proves the guard matters.
+  const unguarded = floorCeilingTrack(days);
+  assert.equal(unguarded.floorBreak.broke, true, 'counting the incomplete day fakes a break — exactly what the guard prevents');
+  assert.equal(unguarded.classification, 'crash-risk', 'and would mislabel a stable item as a crash');
+});
+
+ok('floorCeilingTrack: honesty rails — thin history / no data ⇒ null (never a fake read)', () => {
+  const thin = [0, 1, 2].map(i => fcDay(`d${i}`, 1000, 1200));   // 3 < FC_MIN_DAYS
+  assert.equal(floorCeilingTrack(thin), null, `< FC_MIN_DAYS (${FC_MIN_DAYS}) completed days ⇒ null`);
+  assert.equal(floorCeilingTrack([]), null);
+  assert.equal(floorCeilingTrack(null), null);
+  assert.equal(floorCeilingTrack([['d0', { low: null, hi: null }]]), null);
+  // a forming day that leaves too few COMPLETED days also degrades to null
+  const fivePlusForming = [0, 1, 2, 3].map(i => fcDay(`2026-07-0${i + 1}`, 1000, 1200)).concat([fcDay('2026-07-05', 1000, 1200)]);
+  assert.equal(floorCeilingTrack(fivePlusForming, { todayKey: '2026-07-05' }), null, '4 completed after dropping the forming day ⇒ null');
+});
+
+ok('formatFloorCeiling: compact one-line note; null passes through; floor-break + forming surfaced', () => {
+  const idfmt = n => String(n);   // identity fmt so the assertions read the raw numbers
+  assert.equal(formatFloorCeiling(null, idfmt), null, 'null read ⇒ null (no note)');
+  const lows = [17600000, 17590000, 17600000, 17580000, 17590000, 17600000, 17580000, 17460000];
+  const his  = [19000000, 18624000, 18248000, 17872000, 17496000, 17120000, 16744000, 16368000];
+  const crash = floorCeilingTrack(lows.map((l, i) => fcDay(`2026-07-0${i + 1}`, l, his[i])));
+  const line = formatFloorCeiling(crash, idfmt, { label: "Osmumten's fang" });
+  assert.ok(line.startsWith("Osmumten's fang: floor/ceiling:"), 'label prefixes the note');
+  assert.ok(/crash-risk/.test(line) && /floor BROKE prior/.test(line), 'the classification + the break both surface');
+  assert.ok(/inform-only, never gates/.test(line), 'the honesty rail rides on every line');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);
