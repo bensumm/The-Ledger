@@ -1,6 +1,12 @@
 # PLAN-DEPTH-EXIT — percentile-depth-aware exit pricing (the reach count's principled successor)
 
-Status: **DRAFT — DE1/DE2/DE6/PB1/PB2/DE3/PB4/PB4-app-display/PB5 LANDED (see per-chunk statuses); DE4/DE5/DE7 open.**
+Status: **PARTIALLY REMOVED 2026-07-22 (PLAN-REMOVE-DEPTH-PRESSURE-READS, narrow, Ben's call, git-revivable):
+`depthDays`+`clearableBid` (DE1/DE6 depth per-day tables + low-side mirror) and `hourlyPressure`+`demandRegime`
+(Extension-B DC1/DC3 demand-cycle) were DELETED — inspector/inform-only reads that never fed a decision
+surface. STILL LIVE: `clearableAsk` (DE1 "BOOK AT ≤X" + the DE3 depthExit shadow), `demandPressure`/`reachableBand`
+(Extension A / the `--est-sell pressure` sell-model). DE4/DE5/DE7 remain OPEN (unbuilt). Below is the historical
+design narrative — not rewritten; git preserves the removed code's "why" via its original commits.** \
+Previously: DE1/DE2/DE6/PB1/PB2/DE3/PB4/PB4-app-display/PB5 LANDED (see per-chunk statuses); DE4/DE5/DE7 open.
 Per-topic working doc (PLANNING.md lifecycle step 1–2); folds into `PLAN.md` and is deleted when its
 last chunk ships. Builds ON TOP of the Task 1+2 baseline (real held-lot `intendedUnits` → `reachRelief`
 in `estimatePair` + the watch-positions size-relieved fill note) — that baseline is the CURRENT

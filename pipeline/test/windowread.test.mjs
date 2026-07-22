@@ -18,9 +18,8 @@
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
-import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
-import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
-import { hourlyPressure, demandRegime } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension B (DC1)
+import { clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 (depthDays/clearableBid removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
+import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1) — hourlyPressure/demandRegime (Ext B) removed, PLAN-REMOVE-DEPTH-PRESSURE-READS
 import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-read fix — shared multi-day shape read (read-window-range + quote-items render from ONE definition)
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 
@@ -431,16 +430,7 @@ const dDay = (d, buckets) => buckets.map(b => pt(ts(2026, 0, d, b.h), b.hi - 500
 const dNow = new Date(2026, 0, 25, 12, 0, 0);              // hour 12 ∉ 14–17 → no "today" skip games
 const dOpts = { wStart: 14, wEnd: 17, now: dNow, nights: 14 };
 
-ok('depthDays: qty→0 clearedDays ≡ reachedDays (the reach count is the model\'s zero-size limit)', () => {
-  const series = [];
-  for (let d = 10; d <= 15; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 50 }, { h: 15, hi: 396, volHi: 50 }]));
-  const stats = windowStats(series, dOpts);
-  for (const ask of [395, 397, 399, 401]) {
-    const dd = depthDays(series, ask, { qty: 0, ...dOpts });
-    assert.equal(dd.clearedDays, reachedDays(stats.his, ask), `qty→0 clears ≡ reachedDays @${ask}`);
-  }
-});
-
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: the `depthDays` subsumption test was removed with depthDays.
 ok('clearableAsk: deep book + small size books HIGH; a large lot books lower (size-honest, monotone)', () => {
   const series = [];   // every day trades deeply at 400 and 396 (1000 u each)
   for (let d = 10; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 400, volHi: 1000 }, { h: 15, hi: 396, volHi: 1000 }]));
@@ -462,7 +452,7 @@ ok('clearableAsk: a thin book / oversized lot collapses to null WITH a reason (m
   assert.equal(clearableAsk(few, { qty: 1, ...dOpts }).reason, 'thin-history', '< minDays scored → thin-history');
 });
 
-ok('clearableAsk/depthDays: monotone — higher qty/competition/targetFrac never books HIGHER', () => {
+ok('clearableAsk: monotone — higher qty/competition/targetFrac never books HIGHER', () => {
   const series = [];   // three price tiers/day: 410(200) · 400(400) · 390(800)
   for (let d = 10; d <= 16; d++) series.push(...dDay(d, [{ h: 14, hi: 410, volHi: 200 }, { h: 15, hi: 400, volHi: 400 }, { h: 16, hi: 390, volHi: 800 }]));
   const p = q => clearableAsk(series, { qty: q, ...dOpts }).price ?? -Infinity;
@@ -471,8 +461,6 @@ ok('clearableAsk/depthDays: monotone — higher qty/competition/targetFrac never
   assert.ok(byComp(1) >= byComp(4) && byComp(4) >= byComp(8), 'price non-increasing in competition');
   const byFrac = f => clearableAsk(series, { qty: 50, targetFrac: f, ...dOpts }).price ?? -Infinity;
   assert.ok(byFrac(0.5) >= byFrac(0.75) && byFrac(0.75) >= byFrac(1), 'price non-increasing in targetFrac');
-  const cf = ask => depthDays(series, ask, { qty: 50, ...dOpts }).clearFrac;
-  assert.ok(cf(390) >= cf(400) && cf(400) >= cf(410), 'depthDays clearFrac non-increasing in the ask');
 });
 
 ok('clearableAsk: minBuckets guard — a lone fat bucket at the top cannot set the clearable ask', () => {
@@ -482,50 +470,8 @@ ok('clearableAsk: minBuckets guard — a lone fat bucket at the top cannot set t
   assert.ok(r.price != null && r.price <= 400, 'the lone 420 flier does not set the ask — the dense top ≤400 does');
 });
 
-// --- clearableBid (PLAN-DEPTH-EXIT DE6): the low-side mirror — "how deep can I bid and still fill" --
-// Low-side point masses: dDay writes lo = hi−500 with volLo 10, so build a dedicated builder with
-// controlled (avgLowPrice, lowPriceVolume) buckets instead.
-const bDay = (d, buckets) => buckets.map(b => pt(ts(2026, 0, d, b.h), b.lo, b.lo + 500, b.volLo, 10));
-
-ok('depthDays side:bid — qty→0 clearedDays ≡ touchedDays (the touch count is the zero-size limit)', () => {
-  const series = [];
-  for (let d = 10; d <= 15; d++) series.push(...bDay(d, [{ h: 14, lo: 300, volLo: 50 }, { h: 15, lo: 304, volLo: 50 }]));
-  const stats = windowStats(series, dOpts);
-  for (const bid of [299, 301, 303, 305]) {
-    const dd = depthDays(series, bid, { qty: 0, side: 'bid', ...dOpts });
-    assert.equal(dd.clearedDays, touchedDays(stats.lows, bid), `qty→0 clears ≡ touchedDays @${bid}`);
-  }
-});
-
-ok('clearableBid: deep book + small size catches DEEP; a large lot must bid shallower (mirror-monotone)', () => {
-  const series = [];   // three low tiers/day: 290(800) · 300(400) · 310(200) — the dump is deepest at 290
-  for (let d = 10; d <= 16; d++) series.push(...bDay(d, [{ h: 14, lo: 290, volLo: 800 }, { h: 15, lo: 300, volLo: 400 }, { h: 16, lo: 310, volLo: 200 }]));
-  const small = clearableBid(series, { qty: 10, ...dOpts });      // need 40 → the 290 tier alone absorbs it
-  assert.equal(small.price, 290, 'a small lot catches the deepest printed tier');
-  assert.ok(small.clearFrac >= 0.75 && small.reason == null);
-  const p = q => clearableBid(series, { qty: q, ...dOpts }).price ?? Infinity;
-  assert.ok(p(10) <= p(150) && p(150) <= p(300), 'bid non-DEcreasing in qty — a big lot must bid SHALLOWER (cumulative flow at/below rises with the level)');
-  const byComp = c => clearableBid(series, { qty: 50, competition: c, ...dOpts }).price ?? Infinity;
-  assert.ok(byComp(1) <= byComp(4) && byComp(4) <= byComp(8), 'bid non-decreasing in competition');
-});
-
-ok('clearableBid: thin book collapses UP-or-null WITH a reason (mirage guard mirrored, surfaced)', () => {
-  const thin = [];
-  for (let d = 10; d <= 15; d++) thin.push(...bDay(d, [{ h: 14, lo: 290, volLo: 3 }, { h: 15, lo: 300, volLo: 3 }]));
-  const r = clearableBid(thin, { qty: 100, ...dOpts });           // need 400 ≫ 6 u/day
-  assert.equal(r.price, null);
-  assert.equal(r.reason, 'insufficient-depth', 'never a silent null — the liquidity collapse is named');
-  assert.ok(r.need === 400);
-  const few = bDay(10, [{ h: 14, lo: 300, volLo: 1000 }]).concat(bDay(11, [{ h: 14, lo: 300, volLo: 1000 }]));
-  assert.equal(clearableBid(few, { qty: 1, ...dOpts }).reason, 'thin-history', '< minDays scored → thin-history');
-});
-
-ok('clearableBid: minBuckets guard — a lone fat flush at the bottom cannot set the bid', () => {
-  const series = [...bDay(10, [{ h: 14, lo: 250, volLo: 100000 }])];   // one day, one huge 250 flush
-  for (let d = 11; d <= 16; d++) series.push(...bDay(d, [{ h: 14, lo: 290, volLo: 1000 }, { h: 15, lo: 292, volLo: 1000 }]));
-  const r = clearableBid(series, { qty: 10, ...dOpts });               // 250 has 1 supporting bucket (< 2) → skipped
-  assert.ok(r.price != null && r.price >= 290, 'the lone 250 flier does not set the bid — the dense floor ≥290 does');
-});
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1: the DE6 clearableBid low-side-mirror tests (+ the `bDay`
+// builder + the depthDays side:bid subsumption test) were removed with clearableBid.
 
 // --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
 // Build a windowStats-SHAPED object directly (days oldest→newest; lows/his ascending — the
@@ -637,67 +583,8 @@ ok('reachableBand: SELL-HEAVY commodity reasonableness pin (deep bid, shallow as
   assert.ok(r.bid < r.baseLow && r.ask < r.baseHigh + r.bandHigh, 'sell-heavy: catch the dump deep, don\'t over-ask');
 });
 
-// --- per-hour demand-cycle classifier (PLAN-DEPTH-EXIT Extension B, DC1) -----------------------
-// Build a 6-day series with CONSTANT prices (so hourProfile is profilable) but a controlled per-hour
-// volume pattern, so pressure = per-hour medVolHi/medVolLo is exactly what volFn dictates.
-function demandSeries(days, volFn) {
-  const s = [];
-  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
-    const { volHi, volLo } = volFn(h, di);
-    s.push(pt(ts(2026, 0, 5 + di, h), 1000, 1010, volLo, volHi));   // flat prices; volumes carry the signal
-  }
-  return s;
-}
-const dcNow = new Date(2026, 0, 25, 12, 0, 0);
-
-ok('hourlyPressure: per-hour pressure is the ratio of per-hour MEDIAN volumes (aggregate, not median-of-ratios)', () => {
-  // hour 18 is doubly buy-heavy (volHi 6000), the rest 3000; sell side flat 2000.
-  const track = hourlyPressure(demandSeries(6, h => ({ volHi: (h >= 16 && h <= 20) ? 6000 : 3000, volLo: 2000 })), { nights: 14, now: dcNow });
-  assert.ok(track && track.length >= 20, 'a 6-day series profiles into a per-hour track');
-  const h18 = track.find(t => t.hour === 18), h3 = track.find(t => t.hour === 3);
-  assert.ok(Math.abs(h18.pressure - 3) < 1e-9, 'hour 18: 6000/2000 = 3×');
-  assert.ok(Math.abs(h3.pressure - 1.5) < 1e-9, 'hour 3: 3000/2000 = 1.5×');
-  assert.equal(h18.reliability, 1, 'thick hour → full reliability');
-});
-
-ok('hourlyPressure: a zero-volume side yields null pressure (no divide-by-zero — the aggregation rule)', () => {
-  const track = hourlyPressure(demandSeries(6, h => ({ volHi: 3000, volLo: (h === 4) ? 0 : 3000 })), { nights: 14, now: dcNow });
-  const h4 = track.find(t => t.hour === 4);
-  assert.equal(h4.pressure, null, 'hour 4 sell side never traded → null, never Infinity');
-  assert.ok(Number.isFinite(track.find(t => t.hour === 5).pressure), 'other hours are unaffected + finite');
-});
-
-ok('demandRegime: an all-buy-heavy item classifies buy-heavy with a SELL window and NO buy window', () => {
-  // (Extension B model: high-buy-pressure hours ARE the sell window; an all-buy-heavy item has no
-  // genuine dip-buy hour. This DIVERGES from the plan bullet's "no sell window" wording — see the
-  // demandRegime header. Implemented per the model.)
-  const dr = demandRegime(demandSeries(6, h => ({ volHi: (h >= 16 && h <= 20) ? 6000 : 3000, volLo: 2000 })), { nights: 14, now: dcNow });
-  assert.equal(dr.regime, 'buy-heavy');
-  assert.ok(dr.pooled > 1.1, 'pooled pressure is buy-heavy');
-  assert.ok(dr.sellWindow && dr.sellWindow.atHour >= 16 && dr.sellWindow.atHour <= 20, 'SELL window at the buy-pressure peak');
-  assert.equal(dr.buyWindow, null, 'no buy window — no hour is genuinely sell-heavy');
-});
-
-ok('demandRegime: a troughing item classifies sell-heavy with the BUY window at the trough hours', () => {
-  const dr = demandRegime(demandSeries(6, h => ({ volHi: 2000, volLo: (h >= 2 && h <= 6) ? 8000 : 3000 })), { nights: 14, now: dcNow });
-  assert.equal(dr.regime, 'sell-heavy');
-  assert.ok(dr.pooled < 0.9, 'pooled pressure is sell-heavy');
-  assert.ok(dr.buyWindow && dr.buyWindow.atHour >= 2 && dr.buyWindow.atHour <= 6, 'BUY window at the sell-pressure trough');
-  assert.equal(dr.sellWindow, null, 'no sell window — no hour is genuinely buy-heavy');
-});
-
-ok('demandRegime: a flat item is balanced with no windows; thin volume degrades reliability', () => {
-  const flat = demandRegime(demandSeries(6, () => ({ volHi: 3000, volLo: 3000 })), { nights: 14, now: dcNow });
-  assert.equal(flat.regime, 'balanced');
-  assert.equal(flat.buyWindow, null); assert.equal(flat.sellWindow, null);
-  const thin = demandRegime(demandSeries(6, h => ({ volHi: (h >= 16 && h <= 20) ? 6 : 3, volLo: 2 })), { nights: 14, now: dcNow });
-  assert.ok(thin.hours.every(t => t.reliability < 0.01), 'a handful of units per hour → ~0 reliability (the lean, not a law)');
-});
-
-ok('hourlyPressure / demandRegime: too-thin history degrades to null (no false read)', () => {
-  assert.equal(hourlyPressure(demandSeries(2, () => ({ volHi: 3000, volLo: 2000 })), { nights: 14, now: dcNow }), null, '2 days < HOURPROFILE_MIN_DAYS');
-  assert.equal(demandRegime([], { now: dcNow }), null, 'empty series → null');
-});
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the Extension-B per-hour demand-cycle tests (hourlyPressure +
+// demandRegime + the `demandSeries` builder) were removed with those functions.
 
 // --- trajectoryRead — the shared multi-day shape read (both read-window-range + quote-items) --------
 // days shape: [[key, {low, hi}], …] oldest→newest (windowStats().days). Pure heuristic, inform-only.

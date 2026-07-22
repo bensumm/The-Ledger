@@ -665,39 +665,13 @@ function windowBuckets(series, { nights = 14, wStart, wEnd, now = new Date() } =
     .sort((a, b) => b[0].localeCompare(a[0])).slice(0, nights).reverse();
 }
 
-// Flow at/beyond a level within one day's buckets. ask side = instabuy volume at/ABOVE the ask;
-// bid side = instasell volume at/BELOW the bid (the DE6 low-side mirror rides this same engine).
-const flowBeyond = (buckets, level, side) =>
-  buckets.reduce((s, b) => s + ((side === 'bid' ? b.p <= level : b.p >= level) ? b.v : 0), 0);
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1 (2026-07-22): `depthDays` (DE1 per-day flow-beyond table) and
+// its `flowBeyond` helper were REMOVED (narrow removal — the DE1/DE6 percentile-depth INSPECTOR reads that
+// never fed a main decision surface). `clearableLevel`/`clearableAsk` (below) SURVIVE — clearableAsk still
+// powers the live DE3 `depthExit` shadow on watch-positions/quote-items. Revive from git if ever needed.
 
-/* depthDays(series, level, opts) → per-day flow-beyond + clear counts, or null when no window data.
- *   { perDay:[{key, flow, clears}], nDays, clearedDays, clearFrac, recentDays, recentClears, recentFrac }
- * A day "clears" when flow ≥ competition×qty (qty>0); with qty→0 it degenerates to flow>0 — "a bucket
- * beyond the level actually traded" — which IS reachedDays/touchedDays (the pinned subsumption proof:
- * the reach count is this model's zero-size limit). `side` selects ask (default) vs the low-side mirror. */
-// @provisional-api: PLAN-DEPTH-EXIT DE1 — the per-day depth read consumed by DE2 (read-window-range --depth)
-// and DE3 (watch-positions held-lot line + suggestions.jsonl shadow fields), the tracked next surfaces.
-export function depthDays(series, level, { qty = 0, competition = DEPTH_COMPETITION_MULT, side = 'ask', wStart, wEnd, nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
-  if (level == null) return null;
-  const scored = windowBuckets(series, { nights, wStart, wEnd, now });
-  if (!scored.length) return null;
-  const need = competition * qty;
-  const perDay = scored.map(([key, r]) => {
-    const flow = flowBeyond(side === 'bid' ? r.lo : r.hi, level, side);
-    return { key, flow, clears: qty > 0 ? flow >= need : flow > 0 };
-  });
-  const nDays = perDay.length;
-  const clearedDays = perDay.filter(d => d.clears).length;
-  const recent = perDay.slice(-recentN);
-  const recentClears = recent.filter(d => d.clears).length;
-  return {
-    perDay, nDays, clearedDays, clearFrac: clearedDays / nDays,
-    recentDays: recent.length, recentClears,
-    recentFrac: recent.length ? recentClears / recent.length : null,
-  };
-}
-
-/* clearableLevel — the ONE side-generic engine behind clearableAsk (DE1) and clearableBid (DE6).
+/* clearableLevel — the ONE side-generic engine behind clearableAsk (DE1); the 'bid' path (DE6) is retained
+   for symmetry/revival but has no live caller after chunk-1's clearableBid removal.
  *   ask side: candidate levels = distinct hi-bucket prices scanned HIGH→LOW; flow-beyond = at/ABOVE.
  *   bid side: distinct lo-bucket prices scanned LOW→HIGH; flow-beyond = at/BELOW (instasell flow).
  * clearFrac is monotone toward the flow (non-increasing in the ask / non-decreasing in the bid), so
@@ -742,16 +716,9 @@ function clearableLevel(series, side, { qty, competition = DEPTH_COMPETITION_MUL
 // DE3 (watch-positions line/shadow log); F1 (DE4) later promotes it into estimatePair's held-lot sell.
 export function clearableAsk(series, opts = {}) { return clearableLevel(series, 'ask', opts); }
 
-/* clearableBid(series, opts) → the DE6 low-side mirror: the LOWEST bid P whose instasell flow at/
- * BELOW it clears competition×qty on ≥ targetFrac of days (≥ minBuckets support) — "how deep can I
- * bid and still get filled". Same subsumption proof (qty→0 ≡ touchedDays — depthDays side:'bid'),
- * same structural mirage guard (a thin book's clearableBid collapses UP toward where flow trades,
- * never below it), same floor (never below the observed data — a real bucket price). With
- * clearableAsk this is the TWO-SIDED size-aware band: the honest version of the asym deep-bid →
- * high-ask shape, priced off real depth instead of quantiles. Inform-only; rank effect is DE7. */
-// @provisional-api: PLAN-DEPTH-EXIT DE6 — consumed by DE2's --depth inspector (both edges) and the
-// DE3-era held-lot/quote surfaces; DE7 (F1-gated) later promotes the two-sided band into screen rank.
-export function clearableBid(series, opts = {}) { return clearableLevel(series, 'bid', opts); }
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1 (2026-07-22): `clearableBid` (DE6 low-side mirror) was REMOVED
+// (narrow removal — the low-side depth inspector had no live consumer). `clearableAsk` above survives.
+// Revive from git (`clearableLevel(series, 'bid', opts)` — the engine's bid path is intact) if needed.
 
 // --- pressure-driven reachable band (PLAN-DEPTH-EXIT Extension A, PB1) --------------------------
 // THE GAP the depth model left open (the Soul-rune 394 problem): clearableAsk reads 1h bucket
@@ -1113,96 +1080,10 @@ export function diurnalPhase(profile, { now = new Date() } = {}) {
   return { phase, hoursToPeakClose: null, hoursToNextPeak, hoursSinceClose, startH, endH };
 }
 
-// --- per-hour demand-cycle classifier (PLAN-DEPTH-EXIT Extension B, DC1) -----------------------
-// Pressure is not static — it CYCLES by hour (Soul rune ran 1.26–2.49× across the day; sell-heavy
-// commodities trough below 1). hourlyPressure exposes that cycle; demandRegime classifies the item
-// and names the timing windows. Two payoffs the pooled-window pressure hides: (1) TIMING — the
-// high-buy-pressure hours are the SELL window, the sell-pressure hours are the BUY window (the
-// demand-side complement to hourProfile's PRICE-shape diurnal read); (2) a flip-SIDE classifier —
-// sell-heavy = dip-buy flips, buy-heavy = sell-into-demand/accumulation (DC3's inform column).
-//
-// THE AGGREGATION RULE (the design correction, Ben 2026-07-15): per-hour pressure is the ratio of
-// per-hour volume AGGREGATES (the MEDIAN across days of each hour's bucket volume), NOT the median
-// of per-day RATIOS — a zero-volume hour on some day would otherwise divide by zero and a single
-// noisy day would swing the ratio. hourProfile ALREADY computes exactly those per-hour median
-// volumes (its hours[].volHi/volLo), so hourlyPressure reuses them + demandPressure (PB1) — one
-// vocabulary, no re-bucketing. Per-cell reliability (demandPressure's volume floor) handles thin
-// hours: a handful of units reads reliability ~0, so the regime label degrades honestly.
-// n≈0 — the per-hour median is a ~14-day sample per cell; the regime label is a LEAN, not a law,
-// and a demand-window is NEVER a guaranteed fill time (rule 4). All thresholds are placeholders.
-const PRESSURE_REGIME_S   = 0.2;   // |ln pressure| below this ⇒ 'balanced' (ratio within ~0.82–1.22); PLACEHOLDER
-const DEMAND_CLUSTER_FRAC = 0.34;  // an hour within this fraction of the per-hour s-amplitude of the extreme joins the window (mirrors DIP_CLUSTER_FRAC)
-
-/* hourlyPressure(series, opts) → per-local-hour demand-balance track, or null (too thin to profile).
- *   [{ hour, pressure, s, reliability, medVolHi, medVolLo, n }]  (hours with data, ascending)
- * pressure/s/reliability come from demandPressure({medVolHi, medVolLo}) off hourProfile's per-hour
- * MEDIAN volumes (the aggregate-then-ratio rule above); null pressure on an hour whose sell side never
- * traded. REUSES hourProfile — same hour buckets, de-trend machinery, and MIN_DAYS degrade. */
-// @provisional-api: PLAN-DEPTH-EXIT Extension B (DC1) — consumed by demandRegime below + DC2's
-// read-window-range --pressure per-hour track and DC3's scan flip-side inform column.
-export function hourlyPressure(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
-  const prof = hourProfile(series, { nights, now, recentN });
-  if (!prof) return null;
-  return prof.hours.map(h => {
-    const dp = demandPressure({ medVolHi: h.volHi, medVolLo: h.volLo });
-    return {
-      hour: h.h,
-      pressure: dp ? dp.ratio : null, s: dp ? dp.s : null,
-      reliability: dp ? dp.reliability : 0,
-      medVolHi: h.volHi, medVolLo: h.volLo, n: h.n,
-    };
-  });
-}
-
-// Grow a circular-contiguous hour window out from the pressure extreme, but ONLY when that extreme
-// hour genuinely crosses into the regime the window names (a sell window needs a buy-heavy peak; a
-// buy window needs a sell-heavy trough) — so an all-buy-heavy item reports a SELL window and NO buy
-// window (there is no dip-buy hour), and vice versa. Reuses spanOf for the readable "HH–HH" label.
-function pressureWindow(track, side) {
-  const rel = track.filter(t => t.s != null && t.reliability > 0);
-  if (rel.length < 2) return null;
-  const ext = side === 'sell' ? rel.reduce((a, b) => b.s > a.s ? b : a) : rel.reduce((a, b) => b.s < a.s ? b : a);
-  // a genuine window only when the extreme hour actually crosses into the regime (else it's noise)
-  if (side === 'sell' ? ext.s < PRESSURE_REGIME_S : ext.s > -PRESSURE_REGIME_S) return null;
-  const sVals = rel.map(t => t.s), amp = Math.max(...sVals) - Math.min(...sVals);
-  const within = amp > 0 ? DEMAND_CLUSTER_FRAC * amp : 0;
-  const has = new Map(rel.map(t => [t.hour, t]));
-  const inC = t => side === 'sell' ? t.s >= ext.s - within : t.s <= ext.s + within;
-  const set = new Set([ext.hour]);
-  for (const dir of [1, -1]) for (let step = 1; step < 24; step++) {
-    const h = (ext.hour + dir * step + 24) % 24, t = has.get(h);
-    if (!t || !inC(t)) break;
-    set.add(h);
-  }
-  return { ...spanOf(set), hours: [...set].sort((a, b) => a - b), atHour: ext.hour, pressure: Math.exp(ext.s) };
-}
-
-/* demandRegime(series, opts) → { regime, pooled, s, reliability, buyWindow, sellWindow, hours } | null.
- *   regime      — 'buy-heavy' | 'sell-heavy' | 'balanced' off the POOLED whole-window pressure.
- *   pooled/s    — the pooled ratio + its ln (the classification basis).
- *   sellWindow  — the peak-buy-pressure hours (buyers hungry → SELL here); null if no buy-heavy peak.
- *   buyWindow   — the trough (sell-pressure) hours (sellers dump → BUY here); null if no sell-heavy trough.
- *   hours       — the full hourlyPressure track (for the caller's per-hour render).
- * DIVERGENCE FROM THE PLAN'S DC1 ONE-LINER (surfaced, resolved per Extension B's model): the plan bullet
- * said an all-buy-heavy item has "no sell window", but Extension B's model is "high-buy-pressure hours ARE
- * the sell window" — so an all-buy-heavy item HAS a sell window (its best hours to sell) and lacks a BUY
- * window (no genuine dip-buy hour). Implemented per the model; the fixtures assert that. */
-// @provisional-api: PLAN-DEPTH-EXIT Extension B (DC1) — consumed by DC2 (--pressure regime + window
-// labels) and DC3 (scan flip-side inform column). No rank/gate effect (DC3's rank half is F1-gated).
-export function demandRegime(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
-  const stats = windowStats(series, { nights, wStart: 0, wEnd: 0, now });
-  const pooled = stats ? demandPressure(stats) : null;
-  const hours = hourlyPressure(series, { nights, now, recentN });
-  if (!pooled && !hours) return null;
-  const regime = !pooled ? 'balanced'
-    : pooled.s >= PRESSURE_REGIME_S ? 'buy-heavy'
-    : pooled.s <= -PRESSURE_REGIME_S ? 'sell-heavy' : 'balanced';
-  return {
-    regime,
-    pooled: pooled ? pooled.ratio : null, s: pooled ? pooled.s : null,
-    reliability: pooled ? pooled.reliability : 0,
-    sellWindow: hours ? pressureWindow(hours, 'sell') : null,
-    buyWindow: hours ? pressureWindow(hours, 'buy') : null,
-    hours,
-  };
-}
+// PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the Extension-B per-hour demand-CYCLE
+// classifier — `hourlyPressure` (DC1 per-hour track), `pressureWindow` (the buy/sell window grower),
+// `demandRegime` (DC1/DC3 regime + windows), and their PRESSURE_REGIME_S / DEMAND_CLUSTER_FRAC constants
+// — were REMOVED (narrow removal: these powered only the --pressure DC2 inspector block + the scan's
+// DC3 inform annotation, never a gate/rank/screen.json). `demandPressure` (PB1) + `reachableBand`
+// (Extension A) SURVIVE above (they are the pressure sell-model's price source). `spanOf` is kept — it's
+// shared with hourProfile's dip/peak windows. Revive the cycle read from git history if ever needed.

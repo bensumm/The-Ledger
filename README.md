@@ -105,25 +105,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `⏳ softBuy` note on held lots + bare quotes, mirroring the digest soft-buy column's cell format so both
   surfaces reconcile; inform-only, n≈0, null profile ⇒ no note) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
   deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
-  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `depthDays`/`clearableAsk`
+  for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `clearableAsk`
   (PLAN-DEPTH-EXIT DE1 2026-07-15 — the percentile-DEPTH exit: reconstructs a per-day price→volume
   distribution from the 1h bucket point masses and answers "what can I actually BOOK at?" for a given lot
-  size; the reach count is its qty→0 limit, and a thin book collapses to a null-with-`reason`; `@provisional-api`
-  until DE2/DE3 consume it, the `DEPTH_*` constants module-internal placeholders) + `clearableBid`
-  (DE6 2026-07-15 — the low-side mirror off the same side-generic engine: the LOWEST bid whose instasell
-  flow at/below it fills `competition×qty` on ≥`targetFrac` of days — with `clearableAsk` the TWO-SIDED
-  size-aware band; same collapse-with-reason guard, qty→0 ≡ `touchedDays`) + `demandPressure`/`reachableBand`
+  size; the reach count is its qty→0 limit, and a thin book collapses to a null-with-`reason`; feeds the
+  `--depth` "BOOK AT ≤X" line + the LIVE DE3 `depthExit` shadow on watch/quote held lots; the `DEPTH_*`
+  constants module-internal placeholders. **`depthDays`/`clearableBid` were REMOVED 2026-07-22,
+  PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable**) + `demandPressure`/`reachableBand`
   (PLAN-DEPTH-EXIT Extension A PB1 2026-07-15 — the pressure-driven reachable band: `s=ln(medVolHi/medVolLo)`
   sets each side's headroom `base ± band·φ(±s)·reliability` off the recent central daily level (RC1 reused)
   + the daily-high/low IQR; a thin-VOLUME book collapses to the smoothed center via the sample-reliability
   guard (no peak-cap); the `PRESSURE_*` constants are exported n≈0 placeholders and the Soul-rune/sell-heavy
-  reasonableness pins live in the test; `@provisional-api` until DE3/PB2 consume it) + `hourlyPressure`/`demandRegime`
-  (PLAN-DEPTH-EXIT Extension B DC1 2026-07-15 — the per-hour demand-cycle classifier: `hourlyPressure`
-  reuses `hourProfile`'s per-hour MEDIAN volumes + `demandPressure` so per-hour pressure is the ratio of
-  volume AGGREGATES not median-of-ratios (no divide-by-zero on a dead hour); `demandRegime` → `{ regime:
-  buy-heavy|sell-heavy|balanced, pooled, buyWindow, sellWindow, hours }` where the sell window is the
-  peak-buy-pressure hours and the buy window is the sell-pressure trough; `@provisional-api` until DC2/DC3
-  consume it) + **`trajectoryRead`** (2026-07-21, the fang under-read fix — the shared multi-day SHAPE read
+  reasonableness pins live in the test; it is the `--est-sell pressure` sell-model's price source. **The
+  Extension-B `hourlyPressure`/`demandRegime` per-hour demand-cycle classifier was REMOVED 2026-07-22,
+  PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable**) + **`trajectoryRead`** (2026-07-21, the fang under-read fix — the shared multi-day SHAPE read
   over a `windowStats().days` series: classifies rising/falling/oscillating/based/elevated + the window
   floor/ceiling (with the day each printed) + where a `liveRef` sits between them; HEURISTIC/inform-only,
   never gates; `read-window-range.mjs`'s `read:` line AND `quote-items.mjs`'s `⌁ read:` note on every quote
@@ -364,11 +359,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (watch, quote `--positions`) AND DISCOVERY (screen survivors, quote per-item): `reachable` rides every row
   with an in-hand 1h series; `depthExit` rides only held rows (real qty in hand — the DE7 fetch-budget rule
   keeps depth off the screen). All three shadow shapes come from ONE reshaper home
-  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). A screen survivor row also carries a
-  lean **`demandRegime`** `{ regime, pooled, sellWin?, buyWin? }` (PLAN-DEPTH-EXIT DC3 inform half,
-  2026-07-15 — the dip-buy-vs-sell-into-demand flip-side axis off `js/windowread.mjs demandRegime`, surfaced
-  as an `◈ demand` inform note for a clearly-tilted survivor; INFORM-ONLY, never a rank/gate/grade/`screen.json`
-  input — the routing/rank half is F1-gated). A screen row also carries
+  (`suggestlog.mjs reachableShadow`/`depthExitShadow`/`asymShadow`). _(The screen's lean `demandRegime`
+  `◈ demand` shadow/note was REMOVED 2026-07-22, PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable.)_ A screen row also carries
   the **`expGpDay`**/**`expGpDayLegacy`** shadow pair (PLAN-CAPITAL-THROUGHPUT, 2026-07-14): the ACTIVE
   capital-aware attention-floor throughput (`min(limit, deployablePool/mid)×6 × net`) beside the legacy
   capital-blind value, so `--stats`/F1 can diff old-vs-new surfacing (`--throughput legacy` restores the
@@ -595,15 +587,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `--json`→stdout convention, NOT `writeLastReport` — this command builds no render.mjs sections);
     default markdown stdout is byte-identical when absent (the `DAILY TRAJECTORY`/`read:`/`diurnal:`
     lines are console-only — `--json` output is unchanged). `--profile` = the hour-of-day diurnal dip/peak read
-    + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector,
-    BOTH edges since DE6: per-day instabuy flow at/above the scored `--ask` + the `clearableAsk`
-    "BOOK AT ≤ X", and per-day instasell flow at/below a scored `--bid` + the `clearableBid`
-    "CATCH AT ≥ X" (the two-sided size-aware band), with the collapse REASON surfaced on a thin book —
-    inform-only, reads `js/windowread.mjs` `depthDays`/`clearableAsk`/`clearableBid`; `--pressure` = the
+    + derived stale-guarded bid/ask; `--depth <qty>` = the PLAN-DEPTH-EXIT DE2 percentile-depth inspector —
+    the `clearableAsk` "BOOK AT ≤ X" (the highest ask the lot clears on ≥targetFrac of days), with the
+    collapse REASON surfaced on a thin book — inform-only, reads `js/windowread.mjs` `clearableAsk`. _(The
+    per-day `depthDays` flow tables + the low-side `clearableBid` "CATCH AT ≥X" were REMOVED 2026-07-22,
+    PLAN-REMOVE-DEPTH-PRESSURE-READS — git-revivable.)_ `--pressure` = the
     PB2 demand-balance read: `pressure` (medVolHi/medVolLo) + regime label + `reachableBid`/`reachableAsk`
-    (`base ± band·φ` inline) + reliability, off `demandPressure`/`reachableBand`, inform-only n≈0; DC2
-    adds the per-hour demand cycle + the SELL/BUY timing windows (`demandRegime`) + a cross-check vs the
-    price dip/peak windows — `✓ demand-confirmed` / `✗ diverge`. PLAN-ESTIMATOR-POSTURE AC8: a scored
+    (`base ± band·φ` inline) + reliability, off `demandPressure`/`reachableBand`, inform-only n≈0. _(The DC2
+    per-hour demand cycle + SELL/BUY window block (`demandRegime`) was REMOVED 2026-07-22, same removal.)_
+    PLAN-ESTIMATOR-POSTURE AC8: a scored
     `--bid`/`--ask`/`--exit` now also prints a **`fold:` data-point line** — the SHARED `estimatePair`
     reach-fold on the in-hand data (`best-case X → reach-folded Y · net at folded pair`), zero new fetch,
     inform-only; `--niche band|churn|scalp` (default band) picks the spec (churn inherits the AC5/AC6

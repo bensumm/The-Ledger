@@ -58,7 +58,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, depthDays, clearableAsk, clearableBid, demandPressure, reachableBand, demandRegime, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth model (DE6 added the clearableBid mirror); PB2: --pressure reads the demand-balance band; DC2: --pressure surfaces the per-hour demand cycle + windows; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home
+import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
@@ -444,32 +444,13 @@ for (const want of positionals) {
       result.fold = { niche: NICHE, estBuy: est.estBuy, estSell: est.estSell, estNet: est.estNet, be: est.be, confidence: estConfLean(est) };
     }
   }
-  // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: percentile-DEPTH read, BOTH edges (DE6 added the low
-  // side). Per-day instabuy flow at/above the scored ask (does it clear qty×competition?), then
-  // clearableAsk — the highest ask <qty> can actually book — and clearableBid — the deepest bid that
-  // still fills off the instasell flow (the two-sided size-aware band). A thin book collapses to a
-  // null WITH its reason (never a silent degrade — the surfacing rule).
+  // DE2 (PLAN-DEPTH-EXIT) — --depth <qty>: the percentile-DEPTH "BOOK AT ≤ X" read (clearableAsk — the
+  // highest ask <qty> can actually book at ≥ targetFrac of days). A thin book collapses to a null WITH its
+  // reason (never a silent degrade — the surfacing rule). PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 1
+  // (2026-07-22): the per-day depthDays flow tables (ask + bid) and the low-side clearableBid "CATCH AT ≥ X"
+  // line were REMOVED (narrow removal — inspector-only DE1/DE6 reads); clearableAsk survives (live DE3 shadow).
   if (DEPTH_QTY != null) {
     result.depth = { qty: DEPTH_QTY };
-    const scoreAsk = ASK ?? EXIT ?? null;   // reuse a hand-given --ask/--exit for the per-day flow table
-    if (scoreAsk != null) {
-      const dd = depthDays(series, scoreAsk, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
-      if (dd) {
-        log(`  --depth ${fmt(DEPTH_QTY)}u @ ask ${fmt(scoreAsk)} — per-day instabuy flow at/above the ask:`);
-        for (const d of dd.perDay) log(`    ${d.key}  flow ${fmt(d.flow)} u  ${d.clears ? '✓ clears' : '· short'}`);
-        log(`    → clears the ${fmt(DEPTH_QTY)}u lot on ${dd.clearedDays}/${dd.nDays} day(s)${dd.recentFrac != null ? ` (recent-${RECENT_NIGHTS} ${dd.recentClears}/${dd.recentDays})` : ''}`);
-        result.depth.askFlow = { scoreAsk, clearedDays: dd.clearedDays, nDays: dd.nDays, recentClears: dd.recentClears, recentDays: dd.recentDays };
-      }
-    }
-    if (BID != null) {   // DE6 — the low-side per-day flow table for a scored --bid
-      const db = depthDays(series, BID, { qty: DEPTH_QTY, side: 'bid', wStart: W_START, wEnd: W_END, nights: NIGHTS });
-      if (db) {
-        log(`  --depth ${fmt(DEPTH_QTY)}u @ bid ${fmt(BID)} — per-day instasell flow at/below the bid:`);
-        for (const d of db.perDay) log(`    ${d.key}  flow ${fmt(d.flow)} u  ${d.clears ? '✓ fills' : '· short'}`);
-        log(`    → fills the ${fmt(DEPTH_QTY)}u lot on ${db.clearedDays}/${db.nDays} day(s)${db.recentFrac != null ? ` (recent-${RECENT_NIGHTS} ${db.recentClears}/${db.recentDays})` : ''}`);
-        result.depth.bidFlow = { bid: BID, clearedDays: db.clearedDays, nDays: db.nDays, recentClears: db.recentClears, recentDays: db.recentDays };
-      }
-    }
     const ca = clearableAsk(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
     const compTxt = `×${ca.competition} comp · ≥${Math.round(ca.targetFrac * 100)}% of ${ca.nDays}d · ≥${ca.minBuckets} buckets`;
     if (ca.price != null)
@@ -479,15 +460,6 @@ for (const want of positionals) {
     else
       log(`  --depth ${fmt(DEPTH_QTY)}u → no read (${ca.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'}); reach fallback`);
     result.depth.clearableAsk = { price: ca.price, clearFrac: ca.clearFrac, reason: ca.reason, competition: ca.competition };
-    // DE6 — the mirror edge: how deep a bid still fills off the instasell flow.
-    const cb = clearableBid(series, { qty: DEPTH_QTY, wStart: W_START, wEnd: W_END, nights: NIGHTS });
-    if (cb.price != null)
-      log(`  --depth ${fmt(DEPTH_QTY)}u → CATCH AT ≥ ${fmt(cb.price)}  (a bid this deep fills ${Math.round(cb.clearFrac * 100)}% of days at this size · ×${cb.competition} comp)`);
-    else if (cb.reason === 'insufficient-depth')
-      log(`  --depth ${fmt(DEPTH_QTY)}u → NO clearable bid — the instasell flow can't fill ${fmt(cb.need)}u (${fmt(DEPTH_QTY)}×${cb.competition}) at any level in this window; bid to live instead`);
-    else
-      log(`  --depth ${fmt(DEPTH_QTY)}u → no bid-side read (${cb.reason === 'thin-history' ? 'too little window history' : 'no traded window buckets'})`);
-    result.depth.clearableBid = { price: cb.price, clearFrac: cb.clearFrac, reason: cb.reason, competition: cb.competition };
     log(`    (depth estimated from 1h bucket AVERAGES + volumes — NOT an order book; competition ×${ca.competition} is a PLACEHOLDER, n≈0 — inform-only)`);
   }
   // PB2 (PLAN-DEPTH-EXIT Extension A) — --pressure: the demand-balance reachable band. pressure =
@@ -513,28 +485,11 @@ for (const want of positionals) {
       } else {
         log(`    (too few scored days to form a band — need ≥5)`);
       }
-      // DC2 (PLAN-DEPTH-EXIT Extension B) — the per-hour demand CYCLE + the buy/sell timing windows,
-      // cross-checked against the PRICE-shape diurnal read (hourProfile). The demand read says WHEN
-      // buyers are hungry / sellers dump; the price read says when price peaks/dips. When they AGREE the
-      // timing is demand-CONFIRMED; a divergence is a lean, not a contradiction (both are small-sample).
-      const dReg = demandRegime(series, { nights: NIGHTS });
-      if (dReg && dReg.hours) {
-        const cell = t => t.pressure == null ? `${pad2(t.hour)}:—` : `${pad2(t.hour)}:${t.pressure.toFixed(1)}${t.reliability < 0.5 ? '?' : ''}`;
-        log(`    per-hour pressure (local h · ? = thin): ${dReg.hours.map(cell).join(' ')}`);
-        const winTxt = w => w ? `${pad2(w.startH)}:00–${pad2(w.endH)}:00 (peak ${pad2(w.atHour)}h ${w.pressure.toFixed(2)}×)` : 'none';
-        log(`    SELL window (buyers hungry): ${winTxt(dReg.sellWindow)} · BUY window (sellers dump): ${winTxt(dReg.buyWindow)}`);
-        // cross-check the demand windows against the PRICE dip/peak windows (deriveDiurnalRange).
-        const prof = hourProfile(series, { nights: NIGHTS });
-        const dRange = prof ? deriveDiurnalRange(prof, {}) : null;
-        if (dRange) {
-          const expand = (a, b) => { const s = new Set(); if (a === b) { for (let h = 0; h < 24; h++) s.add(h); return s; } for (let h = a; h !== b; h = (h + 1) % 24) s.add(h); return s; };
-          const agrees = (pw, dw) => (!pw || !dw) ? null : dw.hours.some(h => expand(pw.startH, pw.endH).has(h));
-          const sellAgree = agrees(dRange.peakWindow, dReg.sellWindow);
-          const buyAgree = agrees(dRange.dipWindow, dReg.buyWindow);
-          const mark = a => a == null ? '(one side absent)' : a ? '✓ demand-confirmed' : '✗ diverge (lean only)';
-          log(`    cross-check vs price shape: SELL — price peak ${pad2(dRange.peakWindow.startH)}–${pad2(dRange.peakWindow.endH)}h ${mark(sellAgree)} · BUY — price dip ${pad2(dRange.dipWindow.startH)}–${pad2(dRange.dipWindow.endH)}h ${mark(buyAgree)}`);
-        }
-      }
+      // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the DC2 per-hour demand-CYCLE block
+      // (demandRegime — per-hour pressure track + buy/sell windows + the price-shape cross-check) was
+      // REMOVED (narrow removal — Extension-B DC1/DC3 demand-cycle reads had no live decision consumer).
+      // The base demand-BALANCE ratio + the reachableBand (Extension A) above SURVIVE (they power the
+      // pressure sell-model). Revive demandRegime from git if the per-hour cycle read is wanted again.
       log(`    (pressure = medVolHi/medVolLo; φ slope + PRESSURE_* are PLACEHOLDERS, n≈0 — the reachable price is where price TRADED, not a verified fill · inform-only)`);
     }
   }

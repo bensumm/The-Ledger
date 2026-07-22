@@ -26,14 +26,14 @@ window, no recency split.
 | `reachMargin` (2026-07-20; R4/R4b slope+wired) | cushion-over/under-level TREND (`projectTrajectory` least-squares SLOPE of the cushion over the last 7 days — R4, was mean-of-halves) + today's live pace vs the reaching-day median | 1h, 7-day recent window, `projectTrajectory` slope | folded automatically into `askExitRead` whenever an ask is scored | ✅ slope-based (R4 fixed the mean-of-halves) | `askExitRead` → quote-items (`quote` + `--positions`) + `read-window-range --ask/--bid`; **now ALSO the digest `trend` column (R4b — the ask-side cushion trend beside reach ✓/✗)** |
 | `asymPair` | day-level deep-bid (p25 quantile) / high-reach-ask (p80 quantile) pair | 1h, ~14d | quote (`asym` note), screen `--asym` (opt-in, unpublished) | ❌ whole-window quantile | quote notes, `asymEstimate` |
 | `windowClear`/`windowClearDiverges` | within-target-window (not whole-day) reach fraction + volume-pool absorption check | 1h, re-bucketed to the target window | held big-ticket lots (`--positions`), `--ask` reads | ❌ whole-window reach inside the narrower window | quote-items `windowExit` note |
-| `hourProfile` | per-local-hour dip/peak SHAPE (de-trended by day) + trend-dominates flag | 1h, ~14d full-window shape / recent-3 LEVEL | diurnal note, digest soft-buy, forecast anchor | ⚠️ shape=full-window, level=recent-3 | `deriveDiurnalRange`, `softBuyRead`, `diurnalPhase`, `demandRegime`, `forecast.diurnalForecast`, digest |
+| `hourProfile` | per-local-hour dip/peak SHAPE (de-trended by day) + trend-dominates flag | 1h, ~14d full-window shape / recent-3 LEVEL | diurnal note, digest soft-buy, forecast anchor | ⚠️ shape=full-window, level=recent-3 | `deriveDiurnalRange`, `softBuyRead`, `diurnalPhase`, `forecast.diurnalForecast`, digest |
 | `deriveDiurnalRange` | bid=dip level (live-guarded), ask=peak level | derived from `hourProfile` | quote diurnal note, `--positions` | inherits `hourProfile` | quote notes, `rebidAdvice` |
 | `softBuyRead`/`digestSoftBuy` | is live at/near the diurnal dip floor right now | derived from `hourProfile` | held-lot ADD timing (quote), digest buy column | inherits `hourProfile` | quote notes, digest |
 | `diurnalPhase` | in-peak / pre-peak / post-peak vs the peak window | derived from `hourProfile.peak` | stdout-only timing token (⏲) | n/a (clock vs window) | quote notes, digest `phase`/verdict rule 4 |
-| `demandRegime`/`hourlyPressure` | per-hour buy/sell PRESSURE cycle (volume-ratio), sell/buy windows | 1h, ~14d | `--pressure` inspector only | ❌ | `read-window-range --pressure`, `reachableBand` |
+| ~~`demandRegime`/`hourlyPressure`~~ (REMOVED 2026-07-22) | per-hour buy/sell PRESSURE cycle — DELETED (PLAN-REMOVE-DEPTH-PRESSURE-READS, git-revivable); powered only `--pressure`'s DC2 block + scan DC3 note | — | — | — |
 | `reachableBand` (PB1) | pressure-driven two-sided reachable bid/ask (base = recent-3 median, band = recent-7 IQR) | 1h, recent-3/7 | `--est-sell pressure` TRIAL only | ✅ (base+band both recency-windowed) | pressure sell-model, `read-window-range --pressure` |
-| `demandPressure` | buy/sell volume ratio + reliability | 1h aggregate | feeds `reachableBand`/`hourlyPressure` | ❌ | as above |
-| `depthDays`/`clearableAsk`/`clearableBid` (DE1/DE6) | per-day flow-beyond-a-level (bucket point masses), the highest/lowest level that clears `competition×qty` on ≥75% of days | 1h buckets, ~14d | `--depth` inspector (console only) | ❌ whole-window clear fraction (has a `recentFrac` field but unused downstream) | `read-window-range --depth` only — not in the main pricing path |
+| `demandPressure` | buy/sell volume ratio + reliability | 1h aggregate | feeds `reachableBand` (survives) | ❌ | `reachableBand` / the pressure sell-model |
+| `clearableAsk` (DE1; `depthDays`/`clearableBid` REMOVED 2026-07-22) | the highest ask that clears `competition×qty` on ≥75% of days | 1h buckets, ~14d | `--depth` "BOOK AT ≤X" + the LIVE DE3 `depthExit` shadow (watch/quote held lots) | ❌ whole-window clear fraction | `read-window-range --depth`, `watch-positions`/`quote-items` depthExit shadow |
 | `weekdayProfile` | per-weekday median amplitude % | 1h, ~28d | amplitude niche notes | ❌ | amplitude scan display |
 | `computeQuote` (row) | Quick (live) + Optimistic (robust 2h-band p10/p90 clamped to live) pair, momentum tell, pressure ratio, ask-headroom, bond math | live `/latest` + last 24×5m | every quote row | n/a (this IS the live basis) | everything |
 | `regimeDrift`/`regimeLabel` | 3-day median mid vs prior ~14-day median mid → flat/rising/falling | 6h archive, ~17d | every row (regime column) | ⚠️ ONE comparison (recent-3d vs prior-14d), no trend beyond that | gate/rank/screen exclusion, `momVerdict`, digest |
@@ -250,19 +250,20 @@ some of the five).
 
 ### Dead / never-promoted signals worth naming honestly
 
-- **`depthDays`/`clearableAsk`/`clearableBid`** (DE1/DE6) are fully-built, fixture-tested, and
-  power ONLY the manual `--depth` inspector on `read-window-range.mjs`. They were explicitly staged
-  to feed `estimatePair`'s held-lot sell (DE4) and never graduated. Not dead code (real, working,
-  documented), but currently **inert relative to the main decision surfaces** — nobody reading a
-  scan or a positions review benefits from this work today. Either graduate DE4 or say clearly in
-  `PLAN.md` that depth-based pricing was tried and shelved (right now it reads as "still coming"
-  indefinitely).
+- **`depthDays`/`clearableBid`** (DE1/DE6) — **REMOVED 2026-07-22** (PLAN-REMOVE-DEPTH-PRESSURE-READS,
+  narrow removal, Ben's call; git-revivable). They were fully-built + fixture-tested but powered ONLY the
+  manual `--depth` inspector's per-day flow tables + the low-side "CATCH AT ≥X" line, never a decision
+  surface. **`clearableAsk` SURVIVES** — correcting this section's earlier "inspector-only" claim: it feeds
+  the LIVE DE3 `depthExit` shadow on `watch-positions.mjs`/`quote-items.mjs` (a Gate-B head-to-head
+  challenger), so it was kept; the `--depth` inspector's "BOOK AT ≤X" clearableAsk line stays.
 - **`weekdayProfile`** is genuinely new (no prior day-of-week tooling existed) but is amplitude-mode
   only and n≈3-4/cell — correctly labeled as a lean, but worth flagging that it's the thinnest
   sample of any signal in the inventory that still prints a number.
-- **`demandRegime`/`hourlyPressure`** are well-built (Extension B) but console-inspector-only
-  (`--pressure`); `reachableBand` is their only production consumer, and only under the
-  never-published pressure trial. Same "inert relative to main surfaces" note as depth.
+- **`demandRegime`/`hourlyPressure`** (Extension B DC1/DC3) — **REMOVED 2026-07-22** (same removal;
+  git-revivable). They powered only the `--pressure` per-hour demand-cycle inspector block + the scan's
+  DC3 inform note/shadow, never a gate/rank. **`demandPressure` + `reachableBand` (Extension A) SURVIVE** —
+  they are the price source for the `--est-sell pressure` sell-model + the Gate-B accrual marker, retired
+  later (if ever) via `PLAN-REACHABILITY-CONSOLIDATION` RC1's flag, not this cleanup.
 
 ---
 
