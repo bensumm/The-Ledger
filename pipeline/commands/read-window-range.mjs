@@ -61,6 +61,7 @@ import { parseArgs, parseGp } from '../lib/cli.mjs';
 import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
+import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL folded into the floor/ceiling note (off the in-hand profile+days — no fetch)
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
@@ -221,7 +222,11 @@ for (const want of positionals) {
       // livePos fold into the fc note below; the oscillation read rides fc.oscillating. One combined note.
       const tr = trajectoryRead(tdays, { liveRef });
       const fc = floorCeilingTrack(tdays, { todayKey: todayKeyT });
-      const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling } } : {});
+      // Chunk 5: the drift-adjusted exit level off a profile computed from the SAME 1h series already in hand
+      // (zero new fetch) + the day series; degrades to null (clause omitted) on a thin/degraded projection.
+      const trajProf = hourProfile(series, { nights: NIGHTS });
+      const trajDae = trajProf ? driftExitFrom(trajProf, tdays, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null }) : null;
+      const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling }, drift: trajDae } : { drift: trajDae });
       if (fcText) log(`  ${fcText}`);
       // forward projection: fc.floor/fc.ceiling ARE projectTrajectory results (floorCeilingTrack wraps the
       // primitive), so their `.projected` fields already hold the next-day values — read them directly and
@@ -310,7 +315,10 @@ for (const want of positionals) {
     const pad2fc = n => String(n).padStart(2, '0');
     const nowFc = new Date();
     const fc = floorCeilingTrack(scored, { todayKey: `${nowFc.getFullYear()}-${pad2fc(nowFc.getMonth() + 1)}-${pad2fc(nowFc.getDate())}` });
-    const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling } } : {});
+    // Chunk 5: the drift-adjusted exit level, reusing the profMargin hourProfile already computed this pass
+    // (zero new fetch) + the scored day series; null (clause omitted) when the projection degrades.
+    const dailyDae = profMargin ? driftExitFrom(profMargin, scored, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null }) : null;
+    const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling }, drift: dailyDae } : { drift: dailyDae });
     if (fcText) log(`    ${fcText}`);
     // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.
     if (A.profile === undefined && profMargin) {

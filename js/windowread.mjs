@@ -363,8 +363,14 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
  * R6 (PLAN-SIGNAL-RECENCY): this note now ALSO carries what trajectoryRead's retired `shape` line used to —
  * the `oscillating` qualifier on a ranging item (fc.oscillating) + the absolute 2-week band and where the
  * live price sits in it (`live` opt = { ref, pos, floor, ceiling } from trajectoryRead), so ONE combined
- * note per pass replaces the two that could visibly disagree. `live` absent ⇒ the band clause is omitted. */
-export function formatFloorCeiling(fc, fmt, { label = '', live = null } = {}) {
+ * note per pass replaces the two that could visibly disagree. `live` absent ⇒ the band clause is omitted.
+ * PLAN-OSCILLATION-CYCLE Chunk 5: an OPTIONAL `drift` opt = a driftAdjustedExit() result (js/forecast.mjs,
+ * computed BY THE CALLER off its in-hand hourProfile + days — windowread never imports forecast, the
+ * one-way arrow) folds the drift-adjusted exit LEVEL beside every price suggestion. It is a projected
+ * LEVEL (the drift-adjusted diurnal peak/trough over the hold horizon), NEVER a rising/falling verdict —
+ * direction is only ever the sign of the arithmetic upstream, never a word here. `drift` absent / null
+ * levels ⇒ the clause is omitted (honest degrade, like the band clause). INFORM-only, n≈0 — never a gate. */
+export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = null } = {}) {
   if (!fc) return null;
   const dirStep = t => t.dir == null ? 'n/a'
     : `${t.dir}${t.step == null ? '' : ` ${t.step >= 0 ? '+' : '−'}${fmt(Math.abs(t.step))}/d`}`;
@@ -383,6 +389,16 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null } = {}) {
   // shape line — nothing else computes livePos). Rendered only when a usable live band read was passed.
   if (live && live.pos && live.floor != null && live.ceiling != null)
     parts.push(`band ${fmt(live.floor)}→${fmt(live.ceiling)}${live.ref != null ? ` · live ${fmt(live.ref)} ${live.pos}` : ''}`);
+  // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL (projected diurnal peak/trough shifted by
+  // the multi-week floor/ceiling drift over the hold horizon). Levels ONLY — no direction word (the sign of
+  // the shift never surfaces as a rising/falling label — the corrected-mechanism ruling). Rendered only when
+  // the caller passed a drift result with at least one usable level (degrade otherwise).
+  if (drift && (drift.driftAdjustedPeak != null || drift.driftAdjustedTrough != null)) {
+    const hd = drift.holdHorizonDays != null ? drift.holdHorizonDays : '?';
+    const pk = drift.driftAdjustedPeak != null ? `~${fmt(Math.round(drift.driftAdjustedPeak))}` : '—';
+    const tr = drift.driftAdjustedTrough != null ? `~${fmt(Math.round(drift.driftAdjustedTrough))}` : '—';
+    parts.push(`drift-adj exit (~${hd}d hold): peak ${pk} / trough ${tr} (projected level${drift.confidence ? `, conf ${drift.confidence}` : ''}, n≈0 — inform, not a direction)`);
+  }
   return `${label ? label + ': ' : ''}floor/ceiling: ${parts.join(' · ')}  (heuristic, n≈0 — inform-only, never gates)`;
 }
 

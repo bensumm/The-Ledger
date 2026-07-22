@@ -165,7 +165,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `renderAmplitudeMode` and reused for the shadow-log, and TEMPERS the knife guard with `oscillationVsKnife`
   (a drift-riding oscillator is not a false knife → falls through to the margin gate). Pinned by
   `pipeline/test/oscillation-gate.test.mjs`. Chunk 6 REUSES `driftExitFrom` per-thesis (band/churn/scalp/value
-  drift-adjusted-exit INFORM notes — see `js/flip-niches.mjs`; console-only, no gate)),
+  drift-adjusted-exit INFORM notes — see `js/flip-niches.mjs`; console-only, no gate). Chunk 5 folds the
+  drift-adjusted exit LEVEL into the SHARED `formatFloorCeiling` note path (an optional `drift` opt — the
+  caller passes a pre-computed `driftAdjustedExit()` result off its in-hand prof+days, so windowread keeps
+  its one-way arrow) so it rides beside EVERY price suggestion (`quote-items.mjs` trajectory note,
+  `read-window-range.mjs`, and — APP-VISIBLE — `js/trends.js` `renderForecast`); a projected LEVEL never a
+  direction verdict, display-only, degrade-clean; **APP_VERSION-bumped** (reaches `js/trends.js`). Pinned by
+  `pipeline/test/oscillation-render.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;

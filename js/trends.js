@@ -4,10 +4,10 @@ import { tax, netMargin, netMarginQty, now, clamp } from './money-math.js';
 import { fmt, fmtP, pad2, fmtHour, sgn } from './money-format.js';
 import { svgLine, svgBars } from './charts-static.js';
 import { createChart } from './charts-interactive.js';                                  // CL: interactive chart (diurnal viz)
-import { hourProfile, deriveDiurnalRange } from './windowread.mjs';           // shared diurnal peak-timing math (same module the console uses)
+import { hourProfile, deriveDiurnalRange, windowStats } from './windowread.mjs';           // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5)
 import { reachValidator, floorValidator, trajectoryValidator } from './validate.mjs';   // TV: validator notes split across their viz (inform-only)
 import { termStructure } from './termstructure.mjs';                         // TV: durable multi-week floor/ceiling/typical-swing + trajectory shape (shared)
-import { diurnalForecast, fmtEta } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0)
+import { diurnalForecast, fmtEta, driftExitFrom } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0); driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL beside the forecast readout
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
@@ -378,7 +378,14 @@ function renderTermNote(ts, it){
    when ~?": next trough (bid) + next peak (ask) with eta/window/band, else a LOUD degrade reason
    (post-shock, live-band violation, thin/flat series). The chart plots the projected LOW curve (the
    "when does it get cheap" line) with the trough marked. Provisional (PF, n≈0) — the forecast caveat
-   is rendered here, WITH the band it qualifies (the validator-note split). */
+   is rendered here, WITH the band it qualifies (the validator-note split).
+   PLAN-OSCILLATION-CYCLE Chunk 5: this section ALSO renders the drift-adjusted exit LEVEL (the diurnal
+   peak/trough shifted by the multi-week floor/ceiling drift over a ~1.5d hold) beside the naive next-
+   trough/next-peak readout — the app-visible half of the cross-cutting "drift-adjusted exit on every
+   price suggestion" note. REUSES driftExitFrom off the SAME prof + a windowStats().days series read from
+   the already-fetched profSeries (zero new fetch, forks nothing). A projected LEVEL, never a direction
+   verdict; display-only (never a gate/verdict/price input); degrades to omission when the projection is
+   unavailable. This is why Chunk 5 bumps APP_VERSION (like R2/R3 — it reaches this rendering). */
 function renderForecast(profSeries, qrow, it, showAnalysis){
   const el=document.getElementById('trForecast'); if(!el) return;
   const chartEl=document.getElementById('trForecastChart'), cap=document.getElementById('trForecastCap');
@@ -415,6 +422,17 @@ function renderForecast(profSeries, qrow, it, showAnalysis){
   if(tr && tr.band && tr.band.lo!=null) s+=' <span class="mini">[band '+fmtP(Math.round(tr.band.lo))+'–'+fmtP(Math.round(tr.band.hi))+']</span>';
   s+=' <span class="mini">·</span> <b>Next peak</b> '+lvl(pk)+' '+eta(pk);
   s+=' <span class="mini">· confidence '+(f.confidence||'?')+'</span>';
+  // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL beside the forecast readout — the diurnal
+  // peak/trough shifted by the multi-week floor/ceiling drift over a ~1.5d hold. A projected LEVEL, NEVER a
+  // rising/falling verdict (direction is only the sign of the shift, never a word). REUSES driftExitFrom off
+  // the SAME prof + a days series read from the profSeries already in hand (zero new fetch); null/degraded ⇒
+  // the line is simply omitted (honest degrade). Inform/display-only — never a gate, verdict, or price input.
+  let dae=null;
+  try{ const days=(windowStats(profSeries||[], {nights:14, wStart:0, wEnd:0})||{}).days||[]; dae=driftExitFrom(prof, days, ctx); }catch(_){ dae=null; }
+  if(dae && (dae.driftAdjustedPeak!=null || dae.driftAdjustedTrough!=null)){
+    const dl=x=>(x!=null)?('~'+fmtP(Math.round(x))):'—';
+    s+='<br><span class="mini"><b>Drift-adjusted exit</b> (~'+(dae.holdHorizonDays!=null?dae.holdHorizonDays:'?')+'d hold): peak '+dl(dae.driftAdjustedPeak)+' · trough '+dl(dae.driftAdjustedTrough)+' — projected level'+(dae.confidence?', conf '+dae.confidence:'')+' (n≈0, inform — not a direction)</span>';
+  }
   if(tr && tr.note) s+='<br><span class="loss">⚠ '+tr.note+'</span>';
   if(pk && pk.note) s+='<br><span class="loss">⚠ '+pk.note+'</span>';
   s+=' <span class="ccap">Projection = live anchor + the daily-rhythm shape + a dumb trend extension; it never predicts an exogenous shock. Provisional (PF, n≈0) — timing guidance, not a fill promise (touched ≠ filled).</span>';

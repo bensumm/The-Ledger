@@ -29,7 +29,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
-import { diurnalForecast, whenBuyable, whenSellable, fmtEta } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile
+import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile; driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL folded into the trajectory note
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
 import { hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
@@ -190,7 +190,11 @@ const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDE
 // rides fc.oscillating (the one signal fc's classifier can't otherwise express). Data rows ride as plain
 // strings (the V5-block pattern). ZERO new fetch — `days` is already in hand. `label` prefixes the header
 // on the multi-item positions surface so each block stays tied to its item.
-function pushTrajectory(notes, days, { liveRef = null, label = '' } = {}) {
+// PLAN-OSCILLATION-CYCLE Chunk 5: `prof`+`ctx` (the in-hand hourProfile + the diurnalForecast ctx bits the
+// caller already has — liveLo/liveHi/phase/mom/reliable) fold the drift-adjusted exit LEVEL into the SAME
+// combined note (driftExitFrom off the in-hand `prof`+`days` — NO fetch; forecast degrades ⇒ dae null ⇒ the
+// clause is simply omitted). Display-only, direction-agnostic — never a verdict/gate.
+function pushTrajectory(notes, days, { liveRef = null, label = '', prof = null, ctx = null } = {}) {
   const tr = trajectoryRead(days, { liveRef });
   if (!tr) return;
   notes.push(`  ${label ? label + ': ' : ''}trajectory (14d window low/high, oldest→newest):`);
@@ -198,7 +202,10 @@ function pushTrajectory(notes, days, { liveRef = null, label = '' } = {}) {
   // PLAN-DRIFT-VS-CRASH + R6: the floor/ceiling slope-asymmetry + floor-break read, now ALSO carrying
   // trajectoryRead's retired floor/ceiling band + livePos + the oscillation qualifier — one combined note.
   const fc = floorCeilingTrack(days, { todayKey: localDayKey() });
-  const fcText = formatFloorCeiling(fc, fmt, { label, live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling } });
+  // Chunk 5: the drift-adjusted exit level, off the in-hand prof+days (zero fetch); null when no profile/ctx
+  // or the forecast degrades — formatFloorCeiling then omits the clause (honest degrade).
+  const dae = (prof && ctx) ? driftExitFrom(prof, days, ctx) : null;
+  const fcText = formatFloorCeiling(fc, fmt, { label, live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling }, drift: dae });
   if (fcText) notes.push({ kind: 'fcTrack', text: fcText });
 }
 // local 'YYYY-MM-DD' of now — matches windowStats' dayKey (wStart=0) so the forming-day guard lines up.
@@ -417,7 +424,10 @@ async function runItems() {
       notes.push({ kind: 'reachPlacement', itemId: id, text: `reach/placement: ${parts.join(' — ')}` });
     }
     // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
-    pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell });
+    // Chunk 5: prof (line 330) + the diurnalForecast ctx bits (already used for the forecast lines above)
+    // fold the drift-adjusted exit level into the note — all in-hand, no new fetch.
+    pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell,
+      prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
@@ -791,7 +801,12 @@ async function runPositions() {
       if (parts.length) notes.push({ kind: 'reachPlacement', itemId, text: `${name}: reach/placement — ${parts.join(' — ')}` });
     }
     // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
-    pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name });
+    // Chunk 5: the drift-adjusted exit level off the in-hand ts1h (the profile is computed from the series
+    // already fetched this pass — NO new fetch; the bigTicket block's profH is scoped there, so compute a
+    // profile here for the general held-lot path) + the row's diurnalForecast ctx bits.
+    const profT = inp.ts1h ? hourProfile(inp.ts1h, { nights: 14 }) : null;
+    pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name,
+      prof: profT, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
     // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
     // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.
     pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId });

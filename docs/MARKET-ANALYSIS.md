@@ -293,6 +293,21 @@ gate/drop/grade/`screen.json` input:
   un-gate — R3b stays dropped; this adds no gate and does not change value admission.
 Every threshold is n≈0 PLACEHOLDER. Console-only → no `js/trends.js` consumer, no APP_VERSION.
 
+**Drift-adjusted exit on EVERY price suggestion (PLAN-OSCILLATION-CYCLE Chunk 5 — INFORM, display-only,
+APP-VISIBLE).** The same drift number is folded into the ONE shared trajectory/floor-ceiling note path so it
+rides beside *every* price suggestion, not just amplitude/big-ticket holds. `formatFloorCeiling`
+(`js/windowread.mjs`) gains an optional `drift` opt — a `driftAdjustedExit()` result the CALLER computes via
+the SHARED `driftExitFrom` off its in-hand `hourProfile` + `windowStats().days` (NO new fetch; windowread
+never imports forecast — the caller passes the pre-computed numbers, respecting the one-way arrow). It renders
+a `drift-adj exit (~1.5d hold): peak ~X / trough ~Y` clause — a projected LEVEL, NEVER a rising/falling
+verdict (direction is only ever the sign of the shift upstream, never a word). Wired on the console at
+`quote-items.mjs` (both the bare-quote and `--positions` trajectory note, via `pushTrajectory`) and
+`read-window-range.mjs` (the `--trajectory` and DAILY TRAJECTORY blocks), and — the app-visible half — in
+`js/trends.js`'s `renderForecast` (the "Forward forecast" section), which shows the drift-adjusted peak/trough
+beside the naive next-trough/next-peak readout. Degrades cleanly: a null/degraded projection omits the clause.
+Display-only — never a gate, verdict, grade, or price input; `APP_VERSION` bumped (like R2/R3) because it
+reaches `js/trends.js` rendering. Pinned by `pipeline/test/oscillation-render.test.mjs`.
+
 ### Gates
 - **Two-sided liquidity (S1).** `hpv>0 && lpv>0` (the non-negotiable ghost-spread lesson) AND
   `limitVol ≥ --floor` (3500) **OR** gp-flow `limitVol×mid ≥ --gp-floor` (4.5b). The gp-flow path
