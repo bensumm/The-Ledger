@@ -154,7 +154,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   past the diurnal eta (diurnalForecast already trend-extrapolates to the eta), and `oscillationVsKnife(days)`
   — a DETRENDED-mid direction-flip detector that tells an oscillating-while-drifting shape (fang/blowpipe)
   from a monotone knife where floorCeilingTrack.oscillating structurally can't. INFORM-ONLY, wired into NO
-  gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`),
+  gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`. Chunk 2 adds
+  `driftExitFrom(profile, days, ctx, opts)` — the ONE slope-sourcing + drift-adjusted-exit COMPOSITION (imports
+  `floorCeilingTrack` from windowread to pull the ceiling/floor slope off an in-hand `windowStats().days`, NO
+  fetch; builds the diurnalForecast wrapper; calls `driftAdjustedExit`) — the reusable caller pattern the
+  amplitude lane established and Chunk 6 REUSES; PURE/tax-free (the after-tax margin stays the caller's concern).
+  Pinned by `pipeline/test/oscillation-shadow.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
@@ -190,7 +195,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   trend/knife guard) / `amplitudeDeployUnits` (the deployable-units three-way min the `amplitude`
   estimator family reads — floored HONESTLY to an integer, 0 when unaffordable: amplitude is a
   CONCENTRATION lane so `capGp` is TOTAL REALIZABLE `liquidCapital` used UNDIVIDED, NOT value's
-  `deployablePool ÷ slots`; the caller drops a `lapUnits < 1` pick as `unaffordable`). Imports only `tax` + the `windowread.mjs` reach helpers; consumed by
+  `deployablePool ÷ slots`; the caller drops a `lapUnits < 1` pick as `unaffordable`) / `amplitudeDriftMargin`
+  (PLAN-OSCILLATION-CYCLE Chunk 2 — the drift-adjusted margin `afterTax(driftAdjustedPeak) − entry −
+  requiredMargin` off a `js/forecast.mjs` `driftAdjustedExit` result, through the SAME afterTax path
+  `netPerCycle` uses; direction-agnostic, no sign branch; `AMP_DRIFT_REQ_MARGIN=0` PLACEHOLDER Chunk 3's gate
+  reuses; INFORM-ONLY, shadow-logged only). Imports only `tax` + the `windowread.mjs` reach helpers; consumed by
   `screen-flip-niches.mjs`/`gatecandidates.mjs`/`js/estimators/families.mjs`. All thresholds NAMED
   PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
   `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never

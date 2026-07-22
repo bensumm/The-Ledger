@@ -169,8 +169,8 @@ Chunk 3 is the ONLY gate; it gates on a **magnitude** (drift-adjusted margin), n
 | Chunk | State | SHA | Notes |
 | --- | --- | --- | --- |
 | 1 | ✅ LANDED | 53dab35 | driftAdjustedExit + oscillationVsKnife in js/forecast.mjs + oscillation-cycle.test.mjs (8 checks). FINDING: diurnalForecast ALREADY trend-extrapolates nextPeak/nextTrough to their eta (projHigh = baselineNow + trendPerHour·dt + devHi) — so drift over [now→eta] is already baked in; Chunk 1 shifts ONLY by the RESIDUAL horizon max(0, holdHorizonDays − etaDays), making it thin. Inform-only, wired into NO gate. Validated (main): direction-agnostic symmetry pinned, 76 suites + check-imports green. |
-| 2 | READY (unblocked) | — | shadow-log the margin; depends on Chunk 1 (landed) |
-| 3 | BLOCKED on 2 | — | the only gate |
+| 2 | ✅ LANDED (worktree) | — | shadow-log the drift-adjusted margin in `renderAmplitudeMode` → `amplitudeShadow.drift` (INFORM-ONLY, no gate). CALLER PATTERN homed as `driftExitFrom(profile, days, ctx, opts)` in `js/forecast.mjs` (sources ceiling/floor slope from `floorCeilingTrack(stats.days)` + builds the diurnalForecast wrapper + calls `driftAdjustedExit` — Chunk 6 REUSES it). Tax-margin = `amplitudeDriftMargin(dae,{entry})` in `js/amplitudescreen.mjs` (afterTax path reused, `AMP_DRIFT_REQ_MARGIN=0` placeholder Chunk 3 reuses). Slopes from the IN-HAND `stats.days` — NO new fetch. Direction-agnostic (no sign branch), pinned by `oscillation-shadow.test.mjs` (6 checks). 77 suites + check-imports + lint-docs green. No APP_VERSION (console-only). |
+| 3 | BLOCKED on 2 | — | the only gate; reuse `AMP_DRIFT_REQ_MARGIN` + `amplitudeDriftMargin` |
 | 4 | BLOCKED on 3 | — | genuinely-new engineering |
 | 5 | BLOCKED on 3 | — | APP_VERSION bump |
 | 6 | READY (unblocked) | — | parallel-safe across theses; depends on Chunk 1 (landed) |

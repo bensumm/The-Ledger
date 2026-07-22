@@ -182,6 +182,38 @@ export function amplitudeGate(ar, { trendDominates = false, knife = false, recen
   return { pass: true, reason: null };
 }
 
+// --- PLAN-OSCILLATION-CYCLE Chunk 2 — the drift-adjusted margin (INFORM-ONLY here; the gate is Chunk 3) ---
+// The required per-cycle after-tax profit BUFFER the drift-adjusted margin must clear. n≈0 PLACEHOLDER
+// (rule 4 — F1 owns it): 0 gp = "any positive drift-adjusted net qualifies", the honest floor until the
+// Chunk-2 shadow bake yields a real buffer. Chunk 3's `margin-below-floor` gate reuses THIS constant, so
+// the shadow-logged number and the eventual gate read the SAME threshold (one-home).
+export const AMP_DRIFT_REQ_MARGIN = 0;
+
+/* amplitudeDriftMargin(dae, { entry, requiredMargin }) → the drift-adjusted margin off a js/forecast.mjs
+   driftAdjustedExit() result, or null. THE margin (PLAN "corrected mechanism"):
+     margin = afterTax(driftAdjustedPeak) − entry − requiredMargin
+   computed through the SAME `afterTax` path netPerCycle uses (the ONE tax definition, money-math.js), and
+   IDENTICALLY regardless of the drift's sign — there is NO branch on ceilingSlope/floorSlope direction (the
+   corrected-mechanism ruling: drift is a NUMBER, the margin its consequence, never a direction gate). `entry`
+   is the amplitude trough-bid the row already quotes (ar.ampBid). Chunk 2 SHADOW-LOGS this alongside the
+   naive ampBid/ampAsk (computed, not acted on); Chunk 3 turns the same number into the gate. Null when the
+   exit projection degraded (no driftAdjustedPeak) or no entry — degrade, never a fake margin. */
+export function amplitudeDriftMargin(dae, { entry, requiredMargin = AMP_DRIFT_REQ_MARGIN } = {}) {
+  if (!dae || dae.driftAdjustedPeak == null || entry == null) return null;
+  const margin = afterTax(dae.driftAdjustedPeak) - entry - requiredMargin;
+  const r = x => x == null ? null : Math.round(x);
+  return {
+    driftAdjustedPeak: r(dae.driftAdjustedPeak),
+    driftAdjustedTrough: r(dae.driftAdjustedTrough),
+    naivePeak: r(dae.naivePeak),
+    margin: r(margin),
+    requiredMargin,
+    ceilingSlope: r(dae.ceilingSlope),
+    floorSlope: r(dae.floorSlope),
+    confidence: dae.confidence,
+  };
+}
+
 /* amplitudeDeployUnits({ capGp, buyLow, limitVol, limit, holdDays }) → the deployable units bound, floored
    HONESTLY to an integer (0 when you can't afford even ONE unit). Amplitude is a big-ticket CONCENTRATION
    lane (Ben 2026-07-19), NOT value's diversify-across-N-slots lane: `capGp` is TOTAL REALIZABLE capital

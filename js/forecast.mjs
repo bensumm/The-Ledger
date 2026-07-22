@@ -18,7 +18,7 @@
 //
 // Dependency arrow points ONE way: this imports only windowread.mjs. `phase`/`mom`/`reliable` arrive
 // as PLAIN ctx values (quotecore concepts) so forecast never imports the quote engine.
-import { projectTrajectory } from './windowread.mjs';
+import { projectTrajectory, floorCeilingTrack } from './windowread.mjs';
 
 // ── Named PLACEHOLDER constants (all pending PF8 calibration) ─────────────────────────────────────
 export const FC_HORIZON_DEFAULT = 24;   // hours the trough/peak scan covers by default
@@ -289,6 +289,35 @@ export function driftAdjustedExit(fc, { ceilingSlope = null, floorSlope = null, 
   const shifted = (ceilingSlope != null && ceilingSlope !== 0) || (floorSlope != null && floorSlope !== 0);
   const confidence = shifted ? down(base) : base;
   return { driftAdjustedTrough, driftAdjustedPeak, confidence, holdHorizonDays, ceilingSlope, floorSlope, naivePeak, naiveTrough };
+}
+
+/**
+ * driftExitFrom(profile, days, ctx, opts) — the ONE slope-sourcing + drift-adjusted-exit COMPOSITION.
+ * PLAN-OSCILLATION-CYCLE Chunk 2 established this caller pattern; Chunk 6 (per-thesis integration) REUSES
+ * it rather than forking the three steps (one-home discipline — the amplitude lane is the FIRST caller).
+ * Steps, all off data ALREADY in the caller's hand (NO fetch): (1) source the CEILING-track and FLOOR-track
+ * slopes from floorCeilingTrack(days) — the same daily windowStats().days series the caller already built;
+ * (2) build the diurnalForecast wrapper from the in-hand hourProfile; (3) call driftAdjustedExit with those
+ * slopes. PURE and TAX-FREE: forecast.mjs deliberately never imports the quote engine, so the after-tax
+ * MARGIN (afterTax(peak) − entry − requiredMargin) stays the caller's concern (js/amplitudescreen.mjs
+ * amplitudeDriftMargin for the amplitude lane). Direction-agnostic: the slope reaches driftAdjustedExit as a
+ * signed NUMBER — there is no branch on its sign here or downstream.
+ * @param {object|null} profile   an hourProfile(series) result (→ diurnalForecast). null ⇒ degrade → null.
+ * @param {Array|null} days       a windowStats().days series [[key,{low,hi}],…] (→ floorCeilingTrack slopes).
+ *                                Below FC_MIN_DAYS completed days floorCeilingTrack returns null ⇒ slopes null
+ *                                ⇒ driftAdjustedExit passes the naive levels through UNSHIFTED (honest degrade).
+ * @param {object} ctx            diurnalForecast ctx ({liveLo, liveHi, phase, mom, reliable, now, …}).
+ * @param {object} opts { holdHorizonDays } — forwarded to driftAdjustedExit (slopes are sourced HERE).
+ * @returns {null | driftAdjustedExit-result}  null when diurnalForecast degrades (no nextPeak/nextTrough).
+ */
+export function driftExitFrom(profile, days, ctx = {}, { holdHorizonDays } = {}) {
+  const fc = diurnalForecast(profile, ctx);
+  const fct = floorCeilingTrack(days);
+  const ceilingSlope = fct && fct.ceiling && fct.ceiling.slope != null ? fct.ceiling.slope : null;
+  const floorSlope = fct && fct.floor && fct.floor.slope != null ? fct.floor.slope : null;
+  const opts = { ceilingSlope, floorSlope };
+  if (holdHorizonDays != null) opts.holdHorizonDays = holdHorizonDays;
+  return driftAdjustedExit(fc, opts);
 }
 
 /**

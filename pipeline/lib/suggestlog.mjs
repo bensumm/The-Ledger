@@ -253,7 +253,12 @@ export function depthExitShadow(ca, { qty, volDay } = {}) {
 // NEXT holdDays of the 1h archive to measure the would-have-fill rate as an UPPER BOUND (a printed level
 // ≠ your fill). Null when the amplitude read degraded. Takes a js/amplitudescreen.mjs amplitudeRanges
 // result + { holdDays, profile } (an hourProfile, optional — for the dip/peak windows).
-export function amplitudeShadow(ar, { holdDays = 1, profile = null } = {}) {
+// PLAN-OSCILLATION-CYCLE Chunk 2 — `drift` is the drift-adjusted margin block (js/amplitudescreen.mjs
+// amplitudeDriftMargin): { driftAdjustedPeak, margin, requiredMargin, ceilingSlope, floorSlope, … }, logged
+// ALONGSIDE the naive ampBid/ampAsk so a later review can compare the naive netPerCycle against the
+// drift-adjusted margin WITHOUT re-running the projection. INFORM-ONLY: computed, never gated (Chunk 3 gates).
+// YS2 lean-field: present only when the exit projection produced a number; historical rows keep their shape.
+export function amplitudeShadow(ar, { holdDays = 1, profile = null, drift = null } = {}) {
   if (!ar || !ar.hasData || ar.ampBid == null || ar.ampAsk == null) return null;
   const o = {
     ampBid: ar.ampBid, ampAsk: ar.ampAsk, holdDays,
@@ -266,6 +271,7 @@ export function amplitudeShadow(ar, { holdDays = 1, profile = null } = {}) {
     o.dipWindow = [profile.dip.startH, profile.dip.endH];
     o.peakWindow = [profile.peak.startH, profile.peak.endH];
   }
+  if (drift) o.drift = drift;
   return o;
 }
 

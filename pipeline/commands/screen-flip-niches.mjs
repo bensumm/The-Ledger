@@ -94,7 +94,8 @@ import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PL
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
 import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
-import { amplitudeRanges, amplitudeGate, AMP_HOLD_DAYS_DEFAULT } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default
+import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin
+import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch
 import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
@@ -1599,6 +1600,17 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
       const wp = weekdayProfile(ts1h, { nights: 28 });
       if (wp && wp.best && wp.worst) informNotes.push(`${name}: weekday amplitude — widest ${wp.best.label} (~${(wp.best.ampPct * 100).toFixed(1)}%, n=${wp.best.n}), thinnest ${wp.worst.label} (~${(wp.worst.ampPct * 100).toFixed(1)}%, n=${wp.worst.n}) — n≈3–4/cell, a lean not a law`);
     }
+    // PLAN-OSCILLATION-CYCLE Chunk 2 (INFORM-ONLY, no gate) — compute the drift-adjusted margin for this
+    // Stage-2 survivor and SHADOW-LOG it alongside the naive ampBid/ampAsk. Slopes + diurnal projection come
+    // from data ALREADY in hand — `stats.days` (the daily windowStats) feeds floorCeilingTrack's ceiling/floor
+    // slope, `prof` (the hourProfile) feeds diurnalForecast — via the shared driftExitFrom pattern (NO new
+    // fetch). The margin is COMPUTED, not acted on: the printed table + the knife/trend/reach gates above are
+    // untouched. Direction-agnostic by construction (driftExitFrom passes the slope as a signed number; the
+    // margin arithmetic has no branch on its sign). Chunk 3 turns this same number into the gate.
+    const dae = driftExitFrom(prof, stats.days, {
+      liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
+    }, { holdHorizonDays: AMP_HOLD_DAYS });
+    const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid });
     // §A5 — log the pick with the amplitude lane shadow block (the printed levels + both-leg recent reach
     // + dip/peak windows + holdDays), so the shadow both-leg replay joiner can measure the would-have-fill
     // rate as an UPPER BOUND, and the retro-join attributes realized round trips.
@@ -1606,7 +1618,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
       itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: 'AMP-CYCLE', grade, cappedBy: r.cappedBy, posture: POSTURE, path: 'scalp',   // R7: amplitude only applies rateItem's THIN cap → r.cappedBy
       bid: ar.ampBid, ask: ar.ampAsk, pFill: round2(pFill.value), ttfSec: ttf.value, rank: Math.round(rank),
       estBasis: `${pFill.basis}/${ttf.basis}`, estN: ar.nDays,
-      amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof }),
+      amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof, drift: driftShadow }),
       volDayRolling: rollShadow(series1h, s.id),
     }));
   }
