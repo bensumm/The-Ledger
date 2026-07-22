@@ -18,6 +18,7 @@
 //
 // Dependency arrow points ONE way: this imports only windowread.mjs. `phase`/`mom`/`reliable` arrive
 // as PLAIN ctx values (quotecore concepts) so forecast never imports the quote engine.
+import { projectTrajectory } from './windowread.mjs';
 
 // ── Named PLACEHOLDER constants (all pending PF8 calibration) ─────────────────────────────────────
 export const FC_HORIZON_DEFAULT = 24;   // hours the trough/peak scan covers by default
@@ -221,4 +222,111 @@ export function whenSellable(fc, targetAsk) {
     }
   }
   return null;
+}
+
+// ── PLAN-OSCILLATION-CYCLE Chunk 1 — the exit-projection primitive (INFORM-ONLY, NO gate) ─────────
+// The multi-week oscillator lane (fang/blowpipe: a ~6–8-day ~10% swing riding a slowly drifting floor/
+// ceiling) needs the peak/trough it will SELL/BUY into projected over a MULTI-DAY hold, shifted by the
+// multi-week drift. This module homes that projection here (NOT windowread.mjs — the forecast→windowread
+// arrow is one-way; this file already only imports downward). Two pieces, both n≈0 inform-only:
+//   (1) driftAdjustedExit  — composes diurnalForecast's next trough/peak with a multi-week slope number.
+//   (2) oscillationVsKnife — the drift-aware detector that tells an oscillating-while-drifting item
+//       (harvestable) from a monotone knife (no cycle to harvest).
+// The CORRECTED-MECHANISM ruling (PLAN §"corrected mechanism"): drift is consumed as a NUMBER, never a
+// direction LABEL. driftAdjustedExit returns levels + a confidence and DELIBERATELY exposes NO phase
+// field and NO rising/falling classification — direction is only ever an intermediate of the arithmetic
+// (the sign of `slope`), so nothing downstream can gate on a direction. Chunk 1 gates on nothing at all.
+//
+// ── THE LOAD-BEARING FINDING (PLAN "CRITICAL FIRST STEP") ────────────────────────────────────────
+// diurnalForecast ALREADY places nextPeak.level / nextTrough.level on a TREND-EXTRAPOLATED line:
+//   projHigh = baselineNow + trendPerHour·dt + devHi,  trendPerHour = profile.trendPerDay / 24
+// so the drift over [now → the peak/trough eta] is ALREADY baked in (via the hourProfile's OWN fitted
+// multi-day slope). It is NOT applied twice here. What diurnalForecast does NOT do: extend that drift
+// PAST the next-peak eta out to a multi-DAY hold horizon (its horizon is ≤24h and it uses trendPerDay,
+// not the ceiling-track slope). So driftAdjustedExit shifts ONLY by the RESIDUAL horizon
+// max(0, holdHorizonDays − etaDays) — the portion diurnalForecast did not already cover. This is what
+// makes Chunk 1 thin: the near-term adjustment was already done for us; we add the multi-day tail only.
+
+// hold-horizon-to-slope multiplier — the number of DAYS of ceiling/floor drift applied to the diurnal
+// projection BEYOND the next peak/trough eta. n≈0 PLACEHOLDER (the fang cycle is ~6–8d; a same-cycle
+// daily flip holds ~1–1.5d — the amplitude lane's AMP_HOLD_DAYS default). NOT validated; F1 owns it.
+export const OSC_HOLD_HORIZON_DAYS = 1.5;
+// oscillation-vs-knife detector thresholds (n≈0 PLACEHOLDERS, pending F1):
+export const OSC_MIN_DAYS = 5;            // fewer completed daily mids than this ⇒ null (can't read a cycle)
+export const OSC_FLIP_FRAC = 0.4;         // DETRENDED-mid direction-flip fraction ≥ this ⇒ oscillating (else knife)
+
+/**
+ * driftAdjustedExit(fc, opts) — compose diurnalForecast's next trough/peak with a multi-week drift NUMBER.
+ * @param {object} fc            a diurnalForecast() wrapper ({forecast,reason}) OR a bare forecast object
+ * @param {object} opts {
+ *   ceilingSlope,               // the CEILING-track slope (gp/DAY, magnitude+SIGN) the caller already computed
+ *                               //   — floorCeilingTrack(...).ceiling.slope or termStructure.recentTrend. NO refetch.
+ *   floorSlope,                 // the FLOOR-track slope (gp/day) — floorCeilingTrack(...).floor.slope
+ *   holdHorizonDays = OSC_HOLD_HORIZON_DAYS
+ * }
+ * @returns {null | { driftAdjustedTrough, driftAdjustedPeak, confidence, holdHorizonDays, ceilingSlope, floorSlope,
+ *                    naivePeak, naiveTrough }}
+ *   NO phase / NO direction field — direction is only the sign of the slope, never a returned label (PLAN ruling).
+ *   Slope null on a side ⇒ that side passes diurnalForecast's level through UNSHIFTED (degrade, not a fake number).
+ *   PURE: does NOT mutate `fc` — the un-adjusted forecast is byte-identical after this call (wrapping changes nothing).
+ */
+export function driftAdjustedExit(fc, { ceilingSlope = null, floorSlope = null, holdHorizonDays = OSC_HOLD_HORIZON_DAYS } = {}) {
+  const f = inner(fc);
+  if (!f || !f.nextPeak || !f.nextTrough) return null;
+  const naivePeak = f.nextPeak.level;
+  const naiveTrough = f.nextTrough.level;
+  // diurnalForecast already trend-extrapolated each level to its OWN eta (see the finding above) — so the
+  // drift we ADD is only the RESIDUAL horizon past that eta. Direction-agnostic: `slope` may be ±; the SAME
+  // `level + slope·residDays` line produces below-naive for a down-drift and above-naive for an up-drift.
+  const residDays = etaH => Math.max(0, holdHorizonDays - (etaH != null ? etaH / 24 : 0));
+  const driftAdjustedPeak = (naivePeak != null && ceilingSlope != null)
+    ? naivePeak + ceilingSlope * residDays(f.nextPeak.etaH) : naivePeak;
+  const driftAdjustedTrough = (naiveTrough != null && floorSlope != null)
+    ? naiveTrough + floorSlope * residDays(f.nextTrough.etaH) : naiveTrough;
+  // confidence: the diurnal projection's own coarse ordinal, knocked one step when we applied a drift shift
+  // we cannot yet validate (honesty §4 — a projected multi-day drift is softer than the intraday shape).
+  const base = f.confidence ?? f.nextPeak.confidence ?? 'low';
+  const shifted = (ceilingSlope != null && ceilingSlope !== 0) || (floorSlope != null && floorSlope !== 0);
+  const confidence = shifted ? down(base) : base;
+  return { driftAdjustedTrough, driftAdjustedPeak, confidence, holdHorizonDays, ceilingSlope, floorSlope, naivePeak, naiveTrough };
+}
+
+/**
+ * oscillationVsKnife(days, opts) — the drift-aware oscillation-vs-knife detector (PLAN Chunk 1 sub-piece).
+ * floorCeilingTrack.oscillating fires ONLY on a `ranging` (flat) regime, so it STRUCTURALLY cannot flag a
+ * drifting-floor-plus-weekly-bounce shape (fang/blowpipe). This detector DETRENDS the daily mids first — it
+ * removes the multi-week drift line (via the shared projectTrajectory slope, ONE-home, no re-derived trend
+ * math) and counts direction flips in the RESIDUALS — so an oscillation riding a declining OR rising floor
+ * is seen as oscillating, while a monotone collapse (residuals don't flip) reads as a knife.
+ * @param {Array} days   a windowStats().days series — [[key, {low, hi}], …] oldest→newest
+ * @param {object} opts { minDays = OSC_MIN_DAYS, flipFrac = OSC_FLIP_FRAC }
+ * @returns {null | { oscillating, knife, flipFraction, slope, nDays }}
+ *   `knife` = !oscillating — the boolean intended to TEMPER the EXISTING knife guard so it stops
+ *   over-rejecting a down-drift oscillator as a false knife. Chunk 1 wires this into NO gate (inform-only;
+ *   gating is Chunk 3). null when fewer than minDays usable daily mids (degrade, never a fake read).
+ *   HEURISTIC, n≈0 — the flip fraction is a shape tell, not a probability (rule 4).
+ */
+export function oscillationVsKnife(days, { minDays = OSC_MIN_DAYS, flipFrac = OSC_FLIP_FRAC } = {}) {
+  const scored = Array.isArray(days) ? days.filter(([, n]) => n && (n.low != null || n.hi != null)) : [];
+  const midOf = n => (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low ?? n.hi);
+  const mids = scored.map(([, n]) => midOf(n)).filter(v => v != null);
+  if (mids.length < minDays) return null;
+  // detrend line = the shared recency-weighted slope primitive fit over the WHOLE series (recentN = length),
+  // so we reuse floorCeilingTrack's trend math rather than re-deriving it (one-home discipline).
+  const rt = projectTrajectory(scored, midOf, { minDays, recentN: mids.length });
+  const slope = rt && rt.slope != null ? rt.slope : 0;
+  // residual of each day's mid from the fitted drift line. The intercept is irrelevant: we count sign
+  // flips in the FIRST DIFFERENCE of the residuals (resid[i]−resid[i−1] = (mid[i]−mid[i−1]) − slope), in
+  // which any constant intercept cancels — so a monotone drift at ~slope gives ~no flips (knife) while a
+  // bounce that repeatedly over/undershoots the drift line flips sign (oscillating).
+  const resid = mids.map((m, i) => m - slope * i);
+  let flips = 0;
+  for (let i = 2; i < resid.length; i++) {
+    const a = Math.sign(resid[i - 1] - resid[i - 2]);
+    const b = Math.sign(resid[i] - resid[i - 1]);
+    if (a && b && a !== b) flips++;
+  }
+  const flipFraction = resid.length > 2 ? flips / (resid.length - 2) : 0;
+  const oscillating = flipFraction >= flipFrac;
+  return { oscillating, knife: !oscillating, flipFraction, slope, nDays: mids.length };
 }

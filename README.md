@@ -147,7 +147,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   horizon. Claims ONLY "recurring diurnal shape + dumb trend extension" — never an exogenous shock. Imports
   only `windowread.mjs` (no quotecore — `phase`/`mom`/`reliable` arrive as plain ctx). INFORM-ONLY /
   console-only / provisional (n≈0, every constant a NAMED PLACEHOLDER pending the PF8 backtest); no consumer
-  wired yet (PF2–PF8) and no app import → no APP_VERSION. Pinned by `pipeline/test/forecast.test.mjs`),
+  wired yet (PF2–PF8) and no app import → no APP_VERSION. Pinned by `pipeline/test/forecast.test.mjs`.
+  Also homes PLAN-OSCILLATION-CYCLE Chunk 1 (the multi-week oscillator lane): `driftAdjustedExit(fc,
+  {ceilingSlope,floorSlope,holdHorizonDays})` composes diurnalForecast's next trough/peak with a multi-week
+  drift NUMBER (never a direction label — NO phase/direction field), shifting ONLY by the RESIDUAL horizon
+  past the diurnal eta (diurnalForecast already trend-extrapolates to the eta), and `oscillationVsKnife(days)`
+  — a DETRENDED-mid direction-flip detector that tells an oscillating-while-drifting shape (fang/blowpipe)
+  from a monotone knife where floorCeilingTrack.oscillating structurally can't. INFORM-ONLY, wired into NO
+  gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
