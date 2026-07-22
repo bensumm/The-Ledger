@@ -2,7 +2,7 @@
   "app": "the-coffer-screen",
   "schema": 2,
   "pipeline": "1.0.0",
-  "generatedAt": "2026-07-20T00:41:12.813Z",
+  "generatedAt": "2026-07-22T07:34:25.927Z",
   "mode": "all",
   "posture": "active",
   "params": {
@@ -32,52 +32,6 @@
   "niches": {
     "band": [
       {
-        "id": 11785,
-        "cells": [
-          {
-            "t": "Armadyl crossbow"
-          },
-          {
-            "t": "A-",
-            "title": "thin: ~479/day two-sided — size in units, expect slow fills"
-          },
-          {
-            "t": "39.26m"
-          },
-          {
-            "t": "38.69m → 39.55m · +68,310 (+0.2%)",
-            "c": "gain"
-          },
-          {
-            "t": "38.69m → 40.12m · +629.7k (+1.6%)",
-            "c": "gain"
-          },
-          {
-            "t": "479/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -4%"
-          },
-          {
-            "t": "119.8k · net 629.7k P~0.24 ttf~17.3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 39871514,
-          "bid": 37892358,
-          "pressure": 1.05,
-          "reliability": 0.24,
-          "bandLow": 699956,
-          "bandHigh": 1117555
-        }
-      },
-      {
         "id": 33631,
         "cells": [
           {
@@ -85,113 +39,21 @@
           },
           {
             "t": "B",
-            "title": "thin: ~393/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~355/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "42.98m"
+            "t": "44.41m"
           },
           {
-            "t": "42.50m → 43.70m · +324k (+0.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "42.50m → 44m · +615.7k (+1.4%)",
-            "c": "gain"
-          },
-          {
-            "t": "393/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Rising +9%"
-          },
-          {
-            "t": "116.1k · net 615.7k P~0.32 ttf~19.1h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 43875020,
-          "bid": 39203318,
-          "pressure": 0.99,
-          "reliability": 0.28,
-          "bandLow": 2784662,
-          "bandHigh": 4364345
-        }
-      },
-      {
-        "id": 26233,
-        "cells": [
-          {
-            "t": "Ancient godsword"
-          },
-          {
-            "t": "B",
-            "title": "thin: ~113/day two-sided — size in units, expect slow fills"
-          },
-          {
-            "t": "40.40m"
-          },
-          {
-            "t": "39.24m → 40.19m · +154.8k (+0.4%)",
-            "c": "gain"
-          },
-          {
-            "t": "39.11m → 40.58m · +654.4k (+1.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "113/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Rising +7%"
-          },
-          {
-            "t": "58,401 · net 654.4k P~0.41 ttf~35.7h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 41514115,
-          "bid": 38996936,
-          "pressure": 1.17,
-          "reliability": 0.06,
-          "bandLow": 906551,
-          "bandHigh": 1128510
-        }
-      },
-      {
-        "id": 22983,
-        "cells": [
-          {
-            "t": "Hydra leather"
-          },
-          {
-            "t": "A-",
-            "title": "thin: ~387/day two-sided — size in units, expect slow fills"
-          },
-          {
-            "t": "13.18m"
-          },
-          {
-            "t": "13.07m → 13.18m · -154.7k (-1.2%)",
+            "t": "43.61m → 44.41m · -82,906 (-0.2%)",
             "c": "loss"
           },
           {
-            "t": "13.02m → 13.46m · +167k (+1.3%)",
+            "t": "43.61m → 45.68m · +1.16m (+2.7%)",
             "c": "gain"
           },
           {
-            "t": "387/d",
+            "t": "355/d",
             "c": "mini"
           },
           {
@@ -199,91 +61,45 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Rising +11%"
           },
           {
-            "t": "31,015 · net 167k P~0.26 ttf~19.3h",
+            "t": "168k · net 1.16m P~0.30 ttf~20.1h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 13573337,
-          "bid": 12671672,
-          "pressure": 1.11,
-          "reliability": 0.15,
-          "bandLow": 538192,
-          "bandHigh": 887286
+          "ask": 44803967,
+          "bid": 41951443,
+          "pressure": 0.98,
+          "reliability": 0.22,
+          "bandLow": 3946713,
+          "bandHigh": 3075013
         }
       },
       {
-        "id": 13652,
+        "id": 26245,
         "cells": [
           {
-            "t": "Dragon claws"
+            "t": "Virtus robe bottom"
           },
           {
             "t": "B",
-            "title": "thin: ~615/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~284/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "39.76m"
+            "t": "26.44m"
           },
           {
-            "t": "39.69m → 40.69m · +182.7k (+0.5%)",
+            "t": "26.50m → 27.25m · +204.8k (+0.8%)",
             "c": "gain"
           },
           {
-            "t": "39.69m → 40.71m · +200.9k (+0.5%)",
+            "t": "26.49m → 27.56m · +517.9k (+2.0%)",
             "c": "gain"
           },
           {
-            "t": "615/d",
-            "c": "mini"
-          },
-          {
-            "t": "↓",
-            "c": "amber"
-          },
-          {
-            "t": "Flat +1%"
-          },
-          {
-            "t": "28,797 · net 200.9k P~0.35 ttf~15.3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 40440155,
-          "bid": 38790473,
-          "pressure": 1,
-          "reliability": 0.26,
-          "bandLow": 365665,
-          "bandHigh": 621431
-        }
-      },
-      {
-        "id": 27235,
-        "cells": [
-          {
-            "t": "Masori mask (f)"
-          },
-          {
-            "t": "A-",
-            "title": "thin: ~235/day two-sided — size in units, expect slow fills"
-          },
-          {
-            "t": "20.52m"
-          },
-          {
-            "t": "19.85m → 20.59m · +329.1k (+1.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "19.85m → 20.77m · +503.3k (+2.5%)",
-            "c": "gain"
-          },
-          {
-            "t": "235/d",
+            "t": "284/d",
             "c": "mini"
           },
           {
@@ -291,359 +107,45 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Flat -0%"
           },
           {
-            "t": "26,480 · net 503.3k P~0.11 ttf~24.8h",
+            "t": "67,005 · net 517.9k P~0.26 ttf~22.5h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 21099124,
-          "bid": 20025624,
-          "pressure": 0.89,
-          "reliability": 0.1,
-          "bandLow": 544588,
-          "bandHigh": 382590
+          "ask": 27616016,
+          "bid": 26218689,
+          "pressure": 0.72,
+          "reliability": 0.14,
+          "bandLow": 217186,
+          "bandHigh": 490286
         }
       },
       {
-        "id": 31472,
+        "id": 27652,
         "cells": [
           {
-            "t": "Bolt of linen"
+            "t": "Webweaver bow (u)"
           },
           {
-            "t": "B"
+            "t": "B",
+            "title": "thin: ~618/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "692"
+            "t": "17.37m"
           },
           {
-            "t": "729 → 2,529 · +1,750 (+240.1%)",
+            "t": "17.50m → 17.70m · -156.3k (-0.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "17.17m → 17.74m · +218.6k (+1.3%)",
             "c": "gain"
           },
           {
-            "t": "729 → 9,885 · +8,959 (+1228.9%)",
-            "c": "gain"
-          },
-          {
-            "t": "8.3k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Rising +6% · spike"
-          },
-          {
-            "t": "11,411 · net 9k P~0.25 ttf~4.2h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 782,
-          "bid": 579,
-          "pressure": 2.32,
-          "reliability": 1,
-          "bandLow": 43,
-          "bandHigh": 38
-        }
-      },
-      {
-        "id": 30775,
-        "cells": [
-          {
-            "t": "Chasm teleport scroll"
-          },
-          {
-            "t": "B"
-          },
-          {
-            "t": "34,430"
-          },
-          {
-            "t": "35,700 → 37,294 · +849 (+2.4%)",
-            "c": "gain"
-          },
-          {
-            "t": "33,302 → 37,351 · +3,302 (+9.9%)",
-            "c": "gain"
-          },
-          {
-            "t": "6.4k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Rising +14%"
-          },
-          {
-            "t": "5,421 · net 3.3k P~0.38 ttf~4.7h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 41836,
-          "bid": 31183,
-          "pressure": 0.7,
-          "reliability": 1,
-          "bandLow": 1253,
-          "bandHigh": 5550
-        }
-      },
-      {
-        "id": 29782,
-        "cells": [
-          {
-            "t": "Spider cave teleport"
-          },
-          {
-            "t": "B"
-          },
-          {
-            "t": "26,859"
-          },
-          {
-            "t": "25,756 → 29,935 · +3,581 (+13.9%)",
-            "c": "gain"
-          },
-          {
-            "t": "25,756 → 29,985 · +3,630 (+14.1%)",
-            "c": "gain"
-          },
-          {
-            "t": "8.3k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -1%"
-          },
-          {
-            "t": "2,994 · net 3.6k P~0.14 ttf~4.2h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 27922,
-          "bid": 24539,
-          "pressure": 1.02,
-          "reliability": 1,
-          "bandLow": 899,
-          "bandHigh": 690
-        }
-      },
-      {
-        "id": 28931,
-        "cells": [
-          {
-            "t": "Searing page"
-          },
-          {
-            "t": "B"
-          },
-          {
-            "t": "17,530"
-          },
-          {
-            "t": "17,850 → 18,360 · +143 (+0.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "17,582 → 18,387 · +438 (+2.5%)",
-            "c": "gain"
-          },
-          {
-            "t": "43.9k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -1%"
-          },
-          {
-            "t": "1,547 · net 438 P~0.45 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 18409,
-          "bid": 17037,
-          "pressure": 2.91,
-          "reliability": 1,
-          "bandLow": 400,
-          "bandHigh": 365
-        }
-      },
-      {
-        "id": 12905,
-        "cells": [
-          {
-            "t": "Anti-venom(4)"
-          },
-          {
-            "t": "B-"
-          },
-          {
-            "t": "9,765"
-          },
-          {
-            "t": "9,765 → 10,242 · +273 (+2.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "9,389 → 10,244 · +651 (+6.9%)",
-            "c": "gain"
-          },
-          {
-            "t": "38.6k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -1% · spike"
-          },
-          {
-            "t": "1,182 · net 651 P~0.23 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 11215,
-          "bid": 9239,
-          "pressure": 1.31,
-          "reliability": 1,
-          "bandLow": 258,
-          "bandHigh": 690
-        }
-      },
-      {
-        "id": 10925,
-        "cells": [
-          {
-            "t": "Sanfew serum(4)"
-          },
-          {
-            "t": "B-"
-          },
-          {
-            "t": "20,450"
-          },
-          {
-            "t": "20,283 → 20,897 · +197 (+1.0%)",
-            "c": "gain"
-          },
-          {
-            "t": "20,207 → 20,933 · +308 (+1.5%)",
-            "c": "gain"
-          },
-          {
-            "t": "77.5k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -4%"
-          },
-          {
-            "t": "968 · net 308 P~0.39 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 21576,
-          "bid": 19785,
-          "pressure": 1.6,
-          "reliability": 1,
-          "bandLow": 410,
-          "bandHigh": 1005
-        }
-      },
-      {
-        "id": 21940,
-        "cells": [
-          {
-            "t": "Sapphire dragon bolts (e)"
-          },
-          {
-            "t": "C"
-          },
-          {
-            "t": "2,992"
-          },
-          {
-            "t": "2,917 → 3,083 · +105 (+3.6%)",
-            "c": "gain"
-          },
-          {
-            "t": "2,785 → 3,083 · +237 (+8.5%)",
-            "c": "gain"
-          },
-          {
-            "t": "108.4k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Rising +10%"
-          },
-          {
-            "t": "440 · net 237 P~0.27 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 3170,
-          "bid": 2795,
-          "pressure": 1.41,
-          "reliability": 1,
-          "bandLow": 95,
-          "bandHigh": 32
-        }
-      },
-      {
-        "id": 12625,
-        "cells": [
-          {
-            "t": "Stamina potion(4)"
-          },
-          {
-            "t": "C"
-          },
-          {
-            "t": "3,399"
-          },
-          {
-            "t": "3,405 → 3,546 · +71 (+2.1%)",
-            "c": "gain"
-          },
-          {
-            "t": "3,336 → 3,546 · +140 (+4.2%)",
-            "c": "gain"
-          },
-          {
-            "t": "119.8k/d",
+            "t": "618/d",
             "c": "mini"
           },
           {
@@ -654,41 +156,86 @@
             "t": "Flat -2%"
           },
           {
-            "t": "377 · net 140 P~0.34 ttf~3h",
+            "t": "62,861 · net 218.6k P~0.30 ttf~15.3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 3779,
-          "bid": 3381,
-          "pressure": 1.63,
-          "reliability": 1,
-          "bandLow": 203,
-          "bandHigh": 161
+          "ask": 17893060,
+          "bid": 16775800,
+          "pressure": 1.07,
+          "reliability": 0.32,
+          "bandLow": 516712,
+          "bandHigh": 737967
         }
       },
       {
-        "id": 22446,
+        "id": 32008,
         "cells": [
           {
-            "t": "Vial of blood"
+            "t": "Mithril keel parts"
           },
           {
-            "t": "C"
+            "t": "B"
           },
           {
-            "t": "8,707"
+            "t": "3,285"
           },
           {
-            "t": "8,463 → 8,500 · -133 (-1.6%)",
+            "t": "4,602 → 17,170 · +12,225 (+265.6%)",
+            "c": "gain"
+          },
+          {
+            "t": "3,311 → 17,170 · +13,516 (+408.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "4.5k/d",
+            "c": "mini"
+          },
+          {
+            "t": "↑↑",
+            "c": "gain"
+          },
+          {
+            "t": "Flat +0%"
+          },
+          {
+            "t": "6,255 · net 13.5k P~0.16 ttf~5.7h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 4665,
+          "bid": 2524,
+          "pressure": 0.93,
+          "reliability": 1,
+          "bandLow": 907,
+          "bandHigh": 110
+        }
+      },
+      {
+        "id": 5300,
+        "cells": [
+          {
+            "t": "Snapdragon seed"
+          },
+          {
+            "t": "B"
+          },
+          {
+            "t": "52,346"
+          },
+          {
+            "t": "54,963 → 52,346 · -3,663 (-6.7%)",
             "c": "loss"
           },
           {
-            "t": "8,454 → 8,812 · +182 (+2.2%)",
+            "t": "51,716 → 54,557 · +1,750 (+3.4%)",
             "c": "gain"
           },
           {
-            "t": "140.3k/d",
+            "t": "29k/d",
             "c": "mini"
           },
           {
@@ -696,44 +243,44 @@
             "c": "mommuted"
           },
           {
-            "t": "Rising +16%"
+            "t": "Flat +0%"
           },
           {
-            "t": "351 · net 182 P~0.28 ttf~3h",
+            "t": "3,696 · net 1.8k P~0.26 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 8839,
-          "bid": 7660,
-          "pressure": 0.65,
+          "ask": 53560,
+          "bid": 49494,
+          "pressure": 0.44,
           "reliability": 1,
-          "bandLow": 786,
-          "bandHigh": 640
+          "bandLow": 1464,
+          "bandHigh": 2822
         }
       },
       {
-        "id": 24598,
+        "id": 30125,
         "cells": [
           {
-            "t": "Blighted super restore(4)"
+            "t": "Prayer regeneration potion(4)"
           },
           {
-            "t": "C"
+            "t": "B"
           },
           {
-            "t": "2,421"
+            "t": "101k"
           },
           {
-            "t": "2,383 → 2,527 · +94 (+3.9%)",
+            "t": "99,495 → 102.5k · +906 (+0.9%)",
             "c": "gain"
           },
           {
-            "t": "2,335 → 2,527 · +142 (+6.1%)",
+            "t": "99,446 → 103k · +1,494 (+1.5%)",
             "c": "gain"
           },
           {
-            "t": "203.8k/d",
+            "t": "10k/d",
             "c": "mini"
           },
           {
@@ -741,89 +288,44 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +3%"
+            "t": "Rising +11% · spike"
           },
           {
-            "t": "348 · net 142 P~0.31 ttf~3h",
+            "t": "3,006 · net 1.5k P~0.37 ttf~3.8h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 2600,
-          "bid": 2236,
-          "pressure": 2.39,
+          "ask": 117931,
+          "bid": 95018,
+          "pressure": 2.45,
           "reliability": 1,
-          "bandLow": 88,
-          "bandHigh": 127
+          "bandLow": 6504,
+          "bandHigh": 15480
         }
       },
       {
-        "id": 1745,
+        "id": 11840,
         "cells": [
           {
-            "t": "Green dragon leather"
+            "t": "Dragon boots"
           },
           {
-            "t": "C"
+            "t": "B"
           },
           {
-            "t": "1,897"
+            "t": "227k"
           },
           {
-            "t": "1,995 → 2,090 · +54 (+2.7%)",
+            "t": "220.2k → 227.1k · +2,394 (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "1,993 → 2,195 · +159 (+8.0%)",
+            "t": "220.2k → 231.6k · +6,831 (+3.1%)",
             "c": "gain"
           },
           {
-            "t": "126.9k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Rising +6%"
-          },
-          {
-            "t": "329 · net 159 P~0.30 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 2388,
-          "bid": 1865,
-          "pressure": 2.44,
-          "reliability": 1,
-          "bandLow": 67,
-          "bandHigh": 259
-        }
-      },
-      {
-        "id": 2436,
-        "cells": [
-          {
-            "t": "Super attack(4)"
-          },
-          {
-            "t": "C"
-          },
-          {
-            "t": "1,964"
-          },
-          {
-            "t": "2,050 → 2,152 · +59 (+2.9%)",
-            "c": "gain"
-          },
-          {
-            "t": "1,978 → 2,199 · +178 (+9.0%)",
-            "c": "gain"
-          },
-          {
-            "t": "205.8k/d",
+            "t": "4k/d",
             "c": "mini"
           },
           {
@@ -834,41 +336,267 @@
             "t": "Flat +1%"
           },
           {
-            "t": "254 · net 178 P~0.18 ttf~3h",
+            "t": "1,807 · net 6.8k P~0.07 ttf~6h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 2130,
-          "bid": 1815,
-          "pressure": 1.35,
+          "ask": 240261,
+          "bid": 221601,
+          "pressure": 1.01,
           "reliability": 1,
-          "bandLow": 126,
-          "bandHigh": 174
+          "bandLow": 8810,
+          "bandHigh": 5129
         }
       },
       {
-        "id": 2509,
+        "id": 24251,
         "cells": [
           {
-            "t": "Black dragon leather"
+            "t": "Wilderness crabs teleport"
+          },
+          {
+            "t": "B"
+          },
+          {
+            "t": "17,990"
+          },
+          {
+            "t": "17,990 → 17,990 · -359 (-2.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "17,400 → 19,900 · +2,102 (+12.1%)",
+            "c": "gain"
+          },
+          {
+            "t": "11.4k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat -0%"
+          },
+          {
+            "t": "1,747 · net 2.1k P~0.13 ttf~3.5h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 18718,
+          "bid": 16576,
+          "pressure": 0.73,
+          "reliability": 1,
+          "bandLow": 1231,
+          "bandHigh": 614
+        }
+      },
+      {
+        "id": 12913,
+        "cells": [
+          {
+            "t": "Anti-venom+(4)"
+          },
+          {
+            "t": "B-"
+          },
+          {
+            "t": "13,429"
+          },
+          {
+            "t": "13,500 → 14,000 · +220 (+1.6%)",
+            "c": "gain"
+          },
+          {
+            "t": "13,233 → 14,000 · +487 (+3.7%)",
+            "c": "gain"
+          },
+          {
+            "t": "34.8k/d",
+            "c": "mini"
+          },
+          {
+            "t": "↑",
+            "c": "amber"
+          },
+          {
+            "t": "Rising +6% · spike"
+          },
+          {
+            "t": "946 · net 487 P~0.31 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 14727,
+          "bid": 12679,
+          "pressure": 1.33,
+          "reliability": 1,
+          "bandLow": 677,
+          "bandHigh": 1176
+        }
+      },
+      {
+        "id": 5396,
+        "cells": [
+          {
+            "t": "Oranges(5)"
+          },
+          {
+            "t": "B-"
+          },
+          {
+            "t": "1,240"
+          },
+          {
+            "t": "1,306 → 1,545 · +209 (+16.0%)",
+            "c": "gain"
+          },
+          {
+            "t": "1,209 → 1,557 · +317 (+26.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "19.3k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +73%"
+          },
+          {
+            "t": "629 · net 317 P~0.45 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 2961,
+          "bid": 1185,
+          "pressure": 2.71,
+          "reliability": 1,
+          "bandLow": 333,
+          "bandHigh": 499
+        }
+      },
+      {
+        "id": 31729,
+        "cells": [
+          {
+            "t": "Frost dragon bones"
           },
           {
             "t": "C"
           },
           {
-            "t": "3,983"
+            "t": "6,325"
           },
           {
-            "t": "4,192 → 4,182 · -93 (-2.2%)",
+            "t": "6,251 → 6,325 · -52 (-0.8%)",
             "c": "loss"
           },
           {
-            "t": "4,019 → 4,198 · +96 (+2.4%)",
+            "t": "6,249 → 6,589 · +209 (+3.3%)",
             "c": "gain"
           },
           {
-            "t": "301k/d",
+            "t": "71.8k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +0%"
+          },
+          {
+            "t": "469 · net 209 P~0.31 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 6511,
+          "bid": 6128,
+          "pressure": 0.47,
+          "reliability": 1,
+          "bandLow": 42,
+          "bandHigh": 60
+        }
+      },
+      {
+        "id": 30773,
+        "cells": [
+          {
+            "t": "Diabolic worms 🎲",
+            "title": "exploration-rotation slot — pulled into the fetch pool by the rotating reserve this pass (not ranked in); inform-only"
+          },
+          {
+            "t": "C"
+          },
+          {
+            "t": "2,456"
+          },
+          {
+            "t": "2,706 → 2,668 · -91 (-3.4%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,414 → 2,670 · +203 (+8.4%)",
+            "c": "gain"
+          },
+          {
+            "t": "58.5k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +1%"
+          },
+          {
+            "t": "469 · net 203 P~0.30 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 2497,
+          "bid": 2066,
+          "pressure": 0.32,
+          "reliability": 1,
+          "bandLow": 206,
+          "bandHigh": 329
+        }
+      },
+      {
+        "id": 31638,
+        "cells": [
+          {
+            "t": "Extended stamina potion(4)"
+          },
+          {
+            "t": "C"
+          },
+          {
+            "t": "7,083"
+          },
+          {
+            "t": "7,083 → 7,422 · +191 (+2.7%)",
+            "c": "gain"
+          },
+          {
+            "t": "6,676 → 7,422 · +598 (+9.0%)",
+            "c": "gain"
+          },
+          {
+            "t": "33.2k/d",
             "c": "mini"
           },
           {
@@ -879,131 +607,41 @@
             "t": "Flat -1%"
           },
           {
-            "t": "250 · net 96 P~0.33 ttf~3h",
+            "t": "427 · net 598 P~0.09 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 4204,
-          "bid": 3851,
-          "pressure": 1.94,
+          "ask": 7698,
+          "bid": 6763,
+          "pressure": 3.67,
           "reliability": 1,
-          "bandLow": 49,
-          "bandHigh": 191
+          "bandLow": 293,
+          "bandHigh": 333
         }
       },
       {
-        "id": 573,
+        "id": 23733,
         "cells": [
           {
-            "t": "Air orb"
+            "t": "Divine ranging potion(4)"
           },
           {
             "t": "C"
           },
           {
-            "t": "2,297"
+            "t": "6,755"
           },
           {
-            "t": "2,093 → 2,200 · +63 (+3.0%)",
+            "t": "6,755 → 6,755 · -135 (-2.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "6,648 → 6,987 · +200 (+3.0%)",
             "c": "gain"
           },
           {
-            "t": "2,077 → 2,200 · +79 (+3.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "545.3k/d",
-            "c": "mini"
-          },
-          {
-            "t": "↑",
-            "c": "amber"
-          },
-          {
-            "t": "Rising +20% · spike"
-          },
-          {
-            "t": "139 · net 79 P~0.29 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 2629,
-          "bid": 2239,
-          "pressure": 1.14,
-          "reliability": 1,
-          "bandLow": 229,
-          "bandHigh": 217
-        }
-      },
-      {
-        "id": 3002,
-        "cells": [
-          {
-            "t": "Toadflax potion (unf)"
-          },
-          {
-            "t": "C"
-          },
-          {
-            "t": "2,413"
-          },
-          {
-            "t": "2,480 → 2,549 · +19 (+0.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "2,419 → 2,549 · +80 (+3.3%)",
-            "c": "gain"
-          },
-          {
-            "t": "227.5k/d",
-            "c": "mini"
-          },
-          {
-            "t": "↑",
-            "c": "amber"
-          },
-          {
-            "t": "Flat +1%"
-          },
-          {
-            "t": "137 · net 80 P~0.25 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 2551,
-          "bid": 2230,
-          "pressure": 2.74,
-          "reliability": 1,
-          "bandLow": 221,
-          "bandHigh": 197
-        }
-      },
-      {
-        "id": 824,
-        "cells": [
-          {
-            "t": "Rune dart tip"
-          },
-          {
-            "t": "C"
-          },
-          {
-            "t": "1,116"
-          },
-          {
-            "t": "1,090 → 1,116 · +4 (+0.4%)",
-            "c": "gain"
-          },
-          {
-            "t": "1,089 → 1,153 · +41 (+3.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "370.2k/d",
+            "t": "69.4k/d",
             "c": "mini"
           },
           {
@@ -1011,44 +649,44 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +1%"
+            "t": "Flat +0%"
           },
           {
-            "t": "134 · net 41 P~0.41 ttf~3h",
+            "t": "381 · net 200 P~0.24 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 1166,
-          "bid": 1043,
-          "pressure": 0.5,
+          "ask": 7132,
+          "bid": 6629,
+          "pressure": 1.6,
           "reliability": 1,
-          "bandLow": 19,
-          "bandHigh": 32
+          "bandLow": 184,
+          "bandHigh": 141
         }
       },
       {
-        "id": 13441,
+        "id": 20718,
         "cells": [
           {
-            "t": "Anglerfish"
+            "t": "Burnt page"
           },
           {
             "t": "C"
           },
           {
-            "t": "2,646"
+            "t": "6,360"
           },
           {
-            "t": "2,705 → 2,775 · +15 (+0.6%)",
+            "t": "6,051 → 6,268 · +92 (+1.5%)",
             "c": "gain"
           },
           {
-            "t": "2,682 → 2,788 · +51 (+1.9%)",
+            "t": "6,051 → 6,296 · +120 (+2.0%)",
             "c": "gain"
           },
           {
-            "t": "1.04m/d",
+            "t": "146.5k/d",
             "c": "mini"
           },
           {
@@ -1056,20 +694,20 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Rising +7%"
           },
           {
-            "t": "106 · net 51 P~0.26 ttf~3h",
+            "t": "338 · net 120 P~0.40 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 2818,
-          "bid": 2564,
-          "pressure": 1.94,
+          "ask": 6841,
+          "bid": 5451,
+          "pressure": 0.75,
           "reliability": 1,
-          "bandLow": 117,
-          "bandHigh": 115
+          "bandLow": 878,
+          "bandHigh": 861
         }
       },
       {
@@ -1082,18 +720,18 @@
             "t": "C"
           },
           {
-            "t": "1,334"
+            "t": "1,405"
           },
           {
-            "t": "1,430 → 1,467 · +8 (+0.6%)",
+            "t": "1,473 → 1,492 · -10 (-0.7%)",
+            "c": "loss"
+          },
+          {
+            "t": "1,461 → 1,600 · +107 (+7.3%)",
             "c": "gain"
           },
           {
-            "t": "1,412 → 1,484 · +43 (+3.0%)",
-            "c": "gain"
-          },
-          {
-            "t": "125.7k/d",
+            "t": "95.5k/d",
             "c": "mini"
           },
           {
@@ -1104,41 +742,41 @@
             "t": "Rising +18%"
           },
           {
-            "t": "104 · net 43 P~0.36 ttf~3h",
+            "t": "178 · net 107 P~0.25 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 1669,
-          "bid": 1244,
-          "pressure": 0.81,
+          "ask": 1599,
+          "bid": 1309,
+          "pressure": 0.83,
           "reliability": 1,
-          "bandLow": 215,
-          "bandHigh": 299
+          "bandLow": 95,
+          "bandHigh": 119
         }
       },
       {
-        "id": 31912,
+        "id": 12625,
         "cells": [
           {
-            "t": "Adamant cannonball"
+            "t": "Stamina potion(4)"
           },
           {
-            "t": "D"
+            "t": "C"
           },
           {
-            "t": "318"
+            "t": "3,394"
           },
           {
-            "t": "325 → 355 · +23 (+7.1%)",
+            "t": "3,394 → 3,431 · -31 (-0.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "3,265 → 3,443 · +110 (+3.4%)",
             "c": "gain"
           },
           {
-            "t": "322 → 356 · +27 (+8.4%)",
-            "c": "gain"
-          },
-          {
-            "t": "335.7k/d",
+            "t": "132.3k/d",
             "c": "mini"
           },
           {
@@ -1146,134 +784,134 @@
             "c": "mommuted"
           },
           {
-            "t": "Rising +24%"
+            "t": "Flat -2%"
           },
           {
-            "t": "73 · net 27 P~0.41 ttf~3h",
+            "t": "178 · net 110 P~0.20 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 439,
-          "bid": 273,
-          "pressure": 0.63,
+          "ask": 3683,
+          "bid": 3233,
+          "pressure": 1.61,
           "reliability": 1,
-          "bandLow": 45,
+          "bandLow": 188,
+          "bandHigh": 90
+        }
+      },
+      {
+        "id": 245,
+        "cells": [
+          {
+            "t": "Wine of zamorak"
+          },
+          {
+            "t": "C"
+          },
+          {
+            "t": "1,052"
+          },
+          {
+            "t": "1,087 → 1,131 · +22 (+2.0%)",
+            "c": "gain"
+          },
+          {
+            "t": "1,029 → 1,131 · +80 (+7.8%)",
+            "c": "gain"
+          },
+          {
+            "t": "339k/d",
+            "c": "mini"
+          },
+          {
+            "t": "↑",
+            "c": "amber"
+          },
+          {
+            "t": "Rising +13%"
+          },
+          {
+            "t": "165 · net 80 P~0.33 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 1227,
+          "bid": 948,
+          "pressure": 0.43,
+          "reliability": 1,
+          "bandLow": 86,
+          "bandHigh": 207
+        }
+      },
+      {
+        "id": 21946,
+        "cells": [
+          {
+            "t": "Diamond dragon bolts (e)"
+          },
+          {
+            "t": "C"
+          },
+          {
+            "t": "2,912"
+          },
+          {
+            "t": "2,869 → 2,912 · -15 (-0.5%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,840 → 2,968 · +69 (+2.4%)",
+            "c": "gain"
+          },
+          {
+            "t": "455.9k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +6%"
+          },
+          {
+            "t": "161 · net 69 P~0.33 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 3058,
+          "bid": 2821,
+          "pressure": 1.21,
+          "reliability": 1,
+          "bandLow": 112,
           "bandHigh": 111
         }
       },
       {
-        "id": 33589,
+        "id": 573,
         "cells": [
           {
-            "t": "Seeking amethyst arrow"
+            "t": "Air orb"
           },
           {
             "t": "D"
           },
           {
-            "t": "579"
+            "t": "2,197"
           },
           {
-            "t": "625 → 661 · +23 (+3.7%)",
+            "t": "2,250 → 2,251 · -44 (-2.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,250 → 2,369 · +72 (+3.2%)",
             "c": "gain"
           },
           {
-            "t": "624 → 710 · +72 (+11.5%)",
-            "c": "gain"
-          },
-          {
-            "t": "568.6k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -3%"
-          },
-          {
-            "t": "73 · net 72 P~0.13 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 782,
-          "bid": 664,
-          "pressure": 1.63,
-          "reliability": 1,
-          "bandLow": 67,
-          "bandHigh": 29
-        }
-      },
-      {
-        "id": 10033,
-        "cells": [
-          {
-            "t": "Chinchompa"
-          },
-          {
-            "t": "D"
-          },
-          {
-            "t": "860"
-          },
-          {
-            "t": "835 → 883 · +31 (+3.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "834 → 883 · +32 (+3.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "176.4k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat +2%"
-          },
-          {
-            "t": "48 · net 32 P~0.20 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 881,
-          "bid": 814,
-          "pressure": 1.1,
-          "reliability": 1,
-          "bandLow": 24,
-          "bandHigh": 1
-        }
-      },
-      {
-        "id": 1603,
-        "cells": [
-          {
-            "t": "Ruby"
-          },
-          {
-            "t": "D"
-          },
-          {
-            "t": "862"
-          },
-          {
-            "t": "865 → 914 · +31 (+3.6%)",
-            "c": "gain"
-          },
-          {
-            "t": "865 → 930 · +47 (+5.4%)",
-            "c": "gain"
-          },
-          {
-            "t": "1.15m/d",
+            "t": "342.9k/d",
             "c": "mini"
           },
           {
@@ -1281,64 +919,109 @@
             "c": "amber"
           },
           {
-            "t": "Flat +2%"
+            "t": "Flat -2% · spike"
           },
           {
-            "t": "42 · net 47 P~0.25 ttf~3h",
+            "t": "93 · net 72 P~0.37 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 878,
-          "bid": 804,
-          "pressure": 0.87,
+          "ask": 2479,
+          "bid": 1879,
+          "pressure": 1.12,
           "reliability": 1,
-          "bandLow": 5,
-          "bandHigh": 24
+          "bandLow": 340,
+          "bandHigh": 404
         }
       },
       {
-        "id": 12640,
+        "id": 10034,
         "cells": [
           {
-            "t": "Amylase crystal"
+            "t": "Red chinchompa"
           },
           {
             "t": "D"
           },
           {
-            "t": "711"
+            "t": "1,468"
           },
           {
-            "t": "661 → 693 · +19 (+2.9%)",
+            "t": "1,463 → 1,508 · +15 (+1.0%)",
             "c": "gain"
           },
           {
-            "t": "661 → 727 · +52 (+7.9%)",
+            "t": "1,442 → 1,509 · +37 (+2.6%)",
             "c": "gain"
           },
           {
-            "t": "543.7k/d",
+            "t": "586.7k/d",
             "c": "mini"
           },
           {
-            "t": "↓",
-            "c": "amber"
+            "t": "–",
+            "c": "mommuted"
           },
           {
-            "t": "Flat +4%"
+            "t": "Rising +7% · spike"
           },
           {
-            "t": "25 · net 52 P~0.15 ttf~3h",
+            "t": "79 · net 37 P~0.30 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 760,
-          "bid": 653,
-          "pressure": 1,
+          "ask": 1531,
+          "bid": 1402,
+          "pressure": 1.39,
           "reliability": 1,
-          "bandLow": 53,
+          "bandLow": 65,
+          "bandHigh": 54
+        }
+      },
+      {
+        "id": 5974,
+        "cells": [
+          {
+            "t": "Coconut"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "1,646"
+          },
+          {
+            "t": "1,624 → 1,646 · -10 (-0.6%)",
+            "c": "loss"
+          },
+          {
+            "t": "1,615 → 1,700 · +51 (+3.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "310k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat -4%"
+          },
+          {
+            "t": "69 · net 51 P~0.17 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 1701,
+          "bid": 1553,
+          "pressure": 0.68,
+          "reliability": 1,
+          "bandLow": 47,
           "bandHigh": 52
         }
       },
@@ -1352,18 +1035,18 @@
             "t": "D"
           },
           {
-            "t": "981"
+            "t": "997"
           },
           {
-            "t": "957 → 981 · +5 (+0.5%)",
+            "t": "997 → 997 · -19 (-1.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "980 → 1,021 · +21 (+2.1%)",
             "c": "gain"
           },
           {
-            "t": "957 → 998 · +22 (+2.3%)",
-            "c": "gain"
-          },
-          {
-            "t": "880.5k/d",
+            "t": "742.3k/d",
             "c": "mini"
           },
           {
@@ -1371,44 +1054,314 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -1%"
+            "t": "Flat -2%"
           },
           {
-            "t": "13 · net 22 P~0.07 ttf~3h",
+            "t": "55 · net 21 P~0.33 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 1074,
-          "bid": 958,
-          "pressure": 1.11,
+          "ask": 1039,
+          "bid": 948,
+          "pressure": 1.05,
           "reliability": 1,
-          "bandLow": 12,
-          "bandHigh": 42
+          "bandLow": 21,
+          "bandHigh": 48
         }
       },
       {
-        "id": 314,
+        "id": 9340,
         "cells": [
           {
-            "t": "Feather"
+            "t": "Diamond bolts"
           },
           {
             "t": "D"
           },
           {
-            "t": "3"
+            "t": "338"
           },
           {
-            "t": "2 → 3 · +1 (+50.0%)",
+            "t": "344 → 366 · +15 (+4.4%)",
             "c": "gain"
           },
           {
-            "t": "2 → 3 · +1 (+50.0%)",
+            "t": "304 → 367 · +56 (+18.4%)",
             "c": "gain"
           },
           {
-            "t": "3.42m/d",
+            "t": "354.3k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +4%"
+          },
+          {
+            "t": "54 · net 56 P~0.15 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 348,
+          "bid": 305,
+          "pressure": 1.89,
+          "reliability": 1,
+          "bandLow": 8,
+          "bandHigh": 7
+        }
+      },
+      {
+        "id": 239,
+        "cells": [
+          {
+            "t": "White berries"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "671"
+          },
+          {
+            "t": "671 → 671 · -13 (-1.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "647 → 695 · +35 (+5.4%)",
+            "c": "gain"
+          },
+          {
+            "t": "202.2k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +24% · spike"
+          },
+          {
+            "t": "48 · net 35 P~0.21 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 699,
+          "bid": 620,
+          "pressure": 0.68,
+          "reliability": 1,
+          "bandLow": 35,
+          "bandHigh": 18
+        }
+      },
+      {
+        "id": 19669,
+        "cells": [
+          {
+            "t": "Redwood logs"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "759"
+          },
+          {
+            "t": "773 → 779 · -9 (-1.2%)",
+            "c": "loss"
+          },
+          {
+            "t": "742 → 780 · +23 (+3.1%)",
+            "c": "gain"
+          },
+          {
+            "t": "738.1k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +3%"
+          },
+          {
+            "t": "36 · net 23 P~0.20 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 796,
+          "bid": 719,
+          "pressure": 1.15,
+          "reliability": 1,
+          "bandLow": 15,
+          "bandHigh": 11
+        }
+      },
+      {
+        "id": 31912,
+        "cells": [
+          {
+            "t": "Adamant cannonball"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "342"
+          },
+          {
+            "t": "323 → 342 · +13 (+4.0%)",
+            "c": "gain"
+          },
+          {
+            "t": "323 → 343 · +14 (+4.3%)",
+            "c": "gain"
+          },
+          {
+            "t": "314.3k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +34%"
+          },
+          {
+            "t": "30 · net 14 P~0.36 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 429,
+          "bid": 292,
+          "pressure": 0.63,
+          "reliability": 1,
+          "bandLow": 55,
+          "bandHigh": 46
+        }
+      },
+      {
+        "id": 24607,
+        "cells": [
+          {
+            "t": "Blighted ancient ice sack"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "333"
+          },
+          {
+            "t": "339 → 339 · -6 (-1.8%)",
+            "c": "loss"
+          },
+          {
+            "t": "314 → 339 · +19 (+6.1%)",
+            "c": "gain"
+          },
+          {
+            "t": "1.39m/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +0% · spike"
+          },
+          {
+            "t": "26 · net 19 P~0.17 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 346,
+          "bid": 319,
+          "pressure": 1.89,
+          "reliability": 1,
+          "bandLow": 18,
+          "bandHigh": 8
+        }
+      },
+      {
+        "id": 565,
+        "cells": [
+          {
+            "t": "Blood rune"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "362"
+          },
+          {
+            "t": "362 → 362 · -7 (-1.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "360 → 375 · +8 (+2.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "20.27m/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +11% · spike"
+          },
+          {
+            "t": "14 · net 8 P~0.25 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 387,
+          "bid": 339,
+          "pressure": 1.99,
+          "reliability": 1,
+          "bandLow": 19,
+          "bandHigh": 28
+        }
+      },
+      {
+        "id": 27616,
+        "cells": [
+          {
+            "t": "Ancient essence"
+          },
+          {
+            "t": "D"
+          },
+          {
+            "t": "14"
+          },
+          {
+            "t": "13 → 13 · 0 (+0.0%)",
+            "c": "gain"
+          },
+          {
+            "t": "13 → 14 · +1 (+7.7%)",
+            "c": "gain"
+          },
+          {
+            "t": "14m/d",
             "c": "mini"
           },
           {
@@ -1424,81 +1377,37 @@
           }
         ],
         "reachable": {
-          "ask": 3,
-          "bid": 2,
-          "pressure": 6.91,
-          "reliability": 1,
-          "bandLow": 0,
-          "bandHigh": 0
-        }
-      },
-      {
-        "id": 27616,
-        "cells": [
-          {
-            "t": "Ancient essence"
-          },
-          {
-            "t": "D"
-          },
-          {
-            "t": "13"
-          },
-          {
-            "t": "14 → 13 · -1 (-7.1%)",
-            "c": "loss"
-          },
-          {
-            "t": "13 → 14 · +1 (+7.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "16.93m/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat +0%"
-          },
-          {
-            "t": "7 · net 1 P~0.93 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
           "ask": 14,
           "bid": 13,
-          "pressure": 0.67,
+          "pressure": 0.66,
           "reliability": 1,
           "bandLow": 0,
           "bandHigh": 0
         }
       },
       {
-        "id": 11232,
+        "id": 26219,
         "cells": [
           {
-            "t": "Dragon dart tip"
+            "t": "Osmumten's fang"
           },
           {
-            "t": "D"
+            "t": "D",
+            "title": "thin: ~1205/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "1,291"
+            "t": "17.93m"
           },
           {
-            "t": "1,254 → 1,291 · +12 (+1.0%)",
+            "t": "17.44m → 17.85m · +54,786 (+0.3%)",
             "c": "gain"
           },
           {
-            "t": "1,254 → 1,312 · +32 (+2.6%)",
+            "t": "17.43m → 17.93m · +145.4k (+0.8%)",
             "c": "gain"
           },
           {
-            "t": "807k/d",
+            "t": "1.2k/d",
             "c": "mini"
           },
           {
@@ -1506,91 +1415,45 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Flat +1%"
           },
           {
-            "t": "0 · net 32 P~0.00 ttf~3h",
+            "t": "0 · net 145.4k P~0.00 ttf~10.9h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 1372,
-          "bid": 1182,
-          "pressure": 0.4,
-          "reliability": 1,
-          "bandLow": 81,
-          "bandHigh": 50
-        }
-      }
-    ],
-    "churn": [
-      {
-        "id": 9342,
-        "cells": [
-          {
-            "t": "Onyx bolts"
-          },
-          {
-            "t": "S+"
-          },
-          {
-            "t": "8,297"
-          },
-          {
-            "t": "8,297 → 8,297 · -165 (-2.0%)",
-            "c": "loss"
-          },
-          {
-            "t": "8,297 → 8,558 · +90 (+1.1%)",
-            "c": "gain"
-          },
-          {
-            "t": "173.6k/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
-            "t": "Flat -0%"
-          },
-          {
-            "t": "7.92m · net 90 P~1.00 ttf~3h",
-            "c": "mini"
-          }
-        ],
-        "reachable": {
-          "ask": 8379,
-          "bid": 8107,
-          "pressure": 0.57,
-          "reliability": 1,
-          "bandLow": 71,
-          "bandHigh": 131
+          "ask": 18975799,
+          "bid": 17821173,
+          "pressure": 0.97,
+          "reliability": 0.62,
+          "bandLow": 785116,
+          "bandHigh": 558612
         }
       },
       {
-        "id": 11959,
+        "id": 23956,
         "cells": [
           {
-            "t": "Black chinchompa"
+            "t": "Crystal armour seed"
           },
           {
-            "t": "S+"
+            "t": "D",
+            "title": "thin: ~1216/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "2,951"
+            "t": "6.28m"
           },
           {
-            "t": "2,955 → 3,032 · +17 (+0.6%)",
+            "t": "5.91m → 6.05m · +20,658 (+0.3%)",
             "c": "gain"
           },
           {
-            "t": "2,936 → 3,032 · +36 (+1.2%)",
+            "t": "5.91m → 6.12m · +95,477 (+1.6%)",
             "c": "gain"
           },
           {
-            "t": "539.2k/d",
+            "t": "1.2k/d",
             "c": "mini"
           },
           {
@@ -1601,41 +1464,43 @@
             "t": "Flat +2%"
           },
           {
-            "t": "3.12m · net 36 P~1.00 ttf~3h",
+            "t": "0 · net 95.5k P~0.00 ttf~10.9h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 3013,
-          "bid": 2867,
-          "pressure": 1.66,
-          "reliability": 1,
-          "bandLow": 32,
-          "bandHigh": 20
+          "ask": 6479833,
+          "bid": 6101462,
+          "pressure": 0.83,
+          "reliability": 0.67,
+          "bandLow": 186422,
+          "bandHigh": 145920
         }
       },
       {
-        "id": 22124,
+        "id": 27232,
         "cells": [
           {
-            "t": "Superior dragon bones"
+            "t": "Masori chaps 🎲",
+            "title": "exploration-rotation slot — pulled into the fetch pool by the rotating reserve this pass (not ranked in); inform-only"
           },
           {
-            "t": "S+"
+            "t": "D",
+            "title": "thin: ~186/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "20,633"
+            "t": "27.92m"
           },
           {
-            "t": "20,252 → 20,427 · -233 (-1.2%)",
-            "c": "loss"
-          },
-          {
-            "t": "20,252 → 20,776 · +109 (+0.5%)",
+            "t": "27.30m → 28.11m · +244.9k (+0.9%)",
             "c": "gain"
           },
           {
-            "t": "181.5k/d",
+            "t": "27.26m → 28.11m · +288k (+1.1%)",
+            "c": "gain"
+          },
+          {
+            "t": "186/d",
             "c": "mini"
           },
           {
@@ -1646,41 +1511,41 @@
             "t": "Flat -0%"
           },
           {
-            "t": "2.80m · net 109 P~0.43 ttf~3h",
+            "t": "0 · net 288k P~0.00 ttf~27.8h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 21234,
-          "bid": 19728,
-          "pressure": 0.41,
-          "reliability": 1,
-          "bandLow": 596,
-          "bandHigh": 609
+          "ask": 29004851,
+          "bid": 27552875,
+          "pressure": 0.71,
+          "reliability": 0.11,
+          "bandLow": 1190860,
+          "bandHigh": 1292553
         }
       },
       {
-        "id": 21946,
+        "id": 31976,
         "cells": [
           {
-            "t": "Diamond dragon bolts (e)"
+            "t": "Camphor repair kit"
           },
           {
-            "t": "S+"
+            "t": "D"
           },
           {
-            "t": "3,000"
+            "t": "1,611"
           },
           {
-            "t": "2,913 → 2,991 · +19 (+0.7%)",
+            "t": "1,455 → 1,527 · +42 (+2.9%)",
             "c": "gain"
           },
           {
-            "t": "2,903 → 3,000 · +37 (+1.3%)",
+            "t": "832 → 1,611 · +747 (+89.8%)",
             "c": "gain"
           },
           {
-            "t": "580.3k/d",
+            "t": "98.3k/d",
             "c": "mini"
           },
           {
@@ -1688,89 +1553,271 @@
             "c": "mommuted"
           },
           {
-            "t": "Rising +14% · spike"
+            "t": "Flat -1%"
           },
           {
-            "t": "2.61m · net 37 P~0.93 ttf~3h",
+            "t": "0 · net 747 P~0.00 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 3059,
-          "bid": 2760,
-          "pressure": 1.21,
+          "ask": 1775,
+          "bid": 1438,
+          "pressure": 1.12,
           "reliability": 1,
-          "bandLow": 32,
-          "bandHigh": 101
+          "bandLow": 121,
+          "bandHigh": 57
         }
       },
       {
-        "id": 8782,
+        "id": 31650,
         "cells": [
           {
-            "t": "Mahogany plank"
+            "t": "Armadyl brew(4)"
           },
           {
-            "t": "S+"
+            "t": "D"
           },
           {
-            "t": "1,909"
+            "t": "1,430"
           },
           {
-            "t": "1,909 → 1,928 · -19 (-1.0%)",
+            "t": "889 → 1,398 · +482 (+54.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "889 → 1,398 · +482 (+54.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "46.2k/d",
+            "c": "mini"
+          },
+          {
+            "t": "↓↓",
             "c": "loss"
           },
           {
-            "t": "1,888 → 1,950 · +23 (+1.2%)",
-            "c": "gain"
-          },
-          {
-            "t": "1.53m/d",
-            "c": "mini"
-          },
-          {
-            "t": "–",
-            "c": "mommuted"
-          },
-          {
             "t": "Flat -1%"
           },
           {
-            "t": "854.3k · net 23 P~0.36 ttf~3h",
+            "t": "0 · net 482 P~0.00 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 1978,
-          "bid": 1881,
-          "pressure": 2.08,
+          "ask": 1543,
+          "bid": 1169,
+          "pressure": 1.95,
           "reliability": 1,
-          "bandLow": 17,
-          "bandHigh": 42
+          "bandLow": 175,
+          "bandHigh": 160
         }
-      },
+      }
+    ],
+    "churn": [
       {
-        "id": 3024,
+        "id": 22446,
         "cells": [
           {
-            "t": "Super restore(4)"
+            "t": "Vial of blood"
           },
           {
             "t": "S+"
           },
           {
-            "t": "10,654"
+            "t": "8,715"
           },
           {
-            "t": "10,481 → 10,730 · +35 (+0.3%)",
+            "t": "8,608 → 8,710 · -72 (-0.8%)",
+            "c": "loss"
+          },
+          {
+            "t": "8,600 → 8,878 · +101 (+1.2%)",
             "c": "gain"
           },
           {
-            "t": "10,481 → 10,794 · +98 (+0.9%)",
+            "t": "74.2k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +19%"
+          },
+          {
+            "t": "7.78m · net 101 P~0.93 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 9079,
+          "bid": 8238,
+          "pressure": 0.64,
+          "reliability": 1,
+          "bandLow": 420,
+          "bandHigh": 450
+        }
+      },
+      {
+        "id": 1617,
+        "cells": [
+          {
+            "t": "Uncut diamond"
+          },
+          {
+            "t": "S+"
+          },
+          {
+            "t": "2,586"
+          },
+          {
+            "t": "2,555 → 2,586 · -20 (-0.8%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,555 → 2,635 · +28 (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "295.4k/d",
+            "t": "399.9k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +2%"
+          },
+          {
+            "t": "1.44m · net 28 P~0.64 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 2649,
+          "bid": 2464,
+          "pressure": 0.44,
+          "reliability": 1,
+          "bandLow": 86,
+          "bandHigh": 105
+        }
+      },
+      {
+        "id": 536,
+        "cells": [
+          {
+            "t": "Dragon bones"
+          },
+          {
+            "t": "S+"
+          },
+          {
+            "t": "3,172"
+          },
+          {
+            "t": "3,172 → 3,172 · -63 (-2.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "3,133 → 3,240 · +43 (+1.4%)",
+            "c": "gain"
+          },
+          {
+            "t": "1.10m/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Rising +6% · spike"
+          },
+          {
+            "t": "1.32m · net 43 P~0.57 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 3432,
+          "bid": 3129,
+          "pressure": 0.94,
+          "reliability": 1,
+          "bandLow": 72,
+          "bandHigh": 117
+        }
+      },
+      {
+        "id": 13439,
+        "cells": [
+          {
+            "t": "Raw anglerfish"
+          },
+          {
+            "t": "S+"
+          },
+          {
+            "t": "2,452"
+          },
+          {
+            "t": "2,409 → 2,452 · -6 (-0.2%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,369 → 2,453 · +35 (+1.5%)",
+            "c": "gain"
+          },
+          {
+            "t": "663.1k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat -3%"
+          },
+          {
+            "t": "855k · net 35 P~0.21 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 2491,
+          "bid": 2194,
+          "pressure": 0.73,
+          "reliability": 1,
+          "bandLow": 183,
+          "bandHigh": 134
+        }
+      },
+      {
+        "id": 13441,
+        "cells": [
+          {
+            "t": "Anglerfish"
+          },
+          {
+            "t": "S+"
+          },
+          {
+            "t": "2,677"
+          },
+          {
+            "t": "2,634 → 2,641 · -45 (-1.7%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,628 → 2,713 · +31 (+1.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "773.6k/d",
             "c": "mini"
           },
           {
@@ -1781,17 +1828,17 @@
             "t": "Flat -1%"
           },
           {
-            "t": "672k · net 98 P~0.43 ttf~3h",
+            "t": "708.6k · net 31 P~0.29 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 10909,
-          "bid": 10355,
-          "pressure": 2.59,
+          "ask": 2815,
+          "bid": 2638,
+          "pressure": 1.95,
           "reliability": 1,
-          "bandLow": 192,
-          "bandHigh": 211
+          "bandLow": 62,
+          "bandHigh": 53
         }
       },
       {
@@ -1801,21 +1848,111 @@
             "t": "Ruby dragon bolts (e)"
           },
           {
+            "t": "S+"
+          },
+          {
+            "t": "2,959"
+          },
+          {
+            "t": "2,959 → 3,015 · -4 (-0.1%)",
+            "c": "loss"
+          },
+          {
+            "t": "2,958 → 3,035 · +17 (+0.6%)",
+            "c": "gain"
+          },
+          {
+            "t": "877.3k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat -4%"
+          },
+          {
+            "t": "534.3k · net 17 P~0.36 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 3077,
+          "bid": 2804,
+          "pressure": 2.6,
+          "reliability": 1,
+          "bandLow": 129,
+          "bandHigh": 67
+        }
+      },
+      {
+        "id": 2434,
+        "cells": [
+          {
+            "t": "Prayer potion(4)"
+          },
+          {
+            "t": "S-"
+          },
+          {
+            "t": "8,837"
+          },
+          {
+            "t": "8,837 → 8,837 · -176 (-2.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "8,596 → 8,838 · +66 (+0.8%)",
+            "c": "gain"
+          },
+          {
+            "t": "327.5k/d",
+            "c": "mini"
+          },
+          {
+            "t": "–",
+            "c": "mommuted"
+          },
+          {
+            "t": "Flat +1%"
+          },
+          {
+            "t": "75,429 · net 66 P~0.07 ttf~3h",
+            "c": "mini"
+          }
+        ],
+        "reachable": {
+          "ask": 9024,
+          "bid": 8659,
+          "pressure": 3.43,
+          "reliability": 1,
+          "bandLow": 95,
+          "bandHigh": 59
+        }
+      },
+      {
+        "id": 8782,
+        "cells": [
+          {
+            "t": "Mahogany plank"
+          },
+          {
             "t": "D"
           },
           {
-            "t": "3,008"
+            "t": "1,879"
           },
           {
-            "t": "2,888 → 2,963 · +16 (+0.6%)",
+            "t": "1,888 → 1,906 · -20 (-1.1%)",
+            "c": "loss"
+          },
+          {
+            "t": "1,850 → 1,906 · +18 (+1.0%)",
             "c": "gain"
           },
           {
-            "t": "2,876 → 2,970 · +35 (+1.2%)",
-            "c": "gain"
-          },
-          {
-            "t": "822.4k/d",
+            "t": "1.90m/d",
             "c": "mini"
           },
           {
@@ -1826,25 +1963,25 @@
             "t": "Flat -2%"
           },
           {
-            "t": "0 · net 35 P~0.00 ttf~3h",
+            "t": "0 · net 18 P~0.00 ttf~3h",
             "c": "mini"
           }
         ],
         "reachable": {
-          "ask": 3147,
-          "bid": 2929,
-          "pressure": 2.67,
+          "ask": 1955,
+          "bid": 1850,
+          "pressure": 2.08,
           "reliability": 1,
-          "bandLow": 105,
-          "bandHigh": 119
+          "bandLow": 41,
+          "bandHigh": 30
         }
       }
     ]
   },
   "html": {
-    "band": "<div class=\"tablewrap\"><table class=\"scantable\"><thead><tr><th class=\"left\">Item</th><th>Grade</th><th>Guide</th><th>Quick</th><th>Optimistic</th><th>Vol/d</th><th>Momentum</th><th>Regime</th><th>Rank net·P/ttf</th><th class=\"pcol\" title=\"Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.\">Pressure <span class=\"ptrial\">(trial)</span></th></tr></thead><tbody><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11785\">Armadyl crossbow</span></td><td title=\"thin: ~479/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~479/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~479/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">39.26m</td><td class=\"gain\">38.69m → 39.55m · +68,310 (+0.2%)</td><td class=\"gain\">38.69m → 40.12m · +629.7k (+1.6%)</td><td class=\"mini\">479/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">119.8k · net 629.7k P~0.24 ttf~17.3h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.1×, reliability 0.24 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">37.89m → 39.87m <span class=\"pmeta\">1.1× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"33631\">Crimson kisten</span></td><td title=\"thin: ~393/day two-sided — size in units, expect slow fills\"><span class=\"grade rB\" title=\"thin: ~393/day two-sided — size in units, expect slow fills\">B</span><span class=\"thinflag\" title=\"thin: ~393/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">42.98m</td><td class=\"gain\">42.50m → 43.70m · +324k (+0.8%)</td><td class=\"gain\">42.50m → 44m · +615.7k (+1.4%)</td><td class=\"mini\">393/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +9%</td><td class=\"mini\">116.1k · net 615.7k P~0.32 ttf~19.1h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.0×, reliability 0.28 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">39.20m → 43.88m <span class=\"pmeta\">1.0× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"26233\">Ancient godsword</span></td><td title=\"thin: ~113/day two-sided — size in units, expect slow fills\"><span class=\"grade rB\" title=\"thin: ~113/day two-sided — size in units, expect slow fills\">B</span><span class=\"thinflag\" title=\"thin: ~113/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">40.40m</td><td class=\"gain\">39.24m → 40.19m · +154.8k (+0.4%)</td><td class=\"gain\">39.11m → 40.58m · +654.4k (+1.7%)</td><td class=\"mini\">113/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +7%</td><td class=\"mini\">58,401 · net 654.4k P~0.41 ttf~35.7h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.2×, reliability 0.06 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">39m → 41.51m <span class=\"pmeta\">1.2× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22983\">Hydra leather</span></td><td title=\"thin: ~387/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~387/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~387/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">13.18m</td><td class=\"loss\">13.07m → 13.18m · -154.7k (-1.2%)</td><td class=\"gain\">13.02m → 13.46m · +167k (+1.3%)</td><td class=\"mini\">387/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">31,015 · net 167k P~0.26 ttf~19.3h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.1×, reliability 0.15 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">12.67m → 13.57m <span class=\"pmeta\">1.1× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13652\">Dragon claws</span></td><td title=\"thin: ~615/day two-sided — size in units, expect slow fills\"><span class=\"grade rB\" title=\"thin: ~615/day two-sided — size in units, expect slow fills\">B</span><span class=\"thinflag\" title=\"thin: ~615/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">39.76m</td><td class=\"gain\">39.69m → 40.69m · +182.7k (+0.5%)</td><td class=\"gain\">39.69m → 40.71m · +200.9k (+0.5%)</td><td class=\"mini\">615/d</td><td class=\"amber\">↓</td><td class=\"\">Flat +1%</td><td class=\"mini\">28,797 · net 200.9k P~0.35 ttf~15.3h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.0×, reliability 0.26 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">38.79m → 40.44m <span class=\"pmeta\">1.0× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27235\">Masori mask (f)</span></td><td title=\"thin: ~235/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~235/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~235/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">20.52m</td><td class=\"gain\">19.85m → 20.59m · +329.1k (+1.7%)</td><td class=\"gain\">19.85m → 20.77m · +503.3k (+2.5%)</td><td class=\"mini\">235/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">26,480 · net 503.3k P~0.11 ttf~24.8h</td><td class=\"pressure-trial pthin\" title=\"pressure 0.9×, reliability 0.10 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">20.03m → 21.10m <span class=\"pmeta\">0.9× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31472\">Bolt of linen</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">692</td><td class=\"gain\">729 → 2,529 · +1,750 (+240.1%)</td><td class=\"gain\">729 → 9,885 · +8,959 (+1228.9%)</td><td class=\"mini\">8.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +6% · spike</td><td class=\"mini\">11,411 · net 9k P~0.25 ttf~4.2h</td><td class=\"pressure-trial\" title=\"pressure 2.3×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">579 → 782 <span class=\"pmeta\">2.3×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"30775\">Chasm teleport scroll</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">34,430</td><td class=\"gain\">35,700 → 37,294 · +849 (+2.4%)</td><td class=\"gain\">33,302 → 37,351 · +3,302 (+9.9%)</td><td class=\"mini\">6.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +14%</td><td class=\"mini\">5,421 · net 3.3k P~0.38 ttf~4.7h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">31,183 → 41,836 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"29782\">Spider cave teleport</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">26,859</td><td class=\"gain\">25,756 → 29,935 · +3,581 (+13.9%)</td><td class=\"gain\">25,756 → 29,985 · +3,630 (+14.1%)</td><td class=\"mini\">8.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">2,994 · net 3.6k P~0.14 ttf~4.2h</td><td class=\"pressure-trial\" title=\"pressure 1.0×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">24,539 → 27,922 <span class=\"pmeta\">1.0×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"28931\">Searing page</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">17,530</td><td class=\"gain\">17,850 → 18,360 · +143 (+0.8%)</td><td class=\"gain\">17,582 → 18,387 · +438 (+2.5%)</td><td class=\"mini\">43.9k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">1,547 · net 438 P~0.45 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">17,037 → 18,409 <span class=\"pmeta\">2.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12905\">Anti-venom(4)</span></td><td><span class=\"grade rB\">B-</span></td><td class=\"\">9,765</td><td class=\"gain\">9,765 → 10,242 · +273 (+2.8%)</td><td class=\"gain\">9,389 → 10,244 · +651 (+6.9%)</td><td class=\"mini\">38.6k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1% · spike</td><td class=\"mini\">1,182 · net 651 P~0.23 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.3×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">9,239 → 11,215 <span class=\"pmeta\">1.3×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"10925\">Sanfew serum(4)</span></td><td><span class=\"grade rB\">B-</span></td><td class=\"\">20,450</td><td class=\"gain\">20,283 → 20,897 · +197 (+1.0%)</td><td class=\"gain\">20,207 → 20,933 · +308 (+1.5%)</td><td class=\"mini\">77.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">968 · net 308 P~0.39 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">19,785 → 21,576 <span class=\"pmeta\">1.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21940\">Sapphire dragon bolts (e)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,992</td><td class=\"gain\">2,917 → 3,083 · +105 (+3.6%)</td><td class=\"gain\">2,785 → 3,083 · +237 (+8.5%)</td><td class=\"mini\">108.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +10%</td><td class=\"mini\">440 · net 237 P~0.27 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,795 → 3,170 <span class=\"pmeta\">1.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12625\">Stamina potion(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">3,399</td><td class=\"gain\">3,405 → 3,546 · +71 (+2.1%)</td><td class=\"gain\">3,336 → 3,546 · +140 (+4.2%)</td><td class=\"mini\">119.8k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">377 · net 140 P~0.34 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">3,381 → 3,779 <span class=\"pmeta\">1.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22446\">Vial of blood</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">8,707</td><td class=\"loss\">8,463 → 8,500 · -133 (-1.6%)</td><td class=\"gain\">8,454 → 8,812 · +182 (+2.2%)</td><td class=\"mini\">140.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +16%</td><td class=\"mini\">351 · net 182 P~0.28 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">7,660 → 8,839 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"24598\">Blighted super restore(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,421</td><td class=\"gain\">2,383 → 2,527 · +94 (+3.9%)</td><td class=\"gain\">2,335 → 2,527 · +142 (+6.1%)</td><td class=\"mini\">203.8k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +3%</td><td class=\"mini\">348 · net 142 P~0.31 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,236 → 2,600 <span class=\"pmeta\">2.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"1745\">Green dragon leather</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">1,897</td><td class=\"gain\">1,995 → 2,090 · +54 (+2.7%)</td><td class=\"gain\">1,993 → 2,195 · +159 (+8.0%)</td><td class=\"mini\">126.9k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +6%</td><td class=\"mini\">329 · net 159 P~0.30 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,865 → 2,388 <span class=\"pmeta\">2.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2436\">Super attack(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">1,964</td><td class=\"gain\">2,050 → 2,152 · +59 (+2.9%)</td><td class=\"gain\">1,978 → 2,199 · +178 (+9.0%)</td><td class=\"mini\">205.8k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">254 · net 178 P~0.18 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,815 → 2,130 <span class=\"pmeta\">1.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2509\">Black dragon leather</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">3,983</td><td class=\"loss\">4,192 → 4,182 · -93 (-2.2%)</td><td class=\"gain\">4,019 → 4,198 · +96 (+2.4%)</td><td class=\"mini\">301k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">250 · net 96 P~0.33 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">3,851 → 4,204 <span class=\"pmeta\">1.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"573\">Air orb</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,297</td><td class=\"gain\">2,093 → 2,200 · +63 (+3.0%)</td><td class=\"gain\">2,077 → 2,200 · +79 (+3.8%)</td><td class=\"mini\">545.3k/d</td><td class=\"amber\">↑</td><td class=\"\">Rising +20% · spike</td><td class=\"mini\">139 · net 79 P~0.29 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,239 → 2,629 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"3002\">Toadflax potion (unf)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,413</td><td class=\"gain\">2,480 → 2,549 · +19 (+0.8%)</td><td class=\"gain\">2,419 → 2,549 · +80 (+3.3%)</td><td class=\"mini\">227.5k/d</td><td class=\"amber\">↑</td><td class=\"\">Flat +1%</td><td class=\"mini\">137 · net 80 P~0.25 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,230 → 2,551 <span class=\"pmeta\">2.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"824\">Rune dart tip</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">1,116</td><td class=\"gain\">1,090 → 1,116 · +4 (+0.4%)</td><td class=\"gain\">1,089 → 1,153 · +41 (+3.8%)</td><td class=\"mini\">370.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">134 · net 41 P~0.41 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.5×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,043 → 1,166 <span class=\"pmeta\">0.5×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13441\">Anglerfish</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,646</td><td class=\"gain\">2,705 → 2,775 · +15 (+0.6%)</td><td class=\"gain\">2,682 → 2,788 · +51 (+1.9%)</td><td class=\"mini\">1.04m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">106 · net 51 P~0.26 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,564 → 2,818 <span class=\"pmeta\">1.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2481\">Lantadyme</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">1,334</td><td class=\"gain\">1,430 → 1,467 · +8 (+0.6%)</td><td class=\"gain\">1,412 → 1,484 · +43 (+3.0%)</td><td class=\"mini\">125.7k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +18%</td><td class=\"mini\">104 · net 43 P~0.36 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.8×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,244 → 1,669 <span class=\"pmeta\">0.8×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31912\">Adamant cannonball</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">318</td><td class=\"gain\">325 → 355 · +23 (+7.1%)</td><td class=\"gain\">322 → 356 · +27 (+8.4%)</td><td class=\"mini\">335.7k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +24%</td><td class=\"mini\">73 · net 27 P~0.41 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">273 → 439 <span class=\"pmeta\">0.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"33589\">Seeking amethyst arrow</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">579</td><td class=\"gain\">625 → 661 · +23 (+3.7%)</td><td class=\"gain\">624 → 710 · +72 (+11.5%)</td><td class=\"mini\">568.6k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -3%</td><td class=\"mini\">73 · net 72 P~0.13 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">664 → 782 <span class=\"pmeta\">1.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"10033\">Chinchompa</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">860</td><td class=\"gain\">835 → 883 · +31 (+3.7%)</td><td class=\"gain\">834 → 883 · +32 (+3.8%)</td><td class=\"mini\">176.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">48 · net 32 P~0.20 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">814 → 881 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"1603\">Ruby</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">862</td><td class=\"gain\">865 → 914 · +31 (+3.6%)</td><td class=\"gain\">865 → 930 · +47 (+5.4%)</td><td class=\"mini\">1.15m/d</td><td class=\"amber\">↓</td><td class=\"\">Flat +2%</td><td class=\"mini\">42 · net 47 P~0.25 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">804 → 878 <span class=\"pmeta\">0.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12640\">Amylase crystal</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">711</td><td class=\"gain\">661 → 693 · +19 (+2.9%)</td><td class=\"gain\">661 → 727 · +52 (+7.9%)</td><td class=\"mini\">543.7k/d</td><td class=\"amber\">↓</td><td class=\"\">Flat +4%</td><td class=\"mini\">25 · net 52 P~0.15 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.0×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">653 → 760 <span class=\"pmeta\">1.0×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"231\">Snape grass</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">981</td><td class=\"gain\">957 → 981 · +5 (+0.5%)</td><td class=\"gain\">957 → 998 · +22 (+2.3%)</td><td class=\"mini\">880.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">13 · net 22 P~0.07 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">958 → 1,074 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"314\">Feather</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">3</td><td class=\"gain\">2 → 3 · +1 (+50.0%)</td><td class=\"gain\">2 → 3 · +1 (+50.0%)</td><td class=\"mini\">3.42m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">8 · net 1 P~1.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 6.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2 → 3 <span class=\"pmeta\">6.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27616\">Ancient essence</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">13</td><td class=\"loss\">14 → 13 · -1 (-7.1%)</td><td class=\"gain\">13 → 14 · +1 (+7.7%)</td><td class=\"mini\">16.93m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">7 · net 1 P~0.93 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">13 → 14 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11232\">Dragon dart tip</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">1,291</td><td class=\"gain\">1,254 → 1,291 · +12 (+1.0%)</td><td class=\"gain\">1,254 → 1,312 · +32 (+2.6%)</td><td class=\"mini\">807k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">0 · net 32 P~0.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,182 → 1,372 <span class=\"pmeta\">0.4×</span></td></tr></tbody></table></div>",
-    "churn": "<div class=\"tablewrap\"><table class=\"scantable\"><thead><tr><th class=\"left\">Item</th><th>Grade</th><th>Guide</th><th>Quick</th><th>Optimistic</th><th>Vol/d</th><th>Momentum</th><th>Regime</th><th>Rank net·P/ttf</th><th class=\"pcol\" title=\"Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.\">Pressure <span class=\"ptrial\">(trial)</span></th></tr></thead><tbody><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"9342\">Onyx bolts</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">8,297</td><td class=\"loss\">8,297 → 8,297 · -165 (-2.0%)</td><td class=\"gain\">8,297 → 8,558 · +90 (+1.1%)</td><td class=\"mini\">173.6k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -0%</td><td class=\"mini\">7.92m · net 90 P~1.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">8,107 → 8,379 <span class=\"pmeta\">0.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11959\">Black chinchompa</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">2,951</td><td class=\"gain\">2,955 → 3,032 · +17 (+0.6%)</td><td class=\"gain\">2,936 → 3,032 · +36 (+1.2%)</td><td class=\"mini\">539.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">3.12m · net 36 P~1.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,867 → 3,013 <span class=\"pmeta\">1.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22124\">Superior dragon bones</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">20,633</td><td class=\"loss\">20,252 → 20,427 · -233 (-1.2%)</td><td class=\"gain\">20,252 → 20,776 · +109 (+0.5%)</td><td class=\"mini\">181.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -0%</td><td class=\"mini\">2.80m · net 109 P~0.43 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">19,728 → 21,234 <span class=\"pmeta\">0.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21946\">Diamond dragon bolts (e)</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">3,000</td><td class=\"gain\">2,913 → 2,991 · +19 (+0.7%)</td><td class=\"gain\">2,903 → 3,000 · +37 (+1.3%)</td><td class=\"mini\">580.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +14% · spike</td><td class=\"mini\">2.61m · net 37 P~0.93 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.2×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,760 → 3,059 <span class=\"pmeta\">1.2×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"8782\">Mahogany plank</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">1,909</td><td class=\"loss\">1,909 → 1,928 · -19 (-1.0%)</td><td class=\"gain\">1,888 → 1,950 · +23 (+1.2%)</td><td class=\"mini\">1.53m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">854.3k · net 23 P~0.36 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,881 → 1,978 <span class=\"pmeta\">2.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"3024\">Super restore(4)</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">10,654</td><td class=\"gain\">10,481 → 10,730 · +35 (+0.3%)</td><td class=\"gain\">10,481 → 10,794 · +98 (+0.9%)</td><td class=\"mini\">295.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">672k · net 98 P~0.43 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">10,355 → 10,909 <span class=\"pmeta\">2.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21944\">Ruby dragon bolts (e)</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">3,008</td><td class=\"gain\">2,888 → 2,963 · +16 (+0.6%)</td><td class=\"gain\">2,876 → 2,970 · +35 (+1.2%)</td><td class=\"mini\">822.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">0 · net 35 P~0.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,929 → 3,147 <span class=\"pmeta\">2.7×</span></td></tr></tbody></table></div>",
-    "watchlist": "<div class=\"tablewrap\"><table class=\"scantable\"><thead><tr><th class=\"left\">Item</th><th>Grade</th><th>Guide</th><th>Quick</th><th>Optimistic</th><th>Vol/d</th><th>Momentum</th><th>Regime</th><th>Rank net·P/ttf</th><th>Note</th></tr></thead><tbody><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13263\">Abyssal bludgeon</span></td><td title=\"thin: ~656/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~656/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~656/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">17.45m</td><td class=\"gain\">17.22m → 17.64m · +73,355 (+0.4%)</td><td class=\"gain\">17.17m → 17.65m · +129.9k (+0.8%)</td><td class=\"mini\">656/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">66,741 · net 129.9k P~0.50 ttf~14.8h</td><td class=\"mini\">thin (~656/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11785\">Armadyl crossbow</span></td><td title=\"thin: ~479/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~479/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~479/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">39.26m</td><td class=\"gain\">38.69m → 39.55m · +68,310 (+0.2%)</td><td class=\"gain\">38.69m → 40.12m · +629.7k (+1.6%)</td><td class=\"mini\">479/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">494.5k · net 629.7k P~1.00 ttf~17.3h</td><td class=\"mini\">thin (~479/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22477\">Avernic defender hilt</span></td><td title=\"thin: ~227/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~227/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~227/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">31.30m</td><td class=\"gain\">31.05m → 31.82m · +127.2k (+0.4%)</td><td class=\"gain\">31.05m → 32.11m · +414.6k (+1.3%)</td><td class=\"mini\">227/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -3%</td><td class=\"mini\">101.7k · net 414.6k P~0.50 ttf~25.2h</td><td class=\"mini\">thin (~227/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"24268\">Basilisk jaw</span></td><td title=\"thin: ~710/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~710/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~710/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">15.80m</td><td class=\"loss\">15.97m → 16m · -289.4k (-1.8%)</td><td class=\"gain\">15.93m → 16.37m · +115.1k (+0.7%)</td><td class=\"mini\">710/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">62,642 · net 115.1k P~0.50 ttf~14.2h</td><td class=\"mini\">thin (~710/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"6737\">Berserker ring</span></td><td title=\"thin: ~1577/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1577/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1577/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.03m</td><td class=\"gain\">2.97m → 3.04m · +13,923 (+0.5%)</td><td class=\"gain\">2.97m → 3.05m · +21,599 (+0.7%)</td><td class=\"mini\">1.6k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">44,052 · net 21.6k P~1.00 ttf~9.6h</td><td class=\"mini\">thin (~1577/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11959\">Black chinchompa</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,951</td><td class=\"gain\">2,955 → 3,032 · +17 (+0.6%)</td><td class=\"gain\">2,936 → 3,032 · +36 (+1.2%)</td><td class=\"mini\">539.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">144 · net 36 P~0.50 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"453\">Coal</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">148</td><td class=\"gain\">149 → 153 · +1 (+0.7%)</td><td class=\"gain\">147 → 155 · +5 (+3.4%)</td><td class=\"mini\">11.31m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">20 · net 5 P~0.50 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"23956\">Crystal armour seed</span></td><td title=\"thin: ~1537/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1537/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1537/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">6.17m</td><td class=\"gain\">6.25m → 6.39m · +13,959 (+0.2%)</td><td class=\"gain\">6.21m → 6.39m · +55,589 (+0.9%)</td><td class=\"mini\">1.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">52,872 · net 55.6k P~0.50 ttf~9.7h</td><td class=\"mini\">thin (~1537/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"560\">Death rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">183</td><td class=\"loss\">181 → 183 · -1 (-0.6%)</td><td class=\"gain\">181 → 186 · +2 (+1.1%)</td><td class=\"mini\">17.57m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">16 · net 2 P~1.00 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13652\">Dragon claws</span></td><td title=\"thin: ~615/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~615/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~615/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">39.76m</td><td class=\"gain\">39.69m → 40.69m · +182.7k (+0.5%)</td><td class=\"gain\">39.69m → 40.71m · +200.9k (+0.5%)</td><td class=\"mini\">615/d</td><td class=\"amber\">↓</td><td class=\"\">Flat +1%</td><td class=\"mini\">70,709 · net 200.9k P~0.85 ttf~15.3h</td><td class=\"mini\">thin (~615/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13576\">Dragon warhammer</span></td><td title=\"thin: ~876/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~876/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~876/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">14.84m</td><td class=\"gain\">14.60m → 14.98m · +82,114 (+0.6%)</td><td class=\"gain\">14.59m → 14.98m · +95,361 (+0.7%)</td><td class=\"mini\">876/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -3%</td><td class=\"mini\">59,672 · net 95.4k P~0.50 ttf~12.8h</td><td class=\"mini\">thin (~876/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11284\">Dragonfire shield</span></td><td title=\"thin: ~823/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~823/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~823/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.74m</td><td class=\"gain\">3.74m → 3.85m · +29,149 (+0.8%)</td><td class=\"gain\">3.69m → 3.85m · +80,194 (+2.2%)</td><td class=\"mini\">823/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">53,416 · net 80.2k P~0.50 ttf~13.2h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"23959\">Enhanced crystal teleport seed</span></td><td title=\"thin: ~1248/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1248/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1248/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.47m</td><td class=\"gain\">3.41m → 3.49m · +17,972 (+0.5%)</td><td class=\"gain\">3.39m → 3.49m · +29,285 (+0.9%)</td><td class=\"mini\">1.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +3%</td><td class=\"mini\">25,544 · net 29.3k P~0.50 ttf~10.7h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22983\">Hydra leather</span></td><td title=\"thin: ~387/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~387/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~387/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">13.18m</td><td class=\"loss\">13.07m → 13.18m · -154.7k (-1.2%)</td><td class=\"gain\">13.02m → 13.46m · +167k (+1.3%)</td><td class=\"mini\">387/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">62,428 · net 167k P~0.50 ttf~19.3h</td><td class=\"mini\">thin (~387/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2434\">Prayer potion(4)</span></td><td><span class=\"grade rB\">B-</span></td><td class=\"\">8,990</td><td class=\"gain\">8,704 → 8,990 · +107 (+1.2%)</td><td class=\"gain\">8,704 → 8,992 · +109 (+1.3%)</td><td class=\"mini\">310.9k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">872 · net 109 P~1.00 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"5295\">Ranarr seed</span></td><td><span class=\"grade rB\">B+</span></td><td class=\"\">28,923</td><td class=\"loss\">28,925 → 29,400 · -113 (-0.4%)</td><td class=\"gain\">28,925 → 29,917 · +394 (+1.4%)</td><td class=\"mini\">54.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +7%</td><td class=\"mini\">2,805 · net 394 P~1.00 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21820\">Revenant ether</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">173</td><td class=\"gain\">174 → 178 · +1 (+0.6%)</td><td class=\"gain\">172 → 178 · +3 (+1.7%)</td><td class=\"mini\">16.67m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">12 · net 3 P~0.50 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12929\">Serpentine helm (uncharged)</span></td><td title=\"thin: ~797/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~797/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~797/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.70m</td><td class=\"gain\">3.57m → 3.69m · +39,529 (+1.1%)</td><td class=\"gain\">3.56m → 3.69m · +53,675 (+1.5%)</td><td class=\"mini\">797/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">35,141 · net 53.7k P~0.50 ttf~13.4h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"566\">Soul rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">392</td><td class=\"gain\">389 → 402 · +5 (+1.3%)</td><td class=\"gain\">389 → 403 · +6 (+1.5%)</td><td class=\"mini\">11.23m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">48 · net 6 P~1.00 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"28338\">Soulreaper axe</span></td><td title=\"thin: ~178/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~178/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~178/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">405.31m</td><td class=\"gain\">409.25m → 415m · +745k (+0.2%)</td><td class=\"gain\">409.25m → 417m · +2.74m (+0.7%)</td><td class=\"mini\">178/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +10%</td><td class=\"mini\">787.8k · net 2.74m P~1.00 ttf~28.4h</td><td class=\"mini\">thin (~178/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12924\">Toxic blowpipe (empty)</span></td><td title=\"thin: ~1011/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1011/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1011/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">11.07m</td><td class=\"gain\">11.07m → 11.35m · +47,223 (+0.4%)</td><td class=\"gain\">10.98m → 11.35m · +140.9k (+1.3%)</td><td class=\"mini\">1k/d</td><td class=\"amber\">↑</td><td class=\"\">Flat +3%</td><td class=\"mini\">88,802 · net 140.9k P~0.50 ttf~11.9h</td><td class=\"mini\">thin (~1011/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27652\">Webweaver bow (u)</span></td><td title=\"thin: ~726/day two-sided — size in units, expect slow fills\"><span class=\"grade rD\" title=\"thin: ~726/day two-sided — size in units, expect slow fills\">D</span><span class=\"thinflag\" title=\"thin: ~726/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">16.89m</td><td class=\"loss\">16.84m → 16.89m · -295.1k (-1.8%)</td><td class=\"loss\">16.82m → 16.89m · -276.5k (-1.6%)</td><td class=\"mini\">726/d</td><td class=\"mommuted\">–</td><td class=\"\">Falling -7%</td><td class=\"mini\">-151.9k · net -276.5k P~0.50 ttf~14.1h</td><td class=\"mini\">falling — price to clear, do not accumulate</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21880\">Wrath rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">326</td><td class=\"gain\">328 → 336 · +2 (+0.6%)</td><td class=\"gain\">327 → 336 · +3 (+0.9%)</td><td class=\"mini\">4.50m/d</td><td class=\"mommuted\">–</td><td class=\"\">Falling -15%</td><td class=\"mini\">12 · net 3 P~0.50 ttf~3h</td><td class=\"mini\">falling — price to clear, do not accumulate</td></tr></tbody></table></div>"
+    "band": "<div class=\"tablewrap\"><table class=\"scantable\"><thead><tr><th class=\"left\">Item</th><th>Grade</th><th>Guide</th><th>Quick</th><th>Optimistic</th><th>Vol/d</th><th>Momentum</th><th>Regime</th><th>Rank net·P/ttf</th><th class=\"pcol\" title=\"Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.\">Pressure <span class=\"ptrial\">(trial)</span></th></tr></thead><tbody><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"33631\">Crimson kisten</span></td><td title=\"thin: ~355/day two-sided — size in units, expect slow fills\"><span class=\"grade rB\" title=\"thin: ~355/day two-sided — size in units, expect slow fills\">B</span><span class=\"thinflag\" title=\"thin: ~355/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">44.41m</td><td class=\"loss\">43.61m → 44.41m · -82,906 (-0.2%)</td><td class=\"gain\">43.61m → 45.68m · +1.16m (+2.7%)</td><td class=\"mini\">355/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +11%</td><td class=\"mini\">168k · net 1.16m P~0.30 ttf~20.1h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.0×, reliability 0.22 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">41.95m → 44.80m <span class=\"pmeta\">1.0× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"26245\">Virtus robe bottom</span></td><td title=\"thin: ~284/day two-sided — size in units, expect slow fills\"><span class=\"grade rB\" title=\"thin: ~284/day two-sided — size in units, expect slow fills\">B</span><span class=\"thinflag\" title=\"thin: ~284/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">26.44m</td><td class=\"gain\">26.50m → 27.25m · +204.8k (+0.8%)</td><td class=\"gain\">26.49m → 27.56m · +517.9k (+2.0%)</td><td class=\"mini\">284/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -0%</td><td class=\"mini\">67,005 · net 517.9k P~0.26 ttf~22.5h</td><td class=\"pressure-trial pthin\" title=\"pressure 0.7×, reliability 0.14 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">26.22m → 27.62m <span class=\"pmeta\">0.7× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27652\">Webweaver bow (u)</span></td><td title=\"thin: ~618/day two-sided — size in units, expect slow fills\"><span class=\"grade rB\" title=\"thin: ~618/day two-sided — size in units, expect slow fills\">B</span><span class=\"thinflag\" title=\"thin: ~618/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">17.37m</td><td class=\"loss\">17.50m → 17.70m · -156.3k (-0.9%)</td><td class=\"gain\">17.17m → 17.74m · +218.6k (+1.3%)</td><td class=\"mini\">618/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">62,861 · net 218.6k P~0.30 ttf~15.3h</td><td class=\"pressure-trial pthin\" title=\"pressure 1.1×, reliability 0.32 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">16.78m → 17.89m <span class=\"pmeta\">1.1× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"32008\">Mithril keel parts</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">3,285</td><td class=\"gain\">4,602 → 17,170 · +12,225 (+265.6%)</td><td class=\"gain\">3,311 → 17,170 · +13,516 (+408.2%)</td><td class=\"mini\">4.5k/d</td><td class=\"gain\">↑↑</td><td class=\"\">Flat +0%</td><td class=\"mini\">6,255 · net 13.5k P~0.16 ttf~5.7h</td><td class=\"pressure-trial\" title=\"pressure 0.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,524 → 4,665 <span class=\"pmeta\">0.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"5300\">Snapdragon seed</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">52,346</td><td class=\"loss\">54,963 → 52,346 · -3,663 (-6.7%)</td><td class=\"gain\">51,716 → 54,557 · +1,750 (+3.4%)</td><td class=\"mini\">29k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">3,696 · net 1.8k P~0.26 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">49,494 → 53,560 <span class=\"pmeta\">0.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"30125\">Prayer regeneration potion(4)</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">101k</td><td class=\"gain\">99,495 → 102.5k · +906 (+0.9%)</td><td class=\"gain\">99,446 → 103k · +1,494 (+1.5%)</td><td class=\"mini\">10k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +11% · spike</td><td class=\"mini\">3,006 · net 1.5k P~0.37 ttf~3.8h</td><td class=\"pressure-trial\" title=\"pressure 2.5×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">95,018 → 117.9k <span class=\"pmeta\">2.5×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11840\">Dragon boots</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">227k</td><td class=\"gain\">220.2k → 227.1k · +2,394 (+1.1%)</td><td class=\"gain\">220.2k → 231.6k · +6,831 (+3.1%)</td><td class=\"mini\">4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">1,807 · net 6.8k P~0.07 ttf~6h</td><td class=\"pressure-trial\" title=\"pressure 1.0×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">221.6k → 240.3k <span class=\"pmeta\">1.0×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"24251\">Wilderness crabs teleport</span></td><td><span class=\"grade rB\">B</span></td><td class=\"\">17,990</td><td class=\"loss\">17,990 → 17,990 · -359 (-2.0%)</td><td class=\"gain\">17,400 → 19,900 · +2,102 (+12.1%)</td><td class=\"mini\">11.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -0%</td><td class=\"mini\">1,747 · net 2.1k P~0.13 ttf~3.5h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">16,576 → 18,718 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12913\">Anti-venom+(4)</span></td><td><span class=\"grade rB\">B-</span></td><td class=\"\">13,429</td><td class=\"gain\">13,500 → 14,000 · +220 (+1.6%)</td><td class=\"gain\">13,233 → 14,000 · +487 (+3.7%)</td><td class=\"mini\">34.8k/d</td><td class=\"amber\">↑</td><td class=\"\">Rising +6% · spike</td><td class=\"mini\">946 · net 487 P~0.31 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.3×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">12,679 → 14,727 <span class=\"pmeta\">1.3×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"5396\">Oranges(5)</span></td><td><span class=\"grade rB\">B-</span></td><td class=\"\">1,240</td><td class=\"gain\">1,306 → 1,545 · +209 (+16.0%)</td><td class=\"gain\">1,209 → 1,557 · +317 (+26.2%)</td><td class=\"mini\">19.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +73%</td><td class=\"mini\">629 · net 317 P~0.45 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,185 → 2,961 <span class=\"pmeta\">2.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31729\">Frost dragon bones</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">6,325</td><td class=\"loss\">6,251 → 6,325 · -52 (-0.8%)</td><td class=\"gain\">6,249 → 6,589 · +209 (+3.3%)</td><td class=\"mini\">71.8k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">469 · net 209 P~0.31 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.5×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">6,128 → 6,511 <span class=\"pmeta\">0.5×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"30773\">Diabolic worms 🎲</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,456</td><td class=\"loss\">2,706 → 2,668 · -91 (-3.4%)</td><td class=\"gain\">2,414 → 2,670 · +203 (+8.4%)</td><td class=\"mini\">58.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">469 · net 203 P~0.30 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.3×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,066 → 2,497 <span class=\"pmeta\">0.3×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31638\">Extended stamina potion(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">7,083</td><td class=\"gain\">7,083 → 7,422 · +191 (+2.7%)</td><td class=\"gain\">6,676 → 7,422 · +598 (+9.0%)</td><td class=\"mini\">33.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">427 · net 598 P~0.09 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 3.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">6,763 → 7,698 <span class=\"pmeta\">3.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"23733\">Divine ranging potion(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">6,755</td><td class=\"loss\">6,755 → 6,755 · -135 (-2.0%)</td><td class=\"gain\">6,648 → 6,987 · +200 (+3.0%)</td><td class=\"mini\">69.4k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">381 · net 200 P~0.24 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">6,629 → 7,132 <span class=\"pmeta\">1.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"20718\">Burnt page</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">6,360</td><td class=\"gain\">6,051 → 6,268 · +92 (+1.5%)</td><td class=\"gain\">6,051 → 6,296 · +120 (+2.0%)</td><td class=\"mini\">146.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +7%</td><td class=\"mini\">338 · net 120 P~0.40 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.8×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">5,451 → 6,841 <span class=\"pmeta\">0.8×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2481\">Lantadyme</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">1,405</td><td class=\"loss\">1,473 → 1,492 · -10 (-0.7%)</td><td class=\"gain\">1,461 → 1,600 · +107 (+7.3%)</td><td class=\"mini\">95.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +18%</td><td class=\"mini\">178 · net 107 P~0.25 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.8×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,309 → 1,599 <span class=\"pmeta\">0.8×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12625\">Stamina potion(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">3,394</td><td class=\"loss\">3,394 → 3,431 · -31 (-0.9%)</td><td class=\"gain\">3,265 → 3,443 · +110 (+3.4%)</td><td class=\"mini\">132.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">178 · net 110 P~0.20 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">3,233 → 3,683 <span class=\"pmeta\">1.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"245\">Wine of zamorak</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">1,052</td><td class=\"gain\">1,087 → 1,131 · +22 (+2.0%)</td><td class=\"gain\">1,029 → 1,131 · +80 (+7.8%)</td><td class=\"mini\">339k/d</td><td class=\"amber\">↑</td><td class=\"\">Rising +13%</td><td class=\"mini\">165 · net 80 P~0.33 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">948 → 1,227 <span class=\"pmeta\">0.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21946\">Diamond dragon bolts (e)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">2,912</td><td class=\"loss\">2,869 → 2,912 · -15 (-0.5%)</td><td class=\"gain\">2,840 → 2,968 · +69 (+2.4%)</td><td class=\"mini\">455.9k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +6%</td><td class=\"mini\">161 · net 69 P~0.33 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.2×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,821 → 3,058 <span class=\"pmeta\">1.2×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"573\">Air orb</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">2,197</td><td class=\"loss\">2,250 → 2,251 · -44 (-2.0%)</td><td class=\"gain\">2,250 → 2,369 · +72 (+3.2%)</td><td class=\"mini\">342.9k/d</td><td class=\"amber\">↓</td><td class=\"\">Flat -2% · spike</td><td class=\"mini\">93 · net 72 P~0.37 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,879 → 2,479 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"10034\">Red chinchompa</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">1,468</td><td class=\"gain\">1,463 → 1,508 · +15 (+1.0%)</td><td class=\"gain\">1,442 → 1,509 · +37 (+2.6%)</td><td class=\"mini\">586.7k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +7% · spike</td><td class=\"mini\">79 · net 37 P~0.30 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,402 → 1,531 <span class=\"pmeta\">1.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"5974\">Coconut</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">1,646</td><td class=\"loss\">1,624 → 1,646 · -10 (-0.6%)</td><td class=\"gain\">1,615 → 1,700 · +51 (+3.2%)</td><td class=\"mini\">310k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">69 · net 51 P~0.17 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,553 → 1,701 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"231\">Snape grass</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">997</td><td class=\"loss\">997 → 997 · -19 (-1.9%)</td><td class=\"gain\">980 → 1,021 · +21 (+2.1%)</td><td class=\"mini\">742.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">55 · net 21 P~0.33 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">948 → 1,039 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"9340\">Diamond bolts</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">338</td><td class=\"gain\">344 → 366 · +15 (+4.4%)</td><td class=\"gain\">304 → 367 · +56 (+18.4%)</td><td class=\"mini\">354.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +4%</td><td class=\"mini\">54 · net 56 P~0.15 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">305 → 348 <span class=\"pmeta\">1.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"239\">White berries</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">671</td><td class=\"loss\">671 → 671 · -13 (-1.9%)</td><td class=\"gain\">647 → 695 · +35 (+5.4%)</td><td class=\"mini\">202.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +24% · spike</td><td class=\"mini\">48 · net 35 P~0.21 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">620 → 699 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"19669\">Redwood logs</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">759</td><td class=\"loss\">773 → 779 · -9 (-1.2%)</td><td class=\"gain\">742 → 780 · +23 (+3.1%)</td><td class=\"mini\">738.1k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +3%</td><td class=\"mini\">36 · net 23 P~0.20 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">719 → 796 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31912\">Adamant cannonball</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">342</td><td class=\"gain\">323 → 342 · +13 (+4.0%)</td><td class=\"gain\">323 → 343 · +14 (+4.3%)</td><td class=\"mini\">314.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +34%</td><td class=\"mini\">30 · net 14 P~0.36 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">292 → 429 <span class=\"pmeta\">0.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"24607\">Blighted ancient ice sack</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">333</td><td class=\"loss\">339 → 339 · -6 (-1.8%)</td><td class=\"gain\">314 → 339 · +19 (+6.1%)</td><td class=\"mini\">1.39m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0% · spike</td><td class=\"mini\">26 · net 19 P~0.17 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">319 → 346 <span class=\"pmeta\">1.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"565\">Blood rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">362</td><td class=\"loss\">362 → 362 · -7 (-1.9%)</td><td class=\"gain\">360 → 375 · +8 (+2.2%)</td><td class=\"mini\">20.27m/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +11% · spike</td><td class=\"mini\">14 · net 8 P~0.25 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.0×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">339 → 387 <span class=\"pmeta\">2.0×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27616\">Ancient essence</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">14</td><td class=\"gain\">13 → 13 · 0 (+0.0%)</td><td class=\"gain\">13 → 14 · +1 (+7.7%)</td><td class=\"mini\">14m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">8 · net 1 P~1.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">13 → 14 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"26219\">Osmumten's fang</span></td><td title=\"thin: ~1205/day two-sided — size in units, expect slow fills\"><span class=\"grade rD\" title=\"thin: ~1205/day two-sided — size in units, expect slow fills\">D</span><span class=\"thinflag\" title=\"thin: ~1205/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">17.93m</td><td class=\"gain\">17.44m → 17.85m · +54,786 (+0.3%)</td><td class=\"gain\">17.43m → 17.93m · +145.4k (+0.8%)</td><td class=\"mini\">1.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">0 · net 145.4k P~0.00 ttf~10.9h</td><td class=\"pressure-trial\" title=\"pressure 1.0×, reliability 0.62 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">17.82m → 18.98m <span class=\"pmeta\">1.0×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"23956\">Crystal armour seed</span></td><td title=\"thin: ~1216/day two-sided — size in units, expect slow fills\"><span class=\"grade rD\" title=\"thin: ~1216/day two-sided — size in units, expect slow fills\">D</span><span class=\"thinflag\" title=\"thin: ~1216/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">6.28m</td><td class=\"gain\">5.91m → 6.05m · +20,658 (+0.3%)</td><td class=\"gain\">5.91m → 6.12m · +95,477 (+1.6%)</td><td class=\"mini\">1.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">0 · net 95.5k P~0.00 ttf~10.9h</td><td class=\"pressure-trial\" title=\"pressure 0.8×, reliability 0.67 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">6.10m → 6.48m <span class=\"pmeta\">0.8×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27232\">Masori chaps 🎲</span></td><td title=\"thin: ~186/day two-sided — size in units, expect slow fills\"><span class=\"grade rD\" title=\"thin: ~186/day two-sided — size in units, expect slow fills\">D</span><span class=\"thinflag\" title=\"thin: ~186/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">27.92m</td><td class=\"gain\">27.30m → 28.11m · +244.9k (+0.9%)</td><td class=\"gain\">27.26m → 28.11m · +288k (+1.1%)</td><td class=\"mini\">186/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -0%</td><td class=\"mini\">0 · net 288k P~0.00 ttf~27.8h</td><td class=\"pressure-trial pthin\" title=\"pressure 0.7×, reliability 0.11 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">27.55m → 29m <span class=\"pmeta\">0.7× ⚠thin</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31976\">Camphor repair kit</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">1,611</td><td class=\"gain\">1,455 → 1,527 · +42 (+2.9%)</td><td class=\"gain\">832 → 1,611 · +747 (+89.8%)</td><td class=\"mini\">98.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">0 · net 747 P~0.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,438 → 1,775 <span class=\"pmeta\">1.1×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"31650\">Armadyl brew(4)</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">1,430</td><td class=\"gain\">889 → 1,398 · +482 (+54.2%)</td><td class=\"gain\">889 → 1,398 · +482 (+54.2%)</td><td class=\"mini\">46.2k/d</td><td class=\"loss\">↓↓</td><td class=\"\">Flat -1%</td><td class=\"mini\">0 · net 482 P~0.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,169 → 1,543 <span class=\"pmeta\">1.9×</span></td></tr></tbody></table></div>",
+    "churn": "<div class=\"tablewrap\"><table class=\"scantable\"><thead><tr><th class=\"left\">Item</th><th>Grade</th><th>Guide</th><th>Quick</th><th>Optimistic</th><th>Vol/d</th><th>Momentum</th><th>Regime</th><th>Rank net·P/ttf</th><th class=\"pcol\" title=\"Pressure-driven reachable band (deep bid → bold ask) — a TRIAL, un-calibrated demand read (n≈0), NOT the ranked/graded decision. The neutral Optimistic column is the conservative reference.\">Pressure <span class=\"ptrial\">(trial)</span></th></tr></thead><tbody><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22446\">Vial of blood</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">8,715</td><td class=\"loss\">8,608 → 8,710 · -72 (-0.8%)</td><td class=\"gain\">8,600 → 8,878 · +101 (+1.2%)</td><td class=\"mini\">74.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +19%</td><td class=\"mini\">7.78m · net 101 P~0.93 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">8,238 → 9,079 <span class=\"pmeta\">0.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"1617\">Uncut diamond</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">2,586</td><td class=\"loss\">2,555 → 2,586 · -20 (-0.8%)</td><td class=\"gain\">2,555 → 2,635 · +28 (+1.1%)</td><td class=\"mini\">399.9k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">1.44m · net 28 P~0.64 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,464 → 2,649 <span class=\"pmeta\">0.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"536\">Dragon bones</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">3,172</td><td class=\"loss\">3,172 → 3,172 · -63 (-2.0%)</td><td class=\"gain\">3,133 → 3,240 · +43 (+1.4%)</td><td class=\"mini\">1.10m/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +6% · spike</td><td class=\"mini\">1.32m · net 43 P~0.57 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">3,129 → 3,432 <span class=\"pmeta\">0.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13439\">Raw anglerfish</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">2,452</td><td class=\"loss\">2,409 → 2,452 · -6 (-0.2%)</td><td class=\"gain\">2,369 → 2,453 · +35 (+1.5%)</td><td class=\"mini\">663.1k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -3%</td><td class=\"mini\">855k · net 35 P~0.21 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 0.7×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,194 → 2,491 <span class=\"pmeta\">0.7×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13441\">Anglerfish</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">2,677</td><td class=\"loss\">2,634 → 2,641 · -45 (-1.7%)</td><td class=\"gain\">2,628 → 2,713 · +31 (+1.2%)</td><td class=\"mini\">773.6k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">708.6k · net 31 P~0.29 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 1.9×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,638 → 2,815 <span class=\"pmeta\">1.9×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21944\">Ruby dragon bolts (e)</span></td><td><span class=\"grade rS\">S+</span></td><td class=\"\">2,959</td><td class=\"loss\">2,959 → 3,015 · -4 (-0.1%)</td><td class=\"gain\">2,958 → 3,035 · +17 (+0.6%)</td><td class=\"mini\">877.3k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -4%</td><td class=\"mini\">534.3k · net 17 P~0.36 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.6×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">2,804 → 3,077 <span class=\"pmeta\">2.6×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2434\">Prayer potion(4)</span></td><td><span class=\"grade rS\">S-</span></td><td class=\"\">8,837</td><td class=\"loss\">8,837 → 8,837 · -176 (-2.0%)</td><td class=\"gain\">8,596 → 8,838 · +66 (+0.8%)</td><td class=\"mini\">327.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">75,429 · net 66 P~0.07 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 3.4×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">8,659 → 9,024 <span class=\"pmeta\">3.4×</span></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"8782\">Mahogany plank</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">1,879</td><td class=\"loss\">1,888 → 1,906 · -20 (-1.1%)</td><td class=\"gain\">1,850 → 1,906 · +18 (+1.0%)</td><td class=\"mini\">1.90m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">0 · net 18 P~0.00 ttf~3h</td><td class=\"pressure-trial\" title=\"pressure 2.1×, reliability 1.00 — deep reachable bid → bold reachable ask; TRIAL, un-calibrated (n≈0). The Optimistic column is the conservative reference.\">1,850 → 1,955 <span class=\"pmeta\">2.1×</span></td></tr></tbody></table></div>",
+    "watchlist": "<div class=\"tablewrap\"><table class=\"scantable\"><thead><tr><th class=\"left\">Item</th><th>Grade</th><th>Guide</th><th>Quick</th><th>Optimistic</th><th>Vol/d</th><th>Momentum</th><th>Regime</th><th>Rank net·P/ttf</th><th>Note</th></tr></thead><tbody><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13263\">Abyssal bludgeon</span></td><td title=\"thin: ~517/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~517/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~517/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">17.78m</td><td class=\"loss\">17.78m → 17.97m · -165.6k (-0.9%)</td><td class=\"gain\">17.56m → 18.04m · +128.5k (+0.7%)</td><td class=\"mini\">517/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">56,556 · net 128.5k P~0.50 ttf~16.7h</td><td class=\"mini\">thin (~517/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11785\">Armadyl crossbow</span></td><td title=\"thin: ~423/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~423/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~423/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">38.12m</td><td class=\"gain\">37.55m → 38.65m · +328.4k (+0.9%)</td><td class=\"gain\">37.55m → 38.72m · +395.9k (+1.1%)</td><td class=\"mini\">423/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -3%</td><td class=\"mini\">287.5k · net 395.9k P~1.00 ttf~18.5h</td><td class=\"mini\">thin (~423/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22477\">Avernic defender hilt</span></td><td title=\"thin: ~147/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~147/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~147/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">31.46m</td><td class=\"gain\">30.71m → 31.46m · +117.3k (+0.4%)</td><td class=\"gain\">30.71m → 31.55m · +210.8k (+0.7%)</td><td class=\"mini\">147/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">77,421 · net 210.8k P~1.00 ttf~31.3h</td><td class=\"mini\">thin (~147/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"24268\">Basilisk jaw</span></td><td title=\"thin: ~594/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~594/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~594/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">16.37m</td><td class=\"gain\">16.25m → 16.67m · +83,953 (+0.5%)</td><td class=\"gain\">16.23m → 16.76m · +188.4k (+1.2%)</td><td class=\"mini\">594/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">91,266 · net 188.4k P~0.50 ttf~15.6h</td><td class=\"mini\">thin (~594/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"6737\">Berserker ring</span></td><td title=\"thin: ~1460/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1460/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1460/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.02m</td><td class=\"loss\">2.99m → 3.02m · -28,524 (-1.0%)</td><td class=\"gain\">2.98m → 3.08m · +44,937 (+1.5%)</td><td class=\"mini\">1.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -1%</td><td class=\"mini\">43,665 · net 44.9k P~0.50 ttf~9.9h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11959\">Black chinchompa</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">3,057</td><td class=\"gain\">2,976 → 3,051 · +14 (+0.5%)</td><td class=\"gain\">2,974 → 3,051 · +16 (+0.5%)</td><td class=\"mini\">433.9k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +3%</td><td class=\"mini\">64 · net 16 P~0.50 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"453\">Coal</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">150</td><td class=\"gain\">150 → 156 · +3 (+2.0%)</td><td class=\"gain\">147 → 156 · +6 (+4.1%)</td><td class=\"mini\">9.18m/d</td><td class=\"amber\">↑</td><td class=\"\">Flat +1%</td><td class=\"mini\">22 · net 6 P~0.50 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"23956\">Crystal armour seed</span></td><td title=\"thin: ~1216/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1216/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1216/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">6.28m</td><td class=\"gain\">5.91m → 6.05m · +20,658 (+0.3%)</td><td class=\"gain\">5.91m → 6.12m · +95,477 (+1.6%)</td><td class=\"mini\">1.2k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">78,740 · net 95.5k P~0.50 ttf~10.9h</td><td class=\"mini\">thin (~1216/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"560\">Death rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">181</td><td class=\"loss\">180 → 180 · -3 (-1.7%)</td><td class=\"gain\">178 → 184 · +3 (+1.7%)</td><td class=\"mini\">16.52m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">12 · net 3 P~0.50 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13652\">Dragon claws</span></td><td title=\"thin: ~542/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~542/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~542/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">39.77m</td><td class=\"gain\">39.20m → 40.30m · +296.5k (+0.8%)</td><td class=\"gain\">39.20m → 40.30m · +296.5k (+0.8%)</td><td class=\"mini\">542/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">251.8k · net 296.5k P~1.00 ttf~16.3h</td><td class=\"mini\">thin (~542/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"13576\">Dragon warhammer</span></td><td title=\"thin: ~721/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~721/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~721/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">14.60m</td><td class=\"loss\">14.50m → 14.66m · -134.9k (-0.9%)</td><td class=\"gain\">14.32m → 14.74m · +127.1k (+0.9%)</td><td class=\"mini\">721/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -3%</td><td class=\"mini\">70,334 · net 127.1k P~0.50 ttf~14.1h</td><td class=\"mini\">thin (~721/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"11284\">Dragonfire shield</span></td><td title=\"thin: ~754/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~754/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~754/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.51m</td><td class=\"gain\">3.44m → 3.53m · +14,309 (+0.4%)</td><td class=\"gain\">3.43m → 3.53m · +25,394 (+0.7%)</td><td class=\"mini\">754/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -5%</td><td class=\"mini\">16,095 · net 25.4k P~0.50 ttf~13.8h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"23959\">Enhanced crystal teleport seed</span></td><td title=\"thin: ~1124/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~1124/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~1124/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.49m</td><td class=\"gain\">3.41m → 3.48m · +5,544 (+0.2%)</td><td class=\"gain\">3.41m → 3.49m · +13,691 (+0.4%)</td><td class=\"mini\">1.1k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +3%</td><td class=\"mini\">11,183 · net 13.7k P~0.50 ttf~11.3h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"22983\">Hydra leather</span></td><td title=\"thin: ~326/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~326/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~326/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">13.15m</td><td class=\"loss\">13.12m → 13.29m · -96,909 (-0.7%)</td><td class=\"gain\">12.94m → 13.29m · +82,860 (+0.6%)</td><td class=\"mini\">326/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">27,690 · net 82.9k P~0.50 ttf~21h</td><td class=\"mini\">thin/illiquid — few trades/day</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"2434\">Prayer potion(4)</span></td><td><span class=\"grade rC\">C</span></td><td class=\"\">8,837</td><td class=\"loss\">8,837 → 8,837 · -176 (-2.0%)</td><td class=\"gain\">8,596 → 8,838 · +66 (+0.8%)</td><td class=\"mini\">327.5k/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">264 · net 66 P~0.50 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"5295\">Ranarr seed</span></td><td><span class=\"grade rB\">B-</span></td><td class=\"\">29,197</td><td class=\"gain\">28,000 → 28,961 · +382 (+1.4%)</td><td class=\"gain\">28,000 → 29,000 · +420 (+1.5%)</td><td class=\"mini\">51.2k/d</td><td class=\"amber\">↓</td><td class=\"\">Rising +6%</td><td class=\"mini\">1,150 · net 420 P~0.85 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21820\">Revenant ether</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">176</td><td class=\"gain\">174 → 179 · +2 (+1.1%)</td><td class=\"gain\">174 → 179 · +2 (+1.1%)</td><td class=\"mini\">20m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +0%</td><td class=\"mini\">16 · net 2 P~1.00 ttf~3h</td><td class=\"mini\">below 500k/day attention floor</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12929\">Serpentine helm (uncharged)</span></td><td title=\"thin: ~742/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~742/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~742/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">3.56m</td><td class=\"gain\">3.48m → 3.59m · +38,678 (+1.1%)</td><td class=\"gain\">3.48m → 3.59m · +38,678 (+1.1%)</td><td class=\"mini\">742/d</td><td class=\"mommuted\">–</td><td class=\"\">Falling -5%</td><td class=\"mini\">48,482 · net 38.7k P~1.00 ttf~13.9h</td><td class=\"mini\">falling — price to clear, do not accumulate</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"566\">Soul rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">394</td><td class=\"gain\">395 → 405 · +2 (+0.5%)</td><td class=\"gain\">391 → 405 · +6 (+1.5%)</td><td class=\"mini\">10.94m/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +1%</td><td class=\"mini\">24 · net 6 P~0.50 ttf~3h</td><td class=\"mini\"></td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"28338\">Soulreaper axe</span></td><td title=\"thin: ~208/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~208/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~208/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">429.54m</td><td class=\"loss\">435m → 430m · -10m (-2.3%)</td><td class=\"gain\">424.42m → 433.95m · +4.53m (+1.1%)</td><td class=\"mini\">208/d</td><td class=\"mommuted\">–</td><td class=\"\">Rising +9%</td><td class=\"mini\">721.1k · net 4.53m P~0.50 ttf~26.3h</td><td class=\"mini\">thin (~208/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"12924\">Toxic blowpipe (empty)</span></td><td title=\"thin: ~930/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~930/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~930/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">10.74m</td><td class=\"gain\">10.41m → 10.69m · +60,087 (+0.6%)</td><td class=\"gain\">10.41m → 10.69m · +69,410 (+0.7%)</td><td class=\"mini\">930/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat +2%</td><td class=\"mini\">46,315 · net 69.4k P~0.50 ttf~12.4h</td><td class=\"mini\">thin (~930/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"27652\">Webweaver bow (u)</span></td><td title=\"thin: ~618/day two-sided — size in units, expect slow fills\"><span class=\"grade rA\" title=\"thin: ~618/day two-sided — size in units, expect slow fills\">A-</span><span class=\"thinflag\" title=\"thin: ~618/day two-sided — size in units, expect slow fills\">thin</span></td><td class=\"\">17.37m</td><td class=\"loss\">17.50m → 17.70m · -156.3k (-0.9%)</td><td class=\"gain\">17.17m → 17.74m · +218.6k (+1.3%)</td><td class=\"mini\">618/d</td><td class=\"mommuted\">–</td><td class=\"\">Flat -2%</td><td class=\"mini\">108k · net 218.6k P~0.50 ttf~15.3h</td><td class=\"mini\">thin (~618/day — size in units)</td></tr><tr><td class=\"left\"><span class=\"linkname\" data-trend=\"21880\">Wrath rune</span></td><td><span class=\"grade rD\">D</span></td><td class=\"\">340</td><td class=\"loss\">321 → 325 · -2 (-0.6%)</td><td class=\"loss\">321 → 325 · -2 (-0.6%)</td><td class=\"mini\">4.97m/d</td><td class=\"mommuted\">–</td><td class=\"\">Falling -9%</td><td class=\"mini\">-16 · net -2 P~1.00 ttf~3h</td><td class=\"mini\">falling — price to clear, do not accumulate</td></tr></tbody></table></div>"
   },
   "watchlist": {
     "headers": [
@@ -1868,21 +2005,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~656/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~517/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "17.45m"
+            "t": "17.78m"
           },
           {
-            "t": "17.22m → 17.64m · +73,355 (+0.4%)",
+            "t": "17.78m → 17.97m · -165.6k (-0.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "17.56m → 18.04m · +128.5k (+0.7%)",
             "c": "gain"
           },
           {
-            "t": "17.17m → 17.65m · +129.9k (+0.8%)",
-            "c": "gain"
-          },
-          {
-            "t": "656/d",
+            "t": "517/d",
             "c": "mini"
           },
           {
@@ -1890,14 +2027,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +1%"
+            "t": "Flat +2%"
           },
           {
-            "t": "66,741 · net 129.9k P~0.50 ttf~14.8h",
+            "t": "56,556 · net 128.5k P~0.50 ttf~16.7h",
             "c": "mini"
           },
           {
-            "t": "thin (~656/day — size in units)",
+            "t": "thin (~517/day — size in units)",
             "c": "mini"
           }
         ]
@@ -1910,21 +2047,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~479/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~423/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "39.26m"
+            "t": "38.12m"
           },
           {
-            "t": "38.69m → 39.55m · +68,310 (+0.2%)",
+            "t": "37.55m → 38.65m · +328.4k (+0.9%)",
             "c": "gain"
           },
           {
-            "t": "38.69m → 40.12m · +629.7k (+1.6%)",
+            "t": "37.55m → 38.72m · +395.9k (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "479/d",
+            "t": "423/d",
             "c": "mini"
           },
           {
@@ -1932,14 +2069,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Flat -3%"
           },
           {
-            "t": "494.5k · net 629.7k P~1.00 ttf~17.3h",
+            "t": "287.5k · net 395.9k P~1.00 ttf~18.5h",
             "c": "mini"
           },
           {
-            "t": "thin (~479/day — size in units)",
+            "t": "thin (~423/day — size in units)",
             "c": "mini"
           }
         ]
@@ -1952,21 +2089,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~227/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~147/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "31.30m"
+            "t": "31.46m"
           },
           {
-            "t": "31.05m → 31.82m · +127.2k (+0.4%)",
+            "t": "30.71m → 31.46m · +117.3k (+0.4%)",
             "c": "gain"
           },
           {
-            "t": "31.05m → 32.11m · +414.6k (+1.3%)",
+            "t": "30.71m → 31.55m · +210.8k (+0.7%)",
             "c": "gain"
           },
           {
-            "t": "227/d",
+            "t": "147/d",
             "c": "mini"
           },
           {
@@ -1974,14 +2111,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -3%"
+            "t": "Flat +1%"
           },
           {
-            "t": "101.7k · net 414.6k P~0.50 ttf~25.2h",
+            "t": "77,421 · net 210.8k P~1.00 ttf~31.3h",
             "c": "mini"
           },
           {
-            "t": "thin (~227/day — size in units)",
+            "t": "thin (~147/day — size in units)",
             "c": "mini"
           }
         ]
@@ -1994,21 +2131,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~710/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~594/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "15.80m"
+            "t": "16.37m"
           },
           {
-            "t": "15.97m → 16m · -289.4k (-1.8%)",
-            "c": "loss"
-          },
-          {
-            "t": "15.93m → 16.37m · +115.1k (+0.7%)",
+            "t": "16.25m → 16.67m · +83,953 (+0.5%)",
             "c": "gain"
           },
           {
-            "t": "710/d",
+            "t": "16.23m → 16.76m · +188.4k (+1.2%)",
+            "c": "gain"
+          },
+          {
+            "t": "594/d",
             "c": "mini"
           },
           {
@@ -2016,14 +2153,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -1%"
+            "t": "Flat +2%"
           },
           {
-            "t": "62,642 · net 115.1k P~0.50 ttf~14.2h",
+            "t": "91,266 · net 188.4k P~0.50 ttf~15.6h",
             "c": "mini"
           },
           {
-            "t": "thin (~710/day — size in units)",
+            "t": "thin (~594/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2036,21 +2173,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~1577/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~1460/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "3.03m"
+            "t": "3.02m"
           },
           {
-            "t": "2.97m → 3.04m · +13,923 (+0.5%)",
+            "t": "2.99m → 3.02m · -28,524 (-1.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "2.98m → 3.08m · +44,937 (+1.5%)",
             "c": "gain"
           },
           {
-            "t": "2.97m → 3.05m · +21,599 (+0.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "1.6k/d",
+            "t": "1.5k/d",
             "c": "mini"
           },
           {
@@ -2061,11 +2198,11 @@
             "t": "Flat -1%"
           },
           {
-            "t": "44,052 · net 21.6k P~1.00 ttf~9.6h",
+            "t": "43,665 · net 44.9k P~0.50 ttf~9.9h",
             "c": "mini"
           },
           {
-            "t": "thin (~1577/day — size in units)",
+            "t": "thin/illiquid — few trades/day",
             "c": "mini"
           }
         ]
@@ -2077,21 +2214,21 @@
             "t": "Black chinchompa"
           },
           {
-            "t": "C"
+            "t": "D"
           },
           {
-            "t": "2,951"
+            "t": "3,057"
           },
           {
-            "t": "2,955 → 3,032 · +17 (+0.6%)",
+            "t": "2,976 → 3,051 · +14 (+0.5%)",
             "c": "gain"
           },
           {
-            "t": "2,936 → 3,032 · +36 (+1.2%)",
+            "t": "2,974 → 3,051 · +16 (+0.5%)",
             "c": "gain"
           },
           {
-            "t": "539.2k/d",
+            "t": "433.9k/d",
             "c": "mini"
           },
           {
@@ -2099,10 +2236,10 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +2%"
+            "t": "Flat +3%"
           },
           {
-            "t": "144 · net 36 P~0.50 ttf~3h",
+            "t": "64 · net 16 P~0.50 ttf~3h",
             "c": "mini"
           },
           {
@@ -2121,29 +2258,29 @@
             "t": "D"
           },
           {
-            "t": "148"
+            "t": "150"
           },
           {
-            "t": "149 → 153 · +1 (+0.7%)",
+            "t": "150 → 156 · +3 (+2.0%)",
             "c": "gain"
           },
           {
-            "t": "147 → 155 · +5 (+3.4%)",
+            "t": "147 → 156 · +6 (+4.1%)",
             "c": "gain"
           },
           {
-            "t": "11.31m/d",
+            "t": "9.18m/d",
             "c": "mini"
           },
           {
-            "t": "–",
-            "c": "mommuted"
+            "t": "↑",
+            "c": "amber"
           },
           {
             "t": "Flat +1%"
           },
           {
-            "t": "20 · net 5 P~0.50 ttf~3h",
+            "t": "22 · net 6 P~0.50 ttf~3h",
             "c": "mini"
           },
           {
@@ -2160,21 +2297,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~1537/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~1216/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "6.17m"
+            "t": "6.28m"
           },
           {
-            "t": "6.25m → 6.39m · +13,959 (+0.2%)",
+            "t": "5.91m → 6.05m · +20,658 (+0.3%)",
             "c": "gain"
           },
           {
-            "t": "6.21m → 6.39m · +55,589 (+0.9%)",
+            "t": "5.91m → 6.12m · +95,477 (+1.6%)",
             "c": "gain"
           },
           {
-            "t": "1.5k/d",
+            "t": "1.2k/d",
             "c": "mini"
           },
           {
@@ -2182,14 +2319,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +1%"
+            "t": "Flat +2%"
           },
           {
-            "t": "52,872 · net 55.6k P~0.50 ttf~9.7h",
+            "t": "78,740 · net 95.5k P~0.50 ttf~10.9h",
             "c": "mini"
           },
           {
-            "t": "thin (~1537/day — size in units)",
+            "t": "thin (~1216/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2204,18 +2341,18 @@
             "t": "D"
           },
           {
-            "t": "183"
+            "t": "181"
           },
           {
-            "t": "181 → 183 · -1 (-0.6%)",
+            "t": "180 → 180 · -3 (-1.7%)",
             "c": "loss"
           },
           {
-            "t": "181 → 186 · +2 (+1.1%)",
+            "t": "178 → 184 · +3 (+1.7%)",
             "c": "gain"
           },
           {
-            "t": "17.57m/d",
+            "t": "16.52m/d",
             "c": "mini"
           },
           {
@@ -2223,10 +2360,10 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +1%"
+            "t": "Flat +0%"
           },
           {
-            "t": "16 · net 2 P~1.00 ttf~3h",
+            "t": "12 · net 3 P~0.50 ttf~3h",
             "c": "mini"
           },
           {
@@ -2243,36 +2380,36 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~615/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~542/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "39.76m"
+            "t": "39.77m"
           },
           {
-            "t": "39.69m → 40.69m · +182.7k (+0.5%)",
+            "t": "39.20m → 40.30m · +296.5k (+0.8%)",
             "c": "gain"
           },
           {
-            "t": "39.69m → 40.71m · +200.9k (+0.5%)",
+            "t": "39.20m → 40.30m · +296.5k (+0.8%)",
             "c": "gain"
           },
           {
-            "t": "615/d",
+            "t": "542/d",
             "c": "mini"
           },
           {
-            "t": "↓",
-            "c": "amber"
+            "t": "–",
+            "c": "mommuted"
           },
           {
             "t": "Flat +1%"
           },
           {
-            "t": "70,709 · net 200.9k P~0.85 ttf~15.3h",
+            "t": "251.8k · net 296.5k P~1.00 ttf~16.3h",
             "c": "mini"
           },
           {
-            "t": "thin (~615/day — size in units)",
+            "t": "thin (~542/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2285,21 +2422,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~876/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~721/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "14.84m"
+            "t": "14.60m"
           },
           {
-            "t": "14.60m → 14.98m · +82,114 (+0.6%)",
+            "t": "14.50m → 14.66m · -134.9k (-0.9%)",
+            "c": "loss"
+          },
+          {
+            "t": "14.32m → 14.74m · +127.1k (+0.9%)",
             "c": "gain"
           },
           {
-            "t": "14.59m → 14.98m · +95,361 (+0.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "876/d",
+            "t": "721/d",
             "c": "mini"
           },
           {
@@ -2310,11 +2447,11 @@
             "t": "Flat -3%"
           },
           {
-            "t": "59,672 · net 95.4k P~0.50 ttf~12.8h",
+            "t": "70,334 · net 127.1k P~0.50 ttf~14.1h",
             "c": "mini"
           },
           {
-            "t": "thin (~876/day — size in units)",
+            "t": "thin (~721/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2327,21 +2464,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~823/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~754/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "3.74m"
+            "t": "3.51m"
           },
           {
-            "t": "3.74m → 3.85m · +29,149 (+0.8%)",
+            "t": "3.44m → 3.53m · +14,309 (+0.4%)",
             "c": "gain"
           },
           {
-            "t": "3.69m → 3.85m · +80,194 (+2.2%)",
+            "t": "3.43m → 3.53m · +25,394 (+0.7%)",
             "c": "gain"
           },
           {
-            "t": "823/d",
+            "t": "754/d",
             "c": "mini"
           },
           {
@@ -2349,10 +2486,10 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -2%"
+            "t": "Flat -5%"
           },
           {
-            "t": "53,416 · net 80.2k P~0.50 ttf~13.2h",
+            "t": "16,095 · net 25.4k P~0.50 ttf~13.8h",
             "c": "mini"
           },
           {
@@ -2369,21 +2506,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~1248/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~1124/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "3.47m"
+            "t": "3.49m"
           },
           {
-            "t": "3.41m → 3.49m · +17,972 (+0.5%)",
+            "t": "3.41m → 3.48m · +5,544 (+0.2%)",
             "c": "gain"
           },
           {
-            "t": "3.39m → 3.49m · +29,285 (+0.9%)",
+            "t": "3.41m → 3.49m · +13,691 (+0.4%)",
             "c": "gain"
           },
           {
-            "t": "1.2k/d",
+            "t": "1.1k/d",
             "c": "mini"
           },
           {
@@ -2394,7 +2531,7 @@
             "t": "Flat +3%"
           },
           {
-            "t": "25,544 · net 29.3k P~0.50 ttf~10.7h",
+            "t": "11,183 · net 13.7k P~0.50 ttf~11.3h",
             "c": "mini"
           },
           {
@@ -2411,21 +2548,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~387/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~326/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "13.18m"
+            "t": "13.15m"
           },
           {
-            "t": "13.07m → 13.18m · -154.7k (-1.2%)",
+            "t": "13.12m → 13.29m · -96,909 (-0.7%)",
             "c": "loss"
           },
           {
-            "t": "13.02m → 13.46m · +167k (+1.3%)",
+            "t": "12.94m → 13.29m · +82,860 (+0.6%)",
             "c": "gain"
           },
           {
-            "t": "387/d",
+            "t": "326/d",
             "c": "mini"
           },
           {
@@ -2433,14 +2570,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Flat -2%"
           },
           {
-            "t": "62,428 · net 167k P~0.50 ttf~19.3h",
+            "t": "27,690 · net 82.9k P~0.50 ttf~21h",
             "c": "mini"
           },
           {
-            "t": "thin (~387/day — size in units)",
+            "t": "thin/illiquid — few trades/day",
             "c": "mini"
           }
         ]
@@ -2452,21 +2589,21 @@
             "t": "Prayer potion(4)"
           },
           {
-            "t": "B-"
+            "t": "C"
           },
           {
-            "t": "8,990"
+            "t": "8,837"
           },
           {
-            "t": "8,704 → 8,990 · +107 (+1.2%)",
+            "t": "8,837 → 8,837 · -176 (-2.0%)",
+            "c": "loss"
+          },
+          {
+            "t": "8,596 → 8,838 · +66 (+0.8%)",
             "c": "gain"
           },
           {
-            "t": "8,704 → 8,992 · +109 (+1.3%)",
-            "c": "gain"
-          },
-          {
-            "t": "310.9k/d",
+            "t": "327.5k/d",
             "c": "mini"
           },
           {
@@ -2474,10 +2611,10 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat +2%"
+            "t": "Flat +1%"
           },
           {
-            "t": "872 · net 109 P~1.00 ttf~3h",
+            "t": "264 · net 66 P~0.50 ttf~3h",
             "c": "mini"
           },
           {
@@ -2493,32 +2630,32 @@
             "t": "Ranarr seed"
           },
           {
-            "t": "B+"
+            "t": "B-"
           },
           {
-            "t": "28,923"
+            "t": "29,197"
           },
           {
-            "t": "28,925 → 29,400 · -113 (-0.4%)",
-            "c": "loss"
-          },
-          {
-            "t": "28,925 → 29,917 · +394 (+1.4%)",
+            "t": "28,000 → 28,961 · +382 (+1.4%)",
             "c": "gain"
           },
           {
-            "t": "54.3k/d",
+            "t": "28,000 → 29,000 · +420 (+1.5%)",
+            "c": "gain"
+          },
+          {
+            "t": "51.2k/d",
             "c": "mini"
           },
           {
-            "t": "–",
-            "c": "mommuted"
+            "t": "↓",
+            "c": "amber"
           },
           {
-            "t": "Rising +7%"
+            "t": "Rising +6%"
           },
           {
-            "t": "2,805 · net 394 P~1.00 ttf~3h",
+            "t": "1,150 · net 420 P~0.85 ttf~3h",
             "c": "mini"
           },
           {
@@ -2537,18 +2674,18 @@
             "t": "D"
           },
           {
-            "t": "173"
+            "t": "176"
           },
           {
-            "t": "174 → 178 · +1 (+0.6%)",
+            "t": "174 → 179 · +2 (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "172 → 178 · +3 (+1.7%)",
+            "t": "174 → 179 · +2 (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "16.67m/d",
+            "t": "20m/d",
             "c": "mini"
           },
           {
@@ -2559,11 +2696,11 @@
             "t": "Flat +0%"
           },
           {
-            "t": "12 · net 3 P~0.50 ttf~3h",
+            "t": "16 · net 2 P~1.00 ttf~3h",
             "c": "mini"
           },
           {
-            "t": "",
+            "t": "below 500k/day attention floor",
             "c": "mini"
           }
         ]
@@ -2576,21 +2713,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~797/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~742/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "3.70m"
+            "t": "3.56m"
           },
           {
-            "t": "3.57m → 3.69m · +39,529 (+1.1%)",
+            "t": "3.48m → 3.59m · +38,678 (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "3.56m → 3.69m · +53,675 (+1.5%)",
+            "t": "3.48m → 3.59m · +38,678 (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "797/d",
+            "t": "742/d",
             "c": "mini"
           },
           {
@@ -2598,14 +2735,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Flat -4%"
+            "t": "Falling -5%"
           },
           {
-            "t": "35,141 · net 53.7k P~0.50 ttf~13.4h",
+            "t": "48,482 · net 38.7k P~1.00 ttf~13.9h",
             "c": "mini"
           },
           {
-            "t": "thin/illiquid — few trades/day",
+            "t": "falling — price to clear, do not accumulate",
             "c": "mini"
           }
         ]
@@ -2620,18 +2757,18 @@
             "t": "D"
           },
           {
-            "t": "392"
+            "t": "394"
           },
           {
-            "t": "389 → 402 · +5 (+1.3%)",
+            "t": "395 → 405 · +2 (+0.5%)",
             "c": "gain"
           },
           {
-            "t": "389 → 403 · +6 (+1.5%)",
+            "t": "391 → 405 · +6 (+1.5%)",
             "c": "gain"
           },
           {
-            "t": "11.23m/d",
+            "t": "10.94m/d",
             "c": "mini"
           },
           {
@@ -2642,7 +2779,7 @@
             "t": "Flat +1%"
           },
           {
-            "t": "48 · net 6 P~1.00 ttf~3h",
+            "t": "24 · net 6 P~0.50 ttf~3h",
             "c": "mini"
           },
           {
@@ -2659,21 +2796,21 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~178/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~208/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "405.31m"
+            "t": "429.54m"
           },
           {
-            "t": "409.25m → 415m · +745k (+0.2%)",
+            "t": "435m → 430m · -10m (-2.3%)",
+            "c": "loss"
+          },
+          {
+            "t": "424.42m → 433.95m · +4.53m (+1.1%)",
             "c": "gain"
           },
           {
-            "t": "409.25m → 417m · +2.74m (+0.7%)",
-            "c": "gain"
-          },
-          {
-            "t": "178/d",
+            "t": "208/d",
             "c": "mini"
           },
           {
@@ -2681,14 +2818,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Rising +10%"
+            "t": "Rising +9%"
           },
           {
-            "t": "787.8k · net 2.74m P~1.00 ttf~28.4h",
+            "t": "721.1k · net 4.53m P~0.50 ttf~26.3h",
             "c": "mini"
           },
           {
-            "t": "thin (~178/day — size in units)",
+            "t": "thin (~208/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2701,36 +2838,36 @@
           },
           {
             "t": "A-",
-            "title": "thin: ~1011/day two-sided — size in units, expect slow fills"
+            "title": "thin: ~930/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "11.07m"
+            "t": "10.74m"
           },
           {
-            "t": "11.07m → 11.35m · +47,223 (+0.4%)",
+            "t": "10.41m → 10.69m · +60,087 (+0.6%)",
             "c": "gain"
           },
           {
-            "t": "10.98m → 11.35m · +140.9k (+1.3%)",
+            "t": "10.41m → 10.69m · +69,410 (+0.7%)",
             "c": "gain"
           },
           {
-            "t": "1k/d",
+            "t": "930/d",
             "c": "mini"
           },
           {
-            "t": "↑",
-            "c": "amber"
+            "t": "–",
+            "c": "mommuted"
           },
           {
-            "t": "Flat +3%"
+            "t": "Flat +2%"
           },
           {
-            "t": "88,802 · net 140.9k P~0.50 ttf~11.9h",
+            "t": "46,315 · net 69.4k P~0.50 ttf~12.4h",
             "c": "mini"
           },
           {
-            "t": "thin (~1011/day — size in units)",
+            "t": "thin (~930/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2742,22 +2879,22 @@
             "t": "Webweaver bow (u)"
           },
           {
-            "t": "D",
-            "title": "thin: ~726/day two-sided — size in units, expect slow fills"
+            "t": "A-",
+            "title": "thin: ~618/day two-sided — size in units, expect slow fills"
           },
           {
-            "t": "16.89m"
+            "t": "17.37m"
           },
           {
-            "t": "16.84m → 16.89m · -295.1k (-1.8%)",
+            "t": "17.50m → 17.70m · -156.3k (-0.9%)",
             "c": "loss"
           },
           {
-            "t": "16.82m → 16.89m · -276.5k (-1.6%)",
-            "c": "loss"
+            "t": "17.17m → 17.74m · +218.6k (+1.3%)",
+            "c": "gain"
           },
           {
-            "t": "726/d",
+            "t": "618/d",
             "c": "mini"
           },
           {
@@ -2765,14 +2902,14 @@
             "c": "mommuted"
           },
           {
-            "t": "Falling -7%"
+            "t": "Flat -2%"
           },
           {
-            "t": "-151.9k · net -276.5k P~0.50 ttf~14.1h",
+            "t": "108k · net 218.6k P~0.50 ttf~15.3h",
             "c": "mini"
           },
           {
-            "t": "falling — price to clear, do not accumulate",
+            "t": "thin (~618/day — size in units)",
             "c": "mini"
           }
         ]
@@ -2787,18 +2924,18 @@
             "t": "D"
           },
           {
-            "t": "326"
+            "t": "340"
           },
           {
-            "t": "328 → 336 · +2 (+0.6%)",
-            "c": "gain"
+            "t": "321 → 325 · -2 (-0.6%)",
+            "c": "loss"
           },
           {
-            "t": "327 → 336 · +3 (+0.9%)",
-            "c": "gain"
+            "t": "321 → 325 · -2 (-0.6%)",
+            "c": "loss"
           },
           {
-            "t": "4.50m/d",
+            "t": "4.97m/d",
             "c": "mini"
           },
           {
@@ -2806,10 +2943,10 @@
             "c": "mommuted"
           },
           {
-            "t": "Falling -15%"
+            "t": "Falling -9%"
           },
           {
-            "t": "12 · net 3 P~0.50 ttf~3h",
+            "t": "-16 · net -2 P~1.00 ttf~3h",
             "c": "mini"
           },
           {
@@ -2820,5 +2957,5 @@
       }
     ]
   },
-  "analysis": "<p><b>Two real big-ticket flips — verified, not mirages.</b> <b>Masori mask (f)</b> is the pick: buy ~19.85m (live instasell), sell 20.70m which reaches recent 3/3 at a conservative p7, +436k/u (+2.2%). <b>Ancient godsword</b> re-entry (a known lane): buy ~39.20m, sell 40.40m reaches recent 3/3, rising +7%, +392k/u. Both thin (size in units). The away thin-churn bids (Superior dragon bones 20,150, Divine super combat 18,400) haven't filled — no dip came in the UK evening — so they're redeploy candidates into these higher-margin big-tickets. Everything else is the usual: kisten/Armadyl crossbow are sell-0/3 mirages, plus froth spikes (Bolt of linen +240%, Adamant cannonball).</p>"
+  "analysis": "Quiet board. Digest big-ticket lane is grade-inflated — Twisted buckler's A- verifies as a +0.3% edge with a non-reaching buy leg (0/3), below the after-tax bar. Small-ticket fill-now rows (Searing page, Antidote++) reach but net is thin. No new verified edge worth deploying into; holding the resting fang/blowpipe sells."
 }

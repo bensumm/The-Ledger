@@ -8,5 +8,45 @@
     "path": "value-hold",
     "enteredUnder": "value-hold",
     "ts": 1783927939
+  },
+  {
+    "id": 27235,
+    "exitPrice": 20590000,
+    "tripwire": 19500000,
+    "horizon": null,
+    "window": "0-8",
+    "path": "mask-uk-morning",
+    "enteredUnder": "mask-uk-morning",
+    "ts": 1784513218
+  },
+  {
+    "id": 26233,
+    "exitPrice": 39950000,
+    "tripwire": 38900000,
+    "horizon": null,
+    "window": "0-8",
+    "path": "godsword-uk-day-peak",
+    "enteredUnder": "godsword-uk-day-peak",
+    "ts": 1784609199
+  },
+  {
+    "id": 27652,
+    "exitPrice": 17750000,
+    "tripwire": 16500000,
+    "horizon": null,
+    "window": "1-8",
+    "path": "webweaver-uptrend-ride",
+    "enteredUnder": "webweaver-uptrend-ride",
+    "ts": 1784615440
+  },
+  {
+    "id": 26219,
+    "exitPrice": null,
+    "tripwire": 17500000,
+    "horizon": null,
+    "window": null,
+    "path": "amplitude",
+    "enteredUnder": "amplitude",
+    "ts": 1784670723
   }
 ]
