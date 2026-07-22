@@ -78,7 +78,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--trajectory] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);
@@ -99,6 +99,10 @@ const DEPTH_QTY = A.depth !== undefined ? parseGp(A.depth) : null;
 if (A.depth !== undefined && (!Number.isFinite(DEPTH_QTY) || DEPTH_QTY <= 0)) { console.error('error: --depth expects a positive unit quantity'); process.exit(1); }
 // PB2 — --pressure: the pressure-driven reachable band (demand-balance read; no qty). A bare flag.
 const PRESSURE = A.pressure !== undefined && A.pressure !== false;
+// R1 (PLAN-SIGNAL-RECENCY) — --trajectory: the recency-weighted forward trajectory read (full-day per-day
+// low/high table + floor/ceiling slope classification + a forward-projected next-day low/high band). Its own
+// block, requestable ALONE (the read-trajectory.mjs preset re-execs with just this flag). A bare flag.
+const TRAJ = A.trajectory !== undefined && A.trajectory !== false;
 // AC8 — --niche <band|churn|scalp>: which strategy spec the fold-datapoint is computed against (default
 // band). churn inherits AC5/AC6's fold exemption, so its fold line reads fold ≈ best-case (itself
 // informative). value is term-basis (no opt band pair) → excluded here.
@@ -191,6 +195,54 @@ for (const want of positionals) {
     // blocks below) when NONE of those flags were also given — a bare --profile keeps today's exact
     // profile-only output, while --profile combined with --ask/--bid/--exit/--depth falls through so
     // this same `result` object also picks up the window-range read.
+    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null && !TRAJ) continue;
+  }
+
+  // --trajectory (R1): the recency-weighted forward read. Full-day (0-23) per-day low/high table + the
+  // shared floor/ceiling slope-asymmetry classification + a forward-projected next-day low/high band, all
+  // from the ONE projectTrajectory primitive. Independent block — a bare --trajectory prints just this and
+  // continues; combined with a scored flag it falls through so the same `result` also gets the window read.
+  if (TRAJ) {
+    const tstats = windowStats(series, { nights: NIGHTS, wStart: 0, wEnd: 0 });   // full-day buckets (match quote-items' trajectory basis)
+    const tdays = tstats && Array.isArray(tstats.days) ? tstats.days : [];
+    result.mode = result.mode || 'trajectory';
+    log(`\n## ${r.name} — trajectory, last ${tdays.length} day(s) (full-day window low/high, 1h series)`);
+    if (!tdays.length) {
+      log('  too thin to read a trajectory — need traded daily history.');
+      result.trajectory = null;
+    } else {
+      log(`  day          low          high`);
+      for (const [key, n] of tdays) log(`  ${key}   ${fmt(n.low)}   ${fmt(n.hi)}`);
+      const nowT = new Date();
+      const todayKeyT = `${nowT.getFullYear()}-${pad2(nowT.getMonth() + 1)}-${pad2(nowT.getDate())}`;
+      const liveRef = latest ? (latest.low ?? latest.high ?? null) : null;
+      const tr = trajectoryRead(tdays, { liveRef });
+      if (tr) {
+        const liveNote = tr.livePos ? ` · live ${fmt(tr.liveRef)} ${tr.livePos}` : '';
+        log(`  read: ${tr.shape} · floor ${fmt(tr.floor)}${tr.floorKey ? ` (${tr.floorKey})` : ''} → ceiling ${fmt(tr.ceiling)}${tr.ceilKey ? ` (${tr.ceilKey})` : ''}${liveNote}`);
+      }
+      const fc = floorCeilingTrack(tdays, { todayKey: todayKeyT });
+      const fcText = formatFloorCeiling(fc, fmt);
+      if (fcText) log(`  ${fcText}`);
+      // forward projection: fc.floor/fc.ceiling ARE projectTrajectory results (floorCeilingTrack wraps the
+      // primitive), so their `.projected` fields already hold the next-day values — read them directly and
+      // compose the floor value + ceiling value into a low/high band (one primitive, one call site).
+      const pf = fc && fc.floor.projected, pc = fc && fc.ceiling.projected;
+      if (pf || pc) {
+        const conf = (pf && pf.confidence === 'ok' && pc && pc.confidence === 'ok') ? 'ok' : 'low';
+        log(`  projected next-day: low ~${fmt(pf ? pf.value : null)} · high ~${fmt(pc ? pc.value : null)}  (confidence: ${conf})`);
+      }
+      log(`  (heuristic, n≈0 — inform-only, never gates; F1-pending)`);
+      result.trajectory = {
+        days: tdays.map(([key, n]) => ({ key, low: n.low, hi: n.hi })),
+        classification: fc ? fc.classification : null,
+        floor: fc ? { dir: fc.floor.dir, slope: fc.floor.slope, projected: pf ? pf.value : null } : null,
+        ceiling: fc ? { dir: fc.ceiling.dir, slope: fc.ceiling.slope, projected: pc ? pc.value : null } : null,
+      };
+    }
+    // a bare --trajectory (no scored flag) prints only this block and continues; combined with a scored
+    // --bid/--ask/--exit/--depth it falls through so the same `result` also gets the window read. (--profile
+    // composes fine either way — its own block ran first and its short-circuit now checks !TRAJ.)
     if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null) continue;
   }
 

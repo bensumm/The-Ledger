@@ -479,7 +479,12 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   fires the reactive FLUSH alert (DL2). Full tick contract: `pipeline/MONITORING.md`.
 - **`read-window-range.mjs`** — scores the last ~14 local days for a window: per-day low/high + volume,
   bid/ask levels touched/reached on ~50/75/all days, the RC1 recency split (+ `⚠ stale`), the `--exit`
-  back-solve (§4), and `--profile` (the diurnal read). Shared math in `js/windowread.mjs`.
+  back-solve (§4), `--profile` (the diurnal read), and `--trajectory` (the recency-weighted forward
+  read: per-day low/high table + floor/ceiling slope classification + a forward-projected next-day
+  low/high band, from `js/windowread.mjs` `projectTrajectory`; inform-only, n≈0). Shared math in
+  `js/windowread.mjs`.
+- **`read-trajectory.mjs`** — one-word PRESET over `read-window-range.mjs --trajectory` (all flags
+  forwarded); answers "how's `<item>` trending / where's it likely to be tomorrow" (PLAN-SIGNAL-RECENCY R1).
 - **`read-buy-limits.mjs`** — the rolling-4h buy-limit read per item (no args → every item bought in
   the last 4h). **`run-loop.mjs`** — the multi-action `/loop` multiplexer (watch + screen on
   independent cadences, scan-gated on deployable capital, a local book-refresh each watch pass).

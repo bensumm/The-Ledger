@@ -225,6 +225,85 @@ export const FC_MIN_DAYS = 5;          // fewer COMPLETED days than this ⇒ nul
 export const FC_RECENT_N = 5;          // the recent completed-day window the slope is fit over
 export const FC_FLAT_FRAC = 0.005;     // |slope|/latest-level per day below this ⇒ 'flat' (0.5%/day; PLACEHOLDER, F1)
 export const FC_BREAK_LOOKBACK = 13;   // floor-break = latest low vs the min of the prior N lows (the rest of a 14-day window)
+export const PT_PROJECT_N = 1;         // forward-projection horizon in periods (days); 1 = "next period". PLACEHOLDER, F1
+
+// projectTrajectory(days, extractFn, opts) — THE ONE recency-weighted trajectory primitive (PLAN-SIGNAL-RECENCY R1).
+// Generalizes floorCeilingTrack's inner per-track read (a robust recent-window LEAST-SQUARES slope → dir, a
+// trailing raw-sign micro-run for DURATION, and an optional discrete DOWNWARD break) to an ARBITRARY per-day
+// scalar pulled by `extractFn`, and ADDS a forward projection (`latest + slope × projectN`) so the read points
+// FORWARD ("where's the level likely to be next period"), not only backward. floorCeilingTrack is now a
+// two-call wrapper over this (n=>n.low WITH the break test, n=>n.hi WITHOUT); the other stale-aggregate
+// consumers (regimeDrift, floorValidator, reachMargin — later PLAN-SIGNAL-RECENCY chunks) rebase onto it
+// instead of re-deriving trend math per surface.
+//
+// INPUT: the windowStats().days shape ([[key,{low,hi,…}], …] oldest→newest) every caller already holds
+// (ZERO new fetch). `extractFn:(n)=>number|null` pulls the tracked scalar (n=>n.low, n=>n.hi, n=>cushionOf(n)…).
+// FORMING-DAY GUARD (req #1): pass `todayKey` ('YYYY-MM-DD'); if the NEWEST day matches, it is peeled off the
+// completed series and surfaced as `forming` (provisional) so an incomplete bucket never feeds the slope/break.
+// floorCeilingTrack pre-splits its shared series and passes todayKey:null (the guard already applied — see there).
+//
+// RETURN (or null when < minDays completed extracted points — degrade, never a fake read):
+//   { series, latest, slope, step, dir, run:{dir,len}, nUsed, forming, break, projected }
+//   break     : { broke, latest, priorExtreme, gap, lookback } ONLY when breakLookback is supplied, else null
+//               (a DOWNWARD break: latest < min(prior lookback) — the generalized floor-break)
+//   projected : { value, confidence } — latest + slope×projectN, the recent line extended one horizon forward;
+//               confidence 'low' on a partial-window fit OR a broken series, else 'ok'. null when slope is null.
+//               NOTE (R1 deviation from the draft contract's `{low,high}`): the primitive tracks ONE scalar, so
+//               it projects ONE value; a caller composes a floor-call value + a ceiling-call value into a
+//               {low,high} band (floorCeilingTrack / the read-trajectory CLI do exactly this).
+//
+// HONESTY RAILS (rule 4, inherited unchanged from floorCeilingTrack): HEURISTIC, n≈0, INFORM-ONLY — the
+// primitive NEVER gates; a CALLER'S policy may (e.g. R2/R3). `break` is null unless breakLookback is supplied
+// (never a false negative). All thresholds (recentN/minDays/flatFrac/breakLookback) are the shared FC_*
+// PLACEHOLDERS pending F1.
+export function projectTrajectory(days, extractFn, {
+  recentN = FC_RECENT_N, minDays = FC_MIN_DAYS, flatFrac = FC_FLAT_FRAC,
+  todayKey = null, breakLookback = null, projectN = PT_PROJECT_N,
+} = {}) {
+  if (typeof extractFn !== 'function' || !Array.isArray(days) || !days.length) return null;
+  // req #1: peel the newest day when it is the incomplete current day so it never feeds the slope/break.
+  let forming = null, completed = days;
+  const last = days[days.length - 1];
+  if (todayKey != null && last && last[0] === todayKey) {
+    forming = { key: last[0], value: last[1] ? (extractFn(last[1]) ?? null) : null };
+    completed = days.slice(0, -1);
+  }
+  // extract the tracked scalar from completed days, dropping nulls (like-for-like comparison only).
+  const series = completed.map(([, n]) => (n ? extractFn(n) : null)).filter(v => v != null);
+  if (series.length < minDays) return null;
+
+  const ref = series[series.length - 1];                        // latest level = the relative-threshold ref
+  const window = series.slice(-recentN);
+  const slope = slopePerStep(window);                           // least-squares gp/period over the recent window
+  const band = Math.abs(ref) * flatFrac;
+  const dir = slope == null ? null : slope >= band ? 'rising' : slope <= -band ? 'falling' : 'flat';
+  // trailing micro-run: consecutive steps from the newest end sharing a RAW-SIGN direction. Raw sign
+  // (not the flat band) on purpose — the run's job is to expose a fresh softening/strengthening under a
+  // robust trend (the maul's "flat over 5d, softened 2d"); the flat band lives on `dir`, the trend read.
+  const catOf = d => d > 0 ? 'rising' : d < 0 ? 'falling' : 'flat';
+  let run = { dir: null, len: 0 };
+  for (let i = series.length - 1; i >= 1; i--) {
+    const c = catOf(series[i] - series[i - 1]);
+    if (run.dir == null) run = { dir: c, len: 1 };
+    else if (c === run.dir) run.len++;
+    else break;
+  }
+  // optional discrete DOWNWARD break: latest vs the min of the prior-lookback points (the floor-break shape:
+  // a track that steps UNDER its multi-day trough — the fang/godsword crash trigger).
+  let brk = null;
+  if (breakLookback != null) {
+    const prior = series.slice(Math.max(0, series.length - 1 - breakLookback), series.length - 1);
+    const priorExtreme = prior.length ? Math.min(...prior) : null;
+    const broke = priorExtreme != null && ref < priorExtreme;
+    brk = { broke, latest: ref, priorExtreme, gap: priorExtreme != null ? ref - priorExtreme : null, lookback: prior.length };
+  }
+  // forward projection: extend the recent least-squares line one horizon forward. confidence LOW on a
+  // partial-window fit or a broken series (an honest token, not a bare number presented as certain).
+  const lowConf = window.length < recentN || (brk != null && brk.broke);
+  const projected = slope == null ? null : { value: Math.round(ref + slope * projectN), confidence: lowConf ? 'low' : 'ok' };
+
+  return { series, latest: ref, slope, step: slope == null ? null : Math.round(slope), dir, run, nUsed: window.length, forming, break: brk, projected };
+}
 
 export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N, minDays = FC_MIN_DAYS, flatFrac = FC_FLAT_FRAC, breakLookback = FC_BREAK_LOOKBACK } = {}) {
   const usable = Array.isArray(days) ? days.filter(([, n]) => n && (n.low != null || n.hi != null)) : [];
@@ -238,42 +317,18 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
   }
   const nDays = completed.length;
   if (nDays < minDays) return null;
-  const lows = completed.map(([, n]) => n.low).filter(v => v != null);
-  const his = completed.map(([, n]) => n.hi).filter(v => v != null);
-  if (lows.length < minDays || his.length < minDays) return null;
+  // two-call wrapper over the shared projectTrajectory primitive (R1): the floor track WITH the discrete
+  // break test, the ceiling track WITHOUT. `completed` is already forming-stripped ⇒ todayKey:null here
+  // (the guard above did the split, exactly as before — this keeps the split predicate byte-identical).
+  const floor = projectTrajectory(completed, n => n.low, { recentN, minDays, flatFrac, breakLookback });
+  const ceiling = projectTrajectory(completed, n => n.hi, { recentN, minDays, flatFrac });
+  if (!floor || !ceiling) return null;
+  // map the primitive's generalized `break` back to the floorBreak field names this surface has always used
+  // (priorExtreme → priorFloor) so every downstream consumer of fc.floorBreak stays byte-identical.
+  const b = floor.break;
+  const floorBreak = { broke: b.broke, latest: b.latest, priorFloor: b.priorExtreme, gap: b.gap, lookback: b.lookback };
 
-  // per-track read: robust recent-window slope → dir, plus the raw-sign trailing micro-run for duration.
-  const track = series => {
-    const ref = series[series.length - 1] || 0;                 // latest level = the relative-threshold ref
-    const window = series.slice(-recentN);
-    const slope = slopePerStep(window);                         // least-squares gp/day over the recent window
-    const band = Math.abs(ref) * flatFrac;
-    const dir = slope == null ? null : slope >= band ? 'rising' : slope <= -band ? 'falling' : 'flat';
-    // trailing micro-run: consecutive steps from the newest end sharing a RAW-SIGN direction. Raw sign
-    // (not the flat band) on purpose — the run's job is to expose a fresh softening/strengthening under a
-    // robust trend (the maul's "flat over 5d, softened 2d"); the flat band lives on `dir`, the trend read.
-    const catOf = d => d > 0 ? 'rising' : d < 0 ? 'falling' : 'flat';
-    let run = { dir: null, len: 0 };
-    for (let i = series.length - 1; i >= 1; i--) {
-      const c = catOf(series[i] - series[i - 1]);
-      if (run.dir == null) run = { dir: c, len: 1 };
-      else if (c === run.dir) run.len++;
-      else break;
-    }
-    return { series, slope, step: slope == null ? null : Math.round(slope), dir, run, nUsed: window.length, latest: ref };
-  };
-  const floor = track(lows);
-  const ceiling = track(his);
-
-  // FLOOR-BREAK: the latest COMPLETED daily low vs the min of the prior-lookback lows — the discrete
-  // crash trigger (the fang/godsword shape: a floor that steps UNDER its multi-day trough).
-  const latestLow = lows[lows.length - 1];
-  const priorLows = lows.slice(Math.max(0, lows.length - 1 - breakLookback), lows.length - 1);
-  const priorFloor = priorLows.length ? Math.min(...priorLows) : null;
-  const broke = priorFloor != null && latestLow < priorFloor;
-  const floorBreak = { broke, latest: latestLow, priorFloor, gap: priorFloor != null ? latestLow - priorFloor : null, lookback: priorLows.length };
-
-  const classification = broke ? 'crash-risk'
+  const classification = floorBreak.broke ? 'crash-risk'
     : floor.dir === 'rising' && ceiling.dir === 'rising' ? 'healthy-trend'
     : floor.dir === 'rising' && (ceiling.dir === 'flat' || ceiling.dir === 'falling') ? 'compressing-up'
     : floor.dir === 'flat' && ceiling.dir === 'falling' ? 'mild-cooldown'

@@ -607,7 +607,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `--bid`/`--ask`/`--exit` now also prints a **`fold:` data-point line** — the SHARED `estimatePair`
     reach-fold on the in-hand data (`best-case X → reach-folded Y · net at folded pair`), zero new fetch,
     inform-only; `--niche band|churn|scalp` (default band) picks the spec (churn inherits the AC5/AC6
-    fold exemption); it rides `--json`/`--out` as `result.fold`), `limits.mjs` (LM1 — the buy-limit read:
+    fold exemption); it rides `--json`/`--out` as `result.fold`. `--trajectory` (R1, PLAN-SIGNAL-RECENCY)
+    = the recency-weighted FORWARD read: the full-day per-day low/high table + the shared floor/ceiling
+    slope-asymmetry classification + a **forward-projected next-day low/high band** (`js/windowread.mjs`
+    `projectTrajectory`, the ONE trend primitive `floorCeilingTrack` is now a two-call wrapper over) —
+    its own block, requestable alone, inform-only n≈0, rides `--json` as `result.trajectory`),
+    `read-trajectory.mjs` (R1 — a thin one-word PRESET that re-execs `read-window-range.mjs --trajectory`
+    with all flags forwarded, so the fetch/bucketing plumbing keeps ONE home; answers "how's `<item>`
+    trending / where's it likely to be tomorrow"), `limits.mjs` (LM1 — the buy-limit read:
     `node pipeline/commands/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),
