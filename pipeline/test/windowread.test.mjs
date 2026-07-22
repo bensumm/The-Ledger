@@ -16,7 +16,7 @@
  *     and returns null when the history has no traded window-hours.
  */
 import assert from 'node:assert/strict';
-import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
+import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { depthDays, clearableAsk, clearableBid } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 + DE6 (low-side mirror)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1)
@@ -306,6 +306,42 @@ ok('deriveDiurnalRange: a clean dip below live with no trend is an unflagged pat
   assert.equal(r.bid, 1000); assert.equal(r.bidBasis, 'patient-dip');
   assert.equal(r.notes.length, 0, 'no trend, dip below live → nothing to warn about');
   assert.equal(r.ask, 1080);
+});
+
+// --- 6b. softBuyRead / formatSoftBuy: the ADD-while-holding soft-buy timing read ---------------
+// Reuses the deriveDiurnalRange `prof` helper (dip level + a 21:00–00:00 dip window). The floor is the
+// dip level; live is the buy-side price; the @floor↔+X% marker flips at SOFT_BUY_AT_FLOOR_PCT (0.5%).
+ok('softBuyRead: live at/below the dip floor ⇒ @floor · buy now', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000 });
+  assert.equal(sb.floor, 1000);
+  assert.deepEqual(sb.dipWindow, { startH: 21, endH: 0 }, 'the diurnal dip window is the cheapest add hours');
+  assert.equal(sb.marker, '@floor'); assert.equal(sb.buyNow, true);
+  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live @floor · buy now');
+});
+
+ok('softBuyRead: live within the 0.5% threshold over the floor still reads @floor (buy now)', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1004 });   // +0.4% ≤ 0.5%
+  assert.ok(sb.overPct > 0 && sb.overPct <= SOFT_BUY_AT_FLOOR_PCT);
+  assert.equal(sb.marker, '@floor'); assert.equal(sb.buyNow, true);
+});
+
+ok('softBuyRead: live above the dip ⇒ +X% · wait', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1027 });   // +2.7%
+  assert.equal(sb.marker, '+2.7%'); assert.equal(sb.buyNow, false);
+  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live +2.7% · wait');
+});
+
+ok('softBuyRead: no live reference ⇒ window-only note, no buy/wait cue', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), {});
+  assert.equal(sb.marker, null); assert.equal(sb.buyNow, null);
+  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00');
+});
+
+ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders', () => {
+  assert.equal(softBuyRead(null, { live: 1000 }), null);
+  assert.equal(softBuyRead({ peak: { level: 1080 } }, { live: 1000 }), null, 'no dip ⇒ null');
+  assert.equal(softBuyRead({ dip: { level: null, startH: 21, endH: 0 } }, { live: 1000 }), null, 'no dip level ⇒ null');
+  assert.equal(formatSoftBuy(null), null, 'null read ⇒ no note');
 });
 
 // --- PART II (PLAN-GRADE-REACH): asymPair — deep-buy / reliable-sell realizable pair ----------

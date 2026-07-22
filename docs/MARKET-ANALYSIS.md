@@ -415,6 +415,16 @@ simultaneous independent rungs on one item.
   prints the same BID/ASK line; `read-window-range.mjs --profile` prints the full hour-by-hour table. The app
   renders it in Trends (TV). This is the ENCODED form of the manual windowrange dance — read the block;
   the manual read is now a CONFIRMATION.
+- **Soft-buy (ADD-while-holding) timing, inform-only, n≈0.** `quote-items.mjs` prints a `⏳ soft-buy`
+  line beside each held lot (and on bare quotes) off the SAME `hourProfile` — `js/windowread.mjs`
+  `softBuyRead`/`formatSoftBuy`: `soft-buy: dip HH:00–HH:00 · live @floor | +X% · buy now | wait`. The
+  **dip window** is the cheapest hours-of-day to ADD; the marker is `@floor` when live sits ≤
+  `SOFT_BUY_AT_FLOOR_PCT` (0.5%) over the dip floor (or below → **buy now**) vs `+X%` above it (**wait**).
+  It fills the gap the decision-digest soft-buy COLUMN leaves — the digest excludes held items, so it was
+  blind to mistiming an ADD to a lot we already hold (Dragon boots into the daytime peak ~350k over;
+  blowpipe at 10.67m vs the 10.40m dip). Doctrine: holding to sell into a LATER peak is not a reason to
+  sit idle on the BUY side. Mirrors the digest column's cell format + threshold so both reconcile onto one
+  helper. Never gates/regrades; null 1h series ⇒ no line.
 - **Forward forecast (PF1, inform-only, n≈0).** `js/forecast.mjs` `diurnalForecast(profile, ctx)` projects
   the next 12/24h → `nextTrough`/`nextPeak` (level, band, eta, window, confidence) + `whenBuyable`/
   `whenSellable` — the "not buyable/sellable at a good price now, but ~X in ~4h" answer (`quote-items.mjs`

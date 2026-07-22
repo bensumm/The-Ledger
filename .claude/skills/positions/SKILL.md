@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.46
+version: 1.47
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -48,6 +48,18 @@ sections plus your own prose:
   the shape — "at the FLOOR + oscillating" is a hold-for-the-swing, "elevated + falling" is a clear.
   HEURISTIC (n≈0), inform-only — it never gates, it frames. Same shared `trajectoryRead` the manual
   `read-window-range.mjs` trio prints, zero extra fetch.
+- **Read the `⏳ soft-buy:` line before deciding whether to ADD to a lot (2026-07-22, the
+  buy-soft-while-holding rule).** _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: dip
+  HH:00–HH:00 · live @floor | +X% · buy now | wait`. It puts the ADD-side timing right next to the
+  held lot: the **dip window** = the cheapest hours-of-day to add (the diurnal DIP window); the
+  **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below — **buy now**) vs `+X%` (live
+  sits X% above the dip — **wait** for the window). The doctrine (memory "buy-soft-while-holding-for-peak"):
+  holding a position to sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its
+  diurnal dip when it's soft. Real anchors: we bought Dragon boots into the daytime peak (~350k over)
+  and blowpipe at 10.67m instead of its 10.40m dip, both while already holding — this line would have
+  read `+X% · wait` on both. Same `hourProfile` the `↳ diurnal:` note uses (`softBuyRead`/`formatSoftBuy`
+  in `js/windowread.mjs`), zero extra fetch; HEURISTIC (n≈0), inform-only — never a gate/verdict. A null
+  1h series this pass degrades it to no line (like the diurnal note).
 
 Anchor (2026-07-17, the format that got approved): a positions read that pasted just the table,
 then three short prose paragraphs each naming what changed/mattered per item (a resolved CUT, an

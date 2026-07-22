@@ -99,7 +99,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
-  `windowrange --profile` prints) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
+  `windowrange --profile` prints) + **`softBuyRead`/`formatSoftBuy`** (2026-07-22 — the ADD-while-holding
+  soft-buy timing read off the SAME `hourProfile`: the diurnal DIP window + a live-vs-dip-floor `@floor`/`+X%`
+  marker at `SOFT_BUY_AT_FLOOR_PCT`, ending in a `buy now`/`wait` cue; `quote-items.mjs` renders it as the
+  `⏳ softBuy` note on held lots + bare quotes, mirroring the digest soft-buy column's cell format so both
+  surfaces reconcile; inform-only, n≈0, null profile ⇒ no note) + `asymPair` (PART II PLAN-GRADE-REACH 2026-07-12 — the day-level
   deep-bid/high-reach-ask realizable pair + P_ask/P_bid, consumed by `js/estimators.mjs` `asymEstimate`
   for the `◆ asym fill` inform line + the `asym` suggestions-ledger shadow field) + `depthDays`/`clearableAsk`
   (PLAN-DEPTH-EXIT DE1 2026-07-15 — the percentile-DEPTH exit: reconstructs a per-day price→volume

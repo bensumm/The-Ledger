@@ -93,6 +93,7 @@ export const NOTE_KINDS = {
   staleLive:    { prefix: '  ⚠ ',  tier: TIER.core },     // QUICK_FRESH_MIN — a displayed live instabuy/instasell that's an old /latest print, not a live tick (the 64-min godsword anchor)
   staleExit:    { prefix: '  ⚠ ',  tier: TIER.context },  // Proposal C stale declared-exit flag (inform)
   diurnal:      { prefix: '  ↳ ',  tier: TIER.context },  // COD-4 diurnal BID/ASK timing
+  softBuy:      { prefix: '  ⏳ ',  tier: TIER.context },  // the ADD-while-holding soft-buy timing read (softBuyRead — dip window + live-vs-floor buy-now/wait cue)
   forecast:     { prefix: '  ℹ ',  tier: TIER.context },  // PF1 buyable/sellable-in-~Xh forecast
   windowClear:  { prefix: '  ℹ ',  tier: TIER.context },  // PLAN-WINDOW-CLEAR days-reach ≠ lap-clear
   askHeadroom:  { prefix: '  ⤴ ',  tier: TIER.context },  // Bar-E ask-headroom / list-is-a-floor ladder

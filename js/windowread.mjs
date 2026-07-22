@@ -945,6 +945,50 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
   };
 }
 
+// --- soft-buy timing (the ADD-while-holding entry read, INFORM-ONLY n≈0) -----------------------
+// The DECISION DIGEST already carries a soft-buy column (dip window + live-vs-floor marker), but the
+// digest EXCLUDES held items — so it's blind to the case that actually costs money: mistiming an ADD to
+// a lot we ALREADY hold/accumulate (Dragon boots bought into the daytime peak ~350k over; blowpipe at
+// 10.67m vs the 10.40m dip, both while holding). Doctrine (memory "buy-soft-while-holding-for-peak"):
+// holding a position to sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its
+// diurnal dip when it's soft. softBuyRead answers "when is it cheapest to ADD, and is NOW that time?"
+// off the SAME hourProfile the diurnal note already computes (ZERO new fetch — same inputs as
+// deriveDiurnalRange):
+//   dipWindow — the diurnal DIP window (the cheapest hours-of-day to add), from profile.dip.startH/endH.
+//   floor     — profile.dip.level, the recent dip-cluster low (the add-here bid candidate).
+//   marker    — '@floor' when live sits ≤ SOFT_BUY_AT_FLOOR_PCT % over the dip floor (or below it) → buy
+//               now; '+X%' when live sits X% above the dip → wait for the window to come round.
+//   buyNow    — the boolean the render turns into the plain "buy now / wait" cue.
+// SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column (same HH:00–HH:00 · @floor / +X% cell
+// format + the same SOFT_BUY_AT_FLOOR_PCT boundary) so both surfaces read consistently once both land —
+// the digest's digestSoftBuy is meant to reconcile onto THIS helper. INFORM-ONLY (tier: context) — n≈0,
+// a HEURISTIC, never gates, never a verdict, never a screen.json/rank input (rule 4). A null/absent
+// profile (or no dip level) ⇒ null ⇒ the note simply doesn't render (degrade like trajectoryRead).
+export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip floor (or below) ⇒ @floor / buy now (mirrors the digest branch)
+
+export function softBuyRead(profile, { live = null } = {}) {
+  if (!profile || !profile.dip || profile.dip.level == null) return null;
+  const floor = profile.dip.level;
+  const dipWindow = { startH: profile.dip.startH, endH: profile.dip.endH };
+  let marker = null, overPct = null, buyNow = null;
+  if (live != null && floor > 0) {
+    overPct = (live - floor) / floor * 100;
+    buyNow = overPct <= SOFT_BUY_AT_FLOOR_PCT;                // at/below the floor, or within the threshold over it
+    marker = buyNow ? '@floor' : `+${overPct.toFixed(1)}%`;
+  }
+  return { dipWindow, floor, live, marker, overPct, buyNow };
+}
+
+// formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
+// phrase it identically. Null read ⇒ null (no note). `fmtHour` defaults to the HH:00 formatter that
+// money-format's fmtHour produces, so windowread stays import-free; a caller may pass its own to match.
+export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') + ':00' } = {}) {
+  if (!read) return null;
+  const win = `${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
+  if (read.marker == null) return `soft-buy: dip ${win}`;                // no live reference ⇒ window only
+  return `soft-buy: dip ${win} · live ${read.marker} · ${read.buyNow ? 'buy now' : 'wait'}`;
+}
+
 // --- diurnal-phase entry-timing (INFORM-ONLY PLACEHOLDER, n≈0) ---------------------------------
 // WHERE does NOW sit in this item's daily demand cycle relative to its peak WINDOW? The reach/asym/
 // windowClear reads all say WHERE a level prints; this says WHEN in today's cycle you're ENTERING —
