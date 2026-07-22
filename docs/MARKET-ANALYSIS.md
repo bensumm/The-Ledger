@@ -273,6 +273,26 @@ NEVER as act-now rows. Every threshold is a PLACEHOLDER; the make-or-break "do b
 within the hold horizon?" is measured by the shadow both-leg replay (`join-amplitude-outcomes.mjs`, an
 UPPER BOUND) + the realized retro-join (`/analyze`). Console-only (excluded from `screen.json`, no app tab).
 
+**Per-thesis drift-adjusted-exit notes (PLAN-OSCILLATION-CYCLE Chunk 6 — INFORM everywhere, NO gate).**
+The same drift number the amplitude lane gates on is folded into the OTHER theses as an inform note only.
+Each surfacing spec carries an optional `driftInform:{label}` registry field; the render paths compute the
+drift-adjusted exit ONCE via the SHARED `driftExitFrom` (off data already in hand — the in-hand
+`hourProfile` + `windowStats().days`, NO new fetch, forking nothing) and format it through the one pure
+`driftInformNote(spec,dae,{entry,fmt})` helper — so the per-thesis wording is REGISTRY DATA, never an
+`if (mode===…)` branch. DIRECTION-AGNOSTIC (reads `driftAdjustedPeak`, a signed number, with no branch on
+its sign; a ±same-magnitude drift moves the note by the identical arithmetic). NONE of these gate — each is
+a sibling console note (`ℹ drift-exit` in band/churn/scalp, a timing/trajectory line in invest), never a
+gate/drop/grade/`screen.json` input:
+- **band** — the drift-adjusted band TOP, priced LOWER on a down-drifting item; the item is NOT excluded,
+  its sell target is just the drift-shifted top.
+- **churn** — a "don't buy near the drift-adjusted weekly high" MAGNITUDE caution (folded into the label;
+  `DRIFT_NEAR_HIGH_FRAC` = 0.02 placeholder).
+- **scalp** — sharpens the exit-pricing note on scalp's already-accepted falling regimes; admission UNCHANGED.
+- **invest (value)** — informs the value-amplitude proximity read as a NUMBER (does the drift-adjusted
+  after-tax amplitude still clear the value economics against the buy-low?). EXPLICITLY not a floor relax /
+  un-gate — R3b stays dropped; this adds no gate and does not change value admission.
+Every threshold is n≈0 PLACEHOLDER. Console-only → no `js/trends.js` consumer, no APP_VERSION.
+
 ### Gates
 - **Two-sided liquidity (S1).** `hpv>0 && lpv>0` (the non-negotiable ghost-spread lesson) AND
   `limitVol ≥ --floor` (3500) **OR** gp-flow `limitVol×mid ≥ --gp-floor` (4.5b). The gp-flow path

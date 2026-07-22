@@ -100,7 +100,7 @@ import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitu
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
 // entry path for the suggestions ledger + the per-row path annotation.
-import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS } from '../../js/flip-niches.mjs';
+import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from '../lib/rating.mjs';
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow } from '../lib/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper
@@ -770,6 +770,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const informNotes = [];  // 2026-07-09: inform-mode validator findings (trajectory/reach analysis) — decision support, never a drop
   const headroomNotes = []; // Bar E ask-headroom (PLAN Bar-E-signal): the robust p90 shaved a TRADED in-band top off the quoted ask — sibling inform note, never a gate/drop/grade/screen.json input
   const windowClearNotes = []; // PLAN-WINDOW-CLEAR B2 (churn/scalp): the ask reaches on days but rarely IN its peak window / size ≫ window pool — sibling inform note, never a gate/drop/grade/screen.json input
+  const driftNotes = []; // PLAN-OSCILLATION-CYCLE Chunk 6 (band/churn/scalp): the per-thesis drift-adjusted exit — sibling inform note off the shared driftExitFrom, never a gate/drop/grade/screen.json input
   const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair + P_ask/P_bid split — sibling inform note, never a gate/drop/grade/screen.json input
   for (const s of survivors) {
     let row = qcache.get(s.id);   // PART II: reassigned to a repriced CLONE only under --asym (qcache never mutated)
@@ -929,6 +930,21 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // a DIFFERENT read from R4b's digest trend (that's scored at the stale-guarded refLevel for the display
     // column; this is scored at the band top the fold actually folds down from).
     const askMargin = (rbStats && rbStats.days && row.optSell != null) ? reachMargin(rbStats.days, 'ask', row.optSell) : null;
+    // PLAN-OSCILLATION-CYCLE Chunk 6 — the per-thesis drift-adjusted EXIT inform note (band/churn/scalp).
+    // Slopes + the diurnal projection come from data ALREADY in hand — `rbStats.days` (the daily windowStats
+    // buckets, ZERO new fetch) → floorCeilingTrack's ceiling/floor slope, `prof` (the hourProfile) →
+    // diurnalForecast — composed by the SHARED driftExitFrom (one-home, Chunk 2 established the caller
+    // pattern; NOT forked). Direction-agnostic by construction (driftExitFrom passes the slope as a signed
+    // number; driftInformNote's arithmetic has NO branch on its sign). INFORM-ONLY: a sibling note, never a
+    // gate/drop/grade/screen.json input — the spec's `driftInform` label drives the wording, so this is a
+    // registry-line read, not an `if (mode===...)` branch. Passes buy-side `optBuy` as the entry so the note
+    // states the drift-adjusted after-tax margin. driftInformNote returns null (no note) when the spec has no
+    // driftInform or the projection degraded.
+    const driftExit = (prof && rbStats && rbStats.days) ? driftExitFrom(prof, rbStats.days, {
+      liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
+    }) : null;
+    const driftNote = driftInformNote(FLIP_NICHES[mode], driftExit, { entry: row.optBuy, fmt });
+    if (driftNote) driftNotes.push(`${name}: ${driftNote.text}`);
     const estExtra = {
       bidReach: reachExtra, askReach: askReachExtra,
       diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
@@ -1243,6 +1259,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   for (const n of informNotes) footerLines.push(`ℹ trajectory/reach — ${n}`);
   for (const n of headroomNotes) footerLines.push(`⤴ ask headroom — ${n}`);
   for (const n of windowClearNotes) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);
+  for (const n of driftNotes) footerLines.push(`ℹ drift-exit — ${n}`);
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
   for (const n of asymNotes) footerLines.push(`◆ asym fill — ${n}`);
@@ -1460,6 +1477,20 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     }, { specs: valueInformSpecs });
     const informed = informFlags(vres);
     if (informed.length) valueInformNotes.push(`${name}: ` + informed.map(f => `${f.key} ${f.reason} (would ${f.gatedStatus})`).join('; '));
+    // PLAN-OSCILLATION-CYCLE Chunk 6 — the drift-adjusted exit informs the value-amplitude proximity read as
+    // a NUMBER (does the drift-adjusted after-tax amplitude still clear the value economics against the
+    // buy-low?). Sources the ceiling/floor slope + diurnal projection from data ALREADY in hand — a full-day
+    // windowStats over the in-hand 1h series → floorCeilingTrack slopes, the same series → hourProfile —
+    // composed by the SHARED driftExitFrom (NO new fetch, one-home). INFORM-ONLY: EXPLICITLY not a floor
+    // relax/un-gate (R3b stays dropped) — it annotates the pick, never re-gates it. Direction-agnostic.
+    const vt1h = series1h && series1h.get(s.id);
+    const vStats = vt1h ? windowStats(vt1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
+    const vProf = vt1h ? hourProfile(vt1h, { nights: DIURNAL_NIGHTS }) : null;
+    const vDae = (vProf && vStats && vStats.days) ? driftExitFrom(vProf, vStats.days, {
+      liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph && ph.phase, mom: row.mom, reliable: row.reliable,
+    }) : null;
+    const vDriftNote = driftInformNote(FLIP_NICHES.value, vDae, { entry: vr.buyLow, fmt: fmtP });
+    if (vDriftNote) valueInformNotes.push(`${name}: ${vDriftNote.text}`);
     // BUY-NOW / value-amplitude reconciliation (Ben 2026-07-10, Rank 1). The BUY-NOW tier reads proximity
     // off the durable multi-week range (valueRanges, loadDaily); value-amplitude reads it off the recent
     // WEEK (1h-derived). They can disagree, so a "wait for the dip" caution could sit inside BUY-NOW

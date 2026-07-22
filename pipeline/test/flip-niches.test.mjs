@@ -89,6 +89,17 @@ ok('P6b per-thesis estimator family + price-basis fields are registered as desig
   for (const s of FLIP_NICHE_LIST) assert.ok(ESTIMATOR_FAMILIES.includes(s.estimator), `${s.key} family in the registry`);
 });
 
+ok('PLAN-OSCILLATION-CYCLE Chunk 6: band/churn/scalp/value declare a driftInform label; amplitude opts out', () => {
+  for (const k of ['band', 'churn', 'scalp', 'value']) {
+    assert.ok(FLIP_NICHES[k].driftInform && typeof FLIP_NICHES[k].driftInform.label === 'string' && FLIP_NICHES[k].driftInform.label,
+      `${k} carries a non-empty driftInform.label`);
+  }
+  assert.equal(FLIP_NICHES.amplitude.driftInform, undefined, 'amplitude has its own margin gate → no per-thesis inform note');
+  // the checker BITES on a malformed driftInform
+  assert.ok(validateNicheSpec({ ...FLIP_NICHES.band, driftInform: { label: '' } }).some(e => /driftInform\.label/.test(e)), 'empty label rejected');
+  assert.ok(validateNicheSpec({ ...FLIP_NICHES.band, driftInform: 'nope' }).some(e => /driftInform must be an object/.test(e)), 'non-object rejected');
+});
+
 /* --- every registered spec is structurally conformant --------------------------------------------- */
 ok('every registered spec passes validateNicheSpec (no violations)', () => {
   for (const s of FLIP_NICHE_LIST) {

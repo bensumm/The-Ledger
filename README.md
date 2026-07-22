@@ -164,7 +164,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the floor already inside the margin) sequenced after trend/knife, computed ONCE at the gate stage in
   `renderAmplitudeMode` and reused for the shadow-log, and TEMPERS the knife guard with `oscillationVsKnife`
   (a drift-riding oscillator is not a false knife → falls through to the margin gate). Pinned by
-  `pipeline/test/oscillation-gate.test.mjs`),
+  `pipeline/test/oscillation-gate.test.mjs`. Chunk 6 REUSES `driftExitFrom` per-thesis (band/churn/scalp/value
+  drift-adjusted-exit INFORM notes — see `js/flip-niches.mjs`; console-only, no gate)),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
@@ -238,6 +239,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   rising reserve). `defaultPath` = the inferred DEFAULT ENTRY PATH the surfacing implies (band/churn/
   scalp → `scalp`, value → `value-hold` — a Ben-vetoable judgment proposal), written to
   `suggestions.jsonl` (lean `path` field) + shown as the screen's per-row entry-path annotation.
+  PLAN-OSCILLATION-CYCLE Chunk 6 adds an OPTIONAL per-spec `driftInform:{label}` (band/churn/scalp/value; amplitude
+  opts out — it has its own margin gate) + the pure `driftInformNote(spec,dae,{entry,fmt})` helper: the render paths
+  compute the drift-adjusted exit ONCE via `driftExitFrom` (off in-hand data, NO fetch) and format it through this ONE
+  helper, so the per-thesis wording is REGISTRY DATA, not an `if(mode===)` branch. INFORM-ONLY (a sibling note, never a
+  gate/drop/grade/screen.json input), DIRECTION-AGNOSTIC (reads `driftAdjustedPeak`, a signed number, no sign branch);
+  pinned by `pipeline/test/oscillation-thesis.test.mjs` (incl. the Aldarium rising-floor/fading-ceiling regression pin).
   `validateNicheSpec` + `pipeline/test/flip-niches.test.mjs` are the CONFORMANCE suite (structural contract +
   no-throw + determinism over the replay archetypes). Imports only `tax` from money-math.js + `PATH_KEYS` from
   held-item-strategy.mjs. NOT yet app-imported → no APP_VERSION bump),

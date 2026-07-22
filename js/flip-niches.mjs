@@ -59,6 +59,11 @@ export const CHURN_MIN_VOL = 65000;
 // in js/held-item-strategy.mjs) + offerVerdict's scalp tripwire. PLACEHOLDER (n≈0; the PM2/suggestions accrual tunes it).
 export const SCALP_MIN_ROI = 2.0;
 
+// PLAN-OSCILLATION-CYCLE Chunk 6 — the per-thesis drift-adjusted-exit INFORM note threshold. How near the
+// drift-adjusted high the entry sits before the churn caution phrasing calls it "near" — a MAGNITUDE
+// fraction, never a direction test. n≈0 PLACEHOLDER (F1 owns it); INFORM-ONLY, gates NOTHING.
+export const DRIFT_NEAR_HIGH_FRAC = 0.02;
+
 // scalp: a TRADED intraday band whose after-tax ROI clears the (wider) scalp margin. Unlike band it
 // takes no thin abs-gp fallback — a scalp is a margin play, not a big-ticket gp-flow play.
 function scalpEdge(inp, t) {
@@ -219,6 +224,9 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // on scalp (accepts fallers by thesis — direction is the point, not a caution) or value (a
     // buy-hold-the-cycle move, not a bid-fill play).
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    // PLAN-OSCILLATION-CYCLE Chunk 6 — the drift-adjusted band top, priced LOWER on a down-drifting item
+    // (informs, never gates: the item is NOT excluded, its sell target is just the drift-shifted top).
+    driftInform: { label: 'band top' },
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
@@ -226,6 +234,9 @@ export const FLIP_NICHE_LIST = Object.freeze([
     edge:churnEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    // PLAN-OSCILLATION-CYCLE Chunk 6 — a "don't buy near the drift-adjusted weekly high" MAGNITUDE caution
+    // (never a gate; the caution phrasing is folded into the label so the render stays one code path).
+    driftInform: { label: "weekly high — don't buy near it" },
     // Step 6 (Ben 2026-07-09, decision A): churn ranks the LAP (net/u × min(limit, feasibleDepth) × P ÷
     // TTF) via its own estimator family — we always max the buy limit on these, so the exact limit is a fact.
     // fillShape 'symmetric' (PART II): churn fills EVERY lap on a two-sided commodity — exempt from the
@@ -241,6 +252,9 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // (never veto a scalp for being a faller; its stop lives in the path engine / offerVerdict, not a gate).
     falling: 'accept', gate: 'band',
     validators: [{ key: 'floor', mode: 'inform' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
+    // PLAN-OSCILLATION-CYCLE Chunk 6 — sharpen the exit-pricing note on scalp's already-accepted falling
+    // regimes (admission UNCHANGED): the exit is the drift-adjusted level, not yesterday's peak.
+    driftInform: { label: 'exit' },
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
@@ -272,6 +286,10 @@ export const FLIP_NICHE_LIST = Object.freeze([
       { key: 'value-amplitude', mode: 'inform' },
       { key: 'limit', mode: 'gate' },
     ],
+    // PLAN-OSCILLATION-CYCLE Chunk 6 — informs the value-amplitude proximity read as a NUMBER (does the
+    // drift-adjusted after-tax amplitude still clear the value economics against the buy-low?). EXPLICITLY
+    // NOT a floor relax/un-gate — R3b stays dropped; this adds NO gate and does not change value admission.
+    driftInform: { label: 'value-amplitude exit' },
     defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term', fillShape: 'symmetric',
   },
   {
@@ -310,6 +328,43 @@ export const FLIP_NICHE_LIST = Object.freeze([
 export const FLIP_NICHES = Object.freeze(Object.fromEntries(FLIP_NICHE_LIST.map(s => [s.key, s])));
 export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value','amplitude']
 export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/amplitude in --mode all (THE SWAP, PLAN-AMPLITUDE-SCAN: value.inAll flipped OFF, amplitude.inAll ON; scalp/value stay explicit-only; spread+rising DELETED)
+
+/* --- PLAN-OSCILLATION-CYCLE Chunk 6 — the per-thesis drift-adjusted-exit INFORM note --------------
+   Each surfacing spec that opts in carries a `driftInform` framing label (band/churn/scalp/value). The
+   render paths (screen-flip-niches.mjs) compute the drift-adjusted exit ONCE via the shared
+   forecast.mjs `driftExitFrom` (off data ALREADY in hand — the in-hand hourProfile + windowStats().days,
+   NO new fetch) and format it through this ONE pure helper — so the per-thesis WORDING is DATA in the
+   registry, never an `if (mode===...)` branch (the N2 lesson / the R5 `extra.askMargin` precedent).
+   INFORM everywhere — NOTHING here gates, and the arithmetic is DIRECTION-AGNOSTIC: it reads
+   `driftAdjustedPeak` (a signed number) with NO branch on the drift's sign, so a ±same-magnitude drift
+   moves the note by the identical arithmetic. Honesty (rule 4): every note carries its n≈0 inform label. */
+/**
+ * driftInformNote(spec, dae, opts) — format a spec's drift-adjusted-exit INFORM note. PURE.
+ * @param {object} spec  a FLIP_NICHE spec (reads spec.driftInform = { label } | undefined ⇒ null)
+ * @param {object|null} dae  a driftExitFrom()/driftAdjustedExit() result (null / no peak ⇒ null — honest
+ *                           degrade, never a fake note)
+ * @param {object} opts { entry = null, fmt = String, nearFrac = DRIFT_NEAR_HIGH_FRAC }
+ *   entry = the thesis's BUY level (band low / ampBid / value buyLow) so the note can state the
+ *   drift-adjusted AFTER-TAX margin; fmt = a number formatter (money-format fmtP in production; default
+ *   identity so a test needs no fmt); nearFrac = the "near the high" magnitude fraction.
+ * @returns {null | { key:'drift-exit', label, level, naive, delta, margin, near, text }}
+ *   level = round(driftAdjustedPeak) (the drift-shifted exit the thesis SELLS into); naive = round(naivePeak);
+ *   delta = level − naive (the drift shift, sign preserved); margin = round(afterTax(level) − entry) | null;
+ *   near = |level − entry| ≤ nearFrac×level | null. NOTHING gates on any of these — decision support only.
+ */
+export function driftInformNote(spec, dae, { entry = null, fmt = String, nearFrac = DRIFT_NEAR_HIGH_FRAC } = {}) {
+  if (!spec || !spec.driftInform || !dae || dae.driftAdjustedPeak == null) return null;
+  const level = Math.round(dae.driftAdjustedPeak);
+  const naive = dae.naivePeak != null ? Math.round(dae.naivePeak) : null;
+  const delta = naive != null ? level - naive : null;
+  const margin = entry != null ? Math.round((level - tax(level)) - entry) : null;   // direction-agnostic: one afterTax path
+  const near = (entry != null && level > 0) ? (Math.abs(level - entry) <= nearFrac * level) : null;
+  const label = spec.driftInform.label;
+  const deltaTxt = delta != null ? ` (${delta >= 0 ? '+' : ''}${fmt(delta)} vs naive ${fmt(naive)})` : '';
+  const marginTxt = margin != null ? `; drift-adj after-tax margin ${margin >= 0 ? '+' : ''}${fmt(margin)}` : '';
+  const text = `drift-adjusted ${label} ~${fmt(level)}${deltaTxt}${marginTxt} — n≈0 inform, not a gate`;
+  return { key: 'drift-exit', label, level, naive, delta, margin, near, text };
+}
 
 /* --- conformance ----------------------------------------------------------------------------------
    validateNicheSpec(spec) → string[] of structural violations (empty = conformant). The conformance
@@ -371,5 +426,10 @@ export function validateNicheSpec(spec) {
   if (!VALID_ESTIMATORS.has(spec.estimator)) errs.push(`estimator must be one of ${[...VALID_ESTIMATORS].join('/')}`);
   if (!VALID_PRICE_BASIS.has(spec.priceBasis)) errs.push(`priceBasis must be one of ${[...VALID_PRICE_BASIS].join('/')}`);
   if (!VALID_FILL_SHAPE.has(spec.fillShape)) errs.push(`fillShape must be one of ${[...VALID_FILL_SHAPE].join('/')}`);
+  // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInform is OPTIONAL; when present it must be { label: <non-empty string> }.
+  if (spec.driftInform != null) {
+    if (typeof spec.driftInform !== 'object') errs.push('driftInform must be an object { label } when present');
+    else if (typeof spec.driftInform.label !== 'string' || !spec.driftInform.label) errs.push('driftInform.label must be a non-empty string');
+  }
   return errs;
 }
