@@ -159,7 +159,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `floorCeilingTrack` from windowread to pull the ceiling/floor slope off an in-hand `windowStats().days`, NO
   fetch; builds the diurnalForecast wrapper; calls `driftAdjustedExit`) — the reusable caller pattern the
   amplitude lane established and Chunk 6 REUSES; PURE/tax-free (the after-tax margin stays the caller's concern).
-  Pinned by `pipeline/test/oscillation-shadow.test.mjs`),
+  Pinned by `pipeline/test/oscillation-shadow.test.mjs`. Chunk 3 (THE ONLY GATE) turns that margin into
+  `amplitudeGate`'s `margin-below-floor` reject (`amplitudeDriftMargin().margin <= 0`, direction-agnostic,
+  the floor already inside the margin) sequenced after trend/knife, computed ONCE at the gate stage in
+  `renderAmplitudeMode` and reused for the shadow-log, and TEMPERS the knife guard with `oscillationVsKnife`
+  (a drift-riding oscillator is not a false knife → falls through to the margin gate). Pinned by
+  `pipeline/test/oscillation-gate.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;

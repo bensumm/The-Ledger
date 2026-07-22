@@ -95,7 +95,7 @@ import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight,
 import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
 import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin
-import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch
+import { driftExitFrom, oscillationVsKnife } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife)
 import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
@@ -1541,8 +1541,8 @@ const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wS
 function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) {
   const rows = [], sugg = [];
   const informNotes = [];
-  const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0, unaffordable: 0 };
-  const DROP_KEY = { 'no-history': 'noHistory', 'amp-below-floor': 'ampFloor', 'bid-unreachable': 'bidReach', 'ask-unreachable': 'askReach', 'trend': 'trend', 'knife': 'knife' };
+  const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0, marginFloor: 0, unaffordable: 0 };
+  const DROP_KEY = { 'no-history': 'noHistory', 'amp-below-floor': 'ampFloor', 'bid-unreachable': 'bidReach', 'ask-unreachable': 'askReach', 'trend': 'trend', 'knife': 'knife', 'margin-below-floor': 'marginFloor' };
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -1559,7 +1559,22 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     const traj = trajectoryFrom1h(ts1h);
     const trendDominates = !!(prof && prof.trendDominates);
     const knife = !!(traj && traj.shape === 'knife');
-    const g = amplitudeGate(ar, { trendDominates, knife });
+    // PLAN-OSCILLATION-CYCLE Chunk 3B — the drift-aware oscillation-vs-knife detector off the SAME in-hand
+    // daily windowStats().days (NO fetch). It TEMPERS the raw `knife` above: a drift-riding oscillator
+    // (fang/blowpipe) is not a false knife and must reach the margin gate, not die as `knife`.
+    const osc = oscillationVsKnife(stats.days);
+    // PLAN-OSCILLATION-CYCLE Chunk 3A — compute the drift-adjusted margin ONCE, HERE at the gate stage
+    // (moved up from the render/shadow-log point below), so the SAME value feeds BOTH the margin-below-floor
+    // gate AND the Chunk-2 shadow-log (one compute, reused — never computed twice). Slopes + diurnal
+    // projection come from data ALREADY in hand — `stats.days` (daily windowStats) → floorCeilingTrack's
+    // ceiling/floor slope, `prof` (the hourProfile) → diurnalForecast — via the shared driftExitFrom
+    // pattern (NO new fetch). Direction-agnostic by construction (driftExitFrom passes the slope as a
+    // signed number; amplitudeDriftMargin's arithmetic has NO branch on its sign).
+    const dae = driftExitFrom(prof, stats.days, {
+      liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
+    }, { holdHorizonDays: AMP_HOLD_DAYS });
+    const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid });
+    const g = amplitudeGate(ar, { trendDominates, knife, oscillating: !!(osc && osc.oscillating), driftMargin: driftShadow });
     if (!g.pass) { dropped[DROP_KEY[g.reason] ?? 'ampFloor']++; continue; }
     // rank via the EXISTING spine: the 'amplitude' estimator family (pFill = two-leg daily reach, ttf =
     // hold horizon, lapUnits = deployable min) → rankScore(net×P÷TTF). capGp = TOTAL REALIZABLE capital
@@ -1600,17 +1615,10 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
       const wp = weekdayProfile(ts1h, { nights: 28 });
       if (wp && wp.best && wp.worst) informNotes.push(`${name}: weekday amplitude — widest ${wp.best.label} (~${(wp.best.ampPct * 100).toFixed(1)}%, n=${wp.best.n}), thinnest ${wp.worst.label} (~${(wp.worst.ampPct * 100).toFixed(1)}%, n=${wp.worst.n}) — n≈3–4/cell, a lean not a law`);
     }
-    // PLAN-OSCILLATION-CYCLE Chunk 2 (INFORM-ONLY, no gate) — compute the drift-adjusted margin for this
-    // Stage-2 survivor and SHADOW-LOG it alongside the naive ampBid/ampAsk. Slopes + diurnal projection come
-    // from data ALREADY in hand — `stats.days` (the daily windowStats) feeds floorCeilingTrack's ceiling/floor
-    // slope, `prof` (the hourProfile) feeds diurnalForecast — via the shared driftExitFrom pattern (NO new
-    // fetch). The margin is COMPUTED, not acted on: the printed table + the knife/trend/reach gates above are
-    // untouched. Direction-agnostic by construction (driftExitFrom passes the slope as a signed number; the
-    // margin arithmetic has no branch on its sign). Chunk 3 turns this same number into the gate.
-    const dae = driftExitFrom(prof, stats.days, {
-      liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
-    }, { holdHorizonDays: AMP_HOLD_DAYS });
-    const driftShadow = amplitudeDriftMargin(dae, { entry: ar.ampBid });
+    // PLAN-OSCILLATION-CYCLE Chunk 2 shadow-log (now GATED by Chunk 3): `driftShadow` was computed ONCE at
+    // the gate stage above and is REUSED here (no double-compute). As of Chunk 3 the same margin also DROVE
+    // the margin-below-floor gate, so any survivor still standing here already cleared it — the shadow block
+    // records the winning row's drift-adjusted margin alongside the naive ampBid/ampAsk.
     // §A5 — log the pick with the amplitude lane shadow block (the printed levels + both-leg recent reach
     // + dip/peak windows + holdDays), so the shadow both-leg replay joiner can measure the would-have-fill
     // rate as an UPPER BOUND, and the retro-join attributes realized round trips.
@@ -1633,9 +1641,9 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
   if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
   else console.log('_none_');
   for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);
-  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
+  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
   console.log('⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
-  console.log('⚠ make-or-break (§4, n≈0): the gate measures the levels PRINTED; whether BOTH legs actually FILL within the hold horizon is the open question the shadow both-leg replay (join-amplitude-outcomes.mjs) + realized retro-join measure. Do not trade on this yet.');
+  console.log('⚠ make-or-break (§4, n≈0): the gate measures the levels PRINTED; whether BOTH legs actually FILL within the hold horizon is the open question the shadow both-leg replay (join-amplitude-outcomes.mjs) + realized retro-join measure. The NEW `margin-below-floor` drift-adjusted-margin gate (PLAN-OSCILLATION-CYCLE Chunk 3) rides on the SAME n≈0 PLACEHOLDER threshold + the diurnal/drift projection — it is the make-or-break gate itself, not a validated filter. Do not trade on this yet.');
   console.log('');
   return rows.map(r => ({ id: r.id, cells: r.cells }));
 }

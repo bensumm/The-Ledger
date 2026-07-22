@@ -251,7 +251,21 @@ daily amplitude floor (~2% PLACEHOLDER, on the taxed median-per-day basis, which
 hi↔lo range), the both-leg daily reach (the quoted trough-bid TOUCHED and peak-ask REACHED on ≥2 of
 recent-3 days OR ≥ half the full window, `staleOptimistic`-guarded — the load-bearing viability read),
 and a trend/knife guard (`hourProfile().trendDominates` + the warm 1h trajectory — a trending item's
-"amplitude" is drift). **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
+"amplitude" is drift). **The margin-below-floor gate (PLAN-OSCILLATION-CYCLE Chunk 3 — THE ONLY GATE
+in that program, sequenced LAST after trend/knife):** reject when the drift-adjusted margin
+`afterTax(driftAdjustedPeak) − entry − AMP_DRIFT_REQ_MARGIN <= 0` (`amplitudeDriftMargin` off
+`driftExitFrom`'s forward diurnal+multi-week-drift peak projection, computed ONCE at the gate stage and
+reused for the Chunk-2 shadow-log). **DIRECTION-AGNOSTIC by construction** — the margin is the SIGNED
+consequence of the drift NUMBER, so a single `<= 0` comparison rejects a down-drift AND an up-drift
+identically (NO `if (slope<0)` branch). This is the mechanism that rejects BOTH a fang down-leg (the
+forward peak fell below entry) AND the Aldarium "rising floor" mirage (the margin rides the fading
+CEILING, never the rising FLOOR — a rising floor is never rewarded). Degrade-OPEN: a degraded projection
+(thin days / refused forecast) is NOT a reject. The **knife guard is TEMPERED** by
+`forecast.oscillationVsKnife` — a raw knife that the detrended-mid detector reads as *oscillating* (a
+drift-riding oscillator, not a monotone collapse) is NOT dropped as a false knife; it falls through to the
+margin gate, which admits it only if its drift-adjusted margin clears the floor (this LOOSENS the knife
+guard, safe because the margin gate has final say). Every threshold is n≈0 PLACEHOLDER — the margin gate is
+the make-or-break gate itself, "do not trade on this yet." **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
 (`js/estimators/families.mjs`: `pFill` = the two-leg daily-reach product, `ttf` = the `--hold-days`
 horizon prior (1, or 1.5 for the day-crossing experiment), `lapUnits` = the deployable-units min) — NOT a
 bespoke composite. Amplitude picks are patient multi-hour plays → they surface under deploy/accumulate,

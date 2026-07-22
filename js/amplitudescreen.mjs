@@ -160,13 +160,27 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
   };
 }
 
-/* amplitudeGate(ar, { trendDominates, knife }) → { pass, reason }. Two-sided liquidity + the price
-   window are the CALLER's (shared stack, kept); this owns the amplitude-specific gate: the daily
-   after-tax amplitude floor, the both-leg recent-3 reach viability test, and the trend/knife guard
-   (a trending item's "amplitude" is drift — reject; oscillation around a flat level is the thesis).
-   reason is null on pass; reject reasons: no-history / amp-below-floor / bid-unreachable /
-   ask-unreachable / trend / knife. */
-export function amplitudeGate(ar, { trendDominates = false, knife = false, recentN = AMP_RECENT_N } = {}) {
+/* amplitudeGate(ar, { trendDominates, knife, oscillating, driftMargin }) → { pass, reason }. Two-sided
+   liquidity + the price window are the CALLER's (shared stack, kept); this owns the amplitude-specific gate:
+   the daily after-tax amplitude floor, the both-leg recent-3 reach viability test, the trend/knife guard
+   (a trending item's "amplitude" is drift — reject; oscillation around a flat level is the thesis), and
+   PLAN-OSCILLATION-CYCLE Chunk 3's drift-adjusted `margin-below-floor` gate — THE ONLY GATE in that program.
+   reason is null on pass; reject reasons (in order): no-history / amp-below-floor / bid-unreachable /
+   ask-unreachable / trend / knife / margin-below-floor.
+
+   Chunk 3B — the knife guard is now TEMPERED by `oscillating` (from js/forecast.mjs oscillationVsKnife):
+   a raw knife signal (`knife`) that is ALSO an oscillator riding a drift (`oscillating===true`) is NOT a
+   false knife — it is NOT rejected here and falls through to the margin gate, which admits it only if its
+   drift-adjusted margin clears the floor. This deliberately LOOSENS the knife guard; it is safe because
+   every survivor it lets past must still clear the margin gate below.
+
+   Chunk 3A — `driftMargin` is the amplitudeDriftMargin() result (afterTax(driftAdjustedPeak) − entry −
+   AMP_DRIFT_REQ_MARGIN; the floor is ALREADY subtracted inside it — one-home threshold). DIRECTION-AGNOSTIC
+   by construction: `.margin` is the SIGNED consequence of the drift NUMBER, so the reject is a single
+   `margin <= 0` comparison — identical arithmetic whether the drift was + or −; there is NO sign branch.
+   Degrade-OPEN: a null/absent driftMargin (exit projection degraded — thin days, refused forecast) is NOT a
+   reject; only a POSITIVELY-computed sub-floor margin drops the row (honesty §4 — never a fake rejection). */
+export function amplitudeGate(ar, { trendDominates = false, knife = false, oscillating = false, driftMargin = null, recentN = AMP_RECENT_N } = {}) {
   if (!ar || !ar.hasData) return { pass: false, reason: 'no-history' };
   if (!(ar.medAmpPct != null && ar.medAmpPct >= AMP_MIN_AMP_PCT)) return { pass: false, reason: 'amp-below-floor' };
   // both-leg daily reach — the load-bearing viability test (§4). A leg is reachable when the level prints
@@ -178,7 +192,13 @@ export function amplitudeGate(ar, { trendDominates = false, knife = false, recen
   if (!legOk(ar.bidTouch)) return { pass: false, reason: 'bid-unreachable' };
   if (!legOk(ar.askReach)) return { pass: false, reason: 'ask-unreachable' };
   if (trendDominates) return { pass: false, reason: 'trend' };   // drift swamps the swing
-  if (knife) return { pass: false, reason: 'knife' };            // decline-in-progress, not an oscillation
+  // knife guard, TEMPERED (Chunk 3B): a monotone decline-in-progress is dropped — UNLESS the drift-aware
+  // oscillationVsKnife detector says the shape is an oscillator riding a drift, in which case it is NOT a
+  // false knife and falls through to the margin gate below (which still has final say). LOOSENS the guard.
+  if (knife && !oscillating) return { pass: false, reason: 'knife' };
+  // margin-below-floor (Chunk 3A) — sequenced LAST so a knife is still attributed to `knife`, not `margin`.
+  // Direction-agnostic single comparison; the AMP_DRIFT_REQ_MARGIN floor already lives inside `.margin`.
+  if (driftMargin && driftMargin.margin != null && driftMargin.margin <= 0) return { pass: false, reason: 'margin-below-floor' };
   return { pass: true, reason: null };
 }
 
