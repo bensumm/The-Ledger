@@ -168,9 +168,9 @@ Chunk 3 is the ONLY gate; it gates on a **magnitude** (drift-adjusted margin), n
 
 | Chunk | State | SHA | Notes |
 | --- | --- | --- | --- |
-| 1 | IN REVIEW (worktree) | — | driftAdjustedExit + oscillationVsKnife in js/forecast.mjs + oscillation-cycle.test.mjs (8 checks). FINDING: diurnalForecast ALREADY trend-extrapolates nextPeak/nextTrough to their eta (projHigh = baselineNow + trendPerHour·dt + devHi) — so drift over [now→eta] is already baked in; Chunk 1 shifts ONLY by the RESIDUAL horizon max(0, holdHorizonDays − etaDays), making it thin. Inform-only, wired into NO gate. |
-| 2 | BLOCKED on 1 | — | |
+| 1 | ✅ LANDED | 53dab35 | driftAdjustedExit + oscillationVsKnife in js/forecast.mjs + oscillation-cycle.test.mjs (8 checks). FINDING: diurnalForecast ALREADY trend-extrapolates nextPeak/nextTrough to their eta (projHigh = baselineNow + trendPerHour·dt + devHi) — so drift over [now→eta] is already baked in; Chunk 1 shifts ONLY by the RESIDUAL horizon max(0, holdHorizonDays − etaDays), making it thin. Inform-only, wired into NO gate. Validated (main): direction-agnostic symmetry pinned, 76 suites + check-imports green. |
+| 2 | READY (unblocked) | — | shadow-log the margin; depends on Chunk 1 (landed) |
 | 3 | BLOCKED on 2 | — | the only gate |
 | 4 | BLOCKED on 3 | — | genuinely-new engineering |
 | 5 | BLOCKED on 3 | — | APP_VERSION bump |
-| 6 | BLOCKED on 1 | — | parallel-safe across theses |
+| 6 | READY (unblocked) | — | parallel-safe across theses; depends on Chunk 1 (landed) |
