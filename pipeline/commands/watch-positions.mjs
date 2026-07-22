@@ -510,7 +510,7 @@ function heldAlert(it) {
   if (instabuy != null && be != null && instabuy < be)
     return { level: 'UNDERWATER', msg: `UNDERWATER ${name} — live sell ${fmtP(instabuy)} < break-even ${fmtP(be)}. Hold ≥ break-even only if regime is flat/rising; cut if it turns.` };
   if (row.falling)
-    return { level: 'FALLING', msg: `FALLING ${name} — multi-day regime ${row.regimeLabel} ${row.regime.driftPct.toFixed(0)}%. Price to clear at the instabuy ${fmtP(instabuy)}; don't defend the ask down.` };
+    return { level: 'FALLING', msg: `FALLING ${name} — multi-day regime ${row.regime.classification || row.regimeLabel}${Number.isFinite(row.regime.driftPct) && Math.round(row.regime.driftPct) !== 0 ? ` (${Math.round(Math.abs(row.regime.driftPct))}% ${row.regime.driftPct < 0 ? 'below' : 'above'} 2wk)` : ''}. Price to clear at the instabuy ${fmtP(instabuy)}; don't defend the ask down.` };
   return null;
 }
 

@@ -20,7 +20,7 @@
 import assert from 'node:assert/strict';
 import { computeQuote, momVerdict, quoteOrdered, diurnalRead, moveShape, breakEven, maxBuyForExit, BIG_TICKET_GP, FRESH_HOURS } from '../../js/quotecore.js';
 import { isOvernightNow, overnightStaleRisk, OVERNIGHT_START_HOUR, OVERNIGHT_END_HOUR } from '../../js/quotecore.js';   // S2 posture helpers
-import { regimeLabel, momCell, MOM_STRONG_PCT } from '../../js/quotecore.js';   // TD3 derivation/display helpers
+import { regimeLabel, regimeCellText, momCell, MOM_STRONG_PCT } from '../../js/quotecore.js';   // TD3 derivation/display helpers
 import { phase, regimeDrift } from '../../js/quotecore.js';   // trajectory-phase classifier + regime regression guard
 import { pressureText } from '../../js/quotecore.js';   // 24h buy/sell flow-imbalance display formatter
 import { askHeadroomText } from '../../js/quotecore.js';   // Bar E ask-headroom inform-only signal formatter
@@ -589,6 +589,48 @@ ok('regimeLabel: falling ≤ −5%, rising ≥ +5%, else flat; unknown when !ok'
   assert.deepEqual(regimeLabel({ ok: true, driftPct: 5 }), { label: 'rising', falling: false, rising: true });
   assert.equal(regimeLabel({ ok: false }).label, 'unknown');
   assert.equal(regimeLabel(null).label, 'unknown');
+});
+
+// --- TD3.1d-R2. the classification-based regime read (PLAN-SIGNAL-RECENCY R2) — the Letvek anchor.
+// build a 6h series from per-day MID levels (oldest→newest), one point/day (low=m−8/hi=m+8), newest 1 day
+// ago so windowStats keeps it (today auto-excluded). This is what regimeDrift now buckets + classifies.
+function mk6hFromDailyMids(mids) {
+  return mids.map((m, i) => ({ timestamp: NOW_SEC - (mids.length - i) * 86400, avgLowPrice: m - 8, avgHighPrice: m + 8 }));
+}
+ok('R2 regime: a RECOVERING item (recent slope up, median still down) is rising, NOT falling (the Letvek anchor)', () => {
+  // dropped hard from ~2800 then recovering the last 5 days — the recent floor+ceiling slope is UP even
+  // though the recent-3 daily-mid median (1650) still sits well below the prior median (2400).
+  const r = regimeDrift(mk6hFromDailyMids([2800, 2700, 2600, 2400, 1300, 1250, 1350, 1500, 1650, 1800]));
+  assert.equal(r.ok, true);
+  assert.equal(r.classification, 'healthy-trend', 'floor AND ceiling rising over the recent window');
+  assert.ok(r.driftPct < 0, 'the lagging median-delta is STILL negative — the exact stale signal the old code read');
+  const rl = regimeLabel(r);
+  assert.equal(rl.falling, false, 'the recovering item is NOT excluded as falling (old regimeDrift mislabelled it Falling)');
+  assert.equal(rl.rising, true, 'classification healthy-trend → rising');
+});
+ok('R2 regime: same recent level, different trajectory — a decelerating faller vs a turned-corner recovery split', () => {
+  // both end near ~1500-1800, but one is a steady decline (cooling) and one turned up (healthy-trend).
+  const cooling = regimeDrift(mk6hFromDailyMids([2400, 2300, 2200, 2100, 2000, 1900, 1800, 1700, 1600, 1500]));
+  const recovering = regimeDrift(mk6hFromDailyMids([2800, 2700, 2600, 2400, 1300, 1250, 1350, 1500, 1650, 1800]));
+  assert.equal(regimeLabel(cooling).falling, true, 'a steady decline → cooling → falling');
+  assert.equal(regimeLabel(recovering).falling, false, 'a recovery off the floor → healthy-trend → NOT falling');
+});
+ok('R2 regime: the new fields are present + the min-days gate degrades to unknown', () => {
+  const r = regimeDrift(mk6hFromDailyMids([1000, 1010, 1020, 1030, 1040, 1050, 1060]));
+  assert.equal(typeof r.classification, 'string', 'classification is set on an ok read');
+  assert.ok(['rising', 'flat', 'falling'].includes(r.floorDir) && ['rising', 'flat', 'falling'].includes(r.ceilingDir), 'floorDir/ceilingDir surface the per-track direction');
+  assert.equal(regimeDrift(mk6hFromDailyMids([1000, 1010, 1020, 1030])).ok, false, '< REGIME_MIN_DAYS daily buckets ⇒ unknown (degrade, never a fake read)');
+});
+
+// --- TD3.1d-R2b. regimeCellText — the display (compact = label·classification; full adds range-position)
+ok('R2 regimeCellText: compact is label·classification; full adds unsigned range-position; no signed contradiction', () => {
+  const recovering = { regime: { ok: true, classification: 'healthy-trend', driftPct: -32 }, regimeLabel: 'rising' };
+  assert.equal(regimeCellText(recovering), 'Rising · healthy-trend', 'compact: label + trajectory shape, NO signed %');
+  assert.equal(regimeCellText(recovering, { full: true }), 'Rising · healthy-trend · 32% below 2wk', 'full: driftPct reframed as unsigned below-median (a discount), not "Rising -32%"');
+  const frothy = { regime: { ok: true, classification: 'healthy-trend', driftPct: 18 }, regimeLabel: 'rising' };
+  assert.equal(regimeCellText(frothy, { full: true }), 'Rising · healthy-trend · 18% above 2wk', 'above-median reads overextended');
+  assert.equal(regimeCellText({ regime: { ok: false } }), '—', 'unknown regime ⇒ em-dash');
+  assert.equal(regimeCellText({ regime: { ok: true, classification: 'cooling', driftPct: 0 }, regimeLabel: 'falling' }, { full: true }), 'Falling · cooling', 'a ~0% drift adds no range-position clause');
 });
 
 // --- TD3.1e. momCell strength arrows at MOM_STRONG_PCT

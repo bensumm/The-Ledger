@@ -11,7 +11,7 @@ import { diurnalForecast, fmtEta } from './forecast.mjs';                    // 
 import { fetchGuideSeries, resolveItem, resolveId, searchCatalog, rebuildDatalist, coarseTrend, refineTrend } from './market.js';
 import { toggleWatch } from './ui.js';
 import { switchTab } from './main.js';
-import { regimeDrift, momVerdict, momCell, breakEven } from './quotecore.js';   // shared impls (regime + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them
+import { regimeDrift, regimeLabel, momVerdict, momCell, breakEven } from './quotecore.js';   // shared impls (regime + regimeLabel classification mapping + cut-trigger + T2 momentum token + tax-capped break-even) so quotes/positions/Trends reuse them
 import { fetchQuote, quoteTableHtml } from './quote.js';
 // TC1: the pure DOM-free analytics moved to js/trendcore.js (node-importable + fixture-tested in
 // pipeline/test/trendcore.test.mjs). trends.js re-imports what runTrends/renderPositionCard
@@ -128,9 +128,16 @@ export function renderTrendHead(it){
    refineTrend (guide divergence + 7d/30d momentum). Guidance, not guarantees. */
 export function classifyPositionTrend(s6h, R){
   const regime=regimeDrift(s6h);
+  // R2 (PLAN-SIGNAL-RECENCY): derive falling/rising from the CLASSIFICATION mapping (regimeLabel), not
+  // raw regime.driftPct ±5% thresholds. Post-R2, driftPct is a lagging median-delta that no longer drives
+  // the label — reading it directly here reproduced the exact stale-read bug R2 fixes, on the Trends tab:
+  // a recovering item (classification healthy-trend, driftPct still negative) got mislabelled `falling`
+  // and prescribed SELL/CUT, contradicting the screen surfacing it as a buy. The refineTrend (R.state)
+  // and m30 momentum signals are independent and stay.
+  const rl=regimeLabel(regime);
   const m7=(R&&R.ok)?R.m7:null, m30=(R&&R.ok)?R.m30:null;
-  const falling=(R&&R.ok&&R.state==='down-confirmed') || (regime.ok&&regime.driftPct<=-5) || (m30!=null&&m30<=-15);
-  const rising =(R&&R.ok&&R.state==='up') || (regime.ok&&regime.driftPct>=5);
+  const falling=(R&&R.ok&&R.state==='down-confirmed') || rl.falling || (m30!=null&&m30<=-15);
+  const rising =(R&&R.ok&&R.state==='up') || rl.rising;
   return {falling, rising, regime, m7, m30};
 }
 export function renderPositionCard(t, it, s5m, s6h, gser, qrow){
@@ -483,7 +490,10 @@ export async function runTrends(){
           '<div class="sbox"><div class="sk">Trend</div><div class="sv '+tCls+'">'+tState+(volatile?' <span class="loss" title="price moving fast">⚡</span>':'')+'</div><div class="ss">'+tSub+'</div></div>';
     grid+='</div>';
     // falling = point-in-time below guide OR a multi-day regime step down; drives buy-low/sell-quick pricing
-    const fallingNow = gs.state==='down' || (P.regime && P.regime.ok && P.regime.driftPct<=-5);
+    // R2: read the CLASSIFICATION (regimeLabel), not raw driftPct ≤ −5 — same fix as classifyPositionTrend,
+    // so a recovering item (healthy-trend, driftPct still negative) isn't told to price-to-clear on the
+    // Trends search view. (Fable's follow-up sweep caught this second instance.)
+    const fallingNow = gs.state==='down' || regimeLabel(P.regime).falling;
     const PT=patientTargets(s5m, it, fallingNow);
     // ---- T2: sectioned plan blurb — small labeled blocks, each rendered only when it applies.
     // ⚠ Warnings stays FIRST; then Flip now; then Patient pricing / Price to clear (the header IS

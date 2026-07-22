@@ -138,6 +138,12 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
   `loadAll24hRolling` header. (The browser app still reads the broken `/24h` until a deferred step.)
 - **Net/u** = after the 2% tax. **Regime** = the multi-day `regimeDrift` (flat/rising/falling), with
   a display-only **phase tag** folded in (`spike`/`decay`/`basing`, from `phase()`) — NOT a gate.
+  Since R2 (PLAN-SIGNAL-RECENCY), `regimeDrift`'s flat/rising/falling comes from `floorCeilingTrack`'s
+  slope-asymmetry **classification** over the daily-bucketed 6h series (not the old 3d-vs-14d median
+  delta), so a recovering item whose recent floor/ceiling turned up is no longer mislabelled falling.
+  This gate reads the **6h archive**; `read-trajectory`/`read-window-range` read the **1h** series — the
+  two can classify the same item differently (granularity + history depth), so a verify-tool cross-check
+  isn't a bug when it disagrees with the gate.
 
 ### The decision digest — a THIRD console view (`--digest`)
 `screen-flip-niches.mjs --digest` prints ONE compact cross-niche block ABOVE the per-niche tables (and

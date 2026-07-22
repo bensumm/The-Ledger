@@ -34,6 +34,7 @@
 
 import { tax, netMargin, TAXCAP, isBond, bondFee } from './money-math.js';
 import { fmtP, fmt } from './money-format.js';
+import { windowStats, floorCeilingTrack } from './windowread.mjs';   // R2 (PLAN-SIGNAL-RECENCY): the shared slope-asymmetry primitive replaces regimeDrift's single 3d-vs-14d median delta (both are pure js/ modules — windowread imports nothing from quotecore, so no cycle)
 export { tax, netMargin } from './money-math.js';   // re-export so node consumers (chunk 4.1) get the ONE tax impl
 // Break-even list price: the smallest sell price `s` that still nets ≥ `buy` after the GE tax —
 // i.e. the smallest integer s with s - tax(s) ≥ buy. The ONE definition shared by the app, the
@@ -153,28 +154,62 @@ const med = median;   // internal alias for the regime/phase/activity math below
 const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;
 
 /* --- regime-shift guard (MOVED here from trends.js so Trends + quotes share one impl) ----
-   Has the price LEVEL moved recently? Compares the last 3 days' median mid-price against the
-   prior ~2 weeks'. conf/medCount only measure how much history we have, not whether it's one
-   stable regime — a one-off jump can masquerade as a daily cycle without this. Operates on a
-   6h-timestep series (points with avgLowPrice/avgHighPrice/timestamp). */
+   "Which way has the price LEVEL moved?" — the flat/rising/falling driver behind the screen's
+   falling-EXCLUSION gate (surviveMode) and rateItem's regimeFactor grade multiplier. Operates on a
+   6h-timestep series (points with avgLowPrice/avgHighPrice/timestamp).
+
+   R2 (PLAN-SIGNAL-RECENCY): the read is now floorCeilingTrack's slope-asymmetry CLASSIFICATION over
+   the daily-bucketed 6h series — replacing the old single 3d-vs-14d MEDIAN DELTA. The delta couldn't
+   tell a still-decelerating faller from an item that just turned the corner (the Letvek "Falling
+   −13%" mislabel of a recovering item), because it had no slope/duration — just two medians and a
+   subtraction. floorCeilingTrack (two projectTrajectory calls under the hood) reads the floor and
+   ceiling slopes SEPARATELY + a discrete floor-break, which IS the recency-weighted signal.
+
+   FIELD-COMPATIBLE: still returns {ok, driftPct, recentMed, priorMed} so regimeFactor's froth haircut
+   and the display %-cell are unchanged — driftPct is recomputed as the recent-3-day vs prior daily-mid
+   median delta (same idea, on daily buckets) — PLUS `classification` (the 6-way label) that regimeLabel
+   maps to flat/rising/falling.
+
+   DATA-SOURCE NOTE (R2): this gate classifies off the 6h ARCHIVE series (ts6h — deeper backfill), whereas
+   `read-trajectory`/`read-window-range` classify off the 1h /timeseries. The two can disagree on the same
+   item (different granularity + history depth), so a user cross-checking the gate's regime via the verify
+   tool may see a different label — expected, not a bug. Kept on 6h deliberately (out of R2 scope to unify). */
+export const REGIME_MIN_DAYS = 5;   // fewer daily buckets than this ⇒ unknown (floorCeilingTrack's own floor)
 export function regimeDrift(points){
   if(!points || points.length<2) return {ok:false};
-  const mid=p=>(p.avgLowPrice&&p.avgHighPrice)?(p.avgLowPrice+p.avgHighPrice)/2:(p.avgLowPrice||p.avgHighPrice);
-  const tEnd=points[points.length-1].timestamp;
-  const recentCut=tEnd-3*86400, priorCut=tEnd-17*86400;
-  const recent=[], prior=[];
-  points.forEach(p=>{ const m=mid(p); if(!m) return;
-    if(p.timestamp>=recentCut) recent.push(m);
-    else if(p.timestamp>=priorCut) prior.push(m); });
-  if(recent.length<8 || prior.length<8) return {ok:false};   // not enough on either side to compare
-  const recentMed=med(recent), priorMed=med(prior);
-  if(!recentMed || !priorMed) return {ok:false};
-  return {ok:true, driftPct:(recentMed-priorMed)/priorMed*100, recentMed, priorMed};
+  // bucket the 6h series into full-LOCAL-day low/high (today auto-excluded by windowStats); the shape
+  // is windowStats().days = [[key,{low,hi}], …] oldest→newest — the exact input floorCeilingTrack wants.
+  const stats=windowStats(points, {nights:20, wStart:0, wEnd:0});
+  if(!stats || !Array.isArray(stats.days) || stats.days.length<REGIME_MIN_DAYS) return {ok:false};
+  const fc=floorCeilingTrack(stats.days);
+  if(!fc) return {ok:false};
+  // backward-compat driftPct/recentMed/priorMed: the recent-3-day vs prior daily-MID median delta (the
+  // old 3d-vs-prior idea, recomputed on the daily buckets so regimeFactor + the display cell are stable).
+  const mids=stats.days.map(([,n])=>(n.low!=null&&n.hi!=null)?(n.low+n.hi)/2:(n.low??n.hi)).filter(v=>v!=null);
+  const recentMed=med(mids.slice(-3)), priorMids=mids.slice(0,-3), priorMed=priorMids.length?med(priorMids):null;
+  const driftPct=(recentMed&&priorMed)?(recentMed-priorMed)/priorMed*100:0;
+  return {ok:true, driftPct, recentMed, priorMed, classification:fc.classification, floorDir:fc.floor.dir, ceilingDir:fc.ceiling.dir};
 }
-/* flat / rising / falling label off a regimeDrift result. ±5% threshold matches the
-   falling/rising cutoffs used in classifyPositionTrend and the Trends plan card. */
+
+/* The classification → {flat, rising, falling} mapping (R2). NAMED EXPLICITLY as a visible, Ben-vetoable
+   decision (Fable's review note): only the DECISIVE down/up trajectories move the gate + grade; the
+   ambiguous middle stays FLAT, so the swap does NOT newly-exclude a maul-shaped hold (flat floor, easing
+   ceiling) that the old ±5% delta would have called flat. PLACEHOLDER mapping pending F1.
+     crash-risk, cooling                    → falling  (a floor BREAK, or BOTH tracks decaying)
+     healthy-trend                          → rising   (floor AND ceiling rising)
+     compressing-up, mild-cooldown, ranging → flat     (floor holds / ambiguous — NOT a faller) */
+export const REGIME_FALLING = new Set(['crash-risk', 'cooling']);
+export const REGIME_RISING  = new Set(['healthy-trend']);
 export function regimeLabel(regime){
   if(!regime || !regime.ok) return {label:'unknown', falling:false, rising:false};
+  const c=regime.classification;
+  if(c){
+    if(REGIME_FALLING.has(c)) return {label:'falling', falling:true,  rising:false};
+    if(REGIME_RISING.has(c))  return {label:'rising',  falling:false, rising:true};
+    return {label:'flat', falling:false, rising:false};
+  }
+  // DEFENSIVE fallback for a regime object with no classification (the live regimeDrift always sets one;
+  // this covers a hand-constructed regime, e.g. a unit fixture) — the pre-R2 ±5% driftPct thresholds.
   const d=regime.driftPct;
   if(d<=-5) return {label:'falling', falling:true,  rising:false};
   if(d>= 5) return {label:'rising',  falling:false, rising:true};
@@ -750,6 +785,24 @@ const roiStr=r=>r==null?'—':((r>=0?'+':'')+r.toFixed(1)+'%');
 // pull the plain markdown text out of a structured cell (or a bare string) — the ONE place the
 // script stdout and the app HTML agree on what a cell says.
 export const cellText=c=>(c && typeof c==='object' && 't' in c)?c.t:c;
+
+/* regimeCellText(row, {full}) — the ONE shared regime display (R2, Ben's contextualization). Renders the
+   regime as `<Label> · <classification>` [· N% below/above 2wk]. Post-R2 the label is the trajectory-slope
+   CLASSIFICATION, not the median delta — so pairing it with a SIGNED driftPct read as a contradiction
+   ("Rising -32%"). Here the classification is the trajectory shape (the real signal: crash-risk ≠ cooling),
+   and driftPct is reframed as an UNSIGNED range-position — where live sits vs the 2-week median, i.e.
+   discount ("32% below 2wk" on a recovering riser = room to run) vs overextended ("18% above 2wk"). `full`
+   appends the range-position for roomy surfaces (hold/watch cards); the compact table omits it. ONE home,
+   shared by the quote/screen cell + watch.js + watch-positions.mjs so stdout and app agree. */
+export function regimeCellText(row, {full=false}={}){
+  if(!row || !row.regime || !row.regime.ok) return '—';
+  const word=cap(row.regimeLabel||'');
+  const c=row.regime.classification;
+  let s=c?`${word} · ${c}`:word;
+  const d=row.regime.driftPct;
+  if(full && Number.isFinite(d) && Math.round(d)!==0) s+=` · ${Math.round(Math.abs(d))}% ${d<0?'below':'above'} 2wk`;
+  return s;
+}
 export function quoteCells(name, row){
   // one self-contained transact-basis cell: "buy → sell · +net (roi)", colored by net sign
   const composite=(buy,sell,net,roi)=>({
@@ -764,7 +817,7 @@ export function quoteCells(name, row){
     composite(row.optBuy,   row.optSell,   row.optNet,   row.optRoi),
     {t:row.volDay!=null?fmt(row.volDay)+'/d':'—', c:'mini'},
     {t:m.sym, c:m.cls},
-    {t:(row.regime&&row.regime.ok)?(cap(row.regimeLabel)+' '+(row.regime.driftPct>=0?'+':'')+row.regime.driftPct.toFixed(0)+'%'):'—'}
+    {t:regimeCellText(row)}   // R2: `<Label> · <classification>` (compact); no signed driftPct (was the "Rising -32%" contradiction)
   ];
 }
 /* NOTE: a fixed-column quoteMarkdown() helper was removed by A1 (dead — quote-items.mjs/screen-flip-niches.mjs

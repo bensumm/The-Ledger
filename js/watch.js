@@ -14,7 +14,7 @@
    it reuses marketfetch's cached ts/24h store, so it's a light refresh, not a new data poller. */
 import { API, STATE, IS_LOCALHOST, sGet, sSet, logEvent } from './state.js';
 import { jget, fetchTs, fetch24h } from './marketfetch.js';
-import { computeQuote, momVerdict, breakEven, momCell, offerVerdict } from './quotecore.js';
+import { computeQuote, momVerdict, breakEven, momCell, offerVerdict, regimeCellText } from './quotecore.js';
 import { netMargin } from './money-math.js';
 import { fmt, fmtP } from './money-format.js';
 import { resolveId } from './market.js';
@@ -194,7 +194,7 @@ function heldCardHtml(g, q) {
   const thirdK = fam === 'hold' ? 'Target ask' : 'Quick sell';
   const thirdV = fam === 'hold' ? '<span class="gain">' + fmtP(listAt) + '</span>' : fmtP(row.quickSell);
   const regCls = row.rising ? 'gain' : (row.falling ? 'loss' : '');
-  const regTxt = (row.regime && row.regime.ok) ? cap(row.regimeLabel) + ' ' + (row.regime.driftPct >= 0 ? '+' : '') + row.regime.driftPct.toFixed(0) + '%' : '—';
+  const regTxt = regimeCellText(row, { full: true });   // R2: `<Label> · <classification> · N% below/above 2wk` (hold card has room for the range-position)
   const actTxt = actionText(verdict, mv, row, be, listAt);
   const actWhy = mv && mv.why ? ' title="' + esc(mv.why) + '"' : '';
   return '<div class="wcard ' + fam + '">'
@@ -208,8 +208,6 @@ function heldCardHtml(g, q) {
     + '<div class="wcg"><div class="wk">Regime</div><div class="wv ' + regCls + '">' + regTxt + '</div></div></div>'
     + '<div class="waction ' + fam + '"' + actWhy + '>' + actTxt + '</div>' + noteRow + '</div>';
 }
-const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
-
 // a concise action clause per verdict (the verbose "why" rides as the tooltip). Bold price first.
 function actionText(verdict, mv, row, be, listAt) {
   const at = listAt != null ? fmtP(listAt) : (row.quickSell != null ? fmtP(row.quickSell) : '—');
