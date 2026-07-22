@@ -124,7 +124,8 @@ projectTrajectory(days, extractFn, {
 | R2 | Rewire `regimeDrift`/`regimeLabel` (screen falling-exclusion gate) + `rateItem.regimeFactor` onto `projectTrajectory`'s classification | `js/quotecore.js`, `js/rating.mjs` (unchanged — reads same fields), `pipeline/lib/gatecandidates.mjs` (unchanged), **`js/trends.js`** (`classifyPositionTrend` + `runTrends` `fallingNow` rewired — 2 Fable-found cross-surface consumers), `js/state.js` (APP_VERSION 0.66.0 — deployed-app change), `pipeline/test/quotecore.test.mjs` (Letvek anchor + pair + fields + regimeCellText) | R1 | **GATE** (falling-exclusion) + rank multiplier | **LANDED** — Fable-reviewed (2 passes, both HIGH cross-surface findings fixed), Ben green-lit the mapping + display. Mapping: `crash-risk`/`cooling`→falling, `healthy-trend`→rising, rest→flat |
 | R3 | Add a `projectTrajectory` recency-trend gate input to `floorValidator` / the value-niche buy gate | `js/termstructure.mjs`, `js/validate.mjs`, `pipeline/lib/warm-term-structure.mjs` (`warmOverride` carries `.recentTrend` while cold), `pipeline/commands/{screen-flip-niches,quote-items}.mjs` (override sites), `pipeline/test/termstructure.test.mjs` | R1 | **GATE** (value niche, per-spec) | **LANDED** — Fable-reviewed (2 passes; its HIGH 6h-vs-daily calibration bug fixed: `s` is bucketed to one median-mid/local-day before `projectTrajectory`). Additive-ONLY (tighten a near-floor faller; never relaxes). App-affecting — `js/trends.js` renders `floorValidator` as an inform note, so APP_VERSION 0.66.0→0.66.1. |
 | R3b | The RELAX direction (deferred from R3 per Fable's ruling): relax a raw caution/reject on `floorValidator` ONLY when `recentTrend` is decisively RISING AND the level sits above the stale q15 floor because of a genuine re-price up — the audit's lead harm (false-reject on a recovered riser). Its own fixtures + Ben sign-off; riskier than R3 (un-gates a buy), so NOT smuggled into R3's additive-only scope. | `js/validate.mjs` | R3 | **GATE** (relaxing) | OPEN — future |
-| R4 | Rebase `reachMargin.trend` onto `projectTrajectory`'s slope (drop mean-of-halves); wire `reachMargin` into scan + digest (currently quote-items/CLI only) | `js/windowread.mjs`, `pipeline/commands/screen-flip-niches.mjs` | R1 | inform | OPEN |
+| R4 | Rebase `reachMargin.trend` onto `projectTrajectory`'s slope (drop mean-of-halves) — CONSOLIDATION + all-days-by-recency fit + R5 unblock (NOT single-end-day robustness, see corrected test note) | `js/windowread.mjs`, `pipeline/test/windowread.test.mjs` | R1 | inform | **LANDED** — Fable-reviewed (confirmed the false robustness claim; landed on consolidation grounds) |
+| R4b | Wire `reachMargin` into the scan/digest surface (the ask-side `trend` token beside the digest reach ✓/✗) — split from R4 per Fable (changes a live decision surface → its own before/after diff) | `pipeline/commands/screen-flip-niches.mjs` | R4 | inform | OPEN — next |
 | R5 | Trend-aware discount in `estimatePair`'s sell-top fold (Est-sell mirage fix) + the digest's `mirage top` rule gets recent/full placement divergence + the same trend sign | `js/estimators/pair.mjs`, `js/estimators/sell-models/reach-fold.mjs`, `js/windowread.mjs` (placement helper), `pipeline/commands/screen-flip-niches.mjs` | R1, R4 | inform (both are already inform: a price fold, a triage word) | OPEN |
 | R6 | Retire `trajectoryRead`'s printed shape label; fold its unique fields (floor/ceiling/livePos) into the `floorCeilingTrack`/`projectTrajectory` note | `js/windowread.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/commands/read-window-range.mjs` | R1, R2 (so the surviving note reflects the same classification the gate now uses) | inform (display-only) | OPEN |
 | R7 | Add a single `cappedBy` field to the screen row naming which of the five grade ceilings (if any) bound the printed letter | `pipeline/commands/screen-flip-niches.mjs`, `js/rating.mjs` | — (independent, can land anytime) | n/a (legibility only) | OPEN |
@@ -344,9 +345,16 @@ label comes from, not what callers do with it.
 - Re-run `reachMargin`'s existing fixtures (godsword/mask pair) through the rebased `trend` field —
   assert the NEW slope-based read agrees with (or explains a difference from) the old mean-of-halves
   read on those two anchor cases; a disagreement must be investigated, not silently accepted.
-- A single-noisy-day fixture (the audit's named weakness of mean-of-halves: "a single volatile day
-  at either end swings both halves' means") — assert the slope-based `trend` is NOT swung by it while
-  the OLD mean-of-halves version WOULD have been (a regression-proving contrast test).
+- CORRECTED (2026-07-22, Fable+impl review): the earlier "least-squares is robust to a single volatile
+  END day" claim here was WRONG — OLS gives the window ENDPOINTS *maximum* leverage (∝ x−x̄), so a boundary
+  outlier swings the fitted slope MORE than a coarse half-mean, not less (verified: `[10,10,10,10,10,50]`
+  → fitted Δ ≈ +28.6 vs half-mean Δ = +13.3). Do NOT cite single-end-day robustness anywhere. The rebase's
+  REAL merits are: CONSOLIDATION (the one shared `projectTrajectory` primitive, this plan's mandate), a fit
+  over ALL days by recency-position (vs the old oldest-3-vs-newest-3 bucket diff that discarded the middle
+  day(s)), and the R5 unblock. Test what's TRUE: the rebased `trend` tracks a genuine multi-day fade THROUGH
+  a mid-window spike (mid-window leverage ≈0), and `cushionSlope < 0` on a real decline — NOT an end-outlier
+  invariant. (This matters downstream: R5's sell-fold reuses this slope, so a future reader must not trust
+  the wrong claim and be surprised by an ask-side cushion trend reacting to a single stale-tick print at "today".)
 - A digest-row fixture asserting the new `reachMargin` token appears on scan output and is absent
   (not a crash) when the ask-side read has too few days.
 

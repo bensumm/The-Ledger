@@ -190,6 +190,17 @@ ok('reachMargin ASK: a collapsing cushion over the ask reads FADING (the godswor
   assert.ok(rm.cushionFrom > rm.cushionTo, 'older-half cushion is larger than newer-half (the collapse)');
 });
 
+ok('reachMargin R4: the rebased trend tracks the genuine multi-day cushion direction THROUGH a mid-series spike (least-squares, not a 2-bucket diff)', () => {
+  // cushions over the 100 ask = hi−100 = [60,55,80,45,40,35,30] — a real decline with a d3 up-spike to 80.
+  // the least-squares slope reads the genuine fade; the point is the trend is now the ONE shared
+  // projectTrajectory primitive (consolidation), fitting ALL days, not the old oldest-3-vs-newest-3 diff.
+  const days = [day('d1', 90, 160), day('d2', 90, 155), day('d3', 90, 180),
+                day('d4', 90, 145), day('d5', 90, 140), day('d6', 90, 135), day('d7', 90, 130)];
+  const rm = reachMargin(days, 'ask', 100, { marginN: 7 });
+  assert.equal(rm.trend, 'fading', 'the fitted slope reads the genuine decline despite the mid-series spike');
+  assert.ok(rm.cushionSlope < 0, 'cushionSlope is the robust per-day least-squares slope (negative = fading)');
+});
+
 ok('reachMargin ASK: a steady cushion reads STABLE; BID mirror scores level−low', () => {
   const flat = [day('d1', 90, 125), day('d2', 90, 125), day('d3', 90, 125),
                 day('d4', 90, 125), day('d5', 90, 125), day('d6', 90, 125)];

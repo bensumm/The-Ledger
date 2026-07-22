@@ -443,8 +443,9 @@ export function askExitRead(stats, { ask = null, stats5m = null, recentN = RECEN
 // settling ONTO a cooling peak (godsword: 40.6m reached 3/3 recent while the cushion collapsed +1.3m→
 // +0.1m; "rising vs the 2-week base" masked it). reachMargin folds three reads off the SAME per-day
 // windowStats buckets (zero new fetch) + the in-hand hourProfile:
-//   trend        fading|stable|extending — the sign of (newer-half mean cushion − older-half mean) over
-//                the recent marginN days, thresholded at MARGIN_FADE_FRAC × level (a placeholder).
+//   trend        fading|stable|extending — the robust least-squares SLOPE of the cushion over the recent
+//                marginN days (R4: projectTrajectory, was mean-of-halves — a single volatile end-day swung
+//                both half-means), the FITTED first→last change thresholded at MARGIN_FADE_FRAC × level.
 //   cushionNow   the most-recent day's cushion (how much room is left over/under the level TODAY).
 //   pace         today's live vs the reaching-day median for THIS hour-of-day (from hourProfile) — a
 //                same-day "is today tracking the days that reached?" read; null when there's no live or
@@ -466,20 +467,28 @@ export function reachMargin(days, side, level, { recentN = RECENT_NIGHTS, margin
   const cushionOf = e => side === 'bid' ? (level - e) : (e - level);
   const all = days.map(([key, n]) => { const e = extremeOf(n); return e == null ? null : { key, extreme: e, cushion: cushionOf(e), reached: cushionOf(e) >= 0 }; })
     .filter(Boolean);
-  if (!all.length) return { side, level, trend: null, cushionNow: null, cushionFrom: null, cushionTo: null, reachedRecent: 0, nRecent: 0, perDay: [], pace: pace() };
+  if (!all.length) return { side, level, trend: null, cushionNow: null, cushionFrom: null, cushionTo: null, cushionSlope: null, reachedRecent: 0, nRecent: 0, perDay: [], pace: pace() };
   const recent = all.slice(-marginN);                    // days is oldest→newest ⇒ tail = most recent
   const cushionNow = recent[recent.length - 1].cushion;
   const reachedRecent = recent.filter(d => d.reached).length;
-  const mean = xs => xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : null;
-  let trend = null, cushionFrom = null, cushionTo = null;
+  let trend = null, cushionFrom = null, cushionTo = null, cushionSlope = null;
   if (recent.length >= minDays) {
-    const half = Math.floor(recent.length / 2);
-    cushionFrom = Math.round(mean(recent.slice(0, half).map(d => d.cushion)));
-    cushionTo = Math.round(mean(recent.slice(recent.length - half).map(d => d.cushion)));
-    const delta = cushionTo - cushionFrom, thresh = level * MARGIN_FADE_FRAC;
-    trend = delta <= -thresh ? 'fading' : delta >= thresh ? 'extending' : 'stable';
+    // R4 (PLAN-SIGNAL-RECENCY): the cushion TREND is the robust least-squares SLOPE over the recent cushion
+    // series (projectTrajectory), NOT the mean-of-halves difference — a single volatile day at either end
+    // swung both half-means (the single-noisy-sample sensitivity the primitive exists to resist). SAME
+    // level-relative threshold: classify the FITTED total change (slope × span) vs level × MARGIN_FADE_FRAC.
+    // we consume only rt.slope/rt.nUsed here (NOT rt.dir/rt.run) — projectTrajectory's own flat-band is
+    // relative to `latest`, which for a cushion is degenerate near zero, so we threshold the fitted change
+    // against level × MARGIN_FADE_FRAC below (the item's PRICE level, the right basis) instead.
+    const rt = projectTrajectory(recent.map(d => [d.key, d]), d => d.cushion, { minDays, recentN: marginN });
+    cushionSlope = rt ? rt.slope : null;
+    const delta = (rt && rt.slope != null) ? rt.slope * (rt.nUsed - 1) : null;   // robust fitted first→last cushion change
+    const thresh = level * MARGIN_FADE_FRAC;
+    trend = delta == null ? null : delta <= -thresh ? 'fading' : delta >= thresh ? 'extending' : 'stable';
+    cushionFrom = recent[0].cushion;   // display endpoints (first recent day → today), replacing the half-means
+    cushionTo = cushionNow;
   }
-  return { side, level, trend, cushionNow, cushionFrom, cushionTo, reachedRecent, nRecent: recent.length, perDay: recent, pace: pace() };
+  return { side, level, trend, cushionNow, cushionFrom, cushionTo, cushionSlope, reachedRecent, nRecent: recent.length, perDay: recent, pace: pace() };
 
   // today's pace vs the reaching-day median at THIS hour-of-day (closure over side/level/live/profile/now)
   // STALE-LIVE GUARD: `live` may carry the driving side's freshness (staleLo/staleHi + loAgeMin/hiAgeMin,
