@@ -237,4 +237,47 @@ ok('stale guard no-ops when there is no distinct fresher level (degrades to the 
   assert.ok(approx(r.reachFrac, 2 / 3), 'no fresher instasell → unchanged validator reach');
 });
 
+// --- 8. R4b — the ask-side cushion-trend token (reachMargin) on the digest ----------------------
+// digestReachAndPlacement now folds reachMargin(days, 'ask', refLevel).trend into the digest row, scored at
+// the SAME refLevel the reach ✓/✗ uses (so a stale-guarded row's trend reads at the fresher reference too).
+// It INFORMS the reach column, never re-ranks/gates. Degrades to null on a symmetric niche / thin sample /
+// no in-hand buckets. days shape = windowStats().days: [[key, {low, hi}], …] oldest→newest.
+const mkDays = his => his.map((hi, i) => [`2026-07-${10 + i}`, { low: hi - 40, hi }]);   // ask side reads n.hi
+const FADING_HIS   = [130, 125, 120, 115, 110, 105, 102];   // cushion over ask 100 shrinks 30→2 → fading
+const EXTEND_HIS   = [102, 105, 110, 115, 120, 125, 130];   // cushion grows 2→30 → extending
+const STABLE_HIS   = [110, 110, 110, 110, 110, 110, 110];   // flat cushion 10 → stable
+ok('R4b: a shrinking ask cushion reads `fading` (peak cooling onto the quoted sell)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(FADING_HIS) });
+  assert.equal(r.marginTrend, 'fading');
+});
+ok('R4b: a growing ask cushion reads `extending`', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(EXTEND_HIS) });
+  assert.equal(r.marginTrend, 'extending');
+});
+ok('R4b: a flat ask cushion reads `stable`', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(STABLE_HIS) });
+  assert.equal(r.marginTrend, 'stable');
+});
+ok('R4b: a symmetric niche gets NO ask trend (mismeasures a two-sided band) → null', () => {
+  const r = digestReachAndPlacement({ spec: { fillShape: 'symmetric' }, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(FADING_HIS) });
+  assert.equal(r.marginTrend, null);
+});
+ok('R4b: no in-hand day buckets → null (degrade, never a fake trend)', () => {
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS });
+  assert.equal(r.marginTrend, null);
+});
+ok('R4b: the stale guard scores the trend at the FRESHER reference too', () => {
+  // optSell 100 is stale; fresher instasell is 130. Cushions over 130 (his − 130) shrink → still fading at the honest level.
+  const staleHis = [160, 155, 150, 145, 140, 135, 132];   // cushion over 130 = 30→2
+  const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: true }, quickBuy: 130 }, askReachExtra: REACH_23, his: HIS, days: mkDays(staleHis) });
+  assert.equal(r.staleGuarded, true);
+  assert.equal(r.marginTrend, 'fading');
+});
+ok('R4b: buildDigestBlock renders a `trend` column + the ↓ fade token', () => {
+  const row = { ...mkRow('Faller', 5, 0, 140_000_000, false), marginTrend: 'fading' };
+  const out = buildDigestBlock([row]);
+  assert.match(out, /\| trend \|/);        // the new column header
+  assert.match(out, /↓ fade/);             // the fading token renders
+});
+
 console.log(`\n${n} assertions passed.`);

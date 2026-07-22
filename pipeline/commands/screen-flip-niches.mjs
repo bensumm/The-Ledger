@@ -77,7 +77,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
+import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, demandRegime, placement, weekdayProfile, reachMargin } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; DC3 — demand-regime flip-side inform annotation; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -516,7 +516,13 @@ function digestReachFrac(spec, askReachExtra) {
 // so a stale-inflated reach ✓ flips to the honest read. DIGEST-SCOPED: it touches ONLY the digest's
 // reach/placement/mirage — never the screen's own reach validator notes, screen.json, or quote-items output.
 // Non-stale rows fall straight through to the unchanged askReachExtra/optSell path (byte-identical).
-export function digestReachAndPlacement({ spec, row, askReachExtra, his } = {}) {
+// R4b (PLAN-SIGNAL-RECENCY): `days` is rbStats.days (the per-day windowStats buckets already in hand) — it
+// feeds the ask-side reachMargin CUSHION-TREND token (fading|stable|extending), the digest-surface wiring of
+// R4's rebased reachMargin. It informs the reach ✓/✗ column WITHOUT replacing it: a reach ✓ whose cushion
+// over the ask is `fading` is a peak cooling ONTO the quoted sell (the godsword shape). Scored at the SAME
+// `refLevel` the reach/placement use, so a stale-guarded row's trend reads at the fresher reference too;
+// non-symmetric only (a symmetric churn/amplitude ask trend mismeasures the tight two-sided band → null → '—').
+export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } = {}) {
   const symmetric = !!(spec && spec.fillShape === 'symmetric');
   const optSell = (row && row.optSell != null) ? row.optSell : null;
   // reuse row.quickStale (the staleLiveNote source): sell-side live print stale → the fresher instasell is
@@ -533,7 +539,12 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his } = {}) 
     // recent-3 reach was scored against the stale optSell, so it can't be trusted here.
     reachFrac = his.filter(h => h != null && h >= refLevel).length / his.length;
   else reachFrac = digestReachFrac(spec, askReachExtra);
-  return { reachFrac, askPlacement, staleGuarded: guarded };
+  // R4b: the ask-side cushion trend at refLevel. reachMargin only needs the per-day buckets + the level for
+  // its trend (pace/profile omitted — the digest surfaces trend only), so this is zero new fetch. Degrades
+  // to null (→ '—') on a symmetric niche, a thin day sample, or no in-hand buckets — never a fake read.
+  const marginTrend = (!symmetric && Array.isArray(days) && days.length && refLevel != null)
+    ? (reachMargin(days, 'ask', refLevel)?.trend ?? null) : null;
+  return { reachFrac, askPlacement, staleGuarded: guarded, marginTrend };
 }
 // collectDigestRow(...): compute the realizable capEff + the deployable-throughput RANK KEY + the verdict for
 // one surfaced candidate and push it into DIGEST_ROWS. Skips sub-floor rows (NOT qualified picks, §3.4) and
@@ -567,7 +578,7 @@ function digestSoftBuy(prof, row) {
   const mark = pct <= SOFT_BUY_AT_FLOOR_PCT ? '@floor' : `+${pct.toFixed(pct < 10 ? 1 : 0)}%`;
   return `${win} · ${mark}`;
 }
-function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, prof, subFloor }) {
+function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, prof, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
@@ -586,6 +597,7 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     rankKey: (capEff != null && deployable != null) ? capEff * deployable : null,
     rank: er && er.rank != null ? er.rank : null,
     reachFrac,
+    marginTrend,   // R4b: ask-side cushion trend (fading|stable|extending|null) — informs the reach ✓/✗, stdout-only
     phase: ph,
     softBuy: digestSoftBuy(prof, row),   // inform-only n≈0 diurnal dip window + live-vs-floor marker (stdout-only)
     grade,
@@ -607,11 +619,16 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
 const DIGEST_TOP = 8;
 const BIG_TICKET_MIN = 2;     // if the visible top-8 has fewer than this many big-tickets, append the slice
 const BIG_TICKET_SLICE = 3;   // how many extra big-tickets the guaranteed-visibility slice shows
+// R4b: the ask-side cushion-trend token beside the reach ✓/✗. fading = the cushion over the quoted sell is
+// shrinking (a peak cooling onto the ask — read the ✓ with suspicion); extending = headroom growing; stable
+// = holding. null (symmetric niche / thin sample / no read) → '—'. INFORM-ONLY, never re-ranks or gates.
+const digestTrendCell = t => t === 'fading' ? '↓ fade' : t === 'extending' ? '↑ ext' : t === 'stable' ? 'stable' : '—';
 const digestCells = r => [
   { t: r.name },
   { t: r.capEff != null ? `${round2(r.capEff).toFixed(2)}%/d` : '—' },
   { t: r.deployable != null ? fmtP(Math.round(r.deployable)) : '—' },
   { t: r.reachFrac == null ? '—' : (r.reachFrac >= REACH_GRADE_CAP_FRAC ? '✓' : '✗') },
+  { t: digestTrendCell(r.marginTrend) },
   { t: r.phase || '—' },
   { t: r.softBuy || '—' },   // SOFT-BUY WINDOW — inform-only n≈0 dip window + live-vs-floor (sits BESIDE phase: buy-window vs peak-cycle)
   { t: r.grade },
@@ -631,11 +648,11 @@ export function buildDigestBlock(pool = DIGEST_ROWS) {
     const shown = new Set(main);
     const bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
     if (bigExtra.length) {
-      tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
+      tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
       for (const r of bigExtra) tableRows.push(digestCells(r));
     }
   }
-  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
+  lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'trend', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
   return lines.join('\n');
 }
 
@@ -1073,8 +1090,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // placement token already reads). Stored on the row; the digest is collected after the sort below.
     // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
     // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
-    const { reachFrac: digestReach, askPlacement: digestAskPlacement } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his });
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement });
+    const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement, digestMarginTrend });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1104,7 +1121,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
   // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
-  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, prof: r.prof, subFloor });
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, prof: r.prof, subFloor });
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.

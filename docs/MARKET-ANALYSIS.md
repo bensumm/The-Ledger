@@ -147,7 +147,7 @@ PLACEHOLDER model (n≈3–14); `estBuy`/`estSell`/`estConfidence` ride `suggest
 
 ### The decision digest — a THIRD console view (`--digest`)
 `screen-flip-niches.mjs --digest` prints ONE compact cross-niche block ABOVE the per-niche tables (and
-above `--raw`): `Item | capEff | deploy | reach | phase | soft-buy | grade | verdict` — top ~8 across all flip-niches
+above `--raw`): `Item | capEff | deploy | reach | trend | phase | soft-buy | grade | verdict` — top ~8 across all flip-niches
 this pass, ranked by **deployable throughput** (`capEff × deployable capital` ≈ after-tax deployable gp/day,
 NOT raw %). Raw `capEff` is SCALE-FREE, so ranking on it alone let dust-tier cheap high-% flips (Lead ore
 1072%/d on ~60k of deployable capital) sweep the top and bury the big-ticket deploys the digest exists to
@@ -162,7 +162,13 @@ fantasy you can't actually cycle the whole deployed position at. `capEff` stays 
 fewer than 2 big-ticket rows (`mid ≥ BIG_TICKET_GP`) made the visible top-8, a small `— big-ticket lane —`
 sub-section is APPENDED (top few big-tickets by the same rank key) — additive visibility for the
 attention/risk trade-off, NOT a re-ranking of the main block. The reach ✓/✗ + mirage read is STALE-LIVE
-guarded (POLISH 3). The `soft-buy` column is the BUY-timing complement of `phase` (which reads the peak /
+guarded (POLISH 3). The `trend` column (R4b, PLAN-SIGNAL-RECENCY) is the ask-side `reachMargin` cushion
+trend beside reach ✓/✗ — `↓ fade` (the cushion over the quoted sell is shrinking: a peak cooling ONTO the
+ask, so read the ✓ with suspicion — the godsword shape), `↑ ext` (headroom growing), `stable`, or `—` (a
+symmetric churn/amplitude flip-niche, a thin day sample, or no in-hand buckets → honest degrade, never a
+fake read). It's the slope-based `reachMargin.trend` (R4), scored at the SAME reference the reach column uses (so
+a stale-guarded row's trend reads at the fresher instasell too) — INFORM-ONLY, it never re-ranks or gates.
+The `soft-buy` column is the BUY-timing complement of `phase` (which reads the peak /
 sell-cycle window): the diurnal DIP window (cheapest hours to buy) + where the LIVE instabuy sits vs the dip
 floor — `HH:00–HH:00 · @floor` (live at/near the dip → soft NOW) or `· +X%` (live X% above the dip → wait
 for the window). Inform-only PLACEHOLDER (n≈0), stdout-only — never gates/drops/regrades and never enters

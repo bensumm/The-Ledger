@@ -23,7 +23,7 @@ window, no recency split.
 | `recencySplit` (RC1) | full-window hit-frac vs recent-3 hit-frac, flags `staleOptimistic` | 1h, ~14d + recent-3 | always alongside a reach read | ✅ | `reachValidator`, `askExitRead`, `estimatePair` confidence, digest reach ✓/✗ |
 | `trajectoryRead` | one-shot SHAPE label (rising/falling/oscillating/based/elevated) off blended daily mids | 1h, ~14d | quote + `--positions` (auto) | ⚠️ recent-third vs oldest-third drift, but MEAN-blended mids | quote-items notes |
 | `floorCeilingTrack` (PLAN-DRIFT-VS-CRASH) | floor(lows)/ceiling(highs) tracked SEPARATELY: least-squares slope over recent-N + a floor-BREAK vs prior lookback | 1h, ~14d, recent-5 slope window | quote + `--positions` (auto) | ✅ (best trend primitive in the repo — see §4) | quote-items notes only |
-| `reachMargin` (2026-07-20) | cushion-over/under-level TREND (older-half mean vs newer-half mean of the last 7 days) + today's live pace vs the reaching-day median | 1h, 7-day recent window, split into two halves | folded automatically into `askExitRead` whenever an ask is scored | ✅ but **MEAN-of-halves**, not a slope — see §2 | `askExitRead` → quote-items (`quote` + `--positions`) + `read-window-range --ask/--bid`. **NOT wired into screen-flip-niches.mjs at all** |
+| `reachMargin` (2026-07-20; R4/R4b slope+wired) | cushion-over/under-level TREND (`projectTrajectory` least-squares SLOPE of the cushion over the last 7 days — R4, was mean-of-halves) + today's live pace vs the reaching-day median | 1h, 7-day recent window, `projectTrajectory` slope | folded automatically into `askExitRead` whenever an ask is scored | ✅ slope-based (R4 fixed the mean-of-halves) | `askExitRead` → quote-items (`quote` + `--positions`) + `read-window-range --ask/--bid`; **now ALSO the digest `trend` column (R4b — the ask-side cushion trend beside reach ✓/✗)** |
 | `asymPair` | day-level deep-bid (p25 quantile) / high-reach-ask (p80 quantile) pair | 1h, ~14d | quote (`asym` note), screen `--asym` (opt-in, unpublished) | ❌ whole-window quantile | quote notes, `asymEstimate` |
 | `windowClear`/`windowClearDiverges` | within-target-window (not whole-day) reach fraction + volume-pool absorption check | 1h, re-bucketed to the target window | held big-ticket lots (`--positions`), `--ask` reads | ❌ whole-window reach inside the narrower window | quote-items `windowExit` note |
 | `hourProfile` | per-local-hour dip/peak SHAPE (de-trended by day) + trend-dominates flag | 1h, ~14d full-window shape / recent-3 LEVEL | diurnal note, digest soft-buy, forecast anchor | ⚠️ shape=full-window, level=recent-3 | `deriveDiurnalRange`, `softBuyRead`, `diurnalPhase`, `demandRegime`, `forecast.diurnalForecast`, digest |
@@ -129,12 +129,15 @@ read burns, worst first:
 ### Tier 3 — real damage but already-recency-aware or low-frequency
 
 9. **`reachMargin`'s trend split itself (mean-of-older-half vs mean-of-newer-half over 7 days)** —
-   this is the mechanism Ben asked to generalize, and it is BETTER than the tier-1/2 items above
-   (it IS recency-scoped to a 7-day window), but a mean-of-halves over 7 days is still coarser than
-   a slope: a single volatile day at either end swings both halves' means, and a real linear decay
-   reads identically to a flat cushion with one noisy day. `floorCeilingTrack`'s least-squares slope
-   (already shipped, for the floor/ceiling pair) is strictly the better primitive for this same job
-   — see §4.
+   **FIXED (R4, PLAN-SIGNAL-RECENCY): the trend is now `projectTrajectory`'s least-squares SLOPE of
+   the cushion series, not the mean-of-halves** (the fitted first→last change vs `level ×
+   MARGIN_FADE_FRAC`), and **R4b wired it onto the screen/digest** as the ask-side `trend` column
+   beside reach ✓/✗ (it was quote/positions/CLI-only before). Kept for history: a mean-of-halves over
+   7 days was coarser than a slope — a single volatile day at either end swung both halves' means, and
+   a real linear decay read identically to a flat cushion with one noisy day. (Honesty caveat, R4's
+   corrected finding: OLS gives the window ENDPOINTS *maximum* leverage, so the slope is not "robust to
+   a single end-day"; its real merits are consolidation onto the one shared primitive + an all-days fit
+   + the R5 unblock — see PLAN-SIGNAL-RECENCY R4's corrected test note.)
 10. **`hourProfile`'s SHAPE read (dip/peak cluster) off the full-window de-trended deviation** — the
     shape is intentionally full-window (more samples = stabler cluster), while only the LEVEL
     quoted is recent-3. This is a deliberate, documented split (not an oversight) and is low-damage
