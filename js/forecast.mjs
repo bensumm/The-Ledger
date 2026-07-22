@@ -253,7 +253,20 @@ export function whenSellable(fc, targetAsk) {
 export const OSC_HOLD_HORIZON_DAYS = 1.5;
 // oscillation-vs-knife detector thresholds (n≈0 PLACEHOLDERS, pending F1):
 export const OSC_MIN_DAYS = 5;            // fewer completed daily mids than this ⇒ null (can't read a cycle)
-export const OSC_FLIP_FRAC = 0.4;         // DETRENDED-mid direction-flip fraction ≥ this ⇒ oscillating (else knife)
+// PLAN-OSCILLATION-CYCLE F-A (2026-07-22) — the detector was REDESIGNED; the old OSC_FLIP_FRAC
+// first-difference metric is RETIRED (see the header comment above oscillationVsKnife for the full
+// finding). Replacement thresholds:
+export const OSC_MIN_LEG_DAYS = 2;        // a same-direction detrended run shorter than this (days) is a
+                                           // one-day blip, not a real leg of a cycle — dropped before counting.
+export const OSC_AMP_NOISE_MULT = 1.5;    // a leg's detrended peak-to-trough amplitude must clear this × the
+                                           // series' own day-to-day noise floor to count as a REAL leg (vs jitter).
+export const OSC_MIN_LEGS = 3;            // fewer than this many REAL legs ⇒ knife. Load-bearing: a genuinely
+                                           // monotone (even ACCELERATING/decelerating, i.e. curved) series
+                                           // detrended by a SINGLE straight line always produces exactly one
+                                           // hump in the residuals (one up-leg + one down-leg — 2 legs) purely
+                                           // as a linear-fit artifact, NOT a real cycle. Requiring ≥3 real legs
+                                           // (≥2 direction reversals) is what separates that artifact from an
+                                           // actual multi-leg oscillation (fang/blowpipe's alternating runs).
 
 /**
  * driftAdjustedExit(fc, opts) — compose diurnalForecast's next trough/peak with a multi-week drift NUMBER.
@@ -321,21 +334,52 @@ export function driftExitFrom(profile, days, ctx = {}, { holdHorizonDays } = {})
 }
 
 /**
- * oscillationVsKnife(days, opts) — the drift-aware oscillation-vs-knife detector (PLAN Chunk 1 sub-piece).
- * floorCeilingTrack.oscillating fires ONLY on a `ranging` (flat) regime, so it STRUCTURALLY cannot flag a
- * drifting-floor-plus-weekly-bounce shape (fang/blowpipe). This detector DETRENDS the daily mids first — it
- * removes the multi-week drift line (via the shared projectTrajectory slope, ONE-home, no re-derived trend
- * math) and counts direction flips in the RESIDUALS — so an oscillation riding a declining OR rising floor
- * is seen as oscillating, while a monotone collapse (residuals don't flip) reads as a knife.
+ * oscillationVsKnife(days, opts) — the drift-aware oscillation-vs-knife detector (PLAN Chunk 1 sub-piece;
+ * REDESIGNED at F-A, 2026-07-22 — see below for why).
+ *
+ * ── F-A: the ORIGINAL metric was structurally miscalibrated for its OWN target class ──────────────
+ * The original version detrended the daily mids (via the shared projectTrajectory slope) and counted
+ * SIGN-FLIPS IN THE FIRST DIFFERENCE of the residuals — i.e. how often day-to-day direction reverses.
+ * That measures day-to-day NOISINESS, not harvestable multi-day oscillation. A clean slow oscillation
+ * (fang/blowpipe's real shape: smooth ~4-day up-runs alternating with ~4-day down-runs riding a slow
+ * decline) has very FEW day-to-day reversals — maybe 2 across a 14-day window — so its flip-fraction
+ * was LOW and it was labeled a false KNIFE, including through its profitable up-legs (walk-forward:
+ * blowpipe KNIFE 10/10 days, fang KNIFE 9/10 days). Meanwhile a merely JITTERY item (noisy day-to-day,
+ * no real cycle) flips sign constantly and scored HIGH → OSCILLATING. The metric had the discriminant
+ * backwards for its stated purpose.
+ *
+ * ── The fix: detrended EXCURSION over legs, not first-difference sign density ──────────────────────
+ * Still detrends via the SAME shared projectTrajectory slope (one-home — no second trend fit). Then,
+ * instead of counting day-to-day flips, it walks the residual series into maximal same-direction RUNS
+ * ("legs") and asks whether the series makes REAL excursions to BOTH sides of the trend line over the
+ * window: a leg only counts as real when it (a) spans ≥ OSC_MIN_LEG_DAYS days (filters a one-day blip)
+ * and (b) its peak-to-trough amplitude clears OSC_AMP_NOISE_MULT × the series' own day-to-day noise
+ * floor (the median absolute residual step — filters legs that are themselves just noise). This
+ * rewards fang/blowpipe's long alternating runs (few, but real+large legs) instead of penalizing them.
+ *
+ * A genuinely MONOTONE series (even a CURVED one — accelerating or decelerating, never straight) will
+ * still generically produce exactly ONE hump when detrended by a single straight line (an unavoidable
+ * linear-fit artifact: one up-leg then one down-leg, or vice versa — 2 legs). That is NOT oscillation;
+ * it is curvature, not a cycle. OSC_MIN_LEGS=3 (≥2 direction reversals) is the line between "one
+ * linear-fit-artifact hump" and "an actual multi-leg oscillation" — this is the load-bearing guard
+ * against re-introducing a false positive on a monotone knife.
+ *
+ * Direction-agnostic by construction: nothing here branches on the sign of `slope` or of any leg's
+ * direction — only leg COUNT and amplitude feed `oscillating`.
+ *
  * @param {Array} days   a windowStats().days series — [[key, {low, hi}], …] oldest→newest
- * @param {object} opts { minDays = OSC_MIN_DAYS, flipFrac = OSC_FLIP_FRAC }
- * @returns {null | { oscillating, knife, flipFraction, slope, nDays }}
+ * @param {object} opts { minDays = OSC_MIN_DAYS, minLegDays = OSC_MIN_LEG_DAYS,
+ *                        ampNoiseMult = OSC_AMP_NOISE_MULT, minLegs = OSC_MIN_LEGS }
+ * @returns {null | { oscillating, knife, slope, nDays, legs, amplitude, noiseFloor }}
  *   `knife` = !oscillating — the boolean intended to TEMPER the EXISTING knife guard so it stops
- *   over-rejecting a down-drift oscillator as a false knife. Chunk 1 wires this into NO gate (inform-only;
- *   gating is Chunk 3). null when fewer than minDays usable daily mids (degrade, never a fake read).
- *   HEURISTIC, n≈0 — the flip fraction is a shape tell, not a probability (rule 4).
+ *   over-rejecting a down-drift oscillator as a false knife. Wired into NO gate directly (inform-only
+ *   at Chunk 1; the amplitude gate's Chunk-3B temper reads `.oscillating`). null when fewer than
+ *   minDays usable daily mids (degrade, never a fake read). `legs` = count of REAL legs found;
+ *   `amplitude` = the largest real leg's peak-to-trough gp swing; `noiseFloor` = the day-to-day
+ *   residual-step median used to qualify a leg as real (all diagnostic, for callers/tests).
+ *   HEURISTIC, n≈0 — a shape tell, not a probability (rule 4).
  */
-export function oscillationVsKnife(days, { minDays = OSC_MIN_DAYS, flipFrac = OSC_FLIP_FRAC } = {}) {
+export function oscillationVsKnife(days, { minDays = OSC_MIN_DAYS, minLegDays = OSC_MIN_LEG_DAYS, ampNoiseMult = OSC_AMP_NOISE_MULT, minLegs = OSC_MIN_LEGS } = {}) {
   const scored = Array.isArray(days) ? days.filter(([, n]) => n && (n.low != null || n.hi != null)) : [];
   const midOf = n => (n.low != null && n.hi != null) ? (n.low + n.hi) / 2 : (n.low ?? n.hi);
   const mids = scored.map(([, n]) => midOf(n)).filter(v => v != null);
@@ -344,18 +388,41 @@ export function oscillationVsKnife(days, { minDays = OSC_MIN_DAYS, flipFrac = OS
   // so we reuse floorCeilingTrack's trend math rather than re-deriving it (one-home discipline).
   const rt = projectTrajectory(scored, midOf, { minDays, recentN: mids.length });
   const slope = rt && rt.slope != null ? rt.slope : 0;
-  // residual of each day's mid from the fitted drift line. The intercept is irrelevant: we count sign
-  // flips in the FIRST DIFFERENCE of the residuals (resid[i]−resid[i−1] = (mid[i]−mid[i−1]) − slope), in
-  // which any constant intercept cancels — so a monotone drift at ~slope gives ~no flips (knife) while a
-  // bounce that repeatedly over/undershoots the drift line flips sign (oscillating).
-  const resid = mids.map((m, i) => m - slope * i);
-  let flips = 0;
-  for (let i = 2; i < resid.length; i++) {
-    const a = Math.sign(resid[i - 1] - resid[i - 2]);
-    const b = Math.sign(resid[i] - resid[i - 1]);
-    if (a && b && a !== b) flips++;
+  // residual of each day's mid from the fitted drift line, CENTERED (mean-zeroed) — the intercept of the
+  // fit is arbitrary, so centering makes "amplitude around the trend" a meaningful, comparable quantity.
+  const raw = mids.map((m, i) => m - slope * i);
+  const mean = raw.reduce((a, b) => a + b, 0) / raw.length;
+  const resid = raw.map(r => r - mean);
+
+  // noise floor: the MEDIAN absolute day-to-day residual step — a robust (not mean, so one big real leg
+  // can't inflate its own floor) estimate of ordinary one-day jitter unrelated to a multi-day cycle.
+  const steps = [];
+  for (let i = 1; i < resid.length; i++) steps.push(Math.abs(resid[i] - resid[i - 1]));
+  const sortedSteps = [...steps].sort((a, b) => a - b);
+  const noiseFloor = sortedSteps.length ? sortedSteps[Math.floor(sortedSteps.length / 2)] : 0;
+
+  // split the residual series into maximal same-direction runs ("legs"); a flat (zero) step extends the
+  // current leg rather than breaking it (a literal tie carries no directional information either way).
+  const legsRaw = [];
+  let dir = null, start = 0;
+  for (let i = 1; i < resid.length; i++) {
+    const d = Math.sign(resid[i] - resid[i - 1]);
+    if (d === 0) continue;
+    if (dir == null) { dir = d; start = i - 1; continue; }
+    if (d !== dir) { legsRaw.push({ dir, start, end: i - 1 }); dir = d; start = i - 1; }
   }
-  const flipFraction = resid.length > 2 ? flips / (resid.length - 2) : 0;
-  const oscillating = flipFraction >= flipFrac;
-  return { oscillating, knife: !oscillating, flipFraction, slope, nDays: mids.length };
+  if (dir != null) legsRaw.push({ dir, start, end: resid.length - 1 });
+
+  // a REAL leg clears BOTH the min-length and the amplitude-over-noise-floor bars (filters a single-day
+  // blip and a leg that's itself just noise riding the fit).
+  const realLegs = legsRaw
+    .map(l => ({ dir: l.dir, days: l.end - l.start, amp: Math.abs(resid[l.end] - resid[l.start]) }))
+    .filter(l => l.days >= minLegDays && (noiseFloor === 0 ? l.amp > 0 : l.amp >= noiseFloor * ampNoiseMult));
+
+  // ≥minLegs REAL legs (≥2 direction reversals) is the line between a monotone linear-fit hump (≤2 legs,
+  // never a real cycle) and an actual multi-leg oscillation. Legs strictly alternate direction by
+  // construction, so ≥2 legs already implies both an up-leg and a down-leg — the count IS the discriminant.
+  const oscillating = realLegs.length >= minLegs;
+  const amplitude = realLegs.length ? Math.max(...realLegs.map(l => l.amp)) : 0;
+  return { oscillating, knife: !oscillating, slope, nDays: mids.length, legs: realLegs.length, amplitude, noiseFloor };
 }

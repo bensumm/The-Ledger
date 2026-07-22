@@ -1672,7 +1672,9 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
   if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
   else console.log('_none_');
   for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);
-  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
+  // F-B: report the watchlist reserve honestly (0 when nothing on watchlist.json needed it — byte-identical wording otherwise).
+  const watchReserved = survivors.filter(s => s.watched).length;
+  console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy${watchReserved ? ` + ${watchReserved} watchlist-reserved` : ''}) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
   console.log('⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
   console.log('⚠ make-or-break (§4, n≈0): the gate measures the levels PRINTED; whether BOTH legs actually FILL within the hold horizon is the open question the shadow both-leg replay (join-amplitude-outcomes.mjs) + realized retro-join measure. The NEW `margin-below-floor` drift-adjusted-margin gate (PLAN-OSCILLATION-CYCLE Chunk 3) rides on the SAME n≈0 PLACEHOLDER threshold + the diurnal/drift projection — it is the make-or-break gate itself, not a validated filter. Do not trade on this yet.');
   console.log('');
@@ -1777,6 +1779,11 @@ let BUYS_BY_ITEM = new Map();
 // renderMode (a separate function) can read what main() loaded. Empty set ⇒ no override ⇒ byte-identical.
 let HELD_IDS = new Set();
 let TRACK_INDEX = null;   // admission.mjs track-record boost index (built from positions.json closed lots)
+// F-B (PLAN-OSCILLATION-CYCLE post-landing follow-up) — the SAME repo-root watchlist.json ids the S3
+// always-scanned watchlist pass reads (loadWatchlist below), read ONCE here too so gateAmplitudeCandidates
+// can reserve a fetch slot for a watchlisted big-ticket even when it ranks below AMP_TOP_DEFAULT by the
+// Stage-1 amplitude proxy. Empty set (absent/unreadable watchlist.json) ⇒ no reserve ⇒ byte-identical.
+let WATCHLIST_IDS = new Set();
 function loadBuysByItem() {
   try { return buysByItem(JSON.parse(readFileSync(join(REPO_ROOT, 'fills.json'), 'utf8')).events || []); }
   catch { return new Map(); }   // absent/unreadable fills.json → no limit context (validator degrades to pass)
@@ -1861,6 +1868,9 @@ async function main() {
     TRACK_INDEX = buildTrackIndex(pos && pos.closed);
   } catch { /* no positions.json → nothing held, no track record → no override, exactly today's behavior */ }
   const map = await loadMapping();
+  // F-B: read watchlist.json ids right after map load (loadWatchlist needs map.resolve). Best-effort —
+  // an absent/unreadable file degrades to an empty set (no reserve), never breaks the screen.
+  try { WATCHLIST_IDS = new Set(loadWatchlist(map).map(h => h.id)); } catch { /* keep empty */ }
   const [v24legacy, latest, guide] = await Promise.all([loadAll24h(), loadAllLatest(), loadGuide()]);  // independent endpoints — fetch concurrently, not summed round-trips
   // PLAN-VOL24 step 2 (Ben-validated): DEFAULT `rolling` — the corrected whole-market trailing-24h map (24
   // bulk /1h windows, mostly warm from the SQLite archive) is the ACTIVE volume behind every gate/rank/
@@ -1912,7 +1922,7 @@ async function main() {
   // valueScore and takes a HARD top-N (VALUE_TOP_DEFAULT §F) — a bounded shortlist off a large pool.
   const gated = {};
   for (const m of RUN_MODES) {
-    const cand = gateCandidates(m, ctx, THRESHOLDS, HELD_IDS);
+    const cand = gateCandidates(m, ctx, THRESHOLDS, HELD_IDS, WATCHLIST_IDS);
     const top = FLIP_NICHES[m].gate === 'value' ? VALUE_TOP_DEFAULT
       : FLIP_NICHES[m].gate === 'amplitude' ? AMP_TOP_DEFAULT : TOP;
     // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's

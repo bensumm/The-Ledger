@@ -152,9 +152,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   {ceilingSlope,floorSlope,holdHorizonDays})` composes diurnalForecast's next trough/peak with a multi-week
   drift NUMBER (never a direction label — NO phase/direction field), shifting ONLY by the RESIDUAL horizon
   past the diurnal eta (diurnalForecast already trend-extrapolates to the eta), and `oscillationVsKnife(days)`
-  — a DETRENDED-mid direction-flip detector that tells an oscillating-while-drifting shape (fang/blowpipe)
-  from a monotone knife where floorCeilingTrack.oscillating structurally can't. INFORM-ONLY, wired into NO
-  gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`. Chunk 2 adds
+  — a detector (REDESIGNED at F-A, 2026-07-22 — the original first-difference flip-fraction metric measured
+  day-to-day NOISINESS, not harvestable oscillation, and mislabeled fang/blowpipe's smooth multi-day runs a
+  false knife; see the header comment above the function for the full finding) that detrends the daily mids
+  (same shared `projectTrajectory` slope, one-home) and splits the residuals into maximal same-direction
+  LEGS, counting a leg as real only past `OSC_MIN_LEG_DAYS` + `OSC_AMP_NOISE_MULT`× the series' own
+  day-to-day noise floor; `oscillating` fires at `OSC_MIN_LEGS` (≥2 direction reversals) — fewer legs is a
+  monotone linear-fit hump (even a CURVED collapse), never a real cycle. Tells an oscillating-while-drifting
+  shape (fang/blowpipe) from a monotone knife where floorCeilingTrack.oscillating structurally can't.
+  INFORM-ONLY, wired into NO gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`. Chunk 2 adds
   `driftExitFrom(profile, days, ctx, opts)` — the ONE slope-sourcing + drift-adjusted-exit COMPOSITION (imports
   `floorCeilingTrack` from windowread to pull the ceiling/floor slope off an in-hand `windowStats().days`, NO
   fetch; builds the diurnalForecast wrapper; calls `driftAdjustedExit`) — the reusable caller pattern the
@@ -846,7 +852,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     fixture-testable with synthetic data: the pre-fetch `gateCandidates` gate stack + the
     `risingPoolFloor` predicate (GC1's threshold-driven form, default `DEFAULT_THRESHOLDS`), the
     fetch-pool ranker `rankAndSlice` + `proxyDrift` + `softFactor` (+ `expUnits`) + the **rising reserve**
-    (Steps 3+4 — front-loads the highest-proxy risers, the absorbed `rising` flip-niche mechanism), and the
+    (Steps 3+4 — front-loads the highest-proxy risers, the absorbed `rising` flip-niche mechanism) + the
+    **F-B amplitude watchlist reserve** (2026-07-22 — `gateAmplitudeCandidates`'s `watchedIds` param lets a
+    `watchlist.json` id bypass the `AMP_STAGE1_MIN_PCT` proxy floor, and `rankAndSlice`'s amplitude branch
+    reserves it a guaranteed fetch slot below the `AMP_TOP_DEFAULT` cut, unbounded like the held reserve —
+    the fix for fang/blowpipe/dragon boots never reaching the margin gate via a normal scan), and the
     extracted post-fetch `surviveMode(mode,row,phase,opts)` — falling doctrine/`--phase-rescue`/the
     scalp falling-confirm (+ a vestigial rising-confirm)/overnight-posture, returning
     `{keep,discardReason,rescued}` that maps 1:1 onto renderMode's `disc` counters. **P5**:
@@ -1252,7 +1262,7 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
 | `js/held-item-strategy.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch-positions.mjs` + `quote-items.mjs --positions` at runtime), `js/flip-niches.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/commands/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/test/held-item-strategy.test.mjs`, `pipeline/test/pathpersist.test.mjs` (not yet app-imported) |
 | `js/flip-niches.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/commands/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/test/flip-niches.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
-| `pipeline/lib/admission.mjs` | `pipeline/commands/screen-flip-niches.mjs` (`pickFetchPool`/`buildTrackIndex` — the DEFAULT fetch-pool admission path, PLAN-SCREEN-ARCHITECTURE, 2026-07-18), `pipeline/test/admission.test.mjs`. Replaces `gatecandidates.mjs`'s `rankAndSlice` thin-lane rank (raw gp-flow → after-tax `expGpDay`) + adds a bounded rotating exploration reserve (starvation-proofing), a boost-only track-record prior off `positions.json` closed lots, and an exclusion report (every non-admitted gated candidate returned with a reason) — the fix for the Abyssal-bludgeon/Sanguinesti-staff thin-reserve starvation anchor incident (2026-07-17). `gatecandidates.mjs`'s `rankAndSlice` is UNCHANGED, still fixture/golden-pinned, and stays selectable via `--admission legacy` for rollback. AR2 (PLAN-ARCHITECTURE-COHERENCE): a survivor admitted by the `Date.now()`-bucketed exploration reserve (rather than ranked in) is tagged `via:'explore'`; `screen-flip-niches.mjs` surfaces that as a small 🎲 token on the Item cell so a rotating-lottery slot reads honestly as such. The rotation logic itself is intentionally left non-deterministic (marker, not determinism fix); inform-only, no gate/rank/grade/`screen.json`-number impact. |
+| `pipeline/lib/admission.mjs` | `pipeline/commands/screen-flip-niches.mjs` (`pickFetchPool`/`buildTrackIndex` — the DEFAULT fetch-pool admission path, PLAN-SCREEN-ARCHITECTURE, 2026-07-18), `pipeline/test/admission.test.mjs`. Replaces `gatecandidates.mjs`'s `rankAndSlice` thin-lane rank (raw gp-flow → after-tax `expGpDay`) + adds a bounded rotating exploration reserve (starvation-proofing), a boost-only track-record prior off `positions.json` closed lots, and an exclusion report (every non-admitted gated candidate returned with a reason) — the fix for the Abyssal-bludgeon/Sanguinesti-staff thin-reserve starvation anchor incident (2026-07-17). `gatecandidates.mjs`'s `rankAndSlice` is UNCHANGED, still fixture/golden-pinned, and stays selectable via `--admission legacy` for rollback. AR2 (PLAN-ARCHITECTURE-COHERENCE): a survivor admitted by the `Date.now()`-bucketed exploration reserve (rather than ranked in) is tagged `via:'explore'`; `screen-flip-niches.mjs` surfaces that as a small 🎲 token on the Item cell so a rotating-lottery slot reads honestly as such. The rotation logic itself is intentionally left non-deterministic (marker, not determinism fix); inform-only, no gate/rank/grade/`screen.json`-number impact. F-B (2026-07-22): `pickFetchPool`'s amplitude branch (the DEFAULT admission path — this is the one a real scan actually runs) mirrors `gatecandidates.mjs`'s watchlist reserve, since the amplitude flip-niche's own top-N slice lives here too, not only in the legacy `rankAndSlice`. |
 
 ### Test-location convention
 

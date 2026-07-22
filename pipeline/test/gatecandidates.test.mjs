@@ -372,4 +372,55 @@ ok('surviveMode: held has no effect when the niche already ACCEPTS falling (scal
   assert.equal(heldSv.heldFallingOverride, false, 'no override needed — scalp never excluded this row to begin with');
 });
 
+/* === F-B (PLAN-OSCILLATION-CYCLE post-landing follow-up): the AMPLITUDE niche's watchlist RESERVE ===
+ * F-B fix: AMP_TOP_DEFAULT (25) crops the amplitude fetch pool by the Stage-1 amplitudeProxy BEFORE a
+ * watchlisted big-ticket (fang/blowpipe/dragon boots) ever reaches the real Stage-2 amplitudeGate.
+ * gateAmplitudeCandidates() now takes a `watchedIds` set that (a) bypasses the AMP_STAGE1_MIN_PCT proxy
+ * floor for a watched id (still subject to the shared two-sided-liquidity + price-window gate) and (b)
+ * marks the candidate `watched:true`; rankAndSlice's amplitude branch then RESERVES it a fetch slot even
+ * when it ranks below the top-N by proxy (mirrors the held-reserve shape, unbounded — watchlist.json is
+ * small and user-curated, never a flood risk). */
+console.log('\ngatecandidates.mjs AMPLITUDE niche (F-B):');
+const dseriesA = mids => mids.map((m, i) => ({ ts: TEND - (mids.length - 1 - i) * DAY, mid: m }));
+const FLAT_A = Array.from({ length: 20 }, (_, i) => 2_000_000 + (i % 2 === 0 ? 0 : 2_000));   // ~0.1% daily range — well below AMP_STAGE1_MIN_PCT
+const VOLATILE_A = Array.from({ length: 20 }, (_, i) => 2_000_000 + (i % 2 === 0 ? 0 : 200_000));  // ~10% daily range — clears the floor easily
+const actx = (v24, daily, byId = {}) => ({ v24, map: { byId }, bands: {}, daily });
+
+ok('amplitude gate: a flat-archive item BELOW the Stage-1 proxy floor is dropped when NOT watched', () => {
+  const v24 = { 900: rec(2_000_000, 2_010_000, 200) };
+  const cand = gateCandidates('amplitude', actx(v24, { 900: dseriesA(FLAT_A) }), baseT);
+  assert.equal(cand.length, 0, 'below AMP_STAGE1_MIN_PCT and not watched → filtered at Stage 1');
+});
+
+ok('amplitude gate: the SAME flat-archive item is ADMITTED (watched:true) when on the watchlist', () => {
+  const v24 = { 900: rec(2_000_000, 2_010_000, 200) };
+  const cand = gateCandidates('amplitude', actx(v24, { 900: dseriesA(FLAT_A) }), baseT, new Set(), new Set([900]));
+  assert.equal(cand.length, 1, 'watched bypasses the proxy floor');
+  assert.equal(cand[0].watched, true);
+});
+
+ok('amplitude gate: watching does NOT bypass the shared two-sided-liquidity gate', () => {
+  const v24 = { 900: rec(2_000_000, 2_010_000, 200, 0) };   // lpv=0 → one-sided, non-negotiable
+  const cand = gateCandidates('amplitude', actx(v24, { 900: dseriesA(FLAT_A) }), baseT, new Set(), new Set([900]));
+  assert.equal(cand.length, 0, 'one-sided book still drops it even watched');
+});
+
+ok('rankAndSlice amplitude: a watched candidate below the top-N still gets a RESERVED fetch slot', () => {
+  // 30 high-ampProxy candidates (rank 1..30) + 1 watched LOW-ampProxy straggler that would fall off a top-25 cut.
+  const cand = [];
+  for (let i = 0; i < 30; i++) cand.push({ id: i, ampProxy: 0.5 - i * 0.001, watched: false });
+  cand.push({ id: 999, ampProxy: 0.001, watched: true });
+  const out = rankAndSlice('amplitude', cand, {}, { top: 25 });
+  assert.equal(out.length, 26, 'the top-25 by proxy PLUS the 1 reserved watched straggler');
+  assert.ok(out.some(c => c.id === 999), 'the watched straggler reached the fetch pool despite ranking #31');
+  assert.deepEqual(out.slice(1).map(c => c.id), Array.from({ length: 25 }, (_, i) => i), 'the ranked top-25 itself is untouched/unreshuffled');
+});
+
+ok('rankAndSlice amplitude: a watched candidate ALREADY inside the top-N is not double-counted', () => {
+  const cand = [];
+  for (let i = 0; i < 10; i++) cand.push({ id: i, ampProxy: 0.5 - i * 0.001, watched: i === 3 });
+  const out = rankAndSlice('amplitude', cand, {}, { top: 25 });
+  assert.equal(out.length, 10, 'no duplication — id 3 is already in the top-N, so the reserve adds nothing');
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);

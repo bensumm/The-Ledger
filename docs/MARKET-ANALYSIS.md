@@ -265,7 +265,16 @@ CEILING, never the rising FLOOR — a rising floor is never rewarded). Degrade-O
 drift-riding oscillator, not a monotone collapse) is NOT dropped as a false knife; it falls through to the
 margin gate, which admits it only if its drift-adjusted margin clears the floor (this LOOSENS the knife
 guard, safe because the margin gate has final say). Every threshold is n≈0 PLACEHOLDER — the margin gate is
-the make-or-break gate itself, "do not trade on this yet." **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
+the make-or-break gate itself, "do not trade on this yet." F-A (2026-07-22) redesigned `oscillationVsKnife`
+itself — a walk-forward backtest found the original first-difference flip-fraction metric mislabeled
+fang/blowpipe's real shape (smooth multi-day up/down runs) a false knife; the fixed version detrends the
+same way but counts REAL detrended legs (≥`OSC_MIN_LEG_DAYS` long, amplitude clearing the noise floor)
+instead of day-to-day sign flips — `js/forecast.mjs`'s header comment on the function has the full finding.
+F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_TOP_DEFAULT=25`,
+`pipeline/lib/gatecandidates.mjs`/`admission.mjs`): a big-ticket on `watchlist.json` now bypasses the
+Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-25, so it
+actually reaches this margin gate instead of being silently crowded out every scan (it can still be
+dropped by the gate on its real numbers — the fix is REACHING the gate, not a free pass through it). **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
 (`js/estimators/families.mjs`: `pFill` = the two-leg daily-reach product, `ttf` = the `--hold-days`
 horizon prior (1, or 1.5 for the day-crossing experiment), `lapUnits` = the deployable-units min) — NOT a
 bespoke composite. Amplitude picks are patient multi-hour plays → they surface under deploy/accumulate,

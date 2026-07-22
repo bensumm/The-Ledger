@@ -112,10 +112,21 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   // A2 (PLAN-AMPLITUDE-SCAN) — the amplitude niche keeps its own Stage-1 gate + hard top-N by the
   // daily-amplitude PROXY (mirrors value's own-gate branch); the throughput/thin/exploration lanes below
   // don't apply (amplitude candidates carry no expGpDay — they're ranked by ampProxy, not gp/day velocity).
+  // F-B (PLAN-OSCILLATION-CYCLE post-landing follow-up) — a WATCHLIST RESERVE mirrors gatecandidates.mjs's
+  // rankAndSlice (this is the DEFAULT admission path — ADMISSION==='unified' — so the fix has to live
+  // here too, not just in the legacy rankAndSlice): any `watched` candidate (gateAmplitudeCandidates
+  // already let it through the proxy floor) that falls outside the top-N still gets a guaranteed fetch
+  // slot, so a watchlisted big-ticket (fang/blowpipe/dragon boots) actually reaches the Stage-2
+  // amplitudeGate instead of being silently crowded out by AMP_TOP_DEFAULT every scan.
   const isAmplitude = cand.length && cand[0].ampProxy !== undefined;
   if (isAmplitude) {
     const sorted = cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id));
-    return { survivors: sorted.slice(0, top), excluded: sorted.slice(top).map(c => ({ ...c, reason: 'amplitude-top-n' })) };
+    const topN = sorted.slice(0, top);
+    const topIds = new Set(topN.map(c => c.id));
+    const watchReserve = cand.filter(c => c.watched && !topIds.has(c.id));
+    const survivors = [...watchReserve, ...topN];
+    const survivorIds = new Set(survivors.map(c => c.id));
+    return { survivors, excluded: cand.filter(c => !survivorIds.has(c.id)).map(c => ({ ...c, reason: 'amplitude-top-n' })) };
   }
 
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);

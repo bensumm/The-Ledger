@@ -149,3 +149,25 @@ test('pickFetchPool: value-niche candidates pass through unchanged (own valueSco
   assert.equal(excluded.length, 1);
   assert.equal(excluded[0].reason, 'value-top-n');
 });
+
+// --- F-B (PLAN-OSCILLATION-CYCLE post-landing follow-up): the amplitude watchlist RESERVE, in the
+// DEFAULT ('unified') admission path — this is the branch a real scan actually runs (ADMISSION==='unified'
+// unless --admission legacy), so the fix has to be pinned here too, not just in gatecandidates.mjs's
+// legacy rankAndSlice. ------------------------------------------------------------------------------
+test('pickFetchPool amplitude: a watched straggler below the top-N still reaches the fetch pool', () => {
+  const cand = [];
+  for (let i = 0; i < 30; i++) cand.push({ id: i, ampProxy: 0.5 - i * 0.001, watched: false });
+  cand.push({ id: 999, ampProxy: 0.001, watched: true });
+  const { survivors, excluded } = pickFetchPool('amplitude', cand, {}, { top: 25 });
+  assert.equal(survivors.length, 26, 'top-25 by proxy plus the 1 reserved watched straggler');
+  assert.ok(survivors.some(c => c.id === 999), 'the watched straggler reached the fetch pool despite ranking #31');
+  assert.ok(!excluded.some(c => c.id === 999), 'the watched straggler is not ALSO reported excluded');
+  assert.equal(excluded.length, 5, 'the other 5 unwatched non-top-25 stragglers are still honestly reported excluded');
+});
+
+test('pickFetchPool amplitude: value/amplitude niches pass through unchanged when nothing is watched (byte-parity)', () => {
+  const cand = Array.from({ length: 5 }, (_, i) => ({ id: i, ampProxy: 0.5 - i * 0.01, watched: false }));
+  const { survivors, excluded } = pickFetchPool('amplitude', cand, {}, { top: 3 });
+  assert.deepEqual(survivors.map(c => c.id), [0, 1, 2], 'unwatched pool behaves exactly like before F-B');
+  assert.equal(excluded.length, 2);
+});

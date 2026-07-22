@@ -51,25 +51,60 @@ function diurnal(days, { baseFn, dipHours = [3, 4, 5], peakHours = [15, 16, 17],
 // (band ±5 around each mid). This is the shape the detector consumes.
 const daysFromMids = mids => mids.map((m, i) => [`2026-07-${String(i + 1).padStart(2, '0')}`, { low: m - 5, hi: m + 5 }]);
 
-// ── 1. the detector: fang/blowpipe shape (multi-week decline + weekly bounce) = OSCILLATING ────────
-ok('detector: a declining floor + a ~weekly bounce reads OSCILLATING (not a false knife)', () => {
-  // overall drift DOWN (~−4/step) with a repeated up/down bounce riding it — the fang/blowpipe shape.
-  const fang = daysFromMids([100, 94, 101, 88, 96, 82, 90, 77, 85, 72]);
+// ── 1. the detector: fang/blowpipe shape (SMOOTH multi-day runs riding a decline) = OSCILLATING ────
+// F-A (2026-07-22): the real fang/blowpipe shape is a SMOOTH ~4-day-up/~4-day-down alternation riding a
+// slow decline (PLAN: "+ + + + − − − − + + + + − −"), NOT a daily zigzag. The retired first-difference
+// metric mislabeled exactly this shape a false knife (few day-to-day flips); the redesigned leg/amplitude
+// metric is built to read it correctly. Construct it explicitly: a −1.5/day linear decline plus a
+// triangular bounce that moves +3/day for 4 days, then −3/day for 4 days, then +3/day for 4 days, then
+// −3/day for the remaining days (a textbook multi-week-oscillator shape, 14 days ⇒ ~1.75 cycles).
+function fangShapedMids(n = 14) {
+  const mids = [];
+  let bounce = 0, bdir = 1, runLen = 0;
+  for (let i = 0; i < n; i++) {
+    mids.push(100 - 1.5 * i + bounce);
+    bounce += bdir * 3; runLen++;
+    if (runLen === 4) { bdir = -bdir; runLen = 0; }
+  }
+  return mids;
+}
+ok('detector: a declining floor + a smooth multi-day bounce reads OSCILLATING (not a false knife)', () => {
+  const fang = daysFromMids(fangShapedMids(14));
   const det = oscillationVsKnife(fang);
-  assert.ok(det, 'a 10-day series is readable');
-  assert.equal(det.oscillating, true, 'the bounce riding the decline is oscillation, not a knife');
+  assert.ok(det, 'a 14-day series is readable');
+  assert.equal(det.oscillating, true, 'the smooth bounce riding the decline is oscillation, not a knife');
   assert.equal(det.knife, false, 'knife = !oscillating');
   assert.ok(det.slope < 0, 'the fitted drift is DOWN (an intermediate number, never a returned label)');
-  assert.ok(det.flipFraction >= 0.4, `detrended flip fraction clears the threshold (got ${det.flipFraction})`);
+  assert.ok(det.legs >= 3, `≥3 real legs found (got ${det.legs})`);
 });
 
-// ── 2. the detector: a monotone collapse = KNIFE ─────────────────────────────────────────────────
+ok('detector: the MIRROR up-drift shape reads OSCILLATING too — same code path, no sign branch', () => {
+  const mids = fangShapedMids(14).map((v, i) => v + 3 * i);   // add a stronger UP drift on top
+  const det = oscillationVsKnife(daysFromMids(mids));
+  assert.ok(det, 'readable');
+  assert.equal(det.oscillating, true, 'an up-drift oscillator reads oscillating identically to a down-drift one');
+  assert.ok(det.slope > 0, 'fitted drift is UP this time — direction is only ever the sign of an intermediate number');
+});
+
+// ── 2. the detector: a monotone (even CURVED) collapse = KNIFE ─────────────────────────────────────
 ok('detector: a monotone (accelerating) collapse reads KNIFE (no oscillation to harvest)', () => {
-  const knife = daysFromMids([100, 98, 94, 88, 80, 70, 58, 44]);   // strictly down, convex, no bounce
+  // strictly down, convex (accelerating), no bounce. A single straight-line detrend of ANY curved
+  // monotone series produces exactly one hump in the residuals (one up-leg, one down-leg — 2 legs) as a
+  // pure linear-fit artifact; OSC_MIN_LEGS=3 is what tells this apart from a real multi-leg oscillation.
+  const knife = daysFromMids([100, 98, 94, 88, 80, 70, 58, 44]);
   const det = oscillationVsKnife(knife);
   assert.ok(det, 'readable');
-  assert.equal(det.knife, true, 'a monotone collapse is a knife');
-  assert.equal(det.oscillating, false, 'no detrended sign-flips → not oscillating');
+  assert.equal(det.knife, true, 'a monotone collapse is a knife, even though a linear detrend leaves a residual hump');
+  assert.equal(det.oscillating, false, 'only ~2 legs (one hump) — below OSC_MIN_LEGS, not a real cycle');
+  assert.ok(det.legs <= 2, `at most 2 legs from a single linear-fit hump (got ${det.legs})`);
+});
+
+ok('detector: a genuinely straight-line monotone series has ZERO legs (no residual at all)', () => {
+  const straight = daysFromMids([100, 92, 84, 76, 68, 60, 52, 44]);   // exactly linear, slope -8/day
+  const det = oscillationVsKnife(straight);
+  assert.ok(det, 'readable');
+  assert.equal(det.legs, 0, 'a perfectly linear series detrends to a flat-zero residual — no legs at all');
+  assert.equal(det.oscillating, false, 'no legs ⇒ not oscillating');
 });
 
 ok('detector: too-thin a series degrades to null (never a fake read)', () => {

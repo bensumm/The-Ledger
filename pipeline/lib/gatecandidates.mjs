@@ -186,11 +186,11 @@ export function eachLiquidCandidate({ v24 }, { minPrice = 0, maxPrice = Infinity
   return out;
 }
 
-export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new Set()) {
+export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new Set(), watchedIds = new Set()) {
   const spec = FLIP_NICHES[mode];
   if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
-  if (spec.gate === 'value') return gateValueCandidates(ctx, t);           // P5 — the term-structure value gate
-  if (spec.gate === 'amplitude') return gateAmplitudeCandidates(ctx, t);   // A2 — the daily-amplitude Stage-1 proxy gate
+  if (spec.gate === 'value') return gateValueCandidates(ctx, t);                         // P5 — the term-structure value gate
+  if (spec.gate === 'amplitude') return gateAmplitudeCandidates(ctx, t, watchedIds);     // A2 — the daily-amplitude Stage-1 proxy gate (F-B: watchedIds bypass the proxy floor)
   const { map, bands } = ctx;
   return eachLiquidCandidate(ctx, { minPrice: t.MIN_PRICE, maxPrice: t.MAX_PRICE, floorVol: t.FLOOR, gpFloor: t.GP_FLOOR }, ({ id, limitVol, avgHigh, avgLow, mid, thin }) => {
     const limit = map.byId[id]?.limit ?? null;
@@ -258,15 +258,27 @@ function gateValueCandidates(ctx, t = DEFAULT_THRESHOLDS) {
    renderAmplitudeMode (the two-stage split, exactly like value's proxy→confirm). `ctx.daily` is the bulk
    archive already loaded at gate time (no per-item fetch). Each survivor carries `ampProxy` so
    rankAndSlice can hard top-N by it. A cold/short archive slice → null proxy → not a candidate (the
-   honest degrade — never a fake amplitude). */
-function gateAmplitudeCandidates(ctx, t = DEFAULT_THRESHOLDS) {
+   honest degrade — never a fake amplitude).
+
+   F-B (2026-07-22, PLAN-OSCILLATION-CYCLE post-landing follow-up): `watchedIds` (repo-root
+   watchlist.json, the SAME set the S3 always-scanned watchlist pass already reads) BYPASSES the
+   AMP_STAGE1_MIN_PCT proxy floor — a watchlisted big-ticket whose proxy reads below the floor (or is
+   null on a cold archive slice) still becomes a candidate, carrying `watched:true` so rankAndSlice can
+   guarantee it a fetch slot below (see there for why this is a RESERVE, not a floor relax). It still
+   has to clear the shared two-sided-liquidity + price-window gate above (non-negotiable) — this only
+   waives the proxy-floor CUT, not the base liquidity/price gate. A watched item that clears here is NOT
+   automatically admitted to the amplitude table: it still has to pass the real Stage-2 amplitudeGate
+   (trend/knife/margin-below-floor) in renderAmplitudeMode exactly like any other survivor — reaching the
+   gate is the fix, not a free pass through it. */
+function gateAmplitudeCandidates(ctx, t = DEFAULT_THRESHOLDS, watchedIds = new Set()) {
   const { map, daily } = ctx;
   const floorVol = t.FLOOR;   // amplitude's big tickets mostly enter via the gp-flow THIN path (§2.1)
   return eachLiquidCandidate(ctx, { minPrice: Math.max(t.MIN_PRICE, AMP_MIN_PRICE), maxPrice: AMP_MAX_PRICE, floorVol, gpFloor: t.GP_FLOOR }, ({ id, limitVol, mid, thin }) => {
     const ampProxy = amplitudeProxy(daily && daily[id]);     // Stage-1 attenuated proxy off the 6h archive
-    if (ampProxy == null || ampProxy < AMP_STAGE1_MIN_PCT) return null;
+    const watched = watchedIds.has(id);
+    if (!watched && (ampProxy == null || ampProxy < AMP_STAGE1_MIN_PCT)) return null;
     const limit = map.byId[id]?.limit ?? null;
-    return { id, limitVol, mid, limit, thin, ampProxy };
+    return { id, limitVol, mid, limit, thin, ampProxy, watched };
   });
 }
 
@@ -324,8 +336,18 @@ export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESER
   }
   // A2 — the amplitude niche: rank the whole Stage-1 pool by the attenuated daily-amplitude PROXY and take
   // a HARD top-N to fetch (the exact Stage-2 gate confirms per survivor in renderAmplitudeMode).
+  // F-B — a WATCHLIST RESERVE, mirroring the held-reserve shape above (unbounded — watchlist.json is a
+  // small, user-curated set, never a flood risk): any `watched` candidate that fell outside the top-N by
+  // proxy still gets a guaranteed fetch slot, PREPENDED (not reshuffling the ranked top-N itself). This is
+  // deliberately a reserve, not a bigger AMP_TOP_DEFAULT — raising the top-N would cost one more live
+  // per-item fetch for EVERY candidate in the widened band on EVERY scan, forever, to fix a handful of
+  // named items; a small reserve costs fetches ONLY for the items actually on the watchlist.
   if (FLIP_NICHES[mode] && FLIP_NICHES[mode].gate === 'amplitude') {
-    return cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id)).slice(0, top);
+    const sorted = cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id));
+    const topN = sorted.slice(0, top);
+    const topIds = new Set(topN.map(c => c.id));
+    const watchReserve = cand.filter(c => c.watched && !topIds.has(c.id));
+    return [...watchReserve, ...topN];
   }
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   // Thin gp-flow qualifiers are held OUT of the main ranking and given a bounded RESERVE instead.
