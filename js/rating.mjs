@@ -129,6 +129,11 @@ export function rateItem({ row, rank, activeWin = null, nWin = null, thin = fals
   };
   const riskMult = factors.regime * factors.mom * factors.liq * factors.capital * factors.confidence;
   const score = Math.round((rank || 0) * riskMult);
-  const grade = thin ? capGrade(gradeFor(score), THIN_GRADE_CAP) : gradeFor(score);
-  return { score, grade, riskMult, factors, thin: !!thin };
+  const uncapped = gradeFor(score);
+  const grade = thin ? capGrade(uncapped, THIN_GRADE_CAP) : uncapped;
+  // R7 (PLAN-SIGNAL-RECENCY): name the cap that actually BOUND the printed letter, or null. rateItem owns
+  // only the THIN ceiling; the screen applies the other ceilings (phase-basing / sub-floor / reach) AFTER
+  // this and threads `cappedBy` forward, last-binder-wins. Legibility only — never a gate/rank/grade input.
+  const cappedBy = (thin && grade !== uncapped) ? 'thin' : null;
+  return { score, grade, riskMult, factors, thin: !!thin, cappedBy };
 }

@@ -326,6 +326,13 @@ placeholder cutoffs.
 - **P(fill) is two-leg:** `P = P_bid × askReachFactor(askReach)` — the entry fill discounted by the
   cross-day ASK reach (a robust p90 top can reach only ~2/14 days; the same inform-mode reach number,
   zero new fetch). Paired with a `REACH_GRADE_CAP` so a rarely-reaching ask can't oversell the LETTER.
+- **`cappedBy` names which ceiling bound the letter (R7, legibility).** Four grade ceilings apply
+  sequentially via `capGrade` — `THIN_GRADE_CAP` (A-, inside `rateItem`), then `PHASE_BASING_GRADE_CAP`,
+  `SUBFLOOR_GRADE_CAP`, `REACH_GRADE_CAP` (all at the screen render site). The screen records which one
+  actually LOWERED the printed letter (last-binder-wins) as a single `cappedBy` field
+  (`thin`/`phase-basing`/`sub-floor`/`reach`, or absent when the raw grade stood) — logged to
+  `suggestions.jsonl` for retro segmentation + surfaced as the grade-cell tooltip. Legibility only, never
+  a gate/rank/grade input (the caps themselves are unchanged; this just NAMES the binding one).
 - **Churn is EXEMPT** from the ask-reach discount, the grade cap, AND — since PLAN-ESTIMATOR-POSTURE
   AC5/AC6 — BOTH `estimatePair` PRICE legs (`fillShape:'symmetric'` — a lap sells into continuous
   two-sided flow, so the day-high reach read mismeasures it on every surface). The rank discount, the

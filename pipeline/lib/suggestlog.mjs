@@ -68,6 +68,10 @@
  *               thin/sub-floor cap), so the grade-clumping audit can segment without parsing
  *               `verdict` (which watch-positions.mjs uses for action verdicts); lean-included, screen supplies
  *               it, quote/watch have no grade → absent. Absent on all pre-2026-07-12 rows.)
+ *     cappedBy?, (R7, PLAN-SIGNAL-RECENCY — which grade CEILING bound the printed letter:
+ *               'thin' | 'phase-basing' | 'sub-floor' | 'reach', last-binder-wins; absent when the
+ *               raw grade stood. Lets the retro segment which cap most often clamps a would-be-higher
+ *               letter. Lean-included — an uncapped row is byte-identical.)
  *     depth?,  (AZ-forward 2026-07-12 — the realized 24h book-depth snapshot at emit:
  *               {hpv, lpv} straight off computeQuote's `row.pressure` (units traded at the instabuy /
  *               instasell sides, trailing 24h — a FLOW PROXY, not an order book; same shortcomings as
@@ -319,7 +323,7 @@ export function windowExitShadow(aer, { list = null, live = null, peakWindow = n
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, demandRegime, amplitude, capEff, weakDeploy } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, demandRegime, amplitude, capEff, weakDeploy, cappedBy } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -364,6 +368,10 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude
   // sub-floor rows instead of mistaking them for qualified suggestions.
   if (subFloor != null)      e.subFloor = subFloor;
+  // R7 (PLAN-SIGNAL-RECENCY) — which grade CEILING (thin | phase-basing | sub-floor | reach) bound the
+  // printed letter, or absent when the raw grade stood. Legibility + retro segmentation (which cap most
+  // often clamps a would-be-higher letter). Lean-included (YS2): an uncapped row logs a byte-identical shape.
+  if (cappedBy != null)      e.cappedBy = cappedBy;
   // PART II (PLAN-GRADE-REACH) — the SHADOW asymmetric-fill estimate { bid, ask, pAsk, pBid, n, rank }
   // beside the row's symmetric `rank`, the data-accrual half of the F1 A/B (see the schema doc above).
   // Lean-included (YS2 pattern): callers without an asym read (quote/watch, churn/value rows, no 1h

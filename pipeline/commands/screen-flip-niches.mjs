@@ -1039,15 +1039,20 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // — a provisional surface must not advertise a headline grade off a still-declining regime.
     // P6c: a sub-floor fallback row is capped harder still (SUBFLOOR_GRADE_CAP) — it did NOT clear the
     // configured floors, so it must never print a grade a qualified row could.
-    let grade = rescued ? capGrade(r.grade, PHASE_BASING_GRADE_CAP) : r.grade;
-    if (subFloor) grade = capGrade(grade, SUBFLOOR_GRADE_CAP);
+    // R7 (PLAN-SIGNAL-RECENCY): track WHICH ceiling bound the printed letter (legibility only — never a
+    // gate/rank input). The caps apply sequentially (rateItem's THIN first, then these three); the LAST one
+    // to actually LOWER the grade is what bounds the visible letter, so each binding cap overwrites cappedBy.
+    let cappedBy = r.cappedBy || null;   // THIN (from rateItem) if it bound
+    const cap = (g, ceiling, name) => { const c = capGrade(g, ceiling); if (c !== g) cappedBy = name; return c; };
+    let grade = rescued ? cap(r.grade, PHASE_BASING_GRADE_CAP, 'phase-basing') : r.grade;
+    if (subFloor) grade = cap(grade, SUBFLOOR_GRADE_CAP, 'sub-floor');
     // Proposal B (PLAN-GRADE-REACH): a mirage exit can't advertise a headline letter. When the quoted ASK
     // reaches < REACH_GRADE_CAP_FRAC of recent days, cap the grade (Proposal A already shrank the rank
     // number; this guarantees the LETTER an operator reads can't oversell it). Same capGrade site as above.
     // PART II churn exemption: a 'symmetric'-fillShape niche (churn) is exempt — its lap exit sells into
     // continuous two-sided flow, so the day-high reach read mismeasures it (mirrors estimateRank's askF skip).
     if (FLIP_NICHES[mode].fillShape !== 'symmetric' && askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
-      grade = capGrade(grade, REACH_GRADE_CAP);
+      grade = cap(grade, REACH_GRADE_CAP, 'reach');
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // AR2 (PLAN-ARCHITECTURE-COHERENCE, MARKER option): if admission.mjs pulled this row into the
     // FETCH pool via its Date.now()-bucketed exploration reserve (s.via==='explore'), it's a rotating
@@ -1078,6 +1083,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // `C (sub-floor)` so a copied/quoted row can never pass for a qualified one. (These rows are never
     // published, so the title is stdout-inert, but it keeps the cell honest if that ever changes.)
     if (subFloor) { gradeCell.t = grade + ' (sub-floor)'; gradeCell.title = subFloorLabel(subFloor) + (gradeCell.title ? '; ' + gradeCell.title : `; grade capped at ${SUBFLOOR_GRADE_CAP}`); }
+    // R7 (PLAN-SIGNAL-RECENCY): when a ceiling bound the letter but no per-cap title above already named it
+    // (the pure REACH-cap case → a plain `{t:grade}` cell), add the legibility tooltip. App-side only —
+    // cellText ignores `title`, so stdout stays clean; the structured `cappedBy` on the row is the queryable form.
+    if (cappedBy && !gradeCell.title) gradeCell.title = `grade capped by ${cappedBy}`;
     // P6b: the last cell is the risk-adjusted per-thesis rank + its honest components (net · P~ · ttf~)
     // instead of the demoted `Score gp/d`. The numeric r.score (risk-adjusted rank) is the sort key.
     const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
@@ -1119,7 +1128,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
     // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
     const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, demReg, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1161,7 +1170,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // absent-field pattern — normal rows stay byte-identical) so calibration can segment or exclude them
   // and a ledger reader can never mistake one for a floor-qualified suggestion.
   logSuggestions('screen', { mode, params: SCREEN_PARAMS },
-    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, ...estFields(r.er),
+    rows.map(r => suggestionEntry(r.row, { itemId: r.id, cls: liqClass(r.row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, validators: r.validators, path: defaultPath, subFloor: subFloor ? subFloor.relaxed : null, cappedBy: r.cappedBy, ...estFields(r.er),
       // PART II shadow field: the asymmetric estimate BESIDE the symmetric rank (same row → the F1 A/B join)
       asym: asymShadow(r.asymEr),
       // PLAN-OUTPUT-TABLE shadow pair: the reconciliation estimate the DEFAULT table renders (F1 scores estSell vs the realized sell)
@@ -1609,7 +1618,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     // + dip/peak windows + holdDays), so the shadow both-leg replay joiner can measure the would-have-fill
     // rate as an UPPER BOUND, and the retro-join attributes realized round trips.
     sugg.push(suggestionEntry(row, {
-      itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: 'AMP-CYCLE', grade, posture: POSTURE, path: 'scalp',
+      itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: 'AMP-CYCLE', grade, cappedBy: r.cappedBy, posture: POSTURE, path: 'scalp',   // R7: amplitude only applies rateItem's THIN cap → r.cappedBy
       bid: ar.ampBid, ask: ar.ampAsk, pFill: round2(pFill.value), ttfSec: ttf.value, rank: Math.round(rank),
       estBasis: `${pFill.basis}/${ttf.basis}`, estN: ar.nDays,
       amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof }),
@@ -1714,7 +1723,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
     const cells = [std[0], gradeCell, ...std.slice(1), rankCell, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
     rows.push({ id, cells });
-    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, posture: POSTURE, ...estFields(er) }));   // SF-3: watchlist row's volDay is bulk /24h (v24). AZ-forward: grade letter logged explicitly
+    sugg.push(suggestionEntry(row, { itemId: id, cls: liqClass(row), volSrc: 'bulk', verdict: r.grade, grade: r.grade, cappedBy: r.cappedBy, posture: POSTURE, ...estFields(er) }));   // SF-3: watchlist row's volDay is bulk /24h (v24). AZ-forward: grade letter logged explicitly · R7: THIN cap only → r.cappedBy
   }
   logSuggestions('screen', { mode: 'watchlist', params: SCREEN_PARAMS }, sugg);
   const headers = [...HEADERS, 'Note'];

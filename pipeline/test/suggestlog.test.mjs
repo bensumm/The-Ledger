@@ -64,6 +64,13 @@ ok('AZ-forward: `grade` letter is lean-included (present only when supplied)', (
   assert.ok(!('grade' in none), 'absent grade stays absent (quote/watch rows byte-identical)');
 });
 
+ok('R7: `cappedBy` names the binding grade ceiling — lean-included (present only when set)', () => {
+  const capped = suggestionEntry({}, { itemId: 13, cls: 'liquid', verdict: 'B', grade: 'B', cappedBy: 'reach' });
+  assert.equal(capped.cappedBy, 'reach', 'the binding ceiling is logged for the retro');
+  const uncapped = suggestionEntry({}, { itemId: 14, cls: 'liquid', verdict: 'A', grade: 'A' });
+  assert.ok(!('cappedBy' in uncapped), 'an uncapped row stays byte-identical (no cappedBy field)');
+});
+
 ok('AZ-forward: `depth` {hpv,lpv} is derived off row.pressure; no pressure → no field', () => {
   const withP = suggestionEntry({ quickBuy: 100, quickSell: 110, pressure: { hpv: 3050, lpv: 1910, ratio: 1.6 } },
     { itemId: 13, cls: 'liquid', verdict: 'B' });

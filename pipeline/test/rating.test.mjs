@@ -48,6 +48,15 @@ ok('a gp-flow-thin item never grades above A- regardless of score (THIN_GRADE_CA
   const small = rateItem({ row: idealRow, rank: 2_000, thin: true });
   assert.equal(small.grade, gradeFor(small.score), 'thin cap only clamps, never lifts a sub-cap grade');
 });
+// R7 (PLAN-SIGNAL-RECENCY): rateItem names the THIN cap in `cappedBy` only when it actually BOUND.
+ok('R7: rateItem.cappedBy names "thin" when the thin cap bound the letter, else null', () => {
+  const bound = rateItem({ row: idealRow, rank: 50_000_000, thin: true });   // S+ clamped to A-
+  assert.equal(bound.cappedBy, 'thin', 'the thin cap bound the printed letter → cappedBy "thin"');
+  const notBound = rateItem({ row: idealRow, rank: 2_000, thin: true });      // already below the cap
+  assert.equal(notBound.cappedBy, null, 'thin flag but the grade was already ≤ cap → no binding → null');
+  const notThin = rateItem({ row: idealRow, rank: 50_000_000, thin: false }); // never capped
+  assert.equal(notThin.cappedBy, null, 'a non-thin row is never thin-capped → null');
+});
 
 // --- 2. capGrade only clamps down, never promotes -----------------------------------------
 ok('capGrade clamps a better grade down to the cap, never promotes a worse one', () => {
