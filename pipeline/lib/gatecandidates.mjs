@@ -93,7 +93,12 @@ export const TOP_DEFAULT = 40;
 export const VALUE_TOP_DEFAULT = 25;
 // A2 — the amplitude niche's HARD top-N (same flood-control shape as value; the Stage-1 proxy pool can be
 // large, so rank by ampProxy and take a bounded shortlist to fetch the per-item 1h series for). PLACEHOLDER.
-export const AMP_TOP_DEFAULT = 25;
+// F-D (Ben 2026-07-22): WIDENED 25→40 to surface more of the big-ticket oscillator class the top-25 cut hid
+// (a read-only top-60 run surfaced Virtus set/robe, Oathplate, Tormented synapse). Costs ~+15 fetches/scan;
+// they verify sub-1% off the median-peak basis, so this is VISIBILITY, not new edge — the margin gate + the
+// verify trio still govern. The F-B watchlist RESERVE is the complementary targeted path (a named straggler
+// below this cut still gets a slot); this is the general net-widen.
+export const AMP_TOP_DEFAULT = 40;
 
 // P6c — empty-result sub-floor fallback sizing + honesty cap (Ben, 2026-07-09: when a niche's floors
 // leave ZERO candidates, re-run BENEATH the floor and show the best few HONESTLY LABELED — never
