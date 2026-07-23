@@ -26,7 +26,8 @@
  * structuralSupport / convictionGate) and decides NOTHING — it just orders + formats them. It
  * changes no verdict, no alert, no row selection (V5 is output-format-only).
  */
-import { fmtP, fmt } from '../../js/money-format.js';
+import { fmtP, fmt, fmtHourRange } from '../../js/money-format.js';
+import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer
 
 /**
  * depthReachClause — PLAN-DEPTH-EXIT DE3: the held-lot depth/pressure clause for the window line.
@@ -112,4 +113,79 @@ export function heldNoteBlock({
   if (fillProgress) sellBits.push(fillProgress);
   lines.push(`    ${sellBits.join(' · ')}`);
   return lines;
+}
+
+/**
+ * formatTimedLap(lap, { fmt }) — PLAN-DIURNAL-TIMING DT2, the ONE shared renderer for a
+ * js/windowread.mjs `diurnalTimedLap` result. This SUPERSEDES the three call sites' own hand-rolled
+ * diurnal text (screen's inline block, quote-items' `kind:'diurnal'` push, watch-positions' shadow
+ * lines) — same `diurnal` NOTE_KIND/sigil, richer text, ONE call site so the numbers can never drift
+ * apart (the plan's §0 "two-homes" warning). Returns a plain TEXT string, or null when there is
+ * nothing worth flagging (a `degraded` lap, or one with no priceable bid/ask) — the §7 SOFTENED
+ * render guarantee: every row is COMPUTED (the CI-enforced data guarantee lives at the call site /
+ * DT4's shadow-log), but only a row with something to say PRINTS a line, so a cold/thin/new item
+ * doesn't flood the screen with a content-free "n/a".
+ *
+ * `lap` is the `diurnalTimedLap` return value, optionally carrying two extra fields the pure fn
+ * itself doesn't return (it only takes them as INPUTS): `volDay` (for the liquidity segment) and
+ * `buyLimit` (the "caller-relevant size" the §4 tranche-ceiling caveat checks against). Callers
+ * that want those segments merge them onto the lap object before calling — e.g.
+ * `{ ...diurnalTimedLap(series, { buyLimit, volDay, ... }), volDay, buyLimit }`.
+ *
+ * Renders TWO shapes off `lap.clean` (hourConcentration's verdict, §3):
+ *   clean===true  → the full timed-lap line: BID/ASK + windows, timed net/roi, same-hour instant
+ *                   net (both ALWAYS shown — the blowpipe divergence is the point, never averaged
+ *                   away), the ask−bid range, bid/ask window-reach, hold horizon, and the base
+ *                   floor trend direction.
+ *   clean===false → "range-churn — no timing edge": the specific dip/peak HOURS are omitted (the
+ *                   whole reason `clean` exists — a scattered per-day trough/peak means those hours
+ *                   aren't reliable), but net/instantNet/base still render.
+ * A second liquidity/sizing segment (vol/d, dip/peak pool depth, tranche comfort/ceiling) appends
+ * when the caller supplied `volDay`; the §4 caveat appends when `buyLimit` exceeds `trancheCeiling`.
+ */
+export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
+  if (!lap || lap.degraded) return null;              // §7 — a degrade carries nothing to flag by default
+  if (lap.bid == null || lap.ask == null) return null; // no priceable pair — nothing to say
+  const win = w => (w && w.startH != null && w.endH != null) ? fmtHourRange(w.startH, w.endH) : '?';
+  const netTxt = n => (n == null ? 'n/a' : `${n >= 0 ? '+' : ''}${fmtFn(n)}/u`);
+  const roiTxt = r => (r == null ? '' : ` (${r.toFixed(1)}%)`);
+  const trendTxt = t => (t == null || !Number.isFinite(t)) ? '—' : `${t >= 0 ? '↑' : '↓'}${fmtFn(Math.round(Math.abs(t)))}/d`;
+  const reachTxt = r => (r && r.fullN) ? `${r.fullHit}/${r.fullN}` : '–';
+  const range = fmtFn(lap.ask - lap.bid);
+
+  const bits = [];
+  if (lap.clean === true) {
+    bits.push(`BID ${fmtFn(lap.bid)} (${lap.bidBasis}, dip ${win(lap.dipWindow)})`);
+    bits.push(`ASK ${fmtFn(lap.ask)} (peak ${win(lap.peakWindow)})`);
+    bits.push(`timed ${netTxt(lap.net)}${roiTxt(lap.roi)}`);
+    bits.push(`same-hour ${netTxt(lap.instantNet)}`);
+    bits.push(`range ${range}`);
+    bits.push(`reach bid ${reachTxt(lap.bidReach)}·ask ${reachTxt(lap.askReach)}`);
+    bits.push(`hold ~${fmtHoldHorizon((lap.holdHrs ?? 0) / 24)}`);
+    bits.push(`base ${trendTxt(lap.lowTrend)}`);
+  } else {
+    bits.push('range-churn — no timing edge');
+    bits.push(`range ${range}`);
+    bits.push(`timed ${netTxt(lap.net)}`);
+    bits.push(`same-hour ${netTxt(lap.instantNet)}`);
+    bits.push(`base ${trendTxt(lap.lowTrend)}`);
+  }
+
+  // liquidity/sizing segment — only when the caller merged volDay onto the lap (see doc comment).
+  if (lap.volDay != null) {
+    const sizeBits = [`${fmtFn(lap.volDay)}/d`];
+    if (lap.dipPool != null) sizeBits.push(`dip-pool ~${fmtFn(lap.dipPool)}`);
+    if (lap.peakPool != null) sizeBits.push(`peak-pool ~${fmtFn(lap.peakPool)}`);
+    if (lap.trancheComfort != null) sizeBits.push(`tranche ~${fmtFn(lap.trancheComfort)} comfortable`);
+    if (lap.trancheCeiling != null) sizeBits.push(`~${fmtFn(lap.trancheCeiling)} ceiling`);
+    bits.push(sizeBits.join(' · '));
+  }
+  // §4 caveat — a caller-relevant size (buyLimit — the natural per-window accumulation unit) sized
+  // past the ceiling means expect a materially worse realized net than quoted (the n≈6 reach-relief
+  // finding, BORROWED from a different feature's calibration, not validated for diurnal tranches).
+  if (lap.buyLimit != null && lap.trancheCeiling != null && lap.buyLimit > lap.trancheCeiling) {
+    bits.push(`⚠ buy limit ${fmtFn(lap.buyLimit)} exceeds tranche ceiling — expect a worse realized net than quoted at this size (n≈6 reach-relief, not validated for diurnal)`);
+  }
+
+  return bits.join(' · ');
 }

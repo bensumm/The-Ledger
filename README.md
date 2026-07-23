@@ -99,7 +99,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
-  `windowrange --profile` prints) + **`softBuyRead`/`formatSoftBuy`** (2026-07-22 — the ADD-while-holding
+  `windowrange --profile` prints) + **`hourConcentration`/`diurnalTimedLap`** (PLAN-DIURNAL-TIMING DT1
+  2026-07-23 — `hourConcentration` is a per-day argmin/argmax-hour CIRCULAR-concentration classifier
+  (mean resultant length R∈[0,1] of each day's own trough/peak hour, `HOURCONC_MIN_DAYS`/`HOURCONC_MIN_R`
+  placeholders), distinct from `hourProfile`'s aggregate cluster width; `diurnalTimedLap` is
+  `deriveDiurnalRange`'s output EXTENDED with `net`/`roi` (the TIMED trough→peak lap, `netMargin` from
+  `js/money-math.js`) + `instantNet`/`instantRoi` (the SAME-HOUR/churn margin — both surfaced, since a
+  big-ticket item can show a NEGATIVE same-hour margin beside a POSITIVE timed one) + `bidReach`/
+  `askReach` (`recencySplit` scored against the chosen dip/peak levels' own `windowStats` slice) +
+  `lowTrend`/`hiTrend` (`projectTrajectory`) + `dipPool`/`peakPool` + the retuned `trancheComfort`/
+  `trancheCeiling` (`DT_TRANCHE_COMFORT_VOL_PCT`=0.5%/`DT_TRANCHE_CEILING_VOL_PCT`=1% of `volDay`,
+  borrowed from `js/estimators/reach.mjs`'s n≈6 reach-relief knee, not validated for diurnal
+  specifically) + `hourConcentration`'s `clean` verdict; degrades to `{degraded:true, reason}`, never a
+  throw. DT2 (2026-07-23) wires this into `screen-flip-niches.mjs` for EVERY flip-niche survivor
+  (was top-picks-only via raw `hourProfile`+`deriveDiurnalRange`), rendered through the ONE shared
+  `pipeline/lib/emit.mjs` `formatTimedLap` — see that file's README entry) + **`softBuyRead`/`formatSoftBuy`** (2026-07-22 — the ADD-while-holding
   soft-buy timing read off the SAME `hourProfile`: the diurnal DIP window + a live-vs-dip-floor `@floor`/`+X%`
   marker at `SOFT_BUY_AT_FLOOR_PCT`, ending in a `buy now`/`wait` cue; `quote-items.mjs` renders it as the
   `⏳ softBuy` note on held lots + bare quotes, mirroring the digest soft-buy column's cell format so both
@@ -949,7 +963,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `emit.mjs` (V5 — PURE `heldNoteBlock`/`heldListAt`: the watch loop's stable, consistently-ordered
     per-HELD-lot note block — `verdict · conviction · Δ · tripwire · recovery-read (V6) · path (P4b) ·
     sell/list-at (+ break-even) · fill-progress`, with the sell line GUARANTEED on every held lot;
-    orders/formats already-computed pieces, decides nothing — output-format-only),
+    orders/formats already-computed pieces, decides nothing — output-format-only; PLAN-DIURNAL-TIMING
+    DT2 adds `formatTimedLap(lap, {fmt})` here too — the ONE shared renderer for a `js/windowread.mjs`
+    `diurnalTimedLap` result, SUPERSEDING the old per-call-site diurnal text so `screen-flip-niches.mjs`
+    (DT2, every flip-niche survivor) and, later, `quote-items.mjs`/`watch-positions.mjs` (DT3) render
+    byte-identical diurnal notes off one definition — same `diurnal` NOTE_KIND/sigil, richer text: a
+    clean-cycle BID/ASK+windows/timed+same-hour nets/range/reach/hold/base line, or a range-churn line
+    that omits the unreliable specific hours; both append a liquidity/tranche segment + the §4
+    tranche-ceiling caveat. Returns null (nothing printed) on a degraded/unpriceable lap — §7's softened
+    contract: every survivor's lap is COMPUTED, only a row with something to say PRINTS),
     `recovery.mjs` (V6 — PURE `recoveryRead`/`recoveryLine`/`recoveryTrigger`: the ADVISORY
     recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
     underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a

@@ -20,6 +20,7 @@ import { buildQuoteReport } from '../commands/quote-items.mjs';
 import { buildScreenNicheReport } from '../commands/screen-flip-niches.mjs';
 import { mdTable } from '../lib/cli.mjs';
 import { quoteCells as canonicalQuoteCells, cellText } from '../../js/quotecore.js';
+import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT2
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -364,6 +365,122 @@ ok('VZ4a screen: sub-floor 3-line header renders in order, byte-identical', () =
 /* --- renderReport section-type guard: an unknown section throws (a builder typo is a defect) ---- */
 ok('renderReport throws on an unknown section type (fail loud, never silently drop a fact)', () => {
   assert.throws(() => renderReport({ sections: [{ type: 'bogus' }] }), /unknown section type 'bogus'/);
+});
+
+/* ============================================================================================
+   PLAN-DIURNAL-TIMING DT2 — formatTimedLap (pipeline/lib/emit.mjs), the ONE shared renderer for a
+   js/windowread.mjs diurnalTimedLap result. Fixtures mirror the bolts-clean / chin-scatter shapes
+   pinned in pipeline/test/windowread.test.mjs (same session anchors), but as LITERAL lap objects so
+   this file stays a pure formatting pin, decoupled from the pure-fn's own acceptance suite.
+   ============================================================================================ */
+
+// bolts-shaped: clean cycle, tight dip/peak windows, positive timed net AND positive same-hour net
+// (both shown — the plan's "compute both" row) — plus a liquidity segment (volDay merged onto the lap
+// per formatTimedLap's doc comment) and buyLimit UNDER the ceiling (no caveat).
+const boltsLap = {
+  degraded: false, clean: true,
+  bid: 2816, ask: 3030, bidBasis: 'patient-dip',
+  dipWindow: { startH: 21, endH: 23 }, peakWindow: { startH: 4, endH: 6 },
+  net: 154, roi: 5.5, instantNet: 40, instantRoi: 1.4,
+  holdHrs: 7, lowTrend: 12, hiTrend: 18,
+  bidReach: { fullN: 7, fullHit: 6 }, askReach: { fullN: 7, fullHit: 5 },
+  dipPool: 200000, peakPool: 448002,
+  trancheComfort: 4290, trancheCeiling: 8580,
+  volDay: 858000, buyLimit: 5000,   // deliberately UNDER the 8,580 ceiling (bolts' real buy limit of 11,000
+                                     // is ABOVE it per the plan's §4 anchor table — used in the next test).
+};
+
+// chin-shaped: range-churn (scattered per-day trough/peak hour ⇒ clean:false), small positive net,
+// falling base — the specific hours are OMITTED (the whole point of the clean flag).
+const chinLap = {
+  degraded: false, clean: false,
+  bid: 400, ask: 440, bidBasis: 'patient-dip',
+  dipWindow: { startH: 0, endH: 0 }, peakWindow: { startH: 12, endH: 12 },
+  net: 32, roi: 8, instantNet: 6, instantRoi: 1.5,
+  holdHrs: 12, lowTrend: -3, hiTrend: -1,
+  bidReach: { fullN: 9, fullHit: 3 }, askReach: { fullN: 9, fullHit: 2 },
+  dipPool: 15000, peakPool: 15000,
+  trancheComfort: 2100, trancheCeiling: 4200,
+  volDay: 420000, buyLimit: 2000,
+};
+
+ok('formatTimedLap: clean cycle — BID/ASK+windows, BOTH timed net and same-hour instant net, range/reach/hold/base, liquidity segment, no caveat under the ceiling', () => {
+  const text = formatTimedLap(boltsLap);
+  assert.ok(text.includes('BID 2.8k (patient-dip, dip'), `windows render on a clean cycle (got: ${text})`);
+  assert.ok(text.includes('ASK 3k (peak'));
+  assert.ok(text.includes('timed +154/u (5.5%)'), 'the TIMED trough→peak lap');
+  assert.ok(text.includes('same-hour +40/u'), 'the SAME-HOUR instant margin — both nets must appear');
+  assert.ok(text.includes('range 214'), 'ask−bid range');
+  assert.ok(text.includes('reach bid 6/7·ask 5/7'));
+  assert.ok(text.includes('hold ~7h'));
+  assert.ok(text.includes('base ↑12/d'));
+  assert.ok(text.includes('858k/d'), 'the liquidity segment (volDay merged onto the lap)');
+  assert.ok(text.includes('dip-pool ~200k'));
+  assert.ok(text.includes('peak-pool ~448k'));
+  assert.ok(text.includes('tranche ~4.3k comfortable'));
+  assert.ok(text.includes('~8.6k ceiling'));
+  assert.ok(!text.includes('⚠ buy limit'), 'buyLimit (5,000) is UNDER trancheCeiling (8,580) — no caveat');
+});
+
+ok('formatTimedLap: §4 caveat fires when the caller-relevant size (buyLimit) exceeds trancheCeiling — the real bolts anchor (buyLimit 11,000 > ceiling 8,580 per the plan\'s §4 table)', () => {
+  const overCeiling = { ...boltsLap, buyLimit: 11000 };   // the real bolts session anchor — 11,000 > 8,580
+  const text = formatTimedLap(overCeiling);
+  assert.ok(text.includes('⚠ buy limit 11k exceeds tranche ceiling'), `caveat must fire (got: ${text})`);
+  assert.ok(text.includes('n≈6 reach-relief, not validated for diurnal'));
+  assert.ok(!formatTimedLap(boltsLap).includes('⚠ buy limit'), 'the base fixture (buyLimit 5,000) stays under the ceiling — no caveat');
+});
+
+ok('formatTimedLap: range-churn (clean:false) — leads with the no-timing-edge line, OMITS the specific dip/peak hours, still shows BOTH nets + base', () => {
+  const text = formatTimedLap(chinLap);
+  assert.ok(text.startsWith('range-churn — no timing edge'), `must lead with the range-churn frame (got: ${text})`);
+  assert.ok(!text.includes('BID '), 'the specific dip HOUR is unreliable on a scattered cycle — omit it');
+  assert.ok(!text.includes('dip 0'), 'no dip-window hour text');
+  assert.ok(text.includes('range 40'));
+  assert.ok(text.includes('timed +32/u'), 'timed net still renders (just not the hours)');
+  assert.ok(text.includes('same-hour +6/u'), 'same-hour instant net still renders');
+  assert.ok(text.includes('base ↓3/d'));
+});
+
+ok('formatTimedLap: degrades to null — a degraded lap, a null lap, and a priceless (no bid/ask) lap all render NOTHING (the §7 softened contract: computed everywhere, printed only when there is something to say)', () => {
+  assert.equal(formatTimedLap({ degraded: true, reason: 'thin-history' }), null);
+  assert.equal(formatTimedLap({ degraded: true, reason: 'no-window' }), null);
+  assert.equal(formatTimedLap(null), null);
+  assert.equal(formatTimedLap(undefined), null);
+  assert.equal(formatTimedLap({ degraded: false, clean: true, bid: null, ask: 100 }), null, 'no bid ⇒ nothing priceable to say');
+  assert.equal(formatTimedLap({ degraded: false, clean: false, bid: 100, ask: null }), null, 'no ask ⇒ nothing priceable to say');
+});
+
+ok('formatTimedLap: coverage is NOT gated on the clean flag — both a clean AND a range-churn survivor render a line (DT2 extends coverage past the old ★-candidate-only gate)', () => {
+  assert.ok(formatTimedLap(boltsLap) != null);
+  assert.ok(formatTimedLap(chinLap) != null, 'a range-churn (non-clean, non-star) row still gets a rendered line, not silence');
+});
+
+/* --- §5 item separator: a plain '' entry between two items' diurnal lines renders as ONE blank line
+   between them, and never inside a single item's (single-line) block. Mirrors the actual screen wiring
+   in screen-flip-niches.mjs's renderMode diurnal extraSection (a '' pushed between item lines, each
+   real line prefixed '  ↳ '). formatNote passes a bare string through unchanged, so a lines-array '0'
+   entry (not routed through formatNote at all here — screen's extraSections are plain 'lines' arrays)
+   renders as an empty string list entry ⇒ one blank output line, confirmed against the real render.mjs
+   renderLines()/renderReport() path below. */
+ok('DT2 §5: the item separator renders as exactly one blank line between two items, never within one', () => {
+  const lineA = `Cannonball — ${formatTimedLap(boltsLap)}`;
+  const lineB = `Nature rune — ${formatTimedLap(chinLap)}`;
+  const diurnalLines = [lineA, '', lineB];   // exactly how the screen wiring builds it
+  const parts = {
+    headerLines: ['## BAND — 2 rated'], table: null, estExplainer: null, footerLines: ['Grades: (none)'],
+    extraSections: [{ type: 'lines', blank: false, lines: [
+      'Diurnal timing (timed-lap bid/ask off the in-hand 1h series — support, not a gate):',
+      ...diurnalLines.map(l => l === '' ? '' : `  ↳ ${l}`),
+    ] }],
+  };
+  const out = renderReport(buildScreenNicheReport(parts));
+  const lines = out.split('\n');
+  const idxA = lines.findIndex(l => l.includes('Cannonball —'));
+  const idxB = lines.findIndex(l => l.includes('Nature rune —'));
+  assert.ok(idxA >= 0 && idxB >= 0, 'both item lines render');
+  assert.equal(idxB - idxA, 2, 'exactly one line (the blank separator) sits between the two item lines');
+  assert.equal(lines[idxA + 1], '', 'the separator line is blank');
+  assert.ok(!lines[idxA].includes('\n\n') && lines[idxA].trim().length > 0, 'no blank line WITHIN one item\'s own (single-line) block');
 });
 
 console.log(`\nAll ${pass} checks passed.`);

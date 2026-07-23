@@ -77,7 +77,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -87,6 +87,7 @@ import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
+import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site)
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
@@ -937,6 +938,15 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // (--raw restores Quick/Optimistic); it never touches the published screen.json cells.
     const prof = hourProfile(series1h && series1h.get(s.id), { nights: DIURNAL_NIGHTS });
     const dr = prof ? deriveDiurnalRange(prof, { liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null }) : null;
+    // PLAN-DIURNAL-TIMING DT2: the timed-lap layer, computed for EVERY survivor (not just top picks —
+    // the §7 data guarantee) off the SAME in-hand 1h series (zero new fetch). `volDay`/`buyLimit` are
+    // merged onto the result (diurnalTimedLap itself only takes them as inputs — see the doc comment on
+    // formatTimedLap, pipeline/lib/emit.mjs) so the shared renderer's liquidity segment + §4
+    // tranche-ceiling caveat have them in hand without a second parameter thread.
+    const timedLap = { ...diurnalTimedLap(series1h && series1h.get(s.id), {
+      nights: DIURNAL_NIGHTS, buyLimit: row.limit ?? null, volDay: row.volDay ?? null,
+      liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null,
+    }), volDay: row.volDay ?? null, buyLimit: row.limit ?? null };
     // RC-S2 (PLAN-REACHABILITY-CONSOLIDATION): the pressure-driven reachable band off the SAME in-hand
     // 1h series (zero new fetch) — extends the five-way exit-estimator head-to-head from held lots to the
     // discovery surface (reachRelief=estSell + asym already log here; reach rides estConfidence). DEPTH
@@ -1171,7 +1181,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
     // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
     const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1309,46 +1319,38 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // are collected as report sections and appended to the SAME niche report, printed ONCE at the end —
   // byte-identical to the prior inline console.log sequence (all flush, no inter-blank line).
   const extraSections = [];
-  // Diurnal timing (2026-07-09) — the peak-timing read auto-run on the top surfaced picks. FREE: the 1h
-  // series is already in hand (Leg B fetched it per survivor), so this adds NO fetch. For each top pick it
-  // derives the stale-guarded bid (dip-window level, priced to LIVE when a dominating trend erases the dip
-  // — the Ghrazi lesson) and the ask (peak-window level) via the shared js/windowread.mjs engine — the
-  // same one `windowrange --profile` uses, so the numbers match. Decision SUPPORT / stdout-only, never in
-  // screen.json. This is the encoded form of the per-pick windowrange dance the pricing doctrine required;
-  // a CLEAN pick (concentrated, trend-quiet, positive after-tax swing) is flagged as a diurnal candidate.
+  // Diurnal timing (2026-07-09; DT2-superseded 2026-07-23) — the timed-lap peak-timing read, now
+  // computed for EVERY niche survivor (was top-picks-only) off the SAME diurnalTimedLap result already
+  // stored on the row (r.timedLap — zero new fetch, zero recompute). Rendered via the ONE shared
+  // formatTimedLap (pipeline/lib/emit.mjs) so this stays the SAME `diurnal` NOTE_KIND/sigil quote-items
+  // and watch-positions will move onto too (DT3) — no second diurnal-text definition on this codebase.
+  // §7 softened contract: every survivor's timedLap is COMPUTED (the data guarantee — see r.timedLap
+  // above), but a row only PRINTS a line when formatTimedLap finds something worth flagging (a
+  // degraded/unpriceable lap renders nothing here, keeping a cold/thin/new item off the printed list —
+  // never affects `screen.json`, stdout-only decision support). The item separator (§5) is a bare ''
+  // note between items' blocks — formatNote passes it through unchanged as a blank line.
   const diurnalLines = [];
   for (const r of rows) {
-    // PLAN-OUTPUT-TABLE: prof/dr were computed once in the loop above (same pure math, same inputs)
-    // and stored on the row — reused here instead of recomputing.
-    const prof = r.prof;
-    if (!prof) continue;
-    const dr = r.dr;
-    if (!dr) continue;
+    const text = formatTimedLap(r.timedLap, { fmt });
+    if (!text) continue;
     const nm = map.byId[r.id]?.name || ('#' + r.id);
-    const win = w => `${fmtHour(w.startH)}–${fmtHour(w.endH)}`;
-    // after-tax swing at the derived pair — the honest edge; a positive, non-trend-dominated, concentrated
-    // read is a diurnal candidate (★). tax() nets the ask; bond exemption not modelled here (support line).
-    const net = (dr.bid != null && dr.ask != null) ? Math.round(dr.ask - tax(dr.ask) - dr.bid) : null;
-    const roi = (net != null && dr.bid) ? net / dr.bid * 100 : null;
-    const concentrated = dr.dipWindow.startH !== dr.dipWindow.endH && dr.peakWindow.startH !== dr.peakWindow.endH;
-    const candidate = net != null && net > 0 && !prof.trendDominates && concentrated && roi != null && roi >= MIN_ROI;
-    const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
-    const edge = net != null ? ` · ~${fmt(net)}/u (${roi.toFixed(1)}%)` : '';
-    // ⏲ diurnal-PHASE entry-timing token (INFORM-ONLY PLACEHOLDER, n≈0 — js/windowread.mjs diurnalPhase):
-    // where NOW sits in today's cycle vs the peak window, so a post-peak/cooling entry (the blowpipe miss —
-    // maxed the buy limit as the peak closed → 5u stranded ~16h) is flagged AT entry, not discovered hours
-    // later. Never gates/drops/regrades — a stdout support token only.
-    const ph = diurnalPhase(prof);
+    // ⏲ diurnal-PHASE entry-timing token (INFORM-ONLY PLACEHOLDER, n≈0 — js/windowread.mjs diurnalPhase),
+    // preserved from the pre-DT2 block: where NOW sits in today's cycle vs the peak window, so a
+    // post-peak/cooling entry (the blowpipe miss — maxed the buy limit as the peak closed → 5u stranded
+    // ~16h) is flagged AT entry, not discovered hours later. Orthogonal to the clean/range-churn split —
+    // never gates/drops/regrades, a stdout support token only.
+    const ph = r.prof ? diurnalPhase(r.prof) : null;
     const phaseTok = !ph ? ''
       : ph.phase === 'in-peak' ? ` · ⏲ in-peak (closes ~${ph.hoursToPeakClose}h)`
       : ph.phase === 'pre-peak' ? ` · ⏲ pre-peak (opens ~${ph.hoursToNextPeak}h)`
       : ` · ⏲ post-peak — cooling, next peak ~${ph.hoursToNextPeak}h → starter size / hold-to-next-peak`;
-    diurnalLines.push(`${candidate ? '★ ' : ''}${nm} — BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${edge}${trend}${phaseTok}`);
+    if (diurnalLines.length) diurnalLines.push('');
+    diurnalLines.push(`${nm} — ${text}${phaseTok}`);
   }
   if (diurnalLines.length) {
     extraSections.push({ type: 'lines', blank: false, lines: [
-      `Diurnal timing (peak-timing bid/ask off the in-hand 1h series — support, not a gate; ★ = clean diurnal candidate):`,
-      ...diurnalLines.map(l => `  ↳ ${l}`),
+      `Diurnal timing (timed-lap bid/ask off the in-hand 1h series — support, not a gate):`,
+      ...diurnalLines.map(l => l === '' ? '' : `  ↳ ${l}`),
     ] });
   }
   // COD-2 (2026-07-10) — the OVERNIGHT accumulation-and-capital table. Encoded from /overnight §6's

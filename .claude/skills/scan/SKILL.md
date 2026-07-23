@@ -421,20 +421,33 @@ This is the tribal layer the script can't do — apply ALL of these:
   CONFIRMATION on the handful you actually pitch, not the primary detector (a `would reject`/`would caution`
   note is the screen telling you what a stricter thesis would have done). Still verify by hand before
   quoting a profit — the notes are inform-only and thresholds are placeholders.
-- **The DIURNAL TIMING block auto-derives the peak-timing bid/ask (2026-07-09) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR PRICING below.**
-  _(enforced: `js/windowread.mjs` `hourProfile`/`deriveDiurnalRange`, `pipeline/commands/screen-flip-niches.mjs` Diurnal timing block)_
-  After the reach notes, `screen-flip-niches.mjs` prints a `Diurnal timing` line per surfaced pick (FREE — off the
-  in-hand 1h series): `BID <x> (basis, dip HH–HH) · ASK <y> (peak HH–HH) · ~net/u (roi%)`, with `⚠
-  trend-dominates → bid to live` when a multi-day trend erases the intraday dip (the Ghrazi lesson — the
-  BID is then priced to live, not to a stale low). A `★` marks a **clean diurnal candidate** (concentrated
-  dip+peak, trend-quiet, positive after-tax ≥ min-ROI). This is the ENCODED form of the manual per-item
-  windowrange dance below — it caught BOTH the stale-low bids we pitched manually (Virtus, Ghrazi) and
-  reorders the shelf (a `★` big-ticket can beat a higher-graded row). Read it FIRST; then `windowrange
-  --profile "<item>"` for the full hour-by-hour table on the handful you actually pitch. Honesty: `★`
-  doesn't know froth (a spike item's amplitude flatters the roi — cross-check the phase tag), thresholds
-  are placeholders, and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we
-  hiding winners?") is a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet
-  surface the excluded universe.
+- **The DIURNAL TIMING block auto-derives the timed-lap peak-timing bid/ask (2026-07-09; richened by
+  PLAN-DIURNAL-TIMING DT2, 2026-07-23) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR
+  PRICING below.** _(enforced: `js/windowread.mjs` `diurnalTimedLap`, rendered via the ONE shared
+  `formatTimedLap` (`pipeline/lib/emit.mjs`), `pipeline/commands/screen-flip-niches.mjs` Diurnal timing
+  block)_ `screen-flip-niches.mjs` now prints a `Diurnal timing` line for EVERY flip-niche survivor (was
+  top-picks-only), FREE — off the in-hand 1h series, zero new fetch, blank-line-separated per item. Two
+  shapes off `hourConcentration`'s verdict (replaces the old `★` candidate flag):
+  - **Clean cycle** (concentrated, consistent per-day dip/peak hour): `BID <x> (basis, dip HH–HH) · ASK
+    <y> (peak HH–HH) · timed +net/u (roi%) · same-hour ±net/u · range · reach bid N/M·ask N/M · hold
+    ~Xh · base ↑/↓`. `timed` = the trough→peak lap; `same-hour` = the SAME-HOUR/churn margin — the two
+    can DIVERGE hard on a big ticket (same-hour spread thinner than tax while the trough→peak clears it
+    easily; a live fang row showed `timed +964.5k/u` beside `same-hour -21k/u` on the SAME row) — both
+    always render, never averaged away.
+  - **Range-churn** (scattered per-day trough/peak hour — no reliable timing edge): leads with
+    `range-churn — no timing edge`, omits the specific hours (the whole point of the flag), still shows
+    both nets + the base trend.
+  - Both shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable
+    ~X / ceiling ~Y`) and a `⚠ buy limit … exceeds tranche ceiling` caveat when the item's buy limit sits
+    past the (n≈6, borrowed-not-validated) tranche ceiling — expect a worse realized net at that size.
+  `⚠ trend-dominates → bid to live` still fires when a multi-day trend erases the intraday dip (the
+  Ghrazi lesson). This is the ENCODED form of the manual per-item windowrange dance below — read it
+  FIRST; then `windowrange --profile "<item>"` for the full hour-by-hour table on the handful you
+  actually pitch. Honesty: the clean/range-churn split doesn't know froth (a spike item's amplitude
+  flatters the roi — cross-check the phase tag), every tranche/knee constant is a labeled PLACEHOLDER,
+  and the funnel-widening pass (running this on gate-EXCLUDED items to test "are we hiding winners?") is
+  a planned fast-follow, not yet built — so this reorders SURVIVORS, it doesn't yet surface the excluded
+  universe.
 - **WINDOW-CLEAR PRICING — the canonical peak-timing step (Ben 2026-07-14; encodes memory
   `peak-timing-default-for-pricing`).** _(judgment: the pricing method every churn/scalp bid+ask routes through; the reach/diurnal/asym reads below are its INPUTS)_
   A churn/scalp lap is a WITHIN-WINDOW round trip — buy the tranche, sell it inside the same 4h
