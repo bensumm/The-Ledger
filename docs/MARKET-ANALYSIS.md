@@ -295,6 +295,18 @@ NEVER as act-now rows. Every threshold is a PLACEHOLDER; the make-or-break "do b
 within the hold horizon?" is measured by the shadow both-leg replay (`join-amplitude-outcomes.mjs`, an
 UPPER BOUND) + the realized retro-join (`/analyze`). Console-only (excluded from `screen.json`, no app tab).
 
+**The reach-vs-margin quantile DIAL (`--amp-ask-q` / `--amp-bid-q`, PLAN-OSCILLATION-CYCLE F-E).** The
+peak-ask / trough-bid quote from the daily-high/low quantiles `AMP_ASK_Q` / `AMP_BID_Q` — both `0.5` by
+default (the median peak/trough; Ben's KEPT board). `amplitudeRanges(stats, live, { askQ, bidQ })` exposes
+them as opts and the `--amp-ask-q` / `--amp-bid-q` flags override them for an experiment run. These are
+REACH FRACTIONS, not price percentiles (mind the direction): a LOWER `askQ` = a HIGHER, less-reachable ask
+= more margin per fill but a lower round-trip reach — the reach-vs-margin trade-off the dial exists to let
+a later retro compare. Absent flag ⇒ the default board ⇒ byte-identical to before. A non-default run is
+flagged in the console footer AND lean-logged (`askQ`/`bidQ` in the `amplitudeShadow` block, present ONLY
+when non-default) so an experiment run is distinguishable in `suggestions.jsonl` from a default one — the
+feed the F-G realized-fill retro reads. n≈0, unvalidated: the dial ENABLES the comparison, it does not
+change the default board.
+
 **Per-thesis drift-adjusted-exit notes (PLAN-OSCILLATION-CYCLE Chunk 6 — INFORM everywhere, NO gate).**
 The same drift number the amplitude lane gates on is folded into the OTHER theses as an inform note only.
 Each surfacing spec carries an optional `driftInform:{label}` registry field; the render paths compute the

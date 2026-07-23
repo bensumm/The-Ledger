@@ -124,8 +124,16 @@ export function amplitudeProxy(points, { recentDays = 5, minDays = 3 } = {}) {
            per-day {low, hi}; .lows/.his are the ascending quantile arrays).
    live  — the current live price (the instasell post-fetch), for a proximity note (optional).
    opts  — { holdDays } feeds the family ttf + the shadow-replay horizon.
-   Returns the amplitude SHAPE features, or { hasData:false }. */
-export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT, recentN = AMP_RECENT_N } = {}) {
+           { askQ, bidQ } (PLAN-OSCILLATION-CYCLE F-E) are the reach-vs-margin DIAL — the daily
+           high/low quantiles the peak-ask / trough-bid quote from. They DEFAULT to the module
+           constants AMP_ASK_Q / AMP_BID_Q (0.5 / 0.5 = the median peak/trough, Ben's KEPT default
+           board — an absent caller is byte-identical to pre-F-E). A HIGHER askQ (e.g. 0.75) quotes
+           a better-but-less-reachable sell: a strictly HIGHER ampAsk, a LOWER two-leg reach and a
+           LOWER ampPct — the reach-vs-margin trade-off the dial exists to let F-G's retro compare.
+   Returns the amplitude SHAPE features (incl. the effective askQ/bidQ, so a shadow-log can record
+   WHICH quantiles a row was quoted at — an experiment run is then ledger-distinguishable), or
+   { hasData:false }. */
+export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT, recentN = AMP_RECENT_N, askQ = AMP_ASK_Q, bidQ = AMP_BID_Q } = {}) {
   if (!stats || !Array.isArray(stats.days) || !Array.isArray(stats.lows) || !Array.isArray(stats.his)
     || !stats.lows.length || !stats.his.length) return { hasData: false };
   const nDays = stats.days.length;
@@ -140,8 +148,8 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
     .filter(v => v != null).sort((a, b) => a - b);
   const medAmpPct = dayPcts.length ? dayPcts[Math.floor(dayPcts.length / 2)] : null;
 
-  const ampBid = quantLow(stats.lows, AMP_BID_Q);        // trough-bid — touched on ~AMP_BID_Q of days
-  const ampAsk = quantHigh(stats.his, AMP_ASK_Q);        // peak-ask   — reached on ~AMP_ASK_Q of days
+  const ampBid = quantLow(stats.lows, bidQ);             // trough-bid — touched on ~bidQ of days (default AMP_BID_Q)
+  const ampAsk = quantHigh(stats.his, askQ);             // peak-ask   — reached on ~askQ of days (default AMP_ASK_Q)
   const bidTouch = recencySplit(stats.days, 'bid', ampBid, recentN);
   const askReach = recencySplit(stats.days, 'ask', ampAsk, recentN);
   const netPerCycle = (ampBid != null && ampAsk != null) ? afterTax(ampAsk) - ampBid : null;
@@ -156,6 +164,7 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
     hasData: true, live: num(live), nDays,
     ampBid, ampAsk, netPerCycle, ampPct, medAmpPct,
     bidTouch, askReach, pFill2leg, holdDays,
+    askQ, bidQ,                                          // F-E: the effective reach-vs-margin quantiles this row was quoted at
     liveVsBidPct: (num(live) != null && ampBid > 0) ? (live - ampBid) / ampBid : null,
   };
 }

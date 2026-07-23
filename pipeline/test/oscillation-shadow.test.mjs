@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import { tax } from '../../js/money-math.js';
 import { hourProfile } from '../../js/windowread.mjs';
 import { diurnalForecast, driftAdjustedExit, driftExitFrom } from '../../js/forecast.mjs';
-import { amplitudeDriftMargin, AMP_DRIFT_REQ_MARGIN } from '../../js/amplitudescreen.mjs';
+import { amplitudeDriftMargin, AMP_DRIFT_REQ_MARGIN, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';
 import { amplitudeShadow } from '../lib/suggestlog.mjs';
 
 let pass = 0;
@@ -51,9 +51,10 @@ function diurnal(days, { baseFn, dipHours = [3, 4, 5], peakHours = [15, 16, 17],
 const daysFromMids = mids => mids.map((m, i) => [`2026-07-${String(i + 1).padStart(2, '0')}`, { low: m - 5, hi: m + 5 }]);
 
 // a minimal amplitudeRanges-shaped fixture (only the fields amplitudeShadow reads).
-const arFixture = ({ ampBid = 1000, ampAsk = 1100 } = {}) => ({
+const arFixture = ({ ampBid = 1000, ampAsk = 1100, askQ, bidQ } = {}) => ({
   hasData: true, ampBid, ampAsk, nDays: 10, medAmpPct: 0.03,
   bidTouch: { recentHit: 2, recentDays: 3 }, askReach: { recentHit: 2, recentDays: 3 },
+  ...(askQ !== undefined ? { askQ } : {}), ...(bidQ !== undefined ? { bidQ } : {}),
 });
 
 // ── 1. the shadow block carries BOTH the naive pair AND the drift-adjusted margin ─────────────────
@@ -138,6 +139,24 @@ ok('driftExitFrom: a degraded forecast ⇒ null (never a fake margin)', () => {
   const dae = driftExitFrom(prof, daysFromMids([1000, 990, 980, 970, 960, 950]), { liveLo: 1000, liveHi: 1010, reliable: false });
   assert.equal(dae, null, 'refused forecast ⇒ null exit projection');
   assert.equal(amplitudeDriftMargin(dae, { entry: 1000 }), null, 'null dae ⇒ null margin');
+});
+
+// ── 5. F-E — the shadow block carries the EFFECTIVE quantiles so an experiment run is distinguishable ─
+ok('F-E: a NON-DEFAULT askQ/bidQ is logged in the shadow block (experiment run is ledger-distinguishable)', () => {
+  const o = amplitudeShadow(arFixture({ askQ: 0.25, bidQ: 0.4 }), { holdDays: 1 });
+  assert.equal(o.askQ, 0.25, 'the overridden peak-ask quantile is recorded');
+  assert.equal(o.bidQ, 0.4, 'the overridden trough-bid quantile is recorded');
+  // without this, a --amp-ask-q run would be indistinguishable from a default one → F-G's compare silently corrupts.
+});
+
+ok('F-E: a DEFAULT run logs NO askQ/bidQ keys (byte-identical to a pre-F-E / historical row)', () => {
+  // an explicit-default run (ar carries askQ=0.5/bidQ=0.5 as amplitudeRanges now returns) → lean-omitted.
+  const dflt = amplitudeShadow(arFixture({ askQ: AMP_ASK_Q, bidQ: AMP_BID_Q }), { holdDays: 1 });
+  assert.ok(!('askQ' in dflt) && !('bidQ' in dflt), 'default quantiles ⇒ no askQ/bidQ keys');
+  // a historical row (ar with no askQ/bidQ at all — pre-F-E shape) → also lean-omitted, no crash.
+  const hist = amplitudeShadow(arFixture(), { holdDays: 1 });
+  assert.ok(!('askQ' in hist) && !('bidQ' in hist), 'absent quantiles ⇒ no keys (historical rows unchanged)');
+  assert.equal(hist.ampBid, 1000, 'the rest of the block is unaffected');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

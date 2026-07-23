@@ -94,7 +94,7 @@ import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PL
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
 import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
-import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin
+import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
 import { driftExitFrom, oscillationVsKnife } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife)
 import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
@@ -185,6 +185,13 @@ let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
 // amplitude family's ttf, the deployable-units accumulation leg, and the §A5 shadow-replay horizon. A
 // flag, not a fork. PLACEHOLDER (n≈0).
 const AMP_HOLD_DAYS = A['hold-days'] != null ? Math.max(1, +A['hold-days']) : AMP_HOLD_DAYS_DEFAULT;
+// F-E (PLAN-OSCILLATION-CYCLE): the amplitude reach-vs-margin DIAL — the daily high/low quantiles the
+// peak-ask / trough-bid quote from. Default = the module's KEPT board (AMP_ASK_Q/AMP_BID_Q = 0.5/0.5, the
+// median peak/trough — Ben's explicit call, NOT changed by F-E). A HIGHER --amp-ask-q (e.g. 0.75) quotes a
+// better-but-less-reachable sell so a later retro (F-G) can compare which quantile nets more; absent flag ⇒
+// defaults ⇒ byte-identical to pre-F-E. clamp01 so a fat-fingered arg can't ask for a nonsense quantile.
+const AMP_ASK_Q_EFF = A['amp-ask-q'] != null ? Math.min(1, Math.max(0, +A['amp-ask-q'])) : AMP_ASK_Q;
+const AMP_BID_Q_EFF = A['amp-bid-q'] != null ? Math.min(1, Math.max(0, +A['amp-bid-q'])) : AMP_BID_Q;
 // AMP sizing (PLAN-AMPLITUDE-SCAN sizing fix, Ben 2026-07-19). Amplitude is a big-ticket CONCENTRATION
 // lane — the owner would put his whole bankroll into a single ~345m item — NOT a diversify-across-slots
 // lane like value. So it does NOT use value's per-position (÷slots) cap: it sizes against TOTAL REALIZABLE
@@ -1614,7 +1621,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     const ts1h = series1h && series1h.get(s.id);
     // Stage 2 (§2.1): the EXACT daily amplitude off ONE full-day windowStats call over the in-hand 1h series.
     const stats = ts1h ? windowStats(ts1h, { nights: AMP_NIGHTS, wStart: 0, wEnd: 0 }) : null;
-    const ar = amplitudeRanges(stats, live, { holdDays: AMP_HOLD_DAYS });
+    const ar = amplitudeRanges(stats, live, { holdDays: AMP_HOLD_DAYS, askQ: AMP_ASK_Q_EFF, bidQ: AMP_BID_Q_EFF });
     if (!ar.hasData) { dropped.noHistory++; continue; }
     // trend / knife guard: hourProfile's trendDominates (the "amplitude is drift" test) + the warm 1h
     // trajectory shape ('knife' = monotone decline). Oscillation around a flat level is the thesis.
@@ -1705,6 +1712,10 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
   console.log('Playbook: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle. The edge is a big-ticket that oscillates ~a few % DAILY — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-hour plays that surface under deploy/accumulate, NEVER as act-now rows.');
   console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(both-leg daily reach) ÷ hold-horizon — the standard rank at the amplitude estimator family; every threshold PLACEHOLDER, n≈0)`);
   console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d${AMP_HOLD_DAYS > 1 ? ' (1.5-day experiment — crosses a day boundary; day-of-week read below)' : ''})`);
+  // F-E: an EXPERIMENT run (non-default reach-vs-margin quantiles) is flagged so the operator knows the
+  // board is NOT the standard median-peak/median-trough basis — and so is the ledger (amplitudeShadow logs askQ/bidQ).
+  if (AMP_ASK_Q_EFF !== AMP_ASK_Q || AMP_BID_Q_EFF !== AMP_BID_Q)
+    console.log(`(EXPERIMENT — reach-vs-margin dial: peak-ask quantile ${AMP_ASK_Q_EFF} (default ${AMP_ASK_Q}), trough-bid quantile ${AMP_BID_Q_EFF} (default ${AMP_BID_Q}) — a higher ask quantile = a better-but-less-reachable sell; logged to suggestions.jsonl so F-G can compare which quantile nets more)`);
   if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
   else console.log('_none_');
   for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);

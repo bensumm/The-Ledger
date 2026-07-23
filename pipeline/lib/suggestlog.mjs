@@ -89,6 +89,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // F-E — the DEFAULT reach-vs-margin quantiles, so amplitudeShadow can lean-log askQ/bidQ only when an experiment run overrode them (one-home, no forked 0.5 literal)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // HERE is pipeline/lib/ (since OR2 moved this file into lib/), so repo root is TWO levels up.
@@ -258,6 +259,10 @@ export function depthExitShadow(ca, { qty, volDay } = {}) {
 // ALONGSIDE the naive ampBid/ampAsk so a later review can compare the naive netPerCycle against the
 // drift-adjusted margin WITHOUT re-running the projection. INFORM-ONLY: computed, never gated (Chunk 3 gates).
 // YS2 lean-field: present only when the exit projection produced a number; historical rows keep their shape.
+// PLAN-OSCILLATION-CYCLE F-E — the effective reach-vs-margin quantiles (ar.askQ/ar.bidQ) are logged as
+// `askQ`/`bidQ` ONLY when an experiment run overrode the default board (≠ AMP_ASK_Q/AMP_BID_Q). This is
+// LOAD-BEARING: without it a non-default `--amp-ask-q` run would be indistinguishable in the ledger from a
+// default one, silently corrupting F-G's "which quantile nets more" retro. A default run stays byte-identical.
 export function amplitudeShadow(ar, { holdDays = 1, profile = null, drift = null } = {}) {
   if (!ar || !ar.hasData || ar.ampBid == null || ar.ampAsk == null) return null;
   const o = {
@@ -272,6 +277,8 @@ export function amplitudeShadow(ar, { holdDays = 1, profile = null, drift = null
     o.peakWindow = [profile.peak.startH, profile.peak.endH];
   }
   if (drift) o.drift = drift;
+  if (ar.askQ != null && ar.askQ !== AMP_ASK_Q) o.askQ = ar.askQ;
+  if (ar.bidQ != null && ar.bidQ !== AMP_BID_Q) o.bidQ = ar.bidQ;
   return o;
 }
 
@@ -452,7 +459,9 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // alerted, gatedReason }; joinable against fills.json via the row's itemId + ts.
   if (dipLoop != null)       e.dipLoop = dipLoop;
   // A5 (PLAN-AMPLITUDE-SCAN) — the amplitude lane shadow block { ampBid, ampAsk, holdDays,
-  // bidTouchRecent/Days, askReachRecent/Days, nDays, medAmpPct, dipWindow?, peakWindow? }. screen
+  // bidTouchRecent/Days, askReachRecent/Days, nDays, medAmpPct, dipWindow?, peakWindow?, askQ?, bidQ? }.
+  // F-E: askQ/bidQ (the reach-vs-margin quantiles the row was quoted at) appear ONLY on an experiment run
+  // that overrode the default board — a default run keeps its exact prior shape. screen
   // amplitude rows only; the shadow both-leg replay (join-amplitude-outcomes.mjs) reads it to measure the
   // would-have-fill UPPER BOUND against the 1h archive. Lean-included (YS2 pattern): absent on every other row.
   if (amplitude != null)     e.amplitude = amplitude;

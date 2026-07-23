@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.83
+version: 1.84
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -53,7 +53,7 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 1|1.5] [--capital <gp> --slots N]
+node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 1|1.5] [--amp-ask-q 0.5 --amp-bid-q 0.5] [--capital <gp> --slots N]
 ```
 
 `--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
@@ -174,7 +174,12 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   experiment (adds a day-of-week seasonality note — n≈3–4/weekday, a lean not a law). Every threshold is a
   PLACEHOLDER; the "do both legs actually FILL?" question is measured by `join-amplitude-outcomes.mjs` (an
   UPPER BOUND) + the retro-join in `/analyze`. Don't pitch an amplitude buy off the table blind — verify
-  the recent-3 reach and quote fresh.
+  the recent-3 reach and quote fresh. (6) **`--amp-ask-q` / `--amp-bid-q`** (F-E, experiment-only) dial the
+  peak-ask / trough-bid reach quantiles (default `0.5`/`0.5` = the median peak/trough — the KEPT board; leave
+  them alone for a normal scan). They are REACH FRACTIONS, not price percentiles: a LOWER `--amp-ask-q` (e.g.
+  `0.25`) quotes a HIGHER, less-reachable ask (more margin, less round-trip reach). A non-default run is
+  flagged in the footer and logged to `suggestions.jsonl` (so F-G can later compare which quantile nets more);
+  it does NOT change the default board.
 - **`--mode value`** _(judgment: still PROVISIONAL — don't trade on it yet)_ — buy-hold near a multi-week
   low, hold for the cycle (ONE tax-paid sell of a big move). Runnable via `--mode value` / `--mode invest`;
   **no longer in `--mode all`** (THE SWAP handed its slot to amplitude). Its own term-structure table

@@ -16,7 +16,7 @@
 import assert from 'node:assert/strict';
 import {
   amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits,
-  AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT,
+  AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q,
 } from '../../js/amplitudescreen.mjs';
 
 let pass = 0;
@@ -95,6 +95,45 @@ ok('amplitudeDeployUnits is the three-way min() (bankroll / vol-share / buy-limi
   const u = amplitudeDeployUnits({ capGp: 100_000_000, buyLow: 1000, limitVol: 5000, limit: 100, holdDays: 1 });
   assert.equal(u, 500, `min bound, got ${u}`);
   assert.equal(amplitudeDeployUnits({}), 1, 'no inputs → a single unit');
+});
+
+// --- PLAN-OSCILLATION-CYCLE F-E — the reach-vs-margin quantile DIAL -------------------------------
+// A spread-highs fixture (lows flat at 1000 so ampBid is fixed across bidQ — isolates the ask dial).
+// Highs (chronological, oldest→newest); the last-3 tail drives the recent reach. quantHigh treats its
+// argument as a REACH FRACTION (ask reached on ~q of days), so a LOWER askQ = a HIGHER, less-reachable
+// ask. NOTE: the F-E plan row illustrated this as "0.75 → higher ampAsk", which has the direction
+// inverted vs the actual quantHigh semantics (askQ is the reach fraction, not a price percentile) — the
+// TRUE dial is askQ DOWN ⇒ higher/less-reachable ask. These pins encode the real direction.
+const SPREAD = makeStats([
+  { low: 1000, hi: 1120 }, { low: 1000, hi: 1090 }, { low: 1000, hi: 1055 }, { low: 1000, hi: 1050 },
+  { low: 1000, hi: 1050 }, { low: 1000, hi: 1060 }, { low: 1000, hi: 1065 }, { low: 1000, hi: 1085 },
+  { low: 1000, hi: 1060 }, { low: 1000, hi: 1070 },
+]);
+
+ok('F-E: a LOWER askQ (0.25) quotes a strictly HIGHER, less-reachable ask — more margin, less reach', () => {
+  const base = amplitudeRanges(SPREAD, 1005);               // default 0.5/0.5 (the KEPT board)
+  const dial = amplitudeRanges(SPREAD, 1005, { askQ: 0.25 }); // a better-but-less-reachable sell
+  assert.equal(base.ampAsk, 1065, `default median peak-ask, got ${base.ampAsk}`);
+  assert.ok(dial.ampAsk > base.ampAsk, `strictly higher ampAsk (${dial.ampAsk} > ${base.ampAsk})`);
+  // the MARGIN side of the trade-off: a higher ask ⇒ a strictly higher after-tax ampPct (with ampBid fixed).
+  assert.ok(dial.ampPct > base.ampPct, `more margin (ampPct ${dial.ampPct} > ${base.ampPct})`);
+  // the REACH side of the trade-off: the higher ask is reached on strictly FEWER recent days.
+  assert.ok(dial.pFill2leg < base.pFill2leg, `less two-leg reach (${dial.pFill2leg} < ${base.pFill2leg})`);
+  assert.equal(dial.askQ, 0.25, 'the effective askQ rides on the result (so a shadow-log can record it)');
+  assert.equal(dial.bidQ, 0.5, 'bidQ stays default when only askQ is dialed');
+  // symmetry check: the OTHER direction (higher askQ = MORE reachable = a lower ask) moves the opposite way.
+  const easy = amplitudeRanges(SPREAD, 1005, { askQ: 0.75 });
+  assert.ok(easy.ampAsk < base.ampAsk && easy.pFill2leg > base.pFill2leg, 'higher askQ ⇒ lower ask, more reach');
+});
+
+ok('F-E: the default is byte-identical to pre-F-E (omitted opts ≡ {} ≡ explicit 0.5/0.5)', () => {
+  const omitted  = amplitudeRanges(SPREAD, 1005);
+  const empty    = amplitudeRanges(SPREAD, 1005, {});
+  const explicit = amplitudeRanges(SPREAD, 1005, { askQ: AMP_ASK_Q, bidQ: AMP_BID_Q });
+  assert.deepEqual(omitted, empty, 'omitted opts ≡ {}');
+  assert.deepEqual(omitted, explicit, 'omitted opts ≡ explicit default quantiles');
+  assert.equal(omitted.askQ, 0.5, 'default askQ = AMP_ASK_Q');
+  assert.equal(omitted.bidQ, 0.5, 'default bidQ = AMP_BID_Q');
 });
 
 ok('an UNAFFORDABLE big-ticket (price > total capital) sizes to 0 units — the caller drops it', () => {
