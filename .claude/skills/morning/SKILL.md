@@ -121,7 +121,7 @@ other morning, this check reads `no` — skip straight past this section.
    - **Gate C — Ring-3 rank-denoise** (forward-vs-recency exit, `PLAN-ESTIMATOR-HONEST-SELL`): the
      accrual that gates the display redesign's DEFERRED denoising lever — promoting the drift-adjusted
      FORWARD exit ("list at X") into `estimateRank`'s net/pFill so it reaches the graded board +
-     `screen.json` for every niche. Counts closed-sell round-trips whose read co-logged the forward exit
+     `screen.json` for every flip-niche. Counts closed-sell round-trips whose read co-logged the forward exit
      (`estConfidence.forwardPeak`, E2), bucketed into the same (side × class × regime) cells. Its clock
      started at the E1–E4 land (2026-07-22), so it LAGS both A and B. **When a cell is `SCORABLE`, that
      is the cue to build+run `aggregateForwardExit`** (a retrojoin sibling — designed, not built) which
