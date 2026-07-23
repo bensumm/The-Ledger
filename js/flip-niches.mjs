@@ -64,6 +64,23 @@ export const SCALP_MIN_ROI = 2.0;
 // fraction, never a direction test. n≈0 PLACEHOLDER (F1 owns it); INFORM-ONLY, gates NOTHING.
 export const DRIFT_NEAR_HIGH_FRAC = 0.02;
 
+// F-C (PLAN-OSCILLATION-CYCLE post-landing follow-up, 2026-07-22) — per-thesis HOLD HORIZONS for the
+// drift-adjusted-exit note (`driftExitFrom`'s `holdHorizonDays`, js/forecast.mjs). Chunk 6 originally
+// left every driftInform call site on the bare default (OSC_HOLD_HORIZON_DAYS=1.5d, the AMPLITUDE
+// lane's own hold length) — mis-scaled for band/churn/scalp (real hold: hours, not 1.5 days — the
+// residual-horizon shift ends up OVERSTATED) and for value (real hold: multi-week — 1.5d wildly
+// UNDERSTATES the drift the position will actually ride). Both are NAMED PLACEHOLDERS (n≈0), anchored
+// to an EXISTING constant elsewhere in the codebase rather than invented fresh:
+//   - DRIFT_INTRADAY_HOLD_DAYS anchors to the screen's own "2h band" Bar-E edge (screen-flip-niches.mjs's
+//     BAND_HOURS default) — band/churn/scalp are all same-day flip-first plays priced off that window.
+//   - DRIFT_VALUE_HOLD_DAYS anchors to js/termstructure.mjs's FLOOR_FALLBACK_DAYS=14 — the SAME
+//     "multi-week durable floor" window the value gate itself already reads (valueGate/termStructure),
+//     and matches value's own `reach` validator window ({windowHours:24, nights:14} above).
+// Neither changes ANY gate/admission — driftInform is inform-only by construction (Chunk 6 doctrine);
+// this only re-scales the MAGNITUDE of an already-inform-only display note to the thesis's real hold.
+export const DRIFT_INTRADAY_HOLD_DAYS = 2 / 24;   // ~2 hours, band/churn/scalp's own edge window
+export const DRIFT_VALUE_HOLD_DAYS = 14;          // multi-week — mirrors termstructure.mjs FLOOR_FALLBACK_DAYS
+
 // scalp: a TRADED intraday band whose after-tax ROI clears the (wider) scalp margin. Unlike band it
 // takes no thin abs-gp fallback — a scalp is a margin play, not a big-ticket gp-flow play.
 function scalpEdge(inp, t) {
@@ -226,7 +243,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — the drift-adjusted band top, priced LOWER on a down-drifting item
     // (informs, never gates: the item is NOT excluded, its sell target is just the drift-shifted top).
-    driftInform: { label: 'band top' },
+    driftInform: { label: 'band top', holdDays: DRIFT_INTRADAY_HOLD_DAYS },
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
@@ -236,7 +253,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — a "don't buy near the drift-adjusted weekly high" MAGNITUDE caution
     // (never a gate; the caution phrasing is folded into the label so the render stays one code path).
-    driftInform: { label: "weekly high — don't buy near it" },
+    driftInform: { label: "weekly high — don't buy near it", holdDays: DRIFT_INTRADAY_HOLD_DAYS },
     // Step 6 (Ben 2026-07-09, decision A): churn ranks the LAP (net/u × min(limit, feasibleDepth) × P ÷
     // TTF) via its own estimator family — we always max the buy limit on these, so the exact limit is a fact.
     // fillShape 'symmetric' (PART II): churn fills EVERY lap on a two-sided commodity — exempt from the
@@ -254,7 +271,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     validators: [{ key: 'floor', mode: 'inform' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — sharpen the exit-pricing note on scalp's already-accepted falling
     // regimes (admission UNCHANGED): the exit is the drift-adjusted level, not yesterday's peak.
-    driftInform: { label: 'exit' },
+    driftInform: { label: 'exit', holdDays: DRIFT_INTRADAY_HOLD_DAYS },
     defaultPath: PATH_KEYS.SCALP, estimator: 'intraday', priceBasis: 'opt', fillShape: 'asym',
   },
   {
@@ -289,7 +306,7 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // PLAN-OSCILLATION-CYCLE Chunk 6 — informs the value-amplitude proximity read as a NUMBER (does the
     // drift-adjusted after-tax amplitude still clear the value economics against the buy-low?). EXPLICITLY
     // NOT a floor relax/un-gate — R3b stays dropped; this adds NO gate and does not change value admission.
-    driftInform: { label: 'value-amplitude exit' },
+    driftInform: { label: 'value-amplitude exit', holdDays: DRIFT_VALUE_HOLD_DAYS },
     defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term', fillShape: 'symmetric',
   },
   {
@@ -426,10 +443,17 @@ export function validateNicheSpec(spec) {
   if (!VALID_ESTIMATORS.has(spec.estimator)) errs.push(`estimator must be one of ${[...VALID_ESTIMATORS].join('/')}`);
   if (!VALID_PRICE_BASIS.has(spec.priceBasis)) errs.push(`priceBasis must be one of ${[...VALID_PRICE_BASIS].join('/')}`);
   if (!VALID_FILL_SHAPE.has(spec.fillShape)) errs.push(`fillShape must be one of ${[...VALID_FILL_SHAPE].join('/')}`);
-  // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInform is OPTIONAL; when present it must be { label: <non-empty string> }.
+  // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInform is OPTIONAL; when present it must be { label: <non-empty
+  // string>, holdDays?: <positive number> }. F-C added the optional `holdDays` (the thesis's REAL hold
+  // horizon, in days, fed to driftExitFrom) — absent ⇒ the caller falls back to forecast.mjs's generic
+  // OSC_HOLD_HORIZON_DAYS default (an honest "no known thesis hold" degrade, not a silent mis-scale).
   if (spec.driftInform != null) {
     if (typeof spec.driftInform !== 'object') errs.push('driftInform must be an object { label } when present');
-    else if (typeof spec.driftInform.label !== 'string' || !spec.driftInform.label) errs.push('driftInform.label must be a non-empty string');
+    else {
+      if (typeof spec.driftInform.label !== 'string' || !spec.driftInform.label) errs.push('driftInform.label must be a non-empty string');
+      if (spec.driftInform.holdDays != null && !(typeof spec.driftInform.holdDays === 'number' && spec.driftInform.holdDays > 0))
+        errs.push('driftInform.holdDays must be a positive number when present');
+    }
   }
   return errs;
 }

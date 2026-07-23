@@ -213,28 +213,51 @@ sign of `slope` or any leg's direction — only leg COUNT/amplitude feed `oscill
 
 **Walk-forward validation (trailing-data-only, no look-ahead)** over the real 1h series for
 Osmumten's fang (#26219), Toxic blowpipe (empty) (#12924), Dragon boots (#11840) via
-`pipeline/lib/marketfetch.mjs`'s `fetchTs(id,'1h')` + `js/windowread.mjs`'s `windowStats`, walking
-`oscillationVsKnife` day-by-day exactly as `renderAmplitudeMode` calls it (each as-of day only sees
-data strictly before it): **all three read OSC on the FULL ~15-day window (the production case),
-where the old metric said KNIFE** — the structural false-KNIFE bug is fixed. Across the shorter
-walked slices the split is ~half (main-session independent re-run: fang OSC 5/11, blowpipe OSC
-6/11, dragon boots OSC 5/11), because the `OSC_MIN_LEGS=3` (≥1.5-cycle) requirement CONSERVATIVELY
-reads KNIFE until enough trailing history accrues — the correct failure direction, not the old bug.
-(An earlier draft of this doc claimed "OSC 10/10 walked"; that was an implementer overstatement,
-corrected here against the main session's own walk-forward. The old-metric evidence — blowpipe KNIFE
-10/10 at +2.36% — stands.) A
-synthetic monotone-accelerating-decline fixture (no REAL item in the current archive is currently
-monotone enough to exercise this half live — honestly noted, not papered over) stayed KNIFE across
-all 9 walked days (legs 1–2, never reaching `OSC_MIN_LEGS`). The wiki `/timeseries?timestep=1h`
-endpoint only returns ~16 calendar days of history in practice — short of AMP_NIGHTS=14 plus enough
-prior days for a long walk, so the walk ran from day 5 (not the production 14-night floor) to get
-more than 1–2 as-of days; this is an HONEST SAMPLE-SIZE CONSTRAINT of the endpoint, not a shortcut
-in the fix. Honesty (rule 4): this is in-sample, n≈1 regime, correlated items (all three trended
-down together this window) — it demonstrates the STRUCTURAL fix (a smooth run reads oscillating
-through its cycle) works on the real target class, not a calibrated hit-rate. Pinned by the updated
+`pipeline/lib/marketfetch.mjs`'s `fetchTs(id,'1h')` + `js/windowread.mjs`'s `windowStats`.
+
+**CORRECTION (2026-07-22, main session's independent re-run vs the implementer's first pass):** the
+implementer's first walk-forward reported "fang/blowpipe/dragon boots OSC 10/10 days walked" — that
+number was **an overstatement caused by a look-ahead bug in the harness**, not a legitimately
+different valid measurement. The harness varied a synthetic `now` cutoff but passed the FULL fetched
+series into `windowStats` unchanged; `windowStats`'s `now` param only strips the ONE calendar day
+whose key matches `now` (the forming-day guard) — it does NOT truncate the series to data at-or-before
+`now`. So on a ~16-day archive, `nights:14` kept grabbing (almost) the newest 14 days of the WHOLE
+series on every iteration regardless of the synthetic as-of date, which is why nearly every "day
+walked" silently re-scored (close to) the full window and read OSC.
+
+The main session's independent harness truncates correctly (`days.slice(0, i+1)` on an already-ascending
+`windowStats(...,{nights:40}).days` array — genuinely trailing-only) and found: **fang OSC 5/11 slices
+walked, blowpipe OSC 6/11, dragon boots OSC 5/11 — all three OSC once the FULL ~15-day window is
+reached, KNIFE on the shorter trailing slices.** The implementer reproduced this independently with a
+second, differently-built correct harness (truncating the raw timestamp series itself before calling
+`windowStats`) and got closely matching numbers (fang 6/12, blowpipe 7/12, boots 6/12 — small deltas
+from a different `nights`/loop-start choice, same qualitative shape): **KNIFE on short trailing
+windows (≤~9-10 days), transitioning to OSC once enough days accumulate to show ≥2 real reversals
+(roughly ≥1.5 cycles at fang's ~8-day period).** This is the CORRECT, standing result — the earlier
+"10/10" claim is retracted.
+
+What this means for the fix: the STRUCTURAL bug (a smooth long-run oscillation reading KNIFE on the
+FULL window) is still fixed — full-window fang/blowpipe/dragon boots all read OSC (previously false
+KNIFE per the original evidence above), and a synthetic monotone-accelerating-decline fixture (no REAL
+item in the current archive is currently monotone enough to exercise this half live) reads KNIFE
+consistently across every walked slice. But the corrected walk-forward ALSO shows the redesigned
+detector needs enough TRAILING HISTORY to see ≥2 real reversals before it calls a genuine oscillator
+OSC — on a short window (a few days into a ~week-long down-leg, say) it will correctly read KNIFE
+because, from inside that window, it genuinely cannot yet tell a real cycle from a monotone leg. That
+is an honest, inherent sample-size limitation (not a re-introduction of the old bug), but it is real
+production behavior worth knowing: `renderAmplitudeMode` calls this off `windowStats(...,{nights:14})`
+via `AMP_NIGHTS=14`, i.e. right at the edge of the "needs ~10+ days" transition seen here — a newly
+fetched or short-history item can still spend its early days reading KNIFE even under the fixed
+detector. The wiki `/timeseries?timestep=1h` endpoint only returns ~16 calendar days of history in
+practice, so the whole validation (both the original flawed pass and this correction) is bounded by
+that ceiling. Honesty (rule 4): in-sample, n≈1 regime, correlated items (all three trended down
+together this window) — this demonstrates the structural fix works on the real target class over a
+full window, NOT a calibrated hit-rate, and the walked-slice numbers show a real (not hypothetical)
+history-depth sensitivity worth carrying into any future calibration work. Pinned by the updated
 `pipeline/test/oscillation-cycle.test.mjs` (a fang/blowpipe-SHAPED fixture built from the PLAN's own
 described shape — smooth 4-day runs, not a daily zigzag — a mirror up-drift fixture, the monotone
-case, and a perfectly-linear zero-residual case).
+case, and a perfectly-linear zero-residual case) — the unit fixtures are unaffected by this
+correction (they exercise the metric directly on a fixed-length series, not a multi-step walk).
 
 ### F-B — LANDED-in-worktree (Fable, 2026-07-22): amplitude watchlist RESERVE
 Chose a targeted RESERVE over a blind `AMP_TOP_DEFAULT` raise — a raised top-N costs one more live
@@ -257,6 +280,56 @@ seed and Toxic blowpipe both rode the reserve. Toxic blowpipe reached the real S
 A-), appearing in the AMPLITUDE table. `watchlist.json` was reverted to its original content
 immediately after (this repo's runtime artifacts are restored, never left mutated).
 
+### F-C — LANDED-in-worktree (Fable, 2026-07-22): per-thesis HOLD HORIZONS
+The main session's own audit of F-A/F-B flagged a real GAP: `driftExitFrom`'s `holdHorizonDays`
+defaulted to `OSC_HOLD_HORIZON_DAYS=1.5` (the AMPLITUDE lane's own hold length) at EVERY call site
+except `renderAmplitudeMode` (which correctly passes `AMP_HOLD_DAYS`). Chunk 6's band/churn/scalp
+notes (real hold: hours) were OVERSTATING the residual-horizon drift shift; value's note (real hold:
+multi-week) was WILDLY UNDERSTATING it.
+
+**Fix — only where the code reliably KNOWS the thesis.** Two new NAMED PLACEHOLDER constants in
+`js/flip-niches.mjs`, each anchored to an EXISTING codebase constant rather than invented fresh:
+- `DRIFT_INTRADAY_HOLD_DAYS = 2/24` (~2h) — anchors to the screen's own "2h band" Bar-E edge window
+  (`screen-flip-niches.mjs`'s `BAND_HOURS` default); band/churn/scalp are all same-day flip-first plays.
+- `DRIFT_VALUE_HOLD_DAYS = 14` — anchors to `js/termstructure.mjs`'s `FLOOR_FALLBACK_DAYS=14`, the
+  SAME "multi-week durable floor" window the value gate itself already reads, and matches value's own
+  `reach` validator window (`{windowHours:24, nights:14}`).
+
+Each spec's `driftInform` registry field gained an optional `holdDays` (band/churn/scalp →
+`DRIFT_INTRADAY_HOLD_DAYS`, value → `DRIFT_VALUE_HOLD_DAYS`); `validateNicheSpec` now checks it's a
+positive number when present. `screen-flip-niches.mjs`'s two Chunk-6 call sites (band/churn/scalp at
+the per-row drift-exit note, value at its own) now read `FLIP_NICHES[mode].driftInform?.holdDays` and
+pass it through to `driftExitFrom(..., {holdHorizonDays})` — a registry-line read, not an
+`if(mode===)` branch, one-home (every caller still goes through the SAME `driftExitFrom`). Direction-
+agnostic and inform-only throughout — no admission/gate changed.
+
+**Deliberately left on the generic default (NOT a gap, a scoping decision):** `quote-items.mjs`'s bare
+quote / `--positions` trajectory note, `read-window-range.mjs`, `js/trends.js`'s `renderForecast`, and
+`watch-positions.mjs`'s non-`--cycle` render path have NO reliably-known per-item flip-niche thesis at
+that call site (an arbitrary Trends-page item, or a bare quote, isn't tied to band/churn/scalp/value —
+`js/flip-niches.mjs`/`held-item-strategy.mjs`'s path vocabulary isn't wired into any of them). Inventing
+a guess there would be a bigger, riskier plumbing change for a display-only note than the actual bug
+warranted. These stay on `OSC_HOLD_HORIZON_DAYS` (now re-documented in `js/forecast.mjs` as the
+GENERIC no-known-thesis fallback, not "the" hold horizon) — and this is NOT a silent mis-scale: the
+rendered clause already shows the ACTUAL `holdHorizonDays` used (`formatFloorCeiling` in
+`js/windowread.mjs` reads `drift.holdHorizonDays` dynamically, never a hardcoded "1.5d" string), so a
+reader always sees which horizon produced the number. `watch-positions.mjs --cycle` (Chunk 4) is
+ALSO deliberately unchanged — it IS the multi-week oscillator/amplitude cycle-watch feature, so the
+amplitude-shaped default is the CORRECT one there, not a gap.
+
+**No APP_VERSION bump.** `js/flip-niches.mjs` is still not app-imported (confirmed by grep — only
+`pipeline/lib/gatecandidates.mjs` and `pipeline/commands/screen-flip-niches.mjs` import it); the
+Chunk-6 driftInform notes this touches are console-only (`driftNotes`/`valueInformNotes`, same as
+Chunk 6 itself shipped with no bump). `js/trends.js`'s `renderForecast` — the one APP-VISIBLE
+consumer of `driftExitFrom` — is UNCHANGED (deliberately left on the generic default, per above), so
+nothing reaches the app differently than before. No browser smoke needed for that reason (run anyway
+as part of the existing suite — unaffected, still green).
+
+Tests: extended `pipeline/test/oscillation-thesis.test.mjs` (4 new checks) — each thesis declares its
+real `holdDays`; passing it scales the residual-horizon shift proportionally to the horizon (intraday
+< the old 1.5d default < value's multi-week); ±drift symmetry holds at each thesis's own horizon; the
+new conformance rule catches a malformed `holdDays`.
+
 ## Status
 
 | Chunk | State | SHA | Notes |
@@ -266,6 +339,7 @@ immediately after (this repo's runtime artifacts are restored, never left mutate
 | 3 | ✅ LANDED | a19ba3a | THE ONLY GATE. (A) `amplitudeGate` gains `margin-below-floor` — reject when `amplitudeDriftMargin().margin <= 0` (the `AMP_DRIFT_REQ_MARGIN` floor already subtracted inside the margin — one-home; direction-agnostic, no sign branch), sequenced AFTER trend/knife; the margin is computed ONCE at the gate stage in `renderAmplitudeMode` and REUSED for the Chunk-2 shadow-log (no double-compute); degrade-OPEN (null margin ≠ reject). (B) the knife guard is TEMPERED by `oscillationVsKnife` — a raw knife that `oscillating===true` is not a false knife, falls through to the margin gate (LOOSENS the guard; safe because the margin gate still has final say). Pinned by `pipeline/test/oscillation-gate.test.mjs` (8 checks: fang down-leg → margin-below-floor; Aldarium rising-floor + collapsed amplitude → margin-below-floor; healthy oscillator → pass; knife-temper both ways; direction-agnostic; degrade-open). Live `--mode amplitude` before/after: Twisted buckler DROPPED on margin-below-floor (live 16.98m fell below its 17.46m historical trough → forward peak after-tax 17.27m < entry → genuinely sub-floor); Old school bond / Dinh's bulwark ADMITTED (positive drift-adjusted margins, one rising one mildly falling). 78 suites + check-imports + lint-docs green. No APP_VERSION (console-only). |
 | 4 | ✅ LANDED | b3a843c | the adaptive cycle-expectation loop. NEW `pipeline/lib/cyclewatch.mjs` (pure) + NEW gitignored repo-root sibling `cycle-watch.json` (keyed by item id; loadState/saveState REUSED from watchstate.mjs — not forked). PRIOR = Chunk 2's `driftExitFrom` (REUSED). HOOK = opt-in `--cycle` flag on `watch-positions.mjs`, purely ADDITIVE (loads/saves the state file only under the flag; pushes a nested `cycle — …` note AFTER the emit-contract block; default output byte-identical). Each tick: running realized min/max vs the stored expectation → `trackError()` (the ONE direction-agnostic comparator — branches on `sign(actual−expected)`, NEVER on the drift sign) → `sideRevision()` maps to shallower/deeper dip (revise Te up / drop the bid) + weaker/stronger peak (sell-velocity step-DOWN / ask-headroom ladder-UP, reusing those doctrines) + appends an `{expected, actual, adjustment}` triple. Band-breach → an INFORM-ONLY ABORT note (never an auto-cancel — ALERTS-never-places, the flushSignal precedent). All thresholds NAMED PLACEHOLDERS (n≈0), every note carries the "prior, not a validated forecast" caveat. Pinned by `pipeline/test/cyclewatch.test.mjs` (14 checks: up-drift AND down-drift via one code path, all four revisions, abort, reset/recycle, history cap+purity, persistence round-trip). No APP_VERSION (pipeline-only). 79 suites + check-imports + lint-docs green. |
 | 5 | ✅ LANDED | 696fe55 | drift-adjusted exit on EVERY price suggestion (INFORM, display-only). `formatFloorCeiling` (`js/windowread.mjs`) gains an optional `drift` opt = a `driftAdjustedExit()` result the CALLER computes via the SHARED `driftExitFrom` off its in-hand `hourProfile`+`windowStats().days` (NO new fetch; windowread never imports forecast — the caller passes pre-computed numbers, one-way arrow intact). Renders a `drift-adj exit (~1.5d hold): peak ~X / trough ~Y (projected level, n≈0 — inform, not a direction)` clause — a projected LEVEL, NEVER a rising/falling verdict (direction is only the sign of the shift upstream). Wired at `quote-items.mjs` (bare quote + `--positions`, via `pushTrajectory` — prof+ctx from in-hand data) and `read-window-range.mjs` (`--trajectory` + DAILY TRAJECTORY blocks), and — app-visible — `js/trends.js` `renderForecast` (drift-adjusted peak/trough beside the naive next-trough/peak readout). Degrades cleanly (null projection ⇒ clause omitted). Direction-agnostic (±same-magnitude drift moves the note by identical arithmetic), NEVER a gate/verdict/price input. Pinned by `pipeline/test/oscillation-render.test.mjs` (6 checks: level renders; no direction word; ±drift symmetry; degrade both ways; end-to-end off `driftExitFrom`). **APP_VERSION 0.66.1→0.67.0** (reaches `js/trends.js`, like R2/R3). 81 suites + check-imports + lint-docs + browser smoke green. |
-| F-A | ✅ LANDED | 62da022 | `oscillationVsKnife` redesigned — legs+amplitude detector replaces the first-difference flip-fraction metric. Walk-forward (main-session independent re-run): all three read OSC on the FULL ~15-day window (was KNIFE under the old metric — structural bug fixed); shorter walked slices ~half OSC (fang 5/11, blowpipe 6/11, boots 5/11) — the `OSC_MIN_LEGS=3` conservative short-window degrade (correct direction). Synthetic monotone stays KNIFE 10/10; clean 8d sine → OSC once ≥1.5 periods seen. (Implementer's "OSC 10/10 walked" claim was an overstatement, corrected.) Pinned by the rebuilt `pipeline/test/oscillation-cycle.test.mjs`. n≈0, in-sample, ~16d history — fixes the mislabel, NOT a calibrated hit-rate. |
-| F-B | ✅ LANDED | 62da022 | amplitude Stage-1 fetch pool gains a WATCHLIST RESERVE (`gatecandidates.mjs` + `admission.mjs`, both fetch-pool paths) — bypasses `AMP_STAGE1_MIN_PCT` + guarantees a slot below `AMP_TOP_DEFAULT` for a `watchlist.json` id. Live-proven (main-session re-run): footer `fetched 26 (top 25 + 1 watchlist-reserved)`, watchlisted Toxic blowpipe reached the gate and passed on its real margin. Pinned by new fixtures in `gatecandidates.test.mjs` + `admission.test.mjs`. **CAVEAT: only helps WATCHLIST members** — fang + dragon boots are NOT on `watchlist.json`, so they still don't surface; add them to the watchlist to reserve them a slot. |
+| F-A | ✅ LANDED-in-worktree | (this worktree) | `oscillationVsKnife` redesigned — legs+amplitude detector replaces the first-difference flip-fraction metric. **CORRECTED walk-forward (2026-07-22):** all three (fang/blowpipe/dragon boots) read OSC on the FULL ~15-day window (fixes the false-KNIFE bug); on trailing WALKED slices, fang OSC 5/11, blowpipe 6/11, boots 5/11 — KNIFE on short windows, OSC once enough days accumulate for ≥2 real reversals (the implementer's original "10/10 walked" claim was a look-ahead bug in that harness, retracted — see "Post-landing findings" for the full reconciliation). Synthetic monotone fixture stays KNIFE throughout. Pinned by the rebuilt `pipeline/test/oscillation-cycle.test.mjs` (unaffected by the walk-forward correction — those are fixed-length unit fixtures, not a multi-step walk). |
+| F-B | ✅ LANDED-in-worktree | (this worktree) | amplitude Stage-1 fetch pool gains a WATCHLIST RESERVE (`gatecandidates.mjs` + `admission.mjs`, both fetch-pool paths) — bypasses `AMP_STAGE1_MIN_PCT` + guarantees a slot below `AMP_TOP_DEFAULT` for a `watchlist.json` id. Live-proven: Toxic blowpipe reached the gate and passed on its real margin. Pinned by new fixtures in `gatecandidates.test.mjs` + `admission.test.mjs`. |
+| F-C | ✅ LANDED-in-worktree | (this worktree) | per-thesis HOLD HORIZONS for the drift-adjusted-exit note (the audit's own GAP finding) — `DRIFT_INTRADAY_HOLD_DAYS` (band/churn/scalp, ~2h, anchored to `BAND_HOURS`) and `DRIFT_VALUE_HOLD_DAYS` (value, 14d, anchored to `termstructure.mjs`'s `FLOOR_FALLBACK_DAYS`) replace the blanket amplitude-shaped 1.5d default at the two Chunk-6 call sites that KNOW their thesis. Generic contexts with no known thesis (quote-items/read-window-range/trends.js/watch-positions non-cycle) deliberately kept on the default — the render already shows the real horizon used, so nothing is silently mis-scaled. No APP_VERSION bump (`js/flip-niches.mjs` still not app-imported; `js/trends.js` unchanged). Pinned by 4 new checks in `oscillation-thesis.test.mjs`. |
 | 6 | ✅ LANDED | 7661a76 | per-thesis drift-adjusted-exit INFORM notes. Each surfacing spec (band/churn/scalp/value) gains an OPTIONAL `driftInform:{label}` registry field + the pure `driftInformNote(spec,dae,{entry,fmt})` helper in `js/flip-niches.mjs`; the render paths (renderMode band/churn/scalp + renderValueMode) compute the drift-adjusted exit ONCE via the SHARED `driftExitFrom` (off in-hand `prof`+`windowStats().days`, NO fetch — fork nothing) and push a sibling INFORM note (`driftNotes`/`valueInformNotes`). NO thesis gains a gate; DIRECTION-AGNOSTIC (reads `driftAdjustedPeak`, no sign branch); registry-line read, no `if(mode===)`. band = drift-adjusted band top (priced lower on a fader, NOT excluded); churn = "don't buy near the drift-adjusted weekly high" magnitude caution; scalp = sharpened exit-pricing on already-accepted fallers (admission unchanged); value = drift-adjusted after-tax amplitude vs buy-low (NOT a floor relax — R3b stays dropped). `DRIFT_NEAR_HIGH_FRAC=0.02` placeholder (n≈0). Pinned by `pipeline/test/oscillation-thesis.test.mjs` (7 checks incl. Aldarium rising-floor/fading-ceiling regression pin + ±drift symmetry) + a flip-niches.test.mjs conformance check. 79 suites + check-imports + lint-docs green. **NO APP_VERSION** — console-only notes (driftNotes/valueInformNotes → footer/console.log); does NOT alter screen.json cells or the returned rows, so `js/trends.js` reads nothing new (audited). |

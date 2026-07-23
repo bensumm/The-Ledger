@@ -292,6 +292,14 @@ drift-adjusted exit ONCE via the SHARED `driftExitFrom` (off data already in han
 its sign; a ±same-magnitude drift moves the note by the identical arithmetic). NONE of these gate — each is
 a sibling console note (`ℹ drift-exit` in band/churn/scalp, a timing/trajectory line in invest), never a
 gate/drop/grade/`screen.json` input:
+F-C (2026-07-22): each thesis now feeds `driftExitFrom` its OWN real hold horizon instead of the
+amplitude lane's blanket 1.5d default — band/churn/scalp use `DRIFT_INTRADAY_HOLD_DAYS` (~2h, the
+screen's own Bar-E band window), value uses `DRIFT_VALUE_HOLD_DAYS` (14d, the same multi-week window
+the value gate's own term structure already reads). This was a real GAP (band/churn/scalp were
+overstating the drift shift on an hours-long flip; value was understating it on a multi-week hold),
+found by the main session's audit of F-A/F-B. Generic per-item contexts with no known thesis (a bare
+quote, the Trends page) keep the honest generic default — the rendered clause always shows the actual
+horizon it used, never a hidden hardcoded number.
 - **band** — the drift-adjusted band TOP, priced LOWER on a down-drifting item; the item is NOT excluded,
   its sell target is just the drift-shifted top.
 - **churn** — a "don't buy near the drift-adjusted weekly high" MAGNITUDE caution (folded into the label;

@@ -257,6 +257,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   helper, so the per-thesis wording is REGISTRY DATA, not an `if(mode===)` branch. INFORM-ONLY (a sibling note, never a
   gate/drop/grade/screen.json input), DIRECTION-AGNOSTIC (reads `driftAdjustedPeak`, a signed number, no sign branch);
   pinned by `pipeline/test/oscillation-thesis.test.mjs` (incl. the Aldarium rising-floor/fading-ceiling regression pin).
+  F-C (2026-07-22 — the main session's audit of F-A/F-B found `driftExitFrom`'s `holdHorizonDays` silently
+  defaulting to the AMPLITUDE lane's own 1.5d everywhere): `driftInform` gained an optional `holdDays` —
+  `DRIFT_INTRADAY_HOLD_DAYS` (~2h, band/churn/scalp, anchored to `screen-flip-niches.mjs`'s `BAND_HOURS`) and
+  `DRIFT_VALUE_HOLD_DAYS` (14d, value, anchored to `js/termstructure.mjs`'s `FLOOR_FALLBACK_DAYS`) — read at
+  `screen-flip-niches.mjs`'s two Chunk-6 call sites and passed through to `driftExitFrom`'s own
+  `holdHorizonDays` param (one-home, registry-line read). `validateNicheSpec` checks `holdDays` is a positive
+  number when present. Contexts with no reliably-known per-item thesis (quote-items.mjs/read-window-range.mjs/
+  js/trends.js/watch-positions.mjs's non-`--cycle` path) deliberately stay on `js/forecast.mjs`'s
+  `OSC_HOLD_HORIZON_DAYS` GENERIC fallback (re-documented there as such) — the rendered clause already shows
+  the actual horizon used, so nothing is silently mis-scaled.
   `validateNicheSpec` + `pipeline/test/flip-niches.test.mjs` are the CONFORMANCE suite (structural contract +
   no-throw + determinism over the replay archetypes). Imports only `tax` from money-math.js + `PATH_KEYS` from
   held-item-strategy.mjs. NOT yet app-imported → no APP_VERSION bump),

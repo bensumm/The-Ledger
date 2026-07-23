@@ -250,6 +250,21 @@ export function whenSellable(fc, targetAsk) {
 // hold-horizon-to-slope multiplier — the number of DAYS of ceiling/floor drift applied to the diurnal
 // projection BEYOND the next peak/trough eta. n≈0 PLACEHOLDER (the fang cycle is ~6–8d; a same-cycle
 // daily flip holds ~1–1.5d — the amplitude lane's AMP_HOLD_DAYS default). NOT validated; F1 owns it.
+//
+// F-C (PLAN-OSCILLATION-CYCLE post-landing follow-up, 2026-07-22): this is the AMPLITUDE lane's OWN
+// hold horizon — `renderAmplitudeMode` passes its real `AMP_HOLD_DAYS` explicitly and never relies on
+// this default. Every OTHER `driftExitFrom` caller that KNOWS its thesis's real hold now passes its own
+// `holdHorizonDays` too (band/churn/scalp → `DRIFT_INTRADAY_HOLD_DAYS`, value → `DRIFT_VALUE_HOLD_DAYS`,
+// both in js/flip-niches.mjs, wired at their `driftInform.holdDays` registry field). This constant
+// remains the GENERIC FALLBACK for callers with NO reliably-known per-item thesis at that call site —
+// quote-items.mjs's bare quote / `--positions` trajectory note, read-window-range.mjs, the non-`--cycle`
+// render path in watch-positions.mjs, and js/trends.js's `renderForecast` — an item there may belong to
+// any thesis or none, so this is an honest, clearly-surfaced default rather than a guess (the rendered
+// clause always shows the ACTUAL `holdHorizonDays` used — `formatFloorCeiling` in js/windowread.mjs —
+// so nothing is silently mis-scaled: a reader always sees which horizon produced the number). The
+// `watch-positions.mjs --cycle` loop (PLAN-OSCILLATION-CYCLE Chunk 4) is DELIBERATELY left on this
+// default too — it is specifically the multi-week oscillator/amplitude cycle-watch feature, not a
+// generic per-position note, so the amplitude-shaped horizon is the CORRECT one there, not a gap.
 export const OSC_HOLD_HORIZON_DAYS = 1.5;
 // oscillation-vs-knife detector thresholds (n≈0 PLACEHOLDERS, pending F1):
 export const OSC_MIN_DAYS = 5;            // fewer completed daily mids than this ⇒ null (can't read a cycle)

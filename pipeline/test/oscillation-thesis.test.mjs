@@ -22,8 +22,8 @@
 import assert from 'node:assert/strict';
 import { tax } from '../../js/money-math.js';
 import { hourProfile } from '../../js/windowread.mjs';
-import { diurnalForecast, driftAdjustedExit, driftExitFrom } from '../../js/forecast.mjs';
-import { FLIP_NICHES, driftInformNote, DRIFT_NEAR_HIGH_FRAC } from '../../js/flip-niches.mjs';
+import { diurnalForecast, driftAdjustedExit, driftExitFrom, OSC_HOLD_HORIZON_DAYS } from '../../js/forecast.mjs';
+import { FLIP_NICHES, driftInformNote, DRIFT_NEAR_HIGH_FRAC, DRIFT_INTRADAY_HOLD_DAYS, DRIFT_VALUE_HOLD_DAYS, validateNicheSpec } from '../../js/flip-niches.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -137,6 +137,54 @@ ok('the near-high flag is a pure magnitude read (|level − entry| ≤ frac × l
   const farEntry = level - Math.ceil(DRIFT_NEAR_HIGH_FRAC * level * 2);       // outside it
   assert.equal(driftInformNote(FLIP_NICHES.churn, dae, { entry: nearEntry }).near, true, 'entry within frac×level → near');
   assert.equal(driftInformNote(FLIP_NICHES.churn, dae, { entry: farEntry }).near, false, 'entry beyond frac×level → not near');
+});
+
+// ── 6. F-C (2026-07-22): each thesis carries its OWN real hold horizon, not the amplitude default ──
+ok('F-C: band/churn/scalp declare DRIFT_INTRADAY_HOLD_DAYS; value declares DRIFT_VALUE_HOLD_DAYS', () => {
+  for (const k of ['band', 'churn', 'scalp']) assert.equal(FLIP_NICHES[k].driftInform.holdDays, DRIFT_INTRADAY_HOLD_DAYS, `${k} uses the intraday hold horizon`);
+  assert.equal(FLIP_NICHES.value.driftInform.holdDays, DRIFT_VALUE_HOLD_DAYS, 'value uses the multi-week hold horizon');
+  assert.ok(DRIFT_INTRADAY_HOLD_DAYS < OSC_HOLD_HORIZON_DAYS, 'intraday hold is materially SHORTER than the old blanket 1.5d default');
+  assert.ok(DRIFT_VALUE_HOLD_DAYS > OSC_HOLD_HORIZON_DAYS, 'value hold is materially LONGER than the old blanket 1.5d default');
+});
+
+ok('F-C: passing each spec\'s real holdHorizonDays scales the residual-horizon drift shift accordingly', () => {
+  const prof = flatProf();
+  const ctx = { liveLo: 1000, liveHi: 1010, now: new Date(2026, 0, 10, 12), phase: 'base', reliable: true };
+  const days = daysFrom([100, 98, 96, 94, 92, 90, 88, 86], [140, 138, 136, 134, 132, 130, 128, 126]);   // steady decline both sides
+  const intraday = driftExitFrom(prof, days, ctx, { holdHorizonDays: DRIFT_INTRADAY_HOLD_DAYS });
+  const amplitudeDefault = driftExitFrom(prof, days, ctx, { holdHorizonDays: OSC_HOLD_HORIZON_DAYS });
+  const valueLong = driftExitFrom(prof, days, ctx, { holdHorizonDays: DRIFT_VALUE_HOLD_DAYS });
+  assert.ok(intraday && amplitudeDefault && valueLong, 'all three project cleanly off the same in-hand series');
+  const shift = dae => dae.naivePeak - dae.driftAdjustedPeak;   // positive = shifted down (a declining ceiling here)
+  assert.ok(shift(intraday) >= 0 && shift(amplitudeDefault) >= 0 && shift(valueLong) >= 0, 'a declining ceiling shifts every horizon the SAME direction');
+  assert.ok(shift(intraday) < shift(amplitudeDefault), 'the intraday (shorter) horizon shifts LESS than the old 1.5d blanket default');
+  assert.ok(shift(amplitudeDefault) < shift(valueLong), 'the multi-week (longer) value horizon shifts MORE than the 1.5d default');
+  assert.equal(intraday.holdHorizonDays, DRIFT_INTRADAY_HOLD_DAYS);
+  assert.equal(valueLong.holdHorizonDays, DRIFT_VALUE_HOLD_DAYS);
+});
+
+ok('F-C: ±drift symmetry holds at each thesis\'s own hold horizon (no direction branch introduced)', () => {
+  const fc = cleanFc();
+  for (const [k, holdDays] of [['band', DRIFT_INTRADAY_HOLD_DAYS], ['value', DRIFT_VALUE_HOLD_DAYS]]) {
+    const up = driftAdjustedExit(fc, { ceilingSlope: +60, floorSlope: +60, holdHorizonDays: holdDays });
+    const down = driftAdjustedExit(fc, { ceilingSlope: -60, floorSlope: -60, holdHorizonDays: holdDays });
+    const upShift = up.driftAdjustedPeak - up.naivePeak, downShift = down.driftAdjustedPeak - down.naivePeak;
+    // tolerance-based (not strict-equal) — a very short intraday horizon can legitimately clamp BOTH
+    // shifts to exactly 0 (residDays = max(0, holdHorizonDays − etaDays)), where 0 and -0 differ under
+    // assert/strict's Object.is comparison despite being the same "no shift yet" answer.
+    assert.ok(Math.abs(upShift + downShift) < 1e-9,
+      `${k}: symmetric shift at its OWN hold horizon (${holdDays}d) — up/down still equal-and-opposite (got ${upShift}, ${downShift})`);
+  }
+});
+
+ok('F-C conformance: driftInform.holdDays must be a positive number when present (registry validation)', () => {
+  const bad = { ...FLIP_NICHES.band, driftInform: { label: 'x', holdDays: -1 } };
+  const errs = validateNicheSpec(bad);
+  assert.ok(errs.some(e => /holdDays must be a positive number/.test(e)), 'a negative holdDays is flagged');
+  const ok2 = { ...FLIP_NICHES.band, driftInform: { label: 'x', holdDays: 0.5 } };
+  assert.ok(!validateNicheSpec(ok2).some(e => /holdDays/.test(e)), 'a positive holdDays passes conformance');
+  const noHold = { ...FLIP_NICHES.band, driftInform: { label: 'x' } };
+  assert.ok(!validateNicheSpec(noHold).some(e => /holdDays/.test(e)), 'holdDays absent is still valid (optional field)');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

@@ -939,10 +939,14 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // gate/drop/grade/screen.json input — the spec's `driftInform` label drives the wording, so this is a
     // registry-line read, not an `if (mode===...)` branch. Passes buy-side `optBuy` as the entry so the note
     // states the drift-adjusted after-tax margin. driftInformNote returns null (no note) when the spec has no
-    // driftInform or the projection degraded.
+    // driftInform or the projection degraded. F-C (2026-07-22): pass THIS spec's own driftInform.holdDays
+    // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS, the ~2h Bar-E hold — was silently defaulting to the
+    // amplitude lane's 1.5-DAY horizon, wildly overstating the residual-horizon drift shift on an
+    // hours-long flip) — undefined ⇒ driftExitFrom's own generic fallback (unaffected for any future spec
+    // that doesn't set it).
     const driftExit = (prof && rbStats && rbStats.days) ? driftExitFrom(prof, rbStats.days, {
       liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable,
-    }) : null;
+    }, { holdHorizonDays: FLIP_NICHES[mode].driftInform?.holdDays }) : null;
     const driftNote = driftInformNote(FLIP_NICHES[mode], driftExit, { entry: row.optBuy, fmt });
     if (driftNote) driftNotes.push(`${name}: ${driftNote.text}`);
     const estExtra = {
@@ -1486,9 +1490,12 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vt1h = series1h && series1h.get(s.id);
     const vStats = vt1h ? windowStats(vt1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
     const vProf = vt1h ? hourProfile(vt1h, { nights: DIURNAL_NIGHTS }) : null;
+    // F-C (2026-07-22): value's own driftInform.holdDays (DRIFT_VALUE_HOLD_DAYS=14, multi-week — was
+    // silently defaulting to the amplitude lane's 1.5-day horizon, wildly UNDERSTATING the drift a
+    // multi-week hold actually rides).
     const vDae = (vProf && vStats && vStats.days) ? driftExitFrom(vProf, vStats.days, {
       liveLo: row.quickBuy, liveHi: row.quickSell, phase: ph && ph.phase, mom: row.mom, reliable: row.reliable,
-    }) : null;
+    }, { holdHorizonDays: FLIP_NICHES.value.driftInform?.holdDays }) : null;
     const vDriftNote = driftInformNote(FLIP_NICHES.value, vDae, { entry: vr.buyLow, fmt: fmtP });
     if (vDriftNote) valueInformNotes.push(`${name}: ${vDriftNote.text}`);
     // BUY-NOW / value-amplitude reconciliation (Ben 2026-07-10, Rank 1). The BUY-NOW tier reads proximity
