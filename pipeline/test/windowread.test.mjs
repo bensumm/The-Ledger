@@ -23,6 +23,7 @@ import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PR
 import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-read fix — shared multi-day shape read (read-window-range + quote-items render from ONE definition)
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
+import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -762,6 +763,171 @@ ok('R6 formatFloorCeiling: renders the oscillating qualifier + the live band fol
   const noLive = formatFloorCeiling(fc, idfmt);
   assert.doesNotMatch(noLive, /band /, 'no live read ⇒ no band clause');
   assert.match(noLive, /oscillating floor↔ceiling/, 'the oscillation qualifier still shows without a live read');
+});
+
+// --- PLAN-DIURNAL-TIMING DT1: hourConcentration + diurnalTimedLap -------------------------------
+// Fixture helpers (fresh ts/pt so this section is self-contained against future reshuffles above).
+const dts = (y, mo, d, h) => Math.floor(new Date(y, mo, d, h, 0, 0).getTime() / 1000);
+const dpt = (t, low, hi, volLo = 10, volHi = 10) =>
+  ({ timestamp: t, avgLowPrice: low, avgHighPrice: hi, lowPriceVolume: volLo, highPriceVolume: volHi });
+const dtNow = new Date(2026, 0, 20, 12, 0, 0);
+
+ok('hourConcentration: a bolts-shaped tight per-day trough/peak hour list reads HIGH R (clean true)', () => {
+  const hours = [1, 2, 1, 3, 2];   // 5 days, all within 1-3 (bolts-shaped) — one point/day carries both sides
+  const series = [];
+  hours.forEach((h, di) => series.push(dpt(dts(2026, 0, 5 + di, h), 100, 110)));
+  const conc = hourConcentration(series, { nights: 5, now: dtNow });
+  assert.deepEqual(conc.troughHours, hours);
+  assert.deepEqual(conc.peakHours, hours);
+  assert.ok(conc.rTrough >= 0.9, `tight cluster ⇒ R ≈ 0.9+ (got ${conc.rTrough})`);
+  assert.ok(conc.rPeak >= 0.9);
+  assert.equal(conc.daysScored, 5);
+  assert.equal(conc.clean, true, 'both sides pass the concentration + days floor');
+});
+
+ok('hourConcentration: a chin-shaped scattered per-day trough hour list (≈120° apart) reads LOW R (clean false)', () => {
+  const hours = [0, 17, 3, 0, 17];   // ≥5 days, 3 hours spread ~120° apart on the 24h circle
+  const series = [];
+  hours.forEach((h, di) => series.push(dpt(dts(2026, 0, 5 + di, h), 100, 110)));
+  const conc = hourConcentration(series, { nights: 5, now: dtNow });
+  assert.ok(conc.rTrough < 0.6, `scattered ⇒ low R (got ${conc.rTrough})`);
+  assert.equal(conc.clean, false);
+});
+
+ok('hourConcentration: the 23:00/01:00 wrap reads CLUSTERED (circular, not linear, variance)', () => {
+  const troughHours = [23, 0, 1, 23, 0];   // straddles midnight — a linear variance would call this scattered
+  const series = [];
+  troughHours.forEach((h, di) => series.push(dpt(dts(2026, 0, 5 + di, h), 100, 110)));
+  const peakHours = [12, 12, 12, 12, 12];
+  const series2 = [...series];
+  peakHours.forEach((h, di) => series2.push(dpt(dts(2026, 0, 5 + di, h), 100, 999)));
+  const conc = hourConcentration(series2, { nights: 5, now: dtNow });
+  assert.ok(conc.rTrough >= 0.9, `midnight-wrap hours are tightly clustered circularly (got ${conc.rTrough})`);
+});
+
+ok('hourConcentration: fewer than HOURCONC_MIN_DAYS scored days ⇒ clean false (too thin to judge)', () => {
+  const series = [dpt(dts(2026, 0, 5, 2), 100, 110), dpt(dts(2026, 0, 6, 2), 100, 110)];
+  const conc = hourConcentration(series, { nights: HOURCONC_MIN_DAYS, now: dtNow });
+  assert.ok(conc.daysScored < HOURCONC_MIN_DAYS);
+  assert.equal(conc.clean, false);
+});
+
+// diurnalTimedLap fixtures. dip cluster = hours 21-23, peak cluster = hours 4-6 throughout (the
+// decoupled low/high offset model keeps the two axes independent so hourProfile's cluster growth
+// isn't cross-contaminated — see the DT1 tuning notes in PLAN-DIURNAL-TIMING).
+function boltsSeries(days) {
+  const s = [];
+  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
+    const base = 2900;
+    const dipExtra = [21, 22, 23].includes(h) ? 39 : 0;
+    const peakExtra = [4, 5, 6].includes(h) ? 85 : 0;
+    const isPeak = [4, 5, 6].includes(h);
+    const low = base - 45 - dipExtra, hi = base + 45 + peakExtra;
+    const volHi = isPeak ? 149334 : 858000 / 24;   // peak-window medVolHi ≈ 448k (the §4 anchor)
+    s.push(dpt(dts(2026, 0, 5 + di, h), low, hi, 858000 / 24, volHi));
+  }
+  return s;
+}
+
+ok('diurnalTimedLap: bolts-clean fixture — clean true, net matches the plan finding, tranche per §4 anchor', () => {
+  const r = diurnalTimedLap(boltsSeries(14), { nights: 14, now: dtNow, buyLimit: 11000, volDay: 858000 });
+  assert.equal(r.degraded, false);
+  assert.equal(r.bid, 2816, 'the dip level — the plan finding\'s buy 2,816');
+  assert.equal(r.ask, 3030, 'the peak level — the plan finding\'s sell 3,030');
+  assert.equal(r.net, 154, 'netMargin(2816, 3030) matches the plan finding\'s +154/u');
+  assert.equal(r.clean, true, 'a tight, consistent daily dip/peak hour ⇒ clean');
+  assert.ok(r.instantNet != null && r.instantNet > 0 && r.instantNet < r.net, 'same-hour instant margin is smaller than the timed trough→peak lap, but still positive here');
+  assert.equal(r.peakPool, 448002, 'medVolHi over the peak window ≈ the §4 anchor');
+  assert.equal(r.trancheComfort, 4290, 'min(11000, 0.5%×858000=4290, 15%×peakPool) — the vol term binds');
+  assert.equal(r.trancheCeiling, 8580, 'min(22000, 1%×858000=8580, 25%×peakPool) — the vol term binds');
+});
+
+ok('diurnalTimedLap: chin-scatter fixture — clean false, net small but positive', () => {
+  const troughRot = [0, 17, 3], peakRot = [12, 5, 20];
+  const s = [];
+  for (let di = 0; di < 9; di++) {
+    const tH = troughRot[di % 3], pH = peakRot[di % 3];
+    for (let h = 0; h < 24; h++) {
+      const dipExtra = h === tH ? 25 : 0;
+      const peakExtra = h === pH ? 40 : 0;
+      const low = 420 - 20 - dipExtra, hi = 420 + 20 + peakExtra;
+      s.push(dpt(dts(2026, 0, 5 + di, h), low, hi, 420000 / 24, 420000 / 24));
+    }
+  }
+  const r = diurnalTimedLap(s, { nights: 9, now: dtNow, volDay: 420000 });
+  assert.equal(r.degraded, false);
+  assert.equal(r.clean, false, 'the rotating trough/peak hour scatters the per-day read');
+  assert.ok(r.net > 0 && r.net < 100, `small positive lap (got ${r.net})`);
+  assert.equal(r.trancheComfort, 2100, '0.5%×420000 — the §4 chin anchor');
+  assert.equal(r.trancheCeiling, 4200, '1%×420000 — the §4 chin anchor');
+});
+
+ok('diurnalTimedLap: blowpipe big-ticket fixture — instantNet NEGATIVE (thinner than tax), timed net POSITIVE (trough→peak clears it), falling base, scattered (not clean)', () => {
+  // fixed dip(21-23)/peak(4-6) cluster every day (drives hourProfile's chosen levels/net); an INTRUDER
+  // hour, rotating among 4 widely-spread hours and present every day, digs/spikes even further than the
+  // cluster so the DAY-LEVEL global argmin/argmax (hourConcentration's basis) scatters, while the
+  // per-HOUR median (hourProfile's basis) stays anchored on the consistent cluster.
+  const troughIntruderRot = [3, 9, 15, 17], peakIntruderRot = [11, 13, 19, 1];
+  const s = [];
+  for (let di = 0; di < 10; di++) {
+    const base = 10700000 - 60000 * di;   // falling base
+    const tIH = troughIntruderRot[di % 4], pIH = peakIntruderRot[di % 4];
+    for (let h = 0; h < 24; h++) {
+      const isDip = [21, 22, 23].includes(h), isPeak = [4, 5, 6].includes(h);
+      const dipExtra = isDip ? 110000 : 0;
+      const peakExtra = isPeak ? 110000 : 0;
+      const intruderLowExtra = h === tIH ? 150000 : 0;
+      const intruderHiExtra = h === pIH ? 150000 : 0;
+      const low = base - 100000 - dipExtra - intruderLowExtra;
+      const hi = base + 100000 + peakExtra + intruderHiExtra;
+      s.push(dpt(dts(2026, 0, 5 + di, h), low, hi, 5000, 5000));
+    }
+  }
+  const r = diurnalTimedLap(s, { nights: 10, now: dtNow });
+  assert.equal(r.degraded, false);
+  assert.ok(r.instantNet < 0, `same-hour instant spread thinner than 2% tax ⇒ instantNet negative (got ${r.instantNet})`);
+  assert.ok(r.net > 150000 && r.net < 280000, `trough→peak clears tax handily (got ${r.net}, expect ≈ +200-230k)`);
+  assert.ok(r.net > 0 && r.instantNet < r.net, 'the two reads DIVERGE on a big-ticket item — this is the whole point, not a bug');
+  assert.equal(r.lowTrend.dir, 'falling', 'the base is declining day over day');
+  assert.equal(r.clean, false, 'the intruder scatters the day-level trough/peak hour read');
+});
+
+ok('diurnalTimedLap: degrades honestly on thin/empty history, never throws', () => {
+  assert.deepEqual(diurnalTimedLap([]), { degraded: true, reason: 'thin-history' });
+  assert.deepEqual(diurnalTimedLap(null), { degraded: true, reason: 'thin-history' });
+  const thin = [dpt(dts(2026, 0, 5, 4), 100, 110), dpt(dts(2026, 0, 6, 4), 100, 110)];   // 2 days < HOURPROFILE_MIN_DAYS
+  assert.deepEqual(diurnalTimedLap(thin, { nights: 14, now: dtNow }), { degraded: true, reason: 'thin-history' });
+});
+
+ok('diurnalTimedLap: a thin sell-side peakPool BINDS the tranche min() (the pool-bound branch, not just vol-bound)', () => {
+  const s = [];
+  for (let di = 0; di < 14; di++) for (let h = 0; h < 24; h++) {
+    const isDip = [21, 22, 23].includes(h), isPeak = [4, 5, 6].includes(h);
+    const dipExtra = isDip ? 39 : 0, peakExtra = isPeak ? 85 : 0;
+    const low = 2900 - 45 - dipExtra, hi = 2900 + 45 + peakExtra;
+    const volHi = isPeak ? 700 : 20000;   // tiny peak-window volume ⇒ small medVolHi
+    s.push(dpt(dts(2026, 0, 5 + di, h), low, hi, 20000, volHi));
+  }
+  const r = diurnalTimedLap(s, { nights: 14, now: dtNow, buyLimit: 200000, volDay: 10000000 });
+  assert.equal(r.degraded, false);
+  assert.equal(r.peakPool, 2100, 'medVolHi over the (tiny) peak window');
+  assert.equal(r.trancheComfort, 315, '0.15×2100 — the pool term binds under a huge buyLimit/volDay');
+  assert.equal(r.trancheCeiling, 525, '0.25×2100 — the pool term binds the ceiling too');
+});
+
+ok('diurnalTimedLap: a rising day-to-day base (2800→2816→2948) flags lowTrend rising', () => {
+  const bases = [2800, 2810, 2816, 2870, 2910, 2948];
+  const s = [];
+  for (let di = 0; di < bases.length; di++) for (let h = 0; h < 24; h++) {
+    const isDip = [21, 22, 23].includes(h), isPeak = [4, 5, 6].includes(h);
+    const dipExtra = isDip ? 39 : 0, peakExtra = isPeak ? 85 : 0;
+    const low = bases[di] - 45 - dipExtra, hi = bases[di] + 45 + peakExtra;
+    s.push(dpt(dts(2026, 0, 5 + di, h), low, hi, 20000, 20000));
+  }
+  const r = diurnalTimedLap(s, { nights: bases.length, now: dtNow });
+  assert.equal(r.degraded, false);
+  assert.equal(r.lowTrend.dir, 'rising');
+  assert.equal(r.hiTrend.dir, 'rising');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

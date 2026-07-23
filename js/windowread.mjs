@@ -5,6 +5,12 @@
 // All functions are pure over an already-fetched 1h /timeseries array; no fetching here.
 // Window hours are LOCAL wall-clock — the machine clock IS Ben's wall clock (verified
 // 2026-07-05; only UTC-printing stamps like the old watch header ever suggested otherwise).
+//
+// The ONE tax-arithmetic call site this module uses (diurnalTimedLap's net/roi + instantNet/instantRoi)
+// is `netMargin` from js/money-math.js — imported here rather than hand-inlined, per PLAN-DIURNAL-TIMING
+// §1/§0 (the quote-items.mjs L341 `dr.ask - tax(dr.ask) - dr.bid` inlining was the thing NOT to repeat).
+// money-math.js imports nothing from here, so this stays a one-way arrow (no cycle).
+import { netMargin } from './money-math.js';
 
 // day key = local date of the morning the window ends on (pre-midnight hours belong to
 // tomorrow's morning when the window crosses midnight)
@@ -1108,6 +1114,143 @@ export function diurnalPhase(profile, { now = new Date() } = {}) {
   const hoursSinceClose = ((h - endH + 24) % 24);
   const phase = hoursToNextPeak <= hoursSinceClose ? 'pre-peak' : 'post-peak';
   return { phase, hoursToPeakClose: null, hoursToNextPeak, hoursSinceClose, startH, endH };
+}
+
+// --- hour-of-day CONCENTRATION (PLAN-DIURNAL-TIMING §3, DT1) ------------------------------------
+// hourProfile's dip/peak cluster width measures something ADJACENT but distinct: how wide the
+// low/high plateau is in the AGGREGATE, de-trended 24h profile — not whether each individual day's
+// trough/peak actually lands at the same hour-of-day. An item can have a narrow aggregate cluster
+// while its per-day trough hour still wanders inside that cluster's span (or vice versa). This is a
+// third, narrower classifier: per LOCAL calendar day, find the hour-of-day of that day's own
+// argmin(avgLowPrice) / argmax(avgHighPrice), then measure how CONCENTRATED those per-day hours are
+// around the 24h clock using circular concentration (the mean resultant length R ∈ [0,1] of
+// e^{iθ}, θ = 2π·hour/24) — the right tool because hours WRAP at midnight; a plain variance of the
+// raw hour numbers would wrongly penalize a trough sitting at 23:00 one day and 01:00 the next as
+// "scattered" when it is actually tightly clustered around midnight.
+// PURE over an already-fetched 1h series. Does NOT replace oscillationVsKnife (js/forecast.mjs — a
+// multi-day drift-vs-knife read, orthogonal) or hourProfile's DIP_CLUSTER_FRAC width (kept as-is,
+// still drives the dip/peak WINDOW boundaries the bid/ask levels quote against).
+export const HOURCONC_MIN_DAYS = 5;   // PLACEHOLDER, n≈0 — fewer scored days than this ⇒ can't judge concentration
+export const HOURCONC_MIN_R = 0.6;    // PLACEHOLDER, n≈0 — circular concentration floor for "clean"
+
+export function hourConcentration(series, { nights = 14, now = new Date() } = {}) {
+  const pad2 = n => String(n).padStart(2, '0');
+  const localDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const byDay = new Map();   // day → [{ h, low, hi }]
+  for (const pt of series || []) {
+    if (pt.avgLowPrice == null && pt.avgHighPrice == null) continue;
+    const d = new Date(pt.timestamp * 1000);
+    const day = localDay(d);
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push({ h: d.getHours(), low: pt.avgLowPrice, hi: pt.avgHighPrice });
+  }
+  const days = [...byDay.keys()].sort().slice(-nights);
+  const troughHours = [], peakHours = [];
+  for (const day of days) {
+    const pts = byDay.get(day);
+    const lowPts = pts.filter(p => p.low != null);
+    const hiPts = pts.filter(p => p.hi != null);
+    if (lowPts.length) troughHours.push(lowPts.reduce((a, b) => (b.low < a.low ? b : a)).h);
+    if (hiPts.length) peakHours.push(hiPts.reduce((a, b) => (b.hi > a.hi ? b : a)).h);
+  }
+  const daysScored = days.length;
+  // circular concentration: R = |mean(e^{iθ})|, θ_i = 2π·h_i/24. R→1 = every extreme falls at ~the
+  // same hour; R→0 = scattered uniformly round the clock. null on an empty hour list (degrade).
+  const circR = hrs => {
+    if (!hrs.length) return null;
+    let sx = 0, sy = 0;
+    for (const h of hrs) { const theta = 2 * Math.PI * h / 24; sx += Math.cos(theta); sy += Math.sin(theta); }
+    return Math.sqrt(sx * sx + sy * sy) / hrs.length;
+  };
+  const rTrough = circR(troughHours);
+  const rPeak = circR(peakHours);
+  const clean = daysScored >= HOURCONC_MIN_DAYS && rTrough != null && rPeak != null
+    && rTrough >= HOURCONC_MIN_R && rPeak >= HOURCONC_MIN_R;
+  return { troughHours, peakHours, rTrough, rPeak, daysScored, clean };
+}
+
+// --- the timed-lap layer (PLAN-DIURNAL-TIMING §0/§1, DT1) ---------------------------------------
+// diurnalTimedLap is NOT a parallel computation — it is deriveDiurnalRange's output, EXTENDED with the
+// genuinely new fields (recent-N trend, reach, liquidity pools, tranche sizing, the concentration
+// classifier), composing ONLY existing primitives (hourProfile, deriveDiurnalRange, recencySplit over
+// window-scoped windowStats slices, projectTrajectory, netMargin, hourConcentration) — zero forked
+// math, zero new fetch (every caller already has the 1h series in hand). See PLAN-DIURNAL-TIMING §2 for
+// why this calls recencySplit directly against hourProfile's chosen dip/peak LEVELS rather than
+// re-deriving a second, independently-quantiled trough/peak via amplitudeRanges (a two-homes number bug).
+//
+// net/roi   = the TIMED lap: netMargin(dip level, peak level) — buy the diurnal trough, sell the
+//             diurnal peak, ~1 cycle/day.
+// instantNet/instantRoi = the SAME-HOUR / churn-flip margin: the median across every scored hourly
+//             point's OWN netMargin(avgLowPrice, avgHighPrice) — what a same-hour buy+sell captures,
+//             tax included. On a big-ticket item the two can DIVERGE hard (a same-hour spread thinner
+//             than the 2% tax while the trough→peak range clears it easily) — surfacing both is the
+//             point, not a bug to average away.
+// Returns { degraded: true, reason } (never a throw) when the series is too thin to profile, or the
+// derived range has no usable bid/ask (the §7 honest-degrade contract).
+export const DT_TRANCHE_COMFORT_VOL_PCT = 0.005;  // PLACEHOLDER, n≈0 — borrowed from reach-relief's n≈6
+export const DT_TRANCHE_CEILING_VOL_PCT = 0.01;   // same-session-churn evidence (js/estimators/reach.mjs);
+                                                   // NOT validated for diurnal cross-day holds — inform-only,
+                                                   // shadow-logged for recalibration (PLAN-DIURNAL-TIMING §4)
+
+function instantMargin(series, { nights, now }) {
+  const pad2 = n => String(n).padStart(2, '0');
+  const localDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const days = new Set();
+  for (const pt of series || []) if (pt.avgLowPrice != null || pt.avgHighPrice != null) days.add(localDay(new Date(pt.timestamp * 1000)));
+  const keep = new Set([...days].sort().slice(-nights));
+  const pts = (series || []).filter(pt => keep.has(localDay(new Date(pt.timestamp * 1000))));
+  const nets = pts.map(pt => netMargin(pt.avgLowPrice, pt.avgHighPrice));
+  const lows = pts.map(pt => pt.avgLowPrice).filter(v => v != null);
+  const instantNet = median(nets);
+  const medLow = median(lows);
+  const instantRoi = (instantNet != null && medLow) ? instantNet / medLow * 100 : null;
+  return { instantNet, instantRoi };
+}
+
+export function diurnalTimedLap(series, {
+  nights = 7, recentN = RECENT_NIGHTS, buyLimit = null, volDay = null,
+  liveLo = null, liveHi = null, now = new Date(),
+} = {}) {
+  const profile = hourProfile(series, { nights, now, recentN });
+  if (!profile) return { degraded: true, reason: 'thin-history' };
+  const dr = deriveDiurnalRange(profile, { liveLo, liveHi });
+  if (!dr || dr.bid == null || dr.ask == null) return { degraded: true, reason: 'no-window' };
+
+  const net = netMargin(dr.bid, dr.ask);
+  const roi = (net != null && dr.bid) ? net / dr.bid * 100 : null;
+  const { instantNet, instantRoi } = instantMargin(series, { nights, now });
+
+  // §2: score the CHOSEN dip/peak levels against their OWN window-scoped windowStats slice via
+  // recencySplit — the same primitive amplitudeRanges is built from, NOT the amplitude wrapper itself
+  // (which would derive a second, independently-quantiled trough/peak level — a two-homes bug).
+  const dipStats = windowStats(series, { wStart: profile.dip.startH, wEnd: profile.dip.endH, nights, now });
+  const bidReach = dipStats ? recencySplit(dipStats.days, 'bid', dr.bid, recentN) : null;
+  const peakStats = windowStats(series, { wStart: profile.peak.startH, wEnd: profile.peak.endH, nights, now });
+  const askReach = peakStats ? recencySplit(peakStats.days, 'ask', dr.ask, recentN) : null;
+
+  // recent-N trend off the FULL-day windowStats' days — the existing recency-weighted slope primitive
+  // (projectTrajectory), not a new trend fit.
+  const fullStats = windowStats(series, { wStart: 0, wEnd: 0, nights, now });
+  const lowTrend = fullStats ? projectTrajectory(fullStats.days, n => n.low, { recentN }) : null;
+  const hiTrend = fullStats ? projectTrajectory(fullStats.days, n => n.hi, { recentN }) : null;
+
+  const holdHrs = ((profile.peak.atHour - profile.dip.atHour) % 24 + 24) % 24;
+  const clean = hourConcentration(series, { nights, now }).clean;
+
+  const dipPool = dipStats ? dipStats.medVolLo : null;
+  const peakPool = peakStats ? peakStats.medVolHi : null;
+
+  // §4: retuned tranche sizing — the volDay-percentage term usually binds tightest, but a caller with a
+  // thin sell-side pool relative to volDay must fall through to the pool term (pinned in the unit tests).
+  const comfortInputs = [buyLimit, volDay != null ? DT_TRANCHE_COMFORT_VOL_PCT * volDay : null, peakPool != null ? 0.15 * peakPool : null].filter(x => x != null);
+  const trancheComfort = comfortInputs.length ? Math.min(...comfortInputs) : null;
+  const ceilingInputs = [buyLimit != null ? 2 * buyLimit : null, volDay != null ? DT_TRANCHE_CEILING_VOL_PCT * volDay : null, peakPool != null ? 0.25 * peakPool : null].filter(x => x != null);
+  const trancheCeiling = ceilingInputs.length ? Math.min(...ceilingInputs) : null;
+
+  return {
+    ...dr, net, roi, instantNet, instantRoi, holdHrs, lowTrend, hiTrend, bidReach, askReach,
+    dipPool, peakPool, trancheComfort, trancheCeiling, clean, degraded: false,
+  };
 }
 
 // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2 (2026-07-22): the Extension-B per-hour demand-CYCLE
