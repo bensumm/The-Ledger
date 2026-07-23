@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.15
+version: 1.16
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -108,7 +108,7 @@ other morning, this check reads `no` — skip straight past this section.
 **What to run** — after the overnight review above is delivered (market work first, always):
 1. `node pipeline/commands/join-outcomes.mjs --report` — fill-time distributions by band-percentile ×
    liquidity class with **n per cell**, the concentration line (top item's share of closed lots /
-   realised P/L), and **TWO readiness gates** _(judgment: this is the dashboard, not a build trigger by itself)_:
+   realised P/L), and **THREE readiness gates** _(judgment: this is the dashboard, not a build trigger by itself)_:
    - **Gate A — F1-gate progress** (`X/5 cells at n≥30`): the general fill-rate CALIBRATION gate.
    - **Gate B — Reachability head-to-head** (RC, `PLAN-REACHABILITY-CONSOLIDATION`): the five-way
      exit-estimator co-log (reach·reachRelief·asym·depth·pressure) accrual — closed-sell round-trips
@@ -118,6 +118,17 @@ other morning, this check reads `no` — skip straight past this section.
      and, if a challenger (depth/pressure) beats the incumbent (reachRelief/asym) on median |error| vs
      `sellEach` without worsening the exit-safe rate, sustained over a window, flip the RC1 retire flag.
      Nothing retires off a single week (rule 4); the flags are attended + reversible.
+   - **Gate C — Ring-3 rank-denoise** (forward-vs-recency exit, `PLAN-ESTIMATOR-HONEST-SELL`): the
+     accrual that gates the display redesign's DEFERRED denoising lever — promoting the drift-adjusted
+     FORWARD exit ("list at X") into `estimateRank`'s net/pFill so it reaches the graded board +
+     `screen.json` for every niche. Counts closed-sell round-trips whose read co-logged the forward exit
+     (`estConfidence.forwardPeak`, E2), bucketed into the same (side × class × regime) cells. Its clock
+     started at the E1–E4 land (2026-07-22), so it LAGS both A and B. **When a cell is `SCORABLE`, that
+     is the cue to build+run `aggregateForwardExit`** (a retrojoin sibling — designed, not built) which
+     scores per-cell median |forward−realized| vs |fold−realized|; Ring-3's promotion clears its evidence
+     gate ONLY on a ROBUST cell where the forward exit BEATS the recency reach-fold, AND requires a
+     rank-level knife guard (route `net` through `oscillationVsKnife.knife` → fall back to raw `netMargin`
+     on a knife, since `estimateRank` has no knife gate today). Nothing promotes off a single week (rule 4).
 2. A **realized-P/L attribution** read over `positions.json` `closed` lots (and
    `join-outcomes.mjs`'s realised sell campaigns): per-item realised net after tax, **win rate**
    (share of closed lots in profit), **hold-time distribution** (buy→sell), and
