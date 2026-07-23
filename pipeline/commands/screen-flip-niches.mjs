@@ -417,6 +417,11 @@ function estFields(er) {
 // the per-niche table's `rank` sort is untouched); weakDeploy is a lean suggestions.jsonl flag + a
 // digest token; the verdict strings are a deterministic (NOT calibrated) triage word. None of these
 // thresholds may graduate to a gate without a retro-join measurement first (§7). CONSOLE-ONLY.
+// NAMING (W3-1, PLAN-OSCILLATION-CYCLE): the digest-only `liveCrossable`/`crossable` signal below (live
+// spread not profitably crossable — `quickRoi <= 0` after tax) is a DIFFERENT concept from the existing
+// "ghost spread" (a ONE-SIDED book, `hpv<=0||lpv<=0`, caught upstream by the two-sided-liquidity gate in
+// gatecandidates.mjs). A book can be two-sided (real volume both legs) yet have an uncrossable live spread;
+// crossable catches THAT, in the digest sort only. Do not conflate the two.
 // -----------------------------------------------------------------------------------------------------
 const WEAK_DEPLOY_ROI_PCT = 0.5;   // PLACEHOLDER (n≈0) — Magus (~0.3%, flagged) vs blowpipe (~1.1%, clears
                                    // on margin alone) anchor; a real bar needs the big-ticket single-turn
@@ -485,13 +490,28 @@ function gradeAtLeast(grade, floor) {
   const gi = order.indexOf(grade), fi = order.indexOf(floor);
   return gi >= 0 && fi >= 0 && gi <= fi;
 }
+// liveCrossable(row) (W3-1, PLAN-OSCILLATION-CYCLE): is the LIVE spread profitably crossable RIGHT NOW —
+// i.e. does the tax-inclusive live-spread margin (row.quickRoi = quickNet ÷ quickBuy, the ONE tax/margin
+// home in js/quotecore.js) clear tax-breakeven? This is the digest's biggest single denoiser: cheap high-%
+// "spreads" (Jade necklace, Ironwood plank) whose live instasell ≈ instabuy top the capEff leaderboard yet
+// are uncrossable. Returns true (crossable) / false (spread closed now) / null (no live print → UNKNOWN,
+// treated as unknown-neutral: NOT demoted, NOT flagged — a missing read is never a punishment). DISTINCT
+// from the one-sided-book "ghost spread" (see the header note above). DIGEST-ONLY, inform, never a gate.
+const LIVE_CROSSABLE_MIN_ROI = 0;   // n≈0 PLACEHOLDER — anchored to tax-breakeven (quickRoi>0 after tax) for the first cut, NOT an arbitrary bar
+export function liveCrossable(row) {
+  if (!row || row.quickRoi == null) return null;   // no live print → UNKNOWN, do not punish a missing read
+  return row.quickRoi > LIVE_CROSSABLE_MIN_ROI;
+}
 // digestVerdict(...): the ONE new computed digest field — a deterministic triage WORD, evaluated top-to-bottom,
 // first match wins (§3.2 rule table). All thresholds PLACEHOLDER (n≈0), inform-only — the shape of the
 // judgment, not a calibrated cutoff. `reachFrac` is the RECENT ask-reach fraction (null for a reach-exempt
 // symmetric niche or a no-read row); `askPlacement` is the quoted ask's percentile in the 14-day daily-HIGH
 // distribution (null when no read); `phase` is the diurnalPhase phase string (null when no diurnal profile).
 // `low-conviction` is the honest fallback — "nothing cleared a positive signal," NOT "bad."
-export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, phase } = {}) {
+export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, phase, crossable = null } = {}) {
+  // 0 (W3-1): TOP priority — an uncrossable live spread is a HARDER fact than the soft 'mirage top' below.
+  // Only `false` (a live print that fails tax-breakeven) fires; `null` (no live read) is unknown-neutral.
+  if (crossable === false) return 'spread closed now';
   const reachExists = reachFrac != null;
   if (reachExists && reachFrac < REACH_GRADE_CAP_FRAC) return 'sell unreliable';                       // 1: a bad sell you can't realize beats a thin margin
   // 2: MIRAGE TOP — high in its own distribution AND still-mediocre recent reach. R5 (PLAN-SIGNAL-RECENCY)
@@ -618,6 +638,7 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
   // position is large vs the limit; a small (big-ticket) position keeps its ttf-driven rate. Null → no bound.
   const lapsCap = (row && row.limit != null && units != null && units > 0) ? (row.limit * LAPS_PER_DAY_CEIL) / units : null;
   const capEff = capEfficiency(spec, er, { lapsCap });
+  const crossable = liveCrossable(row);   // W3-1: is the live spread profitably crossable now? true/false/null(unknown)
   DIGEST_ROWS.push({
     name,
     capEff,
@@ -630,7 +651,8 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     softBuy: digestSoftBuy(prof, row),   // inform-only n≈0 diurnal dip window + live-vs-floor marker (stdout-only)
     grade,
     bigTicket: isBigTicket(row),
-    verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, marginTrend, placementDiverges, phase: ph }),
+    crossable,   // W3-1: FLOORS the sort key when === false (uncrossable), NEVER mutates the displayed capEff; null = unknown-neutral
+    verdict: digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, marginTrend, placementDiverges, phase: ph, crossable }),
   });
 }
 // buildDigestBlock(): the rendered digest string. The MAIN block = top ~8 across ALL niches this pass, ranked
@@ -665,7 +687,11 @@ const digestCells = r => [
 export function buildDigestBlock(pool = DIGEST_ROWS) {
   const lines = ['## DECISION DIGEST — deployable-throughput triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by capEff × deployable capital ≈ after-tax deployable gp/day, NOT raw %; capEff = realizable ROI%/day, buy-limit-bounded)'];
   if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
-  const key = r => (r.rankKey != null ? r.rankKey : (r.capEff != null ? r.capEff : -Infinity));
+  // W3-1: an uncrossable live spread (crossable === false) is FLOORED to -Infinity in the comparator ONLY so it
+  // sinks to the bottom — the stored/displayed `capEff` is NEVER mutated (the column still shows the true number)
+  // and the row STILL RENDERS (never silently dropped, mirroring the subFloorLabel doctrine). null (unknown) is
+  // unknown-neutral → keeps its natural key.
+  const key = r => (r.crossable === false ? -Infinity : (r.rankKey != null ? r.rankKey : (r.capEff != null ? r.capEff : -Infinity)));
   const sorted = [...pool].sort((a, b) =>
     (key(b) - key(a)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
   const main = sorted.slice(0, DIGEST_TOP);
@@ -1687,7 +1713,14 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     // recycling carve-out) is exactly where a thin per-turn margin on a huge single-turn hold matters. Build
     // an estimateRank-shaped `er` from the amplitude family's own pair/net/ttf/pFill/rank so capEfficiency +
     // digestVerdict read it uniformly. reach column '—' (fillShape 'symmetric' → reach-exempt, §3.4).
-    const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: ar.netPerCycle, ttf, pFill, rank, lapUnits };
+    // W3-2 (PLAN-OSCILLATION-CYCLE): substitute the DRIFT-ADJUSTED margin for the naive netPerCycle in the
+    // DIGEST rank basis ONLY (`ampEr.net` → capEff via roiPct), so a fading mirage (Aldarium: amplitude
+    // collapses → driftShadow.margin goes NEGATIVE → negative capEff → sinks in the digest naturally). This is
+    // DIGEST-ONLY and built AFTER rank(1666)/grade(1667)/cells(1675) — all of which keep ar.netPerCycle
+    // untouched. driftShadow.margin can be negative; roiPct/capEfficiency null-guard and sort a negative low.
+    // Degrade to ar.netPerCycle when no drift margin is available (null read) so a missing projection never
+    // punishes a real amplitude edge.
+    const ampEr = { pair: { bid: ar.ampBid, ask: ar.ampAsk }, net: (driftShadow && driftShadow.margin != null) ? driftShadow.margin : ar.netPerCycle, ttf, pFill, rank, lapUnits };
     collectDigestRow({ id: s.id, name, spec: FLIP_NICHES.amplitude, row, er: ampEr, grade, reachFrac: null, askPlacement: null, prof, subFloor: null });
     // A3: the 1.5-day experiment's day-of-week seasonality read (net-new — no day-of-week tooling existed).
     // Only surfaced when the hold crosses a day boundary (holdDays > 1) so leg-2 lands on a different weekday.

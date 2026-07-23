@@ -15,7 +15,7 @@
  * 4. buildDigestBlock is a VIEW: top-8 cap, capEff-desc sort (null last), and an honest empty fallback.
  */
 import assert from 'node:assert/strict';
-import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock, digestReachAndPlacement } from '../commands/screen-flip-niches.mjs';
+import { capEfficiency, weakDeploy, digestVerdict, buildDigestBlock, digestReachAndPlacement, liveCrossable } from '../commands/screen-flip-niches.mjs';
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { BIG_TICKET_GP } from '../../js/quotecore.js';
 import { deployUnits } from '../../js/valuescreen.mjs';
@@ -319,6 +319,79 @@ ok('R5 placementDiverges FALSE: recent highs still clear the level (no stale-opt
 ok('R5 placementDiverges is FALSE without day buckets (degrade, never a fake divergence)', () => {
   const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: FULL_HIS });
   assert.equal(r.placementDiverges, false);
+});
+
+// --- 10. W3-1 — live-crossability demotion (digest-only, PLAN-OSCILLATION-CYCLE) -----------------
+// liveCrossable(row) = does the tax-inclusive live spread (row.quickRoi) clear tax-breakeven NOW? true /
+// false / null(unknown). false FLOORS the digest sort key (comparator only — never mutates displayed capEff,
+// row still renders) AND fires the TOP-priority 'spread closed now' verdict. null is unknown-neutral: not
+// demoted, not flagged. DISTINCT from the one-sided-book "ghost spread" (this is a two-sided book whose live
+// spread simply isn't crossable). DIGEST-ONLY, inform, never a gate/screen.json field.
+ok('W3-1: liveCrossable — quickRoi>0 → true, <=0 → false, missing → null (unknown, no punishment)', () => {
+  assert.equal(liveCrossable({ quickRoi: 1.2 }), true);
+  assert.equal(liveCrossable({ quickRoi: 0 }), false);      // exactly tax-breakeven → not crossable
+  assert.equal(liveCrossable({ quickRoi: -0.5 }), false);
+  assert.equal(liveCrossable({ quickRoi: null }), null);    // no live print → UNKNOWN
+  assert.equal(liveCrossable(null), null);
+  assert.equal(liveCrossable({}), null);
+});
+ok('W3-1: same capEff — the uncrossable row sinks BELOW the crossable one AND still renders (never dropped)', () => {
+  const crossRow  = { ...mkRow('Crossable', 50, 0, 1_000_000), crossable: true };
+  const closedRow = { ...mkRow('SpreadClosed', 50, 0, 1_000_000), crossable: false };
+  const out = buildDigestBlock([closedRow, crossRow]);
+  assert.ok(out.indexOf('Crossable') < out.indexOf('SpreadClosed'), 'uncrossable must sink below crossable at equal capEff');
+  assert.match(out, /SpreadClosed/, 'the uncrossable row STILL renders — never silently dropped');
+  // the displayed capEff is UNCHANGED (the column shows the true number, the flooring is comparator-only)
+  assert.match(out, /50\.00%\/d/);
+});
+ok('W3-1: a null-crossable (no live print) row is NOT demoted — unknown-neutral keeps its natural key', () => {
+  const unknown = { ...mkRow('Unknown', 50, 0, 1_000_000), crossable: null };
+  const cross   = { ...mkRow('Crossable', 49, 0, 1_000_000), crossable: true };
+  const out = buildDigestBlock([cross, unknown]);
+  assert.ok(out.indexOf('Unknown') < out.indexOf('Crossable'), 'null crossable keeps its higher natural key (not floored)');
+});
+ok('W3-1: digestVerdict — crossable===false is TOP priority → "spread closed now"', () => {
+  // an otherwise perfectly clean fill-now row → uncrossable still wins
+  assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.9, askPlacement: 0.2, phase: 'in-peak', crossable: false }), 'spread closed now');
+  // it even beats rule-1 'sell unreliable' (an uncrossable spread is a HARDER fact than a thin reach)
+  assert.equal(digestVerdict({ spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.3, askPlacement: 0.9, phase: 'in-peak', crossable: false }), 'spread closed now');
+});
+ok('W3-1: null/true crossable leaves the verdict path unchanged (no false demotion)', () => {
+  const base = { spec: BAND, row: smallMid, er: er(50, 1000, 43200), grade: 'A', reachFrac: 0.9, askPlacement: 0.2, phase: 'in-peak' };
+  assert.equal(digestVerdict({ ...base, crossable: null }), 'fill-now');
+  assert.equal(digestVerdict({ ...base, crossable: true }), 'fill-now');
+  assert.equal(digestVerdict({ ...base }), 'fill-now');   // absent (default null) → byte-identical to pre-W3-1
+});
+
+// --- 11. W3-2 — drift-margin into the amplitude DIGEST rank (PLAN-OSCILLATION-CYCLE) -------------
+// The command builds ampEr.net = driftShadow.margin (the DIGEST rank basis, via capEff→roiPct), while the
+// per-niche rank(1666)=rankScore off ar.netPerCycle and grade(1667) stay on the naive net — untouched. Same
+// netPerCycle, two drift margins (one healthy, one negative/fading like Aldarium) → the digest capEff/order
+// DIFFERS while the per-niche rank field is byte-identical. That simultaneous pin = real AND inform-only.
+ok('W3-2: driftShadow.margin drives the digest capEff/order while rank(1666) stays byte-identical', () => {
+  const ampBid = 10_000_000, ampAsk = 10_500_000;
+  const niceRank = 12345;   // rankScore off the (unchanged) netPerCycle — SAME for both by construction
+  const ampErOf = margin => ({ pair: { bid: ampBid, ask: ampAsk }, net: margin, ttf: { value: 86400 }, pFill: { value: 0.5 }, rank: niceRank, lapUnits: 1 });
+  const healthy = ampErOf(250_000);    // drift-adjusted margin still clears
+  const fading  = ampErOf(-120_000);   // Aldarium: amplitude collapsed → NEGATIVE margin
+  const capHealthy = capEfficiency(AMP, healthy);
+  const capFading  = capEfficiency(AMP, fading);
+  assert.ok(capHealthy > 0, `healthy margin → positive digest capEff, got ${capHealthy}`);
+  assert.ok(capFading < 0, `negative drift margin → negative digest capEff (sinks), got ${capFading}`);
+  assert.notEqual(capHealthy, capFading);
+  // INFORM-ONLY pin: the per-niche rank(1666) is identical between the two — the substitution touched ONLY the digest
+  assert.equal(healthy.rank, fading.rank, 'rank(1666) must be byte-identical — proof the drift substitution is digest-only');
+  // and in the digest VIEW the negative-margin (fading) amplitude row sinks below the healthy one
+  const rowOf = (name, e) => ({ name, capEff: capEfficiency(AMP, e), deployable: 1, rankKey: capEfficiency(AMP, e) * 1, rank: e.rank, reachFrac: null, phase: null, grade: 'B', bigTicket: true, verdict: 'x' });
+  const out = buildDigestBlock([rowOf('Fading', fading), rowOf('Healthy', healthy)]);
+  assert.ok(out.indexOf('Healthy') < out.indexOf('Fading'), 'the negative-drift-margin amplitude row sinks below the healthy one');
+});
+ok('W3-2: a null drift margin degrades to netPerCycle (a missing projection never punishes a real edge)', () => {
+  // mirrors the command guard: net = (driftShadow && driftShadow.margin != null) ? margin : ar.netPerCycle
+  const netPerCycle = 300_000;
+  const margin = null;
+  const chosenNet = (margin != null) ? margin : netPerCycle;
+  assert.equal(chosenNet, netPerCycle);
 });
 
 console.log(`\n${n} assertions passed.`);

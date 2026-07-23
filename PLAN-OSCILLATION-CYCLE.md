@@ -366,17 +366,31 @@ signal reordering a survey, not the graded board). **This SUBSUMES F-I** — F-I
 drift-margin to the screen.json rank/grade") is SHELVED in favor of doing it in the digest rank,
 inform-only.
 
-- **W3-1 — crossability / ghost-spread demotion (the biggest single denoiser).** Demote (or drop
-  from the digest) rows whose live spread isn't profitably crossable — live instasell ≈ instabuy, or
-  spread < tax + a min margin, or the "band" is a ghost. Kills the Jade/Ironwood tier that pollutes
-  the top. HARDEN: is there an existing crossability/ghost-spread signal to reuse (the
-  two-sided-liquidity gate exists but does NOT catch a zero-crossable-spread), or is it new?
-- **W3-2 — drift-margin into the digest RANK (the reshaped F-I).** Rank the amplitude digest rows by
-  the drift-adjusted MARGIN, not `capEff`-of-naive-`netPerCycle` → fading mirages (Aldarium) sink.
-  Also populate the amplitude digest row's currently-null `reachFrac`/`askPlacement`/margin context
-  (amplitude `collectDigestRow` passes `reachFrac: null, askPlacement: null` + naive `net`).
-  Inform-only (digest rank), NOT screen.json grade/rank.
-- **W3-3 — session-verified-noise suppression (the QoL win, the riskiest).** Carry a "drilled &
+- **W3-1 — crossability / ghost-spread demotion (the biggest single denoiser).** ✅ **LANDED-in-worktree**
+  (2026-07-22). NEW pure helper `liveCrossable(row)` (exported) near `digestVerdict` in
+  `screen-flip-niches.mjs`: `row.quickRoi > LIVE_CROSSABLE_MIN_ROI(=0)` → true / false / null(no live
+  print → UNKNOWN, never punished). Reuses `quickRoi` (the tax-inclusive live-spread margin `computeQuote`
+  already sets — the ONE tax/margin home, no `netMargin` dup). `collectDigestRow` stores `crossable` on the
+  row; `buildDigestBlock`'s comparator FLOORS the sort key to `-Infinity` when `crossable===false` (the row
+  STILL renders — never silently dropped — and the displayed `capEff` column is NEVER mutated); `digestVerdict`
+  gains a TOP-priority `if (crossable===false) return 'spread closed now'` (ahead of the soft `mirage top` —
+  an uncrossable live spread is a harder fact). NAMED `liveCrossable`/`crossable`, NOT "ghost spread": the
+  existing "ghost spread" is a ONE-SIDED book (`hpv<=0||lpv<=0`, the two-sided-liquidity gate) — a distinct
+  concept, noted at the digest header (~416). INFORM/DIGEST-ONLY. Pinned by 5 new checks in
+  `capeff-digest.test.mjs` (§10).
+- **W3-2 — drift-margin into the digest RANK (the reshaped F-I).** ✅ **LANDED-in-worktree** (2026-07-22).
+  At the amplitude `ampEr` construction the DIGEST rank basis `net` is substituted:
+  `(driftShadow.margin != null) ? driftShadow.margin : ar.netPerCycle` — so a fading mirage (Aldarium: amplitude
+  collapses → `driftShadow.margin` NEGATIVE → negative `capEff` via `roiPct`'s null-guard → sinks in the digest
+  naturally). `ampEr` is built AFTER rank(1666)/grade(1667)/cells(1675) and (grep-confirmed) consumed ONLY by
+  `collectDigestRow` — the per-niche `rank`, `grade`, and printed amplitude cells all keep `ar.netPerCycle`,
+  untouched. **Scoped out (deliberately):** amplitude's `reachFrac`/`askPlacement` stay `null` (symmetric-exempt
+  by design — populating risks a third reach vocabulary); band/churn/value's Chunk-6 drift is NOT folded into
+  their digest rank (different time horizons — a separate Wave-4 harden). Inform-only (digest rank), NOT
+  screen.json grade/rank. Pinned by 2 new checks in `capeff-digest.test.mjs` (§11) — the load-bearing
+  simultaneous pin (digest capEff differs BETWEEN two drift margins while rank(1666) is byte-identical).
+- **W3-3 — session-verified-noise suppression (the QoL win, the riskiest).** ⏸️ **DEFERRED** (not built in
+  Phase 1). Carry a "drilled &
   rejected this session" mark so a verified mirage doesn't re-top the digest every pass (the ~8×
   Aldarium re-drill is the symptom). HARDEN: where does the state live + who sets it (the
   interpretation layer marks it; the digest suppresses/down-ranks next pass) — an existing session

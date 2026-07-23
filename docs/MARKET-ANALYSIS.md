@@ -189,13 +189,34 @@ distribution — digest-scoped, never touching the screen's own reach validator,
 do I look closer at"), ADDITIVE and opt-in: it never trims or replaces the per-niche tables + context
 footers, and the per-niche table's own `rank` sort is untouched (the deployable-throughput ordering is
 digest-only). The
-`verdict` word is deterministic, first-match-wins over a rule table (`sell unreliable` / `mirage top` /
-`weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
+`verdict` word is deterministic, first-match-wins over a rule table (`spread closed now` / `sell unreliable` /
+`mirage top` / `weak deploy` / `starter · hold-to-next-peak` / `fill-now` / `low-conviction`) — deterministic is not
 calibrated. **R5 (PLAN-SIGNAL-RECENCY)** escalates the base `mirage top` to a HIGH-confidence `mirage top!`
 only when BOTH the recent-vs-full placement DIVERGENCE (`placementDiverges` — the whole-window-CDF analogue
 of RC1's recencySplit: recent-3 days abandoned the top by ≥ `RECENCY_DIVERGE`) AND a `fading` ask cushion
 trend hold; either alone stays the base word, and the base placement/reach condition still gates (the
-escalation sharpens confidence within the existing rule, it never widens what fires mirage top). **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn
+escalation sharpens confidence within the existing rule, it never widens what fires mirage top).
+
+**W3-1 (PLAN-OSCILLATION-CYCLE) — live-crossability demotion (the biggest single denoiser).** The pure helper
+`liveCrossable(row)` reads whether the LIVE spread is profitably crossable NOW: `row.quickRoi > 0` (the
+tax-inclusive live-spread margin `computeQuote` already sets — reused, not re-derived) → `true`; `<= 0` →
+`false`; no live print → `null` (UNKNOWN, never punished). When `crossable === false`, `buildDigestBlock`'s
+comparator FLOORS the row's sort key to `-Infinity` (comparator ONLY — the displayed `capEff` column keeps its
+true number, and the row STILL renders, never silently dropped), and `digestVerdict` returns a TOP-priority
+`spread closed now` (ahead of the soft `mirage top` — an uncrossable live spread is a harder fact). This kills
+the cheap-high-% ghost-spread tier (Jade necklace, Ironwood plank — live instasell ≈ instabuy) that polluted
+the top. **Naming caution:** `liveCrossable`/`crossable` is a DISTINCT concept from the existing "ghost spread"
+term (a ONE-SIDED book, `hpv<=0||lpv<=0`, caught upstream by the two-sided-liquidity gate in
+`gatecandidates.mjs`): a book can be two-sided yet have an uncrossable live spread — `crossable` catches THAT,
+in the digest sort only. **W3-2 — drift-margin into the amplitude digest rank.** The amplitude digest row's
+rank basis (`ampEr.net`, which feeds `capEff` via `roiPct`) is substituted from the naive `ar.netPerCycle` to
+the drift-adjusted `driftShadow.margin` (falling back to `netPerCycle` when the projection is null), so a
+fading mirage (Aldarium: amplitude collapses → negative drift margin → negative `capEff`) sinks in the digest
+naturally. This touches ONLY the digest struct (`ampEr` is built after and consumed only by `collectDigestRow`)
+— the per-niche `rank`/`grade` and the printed amplitude table cells keep `ar.netPerCycle`, untouched. Both
+W3-1 and W3-2 are INFORM/DIGEST-ONLY (n≈0 placeholders), never gating and never touching `screen.json`.
+
+**capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn
 exempt, amplitude not) live inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`/`digestVerdict`,
 reusing `BIG_TICKET_GP` from `js/quotecore.js`, `LIMIT_WINDOW_SEC` from `pipeline/lib/limits.mjs` for the 6
 laps/day ceiling, and `placement`/`diurnalPhase` from `js/windowread.mjs` + `GRADE_CUTOFFS`/

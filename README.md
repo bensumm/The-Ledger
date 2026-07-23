@@ -456,6 +456,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   DISPLAYS a REALIZABLE, buy-limit-bounded `capEff` (laps/day capped at the deployed size) and RANKS by
   deployable throughput = `capEff × deployable capital` (via the reused `valuescreen.mjs deployUnits`, so
   scale-free % can't bury big-ticket deploys; a guaranteed `— big-ticket lane —` slice keeps them visible).
+  Two DIGEST-ONLY denoisers (W3, PLAN-OSCILLATION-CYCLE, 2026-07-22) reshape only the digest sort/verdict:
+  `liveCrossable(row)` FLOORS an uncrossable-live-spread row (`row.quickRoi <= 0`) to the bottom of the
+  digest sort (comparator only — displayed `capEff` unchanged, row still renders) + fires the top-priority
+  `spread closed now` verdict (DISTINCT from the one-sided-book "ghost spread" caught by the two-sided-liquidity
+  gate); and the amplitude digest rank basis (`ampEr.net`) uses the drift-adjusted `driftShadow.margin` (falls
+  back to `netPerCycle`) so a fading mirage sinks. Neither touches the per-niche `rank`/`grade`.
   INFORM-ONLY (n≈0), never a gate/`screen.json` field. Consumer: the future retro-join calibration.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
