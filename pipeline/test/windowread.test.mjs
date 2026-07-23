@@ -22,6 +22,7 @@ import { clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1) — hourlyPressure/demandRegime (Ext B) removed, PLAN-REMOVE-DEPTH-PRESSURE-READS
 import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-read fix — shared multi-day shape read (read-window-range + quote-items render from ONE definition)
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
+import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -706,6 +707,22 @@ ok('formatFloorCeiling: compact one-line note; null passes through; floor-break 
   assert.ok(line.startsWith("Osmumten's fang: floor/ceiling:"), 'label prefixes the note');
   assert.ok(/crash-risk/.test(line) && /floor BROKE prior/.test(line), 'the classification + the break both surface');
   assert.ok(/inform-only, never gates/.test(line), 'the honesty rail rides on every line');
+});
+
+ok('fmtHoldHorizon: sub-day → hours, ≥1d → days unchanged, junk → ?d (the byte-identical-app pin)', () => {
+  // band/churn/scalp's DRIFT_INTRADAY_HOLD_DAYS = 2/24 must read as "2h", never the ugly "~0.08d".
+  assert.equal(fmtHoldHorizon(2 / 24), '2h', '~2h band horizon renders as hours');
+  assert.equal(fmtHoldHorizon(6 / 24), '6h', 'a 6h horizon renders as hours');
+  assert.equal(fmtHoldHorizon(0.5 / 24), '0.5h', 'sub-hour keeps one decimal');
+  // ≥1-day horizons are byte-identical to the old `${d}d` render (app's renderForecast on the 1.5d default,
+  // value's 14d) — this is the pin that the app-facing note never changed.
+  assert.equal(fmtHoldHorizon(1.5), '1.5d', 'the 1.5d default is unchanged');
+  assert.equal(fmtHoldHorizon(14), '14d', "value's 14d is unchanged");
+  assert.equal(fmtHoldHorizon(1), '1d', 'exactly one day is days');
+  // honest degrade (never a crash / NaN in the clause).
+  assert.equal(fmtHoldHorizon(null), '?d', 'null ⇒ ?d');
+  assert.equal(fmtHoldHorizon(undefined), '?d', 'undefined ⇒ ?d');
+  assert.equal(fmtHoldHorizon(NaN), '?d', 'NaN ⇒ ?d');
 });
 
 // --- R6 (PLAN-SIGNAL-RECENCY): the oscillation flag + the live-band fold on floorCeilingTrack --------

@@ -255,13 +255,21 @@ export function whenSellable(fc, targetAsk) {
 // hold horizon — `renderAmplitudeMode` passes its real `AMP_HOLD_DAYS` explicitly and never relies on
 // this default. Every OTHER `driftExitFrom` caller that KNOWS its thesis's real hold now passes its own
 // `holdHorizonDays` too (band/churn/scalp → `DRIFT_INTRADAY_HOLD_DAYS`, value → `DRIFT_VALUE_HOLD_DAYS`,
-// both in js/flip-niches.mjs, wired at their `driftInform.holdDays` registry field). This constant
-// remains the GENERIC FALLBACK for callers with NO reliably-known per-item thesis at that call site —
-// quote-items.mjs's bare quote / `--positions` trajectory note, read-window-range.mjs, the non-`--cycle`
-// render path in watch-positions.mjs, and js/trends.js's `renderForecast` — an item there may belong to
-// any thesis or none, so this is an honest, clearly-surfaced default rather than a guess (the rendered
-// clause always shows the ACTUAL `holdHorizonDays` used — `formatFloorCeiling` in js/windowread.mjs —
-// so nothing is silently mis-scaled: a reader always sees which horizon produced the number). The
+// both in js/flip-niches.mjs, wired at their `driftInform.holdDays` registry field). This INCLUDES the
+// two per-item estimator surfaces (PLAN-ESTIMATOR-HONEST-SELL follow-up, 2026-07-22): `quote-items.mjs`
+// quotes every row against FLIP_NICHES.band so it passes band's ~2h `holdDays`, and `read-window-range.mjs`
+// passes the `--niche` it computes the fold against — over a ~2h horizon the multi-week drift is negligible,
+// so the forward "list at X" ≈ the projected diurnal peak (the honest same-session flip exit; the old 1.5d
+// default OVERSTATED it by adding ~1.5 days of ceiling drift to a band flip). This constant remains the
+// GENERIC FALLBACK for callers with NO per-niche FLIP context at the call site: the standalone TRAJECTORY
+// drift-adj-exit note (the `⇅ floor/ceiling` line — quote-items.mjs's + read-window-range.mjs's bare
+// `driftExitFrom(prof, days, ctx)`, deliberately a multi-day oscillation/drift read, NOT the flip exit), the
+// non-`--cycle` render path in watch-positions.mjs, and js/trends.js's `renderForecast` — an item there may
+// belong to any thesis or none, so this is an honest, clearly-surfaced default rather than a guess. The two
+// horizons can legitimately co-render on one item (a ~2h flip-exit "list at X" beside a ~1.5d trajectory
+// drift note) because they answer different questions, and the rendered clause always shows the ACTUAL
+// `holdHorizonDays` used via `fmtHoldHorizon` (`formatFloorCeiling` in js/windowread.mjs) — nothing is
+// silently mis-scaled: a reader always sees which horizon produced each number. The
 // `watch-positions.mjs --cycle` loop (PLAN-OSCILLATION-CYCLE Chunk 4) is DELIBERATELY left on this
 // default too — it is specifically the multi-week oscillator/amplitude cycle-watch feature, not a
 // generic per-position note, so the amplitude-shaped horizon is the CORRECT one there, not a gap.

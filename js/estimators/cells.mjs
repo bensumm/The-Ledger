@@ -7,6 +7,7 @@
  * the full doctrine; the confidence idioms are unvalidated PLACEHOLDERS (rule 4).
  */
 import { fmtP } from '../money-format.js';
+import { fmtHoldHorizon } from '../windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer (leaf; no cycle)
 
 // The estimated-pair column set (shared by screen-flip-niches.mjs/quote-items.mjs so the header row can't drift).
 export const EST_HEADERS = ['Est. buy', 'Est. sell', 'Net/u (ROI)', 'BE'];
@@ -66,7 +67,7 @@ export function estPairCells(est) {
   // caller passed extra.forward. It carries its hold horizon + a confidence ORDINAL (never a bare gp figure —
   // the formatFloorCeiling honesty discipline, rule 4). Absent forward ⇒ '' (byte-identical reach-fold read).
   const fwdSeg = est.estSellForward != null
-    ? ` · list ~${fmtP(Math.round(est.estSellForward))} (~${est.holdHorizonDays != null ? est.holdHorizonDays : '?'}d hold${est.forwardConfidence ? `, ${est.forwardConfidence}` : ''}, forward n≈0)` : '';
+    ? ` · list ~${fmtP(Math.round(est.estSellForward))} (~${fmtHoldHorizon(est.holdHorizonDays)} hold${est.forwardConfidence ? `, ${est.forwardConfidence}` : ''}, forward n≈0)` : '';
   // E2: P(fill) beside the honest margin (the Net cell) — the SAME askReachFactor probability the rank carries,
   // so the display reads "raw margin × P(fill)" honestly. Shown only where the ask-reach caution is (evidence
   // present, not a foldExempt lap); absent → no token (byte-identical). This is what replaces the fake "+1".

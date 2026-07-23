@@ -693,10 +693,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     suggestion, null on pre-YS2 rows); reconstruction routes through `dedupeSnapshots`. COD-3: `--report`
     stamps `.cache/last-weekly-report` and the cheap standalone `--weekly-due` prints `weekly-due: yes|no`
     off the local Mon–Sun week so `/morning`'s weekly-read cadence is mechanical, not "ask Ben". `--report`
-    prints TWO readiness gates: the F1-gate progress line (general calibration) and the **Reachability
+    prints THREE readiness gates: the F1-gate progress line (general calibration), the **Reachability
     head-to-head** accrual (RC, `PLAN-REACHABILITY-CONSOLIDATION`) — closed-sell round-trips carrying the
     five-way exit co-log (`joinSuggestion`'s `coLog` marker), bucketed into the scorer's (side × class ×
-    regime) cells, so the weekly retro shows WHEN `aggregateReachability` becomes scorable without polling),
+    regime) cells, so the weekly retro shows WHEN `aggregateReachability` becomes scorable without polling —
+    and the **Ring-3 rank-denoise** accrual (`PLAN-ESTIMATOR-HONEST-SELL`) — the same round-trips filtered by
+    the FORWARD-exit co-log (`joinSuggestion`'s `fwdLog` marker = `estConfidence.forwardPeak`), the gate that
+    tracks when the forward-vs-recency-fold head-to-head (`aggregateForwardExit`) becomes scorable, the
+    evidence Ring-3's promotion of the forward exit into `estimateRank`/`screen.json` is deferred on),
     `join-amplitude-outcomes.mjs` (PLAN-AMPLITUDE-SCAN A5 — the amplitude lane's SHADOW BOTH-LEG REPLAY,
     read-only: for every `mode:'amplitude'` pick logged to `suggestions.jsonl` (the `amplitude` shadow
     block — printed trough-bid/peak-ask + hold horizon), replays against the NEXT `holdDays` of the

@@ -85,9 +85,19 @@ Promoting the forward exit into `estimateRank`'s `net`/`pFill` (reaching the gra
 for every niche) is what would DENOISE the rank — but it's **Ring 3**, one step beyond the shelved F-I and
 the unbuilt Wave-4 (both digest-only). It reorders the published board, and `estimateRank` has NO knife
 guard (unlike `amplitudeGate`), so a misclassified knife would inflate the published rank with nothing to
-catch it. GATED on F-G proving the forward read out-predicts the recency-P, AND requires a rank-level
+catch it. GATED on the forward read out-predicting the recency reach-fold, AND requires a rank-level
 knife-fallback (route `net` through `oscillationVsKnife.knife` → fall back to raw `netMargin` on a knife,
 templating Chunk-3B's gate-not-substitute pattern). Not near-term.
+
+**The accrual gate is now WIRED INTO THE RETRO (2026-07-22).** `join-outcomes.mjs --report` (the /morning §5
+weekly read) prints a THIRD readiness gate beside F1 + RC — **Ring-3 rank-denoise (forward-vs-recency
+exit)**: it counts closed-sell round-trips whose nearest read co-logged the forward exit (marker `fwdLog` =
+`estConfidence.forwardPeak`, from E2's estConfLean enrichment), bucketed into the scorer's (side × class ×
+regime) cells, and reports when a cell is SCORABLE. That's the cue to build `aggregateForwardExit` (a
+retrojoin sibling — designed, not built) which scores per-cell median |forward−realized| vs |fold−realized|;
+Ring-3 promotes ONLY on a ROBUST cell where forward beats the fold, plus the knife guard above. So the
+"is Ring-3 buildable yet?" question is now a mechanical weekly readout, not a memory item. The forward
+co-log clock started at the E1–E4 land, so this gate LAGS F1 + RC (0 rows the first week, as expected).
 
 ## Status
 | Chunk | State | SHA | Notes |
@@ -97,7 +107,8 @@ templating Chunk-3B's gate-not-substitute pattern). Not near-term.
 | E3 | LANDED-in-worktree | — | read-window-range `fold:` line — three-part: honest best-case net + P(fill) + `list at X (forward)` + `recency-fold Y (secondary — phase-blind)` + floor caution |
 | E4 | LANDED-in-worktree | — | quote-items — `extra.forward` plumbed from the in-hand `prof`/`ast.days`; footer explainer reconciled |
 | Consumer audit | LANDED-in-worktree | — | reverted the watch-positions BE floor (honest sub-BE = cut price); fixed the quote-items false `(BE-floored)` label |
-| Ring-3 (rank denoise) | DEFERRED — gated on F-G + needs rank knife guard | — | forward exit → estimateRank/screen.json, all niches |
+| holdHorizon follow-up | LANDED-in-worktree | — | quote-items/read-window-range pass their niche's driftInform.holdDays (band ~2h, not the 1.5d amplitude default); fmtHoldHorizon renders sub-day as hours |
+| Ring-3 (rank denoise) | DEFERRED — accrual gate now in the retro; still gated on forward>fold evidence + rank knife guard | — | forward exit → estimateRank/screen.json, all niches; `join-outcomes --report` Gate C tracks readiness |
 
 E1–E4 landed as ONE coherent commit (the shell adds fields the consumers render).
 

@@ -58,7 +58,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
 import { parseArgs, parseGp } from '../lib/cli.mjs';
-import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
+import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
@@ -441,7 +441,13 @@ for (const want of positionals) {
     // + daily windowStats series (scored) the trajectory note already used this pass (ZERO new fetch). The
     // shell computes driftExitFrom off these; absent them it degrades (forward fields null). On a KNIFE
     // driftExitFrom returns a labeled trend-only level (never a crash) — no new detector call site here.
-    extra.forward = (profMargin && scored && scored.length) ? { profile: profMargin, days: scored } : null;
+    // PLAN-ESTIMATOR-HONEST-SELL follow-up (2026-07-22): pass THIS niche's own driftInform.holdDays
+    // (band/churn/scalp → DRIFT_INTRADAY_HOLD_DAYS ~2h) rather than inheriting the shell's bare
+    // OSC_HOLD_HORIZON_DAYS=1.5d amplitude default — mirrors the screen's F-C wiring so the forward
+    // "list at X (~Nd hold)" scales to the niche the fold is computed against, not a 1.5d amplitude cycle.
+    extra.forward = (profMargin && scored && scored.length)
+      ? { profile: profMargin, days: scored, holdHorizonDays: FLIP_NICHES[NICHE]?.driftInform?.holdDays }
+      : null;
     const est = estimatePair(FLIP_NICHES[NICHE], synthRow, extra, { sellModel: 'reach-fold' });
     if (est) {
       const nicheTag = NICHE === 'band' ? '' : ` [--niche ${NICHE}]`;
@@ -457,7 +463,7 @@ for (const want of positionals) {
         const sign = rawNet != null && rawNet > 0 ? '+' : '';
         const pf = est.pFill != null ? ` · P(fill)~${Math.round(est.pFill * 100)}%` : '';
         const fwd = est.estSellForward != null
-          ? ` · list at ${fmt(Math.round(est.estSellForward))} (~${est.holdHorizonDays != null ? est.holdHorizonDays : '?'}d hold${est.forwardConfidence ? `, conf ${est.forwardConfidence}` : ''}, forward n≈0)`
+          ? ` · list at ${fmt(Math.round(est.estSellForward))} (~${fmtHoldHorizon(est.holdHorizonDays)} hold${est.forwardConfidence ? `, conf ${est.forwardConfidence}` : ''}, forward n≈0)`
           : ` · list at — (no diurnal forward this pass)`;
         const foldNote = est.confidence.beFloored ? ` [recency-fold floored to BE ${fmt(est.be)} — nothing to price above break-even]` : '';
         log(`  fold${nicheTag}: best-case ask ${fmt(askScoreLevel)} · honest net ${sign}${fmt(rawNet)}${pf}${fwd} · recency-fold ${fmt(est.estSell)} (secondary — phase-blind)${recFull(extra.askReach)}${foldNote}`);

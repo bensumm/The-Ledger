@@ -145,6 +145,12 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
     // marker the readiness dashboard counts. Boolean only — the scorer reads the raw values off the
     // suggestion itself, not this projection.
     coLog: best.reachable != null,
+    // Ring-3 readiness (PLAN-ESTIMATOR-HONEST-SELL): did this read co-log the FORWARD exit ("list at X")?
+    // E2 enriched estConfLean (logged as `estConfidence`) with forwardPeak/forwardTrough/forwardConfidence,
+    // so a row that carries estConfidence.forwardPeak is one the forward-vs-recency-vs-realized retro can
+    // score (forward = estConfidence.forwardPeak, recency-fold = estSell, realized = the campaign's sell).
+    // Boolean marker only, mirroring coLog — the scorer reads the raw forwardPeak/estSell off the suggestion.
+    fwdLog: !!(best.estConfidence && best.estConfidence.forwardPeak != null),
     lagMin: Math.round((placementTs - best.ts) / 60) };
 }
 
@@ -376,6 +382,32 @@ function report(o) {
   console.log(`  Closed sell round-trips whose read carried the co-log (reach·reachRelief·asym·depth·pressure): ${rcRows.length}`);
   console.log(`  Cells (side × class × regime) at n≥${MIN_N} (scorable): ${rcScorable} · at n≥${MIN_N_F1} (robust): ${rcRobust}`);
   console.log(`  → build+run aggregateReachability once a cell is SCORABLE; an RC1 retire needs a ROBUST cell sustained over a window. Status: ${rcScorable >= 1 ? 'SCORABLE — build the scorer' : 'gated — accruing (co-log clock started RC-S1)'}.`);
+
+  // --- Ring-3 / rank-denoise readiness (PLAN-ESTIMATOR-HONEST-SELL, the display honest-sell redesign) --
+  // The THIRD gate, distinct from F1 (fill-rate) and RC (five-way exit retire): promoting the drift-adjusted
+  // FORWARD exit into estimateRank's net/pFill (the rank-level DENOISING lever that reaches screen.json for
+  // every niche) is DEFERRED — gated on the forward exit proving it OUT-PREDICTS the recency reach-fold vs
+  // the realized sell (and on a rank-level knife guard). This is that gate's ACCRUAL DASHBOARD: it counts
+  // the closed-sell round-trips whose nearest read co-logged the forward exit (marker: fwdLog — E2's
+  // estConfidence.forwardPeak), bucketed into the same (side × class × regime) cell, so we see WHEN the
+  // forward-vs-recency-vs-realized head-to-head is scorable. The forward co-log clock started at the E1–E4
+  // land (2026-07-22), so it LAGS both F1 and RC — most historical rows won't carry it, as expected. Reuses
+  // MIN_N/MIN_N_F1 — no new thresholds. Honest bound: an accrual COUNT; the scorer (a retrojoin sibling,
+  // aggregateForwardExit — designed, not built) computes the per-cell median |forward−realized| vs
+  // |fold−realized| and only THEN does Ring-3's promotion clear its evidence gate (rule 4 — nothing off a
+  // single week; the promotion is attended + needs the knife fallback too).
+  const fwdRows = o.campaigns.filter(x => x.side === 'sell' && x.realised != null && x.suggestion && x.suggestion.fwdLog);
+  const fwdCells = {};
+  for (const r of fwdRows) {
+    const reg = (r.stateAtFill && r.stateAtFill.regime && r.stateAtFill.regime !== 'unknown') ? r.stateAtFill.regime
+      : (r.suggestion ? r.suggestion.regime : 'noreg');
+    const k = r.side + '|' + r.liqClass + '|' + reg; fwdCells[k] = (fwdCells[k] || 0) + 1; }
+  const fwdScorable = Object.values(fwdCells).filter(n => n >= MIN_N).length;
+  const fwdRobust = Object.values(fwdCells).filter(n => n >= MIN_N_F1).length;
+  console.log(`\n# Ring-3 rank-denoise (forward-vs-recency exit — the promotion evidence gate)`);
+  console.log(`  Closed sell round-trips whose read co-logged the forward exit (estConfidence.forwardPeak): ${fwdRows.length}`);
+  console.log(`  Cells (side × class × regime) at n≥${MIN_N} (scorable): ${fwdScorable} · at n≥${MIN_N_F1} (robust): ${fwdRobust}`);
+  console.log(`  → build+run aggregateForwardExit once a cell is SCORABLE; Ring-3's promotion of the forward exit into estimateRank/screen.json needs a ROBUST cell where forward beats the recency-fold on |error| vs the realized sell, PLUS a rank-level knife guard. Status: ${fwdScorable >= 1 ? 'SCORABLE — build the scorer' : 'gated — accruing (forward co-log clock started 2026-07-22)'}.`);
 
   // #3 velocity + capital efficiency (YV1) â€” a DESCRIPTIVE read off the MEASURED velocityClass /
   // parkedSec YS1 records. Makes visible that yield leaks to idle capital + slow fills, not just bad

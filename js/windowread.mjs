@@ -370,6 +370,20 @@ export function floorCeilingTrack(days, { todayKey = null, recentN = FC_RECENT_N
  * LEVEL (the drift-adjusted diurnal peak/trough over the hold horizon), NEVER a rising/falling verdict —
  * direction is only ever the sign of the arithmetic upstream, never a word here. `drift` absent / null
  * levels ⇒ the clause is omitted (honest degrade, like the band clause). INFORM-only, n≈0 — never a gate. */
+/**
+ * fmtHoldHorizon(d) — the ONE renderer for a hold-horizon figure in a "list at X (~… hold)" clause.
+ * Sub-day horizons (band/churn/scalp's ~2h) read as hours, not an ugly "~0.08d"; ≥1-day horizons render
+ * as days unchanged (so the 1.5d/14d clauses — and every app-facing renderForecast note on the default —
+ * are byte-identical). Homed here (the leaf) because forecast.mjs and the estimator/console renderers all
+ * import windowread, never the reverse (the one-way arrow). PURE; display-only, never a gate/price input.
+ */
+export function fmtHoldHorizon(d) {
+  if (d == null || !Number.isFinite(d)) return '?d';
+  if (d >= 1) return `${+d.toFixed(2)}d`;
+  const h = d * 24;
+  return `${+h.toFixed(h < 1 ? 1 : 0)}h`;
+}
+
 export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = null } = {}) {
   if (!fc) return null;
   const dirStep = t => t.dir == null ? 'n/a'
@@ -394,10 +408,10 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
   // the shift never surfaces as a rising/falling label — the corrected-mechanism ruling). Rendered only when
   // the caller passed a drift result with at least one usable level (degrade otherwise).
   if (drift && (drift.driftAdjustedPeak != null || drift.driftAdjustedTrough != null)) {
-    const hd = drift.holdHorizonDays != null ? drift.holdHorizonDays : '?';
+    const hd = fmtHoldHorizon(drift.holdHorizonDays);
     const pk = drift.driftAdjustedPeak != null ? `~${fmt(Math.round(drift.driftAdjustedPeak))}` : '—';
     const tr = drift.driftAdjustedTrough != null ? `~${fmt(Math.round(drift.driftAdjustedTrough))}` : '—';
-    parts.push(`drift-adj exit (~${hd}d hold): peak ${pk} / trough ${tr} (projected level${drift.confidence ? `, conf ${drift.confidence}` : ''}, n≈0 — inform, not a direction)`);
+    parts.push(`drift-adj exit (~${hd} hold): peak ${pk} / trough ${tr} (projected level${drift.confidence ? `, conf ${drift.confidence}` : ''}, n≈0 — inform, not a direction)`);
   }
   return `${label ? label + ': ' : ''}floor/ceiling: ${parts.join(' · ')}  (heuristic, n≈0 — inform-only, never gates)`;
 }

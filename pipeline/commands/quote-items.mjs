@@ -473,7 +473,12 @@ async function runItems() {
       // PLAN-ESTIMATOR-HONEST-SELL E4: the FORWARD "list at X" inputs — the SAME in-hand hourProfile (prof)
       // + daily windowStats series (ast.days) this file already computes for its trajectory/diurnal notes
       // (ZERO new fetch). The shell computes driftExitFrom off these; absent them → forward fields null (degrade).
-      forward: (prof && ast && ast.days && ast.days.length) ? { profile: prof, days: ast.days } : null,
+      // Follow-up (2026-07-22): this file quotes every row against FLIP_NICHES.band (line below), so the
+      // forward horizon is band's own driftInform.holdDays (~2h), NOT the shell's 1.5d amplitude default —
+      // matching the screen's F-C niche-conditioning so "list at X (~Nd hold)" isn't a mis-scaled 1.5d.
+      forward: (prof && ast && ast.days && ast.days.length)
+        ? { profile: prof, days: ast.days, holdHorizonDays: FLIP_NICHES.band.driftInform?.holdDays }
+        : null,
     };
     // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is DISPLAY-ONLY.
     // PC3: `est` = the NEUTRAL reach-fold (the retro co-log, per-item read has no verdict); `estShown` =
