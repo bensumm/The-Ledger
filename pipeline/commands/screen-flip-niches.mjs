@@ -104,7 +104,7 @@ import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitu
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from '../lib/rating.mjs';
-import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow } from '../lib/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper
+import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow } from '../lib/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
@@ -1240,7 +1240,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // PLAN-WINDOW-CLEAR B2 shadow: the within-window clear read (churn/scalp; null elsewhere)
       winClear: r.winClear,
       // RC-S2 shadow: the pressure-driven reachable band (five-way head-to-head on the discovery surface)
-      reachable: reachableShadow(r.reachable) })));
+      reachable: reachableShadow(r.reachable),
+      // PLAN-DIURNAL-TIMING DT4 shadow: r.timedLap is ALREADY computed for every survivor (DT2, off the
+      // same in-hand 1h series) — threaded through as-is, never recomputed, so every row this path logs
+      // carries the field (the §7 data guarantee at the ledger layer).
+      timedLap: timedLapShadow(r.timedLap) })));
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the DC3 `demandRegime` shadow field was REMOVED with demandRegime.
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.

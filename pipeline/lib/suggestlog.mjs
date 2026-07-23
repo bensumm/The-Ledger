@@ -38,6 +38,17 @@
  *                 the 5m archive is thin — never faked.)
  *     (demandRegime? — REMOVED 2026-07-22, PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2. The DC3 demand-cycle
  *                 read was deleted; historical rows keep the field, new rows don't emit it. Revive from git.)
+ *     timedLap?,  (DT4, PLAN-DIURNAL-TIMING 2026-07-23 — the diurnal timed-lap shadow: js/windowread.mjs
+ *                 diurnalTimedLap's result, reshaped by timedLapShadow. Either `{ degraded: true, reason:
+ *                 'thin-history' | 'no-window' }` (never faked) or { bid, ask, dipWindow:[startH,endH],
+ *                 peakWindow:[startH,endH], net, roi, instantNet, instantRoi, holdHrs, clean, lowTrend,
+ *                 hiTrend (both just the trend DIRECTION string — the full projectTrajectory detail is
+ *                 dropped, SR1 lean discipline), bidReach, askReach (each { fullHit, fullN, recentHit,
+ *                 recentDays, diverges }), dipPool, peakPool, trancheComfort, trancheCeiling }. PLACEHOLDER,
+ *                 n≈0 — shadow-logged for the eventual F1 retro-join, NEVER a gate/rank/screen.json input.
+ *                 Lean-included (YS2 pattern): screen-flip-niches.mjs's renderMode survivors always supply
+ *                 it (DT2 computes diurnalTimedLap for every survivor); quote/watch don't pass it yet
+ *                 (not wired at DT4) → absent → byte-identical shape on those rows.)
  *     dipLoop?,  (DL2 — a flush-SIGNAL component object {volDay,price,limit,depthPct,bucketVol,quickBuy,
  *                 optSell,afterTaxMargin,dipScore,alerted,gatedReason}; lean-included, present on watch
  *                 --dip flush rows (alerted=true → headline FLUSH · alerted=false → SIGNAL-ONLY, gated out
@@ -321,6 +332,36 @@ export function windowExitShadow(aer, { list = null, live = null, peakWindow = n
   return { list, live, peakWindow, hiReach, fiveReach, reachMargin };
 }
 
+// PLAN-DIURNAL-TIMING DT4 (2026-07-23) — the timed-lap shadow: js/windowread.mjs diurnalTimedLap's
+// result, reshaped for the ledger. Two shapes, mirroring the §7 DATA guarantee exactly: a degraded
+// read logs `{ degraded: true, reason }` (never faked into zeros); a real read logs the diurnal
+// bid/ask + windows, the timed vs. instant (same-hour) margin pair, the recent-N floor/ceiling trend
+// DIRECTION ONLY (lowTrend/hiTrend's full `series`/`run`/`break` detail is dropped — SR1 lean
+// discipline, the same call windowExitShadow's reachMargin makes for its per-day cushion array), the
+// bid/ask recency-split reach counts (full + recent hit/N, the divergence flags — NOT the raw day
+// list), the dip/peak liquidity pools, and the §4 tranche comfort/ceiling sizing. PLACEHOLDER, n≈0
+// (rule 4) — shadow-logged for the eventual F1 retro-join, never a gate/rank/screen.json input. Null
+// only when the caller has no lap object at all (never called); a genuinely degraded lap still logs
+// its `{ degraded, reason }` shape (the whole point of the §7 data guarantee).
+export function timedLapShadow(lap) {
+  if (!lap) return null;
+  if (lap.degraded) return { degraded: true, reason: lap.reason };
+  const r2 = x => x == null ? null : Math.round(x * 100) / 100;
+  const reach = rc => rc ? { fullHit: rc.fullHit, fullN: rc.fullN, recentHit: rc.recentHit, recentDays: rc.recentDays, diverges: rc.diverges } : null;
+  return {
+    bid: lap.bid, ask: lap.ask,
+    dipWindow: lap.dipWindow ? [lap.dipWindow.startH, lap.dipWindow.endH] : null,
+    peakWindow: lap.peakWindow ? [lap.peakWindow.startH, lap.peakWindow.endH] : null,
+    net: lap.net == null ? null : Math.round(lap.net), roi: r2(lap.roi),
+    instantNet: lap.instantNet == null ? null : Math.round(lap.instantNet), instantRoi: r2(lap.instantRoi),
+    holdHrs: lap.holdHrs ?? null, clean: lap.clean ?? null,
+    lowTrend: lap.lowTrend ? lap.lowTrend.dir : null, hiTrend: lap.hiTrend ? lap.hiTrend.dir : null,
+    bidReach: reach(lap.bidReach), askReach: reach(lap.askReach),
+    dipPool: lap.dipPool ?? null, peakPool: lap.peakPool ?? null,
+    trancheComfort: lap.trancheComfort ?? null, trancheCeiling: lap.trancheCeiling ?? null,
+  };
+}
+
 // Build one suggestion entry from a computeQuote row + the caller's class/verdict. Kept separate
 // from logSuggestions so a caller can assemble a batch, then log once.
 //
@@ -334,7 +375,7 @@ export function windowExitShadow(aer, { list = null, live = null, peakWindow = n
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -488,6 +529,12 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // included (YS2 pattern): a caller that supplies neither (quote/watch/watchlist) logs a byte-identical shape.
   if (capEff != null)        e.capEff = capEff;
   if (weakDeploy != null)    e.weakDeploy = weakDeploy;
+  // PLAN-DIURNAL-TIMING DT4 (2026-07-23) — the timed-lap shadow (see timedLapShadow above): the
+  // js/windowread.mjs diurnalTimedLap result (or its degraded form) for the row. Lean-included (YS2
+  // pattern): a caller with no lap in hand (quote/watch — not yet wired at DT4) logs a byte-identical
+  // shape; screen-flip-niches.mjs's renderMode survivors always have one (DT2 computes it per row), so
+  // every row THAT path logs always carries the field — the §7 data guarantee, at the ledger layer.
+  if (timedLap != null)      e.timedLap = timedLap;
   return e;
 }
 
