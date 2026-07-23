@@ -223,7 +223,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   quantile of the longest multi-week lookback), a robust **ceiling** (P5 — the symmetric high quantile
   q85, so a lone spike can't inflate a range), a **typical fluctuation** (IQR), and a **trajectory** SHAPE
   (TV1 — `classifyTrajectory`: knife/oscillating/based/rising/elevated/flat, attached as `ts.trajectory`);
-  degrades to `hasData:false`/`unknown` on a short series. Consumed by `js/validate.mjs`'s floor+trajectory
+  degrades to `hasData:false`/`unknown` on a short series. Plus (DT6, PLAN-DIURNAL-TIMING §6, 2026-07-23)
+  `basePosition(ts)` — a pure, LIGHT read of an already-computed `ts`: reuses `ts.lookbacks[14].pctInRange`
+  (the SAME field `classifyTrajectory` already scores) + a 3-way coarsening of `ts.trajectory.shape`
+  (+`ts.recentTrend.dir` to split a falling-drift oscillation as "decaying") onto `range-bound`/
+  `trending↑`/`trending↓`/`decaying`, for the `screen-flip-niches.mjs` **Base position** note on band/
+  churn/amplitude survivors (rendered by `pipeline/lib/emit.mjs` `formatBasePosition`) — NOT a second
+  term-structure computation, a second reader of the one `termStructure()` call already in hand; the
+  value flip-niche is deliberately not wired to it (already has its own durable-floor render). Consumed by `js/validate.mjs`'s floor+trajectory
   validators + `pipeline/commands/screen-flip-niches.mjs`/`pipeline/commands/quote-items.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
   `valuescreen.mjs` (P5 — the PURE, DOM-free gate/rank/tier math for the `--mode value` buy-hold flip-niche:
   `valueRanges` (recency-anchored shape features) / `valueScore` (composite rank with a deployable-capital
@@ -992,7 +999,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     survivor's lap is COMPUTED, only a row with something to say PRINTS. DT3 also swaps
     `watch-positions.mjs`'s two direct `hourProfile`+`deriveDiurnalRange` call sites (the shadow-log
     bid/ask co-log, the `diurnalAsk` cycle-fallback exit) for `diurnalTimedLap` — those are VALUE
-    consumers, not note-render sites, so only the computation moved, not the output shape),
+    consumers, not note-render sites, so only the computation moved, not the output shape).
+    **DT6** (2026-07-23) adds `formatBasePosition(bp)` — a one-liner over `js/termstructure.mjs`
+    `basePosition()`'s already-computed `{pct,days,n,label}`: `"base pXX of the <N>d range · <label>"`,
+    or null on a degraded read (never a fabricated percentile). `screen-flip-niches.mjs` calls it for
+    every band/churn/amplitude survivor off the SAME `termStructure()` result already computed for
+    `floorValidator`),
     `recovery.mjs` (V6 — PURE `recoveryRead`/`recoveryLine`/`recoveryTrigger`: the ADVISORY
     recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
     underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a

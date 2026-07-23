@@ -255,3 +255,57 @@ export function classifyTrajectory(series, { lookbacks = {}, floor = null, ceili
     },
   };
 }
+
+// --- DT6 (PLAN-DIURNAL-TIMING §6, 2026-07-23): the "base position" note -------------------------
+// A LIGHT multi-week inform note for the niches that do NOT already render a term-structure read
+// (band/churn/amplitude — the value niche already shows its own durable-floor proximity + phase tag
+// via valueRanges()/phase() at its own call site in screen-flip-niches.mjs's renderValueMode, so it
+// is deliberately NOT wired to this function). This is NOT a second term-structure computation: it
+// is a pure read of the SAME `termStructure(...)` result the caller already computed (screen-flip-
+// niches.mjs's `ts` at the P3 floorValidator call site, renderMode ~L841) — the two-homes risk this
+// file's header discusses is avoided by computing `ts` ONCE per row and handing it to floorValidator,
+// runValidators, AND this function, never re-deriving structure off the raw daily series twice.
+//
+// PERCENTILE: reuses the SAME BASEPOS_LOOKBACK_DAYS-d lookback's `pctInRange` that classifyTrajectory
+// already reads for its 'elevated'/'based' calls (`ts.lookbacks[14].pctInRange`) — so the printed
+// percentile can never silently diverge from the shape label printed beside it (one shared field, two
+// readers). JUDGMENT CALL (flagged to Ben): `pctInRange` is current's position between the RAW
+// low/high of the lookback's daily-MID series — the only shape termStructure has, since loadDaily's
+// archive is `{ts,mid}`, not a daily low/high split. PLAN-DIURNAL-TIMING's prose describes "live-vs-
+// the multi-week daily-LOW distribution"; that would need a second data shape this file doesn't carry
+// and DT6 is barred from a new fetch to add. The daily-mid pctInRange is the best available proxy
+// without one — said explicitly here rather than silently narrowing the claim.
+//
+// ARCHIVE DEPTH: the returned `days` is the LOOKBACK HORIZON actually used (14) — real, and within the
+// ACTUAL archive every caller has on disk today (screen-flip-niches.mjs's DAILY_DAYS = 17 for band/
+// churn/amplitude's shared loadDaily call; 28 only when the value niche runs standalone) — NEVER an
+// aspirational 90d (that full-drill depth stays a MANUAL look, out of scope per the plan).
+//
+// LABEL: a 3-way coarsening of `ts.trajectory.shape` (knife/oscillating/based/rising/elevated/flat/
+// unknown) onto the vocabulary PLAN-DIURNAL-TIMING §6 asks for (range-bound / trending↑ / trending↓ /
+// decaying). NEW JUDGMENT CALL (flagged to Ben, not an existing field): 'oscillating' additionally
+// reads `ts.recentTrend.dir` to split "oscillating with no net drift" (range-bound — a clean mean-
+// reverting cycle) from "oscillating while the overall level drifts down" (decaying — the fang case:
+// "a decaying oscillation in a downtrend"). An oscillating-but-RISING series is also treated as
+// range-bound (a rising drift under an oscillation isn't the "decaying" shape the plan names — no
+// symmetric "growing oscillation" bucket was requested, so it folds into the neutral bucket rather
+// than inventing a fourth label). 'unknown' (thin series) degrades to null — never asserts a label off
+// too little history; a null `basePosition()` means "no note", never a fabricated percentile.
+export const BASEPOS_LOOKBACK_DAYS = 14;   // the horizon whose pctInRange we quote — see note above
+export const BASEPOS_MIN_POINTS = 4;       // PLACEHOLDER, n≈0 (rule 4) — fewer mids in the 14d window ⇒ degrade (no note)
+
+export function basePosition(ts) {
+  if (!ts || !ts.hasData) return null;
+  const lb = ts.lookbacks && ts.lookbacks[BASEPOS_LOOKBACK_DAYS];
+  if (!lb || lb.n < BASEPOS_MIN_POINTS || lb.pctInRange == null) return null;
+  const shape = ts.trajectory && ts.trajectory.shape;
+  if (!shape || shape === 'unknown') return null;
+  let label;
+  if (shape === 'oscillating') label = (ts.recentTrend && ts.recentTrend.dir === 'falling') ? 'decaying' : 'range-bound';
+  else if (shape === 'based' || shape === 'flat') label = 'range-bound';
+  else if (shape === 'rising' || shape === 'elevated') label = 'trending↑';
+  else if (shape === 'knife') label = 'trending↓';
+  else return null;   // defensive — shape is always one of the 7 classifyTrajectory emits
+  const pct = Math.max(0, Math.min(100, Math.round(lb.pctInRange * 100)));
+  return { pct, days: BASEPOS_LOOKBACK_DAYS, n: lb.n, label };
+}

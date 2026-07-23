@@ -615,6 +615,32 @@ simultaneous independent rungs on one item.
   hour-by-hour table; the app renders the pre-DT2 shape in Trends (DT5, not yet landed, reconciles
   `js/trends.js`'s own local `clean` predicate onto `hourConcentration`). This is the ENCODED form of
   the manual windowrange dance — read the block; the manual read is now a CONFIRMATION.
+- **Base position (multi-week, PLAN-DIURNAL-TIMING DT6, 2026-07-23), inform-only, n≈0.** The diurnal
+  read above is intraday/recent (a 3-day `lowTrend` slope at most) and structurally cannot see the
+  MULTI-WEEK shape — a live session proved this insufficient on its own: a bludgeon read "+180k flip"
+  (scan-smoothed) → "knife" (3-day grid) → "low end of a mean-reverting range, a value level" (the
+  multi-week base) — only the third call was right; a fang read similarly went "oscillator at a floor"
+  (14d) → "decaying oscillation in a downtrend" (multi-week). `screen-flip-niches.mjs` now prints a
+  **Base position** block on every band/churn/amplitude survivor: `<item> — base pXX of the 14d
+  range · <range-bound|trending↑|trending↓|decaying>`. `pXX` is live's percentile position between the
+  raw low/high of the 14-day daily-mid lookback `termStructure()` already computes (`js/termstructure.mjs`
+  `ts.lookbacks[14].pctInRange`) — the SAME field `classifyTrajectory` already reads for its
+  `elevated`/`based` calls, so the percentile can never silently diverge from the label beside it. The
+  label is a 3-way coarsening of `ts.trajectory.shape` (`based`/`flat`→range-bound,
+  `rising`/`elevated`→trending↑, `knife`→trending↓, `oscillating`+a falling `recentTrend`→decaying,
+  `oscillating` otherwise→range-bound) — done by the new pure `js/termstructure.mjs` `basePosition(ts)`
+  helper, rendered by `pipeline/lib/emit.mjs` `formatBasePosition`. **Single-source, not a second
+  computation**: `termStructure(daily[id])` is computed ONCE per row (the SAME call `renderMode` already
+  makes for `floorValidator`; `renderAmplitudeMode` now makes its own single call too, since amplitude's
+  gate never touched the daily archive before) and handed to `basePosition` as a pure read of the
+  already-derived structure — the value flip-niche is deliberately NOT wired to this (it already renders
+  its own durable-floor proximity + phase tag via `valueRanges`/`phase()`, off the same underlying
+  `termStructure` call). `days` in the note is the REAL 14-day lookback horizon actually computed off
+  the on-disk daily archive (`DAILY_DAYS` = 17d for band/churn/amplitude's shared `loadDaily` call, 28d
+  only when the value flip-niche runs standalone) — never an aspirational 90d; a full 90-day 6h drill stays a
+  MANUAL look for a big-ticket hold decision, out of scope here. Degrades to no line (never a fabricated
+  percentile) when the archive is too thin (`< BASEPOS_MIN_POINTS` mids in the 14d window) or the shape
+  is `unknown`. STDOUT-only, never a gate/price/rank/`screen.json` input.
 - **Soft-buy (ADD-while-holding) timing, inform-only, n≈0.** `quote-items.mjs` prints a `⏳ soft-buy`
   line beside each held lot (and on bare quotes) off the SAME `hourProfile` — `js/windowread.mjs`
   `softBuyRead`/`formatSoftBuy`: `soft-buy: dip HH:00–HH:00 · live @floor | +X% · buy now | wait`. The

@@ -21,6 +21,7 @@
 import assert from 'node:assert/strict';
 import {
   termStructure, classifyTrajectory, quantile, FLOOR_QUANTILE, FLOOR_MIN_POINTS, MIN_SWING_FRAC,
+  basePosition, BASEPOS_LOOKBACK_DAYS,
 } from '../../js/termstructure.mjs';
 import {
   floorValidator, runValidators, worstStatus, flags,
@@ -247,6 +248,60 @@ ok('classifyTrajectory: older-high then a flat low plateau → based (the value-
 });
 ok('classifyTrajectory: a thin series degrades to shape "unknown" (never asserts off too few points)', () => {
   assert.equal(classifyTrajectory([{ ts: NOW, mid: 100 }, { ts: NOW - DAY, mid: 101 }]).shape, 'unknown');
+});
+
+// --- 7. basePosition (DT6, PLAN-DIURNAL-TIMING §6) — the multi-week base-position note read --------
+// Hand-built `ts` fixtures (mirrors the §4b `tsWith` precedent above) pin the EXACT shape→label
+// mapping deterministically, decoupled from real slope-fit arithmetic; one end-to-end case at the
+// bottom confirms the real termStructure() wiring (reuses the file's own 'knife' fixture, unchanged).
+const bpTs = (shape, pctInRange, { recentDir = null, n = 14 } = {}) => ({
+  hasData: true,
+  lookbacks: { [BASEPOS_LOOKBACK_DAYS]: { days: BASEPOS_LOOKBACK_DAYS, n, pctInRange } },
+  trajectory: { shape },
+  recentTrend: recentDir ? { dir: recentDir } : null,
+});
+ok('basePosition: based/flat shape → range-bound, percentile reused verbatim from the SAME 14d pctInRange', () => {
+  const bp = basePosition(bpTs('based', 0.12));
+  assert.deepEqual(bp, { pct: 12, days: BASEPOS_LOOKBACK_DAYS, n: 14, label: 'range-bound' });
+  assert.equal(basePosition(bpTs('flat', 0.5)).label, 'range-bound');
+});
+ok('basePosition: rising/elevated shape → trending↑', () => {
+  assert.equal(basePosition(bpTs('rising', 0.6)).label, 'trending↑');
+  assert.equal(basePosition(bpTs('elevated', 0.9)).label, 'trending↑');
+});
+ok('basePosition: knife shape → trending↓', () => {
+  assert.equal(basePosition(bpTs('knife', 0.8)).label, 'trending↓');
+});
+ok('basePosition: oscillating + a FALLING recentTrend → decaying (the fang case: "oscillator... decaying... downtrend")', () => {
+  assert.equal(basePosition(bpTs('oscillating', 0.3, { recentDir: 'falling' })).label, 'decaying');
+});
+ok('basePosition: oscillating with no falling drift (rising/flat/absent trend) → range-bound, never a false decay', () => {
+  assert.equal(basePosition(bpTs('oscillating', 0.3, { recentDir: 'rising' })).label, 'range-bound');
+  assert.equal(basePosition(bpTs('oscillating', 0.3, { recentDir: 'flat' })).label, 'range-bound');
+  assert.equal(basePosition(bpTs('oscillating', 0.3)).label, 'range-bound', 'no recentTrend computed at all → range-bound, not a decay guess');
+});
+ok('basePosition: "unknown" shape (thin series) degrades to null — never fakes a percentile off too little history', () => {
+  assert.equal(basePosition(bpTs('unknown', 0.5)), null);
+});
+ok('basePosition: no term structure / cold / too few 14d points → null (honest degrade, no note)', () => {
+  assert.equal(basePosition(null), null);
+  assert.equal(basePosition({ hasData: false }), null);
+  assert.equal(basePosition({ hasData: true, lookbacks: {}, trajectory: { shape: 'based' } }), null, 'missing 14d lookback entirely');
+  assert.equal(basePosition({ hasData: true, lookbacks: { [BASEPOS_LOOKBACK_DAYS]: { n: 2, pctInRange: 0.5 } }, trajectory: { shape: 'based' } }), null, 'too few points (< BASEPOS_MIN_POINTS)');
+});
+ok('basePosition: pct is clamped to [0,100] and rounded (a pctInRange outside [0,1] from a live print beyond the raw lookback high/low)', () => {
+  assert.equal(basePosition(bpTs('based', -0.02)).pct, 0);
+  assert.equal(basePosition(bpTs('based', 1.04)).pct, 100);
+});
+ok('basePosition: end-to-end off a REAL termStructure() knife series — days honestly reports the 14d lookback ACTUALLY used, never an aspirational 90d', () => {
+  // the same 15-point spike-then-monotone-decline fixture the "classifyTrajectory ... knife" test above
+  // already pins to shape 'knife' — reused verbatim, not a new series.
+  const ts = termStructure(seriesFrom([100, 100, 100, 100, 150, 146, 142, 138, 134, 130, 126, 122, 118, 114, 110]));
+  assert.equal(ts.trajectory.shape, 'knife', 'sanity: same fixture the shapeOf test already confirms');
+  const bp = basePosition(ts);
+  assert.ok(bp, 'a real 15-point series clears BASEPOS_MIN_POINTS');
+  assert.equal(bp.label, 'trending↓', 'the knife shape maps to trending↓');
+  assert.equal(bp.days, BASEPOS_LOOKBACK_DAYS, 'reports the ACTUAL lookback horizon used (14), never 90');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

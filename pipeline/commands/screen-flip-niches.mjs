@@ -87,7 +87,7 @@ import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
-import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site)
+import { formatTimedLap, formatBasePosition } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
@@ -111,7 +111,7 @@ import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item id
 import { readOpenPositions } from '../lib/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
-import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series)
+import { termStructure, basePosition, BASEPOS_LOOKBACK_DAYS } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series); DT6 — the light multi-week base-position read off the SAME `ts`, never a second structure computation
 // COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
 // logic) so quote-items.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the
 // two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
@@ -1181,7 +1181,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
     // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
     const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1355,6 +1355,27 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     extraSections.push({ type: 'lines', blank: false, lines: [
       `Diurnal timing (timed-lap bid/ask off the in-hand 1h series — support, not a gate):`,
       ...diurnalLines.map(l => l === '' ? '' : `  ↳ ${l}`),
+    ] });
+  }
+  // PLAN-DIURNAL-TIMING DT6 (2026-07-23): the "base position" note — WHERE live sits in the multi-week
+  // daily-mid range + the multi-week SHAPE (range-bound/trending/decaying), off the SAME `r.ts` every
+  // row already computed above for floorValidator (zero new fetch, zero second term-structure call).
+  // §7-style softened contract: computed for every survivor, PRINTED only when basePosition() finds a
+  // real (non-degraded, non-'unknown'-shape) read — a cold/thin/new item prints nothing here, same as
+  // the diurnal note above. Inform-only, PLACEHOLDER thresholds, n≈0 (js/termstructure.mjs basePosition
+  // header has the full spec + the judgment calls this label mapping makes).
+  const baseLines = [];
+  for (const r of rows) {
+    const bp = basePosition(r.ts);
+    const text = formatBasePosition(bp);
+    if (!text) continue;
+    const nm = map.byId[r.id]?.name || ('#' + r.id);
+    baseLines.push(`${nm} — ${text}`);
+  }
+  if (baseLines.length) {
+    extraSections.push({ type: 'lines', blank: false, lines: [
+      `Base position (multi-week — where live sits in the ${BASEPOS_LOOKBACK_DAYS}d daily-mid range; MANUAL 90d drill for a big-ticket hold, not this):`,
+      ...baseLines.map(l => `  ↳ ${l}`),
     ] });
   }
   // COD-2 (2026-07-10) — the OVERNIGHT accumulation-and-capital table. Encoded from /overnight §6's
@@ -1640,9 +1661,10 @@ export function reachPhaseNote(osc, dae, driftShadow) {
   const clears = !!(driftShadow && driftShadow.margin != null && driftShadow.margin > 0);
   return `oscillating into a falling floor — drift margin ${clears ? 'still clears' : 'does not clear'}`;
 }
-function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) {
+function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, daily) {
   const rows = [], sugg = [];
   const informNotes = [];
+  const baseLines = [];   // DT6 — the multi-week base-position note (amplitude gets no term-structure read otherwise)
   const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0, marginFloor: 0, unaffordable: 0 };
   const DROP_KEY = { 'no-history': 'noHistory', 'amp-below-floor': 'ampFloor', 'bid-unreachable': 'bidReach', 'ask-unreachable': 'askReach', 'trend': 'trend', 'knife': 'knife', 'margin-below-floor': 'marginFloor' };
   for (const s of survivors) {
@@ -1713,6 +1735,12 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
       { t: `${lapUnits}u`, c: 'mini' },
       s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade },
     ];
+    // DT6 (PLAN-DIURNAL-TIMING §6): the multi-week base-position note — amplitude's own gate reads
+    // ONLY the recent full-day window (windowStats/AMP_NIGHTS), never the loadDaily multi-week
+    // archive, so it has no term-structure read at all until now. One computation (`termStructure`)
+    // feeds both floorValidator elsewhere (band/churn) and this inform read — zero new fetch, `daily`
+    // is the SAME bulk archive already loaded once in main() before any niche renders.
+    { const bp = basePosition(termStructure(daily && daily[s.id])); const text = formatBasePosition(bp); if (text) baseLines.push(`${name} — ${text}`); }
     rows.push({ id: s.id, cells, score: rank });
     // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): feed the amplitude pick into the decision digest.
     // amplitude is the big-ticket CONCENTRATION lane, so its weak-deploy flag (§1.1 resolution 1 — NO
@@ -1764,6 +1792,12 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
   if (shown) console.log('\n' + mdTable(AMP_HEADERS, rows.map(r => r.cells)));
   else console.log('_none_');
   for (const n of informNotes) console.log(`ℹ weekday seasonality — ${n}`);
+  // DT6 — base-position note (§7-style softened contract: printed only when there's a real, non-thin,
+  // non-'unknown'-shape read; a cold/new big-ticket item prints nothing here, never a fake percentile).
+  if (baseLines.length) {
+    console.log(`\nBase position (multi-week — where live sits in the ${BASEPOS_LOOKBACK_DAYS}d daily-mid range; MANUAL 90d drill for a big-ticket hold, not this):`);
+    for (const l of baseLines) console.log(`  ↳ ${l}`);
+  }
   // F-B: report the watchlist reserve honestly (0 when nothing on watchlist.json needed it — byte-identical wording otherwise).
   const watchReserved = survivors.filter(s => s.watched).length;
   console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy${watchReserved ? ` + ${watchReserved} watchlist-reserved` : ''}) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
@@ -2081,7 +2115,7 @@ async function main() {
   for (const m of RUN_MODES) niches[m] = FLIP_NICHES[m].gate === 'value'
     ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
     : FLIP_NICHES[m].gate === 'amplitude'
-    ? renderAmplitudeMode(gated[m], qcache, map, series1h, guide)                // A2 — the amplitude niche's own daily-cycle table
+    ? renderAmplitudeMode(gated[m], qcache, map, series1h, guide, daily)         // A2 — the amplitude niche's own daily-cycle table; DT6 — `daily` threaded in for the base-position note
     : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn });
   // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): print the ONE cross-niche decision digest, collected
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it

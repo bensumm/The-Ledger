@@ -189,3 +189,17 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
 
   return bits.join(' · ');
 }
+
+/**
+ * formatBasePosition(bp) → "base pXX of the <N>d range · <label>" or null — PLAN-DIURNAL-TIMING DT6.
+ * PURE formatter over an already-computed `basePosition()` result (js/termstructure.mjs). Mirrors
+ * formatTimedLap's split: the caller computes once (off the SAME `termStructure(...)` already in
+ * hand for floorValidator), this only renders text — never recomputed, never a second structure read.
+ * `bp == null` (degraded/thin/unknown-shape) → null, so a cold/new item prints nothing (never a fake
+ * percentile) — same §7 "compute always, print only when there's something to say" contract DT1-DT5
+ * use for the diurnal note.
+ */
+export function formatBasePosition(bp) {
+  if (!bp) return null;
+  return `base p${bp.pct} of the ${bp.days}d range · ${bp.label}`;
+}
