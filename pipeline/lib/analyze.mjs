@@ -13,6 +13,7 @@
  * signal into a confident claim.
  */
 import { fmt, fmtTurn } from '../../js/money-format.js';
+import { tax } from '../../js/quotecore.js';   // the ONE tax impl — shadow net is after-tax like the realized net
 
 // --- NAMED PLACEHOLDER thresholds (audit SHAPE, not tuned magnitudes) --------------------------------
 export const MIN_N_CANDIDATE = 20;        // a tuning candidate needs at least this many suggestions in its group
@@ -249,4 +250,38 @@ export function deriveCandidates(perNiche, sug, { minN = MIN_N_CANDIDATE } = {})
       pointsAt: `the '${k}' validator thresholds (js/validate.mjs) — needs a not-taken→would-have-filled counterfactual to become a real candidate` });
   }
   return cands;
+}
+
+/* amplitudeRetro(retroRows, opts) → the F-G shadow-vs-realized readout for the amplitude niche (PLAN-
+ * OSCILLATION-CYCLE F-G). PURE. Filters the retroJoin rows to `mode==='amplitude'` picks that actually
+ * closed a realized round-trip (realisedNet != null) and, per pick, lines the LOGGED amplitude shadow
+ * (ampBid→ampAsk + the drift-adjusted margin) up against the REALIZED fill (buyEach→sellEach + realized
+ * net/u). The AGGREGATE `discount` = (Σ shadowNet − Σ realizedNet) / Σ shadowNet — the shadow-vs-real
+ * fill gap (positive = the real round-trip fell short of the printed shadow). Both nets are AFTER-TAX
+ * per unit so they compare apples-to-apples (shadowNet = afterTax(ampAsk) − ampBid; realizedNet =
+ * realisedPerUnit, already after-tax off the FIFO match).
+ *
+ * HONESTY (rule 4): n-gated by the SAME MIN_N_CANDIDATE floor as the tuning candidates (no new
+ * threshold). `belowFloor` is set whenever the pick count is under the floor — the current reality is
+ * n=0 (no amplitude round-trip has closed yet), and the caller prints the honest "awaiting real fills"
+ * line, never a fabricated table. The per-pick rows are FACTS (a printed level vs a realized fill); the
+ * aggregate discount is the CONCLUSION the caller must caveat as not-yet-calibrated below the floor. */
+export function amplitudeRetro(retroRows, { minN = MIN_N_CANDIDATE } = {}) {
+  const picks = (retroRows || []).filter(r => r && r.mode === 'amplitude' && r.realisedNet != null && r.realisedPerUnit != null);
+  const rows = picks.map(r => {
+    const amp = r.amplitude || null;
+    const ampBid = amp && Number.isFinite(amp.ampBid) ? amp.ampBid : null;
+    const ampAsk = amp && Number.isFinite(amp.ampAsk) ? amp.ampAsk : null;
+    const driftMargin = amp && amp.drift && Number.isFinite(amp.drift.margin) ? amp.drift.margin : null;
+    const shadowNet = (ampBid != null && ampAsk != null) ? Math.round((ampAsk - tax(ampAsk)) - ampBid) : null;
+    return { itemId: r.itemId, ampBid, ampAsk, driftMargin, shadowNet,
+      buyEach: r.fillEach, sellEach: r.sellEach, realizedNet: r.realisedPerUnit };
+  });
+  // aggregate only over picks where BOTH a shadow net (had a logged amplitude block) and a realized net exist
+  const paired = rows.filter(x => x.shadowNet != null && x.realizedNet != null);
+  const shadowSum = paired.reduce((a, x) => a + x.shadowNet, 0);
+  const realizedSum = paired.reduce((a, x) => a + x.realizedNet, 0);
+  const discount = (paired.length && shadowSum !== 0) ? (shadowSum - realizedSum) / shadowSum : null;
+  return { n: picks.length, nPaired: paired.length, minN, belowFloor: picks.length < minN,
+    rows, shadowSum, realizedSum, discount };
 }

@@ -102,7 +102,9 @@ const q75 = a => quantileOf(a, 0.75);
  * the qty-weighted realized GROSS sell price, so sell-side joins like the Bar E raw-top-reach
  * question are no longer buy-keyed-only) where one exists,
  * and suggestedNetPerUnit for the realized-vs-suggested comparison. mode/path are carried through
- * for attribution (path absent on rows that predate P4c → grouped under mode only). */
+ * for attribution (path absent on rows that predate P4c → grouped under mode only), and `amplitude`
+ * carries the logged amplitude-shadow block through for F-G's shadow-vs-realized readout (null off
+ * every non-amplitude row + all pre-F-G history). */
 export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY_MODE } = {}) {
   const events = Array.isArray(fillsEvents) ? fillsEvents : [];
   const deduped = dedupeSnapshots(events);
@@ -150,8 +152,13 @@ export function retroJoin(suggestions, fillsEvents, { horizonByMode = HORIZON_BY
     const path = (s && s.path != null) ? s.path : null;
     const claimed = (claims.get(idx) || []).slice().sort((a, b) => a.tsFirstFill - b.tsFirstFill);
     const refBuy = s ? refBuyOf(s) : null;
+    // F-G (PLAN-OSCILLATION-CYCLE): carry the logged amplitude SHADOW block (suggestlog.amplitudeShadow —
+    // ampBid/ampAsk/holdDays/drift{margin,…}) onto the retro row, mirroring the path/refBuy suggestion-native
+    // passthrough above. Additive + pure: a suggestion with no amplitude block (every non-amplitude niche + all
+    // pre-F-G history) degrades to null. analyze-record's amplitude shadow-vs-realized readout lines this up
+    // against the realized fill; no new joiner — aggregateOutcomes already groups the amplitude niche.
     const base = { itemId: s ? s.itemId ?? null : null, ts: s ? s.ts ?? null : null, script: s ? s.script ?? null : null,
-      mode, path, refBuy, suggestedNetPerUnit: s ? suggestedNetPerUnit(s) : null };
+      mode, path, refBuy, amplitude: s ? (s.amplitude ?? null) : null, suggestedNetPerUnit: s ? suggestedNetPerUnit(s) : null };
     if (!claimed.length) {
       return { ...base, outcome: 'not-taken', latencySec: null, fillEach: null, priceKnown: refBuy != null,
         partial: false, realisedNet: null, realisedPerUnit: null, sellEach: null, holdSec: null };

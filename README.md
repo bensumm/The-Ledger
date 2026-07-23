@@ -708,14 +708,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     spread, and realized profit per unit of attention — over EVERY suggestion row × `fills.json`
     buy offers. The SUGGESTION-keyed FORWARD counterpart to join-outcomes.mjs's campaign-keyed backward
     join; the ground-truth TTF calibrator for P6 and the input to the band/churn
-    consolidation question (the spread/rising flip-niches were deleted in Steps 3+4). Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
+    consolidation question (the spread/rising flip-niches were deleted in Steps 3+4). Each retro row also
+    carries the logged `amplitude` shadow block through (F-G — null off every non-amplitude row + pre-F-G
+    history) for the §2b shadow-vs-realized readout. Join logic is the pure `lib/retrojoin.mjs`; `--json` dumps raw rows.
     n on every aggregate, deliberately NO grades/verdicts — the archive is weeks-cold and mostly
     not-taken),
     `analyze.mjs` (PLAN-ANALYZE AZ1 — the ANALYSIS ENGINE: read-only IO+print shell that AUDITS the
     dataset's health (ledger freshness/volume, field-DROP detection — an ALWAYS_FIELD that stopped being
     logged, fills⇆ledger un-attributed-buy coherence, a rebuildability PROXY = inputs parse + positions.json
     fresh vs fills.json, and forward-data recommendations), ORCHESTRATES the existing joins for a compact
-    per-flip-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), a **DL2
+    per-flip-niche RETRO ROLLUP (invokes `retroJoin`/`aggregateOutcomes` — re-implements nothing), an
+    **amplitude shadow-vs-realized readout §2b** (F-G — `amplitudeRetro`: per closed amplitude round-trip,
+    the logged shadow `ampBid→ampAsk ±drift-margin` vs the realized `buy→sell net`, plus the aggregate
+    DISCOUNT = (Σ shadow net − Σ realized net)/Σ shadow net; n-gated by the SAME `MIN_N_CANDIDATE` floor —
+    n=0 today prints an honest "awaiting real fills" line, deploy-small-to-learn/tuition posture, gates
+    NOTHING), a **DL2
     dip-loop retro §4** (`dipLoopAudit` — joins the widened flush log against the retro rows, segments
     `alerted` (liquid) from `signal-only` (illiquid → DL3 input) rows, and computes fillable-vs-not
     separation over the alerted subset; candidate-surfacing → points at F1, never retunes; n≈0 placeholder),

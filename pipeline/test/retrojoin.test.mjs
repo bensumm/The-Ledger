@@ -192,4 +192,25 @@ ok('deterministic: same fixtures produce identical rows + aggregates', () => {
   assert.equal(a.rows[2].outcome, 'not-taken');    // 300 never bought
 });
 
+// --- 10. F-G: the amplitude shadow block is carried through onto the retro row ----------------
+ok('base.amplitude carries the logged amplitude shadow block through (null when absent)', () => {
+  const T0 = 1_000_000;
+  const ampBlock = { ampBid: 100, ampAsk: 130, holdDays: 1.5, drift: { margin: 12, driftAdjustedPeak: 128 } };
+  const withAmp = sug(T0, 100, { mode: 'amplitude', optBuy: 100, amplitude: ampBlock });
+  const noAmp   = sug(T0, 200, { mode: 'band', optBuy: 50 });   // no amplitude block
+  const events = [
+    ...buyOffer(1, 100, 90, 10, 10, T0 + 10, T0 + 100),
+    ...buyOffer(2, 200, 40, 10, 10, T0 + 10, T0 + 100),
+  ];
+  const { rows } = retroJoin([withAmp, noAmp], events);
+  assert.deepEqual(rows[0].amplitude, ampBlock, 'amplitude block carried through verbatim');
+  assert.equal(rows[1].amplitude, null, 'a row with no amplitude block → null (degrades cleanly)');
+  // a not-taken amplitude row still carries the block (the enrichment is off the suggestion, not the fill)
+  const { rows: nt } = retroJoin([withAmp], []);
+  assert.deepEqual(nt[0].amplitude, ampBlock);
+  // a null suggestion index never throws and reads null
+  const { rows: pre } = retroJoin([sug(T0, 300, { mode: 'amplitude', optBuy: 5 })], []);
+  assert.equal(pre[0].amplitude, null, 'amplitude undefined on the suggestion → null, no throw');
+});
+
 console.log(`\n✓ retrojoin.test.mjs — ${pass} assertions passed.`);

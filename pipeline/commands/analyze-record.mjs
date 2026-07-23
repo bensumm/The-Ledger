@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from '../lib/cli.mjs';
 import { readSuggestionLines } from '../lib/suggestlog.mjs';
 import { retroJoin, aggregateOutcomes } from '../lib/retrojoin.mjs';
-import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from '../lib/analyze.mjs';
+import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, amplitudeRetro, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from '../lib/analyze.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..', '..');
@@ -69,6 +69,7 @@ const minN = MIN_N ?? MIN_N_DEFAULT;
 const candidates = deriveCandidates(perNiche, sug, { minN: MIN_N });
 const dipLoop = dipLoopAudit(sug.rows, retroRows);   // DL2 — FLUSH firings ⇆ fills.json retro
 const askHead = askHeadroomAudit(sug.rows, retroRows);   // Bar E — ask-headroom flags ⇆ fills.json retro
+const ampRetro = amplitudeRetro(retroRows, { minN: minN });   // F-G — amplitude shadow(ampBid→ampAsk) ⇆ realized fill
 
 const brief = {
   generatedAt: nowSec,
@@ -85,6 +86,7 @@ const brief = {
   candidates,
   dipLoop,
   askHead,
+  ampRetro,
   minN,
 };
 
@@ -120,6 +122,28 @@ console.log('  ' + line(rollupHead));
 console.log('  ' + w.map(x => '-'.repeat(x)).join('  '));
 for (const r of rollupRows) console.log('  ' + line(r));
 console.log(`  (full band-percentile × liquidity fill-time cells: node pipeline/commands/join-outcomes.mjs --report)`);
+
+// ---- 2b. Amplitude shadow-vs-realized (F-G) ---------------------------------------------------------
+// The AGGREGATE amplitude row already appears in §2 the moment a round-trip closes (HORIZON_BY_MODE.amplitude
+// + aggregateOutcomes, ZERO new join). This PICK-LEVEL readout lines the LOGGED amplitude shadow (ampBid→ampAsk
+// + the drift-adjusted margin) up against the REALIZED fill (buy→sell net) and reports the aggregate DISCOUNT —
+// the shadow-vs-real fill gap. n-gated by the SAME MIN_N floor as §3; deploy-small-to-learn (tuition) posture —
+// the CONCLUSION (does oscillating + positive drift-margin actually predict profit?) is Ben's to draw once REAL
+// closed cycles accrue; this instrumentation gates NOTHING (floors + real-breakdown cuts still hold).
+console.log(`\n## 2b. Amplitude shadow-vs-realized (F-G) — logged shadow(ampBid→ampAsk ±drift) ⇆ realized fill`);
+if (!ampRetro.n) {
+  console.log(`  no realized amplitude cycles yet — awaiting real fills (n=0). The amplitude niche logs a shadow on every survivor, but no amplitude BUY→SELL round-trip has closed; nothing to compare (rule 4).`);
+} else {
+  for (const r of ampRetro.rows) {
+    const shadow = `shadow ${r.ampBid != null ? r.ampBid.toLocaleString() : '—'}→${r.ampAsk != null ? r.ampAsk.toLocaleString() : '—'} (net ${gp(r.shadowNet)}${r.driftMargin != null ? `, drift margin ${gp(r.driftMargin)}` : ''})`;
+    const real = `realized ${r.buyEach != null ? r.buyEach.toLocaleString() : '—'}→${r.sellEach != null ? r.sellEach.toLocaleString() : '—'} (net ${gp(r.realizedNet)})`;
+    console.log(`    - #${r.itemId} · ${shadow} · ${real}`);
+  }
+  const disc = ampRetro.discount != null ? pct(ampRetro.discount) : '—';
+  console.log(`  aggregate over ${ampRetro.nPaired} paired pick(s): shadow Σ ${gp(ampRetro.shadowSum)} · realized Σ ${gp(ampRetro.realizedSum)} · DISCOUNT (shadow−real)/shadow ${disc}`);
+  if (ampRetro.belowFloor)
+    console.log(`  ⚠ n=${ampRetro.n} < ${ampRetro.minN} — the per-pick lines are facts, but the aggregate discount is NOT a calibrated conclusion (deploy-small-to-learn/tuition posture; the "does oscillating+margin predict profit?" call is Ben's once real cycles accrue — rule 4).`);
+}
 
 console.log(`\n## 3. Tuning candidates (n ≥ ${minN}; each is a flag for F1, never applied here)`);
 const realCands = candidates.filter(c => c.kind === 'candidate');

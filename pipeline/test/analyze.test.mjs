@@ -18,9 +18,10 @@
  */
 import assert from 'node:assert/strict';
 import {
-  auditDataset, deriveCandidates, fieldPresence, askHeadroomAudit,
+  auditDataset, deriveCandidates, fieldPresence, askHeadroomAudit, amplitudeRetro,
   MIN_N_CANDIDATE, FIELD_DROP_MIN_WINDOW,
 } from '../lib/analyze.mjs';
+import { tax } from '../../js/quotecore.js';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -202,6 +203,57 @@ ok('askHeadroomAudit: a realized sell BELOW the raw top reads rawTopReached=fals
   assert.equal(a.rows[0].rawTopReached, false);
   assert.equal(a.rawTopKnownTrusted, 1);
   assert.equal(a.rawTopReachedTrusted, 0);
+});
+
+// --- amplitudeRetro (F-G shadow-vs-realized) -------------------------------------------------
+ok('amplitudeRetro: no amplitude round-trips → n=0, discount null (the awaiting-fills path)', () => {
+  const a = amplitudeRetro([]);
+  assert.equal(a.n, 0);
+  assert.equal(a.nPaired, 0);
+  assert.equal(a.discount, null);
+  assert.equal(a.belowFloor, true);
+  // a non-amplitude row and an amplitude row with no realized round-trip both contribute nothing
+  const b = amplitudeRetro([
+    { mode: 'band', realisedNet: 500, realisedPerUnit: 50, amplitude: { ampBid: 1, ampAsk: 2 } },
+    { mode: 'amplitude', realisedNet: null, realisedPerUnit: null, amplitude: { ampBid: 1, ampAsk: 2 } },
+  ]);
+  assert.equal(b.n, 0, 'only amplitude rows WITH a realized round-trip count');
+});
+
+ok('amplitudeRetro: a synthetic closed amplitude round-trip computes shadowNet + discount, n-gated', () => {
+  // shadow: bid 100 → ask 130 (after-tax net = afterTax(130) − 100); realized: bought 95, sold 128, net/u 30
+  const ampBid = 100, ampAsk = 130;
+  const shadowNet = Math.round((ampAsk - tax(ampAsk)) - ampBid);   // the SAME formula the lib uses
+  const row = {
+    itemId: 26219, mode: 'amplitude', realisedNet: 300, realisedPerUnit: 30, fillEach: 95, sellEach: 128,
+    amplitude: { ampBid, ampAsk, drift: { margin: 12 } },
+  };
+  const a = amplitudeRetro([row]);
+  assert.equal(a.n, 1);
+  assert.equal(a.nPaired, 1);
+  assert.equal(a.rows[0].shadowNet, shadowNet, 'shadow net = afterTax(ampAsk) − ampBid');
+  assert.equal(a.rows[0].driftMargin, 12);
+  assert.equal(a.shadowSum, shadowNet);
+  assert.equal(a.realizedSum, 30);
+  // discount = (shadow − realized) / shadow
+  assert.ok(Math.abs(a.discount - (shadowNet - 30) / shadowNet) < 1e-9);
+  assert.equal(a.belowFloor, true, 'n=1 < MIN_N floor → below-floor (no calibrated conclusion)');
+});
+
+ok('amplitudeRetro: clears belowFloor only at/above the n-floor; a row with no amplitude block degrades', () => {
+  const mk = (id) => ({ itemId: id, mode: 'amplitude', realisedNet: 100, realisedPerUnit: 10, fillEach: 90, sellEach: 120,
+    amplitude: { ampBid: 100, ampAsk: 130 } });
+  const rows = [];
+  for (let i = 0; i < MIN_N_CANDIDATE; i++) rows.push(mk(1000 + i));
+  const a = amplitudeRetro(rows);
+  assert.equal(a.n, MIN_N_CANDIDATE);
+  assert.equal(a.belowFloor, false, 'at the floor → no below-floor caveat');
+  // an amplitude round-trip with NO logged amplitude block: counted as a pick but excluded from the paired aggregate
+  const b = amplitudeRetro([{ itemId: 7, mode: 'amplitude', realisedNet: 100, realisedPerUnit: 10, fillEach: 90, sellEach: 120, amplitude: null }]);
+  assert.equal(b.n, 1);
+  assert.equal(b.nPaired, 0, 'no ampBid/ampAsk → no shadow net → excluded from the discount');
+  assert.equal(b.discount, null);
+  assert.equal(b.rows[0].shadowNet, null);
 });
 
 console.log(`\nanalyze.test: ${pass} assertions passed.`);
