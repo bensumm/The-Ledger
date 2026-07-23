@@ -1574,8 +1574,33 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
 // NOT a bespoke composite). Every row is flagged PROVISIONAL (n≈0). Picks accrue via the O1 suggestions
 // ledger (mode 'amplitude') with the §A5 shadow both-leg-replay block. OFF the app (excluded from
 // screen.json); surfaces under deploy/accumulate, never as act-now rows (patient multi-hour plays).
-const AMP_HEADERS = ['Item', 'Guide', 'Live', 'Daily swing (trough→peak)', 'Both-leg reach (bid·ask, recent-3)', 'Net/cycle (after-tax)', 'Hold horizon', 'Deploy units', 'Grade'];
+const AMP_HEADERS = ['Item', 'Guide', 'Live', 'Daily swing (trough→peak)', 'Both-leg reach (recent / full) + phase', 'Net/cycle (after-tax)', 'Hold horizon', 'Deploy units', 'Grade'];
 const AMP_NIGHTS = 14;   // the per-item daily windowStats lookback (full-day wStart:0,wEnd:0)
+
+// PLAN-OSCILLATION-CYCLE F-F — the trough-vs-decay DISPLAY annotation for the amplitude reach cell.
+// WHY: the "both-leg reach" cell reads recent-3 daily hits, but a 3-day window is SHORTER than the ~7–8d
+// oscillation cycle — so a trough-phase oscillator reads a low recent reach (e.g. ask 0/3) at exactly the
+// entry you want, over-implying "sell-unreliable". Full-vs-recent divergence ALONE can't tell a trough-phase
+// oscillator (will recover) from a genuine decay (won't) — BOTH show full-high/recent-low. The real
+// discriminator is slope + amplitude, which the lane ALREADY computes. This is a DISPLAY note, not a
+// reach-window change: it touches nothing upstream of the gate.
+// The 3-signal classifier (all already in local scope at the gate stage — NO new compute/fetch):
+//   osc         = oscillationVsKnife(stats.days)  → osc.oscillating
+//   dae         = driftExitFrom(...)              → dae.floorSlope (signed gp/day)
+//   driftShadow = amplitudeDriftMargin(dae, ...)  → driftShadow.margin (signed after-tax margin)
+// CRITICAL (F-F wording constraint, verified live): the knife bucket must NOT say "decay" or ANY
+// floor-direction word. A RISING floor with COLLAPSED amplitude (the Aldarium mirage: rising+hollow →
+// {oscillating:false, knife:true}) ALSO lands here — "decay" would be a false direction-label on a rising
+// item, exactly the direction-labeling the whole program retired (js/forecast.mjs: "direction is only ever
+// an intermediate of the arithmetic"). Keep it generic + direction-agnostic. n≈0 — this doesn't create a
+// new claim, it stops an existing display from over-implying "sell-unreliable".
+export function reachPhaseNote(osc, dae, driftShadow) {
+  if (!(osc && osc.oscillating)) return 'no real cycle to harvest';   // knife — direction-AGNOSTIC (no floor word)
+  const floorSlope = (dae && dae.floorSlope != null) ? dae.floorSlope : 0;
+  if (floorSlope >= 0) return 'trough phase — floor holding, oscillation intact';
+  const clears = !!(driftShadow && driftShadow.margin != null && driftShadow.margin > 0);
+  return `oscillating into a falling floor — drift margin ${clears ? 'still clears' : 'does not clear'}`;
+}
 function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) {
   const rows = [], sugg = [];
   const informNotes = [];
@@ -1629,7 +1654,11 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     const r = rateItem({ row, rank, thin: s.thin });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1)
     const grade = r.grade;
     const ampPct = (ar.ampPct != null) ? (ar.ampPct * 100) : null;
-    const reachCell = `${ar.bidTouch.recentHit}/${ar.bidTouch.recentDays || AMP_HOLD_DAYS} · ${ar.askReach.recentHit}/${ar.askReach.recentDays || AMP_HOLD_DAYS}`;
+    // F-F: surface the FULL-window reach alongside recent-3 (recencySplit already returns fullHit/fullN —
+    // format change only), then annotate the trough-vs-decay phase so a low recent reach on a trough-phase
+    // oscillator no longer over-implies "sell-unreliable". `osc`/`dae`/`driftShadow` are already in scope.
+    const rf = t => `${t.recentHit}/${t.recentDays || AMP_HOLD_DAYS}·${t.fullHit}/${t.fullN}`;
+    const reachCell = `${rf(ar.bidTouch)} · ${rf(ar.askReach)} — ${reachPhaseNote(osc, dae, driftShadow)}`;
     const cells = [
       { t: name }, { t: guide && guide[s.id] != null ? fmtP(guide[s.id]) : '—' }, { t: fmtP(live) },
       { t: `${fmtP(ar.ampBid)} → ${fmtP(ar.ampAsk)}` },

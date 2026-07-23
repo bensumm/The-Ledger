@@ -177,7 +177,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   its one-way arrow) so it rides beside EVERY price suggestion (`quote-items.mjs` trajectory note,
   `read-window-range.mjs`, and — APP-VISIBLE — `js/trends.js` `renderForecast`); a projected LEVEL never a
   direction verdict, display-only, degrade-clean; **APP_VERSION-bumped** (reaches `js/trends.js`). Pinned by
-  `pipeline/test/oscillation-render.test.mjs`),
+  `pipeline/test/oscillation-render.test.mjs`). F-F adds a trough-vs-decay DISPLAY annotation to the
+  amplitude reach cell (`reachPhaseNote` in `screen-flip-niches.mjs` — recent+full both-leg reach plus a
+  3-signal phase note off `oscillating`/`floorSlope`/`margin`, direction-agnostic in the knife bucket,
+  console-only; pinned by `pipeline/test/oscillation-reachphase.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
   reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
