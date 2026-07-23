@@ -580,8 +580,9 @@ simultaneous independent rungs on one item.
 - **Diurnal timing (auto).** `screen-flip-niches.mjs` runs `js/windowread.mjs` `diurnalTimedLap` on
   EVERY flip-niche survivor (PLAN-DIURNAL-TIMING DT2, 2026-07-23 — was top-picks-only; zero extra fetch,
   the 1h series is already in hand) and prints a **Diurnal timing** block via the ONE shared renderer
-  `pipeline/lib/emit.mjs` `formatTimedLap` (also the future `quote-items.mjs`/`watch-positions.mjs` DT3
-  call site — one diurnal-text definition, not several that can silently disagree). Two shapes off
+  `pipeline/lib/emit.mjs` `formatTimedLap` (also `quote-items.mjs`'s DT3 call site, so
+  `screen-flip-niches.mjs` and `quote-items.mjs` render byte-identical diurnal text off one
+  definition, not several that can silently disagree). Two shapes off
   `hourConcentration`'s verdict (replaces the old `★` clean-candidate flag):
   - **Clean cycle** — the stale-guarded BID (recent dip-window level, priced to LIVE when a dominating
     trend erases the dip — the Ghrazi lesson) and ASK (recent peak-window level), the TIMED trough→peak
@@ -603,12 +604,17 @@ simultaneous independent rungs on one item.
   — maxed the limit as the peak closed → 5u stranded ~16h). STDOUT-only (the diurnal block never reaches
   `screen.json`); a degraded/unpriceable lap renders nothing (§7's softened contract — every survivor is
   COMPUTED, only a row with something to say PRINTS).
-  `quote-items.mjs` still prints the PRE-DT2 raw `hourProfile`+`deriveDiurnalRange` BID/ASK/net-roi line
-  (DT3, not yet landed, moves it onto the same `diurnalTimedLap`/`formatTimedLap` pair); `read-window-range.mjs
-  --profile` prints the full hour-by-hour table; the app renders the pre-DT2 shape in Trends (DT5, not
-  yet landed, reconciles `js/trends.js`'s own local `clean` predicate onto `hourConcentration`). This is
-  the ENCODED form of the manual windowrange dance — read the block; the manual read is now a
-  CONFIRMATION.
+  `quote-items.mjs`'s bare-quote path now renders the SAME richer `diurnalTimedLap`/`formatTimedLap`
+  note under the `diurnal` NOTE_KIND (PLAN-DIURNAL-TIMING DT3, 2026-07-23 — superseded the old raw
+  `hourProfile`+`deriveDiurnalRange` BID/ASK/net-roi line; `prof`/`dr` themselves stay in the file,
+  feeding `extraEst.diurnal`, the window-clear peak window, and the forward E4 inputs — only the
+  RENDERED note changed). DT3 also swaps `watch-positions.mjs`'s two direct `hourProfile`+
+  `deriveDiurnalRange` call sites (the shadow-log bid/ask co-log, the `diurnalAsk` cycle-fallback exit)
+  onto `diurnalTimedLap` — those are value consumers, not note-render sites, so only the underlying
+  computation moved, the numbers are unchanged. `read-window-range.mjs --profile` prints the full
+  hour-by-hour table; the app renders the pre-DT2 shape in Trends (DT5, not yet landed, reconciles
+  `js/trends.js`'s own local `clean` predicate onto `hourConcentration`). This is the ENCODED form of
+  the manual windowrange dance — read the block; the manual read is now a CONFIRMATION.
 - **Soft-buy (ADD-while-holding) timing, inform-only, n≈0.** `quote-items.mjs` prints a `⏳ soft-buy`
   line beside each held lot (and on bare quotes) off the SAME `hourProfile` — `js/windowread.mjs`
   `softBuyRead`/`formatSoftBuy`: `soft-buy: dip HH:00–HH:00 · live @floor | +X% · buy now | wait`. The

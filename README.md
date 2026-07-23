@@ -113,7 +113,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   specifically) + `hourConcentration`'s `clean` verdict; degrades to `{degraded:true, reason}`, never a
   throw. DT2 (2026-07-23) wires this into `screen-flip-niches.mjs` for EVERY flip-niche survivor
   (was top-picks-only via raw `hourProfile`+`deriveDiurnalRange`), rendered through the ONE shared
-  `pipeline/lib/emit.mjs` `formatTimedLap` — see that file's README entry) + **`softBuyRead`/`formatSoftBuy`** (2026-07-22 — the ADD-while-holding
+  `pipeline/lib/emit.mjs` `formatTimedLap` — see that file's README entry. DT3 (2026-07-23) wires the
+  SAME `diurnalTimedLap`+`formatTimedLap` pair into `quote-items.mjs`'s bare-quote `kind:'diurnal'`
+  note (`prof`/`dr` themselves stay — they still feed `extraEst.diurnal`, the window-clear peak window,
+  and the forward E4 inputs), and swaps `watch-positions.mjs`'s two direct `hourProfile`+
+  `deriveDiurnalRange` call sites (the shadow-log bid/ask co-log, the `diurnalAsk` cycle-fallback exit)
+  for `diurnalTimedLap` — those two are VALUE consumers, not note-render sites, so only the underlying
+  computation moved) + **`softBuyRead`/`formatSoftBuy`** (2026-07-22 — the ADD-while-holding
   soft-buy timing read off the SAME `hourProfile`: the diurnal DIP window + a live-vs-dip-floor `@floor`/`+X%`
   marker at `SOFT_BUY_AT_FLOOR_PCT`, ending in a `buy now`/`wait` cue; `quote-items.mjs` renders it as the
   `⏳ softBuy` note on held lots + bare quotes, mirroring the digest soft-buy column's cell format so both
@@ -966,12 +972,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     orders/formats already-computed pieces, decides nothing — output-format-only; PLAN-DIURNAL-TIMING
     DT2 adds `formatTimedLap(lap, {fmt})` here too — the ONE shared renderer for a `js/windowread.mjs`
     `diurnalTimedLap` result, SUPERSEDING the old per-call-site diurnal text so `screen-flip-niches.mjs`
-    (DT2, every flip-niche survivor) and, later, `quote-items.mjs`/`watch-positions.mjs` (DT3) render
-    byte-identical diurnal notes off one definition — same `diurnal` NOTE_KIND/sigil, richer text: a
-    clean-cycle BID/ASK+windows/timed+same-hour nets/range/reach/hold/base line, or a range-churn line
-    that omits the unreliable specific hours; both append a liquidity/tranche segment + the §4
-    tranche-ceiling caveat. Returns null (nothing printed) on a degraded/unpriceable lap — §7's softened
-    contract: every survivor's lap is COMPUTED, only a row with something to say PRINTS),
+    (DT2, every flip-niche survivor) and `quote-items.mjs`'s bare-quote path (DT3) render byte-identical
+    diurnal notes off one definition — same `diurnal` NOTE_KIND/sigil, richer text: a clean-cycle
+    BID/ASK+windows/timed+same-hour nets/range/reach/hold/base line, or a range-churn line that omits
+    the unreliable specific hours; both append a liquidity/tranche segment + the §4 tranche-ceiling
+    caveat. Returns null (nothing printed) on a degraded/unpriceable lap — §7's softened contract: every
+    survivor's lap is COMPUTED, only a row with something to say PRINTS. DT3 also swaps
+    `watch-positions.mjs`'s two direct `hourProfile`+`deriveDiurnalRange` call sites (the shadow-log
+    bid/ask co-log, the `diurnalAsk` cycle-fallback exit) for `diurnalTimedLap` — those are VALUE
+    consumers, not note-render sites, so only the computation moved, not the output shape),
     `recovery.mjs` (V6 — PURE `recoveryRead`/`recoveryLine`/`recoveryTrigger`: the ADVISORY
     recover-vs-drop LEAN that COMPOSES momVerdict's existing signals (diurnal · regime/phase ·
     underwater-persistence · vs structural support) + the trigger gating that surfaces it only on a

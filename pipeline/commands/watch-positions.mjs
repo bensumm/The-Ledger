@@ -72,7 +72,7 @@ import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs 
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
-import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, reachableBand, asymPair, askExitRead } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow
+import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
@@ -751,8 +751,11 @@ async function main() {
           ? { reachedDays: reachedDays(dayStats.his, it.row.optSell), nDays: dayStats.his.length, recentHit: askRc?.recentHit, recentDays: askRc?.recentDays } : null;
         const bidReach = (dayStats.lows.length && it.row.optBuy != null)
           ? { reachedDays: touchedDays(dayStats.lows, it.row.optBuy), nDays: dayStats.lows.length, recentHit: bidRc?.recentHit, recentDays: bidRc?.recentDays } : null;
-        const prof = hourProfile(it.ts1h, { nights: 14 });
-        const dr = prof ? deriveDiurnalRange(prof, { liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null }) : null;
+        // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair —
+        // SAME nights/liveLo/liveHi as before, so dr.bid/dr.ask/dr.peakWindow (read below for the shadow
+        // log + the windowExit peak-window record) come out identical to the old direct call.
+        const lap = diurnalTimedLap(it.ts1h, { nights: 14, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
+        const dr = lap.degraded ? null : lap;
         const estBase = {
           bidReach, askReach,
           diurnal: dr ? { bid: dr.bid, ask: dr.ask } : null,
@@ -813,9 +816,10 @@ async function main() {
       let diurnalAsk = null;
       if (it._thesis && it._thesis.tripwire != null && it._thesis.exitPrice == null) {
         try {
-          const prof = hourProfile(it.ts1h, { nights: 7 });
-          const dr = prof ? deriveDiurnalRange(prof, { liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null }) : null;
-          diurnalAsk = dr && dr.ask != null ? dr.ask : null;
+          // PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the hourProfile+deriveDiurnalRange pair —
+          // SAME nights:7/liveLo/liveHi as before, so the fallback ask is identical to the old direct call.
+          const lap = diurnalTimedLap(it.ts1h, { nights: 7, liveLo: it.row.quickBuy ?? null, liveHi: it.row.quickSell ?? null });
+          diurnalAsk = (!lap.degraded && lap.ask != null) ? lap.ask : null;
         } catch { /* fallback only — the frame degrades to "exit per plan" */ }
       }
       it._display = heldDisplay({ row: it.row, be: it.be, mv,

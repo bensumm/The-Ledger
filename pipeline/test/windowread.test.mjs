@@ -24,6 +24,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
+import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -928,6 +929,84 @@ ok('diurnalTimedLap: a rising day-to-day base (2800→2816→2948) flags lowTren
   assert.equal(r.degraded, false);
   assert.equal(r.lowTrend.dir, 'rising');
   assert.equal(r.hiTrend.dir, 'rising');
+});
+
+// --- PLAN-DIURNAL-TIMING DT3: quote-items.mjs / watch-positions.mjs wiring pins -------------------
+// (1) PARITY: watch-positions.mjs's two direct hourProfile+deriveDiurnalRange call sites now go
+//     through diurnalTimedLap instead — for the SAME nights/liveLo/liveHi, dr.bid/dr.ask/dr.peakWindow
+//     must come out byte-identical (the shadow-log co-log site uses nights:14, the diurnalAsk
+//     cycle-fallback site uses nights:7 — pin both).
+ok('DT3 parity: diurnalTimedLap(nights:14) reproduces the OLD hourProfile+deriveDiurnalRange pair exactly (watch-positions shadow-log site)', () => {
+  const s = boltsSeries(14);
+  const liveLo = 2830, liveHi = 3060;
+  const oldProf = hourProfile(s, { nights: 14, now: dtNow });
+  const oldDr = deriveDiurnalRange(oldProf, { liveLo, liveHi });
+  const lap = diurnalTimedLap(s, { nights: 14, now: dtNow, liveLo, liveHi });
+  assert.equal(lap.degraded, false);
+  assert.equal(lap.bid, oldDr.bid);
+  assert.equal(lap.ask, oldDr.ask);
+  assert.equal(lap.bidBasis, oldDr.bidBasis);
+  assert.deepEqual(lap.dipWindow, oldDr.dipWindow);
+  assert.deepEqual(lap.peakWindow, oldDr.peakWindow);
+  assert.equal(lap.trendDominates, oldDr.trendDominates);
+});
+
+ok('DT3 parity: diurnalTimedLap(nights:7) reproduces the OLD pair exactly (watch-positions diurnalAsk cycle-fallback site)', () => {
+  const s = boltsSeries(10);
+  const liveLo = 2830, liveHi = 3060;
+  const oldProf = hourProfile(s, { nights: 7, now: dtNow });
+  const oldDr = deriveDiurnalRange(oldProf, { liveLo, liveHi });
+  const lap = diurnalTimedLap(s, { nights: 7, now: dtNow, liveLo, liveHi });
+  assert.equal(lap.degraded, false);
+  assert.equal(lap.bid, oldDr.bid);
+  assert.equal(lap.ask, oldDr.ask);
+});
+
+ok('DT3 parity: thin history that made the OLD pair null (prof null) also degrades diurnalTimedLap — both surfaces treat it as "no fallback"', () => {
+  const thin = [dpt(dts(2026, 0, 5, 2), 100, 110)];
+  assert.equal(hourProfile(thin, { nights: 14, now: dtNow }), null);
+  const lap = diurnalTimedLap(thin, { nights: 14, now: dtNow });
+  assert.equal(lap.degraded, true);
+});
+
+// (2) END-TO-END WIRING: quote-items.mjs merges volDay/buyLimit onto the diurnalTimedLap result and
+//     renders via formatTimedLap — the exact composition DT2 already wired for screen-flip-niches.mjs.
+//     Pin it off REAL series fixtures (not literal lap objects, unlike render.test.mjs's DT2 pins) so
+//     the two-hop pipe (real 1h series → diurnalTimedLap → formatTimedLap) is exercised end to end.
+ok('DT3 end-to-end: a clean (bolts-shaped) fixture renders BOTH timed + same-hour net via the quote-items merge pattern', () => {
+  const s = boltsSeries(14);
+  const lap = { ...diurnalTimedLap(s, { nights: 14, now: dtNow, buyLimit: 5000, volDay: 858000, liveLo: 2830, liveHi: 3060 }), volDay: 858000, buyLimit: 5000 };
+  const text = formatTimedLap(lap);
+  assert.ok(text != null, 'a clean fixture with a priceable bid/ask must render a note');
+  assert.ok(text.includes('BID '), 'clean cycle — dip/peak hours render');
+  assert.ok(text.includes('timed +'), 'timed net present');
+  assert.ok(text.includes('same-hour'), 'same-hour instant net present');
+  assert.ok(text.includes('858k/d'), 'liquidity segment rides the merged volDay');
+});
+
+ok('DT3 end-to-end: a scattered (chin-shaped) fixture renders the range-churn frame, not specific hours', () => {
+  const troughRot = [0, 17, 3], peakRot = [12, 5, 20];
+  const s = [];
+  for (let di = 0; di < 9; di++) {
+    const tH = troughRot[di % 3], pH = peakRot[di % 3];
+    for (let h = 0; h < 24; h++) {
+      const dipExtra = h === tH ? 25 : 0;
+      const peakExtra = h === pH ? 40 : 0;
+      const low = 420 - 20 - dipExtra, hi = 420 + 20 + peakExtra;
+      s.push(dpt(dts(2026, 0, 5 + di, h), low, hi, 420000 / 24, 420000 / 24));
+    }
+  }
+  const lap = { ...diurnalTimedLap(s, { nights: 9, now: dtNow, volDay: 420000 }), volDay: 420000 };
+  const text = formatTimedLap(lap);
+  assert.ok(text != null);
+  assert.ok(text.startsWith('range-churn — no timing edge'), `must lead with the range-churn frame (got: ${text})`);
+  assert.ok(!text.includes('BID '), 'scattered per-day hours are unreliable — omitted');
+});
+
+ok('DT3 end-to-end: a degraded (too-thin) fixture renders no note at all — the §7 softened contract holds on the real wiring, not just literal lap fixtures', () => {
+  const thin = [dpt(dts(2026, 0, 5, 2), 100, 110)];
+  const lap = { ...diurnalTimedLap(thin, { nights: 14, now: dtNow }), volDay: 100000, buyLimit: 500 };
+  assert.equal(formatTimedLap(lap), null);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

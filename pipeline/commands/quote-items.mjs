@@ -32,7 +32,7 @@ import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHe
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile; driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL folded into the trajectory note
 import { tax } from '../../js/money-math.js';
 import { fmtP, fmt, fmtHour, fmtHourRange } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, softBuyRead, formatSoftBuy, windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, asymPair, touchedDays, reachedDays, recencySplit, windowClear, windowClearDiverges, reachableBand, clearableAsk, placement, askExitRead } from '../../js/windowread.mjs';   // softBuyRead/formatSoftBuy — per-held-lot ⏳ soft-buy timing (ADD-while-holding); PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read folded under the trajectory line (both quote surfaces); COD-4 — diurnal BID/ASK timing off the now-in-hand 1h series; PART II — asym deep-bid/high-reach-ask pair off the same series; PLAN-OUTPUT-TABLE — touch/reach counts (+ RC1 recent-3 split) feed the est confidence; PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure/depth co-log; placement — the percentile read read-window-range.mjs surfaces (PLAN-QUOTE-PLACEMENT: fold it onto the quote itself, zero new fetch); PLAN-DIURNAL-TIMING DT3 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal NOTE computation (prof/dr themselves stay — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the forward E4 inputs)
 import { asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PART II — the asymmetric-fill inform read (P_ask weight / P_bid optionality); PLAN-OUTPUT-TABLE — the reconciliation Est. buy/sell pair (default view; --raw restores Quick/Optimistic); PC3 — SELL_TOP_MODELS validates --est-sell
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — the ⚓ round-number nudge injected into estimatePair (final step; nudge, never override)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
@@ -51,7 +51,7 @@ import { buysByItem, limitWindow } from '../lib/limits.mjs';   // LM1 — per-it
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 advisory
 import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } from '../lib/item-context.mjs';   // P0 — the shared context chain + held-verdict renderer; P4b — the shared dominant-path line; COD-4 — the shared positions.json-age banner
-import { depthReachClause } from '../lib/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices)
+import { depthReachClause, formatTimedLap } from '../lib/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site)
 import { loadState, ALERT_PERSIST_MS } from '../lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
 
@@ -336,13 +336,19 @@ async function runItems() {
     // stale-guarded to live (the Ghrazi lesson lives in deriveDiurnalRange). tax() nets the after-tax swing.
     const prof = hourProfile(inp.ts1h, { nights: 7 });
     const dr = prof ? deriveDiurnalRange(prof, { liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null }) : null;
-    if (dr && dr.bid != null && dr.ask != null) {
-      const win = w => `${fmtHour(w.startH)}–${fmtHour(w.endH)}`;
-      const net = Math.round(dr.ask - tax(dr.ask) - dr.bid);
-      const roi = dr.bid ? (net / dr.bid * 100) : null;
-      const trend = prof.trendDominates ? ' ⚠ trend-dominates → bid to live' : '';
-      notes.push({ kind: 'diurnal', itemId: id, text: `diurnal: BID ${fmt(dr.bid)} (${dr.bidBasis}, dip ${win(dr.dipWindow)}) · ASK ${fmt(dr.ask)} (peak ${win(dr.peakWindow)})${net != null ? ` · ~${fmt(net)}/u${roi != null ? ` (${roi.toFixed(1)}%)` : ''}` : ''}${trend}` });
-    }
+    // PLAN-DIURNAL-TIMING DT3: the RENDERED note is now the shared diurnalTimedLap + formatTimedLap
+    // (pipeline/lib/emit.mjs) — same `diurnal` NOTE_KIND/sigil, richer text (timed AND same-hour net,
+    // range, bid/ask reach, hold horizon, base trend, liquidity/tranche segment). prof/dr above are KEPT
+    // AS-IS — they still feed extraEst.diurnal, windowClear's peak window, pushTrajectory, and the
+    // forward E4 inputs below (zero behavior change to those paths); diurnalTimedLap recomputes its own
+    // hourProfile internally off the SAME inp.ts1h/nights:7/liveLo/liveHi, so dr.bid/dr.ask are identical
+    // to what the timed lap derives. §7 softened: no note on a degrade (formatTimedLap returns null).
+    const timedLap = { ...diurnalTimedLap(inp.ts1h, {
+      nights: 7, buyLimit: map.byId[id]?.limit ?? null, volDay: row.volDay ?? null,
+      liveLo: row.quickBuy ?? null, liveHi: row.quickSell ?? null,
+    }), volDay: row.volDay ?? null, buyLimit: map.byId[id]?.limit ?? null };
+    const timedLapText = formatTimedLap(timedLap, { fmt });
+    if (timedLapText) notes.push({ kind: 'diurnal', itemId: id, text: timedLapText });
     // The ADD-while-holding SOFT-BUY timing read — pushed via the shared pushSoftBuy so the bare-quote and
     // --positions surfaces stay identical (reuse the prof already computed for the diurnal note; zero new fetch).
     pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id });
