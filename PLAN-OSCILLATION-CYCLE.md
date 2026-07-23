@@ -397,3 +397,32 @@ inform-only.
   artifact to reuse, or genuinely new persistence? Worth the complexity vs W3-1+W3-2 alone?
 
 **Honesty:** all n≈0, inform-only (the digest gates NOTHING). W3-1 is the highest-value first cut.
+
+### Wave 3 Phase 2 (DEFERRED — design captured, Ben will trigger) — (b) upstream ghost-band DROP
+
+Phase 1 (W3-1 digest demotion + W3-2 digest rank) is inform-only/digest-only. Phase 2 promotes the
+denoise UPSTREAM so a ghost band is dropped from the per-niche tables + `screen.json` (the app's Scan
+tab) too — Ben's call, "a ghost spread is noise everywhere."
+
+**THE LOAD-BEARING DESIGN PRINCIPLE: gate on DURABLE crossability, NEVER the instant live tick.** The
+instant live spread (`quickBuy≈quickSell` right now) is a "right-now" signal; the per-niche table +
+`screen.json` are about the PATIENT band edge (`optBuy`/`optSell` over 2h — you rest a bid at the band
+low, you don't need the live spread open at scan-time). A hard drop on the instant tick would FALSE-DROP
+a real patient-band item whose live spread merely happened to be tight when you scanned. So the gate
+condition is: **the after-tax margin between the ACTUALLY-REACHABLE band edges ≤ floor** — reuse the
+REACH-FOLD (already shrinks the band top to what recent days reach); if `afterTax(reach-folded top) −
+reach-supported bottom` can't clear tax + margin, the band is a mirage. Structural (multi-day reach),
+not one tick. The closed live spread is corroboration/trigger, not the decision.
+
+- **Placement:** a new `ghost-band`/`notCrossable` discard in `surviveMode` (`gatecandidates.mjs` —
+  band/churn/scalp/value) + a mirror in `amplitudeGate` (the amplitude lane skips `surviveMode`).
+  Belongs to the ARTIFACT-GUARD family (precedent: value's `artifact-low` reject, band's `artifact-bid`
+  — both already drop rows whose edge is a broken/stale print). The ghost band is the SPREAD analog.
+- **Load-bearing fixtures (the whole risk lives here):** (i) Jade-shape (wide posted band, uncrossable
+  REACHABLE spread, live closed) → DROPPED; (ii) a REAL patient-band item, live spread momentarily tight
+  BUT band edges actually traded/reached → KEPT. Fixture (ii) is the false-drop guard.
+- **Blast radius / sign-off:** touches the shared gate + `screen.json` (app's Scan tab shows fewer rows
+  — a visible behavior change), needs the R2/R3 acceptance-fixture diff + row-by-row review. `screen.json`
+  is data (no APP_VERSION), but a deliberate before/after is required.
+- **Open harden question (for when built):** WHICH durable signal drives it — reach-fold spread vs
+  traded-band-density (Bar-D) vs a multi-read persistence. Fable to resolve at build time.
