@@ -49,7 +49,8 @@ Every read is ONE table, the **table v2** column set:
 ### Console default — `Est. buy` / `Est. sell`
 On `screen-flip-niches.mjs` and `quote-items.mjs`, STDOUT replaces Quick+Optimistic with the
 reconciliation-estimator pair + `Net/u (ROI)` + `BE` columns (`js/estimators/pair.mjs` `estimatePair`
-is the full synthesis: Optimistic ∩ diurnal ∩ reach ∩ anchor ∩ BE-floor). `--raw` restores the
+is the full synthesis: Optimistic ∩ diurnal ∩ reach ∩ anchor, with break-even as a display ANNOTATION —
+not an overwrite — since E1). `--raw` restores the
 model-free Quick/Optimistic (and `--asym` implies `--raw`). The app + `screen.json` render the raw
 table-v2 **decision** cells — the Grade, the rank, and the sort stay F1-gated on the NEUTRAL
 estimator — but (PB4 app-display, 2026-07-15) `screen.json` now ALSO carries an ADDITIVE per-row
@@ -73,20 +74,33 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
 - **`Est. sell`** = a DECLARED thesis exit **only on a held lot** (floored to live, not clamped to
   the band), else the **band** top folded by reach + a diurnal/asym blend; **churn is EXEMPT** (AC5:
   `fillShape:'symmetric'` forces the sell fold factor to 1, so churn's Est. sell is the band-top blend
-  the rank already prices on — un-floors Super restore(4)-class rows from `+1 (BE-floored)` to a real
-  net; the diurnal-ask timing blend still applies, so it lands NEAR the band top, not exactly at it);
-  **BE-floored always**. The pure discovery screen NEVER anchors to a declared exit (a bare candidate is
-  a buy read). The band sell fold is deliberately KEPT (AC7, the crux verdict — the rank's soft-floored
-  ask-reach P is not yet a sufficient mirage guard); its removal is re-decidable when AC4/F1 scores
-  raw-top vs folded against realized sells. The **reach-fold itself now surfaces as a validation DATA
-  POINT** in `read-window-range.mjs` (AC8, below), not as a discovery-price mutation on churn.
+  the rank already prices on; the diurnal-ask timing blend still applies, so it lands NEAR the band top,
+  not exactly at it). **`Est. sell` is the HONEST reach-fold price** (PLAN-ESTIMATOR-HONEST-SELL E1,
+  2026-07-22): it is **no longer OVERWRITTEN to break-even**. Because `netMargin(buy, breakEven(buy)) ≡ +1`
+  for the entire price range, the old BE-clamp turned every sub-BE fold into a **false `+1 (BE X)`** that
+  hid a possibly-real edge — the operator read `+1` and SKIPPED. Now the cell shows the **real (possibly
+  negative) net** with its **P(fill)** beside it (`askReachFactor`, the SAME probability the rank carries —
+  raw margin × P(fill), reused not forked), and when the fold sits below break-even the cell **ANNOTATES**
+  it (`recency-fold floored to BE X — nothing to price above break-even`) rather than substituting the
+  number; `estSellFloorBind` carries that BE as a display fact. A **forward "list at X"** rides alongside —
+  the phase-aware `driftExitFrom` projected exit (`~Nd hold`, confidence ordinal, `forward n≈0` inform),
+  shown when the caller passed its in-hand `hourProfile`+`windowStats().days` (`extra.forward`; absent →
+  degrade, no fetch). The recency reach-fold is labeled **secondary/phase-blind** (the correct read for a
+  confirmed knife); NO "which is authoritative" claim — both ship until the F-G realized-fill retro
+  adjudicates. The pure discovery screen NEVER anchors to a declared exit (a bare candidate is a buy read).
+  The band sell fold is deliberately KEPT (AC7, the crux verdict — the rank's soft-floored ask-reach P is
+  not yet a sufficient mirage guard); its removal is re-decidable when AC4/F1 scores raw-top vs folded
+  against realized sells. The **reach-fold itself also surfaces as a validation DATA POINT** in
+  `read-window-range.mjs` (AC8, below).
 - **The sell-top proposal is a NAMED, swappable MODEL** (PC3, `js/estimators/sell-models/`): the neutral
   **`reach-fold`** (default) above, and the opt-in TRIAL **`pressure`** (PB4). `--est-sell reach-fold|pressure`
   selects it (**`--pressure-exit` = legacy sugar for `--est-sell pressure`**); the model only PROPOSES a
   price — the shell keeps the non-skippable floors (ordering clamps, BE floor, declared-exit anchor) so no
   model can price past break-even or the live book. Under the `pressure` model Est. buy/sell become the
   `reachableBand` legs (deep reachable bid → bold reachable ask), reranking the console scan by the pressure
-  net; still BE-floored, sell ≥ live, declared exit still wins the sell leg, and a **reliability-gated ceiling**
+  net; sell ≥ live, declared exit still wins the sell leg (break-even rides as the `estSellFloorBind` display
+fact, not an overwrite — E1; the one real-price consumer, watch-positions' pressure list-at, uses that
+floor-bound value so a LIST price never sits below break-even), and a **reliability-gated ceiling**
   lets a fully-reliable read exceed the observed 24h high (reliability<1 keeps the `dayHighFrom5m` cap). The
   conservative depth floor renders beside as the reference; a LOUD banner flags every surface as un-calibrated
   (n≈0). **The `pressure` model keeps its uncalibrated prices out of `screen.json`** — since publishing is
@@ -495,11 +509,16 @@ that's already behind you today. So price every entry backward from the exit:
    over-states the sell, so pick a lower one.
 4. **Project today** — is the window ahead or already printed? (the forecast eta, §5.)
 
-Any scored `--bid`/`--ask`/`--exit` run also prints a **`fold:` data-point line** (PLAN-ESTIMATOR-POSTURE
-AC8): `best-case ask X → reach-folded Y (recent a/b · full c/d) · net at folded pair …`. Discovery shows
-the best-case price; the reach-FOLD moved here into validation as an inform-only datapoint (the SHARED
-`estimatePair`, zero new fetch — byte-parity with the screen's fold). `--niche band|churn|scalp` (default
-band) picks the spec; churn inherits the AC5/AC6 exemption so its line reads fold ≈ best-case. Rides
+Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
+AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p% · list at
+F (~Nd hold, conf) · recency-fold Y (secondary — phase-blind) (recent a/b · full c/d)[ recency-fold floored
+to BE …]`. The **honest margin** (raw best-case net, NEVER BE-clamped to `+1`) + its **P(fill)**
+(`askReachFactor`, the rank's probability) lead; the **forward "list at F"** (`driftExitFrom`, phase-aware,
+`n≈0` inform) is the actionable price; the **recency reach-fold** rides labeled secondary/phase-blind (the
+correct read for a confirmed knife — on a KNIFE `driftExitFrom` degrades to a labeled trend-only level, no
+crash). All from the SHARED `estimatePair` (zero new fetch — byte-parity with the screen's fold).
+`--niche band|churn|scalp` (default band) picks the spec; churn inherits the AC5/AC6 exemption so its line
+reads fold ≈ best-case. Rides
 `--json`/`--out` as `result.fold`. Never gates — pair it with the reach/placement/depth reads.
 
 `windowClear` (`js/windowread.mjs`) fires an inform-only `ℹ window-clear` note when an ask reaches on

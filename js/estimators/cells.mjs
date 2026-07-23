@@ -52,18 +52,31 @@ export function estPairCells(est) {
   // invalid for a symmetric lap, so it must not ride the cell as an implied caution (the reach counts still
   // reach the F1 shadow via estConfLean). Every non-exempt branch keeps today's EXACT rendering, so band
   // (asym, never exempt) is byte-identical; foldExempt only removes the token that would otherwise show.
+  // PLAN-ESTIMATOR-HONEST-SELL E2 — estSell is the HONEST reach-fold price now (no longer overwritten to BE);
+  // beFloored is a CAUTION on that secondary/phase-blind fold ("nothing to price above break-even"), NEVER a
+  // number substitution (the old ` (BE-floored)` hid the real sub-BE number behind a break-even price + a "+1").
   let sellSuffix;
-  if (c.beFloored) sellSuffix = ` (BE-floored${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
+  if (c.beFloored) sellSuffix = ` (recency-fold floored to BE ${fmtP(est.estSellFloorBind != null ? est.estSellFloorBind : est.be)} — nothing to price above break-even${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
   else if (c.pressureExit) sellSuffix = ` (${pTag.trim()})`;
   else if (c.declaredAnchored) sellSuffix = ' (declared)';
   // R5: a `fading` ask cushion tightened the sell fold even on a clean reach — surface it as a caution beside
   // the reach token so the number never reads as an un-caveated band top (the mirage the fade guards against).
   else sellSuffix = c.foldExempt ? '' : ` (${reachTok(c.ask)}${c.fade ? ', fading↓' : ''})`;
+  // E2: the FORWARD "list at X" — the phase-aware projected exit LEVEL (driftExitFrom), appended when the
+  // caller passed extra.forward. It carries its hold horizon + a confidence ORDINAL (never a bare gp figure —
+  // the formatFloorCeiling honesty discipline, rule 4). Absent forward ⇒ '' (byte-identical reach-fold read).
+  const fwdSeg = est.estSellForward != null
+    ? ` · list ~${fmtP(Math.round(est.estSellForward))} (~${est.holdHorizonDays != null ? est.holdHorizonDays : '?'}d hold${est.forwardConfidence ? `, ${est.forwardConfidence}` : ''}, forward n≈0)` : '';
+  // E2: P(fill) beside the honest margin (the Net cell) — the SAME askReachFactor probability the rank carries,
+  // so the display reads "raw margin × P(fill)" honestly. Shown only where the ask-reach caution is (evidence
+  // present, not a foldExempt lap); absent → no token (byte-identical). This is what replaces the fake "+1".
+  const pTok = (est.estNet != null && est.pFill != null && c.ask && !c.foldExempt)
+    ? ` · P~${Math.round(est.pFill * 100)}%` : '';
   const netTxt = est.estNet == null ? '—'
-    : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})`;
+    : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})${pTok}`;
   return [
     { t: `${fmtP(est.estBuy)} (${buyTok(c)})` },
-    { t: `${fmtP(est.estSell)}${sellSuffix}`, c: c.beFloored ? 'amber' : (c.pressureExit ? 'gain' : (c.declaredAnchored ? 'gain' : undefined)) },
+    { t: `${fmtP(est.estSell)}${sellSuffix}${fwdSeg}`, c: c.beFloored ? 'amber' : (c.pressureExit ? 'gain' : (c.declaredAnchored ? 'gain' : undefined)) },
     { t: netTxt, c: est.estNet == null ? undefined : (est.estNet >= 0 ? 'gain' : 'loss') },
     { t: fmtP(est.be), c: 'mini' },
   ];
@@ -79,7 +92,16 @@ export function estConfLean(est) {
   if (c.ask) { if (c.ask.rec) { o.askRecHit = c.ask.rec.hit; o.askRecDays = c.ask.rec.days; } if (c.ask.full) { o.askHit = c.ask.full.hit; o.askDays = c.ask.full.days; } }
   if (c.bid) { if (c.bid.rec) { o.bidRecHit = c.bid.rec.hit; o.bidRecDays = c.bid.rec.days; } if (c.bid.full) { o.bidHit = c.bid.full.hit; o.bidDays = c.bid.full.days; } }
   if (c.declaredAnchored) o.declaredAnchored = true;
+  // PLAN-ESTIMATOR-HONEST-SELL E2: KEEP beFloored (F-G continuity — the retro must still segment the sub-BE
+  // fold rows; must not regress). It is now a fold annotation, not a market fact, but the shadow field is unchanged.
   if (c.beFloored) o.beFloored = true;
+  // E2: the FORWARD "list at X" fields (driftExitFrom) for the eventual F-G fold-vs-forward-vs-realized retro
+  // join. YS2 lean discipline — present ONLY when the forward was actually computed (extra.forward was passed);
+  // a reach-fold-only pass logs none of them (byte-identical shadow).
+  if (est.forwardPeak != null) o.forwardPeak = Math.round(est.forwardPeak);
+  if (est.forwardTrough != null) o.forwardTrough = Math.round(est.forwardTrough);
+  if (est.forwardConfidence != null) o.forwardConfidence = est.forwardConfidence;
+  if (est.holdHorizonDays != null) o.holdHorizonDays = est.holdHorizonDays;
   // AC5/AC6: the churn fold-exemption marker so the F1 retro can segment the un-folded churn rows (the
   // reach counts above STAY logged — they are the data the exemption will be tested against). YS2: present
   // only when it fired.

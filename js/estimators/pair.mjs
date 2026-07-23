@@ -15,7 +15,8 @@
 import { netMargin, clamp } from '../money-math.js';
 import { breakEven } from '../quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE model-free break-even (BE floor for estSell)
 import { RECENCY_DIVERGE } from '../windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
-import { reachRelief, REACH_DEBIAS_MAX_FRAC } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap
+import { reachRelief, REACH_DEBIAS_MAX_FRAC, askReachFactor } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap; PLAN-ESTIMATOR-HONEST-SELL E1: askReachFactor — the SAME P(fill) the rank uses (families.mjs:291), reused (never forked) so the display honestly matches the rank pattern (raw margin × P(fill))
+import { driftExitFrom } from '../forecast.mjs';   // PLAN-ESTIMATOR-HONEST-SELL E1: the forward-projected exit LEVEL ("list at X") — computed in the SHELL off extra.forward (profile+days already in the caller's hand → zero new fetch). forecast→windowread(leaf) only, no cycle.
 import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named sell-top proposal models (reach-fold / pressure / …)
 
 // PC3: re-export the sell-model registry + each model's PLACEHOLDER constants through this module so the
@@ -105,7 +106,15 @@ function reachRead(r) {
 }
 
 /* estimatePair(spec, row, extra, { nudge, sellModel, pressureExit }) → { estBuy, estSell, estNet, estRoi,
-   be, confidence } | null.
+   be, estSellFloorBind, pFill, estSellForward, forwardPeak, forwardTrough, forwardConfidence,
+   holdHorizonDays, confidence } | null.
+   PLAN-ESTIMATOR-HONEST-SELL E1 — THE HONESTY FIX: estSell is NO LONGER overwritten to break-even. Because
+   netMargin(buy, breakEven(buy)) ≡ +1 for the whole price range, any BE-clamped "+1 (BE X)" was a clamp
+   ARTIFACT hiding a possibly-real edge (the operator read it and SKIPPED). estSell now keeps the model's
+   honest (possibly-sub-BE, possibly-negative-net) proposal; `estSellFloorBind = beFloored ? be : null` carries
+   the floor as a DISPLAY FACT (an annotation on the SECONDARY reach-fold), never a number substitution.
+   `pFill` reuses askReachFactor (the SAME fn the rank calls) so the display matches the rank's honest
+   pattern (raw margin × P(fill)); `estSellForward`/forward fields are the phase-aware "list at X" projection.
    extra (ALL optional — zero new fetch; the caller passes only what it already computed):
      bidReach  { reachedDays, nDays, recentHit?, recentDays? }  patient bid TOUCH counts (full + recent-3)
      askReach  { reachedDays, nDays, recentHit?, recentDays? }  patient ask REACH counts (full + recent-3)
@@ -121,6 +130,16 @@ function reachRead(r) {
                                    top reference widens toward it (never above it); thin book / large
                                    size / absent → the band top stands byte-identically.
      reachable { ask, bid, pressure, reliability }  the pressure model's price source (ignored by reach-fold).
+     forward   { profile, days, holdHorizonDays?, now? }  PLAN-ESTIMATOR-HONEST-SELL E1 — the "list at X"
+                                   FORWARD projection inputs the CALLER already has in hand (an hourProfile +
+                                   a windowStats().days series — ZERO new fetch). When present the shell
+                                   computes driftExitFrom(profile, days, <ctx built from the live pair>,
+                                   {holdHorizonDays}) and returns estSellForward/forwardPeak/forwardTrough/
+                                   forwardConfidence/holdHorizonDays. ABSENT → all forward fields null (honest
+                                   degrade — the reach-fold read is byte-identical). On a KNIFE driftExitFrom
+                                   degrades to a labeled trend-only level (never a crash), so the number/label
+                                   communicates and no new detector call site is added. `now` (optional) pins
+                                   diurnalForecast's clock for deterministic tests.
    nudge: optional (side, price) → { price }|null — the ⚓ anchor round-number nudge (pipeline passes
    modules/anchor.mjs anchorNudge; injected so this module stays pure/app-importable). Final pricing step.
    sellModel: PC3 — which SELL_TOP_MODELS entry proposes the buy+sell legs ('reach-fold' default,
@@ -180,14 +199,42 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   // deep bid; sellHi can be Infinity for a fully-reliable pressure ask or a declared exit above the band).
   estBuy = Math.round(clamp(estBuy, buyLo, qb));
   estSell = declaredAnchored ? Math.max(Math.round(estSell), qs) : Math.round(clamp(estSell, qs, sellHi));
-  // BE floor — MODEL-FREE and applied LAST: never emit estSell < breakEven(estBuy). The floor binding is
-  // the estimate self-reporting "no profitable trade at model prices" (estNet collapses to ~0).
+  // BE floor — MODEL-FREE, computed LAST but NO LONGER an OVERWRITE (PLAN-ESTIMATOR-HONEST-SELL E1). The
+  // old `if (beFloored) estSell = be` substitution made a sub-BE fold read a false "+1 (BE X)" — a clamp
+  // artifact (netMargin(buy, breakEven(buy)) ≡ +1 for the entire range) that hid a possibly-real edge and
+  // got SKIPPED. estSell stays the model's HONEST proposal (already ordering-clamped to ≥ the live
+  // instasell); `estSellFloorBind` carries the break-even as a DISPLAY FACT (a caution on the SECONDARY
+  // reach-fold — "nothing to price above break-even"), never a number the cell shows in place of the truth.
   const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
   const be = breakEven(estBuy, bopt);
   const beFloored = estSell < be;
-  if (beFloored) estSell = be;
-  const estNet = netMargin(estBuy, estSell, bopt);
+  const estSellFloorBind = beFloored ? be : null;
+  const estNet = netMargin(estBuy, estSell, bopt);   // HONEST: the real (possibly-negative) net at the honest sell, never the clamped +1
   const estRoi = (estNet != null && estBuy > 0) ? estNet / estBuy * 100 : null;
+  // pFill — the SAME two-leg ask/exit reach probability the RANK carries (askReachFactor, families.mjs:291),
+  // REUSED not forked: a first-class field so the display honestly reads "raw margin × P(fill)" like the rank
+  // (a stale exit demotes the probability, it does not haircut the price into a false break-even). Absent
+  // ask-reach → 1 (the byte-identical degrade the rank uses). No relief arg — mirrors families.mjs's rank pFill.
+  const pFill = askReachFactor(extra.askReach);
+  // FORWARD "list at X" (PLAN-ESTIMATOR-HONEST-SELL E1) — the phase-aware forward-projected exit LEVEL, homed
+  // in the SHELL (the sell-model ctx carries no profile/days). driftExitFrom off the caller's in-hand
+  // hourProfile + windowStats().days (extra.forward — ZERO new fetch); the diurnal ctx is built from the live
+  // pair (liveLo = the instasell qs, liveHi = the instabuy qb) + the row's momentum/reliability/phase. Absent
+  // extra.forward → all forward fields null (honest degrade); on a KNIFE driftExitFrom returns a labeled
+  // trend-only level (no crash, no new detector call site). holdHorizonDays is the forward number's own tunable.
+  let estSellForward = null, forwardPeak = null, forwardTrough = null, forwardConfidence = null, holdHorizonDays = null;
+  const fwd = extra.forward;
+  if (fwd && fwd.profile) {
+    const fwdCtx = { liveLo: qs, liveHi: qb, mom: row.mom ?? null, reliable: row.reliable, phase: row.phase, now: fwd.now };
+    const dae = driftExitFrom(fwd.profile, fwd.days ?? null, fwdCtx, fwd.holdHorizonDays != null ? { holdHorizonDays: fwd.holdHorizonDays } : {});
+    if (dae) {
+      forwardPeak = num(dae.driftAdjustedPeak);
+      forwardTrough = num(dae.driftAdjustedTrough);
+      forwardConfidence = dae.confidence ?? null;
+      holdHorizonDays = num(dae.holdHorizonDays);
+      estSellForward = forwardPeak;   // the sell "list at X" is the projected next peak
+    }
+  }
   const confidence = {
     bid: cBid, ask: cAsk,
     beFloored, declaredAnchored, doctrine,
@@ -205,5 +252,11 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     // "(pressure N×)" in the cell so the number never reads as the calibrated default (rule 4).
     pressureExit: cPressure,
   };
-  return { estBuy, estSell, estNet, estRoi, be, confidence };
+  return {
+    estBuy, estSell, estNet, estRoi, be,
+    estSellFloorBind,   // E1: break-even as a DISPLAY FACT when the honest sell is sub-BE (else null) — a caution, not a substitution
+    pFill,              // E1: the reused askReachFactor P(fill) (never forked), a first-class field
+    estSellForward, forwardPeak, forwardTrough, forwardConfidence, holdHorizonDays,   // E1: the forward "list at X" (null when extra.forward absent — degrade)
+    confidence,
+  };
 }

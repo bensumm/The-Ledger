@@ -1071,11 +1071,16 @@ async function main() {
       else if (it.gate && it.gate.armed && it.gate.reason === 'structural-armed')
         conviction = `approaching cut-trigger — armed: live sell ${fmtP(row.quickSell)} below support ${fmtP(it._support)}; headline if it breaks the cut-trigger ${fmtP(Math.round(it._cutTrigger))} or holds below support ~${persistMin}m.`;
     } catch { /* state/levels are observability only — never block a watch pass */ }
-    // PB4: under the pressure-exit trial, the list-at is the pressure-driven est-sell (BE-floored,
-    // declared-exit-respecting — all in _estPressure); else the shared momVerdict list-at (unchanged).
-    // The depth floor still renders in the window clause beside it (depthReachClause — the reference).
+    // PB4: under the pressure-exit trial, the list-at is the pressure-driven est-sell (declared-exit-
+    // respecting — all in _estPressure); else the shared momVerdict list-at (unchanged). The depth floor
+    // still renders in the window clause beside it (depthReachClause — the reference).
+    // PLAN-ESTIMATOR-HONEST-SELL E1: estSell is no longer BE-clamped in the shell (it stays the honest,
+    // possibly-sub-BE number for the display read). A LIST price must never sit below break-even, so this
+    // one real-price consumer uses estSellFloorBind (= be when the fold is sub-BE, else null) → the exact
+    // BE-floored value the shell used to overwrite estSell with. Preserves this surface byte-identically.
     const heldLa = (PRESSURE_EXIT && it._estPressure && it._estPressure.confidence.pressureExit)
-      ? it._estPressure.estSell : heldListAt(row, be, mvHeld);
+      ? (it._estPressure.estSellFloorBind != null ? it._estPressure.estSellFloorBind : it._estPressure.estSell)
+      : heldListAt(row, be, mvHeld);
     // V2-P4b: the persistence-gated dominant-path line (shared renderPathLine) — decision support
     // rendered ALONGSIDE the verdict in the note block; a CONFIRMED migration surfaces prominently
     // here as `path MIGRATED <enteredUnder> → <current>` (never a new alert class).

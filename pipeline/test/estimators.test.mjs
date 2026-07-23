@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import { computeQuote, breakEven } from '../../js/quotecore.js';
 import { FLIP_NICHE_LIST, FLIP_NICHES } from '../../js/flip-niches.mjs';
 import { buildSnapshot } from '../lib/replay.mjs';
+import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-ESTIMATOR-HONEST-SELL E1: the delegation pin — the shell's forward fields must equal a direct driftExitFrom call
 import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,
   pFillIntraday, ttfIntraday, pFillValue, ttfValue, pFillRising, ttfRising, churnLapUnits,
@@ -479,20 +480,31 @@ ok('rev2 DECLARED-EXIT anchors estSell to the thesis target (above the band top)
   const cells = estPairCells(e);
   assert.ok(/\(declared\)/.test(cells[1].t), `sell cell marks it declared: ${cells[1].t}`);
   assert.equal(estConfLean(e).declaredAnchored, true);
-  // a declared exit BELOW break-even is STILL BE-floored (BE never overridden).
+  // PLAN-ESTIMATOR-HONEST-SELL E1: a declared exit below live/BE is NO LONGER overwritten to break-even —
+  // it ordering-clamps to the live instabuy and stays honest; the BE floor rides as estSellFloorBind (a fact).
   const e2 = estimatePair(FLIP_NICHES.band, { quickBuy: 100_000, quickSell: 100_500, optBuy: 99_000, optSell: 103_000 }, { declaredExit: 50_000 });
-  assert.equal(e2.estSell, breakEven(e2.estBuy), 'BE still floors a declared exit below break-even');
+  assert.equal(e2.estSell, 100_500, 'a sub-live declared exit clamps to the live instabuy, NOT overwritten to BE');
+  assert.notEqual(e2.estSell, breakEven(e2.estBuy), 'estSell is the honest number, never the BE substitution');
+  assert.equal(e2.estSellFloorBind, breakEven(e2.estBuy), 'the BE floor rides as a display FACT');
   assert.equal(e2.confidence.beFloored, true);
 });
 
-ok('estimatePair BE FLOOR: a fully-collapsed ask is clamped UP to breakEven(estBuy) and flagged', () => {
+ok('estimatePair E1 HONEST SELL: a fully-collapsed ask is NO LONGER overwritten to BE — real negative net + a floorBind fact', () => {
   const row = { quickBuy: 100_000, quickSell: 100_500, optBuy: 99_000, optSell: 103_000 };
   const e = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 0, nDays: 14 } });
   assert.equal(e.estBuy, 99_000);
-  assert.equal(e.estSell, breakEven(99_000), 'estSell clamped to the model-free break-even');
-  assert.equal(e.confidence.beFloored, true, 'the floor binding is surfaced in the confidence');
-  assert.ok(e.estNet >= 0 && e.estNet <= 2, 'net collapses to ~0 — the estimate self-reports "no trade"');
-  // AC1: a band row now carries its 'band-low' entry doctrine in the shadow (was the default reach-fold pre-AC1).
+  // THE +1 FIX: estSell keeps the honest (sub-BE) fold number, ordering-clamped to the live instabuy — the
+  // old code overwrote it to breakEven(99_000) and reported a fake "+1". No more substitution.
+  assert.equal(e.estSell, row.quickSell, 'estSell stays the honest sub-BE number (clamped to live), never overwritten to BE');
+  assert.notEqual(e.estSell, breakEven(99_000), 'the BE clamp artifact is gone');
+  assert.equal(e.estSellFloorBind, breakEven(99_000), 'the break-even rides as a DISPLAY FACT (estSellFloorBind)');
+  assert.equal(e.confidence.beFloored, true, 'the floor binding is still surfaced in the confidence (F-G continuity)');
+  assert.ok(e.estNet < 0, `estNet is the REAL negative margin (${e.estNet}), never the fake +1`);
+  // the sell cell shows the real number + a caution on the SECONDARY fold, NOT a "+1"; the net is negative.
+  const cells = estPairCells(e);
+  assert.ok(/floored to BE/.test(cells[1].t), `sell cell annotates the floor, not substitutes it: ${cells[1].t}`);
+  assert.ok(!/\+1\b/.test(cells[2].t), `net cell is the honest margin, not "+1": ${cells[2].t}`);
+  // AC1: a band row still carries its 'band-low' entry doctrine + beFloored in the shadow (forward absent → no forward fields).
   assert.deepEqual(estConfLean(e), { askHit: 0, askDays: 14, beFloored: true, doctrine: 'band-low' });
 });
 
@@ -526,11 +538,14 @@ ok('estimatePair PB4 reliability-gated ceiling: a reliability<1 read keeps the d
 });
 
 ok('estimatePair PB4 invariants: BE-floored, sell ≥ live, declared exit still wins the sell leg', () => {
-  // a pressure ask below break-even is floored up (never a sell below BE)
+  // E1: a pressure ask below break-even is NO LONGER overwritten to BE — it stays honest; estSellFloorBind
+  // carries the break-even (the one real-price consumer, watch-positions, uses that floor-bound value to list).
   const thin = { quickBuy: 99_000, quickSell: 98_000, optBuy: 97_000, optSell: 101_000 };
   const beF = estimatePair(FLIP_NICHES.band, thin, { reachable: { bid: 97_500, ask: 98_500, pressure: 0.9, reliability: 1 } }, { pressureExit: true });
-  assert.equal(beF.estSell, beF.be, 'a pressure ask below BE is floored UP to break-even (never a sell below BE)');
+  assert.notEqual(beF.estSell, beF.be, 'the pressure ask stays the honest number, not overwritten to BE');
+  assert.equal(beF.estSellFloorBind, beF.be, 'the BE floor rides as a display fact (estSellFloorBind)');
   assert.ok(beF.confidence.beFloored, 'the floor binding is surfaced');
+  assert.ok(beF.estNet < 0, 'the real negative net shows, not a fake +1');
   // a declared exit still governs the sell leg under the flag (operator plan wins); the bid still goes pressure
   const decl = estimatePair(FLIP_NICHES.band, { quickBuy: 1000, quickSell: 1010, optBuy: 950, optSell: 1100 },
     { reachable: { bid: 900, ask: 1300, pressure: 2, reliability: 1 }, declaredExit: 1150 }, { pressureExit: true });
@@ -738,6 +753,89 @@ ok('PART B de-bias: liquid book lifts the top reference toward dayHigh (capped A
   assert.equal(dayHighFrom5m([]), null);
   assert.equal(dayHighFrom5m(null), null);
   assert.equal(dayHighFrom5m([{ avgHighPrice: 50 }, { avgHighPrice: 70 }]), 70, 'timestamp-less series degrades to a tail read');
+});
+
+/* --- PLAN-ESTIMATOR-HONEST-SELL E1–E4: the honest sell read (pFill reuse · forward degrade/delegation) --- */
+// a minimal hand-built hourProfile diurnalForecast accepts (a clean afternoon peak, no drift), + the live pair.
+const FWD_ROW = { quickBuy: 1010, quickSell: 1000, optBuy: 950, optSell: 1100 };
+const FWD_NOW = new Date('2026-07-22T10:00:00');
+const mkProfile = (over = {}) => ({
+  nights: 10, amplitude: 100, trendPerDay: 0, trendDominates: false,
+  dip: { startH: 3, endH: 5, level: 950 }, peak: { startH: 14, endH: 16, level: 1050 },
+  hours: Array.from({ length: 24 }, (_, h) => ({
+    h, devLow: (h >= 14 && h <= 16) ? 40 : -40, devHi: (h >= 14 && h <= 16) ? 50 : -30,
+    devMid: (h >= 14 && h <= 16) ? 45 : -35, devLowSpread: 10, devHiSpread: 10,
+  })),
+  ...over,
+});
+// the exact ctx the SHELL builds from the live pair (documented in pair.mjs) — the delegation pin replays it.
+const shellFwdCtx = (row, now) => ({ liveLo: row.quickSell, liveHi: row.quickBuy, mom: row.mom ?? null, reliable: row.reliable, phase: row.phase, now });
+
+ok('E1 pFill REUSES askReachFactor byte-identical (the don\'t-fork pin) + absent → 1', () => {
+  const ar = { reachedDays: 4, nDays: 14 };
+  const e = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar });
+  assert.equal(e.pFill, askReachFactor(ar), 'pFill is the SAME askReachFactor value the rank carries (no fork)');
+  const bare = estimatePair(FLIP_NICHES.band, FWD_ROW, {});
+  assert.equal(bare.pFill, 1, 'absent ask-reach → 1 (the rank\'s byte-identical degrade)');
+  assert.equal(bare.pFill, askReachFactor(undefined));
+});
+
+ok('E1 extra.forward ABSENT → forward fields null + byte-identical to the reach-fold-only output (degrade-safe)', () => {
+  const ar = { reachedDays: 4, nDays: 14 };
+  const noFwd = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar });
+  const nullFwd = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar, forward: null });
+  assert.deepEqual(nullFwd, noFwd, 'a null forward is a no-op (additive degrade)');
+  for (const k of ['estSellForward', 'forwardPeak', 'forwardTrough', 'forwardConfidence', 'holdHorizonDays'])
+    assert.equal(noFwd[k], null, `${k} is null when no forward input`);
+  // the reach-fold fields are unchanged from what a forward-less pass produces (the honest reach-fold read).
+  assert.equal(noFwd.estSell, estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar }).estSell);
+});
+
+ok('E1 extra.forward PRESENT → forward fields DELEGATE to a direct driftExitFrom call (not re-derived)', () => {
+  const profile = mkProfile();
+  const e = estimatePair(FLIP_NICHES.band, FWD_ROW, { forward: { profile, days: null, now: FWD_NOW } });
+  const direct = driftExitFrom(profile, null, shellFwdCtx(FWD_ROW, FWD_NOW), {});
+  assert.ok(direct && direct.driftAdjustedPeak != null, 'the fixture produces a usable forward (guards the test)');
+  assert.equal(e.forwardPeak, direct.driftAdjustedPeak, 'forwardPeak = driftExitFrom\'s peak (delegation)');
+  assert.equal(e.forwardTrough, direct.driftAdjustedTrough, 'forwardTrough delegates');
+  assert.equal(e.forwardConfidence, direct.confidence, 'forwardConfidence delegates');
+  assert.equal(e.holdHorizonDays, direct.holdHorizonDays, 'holdHorizonDays delegates');
+  assert.equal(e.estSellForward, direct.driftAdjustedPeak, 'estSellForward is the projected next peak (the "list at X")');
+});
+
+ok('E2 estConfLean: forward fields present-only-when-computed (YS2); beFloored still logs (F-G continuity)', () => {
+  const profile = mkProfile();
+  const withFwd = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: { reachedDays: 4, nDays: 14 }, forward: { profile, days: null, now: FWD_NOW } });
+  const lean = estConfLean(withFwd);
+  assert.equal(lean.forwardPeak, Math.round(withFwd.forwardPeak), 'forwardPeak shadowed when computed');
+  assert.equal(lean.forwardConfidence, withFwd.forwardConfidence);
+  assert.equal(lean.holdHorizonDays, withFwd.holdHorizonDays);
+  const leanNoFwd = estConfLean(estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: { reachedDays: 4, nDays: 14 } }));
+  for (const k of ['forwardPeak', 'forwardTrough', 'forwardConfidence', 'holdHorizonDays'])
+    assert.equal(leanNoFwd[k], undefined, `${k} absent from the shadow when no forward (YS2)`);
+  // F-G continuity: a sub-BE row still logs beFloored (must not regress).
+  const beF = estimatePair(FLIP_NICHES.band, { quickBuy: 100_000, quickSell: 100_500, optBuy: 99_000, optSell: 103_000 }, { askReach: { reachedDays: 0, nDays: 14 } });
+  assert.equal(estConfLean(beF).beFloored, true, 'beFloored still logs (F-G continuity)');
+});
+
+ok('E2 cells: the three-part sell read renders — honest net + P(fill) + list-at-forward; no crash', () => {
+  const profile = mkProfile();
+  const e = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: { reachedDays: 4, nDays: 14 }, forward: { profile, days: null, now: FWD_NOW } });
+  let cells;
+  assert.doesNotThrow(() => { cells = estPairCells(e); }, 'estPairCells renders the forward read without throwing');
+  assert.match(cells[1].t, /list ~/, 'the sell cell carries the forward "list at X" segment');
+  assert.match(cells[2].t, /P~\d+%/, 'the net cell carries P(fill) beside the honest margin');
+});
+
+ok('E3/KNIFE: a trend-only forward (falling ceiling) still projects a labeled level — no crash', () => {
+  // the fold-line/quote surfaces call estimatePair+estPairCells; a KNIFE degrades driftExitFrom to a labeled
+  // trend-only peak (diurnalForecast trendDominates + trendPerDay<0), never a crash. Pin the shared code path.
+  const knife = mkProfile({ trendPerDay: -200, trendDominates: true });
+  const e = estimatePair(FLIP_NICHES.band, FWD_ROW, { forward: { profile: knife, days: null, now: FWD_NOW } });
+  assert.ok(e.estSellForward != null, 'the trend-only forward still yields a projected level');
+  const direct = driftExitFrom(knife, null, shellFwdCtx(FWD_ROW, FWD_NOW), {});
+  assert.equal(e.forwardPeak, direct.driftAdjustedPeak, 'trend-only peak still delegates to driftExitFrom');
+  assert.doesNotThrow(() => estPairCells(e), 'the KNIFE forward renders without crashing');
 });
 
 console.log(`\nAll ${pass} estimator checks passed.`);

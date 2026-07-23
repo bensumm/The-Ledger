@@ -169,7 +169,7 @@ function regimeLine(name, row, limit, win) {
 
 // PLAN-OUTPUT-TABLE: the standing explainer under the estimated (non-RAW) items table (was an inline
 // string literal at the emission site; hoisted so buildQuoteReport can reference it as the estExplainer).
-const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. Est. sell anchors to a DECLARED thesis exit when one exists ("(declared)"). BE is model-free and floors Est. sell. --raw restores the model-free Quick/Optimistic columns.)`;
+const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDER model n≈3–14. Confidence rides in the cell as the RECENT-3 reach (e.g. 0/3), full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. Est. sell is the HONEST reach-fold price (recency-weighted, phase-blind) shown with its P(fill) beside the net; when it sits below break-even the cell ANNOTATES that ("recency-fold floored to BE X") rather than substituting BE — the real (possibly-negative) net is shown, never a "+1". "list ~X (~Nd hold, conf)" is the forward-projected exit (phase-aware, n≈0 inform). Est. sell anchors to a DECLARED thesis exit when one exists ("(declared)"). --raw restores the model-free Quick/Optimistic columns.)`;
 
 // VZ3 (PLAN-VIZ-LAYER) — assemble the quote output pass into ONE plain report object (R4), rendered by
 // render.mjs's renderReport. PURE (no fetch/fs/clock): it takes ALREADY-computed pieces (the table
@@ -470,6 +470,10 @@ async function runItems() {
       // proxy (absent → estimatePair degrades to row.limit, byte-identical for a bare "how's X" read).
       intendedUnits: heldIds.has(id) ? (heldQty.get(id) ?? null) : null,
       reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
+      // PLAN-ESTIMATOR-HONEST-SELL E4: the FORWARD "list at X" inputs — the SAME in-hand hourProfile (prof)
+      // + daily windowStats series (ast.days) this file already computes for its trajectory/diurnal notes
+      // (ZERO new fetch). The shell computes driftExitFrom off these; absent them → forward fields null (degrade).
+      forward: (prof && ast && ast.days && ast.days.length) ? { profile: prof, days: ast.days } : null,
     };
     // The NEUTRAL est is what the retro co-log scores (unbiased); PB4's pressure est is DISPLAY-ONLY.
     // PC3: `est` = the NEUTRAL reach-fold (the retro co-log, per-item read has no verdict); `estShown` =

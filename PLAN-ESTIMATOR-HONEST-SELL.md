@@ -92,8 +92,15 @@ templating Chunk-3B's gate-not-substitute pattern). Not near-term.
 ## Status
 | Chunk | State | SHA | Notes |
 | --- | --- | --- | --- |
-| E1 | PLANNED | — | pair.mjs shell — stop BE-overwrite, add pFill + forward |
-| E2 | BLOCKED on E1 | — | cells.mjs compound render + estConfLean forward fields |
-| E3 | BLOCKED on E1 | — | read-window-range fold line (drilled surface) |
-| E4 | BLOCKED on E1 | — | quote-items columns |
+| E1 | LANDED-in-worktree | — | pair.mjs shell — stopped the BE-overwrite (estSell honest); added `estSellFloorBind`, `pFill` (reuses askReachFactor), `estSellForward`/forward fields (driftExitFrom off `extra.forward`, degrade-safe) |
+| E2 | LANDED-in-worktree | — | cells.mjs — sell cell: honest number + floor ANNOTATION (not substitution) + `list ~X (~Nd hold, conf)`; P(fill) beside the net; estConfLean KEEPs beFloored + ADDs forward fields (YS2) |
+| E3 | LANDED-in-worktree | — | read-window-range `fold:` line — three-part: honest best-case net + P(fill) + `list at X (forward)` + `recency-fold Y (secondary — phase-blind)` + floor caution |
+| E4 | LANDED-in-worktree | — | quote-items — `extra.forward` plumbed from the in-hand `prof`/`ast.days`; footer explainer reconciled |
 | Ring-3 (rank denoise) | DEFERRED — gated on F-G + needs rank knife guard | — | forward exit → estimateRank/screen.json, all niches |
+
+E1–E4 landed as ONE coherent commit (the shell adds fields the consumers render). The one real-price
+consumer of `estSell` (watch-positions' pressure-exit `heldLa`) uses `estSellFloorBind ?? estSell` so a LIST
+price never sits below break-even — the exact BE-floored value the shell used to overwrite `estSell` with.
+Tests: the reuse/degrade/delegation pins in `pipeline/test/estimators.test.mjs` (pFill≡askReachFactor,
+forward-absent byte-identical, forward-present delegates to driftExitFrom, estConfLean YS2 + beFloored
+continuity, KNIFE trend-only renders); the three BE-clamp tests were rewritten to the honest behavior.
