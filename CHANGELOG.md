@@ -10,6 +10,25 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DT5 — Trends tab's `★` diurnal badge swapped onto `hourConcentration` (`js/trends.js`, APP_VERSION 0.68.0, 2026-07-23)
+The last chunk of PLAN-DIURNAL-TIMING: `js/trends.js`'s diurnal chart readout computed its OWN ad hoc
+`clean` predicate (`net>0 && !prof.trendDominates && concentrated && roi>=DIURNAL_MIN_ROI`, where
+`concentrated` just checked the aggregate dip/peak window boundaries weren't degenerate) to decide
+whether to show the `★` "clean diurnal candidate" badge — a second, independently-computed answer to
+the same "is this a real diurnal cycle?" question DT1's `hourConcentration` (`js/windowread.mjs`) now
+answers canonically via circular mean-resultant-length R over each day's own trough/peak hour. Left in
+place, this was the two-competing-definitions failure CLAUDE.md's process rule §8 warns about, just at
+the metric level rather than the note-text level. Fix: `renderDiurnal` now calls
+`hourConcentration(profSeries, {nights})` and gates the badge on `.clean`. **Judgment call**: kept the
+after-tax ROI floor (`DIURNAL_MIN_ROI`) as a SEPARATE, still-live AND-ed gate — cycle cleanliness and
+lap profitability are different questions; a clean but unprofitable cycle still isn't a tradeable ★.
+Dropped the old `trendDominates`/`concentrated` shape entirely rather than keeping it as a parallel
+check. The degrade path (`hourConcentration` throwing or returning falsy on thin history) falls through
+to `clean=false` — no broken badge, matching the existing "not enough history" framing elsewhere in the
+same function. Thresholds (`HOURCONC_MIN_DAYS`/`HOURCONC_MIN_R`/`DIURNAL_MIN_ROI`) remain PLACEHOLDER,
+n≈0 (rule 4). This is the one point in the whole DT1–DT5 program that touches deployed-app rendering,
+so it's the one that bumps `APP_VERSION` (0.67.0 → 0.68.0); DT1–DT4 were pipeline/pure-fn-only.
+
 ### STALE-LIVE-PRINT guard — `QUICK_FRESH_MIN` freshness bar, distinct from the reliability floor (pipeline stdout, no APP_VERSION, 2026-07-21)
 The failure: a positions read reported "live instabuy 39.75m" on Ancient godsword and drove a `pace … ⚠
 lagging` read off it — but that `/latest` instabuy was **64 minutes old**. The wiki serves the last actual

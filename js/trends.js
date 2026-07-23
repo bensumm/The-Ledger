@@ -4,7 +4,7 @@ import { tax, netMargin, netMarginQty, now, clamp } from './money-math.js';
 import { fmt, fmtP, pad2, fmtHour, sgn } from './money-format.js';
 import { svgLine, svgBars } from './charts-static.js';
 import { createChart } from './charts-interactive.js';                                  // CL: interactive chart (diurnal viz)
-import { hourProfile, deriveDiurnalRange, windowStats } from './windowread.mjs';           // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5)
+import { hourProfile, deriveDiurnalRange, windowStats, hourConcentration } from './windowread.mjs';   // shared diurnal peak-timing math (same module the console uses); windowStats → the daily series driftExitFrom's slopes read (Chunk 5); hourConcentration (DT5) → the canonical cycle-cleanliness verdict for the ★ badge
 import { reachValidator, floorValidator, trajectoryValidator } from './validate.mjs';   // TV: validator notes split across their viz (inform-only)
 import { termStructure } from './termstructure.mjs';                         // TV: durable multi-week floor/ceiling/typical-swing + trajectory shape (shared)
 import { diurnalForecast, fmtEta, driftExitFrom } from './forecast.mjs';                    // TV: forward 24h projection off the daily rhythm (shared, provisional n≈0); driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL beside the forecast readout
@@ -267,7 +267,11 @@ function renderRecent(it, s5m, qrow, showAnalysis){
    quote print — parity, not a fork) off the ALREADY-fetched 1h series (no new request). A 24-bar
    hour-of-day chart (dip hours green, peak hours red) with the derived stale-guarded BID/ASK
    overlaid as reference lines, plus a one-line readout of BID→ASK + after-tax swing (★ = clean
-   candidate, matching the console's flag). The `reach` validator note is rendered beside it,
+   candidate — DT5: gated on `hourConcentration`'s `.clean` verdict, PLAN-DIURNAL-TIMING §6's
+   canonical "is this a real diurnal cycle" answer (circular mean-resultant-length R over each
+   day's own trough/peak hour), AND-ed with the existing after-tax ROI floor below — cleanliness
+   of the CYCLE and profitability of the LAP are two separate questions, so both gates stay,
+   matching the console's flag). The `reach` validator note is rendered beside it,
    inform-only (it scores whether those diurnal levels are actually reached). It's a TIMING tool, so
    it lives in the timing tier (below Price history), NOT above the plan card. Thresholds are
    placeholders (n≈0) — the section is labeled guidance, matching the console framing.
@@ -316,8 +320,12 @@ function renderDiurnal(profSeries, qrow, it, showAnalysis){
     if(dr&&dr.bid!=null&&dr.ask!=null){
       const win=w=>fmtHour(w.startH)+'–'+fmtHour(w.endH);
       const net=Math.round(dr.ask-tax(dr.ask)-dr.bid), roi=dr.bid?net/dr.bid*100:null;
-      const concentrated=dr.dipWindow.startH!==dr.dipWindow.endH && dr.peakWindow.startH!==dr.peakWindow.endH;
-      const clean=net>0 && !prof.trendDominates && concentrated && roi!=null && roi>=DIURNAL_MIN_ROI;
+      // DT5: cycle-cleanliness comes from hourConcentration (canonical — PLAN-DIURNAL-TIMING §3/§6),
+      // NOT a locally-reinvented concentrated/trendDominates predicate. Judgment call: keep the ROI
+      // floor as a SEPARATE economic gate — a genuinely clean per-day trough/peak cycle that still
+      // doesn't clear a positive after-tax swing isn't a tradeable ★, so DIURNAL_MIN_ROI stays live.
+      let hc=null; try{ hc=hourConcentration(profSeries||[], {nights}); }catch(_){ hc=null; }
+      const clean=!!(hc&&hc.clean) && net>0 && roi!=null && roi>=DIURNAL_MIN_ROI;
       let s='';
       if(clean) s+='<b class="gain" title="clean diurnal candidate — concentrated dip &amp; peak, trend-quiet, positive after-tax swing">★</b> ';
       s+='<b>BID '+fmtP(dr.bid)+'</b> <span class="mini">('+dr.bidBasis+', dip '+win(dr.dipWindow)+')</span> → <b>ASK '+fmtP(dr.ask)+'</b> <span class="mini">(peak '+win(dr.peakWindow)+')</span>';
