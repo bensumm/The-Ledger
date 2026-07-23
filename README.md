@@ -603,7 +603,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (`reachableBand`), formatted by `lib/emit.mjs depthReachClause` and shadow-logged as the lean
     `depthExit`/`reachable` ledger fields (inform-only — no verdict/price/grade input). PB4
     **`--pressure-exit`** (opt-in TRIAL, 2026-07-15): under the flag the held list-at becomes the
-    pressure-driven est-sell (BE-floored; declared exit still wins), depth floor still beside; LOUD banner,
+    pressure-driven est-sell (HONEST post PLAN-ESTIMATOR-HONEST-SELL — a sub-BE ask is the cut/damage-control
+    price, shown beside break-even, not floored; declared exit still wins), depth floor still beside; LOUD banner,
     the retro co-log stays NEUTRAL (logs the intrinsic estimate, not the pressure display), console-only. RC-S1
     (PLAN-REACHABILITY-CONSOLIDATION, 2026-07-15): held rows ALSO co-log the two OLDER exit estimators —
     the reachRelief-family `estBuy`/`estSell`/`estConfidence` (`estimatePair`, `declaredExit` nulled so the

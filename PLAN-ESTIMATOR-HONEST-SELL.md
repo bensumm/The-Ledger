@@ -96,11 +96,25 @@ templating Chunk-3B's gate-not-substitute pattern). Not near-term.
 | E2 | LANDED-in-worktree | — | cells.mjs — sell cell: honest number + floor ANNOTATION (not substitution) + `list ~X (~Nd hold, conf)`; P(fill) beside the net; estConfLean KEEPs beFloored + ADDs forward fields (YS2) |
 | E3 | LANDED-in-worktree | — | read-window-range `fold:` line — three-part: honest best-case net + P(fill) + `list at X (forward)` + `recency-fold Y (secondary — phase-blind)` + floor caution |
 | E4 | LANDED-in-worktree | — | quote-items — `extra.forward` plumbed from the in-hand `prof`/`ast.days`; footer explainer reconciled |
+| Consumer audit | LANDED-in-worktree | — | reverted the watch-positions BE floor (honest sub-BE = cut price); fixed the quote-items false `(BE-floored)` label |
 | Ring-3 (rank denoise) | DEFERRED — gated on F-G + needs rank knife guard | — | forward exit → estimateRank/screen.json, all niches |
 
-E1–E4 landed as ONE coherent commit (the shell adds fields the consumers render). The one real-price
-consumer of `estSell` (watch-positions' pressure-exit `heldLa`) uses `estSellFloorBind ?? estSell` so a LIST
-price never sits below break-even — the exact BE-floored value the shell used to overwrite `estSell` with.
+E1–E4 landed as ONE coherent commit (the shell adds fields the consumers render).
+
+**Consumer audit ruling (Fable a4b4d2bb + independent re-verify) — sub-BE is the CUT price, not a bug.**
+The E1 commit had floored the two PB4 pressure-exit held-lot surfaces to break-even (`estSellFloorBind ??
+estSell`) on the premise "a LIST price must never sit below break-even." That premise is WRONG, and the
+codebase already proves it: `momVerdict`'s canonical CUT / CUT-CANDIDATE gate deliberately returns
+`listAt: instabuy` BELOW break-even to free stuck capital, and `heldListAt` (`pipeline/lib/emit.mjs`)
+passes that sub-BE number through UNFLOORED. So the honest `estSell` is the CORRECT number on a held cut;
+flooring it suppresses the damage-control signal. Fix: both surfaces now show the HONEST number —
+watch-positions' `heldLa` reverted to bare `estSell` (safe: the note block renders `list @ X · break-even
+Y`, so a sub-BE X is self-labeling), and quote-items' stale `(BE-floored)` literal (false once the number
+isn't floored) → truthful `(below BE Y — cut/damage-control price, not a profit)`. `cells.mjs` /
+`read-window-range.mjs` / the shadow-log consumers were audited CONFIRMED-SOUND (honest number +
+annotation, never substitution). Open follow-up (non-blocking): niche-conditioned `holdHorizonDays` (the
+forward "list at X" currently always assumes the 1.5d default — renders inline, not deceptive).
+
 Tests: the reuse/degrade/delegation pins in `pipeline/test/estimators.test.mjs` (pFill≡askReachFactor,
 forward-absent byte-identical, forward-present delegates to driftExitFrom, estConfLean YS2 + beFloored
 continuity, KNIFE trend-only renders); the three BE-clamp tests were rewritten to the honest behavior.

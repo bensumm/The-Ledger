@@ -699,7 +699,7 @@ async function runPositions() {
       if (estP && estP.confidence.pressureExit) {
         const pe = estP.confidence.pressureExit;
         const clause = depthReachClause({ ca: depthP, rb: reachableP, qty });
-        notes.push({ kind: 'pressureExit', itemId, text: `${name}: pressure-exit — list @ ${fmtP(estP.estSell)}${estP.confidence.beFloored ? ' (BE-floored)' : ''} · re-buy bid ${fmtP(estP.estBuy)} (pressure ${pe.pressure.toFixed(1)}×${pe.reliability != null && pe.reliability < 1 ? ` rel ${pe.reliability.toFixed(2)}` : ''}, BE ${fmtP(estP.be)})${clause ? ` · ${clause}` : ''} — TRIAL, un-calibrated (n≈0)` });
+        notes.push({ kind: 'pressureExit', itemId, text: `${name}: pressure-exit — list @ ${fmtP(estP.estSell)}${estP.confidence.beFloored ? ` (below BE ${fmtP(estP.be)} — cut/damage-control price, not a profit)` : ''} · re-buy bid ${fmtP(estP.estBuy)} (pressure ${pe.pressure.toFixed(1)}×${pe.reliability != null && pe.reliability < 1 ? ` rel ${pe.reliability.toFixed(2)}` : ''}, BE ${fmtP(estP.be)})${clause ? ` · ${clause}` : ''} — TRIAL, un-calibrated (n≈0)` });
       } else if (!ts1hP) {
         notes.push({ kind: 'pressureExit', itemId, text: `${name}: pressure-exit — no 1h series available this pass (targeted fetch failed); re-run watch for the pressure read.` });
       }

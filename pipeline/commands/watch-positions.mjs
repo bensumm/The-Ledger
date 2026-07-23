@@ -562,8 +562,9 @@ async function main() {
   // flag the output is byte-identical to today for every item (no cycle-watch load/save happens).
   const CYCLE = args.includes('--cycle');
   // PB4 (PLAN-DEPTH-EXIT / PLAN-REACHABILITY-CONSOLIDATION) — the pressure-exit TRIAL flag (opt-in, owner
-  // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (still BE-floored
-  // + clamped; declared exit still wins); the depth floor + reachable clause still renders beside it. The
+  // early-adopt). When set, a held lot's list-at is the pressure-driven reachableBand ask (HONEST, not
+  // BE-floored post PLAN-ESTIMATOR-HONEST-SELL — a sub-BE ask is the cut price, shown beside break-even;
+  // declared exit still wins); the depth floor + reachable clause still renders beside it. The
   // retro co-log stays on the NEUTRAL estimate (unbiased). Console-only; no screen.json/app path here.
   // PC3: routed through the shared flag>config>default resolver as a NAMED sell-top model
   // (--est-sell=reach-fold|pressure, the `=value` form since targets are bare positionals); `--pressure-exit`
@@ -1074,12 +1075,14 @@ async function main() {
     // PB4: under the pressure-exit trial, the list-at is the pressure-driven est-sell (declared-exit-
     // respecting — all in _estPressure); else the shared momVerdict list-at (unchanged). The depth floor
     // still renders in the window clause beside it (depthReachClause — the reference).
-    // PLAN-ESTIMATOR-HONEST-SELL E1: estSell is no longer BE-clamped in the shell (it stays the honest,
-    // possibly-sub-BE number for the display read). A LIST price must never sit below break-even, so this
-    // one real-price consumer uses estSellFloorBind (= be when the fold is sub-BE, else null) → the exact
-    // BE-floored value the shell used to overwrite estSell with. Preserves this surface byte-identically.
+    // PLAN-ESTIMATOR-HONEST-SELL E1: estSell is no longer BE-clamped in the shell — it stays the HONEST,
+    // possibly-sub-BE number, and we show it AS-IS here (no BE floor). A sub-BE list-at is NOT a bug: it's
+    // the damage-control / cut price (the same doctrine momVerdict's own CUT/CUT-CANDIDATE uses — listAt =
+    // instabuy, deliberately below break-even to free stuck capital; heldListAt passes it through
+    // unfloored). The note block renders `list @ X · break-even Y` (line below), so a sub-BE X is
+    // self-labeling — the operator sees the cut price beside its break-even, never a hidden loss.
     const heldLa = (PRESSURE_EXIT && it._estPressure && it._estPressure.confidence.pressureExit)
-      ? (it._estPressure.estSellFloorBind != null ? it._estPressure.estSellFloorBind : it._estPressure.estSell)
+      ? it._estPressure.estSell
       : heldListAt(row, be, mvHeld);
     // V2-P4b: the persistence-gated dominant-path line (shared renderPathLine) — decision support
     // rendered ALONGSIDE the verdict in the note block; a CONFIRMED migration surfaces prominently
