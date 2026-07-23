@@ -426,3 +426,16 @@ not one tick. The closed live spread is corroboration/trigger, not the decision.
   is data (no APP_VERSION), but a deliberate before/after is required.
 - **Open harden question (for when built):** WHICH durable signal drives it — reach-fold spread vs
   traded-band-density (Bar-D) vs a multi-read persistence. Fable to resolve at build time.
+
+### Wave 3 — PARKED decision (Ben, 2026-07-22): do NOT floor the digest on `reach ✗`
+
+Considered making `reach ✗`/"sell unreliable" a hard demotion floor (like crossability), since a
+mirage (Aldarium) can top the digest at `reach ✗`. **REJECTED / parked** — `reach ✗` is PHASE-
+CONTAMINATED: a trough-phase oscillator shows `reach ✗` precisely because it's in the down-half of its
+cycle (the peak isn't reaching *recently*), which is the BUY point, not weakness (the F-F insight —
+recent-reach phase-bias). Flooring it would demote a mid-oscillation entry. Crossability stays the only
+hard floor (phase-INDEPENDENT — an uncrossable live spread is uncrossable at any cycle phase). The
+phase-CORRECT way to sink a genuine mirage (not a trough oscillator) is the DRIFT-MARGIN as a soft rank
+penalty — it already encodes phase (trough oscillator → positive margin, kept; fading mirage → negative,
+sinks). So the honest extension is the band-niche drift-margin rank (extend W3-2 to band, Wave-4), NOT a
+reach floor. Revisit after a few live passes once the crossability floor has actually fired.
