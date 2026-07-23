@@ -95,7 +95,7 @@ import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight,
 import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
 import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
-import { driftExitFrom, oscillationVsKnife } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife)
+import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife). F-H — OSC_DETECTOR_NIGHTS = the detector's OWN longer trailing window, decoupled from the gate's AMP_NIGHTS
 import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
 // the registry (the names live in ONE place — flip-niches.mjs) and reads each spec's inferred default
@@ -1629,10 +1629,16 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide) 
     const traj = trajectoryFrom1h(ts1h);
     const trendDominates = !!(prof && prof.trendDominates);
     const knife = !!(traj && traj.shape === 'knife');
-    // PLAN-OSCILLATION-CYCLE Chunk 3B — the drift-aware oscillation-vs-knife detector off the SAME in-hand
-    // daily windowStats().days (NO fetch). It TEMPERS the raw `knife` above: a drift-riding oscillator
-    // (fang/blowpipe) is not a false knife and must reach the margin gate, not die as `knife`.
-    const osc = oscillationVsKnife(stats.days);
+    // PLAN-OSCILLATION-CYCLE Chunk 3B — the drift-aware oscillation-vs-knife detector. It TEMPERS the raw
+    // `knife` above: a drift-riding oscillator (fang/blowpipe) is not a false knife and must reach the
+    // margin gate, not die as `knife`.
+    // F-H (2026-07-22): the detector reads a SEPARATE, LONGER trailing window (`OSC_DETECTOR_NIGHTS`, >
+    // AMP_NIGHTS) — NOT the gate's `stats` — so it gets the ≥1.5 cycles / ≥3 legs of history it needs to
+    // fire OSCILLATING WITHOUT widening the gate's own daily-range/reach/recency reads (which stay on the
+    // AMP_NIGHTS `stats`). Same in-hand `ts1h`, NO new fetch — just a longer lookback into the SAME series
+    // (endpoint-capped ~15d — an honest sample-size fix, see OSC_DETECTOR_NIGHTS in js/forecast.mjs).
+    const oscStats = windowStats(ts1h, { nights: OSC_DETECTOR_NIGHTS, wStart: 0, wEnd: 0 });
+    const osc = oscillationVsKnife(oscStats.days);
     // PLAN-OSCILLATION-CYCLE Chunk 3A — compute the drift-adjusted margin ONCE, HERE at the gate stage
     // (moved up from the render/shadow-log point below), so the SAME value feeds BOTH the margin-below-floor
     // gate AND the Chunk-2 shadow-log (one compute, reused — never computed twice). Slopes + diurnal

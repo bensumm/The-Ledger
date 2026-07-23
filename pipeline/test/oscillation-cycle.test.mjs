@@ -19,11 +19,16 @@
  *   - the returned object exposes NO phase / NO direction label (the corrected-mechanism ruling).
  */
 import assert from 'node:assert/strict';
-import { hourProfile } from '../../js/windowread.mjs';
+import { hourProfile, windowStats } from '../../js/windowread.mjs';
+import { amplitudeRanges } from '../../js/amplitudescreen.mjs';
 import {
   diurnalForecast, driftAdjustedExit, oscillationVsKnife,
-  OSC_HOLD_HORIZON_DAYS,
+  OSC_HOLD_HORIZON_DAYS, OSC_DETECTOR_NIGHTS,
 } from '../../js/forecast.mjs';
+
+// AMP_NIGHTS is a screen-flip-niches.mjs-local const (the amplitude GATE's daily-range lookback) — not
+// exported, so mirror its value here for the F-H decoupling pins. If it changes there, change it here.
+const AMP_NIGHTS = 14;
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -178,6 +183,74 @@ ok('byte-identity: driftAdjustedExit does not mutate the forecast; un-adjusted h
 ok('exit: degrades to null when the forecast degraded (no nextPeak/nextTrough)', () => {
   assert.equal(driftAdjustedExit({ forecast: null, reason: 'no-anchor' }, { ceilingSlope: -50 }), null, 'null forecast → null');
   assert.equal(driftAdjustedExit(null, {}), null, 'null input → null');
+});
+
+// ── 7. F-H: the DETECTOR's lookback is DECOUPLED from the amplitude GATE's AMP_NIGHTS window ───────
+// F-H (2026-07-22): `oscillationVsKnife` needs ≥1.5 cycles / ≥3 real legs of history to fire OSCILLATING.
+// At the gate's AMP_NIGHTS=14 window, a real oscillator that has RECENTLY entered a prolonged down-leg
+// (the fang down-leg you sit inside) reads a false KNIFE — from inside a 14-day window it genuinely
+// cannot yet tell a monotone leg from a cycle (the F-A walk-forward finding). Feeding the detector a
+// SEPARATE, LONGER trailing window (`OSC_DETECTOR_NIGHTS` > AMP_NIGHTS) buys it the extra history to see
+// the earlier reversals and read OSCILLATING — WITHOUT widening the gate's own daily-range/reach reads.
+// A realistic ~7-day-cycle oscillator whose last ~13 days are a prolonged descent: older days carry two
+// clean legs of the ~weekly oscillation; recent days are the current down-leg (with tiny jitter so the
+// noise floor is non-zero). Walked at AMP_NIGHTS trailing days it is all descent (≤1 real leg → KNIFE);
+// the full OSC_DETECTOR_NIGHTS window catches the earlier reversals (≥3 real legs → OSCILLATING).
+function fangDownLegMids() {
+  const mids = [1000, 1018, 1006, 982, 972, 992, 1014, 1016];   // days 0–7: two clean legs of a ~7-day cycle
+  let v = 1010;
+  for (let i = 8; i < 21; i++) { v -= 10 + (i % 2 ? 3 : -3); mids.push(v); }   // days 8–20: the current down-leg + jitter
+  return mids;
+}
+ok('F-H: a recently-down-legging oscillator reads KNIFE at AMP_NIGHTS but OSCILLATING at OSC_DETECTOR_NIGHTS', () => {
+  assert.ok(OSC_DETECTOR_NIGHTS > AMP_NIGHTS, `the detector window (${OSC_DETECTOR_NIGHTS}) must exceed the gate's AMP_NIGHTS (${AMP_NIGHTS}) — that is the decoupling`);
+  const full = fangDownLegMids();
+  assert.ok(full.length >= OSC_DETECTOR_NIGHTS, 'fixture supplies at least a full detector window');
+
+  const shortWin = oscillationVsKnife(daysFromMids(full.slice(full.length - AMP_NIGHTS)));
+  assert.ok(shortWin, 'the AMP_NIGHTS slice is readable');
+  assert.equal(shortWin.knife, true, 'from inside a 14-day window the fang down-leg looks monotone → KNIFE (too few legs)');
+  assert.ok(shortWin.legs < 3, `fewer than OSC_MIN_LEGS real legs in the short window (got ${shortWin.legs})`);
+
+  const longWin = oscillationVsKnife(daysFromMids(full.slice(full.length - OSC_DETECTOR_NIGHTS)));
+  assert.ok(longWin, 'the OSC_DETECTOR_NIGHTS slice is readable');
+  assert.equal(longWin.oscillating, true, 'the longer window catches the earlier reversals → OSCILLATING (the fix helps the target class)');
+  assert.ok(longWin.legs >= 3, `≥3 real legs once enough trailing history is supplied (got ${longWin.legs})`);
+});
+
+// A 25-day 1h fixture: a wide daily swing (evening dip / afternoon peak) riding the same recently-down-
+// legging mid path — so the daily windowStats().days quantiles differ between a 14- and a 21-night window.
+function diurnalOverMids(mids, { dipHours = [3, 4, 5], peakHours = [15, 16, 17], dipD = 40, peakD = 60 } = {}) {
+  const s = [];
+  for (let di = 0; di < mids.length; di++) for (let h = 0; h < 24; h++) {
+    const base = mids[di];
+    const low = base - (dipHours.includes(h) ? dipD : 0);
+    const hi = base + (peakHours.includes(h) ? peakD : 5);
+    s.push(pt(ts(2026, 0, 1 + di, h), low, hi));
+  }
+  return s;
+}
+ok('F-H: the GATE\'s AMP_NIGHTS basis is UNCHANGED — the longer detector window does not touch amplitudeRanges/reach', () => {
+  const mids = [1000, 1018, 1006, 982, 972, 992, 1014, 1016, 1003, 990, 983, 970, 963, 950, 943, 930, 923, 910, 903, 890, 883, 876, 869, 862, 855];
+  const ts1h = diurnalOverMids(mids);
+  const live = 880;
+
+  const gateStats = windowStats(ts1h, { nights: AMP_NIGHTS, wStart: 0, wEnd: 0 });
+  const detStats = windowStats(ts1h, { nights: OSC_DETECTOR_NIGHTS, wStart: 0, wEnd: 0 });
+  assert.equal(gateStats.days.length, AMP_NIGHTS, 'gate window keeps AMP_NIGHTS completed days');
+  assert.ok(detStats.days.length > gateStats.days.length, 'the detector window genuinely reaches further back');
+
+  // The gate's amplitudeRanges is a pure function of the AMP_NIGHTS stats — computing the longer detector
+  // window alongside it changes nothing (recompute it and assert byte-identity to the reference).
+  const ref = amplitudeRanges(gateStats, live);
+  const again = amplitudeRanges(windowStats(ts1h, { nights: AMP_NIGHTS, wStart: 0, wEnd: 0 }), live);
+  assert.deepEqual(again, ref, 'the AMP_NIGHTS amplitudeRanges is unaffected by the detector-window decoupling');
+
+  // …and it is load-bearing that the gate stays on AMP_NIGHTS: feeding it the DETECTOR window instead
+  // WOULD change the reach/quantile outputs (different day set), which the decoupling deliberately avoids.
+  const wrong = amplitudeRanges(detStats, live);
+  assert.ok(wrong.ampBid !== ref.ampBid || wrong.ampAsk !== ref.ampAsk,
+    'the two windows produce different amplitudeRanges — so decoupling (gate on AMP_NIGHTS, detector on OSC_DETECTOR_NIGHTS) is what protects the gate\'s recency read');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

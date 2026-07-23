@@ -268,6 +268,21 @@ export function whenSellable(fc, targetAsk) {
 export const OSC_HOLD_HORIZON_DAYS = 1.5;
 // oscillation-vs-knife detector thresholds (n≈0 PLACEHOLDERS, pending F1):
 export const OSC_MIN_DAYS = 5;            // fewer completed daily mids than this ⇒ null (can't read a cycle)
+// PLAN-OSCILLATION-CYCLE F-H (2026-07-22) — the DETECTOR's OWN trailing lookback, DECOUPLED from the
+// amplitude GATE's AMP_NIGHTS (=14) window. WHY: `oscillationVsKnife` needs ≥1.5 cycles / ≥3 real legs
+// of history to fire OSCILLATING; at a ~6–8d cycle that is ~9–12 trailing days, so a 14-night window
+// sits right at the transition edge and can read a false KNIFE on a real oscillator on its shorter
+// slices (the F-A walk-forward finding: KNIFE on ≤~9–10 trailing days, OSC once enough accumulate).
+// Feeding the detector a SEPARATE, LONGER trailing window buys it that history WITHOUT widening the
+// gate's daily-range/reach/recency reads (AMP_NIGHTS + RECENT_NIGHTS stay a deliberately separate,
+// working SIGNAL-RECENCY concern — do NOT conflate the two by bumping AMP_NIGHTS).
+// HONESTY CEILING (rule 4): the wiki `/timeseries?timestep=1h` endpoint returns only ~16 calendar days
+// in practice, so on the in-hand 1h series this value EFFECTIVELY CAPS near ~15 completed days no matter
+// how high it is set — `windowStats` simply returns all available days when `nights` exceeds the series
+// depth. This is a SAMPLE-SIZE fix bounded by the endpoint, NOT a calibration. (Sourcing a deeper series
+// from pipeline/lib/archive.mjs would be a larger optional follow-up — only worth it if the in-hand
+// series genuinely cannot reach this depth; NOT built here.) Must be > AMP_NIGHTS to actually decouple.
+export const OSC_DETECTOR_NIGHTS = 21;    // detector's own trailing window (> AMP_NIGHTS=14; endpoint-capped ~15d)
 // PLAN-OSCILLATION-CYCLE F-A (2026-07-22) — the detector was REDESIGNED; the old OSC_FLIP_FRAC
 // first-difference metric is RETIRED (see the header comment above oscillationVsKnife for the full
 // finding). Replacement thresholds:

@@ -159,7 +159,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   LEGS, counting a leg as real only past `OSC_MIN_LEG_DAYS` + `OSC_AMP_NOISE_MULT`× the series' own
   day-to-day noise floor; `oscillating` fires at `OSC_MIN_LEGS` (≥2 direction reversals) — fewer legs is a
   monotone linear-fit hump (even a CURVED collapse), never a real cycle. Tells an oscillating-while-drifting
-  shape (fang/blowpipe) from a monotone knife where floorCeilingTrack.oscillating structurally can't.
+  shape (fang/blowpipe) from a monotone knife where floorCeilingTrack.oscillating structurally can't. F-H
+  (2026-07-22) added `OSC_DETECTOR_NIGHTS=21` (> the amplitude gate's `AMP_NIGHTS=14`): `renderAmplitudeMode`
+  feeds the detector its OWN longer trailing `windowStats(...).days` window (off the same in-hand series, NO
+  fetch) so it sees the ≥1.5 cycles / ≥3 legs it needs WITHOUT widening the gate's `AMP_NIGHTS` daily-range/
+  reach/recency read — a sample-size fix BOUNDED by the ~16-day `/timeseries?timestep=1h` endpoint, not a
+  calibration.
   INFORM-ONLY, wired into NO gate in Chunk 1 (gating is Chunk 3); pinned by `pipeline/test/oscillation-cycle.test.mjs`. Chunk 2 adds
   `driftExitFrom(profile, days, ctx, opts)` — the ONE slope-sourcing + drift-adjusted-exit COMPOSITION (imports
   `floorCeilingTrack` from windowread to pull the ceiling/floor slope off an in-hand `windowStats().days`, NO

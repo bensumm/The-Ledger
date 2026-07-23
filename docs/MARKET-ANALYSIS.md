@@ -270,6 +270,16 @@ itself — a walk-forward backtest found the original first-difference flip-frac
 fang/blowpipe's real shape (smooth multi-day up/down runs) a false knife; the fixed version detrends the
 same way but counts REAL detrended legs (≥`OSC_MIN_LEG_DAYS` long, amplitude clearing the noise floor)
 instead of day-to-day sign flips — `js/forecast.mjs`'s header comment on the function has the full finding.
+F-H (2026-07-22) DECOUPLED the detector's lookback from the gate's: the redesigned detector needs ≥1.5
+cycles / ≥3 legs to fire OSCILLATING, so at the gate's `AMP_NIGHTS=14` daily window a real oscillator that
+has recently entered a prolonged down-leg reads a false KNIFE on that short slice. `renderAmplitudeMode`
+now feeds `oscillationVsKnife` a SEPARATE, LONGER trailing window (`OSC_DETECTOR_NIGHTS=21` >`AMP_NIGHTS`,
+`js/forecast.mjs` — its own `windowStats(...).days` off the SAME in-hand `ts1h`, NO new fetch) while the
+GATE keeps `AMP_NIGHTS` for `amplitudeRanges`/reach AND the `driftExitFrom` slopes — so the detector gets
+more history WITHOUT widening the gate's daily-range/reach/recency read (a deliberate SIGNAL-RECENCY
+separation). HONESTY: the wiki `/timeseries?timestep=1h` endpoint returns only ~16 calendar days, so
+`OSC_DETECTOR_NIGHTS` effectively caps near ~15d on real data — a sample-size fix BOUNDED by the endpoint,
+not a calibration. All still n≈0.
 F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_TOP_DEFAULT=25`,
 `pipeline/lib/gatecandidates.mjs`/`admission.mjs`): a big-ticket on `watchlist.json` now bypasses the
 Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-25, so it
