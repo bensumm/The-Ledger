@@ -350,3 +350,36 @@ new conformance rule catches a malformed `holdDays`.
 | #6 (JSON-store consolidation) | SHELVED | — | 3 distinct schemas, no cross-reads, no decision impact. Opportunistic only. |
 | F-C | ✅ LANDED-in-worktree | (this worktree) | per-thesis HOLD HORIZONS for the drift-adjusted-exit note (the audit's own GAP finding) — `DRIFT_INTRADAY_HOLD_DAYS` (band/churn/scalp, ~2h, anchored to `BAND_HOURS`) and `DRIFT_VALUE_HOLD_DAYS` (value, 14d, anchored to `termstructure.mjs`'s `FLOOR_FALLBACK_DAYS`) replace the blanket amplitude-shaped 1.5d default at the two Chunk-6 call sites that KNOW their thesis. Generic contexts with no known thesis (quote-items/read-window-range/trends.js/watch-positions non-cycle) deliberately kept on the default — the render already shows the real horizon used, so nothing is silently mis-scaled. No APP_VERSION bump (`js/flip-niches.mjs` still not app-imported; `js/trends.js` unchanged). Pinned by 4 new checks in `oscillation-thesis.test.mjs`. |
 | 6 | ✅ LANDED | 7661a76 | per-thesis drift-adjusted-exit INFORM notes. Each surfacing spec (band/churn/scalp/value) gains an OPTIONAL `driftInform:{label}` registry field + the pure `driftInformNote(spec,dae,{entry,fmt})` helper in `js/flip-niches.mjs`; the render paths (renderMode band/churn/scalp + renderValueMode) compute the drift-adjusted exit ONCE via the SHARED `driftExitFrom` (off in-hand `prof`+`windowStats().days`, NO fetch — fork nothing) and push a sibling INFORM note (`driftNotes`/`valueInformNotes`). NO thesis gains a gate; DIRECTION-AGNOSTIC (reads `driftAdjustedPeak`, no sign branch); registry-line read, no `if(mode===)`. band = drift-adjusted band top (priced lower on a fader, NOT excluded); churn = "don't buy near the drift-adjusted weekly high" magnitude caution; scalp = sharpened exit-pricing on already-accepted fallers (admission unchanged); value = drift-adjusted after-tax amplitude vs buy-low (NOT a floor relax — R3b stays dropped). `DRIFT_NEAR_HIGH_FRAC=0.02` placeholder (n≈0). Pinned by `pipeline/test/oscillation-thesis.test.mjs` (7 checks incl. Aldarium rising-floor/fading-ceiling regression pin + ±drift symmetry) + a flip-niches.test.mjs conformance check. 79 suites + check-imports + lint-docs green. **NO APP_VERSION** — console-only notes (driftNotes/valueInformNotes → footer/console.log); does NOT alter screen.json cells or the returned rows, so `js/trends.js` reads nothing new (audited). |
+
+## Wave 3 — make the DIGEST actually DENOISE (planned 2026-07-22; pending Fable harden)
+
+**Problem (Ben, 2026-07-22).** The DECISION DIGEST is meant to be the DENOISED, focused output the
+interpretation layer builds on. Today it's a `capEff`-ranked cross-niche leaderboard whose RANK
+rewards the noise: cheap high-% **ghost spreads** (Jade necklace 259%/d, Ironwood plank 143%/d —
+uncrossable, live instasell ≈ instabuy) and drift-blind **naive-net mirages** (Aldarium `capEff`
+41–62%/d on EVERY pass, verified a fading ~1% mirage ~8× this session) top it. The denoising
+signals (crossability, drift-margin, reach-fade) are shown as COLUMNS but don't drive the RANK, and
+there's no session-verified-noise memory → the interpretation layer re-drills the same noise every
+pass. The digest is inform-only (`capEff re-orders the DIGEST view only` — never gates / never
+touches screen.json), so folding the denoisers into its RANK is the SAFE home for this (an n≈0
+signal reordering a survey, not the graded board). **This SUBSUMES F-I** — F-I ("promote the
+drift-margin to the screen.json rank/grade") is SHELVED in favor of doing it in the digest rank,
+inform-only.
+
+- **W3-1 — crossability / ghost-spread demotion (the biggest single denoiser).** Demote (or drop
+  from the digest) rows whose live spread isn't profitably crossable — live instasell ≈ instabuy, or
+  spread < tax + a min margin, or the "band" is a ghost. Kills the Jade/Ironwood tier that pollutes
+  the top. HARDEN: is there an existing crossability/ghost-spread signal to reuse (the
+  two-sided-liquidity gate exists but does NOT catch a zero-crossable-spread), or is it new?
+- **W3-2 — drift-margin into the digest RANK (the reshaped F-I).** Rank the amplitude digest rows by
+  the drift-adjusted MARGIN, not `capEff`-of-naive-`netPerCycle` → fading mirages (Aldarium) sink.
+  Also populate the amplitude digest row's currently-null `reachFrac`/`askPlacement`/margin context
+  (amplitude `collectDigestRow` passes `reachFrac: null, askPlacement: null` + naive `net`).
+  Inform-only (digest rank), NOT screen.json grade/rank.
+- **W3-3 — session-verified-noise suppression (the QoL win, the riskiest).** Carry a "drilled &
+  rejected this session" mark so a verified mirage doesn't re-top the digest every pass (the ~8×
+  Aldarium re-drill is the symptom). HARDEN: where does the state live + who sets it (the
+  interpretation layer marks it; the digest suppresses/down-ranks next pass) — an existing session
+  artifact to reuse, or genuinely new persistence? Worth the complexity vs W3-1+W3-2 alone?
+
+**Honesty:** all n≈0, inform-only (the digest gates NOTHING). W3-1 is the highest-value first cut.
