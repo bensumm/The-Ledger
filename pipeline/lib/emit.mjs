@@ -27,7 +27,7 @@
  * changes no verdict, no alert, no row selection (V5 is output-format-only).
  */
 import { fmtP, fmt, fmtHourRange } from '../../js/money-format.js';
-import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer
+import { fmtHoldHorizon, realityClause } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer; PLAN-DIURNAL-RECENCY-GUARD — realityClause: the spike-top/stale clause appended to the ASK/BID bits
 
 /**
  * depthReachClause — PLAN-DEPTH-EXIT DE3: the held-lot depth/pressure clause for the window line.
@@ -155,8 +155,12 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
 
   const bits = [];
   if (lap.clean === true) {
-    bits.push(`BID ${fmtFn(lap.bid)} (${lap.bidBasis}, dip ${win(lap.dipWindow)})`);
-    bits.push(`ASK ${fmtFn(lap.ask)} (peak ${win(lap.peakWindow)})`);
+    // PLAN-DIURNAL-RECENCY-GUARD — append the compact spike-top/stale clause (empty string ⇒
+    // byte-identical) so a recent-spike-inflated peak/dip level shows its typical alongside.
+    const bidRC = realityClause(lap.dipReality, { side: 'bid', fmt: fmtFn, style: 'short' });
+    const askRC = realityClause(lap.peakReality, { side: 'ask', fmt: fmtFn, style: 'short' });
+    bits.push(`BID ${fmtFn(lap.bid)} (${lap.bidBasis}, dip ${win(lap.dipWindow)})${bidRC ? ' ' + bidRC : ''}`);
+    bits.push(`ASK ${fmtFn(lap.ask)} (peak ${win(lap.peakWindow)})${askRC ? ' ' + askRC : ''}`);
     bits.push(`timed ${netTxt(lap.net)}${roiTxt(lap.roi)}`);
     bits.push(`same-hour ${netTxt(lap.instantNet)}`);
     bits.push(`range ${range}`);

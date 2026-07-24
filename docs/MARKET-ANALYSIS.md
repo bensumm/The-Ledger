@@ -606,7 +606,12 @@ simultaneous independent rungs on one item.
   BID … — second elevated/depressed window (n≈0, inform)` clauses on the SAME line — when `hourProfile`
   finds a SECOND local extremum per side clearing the `SECOND_PROMINENCE_FRAC` topographic-prominence gate
   (e.g. an item with a reliable-reach overnight peak AND a higher-ceiling afternoon peak). Inform-only, n≈0
-  — never gates/prices/ranks; the primary window read is unchanged. Each line still carries the **`⏲`
+  — never gates/prices/ranks; the primary window read is unchanged. **Each emitted peak/dip also carries a
+  `reality` level-check** (PLAN-DIURNAL-RECENCY-GUARD, `js/windowread.mjs` `computeReality`): when the quoted
+  level was inflated by a recent 1–2 day spike over-generalised into "typical" it appends `⚠ spike-top`, and
+  when it's an old high the recent regime no longer reaches it appends `⚠ stale`, each trailing a
+  recency-honest `typical ~X` (the recent-window q55 to quote instead). Inform-only, n≈0 (PLACEHOLDER
+  thresholds), console-only — it flags the level, never rewrites it or gates. Each line still carries the **`⏲`
   diurnal-PHASE entry-timing token** (`js/windowread.mjs` `diurnalPhase`, preserved from the pre-DT2
   block) — where NOW sits in today's cycle vs the peak window: `in-peak (closes ~Xh)` /
   `pre-peak (opens ~Xh)` / `post-peak — cooling, next peak ~Yh → starter size` (only the cooling case

@@ -25,6 +25,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
+import { computeReality, realityClause, SPIKE_REACH_FRAC, SPIKE_PLACEMENT_PCTILE, SPIKE_MIN_GAP_FRAC, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN } from '../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD — the level-reality guard + its renderer
 import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
 
 let pass = 0;
@@ -364,6 +365,84 @@ ok('hourProfile (d): DIP-SIDE mirror — two genuine dips surface, a shallow dip
 ok('hourProfile (e): thin history (< HOURPROFILE_MIN_DAYS) still returns null for the WHOLE profile — no peaks/dips to read', () => {
   const prof = hourProfile(shaped(2, { hiOff: h => [4, 5, 6].includes(h) ? 70 : 0 }), { nights: 14, now: noonNow });
   assert.equal(prof, null, '2 days < HOURPROFILE_MIN_DAYS ⇒ null, the pre-existing early-return is unregressed');
+});
+
+// --- 5b. PLAN-DIURNAL-RECENCY-GUARD: the level-reality read (spikeTop / staleOptimistic) --------
+// Layer A mechanics: computeReality reads over a cluster's per-day HIGHS (ask) / LOWS (bid). Build the
+// clusterDays array directly ([[key,{low,hi}], …] oldest→newest) so each flag's math is pinned exactly.
+const cdays = (his, side = 'ask') => his.map((h, i) => [`d${String(i).padStart(2, '0')}`,
+  side === 'bid' ? { low: h, hi: h + 1000 } : { low: h - 1000, hi: h }]);
+
+ok('computeReality (spike): a recent 2-of-3 spike over a flat regime flags spikeTop, typicalLevel at the flat level, raw level UNCHANGED', () => {
+  // 14 days flat highs 19.0m, the last 2 spike to 19.5m; the emitted (contaminated) level is 19.5m.
+  const his = [...Array(12).fill(19_000_000), 19_500_000, 19_500_000];
+  const r = computeReality(cdays(his, 'ask'), 19_500_000, 'ask');
+  assert.equal(r.spikeTop, true, 'low reach + top placement + a recent print + a real gap ⇒ spikeTop');
+  assert.equal(r.staleOptimistic, false, 'recent is ROSIER than full here — the opposite shape, not stale');
+  assert.equal(r.reachedDays, 2); assert.equal(r.nDays, 14);
+  assert.ok(r.reachedDays / r.nDays <= SPIKE_REACH_FRAC, 'reach fraction under the spike bar');
+  assert.equal(r.typicalLevel, 19_000_000, 'typicalLevel = recent-7 q55 lands on the flat level, NOT the spike');
+  // the guard FLAGS; it never rewrites the level — computeReality returns no `level`, and the caller's is intact
+  assert.ok(Math.abs(19_500_000 - r.typicalLevel) / r.typicalLevel >= SPIKE_MIN_GAP_FRAC, 'the gap clears the min-gap floor');
+});
+
+ok('computeReality (bid spike): a flash-crash low dragging the recent dip DOWN flags spikeTop with the BOTTOM-of-distribution placement (direction flips by side)', () => {
+  // dip LOWS flat 18.0m, the last 2 flash-crash to 17.5m; the emitted dip level is the 17.5m low.
+  const lows = [...Array(12).fill(18_000_000), 17_500_000, 17_500_000];
+  const r = computeReality(cdays(lows, 'bid'), 17_500_000, 'bid');
+  assert.equal(r.spikeTop, true, 'bid-side spike uses placement ≤ 1−p (the bottom of the daily-LOW distribution)');
+  assert.ok(r.placement <= 1 - SPIKE_PLACEMENT_PCTILE, 'placement is at the BOTTOM, not the top');
+  assert.equal(r.typicalLevel, 18_000_000, 'typicalLevel = recent-7 q55 of lows lands on the flat floor');
+});
+
+ok('computeReality (crash): an old-high-now-crashed level flags staleOptimistic, NOT spikeTop', () => {
+  // highs 19.0m for 11 days, then the recent 3 crash to 17.0m; score the OLD 19.0m high.
+  const his = [...Array(11).fill(19_000_000), 17_000_000, 17_000_000, 17_000_000];
+  const r = computeReality(cdays(his, 'ask'), 19_000_000, 'ask');
+  assert.equal(r.staleOptimistic, true, 'recent 0/3 vs full 11/14 ⇒ stale-optimistic (the crash shape)');
+  assert.equal(r.spikeTop, false, 'reach is HIGH (11/14) and recentHit is 0 ⇒ never spikeTop — the flags never steal each other');
+  assert.equal(r.recentHit, 0, 'the old high does not print in the recent window');
+});
+
+ok('computeReality (clean): a flat stable regime raises NEITHER flag and typicalLevel ≈ level (the anti-cry-wolf floor)', () => {
+  const his = Array(14).fill(19_000_000);
+  const r = computeReality(cdays(his, 'ask'), 19_000_000, 'ask');
+  assert.equal(r.spikeTop, false); assert.equal(r.staleOptimistic, false);
+  assert.equal(r.typicalLevel, 19_000_000, 'typicalLevel == level on a flat series (no divergence to report)');
+  assert.equal(realityClause(r, { side: 'ask', fmt: String, style: 'full' }), '', 'a clean read renders an EMPTY clause (byte-identical surfaces)');
+});
+
+// A spike series driven through the REAL hourProfile — proves the reality object rides the emitted
+// peak, the raw level is the (contaminated) recent median, and the multi-peak deep-equal invariant holds.
+function spikeProfileSeries() {
+  const s = [];
+  for (let di = 0; di < 14; di++) {
+    const spike = di >= 12;                                  // the last 2 days spike (2-of-recent-3)
+    for (let h = 0; h < 24; h++) {
+      const peakHour = [4, 5, 6].includes(h);
+      const hi = peakHour ? (spike ? 19_500_000 : 19_100_000) : 19_000_000;
+      const low = [21, 22, 23].includes(h) ? 18_850_000 : 18_900_000;
+      s.push(pt(ts(2026, 0, 5 + di, h), low, hi, 20, 20));
+    }
+  }
+  return s;
+}
+
+ok('hourProfile: the emitted PEAK carries a spikeTop reality read on a recent-spike series (raw level unchanged, invariant intact)', () => {
+  const prof = hourProfile(spikeProfileSeries(), { nights: 14, now: noonNow });
+  assert.ok(prof && prof.peak.reality, 'a reality object rides the emitted peak');
+  assert.equal(prof.peak.level, 19_500_000, 'the RAW level is still the contaminated recent median (we flag, not rewrite)');
+  assert.equal(prof.peak.reality.spikeTop, true, 'the recent 2-day spike is flagged');
+  assert.ok(prof.peak.reality.typicalLevel <= 19_100_000,
+    `typicalLevel (${prof.peak.reality.typicalLevel}) points at the reachable ~19.1m level, not the 19.5m spike`);
+  // §4 deep-equal invariant — peaks[0]/dips[0] SHARE the object by referential identity; every field
+  // except the additive `reality` stays identical even if a future refactor drops the sharing.
+  assert.strictEqual(prof.peaks[0], prof.peak, 'peaks[0] is the SAME reference as peak');
+  assert.strictEqual(prof.dips[0], prof.dip, 'dips[0] is the SAME reference as dip');
+  const { reality: _r1, ...peakRest } = prof.peaks[0];
+  const { reality: _r2, ...peakBase } = prof.peak;
+  assert.deepStrictEqual(peakRest, peakBase, 'every non-reality field of peaks[0] equals peak');
+  assert.ok(prof.peak.reality === undefined || typeof prof.peak.reality === 'object');
 });
 
 // --- 6. deriveDiurnalRange: the stale-to-live guard (the Ghrazi lesson) -----------------------

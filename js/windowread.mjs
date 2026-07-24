@@ -98,6 +98,76 @@ export function recentQuant(days, side, p, recentN = RECENT_NIGHTS) {
   return side === 'bid' ? quantLow(sorted, p) : quantHigh(sorted, p);
 }
 
+// --- level-reality guard (PLAN-DIURNAL-RECENCY-GUARD) ------------------------------------------
+// The recency primitives above catch stale/spike levels in the SCORED --ask/--bid reads, but the
+// diurnal PROFILE's own peak/dip LEVEL was emitted RAW — a recent 1-2 day spike drags the recent-N
+// median up (boots 07-21/22) and NOTHING flagged that the quoted peak wasn't reachable in the
+// current regime. computeReality attaches a level-reality read to each emitted peak/dip. TWO failure
+// shapes, one object:
+//   • staleOptimistic — old-high-now-crashed (full window rosier than recent; from recencySplit).
+//   • spikeTop        — a recent anomalous print over-generalised into "typical" (NEW): low absolute
+//                       reach + placement EXTREME (direction flips by side) + it printed ≥1× recently
+//                       + the gap vs typicalLevel clears the min-gap floor.
+// INFORM-ONLY, n≈0 — NOTHING here gates/prices/ranks; the emitted `level` is UNCHANGED. All four
+// thresholds are PLACEHOLDERS (hardened against the boots/leather anchors + a 145-item over-flag
+// sweep, PLAN-DIURNAL-RECENCY-GUARD §7; with n=2 they validate "catches what fooled us," not a rate).
+export const SPIKE_REACH_FRAC = 0.25;        // PLACEHOLDER (n≈0) — inform-only, never gates
+export const SPIKE_PLACEMENT_PCTILE = 0.75;  // PLACEHOLDER (n≈0) — inform-only, never gates
+export const SPIKE_MIN_GAP_FRAC = 0.01;      // PLACEHOLDER (n≈0) — inform-only, never gates
+export const REALITY_TYPICAL_QUANT = 0.55;   // PLACEHOLDER (n≈0) — inform-only, never gates (the typicalLevel quantile)
+export const REALITY_TYPICAL_RECENTN = 7;    // PLACEHOLDER (n≈0) — inform-only, never gates (the typicalLevel window)
+
+// computeReality(clusterDays, level, side) — the pure level-reality read.
+// `clusterDays` = [[key,{low,hi}], …] oldest→newest for that cluster's hours (built by the caller off
+// the SAME in-hand samples — ZERO new fetch). side 'ask' (peak, vs daily HIGHS) | 'bid' (dip, vs daily
+// LOWS). Returns { reachedDays, nDays, recentHit, recentDays, placement, staleOptimistic, spikeTop,
+// typicalLevel }. Reuses reachedDays/touchedDays/placement/recencySplit/recentQuant — zero new math.
+export function computeReality(clusterDays, level, side) {
+  const vals = clusterDays.map(([, n]) => (side === 'bid' ? n.low : n.hi)).filter(v => v != null);
+  const nDays = vals.length;
+  const sorted = [...vals].sort((a, b) => a - b);
+  const reached = level == null ? 0 : (side === 'bid' ? touchedDays(vals, level) : reachedDays(vals, level));
+  const reachFrac = nDays ? reached / nDays : 0;
+  const place = level == null ? null : placement(sorted, level);
+  const rs = recencySplit(clusterDays, side, level);          // default recentN=3 → recentHit/recentDays/staleOptimistic
+  // typicalLevel — the recency-honest level to quote when a flag fires: RECENT-window q55 (recentN=7),
+  // NOT a full-window quantile (which stays contaminated by a pre-regime-shift tail — the exact disease
+  // this guard cures). Degrades to the full-window q55 when too few recent days (recentQuant → null):
+  // never a crash, never a fabricated number.
+  let typicalLevel = recentQuant(clusterDays, side, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN);
+  if (typicalLevel == null && sorted.length) typicalLevel = side === 'bid' ? quantLow(sorted, REALITY_TYPICAL_QUANT) : quantHigh(sorted, REALITY_TYPICAL_QUANT);
+  // placement direction flips by side: an ASK spike sits at the TOP of the daily-HIGH distribution
+  // (placement ≥ p); a BID spike (an anomalous flash-crash low) sits at the BOTTOM of the daily-LOW
+  // distribution (placement ≤ 1−p). Applying ≥ p to both makes the bid test nearly unsatisfiable.
+  const placeExtreme = place != null && (side === 'bid'
+    ? place <= 1 - SPIKE_PLACEMENT_PCTILE
+    : place >= SPIKE_PLACEMENT_PCTILE);
+  const gapFrac = (typicalLevel != null && typicalLevel !== 0 && level != null) ? Math.abs(level - typicalLevel) / typicalLevel : 0;
+  const spikeTop = reachFrac <= SPIKE_REACH_FRAC && placeExtreme && rs.recentHit > 0 && gapFrac >= SPIKE_MIN_GAP_FRAC;
+  return {
+    reachedDays: reached, nDays, recentHit: rs.recentHit, recentDays: rs.recentDays,
+    placement: place, staleOptimistic: rs.staleOptimistic, spikeTop, typicalLevel,
+  };
+}
+
+// realityClause(reality, opts) — the ONE renderer for the reality flag across all three surfaces
+// (--profile 'full', diurnal timed-lap 'short', positions windowExit 'exit'). Returns '' when reality
+// is absent OR clean (no flag fires) so every caller stays byte-identical when nothing fires. `typical
+// ~X` always trails so the eye lands there last. INFORM-only text; nothing gates.
+export function realityClause(reality, { side = 'ask', fmt = String, style = 'full' } = {}) {
+  if (!reality || (!reality.spikeTop && !reality.staleOptimistic)) return '';
+  const word = reality.spikeTop ? 'spike-top' : 'stale';
+  const typ = `typical ~${fmt(reality.typicalLevel)}`;
+  if (style === 'short') return `⚠ ${word} ~${fmt(reality.typicalLevel)}`;
+  if (style === 'exit')  return `⚠ ${word} — ${typ}`;
+  const verb = side === 'bid' ? 'touched' : 'reached';
+  if (reality.spikeTop) {
+    const pXX = reality.placement != null ? `p${Math.round(reality.placement * 100)}` : 'p—';
+    return `⚠ ${word} (${verb} ${reality.reachedDays}/${reality.nDays}d · ${pXX} · ${typ})`;
+  }
+  return `⚠ ${word} (${verb} ${reality.reachedDays}/${reality.nDays}d full · ${reality.recentHit}/${reality.recentDays} recent · ${typ})`;
+}
+
 /**
  * Bucket a 1h timeseries into per-day window stats.
  * @param {Array} series  raw /timeseries 1h points ({timestamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume})
@@ -958,8 +1028,14 @@ function rankExtrema(items, valueFn, spread, mode) {
  * @param {object} opts { nights=14, now=new Date(), recentN=RECENT_NIGHTS }
  * @returns {null | { hours, dip, peak, peaks, dips, amplitude, amplitudePct, trendPerDay, trendDominates, nights }}
  *   hours: [{ h, n, lowFull, hiFull, lowRecent, hiRecent, volLo, volHi }] (hours with data, ascending)
- *   dip:  { startH, endH, hours:[…], level, atHour }  level = recent dip-cluster low (the bid candidate)
- *   peak: { startH, endH, hours:[…], level, atHour }  level = recent peak-cluster high (the ask candidate)
+ *   dip:  { startH, endH, hours:[…], level, atHour, reality }  level = recent dip-cluster low (the bid candidate)
+ *   peak: { startH, endH, hours:[…], level, atHour, reality }  level = recent peak-cluster high (the ask candidate)
+ *   reality (PLAN-DIURNAL-RECENCY-GUARD, ADDITIVE): a level-reality read off the cluster's per-day HIGHS
+ *     (peak) / LOWS (dip) — { reachedDays, nDays, recentHit, recentDays, placement, staleOptimistic,
+ *     spikeTop, typicalLevel }. Flags whether the emitted `level` is real in the CURRENT regime
+ *     (spikeTop = a recent anomalous print over-generalised; staleOptimistic = an old high now crashed)
+ *     and carries the recency-honest typicalLevel to quote when a flag fires. INFORM-ONLY, n≈0 — nothing
+ *     gates/prices/ranks off it and the emitted `level` is UNCHANGED (see computeReality).
  *   peaks/dips: ADDITIVE prominence-ranked arrays (length 1–2), PLAN-MULTI-PEAK-WINDOWS. peaks[0] is
  *     byte-identical to `peak` (deep-equals it — the circular global max is always rank-1), dips[0] to
  *     `dip`; peaks[1]/dips[1] (present only when a SECOND local extremum clears SECOND_PROMINENCE_FRAC)
@@ -1057,6 +1133,24 @@ export function hourProfile(series, { nights = 14, now = new Date(), recentN = R
 
   const peakObj = { ...spanOf(peakC.set), hours: peakC.hours, level: peakC.level, atHour: peakHour.h };
   const dipObj  = { ...spanOf(dipC.set),  hours: dipC.hours,  level: dipC.level,  atHour: dipHour.h };
+
+  // PLAN-DIURNAL-RECENCY-GUARD — attach a LEVEL-reality read to each primary window BEFORE the return
+  // builds peaks[]/dips[], so peaks[0]/dips[0] share it by referential identity (the multi-peak
+  // deep-equal invariant holds for free — same object). Per-day cluster HIGHS (peak) / LOWS (dip) over
+  // the kept window, off the same in-hand `byHour` samples — ZERO new fetch. INFORM-only; `level` unchanged.
+  const clusterDays = (hourSet) => {
+    const m = new Map();
+    for (const h of hourSet) for (const s of (byHour.get(h) || [])) {
+      if (!keep.has(s.day)) continue;
+      const cur = m.get(s.day) || { low: null, hi: null };
+      if (s.low != null && (cur.low == null || s.low < cur.low)) cur.low = s.low;
+      if (s.hi != null && (cur.hi == null || s.hi > cur.hi)) cur.hi = s.hi;
+      m.set(s.day, cur);
+    }
+    return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  };
+  peakObj.reality = computeReality(clusterDays(peakC.set), peakObj.level, 'ask');
+  dipObj.reality  = computeReality(clusterDays(dipC.set),  dipObj.level,  'bid');
 
   // PLAN-MULTI-PEAK-WINDOWS — surface a SECOND genuinely-prominent window per side (inform-only). The
   // prominence ranking's rank-1 IS the existing primary (peakObj/dipObj — proven, see rankExtrema), so
@@ -1362,6 +1456,9 @@ export function diurnalTimedLap(series, {
   return {
     ...dr, net, roi, instantNet, instantRoi, holdHrs, lowTrend, hiTrend, bidReach, askReach,
     askReaches, bidReaches,
+    // PLAN-DIURNAL-RECENCY-GUARD — carry the primary peak/dip level-reality read so formatTimedLap can
+    // append the spike-top/stale clause without re-computing the profile. INFORM-only; nothing gates.
+    peakReality: profile.peak.reality, dipReality: profile.dip.reality,
     dipPool, peakPool, trancheComfort, trancheCeiling, clean, degraded: false,
   };
 }
