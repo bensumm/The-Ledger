@@ -727,6 +727,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `node pipeline/commands/read-buy-limits.mjs "<item>" [...]` prints limit / bought-this-4h-window / remaining /
     local `next frees ~HH:MM` · `fully resets ~HH:MM` off `fills.json` + the mapping, NO market fetch;
     no-args reports every item with a logged buy in the last 4h. Window math in `lib/limits.mjs`),
+    `read-book.mjs` (PLAN-DASHBOARD — the `/book` capital & book dashboard: `node
+    pipeline/commands/read-book.mjs` renders (1) GE slots + the working/parked/idle capital split and
+    (2) a grouped per-lot P&L board (cost basis / live mark / unreal P&L / % to break-even / capital
+    tied / days held); `--size "<item>" [--capital <gp>]` adds (5) the tranche sizer = min(buy-limit,
+    clearability, capital) with the BINDING bound + net-if-cycled, capital defaulting to this run's own
+    `deployablePool`. IMPURE SHELL: one per-invocation `fetchItemInputs` per id in the held∪bid∪{sizer}
+    union feeds the age-labelled marks + `loadDerivedCash` marketRef; ALL aggregation is the PURE
+    `lib/book-model.mjs`. Inform-only, no gates; live marks age-labelled (decision 3), free-slot count a
+    log-derived lower bound (decision 4)),
     `trigger-alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
@@ -1034,6 +1043,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     anchor) minus LIVE-offers.json resting-bid escrow, so the balance is computed not re-stated; the
     INJECTION DETECTOR raises the anchor when resting bids exceed the tracked balance; `loadDerivedCash`
     is the impure loader (fills.json + offers.json + `cashstate` anchor). Pinned by `derive-cash-tiers.test.mjs`),
+    `book-model.mjs` (PLAN-DASHBOARD — PURE aggregation layer for `/book`'s `read-book.mjs`: `buildBook({
+    groups, offers, cash, marks, sizer })` folds open-lot groups + the offers snapshot + the derived-cash
+    record + a caller-built age-labelled marks map into the slots / capital / per-lot P&L views, and
+    `sizeTranche` computes the min(buy-limit, clearability, capital) sizer + net-if-cycled. NO fetch/fs;
+    delegates the capital split to `capital-utilization.mjs` (never re-derived — pinned byte-identical to
+    watch's SUMMARY footer) and break-even to `js/quotecore.js`. Pinned by `book-model.test.mjs`),
     `staleexit.mjs` (Proposal C 2026-07-12 — PURE `staleExitRead({ts1h, exitLevel})`: scores a DECLARED
     hold-thesis exit against the recent full-day reach history via `js/windowread.mjs`'s own
     `windowStats`/`recencySplit`/`recentQuant` (min-sample floor imported from `reachValidator` — reuse,
@@ -1217,6 +1232,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `velocity.test.mjs` (YS1 — the velocity-class half-open boundaries + n/a guard),
     `capital-utilization.test.mjs` (YV1 — `bookUtilization` split/edges + `parkedStats` counts/median/mix
     + `totalCapital` committed/idle-cash split, null-safe when cash unknown),
+    `book-model.test.mjs` (PLAN-DASHBOARD — `buildBook` slots/capital/lots math + the Risk-5
+    byte-identical-to-watch-SUMMARY-footer capital-split gate + `sizeTranche` each-bound-binding cases +
+    the null-limit refusal + missing-mark null-P&L),
     `velocitytag.test.mjs` (Build 2 — `buildVelocityIndex` aggregation/dominant-class/median + null-safe;
     `velocityTag` minN gate, `fast·~Nm` format, ≥20% unfilled suffix),
     `sessionthesis.test.mjs` (YT1 — upsert/preserve/clear/prune + `thesisLine` format + file round-trip),
