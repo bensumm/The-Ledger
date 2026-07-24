@@ -469,6 +469,14 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 - ✅ **Waves 1–7 + LW/LH** (2026-07-04…07-05): shipped per the Status table above; per-chunk
   executor detail folded out 2026-07-06 (recoverable via `git show <sha>:PLAN.md`).
 
+- ✅ **Flip-planning tooling wave** (2026-07-24) — three build-ready plans, scoped by Claude +
+  hardened by Fable, implemented by Opus worktree lanes, hand-serialized onto main:
+  **`/schedule`** buy/sell window agenda (`-c`/`-w`/`--audit` + `⏭ next:` loop banner, `826b4e8`);
+  **`/book`** capital+P&L dashboard + `--size` sizer (`ca35f9f`); **multi-peak windows** —
+  up-to-2 prominence-ranked `peaks[]`/`dips[]` per side on `hourProfile`, additive/zero-ripple
+  (`41cc041`). Detail in those commits + CHANGELOG. `PLAN-{SCHEDULE,DASHBOARD,MULTI-PEAK-WINDOWS}.md`
+  deleted per the fold-and-delete lifecycle.
+
 ## Discovered
 
 **ARCH-DOCS-AUDIT codification (from `PLAN-ARCH-DOCS-AUDIT.md`, Q3 "prose → code") — ALL DONE, now in the Status table above:**
@@ -476,6 +484,16 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
+- **Thin-reserve should scale with `--capital` (screen fetch-admission, `pipeline/lib/admission.mjs`
+  `pickFetchPool`) — surfaced 2026-07-23, Ben-flagged.** `THIN_RESERVE` is a fixed 6-slot guarantee for
+  thin gp-flow big-tickets regardless of bankroll. At high capital (162m trial) the fixed 6 starves the
+  thin big-ticket band lane: a default `--top 40` scan buried Sanguinesti staff (uncharged, A-, +607k/u
+  P~95%), Basilisk jaw (A-), and Webweaver bow (B) — they only surfaced at `--top 90`. The bug: the
+  reserve caps the number of thin big-tickets that get a fetch slot to a constant, but the number Ben can
+  actually deploy into scales with capital. Fix (for the screen-architecture chunk, NOT a live tweak off
+  one scan, rule 4): make the reserve a function of `--capital` (more idle capital → more guaranteed thin
+  big-ticket slots), so a high-bankroll scan doesn't need a manual `--top 90`. Owner: whatever chunk next
+  touches `pickFetchPool` / the admission ordering. Interim workaround: pass `--top 90` for scans at ≳100m.
 - **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day
   `hourProfile`/`deriveDiurnalRange` engine + the screen's `Diurnal timing` block auto-run on SURVIVORS
   only (free — series in hand). Ben's open question — "are the gates EXCLUDING items that are profitable
