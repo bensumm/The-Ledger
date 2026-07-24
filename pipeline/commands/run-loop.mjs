@@ -50,6 +50,7 @@ import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 import { readOffersSnapshot } from '../lib/offers.mjs';
 import { fetchItemInputs } from '../lib/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';
+import { buildAgenda, loopHeaderLine } from './read-schedule.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..', '..');
@@ -127,6 +128,21 @@ const tierNote = (dcRec && dcRec.known && dcRec.reserved > 0)
 const idleNote = scanSkipReason ? ` · ${scanSkipReason}${tierNote}` : (idle != null ? ` · deployable ${fmtGp(idle)}${tierNote}` : '');
 console.log(`# loop-tick ${hhmm} — cadence watch ${cad(watchMin)} / scan ${cad(scanMin)} · fire every ${cronMin}m`);
 console.log(`# this tick: ${plan.length ? plan.join(', ') : 'nothing due'}${idleNote}\n`);
+
+// ⏭ next-window banner (PLAN-SCHEDULE Chunk 2) — the single soonest buy/sell window across CURRENT
+// positions (-c scope: open lots ∪ open offers), the actionable set mid-loop. Gated on a watch-due tick.
+// FRAGILE CHAIN — the "cheap" claim: read-schedule.mjs's per-item fetchTs('1h') is served by
+// marketfetch's 15-min disk cache (FETCH_TTL.tsSlow), which watch-positions.mjs KEEPS WARM by fetching
+// ts1h for every held item on every tick (fetchItemInputs(id,{ts1h:true})). If a future watch-positions
+// fast-path ever stops fetching ts1h per held item, this banner silently starts paying full fetch cost
+// again — no assertion catches it. Keep the two in sync. Best-effort: a failure never breaks the tick.
+if (watchDue) {
+  try {
+    const { rows } = await buildAgenda({ scope: ['c'], repoRoot: REPO });
+    const line = loopHeaderLine(rows);
+    if (line) console.log(line + '\n');
+  } catch { /* schedule banner is best-effort — the loop tick proceeds regardless */ }
+}
 
 const runScript = (label, args) => {
   console.log(`\n===== ${label} =====`);

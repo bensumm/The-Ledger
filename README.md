@@ -736,6 +736,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     union feeds the age-labelled marks + `loadDerivedCash` marketRef; ALL aggregation is the PURE
     `lib/book-model.mjs`. Inform-only, no gates; live marks age-labelled (decision 3), free-slot count a
     log-derived lower bound (decision 4)),
+    `read-schedule.mjs` (PLAN-SCHEDULE — the buy/sell WINDOW AGENDA: a presentation/aggregation layer over
+    the SAME `hourProfile` dip/peak `read-window-range.mjs --profile` prints, consolidated into ONE
+    time-sorted table `In (h) | Window | Item | Action | Level | List`, sorted by `In (h)` ascending
+    (hours to the window's next start, nearest 0.5h; `now` when inside). Three MUTUALLY-EXCLUSIVE modes:
+    `-c`/`--current-position` (DEFAULT) = the actionable set, open lots in `positions.json` ∪ open offers
+    in `offers.json` (`readOpenPositions`+`readOffersSnapshot`); `-w`/`--watchlist` = `watchlist.json`
+    names via `loadMapping` (`-c`+`-w` UNION, rows tagged C/W); `--audit` = flipped-but-not-watchlisted
+    review off `positions.json` `closed` (trade count + realised P/L, NO market fetch, review-only — never
+    edits `watchlist.json`). Per-item `fetchTs('1h')`+`hourProfile` pooled at `FETCH_CONCURRENCY=5`,
+    served by the 15-min disk cache; INFORM-ONLY n≈0 (PLANS, never gates). Pure `hoursUntil`/`isInsideWindow`/
+    `agendaRowsForItem`/`buildAudit` helpers are fixture-tested (`pipeline/test/schedule.test.mjs`); its
+    `buildAgenda`+`loopHeaderLine` are imported in-process by `run-loop.mjs` for the `⏭ next:` banner.
+    Reads `positions.json`/`offers.json`/`watchlist.json`; produces NO new tracked file),
     `trigger-alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
