@@ -17,6 +17,7 @@
  */
 import assert from 'node:assert/strict';
 import { inWindow, quantLow, quantHigh, touchedDays, reachedDays, placement, windowStats, recencySplit, recentQuant, hourProfile, deriveDiurnalRange, softBuyRead, formatSoftBuy, SOFT_BUY_AT_FLOOR_PCT, asymPair, ASYM_P_LO, ASYM_P_HI, ASYM_MIN_DAYS, reachMargin, MARGIN_MIN_DAYS } from '../../js/windowread.mjs';
+import { SECOND_PROMINENCE_FRAC } from '../../js/windowread.mjs';   // PLAN-MULTI-PEAK-WINDOWS — the secondary-window prominence gate
 import { windowClear, windowClearDiverges, WINCLEAR_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-WINDOW-CLEAR B1
 import { clearableAsk } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT DE1 (depthDays/clearableBid removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { demandPressure, reachableBand, PRESSURE_PHI_SLOPE, PRESSURE_MIN_VOL, PRESSURE_HEADROOM_MAX } from '../../js/windowread.mjs';   // PLAN-DEPTH-EXIT Extension A (PB1) — hourlyPressure/demandRegime (Ext B) removed, PLAN-REMOVE-DEPTH-PRESSURE-READS
@@ -279,6 +280,12 @@ ok('hourProfile: finds the evening dip window and morning peak window, clustered
   assert.equal(prof.dip.level, 950, 'dip level = the recent dip-hour low');
   assert.equal(prof.peak.level, 1070, 'peak level = the recent peak-hour high (base 1000 + 70)');
   assert.equal(prof.trendDominates, false, 'a flat base has no dominating trend');
+  // PLAN-MULTI-PEAK-WINDOWS fixture (f) — the additive peaks/dips arrays exist, are single-window on a
+  // one-hump-per-side shape, and their rank-1 is BYTE-IDENTICAL to the existing primary (deep-equal proof).
+  assert.equal(prof.peaks.length, 1, 'a single morning peak ⇒ no manufactured secondary');
+  assert.equal(prof.dips.length, 1, 'a single evening dip ⇒ no manufactured secondary');
+  assert.deepEqual(prof.peaks[0], prof.peak, 'peaks[0] deep-equals the existing primary peak');
+  assert.deepEqual(prof.dips[0], prof.dip, 'dips[0] deep-equals the existing primary dip');
 });
 
 ok('hourProfile: a rising floor sets trendDominates when drift outpaces the intraday swing', () => {
@@ -287,11 +294,76 @@ ok('hourProfile: a rising floor sets trendDominates when drift outpaces the intr
   assert.deepEqual(prof.dip.hours, [21, 22, 23], 'shape survives the trend (dip still evening)');
   assert.ok(prof.trendPerDay > 0, 'the daily-low slope is positive');
   assert.equal(prof.trendDominates, true, '≈50/day drift ≥ 0.25×~120 amplitude → dominates');
+  assert.deepEqual(prof.peaks[0], prof.peak, 'peaks[0] deep-equals the primary through a rising floor too');
+  assert.deepEqual(prof.dips[0], prof.dip, 'dips[0] deep-equals the primary through a rising floor too');
 });
 
 ok('hourProfile: too little history is unprofilable (null, no false read)', () => {
   assert.equal(hourProfile(diurnal(2, { baseFn: () => 1000 }), { nights: 14, now: noonNow }), null,
     '2 days < HOURPROFILE_MIN_DAYS');
+});
+
+// --- PLAN-MULTI-PEAK-WINDOWS: multi-extremum / topographic-prominence detection ------------------
+// A per-hour offset builder (flat lows OR flat highs on one side, a controlled two/one-hump shape on the
+// other) so each fixture pins the prominence math exactly. base 1000; 6 days is profilable.
+function shaped(days, { hiOff = () => 0, lowOff = () => 0, base = 1000 } = {}) {
+  const s = [];
+  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
+    s.push(pt(ts(2026, 0, 5 + di, h), base + lowOff(h), base + hiOff(h), 20, 20));
+  }
+  return s;
+}
+
+ok('hourProfile (a): a FLAT profile manufactures NO spurious secondary window (the load-bearing honesty pin)', () => {
+  const prof = hourProfile(shaped(6, { hiOff: () => 100, lowOff: () => -100 }), { nights: 14, now: noonNow });
+  assert.ok(prof, 'constant-shape series is still profilable');
+  assert.equal(prof.peaks.length, 1, 'zero intraday shape ⇒ NO second peak (spread 0 ⇒ no candidates)');
+  assert.equal(prof.dips.length, 1, 'zero intraday shape ⇒ NO second dip');
+  assert.deepEqual(prof.peaks[0], prof.peak);
+  assert.deepEqual(prof.dips[0], prof.dip);
+});
+
+ok('hourProfile (b): a genuine TWO-peak shape (boots-like: 4–6 primary + 12–16 secondary, real trough between) surfaces both', () => {
+  const hiOff = h => [4, 5, 6].includes(h) ? 70 : ([12, 13, 14, 15, 16].includes(h) ? 50 : 0);
+  const prof = hourProfile(shaped(6, { hiOff }), { nights: 14, now: noonNow });
+  assert.equal(prof.peaks.length, 2, 'two genuinely elevated windows ⇒ both surface');
+  assert.deepEqual(prof.peaks[0], prof.peak, 'peaks[0] is the unchanged primary (4–7)');
+  assert.deepEqual(prof.peaks[0].hours, [4, 5, 6]);
+  assert.deepEqual(prof.peaks[1].hours, [12, 13, 14, 15, 16], 'peaks[1] grows the 12–16 window');
+  assert.equal(prof.peaks[1].startH, 12); assert.equal(prof.peaks[1].endH, 17, 'secondary span 12:00–17:00');
+  assert.ok(prof.peaks[1].prominenceFrac >= SECOND_PROMINENCE_FRAC, `secondary clears the gate (frac ${prof.peaks[1].prominenceFrac.toFixed(3)})`);
+  const shared = prof.peaks[1].hours.filter(h => prof.peaks[0].hours.includes(h));
+  assert.equal(shared.length, 0, 'the two windows share NO hour (non-overlap by construction)');
+  assert.equal(prof.dips.length, 1, 'flat lows ⇒ NO manufactured secondary dip on the peak-only fixture');
+});
+
+ok('hourProfile (c): a SHALLOW shoulder (real-but-weak bump, prominenceFrac < 0.3) is correctly REJECTED', () => {
+  // primary 70 at 4–6, a mild 15 bump at 12–14, valley 0 between → frac = 15/70 ≈ 0.214 < 0.3.
+  const hiOff = h => [4, 5, 6].includes(h) ? 70 : ([12, 13, 14].includes(h) ? 15 : 0);
+  const prof = hourProfile(shaped(6, { hiOff }), { nights: 14, now: noonNow });
+  assert.equal(prof.peaks.length, 1, 'the weak bump fails the prominence gate — distinct from (a) "no bump at all"');
+  assert.deepEqual(prof.peaks[0], prof.peak);
+});
+
+ok('hourProfile (d): DIP-SIDE mirror — two genuine dips surface, a shallow dip shoulder is rejected (ship-together proof)', () => {
+  // two-dip: primary −70 at 21–23, secondary −50 at 8–10, flat highs.
+  const twoDip = h => [21, 22, 23].includes(h) ? -70 : ([8, 9, 10].includes(h) ? -50 : 0);
+  const p2 = hourProfile(shaped(6, { lowOff: twoDip }), { nights: 14, now: noonNow });
+  assert.equal(p2.dips.length, 2, 'two genuinely depressed windows ⇒ both surface (symmetric to the peak side)');
+  assert.deepEqual(p2.dips[0], p2.dip, 'dips[0] is the unchanged primary');
+  assert.deepEqual(p2.dips[1].hours, [8, 9, 10], 'dips[1] grows the 08–10 window');
+  assert.ok(p2.dips[1].prominenceFrac >= SECOND_PROMINENCE_FRAC);
+  assert.equal(p2.dips[1].hours.filter(h => p2.dips[0].hours.includes(h)).length, 0, 'non-overlapping');
+  assert.equal(p2.peaks.length, 1, 'flat highs ⇒ NO manufactured secondary peak');
+  // shallow-dip mirror of (c): primary −70 at 21–23, weak −15 shoulder at 8–10 → frac ≈ 0.214 rejected.
+  const shallow = h => [21, 22, 23].includes(h) ? -70 : ([8, 9, 10].includes(h) ? -15 : 0);
+  const ps = hourProfile(shaped(6, { lowOff: shallow }), { nights: 14, now: noonNow });
+  assert.equal(ps.dips.length, 1, 'the weak dip shoulder is rejected symmetrically');
+});
+
+ok('hourProfile (e): thin history (< HOURPROFILE_MIN_DAYS) still returns null for the WHOLE profile — no peaks/dips to read', () => {
+  const prof = hourProfile(shaped(2, { hiOff: h => [4, 5, 6].includes(h) ? 70 : 0 }), { nights: 14, now: noonNow });
+  assert.equal(prof, null, '2 days < HOURPROFILE_MIN_DAYS ⇒ null, the pre-existing early-return is unregressed');
 });
 
 // --- 6. deriveDiurnalRange: the stale-to-live guard (the Ghrazi lesson) -----------------------

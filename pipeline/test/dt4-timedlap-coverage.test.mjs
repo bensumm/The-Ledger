@@ -148,4 +148,48 @@ ok('§7 DATA GUARANTEE: every row in a fixture screen pass carries timedLap — 
   assert.equal(entries[2].timedLap.degraded, true, 'no series at all degrades');
 });
 
+// --- (5) PLAN-MULTI-PEAK-WINDOWS: the additive askReaches/bidReaches index-aligned arrays ----------
+// A two-window-per-side series (primary + a genuinely prominent secondary on BOTH the high and low side)
+// so diurnalTimedLap resolves peaks.length===2 / dips.length===2 and the secondary reach reads populate.
+function twoWindowSeries(days = 14) {
+  const s = [];
+  for (let di = 0; di < days; di++) for (let h = 0; h < 24; h++) {
+    const base = 3000;
+    const hiOff = [4, 5, 6].includes(h) ? 80 : ([12, 13, 14, 15, 16].includes(h) ? 55 : 0);
+    const lowOff = [21, 22, 23].includes(h) ? -80 : ([8, 9, 10].includes(h) ? -55 : 0);
+    s.push(dpt(dts(2026, 0, 5 + di, h), base + lowOff, base + hiOff, 200, 200));
+  }
+  return s;
+}
+
+ok('askReaches[0]/bidReaches[0] are the index-0 PARITY of the existing scalar reads (same level/window/reach/pool)', () => {
+  const lap = diurnalTimedLap(healthySeries(14), { nights: 14, now: dtNow, buyLimit: 11000, volDay: 858000 });
+  assert.deepEqual(lap.askReaches[0], { level: lap.ask, window: lap.peakWindow, reach: lap.askReach, pool: lap.peakPool },
+    'askReaches[0] reuses the scalar ask read exactly (byte-identical, incl. dr.ask)');
+  assert.deepEqual(lap.bidReaches[0], { level: lap.bid, window: lap.dipWindow, reach: lap.bidReach, pool: lap.dipPool },
+    'bidReaches[0] reuses the scalar bid read exactly (incl. the stale-to-live dr.bid guard)');
+});
+
+ok('a single-window profile fabricates NO secondary read (askReaches/bidReaches stay length 1)', () => {
+  const lap = diurnalTimedLap(healthySeries(14), { nights: 14, now: dtNow });
+  assert.equal(lap.askReaches.length, 1, 'one peak ⇒ one ask read, no absent-window fabrication');
+  assert.equal(lap.bidReaches.length, 1, 'one dip ⇒ one bid read');
+});
+
+ok('a two-window profile scores the SECONDARY window with the same recencySplit primitive, one window over', () => {
+  const lap = diurnalTimedLap(twoWindowSeries(14), { nights: 14, now: dtNow });
+  assert.equal(lap.degraded, false);
+  assert.equal(lap.askReaches.length, 2, 'the second elevated window gets its own reach read');
+  assert.equal(lap.bidReaches.length, 2, 'the second depressed window gets its own reach read');
+  // index-0 still parity even when a secondary exists
+  assert.deepEqual(lap.askReaches[0], { level: lap.ask, window: lap.peakWindow, reach: lap.askReach, pool: lap.peakPool });
+  // the secondary carries its OWN window bounds, level, and a populated recencySplit reach (byte-identical
+  // use of recencySplit — just a different window's bounds), not a copy of the primary's.
+  assert.deepEqual(lap.askReaches[1].window, { startH: 12, endH: 17 }, 'secondary ask window is the 12–17 span');
+  assert.deepEqual(lap.bidReaches[1].window, { startH: 8, endH: 11 }, 'secondary bid window is the 08–11 span');
+  assert.ok(lap.askReaches[1].reach && typeof lap.askReaches[1].reach.fullN === 'number', 'secondary ask reach populates like the primary');
+  assert.ok(lap.bidReaches[1].reach && typeof lap.bidReaches[1].reach.fullN === 'number', 'secondary bid reach populates like the primary');
+  assert.ok(lap.askReaches[1].pool != null && lap.bidReaches[1].pool != null, 'secondary pools read off the secondary window');
+});
+
 console.log(`\n${n} dt4-timedlap-coverage assertions passed.`);

@@ -595,7 +595,12 @@ simultaneous independent rungs on one item.
     nets + the base trend.
   Both append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable/ceiling`,
   retuned to 0.5%/1% of `volDay` off the n≈6 reach-relief knee, borrowed not validated for diurnal) and a
-  `⚠ buy limit … exceeds tranche ceiling` caveat when sized past it. Each line still carries the **`⏲`
+  `⚠ buy limit … exceeds tranche ceiling` caveat when sized past it. **Up to one ADDITIONAL elevated AND one
+  additional depressed window may render** (PLAN-MULTI-PEAK-WINDOWS, 2026-07-23) as trailing `also ASK …/also
+  BID … — second elevated/depressed window (n≈0, inform)` clauses on the SAME line — when `hourProfile`
+  finds a SECOND local extremum per side clearing the `SECOND_PROMINENCE_FRAC` topographic-prominence gate
+  (e.g. an item with a reliable-reach overnight peak AND a higher-ceiling afternoon peak). Inform-only, n≈0
+  — never gates/prices/ranks; the primary window read is unchanged. Each line still carries the **`⏲`
   diurnal-PHASE entry-timing token** (`js/windowread.mjs` `diurnalPhase`, preserved from the pre-DT2
   block) — where NOW sits in today's cycle vs the peak window: `in-peak (closes ~Xh)` /
   `pre-peak (opens ~Xh)` / `post-peak — cooling, next peak ~Yh → starter size` (only the cooling case

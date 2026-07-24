@@ -455,6 +455,52 @@ ok('formatTimedLap: coverage is NOT gated on the clean flag — both a clean AND
   assert.ok(formatTimedLap(chinLap) != null, 'a range-churn (non-clean, non-star) row still gets a rendered line, not silence');
 });
 
+/* --- PLAN-MULTI-PEAK-WINDOWS: a SECOND elevated / depressed window renders as a trailing clause on the
+   SAME diurnal line (never a second note line). Fixtures extend boltsLap with the additive index-aligned
+   askReaches/bidReaches arrays; [0] is the primary parity, [1] the secondary the clause reads. ------- */
+const secondaryAskLap = {
+  ...boltsLap,
+  askReaches: [
+    { level: boltsLap.ask, window: boltsLap.peakWindow, reach: boltsLap.askReach, pool: boltsLap.peakPool },
+    { level: 3060, window: { startH: 12, endH: 17 }, reach: { fullN: 7, fullHit: 4 }, pool: 300000 },
+  ],
+  bidReaches: [{ level: boltsLap.bid, window: boltsLap.dipWindow, reach: boltsLap.bidReach, pool: boltsLap.dipPool }],
+};
+const bothSecondaryLap = {
+  ...secondaryAskLap,
+  bidReaches: [
+    { level: boltsLap.bid, window: boltsLap.dipWindow, reach: boltsLap.bidReach, pool: boltsLap.dipPool },
+    { level: 2780, window: { startH: 8, endH: 11 }, reach: { fullN: 7, fullHit: 5 }, pool: 180000 },
+  ],
+};
+
+ok('formatTimedLap: a SECOND elevated window renders ONE trailing clause on the same line (inform-only)', () => {
+  const text = formatTimedLap(secondaryAskLap);
+  assert.ok(text.includes('also ASK'), `the secondary ask clause appends (got: ${text})`);
+  assert.ok(text.includes('reach 4/7'), 'the secondary window carries its own reach count');
+  assert.ok(text.includes('— second elevated window (n≈0, inform)'), 'labelled inform-only, n≈0');
+  assert.ok(!text.includes('also BID'), 'only the ask side has a secondary here');
+  assert.ok(!text.includes('\n'), 'still ONE line — never a second note line');
+});
+
+ok('formatTimedLap: BOTH a second elevated AND a second depressed window append — still ONE joined line', () => {
+  const text = formatTimedLap(bothSecondaryLap);
+  assert.ok(text.includes('also ASK') && text.includes('— second elevated window (n≈0, inform)'));
+  assert.ok(text.includes('also BID') && text.includes('— second depressed window (n≈0, inform)'));
+  assert.ok(!text.includes('\n'), 'both clauses ride the SAME line (one-line-per-item house rule)');
+  // exactly two more ' · '-joined bits than the base bolts line (one per secondary side)
+  const base = formatTimedLap(boltsLap).split(' · ').length;
+  assert.equal(text.split(' · ').length, base + 2, 'both clauses are bits on the SAME join, not a new line');
+});
+
+ok('formatTimedLap: NO secondary windows ⇒ byte-identical to today (the no-regression pin)', () => {
+  assert.equal(formatTimedLap(boltsLap).includes('also ASK'), false, 'base bolts lap has no askReaches[1] ⇒ no clause');
+  assert.equal(formatTimedLap(boltsLap).includes('also BID'), false);
+  // a lap with length-1 arrays (a real single-window diurnalTimedLap result) also emits nothing extra
+  const singleWindow = { ...boltsLap, askReaches: [{ level: boltsLap.ask }], bidReaches: [{ level: boltsLap.bid }] };
+  assert.equal(formatTimedLap(singleWindow).includes('also '), false, 'length-1 reaches arrays ⇒ no trailing clause');
+});
+
 /* --- §5 item separator: a plain '' entry between two items' diurnal lines renders as ONE blank line
    between them, and never inside a single item's (single-line) block. Mirrors the actual screen wiring
    in screen-flip-niches.mjs's renderMode diurnal extraSection (a '' pushed between item lines, each

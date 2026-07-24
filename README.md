@@ -99,7 +99,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
-  `windowrange --profile` prints) + **`hourConcentration`/`diurnalTimedLap`** (PLAN-DIURNAL-TIMING DT1
+  `windowrange --profile` prints) + **multi-peak windows** (PLAN-MULTI-PEAK-WINDOWS 2026-07-23 — `hourProfile`
+  gains ADDITIVE prominence-ranked `peaks`/`dips` arrays (length 1–2); `peaks[0]`/`dips[0]` deep-equal the
+  unchanged `peak`/`dip`, `peaks[1]`/`dips[1]` is a SECOND window that cleared the `SECOND_PROMINENCE_FRAC`
+  topographic-prominence gate; `diurnalTimedLap` mirrors it with index-aligned `askReaches`/`bidReaches`
+  arrays — inform-only, n≈0, rendered as a trailing clause by `emit.mjs formatTimedLap`) + **`hourConcentration`/`diurnalTimedLap`** (PLAN-DIURNAL-TIMING DT1
   2026-07-23 — `hourConcentration` is a per-day argmin/argmax-hour CIRCULAR-concentration classifier
   (mean resultant length R∈[0,1] of each day's own trough/peak hour, `HOURCONC_MIN_DAYS`/`HOURCONC_MIN_R`
   placeholders), distinct from `hourProfile`'s aggregate cluster width; `diurnalTimedLap` is
@@ -995,7 +999,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     diurnal notes off one definition — same `diurnal` NOTE_KIND/sigil, richer text: a clean-cycle
     BID/ASK+windows/timed+same-hour nets/range/reach/hold/base line, or a range-churn line that omits
     the unreliable specific hours; both append a liquidity/tranche segment + the §4 tranche-ceiling
-    caveat. Returns null (nothing printed) on a degraded/unpriceable lap — §7's softened contract: every
+    caveat. PLAN-MULTI-PEAK-WINDOWS (2026-07-23) extends it to also append a trailing `also ASK …/also BID …
+    — second elevated/depressed window (n≈0, inform)` clause per side when the lap carries an
+    `askReaches[1]`/`bidReaches[1]` (a SECOND prominent diurnal window) — both ride the SAME joined line
+    (one-line-per-item rule), no new NOTE_KIND. Returns null (nothing printed) on a degraded/unpriceable lap — §7's softened contract: every
     survivor's lap is COMPUTED, only a row with something to say PRINTS. DT3 also swaps
     `watch-positions.mjs`'s two direct `hourProfile`+`deriveDiurnalRange` call sites (the shadow-log
     bid/ask co-log, the `diurnalAsk` cycle-fallback exit) for `diurnalTimedLap` — those are VALUE

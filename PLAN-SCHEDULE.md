@@ -110,18 +110,20 @@ Sorted by **`In (h)` ascending** (soonest window first):
 
 Each item contributes up to **2 rows** (its dip + its peak). When the multi-peak work
 (`PLAN-MULTI-PEAK-WINDOWS.md`) lands, secondary windows simply add rows — **re-confirmed compatible
-against that plan's CURRENT text (re-read in full during this pass, "Emit-shape decision" section,
-line 139 on):** `hourProfile`'s return gains two new optional keys, `secondaryPeak` and
-`secondaryDip`, each `null` or shaped exactly like `profile.peak`/`profile.dip`
-(`{startH, endH, level, ...}`) — **additive nullable fields, explicitly NOT a list**, specifically
-so existing consumers need zero changes (that plan's own words: "A nullable additive field lands
-with zero ripple to any existing consumer: none of them read `secondaryPeak`, so none of them need
-to change to keep working"). `read-schedule.mjs` built against `profile.dip`/`profile.peak` today
-will automatically keep working unchanged after that plan lands, with zero rework — this plan
-needs no coordination with that one beyond both reading `hourProfile`. A later, separate chunk of
-`read-schedule.mjs` can opt in to also emitting `secondaryPeak`/`secondaryDip` rows (same
-`{startH,endH,level}` shape, so it's a copy-paste of the row-building logic, not new math) — **not
-part of this plan's chunk list**, noted only as a natural future extension.
+against that plan's SHIPPED emit shape (its "Emit-shape decision" section, corrected here to the
+final prominence-ranked design that superseded the old single-nullable-field draft):** `hourProfile`'s
+return gains two new ADDITIVE keys, `peaks` and `dips`, each an **array of 1–2 window objects**
+(prominence-ranked), `peaks[0]`/`dips[0]` byte-identical to (deep-equal) the unchanged
+`profile.peak`/`profile.dip`, and `peaks[1]`/`dips[1]` (present only when a second window clears the
+prominence gate) the secondary — shaped `{startH, endH, hours, level, atHour, prominenceFrac}`.
+The **"unaffected" half of the compat claim still holds**: `profile.peak`/`profile.dip` are unchanged,
+so `read-schedule.mjs` built against them today keeps working unchanged after that plan landed, zero
+rework. The **"opt-in" half is corrected to the array shape**: a later, separate chunk of
+`read-schedule.mjs` would iterate `profile.peaks`/`profile.dips` (arrays, index `[1]` is the
+secondary) and emit a row per entry beyond index 0 — so "each item contributes up to 2 rows" would
+become **up to 2 rows PER SIDE (2 dip + 2 peak = up to 4)**, not the "up to 2 total" the line above
+implies. **Not part of this plan's chunk list**, noted only as a natural future extension; nothing in
+the multi-peak plan forces `read-schedule.mjs` to opt in at all.
 
 **Position-aware action: option A (show BOTH rows always) for v1.** Reasoning: `-c` items are the
 primary scope, and a held-but-still-accumulating lot legitimately wants both its dip (buy more) and

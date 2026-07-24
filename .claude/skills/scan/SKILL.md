@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.84
+version: 1.85
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -440,6 +440,11 @@ This is the tribal layer the script can't do — apply ALL of these:
   - Both shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable
     ~X / ceiling ~Y`) and a `⚠ buy limit … exceeds tranche ceiling` caveat when the item's buy limit sits
     past the (n≈6, borrowed-not-validated) tranche ceiling — expect a worse realized net at that size.
+  - **A SECOND window may also flag** (PLAN-MULTI-PEAK-WINDOWS) — a trailing `also ASK …/also BID … —
+    second elevated/depressed window (n≈0, inform)` clause on the SAME line when an item has a second
+    genuinely-prominent elevated (or depressed) diurnal window, not just one (e.g. a reliable overnight
+    peak PLUS a higher-ceiling afternoon peak). Inform-only — it's Ben's call whether to list into one
+    window then relist for the other, or split the stack; the tool only surfaces that both exist.
   `⚠ trend-dominates → bid to live` still fires when a multi-day trend erases the intraday dip (the
   Ghrazi lesson). This is the ENCODED form of the manual per-item windowrange dance below — read it
   FIRST; then `windowrange --profile "<item>"` for the full hour-by-hour table on the handful you

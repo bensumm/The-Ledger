@@ -865,6 +865,15 @@ export const DIP_CLUSTER_FRAC = 0.34;    // an hour within this fraction of the 
                                          //   extreme joins the dip/peak cluster (the contiguous window)
 export const TREND_DOM_FRAC = 0.25;      // |daily-low drift/day| ≥ this fraction of amplitude ⇒ the
                                          //   multi-day trend dominates the intraday swing (price to live)
+export const SECOND_PROMINENCE_FRAC = 0.3;  // PLAN-MULTI-PEAK-WINDOWS: a SECOND local extremum is surfaced
+                                         //   only if its topographic prominence (valley-depth to the nearest
+                                         //   more-extreme point) is ≥ this fraction of that side's OWN
+                                         //   deviation spread (hiSpread/lowSpread — the SAME per-side scale
+                                         //   DIP_CLUSTER_FRAC uses). ONE statistic = the gate AND the noise
+                                         //   guard. PLACEHOLDER, n≈0 (rule 4): eyeballed off the Primordial-
+                                         //   boots / black-dragon-leather anchors at the same order of
+                                         //   magnitude as DIP_CLUSTER_FRAC's 0.34, NOT independently
+                                         //   calibrated — inform-only, never gates/prices/ranks.
 
 const median = arr => { const s = arr.filter(v => v != null).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
 // IQR (q75−q25) of a numeric sample — the small-sample DISPERSION statistic the PF1 forecast band is
@@ -900,13 +909,62 @@ function spanOf(hrsSet) {
   return { startH, endH };
 }
 
+// PLAN-MULTI-PEAK-WINDOWS — rank the local extrema of a CIRCULAR per-hour deviation series by
+// topographic prominence. PURE. `items` is the already-filtered, hour-ascending per-side view
+// (withHi/withLow); `valueFn` reads that side's deviation (devHi/devLow); `spread` is that side's
+// own max−min (hiSpread/lowSpread — negation-invariant, so the same number serves both modes);
+// `mode` 'max' finds peaks, 'min' finds dips (negate the series so ONE local-maxima routine covers
+// both). Returns [{ h, prominenceFrac }, …] sorted prominence-frac DESC then hour ASC (the same
+// earliest-hour-on-a-tie behavior hourProfile's argmax reduce already has). A perfectly FLAT circle
+// (spread 0, or every point equal) yields [] BY CONSTRUCTION — no spurious window is ever
+// manufactured. The circular global extremum always scores prominenceFrac === 1.0 (its two "cols"
+// are both the series' own global min), so it is ALWAYS rank-1 — which is precisely why the existing
+// primary peak/dip is unaffected: nothing can outrank it.
+function rankExtrema(items, valueFn, spread, mode) {
+  const L = items.length;
+  if (L < 2 || !(spread > 0)) return [];
+  const sign = mode === 'min' ? -1 : 1;
+  const vals = items.map(x => sign * valueFn(x));       // work in "maxima" space for both sides
+  const prev = i => (i - 1 + L) % L, next = i => (i + 1) % L;
+  // local-maxima candidates, plateau-aware: a flat top is represented by its FIRST hour (mirrors the
+  // reduce tie-break that keeps the earlier hour). A run spanning the whole circle yields no candidate.
+  const cands = [];
+  for (let i = 0; i < L; i++) {
+    if (!(vals[i] > vals[prev(i)])) continue;           // must rise strictly INTO i from the left
+    let j = i, steps = 0;
+    while (vals[next(j)] === vals[i] && steps < L) { j = next(j); steps++; }
+    if (steps >= L) continue;                           // whole circle equal → not a peak
+    if (vals[next(j)] < vals[i]) cands.push(i);         // strictly falls out the right end → a peak plateau
+  }
+  // prominence: walk each direction, tracking a running min (updated BEFORE the taller-point test so it
+  // never includes vals[i]); stop at the first strictly-taller point, else complete the lap (the global
+  // extremum's fallback). col = the higher of the two sides; prominence = vals[i] − that col.
+  const scan = (i, dir) => {
+    let m = Infinity;
+    for (let k = 1; k < L; k++) {
+      const p = vals[((i + dir * k) % L + L) % L];
+      if (p < m) m = p;
+      if (p > vals[i]) break;
+    }
+    return m;
+  };
+  return cands
+    .map(i => ({ h: items[i].h, prominenceFrac: (vals[i] - Math.max(scan(i, 1), scan(i, -1))) / spread }))
+    .sort((a, b) => (b.prominenceFrac - a.prominenceFrac) || (a.h - b.h));
+}
+
 /**
  * hourProfile(series, opts) — per-local-hour dip/peak structure of a 1h /timeseries.
  * @param {object} opts { nights=14, now=new Date(), recentN=RECENT_NIGHTS }
- * @returns {null | { hours, dip, peak, amplitude, amplitudePct, trendPerDay, trendDominates, nights }}
+ * @returns {null | { hours, dip, peak, peaks, dips, amplitude, amplitudePct, trendPerDay, trendDominates, nights }}
  *   hours: [{ h, n, lowFull, hiFull, lowRecent, hiRecent, volLo, volHi }] (hours with data, ascending)
  *   dip:  { startH, endH, hours:[…], level, atHour }  level = recent dip-cluster low (the bid candidate)
  *   peak: { startH, endH, hours:[…], level, atHour }  level = recent peak-cluster high (the ask candidate)
+ *   peaks/dips: ADDITIVE prominence-ranked arrays (length 1–2), PLAN-MULTI-PEAK-WINDOWS. peaks[0] is
+ *     byte-identical to `peak` (deep-equals it — the circular global max is always rank-1), dips[0] to
+ *     `dip`; peaks[1]/dips[1] (present only when a SECOND local extremum clears SECOND_PROMINENCE_FRAC)
+ *     is the sole new info — a { …span, hours, level, atHour, prominenceFrac } secondary window. INFORM-
+ *     only, n≈0 — no consumer gates/prices/ranks off it. Existing `peak`/`dip` are UNCHANGED.
  */
 export function hourProfile(series, { nights = 14, now = new Date(), recentN = RECENT_NIGHTS } = {}) {
   const pad2 = n => String(n).padStart(2, '0');
@@ -997,14 +1055,46 @@ export function hourProfile(series, { nights = 14, now = new Date(), recentN = R
   const dipC = cluster(dipHour.h, x => x.devLow != null && x.devLow <= dipThresh, x => x.lowRecent);
   const peakC = cluster(peakHour.h, x => x.devHi != null && x.devHi >= peakThresh, x => x.hiRecent);
 
+  const peakObj = { ...spanOf(peakC.set), hours: peakC.hours, level: peakC.level, atHour: peakHour.h };
+  const dipObj  = { ...spanOf(dipC.set),  hours: dipC.hours,  level: dipC.level,  atHour: dipHour.h };
+
+  // PLAN-MULTI-PEAK-WINDOWS — surface a SECOND genuinely-prominent window per side (inform-only). The
+  // prominence ranking's rank-1 IS the existing primary (peakObj/dipObj — proven, see rankExtrema), so
+  // peaks[0]/dips[0] reuse those exact objects (deep-equal by construction). The next ranked extremum
+  // that (a) isn't the primary, (b) sits OUTSIDE the primary cluster, and (c) clears
+  // SECOND_PROMINENCE_FRAC becomes the secondary window — grown with the SAME cluster() closure off its
+  // OWN level (mirroring the primary's per-side threshold) with the primary's hours excluded, so the two
+  // windows are non-overlapping BY CONSTRUCTION (no hour-gap constant needed). Fewer than 2 clearing the
+  // bar (the common case) ⇒ a length-1 array — never a manufactured window.
+  const buildSecondary = (ranked, primaryHour, primaryCluster, spread, devFn, levelFn, side) => {
+    for (const cand of ranked) {
+      if (cand.h === primaryHour || primaryCluster.has(cand.h)) continue;
+      if (cand.prominenceFrac < SECOND_PROMINENCE_FRAC) break;   // ranked desc ⇒ nothing below clears
+      const seed = hourMap.get(cand.h);
+      if (!seed) continue;
+      const seedDev = devFn(seed), pad = DIP_CLUSTER_FRAC * spread;
+      const within = side === 'dip'
+        ? (x => devFn(x) != null && devFn(x) <= seedDev + pad && !primaryCluster.has(x.h))
+        : (x => devFn(x) != null && devFn(x) >= seedDev - pad && !primaryCluster.has(x.h));
+      const c = cluster(cand.h, within, levelFn);
+      return { ...spanOf(c.set), hours: c.hours, level: c.level, atHour: cand.h, prominenceFrac: cand.prominenceFrac };
+    }
+    return null;
+  };
+  const secondPeak = buildSecondary(rankExtrema(withHi, x => x.devHi, hiSpread, 'max'),
+    peakHour.h, peakC.set, hiSpread, x => x.devHi, x => x.hiRecent, 'peak');
+  const secondDip  = buildSecondary(rankExtrema(withLow, x => x.devLow, lowSpread, 'min'),
+    dipHour.h, dipC.set, lowSpread, x => x.devLow, x => x.lowRecent, 'dip');
+
   const trendSeries = allDays.slice(-nights).map(d => dayLow.get(d)).filter(v => v != null);
   const trendPerDay = slopePerStep(trendSeries);
   const trendDominates = amplitude > 0 && trendPerDay != null && Math.abs(trendPerDay) >= TREND_DOM_FRAC * amplitude;
 
   return {
     hours,
-    dip: { ...spanOf(dipC.set), hours: dipC.hours, level: dipC.level, atHour: dipHour.h },
-    peak: { ...spanOf(peakC.set), hours: peakC.hours, level: peakC.level, atHour: peakHour.h },
+    dip: dipObj, peak: peakObj,
+    peaks: secondPeak ? [peakObj, secondPeak] : [peakObj],
+    dips: secondDip ? [dipObj, secondDip] : [dipObj],
     amplitude, amplitudePct: dipHour.lowRecent ? amplitude / dipHour.lowRecent : null,
     trendPerDay, trendDominates, nights: keep.size,
   };
@@ -1240,6 +1330,28 @@ export function diurnalTimedLap(series, {
   const dipPool = dipStats ? dipStats.medVolLo : null;
   const peakPool = peakStats ? peakStats.medVolHi : null;
 
+  // PLAN-MULTI-PEAK-WINDOWS — additive, index-aligned reach/level arrays over profile.peaks/profile.dips.
+  // Index 0 REUSES the scalars already computed above (askReach/bidReach off dr.ask/dr.bid — so
+  // askReaches[0]/bidReaches[0] are byte-identical to the existing single-window read, incl. the
+  // stale-to-live bid guard); index 1 (present ONLY when a secondary window cleared the prominence gate)
+  // scores that window's OWN level via the SAME recencySplit primitive over its OWN window-scoped
+  // windowStats slice — the exact peakStats/askReach pattern, one window over. Never fabricates a read off
+  // an absent window (a length-1 peaks/dips ⇒ a length-1 reaches array). INFORM-only, n≈0 — nothing gates.
+  const askReaches = [{ level: dr.ask, window: dr.peakWindow, reach: askReach, pool: peakPool }];
+  const bidReaches = [{ level: dr.bid, window: dr.dipWindow, reach: bidReach, pool: dipPool }];
+  if (profile.peaks.length > 1) {
+    const pk = profile.peaks[1];
+    const st = windowStats(series, { wStart: pk.startH, wEnd: pk.endH, nights, now });
+    askReaches.push({ level: pk.level, window: { startH: pk.startH, endH: pk.endH },
+      reach: st ? recencySplit(st.days, 'ask', pk.level, recentN) : null, pool: st ? st.medVolHi : null });
+  }
+  if (profile.dips.length > 1) {
+    const dp = profile.dips[1];
+    const st = windowStats(series, { wStart: dp.startH, wEnd: dp.endH, nights, now });
+    bidReaches.push({ level: dp.level, window: { startH: dp.startH, endH: dp.endH },
+      reach: st ? recencySplit(st.days, 'bid', dp.level, recentN) : null, pool: st ? st.medVolLo : null });
+  }
+
   // §4: retuned tranche sizing — the volDay-percentage term usually binds tightest, but a caller with a
   // thin sell-side pool relative to volDay must fall through to the pool term (pinned in the unit tests).
   const comfortInputs = [buyLimit, volDay != null ? DT_TRANCHE_COMFORT_VOL_PCT * volDay : null, peakPool != null ? 0.15 * peakPool : null].filter(x => x != null);
@@ -1249,6 +1361,7 @@ export function diurnalTimedLap(series, {
 
   return {
     ...dr, net, roi, instantNet, instantRoi, holdHrs, lowTrend, hiTrend, bidReach, askReach,
+    askReaches, bidReaches,
     dipPool, peakPool, trancheComfort, trancheCeiling, clean, degraded: false,
   };
 }

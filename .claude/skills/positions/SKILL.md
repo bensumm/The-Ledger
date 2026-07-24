@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.48
+version: 1.49
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -64,6 +64,11 @@ sections plus your own prose:
   read `+X% · wait` on both. Same `hourProfile` the `↳ diurnal:` note uses (`softBuyRead`/`formatSoftBuy`
   in `js/windowread.mjs`), zero extra fetch; HEURISTIC (n≈0), inform-only — never a gate/verdict. A null
   1h series this pass degrades it to no line (like the diurnal note).
+  - **A SECOND diurnal window may flag** (PLAN-MULTI-PEAK-WINDOWS, inform-only n≈0): the `↳ diurnal:` note
+    can append a trailing `also ASK …/also BID … — second elevated/depressed window` clause when a held
+    item has a second genuinely-prominent peak (or dip), not just one — e.g. a reliable overnight exit
+    window PLUS a higher-ceiling afternoon window. It's Ben's call whether to list into one and relist for
+    the other, or split the lot; the tool only surfaces that both windows exist (never a forced re-plan).
 
 Anchor (2026-07-17, the format that got approved): a positions read that pasted just the table,
 then three short prose paragraphs each naming what changed/mattered per item (a resolved CUT, an

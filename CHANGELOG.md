@@ -10,6 +10,41 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-MULTI-PEAK-WINDOWS chunks 1–3 — surface a SECOND prominent diurnal window per side (pipeline/pure-fn only, NO APP_VERSION bump, 2026-07-24)
+Every diurnal read collapsed a day's hour-of-day shape to ONE dip cluster + ONE peak cluster, losing the
+real second window several items carry (Primordial boots: a reliable-reach overnight peak AND a
+higher-ceiling afternoon peak; black dragon leather the same). Chunks 1–3 surface the second window,
+inform-only:
+- **Chunk 1 (`js/windowread.mjs` `hourProfile`)** — a new pure `rankExtrema` helper finds ALL local
+  extrema on the circular per-hour deviation series and ranks them by **topographic prominence**
+  (valley-depth to the nearest more-extreme point ÷ that side's own `hiSpread`/`lowSpread`). This ONE
+  statistic is both the gate and the noise guard — it subsumes the original draft's separate
+  hour-gap + trough-depth constants (only `SECOND_PROMINENCE_FRAC = 0.3`, a labelled PLACEHOLDER n≈0,
+  remains). ADDITIVE `peaks`/`dips` arrays (length 1–2, prominence-ranked); `peaks[0]`/`dips[0]` are
+  the SAME objects as the unchanged `peak`/`dip` (deep-equal — the circular global extremum always
+  scores `prominenceFrac === 1.0`, so nothing outranks the existing primary), `peaks[1]`/`dips[1]` the
+  only new info. Peak+dip detection ship together (symmetric algorithm). The plan's original separate
+  "elevation floor ≥ 0" gate is deliberately DROPPED — folded into prominence (a below-baseline point
+  can still have real prominence; a least-bad-of-a-flat-plateau point fails the prominence gate anyway).
+  A perfectly flat profile yields ZERO candidates by construction (spread 0) — no manufactured window.
+- **Chunk 2 (`diurnalTimedLap`)** — index-aligned `askReaches`/`bidReaches` arrays; index 0 REUSES the
+  existing scalar `askReach`/`bidReach` (byte-identical, incl. the stale-to-live bid guard), index 1
+  scores the secondary window's own level via the SAME `recencySplit`/`windowStats` pattern, one window
+  over. The scalar `bidReach`/`askReach` fields are untouched.
+- **Chunk 3 (`pipeline/lib/emit.mjs` `formatTimedLap`)** — appends a trailing `also ASK …/also BID … —
+  second elevated/depressed window (n≈0, inform)` clause per side present, on the SAME joined line
+  (one-line-per-item house rule), no new NOTE_KIND / render tier. Zero changes at the three consumers
+  (`quote-items`/`screen-flip-niches`/`watch-positions`) — they already push `formatTimedLap`'s return.
+This is ADDITIVE + zero-ripple: the existing `peak`/`dip` fields and all 8+ consumers are untouched in
+behavior (pinned by a deep-equal fixture). Inform-only, n≈0 — never gates/prices/ranks (per the
+`f1-gates-decisions-not-description` memory, it ships without an F1 gate BECAUSE it moves no decision).
+**No `APP_VERSION` bump**: `js/windowread.mjs` is app-imported (via `js/trends.js`) but chunks 1–3 add
+fields nothing in the app reads yet — the deferred chunk 4 (Trends chart marker) would be the only
+app-visible surface. Chunks 4 (chart marker) + 5 (declare-thesis echo) are DEFERRED to the backlog.
+Fixtures: `windowread.test.mjs` (flat-no-spurious, genuine-two-peak, shallow-shoulder-rejected,
+dip-side mirror, thin-history, rank-1-equals-primary deep-equal), `dt4-timedlap-coverage.test.mjs`
+(index-0 parity + secondary reach), `render.test.mjs` (0/1/2 trailing clauses, one line).
+
 ### DT5 — Trends tab's `★` diurnal badge swapped onto `hourConcentration` (`js/trends.js`, APP_VERSION 0.68.0, 2026-07-23)
 The last chunk of PLAN-DIURNAL-TIMING: `js/trends.js`'s diurnal chart readout computed its OWN ad hoc
 `clean` predicate (`net>0 && !prof.trendDominates && concentrated && roi>=DIURNAL_MIN_ROI`, where

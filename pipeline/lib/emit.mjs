@@ -171,6 +171,16 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
     bits.push(`base ${trendTxt(lap.lowTrend)}`);
   }
 
+  // PLAN-MULTI-PEAK-WINDOWS — a SECOND genuinely-prominent window per side (askReaches[1]/bidReaches[1],
+  // present only when it cleared the prominence gate) rides as a trailing clause on the SAME joined line —
+  // NEVER a second note line (the one-line-per-item house rule). 0/1/2 clauses: bits.join doesn't care how
+  // many, so this is just "push one bit per side present." INFORM-only, n≈0 — extends the diurnal note, no
+  // new NOTE_KIND / render tier.
+  const ar2 = lap.askReaches && lap.askReaches[1];
+  const br2 = lap.bidReaches && lap.bidReaches[1];
+  if (ar2) bits.push(`also ASK ${fmtFn(ar2.level)} (peak ${win(ar2.window)}, reach ${reachTxt(ar2.reach)}) — second elevated window (n≈0, inform)`);
+  if (br2) bits.push(`also BID ${fmtFn(br2.level)} (dip ${win(br2.window)}, reach ${reachTxt(br2.reach)}) — second depressed window (n≈0, inform)`);
+
   // liquidity/sizing segment — only when the caller merged volDay onto the lap (see doc comment).
   if (lap.volDay != null) {
     const sizeBits = [`${fmtFn(lap.volDay)}/d`];
