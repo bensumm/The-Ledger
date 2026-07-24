@@ -720,7 +720,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     = the recency-weighted FORWARD read: the full-day per-day low/high table + the shared floor/ceiling
     slope-asymmetry classification + a **forward-projected next-day low/high band** (`js/windowread.mjs`
     `projectTrajectory`, the ONE trend primitive `floorCeilingTrack` is now a two-call wrapper over) —
-    its own block, requestable alone, inform-only n≈0, rides `--json` as `result.trajectory`),
+    its own block, requestable alone, inform-only n≈0, rides `--json` as `result.trajectory`). `--hourly
+    [--days N]` (PLAN-DIURNAL-HOURLY) = the RAW per-LOCAL-hour LOW/MID/HIGH grid: a 7d-avg (median L/M/H)
+    block + the last N dates (default 3, most-recent-first) broken out individually, off the pure
+    `pipeline/lib/hourly-lmh.mjs` `hourlyLMH(series1h,{days})` helper — the hour-by-hour detail the dip/peak
+    summary distills away (reuses the same 1h series, NO second fetch; its own block, requestable alone;
+    inform-only n≈0, rides `--json` as `result.hourly`)),
     `read-trajectory.mjs` (R1 — a thin one-word PRESET that re-execs `read-window-range.mjs --trajectory`
     with all flags forwarded, so the fetch/bucketing plumbing keeps ONE home; answers "how's `<item>`
     trending / where's it likely to be tomorrow"), `limits.mjs` (LM1 — the buy-limit read:
@@ -739,7 +744,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `read-schedule.mjs` (PLAN-SCHEDULE — the buy/sell WINDOW AGENDA: a presentation/aggregation layer over
     the SAME `hourProfile` dip/peak `read-window-range.mjs --profile` prints, consolidated into ONE
     time-sorted table `In (h) | Window | Item | Action | Level | List`, sorted by `In (h)` ascending
-    (hours to the window's next start, nearest 0.5h; `now` when inside). Three MUTUALLY-EXCLUSIVE modes:
+    (hours to the window's next start, nearest 0.5h; `now` when inside). Each item emits up to 4 rows —
+    BUY(dip)+SELL(peak), EACH up to 2: the primary window plus a prominence-ranked SECONDARY off
+    `hourProfile`'s additive `dips[]`/`peaks[]` arrays, the secondary's Action marked `·2` (PLAN-MULTI-PEAK-WINDOWS;
+    a length-1 array never manufactures a `·2` row). Three MUTUALLY-EXCLUSIVE modes:
     `-c`/`--current-position` (DEFAULT) = the actionable set, open lots in `positions.json` ∪ open offers
     in `offers.json` (`readOpenPositions`+`readOffersSnapshot`); `-w`/`--watchlist` = `watchlist.json`
     names via `loadMapping` (`-c`+`-w` UNION, rows tagged C/W); `--audit` = flipped-but-not-watchlisted
@@ -1110,6 +1118,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     classifiers → band-percentile + regime + phase at a fill/placement time, with `reconstructed:false`
     honesty when the history is gone; the shared seam #1(a)'s every-fill classification + #2's
     state-transition scan both read — no market math re-implemented),
+    `hourly-lmh.mjs` (PLAN-DIURNAL-HOURLY — the PURE `hourlyLMH(series1h,{days})` behind
+    `read-window-range.mjs --hourly`: per-LOCAL-hour 0–23 LOW/MID/HIGH off an already-fetched 1h series
+    — a 7d-avg median block + the last N dates broken out; the raw diurnal detail the dip/peak summary
+    hides. Inform-only n≈0; fixture-tested in `pipeline/test/hourly-lmh.test.mjs`),
     `probes.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
     `pipeline/modules/*.mjs`, groups by stage (`observe`/`price`/`gate`), and `runProbes(row,surface,ctx)`
     returns the fired display annotations. **Presence = enabled** (delete the file to disable). The

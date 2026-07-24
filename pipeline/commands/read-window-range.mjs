@@ -39,6 +39,11 @@
  *                  and the clearableBid ("CATCH AT ≥ X" — how deep a bid still fills). A thin book prints
  *                  its COLLAPSE REASON, never a bare null. Estimate from bucket AVERAGES, not an order
  *                  book (inform-only, n≈0).
+ *   --hourly       (PLAN-DIURNAL-HOURLY) the RAW per-LOCAL-hour LOW/MID/HIGH grid — a 7d-avg (median)
+ *                  block + the last N dates broken out individually (N via --days, default 3, most-recent
+ *                  first). The hour-by-hour detail the dip/peak summary distills away (it caught a churn
+ *                  item whose break-even sat above its typical hourly high, and a secret +7% breakout).
+ *                  Reuses the SAME 1h series (no second fetch). Inform-only, n≈0 — a diagnostic, never gates.
  *   --niche <n>    (PLAN-ESTIMATOR-POSTURE AC8) which strategy spec the reach-FOLD data point is computed
  *                  against — band (default) | churn | scalp. With a scored --bid/--ask/--exit + a live
  *                  pair, prints one `fold: best-case X → reach-folded Y` line (the estimator's fold, moved
@@ -66,6 +71,7 @@ import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYC
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
+import { hourlyLMH } from '../lib/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -80,7 +86,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith('--')) { const v = argv[i + 1]; if (v !== undefined && !v.startsWith('--')) i++; continue; }
   positionals.push(a);
 }
-if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--trajectory] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
+if (!positionals.length) { console.error('usage: node pipeline/commands/read-window-range.mjs "<item or id>" [...more] [--nights 14] [--window 0-8] [--bid <gp>] [--ask <gp>] [--exit <ask> [--margin <gp>]] [--depth <qty>] [--pressure] [--profile] [--trajectory] [--hourly [--days 3]] [--niche band|churn|scalp] [--json] [--out <path>]'); process.exit(1); }
 
 const NIGHTS = Math.max(1, parseInt(A.nights, 10) || 14);
 const wm = String(A.window || '0-8').match(/^(\d{1,2})-(\d{1,2})$/);
@@ -105,6 +111,14 @@ const PRESSURE = A.pressure !== undefined && A.pressure !== false;
 // low/high table + floor/ceiling slope classification + a forward-projected next-day low/high band). Its own
 // block, requestable ALONE (the read-trajectory.mjs preset re-execs with just this flag). A bare flag.
 const TRAJ = A.trajectory !== undefined && A.trajectory !== false;
+// --hourly [--days N] (PLAN-DIURNAL-HOURLY): the raw per-LOCAL-hour LOW/MID/HIGH diagnostic — the
+// hour-by-hour detail the dip/peak SUMMARY distills away (it exposed a churn item whose break-even sat
+// above its typical hourly high, and another that had secretly broken out +7% in a day). A bare flag;
+// --days sets the per-day breakout count (default 3, most-recent-first). Its own block, requestable ALONE
+// (a bare --hourly prints just this and continues; combined with a scored flag it falls through so the
+// same result also gets the window read). Reuses the SAME 1h series — NO second fetch. INFORM-ONLY, n≈0.
+const HOURLY = A.hourly !== undefined && A.hourly !== false;
+const HOURLY_DAYS = Math.max(1, parseInt(A.days, 10) || 3);
 // AC8 — --niche <band|churn|scalp>: which strategy spec the fold-datapoint is computed against (default
 // band). churn inherits AC5/AC6's fold exemption, so its fold line reads fold ≈ best-case (itself
 // informative). value is term-basis (no opt band pair) → excluded here.
@@ -197,7 +211,7 @@ for (const want of positionals) {
     // blocks below) when NONE of those flags were also given — a bare --profile keeps today's exact
     // profile-only output, while --profile combined with --ask/--bid/--exit/--depth falls through so
     // this same `result` object also picks up the window-range read.
-    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null && !TRAJ) continue;
+    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null && !TRAJ && !HOURLY) continue;
   }
 
   // --trajectory (R1): the recency-weighted forward read. Full-day (0-23) per-day low/high table + the
@@ -249,6 +263,33 @@ for (const want of positionals) {
     // a bare --trajectory (no scored flag) prints only this block and continues; combined with a scored
     // --bid/--ask/--exit/--depth it falls through so the same `result` also gets the window read. (--profile
     // composes fine either way — its own block ran first and its short-circuit now checks !TRAJ.)
+    if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null && !HOURLY) continue;
+  }
+
+  // --hourly (PLAN-DIURNAL-HOURLY): the raw per-LOCAL-hour LOW/MID/HIGH grid — a 7d-avg (median) block
+  // plus the last HOURLY_DAYS dates broken out individually, off the hourlyLMH pure helper (same 1h
+  // series, zero new fetch). A DIAGNOSTIC the dip/peak summary hides; inform-only, never gates. A bare
+  // --hourly prints only this block and continues; combined with a scored flag it falls through below.
+  if (HOURLY) {
+    const hl = hourlyLMH(series, { days: HOURLY_DAYS });
+    result.mode = result.mode || 'hourly';
+    log(`\n## ${r.name} — hourly LOW/MID/HIGH detail (local hour-of-day, 1h series)`);
+    if (!hl) {
+      log('  too thin — no traded hourly history to break out.');
+      result.hourly = null;
+    } else {
+      const span = ds => ds.length ? `${ds[0]}→${ds[ds.length - 1]}` : '—';
+      log(`  7d-avg (median L/M/H) over ${span(hl.avgDates)} (${hl.avgDates.length} date${hl.avgDates.length === 1 ? '' : 's'}) · per-day, most-recent first: ${hl.perDayDates.join(' · ')}`);
+      const triple = t => (t == null || (t.low == null && t.mid == null && t.high == null)) ? '—' : `${fmt(t.low)}/${fmt(t.mid)}/${fmt(t.high)}`;
+      const heads = ['7d-avg L/M/H', ...hl.perDayDates.map(d => d.slice(5) + ' L/M/H')];
+      const rowsData = hl.hours.map(row => ({ h: row.h, cells: [triple(row.avg7), ...row.perDay.map(triple)] }));
+      const W = Math.max(...heads.map(s => s.length), ...rowsData.flatMap(rd => rd.cells.map(c => c.length))) + 2;
+      const padc = s => String(s).padEnd(W);
+      log('  hh  ' + heads.map(padc).join(''));
+      for (const rd of rowsData) log('  ' + pad2(rd.h) + '  ' + rd.cells.map(padc).join('').replace(/\s+$/, ''));
+      log(`  (raw per-hour detail — L=avgLow M=round(mid) H=avgHigh · INFORM-ONLY, n≈0 — never gates)`);
+      result.hourly = { avgDates: hl.avgDates, perDayDates: hl.perDayDates, hours: hl.hours };
+    }
     if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null) continue;
   }
 

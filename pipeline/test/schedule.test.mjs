@@ -11,7 +11,9 @@
  *     rounded to nearest 0.5h (round-half-up at an exact .25 boundary).
  *   - isInsideWindow handles non-wrapping (startH≤endH) AND midnight-spanning (startH>endH) windows;
  *     a currently-inside window renders In(h) 0.0, never negative.
- *   - agendaRowsForItem emits up to 2 rows (dip+peak); a null (too-thin) profile emits ZERO.
+ *   - agendaRowsForItem emits up to 4 rows: BUY(dip)+SELL(peak), EACH up to 2 (primary + a
+ *     prominence-ranked SECONDARY marked `·2` off profile.dips[]/peaks[]); a null (too-thin)
+ *     profile emits ZERO, and a length-1 dips[]/peaks[] never manufactures a secondary row.
  *   - resolveWatchlist skips an unresolvable name WITH a warning, never aborts.
  *   - buildAudit surfaces only flipped ids whose NAME is not watchlisted, count+summed realised,
  *     sorted by trade count desc.
@@ -104,6 +106,48 @@ ok('two items → 4 rows sorted by In(h) ascending', () => {
   assert.deepEqual(inHs, [...inHs].sort((x, y) => x - y), 'ascending In(h)');
   assert.equal(rows[0].item, 'Bitem', 'soonest (start 11, In 1.0) first');
   assert.equal(rows[0].inH, 1.0);
+});
+// --- PLAN-MULTI-PEAK-WINDOWS: a profile with a SECONDARY peak → two SELL rows for that item ---------
+ok('secondary peak → 2 SELL rows (primary + ·2), sorted by In(h) ascending', () => {
+  const now = at(10, 0);
+  // hourProfile shape: peaks[] length 2 (primary at 20-22, secondary at 12-13 marked prominenceFrac),
+  // dips[] length 1. peaks[0] deep-equals the singular `peak` by construction; index-1 is the secondary.
+  const profile = {
+    dip:  { startH: 6, endH: 8, level: 100 },
+    peak: { startH: 20, endH: 22, level: 200 },
+    dips:  [{ startH: 6, endH: 8, level: 100 }],
+    peaks: [
+      { startH: 20, endH: 22, level: 200 },
+      { startH: 12, endH: 13, level: 180, prominenceFrac: 0.42 },
+    ],
+  };
+  const rows = agendaRowsForItem({ name: 'Twinpeak', tags: ['C'], profile, now });
+  const sells = rows.filter(r => r.action.startsWith('SELL'));
+  assert.equal(sells.length, 2, 'primary + secondary SELL rows');
+  assert.equal(rows.filter(r => r.action.startsWith('BUY')).length, 1, 'still one BUY (dips length 1)');
+  const primary = sells.find(r => r.action === 'SELL peak');
+  const secondary = sells.find(r => r.action === 'SELL peak·2');
+  assert.ok(primary && secondary, 'one primary (unchanged label) + one ·2-marked secondary');
+  assert.equal(primary.secondary, false);
+  assert.equal(secondary.secondary, true);
+  // In(h): now 10:00 → secondary start 12 is 2.0h ahead; primary start 20 is 10.0h ahead
+  assert.equal(secondary.inH, 2.0);
+  assert.equal(primary.inH, 10.0);
+  const sorted = sortRows(rows);
+  const inHs = sorted.map(r => r.inH);
+  assert.deepEqual(inHs, [...inHs].sort((x, y) => x - y), 'agenda sorted by In(h) ascending');
+  // the two SELL rows appear in In(h) order (secondary 2.0h before primary 10.0h)
+  const sellOrder = sorted.filter(r => r.action.startsWith('SELL')).map(r => r.action);
+  assert.deepEqual(sellOrder, ['SELL peak·2', 'SELL peak'], 'secondary sorts before primary here');
+});
+ok('length-1 peaks[]/dips[] → no manufactured secondary row', () => {
+  const rows = agendaRowsForItem({
+    name: 'Single', now: at(9, 0),
+    profile: { dip: { startH: 2, endH: 4, level: 5 }, peak: { startH: 14, endH: 16, level: 9 },
+      dips: [{ startH: 2, endH: 4, level: 5 }], peaks: [{ startH: 14, endH: 16, level: 9 }] },
+  });
+  assert.equal(rows.length, 2, 'exactly one BUY + one SELL — never a phantom ·2 row');
+  assert.ok(rows.every(r => r.secondary === false));
 });
 ok('loopHeaderLine picks the global minimum row (not the first item)', () => {
   const now = at(10, 0);

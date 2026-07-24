@@ -73,26 +73,35 @@ function windowInH(startH, endH, now) {
 }
 
 // ── PURE row building ────────────────────────────────────────────────────────────────────────────
-// agendaRowsForItem({ name, tags, profile, now }) — up to 2 rows (dip + peak) for one item off its
-// hourProfile. A null profile (too thin, <4 traded days) yields ZERO rows. When the multi-peak work
-// lands, profile.secondaryDip/secondaryPeak are additive nullable fields shaped like dip/peak, so a
-// later chunk copy-pastes the same mk() call — no new math.
+// agendaRowsForItem({ name, tags, profile, now }) — up to 4 rows for one item off its hourProfile:
+// the BUY(dip) + SELL(peak) windows, EACH up to 2 (primary + a prominence-ranked SECONDARY). A null
+// profile (too thin, <4 traded days) yields ZERO rows. PLAN-MULTI-PEAK-WINDOWS: hourProfile now returns
+// additive prominence-ranked `dips[]`/`peaks[]` arrays (length 1–2); `dips[0]`/`peaks[0]` are byte-
+// identical to the singular `dip`/`peak`, and index-1 (present only when a second local extremum clears
+// the prominence bar) is the secondary. We iterate those arrays and mark the secondary (index-1) row's
+// Action `·2`, leaving the primary row's appearance UNCHANGED. Falls back to the singular dip/peak when
+// the arrays aren't present (older profile shape / a hand-built fixture), so a length-1 case never
+// manufactures a row.
 export function agendaRowsForItem({ name, tags = [], profile, now = new Date() }) {
   if (!profile) return [];
   const rows = [];
-  const mk = (side, w) => {
+  const mk = (side, w, idx) => {
     if (!w || w.startH == null || w.endH == null) return;
+    const base = side === 'dip' ? 'BUY dip' : 'SELL peak';
     rows.push({
       inH: windowInH(w.startH, w.endH, now),
       startH: w.startH, endH: w.endH,
       item: name,
-      action: side === 'dip' ? 'BUY dip' : 'SELL peak',
+      action: idx >= 1 ? `${base}·2` : base,   // ·2 = the secondary (prominence-ranked) window
+      secondary: idx >= 1,
       level: w.level ?? null,
       tags: [...tags],
     });
   };
-  mk('dip', profile.dip);
-  mk('peak', profile.peak);
+  const dips = (Array.isArray(profile.dips) && profile.dips.length) ? profile.dips : (profile.dip ? [profile.dip] : []);
+  const peaks = (Array.isArray(profile.peaks) && profile.peaks.length) ? profile.peaks : (profile.peak ? [profile.peak] : []);
+  dips.slice(0, 2).forEach((w, i) => mk('dip', w, i));
+  peaks.slice(0, 2).forEach((w, i) => mk('peak', w, i));
   return rows;
 }
 

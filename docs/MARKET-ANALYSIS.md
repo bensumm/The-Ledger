@@ -509,6 +509,12 @@ that's already behind you today. So price every entry backward from the exit:
    over-states the sell, so pick a lower one.
 4. **Project today** — is the window ahead or already printed? (the forecast eta, §5.)
 
+When the dip/peak summary isn't enough — sizing a large position, or a break-even that looks stranded —
+`read-window-range.mjs "<item>" --hourly [--days N]` prints the RAW per-LOCAL-hour LOW/MID/HIGH grid (a
+7d-avg median block + the last N dates individually). It's the hour-by-hour detail the two-window summary
+distills away (it caught a churn item whose break-even sat above its typical hourly high, and a secret
++7% one-day breakout). Inform-only, n≈0 — a diagnostic, never a gate.
+
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p% · list at
 F (~Nd hold, conf) · recency-fold Y (secondary — phase-blind) (recent a/b · full c/d)[ recency-fold floored
