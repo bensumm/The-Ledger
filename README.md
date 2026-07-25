@@ -947,7 +947,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `if (!d.local) { …; continue; }` runs BEFORE any `start()`, every entry every call (the CofferFillsSync
     lesson encoded — no git-writer ever runs unattended). Never throws out to its caller; also owns the
     `loadState`/`saveState` heartbeat helpers. Fixture-tested by `pipeline/test/daemons.test.mjs`, incl. the
-    mandatory safety-invariant test)
+    mandatory safety-invariant test).
+    `cache-warm.mjs` (Chunk 4 — the cache-warm GUARD's real `healthCheck()`/`start()` the registry entry
+    dynamic-imports): `healthCheck()` reads the newest /1h bucket age via `marketfetch.newest1hAgeHours`
+    (opens+closes its own archive handle) and reports `ok:false` when age > `WARM_THRESHOLD_HOURS` (23h, a
+    NAMED PLACEHOLDER — no coverage-gap incidents to validate it against yet) OR the archive is COLD (no /1h
+    data → "needs warming", never a crash); `start()` runs the two zero-git check-before-fetch backfills
+    (`loadAll24hRolling` + `loadBands`, both INJECTABLE so the test stays offline) then stamps
+    `daemon-state.json`'s `lastRan` via the manager's `loadState`/`saveState`. ZERO-GIT by construction —
+    never imports `sync-fills.mjs`. Idempotent (relies on the manager's `MIN_CHECK_INTERVAL_MS` throttle as
+    the de-dupe, no second lock file); both hooks wrapped so they never throw. Ships a CLI
+    (`node pipeline/daemons/cache-warm.mjs --check-only` = report health only; bare/`--warm` = ensure-then-warm
+    through a one-entry `ensure()`) as the future Windows Task Scheduler target (Chunk 6). Consumed by
+    `registry.mjs` (dynamic import) + the opportunistic `ensure()` hook (Chunk 5, not yet landed);
+    fixture-tested hermetically by `pipeline/test/cache-warm.test.mjs` (synthetic :memory: archive + injected
+    backfill spies + temp heartbeat file, TZ-pinned)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `analyze.mjs` (AZ1 — the PURE audit +
     tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence`/`dipLoopAudit`/`askHeadroomAudit`
     + the NAMED-PLACEHOLDER
