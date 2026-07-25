@@ -932,6 +932,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Tier-1 archive 5m read-only; `--json`/`--nights`/`--offline`. Builds NONE of
     `safeQuantile`/`qEvidence`/`impactFold` (AC3). Pure core `lib/fill-placement.mjs`, fixture-tested by
     `fill-placement.test.mjs`. READ-ONLY — writes no artifact, never in a commit/sync path)
+  - **Daemon subsystem (`pipeline/daemons/*.mjs`, PLAN-DAEMON-SUBSYSTEM Phase 1):** the legible
+    background-task layer — one registry + one lightweight manager for the scattered fleet
+    (`watch-log`/`dev-server` residents + the new `cache-warm` guard). `registry.mjs` (the DECLARATIVE
+    fleet list — one `{name, description, kind:'resident'|'guard', local, trigger, healthCheck(), start()}`
+    entry per daemon; seeded with `cache-warm` (guard, zero-git, tolerant of its Chunk-4 module not existing
+    yet) + `watch-log`/`dev-server` Phase-2 stubs; side-effect-free on import; also the registry-adjacent
+    `GIT_WRITER` const recording `sync-fills --publish` as `local:false` WITHOUT a callable `start()` so the
+    manager can never invoke it. Each `description` states "zero-git"/"commits to main" in words — the
+    `--publish` naming-collision guard, since screen's `--publish` is local but sync-fills' is a git-push).
+    `manager.mjs` (`status()` = read-only fleet health, resident up/down + guard last-ran/stale; `ensure()` =
+    start any down resident / run any stale guard, self-throttling via `MIN_CHECK_INTERVAL_MS` (5-min
+    PLACEHOLDER). **THE SAFETY INVARIANT:** `ensure()` refuses to auto-run any `local:false` daemon —
+    `if (!d.local) { …; continue; }` runs BEFORE any `start()`, every entry every call (the CofferFillsSync
+    lesson encoded — no git-writer ever runs unattended). Never throws out to its caller; also owns the
+    `loadState`/`saveState` heartbeat helpers. Fixture-tested by `pipeline/test/daemons.test.mjs`, incl. the
+    mandatory safety-invariant test)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `analyze.mjs` (AZ1 — the PURE audit +
     tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence`/`dipLoopAudit`/`askHeadroomAudit`
     + the NAMED-PLACEHOLDER
@@ -1451,7 +1467,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     underwater, passesUnderwater, belowSupport, passesBelowSupport, bandTopHist[]}`, rewritten fresh
     each pass by `watch-positions.mjs` so vanished positions drop out; counters reset on identity change or a
     gap > `STALE_GAP_MS`. Local, disposable —
-    deleting it just loses one pass of delta history), and the AO1 `last-report/<kind>.json`
+    deleting it just loses one pass of delta history), `daemon-state.json` (PLAN-DAEMON-SUBSYSTEM Chunk 3 —
+    the daemon manager's own heartbeat/throttle bookkeeping: a keyed map `{[daemonName]: {lastRan, lastChecked,
+    ok, detail}}` written by `pipeline/daemons/manager.mjs`'s `saveState`. DELIBERATELY SEPARATE from
+    root-level `heartbeat.json` (LW3 — watch-log's browser-facing 30s pulse): this one is desk-only,
+    whole-fleet, never fetched by the app. Missing/corrupt → `{}`, never throws. Disposable), and the AO1
+    `last-report/<kind>.json`
     dumps (`screen.json`/`quote.json`/`watch.json`) — the compact-JSON render.mjs report object(s)
     the last run of each market-read CLI built, written EVERY run (overwritten, "last run" semantics),
     for an agent to read instead of re-parsing stdout. Producer: `screen-flip-niches.mjs` /
