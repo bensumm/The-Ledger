@@ -49,6 +49,11 @@ import { amplitudeProxy, AMP_MIN_PRICE, AMP_MAX_PRICE, AMP_STAGE1_MIN_PCT } from
 // (the P1 replay goldens pin it), but a new niche (P5 scalp/value) registers a spec instead of editing
 // this file. `tax` moved with the edge functions into flip-niches.mjs.
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';
+// PLAN-LANE-ADMISSION Chunk B — the STRUCTURAL admission gate (value ∧ thin ∧ notional + gear/churn
+// volLane), an alternate iterator with the SAME callback shape as eachLiquidCandidate. Routed via
+// `t.GATE === 'structural'` (default undefined → legacy → byte-identical). Additive behind the flag;
+// see structural-admission.mjs's header for the edge-blind-admission scope + the naming-collision note.
+import { eachStructuralCandidate, DEFAULT_STRUCTURAL } from './structural-admission.mjs';
 
 // DEFAULT_THRESHOLDS: the gate-stack constants at their CLI defaults (screen-flip-niches.mjs builds its own
 // THRESHOLDS from parsed args and passes it explicitly; this default serves fixtures / import callers
@@ -235,7 +240,11 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
   if (spec.gate === 'value') return gateValueCandidates(ctx, t);                         // P5 — the term-structure value gate
   if (spec.gate === 'amplitude') return gateAmplitudeCandidates(ctx, t, watchedIds);     // A2 — the daily-amplitude Stage-1 proxy gate (F-B: watchedIds bypass the proxy floor)
   const { map, bands } = ctx;
-  return eachLiquidCandidate(ctx, { minPrice: t.MIN_PRICE, maxPrice: t.MAX_PRICE, floorVol: t.FLOOR, gpFloor: t.GP_FLOOR }, ({ id, limitVol, avgHigh, avgLow, mid, thin }) => {
+  // The per-mode step-3 edge callback — IDENTICAL for both gates; only the ADMISSION iterator differs.
+  // Extracted to a const (was inline) so `--gate structural` can feed the SAME fn to
+  // eachStructuralCandidate without touching spec.edge. Under `--gate legacy` (t.GATE !== 'structural',
+  // the default) this is the byte-identical eachLiquidCandidate call the replay goldens pin.
+  const edgeFn = ({ id, limitVol, avgHigh, avgLow, mid, thin }) => {
     const limit = map.byId[id]?.limit ?? null;
 
     // --- step 3: the DECLARATIVE spec's edge — P4c re-expressed the old inline per-mode branch as
@@ -267,7 +276,20 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     const held = heldIds.has(id);
     if (!thin && !held && expGpDay < t.MIN_GPD) return null;
     return { id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held };
-  });
+  };
+  // GATE routing (PLAN-LANE-ADMISSION Chunk B) — independent of --admission (which is pool ORDERING,
+  // not membership). Default 'legacy' → the unchanged eachLiquidCandidate admission. 'structural' swaps
+  // in the edge-blind universal gate; the per-mode edgeFn (spec.edge) still runs post-admission in this
+  // chunk. Thresholds fold structural overrides off `t` (undefined → DEFAULT_STRUCTURAL placeholders).
+  if (t.GATE === 'structural') {
+    return eachStructuralCandidate(ctx, {
+      minValue: t.MIN_VALUE ?? DEFAULT_STRUCTURAL.minValue,
+      minThin: t.MIN_THIN_DEPTH ?? DEFAULT_STRUCTURAL.minThin,
+      minNotional: t.MIN_NOTIONAL ?? DEFAULT_STRUCTURAL.minNotional,
+      churnVolCut: t.CHURN_VOL_CUT ?? DEFAULT_STRUCTURAL.churnVolCut,
+    }, edgeFn);
+  }
+  return eachLiquidCandidate(ctx, { minPrice: t.MIN_PRICE, maxPrice: t.MAX_PRICE, floorVol: t.FLOOR, gpFloor: t.GP_FLOOR }, edgeFn);
 }
 
 /* P5 — the VALUE niche's own candidate gate (PLAN-VALUE §A). Keeps the two-sided liquidity gate + the
