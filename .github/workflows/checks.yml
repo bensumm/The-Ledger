@@ -38,6 +38,9 @@ jobs:
       - name: dead-export (no export kept alive only by its own test — RC-A vestigial-code guard)
         run: node pipeline/ci/check-dead-exports.mjs
 
+      - name: daemon-safety (no local/auto-runnable daemon imports or shells the git-writer — PLAN-DAEMON-SUBSYSTEM)
+        run: node pipeline/ci/check-daemon-safety.mjs
+
       - name: archlint (every file ARCHITECTURE.md names resolves on disk — doc-reference guard E7)
         run: node pipeline/ci/lint-arch.mjs
 

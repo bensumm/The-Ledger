@@ -601,6 +601,43 @@ separate machine/deploy-key bypass identity was created.**
   mobile freshness leans on the Refresh button + (optionally) the stretch in-cloud
   reconstruction Action, never on a background PC push.
 
+## 12.1 A NEW scheduled job — `TheCofferCacheWarm` (cache-warm guard, zero-git — do NOT conflate with §12)
+
+§12 above is closed history about the ELIMINATED `CofferFillsSync` job — the *git-writer* whose
+unattended 20-min push to `main` was the whole reason schedules were killed. **`TheCofferCacheWarm`
+is a deliberately-different, provably-zero-git scheduled job** and must never be read as a revival of
+`CofferFillsSync`. The contrast, explicitly:
+
+| | `CofferFillsSync` (ELIMINATED, §12) | `TheCofferCacheWarm` (NEW, PLAN-DAEMON-SUBSYSTEM Phase 1) |
+| --- | --- | --- |
+| What it ran | `sync-fills.mjs` → **fetch + commit + PUSH to `main`** | `pipeline\daemons\cache-warm.mjs --warm` → **read + fetch into the LOCAL SQLite archive only** |
+| Git | **Writes `main` unattended** (the clobber/PII risk) | **Zero git** — never imports `sync-fills.mjs`; only `loadAll24hRolling`/`loadBands` local backfills + a `.cache/daemon-state.json` stamp |
+| Why it exists | (obsolete) keep the deployed book fresh | keep the `/1h` archive full so PLAN-LANE-ADMISSION Path-A's margin doesn't silently degrade during a weekend away |
+| Enforcement | — | `pipeline/ci/check-daemon-safety.mjs` FAILS the build if any local/auto-runnable daemon imports or shells a git-writer; the manager's runtime `!d.local` guard is the second line |
+
+The zero-git property is not a promise, it is CI-enforced (`check-daemon-safety.mjs`) — so a future
+edit that tried to sneak `sync-fills --publish` into the warm path would be rejected before it could
+become "CofferFillsSync round two".
+
+**Registration is via a checked-in, reversible installer** (not auto-run — registering an OS scheduled
+task is a human-attended one-time step, same norm as a destructive git op). Ben runs, once, on the desk
+machine:
+
+```
+pipeline\daemons\install-cache-warm-task.cmd
+```
+
+which executes the exact command (deriving the absolute path from `%~dp0`):
+
+```
+schtasks /create /tn "TheCofferCacheWarm" /tr "C:\dev\The-Ledger\pipeline\daemons\run-cache-warm.cmd" /sc hourly /mo 4 /rl limited /f
+```
+
+— every 4h, `limited` (non-admin) run level, since it only touches gitignored local files. Undo any time
+with `pipeline\daemons\uninstall-cache-warm-task.cmd` (`schtasks /delete /tn "TheCofferCacheWarm" /f`).
+The external tick is belt-and-suspenders: during active use the opportunistic `manager.ensure()` hook
+already warms the archive, so removing the schedule only loses the away-from-desk coverage insurance.
+
 ## 13. Mobile write path — GitHub-as-backend (M1, 0.39.0)
 
 A phone GE trade lands in the same pipeline as a PC trade with seconds of friction, and

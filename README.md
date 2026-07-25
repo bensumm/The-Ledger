@@ -682,7 +682,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   makes each role structural, since the exec bit doesn't): **`pipeline/commands/`** = the
   workflow CLIs you run (screen-flip-niches, quote-items, watch-positions, sync-fills, …);
   **`pipeline/ci/`** = the CI/dev guards + test runner (check-imports, check-dead-exports,
-  lint-arch/docs/skills, run-tests, smoke-test); **`pipeline/lib/`** = the imported-only
+  check-daemon-safety, lint-arch/docs/skills, run-tests, smoke-test); **`pipeline/lib/`** = the imported-only
   shared libraries; **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
   - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
@@ -958,10 +958,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     never imports `sync-fills.mjs`. Idempotent (relies on the manager's `MIN_CHECK_INTERVAL_MS` throttle as
     the de-dupe, no second lock file); both hooks wrapped so they never throw. Ships a CLI
     (`node pipeline/daemons/cache-warm.mjs --check-only` = report health only; bare/`--warm` = ensure-then-warm
-    through a one-entry `ensure()`) as the future Windows Task Scheduler target (Chunk 6). Consumed by
+    through a one-entry `ensure()`) as the Windows Task Scheduler target (Chunk 6). Consumed by
     `registry.mjs` (dynamic import) + the opportunistic `ensure()` hook (Chunk 5, not yet landed);
     fixture-tested hermetically by `pipeline/test/cache-warm.test.mjs` (synthetic :memory: archive + injected
-    backfill spies + temp heartbeat file, TZ-pinned)
+    backfill spies + temp heartbeat file, TZ-pinned).
+    `run-cache-warm.cmd` (Chunk 6 — the STABLE, args-free Windows Task Scheduler target: `cd /d "%~dp0..\.."`
+    to the repo root then `node pipeline\daemons\cache-warm.mjs --warm` (ensure-then-warm, NOT --check-only).
+    Zero-git — same code path as the opportunistic hook. Produced/committed by this repo; consumed by the
+    Task Scheduler job "TheCofferCacheWarm").
+    `install-cache-warm-task.cmd` / `uninstall-cache-warm-task.cmd` (Chunk 6 — the REVERSIBLE, checked-in,
+    run-ONCE-attended installer pair. `install` runs `schtasks /create /tn "TheCofferCacheWarm" /tr
+    "<%~dp0-derived abs path to run-cache-warm.cmd>" /sc hourly /mo 4 /rl limited /f` (every 4h, non-admin
+    run level — local files only) and echoes what it did + how to undo; `uninstall` runs `schtasks /delete
+    /tn "TheCofferCacheWarm" /f`. An agent SHIPS these; Ben RUNS `install` once — registering an OS scheduled
+    task is a human-attended step, not an unattended agent action. Not auto-run by anything)
   - **Shared libraries (`pipeline/lib/*.mjs`, imported only):** `analyze.mjs` (AZ1 — the PURE audit +
     tuning-candidate core: `auditDataset`/`deriveCandidates`/`fieldPresence`/`dipLoopAudit`/`askHeadroomAudit`
     + the NAMED-PLACEHOLDER
@@ -1341,6 +1351,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Uses a character-scanner comment stripper (strings/templates/regexes preserved verbatim, so an identifier in
     a `${…}` interpolation still counts — the STAGES false-positive lesson). Pure helpers exported + pinned by
     `check-dead-exports.test.mjs`,
+  - `check-daemon-safety.mjs` (PLAN-DAEMON-SUBSYSTEM Hardening finding #1, the CI half approved for Phase 1 —
+    a STRUCTURAL, DENYLIST-style zero-git guard run in the cheap `checks` job. Scans `pipeline/daemons/registry.mjs`
+    + every `pipeline/daemons/*.mjs` (non-test) and FAILS the build if a local/auto-runnable daemon (1) IMPORTs
+    sync-fills (static or dynamic), (2) SPAWN/EXECs a command referencing `--publish` (the sync-fills git-push
+    flag) or `sync-fills` via `exec`/`execSync`/`execFile`/`execFileSync`/`spawn`/`spawnSync`, or (3) marks the
+    `GIT_WRITER` const `local:true`. Reuses `check-dead-exports.mjs`'s comment stripper (STRINGS preserved so a
+    real footgun's flag is visible, but the registry's description prose "sync-fills.mjs --publish" doesn't trip
+    it — no spawn/import construct sits by it). Same philosophy as `lint-docs.mjs`/`lint-skills.mjs` — NEVER a
+    semantic/LLM check; it is the build-time backstop to the manager's runtime `!d.local` guard. `--dir <path>`
+    scans a synthetic copy (used to prove the fail path without committing a fixture). Exits non-zero naming the
+    offending file:line),
   - `lint-arch.mjs` (doc-reference guard, 2026-07-14 — enforces `docs/ARCHITECTURE.md` invariant E7 in the
     cheap `checks` job: every code-font FILE token the governed doc names must resolve on disk — a path from
     root, a bare basename against the source dirs; function/field names are skipped, `PLAN-*.md` working docs
