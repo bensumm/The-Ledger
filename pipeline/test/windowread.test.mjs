@@ -25,6 +25,7 @@ import { trajectoryRead } from '../../js/windowread.mjs';   // the fang under-re
 import { floorCeilingTrack, formatFloorCeiling, FC_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — the phase-aligned floor+ceiling slope-asymmetry classifier
 import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HONEST-SELL follow-up — the shared "~Nh/Nd hold" renderer
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
+import { hourlyDriftNote } from '../../js/windowread.mjs';   // PLAN-HOURLY-3DAY-TREND HT2 — the compact render of a hourlyDrift() result
 import { computeReality, realityClause, SPIKE_REACH_FRAC, SPIKE_PLACEMENT_PCTILE, SPIKE_MIN_GAP_FRAC, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN } from '../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD — the level-reality guard + its renderer
 import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
 
@@ -1158,6 +1159,30 @@ ok('DT3 end-to-end: a degraded (too-thin) fixture renders no note at all — the
   const thin = [dpt(dts(2026, 0, 5, 2), 100, 110)];
   const lap = { ...diurnalTimedLap(thin, { nights: 14, now: dtNow }), volDay: 100000, buyLimit: 500 };
   assert.equal(formatTimedLap(lap), null);
+});
+
+// --- hourlyDriftNote (PLAN-HOURLY-3DAY-TREND HT2) acceptance --------------------------------------
+ok('hourlyDriftNote: uniform down-drift + decaying ask reach renders both clauses', () => {
+  const drift = {
+    dominant: { dir: 'down', magPerDay: -812000, uniform: true, split: null },
+    askReach: { perDay: [{ date: 'd1', hoursReached: 18, hoursLogged: 24, frac: 18 / 24 }, { date: 'd2', hoursReached: 11, hoursLogged: 24, frac: 11 / 24 }, { date: 'd3', hoursReached: 4, hoursLogged: 15, frac: 4 / 15 }], decaying: true },
+  };
+  const text = hourlyDriftNote(drift, { ask: 25_300_000, fmt: n => (n / 1e6).toFixed(1) + 'm' });
+  // percentage form: share of each day's logged hours whose high reached the ask (75%→46%→27%) — the
+  // partial newest day (4/15) is normalised to its own hours, so it isn't overstated vs the full prior days
+  assert.equal(text, "3-day hourly drift: uniform step-down ~0.8m/d · ask 25.3m reached 75%→46%→27% of each day's hours (sliding under)");
+});
+ok('hourlyDriftNote: flat + mixed omits the ask clause when ask reach is not decaying', () => {
+  const drift = {
+    dominant: { dir: 'flat', magPerDay: 12000, uniform: false, split: 'mornings +50k/d, evenings flat' },
+    askReach: { perDay: [{ date: 'd1', hoursReached: 3 }, { date: 'd2', hoursReached: 5 }], decaying: false },
+  };
+  const text = hourlyDriftNote(drift, { ask: 1000, fmt: String });
+  assert.equal(text, '3-day hourly drift: flat (±12000/d, mixed)');
+});
+ok('hourlyDriftNote: null drift (the hourlyDrift <2-dates degrade) → null, never a fake read', () => {
+  assert.equal(hourlyDriftNote(null, { ask: 100 }), null);
+  assert.equal(hourlyDriftNote({ dominant: null }, {}), null);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

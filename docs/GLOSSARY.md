@@ -72,6 +72,17 @@ These are different things at different levels — kept as two words on purpose.
   down / breaking up / ranging). Drives the position cut-trigger.
 - **term structure** — the durable multi-week price shape: **floor** (where support prints),
   **ceiling**, **typical fluctuation**, and **trajectory** (knife / basing / oscillating / elevated).
+- **hourly drift** — the day-over-day slope of each hour-of-day's price over the last ~3 local dates
+  (`hourlyDrift`, `pipeline/lib/hourly-lmh.mjs`) — catches a staircase-down item the 14-day `--profile`
+  hides (a peak "reached 14/14d" days ago on a now-falling item still reads bullish). Synthesizes a
+  whole-item **uniform** step-down/up (a real regime step, every hour agrees) vs. **split** (mornings
+  vs. evenings — likely noise). Rendered via `hourlyDriftNote` on every price-recommendation surface;
+  can strategy-aware-relabel a `fill-now` band/churn scan pick to `⚠ falling — verify`, never a
+  value/amplitude pick (falling is that thesis's *expected* shape). Inform-only, n≈0.
+- **ask-reachability decay** — the hourly-drift sub-signal: for a candidate ask, the per-day count of
+  hours whose HIGH actually reached it, and whether that count is *falling* day-over-day (`reach
+  18h→11h→4h`) — the tell that a level has stopped clearing intraday even while its multi-day reach
+  count still looks healthy (the Ghrazi rapier catch).
 
 ### Liquidity & flow
 - **two-sided liquidity** — a real market trades on *both* sides daily (`hpv>0 && lpv>0`). One-sided

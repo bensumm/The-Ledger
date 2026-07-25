@@ -77,7 +77,8 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS, hourlyDriftNote } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 — hourlyDriftNote, the shared compact note renderer used to enrich the top-X digest picks
+import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // HT3 — the per-hour day-over-day slope read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -641,6 +642,9 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
   const capEff = capEfficiency(spec, er, { lapsCap });
   const crossable = liveCrossable(row);   // W3-1: is the live spread profitably crossable now? true/false/null(unknown)
   DIGEST_ROWS.push({
+    id,                                    // HT3 (PLAN-HOURLY-3DAY-TREND) — the top-X hourly-drift enrichment keys off this
+    nicheKey: spec ? spec.key : null,      // HT3 — which strategy this pick belongs to (band/churn/scalp/value/amplitude); drives the strategy-aware relabel
+    askLevel: row ? (row.optSell ?? null) : null,   // HT3 — the ask-reachability-decay reference level (zero extra fetch)
     name,
     capEff,
     deployable,
@@ -685,7 +689,43 @@ const digestCells = r => [
   { t: r.grade },
   { t: r.verdict },
 ];
-export function buildDigestBlock(pool = DIGEST_ROWS) {
+// PLAN-HOURLY-3DAY-TREND HT3 — the top-X pre-recommendation enrichment. The digest is the "about to be
+// printed as a graded recommendation" seam (D1 in the plan); this is where the 3-day hourly drift read
+// gets attached, BOUNDED to the rows actually rendered (main + the guaranteed big-ticket slice), never the
+// full ~70-candidate pool the niches gate from. `series1h` is the SAME already-fetched Map the niche
+// renders used (zero extra fetch on the common path); a row whose id isn't in the map (shouldn't happen
+// for a digest survivor, but the read degrades honestly either way) simply gets no drift note.
+//
+// STRATEGY-AWARE RELABEL (Ruling 3+4): a uniform down-drift beyond DIGEST_DRIFT_RELABEL_FRAC (a PLACEHOLDER,
+// n≈0, pending an F1-style retro) on a 'fill-now' verdict from the band/churn niches — the "pay near live,
+// expect a quick clear" theses — flips the DISPLAYED verdict to `⚠ falling — verify (~X/d)`, the drift
+// number always shown inline (never a silent swap). A value/amplitude/scalp pick, or any pick whose verdict
+// already fired something else (mirage top, sell unreliable, …), is left exactly as computed — falling is
+// the expected shape on a patient/value thesis, not a warning (falling-exclusion-AMENDED, per-strategy).
+// INFORM + a visible label swap ONLY — this never drops a row, never touches capEff/rankKey/sort order.
+const DRIFT_RELABEL_NICHES = new Set(['band', 'churn']);
+const DIGEST_DRIFT_RELABEL_FRAC = 0.004;   // PLACEHOLDER (n≈0) — |dominant.magPerDay| ÷ askLevel ≥ this ⇒ relabel-worthy
+
+function enrichDigestDrift(rows, series1h, driftLines) {
+  if (!series1h) return rows;
+  return rows.map(r => {
+    if (r.id == null) return r;
+    const series = series1h.get(r.id);
+    if (!series) return r;
+    const drift = hourlyDrift(series, { days: 3, ask: r.askLevel ?? null });
+    const note = hourlyDriftNote(drift, { ask: r.askLevel ?? null, fmt });
+    if (!note) return r;
+    driftLines.push(`  ${r.name}: ${note}`);
+    const d = drift.dominant;
+    const magFrac = (d && r.askLevel) ? Math.abs(d.magPerDay) / r.askLevel : 0;
+    const relabel = d && d.uniform && d.dir === 'down' && magFrac >= DIGEST_DRIFT_RELABEL_FRAC
+      && r.verdict === 'fill-now' && DRIFT_RELABEL_NICHES.has(r.nicheKey);
+    if (!relabel) return r;
+    return { ...r, verdict: `⚠ falling — verify (~${fmt(Math.abs(d.magPerDay))}/d)` };
+  });
+}
+
+export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
   const lines = ['## DECISION DIGEST — deployable-throughput triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by capEff × deployable capital ≈ after-tax deployable gp/day, NOT raw %; capEff = realizable ROI%/day, buy-limit-bounded)'];
   if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
   // W3-1: an uncrossable live spread (crossable === false) is FLOORED to -Infinity in the comparator ONLY so it
@@ -695,19 +735,27 @@ export function buildDigestBlock(pool = DIGEST_ROWS) {
   const key = r => (r.crossable === false ? -Infinity : (r.rankKey != null ? r.rankKey : (r.capEff != null ? r.capEff : -Infinity)));
   const sorted = [...pool].sort((a, b) =>
     (key(b) - key(a)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
-  const main = sorted.slice(0, DIGEST_TOP);
-  const tableRows = main.map(digestCells);
+  let main = sorted.slice(0, DIGEST_TOP);
   // POLISH 1: guaranteed big-ticket slice, appended only when the main block under-represents them.
   const bigInMain = main.filter(r => r.bigTicket).length;
+  let bigExtra = [];
   if (bigInMain < BIG_TICKET_MIN) {
     const shown = new Set(main);
-    const bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
-    if (bigExtra.length) {
-      tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
-      for (const r of bigExtra) tableRows.push(digestCells(r));
-    }
+    bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
+  }
+  // HT3: enrich ONLY the rows about to render (main + the guaranteed big-ticket slice) — never the full pool.
+  // Absent series1h (a caller that doesn't pass it, e.g. every pre-existing test) ⇒ enrichDigestDrift is a
+  // no-op passthrough, so this stays byte-identical to the pre-HT3 output whenever the option is omitted.
+  const driftLines = [];
+  main = enrichDigestDrift(main, series1h, driftLines);
+  bigExtra = enrichDigestDrift(bigExtra, series1h, driftLines);
+  const tableRows = main.map(digestCells);
+  if (bigExtra.length) {
+    tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
+    for (const r of bigExtra) tableRows.push(digestCells(r));
   }
   lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'trend', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
+  if (driftLines.length) lines.push('', '3-day hourly drift (top-X only — inform-only, n≈0, never gates):', ...driftLines);
   return lines.join('\n');
 }
 
@@ -2121,7 +2169,7 @@ async function main() {
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of
   // --verbose. CONSOLE-ONLY: never written to screen.json / the last-report dump (the console-only scope lock).
-  if (DIGEST) realLog('\n' + buildDigestBlock() + '\n');
+  if (DIGEST) realLog('\n' + buildDigestBlock(DIGEST_ROWS, { series1h }) + '\n');
   // YP2 (#2) WATCH CLOSELY — items entering a transition state (basing faller / spike on rising vs
   // falling lows), collected across the fetched pool. Descriptive prompts, NOT buy signals;
   // deliberately stdout-only (no screen.json / app render — that surfacing is #5).

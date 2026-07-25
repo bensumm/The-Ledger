@@ -515,6 +515,34 @@ When the dip/peak summary isn't enough — sizing a large position, or a break-e
 distills away (it caught a churn item whose break-even sat above its typical hourly high, and a secret
 +7% one-day breakout). Inform-only, n≈0 — a diagnostic, never a gate.
 
+**The 3-day hourly drift read (PLAN-HOURLY-3DAY-TREND) — a pre-recommendation validator.** The 14-day
+`--profile` and reach validators collapse the day dimension into ONE number per hour-of-day, which reads
+*bullish on a falling item* — the reach was earned days ago when the price was higher (the Ghrazi rapier
+anchor, 2026-07-24: graded A- fill-now, "ask reached 14/14d," while every hour's MID was stepping down
+~650k–1m/day and the ask had already stopped clearing intraday). `hourlyDrift(series1h,{days,ask})`
+(`pipeline/lib/hourly-lmh.mjs`, off the SAME 1h series, zero new fetch) fits a per-hour day-over-day
+least-squares slope over the last N (default 3) local dates, synthesizes a whole-item dominant
+direction/magnitude + whether it's UNIFORM across every hour (a real regime step) or SPLIT (mornings vs
+evenings — likely just intraday noise), and scores an **ask-reachability-decay** sub-signal: for a
+candidate ask, the per-day count of hours whose HIGH reached it, and whether that count is falling
+(`reach 18h→11h→4h` — the highest-value catch, the exact tell that would have killed the rapier call). The
+shared renderer `hourlyDriftNote` (`js/windowread.mjs`) prints ONE compact line
+(`3-day hourly drift: uniform step-down ~800k/d · ask 25.3m no longer clears midday (reach 18h→11h→4h)`)
+on every price-recommendation surface: `read-window-range.mjs --hourly` (a `Δ/d` column + the summary
+line), `quote-items.mjs` (a bare ask/bid quote and every held/watched position), and
+`screen-flip-niches.mjs --digest` (a BOUNDED enrichment pass on the top-X digest picks ONLY, after
+ranking — not the ~70-candidate universe; the 1h-series fetch is too heavy to run pre-rank and the signal
+only matters for the handful about to print as a recommendation). **Strategy-aware, never a global
+exclusion** (reconciles with the falling-exclusion-AMENDED doctrine): a uniform down-drift beyond a
+placeholder threshold flips a `fill-now` verdict on a **band/churn** digest pick to `⚠ falling — verify
+(~X/d)`, the drift number always shown inline — never a silent swap. A **value/amplitude/scalp** pick, or
+any pick a different rule already caught (mirage top, sell unreliable, …), is left untouched — falling is
+the *expected* shape on a patient/value thesis, not a warning. INFORM-ONLY, n≈0, HEURISTIC throughout —
+this never gates a gate, never moves a quoted number, never feeds a cut/alert input; the only place a
+drift number moves a DISPLAYED label is the digest relabel above, and it's always shown, not hidden. (A
+reverse-flip fold onto owned-item surfacing is PLANNED — PLAN-HOURLY-3DAY-TREND HT4 — but deferred until
+PLAN-REVERSE-FLIP ships; `hourlyDriftNote` is already a shared export ready for that call site.)
+
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p% · list at
 F (~Nd hold, conf) · recency-fold Y (secondary — phase-blind) (recent a/b · full c/d)[ recency-fold floored

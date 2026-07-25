@@ -553,6 +553,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
+- `PLAN-BLINDSPOT-AUDIT.md` — a READ-ONLY audit doc (2026-07-24, no code changed): ranked
+  false-negative signatures the scan/gate/grade stack systematically drops or never surfaces
+  (fixed-size fetch-pool crowding, falling-but-liquid big-tickets invisible unless pre-watchlisted,
+  the repeatable multi-week oscillator taxonomy gap, grade-vs-rank double penalty on thin
+  reach-capped picks), each backed by either a live `screen-flip-niches.mjs`/`analyze-record.mjs`
+  read this session or named as pure structural hypothesis. Companion to `docs/SIGNAL-AUDIT.md`
+  (which covers the inverse: stale/mispriced false POSITIVES). Not a plan file in the execution
+  sense — no chunks to ship — so it stays at the root as a standing reference until superseded or
+  folded.
 - `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is broken (serves a frozen stale
   ~1–3h UTC-day slice, under-reporting true rolling 24h ~10–27×). Steps 1+2 (SHIPPED 2026-07-13) — the
   corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`) is now
@@ -732,7 +741,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     block + the last N dates (default 3, most-recent-first) broken out individually, off the pure
     `pipeline/lib/hourly-lmh.mjs` `hourlyLMH(series1h,{days})` helper — the hour-by-hour detail the dip/peak
     summary distills away (reuses the same 1h series, NO second fetch; its own block, requestable alone;
-    inform-only n≈0, rides `--json` as `result.hourly`)),
+    inform-only n≈0, rides `--json` as `result.hourly`); the grid now ALSO carries a per-hour `Δ/d` column
+    + a summary line off the sibling `hourlyDrift(series1h,{days,ask})` export (PLAN-HOURLY-3DAY-TREND HT0/HT1)
+    — the day-over-day per-hour least-squares slope + a whole-item dominant-direction/uniformity synthesis +
+    an optional ask-reachability-decay sub-signal (per-day count of hours whose HIGH reached a candidate ask,
+    and whether that count is falling — the Ghrazi rapier catch: graded fill-now while every hour stepped
+    down and the ask had stopped clearing intraday). Rendered via the shared `js/windowread.mjs`
+    `hourlyDriftNote(drift,{ask,fmt})` (one owner with quote-items.mjs/screen-flip-niches.mjs). Consumers:
+    `read-window-range.mjs --hourly` (the Δ/d column + summary), `quote-items.mjs` (a `hourlyDrift` note on
+    a bare ask/bid quote and on held/watched positions), `screen-flip-niches.mjs`'s `--digest` (a bounded
+    top-X enrichment pass — HT3 — that also strategy-aware-relabels a uniform-down fill-now/band/churn pick
+    to `⚠ falling — verify (~X/d)` with the number inline; never gates/drops a row). INFORM-ONLY, n≈0;
+    fixture-tested in `pipeline/test/hourly-lmh.test.mjs`)),
     `read-trajectory.mjs` (R1 — a thin one-word PRESET that re-execs `read-window-range.mjs --trajectory`
     with all flags forwarded, so the fetch/bucketing plumbing keeps ONE home; answers "how's `<item>`
     trending / where's it likely to be tomorrow"), `limits.mjs` (LM1 — the buy-limit read:
@@ -1128,7 +1148,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `hourly-lmh.mjs` (PLAN-DIURNAL-HOURLY — the PURE `hourlyLMH(series1h,{days})` behind
     `read-window-range.mjs --hourly`: per-LOCAL-hour 0–23 LOW/MID/HIGH off an already-fetched 1h series
     — a 7d-avg median block + the last N dates broken out; the raw diurnal detail the dip/peak summary
-    hides. Inform-only n≈0; fixture-tested in `pipeline/test/hourly-lmh.test.mjs`),
+    hides. PLUS (PLAN-HOURLY-3DAY-TREND HT0) the sibling PURE `hourlyDrift(series1h,{days,ask})` — a
+    per-hour day-over-day least-squares slope + a whole-item dominant-direction/uniformity synthesis
+    (`uniform step-down` vs a `mornings X, evenings Y` split) + an optional ask-reachability-decay
+    sub-signal (per-day count of hours whose HIGH reached a candidate ask, and whether it's falling); both
+    functions share ONE internal bucketing helper. Consumers: `read-window-range.mjs --hourly` (the Δ/d
+    column + summary via `js/windowread.mjs`'s `hourlyDriftNote`), `quote-items.mjs` (a `hourlyDrift` note
+    on a bare quote + held/watched positions), `screen-flip-niches.mjs --digest` (HT3 — a bounded top-X
+    enrichment that can strategy-aware-relabel a fill-now/band/churn pick's DISPLAYED verdict to `⚠ falling
+    — verify (~X/d)`, never a value/amplitude/scalp pick). Inform-only n≈0, never gates; fixture-tested in
+    `pipeline/test/hourly-lmh.test.mjs`). HT4 (a reverse-flip fold onto RF2/RF4's owned-item surfacing) is
+    DEFERRED — PLAN-REVERSE-FLIP isn't built yet; `hourlyDriftNote` is already a clean shared export ready
+    for it,
     `probes.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
     `pipeline/modules/*.mjs`, groups by stage (`observe`/`price`/`gate`), and `runProbes(row,surface,ctx)`
     returns the fired display annotations. **Presence = enabled** (delete the file to disable). The

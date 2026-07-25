@@ -104,6 +104,7 @@ export const NOTE_KINDS = {
   trajectory:   { prefix: '  ⌁ ',  tier: TIER.context }, // the multi-day shape read (trajectoryRead) folded onto the quote (fang under-read fix); the DAILY TRAJECTORY rows above it ride as plain strings (V5-block pattern)
   fcTrack:      { prefix: '  ⇅ ',  tier: TIER.context }, // PLAN-DRIFT-VS-CRASH — the phase-aligned floor/ceiling slope-asymmetry + floor-break read (floorCeilingTrack), folded directly under the trajectory read
   windowExit:   { prefix: '  ↗ ',  tier: TIER.context },  // PLAN-POSITIONS-WINDOW-READ — the auto-surfaced ask-side typical-exit read on a big-ticket held lot (read-window-range.mjs --ask, folded in)
+  hourlyDrift:  { prefix: '  ↕ ',  tier: TIER.context },  // PLAN-HOURLY-3DAY-TREND HT2 — the 3-day per-hour day-over-day drift read (hourlyDrift/hourlyDriftNote), folded onto every price-recommendation surface
 };
 
 /* formatNote(item) — render ONE note item to its line. A plain string passes through UNCHANGED (the V5

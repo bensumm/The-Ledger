@@ -71,7 +71,8 @@ import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYC
 import { estimatePair, estConfLean } from '../lib/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
-import { hourlyLMH } from '../lib/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0)
+import { hourlyLMH, hourlyDrift } from '../lib/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); hourlyDrift (PLAN-HOURLY-3DAY-TREND HT1) — the day-over-day slope read folded onto the SAME grid
+import { hourlyDriftNote } from '../../js/windowread.mjs';   // HT1 — the shared compact drift-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -285,14 +286,29 @@ for (const want of positionals) {
       const span = ds => ds.length ? `${ds[0]}→${ds[ds.length - 1]}` : '—';
       log(`  7d-avg (median L/M/H) over ${span(hl.avgDates)} (${hl.avgDates.length} date${hl.avgDates.length === 1 ? '' : 's'}) · per-day, most-recent first: ${hl.perDayDates.join(' · ')}`);
       const triple = t => (t == null || (t.low == null && t.mid == null && t.high == null)) ? '—' : `${fmt(t.low)}/${fmt(t.mid)}/${fmt(t.high)}`;
-      const heads = ['7d-avg L/M/H', ...hl.perDayDates.map(d => d.slice(5) + ' L/M/H')];
-      const rowsData = hl.hours.map(row => ({ h: row.h, cells: [triple(row.avg7), ...row.perDay.map(triple)] }));
+      // PLAN-HOURLY-3DAY-TREND HT1: the day-over-day Δ/d column, off hourlyDrift over the SAME 1h series
+      // (zero new fetch) — the raw grid above shows the numbers, this shows the TREND a human would
+      // otherwise have to eyeball across the per-day columns. Reuses hl's own HOURLY_DAYS window.
+      const hd = hourlyDrift(series, { days: HOURLY_DAYS, ask: ASK });
+      const driftCell = h => {
+        if (!hd) return '—';
+        const row = hd.perHour[h];
+        if (!row) return '—';
+        const arrow = row.dir === 'up' ? '↑' : row.dir === 'down' ? '↓' : '→';
+        return `${arrow} ${row.driftPerDay >= 0 ? '+' : ''}${fmt(row.driftPerDay)}/d`;
+      };
+      const heads = ['7d-avg L/M/H', ...hl.perDayDates.map(d => d.slice(5) + ' L/M/H'), `Δ/d (${HOURLY_DAYS}d)`];
+      const rowsData = hl.hours.map(row => ({ h: row.h, cells: [triple(row.avg7), ...row.perDay.map(triple), driftCell(row.h)] }));
       const W = Math.max(...heads.map(s => s.length), ...rowsData.flatMap(rd => rd.cells.map(c => c.length))) + 2;
       const padc = s => String(s).padEnd(W);
       log('  hh  ' + heads.map(padc).join(''));
       for (const rd of rowsData) log('  ' + pad2(rd.h) + '  ' + rd.cells.map(padc).join('').replace(/\s+$/, ''));
-      log(`  (raw per-hour detail — L=avgLow M=round(mid) H=avgHigh · INFORM-ONLY, n≈0 — never gates)`);
-      result.hourly = { avgDates: hl.avgDates, perDayDates: hl.perDayDates, hours: hl.hours };
+      log(`  (raw per-hour detail — L=avgLow M=round(mid) H=avgHigh · Δ/d = ${HOURLY_DAYS}-day per-hour least-squares slope · INFORM-ONLY, n≈0 — never gates)`);
+      // HT1 summary line — the shared hourlyDriftNote renderer (one owner with quote-items.mjs / screen-flip-niches.mjs).
+      // days: HOURLY_DAYS so the "N-day hourly drift" label matches the window actually used (the grid's --days).
+      const driftNote = hourlyDriftNote(hd, { ask: ASK, fmt, days: HOURLY_DAYS });
+      if (driftNote) log(`  ${driftNote}`);
+      result.hourly = { avgDates: hl.avgDates, perDayDates: hl.perDayDates, hours: hl.hours, drift: hd };
     }
     if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null) continue;
   }
