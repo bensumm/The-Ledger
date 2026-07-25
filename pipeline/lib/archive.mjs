@@ -174,6 +174,52 @@ export function open(dbPath = DEFAULT_DB, { readonly = false } = {}) {
       return out;
     },
 
+    /* dailyRangeBulk({ ids, sinceTs }) → the whole-market per-item per-DAY price range off the raw
+       /1h observations, in ONE bulk SQL aggregate (no per-item fetch, no per-item loop). READ-ONLY —
+       never touches append/buckets/write paths. Powers PLAN-LANE-ADMISSION's Path-A intraday-range
+       margin (the "bulk /1h archive walk"): a day's range = MAX(avgHighPrice) / MIN(avgLowPrice) over
+       that day's 1h buckets, GROUP BY (itemId, day). Day key = date(ts,'unixepoch') (UTC) — this is an
+       INTERNAL aggregate key for range computation, NOT a rendered timestamp, so UTC is correct here
+       (the local-time display convention governs surfaced times, not this bucketing).
+
+       Returns { ranges, coverage }:
+         ranges   : { [itemId]: { [dateKey]: { hi, lo } } }  (hi/lo may be null if a side never printed)
+         coverage : { [dateKey]: nBuckets }  — distinct 1h buckets stored for that day (24 = full day),
+                    from the authoritative `buckets` table; lets a wrapper report coverageDays honestly
+                    instead of hardcoding a lookback depth the archive may not actually hold yet.
+       Degrades honestly on a cold/empty archive: returns { ranges:{}, coverage:{} }, NEVER throws (so
+       fixtures/CI on a temp/:memory: DB get a clean empty, not an error).
+         - ids     : optional itemId whitelist (omit → whole market)
+         - sinceTs : optional inclusive unix-second lower bound (omit → all history) */
+    dailyRangeBulk({ ids, sinceTs } = {}) {
+      try {
+        const rangeClauses = ["grain = '1h'"], rangeArgs = [];
+        if (Number.isFinite(sinceTs)) { rangeClauses.push('ts >= ?'); rangeArgs.push(Number(sinceTs)); }
+        if (ids && ids.length) { rangeClauses.push(`itemId IN (${ids.map(() => '?').join(',')})`); ids.forEach(i => rangeArgs.push(Number(i))); }
+        const rangeWhere = 'WHERE ' + rangeClauses.join(' AND ');
+        const rows = db.prepare(
+          `SELECT itemId, date(ts, 'unixepoch') AS d, MAX(avgHighPrice) AS hi, MIN(avgLowPrice) AS lo
+             FROM observations ${rangeWhere}
+            GROUP BY itemId, d`).all(...rangeArgs);
+        const ranges = {};
+        for (const r of rows) {
+          const bucket = ranges[r.itemId] || (ranges[r.itemId] = {});
+          bucket[r.d] = { hi: r.hi ?? null, lo: r.lo ?? null };
+        }
+        // coverage: distinct 1h buckets per day from the buckets table (24 ⇒ a full-coverage day).
+        const covClauses = ["grain = '1h'"], covArgs = [];
+        if (Number.isFinite(sinceTs)) { covClauses.push('ts >= ?'); covArgs.push(Number(sinceTs)); }
+        const covRows = db.prepare(
+          `SELECT date(ts, 'unixepoch') AS d, COUNT(*) AS n
+             FROM buckets WHERE ${covClauses.join(' AND ')} GROUP BY d`).all(...covArgs);
+        const coverage = {};
+        for (const r of covRows) coverage[r.d] = Number(r.n || 0);
+        return { ranges, coverage };
+      } catch {
+        return { ranges: {}, coverage: {} };   // cold/empty archive → clean empty, never throw
+      }
+    },
+
     /* exportFixture({ grain, ids, from, to, path }) → a compact, deterministic fixture object of raw
        observations (sorted grain→ts→itemId). Writes JSON to `path` when given. Round-trips through
        `append` (append each bucket) — the format the P1 replay harness reads. */

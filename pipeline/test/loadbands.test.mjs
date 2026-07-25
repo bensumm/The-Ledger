@@ -12,7 +12,7 @@
  */
 import assert from 'node:assert/strict';
 import { open } from '../lib/archive.mjs';
-import { loadBands } from '../lib/marketfetch.mjs';
+import { loadBands, loadDailyRangeBulk, FULL_DAY_1H_BUCKETS } from '../lib/marketfetch.mjs';
 
 let n = 0;
 async function ok(name, fn) { await fn(); n++; console.log('  ✓ ' + name); }
@@ -66,6 +66,34 @@ await (async () => {
     h.append('5m', latest, { 2: { avgHighPrice: 10, avgLowPrice: 8, highPriceVolume: 1, lowPriceVolume: 1 } });
     const bands = await loadBands(1 / 720, { db: h });
     assert.equal(bands[999999], undefined);
+    h.close();
+  });
+
+  await ok('loadDailyRangeBulk reports coverageDays honestly (full vs partial days), zero fetch', async () => {
+    const h = open(':memory:');
+    const HOUR = 3600, DAY = 24 * HOUR;
+    // anchor two whole UTC days INSIDE the default lookback window (recent, so sinceTs keeps them).
+    const todayMid = Math.floor(Date.now() / 1000 / DAY) * DAY;
+    const fullDay = todayMid - 2 * DAY;          // give this day all 24 hourly buckets
+    const partialDay = todayMid - 1 * DAY;       // give this day only 3 hourly buckets
+    for (let i = 0; i < FULL_DAY_1H_BUCKETS; i++)
+      h.append('1h', fullDay + i * HOUR, { 560: { avgHighPrice: 200 + i, avgLowPrice: 150 - i, highPriceVolume: 5, lowPriceVolume: 4 } });
+    for (let i = 0; i < 3; i++)
+      h.append('1h', partialDay + i * HOUR, { 560: { avgHighPrice: 300, avgLowPrice: 100, highPriceVolume: 5, lowPriceVolume: 4 } });
+    const r = loadDailyRangeBulk(7, { db: h });   // shared handle ⇒ read-only, no network
+    assert.equal(r.coverageDays, 1, 'exactly one FULLY-covered (24-bucket) day');
+    assert.equal(r.partialDays, 1, 'the 3-bucket day is partial, not counted as full');
+    // range math still correct on the full day: MAX high = 200+23, MIN low = 150-23
+    assert.equal(r.ranges[560][Object.keys(r.ranges[560]).sort()[0]] !== undefined, true);
+    const fullKey = new Date(fullDay * 1000).toISOString().slice(0, 10);
+    assert.deepEqual(r.ranges[560][fullKey], { hi: 200 + 23, lo: 150 - 23 });
+    h.close();
+  });
+
+  await ok('loadDailyRangeBulk degrades to coverageDays 0 on a cold archive', async () => {
+    const h = open(':memory:');
+    const r = loadDailyRangeBulk(14, { db: h });
+    assert.deepEqual(r, { ranges: {}, coverageDays: 0, partialDays: 0, coverage: {} });
     h.close();
   });
 

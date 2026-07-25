@@ -939,9 +939,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `limitValidator` ctx; honesty: logged fills only, so `remaining` is an UPPER bound), `archive.mjs`
     (D0 — the Tier-1 SQLite market archive: a thin `node:sqlite` (`DatabaseSync`) wrapper storing
     RAW `/1h`+`/5m` bulk observations keyed `(grain, ts, itemId)` with `INSERT OR IGNORE` + WAL/
-    busy_timeout. `open`/`append`/`seriesFor`/`marketAt`/`exportFixture`/`pruneBefore`; NEVER archives
+    busy_timeout. `open`/`append`/`seriesFor`/`marketAt`/`exportFixture`/`pruneBefore`/`dailyRangeBulk`;
+    NEVER archives
     `/latest` (no idempotent bucket); stores only raw fields — every derived value is recomputed by
-    pure functions, never cached; `hasBucket` is the check-before-fetch predicate. Backs `loadDaily`
+    pure functions, never cached; `hasBucket` is the check-before-fetch predicate. `dailyRangeBulk({ids,
+    sinceTs})` (PLAN-LANE-ADMISSION Chunk A) is the READ-ONLY bulk SQL aggregate → per-item per-UTC-day
+    `{hi:MAX(avgHigh), lo:MIN(avgLow)}` over the raw `/1h` buckets + a `coverage` map (distinct 1h
+    buckets/day, 24 = full) — the Path-A intraday-range data source; degrades to an empty result on a
+    cold archive, never throws. Backs `loadDaily`
     (with a one-time `daily_seed` import of the pre-D0 `.cache/daily` mids). Surgically suppresses the
     one `node:sqlite` ExperimentalWarning via a `process.emitWarning` filter installed before a
     `createRequire` load — no global `--no-warnings` flag on any script. CLI: `node
@@ -963,7 +968,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     letting `quote-items.mjs` converge its logged liquidity `class` on screen's bulk snapshot for free) + the
     PLAN-VOL24 CORRECTED rolling-24h volume composers `loadAll24hRolling({db})` (whole-market trailing-24h
     map from the last 24 complete `/1h?timestamp` bulk windows, reusing the SQLite 1h archive; the fix for
-    the broken `/24h` endpoint that serves a frozen stale ~1–3h slice) + `rolling24FromTs1h(ts1h)` (the same
+    the broken `/24h` endpoint that serves a frozen stale ~1–3h slice) + `loadDailyRangeBulk(days,{db,ids})`
+    (PLAN-LANE-ADMISSION Chunk A — the thin READ-ONLY wrapper over `archive.dailyRangeBulk`: whole-market
+    per-item per-day intraday range `{id:{date:{hi,lo}}}` straight from the SQLite archive, ZERO fetch,
+    plus a `coverageDays`/`partialDays` HONESTY field — number of days with FULL 24-bucket `/1h` coverage,
+    never hardcodes a depth the archive lacks; full coverage only started 2026-07-13) + `rolling24FromTs1h(ts1h)` (the same
     sum off an already-fetched per-item 1h series → zero new fetch) — now the DEFAULT `screen-flip-niches.mjs` volume
     (`--vol-source legacy` restores the broken `/24h`; PLAN-VOL24 step 2), with the volume floors recalibrated
     to the corrected distribution; consumed by `screen-flip-niches.mjs` and logged as the `volDayRolling` shadow field for the

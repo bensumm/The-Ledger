@@ -341,6 +341,40 @@ export async function loadAll24hRolling({ db } = {}) {
   }
 }
 
+/* --- loadDailyRangeBulk(days, { db, ids }) — the thin marketfetch wrapper over the archive's
+   dailyRangeBulk (PLAN-LANE-ADMISSION Chunk A). Reads the whole-market per-item per-DAY intraday
+   range (MAX avgHigh / MIN avgLow over each day's /1h buckets) straight from the Tier-1 SQLite
+   archive — READ-ONLY, ZERO fetch (unlike loadDaily/loadAll24hRolling, this NEVER backfills; it only
+   reads what accrual has already stored). Powers Path-A's intraday-range margin (Chunk C).
+
+   HONESTY (finding #1): full 24/24 hourly coverage only started 2026-07-13, so a `days`-back window
+   can silently thin out for its oldest days. This wrapper NEVER assumes `days` of real depth — it
+   reports `coverageDays` = the number of days in the window that actually have FULL 24-bucket 1h
+   coverage (same pattern as loadDaily's `coverageWindows`). Do NOT hardcode 14 anywhere downstream;
+   read coverageDays. `partialDays` is the count of days present but under-covered (<24 buckets).
+
+   Returns { ranges, coverageDays, partialDays, coverage } where ranges is
+   { [id]: { [dateKey]: {hi, lo} } } and coverage is { [dateKey]: nBuckets }. Degrades honestly on a
+   cold archive: { ranges:{}, coverageDays:0, partialDays:0, coverage:{} }, never throws.
+   `db`: reuse an already-open handle (mirrors loadDaily/loadBands); else opened + closed here. --- */
+export const FULL_DAY_1H_BUCKETS = 24;   // a UTC day is fully covered when all 24 /1h buckets are stored
+export function loadDailyRangeBulk(days = 14, { db, ids } = {}) {
+  const archive = db || openArchive();
+  const ownArchive = !db;
+  try {
+    const sinceTs = Math.floor(Date.now() / 1000) - Math.max(1, days) * 24 * 3600;
+    const { ranges, coverage } = archive.dailyRangeBulk({ ids, sinceTs });
+    let coverageDays = 0, partialDays = 0;
+    for (const d in coverage) {
+      if (coverage[d] >= FULL_DAY_1H_BUCKETS) coverageDays++;
+      else if (coverage[d] > 0) partialDays++;
+    }
+    return { ranges, coverageDays, partialDays, coverage };
+  } finally {
+    if (ownArchive) archive.close();
+  }
+}
+
 /* --- loadBands(hours): whole-market intraday band data for EVERY item, zero per-item
    timeseries calls (chunk 9.1). The wiki /5m endpoint is a bulk whole-market snapshot and
    accepts ?timestamp=<unix, divisible by 300> to fetch a past 5m window. We walk the last
