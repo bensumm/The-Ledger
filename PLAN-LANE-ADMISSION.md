@@ -195,10 +195,21 @@ day(s), and whether ~captureFrac of it was reachable** (from the fills we DID pl
 next-day range), NOT the raw realized-daily-ROI that just failed retrospectively. Decoupling the
 metric from our sell-timing is the make-or-break design decision of this harness.
 
-**H4 — the readiness gate (F1/SC5 discipline).** Path-A gp/day stays a **coarse tiering signal,
-never a hard gate/auto-action**, until H2 accrues n ≥ threshold with a stable positive rank
-correlation. captureFrac (0.45/0.62) is re-estimated FROM the forward join once n supports it,
-replacing the retrospective placeholder. Until then: tiers, not precise ordering.
+**H4 — the readiness gate (F1/SC5 discipline).** captureFrac (0.45/0.62) is re-estimated FROM the
+forward join once n ≥ threshold with a stable positive rank correlation, replacing the retrospective
+placeholder.
+
+**OWNER DECISION (Ben, 2026-07-25 pm) — Path-A ships as the PRIMARY sort, existing grade as BACKUP.**
+This overrides the draft's "coarse tiering only until accrued" stance. Rationale is Ben's own
+`gate-on-error-cost-not-n` / `ship-decision-movers-as-visible-comparison` doctrine: he is the sole
+console consumer (a tight, self-correcting loop), we've shown the gate surfaces a better *set*, and a
+number hidden in a secondary column gets ignored — so Path-A drives the ranking NOW, with two hard
+safety rails: (1) **`rateItem` (the existing grade) stays fully computed and shown alongside every
+run** as the backup + live A/B comparison, so a divergence is visible and a revert is instant; (2)
+**the forward-accrual harness (H1–H3) still runs and is the FORMAL validator + revert-trigger** — going
+primary is an owner risk-call to validate-in-real-use, NOT a claim the accrual proved it. Honesty (rule
+4) unchanged: captureFrac is still a placeholder and the primary *order* rests on it, so the A/B
+comparison must be genuinely watched, not rubber-stamped.
 
 **Sequencing:** build Path-A margin (the `/1h`-archive intraday-range × captureFrac) → emit `pathA`
 (H1) → build the join scorer (H2/H3) → accrue → gate/recalibrate (H4). H1 is cheap and can ship the
@@ -402,10 +413,12 @@ least one of them landing first, as marked.
   ship without a bump per rule 5's pipeline-stdout carve-out — decide per exact surface touched).
   CI: `checks` job's fixture/golden pins (finding #4) and `smoke` job (loads `index.html` headless)
   must stay green — if this touches any app-facing surface, run the smoke test locally first.
-- **Validated vs placeholder**: the WHOLE Path-A number is placeholder-grade until H2/H4 accrue
-  (captureFrac unvalidated) — ship it as an inform-only / secondary column, never replacing the
-  existing grade/rank, matching the plan's explicit H4 ruling ("tiers, not precise ordering" until
-  accrual).
+- **Validated vs placeholder / OWNER DECISION (Ben, 2026-07-25 pm)**: Path-A drives the **PRIMARY
+  sort**; `rateItem` (the existing grade) is retained as a **shown BACKUP + live A/B comparison
+  column**, computed every run so a divergence is visible and a revert is instant. captureFrac is
+  still an unproven placeholder (rule 4) — so this is validate-in-real-use, and the forward-accrual
+  (E/F) remains the formal validator/revert-trigger, not a precondition for going primary. See the
+  H4 OWNER DECISION note.
 
 ### Chunk E — H1: `pathA` forward field (depends on Chunk C; independent of B/D)
 - **Files**: `pipeline/lib/suggestlog.mjs` (`suggestionEntry`'s param list + the lean-included
@@ -477,6 +490,23 @@ least one of them landing first, as marked.
   strictly descriptive/inform until that gate exists, per the plan's own wording.
 - **Validated vs placeholder**: fully descriptive/placeholder (n≈0 executed per the plan) — never
   gates, never gets a code path that "licenses" sizing on its own.
+
+### Chunk I — gate transition + legacy retirement (OWNER-triggered, "SOON" — Ben 2026-07-25 pm)
+Axis-1 (admission gate) transition, INDEPENDENT of the Path-A display axis. Ordered sub-steps:
+1. **Trial** `--gate structural` in real use for a short window — run both gates on real sessions,
+   compare what each surfaces + how the picks perform (the A/B window; this is the ONLY reason legacy
+   is still around).
+2. **Flip the default** to `--gate structural` once it's confirmed better in practice (not just
+   retrospectively).
+3. **Delete legacy** — `eachLiquidCandidate` + the turnover-floor (`FLOOR`/`GP_FLOOR`) admission path
+   — and **re-baseline** `pipeline/test/fixtures/replay/golden.json` + the gate/survive/admission
+   suites to the structural behavior.
+- **Gotchas**: this is the ONE chunk ALLOWED to change `golden.json` — and it MUST be a deliberate,
+  reviewed re-baseline, never silent (the exact thing every other chunk was forbidden from). APP_VERSION
+  bump if the flip changes the deployed app's surface. Legacy is recoverable from git after deletion,
+  so removal is cheap/reversible — but do it only AFTER step 1 proves structural live.
+- **Depends on**: Chunk B (structural gate exists) + a real-use trial period. Owner-triggered, not
+  auto-sequenced. This is the "delete legacy SOON" Ben approved — soon = after the live trial, not now.
 
 ### Dependency / parallelism summary
 ```
