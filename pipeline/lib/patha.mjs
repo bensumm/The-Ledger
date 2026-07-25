@@ -93,6 +93,7 @@ export function intradayDailyRange(dayRanges) {
    Returns { gpDay, marginU, captureFrac, cyclesDay, units, price, intradayRange, lane } — the H1 `pathA`
    shape minus `rankInLane` (the ranker adds that). Returns null when no intraday range can be computed
    (cold/absent daily-range data) so a caller can cleanly omit the field. */
+// @provisional-api: Path-A primary-ranking scorer; consumed by the ranker at PLAN-LANE-ADMISSION Chunks D+E.
 export function pathAGpDay({ dayRanges, price, buyLimit = null, volDay = 0, lane = 'gear', capital = Infinity, captureFrac, intradayRange } = {}) {
   const range = intradayRange != null ? intradayRange : intradayDailyRange(dayRanges);
   if (range == null) return null;               // no daily-range data → no Path-A number (honest omit)

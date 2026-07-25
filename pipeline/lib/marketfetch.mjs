@@ -358,6 +358,7 @@ export async function loadAll24hRolling({ db } = {}) {
    cold archive: { ranges:{}, coverageDays:0, partialDays:0, coverage:{} }, never throws.
    `db`: reuse an already-open handle (mirrors loadDaily/loadBands); else opened + closed here. --- */
 export const FULL_DAY_1H_BUCKETS = 24;   // a UTC day is fully covered when all 24 /1h buckets are stored
+// @provisional-api: bulk daily-range loader for Path-A margin; consumed by the ranker at PLAN-LANE-ADMISSION Chunks D+E.
 export function loadDailyRangeBulk(days = 14, { db, ids } = {}) {
   const archive = db || openArchive();
   const ownArchive = !db;
@@ -381,6 +382,7 @@ export function loadDailyRangeBulk(days = 14, { db, ids } = {}) {
    (PLAN-DAEMON-SUBSYSTEM) can ask "how cold are we?" without opening the archive itself. Degrades
    honestly: null on a cold archive (the guard reads null as "cold"), never throws.
    `db`: reuse an already-open handle; else opened + closed here. --- */
+// @provisional-api: /1h archive-freshness probe; consumed by the cache-warm module at PLAN-DAEMON-SUBSYSTEM Chunk 4.
 export function newest1hAgeHours({ db, now = Date.now() } = {}) {
   const archive = db || openArchive();
   const ownArchive = !db;
