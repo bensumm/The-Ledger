@@ -219,3 +219,274 @@ moment Path-A computes a number, so accrual starts as early as possible.
 - Relationship to the existing `pickFetchPool` / `rankAndSlice` / mode stack (band/churn/value/
   amplitude) is a REPLACEMENT of the pre-fetch gate + a reframe of the lanes; the ranking overlay
   reuses expGpDay/grade/reach. Migration/rollout (behind a flag, fixtures) is unscoped here.
+
+## Hardening findings (Fable, 2026-07-25)
+
+Reconciled every load-bearing claim against the actual code (file:line). One correction, one
+naming collision to fix in the build, everything else holds.
+
+1. **`/1h` bulk daily-range — CONFIRMED FEASIBLE, empirically verified live against the real
+   archive (not just read of the code).** `pipeline/lib/archive.mjs`'s `observations` table stores
+   raw per-item-per-hour `avgHighPrice`/`avgLowPrice` (archive.mjs:63-73, invariant 3) with an index
+   on `(grain, itemId, ts)` (archive.mjs:73). A bulk aggregate query —
+   `SELECT itemId, date(ts,'unixepoch') d, MAX(avgHighPrice) hi, MIN(avgLowPrice) lo FROM
+   observations WHERE grain='1h' AND ts>=? GROUP BY itemId, d` — is NOT a function that exists
+   today (no bulk-aggregate method on the archive handle; `seriesFor` is per-item-only,
+   archive.mjs:150-160) but is a straightforward ADD. Verified live against the actual
+   `pipeline/.market-archive.sqlite`: **306 distinct 1h buckets since 2026-07-13, 1,724–3,303
+   items/bucket, full 24/24-hour coverage every day from 2026-07-13 onward** (spot-checked via a
+   throwaway script, not committed); the aggregate query above ran in **429ms and returned 53,328
+   whole-market daily-range rows** for that window. This is the concrete "bulk /1h archive walk"
+   the plan asserts — it is real, cheap, and needs one new SQL aggregate method
+   (`archive.dailyRangeBulk(ids, sinceTs)` or similar), not a per-item fetch.
+   - **Caveat (the one correction): the "7–14 days" depth claim is right at the edge, not
+     comfortably inside it.** `loadAll24hRolling` (marketfetch.mjs:303) — the mechanism that
+     backfills full hourly coverage — is gated behind `--vol-source rolling`, which IS the CLI
+     default (`screen-flip-niches.mjs:361`, `fallback: 'rolling'`), so it runs on every normal
+     scan. But full 24/24 hourly coverage only started **2026-07-13** (12 days of history as of
+     today, 2026-07-25) — before that, the archive only holds 4-8 buckets/day (the pre-existing
+     `loadDaily` 6h-step regime-proxy archive, seeded from `.cache/daily/*.json`). So a 14-day
+     lookback will silently thin out to sparser-than-intended coverage for the oldest ~2 days of
+     any 14-day window today, and will only reach a genuinely comfortable 14-day depth around
+     2026-07-27. **Recommendation: build the aggregate to accept a `days` parameter and report
+     `coverageDays` (the actual number of full-24h days found), same honesty pattern as
+     `loadDaily`'s `coverageWindows` (marketfetch.mjs:498) — never silently degrade sample depth
+     without saying so.**
+2. **Naming collision to fix before writing any code: "lane" means two different things.** The
+   admission spec's "GEAR lane (volDay<20k) / CHURN lane (volDay≥20k)" is a NEW volume-regime split
+   at admission time. The codebase already has a `churn` **mode/niche** (`js/flip-niches.mjs`,
+   `FLIP_NICHES.churn`) with its own edge/rank/gate spec, entirely orthogonal (a mode is an
+   edge-computation strategy; the new "lane" is a pre-edge structural bucket every mode's
+   candidates would fall into). Call the new admission-time split something unambiguous in code —
+   e.g. `volLane: 'low'|'high'` or `throughputLane` — never `mode` or bare `lane` reused near
+   `FLIP_NICHES`. This is purely a naming-collision risk (a future grep for "churn" will hit both
+   concepts), not a logic problem, but it will confuse the first executor who doesn't know both
+   exist. Flagged so the Chunk-1 executor picks the name once, not twice.
+3. **`gateCandidates`/`pickFetchPool` seam confirmed.** `eachLiquidCandidate` (gatecandidates.mjs:211-230)
+   is the ONE shared iterator every mode's gate (`gateCandidates` band/churn path at :238,
+   `gateValueCandidates` at :285, `gateAmplitudeCandidates` at :319) already funnels through — it
+   does the two-sided-liquidity + price-window + thin-classification and calls back into a
+   per-mode `fn`. The new universal structural gate replaces exactly this chokepoint's admission
+   *criteria* (notional/thin/lane vs today's two-sided+floorVol/gpFloor), while the callback shape
+   (`fn({id, limitVol, mid, ...}) → candidate|null`) and everything downstream (`spec.edge`,
+   `rankAndSlice`/`pickFetchPool`, `surviveMode`) stays untouched — so a mode's edge computation
+   never has to change to adopt the new gate. `--admission legacy` (admission.mjs) is a SEPARATE
+   axis (pool ordering, not pool membership) from `rankAndSlice` vs `pickFetchPool` — the new
+   structural gate needs its OWN rollback flag (e.g. `--gate structural|legacy`, defaulting to
+   `legacy` until validated), independent of `--admission`. Both flags can coexist (2×2), matching
+   this repo's existing precedent of flag-gated non-destructive additions (PLAN-SCREEN-ARCHITECTURE's
+   `admission.mjs` landing beside `rankAndSlice` without deleting it).
+4. **Fixture/golden blast radius is real and must be scoped up front.** `pipeline/test/fixtures/replay/golden.json`
+   pins `gateCandidates`'s current per-mode output; `gatecandidates.test.mjs`, `survivemode.test.mjs`,
+   `admission.test.mjs`, `subfloor.test.mjs`, `flip-niches.test.mjs` all assert against today's gate
+   shape. A flag-gated new gate (default off) means these stay byte-identical and green with zero
+   changes — confirmed the correct rollout shape for chunk sequencing (build new, prove it
+   side-by-side, flip the default only after a before/after pass, per this repo's `--vol-source`/
+   `--admission legacy` precedent).
+5. **`expGpDay` is DEMOTED, not the live ranked number — Path A's gp/day is a NEW metric, not a
+   rename.** `js/rating.mjs`'s header (rating.mjs:12) and `screen-flip-niches.mjs:44/70/82` are
+   explicit: `expGpDay` was demoted at P6b to a **pre-fetch pool orderer only**; the actual
+   displayed/ranked quality composite is `rateItem` (`js/rating.mjs:122`, `net × P(fill) ÷ TTF`,
+   built on the P6b per-thesis estimator families in `pipeline/lib/estimators.mjs`, NOT expGpDay).
+   The plan's "Path A gp/day → the single cross-lane ranking number" is therefore a genuinely NEW
+   sortable quantity that must find its place ALONGSIDE `rateItem`'s existing grade — the plan's own
+   "existing grade = a QUALITY DISCOUNT on Path A gp/day, never a gate" phrasing already gets this
+   right, but a build chunk must not accidentally wire Path-A gp/day as a expGpDay rename (it isn't
+   one — expGpDay folds in `expUnits`'s three-compounding-guess throughput math that P6b explicitly
+   moved away from displaying).
+6. **H1/H2/H3 precedent match confirmed exactly, with one important precision the plan doesn't
+   spell out: H2 must mirror `join-amplitude-outcomes.mjs`, NOT `join-outcomes.mjs`.** Both exist
+   and both "join" something, but they answer different questions —
+   `join-outcomes.mjs` (join-outcomes.mjs:1-35) is CAMPAIGN-keyed, joins fills.json BACKWARD to the
+   nearest prior suggestion, and its target (realized daily-ROI / fill-time cells) is exactly the
+   BEHAVIOR-CONFOUNDED metric H3 says must not be repeated (dominated by when we happened to sell).
+   `join-amplitude-outcomes.mjs` (join-amplitude-outcomes.mjs:1-26, 58-83) is SUGGESTION-keyed,
+   joins FORWARD against the archive's OWN materialized future range (not our fills), and is
+   PURE + fixture-tested with a clean `replayPick(series, pick, opts) → {resolved, pending, ...}`
+   shape reading `db.seriesFor(itemId, '1h', {from, to})` (join-amplitude-outcomes.mjs:110) keyed on
+   `(itemId, suggestion ts)`. This is the ONLY of the two that avoids the sell-timing confound, and
+   it is the one the plan means — worth stating explicitly since a name search alone doesn't
+   disambiguate them. `suggestlog.mjs`'s lean-included pattern (`if (x != null) e.x = x`, e.g.
+   `windowExit`/`depthExit`/`reachable` at suggestlog.mjs:474-482) is exactly how `pathA` slots in
+   (H1) — confirmed by direct read, not inference.
+
+## Build chunks (HARDENED — Fable 2026-07-25)
+
+Ordered; each chunk names its files, its integration seam, its gotcha checks, and whether it ships
+something validated or a named PLACEHOLDER (process rule 4). **A** and **B** below are independent
+of each other and of everything else — start both in parallel. Everything after depends on at
+least one of them landing first, as marked.
+
+### Chunk A — bulk daily-range aggregate off the `/1h` archive (independent, start first)
+- **Files**: `pipeline/lib/archive.mjs` (new method on the handle, e.g.
+  `dailyRangeBulk({ ids, sinceTs, db })` → `{ [itemId]: { [dateKey]: {hi, lo} } }` or a flat row
+  array — pick whichever shape `pipeline/lib/marketfetch.mjs` callers want); a thin wrapper in
+  `marketfetch.mjs` alongside `loadDaily`/`loadAll24hRolling` (e.g. `loadDailyRangeBulk(days, {db})`)
+  that also reports `coverageDays` (the honesty field from finding #1).
+- **Integration seam**: a NEW read-only method beside `seriesFor`/`marketAt` on the same handle
+  object (archive.mjs:112-257) — no schema change, no write-path change (the raw observations table
+  already has everything needed, per invariant 3). Zero interaction with `gatecandidates.mjs`/
+  `admission.mjs` at this chunk — this is purely a new data-access function.
+- **Gotchas**: keep it read-only (never touches `append`/`buckets`); must degrade honestly on a
+  cold archive (empty result + `coverageDays: 0`, never throw) so fixtures/CI (which run against a
+  temp/`:memory:` DB per archive.mjs:96-97's documented test isolation) get a clean empty result,
+  not an error. Add to `pipeline/test/archive.test.mjs` with a synthetic multi-day fixture (per
+  `exportFixture`'s round-trip shape, archive.mjs:177-193) — never test against the live
+  `.market-archive.sqlite`.
+- **Validated vs placeholder**: the QUERY is validated (measured live: 429ms/53k rows, finding #1).
+  What days-of-history it can actually promise is honest-but-thin right now (12 days full coverage,
+  growing) — surface via `coverageDays`, don't assert 14 in code/docs until it's true.
+- **Docs**: update `README.md`'s archive.mjs entry (new method) and note `coverageDays` growth in
+  this plan file if depth is still short when Path A ships.
+
+### Chunk B — structural admission gate module (independent, start first)
+- **Files**: new module, e.g. `pipeline/lib/structural-admission.mjs` (mirrors `gatecandidates.mjs`/
+  `admission.mjs`'s existing split: pure, no fetch/fs, fixture-testable). Implements the universal
+  gate (value≥100gp, thin=min(hpv,lpv)≥max(limit,25) with null-limit→25 fallback, notional=value×
+  volDay≥25m/day) and the lane classifier (naming per finding #2 — NOT `mode`/`lane` bare;
+  `volLane: 'gear'|'churn'` or similar, clearly commented as ORTHOGONAL to `FLIP_NICHES` modes).
+- **Integration seam**: an alternate iterator with the SAME callback shape as `eachLiquidCandidate`
+  (gatecandidates.mjs:211, `fn({id, limitVol, mid, ...}) → candidate|null`), selectable via a NEW
+  flag independent of `--admission` — e.g. `--gate structural|legacy` (default `legacy`) — so
+  `gateCandidates` (gatecandidates.mjs:232) can route to it without touching `spec.edge`/
+  `rankAndSlice`/`surviveMode` at all in this chunk. Do NOT wire it as the default; do NOT delete
+  `eachLiquidCandidate`.
+- **Gotchas**: this chunk must NOT change `pipeline/test/fixtures/replay/golden.json` or any
+  existing gate/survive/admission/flip-niches fixture (finding #4) — it's purely additive behind
+  the new flag. Confirm with `--gate legacy` (or the flag omitted) that every existing test still
+  passes unchanged. Add fixture tests exercising the new gate directly (synthetic v24 data), not
+  against golden.json.
+- **Validated vs placeholder**: the thresholds (25m/day notional, thin-floor 25, 20k vol-cut) are
+  explicitly named PLACEHOLDERS in the plan's own "Open items" section — carry that forward in the
+  module's header comment, don't upgrade their status here.
+- **Docs**: README inventory entry for the new file at creation (process rule 8); note the
+  `--gate` flag in `CLAUDE.md`'s ask→command table only once it's wired into a user-facing surface
+  (not yet at this chunk — this chunk is library-only).
+
+### Chunk C — Path-A margin/gp-day calculator (depends on Chunk A)
+- **Files**: new pure module, e.g. `pipeline/lib/patha.mjs`. Implements `intradayDailyRange` (robust
+  p-band of Chunk A's per-day high−low, after tax — reuse the existing `robustBand`/
+  `BAND_EDGE_*` from `js/quotecore.js`, imported the same way `marketfetch.mjs:385` already does,
+  rather than inventing a second percentile-band implementation), `marginU = intradayDailyRange ×
+  captureFrac` (0.45 gear / 0.62 churn, PLACEHOLDER per finding/rule 4), `unitsCyc = min(buyLimit,
+  capital÷price)` (reuse `expUnits`'s existing null-limit/volDay-inferred-limit fallback shape,
+  gatecandidates.mjs:164-169, rather than re-deriving it), `cyclesDay` (throughput-bounded, mirrors
+  the existing buy-limit-refill logic already in `expUnits`/`expUnitsOvernight`), and
+  `gpDay = marginU × unitsCyc × cyclesDay`.
+- **Integration seam**: standalone — takes Chunk A's daily-range data + `js/quotecore.js`'s tax/
+  `robustBand` + mapping (buyLimit) as pure inputs; does not touch `gatecandidates.mjs`/
+  `admission.mjs` in this chunk (wiring into the actual gate/rank pipeline is Chunk D).
+  Explicitly NOT `expGpDay` (finding #5) — name it distinctly (`pathAGpDay` or similar) so no reader
+  conflates the two.
+- **Gotchas**: fixture-test against Chunk A's synthetic archive fixtures (no live data, rule 4);
+  confirm the after-tax reduction reuses `js/quotecore.js`'s `tax()` (the ONE definition, per
+  CLAUDE.md's market-analysis doctrine) rather than a re-implementation.
+- **Validated vs placeholder**: captureFrac 0.45/0.62 are PLACEHOLDERS (n=13/12, own-book-biased,
+  per the plan's Validation-status section) — must be named as such in the module header, not
+  presented as calibrated. The daily-range-percentile math itself (robustBand reuse) is validated
+  infrastructure.
+
+### Chunk D — wire Path-A gp/day into a ranked, shown surface (depends on Chunks A+C; B optional)
+- **Files**: `pipeline/commands/screen-flip-niches.mjs` (and/or `quote-items.mjs` per the plan's
+  "quote/watch where a ranked gp/day is computed" scope) — add `pathA` computation per candidate,
+  behind its own flag/mode gate (e.g. only computed when explicitly requested, given it's a NEW
+  unvalidated number) so it never silently changes today's displayed grade/rank.
+- **Integration seam**: Path-A's gp/day sits ALONGSIDE `rateItem`'s existing grade (finding #5) —
+  reuse `js/rating.mjs`'s `gradeFor`/`capGrade` as the quality discount per the plan's "common
+  overlay" section, and the existing `MIN_GPD` 500k floor (gatecandidates.mjs:61) as a post-rank
+  surfacing cut, NOT a new gate. Whether this runs against the legacy pool or Chunk B's structural
+  pool is an explicit choice this chunk must make and document (the plan defers this — "Migration/
+  rollout... unscoped" — so this is the chunk that un-defers it).
+- **Gotchas**: APP_VERSION bump required (CLAUDE.md rule 5 — this changes the deployed app's
+  displayed surface, if `quote-items.mjs`/the app UI shows it; a pipeline-console-only addition may
+  ship without a bump per rule 5's pipeline-stdout carve-out — decide per exact surface touched).
+  CI: `checks` job's fixture/golden pins (finding #4) and `smoke` job (loads `index.html` headless)
+  must stay green — if this touches any app-facing surface, run the smoke test locally first.
+- **Validated vs placeholder**: the WHOLE Path-A number is placeholder-grade until H2/H4 accrue
+  (captureFrac unvalidated) — ship it as an inform-only / secondary column, never replacing the
+  existing grade/rank, matching the plan's explicit H4 ruling ("tiers, not precise ordering" until
+  accrual).
+
+### Chunk E — H1: `pathA` forward field (depends on Chunk C; independent of B/D)
+- **Files**: `pipeline/lib/suggestlog.mjs` (`suggestionEntry`'s param list + the lean-included
+  `if (pathA != null) e.pathA = pathA;` line, following the EXACT precedent at suggestlog.mjs:474-482
+  for `windowExit`/`depthExit`/`reachable`); the emit call sites in `screen-flip-niches.mjs` (the
+  `suggestionEntry(...)` calls at screen-flip-niches.mjs:1284/1654/1835/1952) and wherever
+  `quote-items.mjs`/`watch-positions.mjs` compute a ranked gp/day, passing the shape from the plan:
+  `{ gpDay, marginU, captureFrac, cyclesDay, units, price, intradayRange, lane, rankInLane }`.
+- **Integration seam**: purely additive param — absent on rows where Path-A wasn't computed
+  (mirrors the existing optional-field contract exactly; no schema migration, no back-compat break
+  since consumers already null-check optional suggestlog fields).
+- **Gotchas**: `suggestions.jsonl` is (per the plan) NOT root-locked in the same way as
+  `fills.json`/`positions.json` — confirm its ROOT-LOCKED-or-not status in README's Map of the repo
+  before assuming it's freely editable; IDs/prices/timestamps only, no PII (repo-public rule,
+  already the existing discipline for this file).
+- **Validated vs placeholder**: this chunk is CHEAP and can ship the moment Chunk C computes a
+  number — start accrual as early as possible (the plan's own sequencing note). The field's
+  presence is validated; its calibration (captureFrac) is not — that's H2/H4's job, not this
+  chunk's.
+- **Can run in parallel with**: Chunk B, Chunk D (as long as D's emit calls end up passing the
+  `pathA` object this chunk defines — light coordination, not a hard sequencing dependency if E
+  lands the schema first).
+
+### Chunk F — H2/H3: the join scorer (depends on Chunk E having accrued *some* logged `pathA` rows, and Chunk A for the forward archive read)
+- **Files**: new command, e.g. `pipeline/commands/join-patha-outcomes.mjs`, mirroring
+  `join-amplitude-outcomes.mjs` STRUCTURALLY (finding #6) — NOT `join-outcomes.mjs`. Same shape:
+  a pure `replayPathAPick(series, pick, opts)` core (fixture-tested, no live archive) + a guarded
+  CLI that reads `suggestions.jsonl` via `readSuggestionLines()` (filtering rows carrying
+  `r.pathA`), opens the archive read-only, and calls `db.seriesFor(itemId, '1h', {from: pick.ts,
+  to: nowSec})` (join-amplitude-outcomes.mjs:110) per item.
+- **Integration seam**: the target metric must be H3's non-confounded one — "did the predicted
+  intraday range materialize the following day(s), and was ~captureFrac of it reachable from fills
+  we actually placed" — NOT realized-daily-ROI. Concretely: replay each logged `pathA.intradayRange`
+  prediction against Chunk A's forward daily-range aggregate for the same item over the pick's
+  horizon, and separately report Spearman(predicted gpDay, realized-range-implied gpDay) +
+  predicted/realized ratio (whether captureFrac holds forward) — Gate-C style `--report`, mirroring
+  join-amplitude-outcomes.mjs's `--report`/`resolved`/`pending` honesty split (pending = archive
+  doesn't yet cover the horizon, not a miss).
+- **Gotchas**: must print "n=0, too new to judge" honestly when no rows have resolved yet (rule 4)
+  — do not synthesize a correlation number below a sample floor (mirror `join-outcomes.mjs`'s
+  `--min-n` refusal-to-summarize discipline even though this isn't that file).
+- **Validated vs placeholder**: this chunk BUILDS the validator; it does not itself validate
+  anything until real accrual — ship it, expect `n≈0` on day one.
+
+### Chunk G — H4: readiness gate / recalibration (depends on Chunk F having accrued real n)
+- **Files**: `pipeline/lib/patha.mjs` (Chunk C) gains a documented threshold check — Path-A gp/day
+  stays a coarse TIERING signal (not a hard gate/auto-action) until Chunk F's `--report` shows a
+  stable positive rank correlation at n ≥ some floor (pick a floor consistent with this repo's
+  existing `--min-n 8`-style precedent in `join-outcomes.mjs`, or restate one explicitly).
+- **Integration seam**: when the floor is met, `captureFrac` is RE-ESTIMATED from Chunk F's forward
+  join (replacing the 0.45/0.62 retrospective placeholder) rather than hand-edited — this is mostly
+  a process/decision chunk, not a large code chunk, until real n exists.
+- **Gotchas**: this is explicitly NOT buildable in full today (no data yet) — scope this chunk as
+  "wire the threshold check + the recalibration hook, leave it dormant" rather than trying to
+  pre-compute a number that doesn't exist yet.
+- **Validated vs placeholder**: entirely gated on future data; do not let an executor mark this
+  chunk "done" by inventing a threshold with no accrued n behind it.
+
+### Chunk H — Path B descriptive overlay wiring (independent; low priority, can run anytime after Chunk D)
+- **Files**: wherever Chunk D surfaces Path A, add the existing oscillator/floor-ceiling read
+  (already-shipped amplitude/value-screen infra, per the plan's "reuses existing oscillator/floor-
+  ceiling reads" line) as a SEPARATE inform-only column/flag — never folded into Path-A's gp/day
+  number (the plan's explicit "risk discount, not extra revenue" framing).
+- **Integration seam**: reuses `js/amplitudescreen.mjs`/`js/valuescreen.mjs`'s existing term-
+  structure reads — no new math, just a presentation-layer join alongside Path A's output.
+- **Gotchas**: the "floor-is-real / anti-stuck-bag gate" the plan calls MANDATORY before any
+  optionality credit does not yet exist as code (it's described, not built) — if this chunk is
+  read as licensing more optimistic pricing, that gate must be built FIRST; scope Chunk H as
+  strictly descriptive/inform until that gate exists, per the plan's own wording.
+- **Validated vs placeholder**: fully descriptive/placeholder (n≈0 executed per the plan) — never
+  gates, never gets a code path that "licenses" sizing on its own.
+
+### Dependency / parallelism summary
+```
+A (archive bulk range)  ─┐
+                          ├─→ C (Path-A calc) ─┬─→ D (wire into surface) ──→ H (Path-B overlay)
+B (structural gate)  ────┘  (independent of B)  ├─→ E (H1 pathA field) ──→ F (H2/H3 join) ──→ G (H4 gate)
+```
+A and B: start immediately, in parallel, no shared files. C depends only on A. E depends only on C
+(not on B or D — can land before D if convenient, since E's schema doesn't need a live surface to
+exist yet). D depends on A+C (and optionally B, if the owner decides Path A should run against the
+structural-gated pool rather than the legacy pool — an explicit decision this hardening pass
+surfaces but does not make). F depends on E having shipped and some accrual time passing. G depends
+on F. H is lowest priority and only depends on D existing to attach to.
