@@ -375,6 +375,24 @@ export function loadDailyRangeBulk(days = 14, { db, ids } = {}) {
   }
 }
 
+/* --- newest1hAgeHours({ db }) → hours since the newest /1h bucket in the archive, or null if the
+   archive holds no /1h data yet (cold clone / :memory: CI). Thin READ-ONLY, ZERO-fetch wrapper over
+   archive.newestBucket('1h') (mirrors loadDailyRangeBulk's shape) so the cache-warm guard
+   (PLAN-DAEMON-SUBSYSTEM) can ask "how cold are we?" without opening the archive itself. Degrades
+   honestly: null on a cold archive (the guard reads null as "cold"), never throws.
+   `db`: reuse an already-open handle; else opened + closed here. --- */
+export function newest1hAgeHours({ db, now = Date.now() } = {}) {
+  const archive = db || openArchive();
+  const ownArchive = !db;
+  try {
+    const ts = archive.newestBucket('1h');
+    if (ts == null) return null;
+    return (now - ts * 1000) / 3_600_000;
+  } finally {
+    if (ownArchive) archive.close();
+  }
+}
+
 /* --- loadBands(hours): whole-market intraday band data for EVERY item, zero per-item
    timeseries calls (chunk 9.1). The wiki /5m endpoint is a bulk whole-market snapshot and
    accepts ?timestamp=<unix, divisible by 300> to fetch a past 5m window. We walk the last

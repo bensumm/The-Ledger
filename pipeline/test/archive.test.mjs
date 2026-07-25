@@ -232,6 +232,30 @@ ok('dailyRangeBulk round-trips through an exported fixture (synthetic multi-day)
   src.close(); dst.close();
 });
 
+ok('newestBucket returns the max ts per grain, filtering by grain', () => {
+  const h = open(':memory:');
+  const D1 = 1750291200;                       // a UTC midnight
+  // three ascending /1h buckets; newest is D1 + 2*3600
+  h.append('1h', D1, { 560: { avgHighPrice: 100, avgLowPrice: 90, highPriceVolume: 5, lowPriceVolume: 4 } });
+  h.append('1h', D1 + 2 * 3600, { 560: { avgHighPrice: 110, avgLowPrice: 95, highPriceVolume: 5, lowPriceVolume: 4 } });
+  h.append('1h', D1 + 3600, { 560: { avgHighPrice: 105, avgLowPrice: 92, highPriceVolume: 5, lowPriceVolume: 4 } });
+  // a LATER /5m bucket must NOT leak into the /1h newest-ts
+  h.append('5m', D1 + 10 * 3600, { 560: { avgHighPrice: 9999, avgLowPrice: 1, highPriceVolume: 1, lowPriceVolume: 1 } });
+
+  assert.equal(h.newestBucket('1h'), D1 + 2 * 3600, 'newest /1h ts, not the later /5m one');
+  assert.equal(h.newestBucket('5m'), D1 + 10 * 3600, '/5m tracked on its own grain');
+  assert.equal(h.newestBucket(), D1 + 2 * 3600, "defaults to grain '1h'");
+  assert.equal(h.newestBucket('6h'), null, 'a grain with no rows → null');
+  h.close();
+});
+
+ok('newestBucket degrades to null on a cold archive (never throws)', () => {
+  const h = open(':memory:');
+  assert.equal(h.newestBucket('1h'), null, 'empty table → null, not undefined');
+  assert.equal(h.newestBucket(), null);
+  h.close();
+});
+
 ok('the tests never target the real archive DB', () => {
   // structural guard: DEFAULT_DB is a real on-disk path outside .cache/, and this suite must not use it.
   assert.ok(/\.market-archive\.sqlite$/.test(DEFAULT_DB));

@@ -962,7 +962,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     sinceTs})` (PLAN-LANE-ADMISSION Chunk A) is the READ-ONLY bulk SQL aggregate → per-item per-UTC-day
     `{hi:MAX(avgHigh), lo:MIN(avgLow)}` over the raw `/1h` buckets + a `coverage` map (distinct 1h
     buckets/day, 24 = full) — the Path-A intraday-range data source; degrades to an empty result on a
-    cold archive, never throws. Backs `loadDaily`
+    cold archive, never throws. `newestBucket(grain='1h')` (PLAN-DAEMON-SUBSYSTEM Chunk 1a) is the
+    READ-ONLY index-covered `SELECT MAX(ts) WHERE grain=?` — newest stored ts (unix s) for a grain, or
+    `null` on a cold/empty archive (never throws); the cache-warm guard's "how cold is the /1h archive"
+    freshness probe. Backs `loadDaily`
     (with a one-time `daily_seed` import of the pre-D0 `.cache/daily` mids). Surgically suppresses the
     one `node:sqlite` ExperimentalWarning via a `process.emitWarning` filter installed before a
     `createRequire` load — no global `--no-warnings` flag on any script. CLI: `node
@@ -988,7 +991,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (PLAN-LANE-ADMISSION Chunk A — the thin READ-ONLY wrapper over `archive.dailyRangeBulk`: whole-market
     per-item per-day intraday range `{id:{date:{hi,lo}}}` straight from the SQLite archive, ZERO fetch,
     plus a `coverageDays`/`partialDays` HONESTY field — number of days with FULL 24-bucket `/1h` coverage,
-    never hardcodes a depth the archive lacks; full coverage only started 2026-07-13) + `rolling24FromTs1h(ts1h)` (the same
+    never hardcodes a depth the archive lacks; full coverage only started 2026-07-13) + `newest1hAgeHours({db})`
+    (PLAN-DAEMON-SUBSYSTEM Chunk 1a — the thin ZERO-fetch wrapper over `archive.newestBucket('1h')`: hours
+    since the newest `/1h` bucket, or `null` on a cold archive, so the cache-warm guard reads "how cold are
+    we?" without opening the archive itself) + `rolling24FromTs1h(ts1h)` (the same
     sum off an already-fetched per-item 1h series → zero new fetch) — now the DEFAULT `screen-flip-niches.mjs` volume
     (`--vol-source legacy` restores the broken `/24h`; PLAN-VOL24 step 2), with the volume floors recalibrated
     to the corrected distribution; consumed by `screen-flip-niches.mjs` and logged as the `volDayRolling` shadow field for the

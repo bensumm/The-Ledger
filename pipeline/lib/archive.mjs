@@ -296,6 +296,17 @@ export function open(dbPath = DEFAULT_DB, { readonly = false } = {}) {
         ? Number(db.prepare('SELECT COUNT(*) AS n FROM buckets WHERE grain = ?').get(String(grain)).n)
         : Number(db.prepare('SELECT COUNT(*) AS n FROM buckets').get().n);
     },
+    /* newestBucket(grain) → the max ts (unix seconds) stored for that grain, or null if none.
+       The buckets PK is (grain, ts), so SELECT MAX(ts) WHERE grain=? is an index-covered aggregate
+       (O(log n), no scan, no new index). READ-ONLY, never touches a write path. Powers the cache-warm
+       guard's "how cold is the /1h archive" check (PLAN-DAEMON-SUBSYSTEM Chunk 1a). Degrades honestly:
+       .get() on an empty table returns { ts: null }, so a cold/fresh archive yields null, never throws
+       — the guard reads "no data yet" as "cold" rather than crashing. */
+    newestBucket(grain = '1h') {
+      try {
+        return db.prepare('SELECT MAX(ts) AS ts FROM buckets WHERE grain = ?').get(String(grain)).ts ?? null;
+      } catch { return null; }
+    },
 
     close() { try { db.close(); } catch {} },
   };
