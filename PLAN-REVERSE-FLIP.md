@@ -29,11 +29,20 @@ For every OTHER flip-niche in this repo, `js/termstructure.mjs`'s `classifyTraje
 gates that treat `rising` as good (upside) and `falling`/`cooling` as risk (stranding). Reverse-flip
 inverts this mapping:
 
-| Shape | Normal flip-niche read | Reverse-flip read |
+**VOCABULARY (CORRECTED 2026-07-24 — this was a load-bearing bug).** `classifyTrajectory`
+(`js/termstructure.mjs:184`) emits `knife | oscillating | based | rising | elevated | flat | unknown`.
+There is **no `falling` or `cooling` shape** — `knife` is the monotone-decline analog, and `oscillating`
+deliberately catches a falling-but-oscillating item (checked BEFORE knife). RF1's gate MUST map against
+these real values; the earlier `falling`/`cooling` draft would have matched nothing and silently never
+passed on a real decline.
+
+| Shape (real `classifyTrajectory` value) | Normal flip-niche read | Reverse-flip read |
 | --- | --- | --- |
 | `rising` | good (upside) | **BAD** — sell now, rebuy at a HIGHER floor tomorrow; the cycle loses money by construction |
-| `falling` / `cooling` | risk (stranding) | fine-to-**good** — sell high off a hold you'd otherwise ride down anyway, rebuy lower; this PROTECTS the hold's value instead of bleeding it |
+| `knife` (monotone decline) | risk (stranding) | fine-to-**good** — sell high off a hold you'd otherwise ride down anyway, rebuy lower; PROTECTS the hold's value instead of bleeding it |
 | `oscillating` / `based` | mixed (depends on niche) | **ideal** — a repeatable peak→dip lap, the exact shape the whole strategy wants |
+| `elevated` (top of 14d range, no spike) | bought-high caution | **good to SELL** (you're at the top) but the rebuy leg is the risk — don't rebuy until it comes off the high |
+| `flat` / `unknown` | neutral | neutral — no clear peak/dip lap to harvest; pass |
 
 This is not a new trajectory computation — it is a **re-mapping of `classifyTrajectory`'s existing
 output**, computed once, in one place (Chunk RF1).
@@ -74,6 +83,29 @@ output**, computed once, in one place (Chunk RF1).
    recommendation ("list 56.5m") is false precision on an item that wobbles 54–58m intraday. See
    [Chunk RF6](#rf6--thin-big-ticket-read-handling) for the handling. This folds in the thin-item lever
    from PLAN-HOURLY-3DAY-TREND (the `--days`-honest longer drift window, now that the mislabel is fixed).
+
+### Rulings — 2026-07-24 session 2 (SUPERSEDE the above where they conflict)
+
+7. **RF1 vocabulary — use the REAL `classifyTrajectory` shapes** (`knife`/`oscillating`/`based`/`rising`/
+   `elevated`/`flat`/`unknown`), per the corrected Regime-asymmetry table above. Mapping ruling (resolves
+   build-readiness open-question #1): `rising` → reject; `knife`/`oscillating`/`based` → pass (harvestable);
+   `elevated` → sell-side OK but flag the rebuy leg (don't rebuy off the high); `flat`/`unknown` → pass but
+   no-conviction (no clear lap). This is the ONLY correct source of shape names — the earlier `falling`/
+   `cooling` text is dead.
+8. **Drop `reverseFlipEligible` — no per-item opt-in flag (Ben).** The filtered owned-item set IS the
+   candidate pool; Ben mentally ignores what he doesn't want, no eligibility gate to maintain. This deletes
+   the flag from `owned-items.json`, and RF2's candidate pool becomes simply "the filtered owned set ∪
+   `hold-thesis.json` `reverseFlip:true` holds." Resolves build-readiness open-questions #3 and #4 (the
+   "show Ben a pre-eligible table / who opts in" flow is gone — the table IS the pool).
+9. **Value threshold = 5m** (Ben), NOT `BIG_TICKET_GP` (10m). The reverse-flip candidate filter keeps owned
+   items with guide ≥ **5,000,000** (a new `REVERSE_FLIP_MIN_GP = 5_000_000` constant, not `BIG_TICKET_GP`).
+   Big-ticket (≥10m) is a *priority ordering* within that pool, not the cutoff. Starting point, not a hard
+   permanent limit — widen later if wanted.
+10. **RF5 is DELETED (Ben + the MCP finding).** The RuneLite `data-export` plugin already exists and runs on
+    Ben's machine, writing `~/.runelite/Data Exports/container_bank.json` (live, export-button-triggered).
+    RF5's whole premise ("if re-seeding is tedious, build a ~100-line plugin") is moot — the plugin is
+    already there. The owned-item seed reads that file directly (see `PLAN-MCP-BANK-SERVER.md`); no
+    bank-export chunk to build. The RF5 section below is retained struck-through for history only.
 
 ## Existing scaffolding (what this plan builds on, not around)
 
@@ -525,7 +557,11 @@ shipped; the `--days`-honest drift label + percentage ask-reach render landed 20
   (tranche ≤2, the vol/d floor, "materially above") are PLACEHOLDER constants, documented as such.
   INFORM-ONLY throughout — nothing here gates, drops, or moves a quoted number; it reframes the read.
 
-### RF5 — (OPTIONAL, Ben-gated, last) Bank-export re-seed convenience
+### ~~RF5 — (OPTIONAL, Ben-gated, last) Bank-export re-seed convenience~~ — **DELETED (Ruling 10)**
+
+> **DELETED 2026-07-24 (Ruling 10).** The RuneLite `data-export` plugin already exists and runs on Ben's
+> machine (`~/.runelite/Data Exports/container_bank.json`), so this chunk's premise is moot — the seed reads
+> that file directly (`PLAN-MCP-BANK-SERVER.md`). Struck-through text retained for history only; do not build.
 
 - **New (only if Ben asks for it):** `.runelite/bank-export/` sibling dir (gitignored, mirrors
   `.runelite/exchange-logger/` conventions), `pipeline/commands/sync-bank.mjs` (`--probe`/`--dry`/
@@ -622,6 +658,93 @@ shipped; the `--days`-honest drift label + percentage ask-reach render landed 20
   for this whole plan: reverse-flip's pool is province-disjoint from every existing niche's fetch
   universe by construction (ownership-gated, not market-gated), so nothing about the existing screen
   funnel can regress.
+
+## Build sequencing / readiness (added post-scoping, 2026-07-24 — read-only verification pass)
+
+This section turns the scoped plan above into a build-ready sequence. It was produced by reading
+every file the plan cites as existing scaffolding and checking the claim against the actual code —
+no source was changed to produce it.
+
+### 1. Claim verification
+
+| Claim (where made) | Verdict | Evidence |
+| --- | --- | --- |
+| `matchTrades()`/`collapseOffers()` handle sell-then-rebuy correctly, zero changes needed (Q2, Case A) | **CONFIRMED** | `pipeline/lib/reconstruct.mjs:258-304` — a SELL against an open lot closes it into `closed` with real realised P/L; the next BUY event opens a fresh lot via the same FIFO queue. No reverse-flip-specific branch needed. |
+| A `BANKED` fill-line mechanism already exists and enters the FIFO queue like a buy (Q2 Case B, existing-scaffolding bullet) | **CONFIRMED** | `reconstruct.mjs:264-268` (`o.type === 'buy' \|\| o.type === 'banked'` pushes into the same lot queue, carrying `banked:true`); `parseJsonLine`/`normalizeStateStr` (`reconstruct.mjs:50-53,99-100`) recognize a `BANK`/`WITHDRAW` state; `add-manual-fill.mjs` already ships a working `--type banked --price <basis>` CLI path (`add-manual-fill.mjs:20,96,108-110`) with a `Dragon claws --type banked` example in its own header — this is a live, exercised mechanism, not aspirational. |
+| A SELL with no open lot lands in `unmatched`, today's safe default (Q2) | **CONFIRMED** | `reconstruct.mjs:289` (`if (remain > 0) unmatched.push(...)`). |
+| `declare-thesis.mjs` is the CLI pattern RF0's `declare-owned.mjs`/`declare-reverse-flip.mjs` should mirror | **CONFIRMED, with one nuance** | `declare-thesis.mjs` mirrors cleanly for `resolveId`/positional-vs-flag parsing/`set`/`clear`/`list`. But it actually writes to **two stores** (`session-thesis.json` gitignored + `hold-thesis.json` tracked) with a `--path` flag bridging them — a two-store split RF0 does NOT need (it's one tracked store, `reverse-flip-state.json`). The cleaner mirror is `pipeline/lib/holdthesis.mjs` (`loadHoldThesis`/`saveHoldThesis`/`upsertThesis`/`clearThesis`/`pruneHoldThesis`, all pure, all confirmed at `pipeline/lib/holdthesis.mjs:57-94`) — a flat tracked array, load/save/upsert/clear/prune, exactly RF0's `reverse-flip-state.json` shape. Build RF0's lib module off `holdthesis.mjs`, and treat `declare-thesis.mjs` only as the CLI **argv-parsing** shape reference, not the storage shape reference. |
+| `ignored-items.json`'s shape is what `owned-items.json` should mirror | **CONFIRMED, structurally** | `ignored-items.json:1-21` — `{ _doc, items:[{id,name,reason}], greenlisted:[] }`. The mirror holds for "one `_doc` + a tracked `items[]` array of small objects," but `owned-items.json`'s actual per-item shape (qty, classification, `reverseFlipEligible`, source) is materially richer than `ignored-items.json`'s `{id,name,reason}` — the plan's own worked example (lines 150-171) already reflects this correctly; only the top-level convention (doc string + items array) is actually shared. |
+| `js/flip-niches.mjs`'s `gate:'value'`/`gate:'amplitude'` seam is the pattern `gate:'reverse'` slots into (RF2) | **CONFIRMED** | `pipeline/lib/gatecandidates.mjs:194-198` (`gateCandidates`) already branches `spec.gate === 'value'` / `'amplitude'` to dedicated gate functions before falling into the shared liquidity+edge stack — adding `if (spec.gate === 'reverse') return gateReverseFlipCandidates(...)` is a one-line, well-precedented addition. **One correction to RF2's acceptance text**: `validateNicheSpec` (`flip-niches.mjs:434`) has a closed `VALID_GATE` allow-list `Set(['band','value','amplitude'])` (`flip-niches.mjs:394`) — RF2 MUST add `'reverse'` to that set or the conformance test (`flip-niches.test.mjs`) will fail the moment the new spec registers. Not called out as an explicit RF2 sub-task in the current text; small but will trip an implementer who copies the `value`/`amplitude` precedent without re-reading the conformance list. |
+| The Regime Asymmetry table's shape vocabulary (`rising`/`falling`/`cooling`/`oscillating`/`based`) is what `classifyTrajectory` emits, and `invertedRegimeGate` re-maps it 1:1 | **WRONG — foundation mismatch, blocks RF1 as currently specified** | `js/termstructure.mjs:184` states `classifyTrajectory`'s actual output vocabulary in full: `shape ∈ 'knife' \| 'oscillating' \| 'based' \| 'rising' \| 'elevated' \| 'flat' \| 'unknown'`. **There is no `falling` shape and no `cooling` shape at all.** The nearest analog to "falling" is `knife` (a real decay/downtrend — see `basePosition()`'s own coarsening at `termstructure.mjs:307`, `shape === 'knife' → label = 'trending↓'`), and there's no analog to "cooling" — the closest concepts are `flat` (no drift) and `elevated` (like rising but off a high base). RF1's spec text ("rising→reject, falling/cooling/oscillating/based→pass") needs to be rewritten against the REAL 7-value enum before `js/reverseflip.mjs` can be written: e.g. `rising→reject, elevated→reject (same "buy back higher" risk as rising), knife→pass (this IS the "falling" case the plan means), oscillating/based/flat→pass, unknown→caution`. This is a genuine spec bug, not a naming quibble — an implementer coding straight off the current table would call `classifyTrajectory(...).shape === 'falling'`, which is never true, and the gate would silently never pass on the exact regime (a real decline) the strategy most wants to catch. |
+| RF6 depends on PLAN-HOURLY-3DAY-TREND's shipped `--days`-honest `hourlyDriftNote` | **CONFIRMED, and already anticipates this plan** | `js/windowread.mjs:503-504`'s own header comment: "this is a SHARED export so a later reverse-flip fold (HT4, deferred pending PLAN-REVERSE-FLIP) can call it too with zero new compute" — `hourlyDriftNote(drift, { ask, fmt, days = 3 })` (`windowread.mjs:512`) takes a `days` param exactly as RF6 needs for the thin-item longer-window default. |
+| `/schedule`, `/book`, `/positions` are extensible additive surfacing hosts (RF4) | **CONFIRMED** | `read-schedule.mjs` already has a per-item `agendaRowsForItem` row-builder (`read-schedule.mjs:85`) unioned into one agenda — a `reverseFlipRows` sibling is a same-shape addition. `read-book.mjs` renders off `pipeline/lib/book-model.mjs`'s pure `buildBook` (`read-book.mjs:34,146`) — a new section is additive there too. `quote-items.mjs --positions` (`quote-items.mjs:89`) is a real, live, dedicated code path (not aspirational), confirmed by its own header example. |
+| `cycle-watch.json`/`dip-watchlist.json` are the precedent for `reverse-flip-state.json`'s "scoped state file" shape | **CONFIRMED** | `dip-watchlist.json:1-15` — flat tracked array of small per-item objects (`id,name,source,track,addedTs,...`), same shape class the plan proposes. |
+| `BIG_TICKET_GP` exists in `js/quotecore.js` for the capture-on-buy filter (RF0) | **CONFIRMED** | `js/quotecore.js:94` — `export const BIG_TICKET_GP = 10_000_000;`, already consumed elsewhere in that file (screen-flip-niches' weak-deploy flag, per the plan's citation). |
+| `tax()` is the canonical break-even function (Ruling 1) | **CONFIRMED** | `js/money-math.js:6,9` — `TAXCAP=5_000_000`; `tax(p) = p<50 ? 0 : min(floor(p*0.02), TAXCAP)`, exactly as described. |
+
+**Net verdict: the FIFO/BANKED/CLI/surfacing scaffolding claims all hold up — RF0, RF2's wiring pattern, RF3, RF4, and RF6 are built on real, working code exactly as described.** The one load-bearing miss is **RF1's shape vocabulary**, which must be corrected before `js/reverseflip.mjs` is written (see Gaps below) — everything downstream of RF1 (RF2's gate, RF4's rows, RF6's notes) inherits whatever `invertedRegimeGate` returns, so this is worth fixing at the spec level now rather than in code review later.
+
+### 2. Sequenced build order + dependency graph
+
+The plan's stated order (RF0 → RF1 → RF2, RF3/RF4 depend on RF0) is directionally right but under-specifies two things: RF3 also needs RF1-shaped state semantics to be meaningful, and RF4/RF6 have a real ordering constraint with each other. Refined graph:
+
+```
+RF0 (stores + CLIs)
+ │
+ ├──▶ RF1 (pure gate/edge module — FIX the shape vocabulary first, see Gaps §1)
+ │      │
+ │      ├──▶ RF2 (--mode reverse wiring; needs RF0's pool + RF1's gate)
+ │      │      │
+ │      │      └──▶ (Question 1b discovery lane rides in RF2, same dependency)
+ │      │
+ │      └──▶ RF6 (thin-item guards; consumes RF1's edge output for the ⚠ rebuy-strand note,
+ │             but its display guards are otherwise independent of RF1/RF2 — could build the
+ │             `isThinBigTicket` predicate + hourlyDriftNote wiring in parallel with RF1)
+ │
+ ├──▶ RF3 (BANKED-backfill advisory; needs RF0's reverse-flip-state.json shape + positions.json's
+ │          existing unmatched[]; does NOT need RF1/RF2 — it's read-only reconciliation, orthogonal
+ │          to whether the gate/screen logic exists yet)
+ │
+ └──▶ RF4 (surfacing in /schedule, /book, /positions; needs RF0's state store to read, and
+            benefits from RF6's thin-item notes existing first so the rows aren't shipped bare
+            and then immediately re-touched to add the ⚠ note — sequence RF6 before RF4's row
+            text, even though RF4's plumbing could start in parallel)
+
+RF5 (optional bank-export) — last, Ben-gated, no other chunk depends on it.
+```
+
+**Parallel-safe pairs** (disjoint file sets, per the plan's own primary-file-list contract): RF0 + nothing (foundation, must go first). Once RF0 lands: RF1 and RF3 touch disjoint files and can run concurrently. RF6's `isThinBigTicket` predicate + its `hourlyDriftNote` wiring touch `js/windowread.mjs`/a new thin-detection module and can start alongside RF1 (both read data already in hand; RF6 only needs RF1's *output shape* — not its implementation — to wire the rebuy-strand note, so a stub/interface-first split is possible if there's schedule pressure to parallelize). **RF2 and RF4 should NOT run concurrently** with each other if both touch `pipeline/lib/gatecandidates.mjs`'s `VALID_GATE` set and `read-schedule.mjs` in the same session — low collision risk but worth a quick check before dispatching as parallel lanes.
+
+### 3. Minimum shippable
+
+**RF0 + RF1 + RF2** is the smallest subset that delivers a usable, real reverse-flip loop:
+- RF0 gives Ben a place to declare "I sold X, tracking the rebuy" the moment a cycle starts (the live Ancestral-hat cycle can be tracked TODAY once RF0 ships, independent of anything else).
+- RF1 gives the gate/edge math (inverted regime + BE-rebuy) that makes a candidate table meaningful rather than just a raw list.
+- RF2 gives the actual `--mode reverse` screen Ben runs to find/confirm candidates.
+
+Without RF3, Case-B (pre-log owned items, the actual Ancestral-hat shape) P/L stays `unmatched` — cosmetically incomplete but NOT incorrect (the plan is explicit this is safe-by-design, Q2). Without RF4, the declared cycle only surfaces via `declare-reverse-flip.mjs list` — a manual check, not woven into the daily `/schedule`/`/book`/`/positions` habit; this is the biggest UX gap in the minimum-shippable slice but not a correctness or safety gap. Without RF6, thin-item pricing on the (mostly-thin) candidate population reverts to the standard reads' known false-precision failure mode (the anchor incident itself) — **this is the one omission from "minimum shippable" that has a live, dated, concrete failure example already in hand**, so it's the strongest candidate for pulling forward into the minimum slice ahead of RF4 if only one extra chunk can be afforded. RF3 and RF5 are the two genuinely deferrable chunks (RF3 is advisory-only convenience, RF5 is explicitly Ben-gated-optional per the plan's own text).
+
+### 4. Open decisions that BLOCK the build (need Ben before code)
+
+1. **RF1's shape-vocabulary fix (see Claim Verification above) needs a ruling, not just a bugfix.** Does `elevated` map to reject-like-`rising` (both are "bought back higher" risk) or does it get its own treatment? Does `flat` pass cleanly or get a caution (no drift ≠ guaranteed a dip will come)? This is a 10-minute decision but it's a decision, not mechanical — the current plan text doesn't make it because it was written against a vocabulary that doesn't exist.
+2. **Seed contents.** RF0 ships "with the live seed entry for the Ancestral hat" (RF0's own text) — but the full seed list (what ELSE does Ben want tracked from day one: Battlestaff and Ghrazi rapier are already flagged `personal-use` on `ignored-items.json`, are they reverse-flip candidates too?) is undeclared. Blocks nothing structurally (capture-on-buy + manual seeding both work incrementally) but the RF0 acceptance criterion ("ships with the live seed entry") implies at least a decision on whether it's ONE item or several at ship time.
+3. **`reverseFlipEligible` opt-in flow — who looks at the candidate table and when?** The plan (Q1) is explicit Ben must be SHOWN a candidate table and opt items in — but no chunk actually builds "show Ben a candidate table of `keep`-classified items that aren't yet eligible-flagged." RF2's `--mode reverse` screen shows already-eligible items; nothing surfaces the *pre*-eligible pool for Ben to review. Worth a ruling: is this a manual `declare-owned.mjs list` review, or does RF2's screen need a `--pending-eligible` view too?
+4. **Placeholder thresholds are honestly named but unset.** `REVERSE_MIN_SWING_PCT`, `PENDING_QTY_MAX`/`MAX_PENDING`, `REBUY_STALE_DAYS` all need SOME starting number to ship compiling code, even as an admitted placeholder (the pattern every other niche already follows — `SCALP_MIN_ROI`, `CHURN_MIN_VOL` etc. shipped as named placeholders too). Not a blocker in the sense of needing Ben's judgment call on the VALUE (placeholders are supposed to be a guess), but the chunk executor needs to just pick numbers and say so — flagging so it isn't treated as an open question mid-build.
+5. **Does RF6 gate any earlier chunk?** No — confirmed by re-reading: RF6 is explicitly "all inform-only, none gate" (RF6's own acceptance text) and is described as depending on RF1/RF2 only for which surfaces to attach its notes to, not for its own logic. RF6 does NOT block RF0-RF2's build; it only makes their OUTPUT honest on thin items. Given the anchor incident is precisely a thin-item misread, treat RF6 as de-facto required-before-Ben-trusts-the-tool even though it's not build-blocking in the dependency-graph sense (see Minimum Shippable above).
+
+### 5. Gaps / ambiguities that would trip an implementer
+
+- **RF1's shape vocabulary (repeated for visibility — this is the single biggest risk to a clean build).** Anyone implementing `invertedRegimeGate` from the plan's prose alone, without independently re-reading `js/termstructure.mjs`, will write a dead `case 'falling':` branch and a gate that silently never accepts the exact regime (a real decline/knife) the strategy is built around. This should be fixed in the plan text itself before RF1 is dispatched to an executor, not left for code review to catch.
+- **RF0's `computeOwnedQty` fold reads `fills.json` events directly, but RF0's acceptance criterion says "fixture-pinned over a synthetic fills.json."** `fills.json`'s real on-disk event shape is the raw normalized-event shape `reconstruct.mjs`'s `parseJsonLine`/`buildEvents` produce (`{ts,type,state,itemId,price,qty,filled,spent,...}`), not the higher-level `positions.json` closed/open/unmatched shape. The plan doesn't misstate this, but an implementer should confirm which layer `computeOwnedQty` folds over — raw `fills.json` events (correct, per Q1's own text: "over raw `fills.json` events") vs. `positions.json`'s derived rows — before writing the fixture, since the two have materially different per-event field names.
+- **RF2's `VALID_GATE` conformance-list addition (`flip-niches.mjs:394`)** isn't named as an explicit RF2 sub-task in the current chunk text — add it explicitly so the chunk's acceptance criteria include "conformance suite passes with `reverse` registered," not just "the screen runs without throwing."
+- **RF3's "prints the exact command" acceptance criterion should specify WHICH timestamp field of `positions.json.unmatched`** the backfill command's `--time` should target — `unmatched` entries carry `sellTs` (`reconstruct.mjs:289`) but the BANKED line needs the ACQUISITION time (pre-sale), which lives only in `owned-items.json`'s `seedTs`/`source`, not in the unmatched row itself. The plan's Q2 prose gets this right ("the correct historical timestamp") but doesn't say explicitly that it's `owned-items.json.seedTs`, not anything off `positions.json` — worth stating in RF3's own acceptance bullet since that's the file an RF3 executor will actually open.
+- **RF4's "byte-identical to pre-RF4 output on an empty store" acceptance criterion is good discipline but should explicitly say WHICH existing fixture/golden it must match**, so the executor runs the real diff rather than eyeballing it.
+
+### Biggest risk to a clean build
+
+**RF1's shape-vocabulary mismatch.** It's the one place the plan's foundation claim is actually wrong rather than merely under-specified, it sits at the base of the dependency graph (RF2/RF4/RF6 all inherit `invertedRegimeGate`'s output), and the failure mode is silent — a `rising→reject / falling→pass` gate coded against a `falling` value that never occurs doesn't throw or warn, it just never passes on the regime that matters most, and nobody would notice without independently knowing `classifyTrajectory`'s real enum. This should be corrected in this plan document (the Regime Asymmetry table + RF1's bullet text) before RF1 is dispatched.
+
+---
 
 ## Open questions / explicitly out of scope
 
