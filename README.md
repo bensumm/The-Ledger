@@ -601,6 +601,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   reach-outcomes.mjs`) as a natural F1/AC1-style chunk. Companion to `PLAN-MULTIWEEK-OSCILLATOR.md`;
   cross-references the still-open `PLAN-REACH-CALIBRATION.md` (a different axis — achievable-price
   calibration, not gate-mode/reject-volume).
+- `PLAN-MCP-BANK-SERVER.md` — READ-ONLY scoping doc (2026-07-24, no code): a local MCP server that
+  reads Ben's RuneLite `data-export` plugin output (`~/.runelite/Data Exports/container_bank.json`,
+  NDJSON, same `{id,quantity,name}` schema the bank dump uses — the plugin is already installed and
+  running, a sibling of `exchange-logger`) and exposes `get_bank()`/`get_equipment()`/`get_inventory()`
+  plus thin `get_offers()`/`get_fills()`/`get_positions()` wrappers over existing pipeline code. Tier-A
+  (file-reader, recommended) vs Tier-B (custom RuneLite plugin + live socket, deferred). Feeds
+  reverse-flip RF0's owned-item seed and SUPERSEDES RF5 (the plugin RF5 would have built already exists).
+  Server CODE can live in the repo; the bank DATA (private) stays gitignored, never committed.
+- `PLAN-GRADE-REWORK.md` — per-topic plan (2026-07-21, un-folded): dimensionally-honest single-source
+  screen grading. 9 confirmed flaws in the `net × P(fill) ÷ TTF` grade; chunks G1 (centralize the grade
+  caps — incl. FLAW 4b, the reach-cap double-count from blindspot-audit #4), G2 (fold deployable capital
+  into every rank family — highest-leverage, app-touching), G3 (invocation-independent per-mode
+  normalized grading), G4 (collapse `riskMult` + kill the momentum double-count), G5 (bound TTF leverage),
+  G6 (`(thin)` confidence marker), G7 (retro-retune, F1-gated/deferred). PLANNING ONLY, no code yet.
 - `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is broken (serves a frozen stale
   ~1–3h UTC-day slice, under-reporting true rolling 24h ~10–27×). Steps 1+2 (SHIPPED 2026-07-13) — the
   corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`) is now
