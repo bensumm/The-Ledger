@@ -93,8 +93,9 @@ import { formatTimedLap, formatBasePosition } from '../lib/emit.mjs';   // PLAN-
 // here: gateCandidates/expUnits/proxyDrift/softFactor/rankAndSlice + the extracted
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
-import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP } from '../lib/gatecandidates.mjs';
-import { pickFetchPool, buildTrackIndex } from '../lib/admission.mjs';
+import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, VALUE_RESERVE_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP,
+  scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/gatecandidates.mjs';
+import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX } from '../lib/admission.mjs';
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
 import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
 import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife). F-H — OSC_DETECTOR_NIGHTS = the detector's OWN longer trailing window, decoupled from the gate's AMP_NIGHTS
@@ -153,6 +154,7 @@ const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
 const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
 const TOP = A.top != null ? +A.top : 40;
+const TOP_EXPLICIT = A.top != null;   // PLAN-FETCH-POOL-SCALING: an explicit --top always wins — never capital-scaled
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 // Bar D (Ben 2026-07-09) DENSITY floor for dense (non-thin) bands — # of windows with ANY trade (one-
 // sided OK) the band must show; two-sidedness is a separate check (sawLow && sawHigh) in bandCore. This
@@ -231,6 +233,14 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
+const THIN_RESERVE_EXPLICIT = A['thin-reserve'] != null;   // an explicit --thin-reserve always wins — never capital-scaled
+// PLAN-FETCH-POOL-SCALING chunks 2-4 — the fetch-pool capital-scaling MASTER SWITCH (default OFF, opt-in
+// per Open Decision 1). OFF ⇒ every pool uses today's fixed default/explicit size and TOTAL_FETCH_MAX
+// never clamps — byte-identical to pre-change, regardless of cash anchor. ON ⇒ each pool's DEFAULT size
+// (never an explicit CLI override) capital-scales off VALUE_CAPITAL/AMP_CAPITAL via scaleSlots, and the
+// cross-niche union is clamped to TOTAL_FETCH_MAX. Chunk 1's VALUE_RESERVE is default-ON independent of
+// this flag (it only ADDS value-niche slots; value is not in --mode all).
+const SCALE_POOL = A['scale-pool'] === true;
 // ADMISSION (PLAN-SCREEN-ARCHITECTURE, 2026-07-18): the fetch-pool admission path. UNIFIED is now the
 // default — pickFetchPool (pipeline/lib/admission.mjs) ranks the thin lane on its after-tax realistic
 // edge instead of raw gp-flow, adds a bounded rotating exploration reserve, folds in the track-record
@@ -1668,7 +1678,11 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   if (!shown) console.log('_none_');
   for (const n of valueInformNotes) console.log(`ℹ timing/trajectory — ${n}`);
   // §F admitted-vs-shown footer — never dump the full pool; say how many the gate admitted.
-  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}${droppedTrajKnife.length ? ` · dropped ${droppedTrajKnife.length} trajectory-knife: ${droppedTrajKnife.join(', ')}` : ''}`);
+  // PLAN-FETCH-POOL-SCALING chunk 1 — count the amplitude-reserved rows (via:'reserve') so the footer is
+  // honest that some fetched rows entered via the value RESERVE (highest cycle-amplitude of the excluded
+  // remainder), not the top-N valueScore cut (mirrors amplitude's `+ N watchlist-reserved`).
+  const valueReserved = survivors.filter(s => s.via === 'reserve').length;
+  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore${valueReserved ? ` + ${valueReserved} amp-reserved` : ''}) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}${droppedTrajKnife.length ? ` · dropped ${droppedTrajKnife.length} trajectory-knife: ${droppedTrajKnife.join(', ')}` : ''}`);
   console.log('');
   // publishable rows: buy-now first, then watch (isolated; the app has no VALUE tab yet → console-only)
   return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));
@@ -2097,8 +2111,18 @@ async function main() {
   const gated = {};
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx, THRESHOLDS, HELD_IDS, WATCHLIST_IDS);
-    const top = FLIP_NICHES[m].gate === 'value' ? VALUE_TOP_DEFAULT
-      : FLIP_NICHES[m].gate === 'amplitude' ? AMP_TOP_DEFAULT : TOP;
+    // PLAN-FETCH-POOL-SCALING chunks 2-3 — the per-niche fetch-pool size. Base = today's fixed default;
+    // under --scale-pool a DEFAULT (non-explicit) size capital-scales sub-linearly (scaleSlots) off the
+    // relevant capital tier (value/band/churn read VALUE_CAPITAL = deployablePool; amplitude reads the
+    // looser AMP_CAPITAL = liquidCapital), clamped to that pool's MAX. An explicit --top/--thin-reserve
+    // always wins (never scaled). SCALE_POOL off ⇒ every branch is the fixed base ⇒ byte-identical.
+    const top = FLIP_NICHES[m].gate === 'value'
+      ? (SCALE_POOL ? scaleSlots(VALUE_TOP_DEFAULT, { capital: VALUE_CAPITAL, max: VALUE_TOP_MAX }) : VALUE_TOP_DEFAULT)
+      : FLIP_NICHES[m].gate === 'amplitude'
+      ? (SCALE_POOL ? scaleSlots(AMP_TOP_DEFAULT, { capital: AMP_CAPITAL, max: AMP_TOP_MAX }) : AMP_TOP_DEFAULT)
+      : (SCALE_POOL && !TOP_EXPLICIT ? scaleSlots(TOP, { capital: VALUE_CAPITAL, max: TOP_MAX }) : TOP);
+    const thinReserveN = (SCALE_POOL && !THIN_RESERVE_EXPLICIT) ? scaleSlots(THIN_RESERVE, { capital: VALUE_CAPITAL, max: THIN_RESERVE_MAX }) : THIN_RESERVE;
+    const valueReserveN = SCALE_POOL ? scaleSlots(VALUE_RESERVE_DEFAULT, { capital: VALUE_CAPITAL, max: VALUE_RESERVE_MAX }) : VALUE_RESERVE_DEFAULT;
     // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's
     // relaxation ladder) and surface the best SUBFLOOR_TOP honestly labeled — never an empty table with the
     // opportunity silently invisible, never a silently lowered bar. Fires ONLY on a zero-candidate niche
@@ -2109,13 +2133,28 @@ async function main() {
     if (!cand.length && FLIP_NICHES[m].gate === 'band') {
       const fb = subFloorFallback(m, ctx, THRESHOLDS);
       if (fb) {
-        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: THIN_RESERVE, top: SUBFLOOR_TOP });
+        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: thinReserveN, top: SUBFLOOR_TOP, valueReserve: valueReserveN });
         gated[m] = { cand: fb.cand, survivors, excluded, subFloor: fb };
         continue;
       }
     }
-    const { survivors, excluded } = admit(m, cand, { thinReserve: THIN_RESERVE, top });
+    const { survivors, excluded } = admit(m, cand, { thinReserve: thinReserveN, top, valueReserve: valueReserveN });
     gated[m] = { cand, survivors, excluded };
+  }
+
+  // PLAN-FETCH-POOL-SCALING chunk 4 — clamp the cross-niche fetch-pool UNION to TOTAL_FETCH_MAX. Only
+  // engages under --scale-pool (the only path that can widen niches past their fixed defaults); a no-op
+  // below the ceiling. Trimmed rows are moved to each niche's `excluded` (reason 'total-fetch-max') and
+  // named in a warning — never a silent drop. Reserve/held/watched/via-tagged survivors are protected.
+  if (SCALE_POOL) {
+    const { niches: clamped, unionSize, trimmedCount } = clampUnionFetch(RUN_MODES.map(m => ({ mode: m, survivors: gated[m].survivors })), TOTAL_FETCH_MAX);
+    if (trimmedCount) {
+      for (const n of clamped) {
+        gated[n.mode].survivors = n.survivors;
+        for (const t of n.trimmed) gated[n.mode].excluded.push({ ...t, reason: 'total-fetch-max' });
+      }
+      console.log(`⚠ TOTAL_FETCH_MAX: cross-niche fetch union clamped to ${unionSize} (cap ${TOTAL_FETCH_MAX}); trimmed ${trimmedCount} — ${clamped.filter(n => n.trimmed.length).map(n => `${n.mode} −${n.trimmed.length}`).join(', ')}`);
+    }
   }
 
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it.

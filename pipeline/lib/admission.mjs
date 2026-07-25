@@ -36,7 +36,7 @@
  * PLAN-SCREEN-ARCHITECTURE.md's SC5 names the join-outcomes-based check before this graduates
  * beyond "worth trying."
  */
-import { proxyDrift, softFactor, THIN_RESERVE_DEFAULT, RISING_RESERVE_DEFAULT, TOP_DEFAULT } from './gatecandidates.mjs';
+import { proxyDrift, softFactor, THIN_RESERVE_DEFAULT, RISING_RESERVE_DEFAULT, TOP_DEFAULT, VALUE_RESERVE_DEFAULT } from './gatecandidates.mjs';
 
 // --- track record (boost-only admission prior) -------------------------------------------------
 
@@ -102,12 +102,30 @@ function pickExploration(pool, n, now) {
 export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   const {
     thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT,
-    exploreReserve = EXPLORE_RESERVE_DEFAULT, trackIndex = null, now = Date.now(),
+    valueReserve = VALUE_RESERVE_DEFAULT, exploreReserve = EXPLORE_RESERVE_DEFAULT, trackIndex = null, now = Date.now(),
   } = opts;
   const isValue = cand.length && cand[0].valueScore !== undefined;
   if (isValue) {
+    // PLAN-FETCH-POOL-SCALING chunk 1 — the VALUE RESERVE, applied in the DEFAULT (unified) admission
+    // path too (ADMISSION==='unified' unless --admission legacy, so the fix has to live in BOTH places
+    // — admission.mjs:116 documents this double-maintenance shape). The excluded remainder is re-ranked
+    // by RAW cycle-amplitude-% (valueRanges.afterTaxAmpPct — a DIFFERENT key than the composite
+    // valueScore that buries a low-liquidity big cycle) and the top `valueReserve` are PREPENDED with
+    // via:'reserve' (mirrors the exploration reserve's via:'explore' marker — a renderer/log CAN tell a
+    // reserve-slotted row from a ranked-in one). Additive: the ranked top-N is untouched, and the
+    // reserved rows are NOT also reported excluded.
     const sorted = cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id));
-    return { survivors: sorted.slice(0, top), excluded: sorted.slice(top).map(c => ({ ...c, reason: 'value-top-n' })) };
+    const topN = sorted.slice(0, top);
+    const topIds = new Set(topN.map(c => c.id));
+    const ampOf = c => (c.valueRanges && c.valueRanges.afterTaxAmpPct) || 0;
+    const reserve = sorted.slice(top)
+      .sort((a, b) => (ampOf(b) - ampOf(a)) || (a.id - b.id))
+      .slice(0, valueReserve)
+      .map(c => ({ ...c, via: 'reserve' }));
+    const reservedIds = new Set(reserve.map(c => c.id));
+    const survivors = [...reserve, ...topN];
+    const excluded = sorted.slice(top).filter(c => !reservedIds.has(c.id)).map(c => ({ ...c, reason: 'value-top-n' }));
+    return { survivors, excluded };
   }
   // A2 (PLAN-AMPLITUDE-SCAN) — the amplitude niche keeps its own Stage-1 gate + hard top-N by the
   // daily-amplitude PROXY (mirrors value's own-gate branch); the throughput/thin/exploration lanes below
@@ -182,4 +200,51 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     .sort((a, b) => (b.expGpDay || 0) - (a.expGpDay || 0));
 
   return { survivors, excluded };
+}
+
+// --- PLAN-FETCH-POOL-SCALING chunk 4: the cross-niche fetch-budget ceiling -------------------------
+// `--mode all` UNIONS survivors across band/churn/amplitude before fetching (dedup on shared ids, but
+// NOT a shared budget today). Once chunks 2-3 let each niche independently capital-scale toward its own
+// MAX, the deduped union can grow past what any single niche's MAX implies — so this clamps the union to
+// TOTAL_FETCH_MAX, keeping the worst-case fetch bill bounded. It is the ONE piece of this plan with no
+// direct precedent (§2.4). PLACEHOLDER n≈0 (rule 4).
+export const TOTAL_FETCH_MAX = 150;   // PLACEHOLDER — cross-niche ceiling on the deduped survivor union
+
+// clampUnionFetch(niches, totalMax) -> { niches:[{mode,survivors,trimmed}], unionSize, trimmedCount }.
+//   niches: [{ mode, survivors:[cand] }] — each niche's fetch-pool survivors (in rank order, best first).
+// Trims plain ranked-in survivors from the tail (lowest-ranked last) fairly across niches (round-robin)
+// until the DEDUPED union of survivor ids is ≤ totalMax. Reserve-slotted survivors are PROTECTED and
+// never trimmed — held/watched items and any via-tagged reserve row (via:'reserve' value reserve,
+// via:'explore' rotation) — matching the codebase precedent of protecting the named/held set first
+// (Open Decision 4.4's inference). Pure: returns NEW survivor arrays + the trimmed rows per niche and a
+// total; the caller reports the trimmed rows (reason 'total-fetch-max') — never a silent drop (SC1's
+// contract extended to the cross-niche level). A union already within budget is returned unchanged
+// (trimmed: []), so this is a strict no-op below the ceiling.
+export function clampUnionFetch(niches, totalMax = TOTAL_FETCH_MAX) {
+  const isProtected = c => !!(c.held || c.watched || c.via);
+  const allIds = new Set();
+  for (const n of niches) for (const c of n.survivors) allIds.add(c.id);
+  if (allIds.size <= totalMax) return { niches: niches.map(n => ({ mode: n.mode, survivors: n.survivors, trimmed: [] })), unionSize: allIds.size, trimmedCount: 0 };
+
+  // protected ids are always kept; the remaining budget fills with the fairest-ranked unprotected ids.
+  const protectedIds = new Set();
+  for (const n of niches) for (const c of n.survivors) if (isProtected(c)) protectedIds.add(c.id);
+  const budget = Math.max(0, totalMax - protectedIds.size);
+  // round-robin across each niche's unprotected survivors (already rank-ordered) so no niche is starved.
+  const queues = niches.map(n => n.survivors.filter(c => !isProtected(c) && !protectedIds.has(c.id)).slice());
+  const keptUnprotected = new Set();
+  let idx = 0, emptyStreak = 0;
+  while (keptUnprotected.size < budget && emptyStreak < queues.length) {
+    const q = queues[idx % queues.length]; idx++;
+    if (!q.length) { emptyStreak++; continue; }
+    emptyStreak = 0;
+    keptUnprotected.add(q.shift().id);
+  }
+  const keepIds = new Set([...protectedIds, ...keptUnprotected]);
+  const out = niches.map(n => {
+    const survivors = [], trimmed = [];
+    for (const c of n.survivors) (keepIds.has(c.id) ? survivors : trimmed).push(c);
+    return { mode: n.mode, survivors, trimmed };
+  });
+  return { niches: out, unionSize: keepIds.size, trimmedCount: out.reduce((s, n) => s + n.trimmed.length, 0) };
 }

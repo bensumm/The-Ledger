@@ -91,6 +91,17 @@ export const RISING_RESERVE_DEFAULT = 6;
 export const TOP_DEFAULT = 40;
 // P5 — the value niche's HARD top-N (§F flood control: the gated pool WILL be large; never dump it).
 export const VALUE_TOP_DEFAULT = 25;
+// PLAN-FETCH-POOL-SCALING chunk 1 (finding #7) — the VALUE niche's fetch-pool RESERVE. Value had NO
+// reserve mechanism at all (band/churn get THIN_RESERVE/RISING_RESERVE, amplitude gets the watchlist
+// reserve); a big-ticket with a strong cycle but low limitVol is buried by the composite valueScore
+// (which folds in the deployable-capital/liquidity weighting that penalizes exactly that profile) and
+// never fetched. This carves out a small bounded slice for the excluded remainder, ranked by RAW
+// cycle-amplitude-% (valueRanges.afterTaxAmpPct — a DIFFERENT key than the primary valueScore cut,
+// exactly the thin/rising/watch-reserve shape: rank the remainder by a different key, take a bounded
+// slice, PREPEND it, never reshuffle the top-N). Additive — it only ADDS slots, never removes. The
+// reserve rows still clear the post-fetch valueGate knife guard, so no independent floor is needed here
+// (mirrors THIN_RESERVE's no-floor rank). PLACEHOLDER n≈0 (rule 4).
+export const VALUE_RESERVE_DEFAULT = 6;
 // A2 — the amplitude niche's HARD top-N (same flood-control shape as value; the Stage-1 proxy pool can be
 // large, so rank by ampProxy and take a bounded shortlist to fetch the per-item 1h series for). PLACEHOLDER.
 // F-D (Ben 2026-07-22): WIDENED 25→40 to surface more of the big-ticket oscillator class the top-25 cut hid
@@ -99,6 +110,33 @@ export const VALUE_TOP_DEFAULT = 25;
 // verify trio still govern. The F-B watchlist RESERVE is the complementary targeted path (a named straggler
 // below this cut still gets a slot); this is the general net-widen.
 export const AMP_TOP_DEFAULT = 40;
+
+// --- PLAN-FETCH-POOL-SCALING chunks 2-3: sub-linear, capped capital-scaling of the fetch pool -------
+// The fixed pool sizes above (40/6/25/6/40) are capital-BLIND: on a big-bankroll night more positions
+// could plausibly be opened, so a real winner ranked outside the fixed slice never gets fetched — yet
+// the fetch cost must NOT scale 1:1 with a 10-100x bankroll. scaleSlots widens a base slot count as
+// deployable capital grows past a reference level, sub-linearly (sqrt) and hard-capped. It is a strict
+// no-op at/below CAP_REF (and on a null/unknown capital), so a session with no cash anchor — where
+// VALUE_CAPITAL falls back to exactly CAP_REF (100m) — reproduces today's fixed constant BYTE-FOR-BYTE.
+// Every constant here is a PLACEHOLDER n≈0 (rule 4): there is no calibration for what slot count catches
+// real winners vs wasted fetches — CAP_REF in particular is a structural judgment (the fixed defaults
+// were never capital-tuned), not a derived number.
+export const CAP_REF = 100_000_000;   // PLACEHOLDER — the reference bankroll the fixed defaults are treated as tuned against; matches screen-flip-niches.mjs's no-anchor VALUE_CAPITAL fallback so a fresh/never-anchored session is a no-op
+export const POOL_SCALE = 1;          // PLACEHOLDER — widening strength: slots = base·(1 + POOL_SCALE·sqrt(excess/CAP_REF)), clamped to max
+// Per-pool hard ceilings (§2.2 — the worst-case fetch bill must stay bounded regardless of capital).
+export const TOP_MAX = 90;            // PLACEHOLDER — matches the manual `--top 90` workaround Ben already resorted to
+export const THIN_RESERVE_MAX = 15;   // PLACEHOLDER — widens more conservatively than TOP (this lane guards the velocity lane from big-ticket crowding)
+export const VALUE_TOP_MAX = 60;      // PLACEHOLDER
+export const VALUE_RESERVE_MAX = 15;  // PLACEHOLDER
+export const AMP_TOP_MAX = 90;        // PLACEHOLDER
+// scaleSlots(base, { capital, capRef, scale, max }) -> integer slot count. capital == null / ≤ capRef
+// returns `base` EXACTLY (the byte-identical no-op). Above capRef it adds base·scale·sqrt(excess/capRef)
+// slots, rounded, then clamped to `max`. Pure, never throws.
+export function scaleSlots(base, { capital = null, capRef = CAP_REF, scale = POOL_SCALE, max = Infinity } = {}) {
+  if (capital == null || !(capital > capRef) || !(capRef > 0)) return base;   // ≤ ref / unknown → exact base
+  const widened = base + scale * base * Math.sqrt((capital - capRef) / capRef);
+  return Math.min(max, Math.round(widened));
+}
 
 // P6c — empty-result sub-floor fallback sizing + honesty cap (Ben, 2026-07-09: when a niche's floors
 // leave ZERO candidates, re-run BENEATH the floor and show the best few HONESTLY LABELED — never
@@ -333,11 +371,25 @@ export function subFloorLabel(fb) {
 // and front-loading the highest-proxy risers into a bounded reserve so a riser isn't buried below flats
 // (the absorbed `rising` mechanism, Steps 3+4). `opts.thinReserve`/`opts.risingReserve`/`opts.top`
 // default to screen-flip-niches.mjs's defaults (screen passes the CLI values explicitly); fixtures can drive them.
-export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT } = {}) {
+export function rankAndSlice(mode, cand, dailySeries, { thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT, valueReserve = VALUE_RESERVE_DEFAULT } = {}) {
   // P5 value niche (§F): rank the WHOLE gated pool by the composite valueScore and take a HARD top-N.
   // The pool is expected large; the shortlist is bounded (renderValueMode prints admitted-vs-shown).
+  // PLAN-FETCH-POOL-SCALING chunk 1 — a VALUE RESERVE (mirrors the thin/rising/watch reserves): the
+  // excluded remainder is re-ranked by RAW cycle-amplitude-% (valueRanges.afterTaxAmpPct, NOT the
+  // composite valueScore that buries a low-liquidity big cycle) and the top `valueReserve` are PREPENDED
+  // with `via:'reserve'` so a renderer can tell a reserve-slotted row from a ranked-in one. Additive —
+  // the ranked top-N itself is untouched; the reserve only ADDS slots (same guarantee as the thin reserve).
   if (FLIP_NICHES[mode] && FLIP_NICHES[mode].gate === 'value') {
-    return cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id)).slice(0, top);
+    const sorted = cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id));
+    const topN = sorted.slice(0, top);
+    const topIds = new Set(topN.map(c => c.id));
+    const ampOf = c => (c.valueRanges && c.valueRanges.afterTaxAmpPct) || 0;
+    const reserve = sorted.slice(top)
+      .filter(c => !topIds.has(c.id))
+      .sort((a, b) => (ampOf(b) - ampOf(a)) || (a.id - b.id))
+      .slice(0, valueReserve)
+      .map(c => ({ ...c, via: 'reserve' }));
+    return [...reserve, ...topN];
   }
   // A2 — the amplitude niche: rank the whole Stage-1 pool by the attenuated daily-amplitude PROXY and take
   // a HARD top-N to fetch (the exact Stage-2 gate confirms per survivor in renderAmplitudeMode).

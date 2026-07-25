@@ -2,7 +2,7 @@
 // No live data (CLAUDE.md rule 4): synthetic candidates only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP } from '../lib/admission.mjs';
+import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch } from '../lib/admission.mjs';
 
 test('buildTrackIndex aggregates closed lots per item, ignoring malformed entries', () => {
   const closed = [
@@ -142,11 +142,38 @@ test('pickFetchPool AR2: with exploreReserve 0 no survivor carries via — JSON 
   for (const s of survivors) assert.ok(!('via' in s), 'no exploration ⇒ no via field on any survivor (common case, byte-parity)');
 });
 
-test('pickFetchPool: value-niche candidates pass through unchanged (own valueScore top-N, out of scope)', () => {
+test('pickFetchPool: value-niche candidates take their own valueScore top-N (valueReserve:0 pins the pure cut)', () => {
   const cand = [{ id: 1, valueScore: 5 }, { id: 2, valueScore: 9 }, { id: 3, valueScore: 1 }];
-  const { survivors, excluded } = pickFetchPool('value', cand, {}, { top: 2 });
+  const { survivors, excluded } = pickFetchPool('value', cand, {}, { top: 2, valueReserve: 0 });
   assert.deepEqual(survivors.map(c => c.id), [2, 1]);
   assert.equal(excluded.length, 1);
+  assert.equal(excluded[0].reason, 'value-top-n');
+});
+
+// --- PLAN-FETCH-POOL-SCALING chunk 1: the VALUE RESERVE, in the DEFAULT (unified) admission path -----
+test('pickFetchPool value: a buried high-amplitude straggler gets a reserved slot tagged via:"reserve" (finding #7)', () => {
+  const cand = [];
+  for (let i = 0; i < 5; i++) cand.push({ id: i, valueScore: 100 - i, valueRanges: { afterTaxAmpPct: 0.05 } });
+  cand.push({ id: 999, valueScore: 1, valueRanges: { afterTaxAmpPct: 0.40 } });   // buried by score, huge cycle
+  const { survivors, excluded } = pickFetchPool('value', cand, {}, { top: 5, valueReserve: 1 });
+  assert.equal(survivors.length, 6, 'top-5 by valueScore + the 1 amplitude-reserved straggler');
+  const reserved = survivors.find(c => c.id === 999);
+  assert.ok(reserved, 'the buried big-cycle candidate reached the fetch pool via the reserve');
+  assert.equal(reserved.via, 'reserve', 'tagged via:"reserve" (distinct from a ranked-in pick)');
+  assert.ok(!excluded.some(c => c.id === 999), 'the reserved straggler is NOT also reported excluded');
+  assert.equal(excluded.length, 0, 'the whole remainder was reserved (only one straggler existed)');
+});
+
+test('pickFetchPool value: the reserve ranks the remainder by amplitude, not valueScore; ranked top-N untouched', () => {
+  const cand = [
+    { id: 1, valueScore: 100, valueRanges: { afterTaxAmpPct: 0.05 } },   // ranked in (top-1)
+    { id: 2, valueScore: 50, valueRanges: { afterTaxAmpPct: 0.08 } },    // higher score, lower amp
+    { id: 3, valueScore: 40, valueRanges: { afterTaxAmpPct: 0.30 } },    // lower score, higher amp → reserve pick
+  ];
+  const { survivors, excluded } = pickFetchPool('value', cand, {}, { top: 1, valueReserve: 1 });
+  assert.equal(survivors[0].id, 3, 'the reserve slot goes to the biggest amplitude, not the bigger valueScore');
+  assert.equal(survivors[1].id, 1, 'the ranked top-1 follows (reserve prepended, top-N unreshuffled)');
+  assert.equal(excluded[0].id, 2, 'the un-reserved remainder is still honestly reported excluded');
   assert.equal(excluded[0].reason, 'value-top-n');
 });
 
@@ -170,4 +197,53 @@ test('pickFetchPool amplitude: value/amplitude niches pass through unchanged whe
   const { survivors, excluded } = pickFetchPool('amplitude', cand, {}, { top: 3 });
   assert.deepEqual(survivors.map(c => c.id), [0, 1, 2], 'unwatched pool behaves exactly like before F-B');
   assert.equal(excluded.length, 2);
+});
+
+// --- PLAN-FETCH-POOL-SCALING chunk 4: the cross-niche fetch-budget ceiling (clampUnionFetch) --------
+
+test('clampUnionFetch: a union within budget passes through unchanged (strict no-op below the ceiling)', () => {
+  const niches = [
+    { mode: 'band', survivors: [{ id: 1 }, { id: 2 }] },
+    { mode: 'churn', survivors: [{ id: 3 }] },
+  ];
+  const out = clampUnionFetch(niches, 10);
+  assert.equal(out.trimmedCount, 0);
+  assert.equal(out.unionSize, 3);
+  for (const n of out.niches) assert.equal(n.trimmed.length, 0, 'nothing trimmed below the cap');
+});
+
+test('clampUnionFetch: a union over budget is clamped, and trimmed rows are returned (never silent)', () => {
+  const niches = [
+    { mode: 'band', survivors: [{ id: 1 }, { id: 2 }, { id: 3 }] },
+    { mode: 'churn', survivors: [{ id: 4 }, { id: 5 }, { id: 6 }] },
+  ];
+  const out = clampUnionFetch(niches, 4);
+  assert.equal(out.unionSize, 4, 'deduped union clamped to the cap');
+  assert.equal(out.trimmedCount, 2, 'exactly the overflow is trimmed');
+  // round-robin keeps the best-ranked from each niche fairly: band#1, churn#4, band#2, churn#5 → trim band#3, churn#6.
+  const trimmedIds = out.niches.flatMap(n => n.trimmed.map(c => c.id)).sort();
+  assert.deepEqual(trimmedIds, [3, 6], 'the lowest-ranked of each niche is trimmed, fairly');
+});
+
+test('clampUnionFetch: reserve/held/watched/via-tagged survivors are PROTECTED from trimming', () => {
+  const niches = [
+    { mode: 'band',  survivors: [{ id: 1, held: true }, { id: 2 }, { id: 3 }] },
+    { mode: 'value', survivors: [{ id: 4, via: 'reserve' }, { id: 5, watched: true }, { id: 6 }] },
+  ];
+  const out = clampUnionFetch(niches, 4);
+  const keptIds = new Set(out.niches.flatMap(n => n.survivors.map(c => c.id)));
+  assert.ok(keptIds.has(1) && keptIds.has(4) && keptIds.has(5), 'held/via-reserve/watched all survive the clamp');
+  assert.equal(out.unionSize, 4);
+  // 3 protected fill the budget of 4; only 1 unprotected slot remains → 2 of {2,3,6} trimmed.
+  assert.equal(out.trimmedCount, 2);
+});
+
+test('clampUnionFetch: shared (deduped) ids across niches count ONCE toward the budget', () => {
+  const niches = [
+    { mode: 'band',  survivors: [{ id: 1 }, { id: 2 }] },
+    { mode: 'churn', survivors: [{ id: 1 }, { id: 3 }] },   // id 1 is shared
+  ];
+  const out = clampUnionFetch(niches, 3);   // union {1,2,3} == 3 → within budget
+  assert.equal(out.trimmedCount, 0, 'the shared id is not double-counted, so the union fits');
+  assert.equal(out.unionSize, 3);
 });

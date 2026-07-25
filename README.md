@@ -562,6 +562,45 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (which covers the inverse: stale/mispriced false POSITIVES). Not a plan file in the execution
   sense — no chunks to ship — so it stays at the root as a standing reference until superseded or
   folded.
+- `PLAN-FETCH-POOL-SCALING.md` — in-flight per-topic plan (2026-07-24, PLANNING ONLY, no code
+  changed yet): scopes blindspot-audit findings #1/#7 — the scan's fetch-pool slot counts
+  (`TOP_DEFAULT`/`THIN_RESERVE_DEFAULT`/`VALUE_TOP_DEFAULT`/`AMP_TOP_DEFAULT` in
+  `pipeline/lib/gatecandidates.mjs`) are fixed constants independent of `--capital`, so a real
+  winner can rank outside the slice and never get fetched, and the value flip-niche has no reserve
+  mechanism at all (unlike band/churn's `THIN_RESERVE`). Proposes: (1) a small fixed
+  `VALUE_RESERVE` mirroring `THIN_RESERVE`'s shape (lowest-risk, ships first), (2) a sub-linear,
+  capped capital-scaling curve reusing the existing `derive-cash-tiers.mjs` `deployablePool`
+  read (no new capital plumbing), and (3) a cross-flip-niche `TOTAL_FETCH_MAX` ceiling so
+  `--mode all` can't let every flip-niche's independently-scaled pool sum past a bounded fetch
+  budget. Zero-ripple at today's defaults / no cash anchor stated. Folds into `PLAN.md` and is
+  deleted when its last chunk ships.
+- `PLAN-MULTIWEEK-OSCILLATOR.md` — READ-ONLY scoping doc (2026-07-24, no code changed): investigates
+  blindspot-audit finding #3 (the "repeats every ~6–8 days" fang-class taxonomy hole). Key finding:
+  the ask is largely ALREADY BUILT by `PLAN-OSCILLATION-CYCLE.md`'s six chunks + F-A/F-B/F-D/F-G
+  (detector, drift-adjusted margin gate, watchlist fetch reserve, `watch-positions.mjs --cycle`
+  adaptive re-entry loop, real-fill retro) — the blindspot audit missed it because that per-topic
+  doc never folded into `PLAN.md`. The one real open finding: ran `oscillationVsKnife`
+  (`js/forecast.mjs`) against 23 unrelated big-ticket items over `pipeline/lib/archive.mjs`'s 44-day
+  history and got OSCILLATING on 22/23 (96%) — the detector isn't currently selective enough to
+  distinguish a genuine ~6–8 day repeating cycle from ordinary big-ticket price wobble, so it can't
+  yet be used as evidence the fang-class shape is common or rare. Recommends NOT building a new
+  flip-niche; scopes what a real autocorrelation-based period detector would need if ever pursued, and
+  points at `analyze-record.mjs`'s F-G amplitude retro (n=0 today) as the actual evidence gate.
+- `PLAN-REACH-VALIDATOR-AUDIT.md` — READ-ONLY scoping + live-analysis doc (2026-07-24, no code
+  changed): investigates blindspot-audit finding #5 (`reach` as the largest validator-reject
+  source). Corrects the audit's premise — `js/flip-niches.mjs`'s registry has `reach` as
+  `mode:'inform'` on EVERY flip-niche (never gate, confirmed via `git log -S` over the file's whole
+  history), so 99.5% of the historical "8,118 reach rejects" never actually dropped a suggestion
+  (only 37 real gate-mode drops, system-wide, on a non-niche surface) — `reach` isn't currently a
+  live false-negative source. Builds a NEW read-only forward-reach counterfactual join against
+  `pipeline/lib/archive.mjs` (not possible a week ago per `PLAN-REACH-CALIBRATION.md`'s AC1 note
+  that the archive then had only 189 buckets; now 1.1M rows / 44 days) — finds ~31% of
+  reach-rejected ask/bid levels DID get reached within the following 8h by real market data,
+  suggesting the reject threshold would be somewhat loose if ever graduated from inform to gate.
+  Scopes the committed-tool version of the join (structured logging + a `pipeline/lib/
+  reach-outcomes.mjs`) as a natural F1/AC1-style chunk. Companion to `PLAN-MULTIWEEK-OSCILLATOR.md`;
+  cross-references the still-open `PLAN-REACH-CALIBRATION.md` (a different axis — achievable-price
+  calibration, not gate-mode/reject-volume).
 - `PLAN-VOL24.md` — in-flight per-topic plan: the `/24h` endpoint is broken (serves a frozen stale
   ~1–3h UTC-day slice, under-reporting true rolling 24h ~10–27×). Steps 1+2 (SHIPPED 2026-07-13) — the
   corrected `/1h`-composed rolling source (`marketfetch.mjs` `loadAll24hRolling`/`rolling24FromTs1h`) is now
@@ -999,7 +1038,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `surviveMode` reads the PER-SPEC `spec.falling` (band/churn keep `exclude`; scalp `accept`s AND
     requires fallers), and `gateCandidates` routes a `gate:'value'` spec to `gateValueCandidates` (the
     term-structure value gate off `ctx.daily` + `js/valuescreen.mjs`) with `rankAndSlice` hard-top-N'ing
-    the value pool by `valueScore`), `replay.mjs` (P1 — the
+    the value pool by `valueScore`). **PLAN-FETCH-POOL-SCALING (2026-07-24)**: adds `VALUE_RESERVE_DEFAULT`
+    (the value flip-niche's own fetch-pool reserve — `rankAndSlice`'s value branch now PREPENDS the highest
+    cycle-amplitude-% (`valueRanges.afterTaxAmpPct`) of the excluded remainder, tagged `via:'reserve'`,
+    mirroring the thin/rising/watch reserves; closes finding #7) and `scaleSlots(base,{capital,max})` — the
+    sub-linear (sqrt), hard-capped capital-scaling curve for the pool sizes (`CAP_REF`/`POOL_SCALE` + per-pool
+    `*_MAX`); a strict no-op at/below `CAP_REF` (100m = the no-anchor `VALUE_CAPITAL` fallback) so a default
+    run is byte-identical. All PLACEHOLDER n≈0), `replay.mjs` (P1 — the
     snapshot-replay acceptance ENGINE: `buildSnapshot()` expands five synthetic ARCHETYPES into a full
     raw market snapshot (`coffer-replay-snapshot/1`, a documented superset of D0's archive fixture —
     it also carries v24/band/latest/timeseries/daily so the whole funnel runs offline) anchored to a
@@ -1441,7 +1486,7 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
 | `js/held-item-strategy.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch-positions.mjs` + `quote-items.mjs --positions` at runtime), `js/flip-niches.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/commands/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/test/held-item-strategy.test.mjs`, `pipeline/test/pathpersist.test.mjs` (not yet app-imported) |
 | `js/flip-niches.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/commands/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/test/flip-niches.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
-| `pipeline/lib/admission.mjs` | `pipeline/commands/screen-flip-niches.mjs` (`pickFetchPool`/`buildTrackIndex` — the DEFAULT fetch-pool admission path, PLAN-SCREEN-ARCHITECTURE, 2026-07-18), `pipeline/test/admission.test.mjs`. Replaces `gatecandidates.mjs`'s `rankAndSlice` thin-lane rank (raw gp-flow → after-tax `expGpDay`) + adds a bounded rotating exploration reserve (starvation-proofing), a boost-only track-record prior off `positions.json` closed lots, and an exclusion report (every non-admitted gated candidate returned with a reason) — the fix for the Abyssal-bludgeon/Sanguinesti-staff thin-reserve starvation anchor incident (2026-07-17). `gatecandidates.mjs`'s `rankAndSlice` is UNCHANGED, still fixture/golden-pinned, and stays selectable via `--admission legacy` for rollback. AR2 (PLAN-ARCHITECTURE-COHERENCE): a survivor admitted by the `Date.now()`-bucketed exploration reserve (rather than ranked in) is tagged `via:'explore'`; `screen-flip-niches.mjs` surfaces that as a small 🎲 token on the Item cell so a rotating-lottery slot reads honestly as such. The rotation logic itself is intentionally left non-deterministic (marker, not determinism fix); inform-only, no gate/rank/grade/`screen.json`-number impact. F-B (2026-07-22): `pickFetchPool`'s amplitude branch (the DEFAULT admission path — this is the one a real scan actually runs) mirrors `gatecandidates.mjs`'s watchlist reserve, since the amplitude flip-niche's own top-N slice lives here too, not only in the legacy `rankAndSlice`. |
+| `pipeline/lib/admission.mjs` | `pipeline/commands/screen-flip-niches.mjs` (`pickFetchPool`/`buildTrackIndex` — the DEFAULT fetch-pool admission path, PLAN-SCREEN-ARCHITECTURE, 2026-07-18), `pipeline/test/admission.test.mjs`. Replaces `gatecandidates.mjs`'s `rankAndSlice` thin-lane rank (raw gp-flow → after-tax `expGpDay`) + adds a bounded rotating exploration reserve (starvation-proofing), a boost-only track-record prior off `positions.json` closed lots, and an exclusion report (every non-admitted gated candidate returned with a reason) — the fix for the Abyssal-bludgeon/Sanguinesti-staff thin-reserve starvation anchor incident (2026-07-17). `gatecandidates.mjs`'s `rankAndSlice` is UNCHANGED, still fixture/golden-pinned, and stays selectable via `--admission legacy` for rollback. AR2 (PLAN-ARCHITECTURE-COHERENCE): a survivor admitted by the `Date.now()`-bucketed exploration reserve (rather than ranked in) is tagged `via:'explore'`; `screen-flip-niches.mjs` surfaces that as a small 🎲 token on the Item cell so a rotating-lottery slot reads honestly as such. The rotation logic itself is intentionally left non-deterministic (marker, not determinism fix); inform-only, no gate/rank/grade/`screen.json`-number impact. F-B (2026-07-22): `pickFetchPool`'s amplitude branch (the DEFAULT admission path — this is the one a real scan actually runs) mirrors `gatecandidates.mjs`'s watchlist reserve, since the amplitude flip-niche's own top-N slice lives here too, not only in the legacy `rankAndSlice`. PLAN-FETCH-POOL-SCALING (2026-07-24): `pickFetchPool`'s value branch gained the SAME `VALUE_RESERVE` carve-out as legacy `rankAndSlice` (both admission paths must implement it — the double-maintenance shape this file's header documents), and `clampUnionFetch(…, TOTAL_FETCH_MAX)` — the cross-flip-niche fetch-budget ceiling that clamps the deduped survivor union under `--mode all --scale-pool`, protecting held/watched/`via`-tagged reserve rows and reporting every trimmed row (reason `total-fetch-max`, never a silent drop). All PLACEHOLDER n≈0. |
 
 ### Test-location convention
 

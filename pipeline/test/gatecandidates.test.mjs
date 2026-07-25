@@ -34,7 +34,8 @@
  * still bypasses the gate stack entirely (runWatchlist) — unrelated to either held exemption above.
  */
 import assert from 'node:assert/strict';
-import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT, surviveMode } from '../lib/gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT, surviveMode,
+  scaleSlots, CAP_REF } from '../lib/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -328,11 +329,42 @@ ok('§F FLOOD CONTROL: a large gated pool ranks by valueScore and is HARD-capped
   }
   const cand = gateCandidates('value', vctx(v24, daily), baseT);
   assert.ok(cand.length > VALUE_TOP_DEFAULT, `the pool is large (${cand.length} admitted > ${VALUE_TOP_DEFAULT})`);
-  const sliced = rankAndSlice('value', cand, daily, { top: VALUE_TOP_DEFAULT });
+  // valueReserve:0 pins the PURE top-N cutoff (the reserve is exercised in its own test below).
+  const sliced = rankAndSlice('value', cand, daily, { top: VALUE_TOP_DEFAULT, valueReserve: 0 });
   assert.equal(sliced.length, VALUE_TOP_DEFAULT, 'HARD top-N cutoff — never dump the full pool');
   // sorted by valueScore DESC — the nearest-the-low (id 1000) leads, and scores are monotonic non-increasing.
   for (let i = 1; i < sliced.length; i++) assert.ok(sliced[i - 1].valueScore >= sliced[i].valueScore, 'ranked by valueScore desc');
   assert.equal(sliced[0].id, 1000, 'the item at the floor (best proximity) ranks first');
+});
+
+/* --- PLAN-FETCH-POOL-SCALING chunk 1: the VALUE RESERVE (finding #7) ------------------------------
+   A candidate outside the top-N by valueScore but with the HIGHEST cycle-amplitude of the excluded
+   remainder gets a reserved fetch slot (mirrors the thin/rising/watch reserves), tagged via:'reserve'. */
+ok('rankAndSlice value: a high-cycle-amplitude straggler below the valueScore top-N gets a RESERVED slot', () => {
+  // 5 ranked-in candidates with descending valueScore + rising amplitude, plus a low-valueScore
+  // straggler carrying the BIGGEST afterTaxAmpPct — the exact profile the composite score buries.
+  const cand = [];
+  for (let i = 0; i < 5; i++) cand.push({ id: i, valueScore: 100 - i, valueRanges: { afterTaxAmpPct: 0.05 } });
+  cand.push({ id: 999, valueScore: 1, valueRanges: { afterTaxAmpPct: 0.40 } });   // buried by score, huge cycle
+  const out = rankAndSlice('value', cand, {}, { top: 5, valueReserve: 1 });
+  assert.equal(out.length, 6, 'top-5 by valueScore PLUS the 1 amplitude-reserved straggler');
+  assert.ok(out.some(c => c.id === 999), 'the buried big-cycle candidate reached the fetch pool via the reserve');
+  const reserved = out.find(c => c.id === 999);
+  assert.equal(reserved.via, 'reserve', 'the reserve-slotted row is tagged via:"reserve" (distinct from a ranked-in pick)');
+  assert.equal(out.slice(1).map(c => c.id).join(','), '0,1,2,3,4', 'the ranked top-5 itself is untouched/unreshuffled (reserve PREPENDED)');
+});
+
+ok('rankAndSlice value: valueReserve ranks the remainder by amplitude, NOT valueScore', () => {
+  // two stragglers below the top-1 cut: the HIGHER valueScore has the LOWER amplitude; the reserve must
+  // pick the higher-AMPLITUDE one (the whole point — a different key than the primary cut).
+  const cand = [
+    { id: 1, valueScore: 100, valueRanges: { afterTaxAmpPct: 0.05 } },   // ranked in (top-1)
+    { id: 2, valueScore: 50, valueRanges: { afterTaxAmpPct: 0.08 } },    // higher score, LOWER amp
+    { id: 3, valueScore: 40, valueRanges: { afterTaxAmpPct: 0.30 } },    // lower score, HIGHER amp → reserve pick
+  ];
+  const out = rankAndSlice('value', cand, {}, { top: 1, valueReserve: 1 });
+  assert.equal(out.length, 2);
+  assert.equal(out[0].id, 3, 'the reserve slot goes to the biggest cycle amplitude, not the bigger valueScore');
 });
 
 /* --- held-item exception (2026-07-16): code-enforced version of the /scan skill's "items Ben
@@ -421,6 +453,28 @@ ok('rankAndSlice amplitude: a watched candidate ALREADY inside the top-N is not 
   for (let i = 0; i < 10; i++) cand.push({ id: i, ampProxy: 0.5 - i * 0.001, watched: i === 3 });
   const out = rankAndSlice('amplitude', cand, {}, { top: 25 });
   assert.equal(out.length, 10, 'no duplication — id 3 is already in the top-N, so the reserve adds nothing');
+});
+
+/* === PLAN-FETCH-POOL-SCALING chunks 2-3: the capital-scaling curve (scaleSlots) ================== */
+console.log('\ngatecandidates.mjs scaleSlots() capital-scaling:');
+
+ok('scaleSlots: BYTE-IDENTICAL no-op at/below CAP_REF and on a null/unknown capital', () => {
+  assert.equal(scaleSlots(40, { capital: null }), 40, 'null capital (no anchor) → exact base');
+  assert.equal(scaleSlots(40, {}), 40, 'absent capital → exact base');
+  assert.equal(scaleSlots(40, { capital: CAP_REF }), 40, 'capital == CAP_REF → exact base (the zero-ripple point)');
+  assert.equal(scaleSlots(40, { capital: CAP_REF - 1 }), 40, 'below CAP_REF → exact base (never shrinks)');
+  assert.equal(scaleSlots(6, { capital: CAP_REF }), 6, 'the thin-reserve base is also a no-op at CAP_REF');
+});
+
+ok('scaleSlots: widens SUB-LINEARLY above CAP_REF and clamps to max', () => {
+  // at 2×CAP_REF: excess/CAP_REF = 1, sqrt = 1 → base·(1 + scale·1) = base·2 (scale default 1).
+  assert.equal(scaleSlots(40, { capital: 2 * CAP_REF }), 80, '2× bankroll → base·2 at the default scale');
+  // at 5×CAP_REF: sqrt(4) = 2 → base·3 = 120, but clamp to max 90.
+  assert.equal(scaleSlots(40, { capital: 5 * CAP_REF, max: 90 }), 90, 'clamped to the per-pool MAX regardless of capital');
+  // sub-linear: a 10× bankroll is NOT a 10× pool — sqrt(9)=3 → base·4 = 160, clamped.
+  assert.equal(scaleSlots(40, { capital: 10 * CAP_REF, max: 200 }), 160, 'sqrt growth: 10× capital → 4× base, not 10×');
+  // monotonic between the ends.
+  assert.ok(scaleSlots(40, { capital: 3 * CAP_REF, max: 999 }) > scaleSlots(40, { capital: 2 * CAP_REF, max: 999 }), 'more capital → more slots (until the cap)');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

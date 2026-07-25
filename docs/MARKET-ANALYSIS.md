@@ -320,6 +320,21 @@ F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_T
 Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-25, so it
 actually reaches this margin gate instead of being silently crowded out every scan (it can still be
 dropped by the gate on its real numbers — the fix is REACHING the gate, not a free pass through it).
+PLAN-FETCH-POOL-SCALING (2026-07-24, blindspot-audit #1/#7) generalizes the reserve/sizing story across
+all lanes. Finding #7: the value lane had NO fetch-pool reserve at all — a big-ticket with a strong cycle
+but low `limitVol` is buried by the composite `valueScore` and never fetched. Fix = **`VALUE_RESERVE`**
+(default 6, `gatecandidates.mjs` `rankAndSlice` + `admission.mjs` `pickFetchPool` — BOTH admission paths):
+prepend the highest raw cycle-amplitude-% (`valueRanges.afterTaxAmpPct`, a DIFFERENT key than the composite
+cut) of the excluded remainder, tagged `via:'reserve'`, additive-only (mirrors the thin/rising/watch
+reserves; the footer prints `+ N amp-reserved`). Finding #1: the fixed slot counts (`TOP`/`THIN_RESERVE`/
+`VALUE_TOP_DEFAULT`/`AMP_TOP_DEFAULT`) are capital-blind, so on a big-bankroll night a real winner ranked
+outside the slice never gets fetched. Fix (opt-in behind **`--scale-pool`**, default OFF) = `scaleSlots` —
+a sub-linear (sqrt), per-lane hard-capped widening keyed off the SAME `derive-cash-tiers.mjs`
+`deployablePool`/`liquidCapital` already in hand, a strict byte-identical no-op at/below `CAP_REF` (100m)
+or with an explicit `--top`/`--thin-reserve` override; plus **`TOTAL_FETCH_MAX`** (`clampUnionFetch`) — the
+cross-flip-niche fetch-budget ceiling clamping the deduped `--mode all` survivor union, protecting
+held/watched/reserve rows and reporting every trim (`total-fetch-max`, never silent). All constants are
+NAMED PLACEHOLDERS (n≈0); full specs live in the two module headers.
 F-F (2026-07-22) reworked the **Both-leg reach cell** ("Both-leg reach (recent / full) + phase"): it now
 prints the FULL-window hit count alongside recent-3 for BOTH legs (`recentHit/recentDays·fullHit/fullN`,
 straight off `recencySplit`) and appends a **trough-vs-decay phase annotation** (`reachPhaseNote`). WHY:
