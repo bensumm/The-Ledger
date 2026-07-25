@@ -126,6 +126,7 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
+import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 
 // --- args ---
 const A = parseArgs(process.argv.slice(2));
@@ -2040,6 +2041,14 @@ async function main() {
   // cheap, never blocks the screen on failure — this is the held-item exception's freshness input
   // too (HELD_IDS below reads positions.json right after this). AR1: the ONE shared invocation.
   runLocalSync({ offBookNote: 'screening off the current book' });
+
+  // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook. Same "before the read" seam as the
+  // sync above, but IN-PROCESS (not subprocessed): manager.ensure() is cheap/local/self-throttling — it
+  // runs the fleet's cheap healthChecks every call and only the expensive /1h backfill when the archive is
+  // actually stale AND past MIN_CHECK_INTERVAL_MS, so it adds NO fetch/latency on the fresh-cache common
+  // case. ensure() never throws; the try/catch is belt-and-suspenders so a manager hiccup can't abort the
+  // screen. log:() => {} keeps it silent (console.log is already no-op'd here unless --verbose).
+  try { await ensureDaemons({ log: () => {} }); } catch { /* opportunistic warm — never blocks the read */ }
 
   pruneCache('ts', 24 * 3600 * 1000);                     // bound the per-item series cache
   BUYS_BY_ITEM = loadBuysByItem();                        // LM1: buy-limit windows for the validator ctx

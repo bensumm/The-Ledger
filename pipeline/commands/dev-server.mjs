@@ -37,6 +37,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..', '..');            // repo root — the static docroot (same as GitHub Pages)
@@ -144,6 +145,12 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`dev-server: serving http://${HOST}:${PORT}/ (repo root) — Ctrl+C to stop.`);
   console.log(`dev-server: POST /api/scan runs screen-flip-niches.mjs --mode all --publish locally (ZERO git).`);
+  // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook, ONCE at boot (right after the listener
+  // starts, NOT per-request) so opening serve.cmd for the day also warms the /1h archive. IN-PROCESS and
+  // fire-and-forget: manager.ensure() is cheap/local/self-throttling and never throws; .catch() is
+  // belt-and-suspenders, and NOT awaiting keeps the server responsive immediately (the warm rides in the
+  // background — on a fresh cache it's a cheap no-op).
+  ensureDaemons().catch(() => { /* opportunistic warm — never affects the server */ });
 });
 server.on('error', e => {
   console.error(`dev-server: FAILED to bind ${HOST}:${PORT} — ${e && e.message || e}`);

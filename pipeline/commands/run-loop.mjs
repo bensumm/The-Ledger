@@ -51,6 +51,7 @@ import { readOffersSnapshot } from '../lib/offers.mjs';
 import { fetchItemInputs } from '../lib/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';
 import { buildAgenda, loopHeaderLine } from './read-schedule.mjs';
+import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..', '..');
@@ -81,6 +82,14 @@ const hhmm = new Date(now).toLocaleTimeString('en-GB', { hour: '2-digit', minute
 
 const watchDue = due('watch', watchMin);
 const scanDue = due('scan', scanMin);
+
+// PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook, at the top of the per-tick action
+// dispatch so an active /loop session drives cache-warm on its own cadence (no separate Task Scheduler
+// tick needed during active hours). IN-PROCESS: manager.ensure() is cheap/local/self-throttling — cheap
+// healthCheck every tick, expensive /1h backfill only when the archive is stale AND past
+// MIN_CHECK_INTERVAL_MS, so it adds no fetch/latency on the fresh-cache common case — and never throws;
+// the try/catch is belt-and-suspenders so a manager hiccup can't abort the tick.
+try { await ensureDaemons(); } catch { /* opportunistic warm — never blocks the loop tick */ }
 
 // buildMarketRef(repoDir) -> { itemId: { live, bandLow } } for every item with a resting BUY offer, so
 // cashderive can classify each bid DEEP (reclaimable) vs COMMITTED. SMALL live fetch — only the (usually

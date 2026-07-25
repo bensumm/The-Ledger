@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
+import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile; driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL folded into the trajectory note
 import { tax } from '../../js/money-math.js';
@@ -564,6 +565,12 @@ async function runPositions() {
   // see the anglerfish anchor incident). Local/zero-git, cheap, never blocks the read on failure.
   // AR1: the ONE shared invocation (pipeline/lib/sync-invoke.mjs).
   runLocalSync({ offBookNote: 'reading off the current book' });
+
+  // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook. Same "before the read" seam as the sync
+  // above but IN-PROCESS: manager.ensure() is cheap/local/self-throttling (cheap healthCheck every call,
+  // expensive /1h backfill only when the archive is stale AND past MIN_CHECK_INTERVAL_MS), so it adds NO
+  // fetch/latency on the fresh-cache common case, and never throws — the try/catch is belt-and-suspenders.
+  try { await ensureDaemons({ log: () => {} }); } catch { /* opportunistic warm — never blocks the read */ }
 
   const { err, groups: allGroups, openLots, ageMin } = readOpenPositions(POSITIONS);
   if (err) { console.error('cannot read positions.json: ' + err); process.exit(1); }
