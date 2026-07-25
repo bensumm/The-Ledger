@@ -268,6 +268,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
   `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never
   rendered). Fixture-pinned `pipeline/test/amplitudescreen.test.mjs`),
+  `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
+  calculator off Chunk A's `loadDailyRangeBulk` daily-range data: `intradayDailyRange(dayRanges)` (the
+  robust CENTRAL after-tax intraday range = the MEDIAN of per-day `netMargin(lo,hi)` across the coverage
+  window — the calibrated statistic, NOT max−min/a spike day; reuses quotecore's ONE `median`/`tax`) /
+  `pathAGpDay({dayRanges,price,buyLimit,volDay,lane,capital})` → `{gpDay,marginU,captureFrac,cyclesDay,
+  units,price,intradayRange,lane}` (the H1 `pathA` shape minus `rankInLane`), where `marginU =
+  intradayDailyRange × captureFrac`, `unitsCyc = min(effLimit, floor(capital÷price))` (0 if unaffordable,
+  null-limit → volDay/24 inferred), and the throughput (`unitsCyc × cyclesDay`) REUSES gatecandidates.mjs
+  `expUnits(effLimit,volDay,floor(capital÷price))` so no ×6-refill / 10%-volume-share constant is
+  re-derived — `gpDay = marginU × unitsCyc × cyclesDay`. `captureFrac` 0.45 gear / 0.62 churn are NAMED
+  PLACEHOLDERS (n=13/12, own-book-biased — re-estimated from the H2/H4 forward join). EXPLICITLY NOT
+  `expGpDay` (a demoted pre-fetch orderer) and NOT the live-ranked `rateItem` — a genuinely new sortable
+  quantity, named distinctly. Standalone: does NOT touch `gatecandidates.mjs`/`admission.mjs`/
+  `screen-flip-niches.mjs` (that wiring is Chunk D). Consumes `js/quotecore.js` (`median`/`netMargin`/`tax`)
+  + gatecandidates.mjs `expUnits`. Fixture-pinned `pipeline/test/patha.test.mjs` (synthetic daily-range
+  inputs, no live archive)),
   `held-item-strategy.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
   list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
