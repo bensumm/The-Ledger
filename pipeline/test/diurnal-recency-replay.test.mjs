@@ -26,6 +26,15 @@
  *   node pipeline/test/diurnal-recency-replay.test.mjs --live     # live diagnostic (no assert — data moves)
  *   node pipeline/test/diurnal-recency-replay.test.mjs --snapshot # refresh the frozen fixture from live (cut at cutISO)
  */
+// HERMETICITY (CI-vs-local determinism): hourProfile buckets each observation by LOCAL hour-of-day
+// (getHours) and reads a wall-clock-relative recent-days window, so both the PEAK WINDOW and the
+// recent split shift with the machine timezone and the current date. The frozen fixture froze the
+// DATA but not the CLOCK — so authored on PDT ~07-24 it passed, but CI (UTC) picked a different peak
+// window (15:00 vs 04:00) and a slid recent split, failing a test about neither. We pin BOTH axes to
+// the freeze boundary: TZ to the authoring zone (America/Los_Angeles), and hourProfile's `now` to
+// REPLAY_NOW below. Assigning process.env.TZ triggers a tzset in Node, and nothing imported here
+// evaluates a local Date at load, so the pin is honored before the first hourProfile call.
+process.env.TZ = 'America/Los_Angeles';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -41,6 +50,11 @@ const FIXTURE = path.join(HERE, 'fixtures', 'diurnal-recency-replay.json');
 // The freeze boundary: end-of-07-23 PDT (07-24 06:59 UTC) so the recent-3 DATA days are the 07-21/22
 // double-spike + 07-23 — the exact state that produced the contaminated peak on 2026-07-24.
 const CUT_ISO = '2026-07-24T06:59:00Z';
+// Pin hourProfile's recent-days window to the freeze boundary so the frozen fixture replays the exact
+// 2026-07-24 state regardless of when (or where) CI runs — without this, real wall-clock time marches
+// past the frozen spike and the recent split self-heals, exactly the non-regression trap the header warns
+// about for --live. The --live diagnostic intentionally keeps default now (data moves; no assert).
+const REPLAY_NOW = new Date(CUT_ISO);
 
 const ANCHORS = [
   // hard: assert spikeTop + typicalLevel band. inform: report only (see header).
@@ -86,7 +100,7 @@ async function main() {
   console.log(`diurnal-recency replay (source: ${live ? 'live (diagnostic — no assert)' : 'frozen fixture'}):`);
   let failures = 0;
   for (const a of ANCHORS) {
-    const prof = hourProfile(series[a.id], { nights: 14 });
+    const prof = hourProfile(series[a.id], { nights: 14, ...(live ? {} : { now: REPLAY_NOW }) });
     if (!prof) { console.log(`  ✗ ${a.name} (${a.id}): unprofilable series`); if (a.hard && !live) failures++; continue; }
     const rl = prof.peak.reality, rawLevel = prof.peak.level;
     const line = `${a.name} (${a.id}): peak ${fmtM(rawLevel)}, window ${String(prof.peak.startH).padStart(2, '0')}:00–${String(prof.peak.endH).padStart(2, '0')}:00 · reached ${rl.reachedDays}/${rl.nDays}d (recent ${rl.recentHit}/${rl.recentDays}) · p${rl.placement == null ? '—' : Math.round(rl.placement * 100)} · spikeTop=${rl.spikeTop} · typicalLevel ${fmtM(rl.typicalLevel)}`;
