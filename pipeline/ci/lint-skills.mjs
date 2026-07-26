@@ -39,11 +39,15 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');   // pipeline/ci -> repo root
 
+// The linted set. book/schedule/ship carry untagged rule-blocks today (a real gap the non-gating
+// lint-plan-lifecycle.mjs report keeps surfacing); they join here once a follow-up chunk tags them.
 export const SKILL_FILES = [
   '.claude/skills/scan/SKILL.md',
   '.claude/skills/positions/SKILL.md',
   '.claude/skills/overnight/SKILL.md',
   '.claude/skills/morning/SKILL.md',
+  '.claude/skills/analyze/SKILL.md',
+  '.claude/skills/cleanup/SKILL.md',
 ];
 
 const RULE_BLOCK_RE = /^- \*\*/;              // top-level bullet, bold lead-in

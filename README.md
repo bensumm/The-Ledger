@@ -768,7 +768,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   makes each role structural, since the exec bit doesn't): **`pipeline/commands/`** = the
   workflow CLIs you run (screen-flip-niches, quote-items, watch-positions, sync-fills, …);
   **`pipeline/ci/`** = the CI/dev guards + test runner (check-imports, check-dead-exports,
-  check-daemon-safety, lint-arch/docs/skills, run-tests, smoke-test); **`pipeline/lib/`** = the imported-only
+  check-daemon-safety, lint-arch/docs/skills, run-tests, smoke-test) plus two NON-GATING report
+  tools the `/cleanup` skill reads (lint-plan-lifecycle, report-branches — never wired into
+  `checks.yml`); **`pipeline/lib/`** = the imported-only
   shared libraries; **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
   - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
@@ -1524,7 +1526,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     firing log is now WIRED (PM2): `logFirings` appends one compact JSONL line per firing —
     `{ts,module,version,stage,surface,id,name,tag,price(price-stage),quickBuy,quickSell,guide,regimeLabel,phase}`
     — the hit/miss ledger the validate-before-promote loop scores later (SCORING is a later chunk).
-  - `lint-skills.mjs` (P7 — a HEURISTIC linter for the four market `SKILL.md` files, run in CI's
+  - `lint-skills.mjs` (P7 — a HEURISTIC linter for the linted `SKILL.md` files (`SKILL_FILES`:
+    scan/positions/overnight/morning + analyze + cleanup; book/schedule/ship carry untagged blocks
+    and join once tagged), run in CI's
     cheap `checks` job + auto-discovered by `run-tests.mjs` via its test: every top-level `- **…**`
     rule-block must carry a backticked `code-pointer` OR an explicit `judgment:` tag; FAILs on
     untagged blocks and prints per-file + total counts so untagged-prose GROWTH is visible. Exports
@@ -1578,6 +1582,28 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     are exempt, genuinely-future files sit in its `PROPOSED` set. Catches rename/delete drift in the doc,
     esp. through the directory rename. Structural/existence only, never semantic; pinned by
     `lint-arch.test.mjs`),
+  - `lint-plan-lifecycle.mjs` (PLAN-CLEANUP-SKILL C10+C11 — a NON-GATING report the `/cleanup` skill
+    reads; NOT wired into `checks.yml`. Scans root `PLAN-*.md` (excluding `PLAN.md`) and flags any
+    whose Status line reads complete (SHIPPED/DONE/LANDED) with no open marker (PARTIAL[LY]/DEFERRED/
+    PENDING/AWAITING/DRAFT/PROPOSAL/OPEN/REMAIN[S]/GATED/WIP) — a doc past its `docs/PLANNING.md`
+    fold-in point — and reports which `.claude/skills/*` are absent from `lint-skills.mjs`'s
+    `SKILL_FILES`. Structural (regex on a Status line + a filename set-difference), never semantic;
+    exit is ALWAYS 0. Exports `extractStatus`/`classifyStatus`/`scanPlans`/`skillDrift`, pinned by
+    `lint-plan-lifecycle.test.mjs`),
+  - `report-branches.mjs` (PLAN-CLEANUP-SKILL C12 — a NON-GATING fact-gather the `/cleanup` skill
+    reads; NOT wired into `checks.yml`, never deletes anything. Emits per-local-branch + per-worktree
+    JSON (`tipSha`/`tipDate`/`tipSubject`/`isAncestorOfMain` vs `origin/main`, plus per-worktree
+    `dirty`) so the stale-vs-deferred VERDICT is the skill's judgment pass — the script only gathers,
+    giving CLAUDE.md rule 9's prose a cheap repeatable data source. Exports the pure parsers
+    `parseWorktreePorcelain`/`parseBranchRefs`, pinned by `report-branches.test.mjs`),
+  - `.claude/skills/cleanup/SKILL.md` (PLAN-CLEANUP-SKILL — the `/cleanup` project skill: the
+    repeatable post-wave hygiene + architectural-integrity pass. Orchestrates the mechanical guards
+    above in `checks.yml` order + the two report tools, then a SESSION/WAVE-scoped judgment sweep
+    (duplication/two-homes, unread spec fields, README-inventory completeness, invariant-table
+    freshness, comment/doc-hygiene) + the worktree/branch review, ending in a propose-never-apply
+    fix list. Cheapness constraint: judgment is scoped to the wave diff, never a cold repo-wide
+    re-audit. Boundary with `/analyze`: `/cleanup` owns implementation integrity, `/analyze` owns the
+    trading-record retro. Linted by `lint-skills.mjs`),
   - `smoke-test.mjs` (CI headless-chromium DOM smoke of `index.html`, all external network stubbed),
     `quotecore.test.mjs` (verdict-tree fixtures + the P4a lotCtx.path byte-identity pin),
     `held-item-strategy.test.mjs` (P4a — the path-engine acceptance: decay-knife held ranks the hold-family below
@@ -1682,6 +1708,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the index.html AP1 drift as xfail, `normalizeWords`/`findDuplicateShingles` on synthetic docs
     (≥14-word verbatim passage flags, short overlap + single-home + null-doc don't), and the live
     CLAUDE.md ⇆ README axis is clean),
+    `lint-plan-lifecycle.test.mjs` (PLAN-CLEANUP-SKILL C10+C11 — the plan-lifecycle report's
+    `extractStatus`/`classifyStatus` (complete-word vs open-marker, incl. the PARTIALLY/open-work
+    carve-outs) + `scanPlans`/`skillDrift` on deterministic tmp fixtures, never the live tree),
+    `report-branches.test.mjs` (PLAN-CLEANUP-SKILL C12 — the branch-report's pure parsers
+    `parseWorktreePorcelain`/`parseBranchRefs` on canned git-output fixtures; classification is the
+    caller's job so the impure `gather()` is exercised live by the skill, not unit-pinned),
     `expunitsovernight.test.mjs` (COD-2 — pins `expUnitsOvernight` = `expUnits × 8/24`: the alignment
     identity so the accumulation-sizing constants can't drift from the day figure, the documented
     closed form `min(limit×2, 8/24×0.10×volDay)`, and the limit-bound/volume-bound/null-limit/zero-vol edges),

@@ -4,7 +4,7 @@
  *
  * Pins the rule-block convention (`- **…**` top-level bullets), the two tag forms
  * (backticked code pointer OR `judgment:`), the frontmatter/fence exclusions, and — the
- * live regression guard — that the four real SKILL.md files currently lint clean.
+ * live regression guard — that every real SKILL.md file in SKILL_FILES currently lints clean.
  */
 import assert from 'node:assert';
 import { lintText, lintFile, SKILL_FILES } from '../ci/lint-skills.mjs';
@@ -77,7 +77,7 @@ ok('empty text yields no blocks (no throw)', () => {
 });
 
 // --- LIVE regression guard: the real skills must lint clean ---------------------------
-ok('all four committed SKILL.md files are fully tagged', () => {
+ok('every committed SKILL.md file in SKILL_FILES is fully tagged', () => {
   for (const rel of SKILL_FILES) {
     const { blocks, untagged } = lintFile(rel);
     assert.ok(blocks.length > 0, `${rel} should have rule-blocks`);
