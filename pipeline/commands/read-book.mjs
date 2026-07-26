@@ -31,13 +31,15 @@ import { readOpenPositions } from '../lib/positions.mjs';
 import { readOffersSnapshot } from '../lib/offers.mjs';
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 import { buysByItem, limitWindow } from '../lib/limits.mjs';
-import { buildBook, CLEARABILITY_FRAC } from '../lib/book-model.mjs';
+import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/book-model.mjs';
+import { loadReverseFlip, pruneReverseFlip } from '../lib/reverseflipstate.mjs';   // RF0 store — RF4 "Reverse-flip pending" section
 import { fmt, fmtP } from '../../js/money-format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
 const OFFERS = path.join(HERE, '..', '..', 'offers.json');
 const FILLS = path.join(HERE, '..', '..', 'fills.json');
+const REVERSE_FLIP = path.join(HERE, '..', '..', 'reverse-flip-state.json');
 
 // LOCAL wall-clock HH:MM for a unix-SECONDS instant (repo rule: rendered times are local). Copied from
 // read-buy-limits.mjs — not worth a shared import for one 3-line helper.
@@ -140,10 +142,20 @@ async function main() {
   }
 
   const book = buildBook({ groups: openGroups, offers, cash, marks, sizer, now });
-  render(book, { cash, capitalSource: (capitalOverride != null ? 'override' : 'deployablePool') });
+
+  // RF4 — the "Reverse-flip pending" section. Loaded/built here (impure shell), rendered off the PURE
+  // book-model builder. infoById reuses the SAME per-id quote row already fetched above (guide/volDay → the
+  // thin read) — NO new fetch. An empty store → buildReverseFlipPending returns [] → the section is skipped
+  // entirely (byte-identical to a pre-RF4 read).
+  const rfState = pruneReverseFlip(loadReverseFlip(REVERSE_FLIP));
+  const rfInfoById = {};
+  for (const [id, row] of quoteById) rfInfoById[id] = { row, live: row.quickSell ?? null };
+  const reverseFlip = buildReverseFlipPending(rfState, { marks, infoById: rfInfoById, now, fmt, fmtP });
+
+  render(book, { cash, capitalSource: (capitalOverride != null ? 'override' : 'deployablePool'), reverseFlip });
 }
 
-function render(book, { cash, capitalSource }) {
+function render(book, { cash, capitalSource, reverseFlip = [] }) {
   const out = [];
 
   // === SLOTS ===
@@ -193,6 +205,18 @@ function render(book, { cash, capitalSource }) {
       out.push(`- bounds: ${b('buy-limit', s.buyLimitBound)} · ${b('clearability', s.clearabilityBound)} (${(CLEARABILITY_FRAC * 100).toFixed(1)}% of day vol) · ${b('capital', s.capitalBound)}`);
       out.push(`- RECOMMEND ${s.recommendedQty == null ? '—' : s.recommendedQty.toLocaleString()} units · BINDING: ${s.binding || '—'}`);
       if (s.netIfCycled != null) out.push(`  net if cycled once ~${s.netIfCycled >= 0 ? '+' : ''}${fmtP(s.netIfCycled)} (sell ${fmtP(s.mark)} vs BE ${fmtP(s.breakEven)})`);
+    }
+  }
+
+  // === REVERSE-FLIP PENDING (RF4) === — declared in-flight cycles with no open lot / no GE slot (capital-free
+  // between the sell + rebuy legs). Printed ONLY when the store has awaiting-rebuy/rebuy-armed entries; an
+  // empty store renders NOTHING here (zero-ripple). INFORM-ONLY, n≈0.
+  if (reverseFlip.length) {
+    out.push('=== REVERSE-FLIP PENDING ===');
+    out.push('  (declared cycles between legs — sold a keep, rebuy at the dip; capital-free, no lot/slot. Inform-only, n≈0)');
+    for (const e of reverseFlip) {
+      out.push(`- ${e.name} [${e.state}]: sold ${e.soldTxt} · BE-rebuy <${e.beRebuyTxt} · live ${e.liveTxt} · pending ${e.daysPendingTxt}`);
+      for (const n of e.notes) out.push(`    ${n}`);
     }
   }
 

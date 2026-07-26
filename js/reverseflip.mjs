@@ -278,3 +278,94 @@ export function rebuyStrandNote({ volDay = null, fmt = String } = {}) {
   const v = num(volDay);
   return `⚠ rebuy may strand (thin, ${v != null ? `${fmt(v)}/d` : 'thin book'})`;
 }
+
+/* =============================================================================================
+ * RF4 — CYCLE-STATE SURFACING helpers (PLAN-REVERSE-FLIP chunk RF4).
+ *
+ * PURE, app-safe (no fs / no fetch — the declared-cycle store IO lives in the node-only
+ * pipeline/lib/reverseflipstate.mjs). These fold the DECLARED in-flight cycle (awaiting-rebuy /
+ * rebuy-armed) into the three READ surfaces — /schedule (read-schedule.mjs), /book (read-book.mjs via
+ * book-model.mjs), /positions (quote-items.mjs --positions) — so a capital-free BETWEEN-legs cycle
+ * (no open FIFO lot, no GE-slot commitment) stays visible instead of silently vanishing. Additive,
+ * INFORM-ONLY, ZERO-RIPPLE: an EMPTY store yields NOTHING extra on every surface (each caller guards on
+ * a non-empty pending-entry list — an empty list renders no header, not an empty one). n≈0 throughout —
+ * nothing here gates, sizes, or moves a quoted number.
+ *
+ * NO NEW FETCH (Ruling — reuse existing reads): the live mark + quote `row` (guide/volDay for the thin
+ * read) + a pre-rendered drift note are passed in BY THE CALLER from what it already fetched; an item
+ * with no in-hand data (e.g. an awaiting-rebuy cycle that isn't an open offer this pass) simply degrades
+ * to the store-only fields (sold/BE-rebuy/days-pending) with no thin/drift note.
+ * ============================================================================================= */
+
+// REBUY_STALE_DAYS — a rebuy leg (awaiting-rebuy / rebuy-armed) pending longer than this many days is
+// "stale intent" worth a display NUDGE (revisit the resting bid; the dip may have passed). SOFTER and far
+// shorter than reverseflipstate.mjs's 30-day TTL prune — a nudge, never a delete. PLACEHOLDER (n≈0).
+export const REBUY_STALE_DAYS = 3;
+
+/* daysPending(entry, now) → days since the sell leg (soldTs), or the declaration (declaredTs) when there's
+   no sell ts, or null when neither is known. `now` is unix-MS (injected so tests are clock/TZ-hermetic). */
+export function daysPending(entry, now = Date.now()) {
+  const anchor = (entry && entry.soldTs != null) ? entry.soldTs
+    : (entry && entry.declaredTs != null ? entry.declaredTs : null);
+  if (anchor == null) return null;
+  return (now / 1000 - anchor) / 86400;
+}
+
+/* rebuyStaleNote(entry, now, { staleDays }) → the REBUY_STALE_DAYS nudge TEXT, or null when the cycle is
+   younger than the placeholder floor / undated. No sigil — the caller's note-kind owns it. PURE. */
+export function rebuyStaleNote(entry, now = Date.now(), { staleDays = REBUY_STALE_DAYS } = {}) {
+  const d = daysPending(entry, now);
+  if (d == null || d < staleDays) return null;
+  return `⚠ rebuy pending ~${d.toFixed(1)}d (> REBUY_STALE_DAYS ${staleDays}d placeholder — revisit the dip/bid)`;
+}
+
+/* reverseFlipPendingEntries(state, { marks, infoById, now }) → the awaiting-rebuy / rebuy-armed entries of
+   the declared store, each folded with any ALREADY-IN-HAND live mark + quote `row` the caller passes (NO
+   fetch here). `holding` (pre-sell) is excluded — no rebuy leg is in flight yet. PURE; returns [] on an
+   empty / all-holding store (the zero-ripple guard every surface leans on).
+     marks    — Map<id,{mark,...}> or {id:{mark}} (read-book/quote already build this); mark = live sell price.
+     infoById — { [id]: { row?, live?, driftNote? } } — the in-hand computeQuote row (guide/volDay → thin
+                read), a live fallback, and a pre-rendered hourlyDriftNote. All optional per id. */
+export function reverseFlipPendingEntries(state, { marks = new Map(), infoById = {}, now = Date.now() } = {}) {
+  const markFor = id => (marks instanceof Map ? marks.get(id) : (marks && marks[id])) || null;
+  const out = [];
+  for (const e of state || []) {
+    if (!e || e.id == null) continue;
+    if (e.state !== 'awaiting-rebuy' && e.state !== 'rebuy-armed') continue;
+    const info = infoById[e.id] || {};
+    const m = markFor(e.id);
+    const live = (m && m.mark != null) ? m.mark : (info.live != null ? info.live : null);
+    out.push({
+      id: e.id,
+      name: e.name || ('#' + e.id),
+      state: e.state,
+      soldQty: e.soldQty ?? null,
+      soldEach: e.soldEach ?? null,
+      beRebuy: e.beRebuy ?? null,
+      rebuyBidPrice: e.rebuyBidPrice ?? null,
+      live,
+      daysPending: daysPending(e, now),
+      thin: isThinBigTicket(info.row || null),
+      row: info.row || null,
+      // carried so reverseFlipCycleNotes can recompute the stale nudge off the store timestamps.
+      soldTs: e.soldTs ?? null,
+      declaredTs: e.declaredTs ?? null,
+    });
+  }
+  return out;
+}
+
+/* reverseFlipCycleNotes(entry, { row, driftNote, now, fmt }) → the shared inform-only note lines a surfaced
+   reverse-flip cycle carries, in order: the thin-item rebuy-may-strand caution (RF6 — thin big-ticket only),
+   the shared hourlyDriftNote (passed PRE-RENDERED by the caller — HT4: a RISING hourly drift is the
+   reverse-flip's OWN bad signal, since you'd rebuy into strength), and the REBUY_STALE_DAYS nudge. PURE;
+   returns [] when none fire. `entry` may be a raw store entry OR a reverseFlipPendingEntries row (both carry
+   soldTs/declaredTs for the stale read and `row`/`thin` context is passed explicitly). */
+export function reverseFlipCycleNotes(entry, { row = null, driftNote = null, now = Date.now(), fmt = String } = {}) {
+  const notes = [];
+  if (isThinBigTicket(row)) notes.push(rebuyStrandNote({ volDay: row ? row.volDay : null, fmt }));
+  if (driftNote) notes.push(driftNote);
+  const stale = rebuyStaleNote(entry, now);
+  if (stale) notes.push(stale);
+  return notes;
+}

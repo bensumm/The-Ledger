@@ -10,6 +10,37 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-REVERSE-FLIP RF4 — cycle-state surfacing into /schedule · /book · /positions (pipeline, inform-only, 2026-07-25)
+A declared reverse-flip is a two-leg cycle on an OWNED item — sell into the peak, then rebuy at the dip.
+BETWEEN the legs it owns no open FIFO lot and no GE slot (it's capital-free until a rebuy bid rests), so
+the cycle would silently vanish from every read surface. RF4 folds the declared store
+(`reverse-flip-state.json` `awaiting-rebuy`/`rebuy-armed` entries, RF0) into the three existing reads —
+ADDITIVE, INFORM-ONLY (nothing gates/sizes/moves a number, n≈0), and ZERO-RIPPLE (byte-identical output
+when the store is `[]`, empirically verified per surface via a before/after diff off the warm cache).
+- **Shared pure core (`js/reverseflip.mjs`, app-safe, no fs/fetch):** `REBUY_STALE_DAYS` (a placeholder
+  stale-nudge floor, softer/shorter than the store's 30-day TTL) + `daysPending`/`rebuyStaleNote`;
+  `reverseFlipPendingEntries` (the awaiting/armed entries folded with any IN-HAND live mark + quote row —
+  `holding` excluded); `reverseFlipCycleNotes` (the shared note lines — the RF6 thin rebuy-strand caution +
+  the caller's pre-rendered `hourlyDriftNote` (the HT4 fold — a RISING hourly drift is the reverse-flip's OWN
+  bad signal, since you'd rebuy into strength) + the stale nudge). REUSES RF6's `isThinBigTicket`/
+  `rebuyStrandNote` and the shared `hourlyDriftNote` — nothing re-derived.
+- **/schedule** (`read-schedule.mjs` `reverseFlipRows`): `RF`-tagged rows unioned into the agenda
+  (`SELL peak`/`REBUY dip`/`REBUY armed`), windowed on the ALREADY-fetched `hourProfile` (a null-window row
+  sorts last), with a "Reverse-flip cycles" note block under the table.
+- **/book** (`book-model.mjs` `buildReverseFlipPending`, a PURE fixture-tested render block →
+  `read-book.mjs` "REVERSE-FLIP PENDING" section): each cycle's sold price · BE-rebuy · live · days-pending
+  + notes. A between-legs cycle appears nowhere else on the book.
+- **/positions** (`quote-items.mjs --positions` `reverseFlipPositionLines`): an additive block after the
+  held-lots table, reading the store directly and reusing `fmt`/`fmtP`.
+- **No new fetch** — every surface reuses what it already fetched; an item with no in-hand data degrades to
+  the store-only fields (a rebuy-armed cycle is an open offer → already in the fetch set → gets its
+  window/drift; an awaiting-rebuy cycle with no bid degrades cleanly).
+- **APP_VERSION:** unchanged — `js/reverseflip.mjs` is NOT app-imported (only comment references from
+  `js/flip-niches.mjs`; the app entrypoint `js/main.js` never reaches it) and the `js/windowread.mjs` edit
+  is comment-only; the rest are pipeline command/lib surfaces. Fixture-pinned + TZ-hermetic:
+  `pipeline/test/reverseflip-surfacing.test.mjs` (all suites green under both default TZ and `TZ=UTC`).
+  Skills-behavior notes: `/schedule`·`/book`·`/positions` SKILL.md `version:` bumps (never APP_VERSION).
+
 ### PLAN-REVERSE-FLIP RF3 — BANKED-backfill reconciliation advisory (pipeline, read-only, 2026-07-25)
 `pipeline/commands/reconcile-reverse-flip.mjs` closes the cosmetic gap a SOLD-FIRST Case-B reverse-flip
 leaves: selling a pre-log owned item (the Ancestral-hat shape — no BUY ever logged) lands the sell in

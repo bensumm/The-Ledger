@@ -290,7 +290,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `gatecandidates.mjs` `gateReverseFlipCandidates` applies the gate per owned candidate and
   `screen-flip-niches.mjs` `runReverseMode` renders the own-table surface + the thin-item guards (RF2 shipped
   2026-07-25; RF6 2026-07-25; the `@provisional-api` markers stay as the n≈0 honesty label). All thresholds
-  NAMED PLACEHOLDERS (n≈0). NOT app-imported → no APP_VERSION bump. Fixture-pinned `pipeline/test/reverseflip.test.mjs`),
+  NAMED PLACEHOLDERS (n≈0). RF4 (2026-07-25) adds the PURE, app-safe CYCLE-STATE SURFACING helpers reused by
+  all three read surfaces: `REBUY_STALE_DAYS` (a placeholder stale-nudge floor, softer/shorter than the
+  30-day store TTL) + `daysPending`/`rebuyStaleNote`, `reverseFlipPendingEntries` (the awaiting-rebuy/
+  rebuy-armed entries folded with any in-hand live mark + quote row; `holding` excluded), and
+  `reverseFlipCycleNotes` (the shared inform-only note lines a surfaced cycle carries — thin rebuy-strand +
+  the caller's pre-rendered `hourlyDriftNote` (HT4) + the stale nudge). No fetch/fs (the store IO stays in
+  `pipeline/lib/reverseflipstate.mjs`). NOT app-imported → no APP_VERSION bump. Fixture-pinned
+  `pipeline/test/reverseflip.test.mjs` (RF1/RF6) + `pipeline/test/reverseflip-surfacing.test.mjs` (RF4)),
   `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
   calculator off Chunk A's `loadDailyRangeBulk` daily-range data: `intradayDailyRange(dayRanges)` (the
   robust CENTRAL after-tax intraday range = the MEDIAN of per-day `netMargin(lo,hi)` across the coverage
@@ -487,9 +494,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   reverse-flip CYCLE store — a flat array of `{id,name,state,soldQty,soldEach,soldTs,beRebuy,targetQty,
   rebuyBidPrice,rebuyBidTs,declaredTs}` (mirrors `hold-thesis.json`'s shape/CLI pattern). `state` walks
   `holding → awaiting-rebuy → rebuy-armed`. AGENT-WRITTEN via `pipeline/commands/declare-reverse-flip.mjs`
-  (`set`/`advance`/`clear`/`list`) when Ben reports the sell/rebuy; `/schedule`·`/book`·`/positions` (RF4)
-  will READ it to keep an in-flight cycle visible between the sell and the rebuy (it holds no open FIFO
-  lot / no slot). It is scheduling/UX bookkeeping, NOT the source of ownership truth (that's the
+  (`set`/`advance`/`clear`/`list`) when Ben reports the sell/rebuy; `/schedule`·`/book`·`/positions`
+  READ it (RF4, 2026-07-25) to keep an in-flight cycle visible between the sell and the rebuy (it holds no
+  open FIFO lot / no slot) — inform-only, zero-ripple (an empty store surfaces nothing extra). It is scheduling/UX bookkeeping, NOT the source of ownership truth (that's the
   `computeOwnedQty` fold). `beRebuy = soldEach − tax(soldEach)` (canonical `js/money-math.js` tax(), E8).
   Ships empty (`[]`); a 30-day TTL prunes stale intent. Fixture-pinned in
   `pipeline/test/reverseflipstate.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
@@ -782,7 +789,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     declared-exit lots only); behavior detail in CLAUDE.md "Script facts".
     **`--pressure-exit`** (PB4 opt-in TRIAL, 2026-07-15) makes Est. buy/sell the pressure-driven
     `reachableBand` legs (per-item cells + a `--positions` inform line, with the depth floor beside);
-    LOUD banner, retro co-log stays neutral, console-only — no screen.json), `screen-flip-niches.mjs`
+    LOUD banner, retro co-log stays neutral, console-only — no screen.json. RF4 (2026-07-25) appends an
+    INFORM-ONLY "Reverse-flip pending" block after the held-lots table — the PURE `reverseFlipPositionLines`
+    reads `reverse-flip-state.json` directly, reusing `fmt`/`fmtP` + the in-hand held rows (no new fetch);
+    `[]` on an empty store → no section → byte-identical positions report), `screen-flip-niches.mjs`
     (opportunity screen; YP2 adds a stdout-only "WATCH CLOSELY" transition list; PM1 a stdout-only
     `Probes` column per flip-niche; P6c re-runs an empty flip-niche beneath the floor (`subFloorFallback` in
     `lib/gatecandidates.mjs`, honestly labeled + grade-capped + stdout-only, never in `screen.json`; the
@@ -926,7 +936,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `deployablePool`. IMPURE SHELL: one per-invocation `fetchItemInputs` per id in the held∪bid∪{sizer}
     union feeds the age-labelled marks + `loadDerivedCash` marketRef; ALL aggregation is the PURE
     `lib/book-model.mjs`. Inform-only, no gates; live marks age-labelled (decision 3), free-slot count a
-    log-derived lower bound (decision 4)),
+    log-derived lower bound (decision 4). RF4 (2026-07-25) adds a "Reverse-flip pending" section — loads
+    `reverse-flip-state.json` and renders `book-model.mjs`'s PURE `buildReverseFlipPending` (awaiting-rebuy/
+    rebuy-armed cycles with sold price / BE-rebuy / live / days-pending + notes), reusing the SAME in-hand
+    quote rows (no new fetch); an empty store renders NOTHING extra — byte-identical to the pre-RF4 read),
     `read-schedule.mjs` (PLAN-SCHEDULE — the buy/sell WINDOW AGENDA: a presentation/aggregation layer over
     the SAME `hourProfile` dip/peak `read-window-range.mjs --profile` prints, consolidated into ONE
     time-sorted table `In (h) | Window | Item | Action | Level | List`, sorted by `In (h)` ascending
@@ -942,7 +955,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     served by the 15-min disk cache; INFORM-ONLY n≈0 (PLANS, never gates). Pure `hoursUntil`/`isInsideWindow`/
     `agendaRowsForItem`/`buildAudit` helpers are fixture-tested (`pipeline/test/schedule.test.mjs`); its
     `buildAgenda`+`loopHeaderLine` are imported in-process by `run-loop.mjs` for the `⏭ next:` banner.
-    Reads `positions.json`/`offers.json`/`watchlist.json`; produces NO new tracked file),
+    RF4 (2026-07-25) adds the PURE `reverseFlipRows(state, {profileByItem,driftByItem,now})` builder,
+    unioned into the agenda when `reverse-flip-state.json` is non-empty: one `RF`-tagged row per declared
+    in-flight cycle (`SELL peak`/`REBUY dip`/`REBUY armed`), windowed on the ALREADY-fetched `hourProfile`
+    (a null-window RF row sorts last), carrying the shared cycle notes (thin strand + `hourlyDriftNote` +
+    the `REBUY_STALE_DAYS` nudge) below the table. Zero new fetch; an empty store adds ZERO rows — the
+    agenda is byte-identical (`pipeline/test/reverseflip-surfacing.test.mjs`). Reads
+    `positions.json`/`offers.json`/`watchlist.json`/`reverse-flip-state.json`; produces NO new tracked file),
     `trigger-alerts.mjs` (N1 push-notification trigger
     engine — behind the standard `import.meta.url === pathToFileURL(argv[1])` invocation guard
     (TD2) so importing it for tests never runs/fetches; exports `positionSignal`/`quietSuppresses`),
@@ -1332,7 +1351,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     record + a caller-built age-labelled marks map into the slots / capital / per-lot P&L views, and
     `sizeTranche` computes the min(buy-limit, clearability, capital) sizer + net-if-cycled. NO fetch/fs;
     delegates the capital split to `capital-utilization.mjs` (never re-derived — pinned byte-identical to
-    watch's SUMMARY footer) and break-even to `js/quotecore.js`. Pinned by `book-model.test.mjs`),
+    watch's SUMMARY footer) and break-even to `js/quotecore.js`. RF4 (2026-07-25) adds the PURE
+    `buildReverseFlipPending(state, {marks, infoById, now, fmt, fmtP})` render block for the "Reverse-flip
+    pending" section (awaiting-rebuy/rebuy-armed cycles → rendered rows with sold/BE-rebuy/live/days-pending
+    + `js/reverseflip.mjs` cycle notes; `[]` on an empty/all-holding store). Pinned by `book-model.test.mjs`
+    + `reverseflip-surfacing.test.mjs`),
     `staleexit.mjs` (Proposal C 2026-07-12 — PURE `staleExitRead({ts1h, exitLevel})`: scores a DECLARED
     hold-thesis exit against the recent full-day reach history via `js/windowread.mjs`'s own
     `windowStats`/`recencySplit`/`recentQuant` (min-sample floor imported from `reachValidator` — reuse,
@@ -1407,9 +1430,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     on a bare quote + held/watched positions), `screen-flip-niches.mjs --digest` (HT3 — a bounded top-X
     enrichment that can strategy-aware-relabel a fill-now/band/churn pick's DISPLAYED verdict to `⚠ falling
     — verify (~X/d)`, never a value/amplitude/scalp pick). Inform-only n≈0, never gates; fixture-tested in
-    `pipeline/test/hourly-lmh.test.mjs`). HT4 (a reverse-flip fold onto RF2/RF4's owned-item surfacing) is
-    DEFERRED — PLAN-REVERSE-FLIP isn't built yet; `hourlyDriftNote` is already a clean shared export ready
-    for it,
+    `pipeline/test/hourly-lmh.test.mjs`). HT4 (a reverse-flip fold onto RF2/RF4's owned-item surfacing)
+    SHIPPED via PLAN-REVERSE-FLIP — the shared `hourlyDriftNote` rides `--mode reverse`'s thin rows (RF6)
+    and each declared in-flight cycle surfaced into `/schedule`·`/book`·`/positions` (RF4),
     `probes.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
     `pipeline/modules/*.mjs`, groups by stage (`observe`/`price`/`gate`), and `runProbes(row,surface,ctx)`
     returns the fired display annotations. **Presence = enabled** (delete the file to disable). The

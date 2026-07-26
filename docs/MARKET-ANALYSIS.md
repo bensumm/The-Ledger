@@ -643,7 +643,12 @@ drift number moves a DISPLAYED label is the digest relabel above, and it's alway
 reverse-flip fold onto owned-item surfacing SHIPPED via PLAN-REVERSE-FLIP RF6 — the `--mode reverse` table's
 thin big-ticket rows carry the shared `hourlyDriftNote`, defaulting to the longer 7-day window since a thin
 book's 3-day slope whipsaws; the broader HT4 reverse read-fold on the quote/`/schedule`/`/book` surfaces
-lands with RF4.)
+SHIPPED via RF4 — each declared in-flight reverse-flip cycle (`reverse-flip-state.json`
+`awaiting-rebuy`/`rebuy-armed`) is surfaced INFORM-ONLY into `/schedule` (`reverseFlipRows`), `/book`
+(a "Reverse-flip pending" section, `book-model.mjs` `buildReverseFlipPending`), and `/positions`
+(`quote-items.mjs --positions` `reverseFlipPositionLines`), carrying the shared `hourlyDriftNote` + the
+thin-item rebuy-strand caution + a `REBUY_STALE_DAYS` nudge; zero-ripple — an empty store renders NOTHING
+extra on every surface.)
 
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p% · list at

@@ -1,6 +1,6 @@
 ---
 name: schedule
-version: 1.0.0
+version: 1.1.0
 description: Consolidated buy/sell WINDOW AGENDA — a time-sorted "what to buy/sell and when" across current positions (default) or the watchlist, plus a flipped-but-not-watchlisted audit. Triggers — "what's my agenda", "what should I buy/sell and when", "when's the next window", "what's coming up", "schedule".
 ---
 
@@ -60,3 +60,10 @@ a guide to time the passes, never a fill guarantee.
 `run-loop.mjs` prints a `⏭ next:` one-liner (the single soonest `-c` window) at the top of each
 watch-due tick, off this same `buildAgenda` — so the upcoming action is always visible mid-loop
 without running the skill.
+
+## Reverse-flip cycles (RF4)
+When `reverse-flip-state.json` holds declared in-flight cycles (`awaiting-rebuy`/`rebuy-armed`), the
+agenda unions `RF`-tagged rows (`SELL peak`/`REBUY dip`/`REBUY armed`) and prints a "Reverse-flip cycles"
+note block under the table — the shared `hourlyDriftNote` (a RISING drift is the reverse-flip's OWN bad
+signal — you'd rebuy into strength), the thin rebuy-strand caution, and the `REBUY_STALE_DAYS` nudge.
+INFORM-ONLY n≈0; relay it when present. An empty store surfaces nothing extra.

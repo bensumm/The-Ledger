@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.49
+version: 1.50
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -524,3 +524,9 @@ misfired, a threshold that misled). Capture it — but the market work comes fir
   conversation keeps flowing; report the diff summary when it lands.
 - **Honesty guard (process rule 4):** _(judgment: process)_ process learnings encode freely; a *market* claim (a
   new threshold, a pattern) needs the usual evidence standard — one session is one sample.
+
+## Reverse-flip pending (RF4)
+`quote-items.mjs --positions` appends a "Reverse-flip pending" block AFTER the held-lots table when
+`reverse-flip-state.json` holds `awaiting-rebuy`/`rebuy-armed` cycles (sold · BE-rebuy · live ·
+days-pending + the shared drift/strand/stale notes). A sold-first reverse-flip owns no open lot, so this
+block is its only home here. INFORM-ONLY n≈0 — relay it when present; an empty store adds nothing.

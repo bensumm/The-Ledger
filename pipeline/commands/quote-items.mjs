@@ -56,6 +56,8 @@ import { buildItemContext, renderHeldVerdict, renderPathLine, staleBookBanner } 
 import { depthReachClause, formatTimedLap } from '../lib/emit.mjs';   // PB4 — the shared two-lens depth-floor/pressure clause (rendered beside the pressure prices); PLAN-DIURNAL-TIMING DT3 — the ONE shared diurnalTimedLap renderer (also DT2's screen call site)
 import { loadState, ALERT_PERSIST_MS } from '../lib/watchstate.mjs';   // P0 — READ the watch loop's cross-pass state (conviction timers; quote never writes it)
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // P0 — declared-hold-thesis (silences expected-underwater), READ-ONLY
+import { loadReverseFlip, pruneReverseFlip } from '../lib/reverseflipstate.mjs';   // RF0 store — RF4 additive reverse-flip pending block (read-only)
+import { reverseFlipPendingEntries, reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4 — shared pure cycle-surfacing core
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', '..', 'positions.json');
@@ -64,6 +66,7 @@ const GUIDE_HISTORY = path.join(HERE, '..', '.guide-history.jsonl');   // YP1: w
 const WATCH_STATE = path.join(HERE, '..', '.cache', 'watch-state.json');   // P0: gitignored cross-pass state written by watch-positions.mjs (read-only here)
 const HOLD_THESIS_PATH = path.join(HERE, '..', '..', 'hold-thesis.json');   // P0: tracked declared-hold-thesis store (read-only here)
 const FILLS = path.join(HERE, '..', '..', 'fills.json');   // LM1: RuneLite-logged fills → per-item 4h buy-limit windows (no fetch)
+const REVERSE_FLIP = path.join(HERE, '..', '..', 'reverse-flip-state.json');   // RF0 declared-cycle store — RF4 additive pending block
 
 // Proposal C: the stale declared-exit read needs the 1h series, which this booked-lots view doesn't
 // otherwise fetch. The fetch is TARGETED (only lots with a declared numeric thesis exit — typically
@@ -229,6 +232,28 @@ function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = nu
   if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
 }
 
+// RF4 (PLAN-REVERSE-FLIP) — the additive reverse-flip PENDING block for the --positions surface, rendered
+// AFTER the normal held-lots table. PURE (reads the store array + an in-hand marks/infoById map the caller
+// built from what it already fetched — NO new fetch), reuses fmt/fmtP (no new formatting primitive). A
+// between-legs cycle owns no open FIFO lot, so it never appears in the held-lots table above — this block is
+// its only home on the positions surface. Returns [] on an EMPTY / all-holding store → NO section is added →
+// the positions report is byte-identical to pre-RF4. INFORM-ONLY, n≈0.
+export function reverseFlipPositionLines(state, { marks = new Map(), infoById = {}, now = Date.now() } = {}) {
+  const entries = reverseFlipPendingEntries(state, { marks, infoById, now });
+  if (!entries.length) return [];
+  const lines = ['', 'Reverse-flip pending (declared in-flight cycles — sold a keep, rebuy at the dip; capital-free, no lot/slot; inform-only, n≈0):'];
+  for (const e of entries) {
+    const sold = e.soldEach != null ? fmtP(e.soldEach) : '—';
+    const be = e.beRebuy != null ? fmtP(e.beRebuy) : '—';
+    const live = e.live != null ? fmtP(e.live) : '—';
+    const pend = e.daysPending != null ? `${e.daysPending.toFixed(1)}d` : '—';
+    lines.push(`  ${e.name} [${e.state}]: sold ${sold} · BE-rebuy <${be} · live ${live} · pending ${pend}`);
+    const notes = reverseFlipCycleNotes(e, { row: e.row, driftNote: (infoById[e.id] && infoById[e.id].driftNote) || null, now, fmt });
+    for (const n of notes) lines.push(`    ${n}`);
+  }
+  return lines;
+}
+
 export function buildQuoteReport({
   mode = 'items',
   header = null,          // positions: the '# Open positions …\n' line (with its trailing \n)
@@ -238,6 +263,7 @@ export function buildQuoteReport({
   estExplainer = null,    // items non-RAW: the standing Est. explainer line
   notes = [],             // flat, ordered typed note items (strings also accepted)
   convLines = [], pathLines = [], rebidLines = [], lateNightLine = null,   // positions extra blocks
+  reverseFlipLines = [],  // RF4 — the additive reverse-flip pending block (positions; [] on an empty store → no section)
 } = {}) {
   const sections = [];
   if (mode === 'positions') {
@@ -250,6 +276,7 @@ export function buildQuoteReport({
     if (pathLines.length) sections.push({ type: 'lines', lines: ['', 'Paths (persistence-gated dominant per held lot — decision support, placeholder weights):', ...pathLines], blank: false });
     if (rebidLines.length) sections.push({ type: 'lines', lines: ['', 'Rebid advisory (cut-and-rebid friction bar + multi-week trajectory — support, never overrides the verdict):', ...rebidLines], blank: false });
     if (lateNightLine) sections.push({ type: 'lines', lines: ['', lateNightLine], blank: false });
+    if (reverseFlipLines.length) sections.push({ type: 'lines', lines: reverseFlipLines, blank: false });
   } else {
     if (pressureBanner) sections.push({ type: 'lines', lines: [pressureBanner + '\n'], blank: false });
     sections.push({ type: 'table', headers, rows, blank: false });
@@ -616,6 +643,7 @@ async function runPositions() {
   let dailyPos = {};
   try { ({ series: dailyPos } = await loadDaily(28, 6, { noFetch: true })); } catch { dailyPos = {}; }
   const rows = [], notes = [], sugg = [], staleRisk = [], convLines = [], pathLines = [], rebidLines = [];
+  const rfMarks = new Map(), rfInfoById = {};   // RF4: in-hand marks/rows for any reverse-flip item that overlaps the held set (no new fetch)
   for (const { itemId, qty, cost, avgCost, buyTs } of groups) {
     const name = map.byId[itemId]?.name || ('#' + itemId);
     const inp = await getInputs(itemId);
@@ -648,6 +676,10 @@ async function runPositions() {
     });
     const row = ctx.market.row;
     const be = ctx.position.be;
+    // RF4: stash this held item's in-hand mark + row so a reverse-flip cycle on the SAME id renders its live
+    // price + thin read with zero new fetch (an RF item not held this pass simply degrades to store-only fields).
+    rfMarks.set(itemId, { mark: row.quickSell ?? null });
+    rfInfoById[itemId] = { row, live: row.quickSell ?? null };
     const v = renderHeldVerdict(ctx, { mode: 'compact' });   // the shared held-verdict renderer (P0)
     // P2 validators — the level we'd list the held lot at (patient band top). Set the reach candidate
     // on the built ctx (row now available) and run the registry. ts1h is NOT fetched here → degrade to
@@ -882,6 +914,11 @@ async function runPositions() {
   const lateNightLine = (isOvernightNow() && staleRisk.length)
     ? `ℹ Late-night: ${staleRisk.length} held position(s) may be stale/underwater by morning — re-verdict at the morning liquid window (${staleRisk.join(', ')}).`
     : null;
+  // RF4: the additive reverse-flip pending block (rendered after the held-lots table). Store loaded read-only;
+  // marks/infoById reuse the in-hand held rows above (no new fetch). Empty store → [] → no section added.
+  const reverseFlipLines = reverseFlipPositionLines(
+    pruneReverseFlip(loadReverseFlip(REVERSE_FLIP)),
+    { marks: rfMarks, infoById: rfInfoById, now: nowMs });
   const report = buildQuoteReport({
     mode: 'positions',
     header: `# Open positions vs market (${groups.length} items, ${openLots} lots)\n`
@@ -891,6 +928,7 @@ async function runPositions() {
     headers, rows,
     notes,
     convLines, pathLines, rebidLines, lateNightLine,
+    reverseFlipLines,
   });
   console.log(renderReport(report));   // no-op unless --verbose
   const rel = writeLastReport('quote', report);   // AO1: always dump the report object for an agent read

@@ -1,6 +1,6 @@
 ---
 name: book
-version: 1
+version: 1.1
 description: Show the state of the book right now — GE slots, working/parked/idle capital, per-lot P&L, and (with --size) how much of an item a given capital can buy. Triggers — "what's my book look like", "what's deployed/idle", "how many slots free", "capital dashboard", "how much X can I buy right now", "book".
 ---
 
@@ -52,3 +52,9 @@ manual sync needed. It does ONE live fetch per item in the held ∪ resting-bid 
 Read the stdout sections and relay them compactly — actionable first (free slots + deployable capital
 + any underwater lot), then the rest. Keep ONE line per lot (repo output convention). The sizer's
 BINDING line is the single most useful number when Ben asks "how much can I buy" — lead with it.
+
+## Reverse-flip pending (RF4)
+When `reverse-flip-state.json` holds `awaiting-rebuy`/`rebuy-armed` cycles, `read-book` prints a
+"REVERSE-FLIP PENDING" section (sold price · BE-rebuy · live · days-pending + inform notes) for each
+declared cycle — these are capital-free BETWEEN-legs cycles that own no lot / no slot, so they appear
+nowhere else on the book. INFORM-ONLY n≈0; relay it when present. An empty store prints nothing extra.

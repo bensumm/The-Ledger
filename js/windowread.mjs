@@ -500,8 +500,8 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
 // PURE, `fmt` (money-format) INJECTED so windowread stays dependency-free; returns the note TEXT only (no
 // sigil — the caller's NOTE_KIND owns that, same as every other note renderer in this file). Read by
 // quote-items.mjs (HT2 wiring, held+watched positions and a bare ask/bid quote) and screen-flip-niches.mjs
-// (HT3, the top-X digest enrichment pass) — this is a SHARED export so a later reverse-flip fold (HT4,
-// deferred pending PLAN-REVERSE-FLIP) can call it too with zero new compute.
+// (HT3, the top-X digest enrichment pass) — and, via the reverse-flip fold (HT4), by screen-flip-niches.mjs
+// `--mode reverse` (RF6 thin rows) + read-schedule.mjs's reverseFlipRows (RF4), all at zero new compute.
 //
 // null `drift` (hourlyDrift's own <2-dates degrade) ⇒ null (no note — an honest absence, never a fake read).
 // The ask-reachability-decay clause only appears when it actually FIRES (decaying === true) — the highest-

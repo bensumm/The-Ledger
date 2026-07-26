@@ -21,6 +21,7 @@
  * Break-even is the ONE tax-capped breakEven() from js/quotecore.js — never a second tax-math home. */
 import { breakEven } from '../../js/quotecore.js';
 import { bookUtilization, totalCapital } from './capital-utilization.mjs';
+import { reverseFlipPendingEntries, reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4 — declared reverse-flip cycle surfacing (pure)
 
 export const TOTAL_SLOTS = 8;   // members' GE has 8 offer slots
 
@@ -148,4 +149,33 @@ export function buildBook({ groups = [], offers = [], cash = {}, marks = new Map
   const out = { slots, capital, lots };
   if (sizer) out.sizer = sizeTranche(sizer);
   return out;
+}
+
+/* buildReverseFlipPending(state, { marks, infoById, now, fmt, fmtP }) -> the "Reverse-flip pending" section
+ * rows (RF4). A PURE render block (fixture-tested, no fs/fetch — read-book.mjs loads the store + builds the
+ * in-hand marks/infoById and calls this): each awaiting-rebuy / rebuy-armed declared cycle → a display row
+ * { id, name, state, soldEach, beRebuy, live, daysPending, soldTxt, beRebuyTxt, liveTxt, daysPendingTxt,
+ *   thin, notes[] }. Returns [] on an EMPTY / all-holding store — read-book renders NOTHING then (the
+ * zero-ripple guard; the section header only prints when this is non-empty). A between-legs cycle owns no
+ * open FIFO lot and no GE slot, so it never appears in the SLOTS/BOOK sections — this is its only home.
+ * `live` reuses the caller's already-built marks (mark = live sell price); no new fetch. INFORM-ONLY, n≈0. */
+export function buildReverseFlipPending(state, { marks = new Map(), infoById = {}, now = Date.now(), fmt = String, fmtP = String } = {}) {
+  const entries = reverseFlipPendingEntries(state, { marks, infoById, now });
+  return entries.map(e => ({
+    id: e.id,
+    name: e.name,
+    state: e.state,
+    soldQty: e.soldQty,
+    soldEach: e.soldEach,
+    beRebuy: e.beRebuy,
+    rebuyBidPrice: e.rebuyBidPrice,
+    live: e.live,
+    daysPending: e.daysPending,
+    thin: e.thin,
+    soldTxt: e.soldEach != null ? fmtP(e.soldEach) : '—',
+    beRebuyTxt: e.beRebuy != null ? fmtP(e.beRebuy) : '—',
+    liveTxt: e.live != null ? fmtP(e.live) : '—',
+    daysPendingTxt: e.daysPending != null ? `${e.daysPending.toFixed(1)}d` : '—',
+    notes: reverseFlipCycleNotes(e, { row: e.row, driftNote: (infoById[e.id] && infoById[e.id].driftNote) || null, now, fmt }),
+  }));
 }

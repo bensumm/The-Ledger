@@ -35,8 +35,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs } from '../lib/marketfetch.mjs';
 import { readOpenPositions } from '../lib/positions.mjs';
 import { readOffersSnapshot } from '../lib/offers.mjs';
-import { hourProfile } from '../../js/windowread.mjs';
+import { hourProfile, hourlyDriftNote } from '../../js/windowread.mjs';
+import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
 import { fmt, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';
+import { loadReverseFlip, pruneReverseFlip } from '../lib/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
+import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..', '..');
@@ -105,9 +108,54 @@ export function agendaRowsForItem({ name, tags = [], profile, now = new Date() }
   return rows;
 }
 
-// sortRows(rows) — soonest window first (In (h) ascending), stable for ties.
+// sortRows(rows) — soonest window first (In (h) ascending), stable for ties. RF rows with a null inH
+// (no in-hand profile → no window) sort to the END (treated as +∞), never displacing a real window.
 export function sortRows(rows) {
-  return rows.map((r, i) => [r, i]).sort((a, b) => (a[0].inH - b[0].inH) || (a[1] - b[1])).map(x => x[0]);
+  const key = r => (r.inH == null ? Number.POSITIVE_INFINITY : r.inH);
+  return rows.map((r, i) => [r, i]).sort((a, b) => (key(a[0]) - key(b[0])) || (a[1] - b[1])).map(x => x[0]);
+}
+
+// ── RF4: reverse-flip cycle rows (PLAN-REVERSE-FLIP) ─────────────────────────────────────────────
+// reverseFlipRows(state, { profileByItem, driftByItem, now }) — PURE row-builder PARALLEL to
+// agendaRowsForItem, unioned into the agenda so an in-flight DECLARED reverse-flip cycle (which owns no
+// FIFO lot + no GE slot between its legs) stays on the schedule. Tagged 'RF' + an `rf:true` flag so it's
+// visually distinct from a normal position/watchlist row, and its Action names the cycle leg:
+//   holding        → 'SELL peak (RF)'  windowed on the item's PEAK  (sell an owned keep into the peak)
+//   awaiting-rebuy → 'REBUY dip (RF)'  windowed on the item's DIP   (rebuy the sold keep at the dip)
+//   rebuy-armed    → 'REBUY armed (RF)' windowed on the item's DIP  (a rebuy bid is already resting)
+// The window comes from the ALREADY-FETCHED hourProfile for that id (profileByItem) — no new fetch; an id
+// with no in-hand profile yields inH=null (renders '—', sorts last). Each row carries the shared inform-only
+// notes (thin rebuy-strand + the shared hourlyDriftNote off driftByItem + the REBUY_STALE_DAYS nudge). An
+// EMPTY / all-holding-with-no-profile store yields ZERO rows → byte-identical agenda (the zero-ripple guard).
+export function reverseFlipRows(state, { profileByItem = {}, driftByItem = {}, now = new Date() } = {}) {
+  const rows = [];
+  const nowMs = (now instanceof Date) ? now.getTime() : (typeof now === 'number' ? now : Date.now());
+  // windowInH needs a Date-like with getHours/getMinutes; a numeric `now` (a test/injected ms) → a Date.
+  const nowClock = (now && typeof now.getHours === 'function') ? now : new Date(nowMs);
+  for (const e of state || []) {
+    if (!e || e.id == null || !e.state) continue;
+    const sell = e.state === 'holding';
+    const prof = profileByItem[e.id] || null;
+    const w = prof ? (sell ? (prof.peak || (prof.peaks && prof.peaks[0])) : (prof.dip || (prof.dips && prof.dips[0]))) : null;
+    const action = sell ? 'SELL peak (RF)' : (e.state === 'rebuy-armed' ? 'REBUY armed (RF)' : 'REBUY dip (RF)');
+    const level = sell ? (e.soldEach ?? null) : (e.rebuyBidPrice ?? e.beRebuy ?? null);
+    const driftNote = driftByItem[e.id] || null;
+    const notes = reverseFlipCycleNotes(e, { row: (prof && prof.row) || null, driftNote, now: nowMs, fmt });
+    rows.push({
+      inH: (w && w.startH != null && w.endH != null) ? windowInH(w.startH, w.endH, nowClock) : null,
+      startH: w ? w.startH : null,
+      endH: w ? w.endH : null,
+      item: e.name || ('#' + e.id),
+      action,
+      secondary: false,
+      level,
+      tags: ['RF'],
+      rf: true,
+      cycleState: e.state,
+      notes,
+    });
+  }
+  return rows;
 }
 
 // buildAudit({ closed, watchNames, mapping }) — group positions.json `closed` by itemId (count +
@@ -203,10 +251,11 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
   }
   const ids = [...selected.keys()];
   const profiles = new Map();
+  const series = new Map();   // RF4: retain the fetched 1h series so a reverse-flip drift note reuses it (no new fetch)
   const queue = [...ids];
   const worker = async () => {
     for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
-      try { profiles.set(id, hourProfile(await fetchTs(id, '1h'), { nights: PROFILE_NIGHTS })); }
+      try { const ts = await fetchTs(id, '1h'); series.set(id, ts); profiles.set(id, hourProfile(ts, { nights: PROFILE_NIGHTS })); }
       catch { profiles.set(id, null); }
     }
   };
@@ -216,7 +265,25 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
     const tags = [...e.tags].sort();   // 'C' before 'W'
     rows.push(...agendaRowsForItem({ name: e.name, tags, profile: profiles.get(id), now }));
   }
-  return { rows: sortRows(rows), warnings, itemCount: ids.length };
+  // RF4: union the in-flight reverse-flip cycles into the agenda. Guarded on a NON-EMPTY store so the
+  // common (empty) case adds zero rows AND zero compute → the agenda is byte-identical to pre-RF4. Windows
+  // + drift reuse ONLY already-fetched series (a rebuy-armed cycle is an open offer → in currentIds → already
+  // fetched; an awaiting-rebuy cycle with no bid isn't fetched → no window/drift, store-only fields).
+  const rfState = pruneReverseFlip(loadReverseFlip(path.join(repoRoot, 'reverse-flip-state.json')));
+  if (rfState.length) {
+    const profileByItem = {}, driftByItem = {};
+    for (const e of rfState) {
+      if (!e || e.id == null) continue;
+      const prof = profiles.get(e.id) || null;
+      if (prof) profileByItem[e.id] = prof;
+      const ts = series.get(e.id) || null;
+      if (ts) {
+        try { const dn = hourlyDriftNote(hourlyDrift(ts, { days: 3 }), { fmt }); if (dn) driftByItem[e.id] = dn; } catch { /* drift is best-effort */ }
+      }
+    }
+    rows.push(...reverseFlipRows(rfState, { profileByItem, driftByItem, now }));
+  }
+  return { rows: sortRows(rows), warnings, itemCount: ids.length, reverseFlipCount: rfState.length };
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────────────────────────
@@ -254,8 +321,16 @@ async function main() {
   console.log('| In (h) | Window | Item | Action | Level | List |');
   console.log('| ---: | --- | --- | --- | ---: | --- |');
   for (const r of rows) {
-    const inTxt = r.inH === 0 ? 'now' : r.inH.toFixed(1);
-    console.log(`| ${inTxt} | ${fmtHourRange(r.startH, r.endH)} | ${r.item} | ${r.action} | ${fmt(r.level)} | ${r.tags.join('/')} |`);
+    const inTxt = r.inH == null ? '—' : (r.inH === 0 ? 'now' : r.inH.toFixed(1));
+    const winTxt = (r.startH == null || r.endH == null) ? '—' : fmtHourRange(r.startH, r.endH);
+    console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmt(r.level)} | ${r.tags.join('/')} |`);
+  }
+  // RF4: reverse-flip cycle notes (inform-only, n≈0) — printed ONLY for RF rows that surfaced a note. On an
+  // empty store there are no RF rows → this block is skipped → byte-identical to the pre-RF4 agenda.
+  const rfNoted = rows.filter(r => r.rf && r.notes && r.notes.length);
+  if (rfNoted.length) {
+    console.log('\nReverse-flip cycles (declared in-flight; inform-only, n≈0 — SELL a keep into the peak, REBUY at the dip):');
+    for (const r of rfNoted) console.log(`- ${r.item} [${r.cycleState}]: ${r.notes.join(' · ')}`);
   }
 }
 
