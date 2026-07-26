@@ -23,10 +23,10 @@ Skills-versioning note: `version` here bumps on material behavior change; skills
 Since G1 (2026-07-04) `main` carries a protection ruleset (PR + green `checks` required, no
 force-push, no branch deletion). **Two current limitations** shape how you actually land work
 — be honest about them (§6 has the full state):
-- **No merge queue.** It is unavailable on this *user-owned* repo (the ruleset `merge_queue`
+- **No merge queue.** _(judgment: process guardrail)_ It is unavailable on this *user-owned* repo (the ruleset `merge_queue`
   rule is rejected; a queue needs an org on Team/Enterprise). Enforcement is ruleset PR +
   `checks` only — nothing serializes concurrent PRs automatically.
-- **PR creation is currently blocked by the gh token.** `createPullRequest` returns
+- **PR creation is currently blocked by the gh token.** _(judgment: process guardrail)_ `createPullRequest` returns
   `FORBIDDEN` (the token can read PRs and do admin writes, but not open them). Fixing it
   needs an interactive `gh auth refresh -s repo` (Ben) — see §5. Until then the PR path
   cannot be exercised.
@@ -88,13 +88,13 @@ separate **`smoke`** job (CI1) that installs Playwright chromium and runs
 stubbed, failing on any page error / app console error / empty pane. Split jobs so the cheap
 one fails fast. Constraints on any workflow change:
 
-- **Public repo → public logs.** No PII in output; no secrets in output — and none are
+- **Public repo → public logs.** _(judgment: CI constraint)_ No PII in output; no secrets in output — and none are
   currently needed anywhere in CI: keep it that way if at all possible.
 - **Nothing that reads `~/.runelite` can run in CI.** The fills sync runs on Ben's machine
   on demand (`node pipeline/commands/sync-fills.mjs`) — the scheduled job was eliminated
   (FILLS-PIPELINE.md §12), but CI still can never see the local logs.
 - **Keep CI seconds-fast.** Cheap invariants only on the hosted runner. A fixture test
-  shipped without a CI hook is a wasted fixture — wire new ones into checks.yml.
+  shipped without a CI hook is a wasted fixture — wire new ones into `.github/workflows/checks.yml`.
 - Keep the `merge_group` trigger — harmless now (no queue on this user-owned repo, §6) but
   required if the repo ever moves under an org and a merge queue becomes available.
 - A workflow change is a normal change: describe it to Ben, and verify its own run goes
@@ -107,10 +107,10 @@ one fails fast. Constraints on any workflow change:
 
 - git operations stay on **git-over-SSH**; `gh` is the API layer (runs, logs, `gh api`,
   ruleset management, and PR management — but PR *creation* is currently token-blocked, §6).
-- **To unblock the PR path:** `gh auth refresh -s repo` (interactive — Ben only; the current
+- **To unblock the PR path:** _(judgment: process guardrail)_ `gh auth refresh -s repo` (interactive — Ben only; the current
   token returns `FORBIDDEN` on `createPullRequest` and lacks the `workflow` scope). This is a
   one-time fix; it does not change git's SSH transport.
-- **Never run `gh auth setup-git`** — it would hijack git's credential helper onto the gh
+- **Never run `gh auth setup-git`** _(judgment: process guardrail)_ — it would hijack git's credential helper onto the gh
   token. If git ever starts prompting for credentials, check
   `git config --get-all credential.helper`.
 
@@ -122,15 +122,15 @@ one fails fast. Constraints on any workflow change:
 schedule died, the full dependency inventory) is FILLS-PIPELINE.md §12.
 
 What actually works vs. what was intended:
-- **Schedule eliminated → on-demand sync: DONE and verified.** No unattended writer to
+- **Schedule eliminated → on-demand sync: DONE and verified.** _(judgment: operational state)_ No unattended writer to
   `main`; no machine/deploy-key bypass identity exists.
 - **Admin bypass DONE and verified** — a direct `sync-fills.mjs` push landed on protected
   `main`, so Ben/agents-as-Ben can push directly (the practical path, §2).
-- **Merge queue: NOT AVAILABLE.** This is a *user-owned* repo; the ruleset `merge_queue` rule
+- **Merge queue: NOT AVAILABLE.** _(judgment: operational state)_ This is a *user-owned* repo; the ruleset `merge_queue` rule
   is rejected (a queue needs an org on GitHub Team/Enterprise). Enforcement is ruleset PR +
   `checks` only — no automatic serialization of concurrent PRs. Revisit only if the repo
   moves under an org.
-- **PR creation: BLOCKED by the current gh token** (`createPullRequest` → `FORBIDDEN`). The
+- **PR creation: BLOCKED by the current gh token** _(judgment: operational state)_ (`createPullRequest` → `FORBIDDEN`). The
   token reads PRs and does admin writes but can't open them, and lacks the `workflow` scope a
   standard `gh auth login` grants. **To enable the PR path, Ben runs `gh auth refresh -s
   repo` (interactive)**; agents can't do this (no interactive auth). Until then, land via

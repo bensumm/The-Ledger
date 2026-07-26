@@ -37,15 +37,15 @@ manual sync needed. It does ONE live fetch per item in the held ∪ resting-bid 
 
 ## Honesty caveats — state these when relaying (they are decided simplifications, not bugs)
 
-- **Live marks are age-labelled.** A mark whose last /latest print is older than ~15m is flagged
+- **Live marks are age-labelled.** _(judgment: display honesty)_ A mark whose last /latest print is older than ~15m is flagged
   `⚠ Nm old`; never relay a stale P&L number as if it were live. All P&L is after-tax (`breakEven`).
-- **The free-slot count is a log-derived LOWER bound.** A just-completed-but-not-yet-collected GE slot
+- **The free-slot count is a log-derived LOWER bound.** _(judgment: display honesty)_ A just-completed-but-not-yet-collected GE slot
   reads as FREE (the Exchange Logger only emits on a state change). So "N free" means "at least N
   free" — don't treat it as ground truth if a fill just landed.
-- **`deployablePool` degrades conservatively.** A resting bid whose item isn't in the fetched marketRef
+- **`deployablePool` degrades conservatively.** _(mechanic: `pipeline/lib/derive-cash-tiers.mjs`)_ A resting bid whose item isn't in the fetched marketRef
   classifies COMMITTED, so the deployable figure can under-report — it never over-reports.
 - **The deployable figure is SHOWN, not modelled — a restart-suspect flag warns when it may be inflated, and a wrong number is fixed at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L2/L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine)_ The deployable line now carries `⚠ N restart-suspect bid(s) (~Xm) may be included — verify in-game` when a restart-blind bid (`suspectBidEscrow`) may have inflated it: a restart-blind slot reads EMPTY, so its escrow drops out of offers.json and is never subtracted. The flag is INFORM-ONLY (it never changes the number). When the deployable is actually wrong, correct it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** `node pipeline/commands/derive-cash.mjs <amount>` for a drifted free-cash baseline, or a **manual-log fix / phantom-bid clear** for a "reclaimable" bid that's really gone. The automated modelling redesign was deliberately shelved — Ben's one-command correction is the resolution (`gate-on-error-cost-not-n`).
-- **Grouped P&L blends tranches.** An old core lot + a fresh top-up show ONE blended break-even and ONE
+- **Grouped P&L blends tranches.** _(judgment: display convention)_ An old core lot + a fresh top-up show ONE blended break-even and ONE
   (oldest) days-held — same convention as every other positions surface, not a per-tranche view.
 
 ## How to relay

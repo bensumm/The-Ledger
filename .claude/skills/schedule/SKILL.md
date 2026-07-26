@@ -40,11 +40,15 @@ Sorted by **`In (h)` ascending** (soonest window first):
 | In (h) | Window | Item | Action | Level | List |
 | ---: | --- | --- | --- | ---: | --- |
 
-- **`In (h)`** — hours to the window's next start, nearest 0.5h; `now` when currently inside it.
-- **Window** — the dip/peak hour range in BOTH zones (local / UK).
-- **Action** — `BUY dip` / `SELL peak`. Each item contributes up to 2 rows (its dip + its peak).
-- **Level** — the recent dip/peak price guide (the bid/ask candidate).
-- **List** — C / W tag(s).
+Column legend (the render columns of `read-schedule.mjs`):
+
+| Column | Meaning |
+| --- | --- |
+| `In (h)` | hours to the window's next start, nearest 0.5h; `now` when currently inside it. |
+| Window | the dip/peak hour range in BOTH zones (local / UK). |
+| Action | `BUY dip` / `SELL peak`. Each item contributes up to 2 rows (its dip + its peak). |
+| Level | the recent dip/peak price guide (the bid/ask candidate). |
+| List | C / W tag(s). |
 
 ## How to present it
 Run the script, then interpret the table into a **short spoken agenda** — the same pattern
