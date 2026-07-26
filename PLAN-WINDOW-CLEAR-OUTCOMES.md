@@ -1,6 +1,12 @@
 # PLAN-WINDOW-CLEAR-OUTCOMES — a forward outcome log for window-clear ask ladders (which reach signal predicts a fill?)
 
-Status: **DRAFT — not yet scheduled.** Per-topic working doc (PLANNING.md lifecycle step 1–2);
+Status: **DRAFT — not yet scheduled. A prototype implementation (WC2 — `join-window-clears.mjs` +
+`pipeline/lib/campaigns.mjs` + `joinwindowclears.test.mjs`, the fill-attribution join + shared campaign
+primitive) is PRESERVED on the salvage worktree `agent-a9590cfca9710921f` (branch tip `babaa36`).**
+Deferred at owner call during the 2026-07-25 salvage sweep: this is data-accrual with no urgency
+(no constant tuned, INFORM-ONLY), so it waits for a scheduled slot rather than landing opportunistically.
+Do NOT delete that worktree or this file until WC2 lands or is formally dropped.
+Per-topic working doc (PLANNING.md lifecycle step 1–2);
 folds into `PLAN.md` and is deleted when its last chunk ships. Executor rules = PLAN.md
 "Executor rules", verbatim. This plan builds a DATA-ACCRUAL mechanism feeding F1 — it is NOT a
 calibration and it tunes NO constant (honesty core below).

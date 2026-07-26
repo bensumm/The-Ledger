@@ -1,9 +1,23 @@
 # PLAN-ARCHITECTURE-COHERENCE — closing the blurred lines/duplication/non-determinism gaps
 
-Status: **DRAFT — awaiting approval.** Per-topic working doc (PLANNING.md lifecycle step 1–2);
-folds into `PLAN.md` and is deleted when its last chunk ships. Executor rules = PLAN.md
-"Executor rules", verbatim (also CLAUDE.md process rules 1–9). **ZERO code has been changed to
-produce this plan** — every finding below is a direct code read (file:line), not theory.
+Status: **PARTIALLY LANDED (salvage subset) — `ceb538b` (2026-07-25).** The cleanly-isolated chunks
+landed off the salvage worktree; the entangled/capital-math chunks stay parked:
+- **LANDED (`ceb538b`, pipeline-only, no APP_VERSION bump, CI checks+smoke green):** **chunk 1**
+  (read-buy-limits `maxTs` via `reduce`, not `Math.max(...spread)` — a V8 ~65k-arg crash fix) · **chunk 5**
+  (marketfetch `series()` caches the in-flight PROMISE not the resolved value → no concurrent double-fetch;
+  `declare-thesis` gets the `argv[1] &&` import-safety guard) · **chunk 6** (new `pipeline/lib/paths.mjs`
+  owns `REPO_DIR`; `derive-cash-tiers`/`cash-anchor` import it from the LIB not the `sync-fills` COMMAND —
+  killing the lib→command layering inversion + the top-level side-effect; `sync-fills` re-exports it;
+  dead-import sweep `fileURLToPath`/`HERE`/`fmtP`/`LOCAL`). README file inventory updated.
+- **DEFERRED — preserved UNCOMMITTED on worktree `agent-a3e1ba12232696893`:** **chunk 2 / LH2.4** (the
+  restart-blind SUSPECT-bid escrow — `offers.mjs` `suspects` array + `derive-cash` forcing a suspect BID to
+  COMMITTED so locked-in-game gp can't read as deployable) and **chunk 3** (`collapseOffers` fresh-placement
+  split on a restart-blind gap). Held back at owner request: chunk 2 changes capital-deployability math and
+  wants its own review; both touch the reconstruction chain. Do NOT delete this file or that worktree until
+  2/3 are resolved (landed or formally dropped).
+
+Per-topic working doc (PLANNING.md lifecycle step 1–2); folds into `PLAN.md` and is deleted when its last
+chunk resolves. Executor rules = PLAN.md "Executor rules", verbatim (also CLAUDE.md process rules 1–9).
 **EXCLUDES** the grade/rank rework (owned by `PLAN-GRADE-REWORK.md` — `js/rating.mjs`,
 `js/estimators/families.mjs`'s `rankScore`/`estimateRank`, `GRADE_CUTOFFS`, the digest `capEff`/
 `rankKey`); those findings are cross-referenced only, never re-planned here.
