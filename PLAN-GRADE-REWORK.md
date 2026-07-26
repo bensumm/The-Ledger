@@ -1,12 +1,24 @@
 # PLAN-GRADE-REWORK — dimensionally-honest, single-source screen grading (rank + letter + digest, reconciled)
 
-Status: **DRAFT — awaiting approval.** Per-topic working doc (PLANNING.md lifecycle step 1–2);
-folds into `PLAN.md` and is deleted when its last chunk ships. Executor rules = PLAN.md
-"Executor rules", verbatim (also CLAUDE.md process rules 1–9). **ZERO code has been changed to
-produce this plan** — every claim below is a direct code read (file:line), not theory. This plan
-is a mix of STRUCTURAL fixes (land now, calibration-independent) and one F1-GATED bucket
-(constant retuning — explicitly NOT scheduled here). Read the honesty core (§4) before touching
-any chunk.
+Status: **PARTIALLY LANDED (split subset) — `5fea8bd` (2026-07-25).** All O1–O6 are owner-resolved
+(the old "DRAFT — awaiting approval" header is superseded). The split was an owner decision once the
+lane was found to have bitrotted against ~10 commits and to collide semantically with Wave-3's
+digest crossability work:
+- **LANDED (`5fea8bd`, APP_VERSION 0.70.0, CI checks+smoke green):** **G1** (centralize the four grade
+  caps in `rateItem`) · **`capitalFactor` deletion** (the wanted half of G2/O3 — extracted WITHOUT the
+  deployable-fold) · **G4** (geometric-mean `riskMult` + kill the momentum double-count) · **G5**
+  (saturating TTF `1/(days+TTF_SAT_DAYS)`) · **G6** (`(thin)` confidence marker off pFill sample `n`).
+- **DEFERRED — superseded by Path-A (`PLAN-LANE-ADMISSION` D+E):** **G2's deployable-capital fold** and
+  **G3's per-mode normalized grading**. Rationale: Path-A (`pathAGpDay`) becomes the PRIMARY
+  "realizable deployable gp/day" ranking from the /1h archive, so reforming the LEGACY estimator rank
+  to *also* be deployable-aware is redundant with the primary path and is the exact chunk that tangles
+  with Wave-3 `liveCrossable`/digest `rankKey`. Revisit only if the live Path-A-vs-legacy A/B shows the
+  backup grade still needs the fold. Do NOT delete this file until G2/G3 are resolved (landed or
+  formally dropped).
+- **G7** stays F1-GATED / NOT SCHEDULED (constant retuning). Read the honesty core (§4) before any chunk.
+
+Per-topic working doc (PLANNING.md lifecycle); folds into `PLAN.md` and is deleted when its last
+(non-deferred) chunk resolves. Executor rules = PLAN.md "Executor rules" + CLAUDE.md process rules 1–9.
 
 ## 1. Problem / motivation
 
