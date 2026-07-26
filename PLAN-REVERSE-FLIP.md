@@ -1,5 +1,14 @@
 # PLAN-REVERSE-FLIP — harvesting owned items (2026-07-24)
 
+**Status: RECONCILED 2026-07-25, RF0 buildable.** A staleness audit vs `main` @ 2026-07-25 confirmed the
+STRATEGY is fully intact — nothing that landed 2026-07-25 (grade rework `5fea8bd`, Path-A `d2d7d32`, the
+daemon subsystem, fetch-pool scaling) touches any concept or code this plan relies on; reverse-flip has
+its own gate/table/ownership-gated pool and never referenced `rating.mjs`/`capitalFactor`/`pathA`. Fixed
+in this pass: the anchor incident (the 2026-07-24 hat cycle has since COMPLETED — see below), a handful of
+drifted `file:line` refs (`gatecandidates` 194-198→237-241, `validateNicheSpec` 434→425, `read-book`
+buildBook 146→142), and the plan's own internal contradiction (the readiness section still declared RF1's
+shape-vocabulary a build-blocker after Ruling §7 had already fixed it — now reconciled).
+
 Follows `docs/PLANNING.md`'s required shape. Per that doc's lifecycle, this file is folded into
 `PLAN.md` and deleted the moment its last chunk ships — do not leave it at the repo root once done.
 
@@ -17,11 +26,15 @@ gear, or a long-term flip-pipeline hold he's not ready to fully exit):
   (price steps up before the rebuy fills) — bounded, because there's no deadline to reacquire your
   own item; worst case you wait for the next dip.
 
-**Anchor incident (2026-07-24):** sold 1 Etched ancestral hat @ 57m — it filled **instantly**,
-above the 56.5m ask, not waiting for any peak window (the item is on `ignored-items.json` as
-`personal-use`, id in the live example). Rebuy bid resting @ 54.05m. This falsifies a naive
+**Anchor incident (2026-07-24, cycle now COMPLETED — reconciled 2026-07-25):** sold 1 Ancestral hat
+(id **21018**) @ 57m — it filled **instantly**, above the 56.5m ask, not waiting for any peak window.
+The rebuy then FILLED @ ~53.515m (below the 54.05m bid originally placed). This falsifies a naive
 "thin item ⇒ sell leg is risky" assumption: on a wanted item, live demand can clear the sell leg
-immediately. **The rebuy leg is the binding constraint**, not the sell leg.
+immediately. **The rebuy leg is the binding constraint**, not the sell leg — and here it cleared cheap,
+a clean profitable loop. Two live on-disk artifacts remain from it: the @57m sell sits in
+`positions.json.unmatched` (a real RF3 Case-B reconciliation instance) and the rebuy is an `open`
+lot. (The hat is NOT on `ignored-items.json`; current `personal-use` ignored entries are Battlestaff
+1391 + Ghrazi rapier 22324 — use one of those if a `personal-use` example is needed.)
 
 ### Regime asymmetry (the inversion, stated precisely)
 
@@ -192,7 +205,7 @@ convention):
     reverseFlipEligible is a SEPARATE opt-in flag on top of classification:'keep' — not every kept
     item is a good oscillator (Ben must be shown a candidate table and choose it in, RF2).",
   "items": [
-    { "id": 21634, "name": "Ancestral hat", "seedQty": 1, "seedTs": 1753315200,
+    { "id": 21018, "name": "Ancestral hat", "seedQty": 1, "seedTs": 1753315200,
       "classification": "keep", "reverseFlipEligible": true, "source": "seed" }
   ],
   "pendingClassification": [
@@ -373,13 +386,17 @@ pattern):
 
 ```json
 [
-  { "id": 21634, "name": "Ancestral hat", "state": "awaiting-rebuy",
+  { "id": 21018, "name": "Ancestral hat", "state": "awaiting-rebuy",
     "soldQty": 1, "soldEach": 57000000, "soldTs": 1753315200,
     "beRebuy": 55860000, "targetQty": 1,
     "rebuyBidPrice": 54050000, "rebuyBidTs": 1753318000,
     "declaredTs": 1753315300 }
 ]
 ```
+_(Illustrative mid-cycle `awaiting-rebuy` entry — id corrected to the real Ancestral hat 21018. NB: the
+real 2026-07-24 hat cycle this was drawn from has since COMPLETED — the @57m sell now sits in
+`positions.json.unmatched` and the rebuy FILLED @~53.515m as an open lot; that completed loop + the live
+`unmatched` sell are a real on-disk instance of the RF3 Case-B reconciliation, a stronger worked example.)_
 
 `state` ∈ `holding` (declared, not yet sold — pre-trigger) → `awaiting-rebuy` (sold, no bid resting
 yet — fully capital-free) → `rebuy-armed` (a bid IS resting — `offers.json` already tracks it as a
@@ -674,15 +691,15 @@ no source was changed to produce it.
 | A SELL with no open lot lands in `unmatched`, today's safe default (Q2) | **CONFIRMED** | `reconstruct.mjs:289` (`if (remain > 0) unmatched.push(...)`). |
 | `declare-thesis.mjs` is the CLI pattern RF0's `declare-owned.mjs`/`declare-reverse-flip.mjs` should mirror | **CONFIRMED, with one nuance** | `declare-thesis.mjs` mirrors cleanly for `resolveId`/positional-vs-flag parsing/`set`/`clear`/`list`. But it actually writes to **two stores** (`session-thesis.json` gitignored + `hold-thesis.json` tracked) with a `--path` flag bridging them — a two-store split RF0 does NOT need (it's one tracked store, `reverse-flip-state.json`). The cleaner mirror is `pipeline/lib/holdthesis.mjs` (`loadHoldThesis`/`saveHoldThesis`/`upsertThesis`/`clearThesis`/`pruneHoldThesis`, all pure, all confirmed at `pipeline/lib/holdthesis.mjs:57-94`) — a flat tracked array, load/save/upsert/clear/prune, exactly RF0's `reverse-flip-state.json` shape. Build RF0's lib module off `holdthesis.mjs`, and treat `declare-thesis.mjs` only as the CLI **argv-parsing** shape reference, not the storage shape reference. |
 | `ignored-items.json`'s shape is what `owned-items.json` should mirror | **CONFIRMED, structurally** | `ignored-items.json:1-21` — `{ _doc, items:[{id,name,reason}], greenlisted:[] }`. The mirror holds for "one `_doc` + a tracked `items[]` array of small objects," but `owned-items.json`'s actual per-item shape (qty, classification, `reverseFlipEligible`, source) is materially richer than `ignored-items.json`'s `{id,name,reason}` — the plan's own worked example (lines 150-171) already reflects this correctly; only the top-level convention (doc string + items array) is actually shared. |
-| `js/flip-niches.mjs`'s `gate:'value'`/`gate:'amplitude'` seam is the pattern `gate:'reverse'` slots into (RF2) | **CONFIRMED** | `pipeline/lib/gatecandidates.mjs:194-198` (`gateCandidates`) already branches `spec.gate === 'value'` / `'amplitude'` to dedicated gate functions before falling into the shared liquidity+edge stack — adding `if (spec.gate === 'reverse') return gateReverseFlipCandidates(...)` is a one-line, well-precedented addition. **One correction to RF2's acceptance text**: `validateNicheSpec` (`flip-niches.mjs:434`) has a closed `VALID_GATE` allow-list `Set(['band','value','amplitude'])` (`flip-niches.mjs:394`) — RF2 MUST add `'reverse'` to that set or the conformance test (`flip-niches.test.mjs`) will fail the moment the new spec registers. Not called out as an explicit RF2 sub-task in the current text; small but will trip an implementer who copies the `value`/`amplitude` precedent without re-reading the conformance list. |
-| The Regime Asymmetry table's shape vocabulary (`rising`/`falling`/`cooling`/`oscillating`/`based`) is what `classifyTrajectory` emits, and `invertedRegimeGate` re-maps it 1:1 | **WRONG — foundation mismatch, blocks RF1 as currently specified** | `js/termstructure.mjs:184` states `classifyTrajectory`'s actual output vocabulary in full: `shape ∈ 'knife' \| 'oscillating' \| 'based' \| 'rising' \| 'elevated' \| 'flat' \| 'unknown'`. **There is no `falling` shape and no `cooling` shape at all.** The nearest analog to "falling" is `knife` (a real decay/downtrend — see `basePosition()`'s own coarsening at `termstructure.mjs:307`, `shape === 'knife' → label = 'trending↓'`), and there's no analog to "cooling" — the closest concepts are `flat` (no drift) and `elevated` (like rising but off a high base). RF1's spec text ("rising→reject, falling/cooling/oscillating/based→pass") needs to be rewritten against the REAL 7-value enum before `js/reverseflip.mjs` can be written: e.g. `rising→reject, elevated→reject (same "buy back higher" risk as rising), knife→pass (this IS the "falling" case the plan means), oscillating/based/flat→pass, unknown→caution`. This is a genuine spec bug, not a naming quibble — an implementer coding straight off the current table would call `classifyTrajectory(...).shape === 'falling'`, which is never true, and the gate would silently never pass on the exact regime (a real decline) the strategy most wants to catch. |
+| `js/flip-niches.mjs`'s `gate:'value'`/`gate:'amplitude'` seam is the pattern `gate:'reverse'` slots into (RF2) | **CONFIRMED** | `pipeline/lib/gatecandidates.mjs:237-241` (`gateCandidates`; drifted from 194-198 via fetch-pool scaling `5e7e9d9` — content unchanged) already branches `spec.gate === 'value'` / `'amplitude'` to dedicated gate functions before falling into the shared liquidity+edge stack — adding `if (spec.gate === 'reverse') return gateReverseFlipCandidates(...)` is a one-line, well-precedented addition. **One correction to RF2's acceptance text**: `validateNicheSpec` (`flip-niches.mjs:425`) has a closed `VALID_GATE` allow-list `Set(['band','value','amplitude'])` (`flip-niches.mjs:394`) — RF2 MUST add `'reverse'` to that set or the conformance test (`flip-niches.test.mjs`) will fail the moment the new spec registers. Not called out as an explicit RF2 sub-task in the current text; small but will trip an implementer who copies the `value`/`amplitude` precedent without re-reading the conformance list. |
+| The Regime Asymmetry table's shape vocabulary (`rising`/`falling`/`cooling`/`oscillating`/`based`) is what `classifyTrajectory` emits, and `invertedRegimeGate` re-maps it 1:1 | **RESOLVED (Ruling §7, 2026-07-25)** — was a real spec bug, now FIXED in the top Regime Asymmetry table | `js/termstructure.mjs:184` states `classifyTrajectory`'s actual output vocabulary in full: `shape ∈ 'knife' \| 'oscillating' \| 'based' \| 'rising' \| 'elevated' \| 'flat' \| 'unknown'`. **There is no `falling` shape and no `cooling` shape at all.** The nearest analog to "falling" is `knife` (a real decay/downtrend — see `basePosition()`'s own coarsening at `termstructure.mjs:307`, `shape === 'knife' → label = 'trending↓'`), and there's no analog to "cooling" — the closest concepts are `flat` (no drift) and `elevated` (like rising but off a high base). RF1's mapping HAS BEEN rewritten against the REAL 7-value enum (top table + Ruling §7): `rising→reject, elevated→reject (same "buy back higher" risk as rising), knife→pass (this IS the "falling" case the plan means), oscillating/based/flat→pass, unknown→caution`. RF1 codes `invertedRegimeGate` straight off that mapping — do NOT reintroduce a `case 'falling':`/`'cooling':` branch (never emitted → silent dead gate). |
 | RF6 depends on PLAN-HOURLY-3DAY-TREND's shipped `--days`-honest `hourlyDriftNote` | **CONFIRMED, and already anticipates this plan** | `js/windowread.mjs:503-504`'s own header comment: "this is a SHARED export so a later reverse-flip fold (HT4, deferred pending PLAN-REVERSE-FLIP) can call it too with zero new compute" — `hourlyDriftNote(drift, { ask, fmt, days = 3 })` (`windowread.mjs:512`) takes a `days` param exactly as RF6 needs for the thin-item longer-window default. |
-| `/schedule`, `/book`, `/positions` are extensible additive surfacing hosts (RF4) | **CONFIRMED** | `read-schedule.mjs` already has a per-item `agendaRowsForItem` row-builder (`read-schedule.mjs:85`) unioned into one agenda — a `reverseFlipRows` sibling is a same-shape addition. `read-book.mjs` renders off `pipeline/lib/book-model.mjs`'s pure `buildBook` (`read-book.mjs:34,146`) — a new section is additive there too. `quote-items.mjs --positions` (`quote-items.mjs:89`) is a real, live, dedicated code path (not aspirational), confirmed by its own header example. |
+| `/schedule`, `/book`, `/positions` are extensible additive surfacing hosts (RF4) | **CONFIRMED** | `read-schedule.mjs` already has a per-item `agendaRowsForItem` row-builder (`read-schedule.mjs:85`) unioned into one agenda — a `reverseFlipRows` sibling is a same-shape addition. `read-book.mjs` renders off `pipeline/lib/book-model.mjs`'s pure `buildBook` (`read-book.mjs:34,142`) — a new section is additive there too. `quote-items.mjs --positions` (`quote-items.mjs:89`) is a real, live, dedicated code path (not aspirational), confirmed by its own header example. |
 | `cycle-watch.json`/`dip-watchlist.json` are the precedent for `reverse-flip-state.json`'s "scoped state file" shape | **CONFIRMED** | `dip-watchlist.json:1-15` — flat tracked array of small per-item objects (`id,name,source,track,addedTs,...`), same shape class the plan proposes. |
 | `BIG_TICKET_GP` exists in `js/quotecore.js` for the capture-on-buy filter (RF0) | **CONFIRMED** | `js/quotecore.js:94` — `export const BIG_TICKET_GP = 10_000_000;`, already consumed elsewhere in that file (screen-flip-niches' weak-deploy flag, per the plan's citation). |
 | `tax()` is the canonical break-even function (Ruling 1) | **CONFIRMED** | `js/money-math.js:6,9` — `TAXCAP=5_000_000`; `tax(p) = p<50 ? 0 : min(floor(p*0.02), TAXCAP)`, exactly as described. |
 
-**Net verdict: the FIFO/BANKED/CLI/surfacing scaffolding claims all hold up — RF0, RF2's wiring pattern, RF3, RF4, and RF6 are built on real, working code exactly as described.** The one load-bearing miss is **RF1's shape vocabulary**, which must be corrected before `js/reverseflip.mjs` is written (see Gaps below) — everything downstream of RF1 (RF2's gate, RF4's rows, RF6's notes) inherits whatever `invertedRegimeGate` returns, so this is worth fixing at the spec level now rather than in code review later.
+**Net verdict: the FIFO/BANKED/CLI/surfacing scaffolding claims all hold up — RF0, RF2's wiring pattern, RF3, RF4, and RF6 are built on real, working code exactly as described.** The RF1 shape-vocabulary miss this section originally flagged **is now RESOLVED** — the Regime Asymmetry table (§ near top) + Ruling §7 were rewritten against `classifyTrajectory`'s REAL 7-value enum (`knife|oscillating|based|rising|elevated|flat|unknown`), so RF1 must simply code `invertedRegimeGate` against that table's mapping (`rising`/`elevated`→reject, `knife`/`oscillating`/`based`/`flat`→pass, `unknown`→caution). The old `falling`/`cooling` draft is dead. Reconciled 2026-07-25 (this section predated the fix rulings and was never updated — a leftover from the plan's own two-session evolution, NOT 2026-07-25 code drift).
 
 ### 2. Sequenced build order + dependency graph
 
@@ -691,7 +708,7 @@ The plan's stated order (RF0 → RF1 → RF2, RF3/RF4 depend on RF0) is directio
 ```
 RF0 (stores + CLIs)
  │
- ├──▶ RF1 (pure gate/edge module — FIX the shape vocabulary first, see Gaps §1)
+ ├──▶ RF1 (pure gate/edge module — code invertedRegimeGate against the FIXED Regime Asymmetry mapping, Ruling §7)
  │      │
  │      ├──▶ RF2 (--mode reverse wiring; needs RF0's pool + RF1's gate)
  │      │      │
@@ -734,7 +751,7 @@ Without RF3, Case-B (pre-log owned items, the actual Ancestral-hat shape) P/L st
 
 ### 5. Gaps / ambiguities that would trip an implementer
 
-- **RF1's shape vocabulary (repeated for visibility — this is the single biggest risk to a clean build).** Anyone implementing `invertedRegimeGate` from the plan's prose alone, without independently re-reading `js/termstructure.mjs`, will write a dead `case 'falling':` branch and a gate that silently never accepts the exact regime (a real decline/knife) the strategy is built around. This should be fixed in the plan text itself before RF1 is dispatched to an executor, not left for code review to catch.
+- **RF1's shape vocabulary — RESOLVED (Ruling §7, 2026-07-25).** The top Regime Asymmetry table + Ruling §7 now encode the correct mapping against `classifyTrajectory`'s real 7-value enum; RF1 codes `invertedRegimeGate` off that table. The residual guard for the implementer: do NOT write a `case 'falling':`/`'cooling':` branch (never emitted → silent dead gate) — `knife` is the "falling" case. Verified against `js/termstructure.mjs:184` on 2026-07-25.
 - **RF0's `computeOwnedQty` fold reads `fills.json` events directly, but RF0's acceptance criterion says "fixture-pinned over a synthetic fills.json."** `fills.json`'s real on-disk event shape is the raw normalized-event shape `reconstruct.mjs`'s `parseJsonLine`/`buildEvents` produce (`{ts,type,state,itemId,price,qty,filled,spent,...}`), not the higher-level `positions.json` closed/open/unmatched shape. The plan doesn't misstate this, but an implementer should confirm which layer `computeOwnedQty` folds over — raw `fills.json` events (correct, per Q1's own text: "over raw `fills.json` events") vs. `positions.json`'s derived rows — before writing the fixture, since the two have materially different per-event field names.
 - **RF2's `VALID_GATE` conformance-list addition (`flip-niches.mjs:394`)** isn't named as an explicit RF2 sub-task in the current chunk text — add it explicitly so the chunk's acceptance criteria include "conformance suite passes with `reverse` registered," not just "the screen runs without throwing."
 - **RF3's "prints the exact command" acceptance criterion should specify WHICH timestamp field of `positions.json.unmatched`** the backfill command's `--time` should target — `unmatched` entries carry `sellTs` (`reconstruct.mjs:289`) but the BANKED line needs the ACQUISITION time (pre-sale), which lives only in `owned-items.json`'s `seedTs`/`source`, not in the unmatched row itself. The plan's Q2 prose gets this right ("the correct historical timestamp") but doesn't say explicitly that it's `owned-items.json.seedTs`, not anything off `positions.json` — worth stating in RF3's own acceptance bullet since that's the file an RF3 executor will actually open.
@@ -742,7 +759,7 @@ Without RF3, Case-B (pre-log owned items, the actual Ancestral-hat shape) P/L st
 
 ### Biggest risk to a clean build
 
-**RF1's shape-vocabulary mismatch.** It's the one place the plan's foundation claim is actually wrong rather than merely under-specified, it sits at the base of the dependency graph (RF2/RF4/RF6 all inherit `invertedRegimeGate`'s output), and the failure mode is silent — a `rising→reject / falling→pass` gate coded against a `falling` value that never occurs doesn't throw or warn, it just never passes on the regime that matters most, and nobody would notice without independently knowing `classifyTrajectory`'s real enum. This should be corrected in this plan document (the Regime Asymmetry table + RF1's bullet text) before RF1 is dispatched.
+**~~RF1's shape-vocabulary mismatch~~ — RESOLVED (Ruling §7, reconciled 2026-07-25).** The original biggest-risk (an `invertedRegimeGate` coded against a `falling` value that `classifyTrajectory` never emits → a silent dead gate) is fixed: the Regime Asymmetry table + Ruling §7 now specify the mapping against the real 7-value enum, and this readiness section has been reconciled to match. The remaining watch-items are ordinary spec hygiene (Gaps §5): confirm `computeOwnedQty` folds raw `fills.json` events, add `'reverse'` to `VALID_GATE` as an explicit RF2 sub-task, and target `owned-items.json.seedTs` (not any `positions.json` field) for RF3's BANKED `--time`. None blocks RF0.
 
 ---
 
