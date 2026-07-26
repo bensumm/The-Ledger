@@ -161,7 +161,7 @@ output**, computed once, in one place (Chunk RF1).
                     │   classification: flip/   │
                     │   keep/consumable/pending)│
                     └─────────────┬─────────────┘
-                                  │ reverseFlipEligible items
+                                  │ classification:'keep' items (§8)
                                   ▼
                     ┌─────────────────────────┐
                     │  js/reverseflip.mjs       │  pure gate/edge (RF1)
@@ -202,11 +202,11 @@ convention):
     classification: 'keep' (owned, want to keep — reverse-flip candidate pool) | 'flip' (normal
     merch item, not owned-for-keeping — the default assumption for anything never classified) |
     'consumable' (used up, not a market position) | 'pending' (awaiting a one-line confirm).
-    reverseFlipEligible is a SEPARATE opt-in flag on top of classification:'keep' — not every kept
-    item is a good oscillator (Ben must be shown a candidate table and choose it in, RF2).",
+    classification:'keep' IS the reverse-flip candidate pool (Ruling §8 — no separate opt-in flag);
+    RF1's oscillator filter + Ben's per-run RF2 table selection pick which keeps to actually cycle.",
   "items": [
     { "id": 21018, "name": "Ancestral hat", "seedQty": 1, "seedTs": 1753315200,
-      "classification": "keep", "reverseFlipEligible": true, "source": "seed" }
+      "classification": "keep", "source": "seed" }
   ],
   "pendingClassification": [
     { "id": 24417, "name": "Soulreaper axe", "qty": 1, "buyEach": 1400000000, "buyTs": 1753315200,
@@ -240,9 +240,10 @@ dashboard) — e.g. `pending: Soulreaper axe ×1 @ 1.4b — flip / keep / consum
 in conversation, the agent runs `declare-owned.mjs classify "<item>" flip|keep|consumable` (new CLI,
 mirrors `declare-thesis.mjs`'s resolve-token → upsert → save shape) which moves the entry from
 `pendingClassification` into `items[]` with `seedQty` = the qty already computed from the fold (not
-re-typed) and `seedTs` = now. A `keep` classification does NOT set `reverseFlipEligible` — that's a
-distinct, later, RF2-table opt-in (a keep item might be a one-off boss piece with no clean
-oscillation at all).
+re-typed) and `seedTs` = now. A `keep` classification puts the item in the reverse-flip pool, but
+being in the pool ≠ being a good cycle: a keep item might be a one-off boss piece with no clean
+oscillation. RF1's oscillator filter + Ben's per-run RF2-table selection do that screening each run
+(Ruling §8 — no persistent `reverseFlipEligible` flag).
 
 **Qty reconciliation — the "must go down too" requirement.** `qty` is **never** an incrementally
 mutated field. It's recomputed every read as `seedQty + Σ(buy/banked qty) − Σ(sell/withdraw qty)`
@@ -255,7 +256,9 @@ casing. **`reverse-flip-state.json`'s job is narrower than qty-tracking: it's th
 bookkeeping for scheduling (Q4), not the source of ownership truth.**
 
 **Candidate pool for `--mode reverse` (RF2).** `owned-items.json.items.filter(i =>
-i.reverseFlipEligible)` **∪** any currently-open long-term flip-pipeline hold flagged via an
+i.classification === 'keep')` (Ruling §8: no `reverseFlipEligible` opt-in flag — the `keep` set IS
+the pool; RF1's oscillator filter + Ben's per-run table selection pick the actual candidates) **∪**
+any currently-open long-term flip-pipeline hold flagged via an
 additive `reverseFlip: true` on its `hold-thesis.json` entry (Case A — see Question 2). Two input
 surfaces, one pool, because Case A (a normal tracked hold electing a reverse-flip cycle) and Case B
 (a personal-use/pre-log owned item) are declared through the store that already owns their intent.
@@ -461,8 +464,8 @@ immediately, before any screening logic exists.
 - **New:** `pipeline/lib/reverseflipstate.mjs` — load/save/upsert/clear/prune for
   `reverse-flip-state.json` (mirrors `pipeline/lib/holdthesis.mjs` verbatim in structure).
 - **New:** `pipeline/commands/declare-owned.mjs` — `seed "<item|id>" [--qty N]`,
-  `classify "<item|id>" flip|keep|consumable`, `eligible "<item|id>" on|off` (sets
-  `reverseFlipEligible`), `list`.
+  `classify "<item|id>" flip|keep|consumable`, `list`. (No `eligible` subcommand — Ruling §8:
+  `classification:'keep'` IS the reverse-flip pool, no per-item opt-in flag. **Landed `0dc43ca`.**)
 - **New:** `pipeline/commands/declare-reverse-flip.mjs` — `set "<item|id>" --state
   awaiting-rebuy --sold-each <gp> --qty N [--sold-ts <iso>]`, `advance "<item|id>" --state
   rebuy-armed --bid <gp>`, `clear "<item|id>"`, `list` (mirrors `declare-thesis.mjs`).
@@ -493,8 +496,8 @@ immediately, before any screening logic exists.
 
 - **Registry entry:** `FLIP_NICHES.reverse` in `js/flip-niches.mjs` (`inAll: false`, explicit-only
   like `scalp`; `gate: 'reverse'` routed in `pipeline/lib/gatecandidates.mjs` to a new
-  `gateReverseFlipCandidates` that reads the RF0 pool — `owned-items.json` `reverseFlipEligible`
-  items ∪ `hold-thesis.json` `reverseFlip:true` entries — and fetches each directly (no two-stage
+  `gateReverseFlipCandidates` that reads the RF0 pool — `owned-items.json` `classification:'keep'`
+  items (Ruling §8: no `reverseFlipEligible` flag) ∪ `hold-thesis.json` `reverseFlip:true` entries — and fetches each directly (no two-stage
   proxy-ordered fetch pool; population is small and pre-selected by ownership, not attention-
   worthiness, unlike every other niche).
 - **Wire into** `screen-flip-niches.mjs`'s mode dispatch/usage string/error message (adds `reverse`
@@ -598,7 +601,7 @@ shipped; the `--days`-honest drift label + percentage ask-reach render landed 20
 | Owned qty (must reconcile up AND down) | `computeOwnedQty` pure fold over fills.json — never hand-edited | none — this is mechanical given data |
 | Regime-inversion mapping (rising=bad) | `invertedRegimeGate` — a fixed re-map of `classifyTrajectory`'s existing output | none — the mapping itself is the ruling, stated once |
 | BE-rebuy level | `tax()`-based, mechanical | none |
-| Whether an item is a reverse-flip CANDIDATE at all | `reverseFlipEligible` flag — RF2's table surfaces eligible-shape items, Ben opts them into the flag | **Ben decides** — not every "keep" item is a good oscillator |
+| Whether an item is a reverse-flip CANDIDATE at all | `classification:'keep'` IS the pool (§8, no flag); RF1's oscillator filter surfaces the clean-shape keeps in RF2's table | **Ben decides** per run — picks from the RF2 table which keeps to actually cycle |
 | Whether/when to actually place the rebuy bid | `/schedule`'s row shows window+BE+slot facts | **Ben places every market offer** — the row is a prompt, never an action |
 | Whether to backfill a BANKED line for a Case-B sell | RF3 prints the exact command | **Ben runs it or doesn't** — cosmetic gap either way (see Q2) |
 | Stale-rebuy nudge threshold (`REBUY_STALE_DAYS`) | printed note, mechanical trigger | the THRESHOLD itself is a named placeholder pending real cycles |
@@ -690,7 +693,7 @@ no source was changed to produce it.
 | A `BANKED` fill-line mechanism already exists and enters the FIFO queue like a buy (Q2 Case B, existing-scaffolding bullet) | **CONFIRMED** | `reconstruct.mjs:264-268` (`o.type === 'buy' \|\| o.type === 'banked'` pushes into the same lot queue, carrying `banked:true`); `parseJsonLine`/`normalizeStateStr` (`reconstruct.mjs:50-53,99-100`) recognize a `BANK`/`WITHDRAW` state; `add-manual-fill.mjs` already ships a working `--type banked --price <basis>` CLI path (`add-manual-fill.mjs:20,96,108-110`) with a `Dragon claws --type banked` example in its own header — this is a live, exercised mechanism, not aspirational. |
 | A SELL with no open lot lands in `unmatched`, today's safe default (Q2) | **CONFIRMED** | `reconstruct.mjs:289` (`if (remain > 0) unmatched.push(...)`). |
 | `declare-thesis.mjs` is the CLI pattern RF0's `declare-owned.mjs`/`declare-reverse-flip.mjs` should mirror | **CONFIRMED, with one nuance** | `declare-thesis.mjs` mirrors cleanly for `resolveId`/positional-vs-flag parsing/`set`/`clear`/`list`. But it actually writes to **two stores** (`session-thesis.json` gitignored + `hold-thesis.json` tracked) with a `--path` flag bridging them — a two-store split RF0 does NOT need (it's one tracked store, `reverse-flip-state.json`). The cleaner mirror is `pipeline/lib/holdthesis.mjs` (`loadHoldThesis`/`saveHoldThesis`/`upsertThesis`/`clearThesis`/`pruneHoldThesis`, all pure, all confirmed at `pipeline/lib/holdthesis.mjs:57-94`) — a flat tracked array, load/save/upsert/clear/prune, exactly RF0's `reverse-flip-state.json` shape. Build RF0's lib module off `holdthesis.mjs`, and treat `declare-thesis.mjs` only as the CLI **argv-parsing** shape reference, not the storage shape reference. |
-| `ignored-items.json`'s shape is what `owned-items.json` should mirror | **CONFIRMED, structurally** | `ignored-items.json:1-21` — `{ _doc, items:[{id,name,reason}], greenlisted:[] }`. The mirror holds for "one `_doc` + a tracked `items[]` array of small objects," but `owned-items.json`'s actual per-item shape (qty, classification, `reverseFlipEligible`, source) is materially richer than `ignored-items.json`'s `{id,name,reason}` — the plan's own worked example (lines 150-171) already reflects this correctly; only the top-level convention (doc string + items array) is actually shared. |
+| `ignored-items.json`'s shape is what `owned-items.json` should mirror | **CONFIRMED, structurally** | `ignored-items.json:1-21` — `{ _doc, items:[{id,name,reason}], greenlisted:[] }`. The mirror holds for "one `_doc` + a tracked `items[]` array of small objects," but `owned-items.json`'s actual per-item shape (qty, classification, source) is materially richer than `ignored-items.json`'s `{id,name,reason}` — the plan's own worked example (lines 150-171) already reflects this correctly; only the top-level convention (doc string + items array) is actually shared. |
 | `js/flip-niches.mjs`'s `gate:'value'`/`gate:'amplitude'` seam is the pattern `gate:'reverse'` slots into (RF2) | **CONFIRMED** | `pipeline/lib/gatecandidates.mjs:237-241` (`gateCandidates`; drifted from 194-198 via fetch-pool scaling `5e7e9d9` — content unchanged) already branches `spec.gate === 'value'` / `'amplitude'` to dedicated gate functions before falling into the shared liquidity+edge stack — adding `if (spec.gate === 'reverse') return gateReverseFlipCandidates(...)` is a one-line, well-precedented addition. **One correction to RF2's acceptance text**: `validateNicheSpec` (`flip-niches.mjs:425`) has a closed `VALID_GATE` allow-list `Set(['band','value','amplitude'])` (`flip-niches.mjs:394`) — RF2 MUST add `'reverse'` to that set or the conformance test (`flip-niches.test.mjs`) will fail the moment the new spec registers. Not called out as an explicit RF2 sub-task in the current text; small but will trip an implementer who copies the `value`/`amplitude` precedent without re-reading the conformance list. |
 | The Regime Asymmetry table's shape vocabulary (`rising`/`falling`/`cooling`/`oscillating`/`based`) is what `classifyTrajectory` emits, and `invertedRegimeGate` re-maps it 1:1 | **RESOLVED (Ruling §7, 2026-07-25)** — was a real spec bug, now FIXED in the top Regime Asymmetry table | `js/termstructure.mjs:184` states `classifyTrajectory`'s actual output vocabulary in full: `shape ∈ 'knife' \| 'oscillating' \| 'based' \| 'rising' \| 'elevated' \| 'flat' \| 'unknown'`. **There is no `falling` shape and no `cooling` shape at all.** The nearest analog to "falling" is `knife` (a real decay/downtrend — see `basePosition()`'s own coarsening at `termstructure.mjs:307`, `shape === 'knife' → label = 'trending↓'`), and there's no analog to "cooling" — the closest concepts are `flat` (no drift) and `elevated` (like rising but off a high base). RF1's mapping HAS BEEN rewritten against the REAL 7-value enum (top table + Ruling §7): `rising→reject, elevated→reject (same "buy back higher" risk as rising), knife→pass (this IS the "falling" case the plan means), oscillating/based/flat→pass, unknown→caution`. RF1 codes `invertedRegimeGate` straight off that mapping — do NOT reintroduce a `case 'falling':`/`'cooling':` branch (never emitted → silent dead gate). |
 | RF6 depends on PLAN-HOURLY-3DAY-TREND's shipped `--days`-honest `hourlyDriftNote` | **CONFIRMED, and already anticipates this plan** | `js/windowread.mjs:503-504`'s own header comment: "this is a SHARED export so a later reverse-flip fold (HT4, deferred pending PLAN-REVERSE-FLIP) can call it too with zero new compute" — `hourlyDriftNote(drift, { ask, fmt, days = 3 })` (`windowread.mjs:512`) takes a `days` param exactly as RF6 needs for the thin-item longer-window default. |
@@ -745,7 +748,7 @@ Without RF3, Case-B (pre-log owned items, the actual Ancestral-hat shape) P/L st
 
 1. **RF1's shape-vocabulary fix (see Claim Verification above) needs a ruling, not just a bugfix.** Does `elevated` map to reject-like-`rising` (both are "bought back higher" risk) or does it get its own treatment? Does `flat` pass cleanly or get a caution (no drift ≠ guaranteed a dip will come)? This is a 10-minute decision but it's a decision, not mechanical — the current plan text doesn't make it because it was written against a vocabulary that doesn't exist.
 2. **Seed contents.** RF0 ships "with the live seed entry for the Ancestral hat" (RF0's own text) — but the full seed list (what ELSE does Ben want tracked from day one: Battlestaff and Ghrazi rapier are already flagged `personal-use` on `ignored-items.json`, are they reverse-flip candidates too?) is undeclared. Blocks nothing structurally (capture-on-buy + manual seeding both work incrementally) but the RF0 acceptance criterion ("ships with the live seed entry") implies at least a decision on whether it's ONE item or several at ship time.
-3. **`reverseFlipEligible` opt-in flow — who looks at the candidate table and when?** The plan (Q1) is explicit Ben must be SHOWN a candidate table and opt items in — but no chunk actually builds "show Ben a candidate table of `keep`-classified items that aren't yet eligible-flagged." RF2's `--mode reverse` screen shows already-eligible items; nothing surfaces the *pre*-eligible pool for Ben to review. Worth a ruling: is this a manual `declare-owned.mjs list` review, or does RF2's screen need a `--pending-eligible` view too?
+3. **Candidate-review flow — RESOLVED by Ruling §8.** There is no `reverseFlipEligible` flag, so there is no "pre-eligible pool" to surface separately: the pool IS the `classification:'keep'` set (reviewable any time via `declare-owned.mjs list`), and RF2's `--mode reverse` screen applies RF1's oscillator filter to show the clean-shape keeps for Ben to pick from per run. No `--pending-eligible` view is needed — the earlier two-tier (eligible-flagged vs pre-eligible) distinction dissolved with the flag.
 4. **Placeholder thresholds are honestly named but unset.** `REVERSE_MIN_SWING_PCT`, `PENDING_QTY_MAX`/`MAX_PENDING`, `REBUY_STALE_DAYS` all need SOME starting number to ship compiling code, even as an admitted placeholder (the pattern every other niche already follows — `SCALP_MIN_ROI`, `CHURN_MIN_VOL` etc. shipped as named placeholders too). Not a blocker in the sense of needing Ben's judgment call on the VALUE (placeholders are supposed to be a guess), but the chunk executor needs to just pick numbers and say so — flagging so it isn't treated as an open question mid-build.
 5. **Does RF6 gate any earlier chunk?** No — confirmed by re-reading: RF6 is explicitly "all inform-only, none gate" (RF6's own acceptance text) and is described as depending on RF1/RF2 only for which surfaces to attach its notes to, not for its own logic. RF6 does NOT block RF0-RF2's build; it only makes their OUTPUT honest on thin items. Given the anchor incident is precisely a thin-item misread, treat RF6 as de-facto required-before-Ben-trusts-the-tool even though it's not build-blocking in the dependency-graph sense (see Minimum Shippable above).
 
