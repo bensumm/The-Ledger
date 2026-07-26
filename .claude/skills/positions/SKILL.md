@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.50
+version: 1.51
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -54,16 +54,32 @@ sections plus your own prose:
   `read-window-range.mjs` trio prints, zero extra fetch.
 - **Read the `⏳ soft-buy:` line before deciding whether to ADD to a lot (2026-07-22, the
   buy-soft-while-holding rule).** _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: dip
-  HH:00–HH:00 · live @floor | +X% · buy now | wait`. It puts the ADD-side timing right next to the
+  HH:00–HH:00 · live @floor | +X% · <cue>`. It puts the ADD-side timing right next to the
   held lot: the **dip window** = the cheapest hours-of-day to add (the diurnal DIP window); the
-  **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below — **buy now**) vs `+X%` (live
-  sits X% above the dip — **wait** for the window). The doctrine (memory "buy-soft-while-holding-for-peak"):
-  holding a position to sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its
-  diurnal dip when it's soft. Real anchors: we bought Dragon boots into the daytime peak (~350k over)
-  and blowpipe at 10.67m instead of its 10.40m dip, both while already holding — this line would have
-  read `+X% · wait` on both. Same `hourProfile` the `↳ diurnal:` note uses (`softBuyRead`/`formatSoftBuy`
-  in `js/windowread.mjs`), zero extra fetch; HEURISTIC (n≈0), inform-only — never a gate/verdict. A null
-  1h series this pass degrades it to no line (like the diurnal note).
+  **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below) vs `+X%` (live sits X% above
+  the dip). The **cue** is now **FLOOR-AWARE** (2026-07-22, the fang under-read fix) — when the marker
+  is `@floor` it consults the SAME multi-day floor read the adjacent `⇅ floor/ceiling` (`fcTrack`) note
+  already prints, so a post-update dump sitting at its diurnal floor EVERY day no longer misreads as a
+  discount:
+    - `@floor · ▽ caution — floor breaking ↓` — the multi-day floor BROKE / is crash-risk. **@floor here
+      is a dump artifact, not a discount** — don't add on the dip alone; this is a falling knife (the fang
+      dumped ~32m while the old label stayed bullish).
+    - `@floor · ▲ favorable — dip in uptrend (price-trend only)` — the multi-day floor is RISING
+      (healthy-trend / compressing-up): a dip WITHIN an uptrend. **PRICE-TREND ONLY** — it is blind to
+      game-update/regime breaks (a rising floor also describes a PRE-update pump), so it is a prompt, NOT
+      a green-light; overlay your own update knowledge.
+    - `@floor · buy now` — floor flat/ranging/cooling, or too few days to classify: the plain soft dip
+      (unchanged behavior).
+    - `+X% · wait` — live above the dip; wait for the window (the floor-aware cue applies only `@floor`).
+  These cue words are their OWN vocabulary (a buy-TIMING cue) — do NOT conflate `▽ caution — floor
+  breaking ↓` here with the separate `⇅` floor/ceiling TREND line or the reachMargin ask-CUSHION
+  extending/fading line. The doctrine (memory "buy-soft-while-holding-for-peak"): holding a position to
+  sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its diurnal dip when it's soft.
+  Real anchors: we bought Dragon boots into the daytime peak (~350k over) and blowpipe at 10.67m instead
+  of its 10.40m dip, both while already holding — this line would have read `+X% · wait` on both. Same
+  `hourProfile` the `↳ diurnal:` note uses; the floor-aware cue reuses the in-hand `floorCeilingTrack`
+  fc (`softBuyRead`/`formatSoftBuy` in `js/windowread.mjs`), zero extra fetch; HEURISTIC (n≈0),
+  inform-only — never a gate/verdict. A null 1h series this pass degrades it to no line (like the diurnal note).
   - **A SECOND diurnal window may flag** (PLAN-MULTI-PEAK-WINDOWS, inform-only n≈0): the `↳ diurnal:` note
     can append a trailing `also ASK …/also BID … — second elevated/depressed window` clause when a held
     item has a second genuinely-prominent peak (or dip), not just one — e.g. a reliable overnight exit

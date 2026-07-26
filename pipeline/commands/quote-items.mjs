@@ -201,7 +201,7 @@ const EST_EXPLAINER = `(Est. buy/sell are ESTIMATES — reach-folded, PLACEHOLDE
 // clause is simply omitted). Display-only, direction-agnostic — never a verdict/gate.
 function pushTrajectory(notes, days, { liveRef = null, label = '', prof = null, ctx = null } = {}) {
   const tr = trajectoryRead(days, { liveRef });
-  if (!tr) return;
+  if (!tr) return null;
   notes.push(`  ${label ? label + ': ' : ''}trajectory (14d window low/high, oldest→newest):`);
   for (const [key, n] of tr.scored) notes.push(`    ${key}  low ${fmt(n.low)}  high ${fmt(n.hi)}`);
   // PLAN-DRIFT-VS-CRASH + R6: the floor/ceiling slope-asymmetry + floor-break read, now ALSO carrying
@@ -212,6 +212,7 @@ function pushTrajectory(notes, days, { liveRef = null, label = '', prof = null, 
   const dae = (prof && ctx) ? driftExitFrom(prof, days, ctx) : null;
   const fcText = formatFloorCeiling(fc, fmt, { label, live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling }, drift: dae });
   if (fcText) notes.push({ kind: 'fcTrack', text: fcText });
+  return fc;   // hand the floorCeilingTrack read back so the caller can thread it into pushSoftBuy's floor-aware @floor cue (no recompute)
 }
 // local 'YYYY-MM-DD' of now — matches windowStats' dayKey (wStart=0) so the forming-day guard lines up.
 function localDayKey(d = new Date()) {
@@ -224,11 +225,14 @@ function localDayKey(d = new Date()) {
 // and this computes the profile. This helper exists because the note originally lived ONLY in runItems, so
 // `--positions` — the held-lot surface the whole feature is FOR — silently never rendered it; centralizing the
 // push is what keeps the two surfaces from drifting again (the same shared-helper discipline as pushTrajectory).
-// `live` = the live buy-side (the instabuy Ben would pay to add now). Inform-only, never a gate; null profile → no note.
-function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null } = {}) {
+// `live` = the live buy-side (the instabuy Ben would pay to add now). `fc` = the floorCeilingTrack read
+// pushTrajectory just returned (the SAME multi-day floor read) — it drives the @floor floor-aware cue
+// (caution on a breaking floor, favorable on a dip-in-uptrend) with NO re-derived slope. Inform-only,
+// never a gate; null profile → no note; null fc → the cue honestly degrades to the bare 'buy now'.
+function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null, fc = null } = {}) {
   const p = prof || (ts1h ? hourProfile(ts1h, { nights: 7 }) : null);
   if (!p) return;
-  const sbTxt = formatSoftBuy(softBuyRead(p, { live }), { fmtHour });
+  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc }), { fmtHour });
   if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
 }
 
@@ -378,9 +382,7 @@ async function runItems() {
     }), volDay: row.volDay ?? null, buyLimit: map.byId[id]?.limit ?? null };
     const timedLapText = formatTimedLap(timedLap, { fmt });
     if (timedLapText) notes.push({ kind: 'diurnal', itemId: id, text: timedLapText });
-    // The ADD-while-holding SOFT-BUY timing read — pushed via the shared pushSoftBuy so the bare-quote and
-    // --positions surfaces stay identical (reuse the prof already computed for the diurnal note; zero new fetch).
-    pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id });
+    // (SOFT-BUY moved below pushTrajectory so its @floor cue can reuse the floorCeilingTrack fc — see there.)
     // #6 (PF1 forecast, Ben 2026-07-15): the module's motivating ask — "not buyable/sellable at a good
     // price NOW, but ~Xh from now." whenBuyable/whenSellable over ONE diurnalForecast (all js/forecast.mjs).
     // Inform-only, provisional (n≈0, diurnal+trend only) — zero new fetch (reuses the in-hand prof); never
@@ -461,8 +463,11 @@ async function runItems() {
     // multi-day trajectory (shape + floor/ceiling + live position) — the fang under-read fix; zero fetch.
     // Chunk 5: prof (line 330) + the diurnalForecast ctx bits (already used for the forecast lines above)
     // fold the drift-adjusted exit level into the note — all in-hand, no new fetch.
-    pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell,
+    const fcTraj = pushTrajectory(notes, ast && ast.days, { liveRef: row.quickBuy ?? row.quickSell,
       prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
+    // The ADD-while-holding SOFT-BUY timing read — pushed AFTER pushTrajectory so its @floor cue reuses the
+    // floorCeilingTrack fc just computed (bare-quote & --positions surfaces stay identical; zero new fetch).
+    pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id, fc: fcTraj });
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
@@ -881,11 +886,12 @@ async function runPositions() {
     // already fetched this pass — NO new fetch; the bigTicket block's profH is scoped there, so compute a
     // profile here for the general held-lot path) + the row's diurnalForecast ctx bits.
     const profT = inp.ts1h ? hourProfile(inp.ts1h, { nights: 14 }) : null;
-    pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name,
+    const fcHeld = pushTrajectory(notes, astHeld && astHeld.days, { liveRef: row.quickBuy ?? row.quickSell, label: name,
       prof: profT, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
     // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
     // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.
-    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId });
+    // fcHeld (the floorCeilingTrack just computed) drives the @floor floor-aware cue — caution on a breaking floor.
+    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId, fc: fcHeld });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid

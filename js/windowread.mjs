@@ -1280,24 +1280,61 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 //               now; '+X%' when live sits X% above the dip → wait for the window to come round.
 //   buyNow    — the boolean the render turns into the plain "buy now / wait" cue.
 // SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column (same HH:00–HH:00 · @floor / +X% cell
-// format + the same SOFT_BUY_AT_FLOOR_PCT boundary) so both surfaces read consistently once both land —
-// the digest's digestSoftBuy is meant to reconcile onto THIS helper. INFORM-ONLY (tier: context) — n≈0,
-// a HEURISTIC, never gates, never a verdict, never a screen.json/rank input (rule 4). A null/absent
+// format + the same SOFT_BUY_AT_FLOOR_PCT boundary) so both surfaces read consistently — the digest's
+// digestSoftBuy reconciles onto THIS helper (ONE implementation, not two). INFORM-ONLY (tier: context) —
+// n≈0, a HEURISTIC, never gates, never a verdict, never a screen.json/rank input (rule 4). A null/absent
 // profile (or no dip level) ⇒ null ⇒ the note simply doesn't render (degrade like trajectoryRead).
+//
+// FLOOR-AWARE cue (the fang under-read fix, Ben 2026-07-21): a bare '@floor · buy now' misreads a
+// post-update dump — an item sitting at its diurnal floor EVERY day because it's falling — as a discount
+// (the fang dumped while the label stayed bullish). The fix does NOT re-derive a slope: it consults the
+// MULTI-DAY floorCeilingTrack `fc` the caller ALREADY computed one line away (pushTrajectory's fcTrack
+// note), reading its DISCRETE floorBreak flag + classification ONLY. When live sits @floor:
+//   • fc.floorBreak.broke OR classification 'crash-risk'          → 'caution'   — @floor is a dump artifact,
+//                                                                    not a discount (the guard)
+//   • classification 'healthy-trend' | 'compressing-up' (rising)  → 'favorable' — a dip WITHIN an uptrend
+//   • anything else (ranging/cooling/mild-cooldown/flat), OR no    → 'buy now'   — today's unchanged behavior
+//     fc / too few days to classify
+// UPDATE-BLINDNESS CAVEAT (rule 4): 'favorable' is a PRICE-TREND read ONLY — blind to game-update/regime
+// breaks (a rising floor equally describes a PRE-update pump), so it is worded as a DESCRIPTION ("dip in
+// uptrend (price-trend only)"), NOT an imperative "GO"; the operator overlays update knowledge. Both cues
+// are prompts, never orders. The vocabulary ("floor breaking ↓" / "dip in uptrend") is deliberately its
+// own thing — a BUY-TIMING cue — distinct from the adjacent fcTrack floor/ceiling TREND line and the
+// reachMargin ask-CUSHION extending/fading line, so a reader doesn't conflate the three.
 export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip floor (or below) ⇒ @floor / buy now (mirrors the digest branch)
 
-export function softBuyRead(profile, { live = null } = {}) {
+// the @floor floor-aware cue off the ALREADY-computed fc (NO re-derived slope — discrete floorBreak +
+// classification only). Missing fc / no classification ⇒ 'buy now' (honest degrade: no favorable/caution
+// claim without the floor read). Module-internal; the read carries the resolved `cue`, formatSoftBuy words it.
+function softBuyFloorCue(fc) {
+  if (!fc || !fc.classification) return 'buy now';
+  if ((fc.floorBreak && fc.floorBreak.broke) || fc.classification === 'crash-risk') return 'caution';
+  if (fc.classification === 'healthy-trend' || fc.classification === 'compressing-up') return 'favorable';
+  return 'buy now';
+}
+
+export function softBuyRead(profile, { live = null, fc = null } = {}) {
   if (!profile || !profile.dip || profile.dip.level == null) return null;
   const floor = profile.dip.level;
   const dipWindow = { startH: profile.dip.startH, endH: profile.dip.endH };
-  let marker = null, overPct = null, buyNow = null;
+  let marker = null, overPct = null, buyNow = null, cue = null;
   if (live != null && floor > 0) {
     overPct = (live - floor) / floor * 100;
     buyNow = overPct <= SOFT_BUY_AT_FLOOR_PCT;                // at/below the floor, or within the threshold over it
     marker = buyNow ? '@floor' : `+${overPct.toFixed(1)}%`;
+    cue = buyNow ? softBuyFloorCue(fc) : 'wait';             // @floor → floor-aware cue; above the dip → wait
   }
-  return { dipWindow, floor, live, marker, overPct, buyNow };
+  return { dipWindow, floor, live, marker, overPct, buyNow, cue };
 }
+
+// cue → rendered wording. ONE map so both surfaces (positions note + screen digest) word the four states
+// identically. The 'favorable' text carries its update-blindness caveat inline (never an imperative GO).
+export const SOFT_BUY_CUE_TEXT = {
+  'buy now':   'buy now',
+  'wait':      'wait',
+  'favorable': '▲ favorable — dip in uptrend (price-trend only)',
+  'caution':   '▽ caution — floor breaking ↓',
+};
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
 // phrase it identically. Null read ⇒ null (no note). `fmtHour` defaults to the HH:00 formatter that
@@ -1306,7 +1343,8 @@ export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') 
   if (!read) return null;
   const win = `${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
   if (read.marker == null) return `soft-buy: dip ${win}`;                // no live reference ⇒ window only
-  return `soft-buy: dip ${win} · live ${read.marker} · ${read.buyNow ? 'buy now' : 'wait'}`;
+  const cueText = SOFT_BUY_CUE_TEXT[read.cue] ?? read.cue;
+  return `soft-buy: dip ${win} · live ${read.marker} · ${cueText}`;
 }
 
 // --- diurnal-phase entry-timing (INFORM-ONLY PLACEHOLDER, n≈0) ---------------------------------

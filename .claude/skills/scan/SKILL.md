@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.85
+version: 1.86
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -76,8 +76,14 @@ additive visibility, never a re-rank of the main block. The reach ✓/✗ + mira
 a quoted ask pinned to a STALE live instabuy print (the `staleLive` case `quote-items.mjs` flags) can't fake
 a reach ✓ — reach/placement recompute against the fresher instasell, digest-scoped. The `soft-buy` column is
 the BUY-timing complement of `phase` (which is the peak/sell-cycle window): the diurnal DIP window + where
-live sits vs the dip floor (`HH:00–HH:00 · @floor` = soft NOW · `+X%` = live above the dip, wait for the
-window) — so you don't buy into a peak; relay it when a pick reads `@floor` or is deep into its dip window. It
+live sits vs the dip floor + a FLOOR-AWARE cue (`HH:00–HH:00 · @floor · <cue>` · `+X% · wait`). It is the SAME
+shared `softBuyRead` helper the positions surface uses (ONE implementation), so the `@floor` cue reads the
+multi-day floor: `@floor · buy now` (soft dip) · `@floor · ▲ favorable — dip in uptrend (price-trend only)`
+(rising floor — a prompt, NOT a green-light; blind to game-update breaks) · `@floor · ▽ caution — floor
+breaking ↓` (a post-update dump sitting @floor is a falling knife, NOT a discount — the fang anchor). The
+digest excludes held items but still shows FRESH candidates, so the caution guard matters here too: don't
+relay a `@floor` pick as a buy without checking its cue. Relay it when a pick reads `@floor` or is deep into
+its dip window. It
 is an ADDITIVE VIEW, not a replacement: the digest sits ABOVE the full per-niche tables and the context
 footers, it never trims or supersedes them (the `actionable-first-dead-last` trim rule below still governs
 the FULL table you paste). Relay the digest AND the trimmed per-niche table — two different surfaces for two

@@ -509,6 +509,47 @@ ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders',
   assert.equal(formatSoftBuy(null), null, 'null read ⇒ no note');
 });
 
+// --- 6c. floor-aware @floor cue (the fang under-read fix) — softBuyRead consults the caller's fc ------
+// @floor no longer means an unconditional "buy now": the caller threads the ALREADY-computed
+// floorCeilingTrack `fc`, and a breaking/crash floor turns @floor into 'caution' (a dump artifact, not a
+// discount), a dip-in-uptrend into 'favorable'. Missing fc / no classification degrades to plain 'buy now'.
+ok('softBuyRead @floor + no fc ⇒ cue degrades to buy now (unchanged behavior)', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000 });
+  assert.equal(sb.cue, 'buy now');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live @floor · buy now');
+});
+
+ok('softBuyRead @floor + a BREAKING floor (floorBreak.broke) ⇒ caution', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'cooling', floorBreak: { broke: true } } });
+  assert.equal(sb.cue, 'caution');
+  assert.ok(formatSoftBuy(sb).includes('caution — floor breaking'));
+});
+
+ok('softBuyRead @floor + classification crash-risk ⇒ caution (@floor is a dump artifact)', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'crash-risk', floorBreak: { broke: false } } });
+  assert.equal(sb.cue, 'caution');
+});
+
+ok('softBuyRead @floor + a rising floor (healthy-trend / compressing-up) ⇒ favorable', () => {
+  const up = softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'healthy-trend' } });
+  assert.equal(up.cue, 'favorable');
+  assert.ok(formatSoftBuy(up).includes('favorable — dip in uptrend'));
+  const comp = softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'compressing-up' } });
+  assert.equal(comp.cue, 'favorable');
+});
+
+ok('softBuyRead @floor + a neutral regime (ranging) ⇒ plain buy now', () => {
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, fc: { classification: 'ranging' } });
+  assert.equal(sb.cue, 'buy now');
+});
+
+ok('softBuyRead: fc NEVER overrides the wait cue when live sits above the dip', () => {
+  // the floor-aware cue only applies AT the floor; a +X% (wait) read stays 'wait' regardless of fc.
+  const sb = softBuyRead(prof(1000, 1080, false), { live: 1027, fc: { classification: 'crash-risk', floorBreak: { broke: true } } });
+  assert.equal(sb.cue, 'wait');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live +2.7% · wait');
+});
+
 // --- PART II (PLAN-GRADE-REACH): asymPair — deep-buy / reliable-sell realizable pair ----------
 // 14 synthetic nights. lows/his ascending (windowStats' contract); days only carries the count here.
 const asymStats = (lows, his) => ({ days: Array.from({ length: Math.max(lows.length, his.length) }, (_, i) => [`d${i}`, {}]), lows: [...lows].sort((a, b) => a - b), his: [...his].sort((a, b) => a - b) });

@@ -10,6 +10,27 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Floor-aware soft-buy cue — @floor consults floorCeilingTrack, not a re-derived slope (0.71.0, salvage lane, 2026-07-25)
+Salvaged the `soft-buy-cue` worktree (branch `e310530`, ~4 days bitrotted). Re-implemented onto
+current `main` rather than force-merging: the branch was based on the pre-R6 `pushTrajectory`, which
+`main` has since reworked so it ALREADY computes the `floorCeilingTrack` `fc` the cue wants — so the
+threading is now natural. The problem it fixes (memory `update-cycle-timing`, the fang under-read):
+`softBuyRead`'s bare `@floor · buy now` misread a post-update DUMP — an item sitting at its diurnal
+floor EVERY day because it's falling — as a discount. The fang dumped ~32m while the old label stayed
+bullish. Now the `@floor` cue is FLOOR-AWARE: `softBuyRead` takes an optional `fc` (the `floorCeilingTrack`
+result the caller already computed one line away — NO re-derived slope, discrete `floorBreak`/`classification`
+only) and resolves `▽ caution — floor breaking ↓` (broke/crash-risk = a dump artifact, not a discount),
+`▲ favorable — dip in uptrend (price-trend only)` (rising floor — carries its update-blindness caveat, a
+prompt not a green-light), else `buy now` (unchanged); `+X%` stays `wait`. `SOFT_BUY_CUE_TEXT` maps
+cue→wording so both surfaces phrase it identically. `quote-items.mjs` threads the `fc` `pushTrajectory`
+now returns (runItems moved below pushTrajectory; runPositions passes `fcHeld`); `screen-flip-niches.mjs`'s
+duplicate `digestSoftBuy` now DELEGATES to the shared `softBuyRead` (ONE implementation) with `fc` off the
+in-hand `rbStats`/amplitude `windowStats` days. Proven live: `Blighted ancient ice sack` rendered
+`@floor · ▲ favorable — dip in uptrend` on the band digest; Primordial boots stayed `@floor · buy now`
+(ranging, correctly no false-alarm). 6 new floor-aware unit cases. `APP_VERSION 0.70.0 → 0.71.0`
+(js/windowread.mjs is loaded by the app via trends.js/quotecore.js). HEURISTIC n≈0, INFORM-ONLY —
+never a gate/verdict.
+
 ### PLAN-DAEMON-SUBSYSTEM Phase 2 — migrate the fleet to real health checks + a status surface (pipeline, 2026-07-25)
 Phase 1 built the daemon home/registry/manager + the `cache-warm` guard but left the three pre-existing
 daemons (`sync-fills`, `watch-log`, `dev-server`) as `{ok:null}` stubs. Phase 2 wires their REAL health and
