@@ -20,50 +20,26 @@
  *       --repo-dir   override the repo root (mirrors sync-fills.mjs's existing convention);
  *                    not expected to be used in real invocations, only for testability.
  */
-import fs from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { heartbeatHealth, httpProbeHealth } from '../daemons/health.mjs';   // Phase-2 Chunk 10: ONE source of truth
 
-const HEARTBEAT_STALE_MS = 90_000; // 3x the daemon's 30s heartbeat interval — safety margin against a missed tick
-const HTTP_TIMEOUT_MS = 2_000;
 const SERVER_URL = 'http://127.0.0.1:8000/';
 
 const argVal = name => { const i = process.argv.indexOf(name); return (i >= 0 && i + 1 < process.argv.length) ? process.argv[i + 1] : undefined; };
 const REPO_DIR = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';
 
+// These two probes were the ORIGINAL hand-rolled versions this whole daemon subsystem generalized —
+// they now delegate to the shared health.mjs so ensure-server and the registry can never drift apart.
+// Kept as thin { running, detail } adapters because main() below (and its /morning contract) speak that shape.
 function checkDaemon() {
-  const heartbeatPath = join(REPO_DIR, 'heartbeat.json');
-  let raw;
-  try {
-    raw = fs.readFileSync(heartbeatPath, 'utf8');
-  } catch {
-    return { running: false, detail: 'no heartbeat.json found' };
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { running: false, detail: 'heartbeat.json unparseable' };
-  }
-  const generatedAt = parsed && parsed.generatedAt ? new Date(parsed.generatedAt).getTime() : NaN;
-  if (!Number.isFinite(generatedAt)) return { running: false, detail: 'heartbeat.json missing generatedAt' };
-  const ageMs = Date.now() - generatedAt;
-  if (ageMs > HEARTBEAT_STALE_MS) return { running: false, detail: `heartbeat is ${Math.round(ageMs / 1000)}s old (stale)` };
-  return { running: true, detail: `${Math.round(ageMs / 1000)}s old heartbeat` };
+  const h = heartbeatHealth({ path: join(REPO_DIR, 'heartbeat.json') });
+  return { running: h.ok === true, detail: h.detail };
 }
 
 async function checkServer() {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT_MS);
-  try {
-    await fetch(SERVER_URL, { signal: ctrl.signal });
-    return { running: true, detail: '' };
-  } catch (e) {
-    const msg = (e && e.message) || String(e);
-    return { running: false, detail: msg.includes('abort') ? 'timed out' : 'connection refused' };
-  } finally {
-    clearTimeout(to);
-  }
+  const h = await httpProbeHealth({ url: SERVER_URL });
+  return { running: h.ok === true, detail: h.detail };
 }
 
 function startServeCmd() {

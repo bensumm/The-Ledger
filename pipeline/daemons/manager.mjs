@@ -96,6 +96,7 @@ export async function status({ registry = DAEMONS, statePath = STATE_PATH } = {}
       name: d.name,
       kind: d.kind,
       local: d.local,
+      autoRun: d.autoRun !== false,   // default true; only the cache-warm guard is actually auto-run
       trigger: d.trigger || '',
       ok: health.ok ?? null,
       detail: health.detail || '',
@@ -115,7 +116,7 @@ export async function status({ registry = DAEMONS, statePath = STATE_PATH } = {}
  * @param {Function} [opts.log]                where refuse/action notes go (default console.error — stderr,
  *                                             so it never pollutes a stdout market table)
  * @returns {Promise<Array>} one action row per entry: { name, action, detail }
- *   action ∈ 'refused-git-writer' | 'started' | 'ok' | 'throttled' | 'start-failed'
+ *   action ∈ 'refused-git-writer' | 'skipped-manual' | 'started' | 'ok' | 'throttled' | 'start-failed'
  */
 export async function ensure({
   registry = DAEMONS,
@@ -140,6 +141,16 @@ export async function ensure({
       continue;
     }
     // ──────────────────────────────────────────────────────────────────────────────────────
+
+    // autoRun:false → VISIBLE in status() but the manager never auto-starts it here. This is distinct
+    // from the git-writer refusal above: these ARE local/zero-git-safe, but their trigger is elsewhere
+    // (sync-fills rides every read via runLocalSync; residents are started attended via serve.cmd), so
+    // ensure() must not surprise-run them on a routine scan/quote/loop pass. Checked BEFORE health so an
+    // unhealthy manual daemon is reported as skipped, never started.
+    if (d.autoRun === false) {
+      actions.push({ name: d.name, action: 'skipped-manual', detail: 'autoRun:false — on-demand/attended only' });
+      continue;
+    }
 
     // Healthy (or unknown/not-yet-wired) → nothing to start. `ok === false` is the only "act" case.
     if (health.ok !== false) {

@@ -32,11 +32,20 @@
  * Every `description` below states "zero-git" or "commits to main" in words so the `local` boolean
  * is never inferred from the bare token "publish".
  *
- * PHASING: Phase-1 seeds this with the daemons that exist TODAY as thin stubs (watch-log,
- * dev-server — their real health checks land in Phase 2 by generalizing ensure-server.mjs's
- * checkDaemon()/checkServer()) PLUS the new `cache-warm` guard (this phase's real deliverable —
- * its module is built in Chunk 4; the entry here is tolerant of that module not yet existing so
- * this file lands and imports cleanly ahead of it). Node-only, no APP_VERSION bump.
+ * PHASING: Phase-1 seeded this with the daemons that exist TODAY as thin stubs (watch-log,
+ * dev-server) PLUS the new `cache-warm` guard. Phase-2 (Chunk 7) then wired the residents' REAL
+ * health checks by generalizing ensure-server.mjs's checkDaemon()/checkServer() into the shared
+ * health.mjs (heartbeatHealth / httpProbeHealth), and registered `sync-fills` as a visibility-only
+ * guard (see its entry). Node-only, no APP_VERSION bump.
+ *
+ * ── THE `autoRun` FIELD (Phase-2) ──
+ * `local` says "safe to auto-run at all" (git-safety). `autoRun` says "SHOULD the manager auto-run
+ * it in ensure()". Only the cache-warm guard is auto-run (autoRun omitted → defaults true). Every
+ * other entry is `autoRun:false` — VISIBLE in status() but never started by ensure():
+ *   • sync-fills — already rides EVERY read via sync-invoke.runLocalSync; registering it adds
+ *     freshness VISIBILITY to status(), NOT a second auto-trigger.
+ *   • watch-log / dev-server — residents started ATTENDED via serve.cmd (or ensure-server.mjs at
+ *     /morning); ensure() must never surprise-spawn an HTTP server on a routine scan/quote pass.
  */
 
 /**
@@ -52,6 +61,16 @@
  * @provisional-api: Phase-1 legibility constant; the Phase-2 `status` surface (read-daemons.mjs) will
  * cite it so `status()` can report "when did we last publish". Test-covered now, no consumer until then.
  */
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import { heartbeatHealth, httpProbeHealth } from './health.mjs';
+
+// Repo root, for the resident/guard health checks below. Pure path math — NO fs/network at import
+// (statSync/read only run when a healthCheck() is actually called), so importing stays side-effect-free.
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, '..', '..');
+
 export const GIT_WRITER = Object.freeze({
   name: 'sync-fills-publish',
   description: 'sync-fills.mjs --publish — the once-a-day /overnight book publish: fetch/ff-pull ' +
@@ -90,18 +109,46 @@ export const DAEMONS = [
     },
   },
   {
+    name: 'sync-fills',
+    description: 'sync-fills.mjs --local — the ZERO-GIT book rebuild (RuneLite exchange logs → ' +
+      'fills.json/positions.json/offers.json). This entry is the LOCAL form ONLY; the --publish git form ' +
+      '(fetch/ff-pull + commit + PUSH to main) is the SEPARATE GIT_WRITER const above, never this entry. ' +
+      'Guard: health = book freshness (positions.json mtime). autoRun:false — it already rides EVERY read ' +
+      'via sync-invoke.runLocalSync, so registering it adds freshness VISIBILITY to status(), NOT a new ' +
+      'auto-trigger the manager would fire.',
+    kind: 'guard',
+    local: true,
+    autoRun: false,
+    trigger: 'runLocalSync (sync-invoke.mjs) at the top of every scan/positions/watch/loop read; attended --publish at /overnight.',
+    // Freshness only — a plain fs.statSync on the rebuilt artifact. Deliberately does NOT import or spawn
+    // sync-fills.mjs (that would trip check-daemon-safety and, more importantly, is not this guard's job).
+    healthCheck() {
+      try {
+        const st = fs.statSync(join(REPO_ROOT, 'positions.json'));
+        const ageMin = Math.round((Date.now() - st.mtimeMs) / 60000);
+        // "stale" past ~26h just flags a cold book; ensure() never acts on it (autoRun:false).
+        return { ok: (Date.now() - st.mtimeMs) < 26 * 3600_000, detail: `book (positions.json) ${ageMin}m old`, lastRan: new Date(st.mtimeMs).toISOString() };
+      } catch {
+        return { ok: false, detail: 'positions.json not found', lastRan: null };
+      }
+    },
+    start() { return { ok: null, detail: 'on-demand only — runs via runLocalSync every read (--local); attended at /overnight (--publish)' }; },
+  },
+  {
     name: 'watch-log',
     description: 'watch-log.mjs live-desk daemon (LW) — fs.watch on the exchange logs + a 30s heartbeat.json ' +
       'pulse; regenerates offers.json/fills.json in-process. ZERO-GIT always (no git call anywhere in the file). ' +
-      'Resident: health = live PID (Phase 2 will read heartbeat.json via the generalized ensure-server.checkDaemon()).',
+      'Resident: health = heartbeat.json freshness (the LW3 browser-facing pulse).',
     kind: 'resident',
     local: true,
+    autoRun: false,
     trigger: 'serve.cmd (start /b) alongside dev-server.mjs; standalone; Ctrl+C to stop. No Task Scheduler job.',
-    // Phase-2 stub: real health-check = generalize ensure-server.mjs checkDaemon() (heartbeat.json age).
-    // NOTE (Hardening finding #5): this resident's health source stays heartbeat.json (root-level, LW3,
-    // browser-facing) — do NOT unify it with the manager's own .cache/daemon-state.json bookkeeping.
-    healthCheck() { return { ok: null, detail: 'not yet wired — Phase 2 (generalize ensure-server.checkDaemon)' }; },
-    start() { return { ok: null, detail: 'not yet wired — Phase 2 (resident start via serve.cmd)' }; },
+    // Phase-2: real health-check via the shared health.mjs (generalized from ensure-server.checkDaemon()).
+    // NOTE (Hardening finding #5): this resident's health source STAYS heartbeat.json (root-level, LW3,
+    // browser-facing) — deliberately NOT unified with the manager's own .cache/daemon-state.json bookkeeping.
+    // start() is attended-only (autoRun:false): ensure() must never surprise-spawn serve.cmd on a routine pass.
+    healthCheck() { return heartbeatHealth({ path: join(REPO_ROOT, 'heartbeat.json') }); },
+    start() { return { ok: null, detail: 'attended — started via serve.cmd (start /b, with dev-server); ensure() never auto-spawns a resident' }; },
   },
   {
     name: 'dev-server',
@@ -109,13 +156,15 @@ export const DAEMONS = [
       '/api/local-file. ZERO-GIT for its own writes. /api/scan shells `screen-flip-niches.mjs --mode all ' +
       "--publish`, but that --publish is SCREEN's own flag (rewrites screen.json LOCALLY, zero git) — NOT " +
       "sync-fills.mjs --publish's git-push. So this stays local:true despite the word \"publish\". " +
-      'Resident: health = HTTP probe on :8000 (Phase 2 = generalized ensure-server.checkServer()).',
+      'Resident: health = HTTP probe on :8000 (generalized ensure-server.checkServer()).',
     kind: 'resident',
     local: true,
+    autoRun: false,
     trigger: 'serve.cmd (foreground; dies with the terminal).',
-    // Phase-2 stub: real health-check = generalize ensure-server.mjs checkServer() (HTTP probe :8000).
-    healthCheck() { return { ok: null, detail: 'not yet wired — Phase 2 (generalize ensure-server.checkServer)' }; },
-    start() { return { ok: null, detail: 'not yet wired — Phase 2 (resident start via serve.cmd)' }; },
+    // Phase-2: real health-check via the shared health.mjs (generalized from ensure-server.checkServer()).
+    // async: httpProbeHealth awaits a localhost fetch. start() attended-only (autoRun:false) — same reason as watch-log.
+    async healthCheck() { return httpProbeHealth({ url: `http://127.0.0.1:${Number(process.env.COFFER_DEV_PORT) || 8000}/` }); },
+    start() { return { ok: null, detail: 'attended — started via serve.cmd (foreground); ensure() never auto-spawns a resident' }; },
   },
 ];
 

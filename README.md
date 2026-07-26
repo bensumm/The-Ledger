@@ -487,8 +487,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   per-run table selection pick the actual candidates from the kept set). A Case-B (pre-log, sold-first)
   item MAY also carry an optional `seedBasis` (acquisition cost each) — the acquisition basis
   `reconcile-reverse-flip.mjs` (RF3) reads to build the BANKED-backfill command (absent → RF3 prints a
-  "declare the seed first" note instead of a fabricated basis). Ships EMPTY (Ben seeds real items
-  via the CLI — the Ancestral hat is deliberately NOT seeded). No PII. Fixture-pinned in
+  "declare the seed first" note instead of a fabricated basis). **The COMMITTED copy ships EMPTY**
+  (`{_doc, items:[]}`); on Ben's desk it is populated locally with the ≥5m big-ticket bank keeps (27
+  items, from the data-export plugin's `container_bank.json`) but held OUT of the public repo via
+  `git update-index --skip-worktree owned-items.json` — so the file is full on disk (the reverse-flip
+  screen reads it) yet `git status` shows nothing and it never commits/pushes (his holdings stay off
+  GitHub; see memory `owned-items-skip-worktree`). To edit the committed stub's schema: clear
+  skip-worktree, edit to the EMPTY shape only, commit, re-set skip-worktree, repopulate locally. No PII
+  (ids/names only). Fixture-pinned in
   `pipeline/test/ownedledger.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
 - `reverse-flip-state.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the declared
   reverse-flip CYCLE store — a flat array of `{id,name,state,soldQty,soldEach,soldTs,beRebuy,targetQty,
@@ -1041,22 +1047,34 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Tier-1 archive 5m read-only; `--json`/`--nights`/`--offline`. Builds NONE of
     `safeQuantile`/`qEvidence`/`impactFold` (AC3). Pure core `lib/fill-placement.mjs`, fixture-tested by
     `fill-placement.test.mjs`. READ-ONLY — writes no artifact, never in a commit/sync path)
-  - **Daemon subsystem (`pipeline/daemons/*.mjs`, PLAN-DAEMON-SUBSYSTEM Phase 1):** the legible
+  - **Daemon subsystem (`pipeline/daemons/*.mjs`, PLAN-DAEMON-SUBSYSTEM Phase 1+2):** the legible
     background-task layer — one registry + one lightweight manager for the scattered fleet
-    (`watch-log`/`dev-server` residents + the new `cache-warm` guard). `registry.mjs` (the DECLARATIVE
-    fleet list — one `{name, description, kind:'resident'|'guard', local, trigger, healthCheck(), start()}`
-    entry per daemon; seeded with `cache-warm` (guard, zero-git, tolerant of its Chunk-4 module not existing
-    yet) + `watch-log`/`dev-server` Phase-2 stubs; side-effect-free on import; also the registry-adjacent
-    `GIT_WRITER` const recording `sync-fills --publish` as `local:false` WITHOUT a callable `start()` so the
-    manager can never invoke it. Each `description` states "zero-git"/"commits to main" in words — the
-    `--publish` naming-collision guard, since screen's `--publish` is local but sync-fills' is a git-push).
-    `manager.mjs` (`status()` = read-only fleet health, resident up/down + guard last-ran/stale; `ensure()` =
-    start any down resident / run any stale guard, self-throttling via `MIN_CHECK_INTERVAL_MS` (5-min
-    PLACEHOLDER). **THE SAFETY INVARIANT:** `ensure()` refuses to auto-run any `local:false` daemon —
-    `if (!d.local) { …; continue; }` runs BEFORE any `start()`, every entry every call (the CofferFillsSync
-    lesson encoded — no git-writer ever runs unattended). Never throws out to its caller; also owns the
-    `loadState`/`saveState` heartbeat helpers. Fixture-tested by `pipeline/test/daemons.test.mjs`, incl. the
-    mandatory safety-invariant test).
+    (`sync-fills`/`watch-log`/`dev-server` + the `cache-warm` guard). `registry.mjs` (the DECLARATIVE
+    fleet list — one `{name, description, kind:'resident'|'guard', local, autoRun?, trigger, healthCheck(),
+    start()}` entry per daemon. Phase 2 migrated the three pre-existing daemons off their stubs to REAL
+    health checks: `sync-fills` (guard — book freshness via `positions.json` mtime), `watch-log` (resident —
+    `heartbeatHealth` off the LW3 `heartbeat.json`), `dev-server` (resident — `httpProbeHealth` on :8000),
+    all `autoRun:false` (see below); `cache-warm` (guard, zero-git) stays the ONE auto-run entry. Also the
+    registry-adjacent `GIT_WRITER` const records `sync-fills --publish` as `local:false` WITHOUT a callable
+    `start()` so the manager can never invoke it. Each `description` states "zero-git"/"commits to main" in
+    words — the `--publish` naming-collision guard, since screen's `--publish` is local but sync-fills' is a
+    git-push. Side-effect-free on import). **The `autoRun` field (Phase 2):** `local` = git-safe-to-run-at-all;
+    `autoRun` = should `ensure()` actually START it. Only `cache-warm` is auto-run (field omitted → defaults
+    true); the other three are `autoRun:false` — VISIBLE in `status()` but never auto-started (sync-fills
+    already rides every read via `runLocalSync`; residents are started attended via `serve.cmd`).
+    `manager.mjs` (`status()` = read-only fleet health, resident up/down + guard last-ran/stale + the `autoRun`
+    flag per row; `ensure()` = start any down resident / run any stale guard, self-throttling via
+    `MIN_CHECK_INTERVAL_MS` (5-min PLACEHOLDER). **THE SAFETY INVARIANT:** `ensure()` refuses to auto-run any
+    `local:false` daemon — `if (!d.local) { …; continue; }` runs BEFORE any `start()`, every entry every call
+    (the CofferFillsSync lesson encoded — no git-writer ever runs unattended); a second `if (d.autoRun ===
+    false) continue` skips the visible-but-manual entries the same way. Never throws out to its caller; also
+    owns the `loadState`/`saveState` heartbeat helpers. Fixture-tested by `pipeline/test/daemons.test.mjs`,
+    incl. the mandatory safety-invariant + autoRun-skip tests).
+    `health.mjs` (Phase 2 Chunk 7 — the SHARED resident health primitives: `heartbeatHealth({path,now,staleMs})`
+    (heartbeat.json age → `{ok,detail,lastRan}`) + `httpProbeHealth({url,timeoutMs,fetchFn})` (HTTP probe →
+    `{ok,detail}`), both injectable + never-throw. GENERALIZED from `ensure-server.mjs`'s two hand-rolled
+    `checkDaemon()`/`checkServer()` probes so the registry's resident entries AND `ensure-server.mjs` share ONE
+    implementation; consumed by `registry.mjs`, `pipeline/commands/ensure-server.mjs`, and the test).
     `cache-warm.mjs` (Chunk 4 — the cache-warm GUARD's real `healthCheck()`/`start()` the registry entry
     dynamic-imports): `healthCheck()` reads the newest /1h bucket age via `marketfetch.newest1hAgeHours`
     (opens+closes its own archive handle) and reports `ok:false` when age > `WARM_THRESHOLD_HOURS` (23h, a
@@ -1068,9 +1086,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     the de-dupe, no second lock file); both hooks wrapped so they never throw. Ships a CLI
     (`node pipeline/daemons/cache-warm.mjs --check-only` = report health only; bare/`--warm` = ensure-then-warm
     through a one-entry `ensure()`) as the Windows Task Scheduler target (Chunk 6). Consumed by
-    `registry.mjs` (dynamic import) + the opportunistic `ensure()` hook (Chunk 5, not yet landed);
+    `registry.mjs` (dynamic import) + the opportunistic `ensure()` hook (Chunk 5 — LANDED, wired into
+    `screen-flip-niches.mjs`/`quote-items.mjs`/`run-loop.mjs`/`dev-server.mjs` boot);
     fixture-tested hermetically by `pipeline/test/cache-warm.test.mjs` (synthetic :memory: archive + injected
     backfill spies + temp heartbeat file, TZ-pinned).
+    `read-daemons.mjs` (`pipeline/commands/`, Phase 2 Chunk 8 — the fleet STATUS surface: `node
+    pipeline/commands/read-daemons.mjs [--json]` prints `manager.status()`'s one-row-per-daemon table
+    (Daemon · Kind · Git · Auto · Health · Last ran · Detail). READ-ONLY — calls `status()`, never `ensure()`,
+    so it starts nothing; it DOES live-probe each entry (a localhost fetch for dev-server, an archive read for
+    cache-warm, a stat for the guards). No APP_VERSION bump).
     `run-cache-warm.cmd` (Chunk 6 — the STABLE, args-free Windows Task Scheduler target: `cd /d "%~dp0..\.."`
     to the repo root then `node pipeline\daemons\cache-warm.mjs --warm` (ensure-then-warm, NOT --check-only).
     Zero-git — same code path as the opportunistic hook. Produced/committed by this repo; consumed by the

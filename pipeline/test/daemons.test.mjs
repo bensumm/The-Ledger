@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 /**
- * daemons.test.mjs — the daemon subsystem (PLAN-DAEMON-SUBSYSTEM Phase-1 Chunks 1+2+3).
+ * daemons.test.mjs — the daemon subsystem (PLAN-DAEMON-SUBSYSTEM Phase-1 Chunks 1+2+3, Phase-2 Chunk 7).
  *
- * Pins the load-bearing guarantees of pipeline/daemons/registry.mjs + manager.mjs with SYNTHETIC
- * registry entries (never the real DAEMONS, so no fetch/archive/process is touched):
+ * Pins the load-bearing guarantees of pipeline/daemons/registry.mjs + manager.mjs + health.mjs with
+ * SYNTHETIC registry entries (never the real DAEMONS for status/ensure, so no fetch/archive/process
+ * is touched):
  *   - registry.mjs's real DAEMONS is well-shaped (every entry has name/kind/local + callable hooks)
- *     and importing it is side-effect-free.
+ *     and importing it is side-effect-free; the Phase-2 residents + sync-fills are registered autoRun:false.
  *   - status() classifies resident-vs-guard and merges the stored heartbeat.
  *   - ensure() STARTS a stale (ok:false) local guard.
  *   - ensure() REFUSES a local:false entry, even when forced unhealthy — THE SAFETY INVARIANT (mandatory).
+ *   - ensure() SKIPS an autoRun:false entry (visible-but-not-auto-started), even when forced unhealthy.
  *   - the heartbeat store (loadState/saveState) round-trips, and a missing/corrupt file degrades to {}.
+ *   - health.mjs's heartbeatHealth/httpProbeHealth classify fresh/stale/missing and never throw.
  *
  * Run: `node pipeline/test/daemons.test.mjs` (exits non-zero on failure). Synthetic fixtures only.
  */
@@ -19,6 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DAEMONS, GIT_WRITER, getDaemon } from '../daemons/registry.mjs';
 import { status, ensure, loadState, saveState } from '../daemons/manager.mjs';
+import { heartbeatHealth, httpProbeHealth } from '../daemons/health.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { const r = fn(); if (r && typeof r.then === 'function') return r.then(() => { pass++; console.log('  ✓ ' + name); }); pass++; console.log('  ✓ ' + name); };
@@ -53,9 +57,18 @@ await ok('DAEMONS is well-shaped (name/kind/local + callable hooks), import is s
     assert.equal(typeof d.healthCheck, 'function');
     assert.equal(typeof d.start, 'function');
   }
-  // The cache-warm guard is seeded and zero-git.
+  // The cache-warm guard is seeded, zero-git, and the ONLY auto-run entry (autoRun defaults true).
   const cw = getDaemon('cache-warm');
   assert.ok(cw && cw.kind === 'guard' && cw.local === true);
+  assert.notEqual(cw.autoRun, false, 'cache-warm must be auto-run (autoRun !== false)');
+  // Phase-2: the three migrated daemons are registered, zero-git, and autoRun:false (visible, not auto-started).
+  for (const [name, kind] of [['sync-fills', 'guard'], ['watch-log', 'resident'], ['dev-server', 'resident']]) {
+    const d = getDaemon(name);
+    assert.ok(d, `${name} must be registered (Phase 2)`);
+    assert.equal(d.kind, kind, `${name} kind`);
+    assert.equal(d.local, true, `${name} is zero-git`);
+    assert.equal(d.autoRun, false, `${name} must be autoRun:false — visible in status(), never auto-started`);
+  }
   // The one git-writer is recorded ADJACENT (never a schedulable entry) and is local:false.
   assert.equal(GIT_WRITER.local, false);
   assert.ok(!DAEMONS.some(d => d.name === GIT_WRITER.name), 'git-writer must NOT be a DAEMONS entry');
@@ -118,6 +131,20 @@ await ok('ensure() starts the local guard but STILL refuses the git-writer in a 
   assert.equal(bad.spy.starts, 0);
 });
 
+/* --- autoRun:false is visible-but-never-auto-started ---------------------------------------- */
+await ok('ensure() SKIPS an autoRun:false local entry even when forced unhealthy', async () => {
+  const sp = tmpState();
+  const { entry, spy } = spyDaemon({ name: 'manual', kind: 'guard', local: true, ok: false });
+  entry.autoRun = false;   // on-demand/attended — must NOT be auto-started
+  const actions = await ensure({ registry: [entry], statePath: sp, now: NOW, log: () => {} });
+  assert.equal(spy.starts, 0, 'an autoRun:false entry must NEVER be auto-started');
+  assert.equal(actions[0].action, 'skipped-manual');
+  // ...but it is still surfaced by status() (visibility is the whole point of registering it).
+  const rows = await status({ registry: [entry], statePath: sp });
+  assert.equal(rows[0].autoRun, false);
+  assert.equal(rows[0].ok, false);
+});
+
 /* --- self-throttle -------------------------------------------------------------------------- */
 await ok('ensure() throttles a repeat start within MIN_CHECK_INTERVAL_MS', async () => {
   const sp = tmpState();
@@ -150,6 +177,44 @@ await ok('ensure() swallows a throwing healthCheck/start (never breaks the calle
   const actions = await ensure({ registry: [boom], statePath: sp, now: NOW, log: () => {} });
   // healthCheck threw → treated as ok:false → start attempted → start threw → start-failed, no throw.
   assert.equal(actions[0].action, 'start-failed');
+});
+
+/* --- health.mjs: shared resident probes (Phase-2 Chunk 7) ----------------------------------- */
+await ok('heartbeatHealth classifies fresh / stale / missing / unparseable (never throws)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-'));
+  const hb = path.join(dir, 'heartbeat.json');
+  const NOWMS = 1_800_000_000_000;
+  // fresh: generatedAt 10s ago
+  fs.writeFileSync(hb, JSON.stringify({ generatedAt: new Date(NOWMS - 10_000).toISOString() }));
+  let h = heartbeatHealth({ path: hb, now: NOWMS });
+  assert.equal(h.ok, true);
+  assert.ok(/10s old/.test(h.detail));
+  assert.equal(h.lastRan, new Date(NOWMS - 10_000).toISOString());
+  // stale: generatedAt 5 min ago (> 90s default)
+  fs.writeFileSync(hb, JSON.stringify({ generatedAt: new Date(NOWMS - 300_000).toISOString() }));
+  h = heartbeatHealth({ path: hb, now: NOWMS });
+  assert.equal(h.ok, false);
+  assert.ok(/stale/.test(h.detail));
+  // missing file
+  h = heartbeatHealth({ path: path.join(dir, 'nope.json'), now: NOWMS });
+  assert.equal(h.ok, false);
+  assert.equal(h.lastRan, null);
+  // unparseable
+  fs.writeFileSync(hb, '{ not json');
+  h = heartbeatHealth({ path: hb, now: NOWMS });
+  assert.equal(h.ok, false);
+  assert.ok(/unparseable/.test(h.detail));
+});
+
+await ok('httpProbeHealth reports up on success, down on refusal/timeout (injected fetchFn, never throws)', async () => {
+  let h = await httpProbeHealth({ url: 'http://x/', fetchFn: async () => ({ ok: true }) });
+  assert.equal(h.ok, true);
+  h = await httpProbeHealth({ url: 'http://x/', fetchFn: async () => { throw new Error('ECONNREFUSED'); } });
+  assert.equal(h.ok, false);
+  assert.equal(h.detail, 'connection refused');
+  h = await httpProbeHealth({ url: 'http://x/', fetchFn: async () => { throw new Error('The operation was aborted'); } });
+  assert.equal(h.ok, false);
+  assert.equal(h.detail, 'timed out');
 });
 
 console.log(`\n${pass} assertion group(s) passed.`);

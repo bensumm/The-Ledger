@@ -10,6 +10,38 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-DAEMON-SUBSYSTEM Phase 2 — migrate the fleet to real health checks + a status surface (pipeline, 2026-07-25)
+Phase 1 built the daemon home/registry/manager + the `cache-warm` guard but left the three pre-existing
+daemons (`sync-fills`, `watch-log`, `dev-server`) as `{ok:null}` stubs. Phase 2 wires their REAL health and
+adds the operator surface, folding `PLAN-DAEMON-SUBSYSTEM.md` into `PLAN.md` (deleted).
+- **Shared health primitives (`pipeline/daemons/health.mjs`, Chunk 7):** `heartbeatHealth({path,now,staleMs})`
+  (heartbeat.json age → `{ok,detail,lastRan}`) + `httpProbeHealth({url,timeoutMs,fetchFn})` (HTTP probe →
+  `{ok,detail}`), both injectable + never-throw. GENERALIZED from the two hand-rolled probes that already
+  lived in `ensure-server.mjs` (`checkDaemon`/`checkServer`) — the plan's explicit "generalize, don't rewrite"
+  directive — so the registry's resident entries and `ensure-server.mjs` now share ONE implementation that
+  can't drift.
+- **Registry migration (Chunk 7):** `sync-fills` registered as a guard (health = `positions.json` mtime
+  freshness — a plain stat, never imports/spawns sync-fills, so `check-daemon-safety` stays green);
+  `watch-log` → `heartbeatHealth` off the LW3 root heartbeat; `dev-server` → `httpProbeHealth` on :8000. All
+  three are `autoRun:false`.
+- **The `autoRun` field:** `local` says "git-safe to run at all"; `autoRun` says "should `ensure()` actually
+  START it". Only `cache-warm` is auto-run (field omitted → default true). The other three are VISIBLE in
+  `status()` but never auto-started — `sync-fills` already rides every read via `runLocalSync`, and residents
+  are started attended via `serve.cmd`, so `ensure()` must not surprise-spawn an HTTP server on a routine
+  scan/quote pass. Encoded as a second `if (d.autoRun === false) continue` in `ensure()`, right after the
+  git-writer safety branch.
+- **Status surface (`pipeline/commands/read-daemons.mjs`, Chunk 8):** `node pipeline/commands/read-daemons.mjs
+  [--json]` prints `manager.status()`'s one-row-per-daemon table (Daemon · Kind · Git · Auto · Health · Last
+  ran · Detail). READ-ONLY — calls `status()`, never `ensure()`; it live-probes each entry (that's the point)
+  but starts nothing.
+- **`ensure-server.mjs` dedup (Chunk 10):** its `checkDaemon`/`checkServer` now delegate to `health.mjs`,
+  keeping the identical `{running,detail}` shape + the `/morning` spawn-serve.cmd behavior — a working,
+  `/morning`-wired script kept (not deleted) but made a thin adapter over the shared source (Ben's-call
+  resolved toward "keep + dedupe").
+- Chunk 9 (dev-server cold-start `ensure()` hook) was already satisfied by Phase-1 Chunk 5. Fixture-tested by
+  the extended `pipeline/test/daemons.test.mjs` (new: the three Phase-2 entries' shape, the `autoRun` skip, and
+  `health.mjs` fresh/stale/missing + up/refused/timeout). No APP_VERSION bump (pipeline-only).
+
 ### PLAN-REVERSE-FLIP RF4 — cycle-state surfacing into /schedule · /book · /positions (pipeline, inform-only, 2026-07-25)
 A declared reverse-flip is a two-leg cycle on an OWNED item — sell into the peak, then rebuy at the dip.
 BETWEEN the legs it owns no open FIFO lot and no GE slot (it's capital-free until a rebuy bid rests), so
