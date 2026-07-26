@@ -478,14 +478,14 @@ immediately, before any screening logic exists.
 ### RF1 — `js/reverseflip.mjs` (pure gate/edge module)
 
 - **New:** `js/reverseflip.mjs` — `invertedRegimeGate(trajectory)` (re-maps `classifyTrajectory`'s
-  shape per the Regime Asymmetry table — rising→reject, falling/cooling/oscillating/based→pass,
-  short/unknown→caution), `reverseFlipEdge(ctx)` (computes `beRebuy = sellRef − tax(sellRef)` via
+  shape per the Regime Asymmetry table — `rising`→reject, `elevated`→reject, `knife`/`oscillating`/`based`/`flat`→pass,
+  `unknown`→caution; do NOT code a `'falling'`/`'cooling'` branch — `classifyTrajectory` never emits those, `knife` IS the "falling" case), `reverseFlipEdge(ctx)` (computes `beRebuy = sellRef − tax(sellRef)` via
   the canonical `js/money-math.js` `tax()`, an amplitude-floor check against a placeholder
   `REVERSE_MIN_SWING_PCT`, direction-agnostic), `reverseFlipGate(ctx)` (composes the regime gate +
   amplitude floor + a rebuy-leg-weighted liquidity check — see Honesty). No fetch, no fs, DOM-free,
   importable by node and (later) the app like `js/valuescreen.mjs`/`js/amplitudescreen.mjs`.
 - **Acceptance:** conformance fixture set mirroring the repo's shared archetypes (rising→reject,
-  oscillating→pass, falling→pass, thin-liquid→caution-not-reject on the sell leg specifically,
+  oscillating→pass, knife→pass (the real "falling" case), elevated→reject, thin-liquid→caution-not-reject on the sell leg specifically,
   thin-liquid→caution/reject on the rebuy leg) in `pipeline/test/reverseflip.test.mjs`. No throw on
   missing/short data (degrade-to-caution, the `momVerdict` optional-degradation precedent).
 
