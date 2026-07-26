@@ -1,6 +1,18 @@
 # PLAN-LANE-ADMISSION — structural fetch-pool admission + per-lane gp/day ranking
 
-Status: **admission validated (this session), ranking spec DRAFTED, build not started.**
+Status: **Chunks A–E LANDED (2026-07-25) — Path-A is the console PRIMARY ranking; F/G/H/I remain.**
+- **A** archive `dailyRangeBulk` + `loadDailyRangeBulk` (`975b9d5`) · **B** structural admission gate
+  (`8fd78e7`, routes on `--gate structural|legacy`, default still legacy) · **C** `pathAGpDay`
+  (`9982796`) · **D+E** Path-A primary console/last-report sort + grade A/B backup + `pathA` forward-log
+  field (`d2d7d32`, CI checks+smoke green, **deployed app unchanged / no APP_VERSION bump** —
+  `screen.json` byte-identical, Path-A console-only until validated).
+- **REMAINING:** **F** (H2/H3 join scorer — the forward validator; GATED on `pathA` rows accruing in
+  `suggestions.jsonl` from real `/scan` passes, so it can't build meaningfully until data accrues) →
+  **G** (H4 readiness gate, depends on F) · **H** (Path-B descriptive overlay, independent/low-pri) ·
+  **I** (gate-default flip structural→legacy-delete, OWNER-triggered). captureFrac (0.45 gear/0.62
+  churn) stays an unproven placeholder (rule 4) until F recalibrates it — Path-A is a coarse tiering
+  signal under live A/B vs the grade backup, never a hard gate.
+
 Owner-driven design session (Ben, 2026-07-25). All numbers below were derived against the live
 bulk caches (`pipeline/.cache/{guide,mapping.cache,all24h-rolling,latest}.json`) and validated
 against the real book (`positions.json` closed/open + `fills.json` + `watchlist.json` = **60
