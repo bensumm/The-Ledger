@@ -1,6 +1,6 @@
 ---
 name: book
-version: 1.1
+version: 1.2
 description: Show the state of the book right now — GE slots, working/parked/idle capital, per-lot P&L, and (with --size) how much of an item a given capital can buy. Triggers — "what's my book look like", "what's deployed/idle", "how many slots free", "capital dashboard", "how much X can I buy right now", "book".
 ---
 
@@ -44,6 +44,7 @@ manual sync needed. It does ONE live fetch per item in the held ∪ resting-bid 
   free" — don't treat it as ground truth if a fill just landed.
 - **`deployablePool` degrades conservatively.** A resting bid whose item isn't in the fetched marketRef
   classifies COMMITTED, so the deployable figure can under-report — it never over-reports.
+- **The deployable figure is SHOWN, not modelled — a restart-suspect flag warns when it may be inflated, and a wrong number is fixed at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L2/L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine)_ The deployable line now carries `⚠ N restart-suspect bid(s) (~Xm) may be included — verify in-game` when a restart-blind bid (`suspectBidEscrow`) may have inflated it: a restart-blind slot reads EMPTY, so its escrow drops out of offers.json and is never subtracted. The flag is INFORM-ONLY (it never changes the number). When the deployable is actually wrong, correct it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** `node pipeline/commands/derive-cash.mjs <amount>` for a drifted free-cash baseline, or a **manual-log fix / phantom-bid clear** for a "reclaimable" bid that's really gone. The automated modelling redesign was deliberately shelved — Ben's one-command correction is the resolution (`gate-on-error-cost-not-n`).
 - **Grouped P&L blends tranches.** An old core lot + a fresh top-up show ONE blended break-even and ONE
   (oldest) days-held — same convention as every other positions surface, not a per-tranche view.
 
