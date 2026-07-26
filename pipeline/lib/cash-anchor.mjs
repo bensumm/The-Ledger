@@ -11,7 +11,7 @@
    / cashderive deriveCash so those stay fixture-testable. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { REPO_DIR } from '../commands/sync-fills.mjs';
+import { REPO_DIR } from './paths.mjs';   // chunk 6: was '../commands/sync-fills.mjs' (a lib importing a command inverted the layering)
 
 const FILE = repoDir => path.join(repoDir, '.capital-state.json');
 

@@ -53,10 +53,11 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkS
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';   // chunk 6: dropped unused fileURLToPath
 // LW1: offers.json emitter. readOfferRows reads the exchange-logger dir raw; offersSnapshot builds
 // the flat live-offer snapshot; nameLookupFromCache resolves display names offline (best-effort).
 import { readOfferRows, offersSnapshot, nameLookupFromCache } from '../lib/offers.mjs';
+import { REPO_DIR } from '../lib/paths.mjs';   // chunk 6: REPO_DIR now lives in a lib (was defined here); re-exported below so watch-log.mjs's import is unchanged
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor-offers.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
@@ -70,7 +71,7 @@ import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into 
 // never reads/writes Ben's real log or the live fills.json/positions.json.
 function argVal(name){ const i = process.argv.indexOf(name); return (i >= 0 && i + 1 < process.argv.length) ? process.argv[i + 1] : undefined; }
 const LOG_DIR   = argVal('--log-dir') || join(homedir(), '.runelite', 'exchange-logger'); // plugin output
-export const REPO_DIR  = argVal('--repo-dir') || 'C:\\dev\\The-Ledger';    // your git clone (exported: watch-log.mjs imports it as the repo ROOT to place heartbeat.json same-origin)
+export { REPO_DIR };    // re-exported from lib/paths.mjs (was defined here) — watch-log.mjs imports it from sync-fills as the repo ROOT for heartbeat.json same-origin
 const FILLS_REL = 'fills.json';                                    // raw event stream, repo-relative
 const POSITIONS_REL = 'positions.json';                            // reconstructed trades/positions (app auto-populates Ledger from this)
 const OFFERS_REL = 'offers.json';                                  // LW1: flat snapshot of live GE offers (both modes; app renders w/ staleness banner)
@@ -81,7 +82,7 @@ const GIT_PUSH  = true;     // set false to stage commits without pushing
 /* =================================================================== */
 
 const args = new Set(process.argv.slice(2));
-const PROBE = args.has('--probe'), DRY = args.has('--dry'), LOCAL = args.has('--local');
+const PROBE = args.has('--probe'), DRY = args.has('--dry');   // chunk 6: dropped unused LOCAL (local is the default mode; --local is a no-op synonym)
 const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetch/ff + commit + push) — the once-a-day /overnight publish; default + --local are ZERO-git
 
 /* ---------------------------------------------------------------------

@@ -65,10 +65,13 @@ async function main() {
     }
     if (!ids.length) process.exit(1);
   } else {
-    // no args → every item with a logged buy still inside the 4h window (most-recently-bought first)
+    // no args → every item with a logged buy still inside the 4h window (most-recently-bought first).
+    // maxTs reduces rather than Math.max(...spread) (chunk 1): an item's buy list is unbounded over the
+    // whole log history, and a spread would crash past V8's ~65k argument ceiling; reduce has no ceiling.
+    const maxTs = buys => buys.reduce((m, x) => (x.ts > m ? x.ts : m), -Infinity);
     ids = [...byItem.keys()]
       .filter(id => byItem.get(id).some(b => b.ts > cutoff))
-      .sort((a, b) => Math.max(...byItem.get(b).map(x => x.ts)) - Math.max(...byItem.get(a).map(x => x.ts)));
+      .sort((a, b) => maxTs(byItem.get(b)) - maxTs(byItem.get(a)));
     if (!ids.length) { console.log('No logged GE buys in the last 4h (nothing counting against a buy limit).'); return; }
     console.log(`# Buy-limit state — ${ids.length} item(s) with a logged buy in the last 4h`);
   }

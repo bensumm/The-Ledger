@@ -1120,6 +1120,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
     position stage wants, so quote-items.mjs can see the live book without the `~/.runelite` log dir),
+    `paths.mjs` (chunk 6 — the tiny shared `REPO_DIR` anchor, honoring `--repo-dir`, so `derive-cash-tiers.mjs`
+    and `cash-anchor.mjs` no longer import it from the `sync-fills.mjs` COMMAND (a lib→command layering
+    inversion that ran sync's module top-level as a side effect); `sync-fills.mjs` re-exports it so
+    `watch-log.mjs`'s import is unchanged),
     `positions.mjs` (shared `readOpenPositions` open-lot grouping), `limits.mjs` (LM1 — PURE rolling-4h
     buy-limit window math: `limitWindow({buys,limit,now})` → `{limit,boughtInWindow,remaining,nextFreeAt,
     fullResetAt}` (null limit = UNKNOWN, never unlimited) + `buysByItem(events)` extracting per-item BUY

@@ -124,4 +124,6 @@ async function main() {
   usage(); process.exit(1);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+// `process.argv[1] &&` guard (chunk 5) — matches sync-fills/screen-flip-niches/trigger-alerts: an
+// import from a context with no argv[1] (some test/embed harnesses) would otherwise crash in pathToFileURL.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

@@ -733,9 +733,13 @@ export async function loadSnapshot({ db, budgetIds = [], ts1h = false } = {}) {
     const n = Number(id);
     if (!budget.has(n)) return null;                           // Tier-2 is budgeted — never a blind fan-out
     if (seriesCache.has(n)) return seriesCache.get(n);
-    const inp = await fetchItemInputs(n, { ts1h });
-    seriesCache.set(n, inp);
-    return inp;
+    // Cache the in-flight PROMISE, not the resolved value (chunk 5): two concurrent series(n) calls
+    // for the same id would both miss a value-cache and double-fetch. A rejection is evicted so a
+    // later call can retry (matches the old resolved-value cache's fail-and-retry behavior).
+    const p = fetchItemInputs(n, { ts1h });
+    seriesCache.set(n, p);
+    p.catch(() => { if (seriesCache.get(n) === p) seriesCache.delete(n); });
+    return p;
   }
 
   return Object.freeze({ ts, latest, v24, mapping, guide, archive, series });
