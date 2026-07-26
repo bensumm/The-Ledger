@@ -105,7 +105,7 @@ import { amplitudeShadow } from '../lib/suggestlog.mjs';   // A5 — the amplitu
 // entry path for the suggestions ledger + the per-row path annotation.
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
-import { rateItem, GRADE_CUTOFFS, capGrade, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC } from '../lib/rating.mjs';
+import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from '../lib/rating.mjs';   // G1: the four grade caps now live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags, no longer calls capGrade itself. REACH_GRADE_CAP_FRAC stays for the digest's reach ✓/✗ read. G6: CONF_THIN_N_FLOOR for the (thin) confidence-marker tooltip.
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow } from '../lib/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
@@ -322,7 +322,8 @@ const PRESSURE_EXIT = SELL_MODEL.active === 'pressure';
 // cell — it never changes which rows are selected/excluded). When ON, an item the falling-exclusion
 // would normally DROP but whose phase()==='basing' (decayed off a spike, lows flattened) is instead
 // SURFACED, capped to PHASE_BASING_GRADE_CAP and flagged provisional. Conservative, gated trial —
-// thresholds are unvalidated placeholders. capGrade is reused from rating.mjs (no rating.mjs change).
+// thresholds are unvalidated placeholders. The cap is now applied inside rateItem's four-cap chain (G1,
+// PLAN-GRADE-REWORK): this constant is passed in as `phaseCap`, not stacked with a capGrade call here.
 const PHASE_RESCUE = resolve('phaseRescue', { flag: A['phase-rescue'] === true ? true : undefined, config: CONFIG.phaseRescue, fallback: false }).active;
 const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-rescue surface
 // --- PART II (PLAN-GRADE-REACH, opt-in): --asym flips the 'asym'-fillShape niches (band/scalp) to the
@@ -452,8 +453,8 @@ function roiPct(er) {
 // holdDays(spec, er, lapsCap): the fraction of a day this pick ties capital up. A churn lane frees +
 // re-commits the SAME capital up to LAPS_PER_DAY_CEIL (6)×/day, bounded ALSO by how long one lap takes to
 // sell (86400/ttf) — the achievable laps/day is the SLOWER of the two constraints; holdDays is its
-// reciprocal. Every other family is single-turn: TTF in days, floored at 1h (mirrors TTF_FLOOR_DAYS's
-// spirit — no divide-by-tiny).
+// reciprocal. Every other family is single-turn: TTF in days, floored at 1h here (the digest's own
+// divide-by-tiny guard; rankScore itself now saturates via TTF_SAT_DAYS rather than flooring — G5).
 // POLISH 2 — REALIZABLE-THROUGHPUT bound (buy-limit at the deployed size): a raw 86400/ttf laps/day is a
 // FANTASY for a fast-selling cheap item (Sunfire splinters read 198%/d) — you can't cycle the whole
 // deployed position that fast because the 4h buy limit caps how many units you can RE-BUY per day. When the
@@ -1146,25 +1147,23 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // Render-stage + --mode-all-only (the `partition` flag) → standalone --mode churn is unchanged and the
     // gate-stage replay goldens are unaffected.
     if (partition && er.pair.bid > 0 && (er.net / er.pair.bid * 100) >= MIN_ROI) { disc.partition++; continue; }
-    const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin });
-    // Part B: a rescued basing faller is capped to PHASE_BASING_GRADE_CAP (reuses rating.mjs capGrade)
-    // — a provisional surface must not advertise a headline grade off a still-declining regime.
-    // P6c: a sub-floor fallback row is capped harder still (SUBFLOOR_GRADE_CAP) — it did NOT clear the
-    // configured floors, so it must never print a grade a qualified row could.
-    // R7 (PLAN-SIGNAL-RECENCY): track WHICH ceiling bound the printed letter (legibility only — never a
-    // gate/rank input). The caps apply sequentially (rateItem's THIN first, then these three); the LAST one
-    // to actually LOWER the grade is what bounds the visible letter, so each binding cap overwrites cappedBy.
-    let cappedBy = r.cappedBy || null;   // THIN (from rateItem) if it bound
-    const cap = (g, ceiling, name) => { const c = capGrade(g, ceiling); if (c !== g) cappedBy = name; return c; };
-    let grade = rescued ? cap(r.grade, PHASE_BASING_GRADE_CAP, 'phase-basing') : r.grade;
-    if (subFloor) grade = cap(grade, SUBFLOOR_GRADE_CAP, 'sub-floor');
-    // Proposal B (PLAN-GRADE-REACH): a mirage exit can't advertise a headline letter. When the quoted ASK
-    // reaches < REACH_GRADE_CAP_FRAC of recent days, cap the grade (Proposal A already shrank the rank
-    // number; this guarantees the LETTER an operator reads can't oversell it). Same capGrade site as above.
-    // PART II churn exemption: a 'symmetric'-fillShape niche (churn) is exempt — its lap exit sells into
-    // continuous two-sided flow, so the day-high reach read mismeasures it (mirrors estimateRank's askF skip).
-    if (FLIP_NICHES[mode].fillShape !== 'symmetric' && askReachExtra && (askReachExtra.reachedDays / askReachExtra.nDays) < REACH_GRADE_CAP_FRAC)
-      grade = cap(grade, REACH_GRADE_CAP, 'reach');
+    // G1 (PLAN-GRADE-REWORK — Fix F): the four-cap chain now lives INSIDE rateItem (js/rating.mjs
+    // applyGradeCaps), applied in ONE fixed order (thin → phase-basing → sub-floor → reach). The render
+    // site simply hands rateItem the cap VALUES/flags for this row instead of stacking capGrade calls
+    // outside it (the pre-G1 two-sources-of-truth bug, Flaw 7). rateItem returns the R7 `cappedBy`
+    // attribution (last-binding cap) directly, so the render site no longer re-derives it with a local
+    // capGrade helper. The reach cap keys off the RECENT ask-reach fraction; PART II churn exemption =
+    // a 'symmetric'-fillShape niche is exempt (its lap exit sells into continuous two-sided flow, so the
+    // day-high reach read mismeasures it — mirrors estimateRank's askF skip). G6: pFillN/ttfN thread the
+    // reach/ttf sample sizes so a thin-evidence fill call gets the `(thin)` confidence marker below.
+    const reachFrac = (askReachExtra && askReachExtra.nDays) ? (askReachExtra.reachedDays / askReachExtra.nDays) : null;
+    const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin,
+      phaseCap: rescued ? PHASE_BASING_GRADE_CAP : null,
+      subFloorCap: subFloor ? SUBFLOOR_GRADE_CAP : null,
+      reachFrac, reachExempt: FLIP_NICHES[mode].fillShape === 'symmetric',
+      pFillN: er.pFill.n, ttfN: er.ttf.n });
+    let grade = r.grade;
+    const cappedBy = r.cappedBy || null;
     const std = stdCells(name, row);                        // structured cells: [item, guide, quick, optimistic, vol, momentum, regime]
     // AR2 (PLAN-ARCHITECTURE-COHERENCE, MARKER option): if admission.mjs pulled this row into the
     // FETCH pool via its Date.now()-bucketed exploration reserve (s.via==='explore'), it's a rotating
@@ -1195,6 +1194,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // `C (sub-floor)` so a copied/quoted row can never pass for a qualified one. (These rows are never
     // published, so the title is stdout-inert, but it keeps the cell honest if that ever changes.)
     if (subFloor) { gradeCell.t = grade + ' (sub-floor)'; gradeCell.title = subFloorLabel(subFloor) + (gradeCell.title ? '; ' + gradeCell.title : `; grade capped at ${SUBFLOOR_GRADE_CAP}`); }
+    // G6 (PLAN-GRADE-REWORK — Fix E / O5): append the `(thin)` CONFIDENCE marker when the fill call rests
+    // on thin reach evidence (pFill sample n < CONF_THIN_N_FLOOR). MARK, don't shrink — the score/grade/
+    // ordering are untouched; this only annotates the displayed letter (+ a tooltip). gradeCls colours the
+    // app pill by the leading letter, so the suffix is cosmetic-safe.
+    if (r.thinConfidence) { gradeCell.t = gradeCell.t + ' (thin)'; gradeCell.title = (gradeCell.title ? gradeCell.title + '; ' : '') + `thin confidence: the fill call rests on only ${er.pFill.n} day(s) of reach evidence (< ${CONF_THIN_N_FLOOR})`; }
     // R7 (PLAN-SIGNAL-RECENCY): when a ceiling bound the letter but no per-cap title above already named it
     // (the pure REACH-cap case → a plain `{t:grade}` cell), add the legibility tooltip. App-side only —
     // cellText ignores `title`, so stdout stays clean; the structured `cappedBy` on the row is the queryable form.
@@ -1781,7 +1785,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     const pFill = ESTIMATORS.amplitude.pFill({ amplitudeRanges: ar });
     const ttf = ESTIMATORS.amplitude.ttf({ holdDays: AMP_HOLD_DAYS });
     const rank = rankScore({ net: ar.netPerCycle * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
-    const r = rateItem({ row, rank, thin: s.thin });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1)
+    const r = rateItem({ row, rank, thin: s.thin, pFillN: pFill.n, ttfN: ttf.n });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1); G6: (thin) confidence marker off the daily-reach sample
     const grade = r.grade;
     const ampPct = (ar.ampPct != null) ? (ar.ampPct * 100) : null;
     // F-F: surface the FULL-window reach alongside recent-3 (recencySplit already returns fullHit/fullN —
@@ -1789,6 +1793,10 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     // oscillator no longer over-implies "sell-unreliable". `osc`/`dae`/`driftShadow` are already in scope.
     const rf = t => `${t.recentHit}/${t.recentDays || AMP_HOLD_DAYS}·${t.fullHit}/${t.fullN}`;
     const reachCell = `${rf(ar.bidTouch)} · ${rf(ar.askReach)} — ${reachPhaseNote(osc, dae, driftShadow)}`;
+    // G6: the amplitude grade cell, with the `(thin)` confidence marker appended when the round-trip call
+    // rests on thin daily-reach evidence (pFill.n < CONF_THIN_N_FLOOR). MARK-only — grade is untouched.
+    const ampGradeCell = s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade };
+    if (r.thinConfidence) { ampGradeCell.t = ampGradeCell.t + ' (thin)'; ampGradeCell.title = (ampGradeCell.title ? ampGradeCell.title + '; ' : '') + `thin confidence: the round-trip call rests on only ${pFill.n} day(s) of reach evidence (< ${CONF_THIN_N_FLOOR})`; }
     const cells = [
       { t: name }, { t: guide && guide[s.id] != null ? fmtP(guide[s.id]) : '—' }, { t: fmtP(live) },
       { t: `${fmtP(ar.ampBid)} → ${fmtP(ar.ampAsk)}` },
@@ -1796,7 +1804,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
       { t: `+${fmtP(Math.round(ar.netPerCycle))}${ampPct != null ? ` (${ampPct.toFixed(1)}%)` : ''}`, c: 'gain' },
       { t: `~${AMP_HOLD_DAYS}d hold`, c: 'mini' },
       { t: `${lapUnits}u`, c: 'mini' },
-      s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade },
+      ampGradeCell,
     ];
     // DT6 (PLAN-DIURNAL-TIMING §6): the multi-week base-position note — amplitude's own gate reads
     // ONLY the recent full-day window (windowStats/AMP_NIGHTS), never the loadDaily multi-week
@@ -1944,9 +1952,10 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
     // P6b: a watchlist row has no niche context, so rank it under the neutral band thesis (intraday
     // estimator, patient 2h-band pair) — a standard flip read. Same rank basis as the niche tables.
     const er = estimateRank(FLIP_NICHES.band, row);
-    const r = rateItem({ row, rank: er.rank, thin });
+    const r = rateItem({ row, rank: er.rank, thin, pFillN: er.pFill.n, ttfN: er.ttf.n });   // G6: (thin) confidence marker off the reach sample
     const std = stdCells(name, row);
     const gradeCell = thin ? { t: r.grade, title: `thin: ~${limitVol}/day two-sided — size in units, expect slow fills` } : { t: r.grade };
+    if (r.thinConfidence) { gradeCell.t = gradeCell.t + ' (thin)'; gradeCell.title = (gradeCell.title ? gradeCell.title + '; ' : '') + `thin confidence: the fill call rests on only ${er.pFill.n} day(s) of reach evidence (< ${CONF_THIN_N_FLOOR})`; }
     const rankCell = { t: `${fmtP(r.score)} · net ${fmt(er.net || 0)} P~${er.pFill.value.toFixed(2)} ttf~${fmtTtf(er.ttf.value)}`, c: 'mini' };
     const cells = [std[0], gradeCell, ...std.slice(1), rankCell, { t: watchlistNote(row, d, bands, id, limit), c: 'mini' }];
     rows.push({ id, cells });

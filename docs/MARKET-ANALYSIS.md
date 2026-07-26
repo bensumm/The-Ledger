@@ -471,19 +471,42 @@ bumps `APP_VERSION`.
 
 ### Rank + grade
 The per-thesis column is `Rank net·P/ttf` (P6b): **rank = net after tax × P(fill at the quoted pair)
-÷ TTF** (`estimateRank`/`rankScore` in `js/estimators/families.mjs`), at the ONE pair the thesis posts. `expGpDay` survives only
+÷ (TTF + K)** (`estimateRank`/`rankScore` in `js/estimators/families.mjs`), at the ONE pair the thesis posts. `expGpDay` survives only
 as the cheap pre-fetch pool orderer + the 500k pre-filter. Grade letters (`rating.mjs`) are
 placeholder cutoffs.
+- **TTF SATURATES (G5, PLAN-GRADE-REWORK):** the fill-speed term is `1/(days + TTF_SAT_DAYS)`, not a raw
+  `1/days` floored at a minimum. TTF is the most-leveraged, least-measured input (always a prior in
+  production), so an extreme near-zero TTF can no longer unboundedly inflate the rank — the transform is
+  still monotonically decreasing in TTF (a slower flip never ranks higher) but BOUNDED as TTF→0 (→1/K).
+  `TTF_SAT_DAYS` is a named placeholder (n≈0); the old `TTF_FLOOR_DAYS` divide-by-tiny floor is retired.
+- **The grade layers a risk MULTIPLIER (geometric mean, G4):** `score = round(rank × geomean(factors))`,
+  where the factors are `regime · mom · liq · confidence` — each ∈ (0,1]. The GEOMETRIC MEAN (G4/O6)
+  replaced the raw product so four sub-1 haircuts no longer compound into an over-harsh discount. The old
+  per-unit-price `capitalFactor` is **DELETED** (G2/O3) — at current capital a big-ticket lane is no
+  longer penalized for costing more per unit (the deployable-capital rank fold that would have made the
+  rank itself capital-aware is a deferred follow-up, not shipped here; the rank stays per-unit for now).
+  The breakdown penalty lives in ONE place — the rank's `pFillIntraday` — since G4 dropped `momFactor`'s
+  duplicate `mom==='breakdown'` branch (it was double-counted); `momFactor` keeps only breakup chase-risk.
 - **P(fill) is two-leg:** `P = P_bid × askReachFactor(askReach)` — the entry fill discounted by the
   cross-day ASK reach (a robust p90 top can reach only ~2/14 days; the same inform-mode reach number,
   zero new fetch). Paired with a `REACH_GRADE_CAP` so a rarely-reaching ask can't oversell the LETTER.
-- **`cappedBy` names which ceiling bound the letter (R7, legibility).** Four grade ceilings apply
-  sequentially via `capGrade` — `THIN_GRADE_CAP` (A-, inside `rateItem`), then `PHASE_BASING_GRADE_CAP`,
-  `SUBFLOOR_GRADE_CAP`, `REACH_GRADE_CAP` (all at the screen render site). The screen records which one
+- **The four grade caps live INSIDE `rateItem` (G1, one chain).** `applyGradeCaps` applies the ceilings in
+  one fixed order (harshest last wins): `THIN_GRADE_CAP` (A-) → `PHASE_BASING_GRADE_CAP` →
+  `SUBFLOOR_GRADE_CAP` → `REACH_GRADE_CAP`. Before G1 only the thin cap lived in `rateItem` and the other
+  three were stacked at the screen render site, so a returned grade was provisional (Flaw 7); the render
+  site now passes the cap VALUES/flags in and `rateItem` returns the final letter.
+- **`cappedBy` names which ceiling bound the letter (R7, legibility).** `applyGradeCaps` records which cap
   actually LOWERED the printed letter (last-binder-wins) as a single `cappedBy` field
   (`thin`/`phase-basing`/`sub-floor`/`reach`, or absent when the raw grade stood) — logged to
   `suggestions.jsonl` for retro segmentation + surfaced as the grade-cell tooltip. Legibility only, never
   a gate/rank/grade input (the caps themselves are unchanged; this just NAMES the binding one).
+- **`(thin)` confidence MARKER (G6/O5) — mark, don't shrink.** When a row's fill call rests on a thin
+  reach SAMPLE (`pFill.n < CONF_THIN_N_FLOOR`) the render appends `(thin)` to the letter — the
+  score/grade/ordering are UNCHANGED, it's a marker only (deterministic, no magic shrinkage). It keys off
+  the pFill reach `n`, NOT the ttf `n` (always the prior in production → would mark everything) and NOT
+  placement/IQR (a price's POSITION and the band WIDTH are orthogonal to how many observations back the
+  proportion). Distinct from the gp-flow `thin` CAP and suggestlog's `liqClass` `thin` — three triggers,
+  one label, disambiguated by the tooltip. The app Finder passes no `n`, so it is never marked.
 - **Churn is EXEMPT** from the ask-reach discount, the grade cap, AND — since PLAN-ESTIMATOR-POSTURE
   AC5/AC6 — BOTH `estimatePair` PRICE legs (`fillShape:'symmetric'` — a lap sells into continuous
   two-sided flow, so the day-high reach read mismeasures it on every surface). The rank discount, the

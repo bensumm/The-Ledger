@@ -77,7 +77,7 @@ export const TTF_MULTIDAY_PRIOR_SEC  = 7 * 24 * 3600;  // accumulation family (m
 export const TTF_REF_VOL             = 1000;  // volume at which the intraday prior applies unscaled
 export const TTF_VEL_MIN             = 0.25;  // a deep book flips ≥4× faster than the prior … (floor)
 export const TTF_VEL_MAX             = 4;     // … a thin book ≤4× slower (ceiling)
-export const TTF_FLOOR_DAYS          = 1 / 24; // 1h min in the rank denominator — no divide-by-tiny blowup
+export const TTF_SAT_DAYS            = 1 / 24; // G5: the saturating-TTF knee — rank speed = 1/(days + this). At the knee a "1h flip" and an "instant flip" rank within 2× instead of unboundedly apart. Replaced the old TTF_FLOOR_DAYS divide-by-tiny floor (deleted — rankScore saturates now instead of flooring). PLACEHOLDER (n≈0)
 export const RISING_PFILL_CONFIRMED  = 0.7;   // rising + not breaking down → entry near current fills readily
 export const RISING_PFILL_UNCONFIRMED = 0.4;  // unconfirmed rising → the forecast entry is less certain
 export const PFILL_ASKREACH_FLOOR    = 0.25;  // two-leg P (Proposal A, PLAN-GRADE-REACH): a flip only "fills"
@@ -249,12 +249,18 @@ export function quotedPair(spec, row = {}) {
    after-tax net PER UNIT, discounted by fill probability, per DAY of capital tied up. PER-UNIT (not
    per-slot) deliberately: volume/slot-count is exactly the hand-wavy throughput assumption Ben rejected
    — the quoted pair is ONE bid/ask the thesis posts, so the metric is the value of that one lap. Missing
-   inputs degrade (net→0, pFill→0, ttf→intraday prior); the TTF floor stops a divide-by-tiny blowup. */
+   inputs degrade (net→0, pFill→0, ttf→intraday prior).
+   G5 (PLAN-GRADE-REWORK — Fix D): the TTF term SATURATES — speed = 1/(days + TTF_SAT_DAYS) instead of a
+   raw 1/days floored at a minimum. TTF is the most-leveraged, LEAST-measured input (Flaw 5: in production
+   it's always a prior, never a measured velocity), so an extreme near-zero TTF must not unboundedly
+   inflate the rank. 1/(days + K) is still monotonically DECREASING in days (a slower flip never ranks
+   higher) but BOUNDED as days→0 (→ 1/K), so a mirage tiny-TTF can't blow the rank up. K is a NAMED
+   PLACEHOLDER (n≈0) — the saturation knee, not a tuned magnitude; G7/F1 calibrate it against real velocity. */
 export function rankScore({ net, pFill, ttfSec } = {}) {
   const n = num(net) ?? 0;
   const p = clamp01(num(pFill) ?? 0);
-  const days = Math.max(TTF_FLOOR_DAYS, (num(ttfSec) ?? TTF_INTRADAY_PRIOR_SEC) / 86400);
-  return n * p / days;
+  const days = Math.max(0, (num(ttfSec) ?? TTF_INTRADAY_PRIOR_SEC) / 86400);
+  return n * p / (days + TTF_SAT_DAYS);
 }
 
 /* estimateRank(spec, row, extra) → { pair, net, pFill, ttf, rank } — the whole bundle a surface needs

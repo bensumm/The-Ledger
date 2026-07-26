@@ -26,7 +26,7 @@ import {
   estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_FADE_DISCOUNT, EST_HEADERS, SELL_TOP_MODELS,
   reachRelief, dayHighFrom5m, REACH_RELIEF_MAX, REACH_DEBIAS_MAX_FRAC,   // PLAN-LIQUIDITY-REACH
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
-  TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_FLOOR_DAYS,
+  TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS,
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
 } from '../lib/estimators.mjs';
 
@@ -172,17 +172,24 @@ ok('churn lapUnits = min(limit, volDay); estimateRank ranks the LAP (net × lapU
 });
 
 /* --- rankScore + quotedPair + estimateRank -------------------------------------------------------- */
-ok('rankScore = net × P(fill) ÷ TTF(days), with the TTF floor guarding a divide-by-tiny', () => {
-  // 12k net, P 0.5, ttf 1 day → 6000/unit/day.
-  assert.equal(rankScore({ net: 12_000, pFill: 0.5, ttfSec: 86_400 }), 6_000);
-  // faster ttf (half a day) doubles the rate; higher pFill scales linearly.
-  assert.equal(rankScore({ net: 12_000, pFill: 0.5, ttfSec: 43_200 }), 12_000);
-  assert.equal(rankScore({ net: 12_000, pFill: 1, ttfSec: 86_400 }), 12_000);
+ok('G5 rankScore = net × P(fill) ÷ (TTF days + TTF_SAT_DAYS) — saturating, monotone, bounded', () => {
+  const rs = (days) => rankScore({ net: 12_000, pFill: 0.5, ttfSec: days * 86_400 });
+  // the saturating formula: 12k × 0.5 / (days + K).
+  assert.equal(rs(1), 6_000 / (1 + TTF_SAT_DAYS));
+  assert.equal(rs(0.5), 6_000 / (0.5 + TTF_SAT_DAYS));
+  assert.equal(rankScore({ net: 12_000, pFill: 1, ttfSec: 86_400 }), 12_000 / (1 + TTF_SAT_DAYS));
   // degrade: missing net → 0; missing pFill → 0.
   assert.equal(rankScore({ pFill: 0.5, ttfSec: 86_400 }), 0);
   assert.equal(rankScore({ net: 12_000, ttfSec: 86_400 }), 0);
-  // a near-zero ttf is floored at TTF_FLOOR_DAYS so the rate can't blow up.
-  assert.equal(rankScore({ net: 100, pFill: 1, ttfSec: 1 }), 100 / TTF_FLOOR_DAYS);
+  // MONOTONE DECREASING in days — a slower flip never ranks higher.
+  let prev = Infinity;
+  for (const d of [0, 0.01, 0.05, 0.1, 0.5, 1, 3, 7]) { const v = rs(d); assert.ok(v <= prev, `rank rose at days=${d}`); prev = v; }
+  // BOUNDED as ttf→0 (Flaw 5): the near-zero-TTF rank is 1/K × net×P, NOT an unbounded blowup, and it is
+  // within 2× of a "normal" 1h flip rather than diverging.
+  const instant = rankScore({ net: 100, pFill: 1, ttfSec: 0 });
+  assert.equal(instant, 100 / TTF_SAT_DAYS, 'a 0-TTF flip saturates at 1/K, not infinity');
+  const oneHour = rankScore({ net: 100, pFill: 1, ttfSec: 3600 });
+  assert.ok(instant / oneHour <= 2, `saturation bounds the blowup: ${instant / oneHour}× (was unbounded pre-G5)`);
 });
 
 ok('quotedPair posts the thesis pair: band/churn/scalp=opt, value=term(null); quick still served', () => {

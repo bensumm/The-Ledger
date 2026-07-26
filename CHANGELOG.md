@@ -10,6 +10,38 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-GRADE-REWORK (approved subset: G1, capitalFactor-delete, G4, G5, G6) — dimensionally-honester grade (0.70.0, 2026-07-25)
+The owner-approved subset of the grade rework, re-implemented fresh against current `main` (the six chunks
+of a prior far-behind branch were READ as a reference implementation and PORTED, not cherry-picked — the
+tangled G2 deployable-fold and G3 per-mode-reference work were deliberately LEFT OUT). All five changes are
+STRUCTURAL (fix a dimensional/compounding/plumbing defect), not calibration — every constant introduced is
+a NAMED PLACEHOLDER with `n≈0`. `js/rating.mjs` + `js/estimators/families.mjs` are app-imported, so these
+change the deployed Finder/Watchlist grades too (owner-approved visible change).
+- **G1 — the four grade caps centralized inside `rateItem`.** `applyGradeCaps` applies thin → phase-basing
+  → sub-floor → reach in ONE fixed order (harshest last wins) and returns the R7 `cappedBy` binder. The
+  screen render site used to stack three of the four caps OUTSIDE `rateItem` (a returned grade was
+  provisional, Flaw 7); it now passes the cap VALUES/flags in. PURE RELOCATION — proven byte-identical
+  across all 240 cap-combination rows before/after.
+- **`capitalFactor` DELETED (G2/O3).** The old per-unit-price haircut (1m→1.0 … ~46m→0.6) is removed
+  outright — at current capital a big-ticket lane must not be penalized for costing more per unit. NOTE
+  the deployable-capital rank fold that O3 pairs with the deletion is the DEFERRED half (out of this
+  subset), so the rank stays per-unit for now; this just removes the haircut, it adds no replacement term.
+- **G4 — geometric-mean `riskMult` + kill the momentum double-count.** `score = round(rank ×
+  geomean(regime·mom·liq·confidence))` — the geometric mean (O6) replaces the raw product so four sub-1
+  haircuts no longer compound into an over-harsh discount. The `mom==='breakdown'` penalty fired BOTH in
+  `momFactor` (×0.45) AND in the rank's `pFillIntraday` (`PFILL_BREAKDOWN_PENALTY`); G4 drops `momFactor`'s
+  breakdown branch (keeps only breakup chase-risk), so a breakdown is penalized exactly once end-to-end.
+- **G5 — saturating TTF.** `rankScore`'s fill-speed term is `1/(days + TTF_SAT_DAYS)` instead of a raw
+  `1/days` floored at a minimum — monotone-decreasing in TTF but BOUNDED as TTF→0, so the most-leveraged /
+  least-measured input can't unboundedly inflate the rank. The retired `TTF_FLOOR_DAYS` const was deleted.
+- **G6 — a `(thin)` confidence MARKER (O5): mark, don't shrink.** When a row's fill call rests on a thin
+  reach sample (`pFill.n < CONF_THIN_N_FLOOR`) the render appends `(thin)` to the letter — score/grade/
+  ordering UNCHANGED. Investigation finding (required by O5): the trigger is the pFill reach `n` only —
+  `placement` is a price POSITION (count(≤x)/n), and IQR is band WIDTH; both are orthogonal to the
+  proportion's sample-size uncertainty (binomial SE ~√(p(1−p)/n)). ttf `n` is excluded (always the prior
+  in production → would mark everything). The app Finder threads no `n`, so it is never marked. This is a
+  THIRD "thin" (gp-flow CAP vs liqClass bucket vs this confidence marker) — one label, tooltip-disambiguated.
+
 ### PLAN-MULTI-PEAK-WINDOWS chunks 1–3 — surface a SECOND prominent diurnal window per side (pipeline/pure-fn only, NO APP_VERSION bump, 2026-07-24)
 Every diurnal read collapsed a day's hour-of-day shape to ONE dip cluster + ONE peak cluster, losing the
 real second window several items carry (Primordial boots: a reliable-reach overnight peak AND a
