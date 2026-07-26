@@ -10,6 +10,27 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-REVERSE-FLIP RF3 — BANKED-backfill reconciliation advisory (pipeline, read-only, 2026-07-25)
+`pipeline/commands/reconcile-reverse-flip.mjs` closes the cosmetic gap a SOLD-FIRST Case-B reverse-flip
+leaves: selling a pre-log owned item (the Ancestral-hat shape — no BUY ever logged) lands the sell in
+`positions.json.unmatched`, so its realised gain never shows as a `closed` row. This script is READ-ONLY
+and ADVISORY — it touches NO file, PRINTS the fix, and never runs it. It reads the declared cycles
+(`reverse-flip-state.json`), the owned registry (`owned-items.json`), and `positions.json.unmatched[]`, and
+when a declared reverse-flip item has a matching unmatched sell it prints the exact
+`add-manual-fill.mjs --type banked --price <basis> --time <iso>` command to inject the acquisition basis
+BEFORE the sell in time-order, so the next sync FIFO-matches it into a real `closed` row (fix-at-the-source
+doctrine, the same BANKED mechanism boss drops already use — `reconstruct.mjs` is untouched, Q2's whole point).
+- **Timestamp discipline (Gaps §5):** `--time` is the ACQUISITION time = `owned-items.json`'s `seedTs` for
+  the item, NOT the unmatched row's `sellTs` (that is the SALE time — a BANKED lot stamped at the sale time
+  would sort AFTER the sell and never pair). Formatted via `toISOString()` (TZ-HERMETIC — always UTC).
+- **Basis, not sell price:** `--price` = the owned-item's `seedBasis` (acquisition cost each), never the
+  sell price. If the owned seed carries no basis/`seedTs`, it prints an honest "declare the seed first" note
+  rather than a fabricated command.
+- **No false positives:** no declaration, or a declaration whose item has no matching unmatched sell, prints
+  "nothing to reconcile" and never a suggestion.
+- No `APP_VERSION` bump (pipeline-only, node-only, read-only). Fixture-pinned + TZ-hermetic acceptance:
+  `pipeline/test/reconcile-reverse-flip.test.mjs`.
+
 ### PLAN-REVERSE-FLIP RF2 — `--mode reverse`, the console surface (pipeline, console-only, 2026-07-25)
 Wires RF0's owned-item stores + RF1's gate into a runnable console screen. `--mode reverse` HARVESTS an
 item you already OWN — sell into the diurnal/multi-day PEAK, rebuy at the DIP, capital-free. It is an

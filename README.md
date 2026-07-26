@@ -469,7 +469,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (`seedQty + Σbuy − Σsell` over events with `ts ≥ seedTs`; the same never-patch-a-derived-number
   philosophy `positions.json` uses). `classification` ∈ `keep`/`flip`/`consumable` — `classification:'keep'`
   IS the reverse-flip candidate pool (Ruling 8: NO per-item opt-in flag; RF1's oscillator filter + Ben's
-  per-run table selection pick the actual candidates from the kept set). Ships EMPTY (Ben seeds real items
+  per-run table selection pick the actual candidates from the kept set). A Case-B (pre-log, sold-first)
+  item MAY also carry an optional `seedBasis` (acquisition cost each) — the acquisition basis
+  `reconcile-reverse-flip.mjs` (RF3) reads to build the BANKED-backfill command (absent → RF3 prints a
+  "declare the seed first" note instead of a fabricated basis). Ships EMPTY (Ben seeds real items
   via the CLI — the Ancestral hat is deliberately NOT seeded). No PII. Fixture-pinned in
   `pipeline/test/ownedledger.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
 - `reverse-flip-state.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the declared
@@ -832,6 +835,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     --sold-each <gp> --qty N [--sold-ts <iso>]` (computes `beRebuy = soldEach − tax(soldEach)`),
     `advance "<item|id>" --state rebuy-armed --bid <gp>`, `clear`, `list`. `COFFER_REVERSE_FLIP_PATH`
     env override for tests only),
+    `reconcile-reverse-flip.mjs` (RF3, PLAN-REVERSE-FLIP — the BANKED-backfill reconciliation ADVISORY,
+    READ-ONLY: touches NO file, PRINTS a command, never runs it. `[<item|id>]` (bare = every declared
+    reverse-flip item). When a declared `reverse-flip-state.json` item has a matching `positions.json`
+    `unmatched` sell (the Case-B sold-first artifact — a sell with no prior buy), it prints the exact
+    `add-manual-fill.mjs --type banked --price <basis> --time <iso>` command to inject the acquisition
+    basis so the next sync produces a real `closed` row. `--price` = the owned-items `seedBasis`
+    (acquisition cost, NOT the sell price); `--time` = the owned-items `seedTs` (ACQUISITION time, NOT
+    the unmatched `sellTs` — FIFO needs the BANKED lot BEFORE the sell). Prints "nothing to reconcile"
+    on no declaration / no matching unmatched sell — never a false positive.
+    `COFFER_REVERSE_FLIP_PATH`/`COFFER_OWNED_PATH`/`COFFER_POSITIONS_PATH` env overrides for tests only.
+    Fixture-pinned `pipeline/test/reconcile-reverse-flip.test.mjs`),
     `derive-cash.mjs` (CLI to DERIVE / re-anchor / clear the idle-cash balance: bare = the derived balance
     (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/derive-cash-tiers.mjs`); `<amount>` =
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch-positions.mjs`'s
