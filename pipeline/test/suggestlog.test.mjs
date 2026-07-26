@@ -90,6 +90,18 @@ ok('P4c: the inferred entry `path` is lean-included (present only when supplied)
   assert.ok(!('path' in none), 'absent path stays absent (SL1-style byte-identity)');
 });
 
+ok('PLAN-LANE-ADMISSION Chunk E: `pathA` is lean-included (present only when supplied) and round-trips', () => {
+  const paObj = { gpDay: 1_250_000, marginU: 42, captureFrac: 0.62, cyclesDay: 3.1, units: 9600, price: 5, intradayRange: 68, lane: 'churn', rankInLane: 2 };
+  const withPa = suggestionEntry({}, { itemId: 21, cls: 'liquid', verdict: 'B', grade: 'B', pathA: paObj });
+  assert.deepEqual(withPa.pathA, paObj, 'the full pathA object is written through unchanged');
+  // survives a JSON serialize/parse round-trip (it lands in suggestions.jsonl as a JSON line — IDs/prices only, no PII)
+  assert.deepEqual(JSON.parse(JSON.stringify(withPa)).pathA, paObj);
+  const none = suggestionEntry({}, { itemId: 22, cls: 'liquid', verdict: 'A' });
+  assert.ok(!('pathA' in none), 'absent pathA stays absent (YS2 byte-identity — a null-Path-A / non-screen row)');
+  const nullPa = suggestionEntry({}, { itemId: 23, cls: 'liquid', verdict: 'A', pathA: null });
+  assert.ok(!('pathA' in nullPa), 'an explicit null pathA (no intraday range) writes no field');
+});
+
 ok('YS2 forward fields are included only when supplied (lean, non-null)', () => {
   const e = suggestionEntry({}, { itemId: 2, cls: 'liquid', verdict: null,
     posture: 'overnight', tripwire: 'support 17.2m', fillWindowHrs: 8, velocityClass: 'slow-hold', thesis: 'guide re-anchor' });

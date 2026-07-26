@@ -118,3 +118,45 @@ export function pathAGpDay({ dayRanges, price, buyLimit = null, volDay = 0, lane
 
   return { gpDay, marginU, captureFrac: frac, cyclesDay, units, price: price ?? null, intradayRange: range, lane };
 }
+
+/* --- Chunk D console-ranking helpers (PURE, fixture-tested). Path-A gp/day is the PRIMARY console/last-report
+   sort; rateItem's grade (the row's `score`) is the shown BACKUP + live A/B column. These encode the ONE
+   two-tier ordering the screen console uses, so the test pins the SAME comparator the surface runs. --- */
+
+/* pathASurfaceTier(pathA, minGpd) → 0 | 1. The existing MIN_GPD attention floor is a post-rank SURFACING
+   partition here (NOT a gate — nothing is dropped): a row whose Path-A gp/day clears the floor is tier 0
+   (Path-A-ranked, surfaced on top); a row below the floor OR with no Path-A number (null) is tier 1
+   (grade-fallback, surfaced beneath). */
+export function pathASurfaceTier(pathA, minGpd) {
+  return (pathA && pathA.gpDay >= minGpd) ? 0 : 1;
+}
+
+/* comparePathARows(a, b, minGpd) — the console sort comparator over rows shaped { pathA, score }. Tier
+   first (qualified above fallback), then Path-A gp/day desc within the qualified tier, else the backup
+   `score` (rateItem's risk-adjusted rank) desc — so a null/sub-floor row still surfaces via its grade.
+   Returns 0 on a true tie (Array.sort-stable-friendly). */
+export function comparePathARows(a, b, minGpd) {
+  const ta = pathASurfaceTier(a.pathA, minGpd), tb = pathASurfaceTier(b.pathA, minGpd);
+  if (ta !== tb) return ta - tb;
+  if (ta === 0) return (b.pathA.gpDay - a.pathA.gpDay) || ((b.score || 0) - (a.score || 0));
+  return (b.score || 0) - (a.score || 0);
+}
+
+/* assignRankInLane(rows) — mutate each row's `pathA` (when non-null) with `rankInLane`: the row's 1-based
+   rank within its gear/churn lane THIS run, by Path-A gp/day desc. Rows with a null pathA are skipped
+   (no object to rank / log). Returns `rows` for chaining. The rank is logged with the H1 pathA field so
+   the forward join can segment a pick by its in-lane standing. */
+export function assignRankInLane(rows) {
+  const byLane = new Map();
+  for (const r of rows) {
+    if (!r.pathA) continue;
+    const l = r.pathA.lane;
+    if (!byLane.has(l)) byLane.set(l, []);
+    byLane.get(l).push(r);
+  }
+  for (const arr of byLane.values()) {
+    arr.sort((a, b) => b.pathA.gpDay - a.pathA.gpDay);
+    arr.forEach((r, i) => { r.pathA = { ...r.pathA, rankInLane: i + 1 }; });
+  }
+  return rows;
+}

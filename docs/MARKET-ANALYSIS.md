@@ -526,6 +526,25 @@ placeholder cutoffs.
   multiplier). `--asym` flips the whole objective but is F1-gated OFF (it silently downgrades the
   default-on publish; an explicit `--publish --asym` hard-refuses). Doctrine:
   the `asymEstimate` header in `js/estimators/reach.mjs`.
+- **Path-A gp/day is the CONSOLE PRIMARY sort; the grade is a shown BACKUP + live A/B (PLAN-LANE-ADMISSION
+  Chunks D+E, owner decision H4).** On the band/churn console + last-report tables the surviving rows are
+  now sorted PRIMARILY by **Path-A after-tax intraday-flip gp/day** (`pathAGpDay`, `pipeline/lib/patha.mjs`
+  — the CALIBRATED intraday-range base rate: `median(per-day after-tax range) × captureFrac × throughput`,
+  reusing the ONE `tax()`/`expUnits`). `rateItem`'s grade is still computed EVERY run and shown in its own
+  `Path-A gp/d*` column BESIDE the Grade column, so a divergence between the two is visible on every pass
+  and a revert to grade-primary is a one-line comparator swap (`comparePathARows` → `b.score − a.score`).
+  The existing **500k `MIN_GPD` attention floor is a post-rank SURFACING partition, NOT a new gate** — rows
+  whose Path-A gp/day clears it sort on top by Path-A; rows below it (or with no intraday range → `no-pathA`)
+  sink beneath, keeping their grade order, surfaced not dropped. captureFrac (0.45 gear / 0.62 churn) is an
+  **unproven PLACEHOLDER** (n=13/12, own-book-biased — the `*` in the header flags it) under validate-in-real-use;
+  the forward-accrual (`pathA` field on `suggestions.jsonl`, Chunk E — `{gpDay, marginU, captureFrac, cyclesDay,
+  units, price, intradayRange, lane, rankInLane}`) is the formal validator/revert-trigger, not a precondition.
+  Path-A is the primary sort for the STANDARD scan (active/auto posture); the two SPECIALIZED console reranks
+  keep their own order (`--posture overnight`'s net-over-velocity accumulation board, `--pressure-exit`'s
+  trial) — Path-A is still computed, shown, and logged on those rows, only the sort defers.
+  **CONSOLE / last-report ONLY** — the published `screen.json` (and the deployed app) keep `rateItem`'s grade
+  + the NEUTRAL sort UNCHANGED (the `--publish` return is frozen on the pre-Path-A order); a later
+  post-validation chunk promotes Path-A to the app. So no `APP_VERSION` bump.
 
 `--posture overnight|active|auto` (S2) TUNES the stack (not a new flip-niche): overnight keeps only
 flat/rising + confident-band + non-thin + non-breakdown, ranks net-over-velocity, drops

@@ -68,8 +68,15 @@
  *
  * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×6,
  * 10% × volDay); expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
- * cheap pre-fetch orderer + the 500k --min-gpd pre-filter (P6b demotion). The DISPLAYED table is then
- * sorted by the risk-adjusted per-thesis RANK (net × P(fill) ÷ TTF) from rating.mjs/estimators.mjs.
+ * cheap pre-fetch orderer + the 500k --min-gpd pre-filter (P6b demotion). PLAN-LANE-ADMISSION Chunk D
+ * (2026-07-25): the CONSOLE / last-report band/churn table is now sorted PRIMARILY by Path-A intraday-flip
+ * gp/day (pipeline/lib/patha.mjs pathAGpDay, off Chunk A's daily ranges + Chunk B's vol lane), shown in a
+ * `Path-A gp/d*` column with the risk-adjusted per-thesis RANK/grade retained BESIDE it as the shown
+ * BACKUP + live A/B (owner decision H4; captureFrac is a PLACEHOLDER n≈0 — the `*`). The 500k --min-gpd
+ * floor is a post-rank SURFACING partition (not a gate); null-Path-A rows fall back to the grade sort.
+ * SCOPE LOCK: this is CONSOLE-ONLY — the --publish screen.json return is frozen on the pre-Path-A
+ * (grade) order + cells (byte-identical), so the deployed app stays on grade until a later chunk promotes
+ * Path-A. Reverting to grade-primary = swap the console comparePathARows sort back to `b.score - a.score`.
  *
  * ALL quote/tax/regime math is js/quotecore.js (imported); rating math is rating.mjs. This file only
  * fetches + gates + rates + renders.
@@ -84,7 +91,7 @@ import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // HT3 — the per-hour d
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
 import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
-import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';
+import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache, sleep } from '../lib/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { renderReport, renderHtmlTable } from '../lib/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
@@ -96,6 +103,8 @@ import { formatTimedLap, formatBasePosition } from '../lib/emit.mjs';   // PLAN-
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, VALUE_RESERVE_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP,
   scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/gatecandidates.mjs';
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX } from '../lib/admission.mjs';
+import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
+import { classifyVolLane } from '../lib/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
 import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
 import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife). F-H — OSC_DETECTOR_NIGHTS = the detector's OWN longer trailing window, decoupled from the gate's AMP_NIGHTS
@@ -411,6 +420,24 @@ const HEADERS = ['Item', 'Grade', ...QUOTE_HEADERS.slice(1), 'Rank net·P/ttf'];
 // printed niche tables only (Grade moves after Regime per the plan's row layout; the Rank column is
 // kept — it's the sort key's honesty readout). HEADERS above stays the --raw AND --publish set.
 const HEADERS_EST = ['Item', 'Guide', ...EST_HEADERS, 'Vol/d', 'Momentum', 'Regime', 'Grade', 'Rank net·P/ttf'];
+
+// PLAN-LANE-ADMISSION Chunk D — the CONSOLE Path-A A/B column. `Path-A gp/d*`: the `*` flags it as a NEW,
+// captureFrac-PLACEHOLDER (n≈0) number under live A/B evaluation against the Grade backup. Appended to the
+// console/last-report table ONLY (never to r.cells) so screen.json / the app stay byte-identical on grade + sort.
+const PATHA_HEADER = 'Path-A gp/d*';
+// pathABCell(r, minGpd) — the structured Path-A cell for one row. `no-pathA` when the row had no intraday
+// range (it then sorts by Grade, surfaced not dropped); a sub-MIN_GPD (attention-floor) number is marked
+// `⚠<floor` (surfaced, NOT gated — the floor is a post-rank surfacing partition here, not a drop).
+function pathABCell(r, minGpd) {
+  if (!r.pathA) return { t: 'no-pathA', c: 'mini', title: 'no intraday daily-range in the /1h archive for this item — Path-A gp/day could not be computed; this row is ranked by Grade only (surfaced, not dropped)' };
+  const pa = r.pathA;
+  const below = pa.gpDay < minGpd;
+  return {
+    t: `${fmtP(pa.gpDay)}/d · L${pa.rankInLane ?? '?'}·${pa.lane}${below ? ' ⚠<floor' : ''}`,
+    c: 'mini',
+    title: `Path-A intraday-flip after-tax gp/day — NEW, captureFrac PLACEHOLDER ${pa.captureFrac} (n≈0), live A/B vs the Grade backup: marginU ${fmt(Math.round(pa.marginU))}/u × units ${fmt(Math.round(pa.units))} × cycles/d ${pa.cyclesDay.toFixed(2)} (lane ${pa.lane}, rank ${pa.rankInLane ?? '?'} in lane)${below ? `; below the ${(minGpd / 1e3).toLocaleString()}k attention floor — surfaced, not gated` : ''}`,
+  };
+}
 
 const round2 = x => Math.round(x * 100) / 100;   // P6b: pFill logged to 2dp (lean ledger)
 // P6b: the compact honest lean fields for a rank estimate `er` (estimateRank result) — the quoted pair
@@ -855,7 +882,7 @@ export function buildScreenNicheReport({ headerLines = [], table = null, estExpl
 // (the app contract stays byte-identical — a previously-empty niche still publishes []). Everything else
 // — validators (reject still DROPS), per-spec falling doctrine, posture — runs UNCHANGED on the fallback
 // rows: a sub-floor pass relaxes floors, never doctrine. subFloor==null ⇒ byte-identical to pre-P6c.
-function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily, { partition = false } = {}) {
+function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, qcache, map, series5m, series6h, series1h, v24, daily, { partition = false, dailyRanges = {} } = {}) {
   const rows = [];
   const dist = {};
   const disc = { falling: 0, notRising: 0, breakdown: 0, posture: 0, rescued: 0, reject: 0, caution: 0, negNet: 0, notFalling: 0, partition: 0 };  // post-fetch discard reasons (--stats)
@@ -1270,6 +1297,40 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     rows.sort((a, b) => pNet(b) - pNet(a));
   }
 
+  // PLAN-LANE-ADMISSION Chunk D (2026-07-25) — Path-A becomes the CONSOLE / last-report PRIMARY sort key,
+  // with rateItem's grade (already the Grade cell) shown ALONGSIDE as the BACKUP + live A/B column (owner
+  // decision H4). Path-A gp/day is a NEW captureFrac-PLACEHOLDER (n≈0) number under live A/B evaluation.
+  // SCOPE LOCK (rule 2): this re-sort + the extra A/B column touch the CONSOLE/last-report ONLY. The
+  // published screen.json keeps rateItem's grade + the neutral sort UNCHANGED — we FREEZE the pre-Path-A
+  // (score-sorted) order here and the --publish return below maps over THAT frozen snapshot, so screen.json's
+  // grade/rank cells + their order stay byte-identical. Reverting Path-A to a backup is the one-line swap of
+  // the `rows.sort` comparator below back to `b.score - a.score`.
+  const publishRows = rows.slice();   // frozen neutral/score-sorted order the app's screen.json ships (NOT re-sorted by Path-A)
+  // Compute Path-A per surviving row: dayRanges from the /1h archive (Chunk A, zero-fetch), lane from volDay
+  // (Chunk B classifyVolLane), the SAME VALUE_CAPITAL the digest sizes one buy-window tranche with,
+  // buyLimit/volDay/price already on the row. Null when no intraday range (cold/absent daily data) — that row
+  // falls back gracefully to the grade sort (surfaced, marked no-pathA, never dropped, never crashes).
+  for (const r of rows) {
+    const lane = classifyVolLane(r.row.volDay ?? 0);
+    const pa = pathAGpDay({ dayRanges: dailyRanges[r.id], price: r.row.optBuy ?? r.row.guide ?? null,
+      buyLimit: r.row.limit ?? null, volDay: r.row.volDay ?? 0, lane, capital: VALUE_CAPITAL });
+    r.pathA = pa;   // null when no intraday range (the H1 lean-omit contract)
+  }
+  // rankInLane: the row's 1-based rank within its Path-A lane THIS run, by Path-A gp/day desc (assignRankInLane
+  // skips null-pathA rows). Logged with the pathA field (Chunk E) so the forward join can segment picks by their
+  // in-lane standing.
+  assignRankInLane(rows);
+  // PRIMARY console sort (comparePathARows): Path-A gp/day desc. The existing MIN_GPD 500k attention floor is a
+  // post-rank SURFACING partition (NOT a new gate — nothing is dropped): rows whose Path-A gp/day clears the
+  // floor sort to the TOP by Path-A; rows below the floor OR with no Path-A number sink beneath them, keeping
+  // their prior score (grade) order among themselves so a null/sub-floor row still surfaces via its grade.
+  // TWO deliberate SPECIALIZED console reranks keep their own order (Path-A is still COMPUTED, SHOWN in the
+  // A/B column, and LOGGED on every row — only the SORT defers): --pressure-exit (an F1-ungraduated trial;
+  // screen.json refused there anyway) and --posture overnight (its net-over-velocity board feeds the
+  // downstream "take lines until capital runs out" accumulation table, a distinct objective). Path-A is the
+  // PRIMARY sort for the STANDARD scan surface (active/auto posture) — the read Ben runs by default.
+  if (!PRESSURE_EXIT && POSTURE !== 'overnight') rows.sort((a, b) => comparePathARows(a, b, MIN_GPD));
+
   // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): feed this niche's SORTED, surfaced rows into the
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
@@ -1307,7 +1368,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // PLAN-DIURNAL-TIMING DT4 shadow: r.timedLap is ALREADY computed for every survivor (DT2, off the
       // same in-hand 1h series) — threaded through as-is, never recomputed, so every row this path logs
       // carries the field (the §7 data guarantee at the ledger layer).
-      timedLap: timedLapShadow(r.timedLap) })));
+      timedLap: timedLapShadow(r.timedLap),
+      // PLAN-LANE-ADMISSION Chunk E/H1 shadow: the Path-A intraday-flip gp/day forward record (the object
+      // { gpDay, marginU, captureFrac, cyclesDay, units, price, intradayRange, lane, rankInLane } off
+      // pathAGpDay + the row's in-lane rank). ACCRUAL for the H2/H4 forward validator (captureFrac is a
+      // PLACEHOLDER); absent on a null-Path-A row (no intraday range). Lean-included (YS2 absent-field pattern).
+      pathA: r.pathA || undefined })));
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the DC3 `demandRegime` shadow field was REMOVED with demandRegime.
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
@@ -1344,22 +1410,28 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // model-free view exactly as before. STDOUT-ONLY: r.cells (the raw layout) is what --publish ships
   // to screen.json either way, so the app contract is byte-identical regardless of the view.
   let printHeaders, printCells, estExplainer = null;
+  // PLAN-LANE-ADMISSION Chunk D: the Path-A A/B column is APPENDED to the console table (after Rank, before
+  // any Probes column) in BOTH views — never added to r.cells, so the --publish screen.json cells stay
+  // byte-identical. It sits beside the existing Grade column as the shown backup (the live A/B comparison).
   if (RAW) {
-    printHeaders = anyProbe ? [...HEADERS, 'Probes'] : HEADERS;
-    printCells = anyProbe ? rows.map(r => [...r.cells, { t: r.probeStr, c: 'mini' }]) : rows.map(r => r.cells);
+    printHeaders = [...HEADERS, PATHA_HEADER, ...(anyProbe ? ['Probes'] : [])];
+    printCells = rows.map(r => [...r.cells, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])]);
   } else {
-    printHeaders = anyProbe ? [...HEADERS_EST, 'Probes'] : HEADERS_EST;
+    printHeaders = [...HEADERS_EST, PATHA_HEADER, ...(anyProbe ? ['Probes'] : [])];
     // r.cells layout: [item, grade, guide, quick, opt, vol, mom, regime, rank] — reuse the shared
     // structured cells (phase-suffixed regime, sub-floor grade label) and swap in the est pair cells.
     printCells = rows.map(r => {
       const c = r.cells;
       const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], c[8]];   // PB4: estShown = pressure legs under the flag, else the neutral est
-      return anyProbe ? [...base, { t: r.probeStr, c: 'mini' }] : base;
+      return [...base, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])];
     });
     if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell carries the RECENT-3 reach, full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its P(fill) beside the net; a sub-break-even fold is ANNOTATED ("recency-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
   }
   const table = rows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
   const footerLines = [`Grades: ${gradeDist(dist)}`];
+  // PLAN-LANE-ADMISSION Chunk D legend: Path-A is now the PRIMARY console sort; Grade is the shown BACKUP +
+  // live A/B column. Loud about the placeholder (rule 4). Console/last-report only — screen.json stays on Grade.
+  if (rows.length) footerLines.push(`Path-A gp/d* = NEW PRIMARY console/last-report sort — after-tax intraday-flip gp/day (captureFrac PLACEHOLDER, n≈0, live A/B vs the Grade backup column) · L#·lane = rank within its gear/churn volume lane · ⚠<floor = below the ${(MIN_GPD / 1e3).toLocaleString()}k attention floor (surfaced, not gated) · no-pathA = no intraday range → grade-ranked. The published screen.json / app stay on Grade + the neutral sort (console-only until validated).`);
   // P2: the coordinator-ruled reject footer — printed whenever any row was validator-REJECTED, naming
   // the count + the top-3 reasons. reachValidator still degrades to pass here (no 1h series fetched);
   // P3's floorValidator CAN reject (a buy parked well above the durable multi-week floor) once the
@@ -1535,7 +1607,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // rank, and the NEUTRAL sort order are byte-unchanged, so screen.json's DECISION surface stays exactly
   // F1-gated. The app renders this band as a `pressure (trial)` column; the console rerank/reprice TRIAL
   // (--pressure-exit) stays a SEPARATE mechanism (still refused under --publish). No reachable read → omit.
-  return rows.map(r => { const rb = reachableShadow(r.reachable); return rb ? { id: r.id, cells: r.cells, reachable: rb } : { id: r.id, cells: r.cells }; });
+  // PLAN-LANE-ADMISSION Chunk D scope lock: publish the FROZEN pre-Path-A (score-sorted) `publishRows`, NOT
+  // the Path-A-re-sorted `rows` — so screen.json's grade/rank cells + their order stay byte-identical (the
+  // Path-A primary sort is console/last-report only until a later post-validation chunk promotes it to the app).
+  return publishRows.map(r => { const rb = reachableShadow(r.reachable); return rb ? { id: r.id, cells: r.cells, reachable: rb } : { id: r.id, cells: r.cells }; });
 }
 
 // --- P5 VALUE niche render (PLAN-VALUE §D) -----------------------------------------------------
@@ -2216,12 +2291,19 @@ async function main() {
   // Step 6a: churn is partitioned from band (drops the band-lane ROI ≥ MIN_ROI rows) ONLY when both
   // niches run together (--mode all) — so the two tables are disjoint. Standalone --mode churn is unpartitioned.
   const partitionChurn = RUN_MODES.includes('band') && RUN_MODES.includes('churn');
+  // PLAN-LANE-ADMISSION Chunk D: the per-item per-day intraday range (Chunk A, READ-ONLY zero-fetch off the
+  // /1h archive) that powers Path-A's console PRIMARY sort. Loaded ONCE over the fetched id union and
+  // threaded into renderMode. Degrades honestly to {} on a cold archive (Path-A then null per row → the
+  // console falls back to the grade sort). Best-effort — a load failure never breaks the scan.
+  let dailyRanges = {};
+  try { dailyRanges = loadDailyRangeBulk(14, { ids: [...ids] }).ranges || {}; }
+  catch (err) { console.error('(path-A: daily-range load failed — ' + ((err && err.message) || err) + ')'); }
   const niches = {};
   for (const m of RUN_MODES) niches[m] = FLIP_NICHES[m].gate === 'value'
     ? renderValueMode(gated[m], qcache, map, series6h, series1h, guide, daily)   // P5 — the value niche's own term-structure table
     : FLIP_NICHES[m].gate === 'amplitude'
     ? renderAmplitudeMode(gated[m], qcache, map, series1h, guide, daily)         // A2 — the amplitude niche's own daily-cycle table; DT6 — `daily` threaded in for the base-position note
-    : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn });
+    : renderMode(m, gated[m], qcache, map, series5m, series6h, series1h, v24, daily, { partition: m === 'churn' && partitionChurn, dailyRanges });
   // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): print the ONE cross-niche decision digest, collected
   // during the niche renders above (the watchClosely precedent). --digest-gated + printed via `realLog` so it
   // appears even under the AO1 quiet default (console.log is a no-op there) — its own gate, independent of

@@ -13,7 +13,7 @@
  * Run: `node pipeline/test/patha.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { pathAGpDay, intradayDailyRange, captureFracFor, CAPTURE_FRAC } from '../lib/patha.mjs';
+import { pathAGpDay, intradayDailyRange, captureFracFor, CAPTURE_FRAC, comparePathARows, assignRankInLane, pathASurfaceTier } from '../lib/patha.mjs';
 import { median, netMargin, tax } from '../../js/quotecore.js';
 import { expUnits } from '../lib/gatecandidates.mjs';
 
@@ -131,6 +131,64 @@ ok('returns the H1 pathA field shape (minus rankInLane)', () => {
   }
   assert.equal(r.lane, 'churn');
   assert.equal(r.price, PX);
+});
+
+// --- Chunk D console-ranking helpers (comparePathARows / assignRankInLane / pathASurfaceTier) ----------
+// Rows are shaped { pathA, score } exactly like the screen's `rows` (a subset — the ranker reads only these).
+const MIN_GPD = 500_000;
+const pa = (gpDay, lane = 'churn') => ({ gpDay, lane });   // minimal pathA object for the ranker
+
+ok('Chunk D PRIMARY sort: a HIGH-pathA / LOW-grade row sorts ABOVE a LOW-pathA / HIGH-grade row', () => {
+  // The A/B pin: Path-A is primary. Row H has the fatter Path-A gp/day but a WORSE backup score; row L is
+  // the reverse. Path-A-primary ordering must put H first — the whole point of the owner H4 decision.
+  const H = { id: 'H', pathA: pa(3_000_000), score: 10 };   // big Path-A, weak grade
+  const L = { id: 'L', pathA: pa(900_000), score: 999 };    // small Path-A, strong grade
+  const sorted = [L, H].sort((a, b) => comparePathARows(a, b, MIN_GPD));
+  assert.deepEqual(sorted.map(r => r.id), ['H', 'L']);
+});
+
+ok('Chunk D: within the qualified tier, ties on Path-A fall back to the backup score (grade A/B)', () => {
+  const a = { id: 'a', pathA: pa(1_000_000), score: 5 };
+  const b = { id: 'b', pathA: pa(1_000_000), score: 50 };   // same Path-A, better grade → wins the tie
+  const sorted = [a, b].sort((x, y) => comparePathARows(x, y, MIN_GPD));
+  assert.deepEqual(sorted.map(r => r.id), ['b', 'a']);
+});
+
+ok('Chunk D: MIN_GPD is a SURFACING partition — a sub-floor row sinks below every qualified row (not dropped)', () => {
+  const sub = { id: 'sub', pathA: pa(200_000), score: 999 };   // huge grade but Path-A below the 500k floor
+  const qual = { id: 'qual', pathA: pa(600_000), score: 1 };   // just clears the floor, tiny grade
+  assert.equal(pathASurfaceTier(sub.pathA, MIN_GPD), 1);
+  assert.equal(pathASurfaceTier(qual.pathA, MIN_GPD), 0);
+  const sorted = [sub, qual].sort((a, b) => comparePathARows(a, b, MIN_GPD));
+  assert.deepEqual(sorted.map(r => r.id), ['qual', 'sub']);   // qualified above sub-floor, despite the grade
+  assert.equal(sorted.length, 2);                              // NOTHING dropped
+});
+
+ok('Chunk D: a NULL-pathA row degrades gracefully — sinks to the fallback tier, ordered by its grade, never dropped', () => {
+  const good = { id: 'good', pathA: pa(700_000), score: 3 };
+  const nullA = { id: 'nullA', pathA: null, score: 800 };     // no intraday range → grade-ranked only
+  const nullB = { id: 'nullB', pathA: null, score: 80 };
+  assert.equal(pathASurfaceTier(null, MIN_GPD), 1);
+  const sorted = [nullB, nullA, good].sort((a, b) => comparePathARows(a, b, MIN_GPD));
+  assert.deepEqual(sorted.map(r => r.id), ['good', 'nullA', 'nullB']);   // qualified first; nulls by grade desc
+  assert.equal(sorted.length, 3);                                        // both null rows still surfaced
+});
+
+ok('Chunk D assignRankInLane: 1-based rank within each gear/churn lane by Path-A gp/day desc; null-pathA skipped', () => {
+  const rows = [
+    { id: 'c1', pathA: pa(1_000_000, 'churn') },
+    { id: 'g1', pathA: pa(2_000_000, 'gear') },
+    { id: 'c2', pathA: pa(3_000_000, 'churn') },
+    { id: 'g2', pathA: pa(500_000, 'gear') },
+    { id: 'x', pathA: null },   // skipped — no object to rank
+  ];
+  assignRankInLane(rows);
+  const byId = Object.fromEntries(rows.map(r => [r.id, r.pathA && r.pathA.rankInLane]));
+  assert.equal(byId.c2, 1);   // churn: 3m > 1m
+  assert.equal(byId.c1, 2);
+  assert.equal(byId.g1, 1);   // gear: 2m > 0.5m
+  assert.equal(byId.g2, 2);
+  assert.equal(rows.find(r => r.id === 'x').pathA, null);   // null pathA untouched
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

@@ -10,6 +10,33 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-LANE-ADMISSION Chunks D+E — Path-A becomes the console PRIMARY sort, grade the A/B backup (pipeline-console, 2026-07-25)
+Wires the Chunk-C Path-A intraday-flip gp/day scorer (`pipeline/lib/patha.mjs` `pathAGpDay`) into the
+`screen-flip-niches.mjs` band/churn console + last-report tables as the **PRIMARY sort key**, with
+`rateItem`'s grade retained as a shown **BACKUP + live A/B comparison column** computed every run (owner
+decision H4). Console-only — **no `APP_VERSION` bump**.
+- **Chunk D — console primary sort.** Per surviving row, `pathAGpDay` is computed off Chunk A's
+  `loadDailyRangeBulk` daily ranges (READ-ONLY, zero-fetch off the /1h archive, loaded ONCE over the fetched
+  id union), the Chunk-B `classifyVolLane(volDay)` lane, and the same `VALUE_CAPITAL` the digest uses. Rows
+  sort by Path-A gp/day desc via the new pure `comparePathARows(a,b,MIN_GPD)`; the existing 500k `MIN_GPD`
+  attention floor is a post-rank **SURFACING partition, NOT a new gate** — sub-floor and `no-pathA` (no
+  intraday range) rows sink beneath the qualified ones keeping their grade order, never dropped, never crash.
+  A new `Path-A gp/d*` column (the `*` flags the captureFrac PLACEHOLDER, n≈0) sits beside the Grade column
+  in both the `--raw` and Est. views + a legend footer. `assignRankInLane(rows)` stamps each row's in-lane
+  rank. Reverting to grade-primary is a one-line comparator swap.
+- **SCOPE LOCK — screen.json unchanged.** The `--publish` return is frozen on the pre-Path-A (score/grade)
+  order (`publishRows = rows.slice()` captured before the Path-A re-sort) and the Path-A column is NEVER added
+  to `r.cells`, so the published `screen.json` cells + order stay byte-identical (proven with a hermetic
+  before/after harness: publish payload identical, console reorders). A later post-validation chunk promotes
+  Path-A to the app.
+- **Chunk E — `pathA` forward field.** `pipeline/lib/suggestlog.mjs` `suggestionEntry` gains an optional
+  lean-included `pathA` (`{gpDay,marginU,captureFrac,cyclesDay,units,price,intradayRange,lane,rankInLane}`),
+  emitted from the screen band/churn suggestions log — the ACCRUAL half of the H2/H4 forward validator
+  (captureFrac stays an unproven placeholder). Absent on null-Path-A / non-screen rows (byte-identical shape).
+- New fixtures in `pipeline/test/patha.test.mjs` (the two-tier ordering pin, sub-floor surfacing, null-pathA
+  graceful degrade, in-lane ranking) + `pipeline/test/suggestlog.test.mjs` (pathA round-trip + absent-when-unset).
+  All 92 suites green under both default and `TZ=UTC`.
+
 ### PLAN-GRADE-REWORK (approved subset: G1, capitalFactor-delete, G4, G5, G6) — dimensionally-honester grade (0.70.0, 2026-07-25)
 The owner-approved subset of the grade rework, re-implemented fresh against current `main` (the six chunks
 of a prior far-behind branch were READ as a reference implementation and PORTED, not cherry-picked — the

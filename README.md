@@ -280,10 +280,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   re-derived — `gpDay = marginU × unitsCyc × cyclesDay`. `captureFrac` 0.45 gear / 0.62 churn are NAMED
   PLACEHOLDERS (n=13/12, own-book-biased — re-estimated from the H2/H4 forward join). EXPLICITLY NOT
   `expGpDay` (a demoted pre-fetch orderer) and NOT the live-ranked `rateItem` — a genuinely new sortable
-  quantity, named distinctly. Standalone: does NOT touch `gatecandidates.mjs`/`admission.mjs`/
-  `screen-flip-niches.mjs` (that wiring is Chunk D). Consumes `js/quotecore.js` (`median`/`netMargin`/`tax`)
-  + gatecandidates.mjs `expUnits`. Fixture-pinned `pipeline/test/patha.test.mjs` (synthetic daily-range
-  inputs, no live archive)),
+  quantity, named distinctly. Also exports the Chunk-D console-ranking helpers `pathASurfaceTier(pathA,
+  minGpd)` / `comparePathARows(a,b,minGpd)` (the two-tier PRIMARY-sort comparator — Path-A gp/day desc above
+  the `MIN_GPD` SURFACING floor, backup `score`/grade desc beneath) / `assignRankInLane(rows)` (stamps each
+  row's `pathA.rankInLane` within its gear/churn lane). Consumes `js/quotecore.js` (`median`/`netMargin`/`tax`)
+  + gatecandidates.mjs `expUnits`; consumed by `screen-flip-niches.mjs` (Chunk D makes Path-A the CONSOLE/
+  last-report PRIMARY sort — grade shown as the A/B backup; screen.json unchanged). Fixture-pinned
+  `pipeline/test/patha.test.mjs` (synthetic daily-range + ranking inputs, no live archive)),
   `held-item-strategy.mjs` (P4a — the PURE, dependency-free PATH ENGINE core: `enumeratePaths(ctx)→Path[]`
   (candidate thesis-paths for an item — held lots get hold-recovery/value-hold/be-escape/
   list-to-clear/cut; unheld candidates get scalp/value-hold/avoid) + `weighPaths(paths,ctx)→
@@ -529,6 +532,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   formatTimedLap`). PLACEHOLDER (n≈0, rule 4) — never a gate/rank/`screen.json` input. Not yet wired
   on `quote-items.mjs`/`watch-positions.mjs` (their rows log a byte-identical shape without it).
   Coverage pinned by `pipeline/test/dt4-timedlap-coverage.test.mjs`.
+  A screen band/churn survivor row also carries a lean **`pathA`** object (PLAN-LANE-ADMISSION Chunk E/H1,
+  2026-07-25): the Path-A intraday-flip gp/day forward record `{ gpDay, marginU, captureFrac, cyclesDay,
+  units, price, intradayRange, lane, rankInLane }` off `pipeline/lib/patha.mjs` `pathAGpDay` + the row's
+  rank within its gear/churn lane this run. This is the ACCRUAL half of the H2/H4 forward validator — Path-A
+  is the CONSOLE PRIMARY sort now (Chunk D) but its `captureFrac` is a PLACEHOLDER (n=13/12, own-book-biased),
+  so the future join scorer reads this field to test whether the predicted `intradayRange` materialized and
+  captureFrac holds forward, before any recalibration. Absent on a null-Path-A row (no intraday range) /
+  non-screen scripts (YS2 lean-include). IDs/prices/timestamps only, no PII. Consumer: the future Path-A
+  forward-join calibration.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

@@ -375,7 +375,7 @@ export function timedLapShadow(lap) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -535,6 +535,16 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   // shape; screen-flip-niches.mjs's renderMode survivors always have one (DT2 computes it per row), so
   // every row THAT path logs always carries the field — the §7 data guarantee, at the ledger layer.
   if (timedLap != null)      e.timedLap = timedLap;
+  // PLAN-LANE-ADMISSION Chunk E/H1 (2026-07-25) — the Path-A intraday-flip gp/day forward record
+  // { gpDay, marginU, captureFrac, cyclesDay, units, price, intradayRange, lane, rankInLane } off
+  // pipeline/lib/patha.mjs pathAGpDay (Chunk C) + the row's rank within its lane in this run. This is
+  // the ACCRUAL half (E) of the H2/H4 forward validator: Path-A drives the CONSOLE primary sort now
+  // (Chunk D, owner decision H4), and its captureFrac is a PLACEHOLDER (n=13/12, own-book-biased) — so
+  // the join scorer (Chunk F) reads THIS field to test forward whether the predicted intradayRange
+  // materialized and captureFrac holds, before any recalibration. Purely additive — absent on every row
+  // where Path-A wasn't computed (null intraday range / non-screen scripts). Lean-included (YS2 pattern):
+  // a caller that supplies no pathA logs a byte-identical shape. IDs/prices/timestamps only, no PII.
+  if (pathA != null)         e.pathA = pathA;
   return e;
 }
 
