@@ -10,6 +10,37 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-REVERSE-FLIP RF0 — owned-item + cycle-state substrate (pipeline/root-data, 2026-07-25)
+The FOUNDATION chunk of the reverse-flip strategy (harvest an item you already OWN: sell into the peak,
+rebuy at the dip, capital-free). Pure data substrate + CLIs — NO screen/gate logic (that's RF1/RF2), NO
+deployed-app change, NO `APP_VERSION` bump (all pipeline/root-data). Fully additive.
+- **Two new tracked root stores.** `owned-items.json` — the OWNED-ITEM REGISTRY (`{_doc, items:[]}`,
+  mirrors `ignored-items.json`); ships EMPTY (the Ancestral hat is deliberately NOT seeded — its 2026-07-24
+  cycle completed and its keep-vs-flip status is ambiguous; Ben seeds real items via the CLI). `reverse-flip-state.json`
+  — the declared reverse-flip CYCLE store (ships `[]`, mirrors `hold-thesis.json`). Per Ruling 8 there is
+  NO per-item `reverseFlipEligible` opt-in flag — `classification:'keep'` IS the reverse-flip candidate
+  pool; RF1's oscillator filter + Ben's per-run table selection pick the actual candidates.
+- **`pipeline/lib/ownedledger.mjs`.** `computeOwnedQty(item, fillsEvents)` — the pure fold that tracks an
+  owned item's qty over RAW `fills.json` events (`seedQty + Σbuy − Σsell` for `ts ≥ seedTs`, via the shared
+  `collapseOffers` normalization). The load-bearing property: **ZERO reverse-flip-specific logic in the
+  fold** — a reverse-flip sell is an ordinary `sell` offer (drives qty to 0) and the rebuy an ordinary
+  `buy` (brings it back). Fixture pins the full seed → buy → sell → reverse-flip-shaped sell→rebuy
+  sequence proving qty tracks to 0 and back, plus pre-seedTs / other-item exclusion. `foldPendingBuys`
+  (`@provisional-api`, consumed by sync-fills at RF2) is the `BIG_TICKET_GP` + qty-ceiling capture-on-buy
+  filter. qty is NEVER stored — recomputed each read (same never-patch-a-derived-number rule `positions.json` uses).
+- **`pipeline/lib/reverseflipstate.mjs`.** load/save/lookup/upsert/clear/prune for the cycle store,
+  mirroring `holdthesis.mjs` verbatim; state machine `holding → awaiting-rebuy → rebuy-armed`; upsert
+  PRESERVES unset fields so `advance` changes only state+bid; 30-day TTL.
+- **Two new CLIs.** `declare-owned.mjs` (`seed`/`classify`/`list`) and `declare-reverse-flip.mjs`
+  (`set`/`advance`/`clear`/`list`, mirrors `declare-thesis.mjs`) — the sole agent-writers of the two stores.
+  `beRebuy = soldEach − tax(soldEach)` via the canonical `js/money-math.js` `tax()` (E8 one-home; NOT a flat
+  ×0.98). Env-path overrides let the round-trip test hit a TEMP store, never the real root files.
+- **`holdthesis.mjs` extension.** `upsertThesis` accepts + preserves an optional additive `reverseFlip:true`
+  Case-A marker (presence-of-true; written only when set, so a bare upsert is byte-identical to the pre-RF0
+  shape and every legacy entry / existing fixture stays valid).
+- **Validation.** All 95 test suites green under both default TZ and `TZ=UTC`; `check-imports`,
+  `check-dead-exports`, `check-daemon-safety`, `lint-docs` all pass.
+
 ### PLAN-LANE-ADMISSION Chunks D+E — Path-A becomes the console PRIMARY sort, grade the A/B backup (pipeline-console, 2026-07-25)
 Wires the Chunk-C Path-A intraday-flip gp/day scorer (`pipeline/lib/patha.mjs` `pathAGpDay`) into the
 `screen-flip-niches.mjs` band/churn console + last-report tables as the **PRIMARY sort key**, with

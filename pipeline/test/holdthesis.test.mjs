@@ -104,6 +104,27 @@ ok('a LEGACY entry (no path/enteredUnder keys) loads / looks up / prunes UNCHANG
   assert.equal(upgraded[0].enteredUnder, null);
 });
 
+/* --- RF0: reverseFlip is an ADDITIVE optional marker; the bare shape is unchanged -------------- */
+ok('upsertThesis WITHOUT reverseFlip produces the pre-RF0 shape (no key injected)', () => {
+  const out = upsertThesis([], { id: 5075, tripwire: 4678 }, NOW);
+  assert.equal('reverseFlip' in out[0], false, 'no reverseFlip key on a bare upsert — byte-identical to pre-RF0');
+});
+ok('upsertThesis WITH reverseFlip:true attaches the marker (Case-A elect)', () => {
+  const out = upsertThesis([], { id: 5075, tripwire: 4678, reverseFlip: true }, NOW);
+  assert.equal(out[0].reverseFlip, true);
+});
+ok('an omitted reverseFlip on a LATER upsert PRESERVES a previously-set marker', () => {
+  const set = upsertThesis([], { id: 5075, tripwire: 4678, reverseFlip: true }, NOW);
+  const later = upsertThesis(set, { id: 5075, tripwire: 4700 }, NOW + 1);   // no reverseFlip arg
+  assert.equal(later[0].reverseFlip, true, 'marker carried forward, not clobbered');
+  assert.equal(later[0].tripwire, 4700);
+});
+ok('reverseFlip:false explicitly drops the marker', () => {
+  const set = upsertThesis([], { id: 5075, reverseFlip: true }, NOW);
+  const off = upsertThesis(set, { id: 5075, reverseFlip: false }, NOW + 1);
+  assert.equal('reverseFlip' in off[0], false, 'false clears the key');
+});
+
 /* --- clear ---------------------------------------------------------------------------------- */
 ok('clearThesis removes every entry for an id and is PURE', () => {
   const before = [{ id: 5075, ts: NOW }, { id: 99, ts: NOW }];

@@ -437,6 +437,31 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `momVerdict` is untouched (the raw verdict stays honest in the ledger). The Gate-2
   breakdown `CUT` is never silenced or frame-masked. Ships empty (`[]`); fixture-pinned in
   `pipeline/test/holdthesis.test.mjs` + `pipeline/test/watchstate.test.mjs` + `pipeline/test/verdictpersist.test.mjs`.
+  RF0 (PLAN-REVERSE-FLIP) adds an optional additive `reverseFlip: true` MARKER to an entry — the Case-A
+  flag that elects a normal tracked hold into the reverse-flip candidate pool; written only when set (a
+  bare upsert keeps the pre-RF0 shape byte-for-byte), preserved across later upserts.
+- `owned-items.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the OWNED-ITEM
+  REGISTRY for reverse-flip eligibility. `{_doc, items:[{id,name,seedQty,seedTs,classification,source}]}`
+  (mirrors `ignored-items.json`'s `{_doc, items:[]}` convention; an optional `pendingClassification[]`
+  holds captured-but-unclassified big-ticket buys). AGENT-WRITTEN via `pipeline/commands/declare-owned.mjs`
+  (`seed`/`classify`/`list`); RF1/RF2's screen + the surfacing skills READ it. An item's live
+  owned qty is NEVER stored — it is RECOMPUTED off `fills.json` via `ownedledger.computeOwnedQty`
+  (`seedQty + Σbuy − Σsell` over events with `ts ≥ seedTs`; the same never-patch-a-derived-number
+  philosophy `positions.json` uses). `classification` ∈ `keep`/`flip`/`consumable` — `classification:'keep'`
+  IS the reverse-flip candidate pool (Ruling 8: NO per-item opt-in flag; RF1's oscillator filter + Ben's
+  per-run table selection pick the actual candidates from the kept set). Ships EMPTY (Ben seeds real items
+  via the CLI — the Ancestral hat is deliberately NOT seeded). No PII. Fixture-pinned in
+  `pipeline/test/ownedledger.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
+- `reverse-flip-state.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the declared
+  reverse-flip CYCLE store — a flat array of `{id,name,state,soldQty,soldEach,soldTs,beRebuy,targetQty,
+  rebuyBidPrice,rebuyBidTs,declaredTs}` (mirrors `hold-thesis.json`'s shape/CLI pattern). `state` walks
+  `holding → awaiting-rebuy → rebuy-armed`. AGENT-WRITTEN via `pipeline/commands/declare-reverse-flip.mjs`
+  (`set`/`advance`/`clear`/`list`) when Ben reports the sell/rebuy; `/schedule`·`/book`·`/positions` (RF4)
+  will READ it to keep an in-flight cycle visible between the sell and the rebuy (it holds no open FIFO
+  lot / no slot). It is scheduling/UX bookkeeping, NOT the source of ownership truth (that's the
+  `computeOwnedQty` fold). `beRebuy = soldEach − tax(soldEach)` (canonical `js/money-math.js` tax(), E8).
+  Ships empty (`[]`); a 30-day TTL prunes stale intent. Fixture-pinned in
+  `pipeline/test/reverseflipstate.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
 - `pipeline/experiments/` — **deliberately removable** standalone probe logs, isolated from the main
   pipeline on purpose (nothing under `pipeline/commands/`, `js/quotecore.js`, `suggestions.jsonl`, or
   `positions.json` reads it — delete a file or the whole dir and nothing else breaks). `README.md`
@@ -776,6 +801,17 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     **VN-2** — with `--path`, a numeric `--tripwire`, `--exit <gp>` and `--window <h-h>` now ride the
     hold-thesis entry too (parseGp; omitted/unparseable flags preserve the existing values), making
     one command the full declared-plan writer the thesis render frame reads),
+    `declare-owned.mjs` (RF0, PLAN-REVERSE-FLIP — CLI, the sole agent-writer of the TRACKED root
+    `owned-items.json`: `seed "<item|id>" [--qty N]` (register pre-log ownership, defaults keep),
+    `classify "<item|id>" flip|keep|consumable`, `list` (shows each item's live computed qty via
+    `ownedledger.computeOwnedQty`). No per-item eligibility flag (Ruling 8 — `classification:'keep'` IS
+    the candidate pool). `COFFER_OWNED_PATH`/`COFFER_FILLS_PATH` env overrides exist ONLY for the
+    round-trip test; production hits the repo root),
+    `declare-reverse-flip.mjs` (RF0, PLAN-REVERSE-FLIP — CLI mirroring declare-thesis.mjs, the sole
+    agent-writer of the TRACKED root `reverse-flip-state.json`: `set "<item|id>" --state awaiting-rebuy
+    --sold-each <gp> --qty N [--sold-ts <iso>]` (computes `beRebuy = soldEach − tax(soldEach)`),
+    `advance "<item|id>" --state rebuy-armed --bid <gp>`, `clear`, `list`. `COFFER_REVERSE_FLIP_PATH`
+    env override for tests only),
     `derive-cash.mjs` (CLI to DERIVE / re-anchor / clear the idle-cash balance: bare = the derived balance
     (anchor + Σ sells-after-tax − Σ buys − resting escrow, via `lib/derive-cash-tiers.mjs`); `<amount>` =
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch-positions.mjs`'s
@@ -1271,7 +1307,21 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `path`/`enteredUnder` (the js/held-item-strategy.mjs entry-path declaration; LEGACY entries without them stay
     fully valid, both default null); watch-positions.mjs reads it read-only and feeds it to `convictionGate` to
     SILENCE the expected-underwater headline while live holds above the declared tripwire — never
-    touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`),
+    touches `momVerdict`; fixture-pinned `holdthesis.test.mjs`; RF0 added the additive optional
+    `reverseFlip:true` Case-A marker on an entry — presence-of-true, written only when set, preserved
+    across upserts, legacy entries unaffected),
+    `ownedledger.mjs` (RF0, PLAN-REVERSE-FLIP — PURE owned-item registry store + the owned-qty fold over
+    `owned-items.json`: `loadOwned`/`saveOwned`/`ownedFor`/`upsertOwnedItem`/`removePending`, the
+    `computeOwnedQty(item,fillsEvents)` fold that tracks owned qty via shared `collapseOffers` — seed
+    ± buys/sells over raw fills.json, ZERO reverse-flip-specific logic so a reverse-flip sell drives qty
+    to 0 and the rebuy brings it back like any trade — and `foldPendingBuys` (`@provisional-api`, the
+    `BIG_TICKET_GP` + qty-ceiling capture-on-buy filter consumed by sync-fills at RF2); no gate/screen
+    logic (that's RF1); fixture-pinned `ownedledger.test.mjs`),
+    `reverseflipstate.mjs` (RF0, PLAN-REVERSE-FLIP — PURE declared reverse-flip CYCLE store mirroring
+    holdthesis.mjs: `loadReverseFlip`/`saveReverseFlip`/`reverseFlipFor`/`upsertReverseFlip`/
+    `clearReverseFlip`/`pruneReverseFlip` over the TRACKED root `reverse-flip-state.json`; `state` ∈
+    `holding`/`awaiting-rebuy`/`rebuy-armed`; upsert PRESERVES unset fields so `advance` changes only
+    state+bid; 30-day TTL; fixture-pinned `reverseflipstate.test.mjs`),
     `item-context.mjs` (P0 — the ITEM CONTEXT CHAIN + the ONE shared held-verdict renderer, the home that ENDS
     the quote-vs-watch verdict fork: staged PURE enrichers (identity→market→history→intraday→position)
     build an `ItemContext`; `renderHeldVerdict(ctx,{mode})` emits the compact (quote `--positions`) or

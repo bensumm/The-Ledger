@@ -47,6 +47,13 @@
  * "undeclared" (no migration signal), exactly the degrade-not-throw contract js/held-item-strategy.mjs relies on.
  * VN-2 adds `window` under the same contract: additive, optional, defaults null, never read by
  * load/lookup/prune — only the render frame displays it.
+ *
+ * RF0 (PLAN-REVERSE-FLIP) adds an optional additive `reverseFlip: true` MARKER — the Case-A flag that
+ * elects a normal tracked hold into the reverse-flip candidate pool (owned ∪ hold-thesis reverseFlip:true,
+ * RF2). It rides the SAME additive contract: the key is written ONLY when set (a bare upsert produces the
+ * pre-RF0 shape byte-for-byte, so legacy entries + existing fixtures stay valid), and an omitted arg on a
+ * later upsert PRESERVES a previously-set reverseFlip rather than clobbering it. load/lookup/prune never
+ * read it — only the RF2 pool builder does.
  */
 import fs from 'node:fs';
 
@@ -77,10 +84,17 @@ export function thesisFor(store, id) {
    fully-shaped entry, so a store of new-shape entries reads identically to the legacy shape wherever
    those keys go unused. */
 export function upsertThesis(store,
-  { id, exitPrice = null, tripwire = null, horizon = null, window: win = null, path = null, enteredUnder = null } = {},
+  { id, exitPrice = null, tripwire = null, horizon = null, window: win = null, path = null, enteredUnder = null, reverseFlip } = {},
   now = Math.floor(Date.now() / 1000)) {
+  const prev = (store || []).find(e => e && e.id === id);
   const rest = (store || []).filter(e => !(e && e.id === id));
-  return [...rest, { id, exitPrice, tripwire, horizon, window: win, path, enteredUnder, ts: now }];
+  const entry = { id, exitPrice, tripwire, horizon, window: win, path, enteredUnder, ts: now };
+  // RF0 reverseFlip marker: additive + optional. Only attach the key when it's actually set (this call
+  // or a prior entry's value), so a bare upsert keeps the pre-RF0 shape and existing fixtures/consumers
+  // are byte-identical. An omitted arg carries forward a previously-set marker rather than dropping it.
+  const rf = reverseFlip !== undefined ? reverseFlip : (prev ? prev.reverseFlip : undefined);
+  if (rf) entry.reverseFlip = true;   // presence-of-true marker: a falsy/omitted-and-never-set value leaves the key off entirely
+  return [...rest, entry];
 }
 
 /* clearThesis — drop every entry for an id (the plan is done / abandoned). PURE. */
