@@ -13,7 +13,9 @@
     { "id": 1079, "name": "Rune platelegs", "reason": "boss-drop" },
     { "id": 1127, "name": "Rune platebody", "reason": "boss-drop" },
     { "id": 1163, "name": "Rune full helm", "reason": "boss-drop" },
-    { "id": 22324, "name": "Ghrazi rapier", "reason": "personal-use" }
+    { "id": 22324, "name": "Ghrazi rapier", "reason": "personal-use" },
+    { "id": 314, "name": "Feather", "reason": "personal-use" },
+    { "id": 5940, "name": "Weapon poison(++)", "reason": "personal-use" }
   ],
   "greenlisted": []
 }

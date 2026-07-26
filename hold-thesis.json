@@ -48,5 +48,25 @@
     "path": "amplitude",
     "enteredUnder": "amplitude",
     "ts": 1784670723
+  },
+  {
+    "id": 12924,
+    "exitPrice": 10989000,
+    "tripwire": 10340000,
+    "horizon": null,
+    "window": "4-9",
+    "path": "diurnal-accumulate",
+    "enteredUnder": "diurnal-accumulate",
+    "ts": 1784707842
+  },
+  {
+    "id": 2509,
+    "exitPrice": 4375,
+    "tripwire": 4000,
+    "horizon": null,
+    "window": "19-20",
+    "path": "hold-recovery",
+    "enteredUnder": "hold-recovery",
+    "ts": 1784837882
   }
 ]
