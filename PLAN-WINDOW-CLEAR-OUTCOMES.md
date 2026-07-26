@@ -1,11 +1,19 @@
 # PLAN-WINDOW-CLEAR-OUTCOMES — a forward outcome log for window-clear ask ladders (which reach signal predicts a fill?)
 
-Status: **DRAFT — not yet scheduled. A prototype implementation (WC2 — `join-window-clears.mjs` +
-`pipeline/lib/campaigns.mjs` + `joinwindowclears.test.mjs`, the fill-attribution join + shared campaign
-primitive) is PRESERVED on the salvage worktree `agent-a9590cfca9710921f` (branch tip `babaa36`).**
-Deferred at owner call during the 2026-07-25 salvage sweep: this is data-accrual with no urgency
-(no constant tuned, INFORM-ONLY), so it waits for a scheduled slot rather than landing opportunistically.
-Do NOT delete that worktree or this file until WC2 lands or is formally dropped.
+Status: **WC1 + WC2 LANDED; WC3 gated on accrual.**
+- **WC1** — the `windowExit` shadow field (surfaced rung + peak window + daily-HIGH/5m-grain reach pair) —
+  landed 2026-07-20 (`windowExitShadow` in `pipeline/lib/suggestlog.mjs`, wired on `quote-items.mjs
+  --positions` / `watch-positions.mjs` big-ticket held lots). It has been accruing (~353 records logged).
+- **WC2** — the fill-attribution join `pipeline/commands/join-window-clears.mjs` + the shared
+  `pipeline/lib/campaigns.mjs` reconstruction primitive (extracted VERBATIM from `join-outcomes.mjs`,
+  which now imports it) + `pipeline/test/joinwindowclears.test.mjs` — landed 2026-07-26 off the preserved
+  salvage prototype (worktree `agent-a9590cfca9710921f`). Runs against the live ledger: 353 surfaces →
+  339 UNPLACED (correctly excluded from every fill-rate), 2 PLACED_FILLED_IN_WINDOW, 0 PLACED_NO_FILL.
+- **WC3** — the reach-signal comparison rollup — STILL GATED on accrual (only 2 placed-filled rungs so
+  far, far below any summary floor). It ships empty-but-honest whenever built; the payoff is weeks out.
+
+DATA-ACCRUAL only — no constant tuned, no price/verdict/grade moved. Do NOT delete this file until WC3
+ships (fold-out discipline); the `agent-a9590cfca9710921f` worktree can now be removed (WC2 salvaged).
 Per-topic working doc (PLANNING.md lifecycle step 1–2);
 folds into `PLAN.md` and is deleted when its last chunk ships. Executor rules = PLAN.md
 "Executor rules", verbatim. This plan builds a DATA-ACCRUAL mechanism feeding F1 — it is NOT a

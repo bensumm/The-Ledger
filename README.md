@@ -998,6 +998,24 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     falsifier for the §4 make-or-break question; the realized truth is `retrojoin.mjs`→`/analyze`. Pure
     core `replayAmplitudePick`/`dayBuckets` fixture-pinned `pipeline/test/join-amplitude.test.mjs`; `--json`
     dumps the per-pick array),
+    `join-window-clears.mjs` (WC2, PLAN-WINDOW-CLEAR-OUTCOMES — the window-clear ask-RUNG fill-attribution
+    join, read-only. PRODUCER: the WC1 `windowExit` shadow rows on `suggestions.jsonl` (the surfaced list
+    level + peak window + the daily-HIGH vs 5m-grain reach pair, logged on `quote-items.mjs --positions` /
+    `watch-positions.mjs` big-ticket held lots). CONSUMER: F1 / human diagnostics. For each `windowExit`
+    surface it reconstructs the item's SELL campaigns (via the shared `lib/campaigns.mjs`
+    `reconstructCampaigns`/`campaignBase` — the SAME `collapseOffers`/`matchTrades`/`stampFirstFill`, never
+    re-implemented) and classifies FOUR outcomes: `UNPLACED` (no rung placed at/near list — a COUNT,
+    EXCLUDED from every fill-rate, so a surface Ben never placed is never a false "no-fill"),
+    `PLACED_NO_FILL` (the floor-night negative), `PLACED_FILLED_IN_WINDOW`, `PLACED_FILLED_OUT_OF_WINDOW`
+    (first fill's local hour ∈/∉ the peak window via `js/windowread.mjs inWindow`). Attribution is
+    nearest-PRIOR (no double-count) + an ASYMMETRIC price gate (`--price-tol` 0.5% above, `--price-tol-below`
+    1.5% below — the anchor-nudge room, since Ben asks just under round numbers) with the signed
+    (placement−list)/list gap emitted so the skew stays visible; the surface→placement lag + gap
+    distributions are the D2 diagnostics that CALIBRATE the `--horizon` (24h) / price-tol placeholders LATER.
+    DATA ACCRUAL, tunes NO constant; n≈0 for weeks, matching-diagnostics-first. Zero false positives —
+    an unrelated lower dump fails the price gate → `UNPLACED`. Pure core `joinWindowClears`/`priceMatch`/
+    `classifyOutcome`/`fillHourInWindow` fixture-pinned `pipeline/test/joinwindowclears.test.mjs`; `--json`
+    dumps the classified rows + counts + diagnostics),
     `f1-calibrate.mjs` (F1 calibration STUDY — read-only over the derived `outcomes.json` (run
     `join-outcomes.mjs --report` first). PROPOSAL-ONLY, mutates nothing and touches no live pricing/gating
     code: (1) re-audits the F1 gate the way its spec documents (side × pctBucket × class × regime cells
@@ -1121,7 +1139,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `reconstruct.mjs` (shared
     FIFO reconstruction + `dedupeSnapshots`; ARCH-1 adds `buildTombstonedEvents` — the live-log →
     tombstone-filtered event list monitor-offers.mjs reconstructs from, mirroring sync's inline REMOVE-tombstone
-    filter), `offers.mjs` (exchange-log discovery + open-offer
+    filter),
+    `campaigns.mjs` (WC2 — the shared CAMPAIGN reconstruction primitive: `reconstructCampaigns(events)` =
+    the exact `dedupeSnapshots→collapseOffers→stampFirstFill→matchTrades→groupCampaigns` sequence
+    `join-outcomes.mjs` used to run inline, lifted here VERBATIM so the forward-join siblings
+    (`join-window-clears.mjs`) reuse ONE reconstruction (the FIFO helpers stay in `reconstruct.mjs`; this
+    only adds campaign GROUPING + `stampFirstFill` + `campaignBase` — the base per-campaign fields
+    placement/first-fill/terminal/fill-fraction). `join-outcomes.mjs` now imports it; the move is byte-identical
+    (proven by diffing its `--json` before/after). Owns `REPRICE_GAP`/`MANUAL_SLOT`),
+    `offers.mjs` (exchange-log discovery + open-offer
     semantics; P0 also adds `readOffersSnapshot`/`askFromSnapshot`/`bidFromSnapshot` — the OTHER-machine-safe
     reader of the flat root `offers.json`, normalized to the `{price,filled,total}` shape the context
     position stage wants, so quote-items.mjs can see the live book without the `~/.runelite` log dir),

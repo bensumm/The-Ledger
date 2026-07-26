@@ -705,10 +705,17 @@ shadow-logs a lean **`windowExit`** field to `suggestions.jsonl` on every big-ti
 surfaced list level, the diurnal peak window, and BOTH competing reach signals side-by-side (daily-HIGH
 1h reach AND the less-smoothed 5m-grain reach, each with its placement; `fiveReach:null` when the 5m
 archive is thin — never faked). So the question the two signals pose — for a resting ask into a peak
-window, is daily-high reach or 5m-grain reach the better fill predictor? — becomes ANSWERABLE: a later
-WC2 join against `fills.json` marks whether the placed rung actually filled inside its window (it did NOT
-before — the note was rendered to the human and thrown away). This is data accrual only (n≈0, weeks to
-accrue); it moves no price/verdict/grade and endorses NEITHER signal — F1/Ben own that call.
+window, is daily-high reach or 5m-grain reach the better fill predictor? — becomes ANSWERABLE: the WC2
+join `pipeline/commands/join-window-clears.mjs` (LANDED 2026-07-26) reads those `windowExit` records and
+marks whether the placed rung actually filled inside its window (it did NOT before — the note was rendered
+to the human and thrown away). It classifies four outcomes — `UNPLACED` (a surface Ben never placed — a
+COUNT, EXCLUDED from every fill-rate, so it can never fabricate a "no-fill"), `PLACED_NO_FILL` (the
+floor-night negative), `PLACED_FILLED_IN_WINDOW`, `PLACED_FILLED_OUT_OF_WINDOW` — over the reconstructed
+sell campaigns, with a nearest-prior + ASYMMETRIC-price-gated attribution (extra room below `list` for
+Ben's just-under-round-number asks) and the surface→placement lag/gap diagnostics that will calibrate its
+n≈0 horizon/tolerance placeholders. This is data accrual only (n≈0, weeks to accrue); it moves no
+price/verdict/grade and endorses NEITHER signal — the reach-signal comparison rollup (WC3) is still gated
+on accrual, and F1/Ben own that call.
 
 **Multiple offers on the SAME item are a queue, not independent rungs (Ben, 2026-07-16).** The GE
 matches a buyer against the cheapest compatible offer first, so a higher-priced ask on an item you

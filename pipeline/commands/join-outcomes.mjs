@@ -36,7 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collapseOffers, matchTrades, dedupeSnapshots } from '../lib/reconstruct.mjs';
+import { reconstructCampaigns, REPRICE_GAP, MANUAL_SLOT } from '../lib/campaigns.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from '../lib/marketfetch.mjs';
 import { loadHistState, bandPercentile } from '../lib/range-position.mjs';
 import { velocityClass } from '../lib/velocity.mjs';
@@ -55,9 +55,9 @@ const OUT = path.join(ROOT, 'outcomes.json');
 const WEEKLY_STAMP = path.join(HERE, '..', '.cache', 'last-weekly-report');
 
 // --- tunable named constants (NOT magic numbers) ---------------------------------------------
-const REPRICE_GAP = 20 * 60;        // s: a re-place within this of a cancel = same campaign (a reprice)
+// REPRICE_GAP + MANUAL_SLOT are now imported from lib/campaigns.mjs (the shared campaign primitive) —
+// ONE source, so this file and the forward-join siblings can't drift on the reprice-stitch window.
 const SUGGEST_WINDOW = 6 * 3600;    // s: a suggestion older than this before placement is too stale to join
-const MANUAL_SLOT = 8;              // coffer-manual.log slot (mobile / manual fills)
 // --- --report cell floors (the numbers that GATE F1 â€” see FILLS-PIPELINE.md Â§10) --------------
 const MIN_N_REPORT = 8;             // below this, a per-cell median/rate is noise â†’ suppressed in --report
 const MIN_N_F1 = 30;               // below this per (percentile Ã— class Ã— regime) cell, F1 must NOT trust a curve
@@ -91,40 +91,9 @@ if (WEEKLY_DUE) {
 
 
 // -------------------------------------------------------------------------------------------
-// First-fill timing: collapseOffers loses intermediate event timing, so scan the raw events to
-// stamp each offer's tsFirstFill (first event in its slot+item+type window with filled>0). Offers
-// are contiguous non-overlapping per slot, so the (slot,item,type,tsâˆˆ[open,close]) match is unique.
-function stampFirstFill(events, offers) {
-  const evs = [...events].sort((a, b) => a.ts - b.ts);
-  for (const o of offers) {
-    o.tsFirstFill = null;
-    for (const e of evs) {
-      if (e.slot === o.slot && e.itemId === o.itemId && e.type === o.type &&
-          e.ts >= o.tsOpen && e.ts <= o.tsClose && (e.filled || 0) > 0) { o.tsFirstFill = e.ts; break; }
-    }
-  }
-}
-
-// Group offers into campaigns (cancel-replace stitching). A completed offer, or a gap > REPRICE_GAP,
-// ends the current campaign for that item+side; anything else is a reprice appended to it.
-function groupCampaigns(offers) {
-  const current = new Map();   // item:type -> in-progress campaign
-  const camps = [];
-  for (const o of [...offers].sort((a, b) => a.tsOpen - b.tsOpen)) {
-    if (o.type === 'withdraw' || o.type === 'banked') continue;   // not a market flip intent
-    const key = o.itemId + ':' + o.type;
-    let c = current.get(key);
-    if (c) {
-      const prev = c.offers[c.offers.length - 1];
-      if (prev.state === 'complete' || (o.tsOpen - prev.tsClose) > REPRICE_GAP) { camps.push(c); c = null; }
-    }
-    if (!c) { c = { itemId: o.itemId, type: o.type, offers: [] }; current.set(key, c); }
-    c.offers.push(o);
-  }
-  for (const c of current.values()) camps.push(c);
-  return camps.sort((a, b) => a.offers[0].tsOpen - b.offers[0].tsOpen);
-}
-
+// stampFirstFill + groupCampaigns moved to lib/campaigns.mjs (the shared campaign primitive, WC2) —
+// join-outcomes and the forward-join siblings reconstruct campaigns the SAME way via reconstructCampaigns.
+//
 // The nearest PRIOR suggestion for an item within SUGGEST_WINDOW of placement (null, never dropped).
 function joinSuggestion(sugByItem, itemId, placementTs) {
   const list = sugByItem.get(itemId); if (!list) return null;
@@ -168,13 +137,11 @@ async function build() {
   const events = (JSON.parse(fs.readFileSync(FILLS, 'utf8')).events || []);
   if (!events.length) { console.error('fills.json has no events.'); process.exit(1); }
 
-  // reuse the canonical reconstruction: offers + FIFO closed lots (for realized P/L join by sellTs)
-  // YS1: dedupeSnapshots FIRST — the same snapshot-re-emit dedupe reconstruct() applies (this path
-  // used to bypass it, so a phantom terminal could spawn a phantom campaign; PLAN Discovered fix).
-  const deduped = dedupeSnapshots(events);
-  const offers = collapseOffers(deduped);
-  stampFirstFill(deduped, offers);
-  const { closed } = matchTrades(offers);   // FIFO â€” never re-implemented here
+  // reuse the canonical reconstruction: offers + FIFO closed lots (for realized P/L join by sellTs) +
+  // the grouped campaigns — ALL via the shared lib/campaigns.mjs reconstructCampaigns (WC2 extraction).
+  // YS1: dedupeSnapshots runs FIRST inside it — the same snapshot-re-emit dedupe reconstruct() applies
+  // (this path used to bypass it, so a phantom terminal could spawn a phantom campaign; PLAN Discovered fix).
+  const { closed, campaigns } = reconstructCampaigns(events);
   CLOSED_LOTS = closed;                                       // expose for report()'s concentration read
   const realisedBySellTs = new Map();                        // sell offer tsOpen -> realised net after tax
   for (const t of closed) { if (t.withdrawn) continue; realisedBySellTs.set(t.sellTs, (realisedBySellTs.get(t.sellTs) || 0) + t.realised); }
@@ -182,8 +149,6 @@ async function build() {
   const holdBySellTs = new Map();
   for (const t of closed) { if (t.withdrawn || t.buyTs == null || t.sellTs == null) continue;
     (holdBySellTs.get(t.sellTs) || holdBySellTs.set(t.sellTs, []).get(t.sellTs)).push(t.sellTs - t.buyTs); }
-
-  const campaigns = groupCampaigns(offers);
 
   // suggestions ledger, ascending per item, for the nearest-prior join. SR1: read the ACTIVE
   // ledger + every monthly archive (readSuggestionLines) — after rotation the active root file
