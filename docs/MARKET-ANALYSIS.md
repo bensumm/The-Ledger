@@ -262,10 +262,11 @@ magnitude" bullets.
 ## 3. How a pick is found — the screen pipeline
 
 `screen-flip-niches.mjs` prints one table per **flip-niche** (band / churn / scalp / value(invest) /
-**amplitude** — declarative specs in `js/flip-niches.mjs`; `--mode` selects which run, `all` =
+**amplitude** / **reverse** — declarative specs in `js/flip-niches.mjs`; `--mode` selects which run, `all` =
 **band+churn+amplitude** as of THE SWAP, PLAN-AMPLITUDE-SCAN §3 — amplitude took value's `--mode all`
-slot; value is now explicit-only via `--mode value`/`--mode invest`, relabelled **Invest**). A candidate
-survives: **gate → validate → rank/grade → render**.
+slot; value is now explicit-only via `--mode value`/`--mode invest`, relabelled **Invest**; `reverse` is
+explicit-only too, an ownership-gated SEPARATE branch — see its lane below). A candidate
+survives: **gate → validate → rank/grade → render** (reverse is the exception — its own gate/table, below).
 
 **The cycle-period frame (PLAN-AMPLITUDE-SCAN §1).** band / **amplitude** / invest are ONE operation —
 buy the low of the N-period cycle, sell the high, capture the amplitude minus tax — at three cycle
@@ -354,6 +355,30 @@ bespoke composite. Amplitude picks are patient multi-hour plays → they surface
 NEVER as act-now rows. Every threshold is a PLACEHOLDER; the make-or-break "do both legs actually FILL
 within the hold horizon?" is measured by the shadow both-leg replay (`join-amplitude-outcomes.mjs`, an
 UPPER BOUND) + the realized retro-join (`/analyze`). Console-only (excluded from `screen.json`, no app tab).
+
+**The reverse-flip lane (`--mode reverse`, console-only, provisional n≈0 — RF2, PLAN-REVERSE-FLIP).** A
+HARVEST-AN-OWNED-ITEM flip-niche, the mirror image of every other lane: instead of deploying capital to buy low
+and sell high, it SELLS an item you already own into the diurnal/multi-day PEAK and REBUYS at the DIP —
+capital-free (nothing deployed to enter), with a BOUNDED failure mode (worst case, wait for the next dip to
+reacquire your own item; no deadline). Its pool is OWNERSHIP-gated — `owned-items.json`
+`classification:'keep'` items ∪ `hold-thesis.json` `reverseFlip:true` entries (Ruling §8: the keep set IS
+the pool, no per-item opt-in flag) — so it never overlaps the standard fetch universe, and it runs as a
+SEPARATE branch (`runReverseMode`) that short-circuits the whole band/churn/amplitude/value pipeline
+(provable zero-ripple: the replay goldens are untouched). It fetches each owned id DIRECTLY (the population
+is small + ownership-pre-selected, so no two-stage proxy-ordered fetch pool), then routes each candidate
+through `gateReverseFlipCandidates` → `js/reverseflip.mjs` `reverseFlipGate`. **The regime read is
+INVERTED** (`invertedRegimeGate` re-maps `classifyTrajectory`'s shape): `rising`/`elevated` → REJECT (sell
+now, rebuy at a HIGHER floor tomorrow = loses by construction), `knife`/`oscillating`/`based`/`flat` → PASS
+(`knife` IS the "falling" case the strategy WANTS — sell high off a hold you'd otherwise ride DOWN, rebuy
+lower), `unknown`/short-data → CAUTION. The **rebuy leg is the binding constraint** (the 2026-07-24
+Ancestral-hat anchor: a wanted thin item's SELL leg clears instantly on live demand, so a thin SELL leg is
+CAUTION-not-reject, but a thin REBUY leg is a real strand risk → REJECT). Its OWN table (not table-v2):
+`Item · Live · Regime (inverted read) · Sold-ref/Peak · BE-rebuy · Swing · Gate`, where `BE-rebuy =
+sellRef − tax(sellRef)` (any rebuy strictly below it profits after tax) and `Swing` is the peak→dip
+amplitude that must clear the tax. Console-only (never writes `screen.json`, excluded from `--publish` by
+construction). INFORM-ONLY throughout — it surfaces candidates + the inverted read, never sizes or enters;
+Ben places every offer. An empty `owned-items.json` prints a clean "no reverse-flip candidates" message and
+exits 0 (never throws).
 
 **The reach-vs-margin quantile DIAL (`--amp-ask-q` / `--amp-bid-q`, PLAN-OSCILLATION-CYCLE F-E).** The
 peak-ask / trough-bid quote from the daily-high/low quantiles `AMP_ASK_Q` / `AMP_BID_Q` — both `0.5` by

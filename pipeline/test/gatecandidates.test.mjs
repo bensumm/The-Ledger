@@ -35,7 +35,7 @@
  */
 import assert from 'node:assert/strict';
 import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT, surviveMode,
-  scaleSlots, CAP_REF } from '../lib/gatecandidates.mjs';
+  scaleSlots, CAP_REF, gateReverseFlipCandidates } from '../lib/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -475,6 +475,43 @@ ok('scaleSlots: widens SUB-LINEARLY above CAP_REF and clamps to max', () => {
   assert.equal(scaleSlots(40, { capital: 10 * CAP_REF, max: 200 }), 160, 'sqrt growth: 10× capital → 4× base, not 10×');
   // monotonic between the ends.
   assert.ok(scaleSlots(40, { capital: 3 * CAP_REF, max: 999 }) > scaleSlots(40, { capital: 2 * CAP_REF, max: 999 }), 'more capital → more slots (until the cap)');
+});
+
+/* --- RF2 (PLAN-REVERSE-FLIP): gateReverseFlipCandidates — the OWNED-item reverse-flip gate --------
+   PURE + total (one pool entry in, one annotated entry out); TZ-hermetic (no Date use). Its pool is the
+   caller-assembled owned set, NOT v24 — so these fixtures pass a synthetic keep-pool + a per-id market
+   context map, with NO live fetch. reverseFlipGate's inverted regime read is what selects: rising/elevated
+   REJECT (you'd rebuy higher), knife/oscillating/based/flat PASS (sell high, rebuy low). */
+const RF_LIQ = { sellRef: 57_000_000, rebuyRef: 54_000_000, sellLegVol: 100, rebuyLegVol: 100 };   // clean two-sided, ~5.3% swing
+
+ok('gateReverseFlipCandidates: a keep OSCILLATOR passes (a repeatable peak→dip lap)', () => {
+  const out = gateReverseFlipCandidates([{ id: 1, name: 'Osc', source: 'owned' }], { 1: { trajectory: 'oscillating', ...RF_LIQ } });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].gate.decision, 'pass');
+  assert.equal(out[0].regime.shape, 'oscillating');
+  assert.ok(out[0].edge.beRebuy < RF_LIQ.sellRef, 'BE-rebuy is below the sell ref (any rebuy under it profits)');
+});
+
+ok('gateReverseFlipCandidates: a keep KNIFE passes (knife IS the "falling" case the strategy protects)', () => {
+  const out = gateReverseFlipCandidates([{ id: 2, name: 'Knife', source: 'owned' }], { 2: { trajectory: 'knife', ...RF_LIQ } });
+  assert.equal(out[0].gate.decision, 'pass', 'knife → sell high off a hold you\'d ride DOWN, rebuy lower');
+});
+
+ok('gateReverseFlipCandidates: a RISING keep is rejected (sell now, rebuy at a HIGHER floor — loses)', () => {
+  const out = gateReverseFlipCandidates([{ id: 3, name: 'Rise', source: 'owned' }], { 3: { trajectory: 'rising', ...RF_LIQ } });
+  assert.equal(out[0].gate.decision, 'reject');
+  assert.ok(out[0].gate.reasons.includes('regime-rising'));
+});
+
+ok('gateReverseFlipCandidates: an EMPTY pool → empty (the honest empty-keep-pool degrade, never a throw)', () => {
+  assert.deepEqual(gateReverseFlipCandidates([], {}), []);
+  assert.deepEqual(gateReverseFlipCandidates(null, {}), []);
+});
+
+ok('gateReverseFlipCandidates: a missing/short trajectory degrades to caution, not a throw', () => {
+  const out = gateReverseFlipCandidates([{ id: 4, name: 'NoTraj', source: 'hold-thesis' }], { 4: { ...RF_LIQ } });
+  assert.equal(out[0].gate.decision, 'caution');   // no trajectory → 'no-trajectory' caution (degrade)
+  assert.equal(out[0].source, 'hold-thesis', 'the pool entry\'s source is carried through for the renderer');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

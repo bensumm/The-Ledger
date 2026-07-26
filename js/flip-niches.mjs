@@ -112,6 +112,19 @@ function amplitudeEdge({ avgHigh, avgLow }, t) {
   return { modeNet, modeRoi, activeWin: null };
 }
 
+// reverse (RF2, PLAN-REVERSE-FLIP): same conformance-only deterministic edge shape as value/amplitudeEdge
+// — the reverse NICHE does NOT select on this. Its selection is the INVERTED regime gate + rebuy-leg-weighted
+// liquidity check in js/reverseflip.mjs `reverseFlipGate`, routed by `gate: 'reverse'` (gatecandidates.mjs →
+// gateReverseFlipCandidates over the OWNED-item pool; runReverseMode in screen-flip-niches.mjs confirms). The
+// reverse pool is ownership-gated (owned-items.json classification:'keep' ∪ hold-thesis reverseFlip:true), NOT
+// the v24 fetch universe every other niche's edge scores — so this edge never actually runs in production; it
+// exists only so the registry contract (every spec has a callable, deterministic edge) holds uniformly. Never gates.
+function reverseEdge({ avgHigh, avgLow }, t) {
+  const modeNet = (avgHigh - tax(avgHigh)) - avgLow;
+  const modeRoi = avgLow ? modeNet / avgLow * 100 : 0;
+  return { modeNet, modeRoi, activeWin: null };
+}
+
 /* --- edge functions (pure; the spec's step-3 edge, re-expressed verbatim from gatecandidates.mjs) ---
    Each takes ({ avgHigh, avgLow, band, limitVol, limit, thin }, thresholds) and returns either
      { modeNet, modeRoi, activeWin }   (the row's after-tax edge + traded-window count, or null win)
@@ -338,12 +351,34 @@ export const FLIP_NICHE_LIST = Object.freeze([
     // count), exactly as churn/value are exempt.
     defaultPath: PATH_KEYS.SCALP, estimator: 'amplitude', priceBasis: 'daily', fillShape: 'symmetric',
   },
+  {
+    // reverse (RF2, PLAN-REVERSE-FLIP) — HARVEST-AN-OWNED-ITEM: sell a keep item into the diurnal/multi-day
+    // PEAK, rebuy at the DIP (capital-free — monetizes an owned asset, nothing deployed to enter). inAll:FALSE,
+    // explicit `--mode reverse` only (like scalp) — its pool is OWNERSHIP-gated (owned-items.json
+    // classification:'keep' ∪ hold-thesis reverseFlip:true), so it never overlaps the standard fetch universe.
+    // gate:'reverse' routes gateCandidates → gateReverseFlipCandidates (gatecandidates.mjs), which applies
+    // js/reverseflip.mjs's INVERTED regime gate + rebuy-leg-weighted liquidity per owned candidate.
+    // screen-flip-niches.mjs's runReverseMode is a SEPARATE branch with its OWN table (Item · Live · Regime
+    // (inverted read) · Sold-ref/Peak · BE-rebuy · Swing · Gate) — console-only, EXCLUDED from screen.json, like
+    // value/amplitude. PROVISIONAL n≈0 — inform-only, never sizes/enters; Ben places every offer.
+    //   falling:'accept' — the inverted read WANTS a knife/faller (sell high off a hold you'd otherwise ride
+    //     DOWN, rebuy lower); the real regime decision is invertedRegimeGate INSIDE reverseFlipGate, and reverse
+    //     never reaches surviveMode (its own branch), so this is a conformant placeholder, not the live gate.
+    //   estimator/priceBasis/fillShape mirror amplitude (a daily peak→dip lap, surface-computed pair, exempt
+    //     from the ask-reach discount) — all dormant here since reverse doesn't rank through the standard spine.
+    //   validators:[] — reverseFlipGate does its OWN gating; the standard validator registry doesn't apply.
+    key: 'reverse', label: 'Reverse-flip', inAll: false,
+    edge: reverseEdge, rank: 'velocity', confirm: null,
+    falling: 'accept', gate: 'reverse',
+    validators: [],
+    defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'amplitude', priceBasis: 'daily', fillShape: 'symmetric',
+  },
 ]);
 
 // by-key map + the ordered mode-name lists screen-flip-niches.mjs derives from the registry (so the flip-niche names
 // live in ONE place — the registry — not as a magic-string array in screen-flip-niches.mjs).
 export const FLIP_NICHES = Object.freeze(Object.fromEntries(FLIP_NICHE_LIST.map(s => [s.key, s])));
-export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value','amplitude']
+export const MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.map(s => s.key));                       // ['band','churn','scalp','value','amplitude','reverse'] (reverse = RF2, explicit-only, ownership-gated)
 export const ALL_MODE_KEYS = Object.freeze(FLIP_NICHE_LIST.filter(s => s.inAll).map(s => s.key)); // band/churn/amplitude in --mode all (THE SWAP, PLAN-AMPLITUDE-SCAN: value.inAll flipped OFF, amplitude.inAll ON; scalp/value stay explicit-only; spread+rising DELETED)
 
 /* --- PLAN-OSCILLATION-CYCLE Chunk 6 — the per-thesis drift-adjusted-exit INFORM note --------------
@@ -391,7 +426,7 @@ export function driftInformNote(spec, dae, { entry = null, fmt = String, nearFra
 const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
 const VALID_RANKS = new Set(['velocity', 'proxy', 'value', 'amplitude']);   // A2 — amplitude ranks its Stage-1 pool by ampProxy
 const VALID_FALLING = new Set(['exclude', 'accept', 'knife-guard']);   // P5 per-spec falling doctrine
-const VALID_GATE = new Set(['band', 'value', 'amplitude']);             // P5 gate-stack selector (+ A2 amplitude)
+const VALID_GATE = new Set(['band', 'value', 'amplitude', 'reverse']);  // P5 gate-stack selector (+ A2 amplitude; + RF2 reverse — the owned-item reverse-flip gate, routed to gateReverseFlipCandidates)
 // P6b — the estimator family + price-basis vocabularies. VALID_ESTIMATORS mirrors pipeline/lib/
 // estimators.mjs's ESTIMATOR_FAMILIES (the runtime registry there is the home; this Set exists so a
 // typo'd family name is caught by conformance instead of silently defaulting to intraday in production).

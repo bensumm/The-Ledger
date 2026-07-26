@@ -2,7 +2,7 @@
 /**
  * screen-flip-niches.mjs — opportunity screen. ONE command → a finished, RATED table per niche.
  *
- *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|all]
+ *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|amplitude|reverse|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose]
  *
@@ -62,7 +62,12 @@
  *                     wide band (fallers only).
  *   value           — a term-structure buy-hold (own table); provisional (n≈0) but IN --mode all as of
  *                     2026-07-10 (Ben) — console-only (excluded from screen.json).
- *   all             — run band + churn + value in sequence (shared fetch cache). scalp explicit-only.
+ *   reverse         — RF2 (PLAN-REVERSE-FLIP), provisional/off-by-default (explicit --mode only): HARVEST an
+ *                     OWNED keep item — sell into the diurnal/multi-day PEAK, rebuy at the DIP (capital-free).
+ *                     Its pool is OWNERSHIP-gated (owned-items.json classification:'keep' ∪ hold-thesis
+ *                     reverseFlip:true), NOT the fetch universe, so it's a SEPARATE branch (runReverseMode)
+ *                     with its OWN table + INVERTED regime read; console-only (excluded from screen.json).
+ *   all             — run band + churn + amplitude in sequence (shared fetch cache). scalp/value/reverse explicit-only.
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
@@ -101,7 +106,10 @@ import { formatTimedLap, formatBasePosition } from '../lib/emit.mjs';   // PLAN-
 // renderMode post-fetch doctrine surviveMode). Logic byte-identical; screen-flip-niches.mjs passes its CLI
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, VALUE_RESERVE_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP,
-  scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/gatecandidates.mjs';
+  scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/gatecandidates.mjs';   // RF2 — reverse routes via gateCandidates('reverse', …) → gateReverseFlipCandidates internally
+import { loadOwned, computeOwnedQty } from '../lib/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
+import { loadReverseFlip, reverseFlipFor } from '../lib/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
+import { loadHoldThesis } from '../lib/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX } from '../lib/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
@@ -2115,6 +2123,122 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
   console.log('');
 }
 
+// --- RF2 (PLAN-REVERSE-FLIP): the `--mode reverse` OWNED-item harvest table -----------------------
+// A dedicated, ownership-gated console surface (like value/amplitude have their own tables). It reads the
+// RF0 pool — owned-items.json classification:'keep' ∪ hold-thesis.json reverseFlip:true (Ruling §8: the keep
+// set IS the pool, no opt-in flag) — fetches each id DIRECTLY (the population is small + ownership-pre-
+// selected, so no two-stage proxy-ordered fetch pool), builds each candidate's market context, and routes it
+// through gateCandidates('reverse', …) → gateReverseFlipCandidates → RF1's reverseFlipGate. Its own columns
+// (Item · Live · Regime (inverted read) · Sold-ref/Peak · BE-rebuy · Swing · Gate) carry the INVERTED regime
+// read (rising/elevated = BAD; knife/oscillating = the wanted "sell high, rebuy low"). Console-only: it never
+// writes screen.json and is EXCLUDED from --publish by construction (this branch returns before the publish
+// path). PROVISIONAL n≈0 — inform-only, never sizes/enters; Ben places every offer.
+const REVERSE_HEADERS = ['Item', 'Live', 'Regime (inverted read)', 'Sold-ref/Peak', 'BE-rebuy', 'Swing', 'Gate'];
+
+// the inverted-regime cell text: shape + WHY it's good/bad for a reverse-flip (sell high, rebuy low).
+function reverseRegimeCell(regime) {
+  const shape = (regime && regime.shape) || 'unknown';
+  const d = regime ? regime.decision : 'caution';
+  if (d === 'reject') return `${shape} → rebuy higher ✗`;   // rising/elevated: sell now, rebuy at a HIGHER floor → loses
+  if (d === 'caution') return `${shape} ⚠`;                  // unknown/short data → degrade
+  if (shape === 'knife') return 'knife → sell high, rebuy low ✓';   // the monotone-decline case the strategy PROTECTS against
+  return `${shape} ✓`;                                       // oscillating/based/flat: a repeatable/neutral lap
+}
+
+async function runReverseMode(realLog) {
+  pruneCache('ts', 24 * 3600 * 1000);
+  const map = await loadMapping();
+
+  // Build the RF0 pool: owned-items.json classification:'keep' ∪ hold-thesis.json reverseFlip:true.
+  const owned = loadOwned(join(REPO_ROOT, 'owned-items.json'));
+  const keepItems = (owned.items || []).filter(i => i && i.classification === 'keep');
+  const thesis = loadHoldThesis(join(REPO_ROOT, 'hold-thesis.json'));
+  const rfThesis = (thesis || []).filter(e => e && e.reverseFlip && e.id != null);
+  const poolById = new Map();   // owned entry wins (carries seedQty/seedTs for the owned-qty fold)
+  for (const i of keepItems) poolById.set(i.id, { id: i.id, name: i.name || map.byId[i.id]?.name || ('#' + i.id), source: 'owned', seedQty: i.seedQty, seedTs: i.seedTs });
+  for (const e of rfThesis) if (!poolById.has(e.id)) poolById.set(e.id, { id: e.id, name: e.name || map.byId[e.id]?.name || ('#' + e.id), source: 'hold-thesis' });
+  const pool = [...poolById.values()];
+
+  realLog('# Reverse-flip screen — sell an OWNED keep item into the PEAK, rebuy at the DIP (capital-free). PROVISIONAL n≈0 — inform-only, never sizes/enters; Ben places every offer.');
+
+  // EMPTY POOL (the current owned-items.json seed): clean message, exit 0, never a throw.
+  if (!pool.length) {
+    realLog('_no reverse-flip candidates (no keep items / no clean oscillators)_ — populate owned-items.json (classification:"keep") via declare-owned.mjs, or mark a hold reverseFlip:true.');
+    return;
+  }
+
+  // fetch the bulk market maps ONCE, then each owned id's per-item series directly.
+  const [latestAll, guideAll] = await Promise.all([loadAllLatest(), loadGuide()]);
+  const v24all = VOL_SOURCE === 'rolling' ? await loadAll24hRolling() : await loadAll24h();
+  let fillsEvents = [];
+  try { const j = JSON.parse(readFileSync(join(REPO_ROOT, 'fills.json'), 'utf8')); fillsEvents = j.events || j.fills || (Array.isArray(j) ? j : []); } catch { /* no fills → owned-qty folds to seedQty */ }
+  const rfState = loadReverseFlip(join(REPO_ROOT, 'reverse-flip-state.json'));
+
+  const ctxById = {};
+  const infoById = {};   // per-id render context (live, qty, cycle) keyed for the post-gate join
+  for (const p of pool) {
+    const id = p.id;
+    let ts1h = null, row = null;
+    try {
+      const [ts5m, ts6h, t1h] = await Promise.all([fetchTsCached(id, '5m', TS_TTL_5M), fetchTsCached(id, '6h', TS_TTL_6H), fetchTsCached(id, '1h', TS_TTL_1H)]);
+      ts1h = t1h;
+      const lt = latestAll[id] || latestAll[String(id)] || null;
+      row = computeQuote({ id, latest: lt, ts5m, ts6h, vol24: v24all[id], guide: guideAll[id] ?? null, limit: map.byId[id]?.limit ?? null, held: true });
+    } catch { /* a per-item fetch failure degrades this row to no-data — never aborts the screen */ }
+    const traj = ts1h ? trajectoryFrom1h(ts1h) : null;   // { shape, … } | null → gate degrades to caution
+    const sellRef = row ? (row.optSell ?? row.quickSell ?? null) : null;   // patient 2h band top = the peak we sell into
+    const rebuyRef = row ? (row.optBuy ?? row.quickBuy ?? null) : null;    // patient 2h band floor = the dip we rebuy at
+    const d24 = v24all[id] || v24all[String(id)] || {};
+    ctxById[id] = {
+      trajectory: traj || 'unknown',
+      sellRef, rebuyRef,
+      sellLegVol: d24.highPriceVolume ?? null,   // MY sell clears against instabuy demand (high-price side)
+      rebuyLegVol: d24.lowPriceVolume ?? null,   // MY rebuy clears against instasell supply (low-price side)
+    };
+    // owned-qty fold (owned-sourced items carry a seed): informational only, never filters.
+    let qty = null;
+    if (p.source === 'owned') { try { qty = computeOwnedQty({ id, seedQty: p.seedQty, seedTs: p.seedTs }, fillsEvents); } catch { qty = null; } }
+    infoById[id] = { live: row ? (row.mid ?? row.quickBuy ?? row.quickSell ?? null) : null, qty, cycle: reverseFlipFor(rfState, id) };
+  }
+
+  // route through the shared gate (RF2 §5 — gateCandidates dispatches gate:'reverse' → gateReverseFlipCandidates).
+  const cands = gateCandidates('reverse', { reversePool: pool, reverseCtxById: ctxById }, THRESHOLDS);
+  const surfaced = cands.filter(c => c.gate.decision !== 'reject');
+  const rejected = cands.filter(c => c.gate.decision === 'reject');
+
+  if (!surfaced.length) {
+    realLog(`_no reverse-flip candidates (no keep items / no clean oscillators)_ — ${pool.length} owned/declared item(s) screened, all rejected (${rejected.map(r => `${r.name}: ${r.gate.reasons.join('/')}`).join('; ') || 'none'}).`);
+    return;
+  }
+
+  // sort: pass before caution, then by swing descending (biggest harvestable lap first).
+  const rank = { pass: 0, caution: 1 };
+  surfaced.sort((a, b) => (rank[a.gate.decision] - rank[b.gate.decision]) || ((b.edge.swingPct ?? -1) - (a.edge.swingPct ?? -1)) || (a.id - b.id));
+
+  const rows = surfaced.map(c => {
+    const info = infoById[c.id] || {};
+    const e = c.edge || {};
+    const nameCell = c.name + (info.qty != null && info.qty > 0 ? ` (${info.qty}x)` : '') + (c.source === 'hold-thesis' ? ' ·thesis' : '');
+    const swingCell = (e.swingPct != null) ? `${(e.swingPct * 100).toFixed(1)}%` : '—';
+    const reasons = c.gate.reasons && c.gate.reasons.length ? ` (${c.gate.reasons.join(', ')})` : '';
+    const cycleNote = info.cycle && info.cycle.state ? ` · cycle:${info.cycle.state}` : '';
+    return [
+      nameCell,
+      info.live != null ? fmtP(info.live) : '—',
+      reverseRegimeCell(c.regime),
+      e.sellRef != null ? fmtP(e.sellRef) : '—',
+      e.beRebuy != null ? `<${fmtP(e.beRebuy)}` : '—',
+      swingCell,
+      c.gate.decision + reasons + cycleNote,
+    ];
+  });
+
+  realLog(`## REVERSE-FLIP — ${surfaced.length} owned candidate(s) to harvest (${rejected.length} rejected: ${rejected.map(r => r.name).join(', ') || 'none'})`);
+  realLog('Playbook: SELL into the peak (Sold-ref/Peak), then REBUY strictly below BE-rebuy for an after-tax gain; the swing must clear the tax. Regime is INVERTED — a rising/elevated item is BAD (you\'d rebuy higher); knife/oscillating is the wanted "sell high, rebuy low". The rebuy leg is the binding risk on a thin item (it can strand) — a bounded miss, never a deadline.');
+  realLog(mdTable(REVERSE_HEADERS, rows));
+  realLog('');
+}
+
 async function main() {
   // AO1: unless --verbose, no-op console.log for the whole pass (keeps `realLog` for the closing summary);
   // every renderMode niche is still captured into REPORTS for the dump via emitReport.
@@ -2125,6 +2249,15 @@ async function main() {
   // cheap, never blocks the screen on failure — this is the held-item exception's freshness input
   // too (HELD_IDS below reads positions.json right after this). AR1: the ONE shared invocation.
   runLocalSync({ offBookNote: 'screening off the current book' });
+
+  // RF2 (PLAN-REVERSE-FLIP) — `--mode reverse` is a SEPARATE, ownership-gated console surface. Its pool
+  // (owned-items.json keep ∪ hold-thesis reverseFlip:true) never overlaps the standard fetch universe by
+  // construction, so it short-circuits the whole band/churn/amplitude/value pipeline below (gateCandidates
+  // over v24, the fetch-pool ranker, renderMode, the digest, the pathA emit, --publish/screen.json) — the
+  // zero-ripple guarantee the replay goldens pin. Runs AFTER the local sync (fresh fills → owned-qty fold),
+  // BEFORE the daemon warm/heavy setup none of which reverse needs. All output via `realLog` so it prints on
+  // the quiet default (this surface has no last-report/screen.json consumer — it's an interactive read).
+  if (MODE === 'reverse') { await runReverseMode(realLog); return; }
 
   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook. Same "before the read" seam as the
   // sync above, but IN-PROCESS (not subprocessed): manager.ensure() is cheap/local/self-throttling — it

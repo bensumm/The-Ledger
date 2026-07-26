@@ -279,9 +279,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `reverseFlipGate` (composes regime + swing floor + a REBUY-LEG-WEIGHTED liquidity check: a thin SELL leg is
   caution-not-reject (live demand clears the sell — the 2026-07-24 Ancestral-hat anchor), a thin REBUY leg is
   the binding risk → reject; degrade-to-caution, never throws). Imports only `tax`; consumed by RF2's
-  `screen-flip-niches.mjs`/`gatecandidates.mjs` wiring (`reverseFlipGate` marked `@provisional-api` until
-  then). All thresholds NAMED PLACEHOLDERS (n≈0). NOT app-imported at ship → no APP_VERSION bump. Fixture-pinned
-  `pipeline/test/reverseflip.test.mjs`),
+  `--mode reverse` wiring — `gatecandidates.mjs` `gateReverseFlipCandidates` applies it per owned candidate and
+  `screen-flip-niches.mjs` `runReverseMode` renders the own-table surface (RF2 shipped 2026-07-25; the
+  `@provisional-api` markers stay as the n≈0 honesty label). All thresholds NAMED PLACEHOLDERS (n≈0). NOT
+  app-imported → no APP_VERSION bump. Fixture-pinned `pipeline/test/reverseflip.test.mjs`),
   `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
   calculator off Chunk A's `loadDailyRangeBulk` daily-range data: `intradayDailyRange(dayRanges)` (the
   robust CENTRAL after-tax intraday range = the MEDIAN of per-day `netMargin(lo,hi)` across the coverage
@@ -312,14 +313,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
   (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/test/held-item-strategy.test.mjs`),
-  `flip-niches.mjs` (P4c/P5/A2 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's FIVE
-  flip-niches (band/churn + scalp/value + **amplitude**; the `spread` and `rising` specs were DELETED in
+  `flip-niches.mjs` (P4c/P5/A2/RF2 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's SIX
+  flip-niches (band/churn + scalp/value + **amplitude** + **reverse**; the `spread` and `rising` specs were DELETED in
   Steps 3+4) as data-shaped specs `{key,label,inAll,pool:{risingFloor},edge,rank,confirm,falling,gate,
   validators,defaultPath,estimator,priceBasis,fillShape}`. THE SWAP (PLAN-AMPLITUDE-SCAN §3): `amplitude`
   is `inAll:true` (in `--mode all`) and `value` is now `inAll:false` (relabelled **Invest**, KEY unchanged,
   runnable via `--mode value`/`--mode invest`). `gate:'amplitude'` routes to `gateAmplitudeCandidates`;
   `estimator:'amplitude'` is the two-leg daily-reach family; `priceBasis:'daily'` = a surface-computed
-  daily-quantile pair.
+  daily-quantile pair. RF2 (PLAN-REVERSE-FLIP, 2026-07-25): the `reverse` spec — `inAll:false` (explicit
+  `--mode reverse` only, like scalp), `gate:'reverse'` (routes to `gateReverseFlipCandidates` over the
+  OWNED-item pool, NOT the v24 fetch universe), `validators:[]` (reverseFlipGate does its own gating),
+  `falling:'accept'`/`estimator:'amplitude'`/`priceBasis:'daily'`/`defaultPath:'value-hold'` — a HARVEST-AN-
+  OWNED-ITEM flip-niche (sell a keep item into the peak, rebuy the dip); `'reverse'` is in `VALID_GATE` so the
+  conformance suite passes with it registered.
   `pipeline/lib/gatecandidates.mjs` looks up
   `FLIP_NICHES[mode]` and calls `spec.edge(...)` / reads `spec.pool.risingFloor` / `spec.rank` / `spec.falling`
   / `spec.gate` instead of branching on the flip-niche name — so a flip-niche can be added or REMOVED by editing the
@@ -1193,7 +1199,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `surviveMode` reads the PER-SPEC `spec.falling` (band/churn keep `exclude`; scalp `accept`s AND
     requires fallers), and `gateCandidates` routes a `gate:'value'` spec to `gateValueCandidates` (the
     term-structure value gate off `ctx.daily` + `js/valuescreen.mjs`) with `rankAndSlice` hard-top-N'ing
-    the value pool by `valueScore`). **PLAN-FETCH-POOL-SCALING (2026-07-24)**: adds `VALUE_RESERVE_DEFAULT`
+    the value pool by `valueScore`). **RF2 (PLAN-REVERSE-FLIP, 2026-07-25)**: `gateCandidates` routes a
+    `gate:'reverse'` spec to `gateReverseFlipCandidates(pool, ctxById, t)` — the PURE + total owned-item gate.
+    Unlike every other gate it does NOT iterate the v24 fetch universe: its population is the caller-assembled
+    OWNED-item pool (`owned-items.json` `classification:'keep'` ∪ `hold-thesis.json` `reverseFlip:true` — Ruling
+    §8: the keep set IS the pool), taken off `ctx.reversePool`/`ctx.reverseCtxById`, and it applies RF1's
+    `reverseFlipGate` per candidate, returning EVERY entry annotated with its `gate` (decision/reasons/regime/edge)
+    for the renderer to split surfaced-from-rejected (an empty pool → `[]`, never a throw). It's a SEPARATE branch
+    from the standard fetch pipeline (`screen-flip-niches.mjs`'s `runReverseMode`), so the replay goldens are
+    untouched — provable zero-ripple. **PLAN-FETCH-POOL-SCALING (2026-07-24)**: adds `VALUE_RESERVE_DEFAULT`
     (the value flip-niche's own fetch-pool reserve — `rankAndSlice`'s value branch now PREPENDS the highest
     cycle-amplitude-% (`valueRanges.afterTaxAmpPct`) of the excluded remainder, tagged `via:'reserve'`,
     mirroring the thin/rising/watch reserves; closes finding #7) and `scaleSlots(base,{capital,max})` — the
@@ -1670,7 +1684,7 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 | `js/validate.mjs` | `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/validate.test.mjs`, `pipeline/test/termstructure.test.mjs`, `pipeline/test/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
 | `js/held-item-strategy.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch-positions.mjs` + `quote-items.mjs --positions` at runtime), `js/flip-niches.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/commands/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/test/held-item-strategy.test.mjs`, `pipeline/test/pathpersist.test.mjs` (not yet app-imported) |
-| `js/flip-niches.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank), `pipeline/commands/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/test/flip-niches.test.mjs` (P4c/P6b — the declarative flip-niche registry; not yet app-imported) |
+| `js/flip-niches.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank; RF2 — `gate:'reverse'` routes to `gateReverseFlipCandidates`), `pipeline/commands/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`; RF2 — the `reverse` mode / `runReverseMode` branch), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/test/flip-niches.test.mjs` (P4c/P6b/RF2 — the declarative flip-niche registry; not yet app-imported) |
 | `pipeline/lib/admission.mjs` | `pipeline/commands/screen-flip-niches.mjs` (`pickFetchPool`/`buildTrackIndex` — the DEFAULT fetch-pool admission path, PLAN-SCREEN-ARCHITECTURE, 2026-07-18), `pipeline/test/admission.test.mjs`. Replaces `gatecandidates.mjs`'s `rankAndSlice` thin-lane rank (raw gp-flow → after-tax `expGpDay`) + adds a bounded rotating exploration reserve (starvation-proofing), a boost-only track-record prior off `positions.json` closed lots, and an exclusion report (every non-admitted gated candidate returned with a reason) — the fix for the Abyssal-bludgeon/Sanguinesti-staff thin-reserve starvation anchor incident (2026-07-17). `gatecandidates.mjs`'s `rankAndSlice` is UNCHANGED, still fixture/golden-pinned, and stays selectable via `--admission legacy` for rollback. AR2 (PLAN-ARCHITECTURE-COHERENCE): a survivor admitted by the `Date.now()`-bucketed exploration reserve (rather than ranked in) is tagged `via:'explore'`; `screen-flip-niches.mjs` surfaces that as a small 🎲 token on the Item cell so a rotating-lottery slot reads honestly as such. The rotation logic itself is intentionally left non-deterministic (marker, not determinism fix); inform-only, no gate/rank/grade/`screen.json`-number impact. F-B (2026-07-22): `pickFetchPool`'s amplitude branch (the DEFAULT admission path — this is the one a real scan actually runs) mirrors `gatecandidates.mjs`'s watchlist reserve, since the amplitude flip-niche's own top-N slice lives here too, not only in the legacy `rankAndSlice`. PLAN-FETCH-POOL-SCALING (2026-07-24): `pickFetchPool`'s value branch gained the SAME `VALUE_RESERVE` carve-out as legacy `rankAndSlice` (both admission paths must implement it — the double-maintenance shape this file's header documents), and `clampUnionFetch(…, TOTAL_FETCH_MAX)` — the cross-flip-niche fetch-budget ceiling that clamps the deduped survivor union under `--mode all --scale-pool`, protecting held/watched/`via`-tagged reserve rows and reporting every trimmed row (reason `total-fetch-max`, never a silent drop). All PLACEHOLDER n≈0. |
 | `pipeline/lib/structural-admission.mjs` | `pipeline/lib/gatecandidates.mjs` (`eachStructuralCandidate`/`DEFAULT_STRUCTURAL` — routed via `t.GATE === 'structural'`), `pipeline/test/structural-admission.test.mjs`. **PLAN-LANE-ADMISSION Chunk B** (2026-07-25) — the NEW edge-blind STRUCTURAL fetch-pool admission gate: one universal gate (`value ≥ 100gp` ∧ `thin = min(hpv,lpv) ≥ max(limit,25)`, null-limit → 25 fallback ∧ `notional = value × volDay ≥ 25m/day`) + a volume lane classifier (`volLane: volDay ≥ 20k → 'churn' else 'gear'` — ORTHOGONAL to the `churn` flip-niche MODE in `js/flip-niches.mjs`, a documented naming-collision risk). Exports `structuralGate(item,t?)` (pure predicate → `{pass,reason,thinDepth,notional,volLane}`), `classifyVolLane`, and `eachStructuralCandidate(ctx,t?,fn)` — an alternate iterator with the SAME callback shape as `gatecandidates.mjs`'s `eachLiquidCandidate` (gear survivors carry `thin:true` as the big-ticket/attention-floor-exempt analogue). Selectable via `--gate structural|legacy` (default `legacy`), INDEPENDENT of `--admission` (a 2×2 with it — `--admission` is pool ORDERING, `--gate` is pool MEMBERSHIP). Purely additive behind the flag: `--gate legacy`/omitted is byte-identical (no golden/fixture change); the per-mode `spec.edge` still runs post-admission in this library-only chunk (edge-blind end-to-end is a later chunk). Thresholds (25m notional, thin-floor 25, 20k vol-cut) are NAMED PLACEHOLDERS (rule 4) — snapshot+own-book calibrated, NOT outcome-validated. |
 

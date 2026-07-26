@@ -10,6 +10,41 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-REVERSE-FLIP RF2 — `--mode reverse`, the console surface (pipeline, console-only, 2026-07-25)
+Wires RF0's owned-item stores + RF1's gate into a runnable console screen. `--mode reverse` HARVESTS an
+item you already OWN — sell into the diurnal/multi-day PEAK, rebuy at the DIP, capital-free. It is an
+ownership-gated SEPARATE branch that never touches the standard scan / `screen.json` — provable zero-ripple
+(the replay goldens are untouched). No `APP_VERSION` bump: `js/flip-niches.mjs` is pipeline-only-consumed
+(verified — no app module imports `FLIP_NICHES`/`validateNicheSpec`/`MODE_KEYS`), so registering the niche
+is console-only.
+- **`js/flip-niches.mjs`** — registers `FLIP_NICHES.reverse` (`inAll:false`, explicit-only like scalp;
+  `gate:'reverse'`; `validators:[]` — reverseFlipGate does its own gating; `falling:'accept'`;
+  `estimator:'amplitude'`/`priceBasis:'daily'`/`defaultPath:'value-hold'`, all dormant since reverse doesn't
+  rank through the standard spine). Adds `'reverse'` to the conformance `VALID_GATE` set (§5 hygiene — REQUIRED
+  or `validateNicheSpec`'s test fails the moment the spec registers). The `edge` is a conformance-only
+  deterministic placeholder (the niche selects via `reverseFlipGate`, not this edge, like value/amplitude).
+- **`pipeline/lib/gatecandidates.mjs`** — `gateCandidates` routes `gate:'reverse'` → new pure `gateReverseFlipCandidates(pool, ctxById, t)`,
+  which reads the caller-assembled OWNED-item pool (`owned-items.json` `classification:'keep'` ∪
+  `hold-thesis.json` `reverseFlip:true` — Ruling §8) and applies RF1's `reverseFlipGate` per candidate,
+  returning EVERY entry annotated with its gate (renderer splits surfaced-from-rejected). Empty pool → `[]`,
+  never a throw.
+- **`pipeline/commands/screen-flip-niches.mjs`** — `runReverseMode` is a new branch that short-circuits the
+  whole band/churn/amplitude/value pipeline (after the local sync, before the daemon warm / heavy setup none
+  of which reverse needs). It fetches each owned id DIRECTLY (small, ownership-pre-selected → no two-stage
+  proxy fetch pool), builds each candidate's market context (trajectory off the warm 1h series, sellRef =
+  the patient band top, rebuyRef = the band floor, per-leg vols off v24's high/low-price volume), routes
+  through the gate, and renders its OWN table — `Item · Live · Regime (inverted read) · Sold-ref/Peak ·
+  BE-rebuy · Swing · Gate` — with the INVERTED regime read (rising/elevated = BAD; knife/oscillating =
+  wanted). Console-only: never writes `screen.json`, excluded from `--publish` by construction. All output
+  via `realLog` so it prints on the quiet default. Empty `owned-items.json` prints a clean "no reverse-flip
+  candidates (no keep items / no clean oscillators)" and exits 0.
+- **Acceptance:** `pipeline/test/flip-niches.test.mjs` conformance passes with `reverse` registered (MODE_KEYS
+  now includes it; a dedicated reverse block pins its shape); a new `gateReverseFlipCandidates` unit block in
+  `pipeline/test/gatecandidates.test.mjs` (a keep oscillator passes, a keep knife passes, a rising keep
+  rejects, empty pool → empty, missing-trajectory → caution — all synthetic, TZ-hermetic). Replay goldens,
+  `check-imports`, `check-dead-exports`, `check-daemon-safety`, `lint-docs` all green (both TZ default and
+  `TZ=UTC`). INFORM-ONLY n≈0 — Ben places every offer.
+
 ### PLAN-REVERSE-FLIP RF1 — `js/reverseflip.mjs`, the pure gate/edge module (js/, node-only, 2026-07-25)
 The reverse-flip strategy's gate/edge MATH — sell an item you already OWN into the peak, rebuy at the dip,
 capital-free. A PURE, DOM-free/fetch-free/fs-free ESM mirroring `js/valuescreen.mjs`/`js/amplitudescreen.mjs`;

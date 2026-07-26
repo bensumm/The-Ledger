@@ -43,6 +43,12 @@ import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '
 // gateCandidates routes a `gate:'amplitude'` spec to gateAmplitudeCandidates (below), mirroring the
 // `gate:'value'` seam. Stage 2 (the exact amplitudeGate off windowStats) runs post-fetch in renderAmplitudeMode.
 import { amplitudeProxy, AMP_MIN_PRICE, AMP_MAX_PRICE, AMP_STAGE1_MIN_PCT } from '../../js/amplitudescreen.mjs';
+// RF2 (PLAN-REVERSE-FLIP) — the reverse-flip niche's INVERTED regime gate + rebuy-leg-weighted liquidity
+// check (js/reverseflip.mjs, pure). gateCandidates routes a `gate:'reverse'` spec to
+// gateReverseFlipCandidates (below), mirroring the `gate:'value'`/`gate:'amplitude'` seams — but its pool is
+// the caller-assembled OWNED-item set (owned-items.json keep ∪ hold-thesis reverseFlip:true), NOT the v24
+// fetch universe, so it takes that pool + a per-id context map off `ctx` rather than iterating v24.
+import { reverseFlipGate } from '../../js/reverseflip.mjs';
 // P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
 // js/flip-niches.mjs. gateCandidates/rankAndSlice look up FLIP_NICHES[mode] and call spec.edge / read
 // spec.rank / spec.confirm instead of branching on the niche name — byte-identical behavior
@@ -239,6 +245,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
   if (!spec) throw new Error('gateCandidates: unknown strategy mode "' + mode + '"');
   if (spec.gate === 'value') return gateValueCandidates(ctx, t);                         // P5 — the term-structure value gate
   if (spec.gate === 'amplitude') return gateAmplitudeCandidates(ctx, t, watchedIds);     // A2 — the daily-amplitude Stage-1 proxy gate (F-B: watchedIds bypass the proxy floor)
+  if (spec.gate === 'reverse') return gateReverseFlipCandidates(ctx.reversePool || [], ctx.reverseCtxById || {}, t);   // RF2 — the OWNED-item reverse-flip gate (pool + per-id ctx come off `ctx`, not v24)
   const { map, bands } = ctx;
   // The per-mode step-3 edge callback — IDENTICAL for both gates; only the ADMISSION iterator differs.
   // Extracted to a const (was inline) so `--gate structural` can feed the SAME fn to
@@ -344,6 +351,32 @@ function gateAmplitudeCandidates(ctx, t = DEFAULT_THRESHOLDS, watchedIds = new S
     if (!watched && (ampProxy == null || ampProxy < AMP_STAGE1_MIN_PCT)) return null;
     const limit = map.byId[id]?.limit ?? null;
     return { id, limitVol, mid, limit, thin, ampProxy, watched };
+  });
+}
+
+/* RF2 (PLAN-REVERSE-FLIP §5) — the REVERSE-FLIP niche's candidate gate. PURE + total (one entry in, one
+   annotated entry out), so it's fixture-testable with a synthetic keep-pool and NO live fetch (CLAUDE.md
+   rule 4). Unlike every other gate here it does NOT iterate the v24 fetch universe: its population is the
+   caller-assembled OWNED-item pool (owned-items.json classification:'keep' ∪ hold-thesis reverseFlip:true —
+   Ruling §8: the keep set IS the pool, no per-item opt-in flag), which is small and pre-selected by
+   OWNERSHIP, not attention-worthiness. So it takes that `pool` array + a per-id market-context map (`ctxById`
+   the caller fetched: { trajectory, sellRef, rebuyRef?, swingPct?, sellLegVol?, rebuyLegVol? }) and applies
+   RF1's reverseFlipGate/reverseFlipEdge per candidate. `t` is accepted for signature parity with the other
+   gates but unused (reverseFlipGate closes over its own PLACEHOLDER constants).
+
+   Returns EVERY pool entry annotated with its `gate` (the full reverseFlipGate result — decision ∈
+   pass|caution|reject, reasons[], regime, edge), NOT a filtered subset: the renderer (runReverseMode) splits
+   surfaced (decision ≠ 'reject') from rejected-for-a-footer, mirroring value's droppedTrajKnife footer. An
+   empty pool → [] (the honest empty-keep-pool degrade, never a throw). */
+export function gateReverseFlipCandidates(pool, ctxById = {}, t = DEFAULT_THRESHOLDS) {
+  return (pool || []).map(p => {
+    const c = (ctxById && ctxById[p.id]) || {};
+    const gate = reverseFlipGate({
+      trajectory: c.trajectory,
+      sellRef: c.sellRef, rebuyRef: c.rebuyRef, swingPct: c.swingPct,
+      sellLegVol: c.sellLegVol, rebuyLegVol: c.rebuyLegVol,
+    });
+    return { id: p.id, name: p.name, source: p.source, gate, edge: gate.edge, regime: gate.regime };
   });
 }
 

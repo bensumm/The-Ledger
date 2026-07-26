@@ -34,8 +34,8 @@ const VALID_PATH_KEYS = new Set(Object.values(PATH_KEYS));
 console.log('flip-niches.mjs conformance:');
 
 /* --- registry shape ------------------------------------------------------------------------------- */
-ok('the registry holds the four niches (Steps 3+4 deleted spread/rising), in order, keyed correctly', () => {
-  assert.deepEqual(MODE_KEYS, ['band', 'churn', 'scalp', 'value', 'amplitude']);
+ok('the registry holds the niches (Steps 3+4 deleted spread/rising; RF2 added reverse), in order, keyed correctly', () => {
+  assert.deepEqual(MODE_KEYS, ['band', 'churn', 'scalp', 'value', 'amplitude', 'reverse']);
   assert.deepEqual(FLIP_NICHE_LIST.map(s => s.key), MODE_KEYS);
   for (const s of FLIP_NICHE_LIST) assert.equal(FLIP_NICHES[s.key], s, `${s.key} indexed by key`);
   // the deleted specs are truly gone from the registry.
@@ -67,6 +67,19 @@ ok('P5/A2 per-spec falling doctrine + gate selector are registered as designed',
   assert.equal(FLIP_NICHES.value.defaultPath, PATH_KEYS.VALUE_HOLD);
   assert.equal(FLIP_NICHES.value.rank, 'value', 'value ranks by valueScore');
   assert.equal(FLIP_NICHES.amplitude.rank, 'amplitude', 'amplitude ranks its Stage-1 pool by ampProxy');
+});
+
+ok('RF2 reverse niche is registered as an explicit-only, ownership-gated console spec', () => {
+  const r = FLIP_NICHES.reverse;
+  assert.ok(r, 'reverse spec exists');
+  assert.equal(r.inAll, false, 'reverse is explicit-only (--mode reverse), like scalp — not in --mode all');
+  assert.equal(r.gate, 'reverse', 'reverse routes to gateReverseFlipCandidates (the owned-item gate)');
+  assert.equal(r.label, 'Reverse-flip');
+  assert.equal(r.falling, 'accept', 'the inverted read wants a knife/faller; real regime decision is invertedRegimeGate');
+  assert.deepEqual(r.validators, [], 'reverseFlipGate does its own gating — the standard validator registry does not apply');
+  assert.equal(r.driftInform, undefined, 'reverse has its own inverted regime read → no per-thesis driftInform note');
+  assert.equal(r.defaultPath, PATH_KEYS.VALUE_HOLD, 'the rebuy leg reacquires-and-holds a keep item');
+  assert.equal(validateNicheSpec(r).length, 0, 'reverse spec is structurally conformant');
 });
 
 ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/churn/scalp keep it inform', () => {
