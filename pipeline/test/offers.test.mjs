@@ -18,7 +18,7 @@
  *     EMPTY/terminal slots are excluded; item name comes from a best-effort lookup ('#<id>' fallback).
  */
 import assert from 'node:assert/strict';
-import { activeOffers, offersSnapshot } from '../lib/offers.mjs';
+import { activeOffers, offersSnapshot, restartBlindSuspects, suspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -115,6 +115,50 @@ ok('no live offers → empty offers array with a real generatedAt envelope', () 
   assert.deepEqual(snap.offers, []);
   assert.equal(snap.app, 'the-coffer-offers');
   assert.ok(typeof snap.generatedAt === 'string' && snap.generatedAt.length > 0);
+});
+
+// ============================================================================================
+console.log('\nrestart-blind suspect-bid escrow acceptance (PLAN-CAPITAL-DEPLOYABILITY L2):');
+
+// BUSINESS REQUIREMENT: a resting BID that went dark through a client-restart log wipe (BUYING → a run of
+// trailing EMPTY, never a terminal row) may still be live in-game, so its escrow is DROPPED from
+// offers.json and never subtracted from the derived deployable figure — inflating it. suspectBidEscrow
+// sums the UNFILLED remainder ((max−qty)×offer) of exactly those suspect BUY slots so the surfaces can
+// flag it. It must NOT count a genuinely-cancelled/filled slot, and must NOT count a suspect SELL (an ask
+// is held inventory, not deployable cash).
+ok('suspectBidEscrow counts a restart-blind BUYING slot\'s unfilled remainder; excludes genuine terminals + sells', () => {
+  const rows = [
+    // slot 0 — restart-blind BID: BUYING then trailing EMPTY, no terminal row → SUSPECT (remainder 800×5000)
+    rawRow(0, 'BUYING', 100, { max: 1000, filled: 200, offer: 5000, time: '10:00:00' }),
+    rawRow(0, 'EMPTY', 0, { time: '11:00:00' }),
+    // slot 1 — genuinely cancelled BID: has a CANCELLED_BUY before EMPTY → NOT a suspect
+    rawRow(1, 'BUYING', 200, { max: 10, filled: 2, offer: 1_000_000, time: '10:00:00' }),
+    rawRow(1, 'CANCELLED_BUY', 200, { max: 10, filled: 2, offer: 1_000_000, time: '10:30:00' }),
+    rawRow(1, 'EMPTY', 0, { time: '11:00:00' }),
+    // slot 2 — restart-blind SELL: SELLING then EMPTY → a suspect ASK, but not deployable cash → excluded
+    rawRow(2, 'SELLING', 300, { max: 50, filled: 0, offer: 2_000_000, time: '10:00:00' }),
+    rawRow(2, 'EMPTY', 0, { time: '11:00:00' }),
+  ];
+  // sanity: restartBlindSuspects sees the two blind slots (0 BUYING, 2 SELLING), not the cancelled slot 1
+  const suspects = restartBlindSuspects(rows);
+  assert.deepEqual(suspects.map(s => s.slot).sort(), [0, 2], 'blind BUY + blind SELL are suspects; genuine cancel is not');
+  const esc = suspectBidEscrow(rows);
+  assert.equal(esc.n, 1, 'only the restart-blind BID counts (sell excluded, genuine cancel excluded)');
+  assert.equal(esc.gp, 800 * 5000, 'escrow is the UNFILLED remainder (max−qty)×offer, not the whole offer');
+});
+
+ok('a clean book (no restart-blind slots) yields zero escrow and an empty note (byte-identical to today)', () => {
+  const rows = [rawRow(0, 'BUYING', 100, { max: 5, filled: 1, offer: 100, time: '10:00:00' })];
+  const esc = suspectBidEscrow(rows);
+  assert.deepEqual(esc, { n: 0, gp: 0 });
+  assert.equal(suspectBidNote(esc, n => n + 'gp'), '', 'no suspects → empty string, so surfaces render unchanged');
+});
+
+ok('suspectBidNote renders the shared flag with count-aware pluralization', () => {
+  assert.equal(suspectBidNote({ n: 1, gp: 4_000_000 }, n => (n / 1e6).toFixed(2) + 'm'),
+    ' ⚠ 1 restart-suspect bid (~4.00m) may be included — verify in-game');
+  assert.equal(suspectBidNote({ n: 3, gp: 12_000_000 }, n => (n / 1e6).toFixed(2) + 'm'),
+    ' ⚠ 3 restart-suspect bids (~12.00m) may be included — verify in-game');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

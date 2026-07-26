@@ -47,7 +47,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
-import { readOffersSnapshot } from '../lib/offers.mjs';
+import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';
 import { fetchItemInputs } from '../lib/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';
 import { buildAgenda, loopHeaderLine } from './read-schedule.mjs';
@@ -134,7 +134,10 @@ const cad = m => m == null ? 'off' : `${m}m`;
 const tierNote = (dcRec && dcRec.known && dcRec.reserved > 0)
   ? ` (free ${fmtGp(dcRec.availableCash)}${dcRec.restingDeepN > 0 ? ` + ${fmtGp(dcRec.reservedDeep)} reclaimable from ${dcRec.restingDeepN} deep bid${dcRec.restingDeepN > 1 ? 's' : ''}` : ''} · liquid ${fmtGp(dcRec.liquidCapital)})`
   : '';
-const idleNote = scanSkipReason ? ` · ${scanSkipReason}${tierNote}` : (idle != null ? ` · deployable ${fmtGp(idle)}${tierNote}` : '');
+// L2 — flag restart-blind suspect bids that may inflate the deployable figure (only meaningful when the
+// scan gate actually derived a deployable number this tick). Local log read; off-machine → no note.
+const suspectNote = scanDue ? suspectBidNote(loadSuspectBidEscrow(), fmtGp) : '';
+const idleNote = scanSkipReason ? ` · ${scanSkipReason}${tierNote}${suspectNote}` : (idle != null ? ` · deployable ${fmtGp(idle)}${tierNote}${suspectNote}` : '');
 console.log(`# loop-tick ${hhmm} — cadence watch ${cad(watchMin)} / scan ${cad(scanMin)} · fire every ${cronMin}m`);
 console.log(`# this tick: ${plan.length ? plan.join(', ') : 'nothing due'}${idleNote}\n`);
 

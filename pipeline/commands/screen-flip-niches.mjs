@@ -127,7 +127,7 @@ import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow } from '../lib/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
-import { readOffersSnapshot } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification)
+import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
 import { readOpenPositions } from '../lib/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
@@ -1761,9 +1761,12 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   console.log(`## VALUE — ${shown} buy-hold candidate(s) near a multi-week low (PROVISIONAL — unproven theory, n≈0)`);
   console.log('Playbook: buy near the multi-week low, HOLD for the range to cycle up; the edge is ONE tax-paid sell of a big move, not fast churn. State the hold horizon at entry — this is a multi-day/week HOLD, not a flip.');
   console.log(`(term structure: 1/3/7/14/28d low·high; ranked by valueScore = after-tax cycle amplitude × proximity-to-low × floor-stability × deployable-capital multiplier — PLACEHOLDER weights, n≈0)`);
-  const capSource = VALUE_CAPITAL_EXPLICIT ? ''
+  // L2 — when the cap is the DERIVED deployablePool, flag restart-blind suspect bids that may have inflated
+  // it (their escrow drops out of offers.json, so it was never subtracted). Local log read; off-machine → ''.
+  const suspectNote = VALUE_CAPITAL_DERIVED ? suspectBidNote(loadSuspectBidEscrow(), fmtP) : '';
+  const capSource = (VALUE_CAPITAL_EXPLICIT ? ''
     : (VALUE_CAPITAL_DERIVED ? ' — derived deployablePool from your cash anchor (derive-cash.mjs: free stack + reclaimable deep-bid escrow, deep bids classified off live prices); pass --capital <gp> to override'
-      : ' — PLACEHOLDER capital; set an anchor (derive-cash.mjs) or pass --capital <gp> [--slots N] for your real figure');
+      : ' — PLACEHOLDER capital; set an anchor (derive-cash.mjs) or pass --capital <gp> [--slots N] for your real figure')) + suspectNote;
   console.log(`(deployable-capital cap ${fmtP(VALUE_CAP_GP)}/position = ${fmtP(VALUE_CAPITAL)} capital ÷ ${VALUE_SLOTS} slots${capSource}. ${buyNow.length} buy-now surfaced — re-run --slots ${buyNow.length || 1} to size the cap to that.)`);
   if (buyNow.length) {
     console.log(`\n### BUY-NOW — live at/near the multi-week low (${buyNow.length})`);

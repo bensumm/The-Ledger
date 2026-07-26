@@ -1,7 +1,14 @@
-Status: **LEAN SCOPE ADOPTED (Ben, 2026-07-26) — awaiting implementation.** The full automated
-redesign in §3-old (three-bucket `reservedSuspect` + confidence band + injection-detector rewrite +
-`reconcile-suspects.mjs`) is **SHELVED**, kept below §2 as the "if this ever runs unattended" version.
-Per-topic working doc (`docs/PLANNING.md` lifecycle); folds into `PLAN.md` + deleted when its chunks ship.
+Status: **LEAN SCOPE — LANDED (Ben, 2026-07-26).** L1 was already satisfied (the `run-loop` scan-gate
+tick has printed `deployable X (free Y + Z reclaimable from N deep bids · liquid W)` + the gate outcome
+since the 07-15 rename — the plan's "does not PRINT" premise was a stale read). **L2 built + tested**
+(`suspectBidEscrow`/`loadSuspectBidEscrow`/`suspectBidNote` in `offers.mjs` → the `⚠ N restart-suspect
+bid(s) may be included` flag on `read-book`, the `run-loop` scan gate, and `screen --capital`; 3 new
+acceptance checks in `offers.test.mjs`). **L3 doctrine** in `/scan` SKILL.md (v1.88) + memory
+`deployable-shown-correct-at-source`. **C1 was already landed** — both reconstruct.mjs hunks (chunk-3
+collapseOffers fresh-placement split + chunk-5 buildEvents purity) and their tests are on main (13
+checks pass). The full automated redesign in §3-old (three-bucket `reservedSuspect` + confidence band +
+injection-detector rewrite + `reconcile-suspects.mjs`) stays **SHELVED**, kept below §2 as the "if this
+ever runs unattended" version. Ready to fold into `PLAN.md` + delete.
 
 # PLAN-CAPITAL-DEPLOYABILITY — surface the deployable number, correct it at the source
 

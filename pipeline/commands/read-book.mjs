@@ -28,7 +28,7 @@ import { runLocalSync } from '../lib/sync-invoke.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, vol24FromInputs } from '../lib/marketfetch.mjs';
 import { computeQuote, breakEven } from '../../js/quotecore.js';
 import { readOpenPositions } from '../lib/positions.mjs';
-import { readOffersSnapshot } from '../lib/offers.mjs';
+import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 import { buysByItem, limitWindow } from '../lib/limits.mjs';
 import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/book-model.mjs';
@@ -152,10 +152,14 @@ async function main() {
   for (const [id, row] of quoteById) rfInfoById[id] = { row, live: row.quickSell ?? null };
   const reverseFlip = buildReverseFlipPending(rfState, { marks, infoById: rfInfoById, now, fmt, fmtP });
 
-  render(book, { cash, capitalSource: (capitalOverride != null ? 'override' : 'deployablePool'), reverseFlip });
+  // L2 — restart-blind suspect BIDS may inflate the derived deployable figure (their escrow drops out of
+  // offers.json, so it's never subtracted). Read off the LOCAL log; off-machine → { n:0 } → no note.
+  const suspectEsc = loadSuspectBidEscrow();
+
+  render(book, { cash, capitalSource: (capitalOverride != null ? 'override' : 'deployablePool'), reverseFlip, suspectEsc });
 }
 
-function render(book, { cash, capitalSource, reverseFlip = [] }) {
+function render(book, { cash, capitalSource, reverseFlip = [], suspectEsc = null }) {
   const out = [];
 
   // === SLOTS ===
@@ -176,7 +180,7 @@ function render(book, { cash, capitalSource, reverseFlip = [] }) {
     out.push(`- total capital ~${fmtP(c.totalGp)} · committed ${fmtP(c.committedGp)} (${c.committedPct}%) / idle cash ~${fmtP(c.availableCash)} (${c.idlePct}%)`);
     const dn = c.restingDeepN || 0;
     const reclaim = dn > 0 ? `+ reclaimable ${fmtP(c.reservedDeep)} from ${dn} deep bid${dn > 1 ? 's' : ''}` : 'no reclaimable deep bids';
-    out.push(`- deployable ${fmtP(c.deployablePool)} (free ${fmtP(c.availableCash)} · ${reclaim}) · liquid ${fmtP(c.liquidCapital)}`);
+    out.push(`- deployable ${fmtP(c.deployablePool)} (free ${fmtP(c.availableCash)} · ${reclaim}) · liquid ${fmtP(c.liquidCapital)}${suspectBidNote(suspectEsc, fmtP)}`);
   } else {
     out.push(`- idle cash not derived — set an anchor: node pipeline/commands/derive-cash.mjs <amount>`);
   }

@@ -167,3 +167,41 @@ export function restartBlindSuspects(rows, ignoredCfg = null) {
   }
   return suspects;
 }
+
+/** suspectBidEscrow(rows, ignoredCfg) -> { n, gp } — count + total unfilled escrow (Σ (max−qty)×offer) of
+ *  restart-blind suspect BUY offers (restartBlindSuspects, filtered to state 'BUYING'). WHY it matters to
+ *  the CAPITAL surface (PLAN-CAPITAL-DEPLOYABILITY L2): a restart-blind slot reads EMPTY, so its bid is
+ *  DROPPED from offers.json and thus from derive-cash-tiers' restingBuyEscrow — its escrow is never
+ *  subtracted, so the derived deployable/available figure is INFLATED by ~gp if that bid is in fact still
+ *  resting in-game. Surfaced (never subtracted — the number is Ben's to correct at source) beside the
+ *  deployable figure so a phantom-inflated pool is flagged for a manual check, not silently trusted.
+ *  INFORM-ONLY. */
+export function suspectBidEscrow(rows, ignoredCfg = null) {
+  let n = 0, gp = 0;
+  for (const s of restartBlindSuspects(rows, ignoredCfg)) {
+    if (s.state !== 'BUYING') continue;
+    const rem = Math.max(0, (s.max || 0) - (s.qty || 0)) * (s.offer || 0);
+    if (rem <= 0) continue;
+    n++; gp += rem;
+  }
+  return { n, gp };
+}
+
+/** loadSuspectBidEscrow(ignoredCfg) -> { n, gp } — the impure seam: read the LOCAL exchange log and
+ *  compute suspectBidEscrow. Degrades to { n:0, gp:0 } on ANY failure (no local ~/.runelite log dir /
+ *  off-machine), so an off-machine caller simply shows no suspect note (same graceful-degrade posture as
+ *  the deployablePool marketRef). */
+export function loadSuspectBidEscrow(ignoredCfg = null) {
+  try { return suspectBidEscrow(readExchangeLog().rows, ignoredCfg); }
+  catch { return { n: 0, gp: 0 }; }
+}
+
+/** suspectBidNote(esc, fmtGp) -> the ONE shared note string (or '' when no suspects), so the three
+ *  capital surfaces (read-book, run-loop scan gate, screen --capital) render an identical flag. `fmtGp`
+ *  is the caller's own gp formatter (fmtP / the loop's fmtGp) — kept out so the surfaces don't drift on
+ *  wording while each keeps its native number format. */
+export function suspectBidNote(esc, fmtGp) {
+  return esc && esc.n > 0
+    ? ` ⚠ ${esc.n} restart-suspect bid${esc.n > 1 ? 's' : ''} (~${fmtGp(esc.gp)}) may be included — verify in-game`
+    : '';
+}

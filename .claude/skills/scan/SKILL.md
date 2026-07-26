@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.87
+version: 1.88
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -49,6 +49,8 @@ default** — there is NO default-hidden middle tier, so surface the context foo
 drop them to "keep it short." A note family only stops being surfaced once real sessions evidence
 it's consistently unused (a future ruling, never a per-pass call). The tier registry lives in
 `pipeline/lib/render.mjs`'s header — the ONE registry; don't restate tiers here.
+
+**The deployable figure is SHOWN, not modelled — if it's wrong, correct it at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine; mechanic in `derive-cash-tiers.mjs` + the `suspectBidNote` flag on `read-book`/`run-loop`/`screen --capital`)_ The scan's default capital is the DERIVED `deployablePool` (free cash + reclaimable deep-bid escrow), and the surfaces now PRINT its composition (`free X · + reclaimable Y from N deep bids`) plus a `⚠ N restart-suspect bid(s) may be included — verify in-game` flag when a restart-blind bid may have inflated it. The tool does NOT model or auto-correct this number — that machinery was deliberately SHELVED (one reliable human-in-the-loop beats an unattended guard: `gate-on-error-cost-not-n`). So when the shown deployable is wrong, fix it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** (`node pipeline/commands/derive-cash.mjs <amount>`) when the free-cash baseline has drifted, or a **manual-log correction / phantom-bid clear** when a bid shown as reclaimable is actually gone. The conversational loop IS the override — Ben says the number's wrong, I route the correction to the anchor/log, and the next read is right.
 
 ## 1. Run the script — never hand-fetch
 
