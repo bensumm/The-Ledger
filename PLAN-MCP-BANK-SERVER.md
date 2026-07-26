@@ -1,8 +1,12 @@
 # PLAN-MCP-BANK-SERVER — a local MCP server for Ben's live bank/GE state (2026-07-24)
 
-**STATUS: SCOPING ONLY.** No code shipped by this doc. Follows `docs/PLANNING.md`'s required
-shape. Per that doc's lifecycle this file is folded into `PLAN.md` and deleted the moment its
-last chunk ships (if it's ever built) — do not leave it at the repo root once done.
+**STATUS: SCOPING ONLY — DEFERRED (Ben, 2026-07-25): finish reverse-flip (RF0-RF6, manual CLI
+seeding) FIRST, build this bank source after.** No code shipped by this doc. The `data-export`
+source was re-confirmed LIVE on 2026-07-25 (`container_bank.json` last-write 5:37 PM, `container_inventory.json`
+6:10 PM that day — the files update mid-session on their own triggers, partial evidence toward MCP0's
+open write-cadence question). Follows `docs/PLANNING.md`'s required shape. Per that doc's lifecycle this
+file is folded into `PLAN.md` and deleted the moment its last chunk ships (if it's ever built) — do not
+leave it at the repo root once done.
 
 ## Context / diagnosis
 
