@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.51
+version: 1.52
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -405,8 +405,22 @@ not the whole bundle. Before naming an action price on anything you're recommend
 list-at, a rebid), run ONE `read-window-range.mjs` call bundling all three checks on it — cheap
 (zero new fetch beyond the archive) and each catches a different failure mode seen this session:
 ```
-node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window <hours> --profile --json --out pipeline/.cache/last-report/verify.json
+node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window peak --profile --json --out pipeline/.cache/last-report/verify.json
 ```
+0. **`--window peak` / `--window dip` — use the literals, never hand-typed hours (2026-07-26, the
+   all-day-vs-window incident).** _(enforced: `read-window-range.mjs` resolves them per-item off that
+   item's own `hourProfile`)_ **`--window 0-23` is a legal 24-hour window, NOT a "no window scoping"
+   sentinel** — every window-scoped figure it returns (reach, placement, cushion, AND the instabuy/
+   instasell pool) then describes the whole day. That is how a Divine super combat exit got verified at
+   `14/14 days, recent 3/3, p0` all-day while the 20:00–23:00 peak it was actually priced for read
+   `recent 0/3 ⚠ stale`, and how a 2,000-unit lot got sized against a 210,763-unit all-day pool when the
+   target window held 7,061 (≈30× off). Reading "PEAK window 20:00–23:00" off the profile and retyping
+   it as `--window 20-23` is the transcription step the literals remove. A full-day window now self-labels
+   `ALL-DAY`, and mixing an explicit `--window` with `--profile` prints a divergence warning when the two
+   disagree. The `--profile` block also now scores each derived window against **its own hours** — the
+   window's level reach, the pool competing there, and (when `--ask`/`--bid` is passed) **your** level's
+   in-window reach plus its signed gap to the window's own level. Read that `↳ in-window:` line: an ask
+   above the peak's own printed level is not a window-clear price.
 1. **`--ask <sell>` / `--bid <buy>` (percentile + reach, AC4a).** Read BOTH numbers it prints, not
    just the day-count: `reached N/14d · recent M/3 · placement pXX of the 14-day daily-HIGH/LOW
    distribution`. The placement percentile tells you WHERE in the distribution the level sits (p86

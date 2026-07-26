@@ -10,6 +10,41 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Window verification: `--window peak|dip`, in-window scoring, and the ALL-DAY label (pipeline-only, 2026-07-26)
+Fixes a real losing trade. A Divine super combat exit was verified with
+`read-window-range.mjs … --window 0-23 --ask 18643 --profile` and pitched as a 20:00–23:00 peak-window
+clear. **`--window 0-23` is a legal 24-hour window, not a "no scoping" sentinel** — so every
+window-scoped figure returned (reach, placement, reach-margin cushion, and the competing volume pool)
+described the whole day. All-day it read `14/14 days · recent 3/3 · placement p0`; in the peak window it
+actually read `recent 0/3 ⚠ stale`, cushion −185. The same error made the size look safe: the quoted
+`median window instabuy volume: 210,763 u` was all-day, while the target window holds 7,061 — a 2,000-unit
+lot was 28% of the real pool, not the ~1–2% claimed (≈30× off). Root cause is structural, not a missing
+rule: `--profile` derives the peak/dip windows via `hourProfile` **completely independently** of whatever
+`--window`/`--ask` the same invocation scores, and nothing cross-checked them, so two unrelated
+computations rendered into one stdout stream and read as one coherent verified window.
+
+Shipped (all in `pipeline/commands/read-window-range.mjs`; `js/windowread.mjs` unchanged, read-only reuse):
+- **`--window peak` / `--window dip`** literals, resolved PER ITEM off that item's own `hourProfile` —
+  removes the hand-transcription step (read `20:00–23:00` off the profile, retype it as `--window 20-23`)
+  that was the mechanical origin. Degrades loudly to the fixed default when the profile is too thin.
+  Explicit `H-H` is unchanged.
+- **In-window scoring on the `--profile` DIP/PEAK lines** (`↳ in-window:`): each derived window's own
+  level reach + the pool competing *in those hours*, and — when `--ask`/`--bid` was passed — that level's
+  in-window reach plus its **signed gap to the window's own level**. The incident was an ask quoted
+  +156 above the peak's own printed level; that gap is now a printed number. Same
+  `windowStats`+`recencySplit` pattern `diurnalTimedLap` §2 already uses.
+- **`ALL-DAY` label** on any window spanning every hour, and a **divergence warning** when an explicit
+  `--window` disagrees with `--profile`'s peak/dip.
+- **Volume-pool lines restate their window** (`median instabuy volume IN <window>`) instead of relying on
+  a header printed dozens of lines earlier.
+- **Combined fade+pace headline**: `cushion FADING`/negative *and* `pace lagging` now print one
+  price-to-sell-EARLY line above the detail. Both fired in the incident and were argued past
+  individually. Inform-only — nothing gates, the named-tripwire override is unchanged.
+
+One `hourProfile` per item is now hoisted and shared (was computed twice). Honesty: n=1 — the tool-output
+changes are justified by making a real misread impossible to repeat; no threshold or gate was added, and
+the larger collapsed-flag redesign was investigated and declined as unjustified at this sample size.
+
 ### Floor-aware soft-buy cue — @floor consults floorCeilingTrack, not a re-derived slope (0.71.0, salvage lane, 2026-07-25)
 Salvaged the `soft-buy-cue` worktree (branch `e310530`, ~4 days bitrotted). Re-implemented onto
 current `main` rather than force-merging: the branch was based on the pre-R6 `pushTrajectory`, which

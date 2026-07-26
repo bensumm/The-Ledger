@@ -880,7 +880,15 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     re-anchor the `.capital-state.json` starting point — the total-capital denominator `watch-positions.mjs`'s
     SUMMARY reads),
     `read-window-range.mjs` (né `nightlows.mjs` — time-of-day
-    range read / overnight fill-realism scoring; a scored `--bid`/`--ask`/`--exit` now reports its
+    range read / overnight fill-realism scoring; **`--window` accepts the literals `peak`/`dip`**
+    (2026-07-26) resolved PER ITEM off that item's own `hourProfile`, so a peak/dip verification never
+    depends on hand-transcribing hours — **`--window 0-23` is a legal 24-hour window, NOT a "no scoping"
+    sentinel**, and scoring an exit against it while pitching a narrower window is what cost a real trade
+    (CHANGELOG 2026-07-26); a full-day window self-labels `ALL-DAY`, an explicit `--window` that disagrees
+    with `--profile`'s peak/dip prints a divergence warning, the volume-pool lines restate their own window,
+    and the `--profile` DIP/PEAK lines carry an `↳ in-window:` read — that window's own level reach, the pool
+    competing in those hours, and (with `--ask`/`--bid`) your level's in-window reach + signed gap to the
+    window's own level; a scored `--bid`/`--ask`/`--exit` now reports its
     PERCENTILE PLACEMENT in the trailing daily-low/high distribution (AC4a — `js/windowread.mjs`
     `placement`, the price→percentile inverse of `quantLow`/`quantHigh`; n stated) BESIDE the reach
     count — purely descriptive, no "safe ≈ pXX" threshold (AC3's calibrated safe quantile did NOT ship,

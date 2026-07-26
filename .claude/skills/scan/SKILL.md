@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.86
+version: 1.87
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -581,8 +581,21 @@ This is the tribal layer the script can't do — apply ALL of these:
     checks — cheap (no new fetch beyond the archive), each catching a different failure mode
     already seen this session:
     ```
-    node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window <hours> --profile --json --out pipeline/.cache/last-report/verify.json
+    node pipeline/commands/read-window-range.mjs "<item>" --ask <sell> --bid <buy> --exit <ask> --window peak --profile --json --out pipeline/.cache/last-report/verify.json
     ```
+    0. **`--window peak` / `--window dip` — the literals, never hand-typed hours (2026-07-26).**
+       _(enforced: `read-window-range.mjs` resolves them per-item off that item's own `hourProfile`)_
+       **`--window 0-23` is a legal 24-hour window, NOT a "no scoping" sentinel** — reach, placement,
+       cushion AND the competing volume pool all then describe the whole day. This is the WINDOW-CLEAR
+       PRICING step's "days-reach ≠ lap-clear" trap in its most literal form, and it cost a real trade:
+       a Divine super combat exit verified `14/14 days, recent 3/3, p0` all-day while its 20:00–23:00
+       peak read `recent 0/3 ⚠ stale`, sized against a 210,763-unit all-day pool when the window held
+       7,061 (≈30× off). A full-day window now self-labels `ALL-DAY`; an explicit `--window` that
+       disagrees with `--profile`'s peak/dip prints a divergence warning; and the `--profile` block
+       scores each window against **its own hours** (`↳ in-window:` — the window's reach, its pool,
+       and your `--ask`/`--bid`'s in-window reach + signed gap to the window's own level). **An ask
+       above the peak window's own printed level is not a window-clear price** — that gap is now
+       printed as a number, so quote it rather than eyeballing two separate lines.
     1. **`--ask <sell>` / `--bid <buy>` (percentile + reach, AC4a).** Read both numbers printed,
        not just the day-count: `reached N/14d · recent M/3 · placement pXX of the 14-day daily-
        HIGH/LOW distribution`. A level can have solid N/14 reach and still be an aggressive ask if
