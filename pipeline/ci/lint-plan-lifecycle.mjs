@@ -9,7 +9,7 @@
  * while, so failing CI on it would fight the natural editing cadence. NEVER wired into checks.yml.
  *
  * TWO reports:
- *   C10 — for each root `PLAN-*.md` (excluding `PLAN.md`), read its Status line and flag it `review`
+ *   C10 — for each `plans/PLAN-*.md` (excluding the root `PLAN.md`), read its Status line and flag it `review`
  *         when the status reads as fully-complete (SHIPPED|DONE|LANDED) with NO stated reason to still
  *         exist (PARTIAL|DEFERRED|PENDING|AWAITING|DRAFT) — i.e. a doc past its fold-in point.
  *   C11 — SKILL_FILES drift: which `.claude/skills/<name>/SKILL.md` exist on disk but are NOT in
@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path';
 import { SKILL_FILES } from './lint-skills.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');   // pipeline/ci -> repo root
+const PLANS_DIR = join(ROOT, 'plans');   // per-topic PLAN-*.md live under plans/ (moved off the root 2026-07-26)
 
 // A status reads COMPLETE if it carries a done-word, and STILL-OPEN if it carries any marker of
 // remaining/deferred work. The open vocabulary is broader than the plan's illustrative
@@ -54,14 +55,17 @@ export function classifyStatus(statusText) {
   return COMPLETE_RE.test(statusText) && !OPEN_RE.test(statusText) ? 'review' : 'ok';
 }
 
-// Scan repo root for PLAN-*.md (excluding PLAN.md itself). Returns [{ path, statusLine, flag }].
-export function scanPlans(root = ROOT) {
+// Scan the plans/ dir for PLAN-*.md (excluding PLAN.md, which stays at the repo root). Returns
+// [{ path, statusLine, flag }]. `dir` is overridable for the fixture test; a missing dir → [].
+export function scanPlans(dir = PLANS_DIR) {
   const out = [];
-  for (const name of readdirSync(root)) {
+  let names = [];
+  try { names = readdirSync(dir); } catch { return out; }   // no plans/ dir → nothing to report
+  for (const name of names) {
     if (!/^PLAN-.+\.md$/.test(name)) continue;
     if (name === 'PLAN.md') continue;
     let statusLine = null;
-    try { statusLine = extractStatus(readFileSync(join(root, name), 'utf8')); } catch { /* unreadable → null */ }
+    try { statusLine = extractStatus(readFileSync(join(dir, name), 'utf8')); } catch { /* unreadable → null */ }
     out.push({ path: name, statusLine, flag: classifyStatus(statusLine) });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
@@ -94,7 +98,7 @@ function main() {
     return;
   }
 
-  console.log(`PLAN-*.md lifecycle — ${plans.length} plan doc(s) at repo root (excluding PLAN.md):`);
+  console.log(`PLAN-*.md lifecycle — ${plans.length} plan doc(s) in plans/ (excluding the root PLAN.md):`);
   for (const p of plans) {
     const mark = p.flag === 'review' ? '⚑ REVIEW' : '·';
     console.log(`  ${mark}  ${p.path} — ${p.statusLine ?? '(no Status line)'}`);

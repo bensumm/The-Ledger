@@ -126,9 +126,11 @@ deliberate):**
   direct-push under the admin bypass (parallel lanes still use worktree subagents,
   hand-serialized) until `gh auth refresh` enables the PR path. The historical plan docs
   (`PLAN-2/3/4/5.md`, and the folded `PLAN-LOCAL-WATCH.md`/`PLAN-LOG-HARDENING.md`) are
-  **deleted** — full text via `git show <sha>:PLAN-4.md` (etc.). A per-topic `PLAN-*.md` is
-  folded into `PLAN.md` and deleted the moment its last chunk ships — don't leave shipped plan
-  files at the repo root.
+  **deleted** — full text via `git show <sha>:PLAN-4.md` (etc.; for the pre-2026-07-26 shas these were
+  at the repo root, so no `plans/` prefix). A per-topic `PLAN-*.md` lives in **`plans/`** (moved off the
+  root 2026-07-26) and is folded into `PLAN.md` + deleted the moment its last chunk ships — `PLAN.md`
+  itself (the master plan + scoreboard) stays at the root; don't leave a shipped per-topic plan behind
+  in `plans/`.
 - **Per-item "recommend price adjustment" button** on the Trends page: pull fresh GE
   state + item info on demand and recommend a price tweak (ties into patient pricing
   and eventually the fills pipeline's realized-vs-suggested calibration; tracked in

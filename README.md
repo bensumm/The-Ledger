@@ -726,6 +726,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   KEPT at 500k — Ben, real NET-throughput floor; `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
   `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
   read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
+- `plans/` — the per-topic `PLAN-*.md` working docs (moved off the repo root 2026-07-26). Each is a
+  transient planning doc that folds into the root `PLAN.md` (the master plan + scoreboard) and is deleted
+  the moment its last chunk ships (`docs/PLANNING.md` lifecycle). `plans/PLAN-*.md` is scanned by
+  `pipeline/ci/lint-plan-lifecycle.mjs` for docs past their fold-in point; `PLAN.md` itself stays at root.
 - `docs/` — repo docs that aren't app/pipeline reference:
   - `PLANNING.md` — the planning process itself (required plan sections, chunk design rules, the
     skills improvement loop, anti-patterns; written 2026-07-08, follow it when producing any

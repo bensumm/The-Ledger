@@ -12,8 +12,8 @@ itself proves wrong, fix it HERE (reconciliation, not append — the CLAUDE.md r
    what are the gaps, what would differ built from scratch. Verify every code claim against the
    actual code (file:line) before asserting it — plans built on unverified claims rot instantly.
 3. **Fold into `PLAN.md` at execution time** — the single master plan + scoreboard. The draft is
-   then dead; per-topic `PLAN-*.md` files at the repo root are folded + deleted the moment their
-   last chunk ships.
+   then dead; per-topic `PLAN-*.md` files live in **`plans/`** (moved off the root 2026-07-26) and are
+   folded + deleted the moment their last chunk ships. `PLAN.md` itself stays at the repo root.
 4. **Execute** per PLAN.md's Executor rules + dispatch model (coordinator + Opus subagents,
    worktree lanes only for parallel work, hand-serialized landing).
 
