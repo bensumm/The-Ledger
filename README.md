@@ -268,6 +268,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
   `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never
   rendered). Fixture-pinned `pipeline/test/amplitudescreen.test.mjs`),
+  `reverseflip.mjs` (PLAN-REVERSE-FLIP RF1 — the PURE, DOM-free gate/edge math for the `--mode reverse`
+  HARVEST-AN-OWNED-ITEM flip-niche, i.e. sell an item you already own into the PEAK and rebuy at the DIP,
+  capital-free: `invertedRegimeGate` (re-maps `js/termstructure.mjs` `classifyTrajectory`'s shape with the
+  read INVERTED — `rising`/`elevated`→reject (sell now, rebuy HIGHER tomorrow = loses by construction),
+  `knife`/`oscillating`/`based`/`flat`→pass (`knife` IS the "falling" case the strategy wants — there is no
+  `falling`/`cooling` shape, that was the plan's fixed vocab bug), `unknown`/missing→caution) / `reverseFlipEdge`
+  (`beRebuy = sellRef − tax(sellRef)` via the canonical `js/money-math.js` `tax()`, NOT a ×0.98 approx —
+  Ruling §1; the peak→dip swing + a `REVERSE_MIN_SWING_PCT` amplitude-floor flag; direction-agnostic) /
+  `reverseFlipGate` (composes regime + swing floor + a REBUY-LEG-WEIGHTED liquidity check: a thin SELL leg is
+  caution-not-reject (live demand clears the sell — the 2026-07-24 Ancestral-hat anchor), a thin REBUY leg is
+  the binding risk → reject; degrade-to-caution, never throws). Imports only `tax`; consumed by RF2's
+  `screen-flip-niches.mjs`/`gatecandidates.mjs` wiring (`reverseFlipGate` marked `@provisional-api` until
+  then). All thresholds NAMED PLACEHOLDERS (n≈0). NOT app-imported at ship → no APP_VERSION bump. Fixture-pinned
+  `pipeline/test/reverseflip.test.mjs`),
   `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
   calculator off Chunk A's `loadDailyRangeBulk` daily-range data: `intradayDailyRange(dayRanges)` (the
   robust CENTRAL after-tax intraday range = the MEDIAN of per-day `netMargin(lo,hi)` across the coverage

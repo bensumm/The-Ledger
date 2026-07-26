@@ -10,6 +10,35 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### PLAN-REVERSE-FLIP RF1 — `js/reverseflip.mjs`, the pure gate/edge module (js/, node-only, 2026-07-25)
+The reverse-flip strategy's gate/edge MATH — sell an item you already OWN into the peak, rebuy at the dip,
+capital-free. A PURE, DOM-free/fetch-free/fs-free ESM mirroring `js/valuescreen.mjs`/`js/amplitudescreen.mjs`;
+importable by node (RF2 wires it into `screen-flip-niches.mjs`/`gatecandidates.mjs`) and later the app. NO
+app import yet at ship, so per the RF1 bookkeeping NO `APP_VERSION` bump. Three exports:
+- **`invertedRegimeGate(trajectory)`** — re-maps `js/termstructure.mjs` `classifyTrajectory`'s shape with
+  the read INVERTED (this is a re-mapping of the existing shape, not a new trajectory computation): `rising`
+  → reject (sell now, rebuy at a HIGHER floor tomorrow = loses by construction), `elevated` → reject (top of
+  range, same buy-back-higher risk), `knife`/`oscillating`/`based`/`flat` → pass, `unknown`/missing/
+  unrecognized → caution (degrade, never throws). **The load-bearing fix (Ruling §7): `knife` IS the
+  "falling" case the strategy wants** — `classifyTrajectory` emits `knife|oscillating|based|rising|elevated|
+  flat|unknown` and NEVER `falling`/`cooling`, so the plan's original `case 'falling'` would have matched
+  nothing and silently never passed on a real decline. There is deliberately NO `falling`/`cooling` branch;
+  the test pins `knife → pass` as the anti-regression.
+- **`reverseFlipEdge(ctx)`** — `beRebuy = sellRef − tax(sellRef)` via the canonical `js/money-math.js`
+  `tax()` (floored, 5m-capped — Ruling §1, NOT a "×0.98" approximation: 57m sell → 1.14m tax → 55.86m
+  beRebuy), plus the peak→dip swing measure + a `REVERSE_MIN_SWING_PCT` (=0.03, PLACEHOLDER n≈0)
+  amplitude-floor flag. Direction-agnostic; degrades to `{hasData:false}` on a missing/invalid sellRef.
+- **`reverseFlipGate(ctx)`** — composes the regime gate + the swing floor + a REBUY-LEG-WEIGHTED liquidity
+  check into one `{decision, reasons, regime, edge}` (severity only downgrades pass→caution→reject; never
+  throws). The liquidity asymmetry is the strategy's core honesty (2026-07-24 Ancestral-hat Anchor
+  incident): a thin SELL leg is **caution-not-reject** (a wanted item's sell clears on live demand), a thin
+  REBUY leg is the **binding risk → reject** (a deep rebuy bid can strand while you're out of the position).
+  `REVERSE_MIN_LEG_VOL` (=50/d) is a PLACEHOLDER (n≈0).
+- **Acceptance:** `pipeline/test/reverseflip.test.mjs` (21 assertions, TZ-hermetic) — the full regime
+  mapping incl. the `knife→pass` anti-regression pin, the `tax()`-based beRebuy (+ the 5m cap), and the
+  sell-leg-caution vs rebuy-leg-reject liquidity asymmetry. `reverseFlipGate` is marked `@provisional-api`
+  (RF2 is its consumer) so the dead-export guard passes while it's node-only.
+
 ### PLAN-REVERSE-FLIP RF0 — owned-item + cycle-state substrate (pipeline/root-data, 2026-07-25)
 The FOUNDATION chunk of the reverse-flip strategy (harvest an item you already OWN: sell into the peak,
 rebuy at the dip, capital-free). Pure data substrate + CLIs — NO screen/gate logic (that's RF1/RF2), NO
