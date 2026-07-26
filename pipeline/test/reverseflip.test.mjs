@@ -18,7 +18,11 @@ import { tax } from '../../js/money-math.js';
 import {
   invertedRegimeGate, reverseFlipEdge, reverseFlipGate,
   REVERSE_MIN_SWING_PCT, REVERSE_MIN_LEG_VOL,
+  // RF6 — thin big-ticket predicate + display-guard helpers
+  isThinBigTicket, reverseListBand, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote,
+  THIN_VOL_FLOOR, SPREAD_MATERIAL_PCT, SPREAD_RARE_FRAC,
 } from '../../js/reverseflip.mjs';
+import { BIG_TICKET_GP } from '../../js/quotecore.js';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -179,6 +183,92 @@ ok('never throws on an empty ctx (fully degraded) — caution, structured decisi
   assert.equal(g.decision, 'caution');
   assert.equal(g.edge.hasData, false);
   assert.equal(g.regime.decision, 'caution');
+});
+
+// --- RF6 — isThinBigTicket predicate (the ONE switch every thin-item display guard reads) -------------
+// A synthetic computeQuote `row` carries only the fields the predicate reads: guide + volDay.
+const rowOf = (guide, volDay) => ({ guide, volDay });
+
+ok('isThinBigTicket: a THIN big-ticket (guide 30m, 135/d) → true', () => {
+  assert.equal(isThinBigTicket(rowOf(30_000_000, 135)), true);
+});
+
+ok('isThinBigTicket: a LIQUID big-ticket (guide 20m, thousands/d) → false (fails the liquidity-thin AND)', () => {
+  assert.equal(isThinBigTicket(rowOf(20_000_000, 5000)), false, `THIN_VOL_FLOOR=${THIN_VOL_FLOOR}: 5000/d is not thin`);
+});
+
+ok('isThinBigTicket: a THIN CHEAP item (guide 1m, 50/d) → false (not big-ticket)', () => {
+  assert.ok(1_000_000 < BIG_TICKET_GP, 'guard sanity: 1m is under the 10m big-ticket line');
+  assert.equal(isThinBigTicket(rowOf(1_000_000, 50)), false);
+});
+
+ok('isThinBigTicket: the tranche override — a big-ticket item clearing ≤2 units is thin even if vol is unknown', () => {
+  assert.equal(isThinBigTicket(rowOf(30_000_000, null), { tranche: 1 }), true);
+  assert.equal(isThinBigTicket(rowOf(30_000_000, null)), false, 'no tranche, no vol ⇒ degrade to NOT thin (conservative)');
+});
+
+ok('isThinBigTicket: null/garbage row → false, never throws', () => {
+  assert.equal(isThinBigTicket(null), false);
+  assert.equal(isThinBigTicket({}), false);
+  assert.equal(isThinBigTicket(rowOf(null, 50)), false);
+});
+
+// --- RF6 — reverseListBand / reverseListBandCell (RANGE-not-a-point; byte-identical degrade) ----------
+ok('reverseListBand: a real reachable band → {lo,hi,center} bracketing sellRef', () => {
+  const b = reverseListBand(57_000_000, { baseHigh: 55_000_000, ask: 58_000_000 });
+  assert.equal(b.center, 57_000_000);
+  assert.equal(b.lo, 55_000_000);
+  assert.equal(b.hi, 58_000_000);
+});
+
+ok('reverseListBand: widens to CONTAIN sellRef when it falls outside the reachable band', () => {
+  const b = reverseListBand(59_000_000, { baseHigh: 55_000_000, ask: 58_000_000 });
+  assert.equal(b.lo, 55_000_000);
+  assert.equal(b.hi, 59_000_000, 'sellRef above the band top widens hi');
+});
+
+ok('reverseListBand: no reachable band, or degenerate → null (caller keeps the single number)', () => {
+  assert.equal(reverseListBand(57_000_000, null), null);
+  assert.equal(reverseListBand(57_000_000, {}), null);
+  assert.equal(reverseListBand(null, { baseHigh: 55_000_000, ask: 58_000_000 }), null);
+});
+
+ok('reverseListBandCell BYTE-IDENTICAL degrade: no band ⇒ the exact single-number render the table uses', () => {
+  // The pre-RF6 cell is `fmtP(e.sellRef)`; with no reachable band the cell helper must reproduce it verbatim.
+  const fmtP = n => `${(n / 1e6).toFixed(2)}m`;
+  assert.equal(reverseListBandCell(57_000_000, null, { fmt: fmtP }), fmtP(57_000_000));
+  assert.equal(reverseListBandCell(57_000_000, {}, { fmt: fmtP }), '57.00m');
+  // and WITH a band → the range form
+  assert.equal(reverseListBandCell(57_000_000, { baseHigh: 55_000_000, ask: 58_000_000 }, { fmt: fmtP }), '~55.00m–58.00m');
+});
+
+// --- RF6 — askSpreadFlag / askSpreadNote (traded-mid vs standing-ask; thin-only) -----------------------
+ok('askSpreadFlag: a lone ask materially above the guide AND rarely reached → fires', () => {
+  const flag = askSpreadFlag({ guide: 55_000_000, askLevel: 58_000_000, reachedDays: 2, nDays: 14 });   // +5.5%, 2/14≈0.14
+  assert.ok(flag, 'expected the flag to fire');
+  assert.ok(flag.abovePct >= SPREAD_MATERIAL_PCT);
+  assert.ok(flag.frac <= SPREAD_RARE_FRAC);
+  assert.equal(askSpreadNote(flag, { fmt: n => `${(n / 1e6).toFixed(1)}m` }), 'trades ~55.0m; lone asks to 58.0m, reached 2/14d');
+});
+
+ok('askSpreadFlag: an ask reached OFTEN (frequently traded) → null (not a lone ask)', () => {
+  assert.equal(askSpreadFlag({ guide: 55_000_000, askLevel: 58_000_000, reachedDays: 12, nDays: 14 }), null);
+});
+
+ok('askSpreadFlag: an ask NOT materially above the guide → null', () => {
+  assert.equal(askSpreadFlag({ guide: 55_000_000, askLevel: 55_500_000, reachedDays: 1, nDays: 14 }), null);   // +0.9% < floor
+});
+
+ok('askSpreadNote(null) → null; askSpreadFlag degrades on missing data, never throws', () => {
+  assert.equal(askSpreadNote(null), null);
+  assert.equal(askSpreadFlag({}), null);
+  assert.equal(askSpreadFlag({ guide: 55_000_000, askLevel: 58_000_000, reachedDays: null, nDays: null }), null);
+});
+
+// --- RF6 — rebuyStrandNote (the reverse-flip-specific rebuy-reliability caution) -----------------------
+ok('rebuyStrandNote: carries the vol/d; degrades to "thin book" when vol is unknown', () => {
+  assert.equal(rebuyStrandNote({ volDay: 135, fmt: String }), '⚠ rebuy may strand (thin, 135/d)');
+  assert.equal(rebuyStrandNote({ volDay: null }), '⚠ rebuy may strand (thin, thin book)');
 });
 
 console.log(`\nreverseflip.mjs: ${pass} assertions passed.`);

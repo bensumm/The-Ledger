@@ -31,6 +31,34 @@ doctrine, the same BANKED mechanism boss drops already use — `reconstruct.mjs`
 - No `APP_VERSION` bump (pipeline-only, node-only, read-only). Fixture-pinned + TZ-hermetic acceptance:
   `pipeline/test/reconcile-reverse-flip.test.mjs`.
 
+### PLAN-REVERSE-FLIP RF6 — thin big-ticket read handling (pipeline, console-only, 2026-07-25)
+Makes the thin big-ticket case honest. The reverse-flip population IS mostly thin owned gear (the Ancestral
+hat: guide ~55m, ~135–178/d, tranche ~1), and Ruling §6 records why the standard reads mislead on it — a
+lone standing ask reached 2/14d looks like "the price", the 3-day hourly slope whipsaws, and a point list
+recommendation is false precision on an item that wobbles 54–58m intraday. RF6 is a shared predicate + four
+INFORM-ONLY, THIN-ITEM-ONLY display guards. Nothing gates, drops, or moves a quoted number. **No `APP_VERSION`
+bump:** the only `js/` module touched, `js/reverseflip.mjs`, is pipeline-only-consumed (verified — its real
+importers are `pipeline/lib/gatecandidates.mjs`, `pipeline/commands/screen-flip-niches.mjs`, and its test;
+NOT in `index.html`'s module graph).
+- **`js/reverseflip.mjs`** — the ONE thin predicate `isThinBigTicket(row)` (big-ticket `guide ≥ BIG_TICKET_GP`
+  (10m) AND liquidity-thin — clearable tranche ≤ `THIN_TRANCHE_UNITS` (2), OR min-side `vol/d < THIN_VOL_FLOOR`
+  (500)), plus the guard helpers `reverseListBand`/`reverseListBandCell` (RANGE-not-a-point off the reachable
+  band), `askSpreadFlag`/`askSpreadNote` (traded-mid vs a lone rarely-reached standing ask), `rebuyStrandNote`
+  (the reverse-flip-specific rebuy-may-strand caution), and `THIN_DRIFT_DAYS=7`. All thresholds NAMED
+  PLACEHOLDERS (n≈0). Now imports `BIG_TICKET_GP` from `js/quotecore.js`.
+- **`pipeline/commands/screen-flip-niches.mjs` `runReverseMode`** — wires the guards into the `--mode reverse`
+  table: a THIN row's Sold-ref/Peak cell becomes a band `~X–Y`, and a thin-item "Thin big-ticket reads" note
+  block (7-day `hourlyDriftNote`, the ask-spread flag when it fires, the rebuy-strand caution) prints under the
+  table. All reads reuse the already-fetched 1h series (`hourlyDrift`/`windowStats`/`reachableBand`/`reachedDays`)
+  — **no new fetch**. Every branch is gated on `isThinBigTicket`, computed thin-only, so a liquid (non-thin) row
+  and an all-liquid pool render BYTE-IDENTICALLY to pre-RF6 — verified empirically by diffing the liquid
+  Primordial-boots row against the stashed pre-RF6 binary (identical) while the thin hat/Armadyl rows gained the
+  band + notes.
+- **`pipeline/test/reverseflip.test.mjs`** — RF6 fixtures: `isThinBigTicket` (thin big-ticket→true; liquid
+  big-ticket→false; thin cheap→false; the tranche override; null-safe), the byte-identical `reverseListBandCell`
+  degrade (no band ⇒ the exact single-number render), the range form, `askSpreadFlag`/`askSpreadNote` fire/skip,
+  and `rebuyStrandNote`. TZ-hermetic; green under both local and `TZ=UTC`.
+
 ### PLAN-REVERSE-FLIP RF2 — `--mode reverse`, the console surface (pipeline, console-only, 2026-07-25)
 Wires RF0's owned-item stores + RF1's gate into a runnable console screen. `--mode reverse` HARVESTS an
 item you already OWN — sell into the diurnal/multi-day PEAK, rebuy at the DIP, capital-free. It is an

@@ -380,6 +380,24 @@ construction). INFORM-ONLY throughout — it surfaces candidates + the inverted 
 Ben places every offer. An empty `owned-items.json` prints a clean "no reverse-flip candidates" message and
 exits 0 (never throws).
 
+**Thin big-ticket read handling (RF6, PLAN-REVERSE-FLIP, Ruling §6, 2026-07-25).** The reverse-flip
+population IS mostly thin big-ticket owned gear (the Ancestral hat: guide ~55m, ~135–178/d, tranche ~1),
+and the STANDARD reads mislead on exactly that shape — a lone standing ask reached only 2/14d looks like
+"the price"; the 3-day hourly slope whipsaws on a thin book; a point recommendation is false precision on
+an item that wobbles 54–58m intraday. RF6 adds INFORM-ONLY, THIN-ITEM-ONLY display guards, all gated on the
+ONE shared predicate `isThinBigTicket(row)` (big-ticket `guide ≥ BIG_TICKET_GP` (10m) AND liquidity-thin —
+a clearable tranche ≤ `THIN_TRANCHE_UNITS` (2), OR min-side `vol/d < THIN_VOL_FLOOR` (500)): (1) the
+Sold-ref/Peak cell becomes a RANGE `~X–Y` off the pressure-reachable band (`reverseListBandCell`), not a
+false-precise point; (2) a longer 7-day drift window (`THIN_DRIFT_DAYS`, via the `--days`-honest
+`hourlyDrift`/`hourlyDriftNote`); (3) a traded-mid vs standing-ask flag (`trades ~<guide>; lone asks to
+<peak>, reached <N/14d>`, `askSpreadFlag`) when a lone ask sits materially above the traded guide and is
+rarely reached; (4) the reverse-flip-specific `⚠ rebuy may strand (thin, <vol/d>)` caution (`rebuyStrandNote`
+— the rebuy leg is the unreliable one). **Every threshold is a NAMED PLACEHOLDER (n≈0).** Each guard is a
+thin-item-only branch — a non-thin (liquid) reverse row renders BYTE-IDENTICALLY to pre-RF6 (empirically
+verified). Nothing here gates, drops, or moves a quoted number; it only reframes the read. The predicate +
+helpers live in `js/reverseflip.mjs` (pipeline-only-consumed; RF4 will reuse them on the quote/`/schedule`/
+`/book` surfaces).
+
 **The reach-vs-margin quantile DIAL (`--amp-ask-q` / `--amp-bid-q`, PLAN-OSCILLATION-CYCLE F-E).** The
 peak-ask / trough-bid quote from the daily-high/low quantiles `AMP_ASK_Q` / `AMP_BID_Q` — both `0.5` by
 default (the median peak/trough; Ben's KEPT board). `amplitudeRanges(stats, live, { askQ, bidQ })` exposes
@@ -622,8 +640,10 @@ any pick a different rule already caught (mirage top, sell unreliable, …), is 
 the *expected* shape on a patient/value thesis, not a warning. INFORM-ONLY, n≈0, HEURISTIC throughout —
 this never gates a gate, never moves a quoted number, never feeds a cut/alert input; the only place a
 drift number moves a DISPLAYED label is the digest relabel above, and it's always shown, not hidden. (A
-reverse-flip fold onto owned-item surfacing is PLANNED — PLAN-HOURLY-3DAY-TREND HT4 — but deferred until
-PLAN-REVERSE-FLIP ships; `hourlyDriftNote` is already a shared export ready for that call site.)
+reverse-flip fold onto owned-item surfacing SHIPPED via PLAN-REVERSE-FLIP RF6 — the `--mode reverse` table's
+thin big-ticket rows carry the shared `hourlyDriftNote`, defaulting to the longer 7-day window since a thin
+book's 3-day slope whipsaws; the broader HT4 reverse read-fold on the quote/`/schedule`/`/book` surfaces
+lands with RF4.)
 
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p% · list at

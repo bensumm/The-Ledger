@@ -89,7 +89,7 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, RECENCY_DIVERGE, RECENT_NIGHTS, hourlyDriftNote } from '../../js/windowread.mjs';   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 — hourlyDriftNote, the shared compact note renderer used to enrich the top-X digest picks
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, hourlyDriftNote } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 — hourlyDriftNote, the shared compact note renderer used to enrich the top-X digest picks
 import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // HT3 — the per-hour day-over-day slope read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe)
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
@@ -110,6 +110,7 @@ import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight,
 import { loadOwned, computeOwnedQty } from '../lib/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
 import { loadReverseFlip, reverseFlipFor } from '../lib/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
 import { loadHoldThesis } from '../lib/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
+import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote, THIN_DRIFT_DAYS } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX } from '../lib/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
@@ -2133,6 +2134,10 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
 // read (rising/elevated = BAD; knife/oscillating = the wanted "sell high, rebuy low"). Console-only: it never
 // writes screen.json and is EXCLUDED from --publish by construction (this branch returns before the publish
 // path). PROVISIONAL n≈0 — inform-only, never sizes/enters; Ben places every offer.
+// RF6 (thin big-ticket read handling): a THIN row (isThinBigTicket off row.guide/volDay) gets a RANGE
+// Sold-ref/Peak cell (band, not a point) + a "Thin big-ticket reads" note block (7-day hourlyDrift, the
+// traded-mid-vs-lone-ask flag, the rebuy-may-strand caution). All thin-item-ONLY & inform-only — a liquid
+// row renders byte-identically. The extra reads reuse the already-fetched ts1h (no new fetch).
 const REVERSE_HEADERS = ['Item', 'Live', 'Regime (inverted read)', 'Sold-ref/Peak', 'BE-rebuy', 'Swing', 'Gate'];
 
 // the inverted-regime cell text: shape + WHY it's good/bad for a reverse-flip (sell high, rebuy low).
@@ -2198,7 +2203,10 @@ async function runReverseMode(realLog) {
     // owned-qty fold (owned-sourced items carry a seed): informational only, never filters.
     let qty = null;
     if (p.source === 'owned') { try { qty = computeOwnedQty({ id, seedQty: p.seedQty, seedTs: p.seedTs }, fillsEvents); } catch { qty = null; } }
-    infoById[id] = { live: row ? (row.mid ?? row.quickBuy ?? row.quickSell ?? null) : null, qty, cycle: reverseFlipFor(rfState, id) };
+    // RF6 — carry `row` + `ts1h` forward so the render pass can run the THIN-ITEM-ONLY display guards
+    // (isThinBigTicket off row.guide/row.volDay; hourlyDrift/windowStats reuse the already-fetched ts1h —
+    // no new fetch). A liquid row never touches these, so its render is byte-identical to pre-RF6.
+    infoById[id] = { live: row ? (row.mid ?? row.quickBuy ?? row.quickSell ?? null) : null, qty, cycle: reverseFlipFor(rfState, id), row, ts1h };
   }
 
   // route through the shared gate (RF2 §5 — gateCandidates dispatches gate:'reverse' → gateReverseFlipCandidates).
@@ -2215,6 +2223,10 @@ async function runReverseMode(realLog) {
   const rank = { pass: 0, caution: 1 };
   surfaced.sort((a, b) => (rank[a.gate.decision] - rank[b.gate.decision]) || ((b.edge.swingPct ?? -1) - (a.edge.swingPct ?? -1)) || (a.id - b.id));
 
+  // RF6 — THIN-ITEM-ONLY display guards. Each is gated on isThinBigTicket(row); a liquid (non-thin) row
+  // takes NONE of these branches and renders byte-identically to pre-RF6 (the zero-ripple contract the
+  // acceptance pins). All inform-only, n≈0 — nothing here gates, drops, or moves a quoted number.
+  const thinNotes = [];   // per-item note lines, printed under the table ONLY for thin items
   const rows = surfaced.map(c => {
     const info = infoById[c.id] || {};
     const e = c.edge || {};
@@ -2222,11 +2234,44 @@ async function runReverseMode(realLog) {
     const swingCell = (e.swingPct != null) ? `${(e.swingPct * 100).toFixed(1)}%` : '—';
     const reasons = c.gate.reasons && c.gate.reasons.length ? ` (${c.gate.reasons.join(', ')})` : '';
     const cycleNote = info.cycle && info.cycle.state ? ` · cycle:${info.cycle.state}` : '';
+
+    const row = info.row || null;
+    const thin = isThinBigTicket(row);   // false when row is null / liquid / not big-ticket → all guards skip
+
+    // Sold-ref/Peak cell — the EXISTING single-number render by default; a THIN item shows a RANGE (band,
+    // not a point) off the pressure-reachable band. reachable is computed thin-only (reuses the in-hand
+    // ts1h — no new fetch), so the liquid path never runs windowStats/reachableBand at all.
+    let sellCell = e.sellRef != null ? fmtP(e.sellRef) : '—';
+    let reachable = null;
+    if (thin) {
+      const ast = info.ts1h ? windowStats(info.ts1h, { nights: 14, wStart: 0, wEnd: 0 }) : null;
+      reachable = ast ? reachableBand(ast) : null;
+      if (e.sellRef != null) sellCell = reverseListBandCell(e.sellRef, reachable, { fmt: fmtP });
+
+      // Guard: longer (7d) drift window on thin (the 3-day slope whipsaws on a thin book). Reuses
+      // hourlyDrift/hourlyDriftNote over the already-fetched ts1h — the label states the window truth.
+      if (info.ts1h) {
+        const drift = hourlyDrift(info.ts1h, { days: THIN_DRIFT_DAYS, ask: e.sellRef ?? null });
+        const dnote = hourlyDriftNote(drift, { ask: e.sellRef ?? null, fmt: fmtP, days: THIN_DRIFT_DAYS });
+        if (dnote) thinNotes.push(`- ${c.name}: ${dnote}`);
+      }
+      // Guard: traded-mid vs standing-ask spread flag — a lone optimistic ask rarely reached, off the
+      // reach data already computed. The ask level is the patient peak (e.sellRef); the traded guide is row.guide.
+      if (ast && row && e.sellRef != null && row.guide != null) {
+        const flag = askSpreadFlag({ guide: row.guide, askLevel: e.sellRef, reachedDays: reachedDays(ast.his, e.sellRef), nDays: ast.his.length });
+        const snote = askSpreadNote(flag, { fmt: fmtP });
+        if (snote) thinNotes.push(`- ${c.name}: ${snote}`);
+      }
+      // Guard: reverse-flip rebuy-reliability caution (the reverse-flip-specific payload — the rebuy leg
+      // is the unreliable one on a thin item). Inform-only; never blocks Ben placing the bid.
+      thinNotes.push(`- ${c.name}: ${rebuyStrandNote({ volDay: row ? row.volDay : null, fmt: fmtP })}`);
+    }
+
     return [
       nameCell,
       info.live != null ? fmtP(info.live) : '—',
       reverseRegimeCell(c.regime),
-      e.sellRef != null ? fmtP(e.sellRef) : '—',
+      sellCell,
       e.beRebuy != null ? `<${fmtP(e.beRebuy)}` : '—',
       swingCell,
       c.gate.decision + reasons + cycleNote,
@@ -2236,6 +2281,13 @@ async function runReverseMode(realLog) {
   realLog(`## REVERSE-FLIP — ${surfaced.length} owned candidate(s) to harvest (${rejected.length} rejected: ${rejected.map(r => r.name).join(', ') || 'none'})`);
   realLog('Playbook: SELL into the peak (Sold-ref/Peak), then REBUY strictly below BE-rebuy for an after-tax gain; the swing must clear the tax. Regime is INVERTED — a rising/elevated item is BAD (you\'d rebuy higher); knife/oscillating is the wanted "sell high, rebuy low". The rebuy leg is the binding risk on a thin item (it can strand) — a bounded miss, never a deadline.');
   realLog(mdTable(REVERSE_HEADERS, rows));
+  // RF6 — thin big-ticket read notes (inform-only, n≈0). Printed ONLY when a thin item surfaced one; on an
+  // all-liquid pool `thinNotes` is empty and this block is skipped → byte-identical to the pre-RF6 output.
+  if (thinNotes.length) {
+    realLog('');
+    realLog('Thin big-ticket reads (inform-only, n≈0 — the standard reads mislead on a thin book; see RF6):');
+    for (const n of thinNotes) realLog(n);
+  }
   realLog('');
 }
 

@@ -39,6 +39,7 @@
  * NOT cite any constant here as validated.
  */
 import { tax } from './money-math.js';
+import { BIG_TICKET_GP } from './quotecore.js';   // RF6 — the ONE big-ticket threshold (10m), reused for isThinBigTicket (never reinvented)
 
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 
@@ -164,4 +165,116 @@ export function reverseFlipGate(ctx = {}) {
   }
 
   return { decision, reasons, regime, edge };
+}
+
+/* =============================================================================================
+ * RF6 — THIN BIG-TICKET READ HANDLING (PLAN-REVERSE-FLIP chunk RF6, Ruling §6)
+ *
+ * The reverse-flip population IS mostly thin big-ticket owned gear (the Ancestral hat: guide ~55m,
+ * trades ~135/d, buy limit 8, tranche ~1 unit), and the STANDARD reads mislead on exactly that shape
+ * (Ruling §6, the live hat case): a lone standing ask reached only 2/14d gets mistaken for "the price";
+ * the 3-day hourly slope whipsaws (hat 3d +1.47m UP vs 7d flat) because each hourly median on a thin
+ * book is a handful of trades; and a point recommendation ("list 56.5m") is false precision on an item
+ * that wobbles 54–58m intraday. RF6 is a set of INFORM-ONLY, THIN-ITEM-ONLY display guards — none gate,
+ * drop, or move a quoted number; each degrades to the existing output on a non-thin (liquid) item so the
+ * liquid path renders BYTE-IDENTICALLY (the zero-ripple contract). RF2's `--mode reverse` table is the
+ * first live consumer; RF4 imports these same helpers for quote-items / `/schedule` / `/book`.
+ *
+ * HONESTY (rule 4 — n≈0). Every threshold below is a NAMED PLACEHOLDER; this lane has no record yet.
+ * ============================================================================================= */
+
+// --- PLACEHOLDER constants (rule 4 — unvalidated; reverse-flip suggestions accrual would tune them) --
+// A clearable tranche at/under this many units is "thin" (the hat clears ~1/window). PLACEHOLDER (n≈0).
+export const THIN_TRANCHE_UNITS = 2;
+// Daily two-sided volume (min-side Vol/d) under this floor is "thin" — the OR fallback when no tranche is
+// in hand. Deliberately generous: big-ticket owned gear trades in the low hundreds/day (hat ~135/d) while
+// a liquid big-ticket clears thousands. PLACEHOLDER (n≈0) — a starting hypothesis, not a validated cut.
+export const THIN_VOL_FLOOR = 500;
+// The drift window (days) a THIN item defaults to — 7d, not the standard 3d, because a thin book's 3-day
+// slope whipsaws (Ruling §6). The label (hourlyDriftNote) already tells the window truth. PLACEHOLDER.
+export const THIN_DRIFT_DAYS = 7;
+// A standing ask must sit at least this fraction ABOVE the traded guide to be a "lone optimistic ask" and
+// not "the price" (the 55m-trades vs 58m-ask gap). PLACEHOLDER (n≈0).
+export const SPREAD_MATERIAL_PCT = 0.03;
+// …AND be reached on at most this fraction of the last N days to count as "rarely reached" (2/14 ≈ 0.14).
+// PLACEHOLDER (n≈0).
+export const SPREAD_RARE_FRAC = 0.30;
+
+/* isThinBigTicket(row, { tranche? }) → boolean. THE ONE thin-detection predicate every RF6 guard reads —
+   no per-surface re-derivation. TRUE when the item is BIG-TICKET (guide ≥ BIG_TICKET_GP, 10m — note this
+   is the 10m big-ticket line, NOT the 5m reverse-flip candidate cutoff) AND liquidity-THIN (a clearable
+   `tranche` ≤ THIN_TRANCHE_UNITS if one is handed in, OR min-side Vol/d < THIN_VOL_FLOOR). Pure, off
+   fields already on a computeQuote `row` (guide, volDay). A null/unknown guide or volume degrades to
+   FALSE (not thin ⇒ no guards ⇒ standard read) — conservative, never throws. */
+export function isThinBigTicket(row, { tranche = null } = {}) {
+  if (!row) return false;
+  const guide = num(row.guide);
+  if (guide == null || guide < BIG_TICKET_GP) return false;   // not big-ticket → never "thin big-ticket"
+  const vol = num(row.volDay);
+  const t = num(tranche);
+  const trancheThin = t != null && t <= THIN_TRANCHE_UNITS;
+  const volThin = vol != null && vol < THIN_VOL_FLOOR;
+  return trancheThin || volThin;
+}
+
+/* reverseListBand(sellRef, reachable) → { lo, hi, center } | null. RANGE-NOT-A-POINT support: a thin
+   big-ticket's list/sell recommendation is a false-precise single number on an item that wobbles intraday,
+   so surface a BAND off the pressure-driven reachable-band read (js/windowread.mjs reachableBand). The band
+   spans the recent central daily-high (reachable.baseHigh) → the pressure-reachable top (reachable.ask),
+   always widened to CONTAIN `sellRef` (today's point stays available as the band's reachable center). Off
+   data already in hand — no new fetch. Returns null when there's no sellRef or no usable reachable band
+   (⇒ the caller keeps the existing single-number render — the byte-identical degrade). */
+export function reverseListBand(sellRef, reachable) {
+  const s = num(sellRef);
+  if (s == null || s <= 0) return null;
+  const base = reachable ? num(reachable.baseHigh) : null;
+  const top = reachable ? num(reachable.ask) : null;
+  if (base == null && top == null) return null;
+  let lo = Math.min(...[base, top, s].filter(v => v != null));
+  let hi = Math.max(...[base, top, s].filter(v => v != null));
+  if (!(hi > lo)) return null;   // degenerate (band collapsed to a point) → no band, keep the point
+  return { lo, hi, center: s };
+}
+
+/* reverseListBandCell(sellRef, reachable, { fmt }) → the Sold-ref/Peak cell TEXT. On a real band → the
+   range `~<lo>–<hi>`; otherwise the plain `<sellRef>` (the exact existing render, byte-identical). The
+   caller only reaches here for a THIN item — a liquid row keeps its own single-number rendering untouched. */
+export function reverseListBandCell(sellRef, reachable, { fmt = String } = {}) {
+  const band = reverseListBand(sellRef, reachable);
+  const s = num(sellRef);
+  if (!band) return s != null ? fmt(s) : '—';
+  return `~${fmt(band.lo)}–${fmt(band.hi)}`;
+}
+
+/* askSpreadFlag({ guide, askLevel, reachedDays, nDays }) → the flag object | null. TRADED-MID vs
+   STANDING-ASK guard: on a thin item a lone optimistic ask sitting materially above where the item
+   actually TRADES must never be mistaken for "the price". Fires only when the ask is BOTH materially
+   above the traded guide (≥ SPREAD_MATERIAL_PCT) AND rarely reached (≤ SPREAD_RARE_FRAC of the last
+   nDays). Off the reach/placement data already computed (reachedDays over the daily-HIGH series). Pure. */
+export function askSpreadFlag({ guide, askLevel, reachedDays, nDays } = {}) {
+  const g = num(guide), a = num(askLevel);
+  if (g == null || g <= 0 || a == null) return null;
+  const abovePct = (a - g) / g;
+  if (abovePct < SPREAD_MATERIAL_PCT) return null;             // ask not materially above the traded guide
+  const rd = num(reachedDays), nd = num(nDays);
+  const frac = (rd != null && nd != null && nd > 0) ? rd / nd : null;
+  if (frac == null || frac > SPREAD_RARE_FRAC) return null;    // reached often (or unknown) → not a lone ask
+  return { guide: g, askLevel: a, reachedDays: rd, nDays: nd, abovePct, frac };
+}
+
+/* askSpreadNote(flag, { fmt }) → the compact note TEXT (no sigil — the caller's note-kind owns that), or
+   null. `trades ~<guide>; lone asks to <askLevel>, reached <N/nD>d`. */
+export function askSpreadNote(flag, { fmt = String } = {}) {
+  if (!flag) return null;
+  return `trades ~${fmt(flag.guide)}; lone asks to ${fmt(flag.askLevel)}, reached ${flag.reachedDays}/${flag.nDays}d`;
+}
+
+/* rebuyStrandNote({ volDay, fmt }) → the REVERSE-FLIP-SPECIFIC rebuy-reliability caution TEXT. Thin items
+   are the RISKIEST reverse-flip because the REBUY leg is the unreliable one (a deep rebuy bid can strand
+   while you're out of the position and price ranges/rises away — the live hat 54.05m→cancelled case). This
+   is inform-only — it NEVER blocks Ben placing the bid (the strategy's own framing is that the rebuy miss
+   is BOUNDED, no deadline). RF2's reverse table wires it; RF4 reuses the same note. */
+export function rebuyStrandNote({ volDay = null, fmt = String } = {}) {
+  const v = num(volDay);
+  return `⚠ rebuy may strand (thin, ${v != null ? `${fmt(v)}/d` : 'thin book'})`;
 }

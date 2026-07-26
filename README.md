@@ -278,11 +278,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Ruling §1; the peak→dip swing + a `REVERSE_MIN_SWING_PCT` amplitude-floor flag; direction-agnostic) /
   `reverseFlipGate` (composes regime + swing floor + a REBUY-LEG-WEIGHTED liquidity check: a thin SELL leg is
   caution-not-reject (live demand clears the sell — the 2026-07-24 Ancestral-hat anchor), a thin REBUY leg is
-  the binding risk → reject; degrade-to-caution, never throws). Imports only `tax`; consumed by RF2's
-  `--mode reverse` wiring — `gatecandidates.mjs` `gateReverseFlipCandidates` applies it per owned candidate and
-  `screen-flip-niches.mjs` `runReverseMode` renders the own-table surface (RF2 shipped 2026-07-25; the
-  `@provisional-api` markers stay as the n≈0 honesty label). All thresholds NAMED PLACEHOLDERS (n≈0). NOT
-  app-imported → no APP_VERSION bump. Fixture-pinned `pipeline/test/reverseflip.test.mjs`),
+  the binding risk → reject; degrade-to-caution, never throws). RF6 (2026-07-25) adds the THIN BIG-TICKET
+  read handling — `isThinBigTicket(row)` (the ONE thin predicate: big-ticket `guide ≥ BIG_TICKET_GP` (10m) AND
+  liquidity-thin — a clearable tranche ≤ `THIN_TRANCHE_UNITS` OR min-side `vol/d < THIN_VOL_FLOOR`) + four
+  inform-only, THIN-ITEM-ONLY display-guard helpers reused across RF2/RF4: `reverseListBand`/`reverseListBandCell`
+  (RANGE-not-a-point list price off the reachable band), `askSpreadFlag`/`askSpreadNote` (traded-mid vs a lone
+  rarely-reached standing ask), `rebuyStrandNote` (the reverse-flip-specific rebuy-may-strand caution), and the
+  `THIN_DRIFT_DAYS=7` longer-window default (the thin 3-day slope whipsaws). Every guard degrades to the existing
+  render on a non-thin item — a liquid reverse row is BYTE-IDENTICAL (empirically verified against the pre-RF6
+  output). Imports `tax` + `BIG_TICKET_GP`; consumed by RF2's `--mode reverse` wiring —
+  `gatecandidates.mjs` `gateReverseFlipCandidates` applies the gate per owned candidate and
+  `screen-flip-niches.mjs` `runReverseMode` renders the own-table surface + the thin-item guards (RF2 shipped
+  2026-07-25; RF6 2026-07-25; the `@provisional-api` markers stay as the n≈0 honesty label). All thresholds
+  NAMED PLACEHOLDERS (n≈0). NOT app-imported → no APP_VERSION bump. Fixture-pinned `pipeline/test/reverseflip.test.mjs`),
   `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
   calculator off Chunk A's `loadDailyRangeBulk` daily-range data: `intradayDailyRange(dayRanges)` (the
   robust CENTRAL after-tax intraday range = the MEDIAN of per-day `netMargin(lo,hi)` across the coverage
