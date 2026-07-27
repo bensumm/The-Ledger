@@ -32,7 +32,7 @@
  */
 import { pathToFileURL } from 'node:url';
 import { newest1hAgeHours, loadAll24hRolling as realLoadAll24hRolling, loadBands as realLoadBands }
-  from '../lib/marketfetch.mjs';
+  from '../lib/market/marketfetch.mjs';
 import { loadState, saveState, STATE_PATH } from './manager.mjs';   // reuse Chunk 2/3's heartbeat helpers
 
 // This daemon's stable id — MUST match the registry entry's `name` (the daemon-state.json key).
