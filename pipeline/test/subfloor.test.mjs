@@ -28,8 +28,8 @@ import assert from 'node:assert/strict';
 import {
   gateCandidates, rankAndSlice, subFloorFallback, subFloorLabel,
   SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP, DEFAULT_THRESHOLDS,
-} from '../lib/gatecandidates.mjs';
-import { capGrade } from '../lib/rating.mjs';
+} from '../lib/signal/gatecandidates.mjs';
+import { capGrade } from '../lib/signal/rating.mjs';
 import { suggestionEntry } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;

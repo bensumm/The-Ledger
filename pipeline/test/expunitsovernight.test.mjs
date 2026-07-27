@@ -10,7 +10,7 @@
  * Run: `node pipeline/test/expunitsovernight.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { expUnits, expUnitsOvernight } from '../lib/gatecandidates.mjs';
+import { expUnits, expUnitsOvernight } from '../lib/signal/gatecandidates.mjs';
 import { OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
 
 let pass = 0;

@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import {
   structuralSupport, cutTrigger,
   SUPPORT_LOOKBACK_DAYS, CUT_TRIGGER_DELTA,
-} from '../lib/levels.mjs';
+} from '../lib/signal/levels.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

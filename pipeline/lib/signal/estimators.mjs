@@ -3,4 +3,4 @@
  * module the pipeline uses (the app↔console parity boundary — shared logic lives in js/, node
  * re-imports it, never forks). This shim keeps every existing pipeline importer
  * (`./lib/estimators.mjs`) resolving byte-identically. Do NOT add logic here — edit js/estimators.mjs. */
-export * from '../../js/estimators.mjs';
+export * from '../../../js/estimators.mjs';

@@ -30,7 +30,7 @@ import {
   rateItem, gradeFor, capGrade, applyGradeCaps, momFactor, regimeFactor, liqFactor,
   confidenceFactor, GRADE_CUTOFFS, THIN_GRADE_CAP, REACH_GRADE_CAP, REACH_GRADE_CAP_FRAC,
   CONF_THIN_N_FLOOR,
-} from '../lib/rating.mjs';
+} from '../lib/signal/rating.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

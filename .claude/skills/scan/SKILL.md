@@ -257,7 +257,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   SCRIPT — `screen-flip-niches.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
-- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/gatecandidates.mjs`)_ If a flip-niche prints `SUB-FLOOR
+- **SUB-FLOOR FALLBACK tables are NOT qualified picks (P6c).** _(judgment: relay discipline; mechanic in `pipeline/lib/signal/gatecandidates.mjs`)_ If a flip-niche prints `SUB-FLOOR
   FALLBACK` (zero candidates cleared the floors → the script re-ran beneath them and shows the best
   ≤5, grades `C (sub-floor)`-capped), relay it AS sub-floor: name the floor that emptied the flip-niche,
   never present a sub-floor row as a normal recommendation, and default to "nothing qualified today"
@@ -265,7 +265,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **24h-drift is a pre-filter only.** _(judgment: interpretation discipline)_ A current-vs-24h-avg read of "flat/slightly soft"
   repeatedly masks multi-day fallers. The screen's displayed Regime column is the real
   multi-day `regimeDrift` check — trust it, and never recommend off a 24h impression alone.
-- **Two-sided liquidity discipline.** _(enforced: `pipeline/lib/gatecandidates.mjs` two-sided gate; the FLOOR is `judgment:`)_ Real liquidity = a two-sided daily market
+- **Two-sided liquidity discipline.** _(enforced: `pipeline/lib/signal/gatecandidates.mjs` two-sided gate; the FLOOR is `judgment:`)_ Real liquidity = a two-sided daily market
   (`lowPriceVolume>0 && highPriceVolume>0`), never the `/volumes` count (bursty/weekly, overstates
   tradability). NOTE (PLAN-VOL24, 2026-07-13): Vol/d now comes from the CORRECTED rolling-24h source
   (composed from the `/1h` grain — the raw `/24h` endpoint is broken, it serves a frozen stale ~1–3h
@@ -712,7 +712,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   confidence on a marginal/big-ticket hold" (`read-window-range.mjs --window 0-23 --nights 21`,
   phase-mapped). Point to it; don't copy the method here.
 - **A "crowded out: N (best excluded: X)" footer line means a real edge lost its fetch slot — read
-  it, don't skip past it (PLAN-SCREEN-ARCHITECTURE, 2026-07-18).** _(judgment: relay discipline; mechanic in `pipeline/lib/admission.mjs` `pickFetchPool`)_
+  it, don't skip past it (PLAN-SCREEN-ARCHITECTURE, 2026-07-18).** _(judgment: relay discipline; mechanic in `pipeline/lib/signal/admission.mjs` `pickFetchPool`)_
   The fetch pool is bounded (API-fetch cost) — only so many gated candidates get priced each pass.
   Since the anchor incident (Abyssal bludgeon / Sanguinesti staff never surfacing despite real
   profitable history — the raw-gp-flow-ranked thin reserve was silently starving them out every

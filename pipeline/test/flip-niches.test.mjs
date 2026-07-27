@@ -23,8 +23,8 @@ import {
   validateNicheSpec, CHURN_MIN_VOL,
 } from '../../js/flip-niches.mjs';
 import { PATH_KEYS } from '../../js/held-item-strategy.mjs';
-import { ESTIMATOR_FAMILIES } from '../lib/estimators.mjs';
-import { DEFAULT_THRESHOLDS } from '../lib/gatecandidates.mjs';
+import { ESTIMATOR_FAMILIES } from '../lib/signal/estimators.mjs';
+import { DEFAULT_THRESHOLDS } from '../lib/signal/gatecandidates.mjs';
 import { buildSnapshot } from '../lib/render/replay.mjs';
 
 let pass = 0;

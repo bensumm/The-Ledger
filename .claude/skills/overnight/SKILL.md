@@ -131,7 +131,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    table under each flip-niche, top-down by the overnight sort, with per line `Bid → Ask (sell) ·
    up-to units/8h · Capital · Cum capital · Net/u · Total if cycled`. The up-to-units figure is
    the shared `expUnitsOvernight` (`= expUnits × 8/24 = min(buyLimit×2, 8/24×0.10×volDay)` —
-   `pipeline/lib/gatecandidates.mjs`, so its constants can never drift from `expUnits`); the
+   `pipeline/lib/signal/gatecandidates.mjs`, so its constants can never drift from `expUnits`); the
    script prints its UPPER-BOUND caveat itself (assumes fills at your bid, prorates daily volume
    flat across the quiet hours, no fill probability). **Do not hand-compute or restate the
    formula — read the table.** Your remaining judgment on top of it:

@@ -104,7 +104,7 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
   header. This was one of four same-day value iterations (deployable-capital, artifact/liquidity
   hardening, RC1 recency anchor, trajectory-GATE) whose current form is now that module header.
 - **`expGpDay` as the ranking metric → demoted (P6b, Ben 2026-07-09: "I despise gp/d").** Rank is now
-  `net after tax × P(fill at the quoted pair) ÷ TTF` per thesis (`pipeline/lib/estimators.mjs`);
+  `net after tax × P(fill at the quoted pair) ÷ TTF` per thesis (`pipeline/lib/signal/estimators.mjs`);
   `expGpDay` survives only as the cheap pre-fetch pool orderer + the 500k `--min-gpd` pre-filter.
 - **Cancel-to-EMPTY fill inference → deleted (LH1).** An EMPTY slot snapshot is NOT evidence of a
   fill; the inference that tried to read fills from cancel-to-EMPTY transitions was removed and must

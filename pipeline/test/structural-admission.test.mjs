@@ -19,8 +19,8 @@ import assert from 'node:assert/strict';
 import {
   structuralGate, classifyVolLane, eachStructuralCandidate,
   MIN_VALUE, MIN_THIN, MIN_NOTIONAL, CHURN_VOL_CUT, DEFAULT_STRUCTURAL,
-} from '../lib/structural-admission.mjs';
-import { gateCandidates } from '../lib/gatecandidates.mjs';
+} from '../lib/signal/structural-admission.mjs';
+import { gateCandidates } from '../lib/signal/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

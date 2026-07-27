@@ -10,7 +10,8 @@ Per-topic working doc (`docs/PLANNING.md` lifecycle); folds into `PLAN.md` + del
 | **3 — `reconstruct/`** | **SHIPPED** | reconstruct, campaigns, offers, positions, fill-placement, sync-invoke, logblind. 45 rewrites across 28 files. Landed BEFORE capital as the hardening reorder specified (avoids double-touching 3 capital files). **Two self-relative paths fixed** — `offers.mjs`'s mapping-cache read (try/caught, so it would have failed SILENTLY) and `sync-invoke.mjs`'s `SYNC_FILLS`; both verified by resolving them at runtime, since the suite passes either way. |
 | **4 — `timing/`** | **SHIPPED** | cyclewatch, velocity, velocitytag, staleexit, statetransition. 15 rewrites across 13 files. No self-relative paths. |
 | **5 — `market/`** | **SHIPPED** | marketfetch, archive, warm-term-structure, compose, guideanchor, item-context, probes, hourly-lmh. 62 rewrites across 38 files. **Four self-relative paths fixed** (CACHE_DIR, DEFAULT_DB, CONFIG_PATH, PROBES_DIR) + the string-built-path correction above. |
-| 6 — `signal/` · 7 — `capital/` | open | Largest/most cross-referenced last, per the original plan. |
+| **6 — `signal/`** | **SHIPPED** | estimators, rating, gatecandidates, admission, structural-admission, patha, recovery, range-position, levels. 43 rewrites across 24 files. The two `export * from '../../js/…'` barrel shims (estimators, rating) depth-bumped correctly — the case `check-imports`' import-only parser cannot see. No self-relative paths. |
+| 7 — `capital/` | open | Last, as the reorder intended: its reconstruct-importing files were already fixed in chunk 3. |
 
 # PLAN-LIB-SUBDIRS — group `pipeline/lib/`'s 50 files into concept subdirectories
 

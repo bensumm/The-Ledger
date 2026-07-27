@@ -13,9 +13,9 @@
  * Run: `node pipeline/test/patha.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { pathAGpDay, intradayDailyRange, captureFracFor, CAPTURE_FRAC, comparePathARows, assignRankInLane, pathASurfaceTier } from '../lib/patha.mjs';
+import { pathAGpDay, intradayDailyRange, captureFracFor, CAPTURE_FRAC, comparePathARows, assignRankInLane, pathASurfaceTier } from '../lib/signal/patha.mjs';
 import { median, netMargin, tax } from '../../js/quotecore.js';
-import { expUnits } from '../lib/gatecandidates.mjs';
+import { expUnits } from '../lib/signal/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

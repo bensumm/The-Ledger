@@ -2,7 +2,7 @@
 // No live data (CLAUDE.md rule 4): synthetic candidates only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch } from '../lib/admission.mjs';
+import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch } from '../lib/signal/admission.mjs';
 
 test('buildTrackIndex aggregates closed lots per item, ignoring malformed entries', () => {
   const closed = [

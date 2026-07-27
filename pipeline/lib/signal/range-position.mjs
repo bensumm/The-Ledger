@@ -10,8 +10,8 @@
    Honesty: a fill whose history is gone (past the /5m or /1h retention) yields reconstructed:false
    with nulled fields — NEVER a fabricated percentile/regime/phase. bandPct is 5m-bucket approximate
    (fine for percentile/regime/phase classification, NOT tick-exact). */
-import { loadHistBands, loadHistDaily } from './market/marketfetch.mjs';
-import { regimeDrift, regimeLabel, phase } from '../../js/quotecore.js';
+import { loadHistBands, loadHistDaily } from '../market/marketfetch.mjs';
+import { regimeDrift, regimeLabel, phase } from '../../../js/quotecore.js';
 
 /* deriveState({ band, series6h, price }) -> the stateAtFill record fields.
    band     : one loadHistBands result { bandLo, bandHi, covered, nWin, loVol, hiVol } (or null)

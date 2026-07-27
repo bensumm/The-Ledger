@@ -35,7 +35,7 @@
  */
 import assert from 'node:assert/strict';
 import { gateCandidates, rankAndSlice, proxyDrift, softFactor, VALUE_TOP_DEFAULT, surviveMode,
-  scaleSlots, CAP_REF, gateReverseFlipCandidates } from '../lib/gatecandidates.mjs';
+  scaleSlots, CAP_REF, gateReverseFlipCandidates } from '../lib/signal/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -28,7 +28,7 @@ import {
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS,
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
-} from '../lib/estimators.mjs';
+} from '../lib/signal/estimators.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

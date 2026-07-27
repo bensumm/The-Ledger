@@ -37,9 +37,9 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/flip-niches.mjs` `inAll` + `pipeline/commands/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
 | Sync first (SY1) / run-from-main (SY1.2) | ENCODE | `pipeline/commands/sync-fills.mjs`; the run-location rule is operational, stays as prose. |
 | 500k gp/day attention floor | ENCODE | `pipeline/commands/screen-flip-niches.mjs` `--min-gpd` (default 500_000). |
-| SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/gatecandidates.mjs`; the relay-honestly rule is judgment. |
+| SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/signal/gatecandidates.mjs`; the relay-honestly rule is judgment. |
 | 24h-drift is a pre-filter only | KEEP-AS-JUDGMENT | Regime column is coded; "never recommend off 24h alone" is interpretation. |
-| Two-sided liquidity discipline | ENCODE | Two-sided gate in `pipeline/lib/gatecandidates.mjs`; the ~100/day floor stays judgment. |
+| Two-sided liquidity discipline | ENCODE | Two-sided gate in `pipeline/lib/signal/gatecandidates.mjs`; the ~100/day floor stays judgment. |
 | Tax dominates thin flips | KEEP-AS-JUDGMENT | The >~0.5% after-tax bar is a taste threshold. |
 | Band-is-the-edge pricing | KEEP-AS-JUDGMENT | Pricing call. |
 | Anchor pricing — fillable side of a round number | KEEP-AS-JUDGMENT | n=2; the `anchor.mjs` probe is output-only, never a gate. |
@@ -53,7 +53,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Phase tag on the Regime cell | ENCODE | `phase()` in `js/quotecore.js`, folded by `pipeline/commands/screen-flip-niches.mjs`; the "spike ≠ retrace" reading is judgment. |
 | Froth entry — CLASSIFIER not PREDICTOR | KEEP-AS-JUDGMENT | `froth.mjs` probe classifies (output-only); n≈0 own trades. |
 | Big-ticket caution | KEEP-AS-JUDGMENT | gp-flow gate in `pipeline/commands/screen-flip-niches.mjs`; "size in units, never chase" is judgment. |
-| Skip despite high grade | KEEP-AS-JUDGMENT | Grade cutoffs are placeholders (`pipeline/lib/rating.mjs`). |
+| Skip despite high grade | KEEP-AS-JUDGMENT | Grade cutoffs are placeholders (`pipeline/lib/signal/rating.mjs`). |
 | Lane management — scale/rotate | KEEP-AS-JUDGMENT | Exposure call. |
 | Peak-throughput sizing — one-window vs multi-day | KEEP-AS-JUDGMENT | Labeling discipline. |
 | Buy-limit-aware sizing | ENCODE | LM1 (2026-07-09): `pipeline/lib/limits.mjs` `limitWindow` (rolling-4h math) → `js/validate.mjs` `limitValidator` (BUY-side: reject exhausted, caution near) on every suggesting surface (`screen-flip-niches.mjs`/`quote-items.mjs`); `quote-items.mjs` regime line shows bought/left/next-frees; `node pipeline/commands/read-buy-limits.mjs "<item>"` is the direct ask. The tranche-vs-multi-window framing stays judgment. Memory `buy-limit-caps-every-size`. |
@@ -73,7 +73,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | Verdict-vocabulary table (interpret each verdict) | ENCODE | Verdicts emitted by `momVerdict()` (`js/quotecore.js`) / `renderHeldVerdict` (`pipeline/lib/market/item-context.mjs`); the skill translates them to actions (judgment). |
 | Sell-velocity / HOLD-band-top step-down / rising-item no-underprice / decaying-band-top / trajectory read / entry-age / override-discipline / cut-and-rebid friction / tripwire conviction / limit-blocked CROSSING / fill-progress | KEEP-AS-JUDGMENT | The interpretation layer over the verdicts; several have coded support (`convictionGate` in `lib/watchstate.mjs` for tripwire-conviction; `breakEven()` floor in `js/quotecore.js`), but the step-down/hold taste is the LLM's. |
 | Verify SELL leg before quoting profit (MANDATORY) | KEEP-AS-JUDGMENT | Same ENCODE-candidate as /scan's — `reachValidator` blocked on ts1h fetch. |
-| Reading recovery-read (V6) as decision support | ENCODE | `pipeline/lib/recovery.mjs`; the "apply judgment on conflict" is the judgment. |
+| Reading recovery-read (V6) as decision support | ENCODE | `pipeline/lib/signal/recovery.mjs`; the "apply judgment on conflict" is the judgment. |
 | Encode-learnings boilerplate | KEEP-AS-JUDGMENT | Shared process boilerplate. |
 
 ## /overnight — `.claude/skills/overnight/SKILL.md`

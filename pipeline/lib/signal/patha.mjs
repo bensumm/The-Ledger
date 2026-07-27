@@ -29,7 +29,7 @@
    NO new refill/volume constants are invented here. (robustBand is quotecore's EDGE robustifier — p90/p10
    of prints — which is the wrong statistic for a CENTRAL range estimate, so we use `median`, quotecore's
    other percentile helper, not robustBand.) */
-import { median, netMargin } from '../../js/quotecore.js';
+import { median, netMargin } from '../../../js/quotecore.js';
 import { expUnits } from './gatecandidates.mjs';
 
 // captureFrac by admission lane (Chunk B's volume-regime split, orthogonal to FLIP_NICHES modes).

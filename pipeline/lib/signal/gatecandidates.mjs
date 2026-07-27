@@ -33,28 +33,28 @@
  * flip-niches.mjs's edge functions now, imported from js/money-math.js there), so the numbers stay
  * byte-identical to screen-flip-niches.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
-import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
-import { median } from './render/cli.mjs';
+import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../../js/quotecore.js';
+import { median } from '../render/cli.mjs';
 // P5 — the value niche's term-structure gate + rank (js/valuescreen.mjs, pure). gateCandidates routes
 // a `gate:'value'` spec here instead of the shared band/spread liquidity+edge stack.
-import { termStructure } from '../../js/termstructure.mjs';
-import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '../../js/valuescreen.mjs';
+import { termStructure } from '../../../js/termstructure.mjs';
+import { valueRanges, valueScore, valueGate, valueTier, VALUE_MIN_PRICE } from '../../../js/valuescreen.mjs';
 // A2 (PLAN-AMPLITUDE-SCAN) — the amplitude niche's Stage-1 pre-fetch proxy + its price window.
 // gateCandidates routes a `gate:'amplitude'` spec to gateAmplitudeCandidates (below), mirroring the
 // `gate:'value'` seam. Stage 2 (the exact amplitudeGate off windowStats) runs post-fetch in renderAmplitudeMode.
-import { amplitudeProxy, AMP_MIN_PRICE, AMP_MAX_PRICE, AMP_STAGE1_MIN_PCT } from '../../js/amplitudescreen.mjs';
+import { amplitudeProxy, AMP_MIN_PRICE, AMP_MAX_PRICE, AMP_STAGE1_MIN_PCT } from '../../../js/amplitudescreen.mjs';
 // RF2 (PLAN-REVERSE-FLIP) — the reverse-flip niche's INVERTED regime gate + rebuy-leg-weighted liquidity
 // check (js/reverseflip.mjs, pure). gateCandidates routes a `gate:'reverse'` spec to
 // gateReverseFlipCandidates (below), mirroring the `gate:'value'`/`gate:'amplitude'` seams — but its pool is
 // the caller-assembled OWNED-item set (owned-items.json keep ∪ hold-thesis reverseFlip:true), NOT the v24
 // fetch universe, so it takes that pool + a per-id context map off `ctx` rather than iterating v24.
-import { reverseFlipGate } from '../../js/reverseflip.mjs';
+import { reverseFlipGate } from '../../../js/reverseflip.mjs';
 // P4c: the per-mode step-3 EDGE + the pool/rank rules are now DECLARATIVE strategy specs in
 // js/flip-niches.mjs. gateCandidates/rankAndSlice look up FLIP_NICHES[mode] and call spec.edge / read
 // spec.rank / spec.confirm instead of branching on the niche name — byte-identical behavior
 // (the P1 replay goldens pin it), but a new niche (P5 scalp/value) registers a spec instead of editing
 // this file. `tax` moved with the edge functions into flip-niches.mjs.
-import { FLIP_NICHES } from '../../js/flip-niches.mjs';
+import { FLIP_NICHES } from '../../../js/flip-niches.mjs';
 // PLAN-LANE-ADMISSION Chunk B — the STRUCTURAL admission gate (value ∧ thin ∧ notional + gear/churn
 // volLane), an alternate iterator with the SAME callback shape as eachLiquidCandidate. Routed via
 // `t.GATE === 'structural'` (default undefined → legacy → byte-identical). Additive behind the flag;

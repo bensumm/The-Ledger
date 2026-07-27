@@ -16,7 +16,7 @@
  *     6h series exists — an unrecoverable fill is never given a fabricated state.
  */
 import assert from 'node:assert/strict';
-import { deriveState } from '../lib/range-position.mjs';
+import { deriveState } from '../lib/signal/range-position.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

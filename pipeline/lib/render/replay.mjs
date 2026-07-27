@@ -31,7 +31,7 @@
  * No live data (CLAUDE.md rule 4).
  */
 import { computeQuote, phase } from '../../../js/quotecore.js';
-import { gateCandidates, rankAndSlice, surviveMode, DEFAULT_THRESHOLDS, THIN_RESERVE_DEFAULT, TOP_DEFAULT } from '../gatecandidates.mjs';
+import { gateCandidates, rankAndSlice, surviveMode, DEFAULT_THRESHOLDS, THIN_RESERVE_DEFAULT, TOP_DEFAULT } from '../signal/gatecandidates.mjs';
 
 // A fixed pass instant. 6h/5m/daily windows are all offset from this; nothing reads the wall clock
 // except overnightStaleRisk (deterministically false by construction — see header).

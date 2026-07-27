@@ -17,7 +17,7 @@
  * Run: `node pipeline/test/survivemode.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { surviveMode } from '../lib/gatecandidates.mjs';
+import { surviveMode } from '../lib/signal/gatecandidates.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

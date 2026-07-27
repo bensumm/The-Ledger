@@ -321,7 +321,7 @@ separation). HONESTY: the wiki `/timeseries?timestep=1h` endpoint returns only ~
 `OSC_DETECTOR_NIGHTS` effectively caps near ~15d on real data — a sample-size fix BOUNDED by the endpoint,
 not a calibration. All still n≈0.
 F-B (2026-07-22) added a WATCHLIST RESERVE to the Stage-1 fetch-pool cut (`AMP_TOP_DEFAULT=25`,
-`pipeline/lib/gatecandidates.mjs`/`admission.mjs`): a big-ticket on `watchlist.json` now bypasses the
+`pipeline/lib/signal/gatecandidates.mjs`/`admission.mjs`): a big-ticket on `watchlist.json` now bypasses the
 Stage-1 amplitude-proxy floor and gets a guaranteed fetch slot even if it ranks below the top-25, so it
 actually reaches this margin gate instead of being silently crowded out every scan (it can still be
 dropped by the gate on its real numbers — the fix is REACHING the gate, not a free pass through it).
@@ -477,7 +477,7 @@ reaches `js/trends.js` rendering. Pinned by `pipeline/test/oscillation-render.te
   **capital-aware** — `expUnits` caps the per-window buy by what the derived `deployablePool` affords
   one tranche of, so the floor measures real capital throughput, not capital-blind market capacity
   (byte-identical when one buy-limit tranche is affordable; binds only on expensive/big positions).
-  `--throughput legacy` restores the capital-blind value. Home: `pipeline/lib/gatecandidates.mjs`.
+  `--throughput legacy` restores the capital-blind value. Home: `pipeline/lib/signal/gatecandidates.mjs`.
 
 ### Falling doctrine — per-strategy, not global
 A faller is not necessarily a poor buy ("we cannot judge falling without its history and typical
@@ -575,7 +575,7 @@ placeholder cutoffs.
   the `asymEstimate` header in `js/estimators/reach.mjs`.
 - **Path-A gp/day is the CONSOLE PRIMARY sort; the grade is a shown BACKUP + live A/B (PLAN-LANE-ADMISSION
   Chunks D+E, owner decision H4).** On the band/churn console + last-report tables the surviving rows are
-  now sorted PRIMARILY by **Path-A after-tax intraday-flip gp/day** (`pathAGpDay`, `pipeline/lib/patha.mjs`
+  now sorted PRIMARILY by **Path-A after-tax intraday-flip gp/day** (`pathAGpDay`, `pipeline/lib/signal/patha.mjs`
   — the CALIBRATED intraday-range base rate: `median(per-day after-tax range) × captureFrac × throughput`,
   reusing the ONE `tax()`/`expUnits`). `rateItem`'s grade is still computed EVERY run and shown in its own
   `Path-A gp/d*` column BESIDE the Grade column, so a divergence between the two is visible on every pass

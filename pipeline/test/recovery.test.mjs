@@ -22,7 +22,7 @@
 import assert from 'node:assert/strict';
 import {
   recoveryRead, recoveryLine, recoveryTrigger, verdictPolarity, leanConflictsVerdict, LEAN_MARGIN,
-} from '../lib/recovery.mjs';
+} from '../lib/signal/recovery.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
