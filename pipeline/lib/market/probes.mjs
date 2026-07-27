@@ -83,7 +83,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const PROBES_DIR = join(HERE, '..', 'probes');
+export const PROBES_DIR = join(HERE, '..', '..', 'probes');
 export const STAGES = ['observe', 'price', 'gate'];
 
 // module-level cache of the loaded, stage-grouped probes. null until loadModules() runs, so a caller

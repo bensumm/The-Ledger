@@ -32,11 +32,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadMapping, fetchTs } from '../lib/marketfetch.mjs';
+import { loadMapping, fetchTs } from '../lib/market/marketfetch.mjs';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
 import { hourProfile, hourlyDriftNote } from '../../js/windowread.mjs';
-import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
+import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
 import { fmt, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)

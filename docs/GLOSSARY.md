@@ -73,7 +73,7 @@ These are different things at different levels — kept as two words on purpose.
 - **term structure** — the durable multi-week price shape: **floor** (where support prints),
   **ceiling**, **typical fluctuation**, and **trajectory** (knife / basing / oscillating / elevated).
 - **hourly drift** — the day-over-day slope of each hour-of-day's price over the last ~3 local dates
-  (`hourlyDrift`, `pipeline/lib/hourly-lmh.mjs`) — catches a staircase-down item the 14-day `--profile`
+  (`hourlyDrift`, `pipeline/lib/market/hourly-lmh.mjs`) — catches a staircase-down item the 14-day `--profile`
   hides (a peak "reached 14/14d" days ago on a now-falling item still reads bullish). Synthesizes a
   whole-item **uniform** step-down/up (a real regime step, every hour agrees) vs. **split** (mornings
   vs. evenings — likely noise). Rendered via `hourlyDriftNote` on every price-recommendation surface;

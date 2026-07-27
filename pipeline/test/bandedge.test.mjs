@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import {
   robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q,
-} from '../lib/marketfetch.mjs';
+} from '../lib/market/marketfetch.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

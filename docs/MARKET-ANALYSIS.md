@@ -624,7 +624,7 @@ distills away (it caught a churn item whose break-even sat above its typical hou
 *bullish on a falling item* — the reach was earned days ago when the price was higher (the Ghrazi rapier
 anchor, 2026-07-24: graded A- fill-now, "ask reached 14/14d," while every hour's MID was stepping down
 ~650k–1m/day and the ask had already stopped clearing intraday). `hourlyDrift(series1h,{days,ask})`
-(`pipeline/lib/hourly-lmh.mjs`, off the SAME 1h series, zero new fetch) fits a per-hour day-over-day
+(`pipeline/lib/market/hourly-lmh.mjs`, off the SAME 1h series, zero new fetch) fits a per-hour day-over-day
 least-squares slope over the last N (default 3) local dates, synthesizes a whole-item dominant
 direction/magnitude + whether it's UNIFORM across every hour (a real regime step) or SPLIT (mornings vs
 evenings — likely just intraday noise), and scores an **ask-reachability-decay** sub-signal: for a

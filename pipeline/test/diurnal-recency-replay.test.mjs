@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 // any working directory AND against whichever checkout it lives in (worktree or main). loadMapping exposes
 // .byId + .resolve (NO .byName — never reach for it).
 import { hourProfile } from '../../js/windowread.mjs';
-import { fetchTs, loadMapping, setFetchCache } from '../lib/marketfetch.mjs';
+import { fetchTs, loadMapping, setFetchCache } from '../lib/market/marketfetch.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.join(HERE, 'fixtures', 'diurnal-recency-replay.json');

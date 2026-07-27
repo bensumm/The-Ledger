@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { open, DEFAULT_DB, GRAINS } from '../lib/archive.mjs';
+import { open, DEFAULT_DB, GRAINS } from '../lib/market/archive.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }

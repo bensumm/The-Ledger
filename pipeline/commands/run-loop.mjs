@@ -48,7 +48,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
-import { fetchItemInputs } from '../lib/marketfetch.mjs';
+import { fetchItemInputs } from '../lib/market/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';
 import { buildAgenda, loopHeaderLine } from './read-schedule.mjs';
 import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook

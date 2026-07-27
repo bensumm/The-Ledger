@@ -27,7 +27,7 @@ import {
   identityStage, marketStage, historyStage, intradayStage, positionStage,
   buildItemContext, heldMomVerdict, renderHeldVerdict, staleBookBanner, STALE_BOOK_MIN,
   breakdownThesisAnnotation,
-} from '../lib/item-context.mjs';
+} from '../lib/market/item-context.mjs';
 import { ALERT_PERSIST_MS } from '../lib/thesis/watchstate.mjs';
 
 let pass = 0;

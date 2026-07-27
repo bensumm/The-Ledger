@@ -15,8 +15,8 @@
  * proxy — a LEVEL read that wants the archive's regime-proxy spacing, not the 1h shape); callers override
  * only `.trajectory` on the loadDaily-based structure with `trajectoryFrom1h`.
  */
-import { windowStats } from '../../js/windowread.mjs';
-import { termStructure } from '../../js/termstructure.mjs';
+import { windowStats } from '../../../js/windowread.mjs';
+import { termStructure } from '../../../js/termstructure.mjs';
 
 /* richFrom1h(ts1h, nights) → the WARM termStructure off the 1h series, or null when thin (<6 daily
    buckets) / absent. Returns the full structure so callers can take BOTH the warm .trajectory AND the

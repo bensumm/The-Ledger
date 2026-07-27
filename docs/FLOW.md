@@ -53,7 +53,7 @@ wiki API                    marketfetch                 quotecore               
 
 - The wiki's `/24h` endpoint is **broken** as a trailing-24h source (frozen stale slice); the
   true rolling-24h is composed from the healthy `/1h` grain at the fetch layer
-  (`pipeline/lib/marketfetch.mjs` `loadAll24hRolling`, `js/quotecore.js` consumers). Every
+  (`pipeline/lib/market/marketfetch.mjs` `loadAll24hRolling`, `js/quotecore.js` consumers). Every
   volume-denominated gate/floor is calibrated to that corrected scale. Full story:
   `docs/GLOSSARY.md` "/24h broken", `PLAN-VOL24.md` (working doc).
 - `computeQuote` turns raw prices + the 2h band + the 24h stats into the **row model** — Guide,
@@ -97,7 +97,7 @@ selects which specs run (`all` = band+churn+value). Doctrine home: `js/flip-nich
 
 ```
 positions.json OPEN lots ─┐
-offers.json book          ├─►  buildItemContext (pipeline/lib/item-context.mjs)
+offers.json book          ├─►  buildItemContext (pipeline/lib/market/item-context.mjs)
 hold-thesis.json          │        │
 .cache/watch-state.json ──┘        ▼
                             momVerdict gate tree (js/quotecore.js)  ── NO-READ · DIURNAL/SHOCK-WATCH ·

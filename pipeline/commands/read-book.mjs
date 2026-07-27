@@ -25,7 +25,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';
-import { loadMapping, loadGuide, fetchItemInputs, vol24FromInputs } from '../lib/marketfetch.mjs';
+import { loadMapping, loadGuide, fetchItemInputs, vol24FromInputs } from '../lib/market/marketfetch.mjs';
 import { computeQuote, breakEven } from '../../js/quotecore.js';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';

@@ -27,7 +27,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { open } from '../lib/archive.mjs';
+import { open } from '../lib/market/archive.mjs';
 import { loadState } from '../daemons/manager.mjs';
 import { ensure } from '../daemons/manager.mjs';
 import { healthCheck, start, WARM_THRESHOLD_HOURS } from '../daemons/cache-warm.mjs';

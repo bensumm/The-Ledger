@@ -38,7 +38,7 @@ import { createRequire } from 'node:module';
 const HERE = pathMod.dirname(fileURLToPath(import.meta.url));
 // Append-forever, gitignored, and deliberately OUTSIDE pipeline/.cache/ (that tree is disposable /
 // pruned; the archive must survive). Sidecars .sqlite-wal / .sqlite-shm are gitignored too.
-export const DEFAULT_DB = pathMod.join(HERE, '..', '.market-archive.sqlite');
+export const DEFAULT_DB = pathMod.join(HERE, '..', '..', '.market-archive.sqlite');
 
 export const GRAINS = new Set(['1h', '5m']);   // the ONLY endpoints we archive (bucketed; never /latest)
 const RAW_FIELDS = ['avgHighPrice', 'avgLowPrice', 'highPriceVolume', 'lowPriceVolume'];

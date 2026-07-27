@@ -9,7 +9,8 @@ Per-topic working doc (`docs/PLANNING.md` lifecycle); folds into `PLAN.md` + del
 | **2 — `thesis/`** | **SHIPPED** | holdthesis, sessionthesis, watchstate, reverseflipstate. 26 rewrites across 19 files. Clean as predicted — no self-relative paths, no cross-cluster edges out. |
 | **3 — `reconstruct/`** | **SHIPPED** | reconstruct, campaigns, offers, positions, fill-placement, sync-invoke, logblind. 45 rewrites across 28 files. Landed BEFORE capital as the hardening reorder specified (avoids double-touching 3 capital files). **Two self-relative paths fixed** — `offers.mjs`'s mapping-cache read (try/caught, so it would have failed SILENTLY) and `sync-invoke.mjs`'s `SYNC_FILLS`; both verified by resolving them at runtime, since the suite passes either way. |
 | **4 — `timing/`** | **SHIPPED** | cyclewatch, velocity, velocitytag, staleexit, statetransition. 15 rewrites across 13 files. No self-relative paths. |
-| 5 — `market/` · 6 — `signal/` · 7 — `capital/` | open | `market/` carries 4 self-relative-path files (marketfetch, archive, compose, probes) — read the mover's ⚠ block carefully. |
+| **5 — `market/`** | **SHIPPED** | marketfetch, archive, warm-term-structure, compose, guideanchor, item-context, probes, hourly-lmh. 62 rewrites across 38 files. **Four self-relative paths fixed** (CACHE_DIR, DEFAULT_DB, CONFIG_PATH, PROBES_DIR) + the string-built-path correction above. |
+| 6 — `signal/` · 7 — `capital/` | open | Largest/most cross-referenced last, per the original plan. |
 
 # PLAN-LIB-SUBDIRS — group `pipeline/lib/`'s 50 files into concept subdirectories
 
@@ -129,6 +130,12 @@ Import style, confirmed by reading a sample of each importer class:
 - `pipeline/commands/*.mjs` → `'../lib/<file>.mjs'` (e.g. `read-book.mjs:27-35`).
 - `pipeline/lib/*.mjs` → sibling `'./<file>.mjs'`, or `'../../js/<file>.{mjs,js}'` for the app-shared modules.
 - `pipeline/test/*.test.mjs` → same `'../lib/<file>.mjs'` shape as commands.
+- **CORRECTION (chunk 5): a string-built module path DOES exist.** The claim below that "no `path.join`-
+  constructed or otherwise string-built lib specifier exists" was **falsified** by `pipeline/test/compose.test.mjs:103`:
+  `pathToFileURL(join(HERE, '..', 'lib', 'compose.mjs')).href`, fed to a child process that imports it. It is
+  not a static specifier, so **the mover cannot see it and `check-imports` cannot either** — it surfaced only
+  as a failing suite. Before each remaining chunk, grep the tree for the moved basenames in
+  `join(...)`/string form as well as in import specifiers. (Swept chunk 5: this was the only real instance.)
 - **No dynamic `import()` of any `pipeline/lib/*` file exists today** — grep of `import\(` across `pipeline/`
   hits only `pipeline/daemons/registry.mjs` + `cache-warm.mjs` (daemon manager, unrelated), `pipeline/lib/probes.mjs`
   (dynamically loads `pipeline/probes/*.mjs`, a different directory, by directory-listing — unrelated to this

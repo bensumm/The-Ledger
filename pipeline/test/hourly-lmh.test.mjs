@@ -17,7 +17,7 @@
  *   - empty series → null (degrade, never a fake read).
  */
 import assert from 'node:assert/strict';
-import { hourlyLMH, hourlyDrift } from '../lib/hourly-lmh.mjs';
+import { hourlyLMH, hourlyDrift } from '../lib/market/hourly-lmh.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

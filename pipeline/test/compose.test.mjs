@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { resolve, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/compose.mjs';
+import { resolve, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/market/compose.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -100,7 +100,7 @@ ok('publish already off: a non-neutral check is a no-op (no exit)', () => {
 /* The explicit-publish HARD ERROR (console.error + process.exit(1)) can't be asserted in-process
    without killing the runner, so drive it as a child process and assert exit code + first message. */
 const HERE = dirname(fileURLToPath(import.meta.url));
-const COMPOSE_URL = pathToFileURL(join(HERE, '..', 'lib', 'compose.mjs')).href;
+const COMPOSE_URL = pathToFileURL(join(HERE, '..', 'lib', 'market', 'compose.mjs')).href;
 function runGuard(publish, publishExplicit, checks) {
   const src = `import { refusePublishIfNonNeutral } from ${JSON.stringify(COMPOSE_URL)};` +
     `refusePublishIfNonNeutral(${JSON.stringify({ publish, publishExplicit, checks })});`;

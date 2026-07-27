@@ -75,7 +75,7 @@ important structural rule — it's what prevents the app and pipeline from diver
 | Tax / break-even / bond math | `js/quotecore.js` (`breakEven`, `maxBuyForExit`) + `js/money-math.js` (`netMargin`, `bondFee`, `tax`) | the ONE tax home (quotecore = derived, money-math = primitives; `js/money-format.js` is display-only). *(E8 proposed)* |
 | Quote computation | `js/quotecore.js` (`computeQuote`) | the app + `quote-items.mjs`/`screen-flip-niches.mjs` all call it |
 | Band/window/diurnal math | `js/windowread.mjs` (`windowStats`, `robustBand` via re-export, `hourProfile`, `windowClear`, `asymPair`) | the pure window-range math; `robustBand` itself lives in `quotecore.js` |
-| Verdict rendering (held lots) | `pipeline/lib/item-context.mjs` (`renderHeldVerdict`) | ended the quote↔watch verdict fork |
+| Verdict rendering (held lots) | `pipeline/lib/market/item-context.mjs` (`renderHeldVerdict`) | ended the quote↔watch verdict fork |
 | Flip-niches (screen strategies) | `js/flip-niches.mjs` (`FLIP_NICHE_LIST`) | declarative specs; consumers look up `FLIP_NICHES[mode]` |
 | Held-item strategies | `js/held-item-strategy.mjs` (`enumeratePaths`/`weighPaths`) | "compare strategies" for a held lot (a `path` = a held-item strategy) |
 | Validators | `js/validate.mjs` | pure `(ctx) → {status, reason, evidence}` |

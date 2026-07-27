@@ -55,7 +55,7 @@ term lookup (core concepts + the codename dictionary — `flip-niche`/`held-item
 **`docs/LORE.md`**; each
 load-bearing "don’t-rebuild" invariant lives in the header of the module/test that governs it (e.g.
 the Gate-2-`CUT`-exempt rule in `pipeline/lib/thesis/watchstate.mjs`, the daemon’s zero-git rule in
-`pipeline/commands/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/probes.mjs`).
+`pipeline/commands/watch-log.mjs`, the probe empty-passthrough contract in `pipeline/lib/market/probes.mjs`).
 Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`**, enforced by
 `pipeline/ci/lint-skills.mjs` in CI. Before building something that feels new, check `git log` +
 `CHANGELOG.md` — much of it already exists; don’t work from a stale assumption that a capability is

@@ -331,7 +331,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Consumes the enriched ItemContext; recomputes no prices. Alternatives are decision SUPPORT, never
   alert inputs; `migration` here is the RAW instantaneous flag — the persistence-gated
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
-  (`pipeline/lib/thesis/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
+  (`pipeline/lib/thesis/watchstate.mjs`) + `pathsStage` (`pipeline/lib/market/item-context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/test/held-item-strategy.test.mjs`),
   `flip-niches.mjs` (P4c/P5/A2/RF2 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's SIX
   flip-niches (band/churn + scalp/value + **amplitude** + **reverse**; the `spread` and `rising` specs were DELETED in
@@ -535,7 +535,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `js/ui.js`; `STATE.ignored`/`STATE.ignoredMeta` in `js/state.js`.
 - `pipeline/pipeline-config.json` — **OPTIONAL, absent by default** (PC1, PLAN-PIPELINE-COMPOSITION).
   When present, sets pipeline-wide DEFAULTS the CLI flags can still override — the middle tier of the
-  `pipeline/lib/compose.mjs` `resolve()` precedence chain (**CLI flag > this file > hardcoded fallback**).
+  `pipeline/lib/market/compose.mjs` `resolve()` precedence chain (**CLI flag > this file > hardcoded fallback**).
   Its ABSENCE is the default state and produces byte-identical behavior to the pre-PC1 inline defaults;
   do not commit one just to have it. Read (once, cached) by `loadPipelineConfig()`. Minimal shape:
   `{ "mode": "band", "volSource": "rolling", "pressureExit": false, "asym": false, "phaseRescue": false }`
@@ -682,7 +682,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (detector, drift-adjusted margin gate, watchlist fetch reserve, `watch-positions.mjs --cycle`
   adaptive re-entry loop, real-fill retro) — the blindspot audit missed it because that per-topic
   doc never folded into `PLAN.md`. The one real open finding: ran `oscillationVsKnife`
-  (`js/forecast.mjs`) against 23 unrelated big-ticket items over `pipeline/lib/archive.mjs`'s 44-day
+  (`js/forecast.mjs`) against 23 unrelated big-ticket items over `pipeline/lib/market/archive.mjs`'s 44-day
   history and got OSCILLATING on 22/23 (96%) — the detector isn't currently selective enough to
   distinguish a genuine ~6–8 day repeating cycle from ordinary big-ticket price wobble, so it can't
   yet be used as evidence the fang-class shape is common or rare. Recommends NOT building a new
@@ -695,7 +695,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   history), so 99.5% of the historical "8,118 reach rejects" never actually dropped a suggestion
   (only 37 real gate-mode drops, system-wide, on a non-niche surface) — `reach` isn't currently a
   live false-negative source. Builds a NEW read-only forward-reach counterfactual join against
-  `pipeline/lib/archive.mjs` (not possible a week ago per `PLAN-REACH-CALIBRATION.md`'s AC1 note
+  `pipeline/lib/market/archive.mjs` (not possible a week ago per `PLAN-REACH-CALIBRATION.md`'s AC1 note
   that the archive then had only 189 buckets; now 1.1M rows / 44 days) — finds ~31% of
   reach-rejected ask/bid levels DID get reached within the following 8h by real market data,
   suggesting the reject threshold would be somewhat loose if ever graduated from inform to gate.
@@ -781,7 +781,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (holdthesis, sessionthesis, watchstate, reverseflipstate); **`pipeline/lib/reconstruct/`** = the
   FIFO book reconstruction (reconstruct, campaigns, offers, positions, fill-placement, sync-invoke,
   logblind); **`pipeline/lib/timing/`** = the cycle/velocity clock (cyclewatch, velocity, velocitytag,
-  staleexit, statetransition). Files not yet clustered stay at
+  staleexit, statetransition); **`pipeline/lib/market/`** = market data acquisition (marketfetch,
+  archive, warm-term-structure, compose, guideanchor, item-context, probes, hourly-lmh). Files not yet
+  clustered stay at
   `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design;
   **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
@@ -941,7 +943,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     its own block, requestable alone, inform-only n≈0, rides `--json` as `result.trajectory`). `--hourly
     [--days N]` (PLAN-DIURNAL-HOURLY) = the RAW per-LOCAL-hour LOW/MID/HIGH grid: a 7d-avg (median L/M/H)
     block + the last N dates (default 3, most-recent-first) broken out individually, off the pure
-    `pipeline/lib/hourly-lmh.mjs` `hourlyLMH(series1h,{days})` helper — the hour-by-hour detail the dip/peak
+    `pipeline/lib/market/hourly-lmh.mjs` `hourlyLMH(series1h,{days})` helper — the hour-by-hour detail the dip/peak
     summary distills away (reuses the same 1h series, NO second fetch; its own block, requestable alone;
     inform-only n≈0, rides `--json` as `result.hourly`); the grid now ALSO carries a per-hour `Δ/d` column
     + a summary line off the sibling `hourlyDrift(series1h,{days,ask})` export (PLAN-HOURLY-3DAY-TREND HT0/HT1)
@@ -1199,7 +1201,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (with a one-time `daily_seed` import of the pre-D0 `.cache/daily` mids). Surgically suppresses the
     one `node:sqlite` ExperimentalWarning via a `process.emitWarning` filter installed before a
     `createRequire` load — no global `--no-warnings` flag on any script. CLI: `node
-    pipeline/lib/archive.mjs [--prune-before <ts>]` (prune shipped, unused by default)), `marketfetch.mjs`
+    pipeline/lib/market/archive.mjs [--prune-before <ts>]` (prune shipped, unused by default)), `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
     `loadHistDaily` (YF1) + `loadBands(hours,{db})` — the whole-market 5m intraday band read, PERF-1
     (2026-07-19) re-pointed at the D0 SQLite archive (`marketAt('5m',w)`, check-before-fetch,
@@ -1792,14 +1794,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     one JSON line `{ts,id,name,guide,prev}` per observed change, appended by `watch-positions.mjs`
     `logGuideChanges()` at watch cadence. Purpose: pin each item's ~daily guide-update
     time + magnitude to feed the guide-re-anchor pricing edge (PLAN.md Discovered,
-    2026-07-06). Consumer: `pipeline/lib/guideanchor.mjs` (YP1 — the guide re-anchor model, honesty-gated
+    2026-07-06). Consumer: `pipeline/lib/market/guideanchor.mjs` (YP1 — the guide re-anchor model, honesty-gated
     on accrual; quote-items.mjs/watch-positions.mjs surface its advisory line, silent until enough real updates accrue). (Not auto-committed by
     `sync-fills.mjs`; commit it periodically so the record on `origin` stays current.)
   - `pipeline/.market-archive.sqlite` (+ `-wal`/`-shm` sidecars) — **gitignored, machine-local, D0**:
     the Tier-1 SQLite market archive. Append-forever RAW `/1h`+`/5m` whole-market observations
     (~30–35GB/yr, Ben-approved) that the wiki API only serves ~30h/item live — the ONLY route to broad
     intraday history, feeding P3's term structure + P6's backtests. Deliberately OUTSIDE `pipeline/.cache/`
-    (that tree is disposable/pruned; the archive must survive). Producer: `pipeline/lib/archive.mjs`
+    (that tree is disposable/pruned; the archive must survive). Producer: `pipeline/lib/market/archive.mjs`
     (`append`, via `loadDaily`/`loadSnapshot`). Consumers: `loadDaily`'s regime proxy + P3's
     `js/termstructure.mjs` durable-floor read (via `loadDaily`, incl. the read-only `{noFetch:true}` path
     quote-items.mjs uses); the Pipeline-v2 context chain (P0+) as it lands. NEVER committed (huge, machine-local,
@@ -1854,7 +1856,7 @@ run `pipeline/test/quotecore.test.mjs` + `pipeline/test/reconstruct.test.mjs`.
 | `js/forecast.mjs` | `pipeline/test/forecast.test.mjs`, `pipeline/commands/read-window-range.mjs` + `pipeline/commands/quote-items.mjs` (`driftExitFrom` Chunk 5), `js/amplitudescreen.mjs`, and **`js/estimators/pair.mjs`** (PLAN-ESTIMATOR-HONEST-SELL E1 — `driftExitFrom` for the `estSellForward` "list at X" forward projection); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Trends "Forward forecast" section: `diurnalForecast`/`fmtEta`, provisional PF n≈0). Console-side consumers still pending — PF7 validate. An app-behavior change to it bumps APP_VERSION. |
 | `js/validate.mjs` | `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/validate.test.mjs`, `pipeline/test/termstructure.test.mjs`, `pipeline/test/dipposture.test.mjs` (DP1 — `dipPostureValidator`) (P2/P3 — the validator registry: reach + floor + dip-posture); imports `js/quotecore.js` (DP1 — `recentDirection`); **APP-IMPORTED by `js/trends.js`** (TV — `reachValidator` beside the Diurnal timing chart; `floorValidator`+`trajectoryValidator` beside the 0.60.0 term-structure overlay — all inform-only) |
 | `js/termstructure.mjs` | `js/validate.mjs`, `pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs`, `pipeline/test/termstructure.test.mjs` (P3 — term structure / durable floor); **APP-IMPORTED by `js/trends.js`** (TV, 0.60.0 — the Price-history floor/ceiling overlay). Imports `js/quotecore.js` for the shared `quantileSorted` (SF-1) and re-exports it as `quantile`. |
-| `js/held-item-strategy.mjs` | `pipeline/lib/item-context.mjs` (`pathsStage`, P4b — so `watch-positions.mjs` + `quote-items.mjs --positions` at runtime), `js/flip-niches.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/commands/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/test/held-item-strategy.test.mjs`, `pipeline/test/pathpersist.test.mjs` (not yet app-imported) |
+| `js/held-item-strategy.mjs` | `pipeline/lib/market/item-context.mjs` (`pathsStage`, P4b — so `watch-positions.mjs` + `quote-items.mjs --positions` at runtime), `js/flip-niches.mjs` (P4c — `PATH_KEYS` vocabulary), `pipeline/commands/screen-flip-niches.mjs` (P4c — per-row entry-path annotation), `pipeline/test/held-item-strategy.test.mjs`, `pipeline/test/pathpersist.test.mjs` (not yet app-imported) |
 | `js/flip-niches.mjs` | `pipeline/lib/gatecandidates.mjs` (spec-driven gate edge/pool/rank; RF2 — `gate:'reverse'` routes to `gateReverseFlipCandidates`), `pipeline/commands/screen-flip-niches.mjs` (mode-name lists + `defaultPath`; P6b — the per-spec `estimator` family + `priceBasis`; RF2 — the `reverse` mode / `runReverseMode` branch), `js/estimators.mjs` (P6b — `estimatorFor(spec)`/`quotedPair(spec,row)` read those two fields; moved from pipeline/lib 2026-07-10), `pipeline/test/flip-niches.test.mjs` (P4c/P6b/RF2 — the declarative flip-niche registry; not yet app-imported) |
 | `pipeline/lib/admission.mjs` | `pipeline/commands/screen-flip-niches.mjs` (`pickFetchPool`/`buildTrackIndex` — the DEFAULT fetch-pool admission path, PLAN-SCREEN-ARCHITECTURE, 2026-07-18), `pipeline/test/admission.test.mjs`. Replaces `gatecandidates.mjs`'s `rankAndSlice` thin-lane rank (raw gp-flow → after-tax `expGpDay`) + adds a bounded rotating exploration reserve (starvation-proofing), a boost-only track-record prior off `positions.json` closed lots, and an exclusion report (every non-admitted gated candidate returned with a reason) — the fix for the Abyssal-bludgeon/Sanguinesti-staff thin-reserve starvation anchor incident (2026-07-17). `gatecandidates.mjs`'s `rankAndSlice` is UNCHANGED, still fixture/golden-pinned, and stays selectable via `--admission legacy` for rollback. AR2 (PLAN-ARCHITECTURE-COHERENCE): a survivor admitted by the `Date.now()`-bucketed exploration reserve (rather than ranked in) is tagged `via:'explore'`; `screen-flip-niches.mjs` surfaces that as a small 🎲 token on the Item cell so a rotating-lottery slot reads honestly as such. The rotation logic itself is intentionally left non-deterministic (marker, not determinism fix); inform-only, no gate/rank/grade/`screen.json`-number impact. F-B (2026-07-22): `pickFetchPool`'s amplitude branch (the DEFAULT admission path — this is the one a real scan actually runs) mirrors `gatecandidates.mjs`'s watchlist reserve, since the amplitude flip-niche's own top-N slice lives here too, not only in the legacy `rankAndSlice`. PLAN-FETCH-POOL-SCALING (2026-07-24): `pickFetchPool`'s value branch gained the SAME `VALUE_RESERVE` carve-out as legacy `rankAndSlice` (both admission paths must implement it — the double-maintenance shape this file's header documents), and `clampUnionFetch(…, TOTAL_FETCH_MAX)` — the cross-flip-niche fetch-budget ceiling that clamps the deduped survivor union under `--mode all --scale-pool`, protecting held/watched/`via`-tagged reserve rows and reporting every trimmed row (reason `total-fetch-max`, never a silent drop). All PLACEHOLDER n≈0. |
 | `pipeline/lib/structural-admission.mjs` | `pipeline/lib/gatecandidates.mjs` (`eachStructuralCandidate`/`DEFAULT_STRUCTURAL` — routed via `t.GATE === 'structural'`), `pipeline/test/structural-admission.test.mjs`. **PLAN-LANE-ADMISSION Chunk B** (2026-07-25) — the NEW edge-blind STRUCTURAL fetch-pool admission gate: one universal gate (`value ≥ 100gp` ∧ `thin = min(hpv,lpv) ≥ max(limit,25)`, null-limit → 25 fallback ∧ `notional = value × volDay ≥ 25m/day`) + a volume lane classifier (`volLane: volDay ≥ 20k → 'churn' else 'gear'` — ORTHOGONAL to the `churn` flip-niche MODE in `js/flip-niches.mjs`, a documented naming-collision risk). Exports `structuralGate(item,t?)` (pure predicate → `{pass,reason,thinDepth,notional,volLane}`), `classifyVolLane`, and `eachStructuralCandidate(ctx,t?,fn)` — an alternate iterator with the SAME callback shape as `gatecandidates.mjs`'s `eachLiquidCandidate` (gear survivors carry `thin:true` as the big-ticket/attention-floor-exempt analogue). Selectable via `--gate structural|legacy` (default `legacy`), INDEPENDENT of `--admission` (a 2×2 with it — `--admission` is pool ORDERING, `--gate` is pool MEMBERSHIP). Purely additive behind the flag: `--gate legacy`/omitted is byte-identical (no golden/fixture change); the per-mode `spec.edge` still runs post-admission in this library-only chunk (edge-blind end-to-end is a later chunk). Thresholds (25m notional, thin-floor 25, 20k vol-cut) are NAMED PLACEHOLDERS (rule 4) — snapshot+own-book calibrated, NOT outcome-validated. |

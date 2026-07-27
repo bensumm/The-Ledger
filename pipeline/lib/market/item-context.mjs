@@ -39,11 +39,11 @@
  * SAME `heldMomVerdict(ctx)` decision. Both strings are reproduced VERBATIM from the pre-P0 inline
  * functions so existing output stays byte-identical; only the shared source of `mv` changed.
  */
-import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../js/quotecore.js';
-import { fmtP } from '../../js/money-format.js';
+import { computeQuote, momVerdict, breakEven, phase, BIG_TICKET_GP, FRESH_HOURS } from '../../../js/quotecore.js';
+import { fmtP } from '../../../js/money-format.js';
 import { computeDeltas, advanceState, convictionGate, pathPersistence,
-  verdictPersistence, VERDICT_PERSIST_MS } from './thesis/watchstate.mjs';
-import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';
+  verdictPersistence, VERDICT_PERSIST_MS } from '../thesis/watchstate.mjs';
+import { enumeratePaths, weighPaths } from '../../../js/held-item-strategy.mjs';
 
 // ---------------------------------------------------------------------------
 // STAGE ENRICHERS — each (ctx, input) → ctx, mutating exactly one namespace and returning ctx so

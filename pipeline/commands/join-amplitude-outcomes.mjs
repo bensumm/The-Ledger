@@ -26,8 +26,8 @@
  */
 import { fileURLToPath } from 'node:url';
 import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
-import { loadMapping } from '../lib/marketfetch.mjs';
-import * as archive from '../lib/archive.mjs';
+import { loadMapping } from '../lib/market/marketfetch.mjs';
+import * as archive from '../lib/market/archive.mjs';
 
 // Bucket a forward 1h series (archive rows mapped to windowStats shape) into per-LOCAL-day {low, hi,
 // firstTs} within [from, to], chronological. PURE. Mirrors windowStats' per-day min-low/max-hi, but

@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { open as openArchive } from './archive.mjs';   // D0: Tier-1 SQLite market archive
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.join(HERE, '..', '.cache'); // pipeline/.cache/ — this file lives in pipeline/lib/ (OR2)
+const CACHE_DIR = path.join(HERE, '..', '..', '.cache'); // pipeline/.cache/ — this file lives in pipeline/lib/ (OR2)
 const DAILY_DIR = path.join(CACHE_DIR, 'daily');       // whole-market 1h window archive @6h spacing (regime proxy)
 const TS_DIR = path.join(CACHE_DIR, 'ts');             // per-item timeseries cache (screen re-fetch avoidance)
 const OB_DIR = path.join(CACHE_DIR, 'outcomes-bands'); // per-item REDUCED historical 5m bands (join-outcomes.mjs; tiny)
@@ -436,7 +436,7 @@ export function newest1hAgeHours({ db, now = Date.now() } = {}) {
    honest historical RECONSTRUCTION for the O1 backtest-join (the real band a trade sat in, flier and
    all), not surfacing. Thresholds are NAMED PLACEHOLDERS pending validation; rawBandLo/rawBandHi kept
    for audit. */
-import { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q } from '../../js/quotecore.js';
+import { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q } from '../../../js/quotecore.js';
 export { robustBand, BAND_EDGE_MIN_SAMPLE, BAND_EDGE_HI_Q, BAND_EDGE_LO_Q };   // re-export: callers/tests import from here
 
 export async function loadBands(hours = 2, { db } = {}) {

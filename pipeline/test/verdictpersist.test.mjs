@@ -27,7 +27,7 @@
  */
 import assert from 'node:assert/strict';
 import { verdictPersistence, verdictSeverity, VERDICT_PERSIST_MS, convictionGate } from '../lib/thesis/watchstate.mjs';
-import { heldDisplay, rawHeldToken, renderHeldVerdict } from '../lib/item-context.mjs';
+import { heldDisplay, rawHeldToken, renderHeldVerdict } from '../lib/market/item-context.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -119,7 +119,7 @@ ok('legacy prior (no display fields) behaves as first sight — adopt the candid
 /* =============================================================================================
  * 1. PARKED-AT-BE (the Berserker shape) — the label holds ONE state while the raw token flips
  * ============================================================================================= */
-import { parkedDeadband, BE_DEADBAND_BAND_FRAC, BE_DEADBAND_MIN_PCT } from '../lib/item-context.mjs';
+import { parkedDeadband, BE_DEADBAND_BAND_FRAC, BE_DEADBAND_MIN_PCT } from '../lib/market/item-context.mjs';
 
 ok('FIXTURE 1: instabuy oscillating across BE inside the dead-band → ONE rendered state over ≥10 passes, raw still flips', () => {
   const BE = 3_150_000;                       // Berserker: BE 3.15m, 2h raw band 3.10–3.17m

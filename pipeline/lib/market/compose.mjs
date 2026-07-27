@@ -37,7 +37,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CONFIG_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'pipeline-config.json');
+const CONFIG_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pipeline-config.json');
 
 let _configCache;   // undefined = not yet read; an object once loaded (absent file → {})
 /* loadPipelineConfig(): the optional pipeline/pipeline-config.json, read once and cached. Absent /

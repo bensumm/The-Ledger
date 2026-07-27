@@ -11,7 +11,7 @@
  * It builds NONE of safeQuantile/qEvidence/impactFold (AC3, gated on this study's findings).
  */
 import { windowStats, placement } from '../../../js/windowread.mjs';
-import { rolling24FromTs1h } from '../marketfetch.mjs';
+import { rolling24FromTs1h } from '../market/marketfetch.mjs';
 
 export const FP_MIN_DAYS = 5;   // fewer scored trailing days than this ⇒ 'thin-history' (mirrors ASYM_MIN_DAYS)
 

@@ -66,9 +66,9 @@ import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
 import { limitWindow, buysByItem } from '../lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../../js/money-format.js';
 import { briefLine } from '../../js/watchcore.js';   // --brief compact book: format owned by the script
-import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
+import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/market/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
-import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
+import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/market/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
@@ -77,7 +77,7 @@ import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
-import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
+import { resolve, loadPipelineConfig } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/thesis/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
 import { cycleTick, cycleNoteLines } from '../lib/timing/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
 import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
@@ -89,7 +89,7 @@ import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs'; 
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
-import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
+import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', '..', 'positions.json');

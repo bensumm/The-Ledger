@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { reconstruct, buildTombstonedEvents } from '../lib/reconstruct/reconstruct.mjs';
 import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs'; // shared log discovery + open-offer semantics; LH2.4 restart-blindness suspects
 import { breakEven } from '../../js/quotecore.js'; // shared tax-capped break-even (chunk 4.1 / BE1)
-import { loadMapping } from '../lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
+import { loadMapping } from '../lib/market/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — tolerates the flat cache shape
 import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
 import { loadIgnored, quarantineEvents, offerQuarantined } from '../lib/ignored.mjs'; // MERCH-book quarantine (shared with positions.json/watch)
 

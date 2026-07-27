@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadMapping } from '../lib/marketfetch.mjs';
+import { loadMapping } from '../lib/market/marketfetch.mjs';
 import {
   loadOwned, saveOwned, ownedFor, upsertOwnedItem, removePending, computeOwnedQty,
 } from '../lib/ownedledger.mjs';

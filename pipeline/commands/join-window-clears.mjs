@@ -52,7 +52,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reconstructCampaigns, campaignBase } from '../lib/reconstruct/campaigns.mjs';
 import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
-import { loadMapping } from '../lib/marketfetch.mjs';
+import { loadMapping } from '../lib/market/marketfetch.mjs';
 import { parseArgs, median } from '../lib/render/cli.mjs';
 import { inWindow } from '../../js/windowread.mjs';
 

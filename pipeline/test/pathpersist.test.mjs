@@ -26,7 +26,7 @@ import {
   pathPersistence, PATH_PERSIST_MS, PATH_HYSTERESIS_MARGIN,
   computeDeltas, advanceState,
 } from '../lib/thesis/watchstate.mjs';
-import { pathsStage, renderPathLine } from '../lib/item-context.mjs';
+import { pathsStage, renderPathLine } from '../lib/market/item-context.mjs';
 import { PATH_KEYS } from '../../js/held-item-strategy.mjs';
 
 let pass = 0;

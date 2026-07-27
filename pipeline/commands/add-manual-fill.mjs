@@ -57,7 +57,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { tax as GE_TAX, breakEven } from '../../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + shared tax-capped inverse — no private copy
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
-import { loadMapping } from '../lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
+import { loadMapping } from '../lib/market/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
 
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
 const OUT = path.join(LOG_DIR, 'coffer-manual.log'); // sibling file; ingested by sync-fills.mjs, never written by RuneLite

@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { setFetchCache, fetchCacheEnabled, _fetchCacheGet, _fetchCachePut, FETCH_TTL } from '../lib/marketfetch.mjs';
+import { setFetchCache, fetchCacheEnabled, _fetchCacheGet, _fetchCachePut, FETCH_TTL } from '../lib/market/marketfetch.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -34,7 +34,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadModules, runProbes, logFirings, collectNeeds, loadedModules, resetModules, PROBES_DIR } from '../lib/probes.mjs';
+import { loadModules, runProbes, logFirings, collectNeeds, loadedModules, resetModules, PROBES_DIR } from '../lib/market/probes.mjs';
 import dip, { DIP_MIN_PCT } from '../probes/dip.mjs';
 import froth from '../probes/froth.mjs';
 import anchor, { anchorNudge, nearestAnchors } from '../probes/anchor.mjs';

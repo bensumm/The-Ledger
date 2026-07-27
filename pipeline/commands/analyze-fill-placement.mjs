@@ -37,9 +37,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from '../lib/render/cli.mjs';
-import { fetchTs } from '../lib/marketfetch.mjs';
+import { fetchTs } from '../lib/market/marketfetch.mjs';
 import { collapseOffers } from '../lib/reconstruct/reconstruct.mjs';
-import { open as openArchive } from '../lib/archive.mjs';
+import { open as openArchive } from '../lib/market/archive.mjs';
 import { median, quant, spearman, lotPlacement, smoothingBias, FP_MIN_DAYS } from '../lib/reconstruct/fill-placement.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

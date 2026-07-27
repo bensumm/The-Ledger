@@ -14,7 +14,7 @@
  *   - guideAnchorLine projects the next guide off the median step only when a current guide is given.
  */
 import assert from 'node:assert/strict';
-import { guideUpdates, guideAnchorModel, guideAnchorLine, GUIDE_MIN_UPDATES } from '../lib/guideanchor.mjs';
+import { guideUpdates, guideAnchorModel, guideAnchorLine, GUIDE_MIN_UPDATES } from '../lib/market/guideanchor.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

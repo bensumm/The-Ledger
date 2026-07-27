@@ -11,8 +11,8 @@
  *    across a pass instead of loadBands opening/closing its own every call.
  */
 import assert from 'node:assert/strict';
-import { open } from '../lib/archive.mjs';
-import { loadBands, loadDailyRangeBulk, FULL_DAY_1H_BUCKETS } from '../lib/marketfetch.mjs';
+import { open } from '../lib/market/archive.mjs';
+import { loadBands, loadDailyRangeBulk, FULL_DAY_1H_BUCKETS } from '../lib/market/marketfetch.mjs';
 
 let n = 0;
 async function ok(name, fn) { await fn(); n++; console.log('  ✓ ' + name); }
