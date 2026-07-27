@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * cli.test.mjs — acceptance fixtures for the shared CLI plumbing (pipeline/lib/cli.mjs) plus the
- * liquidity-class vocabulary (pipeline/lib/suggestlog.mjs).
+ * cli.test.mjs — acceptance fixtures for the shared CLI plumbing (pipeline/lib/render/cli.mjs) plus
+ * the liquidity-class vocabulary (pipeline/lib/render/suggestlog.mjs).
  *
- * Colocated NEXT TO its subjects in pipeline/lib/. All three functions are PURE — synthetic inputs
- * only, no live data (CLAUDE.md rule 4). Importing suggestlog does NOT write suggestions.jsonl
- * (logSuggestions is never called here), so this suite leaves no pollution.
- * Run: `node pipeline/lib/cli.test.mjs`  (exits non-zero on any failure).
+ * parseGp/median/liqClassOf are PURE — synthetic inputs only, no live data (CLAUDE.md rule 4).
+ * Importing suggestlog does NOT write suggestions.jsonl (logSuggestions is never called here). The
+ * one check that DOES touch disk (§4, writeLastReport) writes a throwaway `kind` and removes it, so
+ * this suite still leaves no pollution.
+ * Run: `node pipeline/test/cli.test.mjs`  (exits non-zero on any failure).
  *
  * BUSINESS REQUIREMENTS pinned here (diff a change against these):
  *   - parseGp honors a k/m/b suffix + commas + a LEADING SIGN, passes a number through (rounded),
@@ -19,7 +20,10 @@
  *     (the NY2.4 liquidity vocabulary).
  */
 import assert from 'node:assert/strict';
-import { parseGp, median } from '../lib/render/cli.mjs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseGp, median, writeLastReport } from '../lib/render/cli.mjs';
 import { liqClassOf } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;
@@ -67,6 +71,28 @@ ok('liqClassOf: <100 thin, [100,1000) mid, ≥1000 liquid, null unknown', () => 
   assert.equal(liqClassOf(999), 'mid');
   assert.equal(liqClassOf(1000), 'liquid');          // boundary: 1000 is liquid, not mid
   assert.equal(liqClassOf(50_000), 'liquid');
+});
+
+// --- 4. writeLastReport writes WHERE IT SAYS IT DOES ------------------------------------------
+// Regression (PLAN-LIB-SUBDIRS, 2026-07-27): cli.mjs moved into pipeline/lib/render/ but its
+// LAST_REPORT_DIR kept a single `..`, so the dump landed in pipeline/lib/.cache/ while the function
+// went on RETURNING 'pipeline/.cache/last-report/<kind>.json'. Every agent surface (/positions, /scan,
+// /morning) reads the returned path, so they silently read a stale pre-move file — and the write is
+// wrapped in a `catch {}`, so nothing anywhere threw. No import check or syntax check can see a
+// runtime path-arithmetic bug; this asserts the two halves agree, which is the only thing that would
+// have caught it. Uses a throwaway `kind` so a real screen/quote/watch dump is never clobbered.
+ok('writeLastReport: the returned repo-relative path is where the file actually lands', () => {
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const kind = '__pathcheck';
+  const rel = writeLastReport(kind, { sections: [] });
+  const abs = join(ROOT, rel);
+  try {
+    assert.equal(rel, `pipeline/.cache/last-report/${kind}.json`);
+    assert.ok(existsSync(abs), `writeLastReport returned ${rel} but no file exists there`);
+    assert.equal(JSON.parse(readFileSync(abs, 'utf8')).kind, kind);
+  } finally {
+    try { rmSync(abs); } catch { /* best-effort cleanup */ }
+  }
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

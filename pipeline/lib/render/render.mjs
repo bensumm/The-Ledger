@@ -43,7 +43,7 @@
  *
  * STAGE-2 SEAM (R6, now EXERCISED by AO1): because a report object is plain JSON, a consumer can write it
  * out and re-render it elsewhere. Two live consumers now do: renderHtmlTable below (the app's Scan tab,
- * from screen.json) and AO1's `writeLastReport` (pipeline/lib/cli.mjs), which dumps the exact report
+ * from screen.json) and AO1's `writeLastReport` (pipeline/lib/render/cli.mjs), which dumps the exact report
  * object(s) each of the three market-read CLIs builds to pipeline/.cache/last-report/<kind>.json for an
  * agent read (the `--quiet` path). So: never put pre-rendered markdown as the ONLY representation of a
  * structured fact, never bake console widths/ANSI into cells, and keep render.mjs pipeline-only (the SHAPE

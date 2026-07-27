@@ -10,6 +10,32 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### `writeLastReport` wrote to the wrong directory after the lib reorg — agent reads went stale (pipeline-only, 2026-07-27)
+The eighth self-relative path the `PLAN-LIB-SUBDIRS` reorg silently relocated, and the worst of them,
+because it broke a surface no guard watches: the agent-readable report dump.
+
+`cli.mjs` moved into `pipeline/lib/render/`, but its `LAST_REPORT_DIR` kept a single `..`. So it began
+**writing** to `pipeline/lib/.cache/last-report/` while still **returning**
+`pipeline/.cache/last-report/<kind>.json` as the path to read. The `/positions`, `/scan` and `/morning`
+skills read that returned path — and got the last pre-move file. Measured on discovery: the dump those
+skills read was **~4 hours stale** (07-26 19:58) while live runs were landing at 07-27 00:00 somewhere
+else entirely. The failure is silent by construction — the write sits inside a `catch {}` whose comment
+says "a dump-write failure must not break the read", and here the write *succeeded*, just in the wrong
+place. Nothing threw, no test failed, and all seven CI guards stayed green: `check-imports` sees module
+specifiers, not runtime `path.join` arithmetic.
+
+This is precisely the class `PLAN-LIB-SUBDIRS` recorded as its main cost ("a pure move + import rewrite
+= no behavior change" was FALSE) — the sweep just missed one, because `cli.mjs` builds its path inline
+from `import.meta.url` with no intermediate `HERE` variable, which is the shape the mover's detector
+keys on.
+
+Fix: `'..'` → `'..', '..'`, plus the regression test that would have caught it —
+`cli.test.mjs` §4 asserts the returned repo-relative path is where the file **actually lands**, verified
+to fail against the old path. A comment at the constant now ties the two halves together explicitly.
+Swept every other `import.meta.url` path under `pipeline/lib/*/`: all correct. Stale
+`pipeline/lib/cli.mjs` references in `render.mjs` + the test header reconciled; the orphaned
+`pipeline/lib/.cache/` tree removed.
+
 ### Window verification: `--window peak|dip`, in-window scoring, and the ALL-DAY label (pipeline-only, 2026-07-26)
 Fixes a real losing trade. A Divine super combat exit was verified with
 `read-window-range.mjs … --window 0-23 --ask 18643 --profile` and pitched as a 20:00–23:00 peak-window

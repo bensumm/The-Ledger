@@ -21,7 +21,11 @@ import { fileURLToPath } from 'node:url';
    (`.reports[]` of render.mjs section objects) regardless of how many the pass produced. Best-effort:
    never throws (a dump-write failure must not break the read). Returns the repo-relative display path.
    PURE of side effects on import (only writes when CALLED), so it's safe in a test-imported entrypoint. --- */
-const LAST_REPORT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '.cache', 'last-report');
+// TWO up: this file lives in pipeline/lib/render/, so the target is pipeline/.cache/last-report/.
+// It MUST stay in sync with the repo-relative path this function RETURNS (below) — they disagreed
+// once (PLAN-LIB-SUBDIRS, 2026-07-27: the render/ move left this at one `..`, so the dump silently
+// landed in pipeline/lib/.cache/ while callers were told to read pipeline/.cache/ and got a stale file).
+const LAST_REPORT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.cache', 'last-report');
 export function writeLastReport(kind, reports) {
   const payload = { kind, generatedAt: new Date().toISOString(), reports: Array.isArray(reports) ? reports : [reports] };
   try { mkdirSync(LAST_REPORT_DIR, { recursive: true }); writeFileSync(join(LAST_REPORT_DIR, kind + '.json'), JSON.stringify(payload)); }
