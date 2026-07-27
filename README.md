@@ -301,7 +301,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   rebuy-armed entries folded with any in-hand live mark + quote row; `holding` excluded), and
   `reverseFlipCycleNotes` (the shared inform-only note lines a surfaced cycle carries — thin rebuy-strand +
   the caller's pre-rendered `hourlyDriftNote` (HT4) + the stale nudge). No fetch/fs (the store IO stays in
-  `pipeline/lib/reverseflipstate.mjs`). NOT app-imported → no APP_VERSION bump. Fixture-pinned
+  `pipeline/lib/thesis/reverseflipstate.mjs`). NOT app-imported → no APP_VERSION bump. Fixture-pinned
   `pipeline/test/reverseflip.test.mjs` (RF1/RF6) + `pipeline/test/reverseflip-surfacing.test.mjs` (RF4)),
   `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
   calculator off Chunk A's `loadDailyRangeBulk` daily-range data: `intradayDailyRange(dayRanges)` (the
@@ -331,7 +331,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   Consumes the enriched ItemContext; recomputes no prices. Alternatives are decision SUPPORT, never
   alert inputs; `migration` here is the RAW instantaneous flag — the persistence-gated
   dominance/migration (arm-then-confirm + hysteresis) SHIPPED at P4b as `pathPersistence`
-  (`pipeline/lib/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
+  (`pipeline/lib/thesis/watchstate.mjs`) + `pathsStage` (`pipeline/lib/item-context.mjs`). NOT yet app-imported →
   no APP_VERSION bump. Fixture-pinned `pipeline/test/held-item-strategy.test.mjs`),
   `flip-niches.mjs` (P4c/P5/A2/RF2 — the PURE, DOM-free DECLARATIVE STRATEGY REGISTRY: the screen's SIX
   flip-niches (band/churn + scalp/value + **amplitude** + **reverse**; the `spread` and `rising` specs were DELETED in
@@ -440,7 +440,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   band), the running realized min/max this cycle, and a bounded history of `{expected, actual,
   adjustment}` calibration triples. PRODUCED + CONSUMED by `pipeline/commands/watch-positions.mjs
   --cycle` ONLY (opt-in; the default watch pass never touches the file) — rebuilt fresh each pass via
-  the SHARED `loadState`/`saveState` (`pipeline/lib/watchstate.mjs`), the pure logic in
+  the SHARED `loadState`/`saveState` (`pipeline/lib/thesis/watchstate.mjs`), the pure logic in
   `pipeline/lib/cyclewatch.mjs`. INFORM-ONLY (n≈0 placeholders); it drives a nested `cycle — …` note,
   never a verdict/alert/price. NOT app-imported. Gitignored like `pipeline/.cache/watch-state.json`
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
@@ -468,7 +468,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   tripwire 4,678, multi-day") the agent appends/upserts an entry (the greenlist pattern — hand-edit,
   `holdthesis.mjs upsertThesis`, or `declare-thesis.mjs set … --tripwire <gp> --exit <gp> --window <h-h>
   --path <key>`, which VN-2 made the full declared-plan writer); a 14-day TTL prunes stale
-  intent. `watch-positions.mjs` reads it READ-ONLY through `pipeline/lib/holdthesis.mjs` and passes it into
+  intent. `watch-positions.mjs` reads it READ-ONLY through `pipeline/lib/thesis/holdthesis.mjs` and passes it into
   `convictionGate` (`lib/watchstate.mjs`): while the live price holds ABOVE the declared tripwire,
   the EXPECTED signals — `UNDERWATER`/`CUT-CANDIDATE` and (VN-2) `LIST-TO-CLEAR` — are silenced to
   an armed note (the pre-peak trough is the plan, not news), and the shared display layer renders
@@ -776,9 +776,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   tools the `/cleanup` skill reads (lint-plan-lifecycle, report-branches — never wired into
   `checks.yml`); **`pipeline/lib/`** = the imported-only
   shared libraries — **being regrouped into concept subdirectories one cluster at a time**
-  (PLAN-LIB-SUBDIRS; `pipeline/lib/render/` = the output/reporting cluster is the first landed —
-  render, emit, cli, suggestlog, retrojoin, replay, analyze. Files not yet clustered stay at
-  `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design);
+  (PLAN-LIB-SUBDIRS). Landed clusters: **`pipeline/lib/render/`** = output/reporting (render, emit,
+  cli, suggestlog, retrojoin, replay, analyze); **`pipeline/lib/thesis/`** = the declared-state stores
+  (holdthesis, sessionthesis, watchstate, reverseflipstate). Files not yet clustered stay at
+  `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design;
   **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
   - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →

@@ -27,7 +27,7 @@ import {
   cycleTick, trackError, recordExpectation, bandHalf, shouldRecycle, cycleNoteLines,
   CYCLE_HISTORY_MAX, CYCLE_CONF_BAND_FRAC,
 } from '../lib/cyclewatch.mjs';
-import { loadState, saveState } from '../lib/watchstate.mjs';
+import { loadState, saveState } from '../lib/thesis/watchstate.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

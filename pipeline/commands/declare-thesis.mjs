@@ -23,8 +23,8 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from '../lib/marketfetch.mjs';
-import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from '../lib/sessionthesis.mjs';
-import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from '../lib/holdthesis.mjs';
+import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';
+import { loadHoldThesis, saveHoldThesis, pruneHoldThesis, thesisFor as holdThesisFor, upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis } from '../lib/thesis/holdthesis.mjs';
 import { parseGp } from '../lib/render/cli.mjs';   // VN-2 — numeric tripwire/exit for the hold-thesis write
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

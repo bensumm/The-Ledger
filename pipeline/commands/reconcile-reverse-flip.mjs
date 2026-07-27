@@ -25,7 +25,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadReverseFlip } from '../lib/reverseflipstate.mjs';
+import { loadReverseFlip } from '../lib/thesis/reverseflipstate.mjs';
 import { loadOwned, ownedFor } from '../lib/ownedledger.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

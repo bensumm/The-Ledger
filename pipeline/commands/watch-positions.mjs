@@ -78,7 +78,7 @@ import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral 
 import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
-import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
+import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/thesis/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
 import { cycleTick, cycleNoteLines } from '../lib/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
 import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
@@ -87,8 +87,8 @@ import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/recovery.mjs
 import { freedCapital } from '../lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
 import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
-import { loadThesis, pruneThesis, thesisLine } from '../lib/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
-import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
+import { loadThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
+import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

@@ -38,7 +38,7 @@ import { readOffersSnapshot } from '../lib/offers.mjs';
 import { hourProfile, hourlyDriftNote } from '../../js/windowread.mjs';
 import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
 import { fmt, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';
-import { loadReverseFlip, pruneReverseFlip } from '../lib/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
+import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

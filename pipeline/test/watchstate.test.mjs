@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 import {
   computeDeltas, advanceState, classifyBandTop, shouldReset, convictionGate,
   STALE_GAP_MS, BANDTOP_FLAT_PCT, marginBudgetNote, MARGIN_BUDGET_PCT, MARGIN_BUDGET_STREAK,
-} from '../lib/watchstate.mjs';
+} from '../lib/thesis/watchstate.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

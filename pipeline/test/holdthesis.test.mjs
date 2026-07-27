@@ -25,7 +25,7 @@ import path from 'node:path';
 import {
   loadHoldThesis, saveHoldThesis, thesisFor, upsertThesis, clearThesis, pruneHoldThesis,
   HOLD_THESIS_TTL_DAYS,
-} from '../lib/holdthesis.mjs';
+} from '../lib/thesis/holdthesis.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

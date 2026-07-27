@@ -26,7 +26,7 @@
  * Run: `node pipeline/test/verdictpersist.test.mjs`.
  */
 import assert from 'node:assert/strict';
-import { verdictPersistence, verdictSeverity, VERDICT_PERSIST_MS, convictionGate } from '../lib/watchstate.mjs';
+import { verdictPersistence, verdictSeverity, VERDICT_PERSIST_MS, convictionGate } from '../lib/thesis/watchstate.mjs';
 import { heldDisplay, rawHeldToken, renderHeldVerdict } from '../lib/item-context.mjs';
 
 let pass = 0;

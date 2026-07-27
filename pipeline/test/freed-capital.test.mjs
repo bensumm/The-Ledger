@@ -18,7 +18,7 @@
  */
 import assert from 'node:assert/strict';
 import { freedCapital, FREED_CAPITAL_SCAN_GP } from '../lib/freed-capital.mjs';
-import { STALE_GAP_MS } from '../lib/watchstate.mjs';
+import { STALE_GAP_MS } from '../lib/thesis/watchstate.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

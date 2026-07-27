@@ -108,8 +108,8 @@ import { formatTimedLap, formatBasePosition } from '../lib/render/emit.mjs';   /
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, VALUE_RESERVE_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP,
   scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/gatecandidates.mjs';   // RF2 — reverse routes via gateCandidates('reverse', …) → gateReverseFlipCandidates internally
 import { loadOwned, computeOwnedQty } from '../lib/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
-import { loadReverseFlip, reverseFlipFor } from '../lib/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
-import { loadHoldThesis } from '../lib/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
+import { loadReverseFlip, reverseFlipFor } from '../lib/thesis/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
+import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
 import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote, THIN_DRIFT_DAYS } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX } from '../lib/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)

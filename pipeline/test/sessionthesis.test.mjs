@@ -17,10 +17,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine, THESIS_TTL_DAYS } from '../lib/sessionthesis.mjs';
+import { loadThesis, saveThesis, upsertThesis, clearThesis, pruneThesis, thesisLine, THESIS_TTL_DAYS } from '../lib/thesis/sessionthesis.mjs';
 // FIX 2 (2026-07-13): `declare-thesis.mjs clear` must reach BOTH stores. These are the pure building blocks it
 // wires together — the session clearThesis (above) + the hold-thesis clearThesis/upsertThesis (below).
-import { upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis, thesisFor as holdThesisFor } from '../lib/holdthesis.mjs';
+import { upsertThesis as upsertHoldThesis, clearThesis as clearHoldThesis, thesisFor as holdThesisFor } from '../lib/thesis/holdthesis.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

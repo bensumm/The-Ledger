@@ -22,7 +22,7 @@ import { tax } from '../../js/money-math.js';   // the ONE tax impl — beRebuy 
 import {
   loadReverseFlip, saveReverseFlip, reverseFlipFor, upsertReverseFlip, clearReverseFlip, pruneReverseFlip,
   REVERSE_FLIP_STATES,
-} from '../lib/reverseflipstate.mjs';
+} from '../lib/thesis/reverseflipstate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // TRACKED repo-root store. COFFER_REVERSE_FLIP_PATH env override exists ONLY so the round-trip test

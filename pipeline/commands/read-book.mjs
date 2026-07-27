@@ -32,7 +32,7 @@ import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 import { buysByItem, limitWindow } from '../lib/limits.mjs';
 import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/book-model.mjs';
-import { loadReverseFlip, pruneReverseFlip } from '../lib/reverseflipstate.mjs';   // RF0 store — RF4 "Reverse-flip pending" section
+import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 "Reverse-flip pending" section
 import { fmt, fmtP } from '../../js/money-format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

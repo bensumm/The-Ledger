@@ -20,7 +20,7 @@ import path from 'node:path';
 import {
   loadReverseFlip, saveReverseFlip, reverseFlipFor, upsertReverseFlip, clearReverseFlip, pruneReverseFlip,
   REVERSE_FLIP_STATES, REVERSE_FLIP_TTL_DAYS,
-} from '../lib/reverseflipstate.mjs';
+} from '../lib/thesis/reverseflipstate.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
