@@ -62,6 +62,38 @@ export function ownedFor(store, id) {
   return (store?.items || []).find(e => e && e.id === id) || null;
 }
 
+/* keepIds — the Set of itemIds classified 'keep'. PURE. This is the gate matchTrades takes as its
+   `keeps` option (SM1, PLAN-SYMMETRIC-MATCHING): a sell with no open buy lot opens a keep ROUND-TRIP
+   short only for these items; everything else stays `unmatched` ("basis unknown"). Deliberately
+   narrow — a non-keep pre-log sell matched against a later flip buy would invent a round trip that
+   never happened and orphan the flip that did. */
+export function keepIds(store) {
+  return new Set((store?.items || []).filter(e => e && e.classification === 'keep').map(e => e.id));
+}
+
+/* keepMisclassificationRisks — the §5.1 hygiene guard. A 'keep' that keeps turning up in CLOSED flips
+   is very likely mis-classified (bank-seeded as "this was sitting there" rather than "gear I don't
+   trade"), and a mis-classified keep is exactly what makes the SM1 gate unsafe: its sells open shorts
+   that then absorb buys belonging to genuine flipping, cascading a re-attribution through the item's
+   history. Real anchor (2026-07-26): Abyssal bludgeon carried 28 closed flips against 4 for the next
+   busiest keep — a 7x outlier, reclassified to 'flip'.
+
+   INFORM-ONLY: returns rows, never mutates and never gates. THRESHOLD IS A PLACEHOLDER (n=1) — the one
+   observed separation is 28 vs 4, so anything in that gap is defensible; do not read it as calibrated.
+   PURE. */
+export function keepMisclassificationRisks(store, closedRows, { threshold = 10 } = {}) {
+  const keeps = keepIds(store);
+  const counts = new Map();
+  for (const r of closedRows || []) {
+    if (!r || !keeps.has(r.itemId) || r.withdrawn || r.keepRoundTrip) continue; // only CASH flips count
+    counts.set(r.itemId, (counts.get(r.itemId) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, n]) => n >= threshold)
+    .map(([id, n]) => ({ id, name: ownedFor(store, id)?.name || ('#' + id), closedFlips: n, threshold }))
+    .sort((a, b) => b.closedFlips - a.closedFlips);
+}
+
 /* upsertOwnedItem — replace any existing items[] entry for the id, else append. PURE (new store).
    Defaults the optional fields; the caller supplies whatever it knows. */
 export function upsertOwnedItem(store, entry) {

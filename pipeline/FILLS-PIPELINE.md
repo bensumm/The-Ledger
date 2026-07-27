@@ -199,9 +199,32 @@ answer "what do I hold?" the same way and a purged lot never reappears as a phan
 - **`matchTrades()`** FIFO-matches buy fills against sell fills per item → `closed`
   (with 2% tax applied to the sell exec price, `realised` = after-tax profit) and
   `open` (unsold inventory at real avg cost; same item+price lots merged).
-- **`unmatched`** = sells with no logged buy lot (the log started mid-stream, so the
-  buy predates it). Cost basis is unknowable ⇒ **no realized profit is invented** for
+  It is **SYMMETRIC** since SM1 (PLAN-SYMMETRIC-MATCHING): it also matches **sell → buy**, so
+  selling an item you OWN and later rebuying it closes a **keep round trip** rather than
+  leaking the sell into `unmatched` and the rebuy into a phantom open lot.
+- **`awaitingRebuy`** (SM1) = a **keep** sold with no open buy lot — the open leg of a round trip,
+  held until a rebuy closes it. Carries `beRebuy = sellEach − tax(sellEach)`: the **break-even on the
+  capital reallocation** (rebuy below it and freeing that capital cost nothing; above it, the gap is
+  what it cost). Gated on `owned-items.json` `classification:'keep'` — see §5.1a. It is an **open
+  measurement, not a to-do with a deadline**: never auto-retire or staleness-sweep it.
+- **`unmatched`** = sells with no logged buy lot **and not a keep** (the log started mid-stream, so
+  the buy predates it). Cost basis is unknowable ⇒ **no realized profit is invented** for
   these; the app shows them as informational only, never in the Coffer total.
+
+### 5.1a The keep gate (SM1) — why it is narrow
+
+`matchTrades(offers, { keeps })` takes the keep set as an **optional parameter, never an import**, so
+the function stays pure and every direct caller that passes nothing (`campaigns.mjs`,
+`join-outcomes.mjs`) keeps byte-identical pre-SM1 behavior.
+
+Only `classification:'keep'` items open shorts. This is deliberate: at the time SM1 landed, **13 of 14**
+historical `unmatched` rows were non-keep pre-log commodity sells, and pairing those against later flip
+buys would invent round trips that never happened while orphaning the flips that did. The gate is only
+as good as the classification behind it, so `sync-fills.mjs` warns when a `keep` accumulates cash flips
+past a threshold (a mis-seeded keep — the registry was bulk-seeded as "this was in my bank", not "gear I
+don't trade"). Intent is **not** discriminated and does not need to be: a deliberate reverse flip and a
+liquidation to free capital are byte-identical in the log, and the round-trip P/L is the meaningful
+number for both — hence the neutral `keepRoundTrip` row tag, never `reverseFlip`.
 - Cost basis is **FIFO**; itemId→name resolution is left to the app (it has the
   mapping), so `positions.json` stays name-free and stable across catalog changes.
 

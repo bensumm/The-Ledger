@@ -406,7 +406,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
 - `mobile-fills.log` — tracked, append-only source log the app appends mobile GE trades to
   (slot 9) via the GitHub contents API; read by `sync-fills.mjs` (M1, `FILLS-PIPELINE.md` §13)
 - `positions.json` — derived from `fills.json` by the pipeline (FIFO-matched closed
-  trades + open positions); the app auto-populates its Ledger/Coffer from it
+  trades + open positions); the app auto-populates its Ledger/Coffer from it.
+  Buckets: `closed` · `open` · `unmatched` · **`awaitingRebuy`** (SM1 — a `keep` sold and not yet
+  rebought; matching is SYMMETRIC, so sell→buy closes a `keepRoundTrip` row exactly as buy→sell
+  closes a flip. `beRebuy` = break-even on the capital reallocation. See `FILLS-PIPELINE.md` §5.1a)
 - `offers.json` — tracked, flat snapshot of the live GE offer slots (`{slot, side, itemId,
   item, price, qty, filled, lastUpdateTs}`), written by `sync-fills.mjs`/`watch-log.mjs` in
   both attended and `--local` modes (LW1); the localhost app polls it for desk-side offer
@@ -501,6 +504,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   skip-worktree, edit to the EMPTY shape only, commit, re-set skip-worktree, repopulate locally. No PII
   (ids/names only). Fixture-pinned in
   `pipeline/test/ownedledger.test.mjs` + `pipeline/test/reverse-flip-cli.test.mjs`.
+  `keepIds` (the SM1 round-trip gate) and `keepMisclassificationRisks` (the mis-seeded-keep hygiene
+  warning `sync-fills.mjs` prints) also live here — pinned by `pipeline/test/symmetric-matching.test.mjs`,
+  which builds its fake owned store at runtime and never reads the real `owned-items.json`.
 - `reverse-flip-state.json` — tracked repo-root store (RF0, PLAN-REVERSE-FLIP, 2026-07-25): the declared
   reverse-flip CYCLE store — a flat array of `{id,name,state,soldQty,soldEach,soldTs,beRebuy,targetQty,
   rebuyBidPrice,rebuyBidTs,declaredTs}` (mirrors `hold-thesis.json`'s shape/CLI pattern). `state` walks

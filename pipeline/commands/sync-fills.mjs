@@ -63,6 +63,7 @@ import { REPO_DIR } from '../lib/paths.mjs';   // chunk 6: REPO_DIR now lives in
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
 import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct/reconstruct.mjs';
 import { loadIgnored, quarantineEvents } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
+import { loadOwned, keepIds, keepMisclassificationRisks } from '../lib/capital/ownedledger.mjs';  // SM1: the keep gate for sell->buy round-trip matching + its hygiene guard
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
 
 /* ======================= CONFIG — edit these ======================= */
@@ -101,7 +102,9 @@ const PUBLISH = args.has('--publish');   // the ONLY path that touches git (fetc
  * See reconstruct.mjs's ADAPTER block for the verified field mapping. Only
  * runner-specific glue (log reading, tombstone merge, dedup, commit/push) is here.
  * ------------------------------------------------------------------- */
-function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched }); } // ignore generatedAt
+// ignore generatedAt. awaitingRebuy (SM1) IS part of the signature: a keep sold with no rebuy yet
+// changes only that bucket, and omitting it would read as "no change" and skip the write.
+function positionsSig(p) { return JSON.stringify({ closed: p.closed, open: p.open, unmatched: p.unmatched, awaitingRebuy: p.awaitingRebuy || [] }); }
 
 function readLogFiles(logDir = LOG_DIR) {
   if (!existsSync(logDir)) {
@@ -251,7 +254,21 @@ export function regenerate({ write = true, logDir = LOG_DIR, repoDir = REPO_DIR,
   // this is a view filter, never a deletion. A greenlisted flip (agent-confirmed) flows through.
   const positionsPath = join(repoDir, POSITIONS_REL);
   const ignoredCfg = loadIgnored(repoDir);
-  const pos = reconstruct(quarantineEvents(merged, ignoredCfg));
+  // SM1 (PLAN-SYMMETRIC-MATCHING): thread the owned 'keep' set through so a sell with no open buy lot
+  // opens a ROUND-TRIP short (closed by the eventual rebuy) instead of falling into `unmatched` and
+  // contributing zero realised P/L. Degrades safely: a missing/empty owned-items.json yields an empty
+  // set, which makes the short path unreachable and restores exact pre-SM1 behavior.
+  const ownedStore = loadOwned(join(repoDir, 'owned-items.json'));
+  const keeps = keepIds(ownedStore);
+  const pos = reconstruct(quarantineEvents(merged, ignoredCfg), { keeps });
+  // SM1 §5.1 hygiene guard: a 'keep' that keeps appearing in CASH flips is very likely mis-classified,
+  // and a mis-classified keep is what makes the round-trip gate unsafe (its sells open shorts that
+  // absorb buys belonging to real flipping). INFORM-ONLY — warn, never mutate or gate.
+  for (const risk of keepMisclassificationRisks(ownedStore, pos.closed)) {
+    console.warn(`⚠ owned-items: "${risk.name}" is classified 'keep' but has ${risk.closedFlips} closed cash flips ` +
+      `(≥${risk.threshold}) — likely mis-seeded. A traded keep distorts round-trip matching; consider ` +
+      `\`node pipeline/commands/declare-owned.mjs classify "${risk.name}" flip\`.`);
+  }
   let priorPosSig = null;
   if (existsSync(positionsPath)) { try { priorPosSig = positionsSig(JSON.parse(readFileSync(positionsPath, 'utf8'))); } catch { /* rebuild */ } }
   const positionsChanged = positionsSig(pos) !== priorPosSig;

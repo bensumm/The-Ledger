@@ -31,7 +31,9 @@ push to `main`).
   --publish`** (the only path that fetches/ff-pulls phone trades + commits + pushes) — so the deployed
   app's book updates nightly while the localhost desk reads the fresh rebuild all day. `positions.json` is the FIFO-reconstructed view (`collapseOffers` +
   `matchTrades`): `closed` after-tax realised P/L, `open` inventory at real avg cost, `unmatched`
-  pre-log sells. **`fills.json` and the derived artifacts are ROOT-LOCKED** (app fetches them
+  pre-log sells, `awaitingRebuy` a **keep** sold and not yet rebought (SM1 — matching is SYMMETRIC:
+  sell→buy closes a `keepRoundTrip` just as buy→sell closes a flip; `beRebuy` is the break-even on
+  the capital reallocation). **`fills.json` and the derived artifacts are ROOT-LOCKED** (app fetches them
   same-origin — README "Map of the repo" has the full ROOT-LOCKED vs movable split + the
   `js/quotecore.js`/`js/money-math.js`/`js/money-format.js` shared-module ripple map). **Read `pipeline/FILLS-PIPELINE.md`
   §5.1 before touching the reconstruction, and the whole doc before either script path.** History of

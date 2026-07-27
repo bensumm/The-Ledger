@@ -255,9 +255,29 @@ export function collapseOffers(events) {
   return offers.sort((a, b) => a.tsOpen - b.tsOpen);
 }
 
-export function matchTrades(offers) {
+/* matchTrades — FIFO reconstruction. SYMMETRIC since SM1 (PLAN-SYMMETRIC-MATCHING):
+   buy→sell pairs into a closed flip, and sell→buy pairs into a closed KEEP ROUND TRIP.
+
+   `keeps` is an OPTIONAL Set of itemIds classified 'keep' in owned-items.json. It is a PARAMETER,
+   never an import: matchTrades stays pure/IO-free, and every existing direct caller that passes
+   nothing (campaigns.mjs, join-outcomes.mjs) keeps byte-identical behavior — an empty keep set makes
+   the short path unreachable, so the function degrades exactly to its pre-SM1 form.
+
+   Why the short queue exists: selling an item you OWN (bank gear) leaves no buy lot to consume, so
+   pre-SM1 the sell fell into `unmatched` and its proceeds contributed ZERO realised P/L — the profit
+   was simply lost (SM0 Result B measured this at 2,636,600 gp across two cycles). A keep sold and
+   later rebought is a real round trip; the short queue holds the open leg until the rebuy closes it.
+   Intent is NOT discriminated and does not need to be — a deliberate reverse flip and a liquidation
+   to free capital are byte-identical in the log, and the round-trip P/L is the meaningful number for
+   both (PLAN-SYMMETRIC-MATCHING §2.1). Hence the neutral `keepRoundTrip` tag, never `reverseFlip`.
+
+   A leftover short is NOT cruft awaiting cleanup — it is an OPEN MEASUREMENT (`awaitingRebuy`), and
+   it carries no deadline. Do not add a timeout/staleness sweep: that discards a live measurement. */
+export function matchTrades(offers, { keeps } = {}) {
+  const keepSet = keeps instanceof Set ? keeps : new Set(keeps || []);
   const filled = offers.filter(o => o.filled > 0).sort((a, b) => a.tsOpen - b.tsOpen);
-  const lots = new Map(); // itemId -> [{qty, each, ts}] FIFO queue of open buy lots
+  const lots = new Map();   // itemId -> [{qty, each, ts}] FIFO queue of open buy lots
+  const shorts = new Map(); // itemId -> [{qty, each, taxEach, ts}] FIFO queue of open KEEP SELL legs
   const closed = [], unmatched = [];
   for (const o of filled) {
     const each = o.spent / o.filled; // actual executed gross price per item
@@ -265,7 +285,20 @@ export function matchTrades(offers) {
       // BANKED = pre-owned stock committed to flipping at a declared basis (each). It enters
       // the FIFO queue exactly like a bought lot but carries banked:true so its eventual
       // realised P/L (and any leftover open position) stays distinguishable from cash buys.
-      (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: o.filled, each, ts: o.tsOpen, banked: o.type === 'banked' });
+      let remain = o.filled;
+      // SM1: drain any open short FIRST — a rebuy closes the outstanding keep sell before it can
+      // open new flip inventory. (banked drains too, matching the SM0-validated prototype; whether a
+      // BANKED declaration *should* close a short rather than open a lot is a live question — see
+      // PLAN-SYMMETRIC-MATCHING SM4. Behavior here is what SM0 verified against the real book.)
+      const sq = shorts.get(o.itemId) || [];
+      while (remain > 0 && sq.length) {
+        const s = sq[0], take = Math.min(remain, s.qty);
+        closed.push({ itemId: o.itemId, qty: take, buyEach: Math.round(each), sellEach: Math.round(s.each),
+          tax: s.taxEach * take, realised: Math.round(((s.each - s.taxEach) - each) * take),
+          keepRoundTrip: true, buyTs: o.tsOpen, sellTs: s.ts });
+        s.qty -= take; remain -= take; if (s.qty <= 0) sq.shift();
+      }
+      if (remain > 0) (lots.get(o.itemId) || lots.set(o.itemId, []).get(o.itemId)).push({ qty: remain, each, ts: o.tsOpen, banked: o.type === 'banked' });
     } else if (o.type === 'withdraw') {
       // WITHDRAWN = inventory taken for personal use: consume open lots FIFO into closed rows
       // flagged withdrawn:true with realised 0 (no sale, no proceeds). If nothing is open to
@@ -286,7 +319,18 @@ export function matchTrades(offers) {
           tax: taxEach * take, realised: Math.round(((each - taxEach) - lot.each) * take), banked: !!lot.banked, buyTs: lot.ts, sellTs: o.tsOpen });
         lot.qty -= take; remain -= take; if (lot.qty <= 0) q.shift();
       }
-      if (remain > 0) unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
+      // SM1: a leftover sell on a KEEP opens a short (an open round-trip leg awaiting its rebuy);
+      // anything else stays `unmatched` — "basis unknown", which is what that bucket is for. The gate
+      // is deliberately narrow: 13 of 14 historical unmatched rows were non-keep pre-log commodity
+      // sells, and matching those against later flip buys would invent round trips that never
+      // happened while orphaning the flips that did (PLAN-SYMMETRIC-MATCHING §5).
+      if (remain > 0) {
+        if (keepSet.has(o.itemId)) {
+          (shorts.get(o.itemId) || shorts.set(o.itemId, []).get(o.itemId)).push({ qty: remain, each, taxEach: GE_TAX(each), ts: o.tsOpen });
+        } else {
+          unmatched.push({ itemId: o.itemId, qty: remain, sellEach: Math.round(each), tax: GE_TAX(each) * remain, sellTs: o.tsOpen });
+        }
+      }
     }
   }
   // remaining lots = open inventory; merge same item+price+origin lots into one position
@@ -300,16 +344,27 @@ export function matchTrades(offers) {
     else openMap.set(k, lot.banked ? { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts, banked: true } : { itemId, qty: lot.qty, buyEach: each, buyTs: lot.ts });
   }
   const open = [...openMap.values()].sort((a, b) => a.buyTs - b.buyTs);
-  return { closed, open, unmatched };
+  // SM1: leftover shorts = keeps sold and not yet rebought. beRebuy is the break-even on the capital
+  // reallocation (rebuy below it and the reallocation was free; above it, the gap is what it cost).
+  const awaitingRebuy = [];
+  for (const [itemId, sq] of shorts) for (const s of sq) {
+    if (s.qty <= 0) continue;
+    awaitingRebuy.push({ itemId, qty: s.qty, sellEach: Math.round(s.each), tax: s.taxEach * s.qty,
+      beRebuy: Math.round(s.each - s.taxEach), sellTs: s.ts });
+  }
+  awaitingRebuy.sort((a, b) => a.sellTs - b.sellTs);
+  return { closed, open, unmatched, awaitingRebuy };
 }
 
-export function reconstruct(events) {
+export function reconstruct(events, { keeps } = {}) {
   // dedupeSnapshots first (P1): strip snapshot re-emissions before offers are collapsed, so a
   // phantom duplicate terminal never becomes a second offer. monitor-offers.mjs shares reconstruct(), so
   // its live held count gets the same fix. (join-outcomes.mjs calls collapseOffers/matchTrades directly
   // for campaign boundaries and does NOT go through here — see the Discovered note in PLAN.md.)
-  const { closed, open, unmatched } = matchTrades(collapseOffers(dedupeSnapshots(events)));
-  return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched };
+  // `keeps` (SM1) is threaded through to matchTrades; omitting it disables the keep-round-trip path
+  // entirely, so callers that don't supply it keep pre-SM1 behavior.
+  const { closed, open, unmatched, awaitingRebuy } = matchTrades(collapseOffers(dedupeSnapshots(events)), { keeps });
+  return { app: 'the-coffer-positions', version: 1, generatedAt: new Date().toISOString(), closed, open, unmatched, awaitingRebuy };
 }
 
 export function eventId(e) {
