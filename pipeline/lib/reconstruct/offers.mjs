@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { offerQuarantined } from './ignored.mjs';   // MERCH-book quarantine for resting farm/loot offers
+import { offerQuarantined } from '../ignored.mjs';   // MERCH-book quarantine for resting farm/loot offers
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // pipeline/lib/
 export const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');
@@ -54,7 +54,10 @@ export function readExchangeLog() {
  *  so the offers.json emitter (sync-fills --local, watch-log.mjs) never blocks on the API. */
 export function nameLookupFromCache() {
   try {
-    const obj = JSON.parse(fs.readFileSync(path.join(HERE, '..', '.cache', 'mapping.cache.json'), 'utf8'));
+    // pipeline/.cache/ — TWO up from lib/reconstruct/ (PLAN-LIB-SUBDIRS chunk 3 nested this file).
+    // NOTE this read is try/caught into a silent no-op fallback, so a wrong depth degrades name lookup
+    // to undefined rather than throwing — re-count by hand on any future move, tests will NOT catch it.
+    const obj = JSON.parse(fs.readFileSync(path.join(HERE, '..', '..', '.cache', 'mapping.cache.json'), 'utf8'));
     return id => { const v = obj[id]; return v && typeof v === 'object' ? v.name : (typeof v === 'string' ? v : undefined); };
   } catch { return () => undefined; }
 }

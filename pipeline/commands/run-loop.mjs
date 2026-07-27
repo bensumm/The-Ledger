@@ -47,7 +47,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
-import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';
+import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 import { fetchItemInputs } from '../lib/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';
 import { buildAgenda, loopHeaderLine } from './read-schedule.mjs';

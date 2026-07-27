@@ -26,7 +26,7 @@
  * All DISPLAYED times are the CALLER's concern (repo rule: rendered times are LOCAL) — this module
  * returns unix-SECONDS instants (nextFreeAt / fullResetAt); pipeline/commands/read-buy-limits.mjs formats them local.
  */
-import { collapseOffers, dedupeSnapshots } from './reconstruct.mjs';
+import { collapseOffers, dedupeSnapshots } from './reconstruct/reconstruct.mjs';
 
 export const LIMIT_WINDOW_SEC = 4 * 60 * 60;   // GE buy limit is a rolling 4h window
 

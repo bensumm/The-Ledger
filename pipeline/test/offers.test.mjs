@@ -18,7 +18,7 @@
  *     EMPTY/terminal slots are excluded; item name comes from a best-effort lookup ('#<id>' fallback).
  */
 import assert from 'node:assert/strict';
-import { activeOffers, offersSnapshot, restartBlindSuspects, suspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';
+import { activeOffers, offersSnapshot, restartBlindSuspects, suspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

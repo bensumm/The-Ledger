@@ -7,7 +7,7 @@ Per-topic working doc (`docs/PLANNING.md` lifecycle); folds into `PLAN.md` + del
 | **0 — tooling + guard prep** | **SHIPPED** | `pipeline/ci/move-lib-cluster.mjs` (resolve-and-compare mover, `--dry-run`, pure helpers pinned by `move-lib-cluster.test.mjs`); `lint-arch.mjs` bare-basename resolution now recurses `pipeline/lib/**`; `check-imports.mjs` ENTRYPOINTS = every `pipeline/commands/*.mjs` (11 → 30, 473 → 614 imports checked). All 7 guards green. |
 | **1 — `render/`** | **SHIPPED** | render, emit, cli, suggestlog, retrojoin, replay, analyze. 65 rewrites across 39 files; git recorded all 7 as renames. Two bugs found + fixed live — the mover's pre-move write path (resurrected files at `lib/` root), and **self-relative path math** (`suggestlog.mjs`'s `LEDGER`), now detected by `selfRelativePathRisks`. |
 | **2 — `thesis/`** | **SHIPPED** | holdthesis, sessionthesis, watchstate, reverseflipstate. 26 rewrites across 19 files. Clean as predicted — no self-relative paths, no cross-cluster edges out. |
-| 3 — `reconstruct/` | open | Moved BEFORE capital (avoids double-touching 3 capital files). |
+| **3 — `reconstruct/`** | **SHIPPED** | reconstruct, campaigns, offers, positions, fill-placement, sync-invoke, logblind. 45 rewrites across 28 files. Landed BEFORE capital as the hardening reorder specified (avoids double-touching 3 capital files). **Two self-relative paths fixed** — `offers.mjs`'s mapping-cache read (try/caught, so it would have failed SILENTLY) and `sync-invoke.mjs`'s `SYNC_FILLS`; both verified by resolving them at runtime, since the suite passes either way. |
 | 4 — `timing/` · 5 — `market/` · 6 — `signal/` · 7 — `capital/` | open | |
 
 # PLAN-LIB-SUBDIRS — group `pipeline/lib/`'s 50 files into concept subdirectories

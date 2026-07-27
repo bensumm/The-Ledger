@@ -747,7 +747,7 @@ A flat snapshot of the live GE offer slots, app-fetched same-origin like `positi
   offers:[ { slot, side:'buy'|'sell', itemId, item, price, qty, filled, lastUpdateTs } ] }
 ```
 
-Source: `pipeline/lib/offers.mjs` (`readOfferRows()` → `offersSnapshot()`). `side` is
+Source: `pipeline/lib/reconstruct/offers.mjs` (`readOfferRows()` → `offersSnapshot()`). `side` is
 `BUYING`→`buy` / `SELLING`→`sell`; `price` = offer price each; `qty` = total offer size; `filled` =
 cumulative filled so far; `lastUpdateTs` = the offer line's epoch ms. **EMPTY / terminal / cancelled
 slots are excluded** (only per-slot latest `BUYING`/`SELLING` states survive). Item names resolve

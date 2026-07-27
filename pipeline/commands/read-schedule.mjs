@@ -33,8 +33,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs } from '../lib/marketfetch.mjs';
-import { readOpenPositions } from '../lib/positions.mjs';
-import { readOffersSnapshot } from '../lib/offers.mjs';
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
+import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
 import { hourProfile, hourlyDriftNote } from '../../js/windowread.mjs';
 import { hourlyDrift } from '../lib/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
 import { fmt, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';

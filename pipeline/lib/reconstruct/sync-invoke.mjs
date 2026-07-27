@@ -30,7 +30,8 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SYNC_FILLS = join(dirname(fileURLToPath(import.meta.url)), '..', 'commands', 'sync-fills.mjs');
+// TWO up from lib/reconstruct/ to reach pipeline/, then commands/ (PLAN-LIB-SUBDIRS chunk 3 nested this file).
+const SYNC_FILLS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'commands', 'sync-fills.mjs');
 const SUMMARY_RE = /^positions:|^Pushed|nothing to/;
 
 /**

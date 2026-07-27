@@ -127,8 +127,8 @@ import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
-import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
-import { readOpenPositions } from '../lib/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
+import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
 import { termStructure, basePosition, BASEPOS_LOOKBACK_DAYS } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series); DT6 — the light multi-week base-position read off the SAME `ts`, never a second structure computation
@@ -143,7 +143,7 @@ import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
+import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 
 // --- args ---

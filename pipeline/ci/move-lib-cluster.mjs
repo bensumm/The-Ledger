@@ -114,7 +114,10 @@ export function selfRelativePathRisks(src) {
   if (!vars.size) return [];
   const out = [];
   lines.forEach((line, i) => {
-    if (/import\.meta\.url/.test(line)) return;                       // the declaration itself
+    // The declaration line is usually just plumbing — but when the path math is INLINE on it
+    // (`const SYNC_FILLS = join(dirname(fileURLToPath(import.meta.url)), '..', 'commands', …)`,
+    // sync-invoke.mjs:33) that line IS the risk, so report it rather than only its later usages.
+    if (/import\.meta\.url/.test(line) && !/['"]\.\.['"]|\.\.[\\/]/.test(line)) return;
     const t = line.trim();
     if (t.startsWith('*') || t.startsWith('//')) return;              // prose inside a block/line comment
     const code = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');   // ignore trailing-comment mentions

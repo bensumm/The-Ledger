@@ -56,12 +56,12 @@ import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';   // chunk 6: dropped unused fileURLToPath
 // LW1: offers.json emitter. readOfferRows reads the exchange-logger dir raw; offersSnapshot builds
 // the flat live-offer snapshot; nameLookupFromCache resolves display names offline (best-effort).
-import { readOfferRows, offersSnapshot, nameLookupFromCache } from '../lib/offers.mjs';
+import { readOfferRows, offersSnapshot, nameLookupFromCache } from '../lib/reconstruct/offers.mjs';
 import { REPO_DIR } from '../lib/paths.mjs';   // chunk 6: REPO_DIR now lives in a lib (was defined here); re-exported below so watch-log.mjs's import is unchanged
 // The ONE reconstruction chain (chunk 8): parse/sequence/collapse/FIFO-match + the content-hash
 // event id all live in reconstruct.mjs so this pipeline AND monitor-offers.mjs reconstruct positions
 // identically (no more stale parallel copy). GE_TAX is imported transitively there — not needed here.
-import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct.mjs';
+import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct/reconstruct.mjs';
 import { loadIgnored, quarantineEvents } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot); fills.json stays full
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into positions.json so the app can display the pipeline version
 

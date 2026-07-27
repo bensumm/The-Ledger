@@ -16,7 +16,7 @@
  *   - The threshold is overridable but defaults to BLIND_STALE_MIN.
  */
 import assert from 'node:assert/strict';
-import { blindWarningLine, BLIND_STALE_MIN } from '../lib/logblind.mjs';
+import { blindWarningLine, BLIND_STALE_MIN } from '../lib/reconstruct/logblind.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

@@ -778,7 +778,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   shared libraries — **being regrouped into concept subdirectories one cluster at a time**
   (PLAN-LIB-SUBDIRS). Landed clusters: **`pipeline/lib/render/`** = output/reporting (render, emit,
   cli, suggestlog, retrojoin, replay, analyze); **`pipeline/lib/thesis/`** = the declared-state stores
-  (holdthesis, sessionthesis, watchstate, reverseflipstate). Files not yet clustered stay at
+  (holdthesis, sessionthesis, watchstate, reverseflipstate); **`pipeline/lib/reconstruct/`** = the
+  FIFO book reconstruction (reconstruct, campaigns, offers, positions, fill-placement, sync-invoke,
+  logblind). Files not yet clustered stay at
   `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design;
   **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.

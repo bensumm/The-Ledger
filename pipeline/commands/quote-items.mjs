@@ -27,7 +27,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
+import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 import { ensure as ensureDaemons } from '../daemons/manager.mjs';   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, pressureText, askHeadroomText, rebidAdvice, maxBuyForExit, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-POSITIONS-WINDOW-READ) — the ≥10m whole-lot bar that gates the auto ask-side window-clear read
 import { diurnalForecast, whenBuyable, whenSellable, fmtEta, driftExitFrom } from '../../js/forecast.mjs';   // #6 (PF1) — the "buyable/sellable in ~Xh" forecast lines off the in-hand hourProfile; driftExitFrom (PLAN-OSCILLATION-CYCLE Chunk 5) — the drift-adjusted exit LEVEL folded into the trajectory note
@@ -41,8 +41,8 @@ import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the n
 import { warmOverride } from '../lib/warm-term-structure.mjs';   // COD-4 + R3 — warm .trajectory AND .recentTrend off ts1h so trajectoryValidator + floorValidator's recency gate FIRE on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from '../lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
 import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
-import { readOpenPositions } from '../lib/positions.mjs';
-import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
+import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/reconstruct/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { stdCells, writeLastReport } from '../lib/render/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3); writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { renderReport } from '../lib/render/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)

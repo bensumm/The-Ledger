@@ -26,7 +26,7 @@
  * whole point of P6 is that this retro-join MEASURES the real latency so a later chunk can replace
  * guesses with data. Do NOT cite any constant here as validated.
  */
-import { collapseOffers, matchTrades, dedupeSnapshots } from '../reconstruct.mjs';
+import { collapseOffers, matchTrades, dedupeSnapshots } from '../reconstruct/reconstruct.mjs';
 import { median } from './cli.mjs';
 import { tax, quantileOf } from '../../../js/quotecore.js';   // quantileOf = the ONE sorting type-7 quantile (SF-1)
 

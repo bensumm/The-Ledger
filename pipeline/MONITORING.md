@@ -39,7 +39,7 @@ Print-only — it never writes trade data. Each run emits:
   inventory: the post-restart state where the plugin has re-emitted nothing, so resting offers read
   as missing. It changes no verdict — it just names the failure so a session doesn't chase "vanished"
   offers (restart-check RuneLite or nudge a slot to force a re-emit). Pure line assembler in
-  `pipeline/lib/logblind.mjs` (`blindWarningLine`), fixtures in `pipeline/test/logblind.test.mjs`.
+  `pipeline/lib/reconstruct/logblind.mjs` (`blindWarningLine`), fixtures in `pipeline/test/logblind.test.mjs`.
 - **ACTIVE OFFERS** — offers open right now (per-slot latest `BUYING`/`SELLING` state),
   with filled/total and the offer price.
 - **FILLS / CANCELS (last 30m)** — recent terminal events with executed price.

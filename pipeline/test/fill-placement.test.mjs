@@ -16,7 +16,7 @@
  *     only for hours present on BOTH sides.
  */
 import assert from 'node:assert/strict';
-import { cdf, spearman, median, quant, lotPlacement, smoothingBias, FP_MIN_DAYS } from '../lib/fill-placement.mjs';
+import { cdf, spearman, median, quant, lotPlacement, smoothingBias, FP_MIN_DAYS } from '../lib/reconstruct/fill-placement.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

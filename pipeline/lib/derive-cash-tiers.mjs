@@ -57,9 +57,9 @@
  * like the cashstate figure it derives from. Node-only consumer → no APP_VERSION concern. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { collapseOffers, dedupeSnapshots, GE_TAX } from './reconstruct.mjs';
+import { collapseOffers, dedupeSnapshots, GE_TAX } from './reconstruct/reconstruct.mjs';
 import { readCash } from './cash-anchor.mjs';
-import { readOffersSnapshot } from './offers.mjs';
+import { readOffersSnapshot } from './reconstruct/offers.mjs';
 import { REPO_DIR } from './paths.mjs';   // chunk 6: was '../commands/sync-fills.mjs' (a lib importing a command inverted the layering + ran its top-level)
 
 /* DEEP_BID_PCT — a resting BUY is DEEP (reclaimable) when its price is at least this fraction below the

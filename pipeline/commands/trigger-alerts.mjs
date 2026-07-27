@@ -41,8 +41,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { computeQuote, momVerdict, breakEven, isOvernightNow, MOM_STRONG_PCT } from '../../js/quotecore.js';
 import { fmtP } from '../../js/money-format.js';
 import { loadMapping, loadGuide, fetchLatest, fetchItemInputs, sleep } from '../lib/marketfetch.mjs';
-import { readOpenPositions } from '../lib/positions.mjs';
-import { readExchangeLog } from '../lib/offers.mjs';
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
+import { readExchangeLog } from '../lib/reconstruct/offers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POSITIONS = path.join(HERE, '..', '..', 'positions.json');

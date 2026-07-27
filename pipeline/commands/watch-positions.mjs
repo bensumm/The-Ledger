@@ -57,7 +57,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runLocalSync } from '../lib/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
+import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';   // AR1 — the ONE shared "always sync first" (SY1) invocation
 import { renderReport } from '../lib/render/render.mjs';   // VZ1 (PLAN-VIZ-LAYER) — the ONE render layer; this output pass builds a report object and prints renderReport(buildWatchReport(...))
 import { writeLastReport } from '../lib/render/cli.mjs';   // AO1 — agent-readable last-report dump (pipeline/.cache/last-report/watch.json)
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
@@ -69,13 +69,13 @@ import { briefLine } from '../../js/watchcore.js';   // --brief compact book: fo
 import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
 import { loadIgnored } from '../lib/ignored.mjs';   // MERCH-book quarantine (farming/loot) for the live-offer view
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, vol24FromInputs } from '../lib/marketfetch.mjs';   // vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
-import { readOpenPositions } from '../lib/positions.mjs';
-import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/offers.mjs';
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
+import { readExchangeLog, activeOffers, restartBlindSuspects } from '../lib/reconstruct/offers.mjs';
 import { logSuggestions, suggestionEntry, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // DE3/RC-S1: shared reachable/depthExit/asym ledger-shadow reshapers (one home, no drift across watch/screen/quote); WC1: windowExitShadow (the window-clear ask-rung forward record)
 import { windowStats, quantLow, quantHigh, touchedDays, reachedDays, recencySplit, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, diurnalTimedLap, clearableAsk, reachableBand, asymPair, askExitRead } from '../../js/windowread.mjs';   // VN-2: hourProfile/deriveDiurnalRange feed the thesis frame's diurnal-ask fallback (zero extra fetch — ts1h already in hand); DE3: clearableAsk depth floor + reachableBand pressure read on held lots; RC-S1: asymPair for the head-to-head co-log; WC1: askExitRead for the window-clear ask-rung shadow; PLAN-DIURNAL-TIMING DT3: diurnalTimedLap replaces the two direct hourProfile+deriveDiurnalRange call sites below (the shadow-log bid/ask + the diurnalAsk fallback) — same bid/ask/peakWindow values, one shared composition
 import { estimatePair, asymEstimate, estConfLean, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/estimators.mjs';   // RC-S1 (PLAN-REACHABILITY-CONSOLIDATION): the reachRelief-family estSell + asym pair, co-logged beside depthExit/reachable for the head-to-head; PC3 — SELL_TOP_MODELS validates --est-sell
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // RC-S1: the neutral band thesis for the held-lot est/asym shadow (same convention as quote-items --positions)
-import { blindWarningLine } from '../lib/logblind.mjs'; // LH2 restart-blindness header line
+import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 restart-blindness header line
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/thesis/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget

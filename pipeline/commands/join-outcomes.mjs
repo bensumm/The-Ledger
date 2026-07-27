@@ -36,7 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { reconstructCampaigns, REPRICE_GAP, MANUAL_SLOT } from '../lib/campaigns.mjs';
+import { reconstructCampaigns, REPRICE_GAP, MANUAL_SLOT } from '../lib/reconstruct/campaigns.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from '../lib/marketfetch.mjs';
 import { loadHistState, bandPercentile } from '../lib/range-position.mjs';
 import { velocityClass } from '../lib/velocity.mjs';

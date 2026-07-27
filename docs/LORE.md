@@ -108,7 +108,7 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
   `expGpDay` survives only as the cheap pre-fetch pool orderer + the 500k `--min-gpd` pre-filter.
 - **Cancel-to-EMPTY fill inference → deleted (LH1).** An EMPTY slot snapshot is NOT evidence of a
   fill; the inference that tried to read fills from cancel-to-EMPTY transitions was removed and must
-  not be resurrected (`pipeline/lib/reconstruct.mjs` / LH1 header; the false-EMPTY-snapshot restart
+  not be resurrected (`pipeline/lib/reconstruct/reconstruct.mjs` / LH1 header; the false-EMPTY-snapshot restart
   variant is a known display-only warning case, PLAN.md Discovered).
 - **Re-scoring the screen off a reachable sell → rejected (`/scan`).** The cheap ts6h proxy
   understates reach → false negatives that HIDE good sells (worse than the band-top-artifact problem

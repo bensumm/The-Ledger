@@ -41,7 +41,7 @@
  */
 import fs from 'node:fs';
 import { join } from 'node:path';
-import { LOG_DIR } from '../lib/offers.mjs';
+import { LOG_DIR } from '../lib/reconstruct/offers.mjs';
 import { regenerate, REPO_DIR } from './sync-fills.mjs';
 
 const DEBOUNCE_MS = 10_000; // coalesce a burst of fs.watch events (and Windows rename dupes) into one run

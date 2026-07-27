@@ -24,11 +24,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { runLocalSync } from '../lib/sync-invoke.mjs';
+import { runLocalSync } from '../lib/reconstruct/sync-invoke.mjs';
 import { loadMapping, loadGuide, fetchItemInputs, vol24FromInputs } from '../lib/marketfetch.mjs';
 import { computeQuote, breakEven } from '../../js/quotecore.js';
-import { readOpenPositions } from '../lib/positions.mjs';
-import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/offers.mjs';
+import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
+import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
 import { buysByItem, limitWindow } from '../lib/limits.mjs';
 import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/book-model.mjs';

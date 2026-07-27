@@ -27,7 +27,7 @@
  *     not count as an intervening placement (the deleted cancel-to-EMPTY inference stays deleted).
  */
 import assert from 'node:assert/strict';
-import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct.mjs';
+import { parseJsonLine, buildEvents, validateSlotTransitions, reconstruct, eventId } from '../lib/reconstruct/reconstruct.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

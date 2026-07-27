@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import {
   joinWindowClears, priceMatch, classifyOutcome, fillHourInWindow, REPORT_FLOOR,
 } from '../commands/join-window-clears.mjs';
-import { reconstructCampaigns, campaignBase } from '../lib/campaigns.mjs';
+import { reconstructCampaigns, campaignBase } from '../lib/reconstruct/campaigns.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 let pass = 0;

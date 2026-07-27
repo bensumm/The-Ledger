@@ -13,7 +13,7 @@
  * Run: `node pipeline/test/monitor.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { buildTombstonedEvents, reconstruct, eventId } from '../lib/reconstruct.mjs';
+import { buildTombstonedEvents, reconstruct, eventId } from '../lib/reconstruct/reconstruct.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
