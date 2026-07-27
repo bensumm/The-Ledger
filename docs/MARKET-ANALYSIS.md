@@ -340,6 +340,22 @@ or with an explicit `--top`/`--thin-reserve` override; plus **`TOTAL_FETCH_MAX`*
 cross-flip-niche fetch-budget ceiling clamping the deduped `--mode all` survivor union, protecting
 held/watched/reserve rows and reporting every trim (`total-fetch-max`, never silent). All constants are
 NAMED PLACEHOLDERS (n≈0); full specs live in the two module headers.
+
+PLAN-MID-TIER-ADMISSION (MT2, 2026-07-27) closes the last unreserved lane. **MID-PRICE gear** (~10k–2m
+mid — Helm of neitiznot, Berserker helm) is too LIQUID to be `thin` (so `THIN_RESERVE` never covers it)
+and too LOW-MARGIN to outrank churn commodities on the velocity lane's absolute-`expGpDay` sort — the one
+class with neither a reserve nor a winning rank, so it was never fetched at any bankroll. Fix =
+**`GEAR_RESERVE`** (default 4, `--gear-reserve`, `admission.mjs` `pickFetchPool`): slots guaranteed to
+`gear`-lane (`classifyVolLane`, `volDay < CHURN_VOL_CUT` 20k) candidates from the velocity remainder,
+ranked among their OWN lane on the same `expGpDay × trackBoost` axis, tagged `via:'reserve'` — additive,
+`0` restores the pre-MT2 pool exactly. It reads the lane off `volDay` (hpv+lpv), never `limitVol`
+(min(hpv,lpv) — the thin-side depth), and is FAIL-CLOSED: a candidate with no `volDay` gets no slot rather
+than defaulting to gear. Note the **attention floor was NOT the cause** and is unchanged: `MIN_GPD` is a
+hard PRE-fetch gate on Stage-1 `expGpDay` which mid-tier gear passes, while the `⚠<floor` marker on the
+table measures Path-A gp/day POST-fetch — two different numbers against one constant (MT1). MT3 reports
+the exploration reserve's true rotation period on the `crowded out:` line, since 1 velocity slot over
+~140 excluded is a ~70h wait per row, not a prompt lottery. INFORM/ADMISSION-ONLY — no grade, rank, or
+`screen.json` change; n=0, no mid-tier flip has ever been logged.
 F-F (2026-07-22) reworked the **Both-leg reach cell** ("Both-leg reach (recent / full) + phase"): it now
 prints the FULL-window hit count alongside recent-3 for BOTH legs (`recentHit/recentDays·fullHit/fullN`,
 straight off `recencySplit`) and appends a **trough-vs-decay phase annotation** (`reachPhaseNote`). WHY:

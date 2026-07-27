@@ -251,7 +251,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
   // Extracted to a const (was inline) so `--gate structural` can feed the SAME fn to
   // eachStructuralCandidate without touching spec.edge. Under `--gate legacy` (t.GATE !== 'structural',
   // the default) this is the byte-identical eachLiquidCandidate call the replay goldens pin.
-  const edgeFn = ({ id, limitVol, avgHigh, avgLow, mid, thin }) => {
+  const edgeFn = ({ id, hpv, lpv, limitVol, avgHigh, avgLow, mid, thin }) => {
     const limit = map.byId[id]?.limit ?? null;
 
     // --- step 3: the DECLARATIVE spec's edge — P4c re-expressed the old inline per-mode branch as
@@ -282,7 +282,13 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
     // moved against them — dropping them here would be the exact "silently vanishes" failure this fixes.
     const held = heldIds.has(id);
     if (!thin && !held && expGpDay < t.MIN_GPD) return null;
-    return { id, limitVol, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held };
+    // volDay (MT2, PLAN-MID-TIER-ADMISSION) — TOTAL two-sided daily volume, carried so admission.mjs's
+    // GEAR_RESERVE can call classifyVolLane without re-deriving it. ⚠ This is hpv+lpv and MUST NOT be
+    // confused with `limitVol` = min(hpv,lpv) directly above, which is the thin-side DEPTH: substituting
+    // it would classify churn items as gear and poison the reserve with the exact population it exists to
+    // keep out — a plausible-looking result, not a crash. The structural gate already computes the same
+    // hpv+lpv (structural-admission.mjs:125), so both admission paths agree on this field.
+    return { id, limitVol, volDay: hpv + lpv, mid, limit, expGpDay, expGpDayLegacy, activeWin, thin, held };
   };
   // GATE routing (PLAN-LANE-ADMISSION Chunk B) — independent of --admission (which is pool ORDERING,
   // not membership). Default 'legacy' → the unchanged eachLiquidCandidate admission. 'structural' swaps

@@ -37,6 +37,7 @@
  * beyond "worth trying."
  */
 import { proxyDrift, softFactor, THIN_RESERVE_DEFAULT, RISING_RESERVE_DEFAULT, TOP_DEFAULT, VALUE_RESERVE_DEFAULT } from './gatecandidates.mjs';
+import { classifyVolLane } from './structural-admission.mjs';   // MT2 — the EXISTING gear/churn discriminator; never a second one
 
 // --- track record (boost-only admission prior) -------------------------------------------------
 
@@ -74,7 +75,32 @@ export function trackBoost(entry, { minN = TRACK_BOOST_MIN_N, cap = TRACK_BOOST_
 // --- admission ------------------------------------------------------------------------------------
 
 export const EXPLORE_RESERVE_DEFAULT = 2;   // PLACEHOLDER (rule 4) — small + bounded; the fetch-budget guard is R2
-const ROTATE_MS = 30 * 60 * 1000;           // exploration rotation period — no persisted state file needed
+export const ROTATE_MS = 30 * 60 * 1000;    // exploration rotation period — no persisted state file needed
+
+/* GEAR_RESERVE (MT2, PLAN-MID-TIER-ADMISSION 2026-07-27) — fetch-pool slots guaranteed to GEAR-lane
+   candidates on the non-thin VELOCITY lane.
+
+   The starved class: MID-PRICE gear (Helm of neitiznot, ~10k–2m mid). It is too LIQUID to be `thin`
+   (limitVol ≥ FLOOR) so the thin reserve never covers it, and too LOW-MARGIN to win the velocity lane's
+   absolute-expGpDay sort against churn commodities reaching 4.21m/d. The one class with neither a reserve
+   nor a winning rank — so it is never fetched, at any bankroll, on every pass, deterministically.
+
+   NOT a re-rank (the ruling that scopes this): the pre-fetch orderer cannot rank on capital efficiency —
+   capEfficiency() needs the estimator result, which only exists AFTER the fetch. And reforming the GRADE
+   to be capital-relative is the thing PLAN-GRADE-REWORK deliberately walked back (capitalFactor deleted,
+   5fea8bd). So this is an ADDITIVE reserve in the shape of every other reserve in this file: the ranked
+   top-N is untouched, `0` is byte-identical to pre-change, and nothing here reaches rating.mjs. */
+export const GEAR_RESERVE_DEFAULT = 4;      // PLACEHOLDER (rule 4) — n=0; no mid-tier flip has ever been logged
+
+/* rotationPeriodMs(poolSize, slots, rotateMs) -> ms for one full rotation, or null when nothing rotates.
+   MT3 — the exploration reserve is documented as "starvation-proof by construction", which is true and,
+   unqualified, misleading: 1 velocity slot rotating over ~140 excluded candidates every 30 min means a
+   given row waits ~70 HOURS of continuous scanning for its turn. Pure so the render site can report the
+   real period instead of implying promptness. */
+export function rotationPeriodMs(poolSize, slots, rotateMs = ROTATE_MS) {
+  if (!(poolSize > 0) || !(slots > 0)) return null;
+  return Math.ceil(poolSize / slots) * rotateMs;
+}
 
 // deterministic rotation pick off a coarse time bucket: which excluded candidates get an
 // exploration slot changes every ROTATE_MS, so the same starved item isn't picked forever without
@@ -96,6 +122,8 @@ function pickExploration(pool, n, now) {
        tagged `via:'explore'` (AR2) so a renderer CAN mark a lottery-slotted row vs a ranked-in one
        (the screen table surfaces it as a small 🎲 token) — inform-only, never gates/ranks/grades
      - folds trackBoost into the non-thin/rising lane's sort key too
+     - adds a GEAR_RESERVE (MT2) on the non-thin velocity lane, so mid-price gear — which is neither
+       thin enough for the thin reserve nor high-margin enough to outrank churn — gets guaranteed slots
      - returns every non-admitted candidate with a reason (SC1) instead of silently dropping it
    The value niche keeps its own gate + hard top-N by valueScore (already has an honest
    admitted/shown footer via renderValueMode) — passed through unchanged, out of scope here. */
@@ -103,6 +131,7 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   const {
     thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT,
     valueReserve = VALUE_RESERVE_DEFAULT, exploreReserve = EXPLORE_RESERVE_DEFAULT, trackIndex = null, now = Date.now(),
+    gearReserve = GEAR_RESERVE_DEFAULT,
   } = opts;
   const isValue = cand.length && cand[0].valueScore !== undefined;
   if (isValue) {
@@ -190,7 +219,23 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   const velocityRemainder = velocityPool.slice(nonThinBudget);
   const exploredVelocity = pickExploration(velocityRemainder, velExploreN, now).map(c => ({ ...c, via: 'explore' }));
 
-  const survivors = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity];
+  // GEAR RESERVE (MT2) — see the GEAR_RESERVE_DEFAULT header. Ranked among GEAR-LANE PEERS on the same
+  // expGpDay×trackBoost axis the lane already uses, so no new metric is invented; it is only the peer
+  // GROUP that changes. Tagged via:'reserve' (the value reserve's existing marker), which also makes them
+  // `isProtected` in clampUnionFetch for free. Rows already taken by the exploration rotation are excluded
+  // so the two reserves can't double-spend a slot on the same item.
+  //
+  // FAIL-CLOSED on a missing volDay: `Number.isFinite` first, deliberately NOT `classifyVolLane(c.volDay ?? 0)`
+  // — 0 is below CHURN_VOL_CUT, so a `??0` default would silently classify EVERY volDay-less candidate as
+  // gear and hand the reserve to an arbitrary set. No volDay ⇒ no reserve slot (pinned by a test).
+  const exploredVelIds = new Set(exploredVelocity.map(c => c.id));
+  const gearReserved = velocityRemainder
+    .filter(c => !exploredVelIds.has(c.id) && Number.isFinite(c.volDay) && classifyVolLane(c.volDay) === 'gear')
+    .sort((a, b) => ((b.expGpDay || 0) * boostOf(b)) - ((a.expGpDay || 0) * boostOf(a)) || (a.id - b.id))
+    .slice(0, gearReserve)
+    .map(c => ({ ...c, via: 'reserve' }));
+
+  const survivors = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity, ...gearReserved];
 
   // --- exclusion report (SC1) — every gated candidate NOT admitted, with a reason. ---
   const admittedIds = new Set(survivors.map(c => c.id));

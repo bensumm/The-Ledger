@@ -5,6 +5,7 @@
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|amplitude|reverse|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose]
+ *     [--thin-reserve 6] [--gear-reserve 4]
  *
  *   DEFAULT is quiet: prints ONE summary line + the last-report dump path, not the markdown table.
  *   The per-niche report objects are ALWAYS written to pipeline/.cache/last-report/screen.json
@@ -73,7 +74,11 @@
  *
  * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×6,
  * 10% × volDay); expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
- * cheap pre-fetch orderer + the 500k --min-gpd pre-filter (P6b demotion). PLAN-LANE-ADMISSION Chunk D
+ * cheap pre-fetch orderer + the 500k --min-gpd pre-filter. That pre-filter is a HARD GATE, not a
+ * demotion (MT1, 2026-07-27 — it read "P6b demotion" here for months): gatecandidates.mjs:284 returns
+ * null, so a sub-floor non-thin/non-held candidate is DROPPED and never rated. Do not confuse it with
+ * the `⚠<floor` marker on the Path-A column, which is display-only and measures a DIFFERENT number —
+ * see the "TWO METRICS, ONE CONSTANT" note at pathABCell. PLAN-LANE-ADMISSION Chunk D
  * (2026-07-25): the CONSOLE / last-report band/churn table is now sorted PRIMARILY by Path-A intraday-flip
  * gp/day (pipeline/lib/patha.mjs pathAGpDay, off Chunk A's daily ranges + Chunk B's vol lane), shown in a
  * `Path-A gp/d*` column with the risk-adjusted per-thesis RANK/grade retained BESIDE it as the shown
@@ -111,7 +116,7 @@ import { loadOwned, computeOwnedQty } from '../lib/capital/ownedledger.mjs';   /
 import { loadReverseFlip, reverseFlipFor } from '../lib/thesis/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
 import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
 import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote, THIN_DRIFT_DAYS } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
-import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX } from '../lib/signal/admission.mjs';
+import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_RESERVE_DEFAULT, EXPLORE_RESERVE_DEFAULT, rotationPeriodMs } from '../lib/signal/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
@@ -253,6 +258,12 @@ const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
 // of the gp-flow path. Reserve up to this many (ranked by gp-flow = limitVol×mid) into every niche's pool.
 const THIN_RESERVE = A['thin-reserve'] != null ? +A['thin-reserve'] : 6;
 const THIN_RESERVE_EXPLICIT = A['thin-reserve'] != null;   // an explicit --thin-reserve always wins — never capital-scaled
+// GEAR_RESERVE (MT2, PLAN-MID-TIER-ADMISSION): fetch-pool slots guaranteed to GEAR-lane candidates on the
+// non-thin velocity lane — the mid-price band (Helm of neitiznot class) that is too liquid for the thin
+// reserve and too low-margin to outrank churn on absolute expGpDay, so it never gets fetched at all.
+// `--gear-reserve 0` restores the pre-MT2 pool exactly. Deliberately NOT capital-scaled yet: ship it fixed
+// so one before/after scan can actually be read, then revisit alongside the THIN_RESERVE scaling entry.
+const GEAR_RESERVE = A['gear-reserve'] != null ? +A['gear-reserve'] : GEAR_RESERVE_DEFAULT;
 // PLAN-FETCH-POOL-SCALING chunks 2-4 — the fetch-pool capital-scaling MASTER SWITCH (default OFF, opt-in
 // per Open Decision 1). OFF ⇒ every pool uses today's fixed default/explicit size and TOTAL_FETCH_MAX
 // never clamps — byte-identical to pre-change, regardless of cash anchor. ON ⇒ each pool's DEFAULT size
@@ -437,6 +448,16 @@ const PATHA_HEADER = 'Path-A gp/d*';
 // pathABCell(r, minGpd) — the structured Path-A cell for one row. `no-pathA` when the row had no intraday
 // range (it then sorts by Grade, surfaced not dropped); a sub-MIN_GPD (attention-floor) number is marked
 // `⚠<floor` (surfaced, NOT gated — the floor is a post-rank surfacing partition here, not a drop).
+//
+// ⚠ TWO METRICS, ONE CONSTANT (MT1, PLAN-MID-TIER-ADMISSION 2026-07-27 — read this before reasoning about
+// `⚠<floor`). MIN_GPD is compared against TWO DIFFERENT numbers in this pipeline, and they disagree:
+//   · Stage-1 `expGpDay` (gatecandidates.mjs:284, PRE-fetch)  — a HARD GATE. Sub-floor ⇒ dropped, never rated.
+//   · Path-A `pa.gpDay`  (here, POST-fetch)                   — DISPLAY ONLY. Sub-floor ⇒ marked, still shown.
+// So a row CAN carry `⚠<floor` while having comfortably cleared the gate on the other number — Helm of
+// neitiznot passes Stage-1 at ~692k and prints 420.7k/d ⚠<floor. Seeing the marker and concluding "MIN_GPD
+// is why this class never appears" is therefore wrong, and that misreading is exactly what sent
+// PLAN-MID-TIER-ADMISSION's first draft after the wrong cause: the real one is fetch ORDERING (absolute
+// expGpDay vs the --top cap), not the floor.
 function pathABCell(r, minGpd) {
   if (!r.pathA) return { t: 'no-pathA', c: 'mini', title: 'no intraday daily-range in the /1h archive for this item — Path-A gp/day could not be computed; this row is ranked by Grade only (surfaced, not dropped)' };
   const pa = r.pathA;
@@ -446,6 +467,28 @@ function pathABCell(r, minGpd) {
     c: 'mini',
     title: `Path-A intraday-flip after-tax gp/day — NEW, captureFrac PLACEHOLDER ${pa.captureFrac} (n≈0), live A/B vs the Grade backup: marginU ${fmt(Math.round(pa.marginU))}/u × units ${fmt(Math.round(pa.units))} × cycles/d ${pa.cyclesDay.toFixed(2)} (lane ${pa.lane}, rank ${pa.rankInLane ?? '?'} in lane)${below ? `; below the ${(minGpd / 1e3).toLocaleString()}k attention floor — surfaced, not gated` : ''}`,
   };
+}
+
+// rotationNote(excluded) — MT3 (PLAN-MID-TIER-ADMISSION). The exploration reserve is described in
+// admission.mjs as "starvation-proof by construction". That is true and, left unqualified, misleading:
+// the budget is split across two lanes (⌈n/2⌉ thin, ⌊n/2⌋ velocity), so at the default 2 the velocity
+// lane rotates ONE slot over its whole excluded pool every 30 min — ~70 hours per turn against ~140
+// candidates. This reports the real period per lane so "it'll come round eventually" is a number the
+// reader can weigh, not a promise. INFORM-ONLY: never gates, reorders, or changes what is fetched.
+// Returns null when nothing rotates (no exploration budget, or an empty pool).
+function rotationNote(excluded) {
+  const thinPool = excluded.filter(c => c.reason === 'thin-reserve-full').length;
+  const velPool = excluded.filter(c => c.reason !== 'thin-reserve-full').length;
+  const parts = [];
+  for (const [label, pool, slots] of [
+    ['thin', thinPool, Math.ceil(EXPLORE_RESERVE_DEFAULT / 2)],
+    ['velocity', velPool, Math.floor(EXPLORE_RESERVE_DEFAULT / 2)],
+  ]) {
+    const ms = rotationPeriodMs(pool, slots);
+    if (ms == null) continue;
+    parts.push(`${label} ${slots} slot(s) over ${pool} → ~${(ms / 3.6e6).toFixed(0)}h/turn`);
+  }
+  return parts.length ? `  exploration rotation (a given excluded row's wait for a lottery slot): ${parts.join(' · ')}` : null;
 }
 
 const round2 = x => Math.round(x * 100) / 100;   // P6b: pFill logged to 2dp (lean ledger)
@@ -1602,9 +1645,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   if (excluded.length) {
     const best = excluded[0];   // pre-sorted desc by expGpDay in admission.mjs
     const bestName = map.byId[best.id]?.name || ('#' + best.id);
-    extraSections.push({ type: 'lines', blank: false, lines: [
-      `crowded out: ${excluded.length} gated candidate(s) never got a fetch slot (best excluded: ${bestName}, ~${fmt(best.expGpDay || 0)}/d expected net, reason: ${best.reason})`,
-    ] });
+    const lines = [`crowded out: ${excluded.length} gated candidate(s) never got a fetch slot (best excluded: ${bestName}, ~${fmt(best.expGpDay || 0)}/d expected net, reason: ${best.reason})`];
+    const rot = rotationNote(excluded);
+    if (rot) lines.push(rot);
+    extraSections.push({ type: 'lines', blank: false, lines });
   }
   if (STATS) {
     const fetched = survivors.length, kept = rows.length;
@@ -2425,12 +2469,12 @@ async function main() {
     if (!cand.length && FLIP_NICHES[m].gate === 'band') {
       const fb = subFloorFallback(m, ctx, THRESHOLDS);
       if (fb) {
-        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: thinReserveN, top: SUBFLOOR_TOP, valueReserve: valueReserveN });
+        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: thinReserveN, top: SUBFLOOR_TOP, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE });
         gated[m] = { cand: fb.cand, survivors, excluded, subFloor: fb };
         continue;
       }
     }
-    const { survivors, excluded } = admit(m, cand, { thinReserve: thinReserveN, top, valueReserve: valueReserveN });
+    const { survivors, excluded } = admit(m, cand, { thinReserve: thinReserveN, top, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE });
     gated[m] = { cand, survivors, excluded };
   }
 

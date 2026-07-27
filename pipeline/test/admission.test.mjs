@@ -1,8 +1,10 @@
-// admission.test.mjs — pure fixture tests for pipeline/lib/admission.mjs (PLAN-SCREEN-ARCHITECTURE).
+// admission.test.mjs — pure fixture tests for pipeline/lib/signal/admission.mjs (PLAN-SCREEN-ARCHITECTURE
+// + PLAN-MID-TIER-ADMISSION MT2/MT3).
 // No live data (CLAUDE.md rule 4): synthetic candidates only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch } from '../lib/signal/admission.mjs';
+import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch, rotationPeriodMs, ROTATE_MS } from '../lib/signal/admission.mjs';
+import { CHURN_VOL_CUT } from '../lib/signal/structural-admission.mjs';
 
 test('buildTrackIndex aggregates closed lots per item, ignoring malformed entries', () => {
   const closed = [
@@ -45,9 +47,14 @@ test('trackBoost rewards a proven-profitable record, capped and confidence-scale
 
 // --- pickFetchPool ------------------------------------------------------------------------------
 
-function mkCand(id, { thin = false, held = false, expGpDay = 0, limitVol = 1000, mid = 1000 } = {}) {
-  return { id, thin, held, expGpDay, limitVol, mid, limit: null, activeWin: 24 };
+function mkCand(id, { thin = false, held = false, expGpDay = 0, limitVol = 1000, mid = 1000, volDay } = {}) {
+  const c = { id, thin, held, expGpDay, limitVol, mid, limit: null, activeWin: 24 };
+  if (volDay !== undefined) c.volDay = volDay;   // omitted by default — see the fail-closed test below
+  return c;
 }
+// MT2 lane helpers. classifyVolLane splits on TOTAL two-sided volume (hpv+lpv), NOT the thin-side depth.
+const GEAR_VOL = CHURN_VOL_CUT - 1;    // just under the cut → gear lane
+const CHURN_VOL = CHURN_VOL_CUT;       // at the cut → churn lane (boundary is inclusive-churn)
 
 test('pickFetchPool: a held candidate always survives, unbounded, regardless of score', () => {
   const cand = [mkCand(1, { held: true, expGpDay: 1 }), ...Array.from({ length: 10 }, (_, i) => mkCand(100 + i, { expGpDay: 1e6 - i }))];
@@ -246,4 +253,89 @@ test('clampUnionFetch: shared (deduped) ids across niches count ONCE toward the 
   const out = clampUnionFetch(niches, 3);   // union {1,2,3} == 3 → within budget
   assert.equal(out.trimmedCount, 0, 'the shared id is not double-counted, so the union fits');
   assert.equal(out.unionSize, 3);
+});
+
+// --- MT2: GEAR_RESERVE (PLAN-MID-TIER-ADMISSION) -------------------------------------------------
+// The starved class is MID-PRICE gear: too liquid to be `thin` (so the thin reserve never covers it),
+// too low-margin to outrank churn on absolute expGpDay (so it never wins a velocity slot). These pin
+// that it now gets guaranteed slots WITHOUT disturbing the ranked top-N.
+
+test('MT2 gear reserve: a gear-lane candidate that lost the velocity sort still gets a fetch slot', () => {
+  const churn = mkCand('churn', { expGpDay: 4_210_000, volDay: CHURN_VOL });   // the class that always wins
+  const gearA = mkCand('gearA', { expGpDay: 692_000, volDay: GEAR_VOL });      // neitiznot-shaped
+  const gearB = mkCand('gearB', { expGpDay: 500_000, volDay: GEAR_VOL });
+  const { survivors, excluded } = pickFetchPool('band', [churn, gearA, gearB], {},
+    { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 1 });
+  assert.deepEqual(survivors.map(c => c.id), ['churn', 'gearA'], 'the ranked slot goes to churn; the reserve rescues the best gear-lane loser');
+  assert.equal(survivors.find(c => c.id === 'gearA').via, 'reserve', 'a reserve-slotted row is marked, not disguised as a ranked-in pick');
+  assert.deepEqual(excluded.map(c => c.id), ['gearB'], 'a reserved row must NOT also be reported as excluded');
+});
+
+test('MT2 gear reserve: gearReserve 0 is byte-identical to the pre-MT2 pool', () => {
+  const cand = [
+    mkCand('churn', { expGpDay: 4_210_000, volDay: CHURN_VOL }),
+    mkCand('gearA', { expGpDay: 692_000, volDay: GEAR_VOL }),
+  ];
+  const opts = { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 0 };
+  const off = pickFetchPool('band', cand, {}, { ...opts, gearReserve: 0 });
+  assert.deepEqual(off.survivors.map(c => c.id), ['churn']);
+  assert.ok(off.survivors.every(c => c.via === undefined), 'with the reserve off no row carries a via tag — the shape is unchanged');
+  assert.deepEqual(off.excluded.map(c => c.id), ['gearA']);
+});
+
+test('MT2 gear reserve: CHURN-lane losers are never reserved (the reserve is not a second top-N)', () => {
+  const win = mkCand('win', { expGpDay: 4_210_000, volDay: CHURN_VOL });
+  const churnLoser = mkCand('churnLoser', { expGpDay: 4_200_000, volDay: CHURN_VOL });
+  const { survivors } = pickFetchPool('band', [win, churnLoser], {},
+    { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 4 });
+  assert.deepEqual(survivors.map(c => c.id), ['win'], 'a churn-lane candidate that merely lost the sort gets no reserve slot');
+});
+
+test('MT2 gear reserve: FAIL-CLOSED on a missing volDay — no lane reading, no slot', () => {
+  // The trap this guards: classifyVolLane(c.volDay ?? 0) would read a MISSING volDay as 0, which is
+  // below CHURN_VOL_CUT, so every volDay-less candidate would classify as gear and the reserve would be
+  // handed to an arbitrary set. Absent the field, the candidate must simply not be eligible.
+  const win = mkCand('win', { expGpDay: 100 });
+  const noLane = mkCand('noLane', { expGpDay: 1 });                 // mkCand omits volDay by default
+  const { survivors, excluded } = pickFetchPool('band', [win, noLane], {},
+    { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 4 });
+  assert.deepEqual(survivors.map(c => c.id), ['win']);
+  assert.deepEqual(excluded.map(c => c.id), ['noLane'], 'a candidate with no volDay is excluded, never silently treated as gear');
+});
+
+test('MT2 gear reserve: limitVol is NOT a substitute for volDay (the min-vs-sum trap)', () => {
+  // A balanced churn book: limitVol = min(hpv,lpv) sits below the cut while the real volDay = hpv+lpv
+  // is above it. Classifying on limitVol would call this GEAR and reserve it — the exact poisoning the
+  // plan flags. Pinned by asserting the churn item is NOT reserved even though its limitVol looks gear-ish.
+  const win = mkCand('win', { expGpDay: 999_999, volDay: CHURN_VOL });
+  const balancedChurn = mkCand('balancedChurn', { expGpDay: 10, limitVol: CHURN_VOL_CUT - 1, volDay: (CHURN_VOL_CUT - 1) * 2 });
+  const { survivors } = pickFetchPool('band', [win, balancedChurn], {},
+    { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 4 });
+  assert.deepEqual(survivors.map(c => c.id), ['win'], 'lane must be read off volDay (hpv+lpv), not the thin-side limitVol');
+});
+
+test('MT2 gear reserve: never double-spends a slot with the exploration rotation', () => {
+  const win = mkCand('win', { expGpDay: 1e6, volDay: CHURN_VOL });
+  const gear = mkCand('gear', { expGpDay: 1, volDay: GEAR_VOL });   // the ONLY remainder
+  const { survivors } = pickFetchPool('band', [win, gear], {},
+    { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 2, gearReserve: 4, now: 0 });
+  assert.equal(survivors.filter(c => c.id === 'gear').length, 1, 'the same item must not be admitted twice by two different reserves');
+});
+
+test('MT2 gear reserve: reserved rows are PROTECTED from the cross-niche fetch clamp', () => {
+  // via:'reserve' already makes a row isProtected in clampUnionFetch — pinned so a future edit to the
+  // marker cannot silently make gear-reserved rows the first thing trimmed under a tight budget.
+  const gearRow = { id: 'gear', via: 'reserve' };
+  const out = clampUnionFetch([{ mode: 'band', survivors: [{ id: 'a' }, { id: 'b' }, gearRow] }], 1);
+  assert.ok(out.niches[0].survivors.some(c => c.id === 'gear'), 'a gear-reserved row survives the clamp');
+});
+
+// --- MT3: exploration rotation period ------------------------------------------------------------
+
+test('MT3 rotationPeriodMs: reports the real wait, and null when nothing rotates', () => {
+  assert.equal(rotationPeriodMs(140, 1), 140 * ROTATE_MS, '1 slot over 140 candidates = 140 rotations');
+  assert.equal(rotationPeriodMs(140, 1) / 3.6e6, 70, '…which is the ~70 HOURS the plan flags, not "eventually"');
+  assert.equal(rotationPeriodMs(5, 2), 3 * ROTATE_MS, 'partial turns round UP — the last candidate still waits a full bucket');
+  assert.equal(rotationPeriodMs(0, 1), null, 'nothing excluded → no rotation to report');
+  assert.equal(rotationPeriodMs(140, 0), null, 'no exploration budget → no rotation to report');
 });

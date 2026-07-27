@@ -10,6 +10,51 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Mid-price gear was structurally unfetchable — `GEAR_RESERVE` (MT1–MT3, pipeline-only, 2026-07-27)
+Ben flagged that no mid-tier item had ever entered a scan — "not big gear, not churn — stuff like
+neitiznot helm". It was real, and the first diagnosis was wrong in a way worth recording.
+
+**The correction.** `MIN_GPD` looked like the culprit and isn't. It is a HARD pre-fetch gate
+(`gatecandidates.mjs:284` returns `null`, despite the screen header calling it a "P6b demotion" for
+months), and mid-tier gear **passes** it: Helm of neitiznot's Stage-1 `expGpDay` is
+`min(70×6, 10%×6.2k) × 1,648 ≈ 692k`, clear of the 500k floor. The evidence was already in hand and
+misread — 177 candidates gated at BOTH `--top` settings, and `MIN_GPD` runs before the fetch cap, so it
+cannot be what changed.
+
+What caused the misreading is a genuine hazard now documented at the render site: the `⚠<floor` marker on
+the table is **Path-A gp/day** (post-fetch, display-only) while the gate uses **Stage-1 `expGpDay`**
+(pre-fetch, a drop). Two different numbers compared against the same 500k constant, in the same output.
+**MT1** reconciles the three inconsistent in-tree descriptions.
+
+**The real cause is ordering.** At 6.2k/d the item isn't `thin` (≥ `FLOOR` 3,500), so no thin reserve
+covers it; on the velocity lane it's sorted on absolute `expGpDay` into ~30 slots against churn reaching
+4.21m/d. It is the one class with neither a reserve nor a winning rank — invisible at any bankroll, every
+pass, deterministically. The exploration reserve doesn't save it either: one velocity slot rotating over
+~140 excluded candidates every 30 min is a **~70-hour wait per row**. "Starvation-proof by construction"
+is true and, unqualified, misleading — **MT3** now prints the real period.
+
+**MT2 — `GEAR_RESERVE`** (`--gear-reserve`, default 4, PLACEHOLDER): guaranteed fetch slots for `gear`-lane
+candidates from the velocity remainder, ranked among their OWN lane on the same `expGpDay × trackBoost`
+axis, tagged `via:'reserve'` (which also makes them `isProtected` in `clampUnionFetch` for free). Additive
+in the shape of every other reserve here — the ranked top-N is untouched and `0` is byte-identical to
+before.
+
+Deliberately a reserve, not a re-rank, for two independent reasons: the pre-fetch orderer *cannot* rank on
+capital efficiency (`capEfficiency` takes the estimator result, which only exists after the fetch), and
+reforming the GRADE to be capital-relative is precisely what `5fea8bd` walked back when it deleted
+`capitalFactor`. Nothing in MT1–MT3 reaches `rating.mjs`, and `screen.json` is unchanged.
+
+Two traps closed in code and pinned by tests: the lane is read off `volDay` (hpv+lpv, newly carried on the
+candidate) and **never** `limitVol` (`min(hpv,lpv)` — the thin-side depth), since substituting it would
+classify churn as gear and fill the reserve with the exact population it exists to exclude; and it is
+**fail-closed** — `Number.isFinite(volDay)` rather than `volDay ?? 0`, because 0 is below `CHURN_VOL_CUT`
+and would have silently made every volDay-less candidate "gear".
+
+Honesty (rule 4): **n = 0.** No mid-tier flip has ever been logged, because none was ever surfaced. This
+buys the class visibility, nothing more — success is "mid-tier rows appear and can be judged", not
+"mid-tier makes money". Class B (Berserker helm 780/d, failing both liquidity paths) is untouched and moved
+to PLAN.md's Open list: it needs a distribution study, not a threshold tweak.
+
 ### `writeLastReport` wrote to the wrong directory after the lib reorg — agent reads went stale (pipeline-only, 2026-07-27)
 The eighth self-relative path the `PLAN-LIB-SUBDIRS` reorg silently relocated, and the worst of them,
 because it broke a surface no guard watches: the agent-readable report dump.
