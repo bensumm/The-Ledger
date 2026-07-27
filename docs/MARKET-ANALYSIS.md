@@ -376,9 +376,21 @@ recomputed each pass, so it is "next N by CURRENT rank", not a durable cursor). 
 FAIL-CLOSED but never silently — such a candidate is reported as `mid-tier-limit-unknown` rather than
 folded into `top-n-full`, because `structural-admission.mjs` deliberately does NOT exclude on null
 (~89 newer gear items carry `limit=null`), making this a local exception that must stay visible.
-Verified on real data: Neitiznot is admitted at the shipped default, additive, no duplicates. Two
-populations remain unreached and are NOT addressed here — Berserker helm/Dragon scimitar (pre-fetch
-liquidity-gated) and Rune platebody (edge-gated); see PLAN.md's Open list. Still n=0.
+Verified on real data: the low-limit pool is reached, additive, no duplicates.
+
+**⚠ THE SUCCESS CRITERION IS NOT "a named item appears" (owner, 2026-07-27).** MT-V2 was validated by
+checking that Helm of neitiznot got admitted. That was the wrong target — it is an ARBITRARY example
+of the class and may well be unprofitable. **The actual goal is a candidate pool appropriate to
+AVAILABLE CAPITAL**: mid-tier flips are probably not lucrative at high bankroll (buy limit × mid caps
+what they can absorb — Neitiznot is ~3.4m per 4h window, i.e. ~3% of a 100m pool but ~34% of a 10m
+one), and they should NOT crowd the pool there; they should surface if and when the capital makes them
+the right call. Note the RANKING already behaves this way — `expGpDay` is capital-aware via
+`THROUGHPUT_CAP_GP` (`capPerWindow = pool / mid`), so low capital naturally promotes cheaper items. It
+is the RESERVES that are capital-blind: a fixed slot count is a standing bypass of that ranking and
+costs the same at every bankroll. Making the three reserves capital-conditioned is the open follow-up
+(PLAN.md Open list) — until then, read a mid-tier row as "this class was given a look", not as "this
+class is worth capital right now". Two populations remain unreached and are NOT addressed here —
+Berserker helm/Dragon scimitar (pre-fetch liquidity-gated) and Rune platebody (edge-gated). Still n=0.
 F-F (2026-07-22) reworked the **Both-leg reach cell** ("Both-leg reach (recent / full) + phase"): it now
 prints the FULL-window hit count alongside recent-3 for BOTH legs (`recentHit/recentDays·fullHit/fullN`,
 straight off `recencySplit`) and appends a **trough-vs-decay phase annotation** (`reachPhaseNote`). WHY:
