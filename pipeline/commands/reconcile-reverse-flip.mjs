@@ -26,7 +26,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadReverseFlip } from '../lib/thesis/reverseflipstate.mjs';
-import { loadOwned, ownedFor } from '../lib/ownedledger.mjs';
+import { loadOwned, ownedFor } from '../lib/capital/ownedledger.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // TRACKED repo-root stores. The COFFER_*_PATH env overrides exist ONLY so the acceptance test can point

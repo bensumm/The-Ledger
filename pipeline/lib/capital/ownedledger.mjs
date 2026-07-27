@@ -28,8 +28,8 @@
  * The GATE/screen logic (inverted regime, edge, --mode reverse) is RF1/RF2 — NOT here (foundation only).
  */
 import fs from 'node:fs';
-import { collapseOffers } from './reconstruct/reconstruct.mjs';   // raw snapshot lines -> final per-offer filled/spent (shared, pure)
-import { BIG_TICKET_GP } from '../../js/quotecore.js'; // the ONE big-ticket threshold (one-home; = 10m)
+import { collapseOffers } from '../reconstruct/reconstruct.mjs';   // raw snapshot lines -> final per-offer filled/spent (shared, pure)
+import { BIG_TICKET_GP } from '../../../js/quotecore.js'; // the ONE big-ticket threshold (one-home; = 10m)
 
 export const PENDING_QTY_MAX = 5;    // a "keep" buy is bought in singles; a commodity flip in hundreds/thousands — placeholder ceiling
 export const MAX_PENDING = 20;       // cap pendingClassification so a busy session can't flood the list — placeholder

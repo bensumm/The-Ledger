@@ -46,7 +46,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
+import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
 import { fetchItemInputs } from '../lib/market/marketfetch.mjs';
 import { computeQuote } from '../../js/quotecore.js';

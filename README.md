@@ -776,7 +776,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   tools the `/cleanup` skill reads (lint-plan-lifecycle, report-branches — never wired into
   `checks.yml`); **`pipeline/lib/`** = the imported-only
   shared libraries — **being regrouped into concept subdirectories one cluster at a time**
-  (PLAN-LIB-SUBDIRS). Landed clusters: **`pipeline/lib/render/`** = output/reporting (render, emit,
+  (PLAN-LIB-SUBDIRS, COMPLETE — folded into PLAN.md). The seven clusters: **`pipeline/lib/render/`** = output/reporting (render, emit,
   cli, suggestlog, retrojoin, replay, analyze); **`pipeline/lib/thesis/`** = the declared-state stores
   (holdthesis, sessionthesis, watchstate, reverseflipstate); **`pipeline/lib/reconstruct/`** = the
   FIFO book reconstruction (reconstruct, campaigns, offers, positions, fill-placement, sync-invoke,

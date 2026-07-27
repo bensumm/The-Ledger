@@ -107,7 +107,7 @@ import { formatTimedLap, formatBasePosition } from '../lib/render/emit.mjs';   /
 // THRESHOLDS / sizing explicitly. Fixtures drive them in gatecandidates.test.mjs + survivemode.test.mjs.
 import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight, VALUE_TOP_DEFAULT, AMP_TOP_DEFAULT, VALUE_RESERVE_DEFAULT, subFloorFallback, subFloorLabel, SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP,
   scaleSlots, TOP_MAX, THIN_RESERVE_MAX, VALUE_TOP_MAX, VALUE_RESERVE_MAX, AMP_TOP_MAX } from '../lib/signal/gatecandidates.mjs';   // RF2 — reverse routes via gateCandidates('reverse', …) → gateReverseFlipCandidates internally
-import { loadOwned, computeOwnedQty } from '../lib/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
+import { loadOwned, computeOwnedQty } from '../lib/capital/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
 import { loadReverseFlip, reverseFlipFor } from '../lib/thesis/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
 import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
 import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote, THIN_DRIFT_DAYS } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
@@ -126,11 +126,11 @@ import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   
 import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps now live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags, no longer calls capGrade itself. REACH_GRADE_CAP_FRAC stays for the digest's reach ✓/✗ read. G6: CONF_THIN_N_FLOOR for the (thin) confidence-marker tooltip.
 import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
+import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
 import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
-import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
+import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/capital/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
 import { termStructure, basePosition, BASEPOS_LOOKBACK_DAYS } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series); DT6 — the light multi-week base-position read off the SAME `ts`, never a second structure computation
 // COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
 // logic) so quote-items.mjs's budgeted-ts1h read shares the IDENTICAL warm-term-structure aggregation and the

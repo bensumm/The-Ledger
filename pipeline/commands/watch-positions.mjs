@@ -63,7 +63,7 @@ import { writeLastReport } from '../lib/render/cli.mjs';   // AO1 — agent-read
 import { computeQuote, breakEven, momVerdict, offerVerdict, BIG_TICKET_GP,
   diurnalRead, phase, underwaterHours, isOvernightNow, pressureText, flushSignal,
   quoteCells as canonicalQuoteCells, cellText } from '../../js/quotecore.js';   // VZ2b — the ONE canonical table-v2 cell format for the watch Quick/Optimistic cells
-import { limitWindow, buysByItem } from '../lib/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
+import { limitWindow, buysByItem } from '../lib/capital/limits.mjs';   // DL2 — buy-limit-aware FLUSH clause
 import { fmtP, fmt } from '../../js/money-format.js';
 import { briefLine } from '../../js/watchcore.js';   // --brief compact book: format owned by the script
 import { renderHeldVerdict, pathsStage, renderPathLine, rawHeldToken, heldDisplay } from '../lib/market/item-context.mjs';   // P0 — the ONE shared held-verdict renderer (verbose mode = this surface); P4b — path stage + shared dominant-path line; VN-1 — persistence-gated display layer
@@ -84,9 +84,9 @@ import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drif
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/signal/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause
 import { recoveryRead, recoveryLine, recoveryTrigger } from '../lib/signal/recovery.mjs';   // V6 advisory recover-vs-drop forecast
-import { freedCapital } from '../lib/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
-import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
+import { freedCapital } from '../lib/capital/freed-capital.mjs';   // V6 companion — freed-capital redeploy prompt
+import { bookUtilization, totalCapital } from '../lib/capital/capital-utilization.mjs';   // YV1 (#3) — working-vs-parked capital line
+import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';    // total-capital: DERIVED idle-cash denominator (derive-cash.mjs anchor + log flow)
 import { loadThesis, pruneThesis, thesisLine } from '../lib/thesis/sessionthesis.mjs';   // YT1 (#4) — read-only session-thesis reminder
 import { loadHoldThesis, pruneHoldThesis, thesisFor } from '../lib/thesis/holdthesis.mjs';   // TG1 — read-only declared-hold-thesis store (gates the expected-underwater headline)
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 (#2) advisory guide re-anchor line

@@ -11,7 +11,7 @@
  *    returns a status (a reject on a held lot is still just a status the surface renders as a note).
  */
 import assert from 'node:assert/strict';
-import { limitWindow, buysByItem, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';
+import { limitWindow, buysByItem, LIMIT_WINDOW_SEC } from '../lib/capital/limits.mjs';
 import { limitValidator, runValidators, worstStatus, flags, LIMIT_CAUTION_FRAC } from '../../js/validate.mjs';
 
 let n = 0;

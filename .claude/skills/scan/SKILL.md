@@ -748,7 +748,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   sizing sanity-check, not a formula; it's a labeling discipline (call the roll horizon at entry),
   never a hard cap.
 - **Buy-limit-aware sizing — NEVER suggest a quantity over the 4h GE limit (Ben, 2026-07-08).**
-  _(code-pointer: `pipeline/lib/limits.mjs` `limitWindow` + `js/validate.mjs` `limitValidator`; ask =
+  _(code-pointer: `pipeline/lib/capital/limits.mjs` `limitWindow` + `js/validate.mjs` `limitValidator`; ask =
   `node pipeline/commands/read-buy-limits.mjs "<item>"`)_ Every accumulation/tranche suggestion is CAPPED by the item's
   GE buy limit (`quote-items.mjs` prints it as `· buy limit N/4h`; also in the mapping — look it up before
   sizing). A "tranche" is ONE window's worth = **≤ limit units**; a position bigger than the limit is a

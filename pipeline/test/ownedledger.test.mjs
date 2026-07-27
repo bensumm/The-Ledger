@@ -23,7 +23,7 @@ import path from 'node:path';
 import {
   loadOwned, saveOwned, ownedFor, upsertOwnedItem, removePending,
   computeOwnedQty, foldPendingBuys, PENDING_QTY_MAX,
-} from '../lib/ownedledger.mjs';
+} from '../lib/capital/ownedledger.mjs';
 import { BIG_TICKET_GP } from '../../js/quotecore.js';
 
 let pass = 0;

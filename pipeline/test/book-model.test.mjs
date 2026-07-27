@@ -14,8 +14,8 @@
  *    qty·(mark−breakEven).
  */
 import assert from 'node:assert/strict';
-import { buildBook, sizeTranche, CLEARABILITY_FRAC, TOTAL_SLOTS } from '../lib/book-model.mjs';
-import { bookUtilization, totalCapital } from '../lib/capital-utilization.mjs';
+import { buildBook, sizeTranche, CLEARABILITY_FRAC, TOTAL_SLOTS } from '../lib/capital/book-model.mjs';
+import { bookUtilization, totalCapital } from '../lib/capital/capital-utilization.mjs';
 import { breakEven } from '../../js/quotecore.js';
 
 let n = 0;

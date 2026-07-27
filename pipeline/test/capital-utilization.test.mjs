@@ -13,7 +13,7 @@
  *     is excluded from the parked-time median (it has no first-fill).
  */
 import assert from 'node:assert/strict';
-import { bookUtilization, parkedStats, totalCapital } from '../lib/capital-utilization.mjs';
+import { bookUtilization, parkedStats, totalCapital } from '../lib/capital/capital-utilization.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

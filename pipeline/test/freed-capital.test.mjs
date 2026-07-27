@@ -17,7 +17,7 @@
  * Synthetic fixtures only. Run: `node pipeline/test/freed-capital.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { freedCapital, FREED_CAPITAL_SCAN_GP } from '../lib/freed-capital.mjs';
+import { freedCapital, FREED_CAPITAL_SCAN_GP } from '../lib/capital/freed-capital.mjs';
 import { STALE_GAP_MS } from '../lib/thesis/watchstate.mjs';
 
 let pass = 0;

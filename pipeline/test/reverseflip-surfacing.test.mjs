@@ -24,7 +24,7 @@ import {
   reverseFlipPendingEntries, reverseFlipCycleNotes, rebuyStaleNote, daysPending, REBUY_STALE_DAYS,
 } from '../../js/reverseflip.mjs';
 import { reverseFlipRows, sortRows, agendaRowsForItem } from '../commands/read-schedule.mjs';
-import { buildReverseFlipPending } from '../lib/book-model.mjs';
+import { buildReverseFlipPending } from '../lib/capital/book-model.mjs';
 import { reverseFlipPositionLines } from '../commands/quote-items.mjs';
 import { fmt, fmtP } from '../../js/money-format.js';
 

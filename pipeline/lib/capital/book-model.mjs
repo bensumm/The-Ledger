@@ -19,9 +19,9 @@
  * verbatim from the loadDerivedCash record. book-model.test.mjs pins the split byte-identical to
  * watch-positions.mjs's SUMMARY footer for the same input, so the two capital surfaces can't drift.
  * Break-even is the ONE tax-capped breakEven() from js/quotecore.js — never a second tax-math home. */
-import { breakEven } from '../../js/quotecore.js';
+import { breakEven } from '../../../js/quotecore.js';
 import { bookUtilization, totalCapital } from './capital-utilization.mjs';
-import { reverseFlipPendingEntries, reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4 — declared reverse-flip cycle surfacing (pure)
+import { reverseFlipPendingEntries, reverseFlipCycleNotes } from '../../../js/reverseflip.mjs';   // RF4 — declared reverse-flip cycle surfacing (pure)
 
 export const TOTAL_SLOTS = 8;   // members' GE has 8 offer slots
 

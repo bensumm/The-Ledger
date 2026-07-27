@@ -16,7 +16,7 @@
  * Run: `node pipeline/test/derive-cash-tiers.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { deriveCash, restingBuyEscrow, classifyBid, DEEP_BID_PCT } from '../lib/derive-cash-tiers.mjs';
+import { deriveCash, restingBuyEscrow, classifyBid, DEEP_BID_PCT } from '../lib/capital/derive-cash-tiers.mjs';
 import { GE_TAX } from '../lib/reconstruct/reconstruct.mjs';
 
 let pass = 0;

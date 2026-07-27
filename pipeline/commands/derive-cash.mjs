@@ -14,8 +14,8 @@
  * exceed the tracked balance (you clearly added capital); the ONE thing it can't see is an off-ledger
  * outflow / missed log, which you correct with a bare re-anchor. Output-only — NEVER a verdict/alert input. */
 import { parseGp, fmtP } from '../../js/money-format.js';
-import { writeCash, clearCash } from '../lib/cash-anchor.mjs';
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
+import { writeCash, clearCash } from '../lib/capital/cash-anchor.mjs';
+import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
 
 const arg = process.argv[2];
 

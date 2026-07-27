@@ -236,7 +236,7 @@ W3-1 and W3-2 are INFORM/DIGEST-ONLY (n≈0 placeholders), never gating and neve
 
 **capEff** + the **weak-deploy** flag (a big-ticket single-turn pick under ~0.5%/turn — churn
 exempt, amplitude not) live inline in `screen-flip-niches.mjs` (`capEfficiency`/`weakDeploy`/`digestVerdict`,
-reusing `BIG_TICKET_GP` from `js/quotecore.js`, `LIMIT_WINDOW_SEC` from `pipeline/lib/limits.mjs` for the 6
+reusing `BIG_TICKET_GP` from `js/quotecore.js`, `LIMIT_WINDOW_SEC` from `pipeline/lib/capital/limits.mjs` for the 6
 laps/day ceiling, and `placement`/`diurnalPhase` from `js/windowread.mjs` + `GRADE_CUTOFFS`/
 `REACH_GRADE_CAP_FRAC` from `js/rating.mjs`); a lean `capEff`/`weakDeploy` shadow rides `suggestions.jsonl`
 for the retro-join. Everything here is **INFORM-ONLY, PLACEHOLDER (n≈0), never gates**, and — critically —

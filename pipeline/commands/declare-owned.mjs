@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from '../lib/market/marketfetch.mjs';
 import {
   loadOwned, saveOwned, ownedFor, upsertOwnedItem, removePending, computeOwnedQty,
-} from '../lib/ownedledger.mjs';
+} from '../lib/capital/ownedledger.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // TRACKED repo-root stores. COFFER_OWNED_PATH / COFFER_FILLS_PATH env overrides exist ONLY so the

@@ -12,7 +12,7 @@
 // pass (a fresh/empty prior, a first-seen lot, or a stale-gap pass → NO event, so it never misfires
 // on startup, a reset, or an overnight pause where a lot merely "vanished" from an old snapshot).
 
-import { STALE_GAP_MS } from './thesis/watchstate.mjs';
+import { STALE_GAP_MS } from '../thesis/watchstate.mjs';
 
 // Freed value (proceeds of a booked SELL) at/above which a redeploy prompt is worth surfacing.
 // DOCUMENTED PLACEHOLDER (Ben, 2026-07-06) — ~5m is "a real position closed, worth a scan"; below it

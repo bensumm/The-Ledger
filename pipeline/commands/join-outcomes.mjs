@@ -40,7 +40,7 @@ import { reconstructCampaigns, REPRICE_GAP, MANUAL_SLOT } from '../lib/reconstru
 import { loadMapping, loadAll24h, loadHistBands } from '../lib/market/marketfetch.mjs';
 import { loadHistState, bandPercentile } from '../lib/signal/range-position.mjs';
 import { velocityClass } from '../lib/timing/velocity.mjs';
-import { parkedStats } from '../lib/capital-utilization.mjs';
+import { parkedStats } from '../lib/capital/capital-utilization.mjs';
 import { parseArgs, median } from '../lib/render/cli.mjs';
 import { liqClassOf, readSuggestionLines } from '../lib/render/suggestlog.mjs';
 import { fmt, fmtTurn } from '../../js/money-format.js';   // chunk 6: dropped unused fmtP

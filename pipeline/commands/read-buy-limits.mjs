@@ -16,7 +16,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadMapping } from '../lib/market/marketfetch.mjs';
-import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/limits.mjs';
+import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/capital/limits.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FILLS = path.join(HERE, '..', '..', 'fills.json');

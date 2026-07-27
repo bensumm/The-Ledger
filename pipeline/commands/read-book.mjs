@@ -29,9 +29,9 @@ import { loadMapping, loadGuide, fetchItemInputs, vol24FromInputs } from '../lib
 import { computeQuote, breakEven } from '../../js/quotecore.js';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';
-import { loadDerivedCash } from '../lib/derive-cash-tiers.mjs';
-import { buysByItem, limitWindow } from '../lib/limits.mjs';
-import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/book-model.mjs';
+import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';
+import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';
+import { buildBook, buildReverseFlipPending, CLEARABILITY_FRAC } from '../lib/capital/book-model.mjs';
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 "Reverse-flip pending" section
 import { fmt, fmtP } from '../../js/money-format.js';
 

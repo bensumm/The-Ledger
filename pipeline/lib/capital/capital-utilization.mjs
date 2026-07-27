@@ -8,7 +8,7 @@
      parkedStats    — a HISTORICAL "how long bids sat" read over outcomes campaigns, off the MEASURED
        parkedSec/velocityClass YS1 records. Honest: a per-item read off a handful of lots is a LABEL,
        not a rate (the ~116-lot concentration caveat applies). */
-import { median } from './render/cli.mjs';
+import { median } from '../render/cli.mjs';
 
 /* bookUtilization({ workingGp, parkedGp }) -> { workingGp, parkedGp, committed, utilizationPct }.
    utilizationPct = working / (working + parked), null when no capital is committed. */
