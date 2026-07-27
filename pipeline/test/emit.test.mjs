@@ -17,7 +17,7 @@
  * Synthetic fixtures only. Run: `node pipeline/test/emit.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/emit.mjs';
+import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/render/emit.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

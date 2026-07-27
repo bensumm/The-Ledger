@@ -25,7 +25,7 @@ doctrine). The overnight-fill narrative supplements the table, it doesn't replac
 labels every note family a TRACKING tier — `core` (verdicts, alerts, the V5 held-note fields) and
 `context` (the inform-only families). _judgment:_ **both render AND relay by default** — there is NO
 default-hidden middle tier, so surface the context notes too. The tier registry lives in
-`pipeline/lib/render.mjs`'s header — the ONE registry; don't restate tiers here.
+`pipeline/lib/render/render.mjs`'s header — the ONE registry; don't restate tiers here.
 
 ## 0. Ensure the local desk is up (Ben, 2026-07-18)
 

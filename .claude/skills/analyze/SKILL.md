@@ -23,18 +23,18 @@ node pipeline/commands/analyze-record.mjs --json     # the structured brief (par
 ```
 
 - **That command IS the analysis** — it reads `suggestions.jsonl` (+ archives), `fills.json`, and
-  `positions.json` and prints the three honest sections; the pure core is `pipeline/lib/analyze.mjs`.
+  `positions.json` and prints the three honest sections; the pure core is `pipeline/lib/render/analyze.mjs`.
   NEVER hand-write a join or a `node -e` over the ledger — every number here must be byte-identical to
   what the engine (and thus `retrojoin.mjs`) computes.
 - **The n-gates already ran inside the engine** — `judgment:` your job is to READ the flags, not to
-  re-derive them or lower their bar; a candidate is `pipeline/lib/analyze.mjs`'s call, not yours.
+  re-derive them or lower their bar; a candidate is `pipeline/lib/render/analyze.mjs`'s call, not yours.
 
 ## 2. Load session context — all of it is already persisted
 
 Before interpreting, know what WE did this session so the retro is grounded, not generic:
 
 - **The ledger is the mechanical session record** — `judgment:` every quote/scan/watch you ran is
-  already a row in `suggestions.jsonl` (written by `pipeline/lib/suggestlog.mjs`) with its `ts`; skim
+  already a row in `suggestions.jsonl` (written by `pipeline/lib/render/suggestlog.mjs`) with its `ts`; skim
   the recent tail (or `analyze.mjs --since`) for what was surfaced and under which niche/posture. No
   extra logging is needed for v1.
 - **The realized side is `fills.json` / `positions.json`** — what actually filled + the FIFO view;
@@ -67,7 +67,7 @@ Before interpreting, know what WE did this session so the retro is grounded, not
   O1's sample thresholds, never a same-session edit off a thin signal.
 - **A forward-DATA gap is often the highest-value proposal** — `judgment:` when the engine reports "can't
   answer Y because field Z was never logged" (e.g. grade letter, book depth), the fix is a lean field on
-  `pipeline/lib/suggestlog.mjs` (the YS2 pattern) so the analysis becomes possible LATER — cheap now,
+  `pipeline/lib/render/suggestlog.mjs` (the YS2 pattern) so the analysis becomes possible LATER — cheap now,
   compounding value.
 - **Never edit a strategy/rating constant to "act on" a retro in this skill** — `judgment:` that is the
   exact overclaim-from-small-n failure rule 4 guards; the deliverable here is a well-evidenced proposal

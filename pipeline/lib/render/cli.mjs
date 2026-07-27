@@ -4,7 +4,7 @@
    (chunk 10.2 dedup). No market/quote math lives here — that is js/quotecore.js.
    Consumers: screen-flip-niches.mjs, add-manual-fill.mjs (parseArgs/parseGp); quote-items.mjs,
    screen-flip-niches.mjs (mdTable/stdCells). */
-import { quoteCells, cellText } from '../../js/quotecore.js';
+import { quoteCells, cellText } from '../../../js/quotecore.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

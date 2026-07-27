@@ -53,7 +53,7 @@
  * screen-flip-niches.mjs join in later chunks. Fixture-pinned by pipeline/test/render.test.mjs.
  */
 import { mdTable } from './cli.mjs';
-import { gradeCls, fmtP } from '../../js/money-format.js';
+import { gradeCls, fmtP } from '../../../js/money-format.js';
 
 /* --- SURFACING-TIER REGISTRY (R10 — TRACKING label, NOT a render/relay gate; VZ5 = the ONE registry) --
    Every note kind carries a tier so a later iteration pass can see which kinds are actually read vs

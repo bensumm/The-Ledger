@@ -16,7 +16,7 @@ confirmed live, 2026-07-16). The sizing prose supplements the tables, it doesn't
 labels every note family a TRACKING tier — `core` (verdicts, alerts, the WATCHLIST, the accumulation
 table) and `context` (the inform-only families: diurnal, forecast, ask headroom, asym, window-clear,
 reach relief, demand). _judgment:_ **both render AND relay by default** — there is NO default-hidden
-middle tier, so surface the context notes too. The tier registry lives in `pipeline/lib/render.mjs`'s
+middle tier, so surface the context notes too. The tier registry lives in `pipeline/lib/render/render.mjs`'s
 header — the ONE registry; don't restate tiers here.
 
 ## Time-geography of the overnight flip (v1.8, 2026-07-05 — Ben-endorsed)

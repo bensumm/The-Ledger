@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { computeQuote, breakEven } from '../../js/quotecore.js';
 import { FLIP_NICHE_LIST, FLIP_NICHES } from '../../js/flip-niches.mjs';
-import { buildSnapshot } from '../lib/replay.mjs';
+import { buildSnapshot } from '../lib/render/replay.mjs';
 import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-ESTIMATOR-HONEST-SELL E1: the delegation pin — the shell's forward fields must equal a direct driftExitFrom call
 import {
   estimatorFor, ESTIMATORS, ESTIMATOR_FAMILIES,

@@ -33,8 +33,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, median } from '../lib/cli.mjs';
-import { liqClassOf } from '../lib/suggestlog.mjs';
+import { parseArgs, median } from '../lib/render/cli.mjs';
+import { liqClassOf } from '../lib/render/suggestlog.mjs';
 import {
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL,
 } from '../../js/estimators/families.mjs';

@@ -27,7 +27,7 @@ import { fmtHoldHorizon } from '../../js/windowread.mjs';   // PLAN-ESTIMATOR-HO
 import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, DT_TRANCHE_COMFORT_VOL_PCT, DT_TRANCHE_CEILING_VOL_PCT } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT1 — the timed-lap layer
 import { hourlyDriftNote } from '../../js/windowread.mjs';   // PLAN-HOURLY-3DAY-TREND HT2 — the compact render of a hourlyDrift() result
 import { computeReality, realityClause, SPIKE_REACH_FRAC, SPIKE_PLACEMENT_PCTILE, SPIKE_MIN_GAP_FRAC, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN } from '../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD — the level-reality guard + its renderer
-import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
+import { formatTimedLap } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

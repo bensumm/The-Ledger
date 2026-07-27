@@ -15,7 +15,7 @@ summary. Term lookup: `docs/GLOSSARY.md`. Data-flow: `docs/FLOW.md`. Invariants:
 
 **The render layer (PLAN-VIZ-LAYER).** The three market-read scripts (watch/quote/screen) each build
 ONE plain, JSON-serializable **report object** (`{ kind, generatedAt, sections:[…] }`) beside their
-compute and print it via `renderReport` — the ONE render path, `pipeline/lib/render.mjs`. It formats
+compute and print it via `renderReport` — the ONE render path, `pipeline/lib/render/render.mjs`. It formats
 already-computed facts and decides NOTHING (no numbers, no verdicts). Section types: `headline` /
 `alerts` / `table` (→ `mdTable`) / `lines` / `notes` (typed `{kind,tier,text}`, the per-kind sigil
 lives in render.mjs's `NOTE_KINDS`, not the push site). Every note family carries a **surfacing tier**
@@ -732,7 +732,7 @@ simultaneous independent rungs on one item.
 - **Diurnal timing (auto).** `screen-flip-niches.mjs` runs `js/windowread.mjs` `diurnalTimedLap` on
   EVERY flip-niche survivor (PLAN-DIURNAL-TIMING DT2, 2026-07-23 — was top-picks-only; zero extra fetch,
   the 1h series is already in hand) and prints a **Diurnal timing** block via the ONE shared renderer
-  `pipeline/lib/emit.mjs` `formatTimedLap` (also `quote-items.mjs`'s DT3 call site, so
+  `pipeline/lib/render/emit.mjs` `formatTimedLap` (also `quote-items.mjs`'s DT3 call site, so
   `screen-flip-niches.mjs` and `quote-items.mjs` render byte-identical diurnal text off one
   definition, not several that can silently disagree). Two shapes off
   `hourConcentration`'s verdict (replaces the old `★` clean-candidate flag):
@@ -791,7 +791,7 @@ simultaneous independent rungs on one item.
   label is a 3-way coarsening of `ts.trajectory.shape` (`based`/`flat`→range-bound,
   `rising`/`elevated`→trending↑, `knife`→trending↓, `oscillating`+a falling `recentTrend`→decaying,
   `oscillating` otherwise→range-bound) — done by the new pure `js/termstructure.mjs` `basePosition(ts)`
-  helper, rendered by `pipeline/lib/emit.mjs` `formatBasePosition`. **Single-source, not a second
+  helper, rendered by `pipeline/lib/render/emit.mjs` `formatBasePosition`. **Single-source, not a second
   computation**: `termStructure(daily[id])` is computed ONCE per row (the SAME call `renderMode` already
   makes for `floorValidator`; `renderAmplitudeMode` now makes its own single call too, since amplitude's
   gate never touched the daily archive before) and handed to `basePosition` as a pure read of the

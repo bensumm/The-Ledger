@@ -34,7 +34,7 @@
  * byte-identical to screen-flip-niches.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
 import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
-import { median } from './cli.mjs';
+import { median } from './render/cli.mjs';
 // P5 — the value niche's term-structure gate + rank (js/valuescreen.mjs, pure). gateCandidates routes
 // a `gate:'value'` spec here instead of the shared band/spread liquidity+edge stack.
 import { termStructure } from '../../js/termstructure.mjs';

@@ -27,9 +27,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from '../lib/cli.mjs';
-import { readSuggestionLines } from '../lib/suggestlog.mjs';
-import { retroJoin, aggregateOutcomes } from '../lib/retrojoin.mjs';
+import { parseArgs } from '../lib/render/cli.mjs';
+import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
+import { retroJoin, aggregateOutcomes } from '../lib/render/retrojoin.mjs';
 import { fmt, fmtTurn } from '../../js/money-format.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

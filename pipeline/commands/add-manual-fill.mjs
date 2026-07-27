@@ -56,7 +56,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { tax as GE_TAX, breakEven } from '../../js/quotecore.js'; // the ONE tax impl (chunk 4.1) + shared tax-capped inverse — no private copy
-import { parseArgs, parseGp } from '../lib/cli.mjs';
+import { parseArgs, parseGp } from '../lib/render/cli.mjs';
 import { loadMapping } from '../lib/marketfetch.mjs'; // shared 24h-cached mapping loader (X1) — id/name resolve()
 
 const LOG_DIR = path.join(os.homedir(), '.runelite', 'exchange-logger');

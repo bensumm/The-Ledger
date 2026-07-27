@@ -174,7 +174,7 @@ This loop is *why* so many thresholds are labelled PLACEHOLDER: the system recor
 recommended (`suggestions.jsonl`, append-only, month-rotated) and what actually happened
 (`fills.json`), and `analyze-record.mjs` surfaces the gap — but calibration (F1) stays gated
 until the sample is large enough to be honest (process rule 4). The `/analyze` skill drives
-this. Homes: `pipeline/lib/suggestlog.mjs`, the `/analyze` skill, `pipeline/FILLS-PIPELINE.md`.
+this. Homes: `pipeline/lib/render/suggestlog.mjs`, the `/analyze` skill, `pipeline/FILLS-PIPELINE.md`.
 
 ---
 

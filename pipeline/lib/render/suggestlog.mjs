@@ -100,13 +100,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // F-E — the DEFAULT reach-vs-margin quantiles, so amplitudeShadow can lean-log askQ/bidQ only when an experiment run overrode them (one-home, no forked 0.5 literal)
+import { AMP_ASK_Q, AMP_BID_Q } from '../../../js/amplitudescreen.mjs';   // F-E — the DEFAULT reach-vs-margin quantiles, so amplitudeShadow can lean-log askQ/bidQ only when an experiment run overrode them (one-home, no forked 0.5 literal)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-// HERE is pipeline/lib/ (since OR2 moved this file into lib/), so repo root is TWO levels up.
-// A single '..' here silently forked the ledger into untracked pipeline/suggestions.jsonl for
-// half a day (2026-07-05) — suggestlog.test.mjs pins the resolved path to the repo root.
-export const LEDGER = path.join(HERE, '..', '..', 'suggestions.jsonl');
+// HERE is pipeline/lib/render/ (PLAN-LIB-SUBDIRS chunk 1 nested it one deeper), so repo root is THREE
+// levels up. A single '..' here silently forked the ledger into untracked pipeline/suggestions.jsonl for
+// half a day (2026-07-05) — suggestlog.test.mjs pins the resolved path to the repo root, and caught this
+// same class again when the render/ move added a level. Re-count these on any future move of this file.
+export const LEDGER = path.join(HERE, '..', '..', '..', 'suggestions.jsonl');
 
 // SR1 — rotation/compaction. The active LEDGER lives in the DEPLOY ROOT and grows unbounded
 // (~3k rows/day ≈ >1MB/day). To keep the root file bounded to the CURRENT calendar month while
@@ -114,7 +115,7 @@ export const LEDGER = path.join(HERE, '..', '..', 'suggestions.jsonl');
 // are moved OUT of the root into monthly archive files `suggestions-YYYY-MM.jsonl` under a tracked
 // `pipeline/suggestions-archive/` dir (out of the deploy root, still committed by sync-fills). The
 // resolved ACTIVE path above stays pinned by suggestlog.test.mjs — only history relocates.
-export const ARCHIVE_DIR = path.join(HERE, '..', 'suggestions-archive');
+export const ARCHIVE_DIR = path.join(HERE, '..', '..', 'suggestions-archive');   // pipeline/suggestions-archive (TWO up from lib/render/)
 
 // UTC month key (YYYY-MM) for a unix-SECONDS ts. Archive naming is a STORAGE/wire concern, so it
 // uses UTC (consistent with the CLAUDE.md time-convention: ISO/UTC is storage, local getters are

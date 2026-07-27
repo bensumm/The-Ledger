@@ -48,7 +48,7 @@ headroom, asym fill, window-clear, reach relief, demand). _judgment:_ **both ren
 default** — there is NO default-hidden middle tier, so surface the context footer notes too, don't
 drop them to "keep it short." A note family only stops being surfaced once real sessions evidence
 it's consistently unused (a future ruling, never a per-pass call). The tier registry lives in
-`pipeline/lib/render.mjs`'s header — the ONE registry; don't restate tiers here.
+`pipeline/lib/render/render.mjs`'s header — the ONE registry; don't restate tiers here.
 
 **The deployable figure is SHOWN, not modelled — if it's wrong, correct it at the SOURCE (PLAN-CAPITAL-DEPLOYABILITY L3, Ben 2026-07-26).** _(judgment: capital-transparency doctrine; mechanic in `derive-cash-tiers.mjs` + the `suspectBidNote` flag on `read-book`/`run-loop`/`screen --capital`)_ The scan's default capital is the DERIVED `deployablePool` (free cash + reclaimable deep-bid escrow), and the surfaces now PRINT its composition (`free X · + reclaimable Y from N deep bids`) plus a `⚠ N restart-suspect bid(s) may be included — verify in-game` flag when a restart-blind bid may have inflated it. The tool does NOT model or auto-correct this number — that machinery was deliberately SHELVED (one reliable human-in-the-loop beats an unattended guard: `gate-on-error-cost-not-n`). So when the shown deployable is wrong, fix it at the SOURCE, never by patching a derived view (`fix-at-the-source-not-derived-view`): **re-anchor** (`node pipeline/commands/derive-cash.mjs <amount>`) when the free-cash baseline has drifted, or a **manual-log correction / phantom-bid clear** when a bid shown as reclaimable is actually gone. The conversational loop IS the override — Ben says the number's wrong, I route the correction to the anchor/log, and the next read is right.
 
@@ -432,7 +432,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 - **The DIURNAL TIMING block auto-derives the timed-lap peak-timing bid/ask (2026-07-09; richened by
   PLAN-DIURNAL-TIMING DT2, 2026-07-23) — READ IT; it supplies the spike-window exit for WINDOW-CLEAR
   PRICING below.** _(enforced: `js/windowread.mjs` `diurnalTimedLap`, rendered via the ONE shared
-  `formatTimedLap` (`pipeline/lib/emit.mjs`), `pipeline/commands/screen-flip-niches.mjs` Diurnal timing
+  `formatTimedLap` (`pipeline/lib/render/emit.mjs`), `pipeline/commands/screen-flip-niches.mjs` Diurnal timing
   block)_ `screen-flip-niches.mjs` now prints a `Diurnal timing` line for EVERY flip-niche survivor (was
   top-picks-only), FREE — off the in-hand 1h series, zero new fetch, blank-line-separated per item. Two
   shapes off `hourConcentration`'s verdict (replaces the old `★` candidate flag):

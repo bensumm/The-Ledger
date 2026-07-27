@@ -124,7 +124,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   specifically) + `hourConcentration`'s `clean` verdict; degrades to `{degraded:true, reason}`, never a
   throw. DT2 (2026-07-23) wires this into `screen-flip-niches.mjs` for EVERY flip-niche survivor
   (was top-picks-only via raw `hourProfile`+`deriveDiurnalRange`), rendered through the ONE shared
-  `pipeline/lib/emit.mjs` `formatTimedLap` — see that file's README entry. DT3 (2026-07-23) wires the
+  `pipeline/lib/render/emit.mjs` `formatTimedLap` — see that file's README entry. DT3 (2026-07-23) wires the
   SAME `diurnalTimedLap`+`formatTimedLap` pair into `quote-items.mjs`'s bare-quote `kind:'diurnal'`
   note (`prof`/`dr` themselves stay — they still feed `extraEst.diurnal`, the window-clear peak window,
   and the forward E4 inputs), and swaps `watch-positions.mjs`'s two direct `hourProfile`+
@@ -244,7 +244,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (the SAME field `classifyTrajectory` already scores) + a 3-way coarsening of `ts.trajectory.shape`
   (+`ts.recentTrend.dir` to split a falling-drift oscillation as "decaying") onto `range-bound`/
   `trending↑`/`trending↓`/`decaying`, for the `screen-flip-niches.mjs` **Base position** note on band/
-  churn/amplitude survivors (rendered by `pipeline/lib/emit.mjs` `formatBasePosition`) — NOT a second
+  churn/amplitude survivors (rendered by `pipeline/lib/render/emit.mjs` `formatBasePosition`) — NOT a second
   term-structure computation, a second reader of the one `termStructure()` call already in hand; the
   value flip-niche is deliberately not wired to it (already has its own durable-floor render). Consumed by `js/validate.mjs`'s floor+trajectory
   validators + `pipeline/commands/screen-flip-niches.mjs`/`pipeline/commands/quote-items.mjs` + `js/valuescreen.mjs`; here in `js/` so validate.mjs can import it — NOT yet app-imported),
@@ -543,7 +543,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote-items.mjs`/`screen-flip-niches.mjs`/`watch-positions.mjs`
-  via `pipeline/lib/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
+  via `pipeline/lib/render/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
   recording which `/24h` endpoint the liquidity `class` volume came from (screen = bulk; quote = bulk
   when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources. A row may also
   carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
@@ -602,7 +602,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   This is the §7 **data guarantee** made concrete at the ledger layer — DT2 already computes a
   `timedLap` for EVERY flip-niche survivor (not just top picks), so this field rides every row the shadow
   logs, healthy or thin/degraded alike; the SEPARATE render guarantee (the printed `↳ diurnal` note)
-  stays soft — it prints only when there's something worth telling Ben (`pipeline/lib/emit.mjs
+  stays soft — it prints only when there's something worth telling Ben (`pipeline/lib/render/emit.mjs
   formatTimedLap`). PLACEHOLDER (n≈0, rule 4) — never a gate/rank/`screen.json` input. Not yet wired
   on `quote-items.mjs`/`watch-positions.mjs` (their rows log a byte-identical shape without it).
   Coverage pinned by `pipeline/test/dt4-timedlap-coverage.test.mjs`.
@@ -621,7 +621,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   archived, never deleted.
 - `pipeline/suggestions-archive/` — tracked dir of completed-month archive files
   `suggestions-YYYY-MM.jsonl` (SR1), moved OUT of the deploy root by `rotateLedger`
-  (`pipeline/lib/suggestlog.mjs`). Same schema/lines as the active ledger; the append-only O1
+  (`pipeline/lib/render/suggestlog.mjs`). Same schema/lines as the active ledger; the append-only O1
   calibration history. Read together with the active file via `readSuggestionLines` — any full-
   history reader (`join-outcomes.mjs`'s F1 join, `retrojoin.mjs`'s P6a suggestion→fill join) MUST use
   that helper, not the active file alone.
@@ -637,7 +637,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   rank/grade input). The console `--pressure-exit` rerank/reprice TRIAL is a SEPARATE mechanism (refused
   under `--publish`, so it never reaches `screen.json`). Also carries a top-level `html` field
   (2026-07-16, PLAN-VIZ-LAYER Stage-2) — one pre-rendered HTML string per flip-niche + watchlist
-  (`pipeline/lib/render.mjs` `renderHtmlTable`, the server-side twin of `js/ui.js`'s client-side
+  (`pipeline/lib/render/render.mjs` `renderHtmlTable`, the server-side twin of `js/ui.js`'s client-side
   `scanTableHtml`), ADDITIVE beside `cells` (never a replacement); the app prefers `html[key]` when
   present, falling back to client-side rendering for a screen.json published before this field
   existed. **Publishing is now the DEFAULT every run**
@@ -775,7 +775,11 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   check-daemon-safety, lint-arch/docs/skills, run-tests, smoke-test) plus two NON-GATING report
   tools the `/cleanup` skill reads (lint-plan-lifecycle, report-branches — never wired into
   `checks.yml`); **`pipeline/lib/`** = the imported-only
-  shared libraries; **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
+  shared libraries — **being regrouped into concept subdirectories one cluster at a time**
+  (PLAN-LIB-SUBDIRS; `pipeline/lib/render/` = the output/reporting cluster is the first landed —
+  render, emit, cli, suggestlog, retrojoin, replay, analyze. Files not yet clustered stay at
+  `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design);
+  **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.
   - **Workflow CLIs (`pipeline/commands/*.mjs`, run directly):** `sync-fills.mjs` (parse logs →
     `fills.json`/`positions.json`/`offers.json`; **DEFAULT is LOCAL / zero-git** — the cheap in-session
@@ -1772,7 +1776,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     dumps (`screen.json`/`quote.json`/`watch.json`) — the compact-JSON render.mjs report object(s)
     the last run of each market-read CLI built, written EVERY run (overwritten, "last run" semantics),
     for an agent to read instead of re-parsing stdout. Producer: `screen-flip-niches.mjs` /
-    `quote-items.mjs` / `watch-positions.mjs` (via `writeLastReport`, `pipeline/lib/cli.mjs`); consumer:
+    `quote-items.mjs` / `watch-positions.mjs` (via `writeLastReport`, `pipeline/lib/render/cli.mjs`); consumer:
     agent analysis passes — quiet-and-dump-only is now the DEFAULT (an agent must read this file for
     the data, not a stdout summary line); `--verbose` opts into the markdown table for a human paste.
     Shape `{kind, generatedAt, reports:[…]}`; screen
@@ -1827,7 +1831,7 @@ constant governs each, so these can move without touching the deployed app or ph
 | File | Producer / consumer | Tracked? |
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/commands/trigger-alerts.mjs` (N1) | tracked (ships empty) |
-| `suggestions.jsonl` | appended by `pipeline/lib/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/… + SF-3 `volSrc?`); SR1-bounded to the current month | tracked, append-only |
+| `suggestions.jsonl` | appended by `pipeline/lib/render/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/… + SF-3 `volSrc?`); SR1-bounded to the current month | tracked, append-only |
 | `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | tracked, append-only (lazy) |
 | `outcomes.json` | derived by `pipeline/commands/join-outcomes.mjs` (F1 join reads active+archives) | gitignored |
 

@@ -27,10 +27,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from '../lib/cli.mjs';
-import { readSuggestionLines } from '../lib/suggestlog.mjs';
-import { retroJoin, aggregateOutcomes } from '../lib/retrojoin.mjs';
-import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, amplitudeRetro, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from '../lib/analyze.mjs';
+import { parseArgs } from '../lib/render/cli.mjs';
+import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
+import { retroJoin, aggregateOutcomes } from '../lib/render/retrojoin.mjs';
+import { auditDataset, deriveCandidates, dipLoopAudit, askHeadroomAudit, amplitudeRetro, hrs, gp, pct, ALWAYS_FIELDS, OPTIONAL_FIELDS } from '../lib/render/analyze.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..', '..');

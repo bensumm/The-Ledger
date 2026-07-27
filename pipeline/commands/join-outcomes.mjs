@@ -41,8 +41,8 @@ import { loadMapping, loadAll24h, loadHistBands } from '../lib/marketfetch.mjs';
 import { loadHistState, bandPercentile } from '../lib/range-position.mjs';
 import { velocityClass } from '../lib/velocity.mjs';
 import { parkedStats } from '../lib/capital-utilization.mjs';
-import { parseArgs, median } from '../lib/cli.mjs';
-import { liqClassOf, readSuggestionLines } from '../lib/suggestlog.mjs';
+import { parseArgs, median } from '../lib/render/cli.mjs';
+import { liqClassOf, readSuggestionLines } from '../lib/render/suggestlog.mjs';
 import { fmt, fmtTurn } from '../../js/money-format.js';   // chunk 6: dropped unused fmtP
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

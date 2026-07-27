@@ -51,9 +51,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reconstructCampaigns, campaignBase } from '../lib/campaigns.mjs';
-import { readSuggestionLines } from '../lib/suggestlog.mjs';
+import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
 import { loadMapping } from '../lib/marketfetch.mjs';
-import { parseArgs, median } from '../lib/cli.mjs';
+import { parseArgs, median } from '../lib/render/cli.mjs';
 import { inWindow } from '../../js/windowread.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

@@ -23,7 +23,7 @@ import { tax } from '../../js/money-math.js';
 import { hourProfile } from '../../js/windowread.mjs';
 import { diurnalForecast, driftAdjustedExit, driftExitFrom } from '../../js/forecast.mjs';
 import { amplitudeDriftMargin, AMP_DRIFT_REQ_MARGIN, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';
-import { amplitudeShadow } from '../lib/suggestlog.mjs';
+import { amplitudeShadow } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

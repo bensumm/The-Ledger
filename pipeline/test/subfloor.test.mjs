@@ -30,7 +30,7 @@ import {
   SUBFLOOR_TOP, SUBFLOOR_GRADE_CAP, DEFAULT_THRESHOLDS,
 } from '../lib/gatecandidates.mjs';
 import { capGrade } from '../lib/rating.mjs';
-import { suggestionEntry } from '../lib/suggestlog.mjs';
+import { suggestionEntry } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

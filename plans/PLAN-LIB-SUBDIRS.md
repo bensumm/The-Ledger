@@ -5,7 +5,7 @@ Per-topic working doc (`docs/PLANNING.md` lifecycle); folds into `PLAN.md` + del
 | Chunk | State | Notes |
 | --- | --- | --- |
 | **0 — tooling + guard prep** | **SHIPPED** | `pipeline/ci/move-lib-cluster.mjs` (resolve-and-compare mover, `--dry-run`, pure helpers pinned by `move-lib-cluster.test.mjs`); `lint-arch.mjs` bare-basename resolution now recurses `pipeline/lib/**`; `check-imports.mjs` ENTRYPOINTS = every `pipeline/commands/*.mjs` (11 → 30, 473 → 614 imports checked). All 7 guards green. |
-| 1 — `render/` | open | Dry-run verified: 65 rewrites across 39 files, all six edge cases correct. |
+| **1 — `render/`** | **SHIPPED** | render, emit, cli, suggestlog, retrojoin, replay, analyze. 65 rewrites across 39 files; git recorded all 7 as renames. Two bugs found + fixed live — the mover's pre-move write path (resurrected files at `lib/` root), and **self-relative path math** (`suggestlog.mjs`'s `LEDGER`), now detected by `selfRelativePathRisks`. |
 | 2 — `thesis/` | open | |
 | 3 — `reconstruct/` | open | Moved BEFORE capital (avoids double-touching 3 capital files). |
 | 4 — `timing/` · 5 — `market/` · 6 — `signal/` · 7 — `capital/` | open | |
@@ -37,8 +37,11 @@ is flexible and the work can pause indefinitely between chunks.
   split). A later, separate phase could consider `js/` — NOT this plan.
 - **`paths.mjs` and `version.mjs` are high-fan-in infra** — imported very widely. Leave them at `lib/` root (or
   move them LAST, on their own chunk) so early chunks stay small.
-- **No behavior change, ever.** A chunk is a pure move + import-path rewrite. `positions.json`/`screen.json`
-  regenerate byte-identical; no APP_VERSION bump (pipeline-only); tests are updated for the new paths only.
+- **No behavior change, ever — but this is NOT automatic (learned chunk 1).** A chunk is a pure move +
+  import-path rewrite *plus* a hand re-count of any self-relative path math in the moved files (recipe step
+  2b). `positions.json`/`screen.json` regenerate byte-identical — verify this, it is the acceptance check
+  that catches a broken `HERE`-relative path that every static guard passes. No APP_VERSION bump
+  (pipeline-only); tests are updated for the new paths only.
 - **The archlint / README file-registry stays honest** — each chunk updates README "Map of the repo" entries
   to the new `lib/<cluster>/` paths in the SAME commit (process rule 8). `docs/ARCHITECTURE.md` and
   `docs/GLOSSARY.md` are the two docs `lint-arch.mjs` actually CI-enforces (a stale reference there
@@ -78,6 +81,16 @@ is flexible and the work can pause indefinitely between chunks.
    grep against the WHOLE `pipeline/` tree (including already-created cluster subdirs), not just
    `pipeline/lib/` root + `commands/` + `test/`, or the second-bump case above is missed. `check-imports.mjs`
    is the safety net for entrypoint-reachable breakage — but see Guards below for what it does NOT cover.
+2b. **Re-count every SELF-RELATIVE path in the moved files (added chunk 1 — a real blind spot, not
+   hypothetical).** A file that computes a path from its own location (`import.meta.url` → `HERE`) does NOT
+   survive a pure move: nesting one level deeper silently changes where that path resolves. This is runtime
+   path arithmetic, so **no import guard can see it** — `check-imports` passes, the file parses, and the
+   artifact quietly lands somewhere new. ANCHOR: `suggestlog.mjs`'s `LEDGER = path.join(HERE, '..', '..',
+   'suggestions.jsonl')` pointed at the repo root from `lib/` but at `pipeline/` from `lib/render/`, which
+   would have forked `suggestions.jsonl` into an untracked file (the same file's header records this class
+   biting once before, 2026-07-05). The mover now PRINTS a `⚠ SELF-RELATIVE PATHS` block listing every such
+   line in the moved set — re-count the `'..'` segments by hand for each, then re-run the suite. Six files
+   still carry this pattern: `archive`, `compose`, `marketfetch`, `offers`, `probes`, `sync-invoke`.
 3. Run the full guard suite (`run-tests`, `check-imports`, `check-dead-exports`, `check-daemon-safety`,
    `lint-arch`, `lint-skills`, `lint-docs`) — all green before landing. If the chunk-0 helper exists, it runs
    `check-imports` + `run-tests` itself and prints a per-file edit summary for review before commit.

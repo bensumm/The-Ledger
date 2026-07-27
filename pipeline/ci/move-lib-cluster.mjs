@@ -84,6 +84,57 @@ export function specifierFrom(fromDir, toAbs) {
   return rel;
 }
 
+/* Files that compute a path from their OWN location (`import.meta.url` → `path.join(HERE, '..', …)`)
+   are NOT safe to move mechanically: nesting one level deeper silently changes where every such path
+   resolves. No import guard can see this — it is runtime path arithmetic, not a specifier — so the mover
+   must flag it for a human to re-count the '..' segments.
+
+   ANCHOR (2026-07-26, chunk 1): `suggestlog.mjs`'s `LEDGER = path.join(HERE, '..', '..',
+   'suggestions.jsonl')` resolved to the repo root from `lib/`, but to `pipeline/` from `lib/render/` —
+   which would have forked suggestions.jsonl into an untracked file. Only `suggestlog.test.mjs`'s
+   pinned-path assertion caught it. That file's own header records the SAME bug biting once before
+   (2026-07-05, half a day lost), so this is a repeat class, not a one-off.
+
+   Detection is deliberately a WARNING, not a hard stop: some self-relative paths (e.g. a sibling-dir
+   read) are unaffected by depth, so the call is human judgment — but it must never be silent.
+
+   Detection tracks the VARIABLE, not the call shape: find whatever `import.meta.url` is resolved into
+   (`const HERE = path.dirname(fileURLToPath(import.meta.url))`) and report every later line that uses it.
+   Matching on `path.join(` would miss the real forms in this tree — `probes.mjs:86` uses a destructured
+   `join(HERE, '..', 'probes')` and `archive.mjs:41` uses `pathMod.join(HERE, …)`. Both break on a move. */
+export function selfRelativePathRisks(src) {
+  if (!/import\.meta\.url/.test(src)) return [];
+  const lines = src.split('\n');
+  // the variable(s) holding this file's own directory
+  const vars = new Set();
+  const declRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=[^\n]*import\.meta\.url/g;
+  // `require` comes from createRequire(import.meta.url) — derived from the URL but never a path, so it
+  // would flag every require() call as a move risk. Not path arithmetic; excluded.
+  let d; while ((d = declRe.exec(src)) !== null) if (d[1] !== 'require') vars.add(d[1]);
+  if (!vars.size) return [];
+  const out = [];
+  lines.forEach((line, i) => {
+    if (/import\.meta\.url/.test(line)) return;                       // the declaration itself
+    const t = line.trim();
+    if (t.startsWith('*') || t.startsWith('//')) return;              // prose inside a block/line comment
+    const code = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');   // ignore trailing-comment mentions
+    for (const v of vars) {
+      if (new RegExp(`\\b${v}\\b`).test(code)) { out.push({ line: i + 1, text: line.trim() }); return; }
+    }
+  });
+  return out;
+}
+
+/* Where a rewritten file must actually be WRITTEN. `scannedAbs` is the path as walked (pre-move); if that
+   file is itself in the move set, its content belongs at the NEW path — `git mv` has already run by write
+   time, so writing to the scanned path would resurrect the old file at lib/ root holding the rewritten
+   content while the moved copy kept the stale original. That failure is silent to a path-resolution guard
+   (both files exist and parse) and only surfaced via run-tests. Pinned by move-lib-cluster.test.mjs. */
+export function writeTargetFor(scannedAbs, byOldAbs) {
+  const self = byOldAbs.get(scannedAbs);
+  return self ? self.newAbs : scannedAbs;
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const dryRun = argv.includes('--dry-run');
@@ -118,6 +169,18 @@ function main() {
 
   console.log(`PLAN-LIB-SUBDIRS — moving ${moves.length} file(s) into pipeline/lib/${cluster}/${dryRun ? '  [DRY RUN]' : ''}`);
   for (const m of moves) console.log(`  lib/${m.base}  ->  lib/${cluster}/${m.base}`);
+
+  // Self-relative path arithmetic — the one class a pure move CAN break silently (see selfRelativePathRisks).
+  const risks = moves.map(m => ({ m, hits: selfRelativePathRisks(fs.readFileSync(m.oldAbs, 'utf8')) })).filter(r => r.hits.length);
+  if (risks.length) {
+    console.log(`\n⚠ SELF-RELATIVE PATHS — ${risks.length} moved file(s) compute paths from their own location.`);
+    console.log('  Nesting one level deeper changes where these resolve. Re-count the \'..\' segments BY HAND;');
+    console.log('  no import guard catches this (it is runtime path math, not a specifier).');
+    for (const r of risks) {
+      console.log(`  lib/${r.m.base}:`);
+      for (const h of r.hits) console.log(`      :${h.line}  ${h.text.slice(0, 110)}`);
+    }
+  }
 
   // --- Step 2: compute every specifier rewrite (resolve-and-compare, not case-matching) -----------
   // Done BEFORE the move so resolution is against the pre-move tree; the map above is the source of truth
@@ -181,7 +244,12 @@ function main() {
       process.exit(1);
     }
   }
-  for (const e of edits) fs.writeFileSync(e.file, e.updated);
+  // Write each edit to the file's POST-MOVE path. `e.file` is the path as scanned (pre-move); for a file
+  // that is itself in the move set, that path no longer exists after `git mv` — writing to it would
+  // RESURRECT the old file at lib/ root with the rewritten content while the moved copy kept the original
+  // (caught by run-tests on the first live run: lib/render/emit.mjs kept `../../js/…`, which resolves to
+  // the nonexistent pipeline/js/). Always route through the move map.
+  for (const e of edits) fs.writeFileSync(writeTargetFor(e.file, byOldAbs), e.updated);
   console.log(`\n✓ moved ${moves.length} file(s) and rewrote ${totalChanges} specifier(s).`);
 
   // --- Step 4: verification (mechanical guards only; the rest is the recipe's step 3) --------------

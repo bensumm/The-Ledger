@@ -17,7 +17,7 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping } from '../lib/marketfetch.mjs';
-import { parseGp } from '../lib/cli.mjs';
+import { parseGp } from '../lib/render/cli.mjs';
 import { tax } from '../../js/money-math.js';   // the ONE tax impl — beRebuy = soldEach − tax(soldEach)
 import {
   loadReverseFlip, saveReverseFlip, reverseFlipFor, upsertReverseFlip, clearReverseFlip, pruneReverseFlip,

@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow } from '../lib/suggestlog.mjs';
+import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }

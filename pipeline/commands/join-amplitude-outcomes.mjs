@@ -25,7 +25,7 @@
  * the CLI wiring (archive read, suggestions read) is guarded so importing the module fires no side effect.
  */
 import { fileURLToPath } from 'node:url';
-import { readSuggestionLines } from '../lib/suggestlog.mjs';
+import { readSuggestionLines } from '../lib/render/suggestlog.mjs';
 import { loadMapping } from '../lib/marketfetch.mjs';
 import * as archive from '../lib/archive.mjs';
 

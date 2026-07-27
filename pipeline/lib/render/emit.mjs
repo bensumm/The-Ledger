@@ -26,8 +26,8 @@
  * structuralSupport / convictionGate) and decides NOTHING — it just orders + formats them. It
  * changes no verdict, no alert, no row selection (V5 is output-format-only).
  */
-import { fmtP, fmt, fmtHourRange } from '../../js/money-format.js';
-import { fmtHoldHorizon, realityClause } from '../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer; PLAN-DIURNAL-RECENCY-GUARD — realityClause: the spike-top/stale clause appended to the ASK/BID bits
+import { fmtP, fmt, fmtHourRange } from '../../../js/money-format.js';
+import { fmtHoldHorizon, realityClause } from '../../../js/windowread.mjs';   // PLAN-DIURNAL-TIMING DT2 — formatTimedLap's hold-horizon renderer; PLAN-DIURNAL-RECENCY-GUARD — realityClause: the spike-top/stale clause appended to the ASK/BID bits
 
 /**
  * depthReachClause — PLAN-DEPTH-EXIT DE3: the held-lot depth/pressure clause for the window line.

@@ -19,8 +19,8 @@
  *     (the NY2.4 liquidity vocabulary).
  */
 import assert from 'node:assert/strict';
-import { parseGp, median } from '../lib/cli.mjs';
-import { liqClassOf } from '../lib/suggestlog.mjs';
+import { parseGp, median } from '../lib/render/cli.mjs';
+import { liqClassOf } from '../lib/render/suggestlog.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

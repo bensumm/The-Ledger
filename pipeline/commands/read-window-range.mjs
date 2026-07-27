@@ -62,7 +62,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest } from '../lib/marketfetch.mjs';
-import { parseArgs, parseGp } from '../lib/cli.mjs';
+import { parseArgs, parseGp } from '../lib/render/cli.mjs';
 import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line

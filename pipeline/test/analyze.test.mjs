@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import {
   auditDataset, deriveCandidates, fieldPresence, askHeadroomAudit, amplitudeRetro,
   MIN_N_CANDIDATE, FIELD_DROP_MIN_WINDOW,
-} from '../lib/analyze.mjs';
+} from '../lib/render/analyze.mjs';
 import { tax } from '../../js/quotecore.js';
 
 let pass = 0;

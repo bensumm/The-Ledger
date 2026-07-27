@@ -30,8 +30,8 @@ import assert from 'node:assert/strict';
 import {
   flushSignal, DIP_LOOP_LIQUID_FLOOR, DIP_LOOP_FLUSH_PCT, DIP_LOOP_DEPLOY_VOL_FRAC, breakEven,
 } from '../../js/quotecore.js';
-import { suggestionEntry } from '../lib/suggestlog.mjs';
-import { dipLoopAudit } from '../lib/analyze.mjs';
+import { suggestionEntry } from '../lib/render/suggestlog.mjs';
+import { dipLoopAudit } from '../lib/render/analyze.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

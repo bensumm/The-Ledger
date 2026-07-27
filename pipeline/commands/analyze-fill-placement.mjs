@@ -36,7 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from '../lib/cli.mjs';
+import { parseArgs } from '../lib/render/cli.mjs';
 import { fetchTs } from '../lib/marketfetch.mjs';
 import { collapseOffers } from '../lib/reconstruct.mjs';
 import { open as openArchive } from '../lib/archive.mjs';

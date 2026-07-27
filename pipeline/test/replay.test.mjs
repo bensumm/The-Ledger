@@ -29,7 +29,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildSnapshot, runReplay, ARCHETYPES } from '../lib/replay.mjs';
+import { buildSnapshot, runReplay, ARCHETYPES } from '../lib/render/replay.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FX_DIR = path.join(HERE, 'fixtures', 'replay');

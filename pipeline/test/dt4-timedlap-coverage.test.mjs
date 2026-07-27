@@ -26,7 +26,7 @@
  */
 import assert from 'node:assert/strict';
 import { diurnalTimedLap } from '../../js/windowread.mjs';
-import { suggestionEntry, timedLapShadow } from '../lib/suggestlog.mjs';
+import { suggestionEntry, timedLapShadow } from '../lib/render/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }

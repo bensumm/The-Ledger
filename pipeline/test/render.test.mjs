@@ -14,13 +14,13 @@
  * Run: `node pipeline/test/render.test.mjs` (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { renderReport, formatNote, NOTE_KINDS } from '../lib/render.mjs';
+import { renderReport, formatNote, NOTE_KINDS } from '../lib/render/render.mjs';
 import { buildWatchReport } from '../commands/watch-positions.mjs';
 import { buildQuoteReport } from '../commands/quote-items.mjs';
 import { buildScreenNicheReport } from '../commands/screen-flip-niches.mjs';
-import { mdTable } from '../lib/cli.mjs';
+import { mdTable } from '../lib/render/cli.mjs';
 import { quoteCells as canonicalQuoteCells, cellText } from '../../js/quotecore.js';
-import { formatTimedLap } from '../lib/emit.mjs';   // PLAN-DIURNAL-TIMING DT2
+import { formatTimedLap } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

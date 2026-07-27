@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import {
   retroJoin, aggregateOutcomes, horizonFor,
   HORIZON_INTRADAY_SEC, HORIZON_MULTIDAY_SEC, HORIZON_DEFAULT_SEC,
-} from '../lib/retrojoin.mjs';
+} from '../lib/render/retrojoin.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

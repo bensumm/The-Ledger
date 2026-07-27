@@ -12,8 +12,8 @@
  * NAMED PLACEHOLDER; every aggregate carries n; the n-gates live HERE so a skill can't launder a thin
  * signal into a confident claim.
  */
-import { fmt, fmtTurn } from '../../js/money-format.js';
-import { tax } from '../../js/quotecore.js';   // the ONE tax impl — shadow net is after-tax like the realized net
+import { fmt, fmtTurn } from '../../../js/money-format.js';
+import { tax } from '../../../js/quotecore.js';   // the ONE tax impl — shadow net is after-tax like the realized net
 
 // --- NAMED PLACEHOLDER thresholds (audit SHAPE, not tuned magnitudes) --------------------------------
 export const MIN_N_CANDIDATE = 20;        // a tuning candidate needs at least this many suggestions in its group

@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { classAndSource, liqClass, liqClassOf } from '../lib/suggestlog.mjs';
+import { classAndSource, liqClass, liqClassOf } from '../lib/render/suggestlog.mjs';
 import { readWarmAll24h, ALL24H_TTL } from '../lib/marketfetch.mjs';
 
 let pass = 0;

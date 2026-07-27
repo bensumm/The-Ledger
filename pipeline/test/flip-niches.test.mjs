@@ -25,7 +25,7 @@ import {
 import { PATH_KEYS } from '../../js/held-item-strategy.mjs';
 import { ESTIMATOR_FAMILIES } from '../lib/estimators.mjs';
 import { DEFAULT_THRESHOLDS } from '../lib/gatecandidates.mjs';
-import { buildSnapshot } from '../lib/replay.mjs';
+import { buildSnapshot } from '../lib/render/replay.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
