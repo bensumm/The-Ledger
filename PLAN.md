@@ -523,9 +523,23 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   makes a reserve self-retiring at high capital and self-activating at low, with no hand-tuned constant per
   class, and it unifies the three reserves under ONE rule instead of three numbers. Open question to settle
   first: whether reserves should remain standing quotas at all, or become bounded DISCOVERY mechanisms with
-  rotation/decay like the exploration reserve already is — the discovery role ("if it became lucrative I'd
-  expect it to show") is what justifies bypassing a correct ranking, and that argues for rotation over a
-  permanent quota. All PLACEHOLDER, n=0.
+  rotation/decay like the exploration reserve already is. **RESOLVED (Ben, 2026-07-27): neither — they are
+  VALIDATION SCAFFOLDING with an exit condition.** Keep them in the short term precisely because we are
+  still validating; **once the top-N is proven to surface the best candidates for the capital pool, the
+  reserves are not needed at all.** So the work is not "make three constants adaptive" — it is "prove or
+  disprove the ranking, then delete the scaffolding". Recorded in `admission.mjs`'s header so a future
+  editor doesn't entrench them. All PLACEHOLDER, n=0.
+- **Log `via` into `suggestions.jsonl` — the prerequisite for retiring the reserves (2026-07-27, small).**
+  Each reserve admission is a natural experiment: an item the ranked top-N would NOT have fetched, fetched
+  anyway and then scored post-fetch. Comparing `via`-tagged rows against ranked-in rows is exactly the
+  evidence that settles "does the top-N already surface the best candidates for this capital" — and
+  therefore whether the reserves can be deleted. **The tag exists on the candidate** (`via:'reserve'` /
+  `via:'explore'`, set in `admission.mjs`; it already drives the 🎲 render token and `clampUnionFetch`'s
+  `isProtected`) **but is never carried into the retro ledger**, so the comparison cannot be run today and
+  every scan pass discards the datapoint. Fix: thread `via` through `suggestionEntry`
+  (`pipeline/lib/render/suggestlog.mjs` — additive optional field, same `if (x != null)` shape as its
+  existing ones) at the screen's log site, then a per-`via` rollup in `analyze-record.mjs`. Cheap, and it
+  is the gate on every downstream decision in this entry — do it BEFORE tuning any slice size.
 - **~~Class B mid-tier: does the `FLOOR` 50 → 3,500 recalibration overshoot the mid band?~~ SUPERSEDED
   2026-07-27 — that asked about the wrong constant. The real blocker is the EDGE floor, not liquidity.**
   Berserker helm (780/d), Dragon scimitar (1.7k/d) and — newly identified — **Rune platebody** never become

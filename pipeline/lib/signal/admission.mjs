@@ -74,6 +74,25 @@ export function trackBoost(entry, { minN = TRACK_BOOST_MIN_N, cap = TRACK_BOOST_
 
 // --- admission ------------------------------------------------------------------------------------
 
+/* ⚠ THE RESERVES ARE VALIDATION SCAFFOLDING, NOT PERMANENT ARCHITECTURE (Ben, 2026-07-27).
+   Read this before adding, resizing, or defending a reserve.
+
+   Every reserve below (THIN/RISING/VALUE/watch/EXPLORE/GEAR/MID_TIER) is a deliberate BYPASS of the
+   ranked top-N. That is justified only while we cannot yet trust the ranking — and the ranking is
+   already capital-aware: expGpDay caps affordable units by the deployable pool (THROUGHPUT_CAP_GP,
+   capPerWindow = pool / mid), so a small bankroll promotes cheaper items and a large one lets big
+   tickets win on net/u. The reserve SIZES are the part that is still capital-blind: fixed slot counts
+   cost the same at 10m as at 500m.
+
+   EXIT CONDITION — these retire once the top-N is shown to surface the best candidates for the
+   capital pool. They are kept in the short term BECAUSE we are still validating, not because a
+   permanent per-class quota is the intended end state. Do not entrench them.
+
+   HOW THE PROOF GETS MADE: each reserve admission is a natural experiment — an item the ranking would
+   NOT have fetched, fetched anyway and then scored post-fetch. Comparing `via`-tagged rows against
+   ranked-in rows is therefore the evidence that retires the reserves. NOTE (2026-07-27): `via` is NOT
+   yet carried into suggestions.jsonl, so that comparison cannot be run today and every pass discards
+   the datapoint. Logging it is the prerequisite for the retirement decision. */
 export const EXPLORE_RESERVE_DEFAULT = 2;   // PLACEHOLDER (rule 4) — small + bounded; the fetch-budget guard is R2
 export const ROTATE_MS = 30 * 60 * 1000;    // exploration rotation period — no persisted state file needed
 
