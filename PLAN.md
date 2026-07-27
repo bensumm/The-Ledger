@@ -489,7 +489,7 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
-- **Thin-reserve should scale with `--capital` (screen fetch-admission, `pipeline/lib/admission.mjs`
+- **Thin-reserve should scale with `--capital` (screen fetch-admission, `pipeline/lib/signal/admission.mjs`
   `pickFetchPool`) — surfaced 2026-07-23, Ben-flagged.** `THIN_RESERVE` is a fixed 6-slot guarantee for
   thin gp-flow big-tickets regardless of bankroll. At high capital (162m trial) the fixed 6 starves the
   thin big-ticket band lane: a default `--top 40` scan buried Sanguinesti staff (uncharged, A-, +607k/u
@@ -499,6 +499,9 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   one scan, rule 4): make the reserve a function of `--capital` (more idle capital → more guaranteed thin
   big-ticket slots), so a high-bankroll scan doesn't need a manual `--top 90`. Owner: whatever chunk next
   touches `pickFetchPool` / the admission ordering. Interim workaround: pass `--top 90` for scans at ≳100m.
+  **Sibling: `plans/PLAN-MID-TIER-ADMISSION.md`** (MT2 `GEAR_RESERVE`) — same function, a DIFFERENT starved
+  population (mid-price gear on the velocity lane, which has no reserve at all, vs thin big-tickets whose
+  reserve is merely too small). Land MT2 and this together or MT2 first — not concurrently in two branches.
 - **Diurnal funnel-widening (fast-follow to the 2026-07-09 diurnal engine):** the hour-of-day
   `hourProfile`/`deriveDiurnalRange` engine + the screen's `Diurnal timing` block auto-run on SURVIVORS
   only (free — series in hand). Ben's open question — "are the gates EXCLUDING items that are profitable
