@@ -137,8 +137,8 @@ import { termStructure, basePosition, BASEPOS_LOOKBACK_DAYS } from '../../js/ter
 // two surfaces can't drift — the loadDaily archive is still young, so both derive the warm trajectory (+
 // value-amplitude's recent-week lookbacks) off the 1h /timeseries. See the warm-term-structure.mjs header for why.
 import { richFrom1h, trajectoryFrom1h, warmOverride } from '../lib/warm-term-structure.mjs';
-import { stateTransition } from '../lib/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
-import { buildVelocityIndex, velocityTag } from '../lib/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
+import { stateTransition } from '../lib/timing/statetransition.mjs';   // YP2 (#2) — watch-closely transition scan
+import { buildVelocityIndex, velocityTag } from '../lib/timing/velocitytag.mjs';   // Build 2 — per-item velocity footnote from outcomes.json
 import { loadModules, runProbes, logFirings } from '../lib/probes.mjs';   // PM1 — probe-module system (dip/froth/anchor/decant); PM2 — firing log
 import { writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

@@ -79,7 +79,7 @@ import { blindWarningLine } from '../lib/reconstruct/logblind.mjs'; // LH2 resta
 import { reachRelief, askReachFactor } from '../lib/estimators.mjs'; // PLAN-LIQUIDITY-REACH: size/liquidity-conditioned ask-reach relief on a held lot
 import { resolve, loadPipelineConfig } from '../lib/compose.mjs';   // PC1 — the flag>config>default precedence resolver (routes --pressure-exit here)
 import { loadState, saveState, computeDeltas, advanceState, convictionGate, ALERT_PERSIST_MS, marginBudgetNote } from '../lib/thesis/watchstate.mjs'; // V1 cross-pass memory + V4/V7 conviction gating; PB-COPILOT-1 margin-reduction budget
-import { cycleTick, cycleNoteLines } from '../lib/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
+import { cycleTick, cycleNoteLines } from '../lib/timing/cyclewatch.mjs'; // PLAN-OSCILLATION-CYCLE Chunk 4 — the opt-in (--cycle) adaptive cycle-expectation loop (INFORM-ONLY, ALERTS-never-places)
 import { driftExitFrom } from '../../js/forecast.mjs'; // Chunk 1/2 — the drift-adjusted trough/peak prior the cycle loop tracks (REUSED, not forked)
 import { structuralSupport, cutTrigger, SUPPORT_LOOKBACK_DAYS } from '../lib/levels.mjs';   // V2 support/cut-trigger
 import { heldNoteBlock, heldListAt, depthReachClause } from '../lib/render/emit.mjs';   // V5 standardized per-held emit contract; DE3 depth/pressure clause

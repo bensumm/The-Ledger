@@ -32,7 +32,7 @@
 // (identity change / a gap beyond the stale window RE-RECORDS the cycle) mirrors watchstate.shouldReset,
 // scaled to the cycle horizon (days, not minutes).
 
-import { fmtP } from '../../js/money-format.js';
+import { fmtP } from '../../../js/money-format.js';
 
 // --- named PLACEHOLDER tunables (n≈0, F1 owns calibration — honesty rule 4) ------------------------
 // A cycle spans DAYS, so "the same cycle continues" tolerates a much larger inter-pass gap than the

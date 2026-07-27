@@ -4,7 +4,7 @@
    drops), and a 'spike' split by its recent daily-low slope into a HEALTHY reprice (lows rising →
    more holdable) vs FROTH (lows falling → fragile, don't chase). PURE — a DESCRIPTIVE prompt, NOT a
    buy/verdict signal; it populates a "watch closely" list. Slope thresholds inherited from phase(). */
-import { PHASE_LOW_FLAT_PCT } from '../../js/quotecore.js';
+import { PHASE_LOW_FLAT_PCT } from '../../../js/quotecore.js';
 
 /* stateTransition(ph) -> { state, watch, note } | null.
    ph = a phase() result { phase, lowSlope, … }. Returns null for base/decay/unknown (not a

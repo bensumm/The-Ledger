@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 import { reconstructCampaigns, REPRICE_GAP, MANUAL_SLOT } from '../lib/reconstruct/campaigns.mjs';
 import { loadMapping, loadAll24h, loadHistBands } from '../lib/marketfetch.mjs';
 import { loadHistState, bandPercentile } from '../lib/range-position.mjs';
-import { velocityClass } from '../lib/velocity.mjs';
+import { velocityClass } from '../lib/timing/velocity.mjs';
 import { parkedStats } from '../lib/capital-utilization.mjs';
 import { parseArgs, median } from '../lib/render/cli.mjs';
 import { liqClassOf, readSuggestionLines } from '../lib/render/suggestlog.mjs';

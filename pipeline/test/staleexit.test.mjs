@@ -8,7 +8,7 @@
  * Synthetic series only — never the live API. Run: node pipeline/test/staleexit.test.mjs
  */
 import assert from 'node:assert/strict';
-import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';
+import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/timing/staleexit.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log(`  ✓ ${name}`); };

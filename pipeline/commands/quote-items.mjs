@@ -40,7 +40,7 @@ import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE — t
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';     // PART II — the neutral band thesis for the asym read (same convention as screen's watchlist rank)
 import { warmOverride } from '../lib/warm-term-structure.mjs';   // COD-4 + R3 — warm .trajectory AND .recentTrend off ts1h so trajectoryValidator + floorValidator's recency gate FIRE on the explicit-ask surface
 import { loadMapping, loadGuide, fetchItemInputs, loadSnapshot, loadDaily, loadAll24hWarm, fetchTsCached, vol24FromInputs } from '../lib/marketfetch.mjs';   // SF-3 — warm-only bulk /24h read (fetch-free class convergence); fetchTsCached — Proposal C's targeted 1h read; vol24FromInputs (PLAN-VOL24) — corrected per-item rolling-24h volume off the in-hand ts1h
-import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
+import { staleExitRead, STALE_EXIT_RECENT_FRAC } from '../lib/timing/staleexit.mjs';   // Proposal C — stale declared-exit auto-flag (inform-only)
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot, askFromSnapshot, bidFromSnapshot } from '../lib/reconstruct/offers.mjs';   // P0 — offers.json book (the askFilling source quote lacked)
 import { stdCells, writeLastReport } from '../lib/render/cli.mjs';   // mdTable is no longer called here — the table now renders via render.mjs's `table` section (VZ3); writeLastReport — AO1 agent-readable dump

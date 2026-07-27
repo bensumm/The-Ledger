@@ -4,7 +4,7 @@
    bids never filled. DESCRIPTIVE — a label off a handful of lots, NEVER a rate/sort/gate (the
    concentration + F1 caveats carry). Kept pure (no fs): screen-flip-niches.mjs reads outcomes.json and passes the
    parsed object in; absent/empty → an empty index → screen stays silent. */
-import { median } from './render/cli.mjs';
+import { median } from '../render/cli.mjs';
 
 const SHORT = { 'fast-cycler': 'fast', 'mid': 'mid', 'slow-hold': 'slow' };
 

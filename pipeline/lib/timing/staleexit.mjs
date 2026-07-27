@@ -27,8 +27,8 @@
  * avgHigh buckets — touched ≠ filled, and ~14 nights is a small sample; the read degrades to null
  * (silent) on any thin/missing history rather than crying stale off nothing.
  */
-import { windowStats, recencySplit, recentQuant, RECENT_NIGHTS } from '../../js/windowread.mjs';
-import { REACH_MIN_DAYS, REACH_NIGHTS } from '../../js/validate.mjs';
+import { windowStats, recencySplit, recentQuant, RECENT_NIGHTS } from '../../../js/windowread.mjs';
+import { REACH_MIN_DAYS, REACH_NIGHTS } from '../../../js/validate.mjs';
 
 // PLACEHOLDER (n≈0): the declared exit is STALE when it printed on FEWER than this fraction of the
 // recent nights (recencySplit's RECENT_NIGHTS=3 ⇒ stale = reached ≤1/3 recent; 2/3 exactly is fresh).

@@ -441,7 +441,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   adjustment}` calibration triples. PRODUCED + CONSUMED by `pipeline/commands/watch-positions.mjs
   --cycle` ONLY (opt-in; the default watch pass never touches the file) — rebuilt fresh each pass via
   the SHARED `loadState`/`saveState` (`pipeline/lib/thesis/watchstate.mjs`), the pure logic in
-  `pipeline/lib/cyclewatch.mjs`. INFORM-ONLY (n≈0 placeholders); it drives a nested `cycle — …` note,
+  `pipeline/lib/timing/cyclewatch.mjs`. INFORM-ONLY (n≈0 placeholders); it drives a nested `cycle — …` note,
   never a verdict/alert/price. NOT app-imported. Gitignored like `pipeline/.cache/watch-state.json`
 - `watchlist.json` — tracked repo-root watchlist (array of item names/ids); the app unions it
   with local `STATE.watchlist` and `screen-flip-niches.mjs` always scans it (S3); app writes it back via
@@ -780,7 +780,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   cli, suggestlog, retrojoin, replay, analyze); **`pipeline/lib/thesis/`** = the declared-state stores
   (holdthesis, sessionthesis, watchstate, reverseflipstate); **`pipeline/lib/reconstruct/`** = the
   FIFO book reconstruction (reconstruct, campaigns, offers, positions, fill-placement, sync-invoke,
-  logblind). Files not yet clustered stay at
+  logblind); **`pipeline/lib/timing/`** = the cycle/velocity clock (cyclewatch, velocity, velocitytag,
+  staleexit, statetransition). Files not yet clustered stay at
   `pipeline/lib/` root, and cross-cutting infra — paths, version, ignored — stays there by design;
   **`pipeline/probes/`** = the probe framework; **`pipeline/test/`** = all
   `*.test.mjs` suites + `fixtures/`; plus the two pipeline docs and generated data files.

@@ -12,7 +12,7 @@
  *     slow-hold.
  */
 import assert from 'node:assert/strict';
-import { velocityClass, VELOCITY_FAST_HRS, VELOCITY_SLOW_HRS } from '../lib/velocity.mjs';
+import { velocityClass, VELOCITY_FAST_HRS, VELOCITY_SLOW_HRS } from '../lib/timing/velocity.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };

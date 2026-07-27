@@ -13,7 +13,7 @@
  *     stays focused, never a firehose.
  */
 import assert from 'node:assert/strict';
-import { stateTransition } from '../lib/statetransition.mjs';
+import { stateTransition } from '../lib/timing/statetransition.mjs';
 import { PHASE_LOW_FLAT_PCT } from '../../js/quotecore.js';
 
 let pass = 0;

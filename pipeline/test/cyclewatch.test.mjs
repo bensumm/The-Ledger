@@ -26,7 +26,7 @@ import path from 'node:path';
 import {
   cycleTick, trackError, recordExpectation, bandHalf, shouldRecycle, cycleNoteLines,
   CYCLE_HISTORY_MAX, CYCLE_CONF_BAND_FRAC,
-} from '../lib/cyclewatch.mjs';
+} from '../lib/timing/cyclewatch.mjs';
 import { loadState, saveState } from '../lib/thesis/watchstate.mjs';
 
 let pass = 0;

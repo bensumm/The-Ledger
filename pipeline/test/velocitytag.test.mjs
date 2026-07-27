@@ -11,7 +11,7 @@
  *     tell). A label, never a rate.
  */
 import assert from 'node:assert/strict';
-import { buildVelocityIndex, velocityTag } from '../lib/velocitytag.mjs';
+import { buildVelocityIndex, velocityTag } from '../lib/timing/velocitytag.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
