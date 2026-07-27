@@ -3,7 +3,7 @@
 // No live data (CLAUDE.md rule 4): synthetic candidates only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch, rotationPeriodMs, ROTATE_MS } from '../lib/signal/admission.mjs';
+import { buildTrackIndex, trackBoost, pickFetchPool, TRACK_BOOST_MIN_N, TRACK_BOOST_CAP, clampUnionFetch, rotationPeriodMs, ROTATE_MS, safeSlot } from '../lib/signal/admission.mjs';
 import { CHURN_VOL_CUT } from '../lib/signal/structural-admission.mjs';
 
 test('buildTrackIndex aggregates closed lots per item, ignoring malformed entries', () => {
@@ -47,8 +47,8 @@ test('trackBoost rewards a proven-profitable record, capped and confidence-scale
 
 // --- pickFetchPool ------------------------------------------------------------------------------
 
-function mkCand(id, { thin = false, held = false, expGpDay = 0, limitVol = 1000, mid = 1000, volDay } = {}) {
-  const c = { id, thin, held, expGpDay, limitVol, mid, limit: null, activeWin: 24 };
+function mkCand(id, { thin = false, held = false, expGpDay = 0, limitVol = 1000, mid = 1000, volDay, limit = null } = {}) {
+  const c = { id, thin, held, expGpDay, limitVol, mid, limit, activeWin: 24 };
   if (volDay !== undefined) c.volDay = volDay;   // omitted by default — see the fail-closed test below
   return c;
 }
@@ -338,4 +338,118 @@ test('MT3 rotationPeriodMs: reports the real wait, and null when nothing rotates
   assert.equal(rotationPeriodMs(5, 2), 3 * ROTATE_MS, 'partial turns round UP — the last candidate still waits a full bucket');
   assert.equal(rotationPeriodMs(0, 1), null, 'nothing excluded → no rotation to report');
   assert.equal(rotationPeriodMs(140, 0), null, 'no exploration budget → no rotation to report');
+});
+
+// --- MT-V2: MID_TIER_RESERVE + paging (PLAN-MID-TIER-V2) -----------------------------------------
+// GEAR_RESERVE works mechanically but `gear` is a VOLUME lane, so its peer group is dominated by cheap
+// high-buy-limit consumables and the mid-price equipment it was built for still loses. This reserve
+// re-cuts the peer group by GE BUY LIMIT. These pin the axis, the paging, and the fail-closed-but-
+// VISIBLE null-limit handling.
+
+const GEAR = CHURN_VOL_CUT - 1;   // gear-lane volDay
+
+test('MT-V2 mid-tier reserve: a LOW-LIMIT candidate wins over a higher-expGpDay HIGH-LIMIT one', () => {
+  // The whole point: the limit filter, not the score, separates b from c. c outranks b on expGpDay and
+  // would win any score-only reserve — it must NOT win this one.
+  const a = mkCand('a', { expGpDay: 2_000_000, volDay: GEAR, limit: 10000 });   // takes the gear slot
+  const b = mkCand('b', { expGpDay: 500_000, volDay: GEAR, limit: 70 });        // restricted — the wanted class
+  const c = mkCand('c', { expGpDay: 1_000_000, volDay: GEAR, limit: 15000 });   // higher score, mass-tradeable
+  const { survivors } = pickFetchPool('band', [a, b, c], {},
+    { top: 0, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 1, midTierReserve: 1 });
+  const ids = survivors.map(s => s.id);
+  assert.ok(ids.includes('a'), 'the gear reserve still takes the top-ranked gear-lane candidate');
+  assert.ok(ids.includes('b'), 'the mid-tier reserve admits the LOW-LIMIT candidate');
+  assert.ok(!ids.includes('c'), 'a higher-expGpDay HIGH-LIMIT candidate must not win the mid-tier slot');
+});
+
+test('MT-V2 mid-tier reserve: midTierReserve 0 is a strict no-op', () => {
+  const a = mkCand('a', { expGpDay: 2_000_000, volDay: GEAR, limit: 10000 });
+  const b = mkCand('b', { expGpDay: 500_000, volDay: GEAR, limit: 70 });
+  const opts = { top: 0, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 1 };
+  const off = pickFetchPool('band', [a, b], {}, { ...opts, midTierReserve: 0 });
+  assert.deepEqual(off.survivors.map(s => s.id), ['a']);
+  assert.deepEqual(off.excluded.map(s => s.id), ['b'], 'with the reserve off the low-limit row stays excluded');
+});
+
+test('MT-V2 mid-tier reserve: FAIL-CLOSED on a null limit, and the drop is REPORTED not silent', () => {
+  // structural-admission.mjs records "null => NOT exclude — ~89 newer gear items carry limit=null", so
+  // this filter is a deliberate local exception. It must therefore be VISIBLE: asserting the specific
+  // reason string is the point — a generic top-n-full here is the silent-drop regression.
+  const a = mkCand('a', { expGpDay: 2_000_000, volDay: GEAR, limit: 10000 });
+  const nul = mkCand('nul', { expGpDay: 1_500_000, volDay: GEAR, limit: null });
+  const { survivors, excluded } = pickFetchPool('band', [a, nul], {},
+    { top: 0, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 1, midTierReserve: 4 });
+  assert.ok(!survivors.some(s => s.id === 'nul'), 'a null-limit candidate never takes a mid-tier slot');
+  const row = excluded.find(c => c.id === 'nul');
+  assert.equal(row.reason, 'mid-tier-limit-unknown', 'the structural shut-out must be named, not folded into top-n-full');
+});
+
+test('MT-V2 mid-tier reserve: offset pages to the NEXT batch without re-ranking', () => {
+  const pool = [
+    mkCand('p1', { expGpDay: 900, volDay: GEAR, limit: 70 }),
+    mkCand('p2', { expGpDay: 800, volDay: GEAR, limit: 70 }),
+    mkCand('p3', { expGpDay: 700, volDay: GEAR, limit: 70 }),
+    mkCand('p4', { expGpDay: 600, volDay: GEAR, limit: 70 }),
+  ];
+  const opts = { top: 0, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 0, midTierReserve: 2 };
+  const page1 = pickFetchPool('band', pool, {}, { ...opts, midTierOffset: 0 }).survivors.map(s => s.id);
+  const page2 = pickFetchPool('band', pool, {}, { ...opts, midTierOffset: 2 }).survivors.map(s => s.id);
+  assert.deepEqual(page1, ['p1', 'p2'], 'page 1 is the top two by rank');
+  assert.deepEqual(page2, ['p3', 'p4'], 'page 2 is the NEXT two, in unchanged rank order');
+  assert.equal(page1.filter(id => page2.includes(id)).length, 0, 'pages are disjoint');
+  const past = pickFetchPool('band', pool, {}, { ...opts, midTierOffset: 99 }).survivors.map(s => s.id);
+  assert.deepEqual(past, [], 'an offset past the pool admits nothing — it must not wrap around');
+});
+
+test('MT-V2 safeSlot: NaN/negative degrade to the default instead of a negative slice', () => {
+  // .slice() with a negative start counts from the END, and a negative reserve makes the end bound
+  // negative too — which can silently admit MORE rows than asked. Both must fall back, not compute.
+  assert.equal(safeSlot(3, 9), 3);
+  assert.equal(safeSlot(0, 9), 0, 'zero is a legitimate value, never replaced by the fallback');
+  assert.equal(safeSlot(2.7, 9), 2, 'a finite non-integer truncates — a safe degrade');
+  assert.equal(safeSlot(-2, 9), 9, 'negative falls back');
+  assert.equal(safeSlot(NaN, 9), 9, 'NaN falls back');
+  assert.equal(safeSlot(undefined, 9), 9);
+  const pool = [
+    mkCand('p1', { expGpDay: 900, volDay: GEAR, limit: 70 }),
+    mkCand('p2', { expGpDay: 800, volDay: GEAR, limit: 70 }),
+    mkCand('p3', { expGpDay: 700, volDay: GEAR, limit: 70 }),
+  ];
+  const opts = { top: 0, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 0 };
+  const neg = pickFetchPool('band', pool, {}, { ...opts, midTierReserve: 2, midTierOffset: -2 }).survivors.map(s => s.id);
+  assert.deepEqual(neg, ['p1', 'p2'], 'a negative offset yields the DEFAULT first page, not a tail slice');
+});
+
+test('MT-V2 mid-tier reserve: no double-admit with the gear or exploration reserve', () => {
+  const solo = mkCand('solo', { expGpDay: 1000, volDay: GEAR, limit: 70 });   // every reserve would want it
+  const filler = mkCand('filler', { expGpDay: 5000, volDay: GEAR, limit: 10000 });
+  const { survivors, excluded } = pickFetchPool('band', [filler, solo], {},
+    { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 2, gearReserve: 4, midTierReserve: 4, now: 0 });
+  assert.equal(survivors.filter(s => s.id === 'solo').length, 1, 'admitted exactly once across all reserves');
+  assert.ok(!excluded.some(c => c.id === 'solo'), 'an admitted row is never also reported excluded');
+});
+
+test('MT-V2 mid-tier reserve: every admission is gear-lane AND within the limit cut', () => {
+  const cand = [
+    mkCand('gearLow', { expGpDay: 100, volDay: GEAR, limit: 70 }),
+    mkCand('churnLow', { expGpDay: 9_000_000, volDay: CHURN_VOL_CUT, limit: 70 }),   // low limit but CHURN lane
+    mkCand('gearHigh', { expGpDay: 8_000_000, volDay: GEAR, limit: 10000 }),
+  ];
+  const { survivors } = pickFetchPool('band', cand, {},
+    { top: 0, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 0, midTierReserve: 4 });
+  assert.deepEqual(survivors.map(s => s.id), ['gearLow'], 'churn-lane and over-cut candidates are both ineligible');
+});
+
+test('MT-V2 mid-tier reserve: the ranked top-N and GEAR_RESERVE admissions are untouched', () => {
+  const cand = [
+    mkCand('ranked', { expGpDay: 9_000_000, volDay: GEAR, limit: 10000 }),
+    mkCand('gearPick', { expGpDay: 5_000_000, volDay: GEAR, limit: 12000 }),
+    mkCand('midPick', { expGpDay: 100, volDay: GEAR, limit: 70 }),
+  ];
+  const base = { top: 1, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 1 };
+  const off = pickFetchPool('band', cand, {}, { ...base, midTierReserve: 0 });
+  const on = pickFetchPool('band', cand, {}, { ...base, midTierReserve: 2 });
+  assert.ok(off.survivors.every(c => on.survivors.some(s => s.id === c.id)),
+    'turning the mid-tier reserve on is strictly additive — it displaces nothing');
+  assert.ok(on.survivors.some(s => s.id === 'midPick'), 'and it adds the low-limit row');
 });

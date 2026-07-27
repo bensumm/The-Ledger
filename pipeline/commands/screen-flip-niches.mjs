@@ -5,7 +5,7 @@
  *   node pipeline/commands/screen-flip-niches.mjs [--mode band|churn|scalp|value|amplitude|reverse|all]
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose]
- *     [--thin-reserve 6] [--gear-reserve 4]
+ *     [--thin-reserve 6] [--gear-reserve 4] [--mid-tier-reserve 2] [--mid-tier-offset 0]
  *
  *   DEFAULT is quiet: prints ONE summary line + the last-report dump path, not the markdown table.
  *   The per-niche report objects are ALWAYS written to pipeline/.cache/last-report/screen.json
@@ -116,7 +116,7 @@ import { loadOwned, computeOwnedQty } from '../lib/capital/ownedledger.mjs';   /
 import { loadReverseFlip, reverseFlipFor } from '../lib/thesis/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
 import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
 import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote, THIN_DRIFT_DAYS } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
-import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_RESERVE_DEFAULT, EXPLORE_RESERVE_DEFAULT, rotationPeriodMs } from '../lib/signal/admission.mjs';
+import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_RESERVE_DEFAULT, EXPLORE_RESERVE_DEFAULT, rotationPeriodMs, MID_TIER_RESERVE_DEFAULT, MID_TIER_OFFSET_DEFAULT } from '../lib/signal/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
@@ -264,6 +264,15 @@ const THIN_RESERVE_EXPLICIT = A['thin-reserve'] != null;   // an explicit --thin
 // `--gear-reserve 0` restores the pre-MT2 pool exactly. Deliberately NOT capital-scaled yet: ship it fixed
 // so one before/after scan can actually be read, then revisit alongside the THIN_RESERVE scaling entry.
 const GEAR_RESERVE = A['gear-reserve'] != null ? +A['gear-reserve'] : GEAR_RESERVE_DEFAULT;
+// MID_TIER_RESERVE (PLAN-MID-TIER-V2): the SIBLING of GEAR_RESERVE, sequenced after it and additionally
+// filtered to a LOW GE BUY LIMIT (≤ MID_TIER_LIMIT_CUT) — because `gear` is a VOLUME lane, so GEAR_RESERVE's
+// own peer group is dominated by cheap high-limit consumables and the mid-price equipment it was built for
+// (Helm of neitiznot) still lost. `--mid-tier-offset N` pages to the NEXT N picks when the first two aren't
+// interesting, so the small default costs nothing in reachability. `--mid-tier-reserve 0` is a strict no-op.
+// Both are passed through unguarded here on purpose — the ONE home for the NaN/negative guard is
+// admission.mjs's safeSlot, inside pickFetchPool, so direct callers (the test suite) are protected too.
+const MID_TIER_RESERVE = A['mid-tier-reserve'] != null ? +A['mid-tier-reserve'] : MID_TIER_RESERVE_DEFAULT;
+const MID_TIER_OFFSET  = A['mid-tier-offset']  != null ? +A['mid-tier-offset']  : MID_TIER_OFFSET_DEFAULT;
 // PLAN-FETCH-POOL-SCALING chunks 2-4 — the fetch-pool capital-scaling MASTER SWITCH (default OFF, opt-in
 // per Open Decision 1). OFF ⇒ every pool uses today's fixed default/explicit size and TOTAL_FETCH_MAX
 // never clamps — byte-identical to pre-change, regardless of cash anchor. ON ⇒ each pool's DEFAULT size
@@ -2469,12 +2478,12 @@ async function main() {
     if (!cand.length && FLIP_NICHES[m].gate === 'band') {
       const fb = subFloorFallback(m, ctx, THRESHOLDS);
       if (fb) {
-        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: thinReserveN, top: SUBFLOOR_TOP, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE });
+        const { survivors, excluded } = admit(m, fb.cand, { thinReserve: thinReserveN, top: SUBFLOOR_TOP, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE, midTierReserve: MID_TIER_RESERVE, midTierOffset: MID_TIER_OFFSET });
         gated[m] = { cand: fb.cand, survivors, excluded, subFloor: fb };
         continue;
       }
     }
-    const { survivors, excluded } = admit(m, cand, { thinReserve: thinReserveN, top, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE });
+    const { survivors, excluded } = admit(m, cand, { thinReserve: thinReserveN, top, valueReserve: valueReserveN, gearReserve: GEAR_RESERVE, midTierReserve: MID_TIER_RESERVE, midTierOffset: MID_TIER_OFFSET });
     gated[m] = { cand, survivors, excluded };
   }
 

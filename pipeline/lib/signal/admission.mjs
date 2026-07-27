@@ -92,6 +92,45 @@ export const ROTATE_MS = 30 * 60 * 1000;    // exploration rotation period — n
    top-N is untouched, `0` is byte-identical to pre-change, and nothing here reaches rating.mjs. */
 export const GEAR_RESERVE_DEFAULT = 4;      // PLACEHOLDER (rule 4) — n=0; no mid-tier flip has ever been logged
 
+/* MID_TIER_RESERVE (PLAN-MID-TIER-V2, 2026-07-27) — the SIBLING of GEAR_RESERVE that actually reaches
+   the class GEAR_RESERVE was built for and missed.
+
+   Measured after MT2 shipped: GEAR_RESERVE works mechanically (purely additive, 0 rows displaced) but
+   `gear` is a VOLUME lane (`volDay < CHURN_VOL_CUT`), not a price or equipment class. It spans Old
+   school bond (11.88m mid) down to Mithril keel parts (4.5k), and ranking that peer group by absolute
+   expGpDay hands the slots to cheap high-buy-limit consumables — teleport scrolls, notes, ship parts.
+   Helm of neitiznot, the motivating item, sat rank 10/15 and was never admitted. In other words MT1's
+   "biggest number wins" bias simply recurred one level down, inside the reserve's own peer group.
+
+   The fix is the RANKING DIMENSION, not a bigger reserve — the ruling this module's header already
+   records from the bludgeon/Sanguinesti incident ("raising the floor is just papering over the
+   problem"). Bumping GEAR_RESERVE 4→10 was considered and REJECTED: it spends 6 more fetch slots to
+   reach an item scoring WORSE post-fetch (Path-A 420.7k/d, sub-floor) than what 4 slots already
+   deliver (528k–758k/d, grade B). Instead this reserve re-cuts the PEER GROUP by GE buy limit — an
+   existing per-candidate field, not a new metric — so genuinely GE-restricted items (limit ~70, the
+   same range as the thin lane's own 5–70) are ranked against each other rather than against
+   mass-tradeable commodities at limit 10,000+. */
+export const MID_TIER_RESERVE_DEFAULT = 2;  // PLACEHOLDER (rule 4) — n=0. Owner's call: TWO, not four — a small
+                                            // bite, paired with the offset so the next batch is one flag away.
+export const MID_TIER_OFFSET_DEFAULT = 0;   // next-batch paging; 0 ⇒ byte-identical to un-paged
+export const MID_TIER_LIMIT_CUT = 200;      // PLACEHOLDER — buy-limit ceiling. Real armor/weapon limits cluster
+                                            // 5–100; the commodity population sits at 10,000+ or null; 200 is in
+                                            // the empirically-clean gap with headroom.
+
+/* safeSlot(v, fallback) -> a non-negative integer, or `fallback` when v is not finite or is negative.
+   Guards the `.slice(start, end)` footgun that PAGING introduces here for the first time: a negative
+   START selects from the array's END (never the intended "next N by rank"), a negative RESERVE makes
+   the END bound negative too and can silently ADMIT MORE than asked (reserve -2 on a 5-item pool
+   admits 3, not 0), and `.slice(NaN, …)` degrades to an empty admission instead of the configured
+   default. None of THIN/RISING/GEAR/VALUE_RESERVE validate their CLI input, because a plain reserve
+   SIZE alone can't produce a negative slice bound — paging is what makes this a genuinely new hazard,
+   so this is not a missing mirror of existing precedent. It lives HERE rather than at the CLI so a
+   fixture calling pickFetchPool directly (the whole test suite) is protected too. A finite
+   non-integer truncates (safe degrade); only NaN/negative fall back. */
+export function safeSlot(v, fallback) {
+  return (Number.isFinite(v) && v >= 0) ? Math.trunc(v) : fallback;
+}
+
 /* rotationPeriodMs(poolSize, slots, rotateMs) -> ms for one full rotation, or null when nothing rotates.
    MT3 — the exploration reserve is documented as "starvation-proof by construction", which is true and,
    unqualified, misleading: 1 velocity slot rotating over ~140 excluded candidates every 30 min means a
@@ -132,7 +171,11 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     thinReserve = THIN_RESERVE_DEFAULT, risingReserve = RISING_RESERVE_DEFAULT, top = TOP_DEFAULT,
     valueReserve = VALUE_RESERVE_DEFAULT, exploreReserve = EXPLORE_RESERVE_DEFAULT, trackIndex = null, now = Date.now(),
     gearReserve = GEAR_RESERVE_DEFAULT,
+    midTierReserve: midTierReserveRaw = MID_TIER_RESERVE_DEFAULT, midTierOffset: midTierOffsetRaw = MID_TIER_OFFSET_DEFAULT,
+    midTierLimitCut = MID_TIER_LIMIT_CUT,
   } = opts;
+  const midTierReserve = safeSlot(midTierReserveRaw, MID_TIER_RESERVE_DEFAULT);
+  const midTierOffset = safeSlot(midTierOffsetRaw, MID_TIER_OFFSET_DEFAULT);
   const isValue = cand.length && cand[0].valueScore !== undefined;
   if (isValue) {
     // PLAN-FETCH-POOL-SCALING chunk 1 — the VALUE RESERVE, applied in the DEFAULT (unified) admission
@@ -235,13 +278,43 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     .slice(0, gearReserve)
     .map(c => ({ ...c, via: 'reserve' }));
 
-  const survivors = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity, ...gearReserved];
+  // MID_TIER_RESERVE (PLAN-MID-TIER-V2) — a SIBLING of GEAR_RESERVE, sequenced strictly AFTER it (it
+  // draws from what GEAR_RESERVE left behind), additionally filtered to a LOW GE BUY LIMIT. See the
+  // MID_TIER_RESERVE_DEFAULT header above for why the buy limit is the right axis and why a bigger
+  // GEAR_RESERVE was rejected. Same additive shape as every other reserve here: 0 is a strict no-op.
+  //
+  // ⚠ NULL LIMIT — fail-closed, but NEVER silently. Requiring `c.limit != null` is correct TODAY (the
+  // only null-limit gear-lane candidates measured are teleport scrolls) but it opposes a deliberate
+  // ruling in structural-admission.mjs: "null ⇒ MIN_THIN fallback, NOT exclude — ~89 newer gear items
+  // carry limit=null". Measured: 450 of 4,591 mapped items carry a null limit, and Webweaver bow (u),
+  // Magus ring and Bellator ring are null-limit gear-lane candidates right now — they miss this pool
+  // ONLY because they classify `thin`. Being liquid enough to escape `thin` is the DEFINING trait of
+  // the mid-tier class, so this will eventually drop a real target item. The filter stays; the
+  // invisibility does not — such a candidate is reported below as `mid-tier-limit-unknown` rather than
+  // being folded into the generic `top-n-full` (SC1's never-a-silent-drop contract, and this module's
+  // own header: the fix is the ranking dimension AND the invisibility).
+  // Honest about its coarseness: that reason fires for EVERY mid-tier-eligible null-limit candidate,
+  // not only one that would have won a slot — it flags "structurally shut out", not "would have been
+  // admitted", the same coarseness as the pre-existing top-n-full bucket.
+  const gearReservedIds = new Set(gearReserved.map(c => c.id));
+  const midTierEligible = c =>
+    !exploredVelIds.has(c.id) && !gearReservedIds.has(c.id) &&
+    Number.isFinite(c.volDay) && classifyVolLane(c.volDay) === 'gear';
+  const midTierReserved = velocityRemainder
+    .filter(c => midTierEligible(c) && c.limit != null && c.limit <= midTierLimitCut)
+    .sort((a, b) => ((b.expGpDay || 0) * boostOf(b)) - ((a.expGpDay || 0) * boostOf(a)) || (a.id - b.id))
+    .slice(midTierOffset, midTierOffset + midTierReserve)   // paging; safeSlot-guarded, and an offset at/past
+    .map(c => ({ ...c, via: 'reserve' }));                  // the pool size slices to [] by plain JS semantics
+
+  const survivors = [...held, ...thinAdmitted, ...exploredThin, ...risers, ...velocityAdmitted, ...exploredVelocity, ...gearReserved, ...midTierReserved];
 
   // --- exclusion report (SC1) — every gated candidate NOT admitted, with a reason. ---
   const admittedIds = new Set(survivors.map(c => c.id));
   const excluded = cand
     .filter(c => !admittedIds.has(c.id))
-    .map(c => ({ ...c, reason: c.thin ? 'thin-reserve-full' : ((c.proxyDrift ?? 0) > 0 ? 'rising-reserve-full' : 'top-n-full') }))
+    .map(c => ({ ...c, reason: c.thin ? 'thin-reserve-full'
+      : ((c.proxyDrift ?? 0) > 0 ? 'rising-reserve-full'
+      : (midTierEligible(c) && c.limit == null ? 'mid-tier-limit-unknown' : 'top-n-full')) }))
     .sort((a, b) => (b.expGpDay || 0) - (a.expGpDay || 0));
 
   return { survivors, excluded };

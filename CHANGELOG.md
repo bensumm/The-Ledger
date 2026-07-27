@@ -10,6 +10,56 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### `GEAR_RESERVE` reached the wrong population — `MID_TIER_RESERVE` re-cuts the peer group (MT-V2, pipeline-only, 2026-07-27)
+A follow-up to MT1–MT3 shipped hours earlier, and a correction to it.
+
+Validating `GEAR_RESERVE` against the live universe showed the mechanism was sound — purely additive,
+0 rows displaced, confirmed independently by a live `--gear-reserve 0` A/B — but that it **did not
+admit the class it was built for.** `gear` is a VOLUME lane (`volDay < CHURN_VOL_CUT`), not a price or
+equipment class: it spans Old school bond at 11.88m mid down to Mithril keel parts at 4.5k. Ranking
+that peer group by absolute `expGpDay` handed the slots to cheap high-buy-limit consumables — teleport
+scrolls, notes, ship parts — and left Helm of neitiznot, the motivating item, at rank 10/15. MT1's
+"biggest number wins" bias had simply recurred one level down, inside the reserve's own peer group.
+
+**Widening `GEAR_RESERVE` 4→10 was rejected.** It spends 6 more fetch slots per pass to reach an item
+that scores *worse* post-fetch (Path-A 420.7k/d, below the attention floor) than the three the reserve
+already delivers (528k–758k/d, all grade B) — and it is the same move `admission.mjs`'s own header
+already rules against from the bludgeon/Sanguinesti incident: *"raising the floor is just papering over
+the problem — the fix is the ranking dimension, not a bigger reserve."*
+
+So the fix is the ranking dimension. **`MID_TIER_RESERVE`** (default 2, `--mid-tier-reserve`) is a
+sibling sequenced strictly after `GEAR_RESERVE`, drawing from what it leaves behind, additionally
+filtered to a low GE buy limit (`MID_TIER_LIMIT_CUT` 200 — an existing per-candidate field, not a new
+metric). Genuinely GE-restricted items now rank against each other instead of against mass-tradeable
+commodities at limit 10,000+. A price-band cut was tested first and was *worse* (it buried Neitiznot
+under churn-lane seed items in the same price range); buy limit is the sharper axis.
+
+**`--mid-tier-offset N`** pages to the next N picks, so a deliberately small default costs nothing in
+reachability. Honest limit: ranks are recomputed from live data each pass, so it is "next N by CURRENT
+rank", not a durable cursor — deliberate, since the alternative is a persisted state file the
+exploration reserve also declines to keep.
+
+Two hazards closed. **`safeSlot`** guards the `.slice()` footgun that paging newly introduces — a
+negative start selects from the array's END, and a negative reserve can silently admit MORE rows than
+asked. No existing reserve validates its CLI input, so there was no precedent to mirror; the guard
+lives inside `pickFetchPool` rather than at the CLI so direct callers (the whole test suite) are
+covered. And **null limits are fail-closed but never silent**: such a candidate is reported as
+`mid-tier-limit-unknown` rather than folded into `top-n-full`, because `structural-admission.mjs`
+deliberately does *not* exclude on null (~89 newer gear items carry `limit=null`) — and since escaping
+`thin` is the defining trait of this very class, that exception will eventually drop a real target
+item. It will do so loudly.
+
+Verified on real data: Neitiznot is admitted at the shipped default, additive, no duplicates, and the
+new exclusion reason fires correctly on two teleport scrolls. 6 of the 9 new tests fail against
+un-patched code (the other 3 are shape-pins, labelled as such rather than counted as regressions).
+
+Also corrected: MARKET-ANALYSIS/README's claim that MT2 "closes the last unreserved lane" (false on
+both counts), and PLAN.md's Class B entry — which asked whether the `FLOOR` recalibration overshot.
+It didn't. Running the structural admission path shows Berserker helm, Dragon scimitar **and Rune
+platebody** all clear `structuralGate` comfortably (84m–4,251m/day notional) and are excluded by
+`bandEdge`'s 1.5% ROI floor instead. Three symptoms, one gap. Still unscheduled — the honest fix is a
+new edge treatment for tight-band gear, not loosening a threshold on n=0 outcomes.
+
 ### Mid-price gear was structurally unfetchable — `GEAR_RESERVE` (MT1–MT3, pipeline-only, 2026-07-27)
 Ben flagged that no mid-tier item had ever entered a scan — "not big gear, not churn — stuff like
 neitiznot helm". It was real, and the first diagnosis was wrong in a way worth recording.

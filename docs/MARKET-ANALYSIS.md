@@ -341,8 +341,8 @@ cross-flip-niche fetch-budget ceiling clamping the deduped `--mode all` survivor
 held/watched/reserve rows and reporting every trim (`total-fetch-max`, never silent). All constants are
 NAMED PLACEHOLDERS (n≈0); full specs live in the two module headers.
 
-PLAN-MID-TIER-ADMISSION (MT2, 2026-07-27) closes the last unreserved lane. **MID-PRICE gear** (~10k–2m
-mid — Helm of neitiznot, Berserker helm) is too LIQUID to be `thin` (so `THIN_RESERVE` never covers it)
+PLAN-MID-TIER-ADMISSION (MT2, 2026-07-27) added fetch-pool visibility for the non-thin GEAR lane.
+**MID-PRICE gear** (~10k–2m mid — Helm of neitiznot, Berserker helm) is too LIQUID to be `thin` (so `THIN_RESERVE` never covers it)
 and too LOW-MARGIN to outrank churn commodities on the velocity lane's absolute-`expGpDay` sort — the one
 class with neither a reserve nor a winning rank, so it was never fetched at any bankroll. Fix =
 **`GEAR_RESERVE`** (default 4, `--gear-reserve`, `admission.mjs` `pickFetchPool`): slots guaranteed to
@@ -356,6 +356,29 @@ table measures Path-A gp/day POST-fetch — two different numbers against one co
 the exploration reserve's true rotation period on the `crowded out:` line, since 1 velocity slot over
 ~140 excluded is a ~70h wait per row, not a prompt lottery. INFORM/ADMISSION-ONLY — no grade, rank, or
 `screen.json` change; n=0, no mid-tier flip has ever been logged.
+
+**PLAN-MID-TIER-V2 (2026-07-27) — `GEAR_RESERVE` alone did NOT reach the class it targets.** A
+re-validation against the live universe found the mechanism sound (purely additive, 0 rows displaced)
+but the AXIS wrong: `gear` is a VOLUME lane, so its peer group spans Old school bond (11.88m mid) down
+to Mithril keel parts (4.5k), and ranking that by absolute `expGpDay` hands the slots to cheap
+high-buy-limit consumables — teleport scrolls, notes, ship parts. Helm of neitiznot sat rank 10/15 and
+was never admitted; MT1's "biggest number wins" bias had simply recurred one level down, inside the
+reserve's own peer group. Widening `GEAR_RESERVE` 4→10 was REJECTED — it spends 6 more fetch slots to
+reach an item scoring WORSE post-fetch (Path-A 420.7k/d, sub-floor) than what 4 slots already deliver
+(528k–758k/d, grade B), and contradicts the founding ruling in `admission.mjs`'s own header ("raising
+the floor is just papering over the problem — the fix is the ranking dimension"). Fix = **`MID_TIER_RESERVE`**
+(default 2, `--mid-tier-reserve`): a SIBLING sequenced strictly after `GEAR_RESERVE`, drawing from what
+it left behind, additionally filtered to a **low GE buy limit** (`MID_TIER_LIMIT_CUT` 200 — an existing
+per-candidate field, not a new metric) so genuinely GE-restricted items are ranked against each other
+instead of against mass-tradeable commodities at limit 10,000+. **`--mid-tier-offset N`** pages to the
+next N picks, so a deliberately small default costs nothing in reachability (honest limit: ranks are
+recomputed each pass, so it is "next N by CURRENT rank", not a durable cursor). Null limits are
+FAIL-CLOSED but never silently — such a candidate is reported as `mid-tier-limit-unknown` rather than
+folded into `top-n-full`, because `structural-admission.mjs` deliberately does NOT exclude on null
+(~89 newer gear items carry `limit=null`), making this a local exception that must stay visible.
+Verified on real data: Neitiznot is admitted at the shipped default, additive, no duplicates. Two
+populations remain unreached and are NOT addressed here — Berserker helm/Dragon scimitar (pre-fetch
+liquidity-gated) and Rune platebody (edge-gated); see PLAN.md's Open list. Still n=0.
 F-F (2026-07-22) reworked the **Both-leg reach cell** ("Both-leg reach (recent / full) + phase"): it now
 prints the FULL-window hit count alongside recent-3 for BOTH legs (`recentHit/recentDays·fullHit/fullN`,
 straight off `recencySplit`) and appends a **trough-vs-decay phase annotation** (`reachPhaseNote`). WHY:
