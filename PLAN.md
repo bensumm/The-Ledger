@@ -536,10 +536,19 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   therefore whether the reserves can be deleted. **The tag exists on the candidate** (`via:'reserve'` /
   `via:'explore'`, set in `admission.mjs`; it already drives the 🎲 render token and `clampUnionFetch`'s
   `isProtected`) **but is never carried into the retro ledger**, so the comparison cannot be run today and
-  every scan pass discards the datapoint. Fix: thread `via` through `suggestionEntry`
-  (`pipeline/lib/render/suggestlog.mjs` — additive optional field, same `if (x != null)` shape as its
-  existing ones) at the screen's log site, then a per-`via` rollup in `analyze-record.mjs`. Cheap, and it
-  is the gate on every downstream decision in this entry — do it BEFORE tuning any slice size.
+  every scan pass discards the datapoint.
+  **Shape (Ben, 2026-07-27): CASE-BY-CASE, not a standing rollup.** The real use is diagnostic — *"this
+  reserve is severely underperforming; how did its picks rank in the overall list?"* A reserve pick that
+  would have ranked 12th of 178 says the top-N nearly had it anyway and the slot is not earning its keep; one
+  that ranked 87th says the reserve is reaching genuinely far down. So no `analyze-record.mjs` aggregate is
+  needed — just enough logged per row to make that a lookup. Fix: thread **`via`** AND the row's
+  **position in the unified pre-fetch ordering** through `suggestionEntry`
+  (`pipeline/lib/render/suggestlog.mjs` — additive optional fields, same `if (x != null)` shape as its
+  existing ones) at the screen's log site. `expGpDay` is already logged but is NOT sufficient to recover the
+  rank, because the ordering is `expGpDay × softFactor × trackBoost` and neither multiplier is recorded.
+  **URGENCY: rank is NOT reconstructable after the fact** — it depends on that pass's market snapshot, so
+  an un-captured rank is gone permanently, the same failure shape as the `via` gap itself. Cheap, and it
+  gates the retirement decision — do it BEFORE tuning any slice size.
 - **~~Class B mid-tier: does the `FLOOR` 50 → 3,500 recalibration overshoot the mid band?~~ SUPERSEDED
   2026-07-27 — that asked about the wrong constant. The real blocker is the EDGE floor, not liquidity.**
   Berserker helm (780/d), Dragon scimitar (1.7k/d) and — newly identified — **Rune platebody** never become
