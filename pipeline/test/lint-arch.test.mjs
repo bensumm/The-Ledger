@@ -36,6 +36,15 @@ ok('resolveRef: real path resolves; bare basename resolves against source dirs',
   assert.equal(resolveRef('quotecore.js'), true, 'bare basename resolves against js/');
 });
 
+ok('resolveRef: a bare basename nested in a pipeline/lib cluster subdir resolves (PLAN-LIB-SUBDIRS)', () => {
+  // The lib reorg moves files into pipeline/lib/<cluster>/, so a governed doc's BARE basename reference
+  // (e.g. `gatecandidates.mjs`, `compose.mjs` — ARCHITECTURE.md names both without a path) must still
+  // resolve after the move. Without the recursive search this is exactly the hard CI fail the plan predicts.
+  // Uses whatever lib file is present, nested or not, so the check survives every chunk of the reorg.
+  assert.equal(resolveRef('paths.mjs'), true, 'a lib-root basename resolves');
+  assert.equal(resolveRef('reconstruct.mjs'), true, 'a lib basename resolves wherever its cluster puts it');
+});
+
 ok('resolveRef: a PROPOSED (injected) future file is exempt; a missing non-proposed file fails', () => {
   // The live PROPOSED set is currently empty (all proposals shipped), so inject a synthetic one to keep
   // the exemption path tested: a genuinely-absent file passes ONLY because it is in the proposed set.

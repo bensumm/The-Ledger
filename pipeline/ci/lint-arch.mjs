@@ -35,6 +35,21 @@ const PROPOSED = new Set();
 // A bare basename resolves against these dirs (repo-root-relative). '' = repo root (index.html, *.json).
 const SEARCH_DIRS = ['', 'js', 'pipeline', 'pipeline/lib', 'pipeline/test', 'pipeline/commands', 'pipeline/ci', 'pipeline/probes', 'docs', '.github/workflows', '.claude/skills'];
 
+// PLAN-LIB-SUBDIRS chunk 0: `pipeline/lib/` is being regrouped into concept subdirectories one cluster at
+// a time, so a bare basename in a governed doc (e.g. `gatecandidates.mjs`, `compose.mjs`) may live at
+// `pipeline/lib/<cluster>/` instead of `pipeline/lib/` root. Searching RECURSIVELY under these roots — rather
+// than appending each new cluster to SEARCH_DIRS — means the guard never needs editing again as clusters land.
+const RECURSIVE_DIRS = ['pipeline/lib'];
+
+function findInTree(dir, basename) {
+  let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; }
+  for (const e of ents) {
+    if (e.isFile() && e.name === basename) return true;
+    if (e.isDirectory() && e.name !== 'node_modules' && findInTree(path.join(dir, e.name), basename)) return true;
+  }
+  return false;
+}
+
 const EXT = /\.(mjs|js|json|jsonl|md|css|html|yml|yaml)$/;
 
 // Extract file-ish `code-font` tokens. Skips: non-file tokens (no extension), spaced phrases, `.test.mjs`
@@ -58,7 +73,8 @@ export function extractRefs(md) {
 export function resolveRef(ref, proposed = PROPOSED) {
   if (proposed.has(ref)) return true;
   if (ref.includes('/')) return fs.existsSync(path.join(ROOT, ref));
-  return SEARCH_DIRS.some(d => fs.existsSync(path.join(ROOT, d, ref)));   // bare basename → any known dir
+  if (SEARCH_DIRS.some(d => fs.existsSync(path.join(ROOT, d, ref)))) return true;   // bare basename → any known dir
+  return RECURSIVE_DIRS.some(d => findInTree(path.join(ROOT, d), ref));             // … or nested in a lib cluster
 }
 
 function main() {

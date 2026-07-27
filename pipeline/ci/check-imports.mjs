@@ -29,11 +29,14 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The pipeline CLI entrypoints. Their imports are checked; the files themselves are NEVER executed
 // (guarded ones like screen-flip-niches.mjs/sync-fills.mjs AND unguarded ones like quote/watch/analyze alike — the
 // static parse means guardedness is irrelevant to safety here).
-const ENTRYPOINTS = [
-  'commands/screen-flip-niches.mjs', 'commands/quote-items.mjs', 'commands/watch-positions.mjs', 'commands/run-loop.mjs', 'commands/analyze-record.mjs',
-  'commands/monitor-offers.mjs', 'commands/read-buy-limits.mjs', 'commands/read-window-range.mjs', 'commands/sync-fills.mjs', 'commands/add-manual-fill.mjs',
-  'commands/join-amplitude-outcomes.mjs',   // PLAN-AMPLITUDE-SCAN A5 — the amplitude shadow both-leg replay joiner
-].map(f => path.join(HERE, '..', f)).filter(p => fs.existsSync(p));   // HERE=pipeline/ci; '..' -> pipeline/
+// PLAN-LIB-SUBDIRS chunk 0: this was a hardcoded list of 11 commands, so the other ~19 (read-book.mjs,
+// read-schedule.mjs, derive-cash.mjs, …) had NO static import check — a broken import in one could reach
+// main and only surface when Ben ran the command. The lib-subdir reorg rewrites specifiers across every
+// command, which makes that gap far likelier to bite, so the list is now the whole directory: any new
+// command is covered automatically and never needs registering here.
+const ENTRYPOINTS = fs.readdirSync(path.join(HERE, '..', 'commands'))   // HERE=pipeline/ci; '..' -> pipeline/
+  .filter(f => f.endsWith('.mjs')).sort()
+  .map(f => path.join(HERE, '..', 'commands', f));
 
 // Extract [{ specifier, names:Set, wantDefault:bool, nsOnly:bool }] for every RELATIVE from-import in src.
 // Handles single- and multi-line braces, `as` renames (checks the EXPORTED name), default + namespace,

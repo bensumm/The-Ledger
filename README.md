@@ -1559,7 +1559,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     targets (never the entrypoints — so no main()/fetch/git/argv side effect fires). Closes the gap that let
     screen-flip-niches.mjs's missing `dayHighFrom5m` import ride onto main undetected — `node --check` is syntax-only, no
     test imports the entrypoints, smoke loads only the browser app. Fast/offline/deterministic; exits non-zero
-    naming the offending entrypoint→module→symbol),
+    naming the offending entrypoint→module→symbol. **Entrypoints = every `pipeline/commands/*.mjs`, read from
+    the directory** (PLAN-LIB-SUBDIRS chunk 0 — was a hardcoded list of 11, leaving ~19 commands statically
+    unchecked; a new command is now covered automatically and never needs registering),
   - `check-dead-exports.mjs` (RC-A guard, 2026-07-14 — the INVERSE of import-check, run in the cheap `checks`
     job: a name-based, comment-stripped, deliberately CONSERVATIVE static scan of `js/` + `pipeline/` that
     fails if any export has NO non-test consumer — the recurring "kept-for-future / until-torn-out" vestigial
@@ -1585,7 +1587,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     root, a bare basename against the source dirs; function/field names are skipped, `PLAN-*.md` working docs
     are exempt, genuinely-future files sit in its `PROPOSED` set. Catches rename/delete drift in the doc,
     esp. through the directory rename. Structural/existence only, never semantic; pinned by
-    `lint-arch.test.mjs`),
+    `lint-arch.test.mjs`. A bare basename also resolves RECURSIVELY under `pipeline/lib/**`
+    (PLAN-LIB-SUBDIRS chunk 0) so a doc reference like `` `gatecandidates.mjs` `` survives the lib-subdir
+    reorg without the guard needing an edit per cluster),
+  - `move-lib-cluster.mjs` (PLAN-LIB-SUBDIRS chunk 0 — the mechanical cluster-mover; a DEV tool, NOT wired
+    into `checks.yml`. Takes a cluster name + explicit file-basename list, `git mv`s those files into
+    `pipeline/lib/<cluster>/`, then rewrites every affected import specifier across `js/` + `pipeline/` by
+    RESOLVING each relative specifier to an absolute path and comparing it against the moved set — not by
+    pattern-matching import "cases", so all six edge cases (in-cluster sibling, outside-in, moved-importing-
+    stayed, the `../../js/` depth-bump, and the second bump when an already-moved file's target moves in a
+    LATER chunk) are handled correctly by construction. Parses `export … from`/`export * from` as well as
+    `import` (the estimators/rating barrel shims are re-export-only — `check-imports.mjs`'s parser misses
+    them). `--dry-run` prints the full rewrite plan without writing. Runs `check-imports` + `run-tests`
+    after applying; NEVER commits, never infers cluster membership, and leaves doc/skill prose pointers to
+    the manual step. Pure helpers pinned by `move-lib-cluster.test.mjs`),
   - `lint-plan-lifecycle.mjs` (PLAN-CLEANUP-SKILL C10+C11 — a NON-GATING report the `/cleanup` skill
     reads; NOT wired into `checks.yml`. Scans root `PLAN-*.md` (excluding `PLAN.md`) and flags any
     whose Status line reads complete (SHIPPED/DONE/LANDED) with no open marker (PARTIAL[LY]/DEFERRED/

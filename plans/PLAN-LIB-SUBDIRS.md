@@ -1,6 +1,14 @@
-Status: **PROPOSAL — chip-away, one cluster per chunk (Ben, 2026-07-26).** No chunk shipped yet. This is
-a slow, opportunistic reorg to run a cluster at a time between feature work, never a single big-bang pass.
+Status: **IN PROGRESS — chunk 0 SHIPPED; clusters 1–7 REMAIN (Ben, 2026-07-26).** A slow, opportunistic
+reorg run a cluster at a time between feature work, never a single big-bang pass.
 Per-topic working doc (`docs/PLANNING.md` lifecycle); folds into `PLAN.md` + deleted when every cluster lands.
+
+| Chunk | State | Notes |
+| --- | --- | --- |
+| **0 — tooling + guard prep** | **SHIPPED** | `pipeline/ci/move-lib-cluster.mjs` (resolve-and-compare mover, `--dry-run`, pure helpers pinned by `move-lib-cluster.test.mjs`); `lint-arch.mjs` bare-basename resolution now recurses `pipeline/lib/**`; `check-imports.mjs` ENTRYPOINTS = every `pipeline/commands/*.mjs` (11 → 30, 473 → 614 imports checked). All 7 guards green. |
+| 1 — `render/` | open | Dry-run verified: 65 rewrites across 39 files, all six edge cases correct. |
+| 2 — `thesis/` | open | |
+| 3 — `reconstruct/` | open | Moved BEFORE capital (avoids double-touching 3 capital files). |
+| 4 — `timing/` · 5 — `market/` · 6 — `signal/` · 7 — `capital/` | open | |
 
 # PLAN-LIB-SUBDIRS — group `pipeline/lib/`'s 50 files into concept subdirectories
 
@@ -212,10 +220,10 @@ in full against this plan. Findings:
   A command outside both lists (e.g. `read-book.mjs`, which imports 7 lib files including 3 in the proposed
   `capital` cluster) could ship a broken import to `main` and only surface when Ben runs `/book`. **This is a
   pre-existing gap, not caused by this plan** — but this plan's per-chunk touch count makes it far more
-  likely to matter, so: either extend `ENTRYPOINTS` to cover all `pipeline/commands/*.mjs` (cheap, ~1-line
-  array change, arguably worth doing regardless of this plan) BEFORE chunk 1, or explicitly accept the gap
-  and require a manual `grep` + spot-run of any touched, guard-uncovered command as part of each chunk's
-  acceptance. (2) its parser (`parseRelativeImports`, `check-imports.mjs:41-69`) matches `import … from`
+  likely to matter. **RESOLVED in chunk 0** — `ENTRYPOINTS` now reads the whole `pipeline/commands/` directory
+  (30 entrypoints, 614 imports checked, up from 11/473), so every command is statically checked and a new one
+  is covered automatically. The per-chunk "spot-run an uncovered command" step is no longer needed.
+  (2) its parser (`parseRelativeImports`, `check-imports.mjs:41-69`) matches `import … from`
   only, never `export … from`/`export * from` — so a broken re-export specifier (the estimators.mjs/rating.mjs
   shims) is caught only INDIRECTLY: the broken module throws at `import()` evaluation time
   (`exportsOf`, `check-imports.mjs:74-81`), and that's only exercised if the module is transitively reached
@@ -238,9 +246,9 @@ in full against this plan. Findings:
   this plan should avoid. **Better tweak, one-time**: change `resolveRef`'s bare-basename branch to search
   `pipeline/lib/**` recursively (one level of subdirectories is enough — this taxonomy is not deeply nested)
   instead of iterating a fixed `SEARCH_DIRS` list, so it never needs touching again regardless of which
-  cluster ships when. Do this tweak in chunk 0 alongside the helper script, before chunk 1 ships, or chunk 1
-  will hard-fail `lint-arch` the moment `gatecandidates.mjs`/`compose.mjs` move (whichever chunk touches
-  them) without a doc rewrite AND a `SEARCH_DIRS` fix landing together.
+  cluster ships when. **DONE in chunk 0** — `resolveRef`'s bare-basename branch now falls back to a recursive
+  search under `RECURSIVE_DIRS = ['pipeline/lib']` (`lint-arch.mjs`), so no per-chunk guard maintenance is
+  needed and chunk 1 cannot hard-fail on a bare-basename reference. Pinned by `lint-arch.test.mjs`.
 - **`check-dead-exports.mjs` — no tweak needed.** `SCAN_DIRS` (`check-dead-exports.mjs:39`) is `[js/,
   pipeline/]` and its `walk()` helper (`check-dead-exports.mjs:78-87`) already recurses into subdirectories
   (skipping only `node_modules`/`.cache`), so moved files are picked up automatically regardless of nesting
