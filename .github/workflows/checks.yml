@@ -1,7 +1,16 @@
-# Non-gating repo checks (gating once branch protection / merge queue lands).
+# GATING repo checks — `checks` is a REQUIRED status check on `main` since G1 (2026-07-04); the
+# ruleset also requires a PR and forbids force-push/deletion. Repository admins carry an always-on
+# bypass, so an attended direct-push still lands and CI runs AFTER it — watch the run, don't assume
+# the push implies green (/ship §2/§3).
 # Runs the same checks agents run locally (CLAUDE.md rule 2 + the auto-discovered test suites):
-# nothing here needs secrets or Ben's machine — the fills *sync* itself can never
-# move to CI (it reads ~/.runelite locally; Task Scheduler is its permanent home).
+# nothing here needs secrets or Ben's machine — the fills *sync* itself can never move to CI (it
+# reads ~/.runelite locally). That sync is ON-DEMAND ONLY: the `CofferFillsSync` scheduled task was
+# ELIMINATED 2026-07-04 (pipeline/FILLS-PIPELINE.md §12), so Task Scheduler is NOT its home — the
+# only scheduled job left in this repo is the zero-git cache-warm guard.
+#
+# Action majors are pinned to @v5 (Node 24 runtime, requires runner >= v2.327.1 — GitHub-hosted
+# ubuntu-latest satisfies this). Bumped from @v4 on 2026-07-28: v4 targets the retired Node 20 and
+# was already being force-run on Node 24 with a deprecation annotation on every run.
 name: checks
 
 on:
@@ -15,9 +24,9 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -67,9 +76,9 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
