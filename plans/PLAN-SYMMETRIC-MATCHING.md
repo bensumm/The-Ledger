@@ -1,6 +1,10 @@
 # PLAN-SYMMETRIC-MATCHING — match sells→buys the same way we match buys→sells
 
-**Status:** proposed, not started. Raised by Ben 2026-07-26 in response to a mis-modeling report
+**Status:** PARTIALLY SHIPPED — **SM0 + SM1 are DONE** (SM1 landed 2026-07-27, `1d57e7c`); **SM2–SM5
+remain OPEN**, which is why this file is still here rather than folded into `PLAN.md` and deleted.
+(Corrected 2026-07-28: this line read "proposed, not started" long after SM1 shipped — see the
+per-chunk headings in §6 for the authoritative state, and prefer them over this summary.)
+Raised by Ben 2026-07-26 in response to a mis-modeling report
 (see §2). **This SUPERSEDES the ownership-filter approach** that a prior investigation recommended —
 that fix suppressed a symptom at three read surfaces; this one removes the cause in one function.
 
