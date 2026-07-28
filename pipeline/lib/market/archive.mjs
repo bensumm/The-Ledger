@@ -240,8 +240,24 @@ export function open(dbPath = DEFAULT_DB, { readonly = false } = {}) {
 
     /* pruneBefore(ts): the shipped-but-unused `--prune-before` utility. Deletes observations +
        bucket + seed rows strictly older than `ts` (unix seconds). Returns per-table deleted counts.
-       The archive is append-forever by policy (~30–35GB/yr, Ben-approved) — this exists as a manual
-       escape hatch, NOT a default path. */
+       The archive is append-forever by policy — this exists as a manual escape hatch, NOT a default
+       path, and nothing calls it.
+
+       GROWTH, MEASURED 2026-07-28 (the old "~30–35GB/yr, Ben-approved" figure was an estimate and
+       overstated the real rate by 4–8x; corrected here so a future prune decision starts from facts):
+         · on-disk cost   45.4 bytes/row, including indexes + the buckets table
+                          (340MB / 7.84M rows on a 60d /1h + 19d /5m archive)
+         · /1h            ~2,982 rows/bucket × 24/day  =  72k rows/day = 3.1 MB/day = 1.1 GB/yr
+         · /5m            ~1,580 rows/bucket × 288/day = 455k rows/day = 19.7 MB/day = 7.0 GB/yr @100%
+         · TOTAL          4.0 GB/yr at OBSERVED coverage · 8.1 GB/yr at 100% coverage
+       /5m is ~86% of the growth (288 buckets/day vs 24), so it is the only grain worth pruning if
+       this ever matters. It does not currently matter: at 4–8 GB/yr a desktop absorbs this for years.
+
+       BEFORE PRUNING ANY /5m HISTORY, note it IS read — this is not a write-only grain. Beyond
+       loadBands' trailing 2h window, three surfaces read historical 5m via `seriesFor(id,'5m')`:
+       `analyze-fill-placement.mjs` (per-lot placement windows, AC1/AC2), `quote-items.mjs`, and
+       `read-window-range.mjs`. A retention cut would silently degrade those, so it needs a stated
+       horizon per consumer, not a blanket date. */
     pruneBefore(ts) {
       const t = Number(ts);
       const obs = db.prepare('DELETE FROM observations WHERE ts < ?').run(t);

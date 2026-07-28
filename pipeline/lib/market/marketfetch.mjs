@@ -408,8 +408,10 @@ export function newest1hAgeHours({ db, now = Date.now() } = {}) {
    45-70% of a whole `/scan` pass's wall time once the cache grew past a couple weeks (359MB / 17
    files at the time of the fix), and only getting worse as it accreted toward the 90d cap. The
    SQLite archive already indexes by (grain, ts) — `marketAt('5m', w)` reads exactly the requested
-   window, no linear scan, no retention pruning needed (the archive is append-forever by policy,
-   ~30-35GB/yr, same as every other grain it stores). `loadHistBands` (below) is a SEPARATE
+   window, no linear scan, no retention pruning needed (the archive is append-forever by policy;
+   MEASURED 2026-07-28 at 4.0 GB/yr observed / 8.1 GB/yr at full coverage — the older ~30-35GB/yr
+   figure was an over-estimate, see archive.mjs `pruneBefore` for the full per-grain breakdown and
+   the list of surfaces that read historical 5m). `loadHistBands` (below) is a SEPARATE
    function with its own per-item reduced cache (.cache/outcomes-bands/) for the outcome-join's
    past-window reconstruction — untouched by this change, do not conflate the two.
 
