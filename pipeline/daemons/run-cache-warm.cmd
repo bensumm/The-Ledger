@@ -10,6 +10,10 @@ REM This is the read-only cousin of the ELIMINATED CofferFillsSync job, NOT a re
 REM
 REM This file lives in pipeline\daemons\ ; "%~dp0..\.." is the repo root. `cd /d` also switches drive.
 REM Runs the ENSURE-THEN-WARM path (--warm): cheap check of the newest /1h bucket age; warm ONLY if
-REM stale (>23h). (NOT --check-only, which reports health but warms nothing.)
+REM stale (newest /1h bucket older than WARM_THRESHOLD_HOURS = 3h — deliberately BELOW this job's 4h
+REM tick so the lag stays bounded; the two numbers are coupled, so retune the threshold if you change
+REM the interval here). (NOT --check-only, which reports health but warms nothing.)
+REM Repairing holes ALREADY in the archive is a separate, deliberate job — this guard only keeps the
+REM leading edge current: node pipeline\commands\backfill-archive.mjs --days 60
 cd /d "%~dp0..\.."
 node pipeline\daemons\cache-warm.mjs --warm

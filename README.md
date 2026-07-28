@@ -1132,8 +1132,10 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     implementation; consumed by `registry.mjs`, `pipeline/commands/ensure-server.mjs`, and the test).
     `cache-warm.mjs` (Chunk 4 — the cache-warm GUARD's real `healthCheck()`/`start()` the registry entry
     dynamic-imports): `healthCheck()` reads the newest /1h bucket age via `marketfetch.newest1hAgeHours`
-    (opens+closes its own archive handle) and reports `ok:false` when age > `WARM_THRESHOLD_HOURS` (23h, a
-    NAMED PLACEHOLDER — no coverage-gap incidents to validate it against yet) OR the archive is COLD (no /1h
+    (opens+closes its own archive handle) and reports `ok:false` when age > `WARM_THRESHOLD_HOURS` (**3h** —
+    retuned 2026-07-27 from 23h, which could not work: the Task Scheduler tick is 4h, so a 23h threshold left
+    ~1h of margin against the 24h cap on `loadAll24hRolling`'s backfill walk and routinely reported "fresh"
+    on a 12h-stale archive. The threshold must stay BELOW the tick interval — the two are coupled) OR the archive is COLD (no /1h
     data → "needs warming", never a crash); `start()` runs the two zero-git check-before-fetch backfills
     (`loadAll24hRolling` + `loadBands`, both INJECTABLE so the test stays offline) then stamps
     `daemon-state.json`'s `lastRan` via the manager's `loadState`/`saveState`. ZERO-GIT by construction —
@@ -1150,6 +1152,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (Daemon · Kind · Git · Auto · Health · Last ran · Detail). READ-ONLY — calls `status()`, never `ensure()`,
     so it starts nothing; it DOES live-probe each entry (a localhost fetch for dev-server, an archive read for
     cache-warm, a stat for the guards). No APP_VERSION bump).
+    `backfill-archive.mjs` (`pipeline/commands/`, added 2026-07-27 — the DELIBERATE hole-REPAIR job for the
+    Tier-1 SQLite archive, the backwards-looking counterpart to the forward-looking `cache-warm` guard:
+    `node pipeline/commands/backfill-archive.mjs [--days N] [--grain 1h|5m] [--dry-run] [--limit N] [--pace ms]`.
+    EXISTS BECAUSE every routine writer is capped — `loadAll24hRolling` walks only the trailing 24 windows and
+    `loadDaily` only a 6-HOURLY grid (`stepHours=6`, the 1-in-6 sawtooth older than a day) — so a hole left by an
+    idle stretch is never repaired by anything else. Holes ARE repairable: bulk `/1h?timestamp=` was measured
+    serving real, distinct buckets 365 DAYS back, so the old "the wiki only serves ~30h/item, a hole is
+    permanent" premise is retired. Finds the missing buckets over the requested window, prints them as
+    contiguous runs, then fetches OLDEST-FIRST (the leading edge refills itself via the guard/any scan; old holes
+    do not). ZERO-GIT — writes only `pipeline/.market-archive.sqlite`; interrupt-safe + resumable (idempotent
+    composite PK + check-before-fetch), so a re-run skips what landed. Distinguishes a wiki-EMPTY slot from a
+    FAILED request in the summary. Costs one bulk request per missing bucket — prefer `--dry-run` first, and
+    `--limit` to split a long repair. Not auto-run by anything. Its two PURE helpers (`windowsFor` — the
+    grain-grid window list, pinned to the last COMPLETE bucket so a half-formed hour is never archived as
+    final; `holeRuns` — contiguous-run shaping for the report) are fixture-tested offline by
+    `pipeline/test/backfill-archive.test.mjs`, which also proves importing the module never fires its CLI).
     `run-cache-warm.cmd` (Chunk 6 — the STABLE, args-free Windows Task Scheduler target: `cd /d "%~dp0..\.."`
     to the repo root then `node pipeline\daemons\cache-warm.mjs --warm` (ensure-then-warm, NOT --check-only).
     Zero-git — same code path as the opportunistic hook. Produced/committed by this repo; consumed by the

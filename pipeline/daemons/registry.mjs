@@ -84,9 +84,11 @@ export const DAEMONS = [
     name: 'cache-warm',
     description: 'cache-warm guard — keeps the /1h SQLite market archive full so PLAN-LANE-ADMISSION ' +
       "Path-A's margin doesn't degrade. Cheap check (newest /1h bucket age) on every ensure(); expensive " +
-      'backfill (loadAll24hRolling + loadBands) ONLY when the newest bucket is about to age out of the ' +
-      'rolling-24h window. ZERO-GIT by construction (archive/marketfetch reads + backfills only; never ' +
-      'imports sync-fills.mjs).',
+      'backfill (loadAll24hRolling + loadBands) only when the newest bucket is older than ' +
+      'WARM_THRESHOLD_HOURS (3h — kept BELOW the 4h Task Scheduler tick so the lag stays bounded). Keeps ' +
+      'the LEADING EDGE current only; repairing holes already in the archive is the separate deliberate ' +
+      'job pipeline/commands/backfill-archive.mjs. ZERO-GIT by construction (archive/marketfetch reads + ' +
+      'backfills only; never imports sync-fills.mjs).',
     kind: 'guard',
     local: true,
     trigger: 'Opportunistic ensure() at the top of scan/positions/loop + one Windows Task Scheduler tick every ~4h (deduped via the heartbeat).',

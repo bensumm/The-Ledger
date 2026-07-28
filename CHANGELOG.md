@@ -10,6 +10,40 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The cache-warm guard couldn't keep pace — threshold 23h→3h, plus `backfill-archive.mjs` to repair the holes (pipeline-only, 2026-07-27)
+A double-check of whether the daemon was actually keeping the /1h archive in sync with the wiki. It
+was not, and the reason was in the spec rather than the machinery.
+
+**The daemon was healthy and lying.** `TheCofferCacheWarm` was registered, ticking every 4h, exiting
+0 — but `daemon-state.json` was `{}`: it had *never once warmed*, only checked-and-skipped. The
+archive's newest /1h bucket was **12.6h old**, trailing-24h coverage **13/24 (54%)**, and
+`healthCheck()` reported `✓ up — fresh`, because the warm only fired above `WARM_THRESHOLD_HOURS = 23`.
+
+**23h could not work against a 4h tick.** `loadAll24hRolling`'s backfill walk is capped at the trailing
+24 windows, so 23h left ~1h of margin. A check landing at 22.9h skips; the next is 4h later at 26.9h —
+by then the hours between 24h and 26.9h are outside the walk and no routine path fetches them again.
+The threshold has to sit BELOW the tick interval for the lag to be bounded at all. Now **3h**, which
+holds worst-case lag near tick+threshold ≈ 7h. The two numbers are coupled — retune together.
+
+**The premise the guard was built on was false.** Its header claimed *"the wiki only serves ~30h/item
+live, so a bucket that ages out of the rolling-24h window can never be back-filled."* Measured against
+the live API: bulk `/1h?timestamp=` returns real, distinct whole-market buckets at least **365 days**
+back (2025-07-28: id 560 hi=144, hpv 2.11m), and per-item `/timeseries?timestep=1h` returns 365 points
+≈ 364h. Neither is ~30h. Nothing had been lost — it simply was never re-requested. Comment corrected in
+place rather than left to mislead the next reader.
+
+**Why holes persisted anyway.** Every routine writer is capped: `loadAll24hRolling` at 24 windows,
+`loadDaily` at a 6-HOURLY grid (`stepHours=6`) — which is exactly the 1-bucket-in-6 sawtooth the archive
+showed older than a day. The archive held **428/1441 buckets (30%)** with 50 holes beyond 24h. So
+repair needed its own job: **`pipeline/commands/backfill-archive.mjs`** (`--days`/`--grain`/`--dry-run`/
+`--limit`/`--pace`) walks past the 24-window cap, reports holes as contiguous runs, and fetches
+oldest-first — the leading edge refills itself, old holes do not. Zero-git, interrupt-safe, resumable.
+
+**Honest severity:** a scan already self-healed the last 24h (`loadAll24hRolling` runs at
+`screen-flip-niches.mjs:2244`, before the zero-fetch `loadDailyRangeBulk` read at :2551). The real
+exposure was the read-side deflation in the gaps — a surface composing trailing-24h volume off a
+54%-covered archive understates volume roughly in proportion, compounding the known `/24h` deflation.
+
 ### `GEAR_RESERVE` reached the wrong population — `MID_TIER_RESERVE` re-cuts the peer group (MT-V2, pipeline-only, 2026-07-27)
 A follow-up to MT1–MT3 shipped hours earlier, and a correction to it.
 
