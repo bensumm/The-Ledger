@@ -47,6 +47,7 @@
  * Crimson-kisten / Masori-body mirage anchors, explicitly provisional, NOT a calibrated claim.
  */
 import { clamp } from '../../money-math.js';
+import { symmetricExemptionHolds } from '../families.mjs';   // EF1(b) (PLAN-ESTIMATOR-FIDELITY): the ONE placement-bounded churn-exemption predicate (families.mjs owns it beside MIRAGE_PLACEMENT); call-time only, no eval-time cycle (families does not import sell-models)
 
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 
@@ -97,7 +98,17 @@ export const reachFoldModel = {
     // TIMING model, not the reach signal, so estSell lands NEAR, not exactly at, the raw band top). The ask
     // reach counts stay POPULATED in confidence (the F1 shadow must keep logging them — they are the very
     // data that will test this exemption); `foldExempt` tells the cell/shadow to drop the caution token.
-    const foldExempt = (spec && spec.fillShape === 'symmetric') ? 'symmetric' : null;
+    // EF1(b) (PLAN-ESTIMATOR-FIDELITY): the exemption is PLACEMENT-BOUNDED — it holds only while the
+    // quoted ask sits inside the daily-high distribution (extra.askPlacement ≤ MIRAGE_PLACEMENT, or no
+    // read — symmetricExemptionHolds, the SAME predicate the rank uses). An above-the-distribution churn
+    // ask has left the "tight top" premise, so it takes the standard reach fold + cell caution tokens
+    // (BOTH legs' tokens return — the whole-row exemption falls with its premise, an additive-caution
+    // direction); `exemptionBounded:'placement'` marks the drop for the cell/shadow so the F1 retro can
+    // segment. A tight in-distribution lap (Ancient-essence class) keeps the AC5/AC6 exemption
+    // byte-identically; callers that pass no askPlacement are unchanged.
+    const symmetric = !!(spec && spec.fillShape === 'symmetric');
+    const foldExempt = (symmetric && symmetricExemptionHolds(spec, extra ? extra.askPlacement : null)) ? 'symmetric' : null;
+    const exemptionBounded = (symmetric && !foldExempt) ? 'placement' : null;
     // --- BUY: per-strategy entry doctrine (rev2) ---
     let estBuy, buyReach = bidR;   // buyReach ANNOTATES the buy cell (null for near-live)
     if (doctrine === 'near-live') {
@@ -152,6 +163,9 @@ export const reachFoldModel = {
         // for the F1 shadow, but the cell drops the caution token (the invalidated signal must not ride the
         // cell as an implied caution) and the shadow logs foldExempt so the retro can segment.
         foldExempt,
+        // EF1(b): 'placement' when a symmetric spec LOST the exemption to the placement bound (ask above
+        // the daily-high distribution) — the shadow segments the de-exempted churn rows on it.
+        exemptionBounded,
       },
     };
   },

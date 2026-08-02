@@ -64,6 +64,17 @@ export const REACH_REJECT_FRAC = 0;     // reached on ≤ this fraction ⇒ reje
  * severity one step (pass→caution, caution→reject), because a reach the recent nights don't confirm
  * is a mirage — reusing recencySplit's existing staleOptimistic semantics, no new threshold.
  *
+ * ⚠ WINDOW SCOPE — THIS IS A CLOCK-ANCHORED "COMING-HOURS" READ, NOT A FULL-DAY ONE (EF1(d),
+ * PLAN-ESTIMATOR-FIDELITY — the diagnosed screen-vs-quote reach divergence). The scored window is
+ * `[now.getHours(), +REACH_WINDOW_HOURS)` (default 8h) repeated over REACH_NIGHTS nights: "will this
+ * level print in the SAME coming-8h window it's about to rest through?" — so the count MOVES with the
+ * clock. quote-items.mjs scores the same level over the FULL DAY (windowStats wStart 0, wEnd 0):
+ * "does this level print at some point in a day?" Both are legitimate questions and they legitimately
+ * DISAGREE (the 2026-08-02 neitiznot bid: 0/3 here vs 2/3 full-day, minutes apart — the dip printed
+ * outside the coming-8h window). INTENTIONAL DIFFERENCE, kept: the screen's rank P(fill) is built on
+ * this window read (unifying it to full-day would re-score every board — its own chunk, EF0-gated).
+ * Cross-surface comparison of raw reach tokens is invalid without naming the window basis.
+ *
  * READS (all from the intraday namespace — the P0 chain's Tier-2 stage, its declared extension point):
  *   ctx.intraday.ts1h    the 1h /timeseries the window read buckets (CALLER-fetched; null → degrade)
  *   ctx.intraday.reach   the candidate to score: { side:'ask'|'bid', level, windowHours?, nights?, now? }

@@ -438,6 +438,11 @@ async function runItems() {
     // the estBuy/estSell/estConfidence shadow fields either way (the F1 accrual).
     // rev1: the RC1 recent-3 split (recencySplit over ast.days) rides alongside the full-window count so
     // estimatePair folds on recent-3 and the confidence token shows it (with the full window on divergence).
+    // ⚠ WINDOW SCOPE (EF1(d), PLAN-ESTIMATOR-FIDELITY): these reach counts are FULL-DAY (ast = windowStats
+    // wStart 0, wEnd 0 — "does the level print at some point in a day?"). The SCREEN's bid/ask reach is the
+    // reachValidator's CLOCK-ANCHORED coming-8h window ("will it print in the window it rests through?"),
+    // so the same level can legitimately read 2/3 here and 0/3 on the screen minutes apart (the diagnosed
+    // neitiznot divergence). Intentional difference, documented in both homes + js/validate.mjs.
     const bidRc = (ast && ast.days && row.optBuy != null) ? recencySplit(ast.days, 'bid', row.optBuy) : null;
     const askRc = (ast && ast.days && row.optSell != null) ? recencySplit(ast.days, 'ask', row.optSell) : null;
     const bidReach = (ast && ast.lows && ast.lows.length && row.optBuy != null)

@@ -25,6 +25,7 @@ import {
   quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
   estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_FADE_DISCOUNT, EST_HEADERS, SELL_TOP_MODELS,
   reachRelief, dayHighFrom5m, REACH_RELIEF_MAX, REACH_DEBIAS_MAX_FRAC,   // PLAN-LIQUIDITY-REACH
+  MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, symmetricExemptionHolds,   // EF1 (PLAN-ESTIMATOR-FIDELITY): the placement-bounded churn exemption + the dead-bid reprice floor
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS,
   RISING_PFILL_CONFIRMED, RISING_PFILL_UNCONFIRMED,
@@ -831,7 +832,7 @@ ok('E2 cells: the three-part sell read renders — honest net + P(fill) + list-a
   let cells;
   assert.doesNotThrow(() => { cells = estPairCells(e); }, 'estPairCells renders the forward read without throwing');
   assert.match(cells[1].t, /list ~/, 'the sell cell carries the forward "list at X" segment');
-  assert.match(cells[2].t, /P~\d+%/, 'the net cell carries P(fill) beside the honest margin');
+  assert.match(cells[2].t, /P\(ask\)~\d+%/, 'the net cell carries the ask-leg P (labeled P(ask)~ — EF1(c)) beside the honest margin');
 });
 
 ok('E3/KNIFE: a trend-only forward (falling ceiling) still projects a labeled level — no crash', () => {
@@ -843,6 +844,87 @@ ok('E3/KNIFE: a trend-only forward (falling ceiling) still projects a labeled le
   const direct = driftExitFrom(knife, null, shellFwdCtx(FWD_ROW, FWD_NOW), {});
   assert.equal(e.forwardPeak, direct.driftAdjustedPeak, 'trend-only peak still delegates to driftExitFrom');
   assert.doesNotThrow(() => estPairCells(e), 'the KNIFE forward renders without crashing');
+});
+
+/* --- EF1 (PLAN-ESTIMATOR-FIDELITY): rank-leg honesty ------------------------------------------------
+   (a) the dead-bid REPRICED-ENTRY alternative, (b) the PLACEMENT-BOUNDED churn exemption, (c) the P-leg
+   split. Every bound/floor here is a PLACEHOLDER (n≈0) — these fixtures pin STRUCTURE + the exact
+   trigger conditions, never a calibrated value. */
+const EF1_ROW = { optBuy: 100, optSell: 110, quickBuy: 101, quickSell: 109, volDay: 100_000, limit: 20_000, mid: 105 };
+const EF1_BAD_ASK = { reachedDays: 1, nDays: 14 };   // the Sapphire-shaped mirage exit: prints 1/14d
+
+ok('EF1(b) symmetricExemptionHolds: holds inside/at the bound + on no read; fails above it; never for non-symmetric', () => {
+  assert.equal(symmetricExemptionHolds(FLIP_NICHES.churn, null), true, 'absent read → exemption holds (degrade)');
+  assert.equal(symmetricExemptionHolds(FLIP_NICHES.churn, 0.5), true, 'in-distribution → holds');
+  assert.equal(symmetricExemptionHolds(FLIP_NICHES.churn, MIRAGE_PLACEMENT), true, 'exactly AT the bound → holds (strict >)');
+  assert.equal(symmetricExemptionHolds(FLIP_NICHES.churn, 0.86), false, 'above the bound → fails');
+  assert.equal(symmetricExemptionHolds(FLIP_NICHES.band, 0.99), false, 'a non-symmetric spec was never exempt');
+  assert.equal(symmetricExemptionHolds(null, 0.2), false, 'no spec → false');
+});
+
+ok('EF1(b) rank bound: an ABOVE-distribution churn ask takes the standard discount (Sapphire shape drops); a tight in-distribution lap keeps the exemption byte-identically (Ancient-essence canary)', () => {
+  const noPlacement = estimateRank(FLIP_NICHES.churn, EF1_ROW, { askReach: EF1_BAD_ASK });
+  // the regression canary: in-distribution ask (p50) — exemption KEEPS, byte-identical to no-placement.
+  const inBounds = estimateRank(FLIP_NICHES.churn, EF1_ROW, { askReach: EF1_BAD_ASK, askPlacement: 0.5 });
+  assert.equal(inBounds.pFill.value, noPlacement.pFill.value, 'tight lap keeps the exemption (P untouched)');
+  assert.equal(inBounds.rank, noPlacement.rank, 'tight lap keeps the exemption (rank untouched)');
+  assert.equal(inBounds.exemptionBounded, false);
+  // exactly at the bound → still exempt (the flip is strictly above).
+  assert.equal(estimateRank(FLIP_NICHES.churn, EF1_ROW, { askReach: EF1_BAD_ASK, askPlacement: MIRAGE_PLACEMENT }).rank, noPlacement.rank);
+  // the Sapphire shape: ask above the daily-high distribution + 1/14 reach → standard askReachFactor applies.
+  const outBounds = estimateRank(FLIP_NICHES.churn, EF1_ROW, { askReach: EF1_BAD_ASK, askPlacement: 0.99 });
+  assert.equal(outBounds.exemptionBounded, true, 'the drop is marked (R-1 visible swap + shadow)');
+  assert.equal(outBounds.pFill.value, Math.min(1, noPlacement.pFill.value * askReachFactor(EF1_BAD_ASK)), 'the discount IS the standard askReachFactor — no new math');
+  assert.ok(outBounds.rank < noPlacement.rank, 'the mirage churn top drops from its exempt rank');
+  assert.match(outBounds.pFill.basis, /×askreach/, 'the basis names the discount');
+  // a band (asym) row is untouched by a placement read — the bound only governs the symmetric exemption.
+  const bandNoP = estimateRank(FLIP_NICHES.band, EF1_ROW, { askReach: EF1_BAD_ASK });
+  const bandWithP = estimateRank(FLIP_NICHES.band, EF1_ROW, { askReach: EF1_BAD_ASK, askPlacement: 0.99 });
+  assert.equal(bandWithP.rank, bandNoP.rank, 'band already discounts; placement adds nothing');
+  assert.equal(bandWithP.exemptionBounded, false);
+});
+
+ok('EF1(b) price-fold bound: the churn fold exemption drops with placement too — estSell folds, the marker logs', () => {
+  const row = { quickBuy: 23_900_000, quickSell: 24_000_000, optBuy: 23_600_000, optSell: 24_440_000 };
+  const rc = { reachedDays: 1, nDays: 14 };
+  const noP = estimatePair(FLIP_NICHES.churn, row, { askReach: rc });
+  const inB = estimatePair(FLIP_NICHES.churn, row, { askReach: rc, askPlacement: 0.5 });
+  assert.equal(inB.estSell, noP.estSell, 'in-distribution churn: byte-identical (the AC5/AC6 exemption survives)');
+  assert.equal(inB.confidence.foldExempt, 'symmetric');
+  assert.equal(inB.confidence.exemptionBounded, null);
+  const outB = estimatePair(FLIP_NICHES.churn, row, { askReach: rc, askPlacement: 0.99 });
+  assert.equal(outB.confidence.foldExempt, null, 'the exemption fell with its premise');
+  assert.equal(outB.confidence.exemptionBounded, 'placement');
+  assert.ok(outB.estSell < inB.estSell, 'the above-distribution top folds toward live (the safe direction)');
+  // and it equals the band fold at identical inputs — the STANDARD fold, not new math (both 'band-low' entry).
+  const band = estimatePair(FLIP_NICHES.band, row, { askReach: rc, askPlacement: 0.99 });
+  assert.equal(outB.estSell, band.estSell, 'de-exempted churn folds exactly like band');
+  // shadow segmentation: the drop marker + the kept foldExempt both ride estConfLean (YS2 lean).
+  assert.equal(estConfLean(outB).exemptionBounded, 'placement');
+  assert.equal(estConfLean(inB).foldExempt, 'symmetric');
+  assert.equal(estConfLean(inB).exemptionBounded, undefined, 'marker absent when the exemption held');
+});
+
+ok('EF1(a) dead-bid reprice: fires exactly on (real-reach entry P < floor) AND (scored sell) AND (live above the quoted bid); headline rank untouched (R-1)', () => {
+  const deadBid = { reachedDays: 0, nDays: 14 };    // the neitiznot shape: the quoted band-low bid never prints
+  const goodAsk = { reachedDays: 14, nDays: 14 };   // …while the sell leg is verified 14/14
+  const er = estimateRank(FLIP_NICHES.band, EF1_ROW, { reach: deadBid, askReach: goodAsk });
+  assert.ok(er.repriced, 'the labeled alternative is computed');
+  assert.equal(er.repriced.bid, EF1_ROW.quickBuy, 'entry repriced to the live crossable level');
+  assert.equal(er.repriced.ask, er.pair.ask, 'sell leg unchanged');
+  assert.ok(er.repriced.pFill > 0.5 && er.repriced.rank > 0, 'the alternative carries a live P + rank');
+  // R-1: the HEADLINE stays the honest dead-bid read — nothing reorders on the alternative.
+  assert.equal(er.pFill.value, 0, 'headline P stays the dead-bid zero');
+  assert.equal(er.rank, 0, 'headline rank unchanged');
+  // EF1(c): the leg split names WHICH leg collapsed (entry 0, ask factor 1 at 14/14).
+  assert.equal(er.pLegs.entry, 0);
+  assert.equal(er.pLegs.askF, 1);
+  // trigger boundaries — each miss keeps repriced null:
+  assert.equal(estimateRank(FLIP_NICHES.band, EF1_ROW, { reach: { reachedDays: 7, nDays: 14 }, askReach: goodAsk }).repriced, null, 'healthy entry → no reprice');
+  assert.equal(estimateRank(FLIP_NICHES.band, EF1_ROW, { reach: deadBid }).repriced, null, 'unscored sell leg → no reprice');
+  assert.equal(estimateRank(FLIP_NICHES.band, EF1_ROW, { askReach: goodAsk }).repriced, null, 'prior-basis entry (no real reach read) → no reprice');
+  assert.equal(estimateRank(FLIP_NICHES.band, { ...EF1_ROW, optBuy: EF1_ROW.quickBuy }, { reach: deadBid, askReach: goodAsk }).repriced, null, 'quoted bid already AT live → nothing to reprice');
+  assert.ok(DEADBID_PFILL_FLOOR > 0 && DEADBID_PFILL_FLOOR < 1, 'the floor is a named placeholder in (0,1)');
 });
 
 console.log(`\nAll ${pass} estimator checks passed.`);

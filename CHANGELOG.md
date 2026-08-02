@@ -10,6 +10,35 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### EF1 — rank-leg honesty: the dead bid gets a repriced alternative, the churn exemption gets a placement bound, and one row stops printing two P's (pipeline-only, 2026-08-01)
+PLAN-ESTIMATOR-FIDELITY chunk EF1, motivated by two same-session captures of the tool being fooled by
+its own numbers: **the buried great trade** (Helm of neitiznot at `Rank 0 · P~0.00 · row 79/83` while
+its verified sell reached 14/14 days — the pair-P was zeroed ENTIRELY by a quoted band-low bid that
+never prints, when the correct response to a dead bid is to reprice the entry to a live-crossable
+level) and **the promoted mirage** (Sapphire dragon bolts (e) ranked churn #1 at `P~1.00 · S+` while
+its own inform note read "ask reached 1/14d" — the AC5/AC6 symmetric exemption fired with the ask at
+p100 of the daily-high distribution, where its tight-lap premise no longer holds).
+
+Shipped, all additive-first per the `gate-on-error-cost-not-n` 3-Q rule: **(a)** a `↻ repriced entry`
+console line + lean `repriced` shadow whenever a REAL-reach entry P collapses below `DEADBID_PFILL_FLOOR`
+(0.10, n≈0) with a scored sell leg — the alternative carries the sell leg's reach evidence inline (the
+DHCB guard) and the headline rank/sorts are untouched until EF0(c) rules; **(b)** the symmetric (churn)
+ask-reach exemption is now bounded by `MIRAGE_PLACEMENT` (0.85 — moved to `js/estimators/families.mjs`
+and single-sourced with the digest's mirage rule) at EVERY exemption site (rank, price fold, grade cap,
+overnight weight, digest), a genuine visible swap — affected rows print `⚠ exemption dropped — rank X
+(was Y)` and log `exemptionBounded`/`rankPre`; live capture: Sapphire `S+ 10.05m P~1.00` → `B 3.05m
+P~0.30`, while the tight-lap canary (Ancient essence) kept its numbers byte-identically (integer-tick
+laps read p100 by construction, but their genuine reach makes the discount a no-op — noted in the plan
+as the bound's real limit); **(c)** the Net cell's ask-leg-only probability is labeled `P(ask)~` and a
+collapsed rank-P names its leg (`P~0.00 (bid leg)`, console-only copy — published cells untouched);
+**(d)** the screen-vs-quote bid-reach divergence (0/3 vs 2/3 minutes apart) is DIAGNOSED, not unified:
+the screen scores `reachValidator`'s clock-anchored coming-8h window, the quote scores the full day —
+different questions, both kept, documented in both homes (unifying would re-score every board's P;
+EF0-gated follow-up if ever). `screen.json` keeps its shape and never sees the est pair; the only
+app-visible effect is data-level — de-exempted churn rows' grade/rank cell content and score order,
+the sanctioned (b) swap. No APP_VERSION bump (no app-behavior change; the app Finder passes no
+placement read).
+
 ### The cache-warm guard couldn't keep pace — threshold 23h→3h, plus `backfill-archive.mjs` to repair the holes (pipeline-only, 2026-07-27)
 A double-check of whether the daemon was actually keeping the /1h archive in sync with the wiki. It
 was not, and the reason was in the spec rather than the machinery.

@@ -258,9 +258,18 @@ ok('R4b: a flat ask cushion reads `stable`', () => {
   const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(STABLE_HIS) });
   assert.equal(r.marginTrend, 'stable');
 });
-ok('R4b: a symmetric niche gets NO ask trend (mismeasures a two-sided band) → null', () => {
-  const r = digestReachAndPlacement({ spec: { fillShape: 'symmetric' }, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(FADING_HIS) });
+ok('R4b: a symmetric niche INSIDE its daily-high distribution gets NO ask trend (tight lap — mismeasured) → null', () => {
+  // EF1(b) re-pin: the exemption is placement-bounded now, so the exempt case needs an IN-distribution
+  // ask (52 → p0.3 of HIS). The old fixture (100 vs HIS[50..59] = p1.0) moved to the bounded test below.
+  const r = digestReachAndPlacement({ spec: { fillShape: 'symmetric' }, row: { optSell: 52, quickStale: { sell: false }, quickBuy: 52 }, askReachExtra: REACH_23, his: HIS, days: mkDays(FADING_HIS) });
   assert.equal(r.marginTrend, null);
+  assert.equal(r.reachFrac, null, 'the tight lap keeps the reach exemption too (renders —)');
+});
+ok('EF1(b): a symmetric ask ABOVE its daily-high distribution loses the digest exemption — reach + trend read (the Sapphire shape)', () => {
+  const r = digestReachAndPlacement({ spec: { fillShape: 'symmetric' }, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS, days: mkDays(FADING_HIS) });
+  assert.ok(r.askPlacement > 0.85, `placement above the MIRAGE_PLACEMENT bound (got ${r.askPlacement})`);
+  assert.ok(approx(r.reachFrac, 2 / 3), 'the standard recent-3 reach read applies (no — exemption)');
+  assert.equal(r.marginTrend, 'fading', 'the cushion trend reads too — the verdict rules can now name the mirage');
 });
 ok('R4b: no in-hand day buckets → null (degrade, never a fake trend)', () => {
   const r = digestReachAndPlacement({ spec: ASYM_SPEC, row: { optSell: 100, quickStale: { sell: false }, quickBuy: 100 }, askReachExtra: REACH_23, his: HIS });

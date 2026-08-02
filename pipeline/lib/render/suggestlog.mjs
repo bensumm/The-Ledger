@@ -27,9 +27,19 @@
  *                 `--admission legacy` (rankAndSlice stamps nothing) and on quote/watch rows.)
  *     askPlacement?,   (EF-0a — the quoted ask's placement percentile (0–1) in the 14-day daily-HIGH
  *                 distribution, the SAME digestReachAndPlacement number the --digest verdicts read
- *                 (stale-live-guarded; null on symmetric/reach-exempt niches → absent). Was computed
- *                 every pass and discarded; logged so EF0 can segment rank outcomes by placement.
- *                 Lean-included; screen renderMode rows only.)
+ *                 (stale-live-guarded; computed for symmetric/churn rows too — since EF1(b) it also
+ *                 BOUNDS their ask-reach exemption; null only when no daily-high history is in hand).
+ *                 Was computed every pass and discarded; logged so EF0 can segment rank outcomes by
+ *                 placement. Lean-included; screen renderMode rows only.)
+ *     repriced?, exemptionBounded?, rankPre?,   (EF1, PLAN-ESTIMATOR-FIDELITY 2026-08-01 — rank-leg
+ *                 honesty shadows. repriced = the EF1(a) dead-bid REPRICED-ENTRY alternative
+ *                 { bid, ask, net, pFill, rank } (entry at the live crossable level, sell unchanged) —
+ *                 a labeled alternative; the row's headline rank/pFill stay the untouched dead-bid
+ *                 numbers (R-1) until EF0(c) scores the class. exemptionBounded = true when the EF1(b)
+ *                 placement bound dropped a symmetric (churn) row's ask-reach exemption (ask above
+ *                 the daily-high distribution) — the logged pFill/rank are the DISCOUNTED numbers;
+ *                 rankPre rides beside it (the pre-bound rank, the R-1 visible-swap pair). All
+ *                 lean-included; screen renderMode rows only, PLACEHOLDER bounds n≈0.)
  *     depthExit?,  (PLAN-DEPTH-EXIT DE3 2026-07-15 — the held-lot percentile-DEPTH shadow:
  *                 { qty, competition, liqClass, ask?, clearFrac?, collapse? }. `ask`/`clearFrac` =
  *                 the clearableAsk "book at" read when non-null; `collapse` = the null-read REASON
@@ -418,7 +428,7 @@ export function timedLapShadow(lap) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement, repriced, exemptionBounded, rankPre } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -467,6 +477,18 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (preRank != null)       e.preRank = preRank;
   if (prePool != null)       e.prePool = prePool;
   if (askPlacement != null)  e.askPlacement = askPlacement;
+  // EF1 (PLAN-ESTIMATOR-FIDELITY, 2026-08-01) — rank-leg honesty shadows (all lean, YS2 pattern):
+  //   repriced          { bid, ask, net, pFill, rank } — the EF1(a) dead-bid REPRICED-ENTRY alternative
+  //                     (entry at the live crossable level, sell unchanged). A labeled alternative only;
+  //                     the row's headline rank/pFill above are UNCHANGED by it (R-1). EF0(c) scores it.
+  //   exemptionBounded  true — the EF1(b) placement bound DROPPED this symmetric (churn) row's ask-reach
+  //                     exemption (ask above the daily-high distribution); the logged pFill/rank are the
+  //                     DISCOUNTED (post-bound) numbers.
+  //   rankPre           the pre-bound rank (exemption still held) logged beside it — the R-1 visible-swap
+  //                     pair for the F1 pre/post churn-board audit. Present only with exemptionBounded.
+  if (repriced != null)      e.repriced = repriced;
+  if (exemptionBounded != null) e.exemptionBounded = exemptionBounded;
+  if (rankPre != null)       e.rankPre = rankPre;
   // P6c — a screen row surfaced by the EMPTY-RESULT SUB-FLOOR FALLBACK carries which floor was relaxed
   // ('min-gpd' | 'liquidity'). Lean-included (the YS2 pattern — pinned by subfloor.test.mjs): a normal
   // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude

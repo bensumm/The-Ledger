@@ -75,7 +75,9 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   the band), else the **band** top folded by reach + a diurnal/asym blend; **churn is EXEMPT** (AC5:
   `fillShape:'symmetric'` forces the sell fold factor to 1, so churn's Est. sell is the band-top blend
   the rank already prices on; the diurnal-ask timing blend still applies, so it lands NEAR the band top,
-  not exactly at it). **`Est. sell` is the HONEST reach-fold price** (PLAN-ESTIMATOR-HONEST-SELL E1,
+  not exactly at it) — **exempt only while the ask sits inside the daily-high distribution** (EF1(b)'s
+  placement bound, `askPlacement ≤ MIRAGE_PLACEMENT` — an above-the-distribution churn ask takes the
+  standard fold + caution tokens; see the rank/grade section). **`Est. sell` is the HONEST reach-fold price** (PLAN-ESTIMATOR-HONEST-SELL E1,
   2026-07-22): it is **no longer OVERWRITTEN to break-even**. Because `netMargin(buy, breakEven(buy)) ≡ +1`
   for the entire price range, the old BE-clamp turned every sub-BE fold into a **false `+1 (BE X)`** that
   hid a possibly-real edge — the operator read `+1` and SKIPPED. Now the cell shows the **real (possibly
@@ -588,6 +590,17 @@ placeholder cutoffs.
 - **P(fill) is two-leg:** `P = P_bid × askReachFactor(askReach)` — the entry fill discounted by the
   cross-day ASK reach (a robust p90 top can reach only ~2/14 days; the same inform-mode reach number,
   zero new fetch). Paired with a `REACH_GRADE_CAP` so a rarely-reaching ask can't oversell the LETTER.
+  **The two P's on a row are labeled (EF1(c), PLAN-ESTIMATOR-FIDELITY):** the Net cell's probability is
+  the ASK LEG only and prints `P(ask)~X%`; the Rank cell's `P~` is the two-leg product, and when it
+  collapses to 0.00 the console names the collapsed leg (`P~0.00 (bid leg)` — the only path to a 0.00
+  product is a ~0 entry leg, since `askReachFactor` floors at 0.25). Same row, two different questions —
+  no longer two contradictory unlabeled numbers.
+- **A dead bid gets a REPRICED-ENTRY alternative, not just a buried row (EF1(a)):** when the entry-leg P
+  collapses below `DEADBID_PFILL_FLOOR` (0.10, PLACEHOLDER n≈0) on a REAL reach read while the sell leg is
+  scored, the screen prints a `↻ repriced entry` line — the pair re-evaluated with the entry at the live
+  crossable level, sell unchanged, WITH the sell leg's reach evidence inline (the DHCB guard). It is a
+  labeled ALTERNATIVE only: the headline rank/P and every sort stay the honest dead-bid numbers (R-1)
+  until EF0(c) scores the band-low-bid class; a lean `repriced` shadow rides `suggestions.jsonl`.
 - **The four grade caps live INSIDE `rateItem` (G1, one chain).** `applyGradeCaps` applies the ceilings in
   one fixed order (harshest last wins): `THIN_GRADE_CAP` (A-) → `PHASE_BASING_GRADE_CAP` →
   `SUBFLOOR_GRADE_CAP` → `REACH_GRADE_CAP`. Before G1 only the thin cap lived in `rateItem` and the other
@@ -605,12 +618,20 @@ placeholder cutoffs.
   placement/IQR (a price's POSITION and the band WIDTH are orthogonal to how many observations back the
   proportion). Distinct from the gp-flow `thin` CAP and suggestlog's `liqClass` `thin` — three triggers,
   one label, disambiguated by the tooltip. The app Finder passes no `n`, so it is never marked.
-- **Churn is EXEMPT** from the ask-reach discount, the grade cap, AND — since PLAN-ESTIMATOR-POSTURE
-  AC5/AC6 — BOTH `estimatePair` PRICE legs (`fillShape:'symmetric'` — a lap sells into continuous
-  two-sided flow, so the day-high reach read mismeasures it on every surface). The rank discount, the
-  grade cap, and both Est. price folds apply only to `fillShape:'asym'` (band/scalp); churn's Est.
-  buy/sell are the unfolded band-edge prices, and its rows carry a `foldExempt` shadow so F1 can segment.
-  Read the rank/grade (not the Est. reach token) for a churn row's fill risk.
+- **Churn's exemption is PLACEMENT-BOUNDED (EF1(b), PLAN-ESTIMATOR-FIDELITY — supersedes the
+  unconditional AC5/AC6 form).** A `fillShape:'symmetric'` (churn) row skips the ask-reach discount, the
+  `REACH_GRADE_CAP`, the overnight P-weight, the digest reach/trend read AND both `estimatePair` price
+  folds **only while its quoted ask sits inside the 14-day daily-HIGH distribution** (placement ≤
+  `MIRAGE_PLACEMENT` 0.85, or no read — `symmetricExemptionHolds`, js/estimators/families.mjs). The
+  exemption exists because the day-level reach read mismeasures a TIGHT lap; an ask ABOVE the distribution
+  has left that premise (the Sapphire-bolts mirage: churn #1 at P~1.00 while its ask printed 1/14d), so it
+  takes the standard `askReachFactor` discount + cap + fold, its reach caution tokens return, and the
+  screen prints the pre/post rank on the row (`⚠ exemption dropped — rank X (was Y)`, the R-1 visible
+  swap; lean `exemptionBounded`/`rankPre` shadows ride `suggestions.jsonl`). CAVEAT (integer-tick laps):
+  a one-tick band's ask IS the daily high, so it reads p100 by construction and trips the bound — but its
+  genuinely-high reach makes the applied discount a no-op (factor ≈ 1, numbers unchanged; the swap note is
+  suppressed when nothing moved). In-distribution churn rows are byte-identical to the AC5/AC6 behavior;
+  read the rank/grade (not the Est. reach token) for an exempt churn row's fill risk.
 - **Value + amplitude compute their own pair** (`fillShape:'symmetric'`, surface-computed, so the
   ask-reach discount isn't double-applied). Amplitude's `pFill` IS the two-leg daily-reach product, so
   it's the honest "round trip completes" number as the first-class rank input; amplitude rows are
@@ -714,7 +735,8 @@ to BE …]`. The **honest margin** (raw best-case net, NEVER BE-clamped to `+1`)
 correct read for a confirmed knife — on a KNIFE `driftExitFrom` degrades to a labeled trend-only level, no
 crash). All from the SHARED `estimatePair` (zero new fetch — byte-parity with the screen's fold).
 `--niche band|churn|scalp` (default band) picks the spec; churn inherits the AC5/AC6 exemption so its line
-reads fold ≈ best-case. Rides
+reads fold ≈ best-case (unconditionally HERE — this surface passes no `askPlacement`, so EF1(b)'s
+placement bound never fires on it; the bound lives on the screen, which does). Rides
 `--json`/`--out` as `result.fold`. Never gates — pair it with the reach/placement/depth reads.
 
 `windowClear` (`js/windowread.mjs`) fires an inform-only `ℹ window-clear` note when an ask reaches on

@@ -71,8 +71,12 @@ export function estPairCells(est) {
   // E2: P(fill) beside the honest margin (the Net cell) — the SAME askReachFactor probability the rank carries,
   // so the display reads "raw margin × P(fill)" honestly. Shown only where the ask-reach caution is (evidence
   // present, not a foldExempt lap); absent → no token (byte-identical). This is what replaces the fake "+1".
+  // EF1(c) (PLAN-ESTIMATOR-FIDELITY): labeled `P(ask)~` — this probability is the ASK-LEG factor ONLY
+  // (askReachFactor), while the Rank cell's `P~` is the TWO-LEG product (entry × ask). The same row was
+  // printing `P~57%` here beside `P~0.00` in the rank cell with no marker — the label names which leg
+  // each number is, and the rank cell now labels a collapsed leg (screen-flip-niches.mjs consoleRankCell).
   const pTok = (est.estNet != null && est.pFill != null && c.ask && !c.foldExempt)
-    ? ` · P~${Math.round(est.pFill * 100)}%` : '';
+    ? ` · P(ask)~${Math.round(est.pFill * 100)}%` : '';
   const netTxt = est.estNet == null ? '—'
     : `${est.estNet > 0 ? '+' : ''}${fmtP(est.estNet)} (${est.estRoi != null ? (est.estRoi >= 0 ? '+' : '') + est.estRoi.toFixed(1) + '%' : '—'})${pTok}`;
   return [
@@ -107,6 +111,9 @@ export function estConfLean(est) {
   // reach counts above STAY logged — they are the data the exemption will be tested against). YS2: present
   // only when it fired.
   if (c.foldExempt) o.foldExempt = c.foldExempt;
+  // EF1(b): the placement-bounded exemption-DROP marker ('placement') — a symmetric row whose ask sat
+  // above the daily-high distribution and therefore took the standard fold. YS2: present only when it fired.
+  if (c.exemptionBounded) o.exemptionBounded = c.exemptionBounded;
   // R5 shadow (F1 retro-join: did the fade-tightened top predict the realized sell better than the raw top?)
   // — present only when a fading cushion actually discounted the sell (YS2 absent-field pattern).
   if (c.fade) o.fade = c.fade.discount;

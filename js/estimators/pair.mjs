@@ -123,6 +123,12 @@ function reachRead(r) {
      askMargin { trend }          R5: the ask-side reachMargin CUSHION trend (fading|stable|extending) — a
                                    `fading` trend tightens the sell fold even on a clean reach (the mirage
                                    fix). Absent → no fade (byte-identical). reach-fold reads only .trend.
+     askPlacement  number|null    EF1(b) (PLAN-ESTIMATOR-FIDELITY): the quoted ask's percentile (0–1) in
+                                   the 14-day daily-HIGH distribution (the screen's stale-guarded
+                                   digestReachAndPlacement read). BOUNDS the 'symmetric' (churn) fold
+                                   exemption: > MIRAGE_PLACEMENT ⇒ the exemption drops and the standard
+                                   reach fold + caution tokens apply (confidence.exemptionBounded
+                                   = 'placement'). Absent / ≤ bound / non-symmetric ⇒ byte-identical.
      declaredExit  number|null     the lot's declared thesis exit (hold-thesis.json) — anchors estSell
      dayHigh   number|null         PLAN-LIQUIDITY-REACH Part B: the observed trailing-24h high (the
                                    caller's dayHighFrom5m over its in-hand 5m series — the least-smoothed
@@ -179,6 +185,7 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   let sellHi = prop.sellHi;
   let { bid: cBid, ask: cAsk, relief: cRelief, pressureExit: cPressure } = prop.confidence;
   const cFoldExempt = prop.confidence.foldExempt || null;   // AC5: churn sell-fold exemption marker (pressure model omits it → null)
+  const cExemptionBounded = prop.confidence.exemptionBounded || null;   // EF1(b): 'placement' when the symmetric exemption was dropped by the placement bound (pressure model omits it → null)
   let cFade = prop.confidence.fade || null;   // R5: cushion-fade marker (pressure model omits it → null)
   // --- SHELL SPINE (the non-skippable floors — a model can propose a price, never bypass these) -------
   // DECLARED-EXIT anchor: the operator's stated target governs the SELL leg for EVERY model (NOT
@@ -242,6 +249,9 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
     // and the shadow segments on it. A declared exit already nulled cAsk above, but foldExempt is orthogonal
     // (a declared churn lot still folds nothing) so it rides regardless.
     foldExempt: cFoldExempt,
+    // EF1(b): the placement-bounded exemption-drop marker ('placement' | null) — rides beside foldExempt
+    // so the shadow/F1 retro can segment the de-exempted churn rows.
+    exemptionBounded: cExemptionBounded,
     // PLAN-LIQUIDITY-REACH: non-null ONLY when the relief changed the sell estimate (softened fold or
     // de-biased top) — { relief, sizeRatio, debiasedTop|null }. Feeds the stdout note + the lean shadow.
     relief: cRelief,

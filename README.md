@@ -746,13 +746,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   KEPT at 500k — Ben, real NET-throughput floor; `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
   `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
   read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
-- `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01, PLANNING ONLY, no code): the discovery
+- `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01): the discovery
   estimator understates both legs against the daily distribution (the 2h-band basis + the
   clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
   buries repriceable rows (dead-bid ⇒ P~0 instead of a repriced-entry alternative; churn's
-  symmetric fold exemption lacks a placement bound), and windows-per-day is assumed ×6 in four
-  homes while `diurnalTimedLap`'s measured cycle is discarded. Chunks EF0 (counterfactual +
-  `(none)`-bucket attribution report) → EF1 (rank-leg honesty) → EF2 (timed pair as a visible
+  symmetric fold exemption lacked a placement bound), and windows-per-day is assumed ×6 in four
+  homes while `diurnalTimedLap`'s measured cycle is discarded. Chunks: EF-0a (`via`+rank ledger
+  logging — SHIPPED 2026-08-01) and **EF1 (rank-leg honesty: dead-bid `↻ repriced entry`
+  alternative, the placement-bounded churn exemption, ONE labeled P per row, the screen-vs-quote
+  bid-reach window divergence diagnosed — SHIPPED 2026-08-01)**; open: EF0 (counterfactual +
+  `(none)`-bucket attribution report) → EF2 (timed pair as a visible
   second answer) → EF3 (measured cycles post-fetch + constant single-sourcing). Anchor is n=5
   laps on one item — hypothesis-generating, nothing auto-applies without EF0. Starvation stays
   with `PLAN-FETCH-POOL-SCALING`; the band sell fold moves only via AC7's re-decision path.
@@ -1337,7 +1340,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     each estimate is `{value,n,basis}` so the honesty travels with the number. `quotedPair(spec,row)`
     is the ONE price pair the thesis posts (the price-basis principle); `estimateRank(spec,row,extra)`
     bundles pair/net/pFill/ttf/rank (Proposal A two-leg P via `askReachFactor` — SKIPPED for
-    `fillShape:'symmetric'` specs, the PART II churn exemption); `asymEstimate(spec,row,asymPair)`
+    `fillShape:'symmetric'` specs, the PART II churn exemption, **placement-bounded since EF1(b)
+    (PLAN-ESTIMATOR-FIDELITY): the skip holds only while `extra.askPlacement ≤ MIRAGE_PLACEMENT` (0.85,
+    moved here from the screen's digest) or no read — `symmetricExemptionHolds`; an above-the-daily-high-
+    distribution churn ask takes the standard discount and the result carries `exemptionBounded`. EF1 also
+    added `pLegs` (the entry/askF split behind the leg-labeled console P) and `repriced` (the dead-bid
+    repriced-entry alternative, `DEADBID_PFILL_FLOOR` 0.10 n≈0 — a labeled alternative, never the headline
+    rank). Callers passing no `askPlacement` (quote/watch/app Finder/amplitude) are byte-identical**);
+    `asymEstimate(spec,row,asymPair)`
     (PART II PLAN-GRADE-REACH — the asymmetric deep-buy/reliable-sell estimate: rank = net × P_ask ÷ TTF,
     P_bid is annotation-only, ordering guards; feeds the inform line + the `asym` ledger shadow field +
     `screen-flip-niches.mjs --asym`); `estimatePair(spec,row,extra,{nudge,sellModel})` + `entryDoctrine`/`estPairCells`/`estConfLean`/

@@ -99,7 +99,7 @@ import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // HT3 — the per
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS } from '../lib/signal/estimators.mjs';   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR } from '../lib/signal/estimators.mjs';   // EF1 (PLAN-ESTIMATOR-FIDELITY): MIRAGE_PLACEMENT moved to estimators/families.mjs (single-sourced — it now ALSO bounds the churn ask-reach exemption); DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache, sleep } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
@@ -478,6 +478,21 @@ function pathABCell(r, minGpd) {
   };
 }
 
+// consoleRankCell(r) — EF1(c) (PLAN-ESTIMATOR-FIDELITY): the CONSOLE copy of a renderMode row's Rank
+// cell, LEG-LABELED when the two-leg P collapsed to a displayed 0.00. The same row's Net cell shows the
+// ask-leg-only `P(ask)~X%` (js/estimators/cells.mjs), so an unlabeled `P~0.00` beside it printed as a
+// flat contradiction (the Helm-of-neitiznot incident: `P~0.00` and `P~57%` on ONE line). The only path
+// to a 0.00 PRODUCT is a ~0 ENTRY leg (askReachFactor floors at PFILL_ASKREACH_FLOOR=0.25), so the
+// label names the bid leg. CONSOLE-ONLY: returns a copy — r.cells (the published screen.json set) is
+// byte-untouched.
+function consoleRankCell(r) {
+  const cell = r.cells[r.cells.length - 1];
+  const er = r.er;
+  if (er && er.pLegs && er.pFill && er.pFill.value < 0.005 && er.pLegs.entry < 0.005)
+    return { ...cell, t: cell.t.replace('P~0.00', 'P~0.00 (bid leg)') };
+  return cell;
+}
+
 // rotationNote(excluded) — MT3 (PLAN-MID-TIER-ADMISSION). The exploration reserve is described in
 // admission.mjs as "starvation-proof by construction". That is true and, left unqualified, misleading:
 // the budget is split across two lanes (⌈n/2⌉ thin, ⌊n/2⌋ velocity), so at the default 2 the velocity
@@ -530,7 +545,9 @@ const WEAK_DEPLOY_ROI_PCT = 0.5;   // PLACEHOLDER (n≈0) — Magus (~0.3%, flag
                                    // retro-join (§9). Per-TURN %, deliberately NOT capEff's per-day %.
 const LAPS_PER_DAY_CEIL = Math.floor(86400 / LIMIT_WINDOW_SEC);   // = 6 — the 4h buy-limit refill ceiling; a
                                    // churn lane can re-lap at most this many times/day (LIMIT_WINDOW_SEC is the SoT).
-const MIRAGE_PLACEMENT = 0.85;     // PLACEHOLDER (n≈0, freshly invented per §10 Q3) — "mirage top" ask-side placement bar
+// MIRAGE_PLACEMENT (the "mirage top" ask-side placement bar, PLACEHOLDER n≈0) MOVED to
+// js/estimators/families.mjs (EF1(b), PLAN-ESTIMATOR-FIDELITY) — it now also bounds the churn
+// ask-reach exemption there, so the digest rule and the rank/fold bound share ONE constant (imported above).
 const MIRAGE_REACH_FRAC = 0.70;    // PLACEHOLDER (n≈0, freshly invented) — "still mediocre" recent-reach bar for the mirage rule
 
 // roiPct(er): after-tax per-TURN ROI% off the rank estimate — er.net (per-unit tax-net) ÷ er.pair.bid.
@@ -634,11 +651,11 @@ export function digestVerdict({ spec, row, er, grade, reachFrac, askPlacement, m
 // render, printed ONCE after the RUN_MODES loop in main() via realLog). STDOUT-ONLY, --digest-gated — never
 // a screen.json/last-report field. Each entry: { name, capEff, rank, reachFrac, phase, grade, verdict }.
 const DIGEST_ROWS = [];
-// digestReachFrac(spec, askReachExtra): the RECENT ask-reach fraction for the digest's reach ✓/✗ column and
-// verdict rules 1/2. A reach-exempt symmetric niche (churn/amplitude — fillShape 'symmetric') → null (renders
-// '—', NOT '✗' — a false alarm, per §3.4); no reach read → null. Prefers the RC1 recent-3 count, full window fallback.
-function digestReachFrac(spec, askReachExtra) {
-  if (spec && spec.fillShape === 'symmetric') return null;
+// digestReachFrac(askReachExtra): the RECENT ask-reach fraction for the digest's reach ✓/✗ column and
+// verdict rules 1/2 — prefers the RC1 recent-3 count, full window fallback; no read → null. Whether a
+// symmetric (churn/amplitude) niche is reach-EXEMPT (→ null, renders '—' NOT '✗' — a false alarm, §3.4)
+// is decided by the CALLER (digestReachAndPlacement) since EF1(b) made the exemption placement-bounded.
+function digestReachFrac(askReachExtra) {
   if (!askReachExtra) return null;
   if (askReachExtra.recentDays) return askReachExtra.recentHit / askReachExtra.recentDays;
   return askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
@@ -668,17 +685,25 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
   const guarded = staleSell && optSell != null && fresher != null && fresher !== optSell;
   const refLevel = guarded ? fresher : optSell;
   const askPlacement = (his && his.length && refLevel != null) ? placement(his, refLevel) : null;
+  // EF1(b) (PLAN-ESTIMATOR-FIDELITY): the symmetric reach EXEMPTION is placement-bounded here exactly
+  // as in the rank/fold (families.mjs symmetricExemptionHolds — same MIRAGE_PLACEMENT bound, evaluated
+  // at the SAME stale-guarded refLevel this function's placement uses). A tight in-distribution churn
+  // lap stays exempt (reach '—', no trend — byte-identical); an above-the-distribution churn ask takes
+  // the standard reach/trend/divergence read, so the digest verdict can name the mirage instead of
+  // exempting it ('Sapphire dragon bolts (e)': churn #1 while its ask read 1/14d). Amplitude rows never
+  // route through here (renderAmplitudeMode passes reachFrac/askPlacement null directly) — untouched.
+  const exempt = symmetric && !(askPlacement != null && askPlacement > MIRAGE_PLACEMENT);
   let reachFrac;
-  if (symmetric) reachFrac = null;
+  if (exempt) reachFrac = null;
   else if (guarded && his && his.length)
     // recompute reach off the daily-HIGH distribution at the honest (fresher) reference — the validator's
     // recent-3 reach was scored against the stale optSell, so it can't be trusted here.
     reachFrac = his.filter(h => h != null && h >= refLevel).length / his.length;
-  else reachFrac = digestReachFrac(spec, askReachExtra);
+  else reachFrac = digestReachFrac(askReachExtra);
   // R4b: the ask-side cushion trend at refLevel. reachMargin only needs the per-day buckets + the level for
   // its trend (pace/profile omitted — the digest surfaces trend only), so this is zero new fetch. Degrades
   // to null (→ '—') on a symmetric niche, a thin day sample, or no in-hand buckets — never a fake read.
-  const marginTrend = (!symmetric && Array.isArray(days) && days.length && refLevel != null)
+  const marginTrend = (!exempt && Array.isArray(days) && days.length && refLevel != null)
     ? (reachMargin(days, 'ask', refLevel)?.trend ?? null) : null;
   // R5: the recent-vs-full placement DIVERGENCE (the whole-window-CDF analogue of RC1's recencySplit hit-count
   // idiom). askPlacement is the level's percentile in the FULL 14-day daily-HIGH distribution; recentPlacement
@@ -687,7 +712,7 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
   // confirming signal the mirage rule ANDs with a falling cushion trend to escalate confidence. Directional
   // (recent − full ≥ threshold), not |diff|: a level that got EASIER recently is the opposite of a mirage.
   let placementDiverges = false;
-  if (!symmetric && Array.isArray(days) && days.length && refLevel != null && askPlacement != null) {
+  if (!exempt && Array.isArray(days) && days.length && refLevel != null && askPlacement != null) {
     const recentHis = days.slice(-RECENT_NIGHTS).map(([, n]) => n && n.hi).filter(x => x != null).sort((a, b) => a - b);
     if (recentHis.length) {
       const recentPlacement = placement(recentHis, refLevel);
@@ -960,6 +985,8 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   const windowClearNotes = []; // PLAN-WINDOW-CLEAR B2 (churn/scalp): the ask reaches on days but rarely IN its peak window / size ≫ window pool — sibling inform note, never a gate/drop/grade/screen.json input
   const driftNotes = []; // PLAN-OSCILLATION-CYCLE Chunk 6 (band/churn/scalp): the per-thesis drift-adjusted exit — sibling inform note off the shared driftExitFrom, never a gate/drop/grade/screen.json input
   const asymNotes = [];     // PART II asym-fill (PLAN-GRADE-REACH): deep-bid → high-reach-ask realizable pair + P_ask/P_bid split — sibling inform note, never a gate/drop/grade/screen.json input
+  const repriceNotes = []; // EF1(a) (PLAN-ESTIMATOR-FIDELITY): the dead-bid ↻ repriced-entry alternative — a labeled sibling line, the headline rank/sort untouched (R-1)
+  const exemptNotes = [];  // EF1(b): the placement-bounded churn-exemption R-1 visible swap — pre/post rank+P printed on every row the bound de-exempted
   for (const s of survivors) {
     let row = qcache.get(s.id);   // PART II: reassigned to a repriced CLONE only under --asym (qcache never mutated)
     if (!row) continue;
@@ -1041,6 +1068,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // P(fill) here is a BID-FILL probability → it MUST use the bid-side reach (bidRes, optBuy), NOT the
     // ask-side spec-plan reach (vres, optSell). NOTE the field remap: estimators reads reach.nDays /
     // reach.reachedDays; the validator emits evidence.days / evidence.hit.
+    // ⚠ WINDOW SCOPE (EF1(d), PLAN-ESTIMATOR-FIDELITY): this reach is the validator's CLOCK-ANCHORED
+    // coming-8h window over 14 nights (reachValidator: wStart = now.getHours()) — "will it print in the
+    // window it rests through?" — NOT quote-items.mjs's FULL-DAY windowStats read ("does it print at some
+    // point in a day?"). The same level can legitimately score 0/3 here and 2/3 on the quote minutes
+    // apart (the diagnosed neitiznot divergence). Intentional difference, documented in both homes +
+    // js/validate.mjs; unifying would re-score every board's P(fill) — its own chunk, EF0-gated.
     let reachExtra = null;
     if (row.optBuy != null && series1h && series1h.get(s.id)) {
       const bidRes = runValidators(
@@ -1127,6 +1160,13 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // a DIFFERENT read from R4b's digest trend (that's scored at the stale-guarded refLevel for the display
     // column; this is scored at the band top the fold actually folds down from).
     const askMargin = (rbStats && rbStats.days && row.optSell != null) ? reachMargin(rbStats.days, 'ask', row.optSell) : null;
+    // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C) — the digest's reach ✓/✗ + placement + trend
+    // inputs, off data ALREADY in hand (zero new fetch): the RECENT ask-reach fraction and the quoted
+    // ask's placement in the 14-day daily-HIGH distribution (rbStats.his), through the POLISH-3
+    // stale-live guard. MOVED UP from below the rank call (EF1, PLAN-ESTIMATOR-FIDELITY): the placement
+    // now ALSO bounds the churn ask-reach exemption, so the estimate (estExtra.askPlacement) and the
+    // rank (estimateRank extra.askPlacement) read the SAME stale-guarded number the digest verdicts use.
+    const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
     // PLAN-OSCILLATION-CYCLE Chunk 6 — the per-thesis drift-adjusted EXIT inform note (band/churn/scalp).
     // Slopes + the diurnal projection come from data ALREADY in hand — `rbStats.days` (the daily windowStats
     // buckets, ZERO new fetch) → floorCeilingTrack's ceiling/floor slope, `prof` (the hourProfile) →
@@ -1153,6 +1193,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       dayHigh: dayHighFrom5m(series5m && series5m.get(s.id)),
       reachable,   // PB4: the pressure-exit price source (ignored unless the flag is on)
       askMargin,   // R5: the ask cushion trend — a fading top tightens the sell fold (mirage fix)
+      askPlacement: digestAskPlacement,   // EF1(b): bounds the churn fold exemption (the stale-guarded digest placement — same number the rank/digest use)
     };
     // PC3: the ACTIVE sell-model drives the DISPLAY/rerank (estShown); every DEFAULT-SHADOW model
     // (SELL_MODEL.shadow — reach-fold today) runs each pass and rides suggestions.jsonl as the unbiased
@@ -1210,7 +1251,34 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     if (ASYM && asymEr) row = { ...row, optBuy: asymEr.bid, optSell: asymEr.ask, optNet: asymEr.net };
     // P6b: the per-thesis RANK at the thesis's OWN quoted pair (spec.priceBasis) — net, P(fill), TTF all
     // evaluated at that same pair. reach = the BID-fill prob (entry); askReach = the two-leg exit discount.
-    let er = estimateRank(FLIP_NICHES[mode], row, { reach: reachExtra, askReach: askReachExtra });
+    // EF1 (PLAN-ESTIMATOR-FIDELITY): askPlacement bounds the churn exemption (b); er also carries the
+    // dead-bid `repriced` alternative (a) and the `pLegs` split (c) — all additive, null/false when idle.
+    let er = estimateRank(FLIP_NICHES[mode], row, { reach: reachExtra, askReach: askReachExtra, askPlacement: digestAskPlacement });
+    // EF1(b) R-1 visible swap: when the placement bound DROPPED this row's churn exemption, the rank/P
+    // changed (a real reorder of the churn board) — print pre AND post on the row's note + log rankPre,
+    // so the first passes carry both numbers (gate-on-error-cost-not-n: visible, cheap, reversible).
+    let rankPre = null;
+    if (er.exemptionBounded) {
+      const erPre = estimateRank(FLIP_NICHES[mode], row, { reach: reachExtra, askReach: askReachExtra });
+      rankPre = Math.round(erPre.rank);
+      // NOTE only when the drop actually MOVED the numbers. An integer-tick tight lap (Ancient-essence
+      // class: the whole band is two ticks, so the ask IS the daily high → p100 BY CONSTRUCTION) trips
+      // the placement bound but its genuinely-high reach makes askReachFactor ≈ 1 — a no-op "rank X
+      // (was X)" line is noise (compact-output rule). The exemptionBounded/rankPre SHADOW fields still
+      // log on every bounded row so the F1 retro can segment no-op drops too.
+      const moved = Math.round(er.rank) !== rankPre || er.pFill.value.toFixed(2) !== erPre.pFill.value.toFixed(2);
+      if (moved) exemptNotes.push(`${name}: churn ask-reach exemption DROPPED — ask ${fmt(row.optSell)} at p${Math.round((digestAskPlacement ?? 0) * 100)} of the 14d daily-high distribution (> p${Math.round(MIRAGE_PLACEMENT * 100)} bound) → standard reach discount applies: rank ${fmtP(Math.round(er.rank))} (was ${fmtP(rankPre)}) · P~${er.pFill.value.toFixed(2)} (was ${erPre.pFill.value.toFixed(2)}) — placement-bounded exemption (EF1(b), PLACEHOLDER bound n≈0)`);
+    }
+    // EF1(a) — the DEAD-BID REPRICED-ENTRY alternative (additive: a labeled line, the headline rank/sort
+    // untouched per R-1). The reality guard rides inline: the sell leg's cross-day reach evidence prints
+    // WITH the optimistic number (the DHCB discipline — no optimistic figure without its reach beside it).
+    if (er.repriced) {
+      const rp = er.repriced;
+      const bidTok = reachExtra ? `touched ${reachExtra.reachedDays}/${reachExtra.nDays}d in the validator's coming-8h window` : 'no reach read';
+      const askTok = askReachExtra ? `reached ${askReachExtra.reachedDays}/${askReachExtra.nDays}d` : 'unscored';
+      const roiR = rp.bid > 0 ? (rp.net / rp.bid * 100).toFixed(1) : null;
+      repriceNotes.push(`${name}: quoted bid ${fmt(er.pair.bid)} is DEAD (entry P~${er.pLegs.entry.toFixed(2)} < ${DEADBID_PFILL_FLOOR} floor — ${bidTok}) → repriced entry at live ${fmt(rp.bid)}: net ${rp.net >= 0 ? '+' : ''}${fmt(rp.net)}/u${roiR != null ? ` (${roiR}%)` : ''} · rank ~${fmtP(Math.round(rp.rank))} P~${rp.pFill.toFixed(2)} (sell ${fmt(rp.ask)} ${askTok}) — alternative only, headline rank/sort unchanged (EF1(a), PLACEHOLDER n≈0)`);
+    }
     // --asym sort flip: rank = net(asym pair) × P_ask ÷ TTF — P_ask is the ONLY fill weight (§II.1; the
     // bid-reach P and the Part-I ask-reach discount both step aside), and r.score/sort follow the rank.
     if (ASYM && asymEr) er = { ...er, pFill: { value: asymEr.pAsk, n: asymRead.nDays, basis: 'ask-reach-asym' }, rank: rankScore({ net: er.net * er.lapUnits, pFill: asymEr.pAsk, ttfSec: er.ttf.value }) };
@@ -1248,13 +1316,16 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // attribution (last-binding cap) directly, so the render site no longer re-derives it with a local
     // capGrade helper. The reach cap keys off the RECENT ask-reach fraction; PART II churn exemption =
     // a 'symmetric'-fillShape niche is exempt (its lap exit sells into continuous two-sided flow, so the
-    // day-high reach read mismeasures it — mirrors estimateRank's askF skip). G6: pFillN/ttfN thread the
-    // reach/ttf sample sizes so a thin-evidence fill call gets the `(thin)` confidence marker below.
+    // day-high reach read mismeasures it — mirrors estimateRank's askF skip). EF1(b): the exemption is
+    // PLACEMENT-BOUNDED now, mirroring the rank exactly (er.exemptionBounded — an above-the-distribution
+    // churn ask takes the REACH_GRADE_CAP letter ceiling too, so a de-exempted mirage can't keep an S+).
+    // G6: pFillN/ttfN thread the reach/ttf sample sizes so a thin-evidence fill call gets the `(thin)`
+    // confidence marker below.
     const reachFrac = (askReachExtra && askReachExtra.nDays) ? (askReachExtra.reachedDays / askReachExtra.nDays) : null;
     const r = rateItem({ row, rank: er.rank, activeWin: s.activeWin, nWin: s.activeWin != null ? N_WIN : null, thin: s.thin,
       phaseCap: rescued ? PHASE_BASING_GRADE_CAP : null,
       subFloorCap: subFloor ? SUBFLOOR_GRADE_CAP : null,
-      reachFrac, reachExempt: FLIP_NICHES[mode].fillShape === 'symmetric',
+      reachFrac, reachExempt: FLIP_NICHES[mode].fillShape === 'symmetric' && !er.exemptionBounded,
       pFillN: er.pFill.n, ttfN: er.ttf.n });
     let grade = r.grade;
     const cappedBy = r.cappedBy || null;
@@ -1330,21 +1401,20 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // families.mjs:251). A P~0.00 row now weights ~0 and sinks; a reachable high-P edge leads. Symmetric
     // niches (churn) stay EXEMPT at weight 1 — the reach read mismeasures a tight two-sided churn band
     // (Ben 2026-07-12), so churn's overnight order stays raw-optNet, UNCHANGED from the first AC9(b) cut.
-    const ovWeight = (FLIP_NICHES[mode].fillShape === 'symmetric') ? 1 : (er.pFill?.value ?? 0);
-    // PLAN-CAPITAL-EFFICIENCY-AND-DIGEST (Workstream C): the digest's reach ✓/✗ + verdict inputs, off data
-    // ALREADY in hand (zero new fetch) — the RECENT ask-reach fraction (symmetric niches → null → '—') and
-    // the quoted ask's placement in the 14-day daily-HIGH distribution (rbStats.his, same rbStats the band-low
-    // placement token already reads). Stored on the row; the digest is collected after the sort below.
-    // POLISH 3: reach + placement through the stale-live guard (falls back to the fresher instasell as the
-    // reference when the sell-side live print is stale, so a stale-pinned optSell can't fake a reach ✓).
-    const { reachFrac: digestReach, askPlacement: digestAskPlacement, marginTrend: digestMarginTrend, placementDiverges: digestPlacementDiverges } = digestReachAndPlacement({ spec: FLIP_NICHES[mode], row, askReachExtra, his: rbStats && rbStats.his, days: rbStats && rbStats.days });
+    // EF1(b): the exemption is placement-bounded here too (er.exemptionBounded mirrors the rank) — an
+    // above-the-distribution churn ask weights by its discounted two-leg P like every asym row.
+    const ovWeight = (FLIP_NICHES[mode].fillShape === 'symmetric' && !er.exemptionBounded) ? 1 : (er.pFill?.value ?? 0);
+    // (The digest reach/placement/trend read — digestReach/digestAskPlacement/digestMarginTrend/
+    // digestPlacementDiverges — was MOVED ABOVE the estimate/rank calls by EF1: the placement now also
+    // bounds the churn exemption, so the estimate, the rank and the digest read the ONE stale-guarded
+    // number. Stored on the row below; the digest is collected after the sort, unchanged.)
     // softBuyFc: the floorCeilingTrack read off the in-hand rbStats.days (zero new fetch) — carried to the
     // digest's collectDigestRow (called in a later loop) so digestSoftBuy's @floor cue is floor-aware too.
     const softBuyFc = (rbStats && rbStats.days) ? floorCeilingTrack(rbStats.days) : null;
     // EF-0a: carry the admission-provenance stamps (s.via — reserve/explore tag; s.preRank/s.prePool —
     // the pre-fetch-ordering position, stamped in admission.mjs) onto the row so the ledger log below
     // can record them. Inform-only pass-through — read by nothing else here.
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, via: s.via, preRank: s.preRank, prePool: s.prePool });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, rankPre, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, via: s.via, preRank: s.preRank, prePool: s.prePool });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1452,7 +1522,11 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // NOT reconstructable after the pass), and the quoted ask's daily-HIGH placement percentile the
       // digest already computed (digestReachAndPlacement — null on symmetric/reach-exempt niches).
       via: r.via, preRank: r.preRank, prePool: r.prePool,
-      askPlacement: r.digestAskPlacement != null ? round2(r.digestAskPlacement) : null })));
+      askPlacement: r.digestAskPlacement != null ? round2(r.digestAskPlacement) : null,
+      // EF1 shadows (PLAN-ESTIMATOR-FIDELITY, lean/YS2): the dead-bid repriced-entry alternative (a),
+      // the placement-bounded exemption-drop marker + the pre-bound rank (b) — the R-1 visible-swap pair.
+      repriced: r.er.repriced ? { bid: r.er.repriced.bid, ask: r.er.repriced.ask, net: r.er.repriced.net, pFill: round2(r.er.repriced.pFill), rank: Math.round(r.er.repriced.rank) } : undefined,
+      exemptionBounded: r.er.exemptionBounded || undefined, rankPre: r.rankPre ?? undefined })));
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the DC3 `demandRegime` shadow field was REMOVED with demandRegime.
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
@@ -1494,17 +1568,19 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // byte-identical. It sits beside the existing Grade column as the shown backup (the live A/B comparison).
   if (RAW) {
     printHeaders = [...HEADERS, PATHA_HEADER, ...(anyProbe ? ['Probes'] : [])];
-    printCells = rows.map(r => [...r.cells, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])]);
+    // EF1(c): the printed Rank cell is the leg-labeled console copy (consoleRankCell) — screen.json's r.cells untouched.
+    printCells = rows.map(r => [...r.cells.slice(0, -1), consoleRankCell(r), pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])]);
   } else {
     printHeaders = [...HEADERS_EST, PATHA_HEADER, ...(anyProbe ? ['Probes'] : [])];
     // r.cells layout: [item, grade, guide, quick, opt, vol, mom, regime, rank] — reuse the shared
     // structured cells (phase-suffixed regime, sub-floor grade label) and swap in the est pair cells.
+    // EF1(c): the Rank cell prints via consoleRankCell (leg-labeled when the two-leg P collapsed).
     printCells = rows.map(r => {
       const c = r.cells;
-      const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], c[8]];   // PB4: estShown = pressure legs under the flag, else the neutral est
+      const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], consoleRankCell(r)];   // PB4: estShown = pressure legs under the flag, else the neutral est
       return [...base, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])];
     });
-    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell carries the RECENT-3 reach, full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its P(fill) beside the net; a sub-break-even fold is ANNOTATED ("recency-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
+    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell carries the RECENT-3 reach, full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("recency-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
   }
   const table = rows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
   const footerLines = [`Grades: ${gradeDist(dist)}`];
@@ -1528,6 +1604,12 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // PART II: the asym-fill inform block — decision support only (P_bid = optionality annotation, never a
   // rank input by default; placeholder quantiles n≈14; the shadow `asym` ledger field is the F1 A/B data).
   for (const n of asymNotes) footerLines.push(`◆ asym fill — ${n}`);
+  // EF1(a): the dead-bid repriced-entry alternative — additive decision support; the row's headline
+  // rank/sort are untouched (R-1) and the optimistic number carries its sell-leg reach evidence inline.
+  for (const n of repriceNotes) footerLines.push(`↻ repriced entry — ${n}`);
+  // EF1(b): the placement-bounded churn-exemption visible swap — the rank DID change on these rows
+  // (decision-moving), so pre AND post print until EF0's report rules on promotion/rollback.
+  for (const n of exemptNotes) footerLines.push(`⚠ exemption dropped — ${n}`);
   // DC3 (INFORM HALF): the demand-regime flip-side classifier — decision support only (never a rank/gate/
   // grade/screen.json input; the routing/rank half is F1-gated). One line per clearly-tilted survivor.
   // (PLAN-ESTIMATOR-POSTURE AC3 — the interim patient-band-edge divergence footer — was REMOVED once AC1

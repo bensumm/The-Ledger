@@ -77,9 +77,11 @@ Root causes CONFIRMED in code (all verified against current `main`, 2026-08-01):
 6. **Same-hour surface disagreement on the SAME reach read (new, found while verifying this
    plan).** 2026-08-02, minutes apart: the band screen scored neitiznot's bid 45,701 as
    `(0/3 · p14)` (→ rank P~0.00) while `quote-items.mjs` scored the same bid `(2/3 · 2/14)`.
-   Likely the dip-window-scoped `bidReach` (screen, via timedLap windows) vs a differently-scoped
-   read (quote) — an unconfirmed hypothesis; EF1 must diagnose before changing anything (the
-   "unifying prose without unifying INPUTS" anti-pattern is exactly this).
+   DIAGNOSED at EF1(d) — the original hypothesis (timedLap dip-window scoping) was wrong: the
+   screen's read is `reachValidator`'s CLOCK-ANCHORED coming-8h window (`wStart = now.getHours()`),
+   the quote's is full-day `windowStats` (wStart 0/wEnd 0). Different questions, both legitimate;
+   kept + documented in both homes' headers (unification would re-score every board's P — EF0-gated,
+   own chunk). See the EF1 section for the full writeup.
 
 **Fetch-pool starvation is real but NOT scoped here.** Runite bolts (unf) required `--top 130`
 for a fetch slot (band 88 rated at `--top 180` vs 26 at default; 60–135 "crowded out" per pass).
@@ -204,28 +206,53 @@ logged, did the level print within horizon (5m grain)? — the buy-leg twin of (
 change to any live number; README inventory entry. Honest-empty when a cell is thin.
 *Primary files:* new report command, `pipeline/lib/render/retrojoin.mjs` (import-only).
 
-### EF1 — rank-leg honesty: reprice the dead bid, bound the churn exemption, ONE P per row
-(a) **Dead-bid reprice alternative:** when the entry-leg P collapses below a named floor while
-the sell leg is scored, compute the repriced pair (entry at the live crossable level, sell
-unchanged), and surface it on the row as a labeled alternative (`↻ repriced entry X → rank Y`),
-shadow-logged. The row's HEADLINE rank stays unchanged this chunk (R-1) — the alternative is
-visible, not silently ranked, until EF0(c) says the band-low bid class under- or over-prints.
-(b) **Placement-bounded symmetric exemption:** churn's ask-reach-discount exemption applies
-only while the ask sits inside the daily-high distribution (placement ≤ a named PLACEHOLDER
-bound, e.g. the existing `MIRAGE_PLACEMENT` 0.85 — reuse, don't invent); above it the standard
-`askReachFactor` discount applies. This IS decision-moving (reorders the churn board) — ship
-with the pre/post rank printed on the affected row for the first passes (visible swap, R-1).
-(c) **P coherence:** a row must not print two contradictory P's (`P~57%` cell vs `P~0.00`
-rank) with no marker — reconcile the display (label which leg collapsed: `P~0 (bid leg)`).
-(d) **Diagnose finding 6** (screen-vs-quote bidReach divergence): trace both surfaces' reach
-inputs to their windows; unify INPUTS or document the intentional difference in both headers.
-*Acceptance:* fixtures pin (a) triggering exactly on the P-floor + sell-leg-scored condition
-and (b) flipping exactly at the placement bound; Sapphire-shaped fixture drops from top-rank,
-Ancient-essence-shaped fixture (tight lap, ask inside distribution) keeps its exemption;
-neitiznot-shaped fixture prints the alternative line. Replay goldens for untouched paths
-unchanged. Zero new fetch (all inputs on the row already).
-*Primary files:* `js/estimators/families.mjs`, `js/estimators/pair.mjs` (+cells),
-`pipeline/commands/screen-flip-niches.mjs` (render), tests.
+### EF1 — rank-leg honesty: reprice the dead bid, bound the churn exemption, ONE P per row (SHIPPED 2026-08-01)
+(a) **Dead-bid reprice alternative — SHIPPED as specced:** `estimateRank` computes `repriced`
+(entry at the live crossable `quickBuy`, sell unchanged, entry-P re-run at the live level with the
+now-wrong-level reach read dropped, the SAME bounded ask-leg discount) when the entry-leg P from a
+REAL reach read (`basis 'reach'`) < `DEADBID_PFILL_FLOOR` (0.10, PLACEHOLDER n≈0) AND the sell leg
+is scored AND the live entry sits above the quoted bid. The screen prints a `↻ repriced entry`
+footer line with the sell leg's reach evidence inline (the DHCB guard); a lean `repriced` shadow
+rides `suggestions.jsonl`. HEADLINE rank/pFill/sorts untouched (R-1) — pinned by fixture.
+(b) **Placement-bounded symmetric exemption — SHIPPED as specced,** at EVERY exemption site so no
+surface disagrees: the rank askF skip (`families.mjs` `symmetricExemptionHolds`), the price fold
+(`reach-fold.mjs` `foldExempt`), the `REACH_GRADE_CAP` skip, the AC9 overnight P-weight, and the
+digest reach/trend/divergence read. `MIRAGE_PLACEMENT` 0.85 MOVED to `families.mjs` (single-sourced;
+the screen's digest imports it back). Visible swap: a `⚠ exemption dropped — rank X (was Y) ·
+P~a (was b)` line per moved row + lean `exemptionBounded`/`rankPre` shadows. DEVIATION (found live):
+integer-tick tight laps (Ancient essence — the whole band is two ticks, so the ask IS the daily
+high) read p100 BY CONSTRUCTION and trip the bound; their genuinely-high reach makes the applied
+discount a NO-OP (factor ≈ 1 → numbers byte-identical), so the swap NOTE is suppressed when nothing
+moved (the shadow still logs). I.e. on integer-tick items the placement bound cannot separate
+tail-ask from tight-top — the protection for the Ancient-essence class is the reach count itself,
+not the placement gate. EF0's report should segment `exemptionBounded` rows by moved-vs-no-op.
+(c) **P coherence — SHIPPED:** the Net cell's ask-leg-only probability is labeled `P(ask)~X%`
+(`cells.mjs`), and the CONSOLE rank cell labels a collapsed product (`P~0.00 (bid leg)` — the only
+path to 0.00 is a ~0 entry leg, the ask factor floors at 0.25) via `consoleRankCell`, a print-time
+copy: the published `screen.json` cells are byte-untouched by (a)/(c).
+(d) **Finding-6 DIAGNOSED — root cause found, difference kept + documented (not unified).** The
+hypothesis ("dip-window-scoped via timedLap") was WRONG. Actual cause: the screen's bid/ask reach
+comes from `reachValidator` (js/validate.mjs), which scores a CLOCK-ANCHORED coming-8h window
+(`wStart = now.getHours()`, `REACH_WINDOW_HOURS` 8, over 14 nights — "will it print in the window
+it rests through?", and the count MOVES with the clock); quote-items scores the SAME level over the
+FULL DAY (`windowStats` wStart 0/wEnd 0 — "does it print at some point in a day?"). 0/3 vs 2/3
+minutes apart is therefore legitimate, not a data bug. Unifying is NOT safe as a side-effect: the
+screen's rank P(fill) is built on the window read, so switching it to full-day re-scores every
+board — its own chunk, EF0-gated, if wanted at all (the two windows answer different questions).
+Documented in all three homes (`reachValidator` header, the screen's `reachExtra` block,
+quote-items' `bidReach` block); the screen's `↻ repriced entry` line names its window basis.
+*Acceptance — all verified at landing:* fixtures pin (a)'s exact trigger + R-1, (b) flipping
+strictly above the bound (at-bound keeps), Sapphire-shaped drops from top-rank (live: churn #1
+`S+ 10.05m P~1.00` → `B 3.05m P~0.30`, reach cap named), Ancient-essence-shaped keeps its numbers,
+neitiznot-shaped prints the alternative (live: `↻ … entry at live 46.3k: net +2.7k/u · rank ~4,958
+P~0.46 (sell 50k reached 4/14d)`); estimatePair de-exempted churn folds byte-equal to band; replay
+goldens untouched; zero new fetch; suggestions fields additive-lean (pinned). NOTE an intended
+consequence: `screen.json`'s grade/rank CELL CONTENT (and score order) changes for de-exempted
+churn rows — same shape, data-level, the sanctioned (b) swap; est cells still never enter it.
+*Primary files:* `js/estimators/families.mjs`, `js/estimators/sell-models/reach-fold.mjs`,
+`js/estimators/pair.mjs`, `js/estimators/cells.mjs`, `js/validate.mjs` (doc),
+`pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/quote-items.mjs` (doc),
+`pipeline/lib/render/suggestlog.mjs`, tests (estimators/capeff-digest/suggestlog).
 
 ### EF2 — the timed (daily-basis) pair as a first-class visible second answer
 Promote the already-computed `r.timedLap` dip/peak pair from a footnote line to a labeled
@@ -284,7 +311,7 @@ updated to assert the measured path; (b) byte-identical diff; (c) documented in
 | --- | --- | --- |
 | EF-0a | `via`+rank+excluded-set ledger logging (the data-perishable prerequisite) | ✅ 2026-08-01 |
 | EF0 | Counterfactual + attribution report (fold-vs-raw, (none) decomposition, bid twin) | OPEN |
-| EF1 | Rank-leg honesty: dead-bid reprice line · placement-bounded churn exemption · one P | OPEN |
+| EF1 | Rank-leg honesty: dead-bid reprice line · placement-bounded churn exemption · one P · finding-6 diagnosis | ✅ 2026-08-01 |
 | EF2 | Timed daily-basis pair as visible second answer (guards inline) | OPEN |
 | EF3 | Measured cycles/day post-fetch (+ byte-identical constant single-sourcing) | OPEN |
 

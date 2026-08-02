@@ -82,6 +82,17 @@ ok('EF-0a: via/preRank/prePool/askPlacement are lean-included admission-provenan
     'absent admission-provenance fields stay absent (quote/watch + --admission legacy rows byte-identical)');
 });
 
+ok('EF1: repriced / exemptionBounded / rankPre are lean-included rank-leg-honesty shadows', () => {
+  const rep = { bid: 46_099, ask: 49_199, net: 2_116, pFill: 0.97, rank: 1_200_000 };
+  const e = suggestionEntry({}, { itemId: 22, cls: 'mid', verdict: 'B', repriced: rep, exemptionBounded: true, rankPre: 14_440_000 });
+  assert.deepEqual(e.repriced, rep, 'the dead-bid repriced-entry alternative rides whole (EF1(a))');
+  assert.equal(e.exemptionBounded, true, 'the placement-bound drop marker rides (EF1(b))');
+  assert.equal(e.rankPre, 14_440_000, 'the pre-bound rank rides beside it (the R-1 visible-swap pair)');
+  const none = suggestionEntry({}, { itemId: 23, cls: 'mid', verdict: 'B' });
+  assert.ok(!('repriced' in none) && !('exemptionBounded' in none) && !('rankPre' in none),
+    'absent EF1 fields stay absent — every pre-EF1 row shape is byte-identical (YS2)');
+});
+
 ok('EF-0a: excludedShadow — lean crowded-out shape; null when nothing was excluded', () => {
   assert.equal(excludedShadow([]), null, 'legacy admission / fully-fetched pool → no aggregate line');
   assert.equal(excludedShadow(null), null);

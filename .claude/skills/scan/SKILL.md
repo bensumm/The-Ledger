@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.88
+version: 1.89
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -551,6 +551,25 @@ This is the tribal layer the script can't do — apply ALL of these:
       **read the RANK/GRADE for churn fill risk, not the Est. cell**. This un-floored Super restore(4)-class
       churn rows from `+1 (BE-floored)` to a real net. The reach-FOLD now lives in the VALIDATION step
       (`read-window-range.mjs`'s `fold:` line — the trio below), not the churn discovery price.
+      **EF1(b) bound (PLAN-ESTIMATOR-FIDELITY, 2026-08-01):** churn's exemption now holds ONLY while the
+      ask sits inside the 14-day daily-high distribution (placement ≤ p85). An above-the-distribution
+      churn ask (the Sapphire-bolts mirage: churn #1 at P~1.00 with a 1/14 ask) takes the standard reach
+      discount/fold/grade-cap, its caution tokens return, and the row prints a
+      `⚠ exemption dropped — … rank X (was Y)` visible-swap line — RELAY both numbers when one of these is
+      a candidate you'd otherwise pitch off its old rank. Integer-tick tight laps (Ancient-essence class)
+      read p100 by construction and trip the bound, but their genuine reach makes the discount a no-op
+      (numbers unchanged, no note).
+    - **`↻ repriced entry` lines are the dead-bid alternative — an OPTION to reprice, not a new pick
+      (EF1(a), PLACEHOLDER n≈0).** _(judgment: relay + pricing discipline; mechanic in
+      `js/estimators/families.mjs` `estimateRank` `repriced` + the screen's `↻` footer line)_ When a row's
+      quoted band-low bid is DEAD (entry P below the 0.10 floor on a real reach read) while its sell leg is
+      scored, the screen prints the pair repriced at the LIVE crossable entry with the sell leg's reach
+      evidence inline (the neitiznot class: rank-0 row 79/83 while its ask printed 14/14). The headline
+      rank/sort are UNCHANGED (R-1) — treat the line as "this row's honest form is a live-entry flip";
+      verify the sell leg per WINDOW-CLEAR PRICING before pitching it, and never quote the repriced net
+      without its reach token. The rank cell also labels a collapsed leg (`P~0.00 (bid leg)`) and the Net
+      cell's probability is now labeled `P(ask)~` — two different questions, don't read them as a
+      contradiction.
   **MANDATORY, both legs — this is a hard step, not a judgment call (Ben, 2026-07-07, the DHCB
   overpitch).** A dip-bid has TWO legs to verify and it is easy to do only one: the BUY (trajectory /
   dip-vs-knife) AND the SELL (the `--ask` reach). **Before quoting ANY dip-bid's expected profit, run

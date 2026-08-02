@@ -86,6 +86,33 @@ export const PFILL_ASKREACH_FLOOR    = 0.25;  // two-leg P (Proposal A, PLAN-GRA
                                               // floors the weight HERE (not to 0) so a stale fortnight demotes a
                                               // large-net item hard without zeroing it — SOFT by design
                                               // (rule 4: n≈14 per item, F1/retrojoin calibrates the magnitude).
+// EF1(b) (PLAN-ESTIMATOR-FIDELITY) — the PLACEMENT BOUND on the 'symmetric' (churn) ask-reach exemption.
+// MOVED here from screen-flip-niches.mjs (was its digest-local MIRAGE_PLACEMENT — same constant, now
+// single-sourced; the digest's mirage-top rule imports it back). PLACEHOLDER (n≈0, invented per
+// PLAN-CAPITAL-EFFICIENCY-AND-DIGEST §10 Q3); reused per EF1(b)'s "reuse, don't invent" ruling.
+export const MIRAGE_PLACEMENT = 0.85;
+// EF1(a) — the DEAD-BID floor: an entry-leg P (from a REAL reach read) below this marks the quoted bid
+// as effectively dead, and estimateRank computes a REPRICED-ENTRY alternative (entry at the live
+// crossable level, sell unchanged) beside the untouched headline rank. PLACEHOLDER (n≈0) — EF0(c)'s
+// bid-side counterfactual owns the real value.
+export const DEADBID_PFILL_FLOOR = 0.10;
+
+/* symmetricExemptionHolds(spec, askPlacement) — EF1(b), PLAN-ESTIMATOR-FIDELITY. The 'symmetric'
+   (churn) fillShape skips the ask-reach discount on the premise "sells into continuous two-sided flow
+   NEAR a tight band top" (AC5/AC6 — the exemption fixed a real mismeasurement and must survive for
+   tight laps). When the quoted ask sits ABOVE the daily-high distribution (placement > MIRAGE_PLACEMENT)
+   that premise fails — the ask is not "near the tight top", it is the top's tail — so the exemption is
+   BOUNDED: it holds only while placement ≤ the bound (or no placement read exists — an absent read never
+   punishes, the standard degrade). Returns false for any non-symmetric spec (they were never exempt).
+   ⚠ AMPLITUDE CAVEAT: the amplitude family is also fillShape 'symmetric', but its pFill ALREADY folds
+   the exit leg (basis 'daily-reach-2leg'), so applying askReachFactor on top would DOUBLE-discount. The
+   amplitude surface builds its own rank and passes NO askPlacement/askReach into estimateRank — keep it
+   that way (the bound only ever fires when the caller passes a placement read). */
+export function symmetricExemptionHolds(spec, askPlacement) {
+  if (!spec || spec.fillShape !== 'symmetric') return false;
+  const p = num(askPlacement);
+  return !(p != null && p > MIRAGE_PLACEMENT);
+}
 
 /* --- P(fill) estimators — return { value∈[0,1], n, basis } ---------------------------------------- */
 
@@ -293,8 +320,16 @@ export function estimateRank(spec, row = {}, extra = {}) {
   // mismeasures a small-margin band. The lap thesis is fill-every-lap, the anti-shape of the asymmetric
   // objective (§II.2 "a deep-flush bid is anti-churn") — so a 'symmetric' fillShape spec skips the
   // Proposal-A ask-reach discount entirely (and screen-flip-niches.mjs mirrors this for the REACH_GRADE_CAP letter).
+  // EF1(b) (PLAN-ESTIMATOR-FIDELITY): the exemption is now PLACEMENT-BOUNDED — it holds only while the
+  // quoted ask sits inside the daily-high distribution (extra.askPlacement ≤ MIRAGE_PLACEMENT, or no
+  // placement read — symmetricExemptionHolds). An above-the-distribution churn ask (the Sapphire-bolts
+  // mirage: ask at p100 reaching 1/14d yet ranked #1 at P~0.93) takes the standard askReachFactor
+  // discount; a tight in-distribution lap (the Ancient-essence class AC5/AC6 fixed) keeps the exemption
+  // byte-identically. Callers that pass no askPlacement (quote/watch/app Finder/amplitude) are unchanged.
   const pFillRaw = est.pFill(ctx);
-  const askF = (spec && spec.fillShape === 'symmetric') ? 1 : askReachFactor(ctx.askReach);
+  const symmetric = !!(spec && spec.fillShape === 'symmetric');
+  const exemptionBounded = symmetric && !symmetricExemptionHolds(spec, extra.askPlacement);
+  const askF = (symmetric && !exemptionBounded) ? 1 : askReachFactor(ctx.askReach);
   const pFill = askF < 1
     ? { value: clamp01(pFillRaw.value * askF), n: pFillRaw.n, basis: pFillRaw.basis + '×askreach' }
     : pFillRaw;
@@ -304,7 +339,31 @@ export function estimateRank(spec, row = {}, extra = {}) {
   // band/scalp/value/intraday are byte-identical. er.net stays PER-UNIT (the honest displayed margin).
   const lapUnits = est.lapUnits ? est.lapUnits(ctx) : 1;
   const rank = rankScore({ net: net * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
-  return { pair, net, pFill, ttf, rank, lapUnits };
+  // EF1(a) (PLAN-ESTIMATOR-FIDELITY) — the DEAD-BID REPRICE ALTERNATIVE. When the ENTRY leg's P
+  // collapses below DEADBID_PFILL_FLOOR on a REAL reach read (basis 'reach' — a prior/band-depth call
+  // never fires this) while the SELL leg is scored (a real askReach read exists), the correct response
+  // is to REPRICE the entry to the live crossable level (ctx.quickBuy — the transact-now buy) and
+  // re-evaluate, not to bury the row (the Helm-of-neitiznot class: a dead band-low bid zeroed a row
+  // whose ask reached 14/14d). `repriced` is a LABELED ALTERNATIVE beside the untouched headline
+  // rank/pFill (R-1: nothing reorders on it until EF0(c) scores the band-low-bid class); the repriced
+  // entry P re-runs the family estimator at the live bid with the (now-wrong-level) reach read dropped —
+  // the honest band-depth "transact-now fills ~certainly" prior, breakdown honesty kept — then takes the
+  // SAME (placement-bounded) ask-leg discount the headline takes. Null whenever the condition misses.
+  let repriced = null;
+  if (pFillRaw.basis === 'reach' && pFillRaw.value < DEADBID_PFILL_FLOOR
+      && ctx.askReach && num(ctx.askReach.nDays) > 0 && num(ctx.askReach.reachedDays) != null
+      && num(ctx.quickBuy) != null && num(pair.ask) != null && num(pair.bid) != null && ctx.quickBuy > pair.bid) {
+    const liveBid = ctx.quickBuy;
+    const pEntryR = est.pFill({ ...ctx, bid: liveBid, reach: null });
+    const pR = clamp01(pEntryR.value * askF);
+    const netR = netMargin(liveBid, pair.ask, row.bond ? { bond: true, guide: row.guide } : null);
+    repriced = { bid: liveBid, ask: pair.ask, net: netR, pFill: pR,
+      rank: rankScore({ net: netR * lapUnits, pFill: pR, ttfSec: ttf.value }) };
+  }
+  // EF1(c): the P LEG SPLIT — entry-family P and the ask-leg factor, so a surface can label WHICH leg
+  // collapsed a near-zero product ("P~0.00 (bid leg)") instead of printing two contradictory P's.
+  const pLegs = { entry: pFillRaw.value, askF };
+  return { pair, net, pFill, ttf, rank, lapUnits, pLegs, exemptionBounded, repriced };
 }
 
 /* fmtTtf(sec) → compact "45m" / "2.5h" / "3d" for the honest rank rendering. */
