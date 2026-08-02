@@ -732,6 +732,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   KEPT at 500k — Ben, real NET-throughput floor; `DL4_MIN_ABS_SWING` unchanged). `volDayRolling` logged on
   `suggestions.jsonl`. Step 3 REMAINING = the browser app fix (`js/marketfetch.js` Finder/Watch/Trends still
   read the broken `/24h`; APP_VERSION-bumping). Folds into `PLAN.md` and is deleted when step 3 ships.
+- `PLAN-ESTIMATOR-FIDELITY.md` — per-topic plan (2026-08-01, PLANNING ONLY, no code): the discovery
+  estimator understates both legs against the daily distribution (the 2h-band basis + the
+  clamp-to-bandTop blend make a verified daily-basis ask/dip structurally unquotable), the rank
+  buries repriceable rows (dead-bid ⇒ P~0 instead of a repriced-entry alternative; churn's
+  symmetric fold exemption lacks a placement bound), and windows-per-day is assumed ×6 in four
+  homes while `diurnalTimedLap`'s measured cycle is discarded. Chunks EF0 (counterfactual +
+  `(none)`-bucket attribution report) → EF1 (rank-leg honesty) → EF2 (timed pair as a visible
+  second answer) → EF3 (measured cycles post-fetch + constant single-sourcing). Anchor is n=5
+  laps on one item — hypothesis-generating, nothing auto-applies without EF0. Starvation stays
+  with `PLAN-FETCH-POOL-SCALING`; the band sell fold moves only via AC7's re-decision path.
 - `plans/` — the per-topic `PLAN-*.md` working docs (moved off the repo root 2026-07-26). Each is a
   transient planning doc that folds into the root `PLAN.md` (the master plan + scoreboard) and is deleted
   the moment its last chunk ships (`docs/PLANNING.md` lifecycle). `plans/PLAN-*.md` is scanned by

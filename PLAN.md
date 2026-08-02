@@ -492,6 +492,16 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
+- **Estimator fidelity vs the daily distribution — `plans/PLAN-ESTIMATOR-FIDELITY.md` (2026-08-01,
+  PLANNING ONLY).** The discovery `Est.` pair prices the 2h band and clamps the daily-basis diurnal
+  levels inside it (`reach-fold.mjs:132`, `buyLo` `:143`), so a verifier-confirmed daily ask/dip is
+  structurally unquotable; the rank zeroes on a dead bid instead of repricing the entry (the
+  Helm-of-neitiznot burial); churn's symmetric fold exemption has no placement bound (the
+  Sapphire-dragon-bolts mirage top); windows/day is an assumed ×6 in four homes while
+  `diurnalTimedLap`'s measured cycle count is shadow-only. Chunks EF0–EF3, evidence-first
+  (counterfactual report gates every promotion; anchor = n=5 laps on ONE item, rule 4). Starvation
+  is deliberately left to PLAN-FETCH-POOL-SCALING + the capital-conditioned-reserves entry below;
+  the band sell fold moves only via AC7's re-decision path (`reach-fold.mjs` header).
 - **Thin-reserve should scale with `--capital` (screen fetch-admission, `pipeline/lib/signal/admission.mjs`
   `pickFetchPool`) — surfaced 2026-07-23, Ben-flagged.** `THIN_RESERVE` is a fixed 6-slot guarantee for
   thin gp-flow big-tickets regardless of bankroll. At high capital (162m trial) the fixed 6 starves the
