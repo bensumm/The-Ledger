@@ -453,3 +453,42 @@ test('MT-V2 mid-tier reserve: the ranked top-N and GEAR_RESERVE admissions are u
     'turning the mid-tier reserve on is strictly additive — it displaces nothing');
   assert.ok(on.survivors.some(s => s.id === 'midPick'), 'and it adds the low-limit row');
 });
+
+// --- EF-0a: pre-fetch position stamps (preRank/prePool) — the `via`+rank ledger prerequisite ------
+
+test('EF-0a: pickFetchPool stamps preRank/prePool on every gated candidate — survivors AND excluded', () => {
+  // empty dailySeries → proxyDrift null → softFactor uniform (0.7) → unified ordering = expGpDay desc
+  const cand = [
+    mkCand(1, { expGpDay: 300, volDay: CHURN_VOL }),
+    mkCand(2, { expGpDay: 100, volDay: CHURN_VOL }),
+    mkCand(3, { expGpDay: 200, volDay: CHURN_VOL }),
+  ];
+  const { survivors, excluded } = pickFetchPool('band', cand, {},
+    { top: 2, thinReserve: 0, risingReserve: 0, exploreReserve: 0, gearReserve: 0, midTierReserve: 0 });
+  const all = [...survivors, ...excluded];
+  const rankOf = id => all.find(c => c.id === id).preRank;
+  assert.equal(rankOf(1), 1); assert.equal(rankOf(3), 2); assert.equal(rankOf(2), 3);
+  assert.ok(all.every(c => c.prePool === 3), 'every candidate carries the pool size (the "of 178")');
+  // the crowded-out row keeps its stamp — the EF0 "would the buried row have been good?" key
+  assert.deepEqual(excluded.map(c => c.id), [2]);
+  assert.equal(excluded[0].preRank, 3);
+  // and admission itself is untouched by the stamp (survivor set is the plain top-2)
+  assert.deepEqual(survivors.map(c => c.id).sort(), [1, 3]);
+});
+
+test('EF-0a: value branch stamps preRank by valueScore ordering; reserve/excluded clones inherit it', () => {
+  const cand = [
+    { id: 1, valueScore: 5, valueRanges: { afterTaxAmpPct: 0.01 } },
+    { id: 2, valueScore: 9, valueRanges: { afterTaxAmpPct: 0.02 } },
+    { id: 3, valueScore: 1, valueRanges: { afterTaxAmpPct: 0.50 } },
+    { id: 4, valueScore: 2, valueRanges: { afterTaxAmpPct: 0.03 } },
+  ];
+  const { survivors, excluded } = pickFetchPool('value', cand, {}, { top: 2, valueReserve: 1 });
+  const all = [...survivors, ...excluded];
+  const rankOf = id => all.find(c => c.id === id).preRank;
+  assert.equal(rankOf(2), 1); assert.equal(rankOf(1), 2); assert.equal(rankOf(4), 3); assert.equal(rankOf(3), 4);
+  const reserve = survivors.find(c => c.via === 'reserve');
+  assert.equal(reserve.id, 3, 'highest cycle-amplitude of the excluded remainder wins the reserve');
+  assert.equal(reserve.preRank, 4, 'the via-tagged reserve CLONE inherits the position stamp');
+  assert.ok(all.every(c => c.prePool === 4));
+});

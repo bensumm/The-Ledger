@@ -129,7 +129,7 @@ import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the 
 import { FLIP_NICHES, MODE_KEYS, ALL_MODE_KEYS, driftInformNote } from '../../js/flip-niches.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 6 — driftInformNote = the per-thesis drift-adjusted-exit INFORM note (registry-driven, NO if(mode===) branch; off the shared driftExitFrom, NO fetch)
 import { enumeratePaths, weighPaths } from '../../js/held-item-strategy.mjs';   // P4c: weighed entry-path menu per surfaced row (display-only)
 import { rateItem, GRADE_CUTOFFS, REACH_GRADE_CAP_FRAC, CONF_THIN_N_FLOOR } from '../lib/signal/rating.mjs';   // G1: the four grade caps now live INSIDE rateItem (applyGradeCaps) — the render site passes cap values/flags, no longer calls capGrade itself. REACH_GRADE_CAP_FRAC stays for the digest's reach ✓/✗ read. G6: CONF_THIN_N_FLOOR for the (thin) confidence-marker tooltip.
-import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
+import { logSuggestions, suggestionEntry, liqClass, reachableShadow, asymShadow, timedLapShadow, excludedShadow } from '../lib/render/suggestlog.mjs';   // RC-S2: pressure co-log on survivors (five-way head-to-head off the in-hand 1h series); shared asym reshaper; PLAN-DIURNAL-TIMING DT4: timedLap shadow reshaper
 import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into screen.json so the app can display the pipeline version
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
@@ -1341,7 +1341,10 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // softBuyFc: the floorCeilingTrack read off the in-hand rbStats.days (zero new fetch) — carried to the
     // digest's collectDigestRow (called in a later loop) so digestSoftBuy's @floor cue is floor-aware too.
     const softBuyFc = (rbStats && rbStats.days) ? floorCeilingTrack(rbStats.days) : null;
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc });
+    // EF-0a: carry the admission-provenance stamps (s.via — reserve/explore tag; s.preRank/s.prePool —
+    // the pre-fetch-ordering position, stamped in admission.mjs) onto the row so the ledger log below
+    // can record them. Inform-only pass-through — read by nothing else here.
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, via: s.via, preRank: s.preRank, prePool: s.prePool });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1443,7 +1446,13 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       // { gpDay, marginU, captureFrac, cyclesDay, units, price, intradayRange, lane, rankInLane } off
       // pathAGpDay + the row's in-lane rank). ACCRUAL for the H2/H4 forward validator (captureFrac is a
       // PLACEHOLDER); absent on a null-Path-A row (no intraday range). Lean-included (YS2 absent-field pattern).
-      pathA: r.pathA || undefined })));
+      pathA: r.pathA || undefined,
+      // EF-0a shadow trio (PLAN.md Discovered `via`+rank logging): the admission provenance (via —
+      // 'reserve'/'explore', absent = ranked-in/held), the pre-fetch-ordering position ("12th of 178" —
+      // NOT reconstructable after the pass), and the quoted ask's daily-HIGH placement percentile the
+      // digest already computed (digestReachAndPlacement — null on symmetric/reach-exempt niches).
+      via: r.via, preRank: r.preRank, prePool: r.prePool,
+      askPlacement: r.digestAskPlacement != null ? round2(r.digestAskPlacement) : null })));
       // PLAN-REMOVE-DEPTH-PRESSURE-READS chunk 2: the DC3 `demandRegime` shadow field was REMOVED with demandRegime.
 
   // P5: the falling note is per-spec — a 'accept' niche (scalp) deliberately INCLUDES fallers.
@@ -1804,7 +1813,8 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
     sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: bulk /24h volume
       bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n),
-      volDayRolling: rollShadow(series1h, s.id) }));   // PLAN-VOL24 shadow: corrected /1h-composed 24h volume
+      volDayRolling: rollShadow(series1h, s.id),   // PLAN-VOL24 shadow: corrected /1h-composed 24h volume
+      via: s.via, preRank: s.preRank, prePool: s.prePool }));   // EF-0a: admission provenance (via 'reserve' = the value cycle-amplitude reserve) + the valueScore pre-fetch position
   }
   buyNow.sort((a, b) => b.score - a.score); watch.sort((a, b) => b.score - a.score);
   // §E — value picks are logged in ISOLATION (mode 'value'); they never touch the fast-flip ledger rows.
@@ -1997,6 +2007,9 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
       estBasis: `${pFill.basis}/${ttf.basis}`, estN: ar.nDays,
       amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof, drift: driftShadow }),
       volDayRolling: rollShadow(series1h, s.id),
+      // EF-0a: the ampProxy pre-fetch position stamp. Amplitude's watchlist reserve carries no `via`
+      // tag today (the `watched` flag is its marker), so `via` is naturally absent on every amplitude row.
+      via: s.via, preRank: s.preRank, prePool: s.prePool,
     }));
   }
   rows.sort((a, b) => b.score - a.score);
@@ -2500,6 +2513,18 @@ async function main() {
       }
       console.log(`⚠ TOTAL_FETCH_MAX: cross-niche fetch union clamped to ${unionSize} (cap ${TOTAL_FETCH_MAX}); trimmed ${trimmedCount} — ${clamped.filter(n => n.trimmed.length).map(n => `${n.mode} −${n.trimmed.length}`).join(', ')}`);
     }
+  }
+
+  // EF-0a (PLAN.md Discovered `via`+rank logging; PLAN-ESTIMATOR-FIDELITY EF-0a) — persist each niche's
+  // CROWDED-OUT set to the suggestions ledger as ONE aggregate line per niche ({ excluded:[{id, reason,
+  // preRank?, expGpDay?}], prePool }) BEFORE the fetch phase, so "which gated candidate never got a fetch
+  // slot, and where would it have ranked" survives the pass (it is NOT reconstructable later — it depends
+  // on this pass's market snapshot). Console-silent + screen.json-untouched (ledger-only); nothing under
+  // `--admission legacy` (excluded is always [] there) or when every candidate was fetched. The rows carry
+  // NO itemId, so every suggestion→fill joiner skips them (see suggestlog.mjs's aggregate-row block).
+  for (const m of RUN_MODES) {
+    const ex = excludedShadow(gated[m].excluded);
+    if (ex) logSuggestions('screen', { mode: m, params: SCREEN_PARAMS }, [{ excluded: ex, prePool: gated[m].cand.length }]);
   }
 
   // fetch each unique survivor's series ONCE (shared across modes in --mode all; cached on disk), quote it.

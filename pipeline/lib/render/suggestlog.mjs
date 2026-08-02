@@ -15,6 +15,21 @@
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
  *     bid?, ask?, pFill?, ttfSec?, rank?, estBasis?, estN?,   (P6b rank estimate — the quoted pair +
  *     net×P÷TTF components; lean-included, absent on older rows)
+ *     via?, preRank?, prePool?,   (EF-0a 2026-08-01, the PLAN.md Discovered `via`+rank logging — the
+ *                 ADMISSION PROVENANCE: via = how the row won its fetch slot ('reserve' — value/gear/
+ *                 mid-tier reserve | 'explore' — the rotating exploration lottery; ABSENT = ranked-in/
+ *                 held, the baseline), preRank/prePool = the candidate's 1-based position in its
+ *                 niche's pre-fetch ordering and that pool's size ("would have ranked 12th of 178"),
+ *                 stamped by admission.mjs pickFetchPool (band/churn: the unified expGpDay ×
+ *                 softFactor × trackBoost score; value: valueScore; amplitude: ampProxy). The rank is
+ *                 NOT reconstructable after the fact (it depends on that pass's market snapshot) —
+ *                 this is the reserve-retirement evidence. Lean-included; absent under
+ *                 `--admission legacy` (rankAndSlice stamps nothing) and on quote/watch rows.)
+ *     askPlacement?,   (EF-0a — the quoted ask's placement percentile (0–1) in the 14-day daily-HIGH
+ *                 distribution, the SAME digestReachAndPlacement number the --digest verdicts read
+ *                 (stale-live-guarded; null on symmetric/reach-exempt niches → absent). Was computed
+ *                 every pass and discarded; logged so EF0 can segment rank outcomes by placement.
+ *                 Lean-included; screen renderMode rows only.)
  *     depthExit?,  (PLAN-DEPTH-EXIT DE3 2026-07-15 — the held-lot percentile-DEPTH shadow:
  *                 { qty, competition, liqClass, ask?, clearFrac?, collapse? }. `ask`/`clearFrac` =
  *                 the clearableAsk "book at" read when non-null; `collapse` = the null-read REASON
@@ -96,6 +111,17 @@
  *               evolves; recomputing it later would REWRITE history, so it's snapshotted here.
  *     verdict — the emitted action verdict where the script produces one (else null)
  *   Prices are whatever the computeQuote row held (may be null) — we never fabricate a number.
+ *
+ * ADMISSION-EXCLUSION AGGREGATE ROWS (EF-0a, 2026-08-01). Besides per-item suggestion rows, each
+ * screen pass appends ONE aggregate line per niche recording the CROWDED-OUT set — every gated
+ * candidate that never got a fetch slot (the pickFetchPool `excluded` report, incl. any
+ * 'total-fetch-max' trims): `{ ts, script:'screen', mode, params, prePool,
+ * excluded:[{ id, reason, preRank?, expGpDay? }, …] }` (shaped by excludedShadow below). These are
+ * ADMISSION TELEMETRY, NOT suggestions: they deliberately carry NO `itemId`, so every existing
+ * joiner (retroJoin, join-outcomes, join-window-clears, report-retro) skips them by its
+ * itemId-null guard — analyze-record.mjs additionally skips them BEFORE its noKey health counter so
+ * they never read as malformed rows. EF0's counterfactual ("would the buried row have been good?")
+ * is their one intended reader; without them the excluded set is unrecoverable after the pass.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -294,6 +320,22 @@ export function amplitudeShadow(ar, { holdDays = 1, profile = null, drift = null
   return o;
 }
 
+// EF-0a — the admission-exclusion aggregate reshaper: pickFetchPool's `excluded` candidates → the lean
+// per-pass `excluded` ledger array (see the header's ADMISSION-EXCLUSION AGGREGATE ROWS block). Per
+// item: id + the SC1 exclusion reason, plus (lean) the pre-fetch position stamp and the rounded
+// expGpDay ordering input where the candidate carried them (value/amplitude candidates have no
+// expGpDay — the field is simply absent there). Null when there is nothing excluded (legacy
+// admission, or every candidate fetched) → the caller logs no line at all.
+export function excludedShadow(excluded) {
+  if (!Array.isArray(excluded) || !excluded.length) return null;
+  return excluded.map(c => {
+    const o = { id: c.id, reason: c.reason ?? null };
+    if (c.preRank != null) o.preRank = c.preRank;
+    if (c.expGpDay != null) o.expGpDay = Math.round(c.expGpDay);
+    return o;
+  });
+}
+
 // the fixed-quantile asym pair (js/estimators.mjs asymEstimate result) → the lean `asym` shadow field;
 // the same shape screen/quote/watch all log for the head-to-head. Null when there is no pair.
 export function asymShadow(ae) {
@@ -376,7 +418,7 @@ export function timedLapShadow(lap) {
 // fabricates a thesis or a pre-F1 predicted velocity. join-outcomes.mjs joinSuggestion reads each `?? null`.
 // P2: `validators` is the compact non-pass validator-flag list (js/validate.mjs leanValidators) —
 // lean-included exactly like the YS2 fields, so a clean (all-pass) row's logged shape is unchanged.
-export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA } = {}) {
+export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tripwire, fillWindowHrs, velocityClass, thesis, validators, path, bid, ask, pFill, ttfSec, rank, estBasis, estN, subFloor, dipLoop, grade, asym, estBuy, estSell, estConfidence, volDayRolling, expGpDay, expGpDayLegacy, winClear, windowExit, depthExit, reachable, amplitude, capEff, weakDeploy, cappedBy, timedLap, pathA, via, preRank, prePool, askPlacement } = {}) {
   const e = {
     itemId,
     quickBuy:  row.quickBuy  ?? null,
@@ -416,6 +458,15 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
   if (rank != null)          e.rank = rank;
   if (estBasis != null)      e.estBasis = estBasis;
   if (estN != null)          e.estN = estN;
+  // EF-0a (2026-08-01) — ADMISSION PROVENANCE (see the schema block above): via = how the row won its
+  // fetch slot ('reserve' | 'explore'; absent = ranked-in/held — the natural-experiment baseline),
+  // preRank/prePool = the pre-fetch-ordering position stamp ("12th of 178") off admission.mjs, and
+  // askPlacement = the quoted ask's daily-HIGH placement percentile the digest already computes.
+  // Lean-included (YS2 pattern): quote/watch and `--admission legacy` rows log a byte-identical shape.
+  if (via != null)           e.via = via;
+  if (preRank != null)       e.preRank = preRank;
+  if (prePool != null)       e.prePool = prePool;
+  if (askPlacement != null)  e.askPlacement = askPlacement;
   // P6c — a screen row surfaced by the EMPTY-RESULT SUB-FLOOR FALLBACK carries which floor was relaxed
   // ('min-gpd' | 'liquidity'). Lean-included (the YS2 pattern — pinned by subfloor.test.mjs): a normal
   // floor-qualified row logs a byte-identical shape, and calibration/readers can segment or exclude

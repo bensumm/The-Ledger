@@ -621,6 +621,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   captureFrac holds forward, before any recalibration. Absent on a null-Path-A row (no intraday range) /
   non-screen scripts (YS2 lean-include). IDs/prices/timestamps only, no PII. Consumer: the future Path-A
   forward-join calibration.
+  Every screen flip-niche row also carries the lean **admission-provenance trio** (EF-0a, 2026-08-01 — the
+  PLAN.md Discovered `via`+rank logging, the reserve-retirement prerequisite): **`via`** (`'reserve'` |
+  `'explore'` — how the row won its fetch slot; absent = ranked-in/held, the natural-experiment
+  baseline), **`preRank`**/**`prePool`** (the candidate's 1-based position in its flip-niche's pre-fetch
+  ordering + that pool's size — "would have ranked 12th of 178"; stamped by `admission.mjs
+  pickFetchPool`, NOT reconstructable after the pass; absent under `--admission legacy`), and
+  **`askPlacement`** (the quoted ask's daily-HIGH placement percentile the `--digest` verdicts already
+  compute; band/churn renderMode rows only). Each screen pass ALSO appends ONE **admission-exclusion
+  AGGREGATE line per flip-niche** — `{ ts, script:'screen', mode, params, prePool, excluded:[{ id, reason,
+  preRank?, expGpDay? }, …] }` (`suggestlog.mjs excludedShadow`) — recording the CROWDED-OUT set (every
+  gated candidate that never got a fetch slot, with its SC1 reason). These aggregate rows are admission
+  telemetry, not suggestions: they carry NO `itemId`, so every suggestion→fill joiner skips them
+  (analyze-record additionally exempts them from its noKey health counter). Consumer: EF0's
+  counterfactual (PLAN-ESTIMATOR-FIDELITY) + the reserve-retirement comparison.
   **Bounded to the CURRENT month (SR1):** on append,
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is

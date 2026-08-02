@@ -1,6 +1,16 @@
 # PLAN-FETCH-POOL-SCALING — capital-scale the fetch pool, give value a reserve
 
-**Status: PLANNING ONLY. No code changed.** Scopes blindspot-audit findings **#1** and **#7**
+**Status: ALL FOUR CHUNKS SHIPPED `5e7e9d9` (2026-07-24)** — VALUE_RESERVE default-ON in both
+admission paths; the `scaleSlots` capital curve behind the explicit `--scale-pool` flag (default
+OFF — byte-identical otherwise, Open Decision 1 resolved opt-in-first); `clampUnionFetch`/
+`TOTAL_FETCH_MAX` cross-niche ceiling. Constants all PLACEHOLDER n≈0. *(Header was stale
+"PLANNING ONLY" until 2026-08-01 — corrected during EF-0a's doc pass.)* **The `via`+rank
+suggestions-ledger logging this plan's evidence depends on — the PLAN.md Discovered
+reserve-retirement prerequisite — LANDED 2026-08-01 as EF-0a (PLAN-ESTIMATOR-FIDELITY):** every
+screen row now logs `via`/`preRank`/`prePool` and each pass logs its per-niche crowded-out set, so
+the reserve-vs-ranked-in comparison and any slice-size tuning can finally read real data. Still
+open here: the default-on decision for `--scale-pool` (needs that accrued data) + fold-into-PLAN.md
+lifecycle. Originally scoped from blindspot-audit findings **#1** and **#7**
 (`PLAN-BLINDSPOT-AUDIT.md`): the scan's fetch pool is sized by FIXED constants
 (`pipeline/lib/gatecandidates.mjs` `TOP_DEFAULT=40`, `THIN_RESERVE_DEFAULT=6`,
 `VALUE_TOP_DEFAULT=25`, `AMP_TOP_DEFAULT=40`), independent of how much capital there actually is

@@ -540,26 +540,24 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   reserves are not needed at all.** So the work is not "make three constants adaptive" — it is "prove or
   disprove the ranking, then delete the scaffolding". Recorded in `admission.mjs`'s header so a future
   editor doesn't entrench them. All PLACEHOLDER, n=0.
-- **Log `via` into `suggestions.jsonl` — the prerequisite for retiring the reserves (2026-07-27, small).**
+- **~~Log `via` into `suggestions.jsonl` — the prerequisite for retiring the reserves (2026-07-27,
+  small).~~ DONE 2026-08-01 as EF-0a (PLAN-ESTIMATOR-FIDELITY's logging prerequisite chunk).**
   Each reserve admission is a natural experiment: an item the ranked top-N would NOT have fetched, fetched
   anyway and then scored post-fetch. Comparing `via`-tagged rows against ranked-in rows is exactly the
   evidence that settles "does the top-N already surface the best candidates for this capital" — and
-  therefore whether the reserves can be deleted. **The tag exists on the candidate** (`via:'reserve'` /
-  `via:'explore'`, set in `admission.mjs`; it already drives the 🎲 render token and `clampUnionFetch`'s
-  `isProtected`) **but is never carried into the retro ledger**, so the comparison cannot be run today and
-  every scan pass discards the datapoint.
-  **Shape (Ben, 2026-07-27): CASE-BY-CASE, not a standing rollup.** The real use is diagnostic — *"this
-  reserve is severely underperforming; how did its picks rank in the overall list?"* A reserve pick that
-  would have ranked 12th of 178 says the top-N nearly had it anyway and the slot is not earning its keep; one
-  that ranked 87th says the reserve is reaching genuinely far down. So no `analyze-record.mjs` aggregate is
-  needed — just enough logged per row to make that a lookup. Fix: thread **`via`** AND the row's
-  **position in the unified pre-fetch ordering** through `suggestionEntry`
-  (`pipeline/lib/render/suggestlog.mjs` — additive optional fields, same `if (x != null)` shape as its
-  existing ones) at the screen's log site. `expGpDay` is already logged but is NOT sufficient to recover the
-  rank, because the ordering is `expGpDay × softFactor × trackBoost` and neither multiplier is recorded.
-  **URGENCY: rank is NOT reconstructable after the fact** — it depends on that pass's market snapshot, so
-  an un-captured rank is gone permanently, the same failure shape as the `via` gap itself. Cheap, and it
-  gates the retirement decision — do it BEFORE tuning any slice size.
+  therefore whether the reserves can be deleted.
+  **Shape (Ben, 2026-07-27): CASE-BY-CASE, not a standing rollup** — the real use is diagnostic (*"how did
+  a reserve's picks rank in the overall list?"* — 12th of 178 says the slot isn't earning its keep; 87th
+  says it reaches genuinely far down), so no `analyze-record.mjs` aggregate; just enough per row to make
+  that a lookup. **Shipped exactly that:** `pickFetchPool` (`admission.mjs`) stamps every gated candidate's
+  `preRank`/`prePool` (position in the pre-fetch ordering — band/churn: the `expGpDay × softFactor ×
+  trackBoost` unified score; value: `valueScore`; amplitude: `ampProxy`), and the screen's log sites thread
+  `via` + `preRank`/`prePool` (+ the already-computed `askPlacement` percentile) through `suggestionEntry`
+  as lean fields; each pass also appends ONE admission-exclusion aggregate line per niche (the crowded-out
+  set with SC1 reasons — `suggestlog.mjs excludedShadow`; itemId-less, skipped by every fill joiner).
+  Behaviour-neutral (console + `screen.json` byte-identical; ledger-only, ~+19KB/`--mode all` pass). The
+  retirement comparison and EF0's counterfactual can now accrue; anything logged before 2026-08-01 has no
+  provenance — the datapoints those passes discarded are gone (the urgency was real).
 - **~~Class B mid-tier: does the `FLOOR` 50 → 3,500 recalibration overshoot the mid band?~~ SUPERSEDED
   2026-07-27 — that asked about the wrong constant. The real blocker is the EDGE floor, not liquidity.**
   Berserker helm (780/d), Dragon scimitar (1.7k/d) and — newly identified — **Rune platebody** never become

@@ -90,9 +90,13 @@ export function trackBoost(entry, { minN = TRACK_BOOST_MIN_N, cap = TRACK_BOOST_
 
    HOW THE PROOF GETS MADE: each reserve admission is a natural experiment — an item the ranking would
    NOT have fetched, fetched anyway and then scored post-fetch. Comparing `via`-tagged rows against
-   ranked-in rows is therefore the evidence that retires the reserves. NOTE (2026-07-27): `via` is NOT
-   yet carried into suggestions.jsonl, so that comparison cannot be run today and every pass discards
-   the datapoint. Logging it is the prerequisite for the retirement decision. */
+   ranked-in rows is therefore the evidence that retires the reserves. EF-0a (2026-08-01, the PLAN.md
+   Discovered "log `via`" prerequisite): `via` + the candidate's `preRank`/`prePool` (its 1-based
+   position in this niche's pre-fetch ordering, stamped by pickFetchPool below) now RIDE
+   suggestions.jsonl on every screen row, and each pass's non-admitted candidates are persisted as one
+   aggregate `excluded` ledger line per niche (suggestlog.mjs excludedShadow) — so the reserve-vs-
+   ranked-in comparison, and the "would the buried row have been good?" counterfactual (EF0,
+   PLAN-ESTIMATOR-FIDELITY), can finally accrue. Inform-only: the stamps never gate/rank/sort. */
 export const EXPLORE_RESERVE_DEFAULT = 2;   // PLACEHOLDER (rule 4) — small + bounded; the fetch-budget guard is R2
 export const ROTATE_MS = 30 * 60 * 1000;    // exploration rotation period — no persisted state file needed
 
@@ -206,6 +210,12 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
     // reserve-slotted row from a ranked-in one). Additive: the ranked top-N is untouched, and the
     // reserved rows are NOT also reported excluded.
     const sorted = cand.slice().sort((a, b) => (b.valueScore - a.valueScore) || (a.id - b.id));
+    // EF-0a — stamp every gated candidate's position in THIS niche's pre-fetch ordering (valueScore
+    // desc, the ordering that decides admission here) so the ledger can answer "how did a reserve/
+    // excluded pick rank in the overall list?" (PLAN.md Discovered `via`+rank logging). Mutates the
+    // candidate objects (the proxyDrift precedent below); clones made later inherit the stamp.
+    // Inform-only — never read by any gate/sort in this module.
+    sorted.forEach((c, i) => { c.preRank = i + 1; c.prePool = sorted.length; });
     const topN = sorted.slice(0, top);
     const topIds = new Set(topN.map(c => c.id));
     const ampOf = c => (c.valueRanges && c.valueRanges.afterTaxAmpPct) || 0;
@@ -230,6 +240,9 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
   const isAmplitude = cand.length && cand[0].ampProxy !== undefined;
   if (isAmplitude) {
     const sorted = cand.slice().sort((a, b) => (b.ampProxy - a.ampProxy) || (a.id - b.id));
+    // EF-0a — same pre-fetch-position stamp as the value branch, on amplitude's own ordering key
+    // (ampProxy desc). Inform-only.
+    sorted.forEach((c, i) => { c.preRank = i + 1; c.prePool = sorted.length; });
     const topN = sorted.slice(0, top);
     const topIds = new Set(topN.map(c => c.id));
     const watchReserve = cand.filter(c => c.watched && !topIds.has(c.id));
@@ -240,6 +253,21 @@ export function pickFetchPool(mode, cand, dailySeries, opts = {}) {
 
   for (const c of cand) c.proxyDrift = proxyDrift(dailySeries[c.id]);
   const boostOf = c => trackIndex ? trackBoost(trackIndex.get(c.id)) : 1;
+
+  // EF-0a (PLAN.md Discovered "log `via` into suggestions.jsonl" — the reserve-retirement prerequisite):
+  // stamp every gated candidate's 1-based position in the UNIFIED pre-fetch ordering,
+  // expGpDay × softFactor(proxyDrift) × trackBoost — the exact formula the Discovered entry names as
+  // unrecoverable after the fact ("neither multiplier is recorded"). This is a DIAGNOSTIC reference
+  // ordering over the WHOLE gated pool (held + thin + velocity together); the actual admission still
+  // runs the per-lane sorts below (thin omits softFactor, held bypasses ranking) — the stamp exists so
+  // a ledger row can say "would have ranked 12th of 178", not to change who is admitted. Mutates the
+  // candidate objects (the proxyDrift precedent above); via-tagged clones inherit it. Inform-only —
+  // nothing below reads preRank/prePool.
+  {
+    const unifiedScore = c => (c.expGpDay || 0) * softFactor(c.proxyDrift) * boostOf(c);
+    const ordered = cand.slice().sort((a, b) => (unifiedScore(b) - unifiedScore(a)) || (a.id - b.id));
+    ordered.forEach((c, i) => { c.preRank = i + 1; c.prePool = ordered.length; });
+  }
 
   const held = cand.filter(c => c.held);
   const heldIds = new Set(held.map(c => c.id));

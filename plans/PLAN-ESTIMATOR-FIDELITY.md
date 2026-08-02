@@ -84,9 +84,10 @@ Root causes CONFIRMED in code (all verified against current `main`, 2026-08-01):
 **Fetch-pool starvation is real but NOT scoped here.** Runite bolts (unf) required `--top 130`
 for a fetch slot (band 88 rated at `--top 180` vs 26 at default; 60–135 "crowded out" per pass).
 That is `PLAN-FETCH-POOL-SCALING` chunks 2–4 + the PLAN.md Discovered "capital-conditioned
-reserves" ruling (reserves = validation scaffolding with an exit condition) + the `via`-rank
-suggestions logging (Discovered, flagged URGENT — un-captured rank is gone forever). This plan
-contributes the evidence row and takes a dependency, nothing more — do not fork that work here.
+reserves" ruling (reserves = validation scaffolding with an exit condition). The `via`-rank
+suggestions logging half (Discovered, was flagged URGENT — un-captured rank is gone forever)
+**shipped 2026-08-01 as EF-0a below**. This plan contributes the evidence row and takes a
+dependency on the scaling chunks, nothing more — do not fork that work here.
 
 ## Challenge to the premise (why EF0 comes first)
 
@@ -151,6 +152,41 @@ EF2 consumes `r.timedLap`, never re-derives), evidence reports in `pipeline/comm
 `screen.json`).
 
 ## Staged chunks
+
+### EF-0a — the `via`+rank logging prerequisite (SHIPPED 2026-08-01; data-perishable, landed first)
+The PLAN.md Discovered "log `via` into `suggestions.jsonl`" spec, implemented literally (every scan
+pass without it permanently discarded the datapoint — rank depends on that pass's market snapshot
+and is NOT reconstructable):
+(a) **Per-surfaced-row admission provenance:** `pickFetchPool` (`pipeline/lib/signal/admission.mjs`)
+stamps every gated candidate's `preRank`/`prePool` — its 1-based position in that niche's pre-fetch
+ordering + the pool size ("would have ranked 12th of 178"). Ordering keys: band/churn = the unified
+`expGpDay × softFactor(proxyDrift) × trackBoost` score the Discovered entry names (a DIAGNOSTIC
+reference over the whole gated pool — the per-lane admission sorts are untouched; thin omits
+softFactor, held bypasses ranking); value = `valueScore`; amplitude = `ampProxy`. The screen's three
+log sites (renderMode / value / amplitude) thread `via` ('reserve' | 'explore'; absent = ranked-in —
+the natural-experiment baseline) + `preRank`/`prePool` + `askPlacement` (the digest's already-computed
+daily-HIGH placement percentile, previously discarded) through `suggestionEntry` as lean
+`if (x != null)` fields.
+(b) **The crowded-out set:** each pass appends ONE admission-exclusion aggregate line per niche —
+`{ ts, script:'screen', mode, params, prePool, excluded:[{ id, reason, preRank?, expGpDay? }, …] }`
+(`suggestlog.mjs excludedShadow`) — exactly the excluded population EF0's "would the buried row have
+been good?" counterfactual joins against the archive. Aggregate rows are itemId-less by design, so
+retroJoin / join-outcomes / join-window-clears / report-retro all skip them structurally;
+`analyze-record.mjs` additionally exempts them from its `noKey` health counter.
+*Acceptance (all verified at landing):* behaviour-neutral — back-to-back warm-cache before/after
+runs of `--verbose --digest --mode all` diff identical except wall-clock "~Nmin ago" labels; no
+`screen.json` shape/content change; zero new fetches (every logged number was already in-process);
+fixtures pin the stamps (`admission.test.mjs`) + the lean fields/reshaper (`suggestlog.test.mjs`);
+measured cost ≈ +19.4KB per `--mode all` pass (~17.9KB the three aggregate lines, ~1.5KB the per-row
+trio) vs ~101KB baseline pass. Absent under `--admission legacy` (rankAndSlice stamps nothing —
+lean fields simply don't appear).
+*Gap vs the task's wish-list (honesty):* the rank components net/P/TTF and the reach splits were
+ALREADY logged (`estFields`' bid/ask/pFill/ttfSec/rank + `estConfidence`/`timedLap`); EF-0a added
+only what was missing (`via`, `preRank`/`prePool`, `askPlacement`, the excluded set). The
+`softFactor`/`trackBoost` multipliers themselves are not logged as separate fields — `preRank` (the
+position, which the Discovered entry names as the needed lookup) supersedes recovering them.
+*Primary files:* `pipeline/lib/signal/admission.mjs`, `pipeline/lib/render/suggestlog.mjs`,
+`pipeline/commands/screen-flip-niches.mjs`, `pipeline/commands/analyze-record.mjs`, tests.
 
 ### EF0 — the counterfactual + attribution report (evidence first; gates every promotion)
 Read-only command `pipeline/commands/report-estimator-fidelity.mjs` (or a `report-retro.mjs`
@@ -234,8 +270,8 @@ updated to assert the measured path; (b) byte-identical diff; (c) documented in
 
 ### Deliberately NOT scoped here
 - Fetch-pool starvation / reserves / `--top` scaling → `PLAN-FETCH-POOL-SCALING` + PLAN.md
-  Discovered (capital-conditioned reserves; `via`+rank logging is the prerequisite and should
-  land FIRST there — it is cheap and its data is unrecoverable).
+  Discovered (capital-conditioned reserves). The `via`+rank logging prerequisite DID land here
+  (EF-0a, 2026-08-01 — it was cheap and its data unrecoverable); the scaling work itself stays out.
 - Removing the band sell fold → only via AC7's re-decision path, i.e. EF0(a)'s numbers +
   a Ben ruling. This plan never deletes the fold on the anchor alone.
 - `safeQuantile` / size-conditioned achievable price → `PLAN-REACH-CALIBRATION` AC3+ (the
@@ -246,6 +282,7 @@ updated to assert the measured path; (b) byte-identical diff; (c) documented in
 
 | Chunk | What | State |
 | --- | --- | --- |
+| EF-0a | `via`+rank+excluded-set ledger logging (the data-perishable prerequisite) | ✅ 2026-08-01 |
 | EF0 | Counterfactual + attribution report (fold-vs-raw, (none) decomposition, bid twin) | OPEN |
 | EF1 | Rank-leg honesty: dead-bid reprice line · placement-bounded churn exemption · one P | OPEN |
 | EF2 | Timed daily-basis pair as visible second answer (guards inline) | OPEN |

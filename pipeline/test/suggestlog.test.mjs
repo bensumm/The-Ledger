@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';
+import { LEDGER, suggestionEntry, liqClassOf, rotateLedger, readSuggestionLines, currentMonthKey, reachableShadow, depthExitShadow, windowExitShadow, excludedShadow } from '../lib/render/suggestlog.mjs';
 
 let n = 0;
 function ok(name, fn) { fn(); n++; console.log('  ✓ ' + name); }
@@ -69,6 +69,30 @@ ok('R7: `cappedBy` names the binding grade ceiling — lean-included (present on
   assert.equal(capped.cappedBy, 'reach', 'the binding ceiling is logged for the retro');
   const uncapped = suggestionEntry({}, { itemId: 14, cls: 'liquid', verdict: 'A', grade: 'A' });
   assert.ok(!('cappedBy' in uncapped), 'an uncapped row stays byte-identical (no cappedBy field)');
+});
+
+ok('EF-0a: via/preRank/prePool/askPlacement are lean-included admission-provenance fields', () => {
+  const e = suggestionEntry({}, { itemId: 20, cls: 'mid', verdict: 'B', via: 'reserve', preRank: 12, prePool: 178, askPlacement: 0.85 });
+  assert.equal(e.via, 'reserve');
+  assert.equal(e.preRank, 12);
+  assert.equal(e.prePool, 178);
+  assert.equal(e.askPlacement, 0.85);
+  const none = suggestionEntry({}, { itemId: 21, cls: 'mid', verdict: 'B' });
+  assert.ok(!('via' in none) && !('preRank' in none) && !('prePool' in none) && !('askPlacement' in none),
+    'absent admission-provenance fields stay absent (quote/watch + --admission legacy rows byte-identical)');
+});
+
+ok('EF-0a: excludedShadow — lean crowded-out shape; null when nothing was excluded', () => {
+  assert.equal(excludedShadow([]), null, 'legacy admission / fully-fetched pool → no aggregate line');
+  assert.equal(excludedShadow(null), null);
+  const ex = excludedShadow([
+    { id: 5, reason: 'thin-reserve-full', expGpDay: 1234.6, preRank: 7, mid: 100, thin: true, limitVol: 9 },
+    { id: 6, reason: 'value-top-n' },   // value/amplitude candidates carry no expGpDay/preRank-optional inputs
+  ]);
+  assert.deepEqual(ex, [
+    { id: 5, reason: 'thin-reserve-full', preRank: 7, expGpDay: 1235 },
+    { id: 6, reason: 'value-top-n' },
+  ], 'only id/reason (+ lean preRank/rounded expGpDay) survive — never the whole candidate object');
 });
 
 ok('AZ-forward: `depth` {hpv,lpv} is derived off row.pressure; no pressure → no field', () => {

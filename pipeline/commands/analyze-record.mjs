@@ -49,6 +49,10 @@ function loadSuggestions() {
   for (const line of readSuggestionLines()) {
     if (!line.trim()) continue;
     let s; try { s = JSON.parse(line); } catch { malformed++; continue; }
+    // EF-0a: admission-exclusion AGGREGATE rows (screen-pass crowded-out telemetry — deliberately
+    // itemId-less, see suggestlog.mjs's aggregate-row block) are NOT suggestions and NOT missing-key
+    // defects — skip them BEFORE the noKey health counter so the dataset audit stays honest.
+    if (s.excluded != null && s.itemId == null) continue;
     if (s.itemId == null || s.ts == null) { noKey++; continue; }
     rows.push(s);
   }
