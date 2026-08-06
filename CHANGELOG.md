@@ -10,6 +10,56 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The forecast's refusals were FAIL-OPEN, and the verification trio was the one surface calling them blind (0.71.1, 2026-08-06)
+**The failure.** Snape grass was held 13,000 @ 1,051 (BE 1,073) through a textbook post-spike decay.
+Across a full day the `read-window-range.mjs` trio — the surface the market-read doctrine makes
+MANDATORY before quoting any price — printed a drift-adjusted exit projection that marched
+`peak ~1,090 → ~1,062 → ~1,033 → ~1,024`, and it was quoted as decision evidence on a 13.66m position.
+It should never have printed at all.
+
+**Why.** `diurnalForecast` (`js/forecast.mjs`) opens with three refusals: `unreliable-quote`
+(`ctx.reliable === false`), `post-shock-shape` (`ctx.phase` 'spike'|'decay' — its own comment reads
+*"a post-SHOCK shape is not the recurring shape — refuse to project it"*), and `band-violation-live`
+(`ctx.mom` 'breakdown'|'breakup'). Every one is **fail-open by construction**: `ctx.phase === 'spike'`
+is simply `false` when the caller never passed `phase`. An audit of all six call sites found
+`screen-flip-niches.mjs` (×2) and `quote-items.mjs` (×2) passing `phase`/`mom`/`reliable`, and
+`read-window-range.mjs` (×2) passing only `liveLo`/`liveHi` — so on the trio all three refusals were
+dead. Snape grass is classified `spike`; the guard existed, matched the case exactly, and could not fire.
+The defect was invisible precisely because the surfaces agreed in FORMAT while disagreeing in RIGOUR.
+
+**The fix, three parts.**
+- **P2 — the call sites.** `read-window-range.mjs` now computes `phase(series)` once off the 1h series
+  already in hand (`js/quotecore.js`, zero new fetch) and threads it into both `driftExitFrom` ctx
+  objects. Verified live: Snape grass's drift clause is now correctly ABSENT (refused as
+  `post-shock-shape`) while Soul rune's still prints — no regression on a normal-shape item.
+- **P1 — fail-closed VISIBILITY, not fail-closed behaviour.** `diurnalForecast` now returns
+  `guardsUnchecked` naming which guard inputs the caller omitted, `driftAdjustedExit` passes it
+  through, and `formatFloorCeiling` renders `⚠ guards unchecked: reliable/mom` inline on the drift
+  clause. Deliberately NOT a refusal — refusing on a missing field would break every honest degrade
+  path; the point is that a blind projection can never again read identically to a checked one.
+  `phase: 'unknown'` counts as CHECKED (the classifier ran and couldn't tell — a different, honest
+  statement from "nobody asked").
+- **P3 — the CI pin.** New `pipeline/ci/check-forecast-guards.mjs` fails the build if any
+  `diurnalForecast(`/`driftExitFrom(` call region lacks `phase`. Wired into `checks.yml`. It
+  immediately earned its keep: beyond the two known sites it flagged `js/estimators/pair.mjs` and
+  `js/trends.js`, both of which turned out to pass a prepared ctx — which is why the checker resolves
+  one level (a `...spread` or a bare `ctx` param built as `ctx: { … phase … }`) and strips comment
+  bodies offset-preservingly. A negative test (blanking `guardCtx`) confirms it is not vacuous.
+
+**What is NOT broken.** The projection MODEL is sound and was not touched: it computes
+`baselineNow = liveMid − devMidCur`, backing today's implied day-level out of live via the current
+hour's own typical deviation, then re-projects each future hour with that hour's deviation. Its one
+real modelling assumption is **zero mean-reversion** — today's gap propagates fully to the projected
+peak — which is defensible but **unmeasured**: nothing scores these projections against outcomes, so
+`conf med, n≈0` is a placeholder, not a measured confidence. A replay scorer (project as of hour H,
+compare to that day's realised extremum, report error and bias by hour and phase) is the open
+follow-up and the only thing that will actually answer "is it accurate".
+
+**Honesty (rule 4).** This fixes a KNOWN-INVALID projection rendering. It does not make the valid
+ones more accurate — that needs the scorer above. Four new acceptance fixtures in
+`pipeline/test/forecast.test.mjs` pin the `guardsUnchecked` contract (blind / fully-guarded /
+supplied-but-unknown / partial).
+
 ### The deep-book reach misread is now answered in CODE, not prose — the `⊙ avg-bound read` clause (pipeline-only, 2026-08-05)
 **The failure.** Verifying scan candidates with the `read-window-range.mjs` trio, an agent read
 `--bid 2,888 → touched on 0/14 day(s) · recent 0/3 · placement p0` on **Ruby dragon bolts (e) at

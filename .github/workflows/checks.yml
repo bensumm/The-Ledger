@@ -50,6 +50,9 @@ jobs:
       - name: daemon-safety (no local/auto-runnable daemon imports or shells the git-writer — PLAN-DAEMON-SUBSYSTEM)
         run: node pipeline/ci/check-daemon-safety.mjs
 
+      - name: forecast-guards (every diurnalForecast/driftExitFrom ctx passes `phase` — the fail-open refusal pin)
+        run: node pipeline/ci/check-forecast-guards.mjs
+
       - name: archlint (every file ARCHITECTURE.md names resolves on disk — doc-reference guard E7)
         run: node pipeline/ci/lint-arch.mjs
 

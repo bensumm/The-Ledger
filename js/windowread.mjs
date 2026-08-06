@@ -562,7 +562,11 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
     const hd = fmtHoldHorizon(drift.holdHorizonDays);
     const pk = drift.driftAdjustedPeak != null ? `~${fmt(Math.round(drift.driftAdjustedPeak))}` : '—';
     const tr = drift.driftAdjustedTrough != null ? `~${fmt(Math.round(drift.driftAdjustedTrough))}` : '—';
-    parts.push(`drift-adj exit (~${hd} hold): peak ${pk} / trough ${tr} (projected level${drift.confidence ? `, conf ${drift.confidence}` : ''}, n≈0 — inform, not a direction)`);
+    // P1 (2026-08-06): a projection computed WITHOUT the caller supplying diurnalForecast's guard inputs
+    // (reliable / phase / mom) is not the same object as a guarded one — the post-shock-shape and
+    // band-violation REFUSALS could not have fired. Say so inline rather than let it read identically.
+    const gu = (drift.guardsUnchecked && drift.guardsUnchecked.length) ? `, ⚠ guards unchecked: ${drift.guardsUnchecked.join('/')}` : '';
+    parts.push(`drift-adj exit (~${hd} hold): peak ${pk} / trough ${tr} (projected level${drift.confidence ? `, conf ${drift.confidence}` : ''}, n≈0${gu} — inform, not a direction)`);
   }
   return `${label ? label + ': ' : ''}floor/ceiling: ${parts.join(' · ')}  (heuristic, n≈0 — inform-only, never gates)`;
 }

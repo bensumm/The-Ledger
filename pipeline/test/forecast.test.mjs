@@ -202,4 +202,28 @@ ok('fmtEta: terse hour token', () => {
   assert.equal(fmtEta(0), 'now');
 });
 
+// ── P1: the guards are FAIL-OPEN — `guardsUnchecked` is what makes a blind projection visible ──────
+// The 2026-08-06 Snape grass miss: read-window-range.mjs (the mandatory verification trio) passed only
+// liveLo/liveHi, so `ctx.phase === 'spike'` was false-by-absence and a mid-decay item kept printing a
+// drift-adj peak the module was written to REFUSE. These pin the visibility contract: a caller that
+// omits a guard input still gets a projection (breaking every honest degrade path would be worse), but
+// the forecast now NAMES which refusals could not have fired, and the render surfaces it.
+ok('P1: a blind ctx (no phase/mom/reliable) still projects but reports all three guardsUnchecked', () => {
+  const f = diurnalForecast(cleanProf(), { liveLo: 1000, liveHi: 1010, now: noon }).forecast;
+  assert.ok(f, 'a missing guard input must NOT refuse — that would break the honest degrade paths');
+  assert.deepEqual(f.guardsUnchecked, ['reliable', 'phase', 'mom']);
+});
+ok('P1: a fully-guarded ctx reports guardsUnchecked empty (no marker on a checked projection)', () => {
+  const f = diurnalForecast(cleanProf(), { liveLo: 1000, liveHi: 1010, now: noon, phase: 'base', mom: 'clean', reliable: true }).forecast;
+  assert.deepEqual(f.guardsUnchecked, []);
+});
+ok('P1: phase supplied-but-unknown counts as CHECKED (the classifier ran and could not tell)', () => {
+  const f = diurnalForecast(cleanProf(), { liveLo: 1000, liveHi: 1010, now: noon, phase: 'unknown', mom: 'clean', reliable: true }).forecast;
+  assert.deepEqual(f.guardsUnchecked, [], "'unknown' is a real answer — different from nobody asking");
+});
+ok('P1: partial coverage names exactly the missing inputs (the trio: phase checked, mom/reliable not)', () => {
+  const f = diurnalForecast(cleanProf(), { liveLo: 1000, liveHi: 1010, now: noon, phase: 'base' }).forecast;
+  assert.deepEqual(f.guardsUnchecked, ['reliable', 'mom']);
+});
+
 console.log(`\nAll ${pass} acceptance checks passed.`);

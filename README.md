@@ -1661,6 +1661,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Uses a character-scanner comment stripper (strings/templates/regexes preserved verbatim, so an identifier in
     a `${…}` interpolation still counts — the STAGES false-positive lesson). Pure helpers exported + pinned by
     `check-dead-exports.test.mjs`,
+  - `check-forecast-guards.mjs` (2026-08-06, the Snape grass miss — a STRUCTURAL, denylist-style pin on
+    `diurnalForecast`'s FAIL-OPEN refusals, run in the cheap `checks` job. `js/forecast.mjs` refuses to project
+    an `unreliable-quote` / `post-shock-shape` (`ctx.phase` 'spike'|'decay') / `band-violation-live` shape — but
+    `ctx.phase === 'spike'` is simply false when a caller omits `phase`, so a blind call yields an UNGUARDED
+    projection that renders byte-identically to a guarded one. Scans `js/`, `pipeline/commands/`, `pipeline/lib/`
+    (non-test; `js/forecast.mjs` itself exempt — it is where the guards live) and FAILS the build if any
+    `diurnalForecast(`/`driftExitFrom(` call region does not carry `phase`, resolving ONE level so a
+    prepared ctx (`...guardCtx`, or a bare `ctx` param built as `ctx: { … phase … }`) counts. Strips comment
+    bodies offset-preservingly so a doc comment quoting a call shape can't trip it. Only `phase` is REQUIRED —
+    `mom`/`reliable` aren't computed on every surface, and their absence is surfaced at runtime by the
+    forecast's `guardsUnchecked` field rendering `⚠ guards unchecked: …` on the drift-adj clause instead.
+    Produces/consumes nothing; exit 1 + a per-site report on violation)
   - `check-daemon-safety.mjs` (PLAN-DAEMON-SUBSYSTEM Hardening finding #1, the CI half approved for Phase 1 —
     a STRUCTURAL, DENYLIST-style zero-git guard run in the cheap `checks` job. Scans `pipeline/daemons/registry.mjs`
     + every `pipeline/daemons/*.mjs` (non-test) and FAILS the build if a local/auto-runnable daemon (1) IMPORTs

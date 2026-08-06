@@ -64,7 +64,7 @@ import path from 'node:path';
 import { loadMapping, fetchTs, fetchLatest, rolling24FromTs1h } from '../lib/market/marketfetch.mjs';   // rolling24FromTs1h: the TRUE trailing-24h units/d composed from the IN-HAND 1h series (never the broken /24h) — feeds the avg-bound deep/thin split at zero new fetch
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
 import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
-import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
+import { maxBuyForExit, breakEven, QUICK_FRESH_MIN, phase } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard; `phase` (2026-08-06) feeds diurnalForecast's post-shock-shape REFUSAL through driftExitFrom's ctx — see the FORECAST-GUARD note below
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/market/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL folded into the floor/ceiling note (off the in-hand profile+days — no fetch)
@@ -181,6 +181,21 @@ for (const want of positionals) {
   // ONE hourProfile per item, shared by the T1 --window peak|dip resolution, the --profile block, and
   // the reachMargin pace read (previously computed twice per item). Pure — no fetch.
   const prof = hourProfile(series, { nights: NIGHTS });
+  // ── FORECAST-GUARD (2026-08-06, the Snape grass miss) ─────────────────────────────────────────────
+  // `diurnalForecast` REFUSES to project three shapes — `unreliable-quote` (ctx.reliable === false),
+  // `post-shock-shape` (ctx.phase 'spike'|'decay' — "a post-SHOCK shape is not the recurring shape"),
+  // and `band-violation-live` (ctx.mom 'breakdown'|'breakup'). Those guards are FAIL-OPEN by
+  // construction: `ctx.phase === 'spike'` is simply false when the caller omits `phase`, so a blind
+  // call yields an UNGUARDED projection that renders byte-identically to a guarded one. Every other
+  // driftExitFrom call site (screen-flip-niches ×2, quote-items ×2) passes phase/mom/reliable; THIS
+  // script — the mandatory verification trio — passed only liveLo/liveHi, so all three were dead here.
+  // Real cost: Snape grass (classified `spike`, mid-decay) kept printing a drift-adj peak (~1,090 →
+  // ~1,024 across one day) that the module was written to refuse, and it was quoted as decision
+  // evidence. `phase` is derivable free off the 1h series already in hand — compute it ONCE here and
+  // thread it into both ctx objects. `mom`/`reliable` are NOT computed on this surface; P1's
+  // `guardsChecked` marker is what makes their absence visible rather than silent.
+  const fcPhase = phase(series);
+  const guardCtx = { phase: fcPhase ? fcPhase.phase : undefined };
   // T1 — resolve the `peak`/`dip` literals against THIS item's own profile. When the profile is too thin
   // to derive one, say so and fall back to the fixed default rather than silently scoring a fabricated
   // window (the whole point of the flag is that the window is not hand-transcribed).
@@ -294,7 +309,7 @@ for (const want of positionals) {
       // Chunk 5: the drift-adjusted exit level off a profile computed from the SAME 1h series already in hand
       // (zero new fetch) + the day series; degrades to null (clause omitted) on a thin/degraded projection.
       const trajProf = hourProfile(series, { nights: NIGHTS });
-      const trajDae = trajProf ? driftExitFrom(trajProf, tdays, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null }) : null;
+      const trajDae = trajProf ? driftExitFrom(trajProf, tdays, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null, ...guardCtx }) : null;
       const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling }, drift: trajDae } : { drift: trajDae });
       if (fcText) log(`  ${fcText}`);
       // forward projection: fc.floor/fc.ceiling ARE projectTrajectory results (floorCeilingTrack wraps the
@@ -468,7 +483,7 @@ for (const want of positionals) {
     const fc = floorCeilingTrack(scored, { todayKey: `${nowFc.getFullYear()}-${pad2fc(nowFc.getMonth() + 1)}-${pad2fc(nowFc.getDate())}` });
     // Chunk 5: the drift-adjusted exit level, reusing the profMargin hourProfile already computed this pass
     // (zero new fetch) + the scored day series; null (clause omitted) when the projection degrades.
-    const dailyDae = profMargin ? driftExitFrom(profMargin, scored, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null }) : null;
+    const dailyDae = profMargin ? driftExitFrom(profMargin, scored, { liveLo: latest ? latest.low ?? null : null, liveHi: latest ? latest.high ?? null : null, ...guardCtx }) : null;
     const fcText = formatFloorCeiling(fc, fmt, tr ? { live: { ref: tr.liveRef, pos: tr.livePos, floor: tr.floor, ceiling: tr.ceiling }, drift: dailyDae } : { drift: dailyDae });
     if (fcText) log(`    ${fcText}`);
     // diurnal dip/peak summary — ONLY when --profile didn't already print the full profile block above.

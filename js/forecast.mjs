@@ -93,6 +93,20 @@ export function diurnalForecast(profile, ctx = {}) {
   // the price is violating its own 2h band RIGHT NOW — the live anchor is untrustworthy
   if (ctx.mom === 'breakdown' || ctx.mom === 'breakup') return nul('band-violation-live');
 
+  // ── P1 FAIL-CLOSED VISIBILITY (2026-08-06, the Snape grass miss) ────────────────────────────────
+  // The three guards above are FAIL-OPEN by construction: `ctx.phase === 'spike'` is simply false when
+  // the caller omits `phase`, so a blind call produces an UNGUARDED projection that renders byte-for-byte
+  // like a checked one. That is how a mid-decay item kept printing a drift-adj peak on the verification
+  // trio for a full day. We deliberately do NOT refuse on a missing field (that would break every honest
+  // degrade path); instead we RECORD which guard inputs the caller supplied so the render can say so.
+  // Note `phase: 'unknown'` counts as SUPPLIED — the classifier ran and couldn't tell, which is a
+  // different (and honest) statement from "nobody asked". Inform-only: never changes a level, a
+  // confidence, or a refusal. Enforced at the call sites by pipeline/ci/check-forecast-guards.mjs.
+  const guardsUnchecked = [];
+  if (ctx.reliable === undefined) guardsUnchecked.push('reliable');
+  if (ctx.phase === undefined) guardsUnchecked.push('phase');
+  if (ctx.mom === undefined) guardsUnchecked.push('mom');
+
   const liveMid = (ctx.liveLo != null && ctx.liveHi != null) ? (ctx.liveLo + ctx.liveHi) / 2
     : (ctx.liveLo ?? ctx.liveHi ?? null);
   if (liveMid == null) return nul('no-anchor');
@@ -177,7 +191,7 @@ export function diurnalForecast(profile, ctx = {}) {
       && nextTrough.mode === 'diurnal' && nextPeak.mode === 'diurnal') return nul('flat-window');
 
   return {
-    forecast: { nextTrough, nextPeak, series, baselineNow, trendPerHour, horizonH, nights: profile.nights, confidence },
+    forecast: { nextTrough, nextPeak, series, baselineNow, trendPerHour, horizonH, nights: profile.nights, confidence, guardsUnchecked },
     reason: null,
   };
 }
@@ -339,7 +353,10 @@ export function driftAdjustedExit(fc, { ceilingSlope = null, floorSlope = null, 
   const base = f.confidence ?? f.nextPeak.confidence ?? 'low';
   const shifted = (ceilingSlope != null && ceilingSlope !== 0) || (floorSlope != null && floorSlope !== 0);
   const confidence = shifted ? down(base) : base;
-  return { driftAdjustedTrough, driftAdjustedPeak, confidence, holdHorizonDays, ceilingSlope, floorSlope, naivePeak, naiveTrough };
+  // P1: carry the forecast's guard-coverage through so the RENDER can mark a blind projection. Pure
+  // pass-through — nothing here reads or branches on it.
+  return { driftAdjustedTrough, driftAdjustedPeak, confidence, holdHorizonDays, ceilingSlope, floorSlope, naivePeak, naiveTrough,
+    guardsUnchecked: (f.guardsUnchecked && f.guardsUnchecked.length) ? f.guardsUnchecked : null };
 }
 
 /**
