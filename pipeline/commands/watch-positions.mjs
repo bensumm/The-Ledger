@@ -248,8 +248,16 @@ function windowLine(ts1h, { bid = null, ask = null, compact = false, heldQty = n
     if (heldQty == null || volDay == null || !his.length) return '';
     const rel = reachRelief({ intendedUnits: heldQty, volDay });
     if (!(rel > 0)) return '';
-    const aR = { reachedDays: reachedDays(his, askLevel), nDays: his.length };
-    const base = askReachFactor(aR, 0), relieved = askReachFactor(aR, rel);
+    // RB-3 (PLAN-RECENCY-BASIS): score the relief note on the RECENT-3 basis, off the SAME recencySplit the
+    // `⚠stale` marker two lines up already computes (zero new fetch). WHY: `⚠stale` and this note print
+    // INCHES APART on one held-lot line — `⚠stale` says "recent nights don't reach the ask" while a
+    // full-window `size-relieved fill ~N%` asserted a fill probability off the older regime. Two contradicting
+    // recency reads on one line is exactly the defect this chunk removes. CONSEQUENCE, and it is correct:
+    // on a RECOVERING item whose recent reach is already 3/3 the base factor is 1.0, relief has nothing left
+    // to relieve, and the clause DISAPPEARS — there is no discount left to soften, so there is nothing to say.
+    const rcAsk = recencySplit(stats.days, 'ask', askLevel, RECENT_NIGHTS);
+    const aR = { reachedDays: reachedDays(his, askLevel), nDays: his.length, recentHit: rcAsk.recentHit, recentDays: rcAsk.recentDays };
+    const base = askReachFactor(aR, 0, { prefer: 'recent' }), relieved = askReachFactor(aR, rel, { prefer: 'recent' });
     if (!(relieved > base)) return '';
     const pct = heldQty / volDay * 100;
     return ` · size-relieved fill ~${Math.round(relieved * 100)}% (${fmt(heldQty)}≈${pct < 0.1 ? '<0.1' : pct.toFixed(1)}% of ${fmt(volDay)}/d — deep book)`;

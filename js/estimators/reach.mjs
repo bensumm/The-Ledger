@@ -1,6 +1,8 @@
 /**
  * estimators/reach.mjs (PC2, 2026-07-17) — the REACH-CONDITIONING helpers, split out of the estimator
- * monolith: reachRelief + its liquidity/size constants, dayHighFrom5m, askReachFactor, asymEstimate.
+ * monolith: reachRelief + its liquidity/size constants, dayHighFrom5m, reachFraction, askReachFactor,
+ * asymEstimate. reachFraction (RB-3) is the ONE recency-basis rule — full-window by default, recent-3 on an
+ * explicit `{ prefer: 'recent' }` opt-in — shared by askReachFactor, pair.mjs's reachRead, and the screen digest.
  * These are consumed by BOTH the family rank (families.mjs estimateRank → askReachFactor) and the
  * reconciliation price estimator (pair.mjs estimatePair → reachRelief/REACH_DEBIAS_MAX_FRAC). PURE:
  * DOM/fetch/fs-free, imports only the money-math helpers + families' estimatorFor/rankScore (a runtime
@@ -77,6 +79,27 @@ export function dayHighFrom5m(ts5m, { hours = 24 } = {}) {
   return hi;
 }
 
+/* --- reachFraction: THE ONE recency-basis rule for an ask/bid reach count (RB-3, PLAN-RECENCY-BASIS) ---
+   `reachFraction({ reachedDays, nDays, recentHit?, recentDays? }, { prefer })` → number|null.
+     prefer:'full'   (DEFAULT) → reachedDays / nDays — today's flat full-window fraction, byte-identical.
+     prefer:'recent'           → recentHit / recentDays when a recent read exists, ELSE the full window
+                                 (the absent→degrade precedent: no recent counts ⇒ nothing to prefer).
+   WHY THIS EXISTS: the same rule had THREE independent implementations — pair.mjs's `reachRead` (the fold
+   PRICE basis), screen-flip-niches.mjs's `digestReachFrac` (the digest reach ✓/✗ column), and the flat
+   `reachedDays/nDays` inline in askReachFactor below. All three now route here (RB-3/RB-5). A CALLER
+   declares its basis; this function never guesses one, so every existing call is unchanged by construction.
+   HONESTY (rule 4): which basis PREDICTS a fill better is UNMEASURED (n=0 — no fills-to-basis join exists).
+   Preferring recent is a CONSISTENCY choice (the printed price and the probability beside it answer the
+   same question), never an accuracy claim. RECENT_NIGHTS=3 (windowread) is an inherited PLACEHOLDER. */
+export function reachFraction(askReach, { prefer = 'full' } = {}) {
+  const a = askReach || null;
+  if (!a) return null;
+  const full = (num(a.nDays) > 0 && num(a.reachedDays) != null) ? clamp01(a.reachedDays / a.nDays) : null;
+  if (prefer !== 'recent') return full;
+  const rec = (num(a.recentDays) > 0 && num(a.recentHit) != null) ? clamp01(a.recentHit / a.recentDays) : null;
+  return rec != null ? rec : full;   // absent recent counts ⇒ degrade to the full window (never a fabricated read)
+}
+
 // two-leg fill weight (Proposal A, PLAN-GRADE-REACH) — the family pFill above is the BID/ENTRY fill; the
 // rank's `net` silently ASSUMES the exit at optSell prints. Discount that by the cross-day ASK reach so a
 // mirage exit (e.g. a p90 band top reaching 2/14 days) can't carry a full rank. ABSENT an ask-reach read →
@@ -88,10 +111,21 @@ export function dayHighFrom5m(ts5m, { hours = 24 } = {}) {
 // DELIBERATELY NOT WIRED INTO estimateRank yet (F1-gated): the rank feeds the published grade/sort
 // (screen.json), so promoting relief into the rank/letter is held for F1 calibration — today the relief
 // consumers are the est-view price fold (estimatePair) + the stdout reach notes only.
-export function askReachFactor(askReach, relief = 0) {
+// RB-3 (PLAN-RECENCY-BASIS): the recency basis is an EXPLICIT OPT-IN, `{ prefer }`, defaulting to 'full'.
+// Why an option and not a behavior change: this function has three call sites with different roles — the
+// RANK (families.mjs:332, whose blast radius is screen.json's ordering; DEFERRED, see below), the DISPLAY
+// pFill (pair.mjs), and watch-positions' size-relief note. Keeping the default 'full' makes every call
+// byte-identical by construction and makes the opt-in sites grep-able. The presence/absence guard below is
+// the FULL window's on purpose — an ask-reach read with no full counts is still "no read" → 1.
+// ⚠ THE RANK CALL SITE IS DELIBERATELY STILL 'full' (families.mjs:332). A measurement pass (2026-08-03/04)
+// found the rank-basis swap moves the composite rank by >33% on ~23% of item-days — a four-valued n=3
+// probability MULTIPLIER is not the same risk as a continuous, band-bounded price. So the display moved and
+// the rank did not: the two disagree BY DESIGN and by decision, not by drift. Do not "fix" this by flipping
+// families.mjs:332 without the fills-joined evidence (that is PLAN-RECENCY-BASIS RB-4, deferred).
+export function askReachFactor(askReach, relief = 0, { prefer = 'full' } = {}) {
   const a = askReach || null;
   if (!a || !(num(a.nDays) > 0) || num(a.reachedDays) == null) return 1;
-  const frac = clamp01(a.reachedDays / a.nDays);
+  const frac = reachFraction(a, { prefer });
   const base = clamp01(PFILL_ASKREACH_FLOOR + (1 - PFILL_ASKREACH_FLOOR) * frac);
   const r = clamp01(num(relief) ?? 0);
   return r > 0 ? clamp01(base + r * (1 - base)) : base;

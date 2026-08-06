@@ -81,8 +81,17 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   2026-07-22): it is **no longer OVERWRITTEN to break-even**. Because `netMargin(buy, breakEven(buy)) ≡ +1`
   for the entire price range, the old BE-clamp turned every sub-BE fold into a **false `+1 (BE X)`** that
   hid a possibly-real edge — the operator read `+1` and SKIPPED. Now the cell shows the **real (possibly
-  negative) net** with its **P(fill)** beside it (`askReachFactor`, the SAME probability the rank carries —
-  raw margin × P(fill), reused not forked), and when the fold sits below break-even the cell **ANNOTATES**
+  negative) net** with its **P(fill)** beside it (`askReachFactor` — the same function the rank calls, reused
+  not forked, so the cell reads raw margin × P(fill)). **Its basis is RECENT-3** (RB-3, PLAN-RECENCY-BASIS,
+  2026-08-04): the probability is scored on the same recent-3 window as the fold price it sits beside, because
+  before RB-3 the price was recent-3 and the probability full-window and the two contradicted each other on any
+  regime-changed item. **The RANK's `P(fill)` is still FULL-WINDOW** (`js/estimators/families.mjs`) — a decided
+  split, not drift: a measurement pass found the rank-basis swap moves the composite rank >33% on ~23% of
+  item-days, and a four-valued n=3 probability *multiplier* is not the same risk as a continuous band-bounded
+  price, so the rank basis is gated on a realized-fill study. So on a recency-divergent row the `P(ask)~` in the
+  Est. cells and the `P~` in the Rank cell legitimately differ; neither is "the same probability the other
+  carries". Rule 4: recent-3 is not KNOWN to predict fills better (n=0, no fills-to-basis join) — this is a
+  *consistency* fix, not an accuracy claim. When the fold sits below break-even the cell **ANNOTATES**
   it (`recency-fold floored to BE X — nothing to price above break-even`) rather than substituting the
   number; `estSellFloorBind` carries that BE as a display fact. A **forward "list at X"** rides alongside —
   the phase-aware `driftExitFrom` projected exit (`~Nd hold`, confidence ordinal, `forward n≈0` inform),
@@ -727,10 +736,12 @@ thin-item rebuy-strand caution + a `REBUY_STALE_DAYS` nudge; zero-ripple — an 
 extra on every surface.)
 
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
-AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p% · list at
-F (~Nd hold, conf) · recency-fold Y (secondary — phase-blind) (recent a/b · full c/d)[ recency-fold floored
-to BE …]`. The **honest margin** (raw best-case net, NEVER BE-clamped to `+1`) + its **P(fill)**
-(`askReachFactor`, the rank's probability) lead; the **forward "list at F"** (`driftExitFrom`, phase-aware,
+AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p%[ (full-window
+q%)] · list at F (~Nd hold, conf) · recency-fold Y (secondary — phase-blind) (recent a/b · full c/d)[
+recency-fold floored to BE …]`. The **honest margin** (raw best-case net, NEVER BE-clamped to `+1`) + its
+**P(fill)** (`askReachFactor` on the **recent-3** display basis since RB-3 — with the **full-window** value,
+which is what the rank still carries, printed in parentheses **only when the two differ**, so a basis that
+moves a displayed number is visible rather than silently swapped) lead; the **forward "list at F"** (`driftExitFrom`, phase-aware,
 `n≈0` inform) is the actionable price; the **recency reach-fold** rides labeled secondary/phase-blind (the
 correct read for a confirmed knife — on a KNIFE `driftExitFrom` degrades to a labeled trend-only level, no
 crash). All from the SHARED `estimatePair` (zero new fetch — byte-parity with the screen's fold).
@@ -756,10 +767,7 @@ coverage, a less-smoothed 5m-grain reach/placement alongside (labeled; a LOWER B
 per AC2). The placement is PURELY DESCRIPTIVE — it says where a price sits historically, NOT that it is
 "achievable" or "safe". There is deliberately **no "safe ≈ pXX" threshold**: AC3's calibrated
 liquidity-scaled safe quantile did NOT ship — its gate failed (the Finding-2 size-share knee is
-unobservable on our own fills; `PLAN-REACH-CALIBRATION.md` AC1 "GATE RESULT: NOT MET"). So the trust
-judgment stays in this layer: on a LIQUID/deep book, distrust only a level AT OR ABOVE the item's own
-historical extreme (near p100), and trust deeper into the upper tail; on a THIN book, stay close to the
-center of the distribution (a single artifact print is easy to mistake for a real level there). Anchor:
+unobservable on our own fills; `PLAN-REACH-CALIBRATION.md` AC1 "GATE RESULT: NOT MET"). Anchor:
 Soul rune's own ~20+ closed lots filled at 397–399 while `--ask 398` reads "reached 1/14, recent 0/3"
 on the smoothed 1h grain — yet placement p93 and, on the less-smoothed 5m grain, reached 3/7 · p57
 (upper-middle of the printed band): the raw 1h count read as a warning on a liquid, thick book where

@@ -25,6 +25,7 @@ import {
   quotedPair, rankScore, estimateRank, fmtTtf, askReachFactor, asymEstimate,
   estimatePair, estPairCells, estConfLean, EST_REACH_SAT_FRAC, EST_FADE_DISCOUNT, EST_HEADERS, SELL_TOP_MODELS,
   reachRelief, dayHighFrom5m, REACH_RELIEF_MAX, REACH_DEBIAS_MAX_FRAC,   // PLAN-LIQUIDITY-REACH
+  reachFraction,   // RB-3 (PLAN-RECENCY-BASIS): the ONE recency-basis rule (full default / recent opt-in)
   MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, symmetricExemptionHolds,   // EF1 (PLAN-ESTIMATOR-FIDELITY): the placement-bounded churn exemption + the dead-bid reprice floor
   PFILL_PRIOR, PFILL_DEPTH_SLOPE, PFILL_BREAKDOWN_PENALTY, PFILL_ASKREACH_FLOOR,
   TTF_INTRADAY_PRIOR_SEC, TTF_MULTIDAY_PRIOR_SEC, TTF_REF_VOL, TTF_SAT_DAYS,
@@ -779,13 +780,90 @@ const mkProfile = (over = {}) => ({
 // the exact ctx the SHELL builds from the live pair (documented in pair.mjs) — the delegation pin replays it.
 const shellFwdCtx = (row, now) => ({ liveLo: row.quickSell, liveHi: row.quickBuy, mom: row.mom ?? null, reliable: row.reliable, phase: row.phase, now });
 
-ok('E1 pFill REUSES askReachFactor byte-identical (the don\'t-fork pin) + absent → 1', () => {
+/* THE DON'T-FORK PIN, rewritten by RB-3 (PLAN-RECENCY-BASIS §1.7).
+   BEFORE: this test asserted `e.pFill === askReachFactor(ar)` under the name "byte-identical … the SAME
+   value the rank carries". Its fixture `{reachedDays:4, nDays:14}` carries NO recent fields, so once the
+   display opted into the recent basis the call DEGRADED to the full window and the assertion kept passing —
+   green, while the invariant its name claimed had quietly become conditional. That is worse than a red
+   build, so the test is split into the two things that are actually true:
+     case 1 — the DEGRADE path: no recent counts ⇒ recent basis == full basis, byte-identical (pinned as a
+              degrade, not as the general rule);
+     case 2 — the REAL invariant: pFill is `askReachFactor` CALLED ON THE BASIS THE CALLER DECLARED, never a
+              reimplementation. With recent fields present it equals the recent-basis call and DIFFERS from
+              the default (full) call — the divergence is the point, and the shared function is still the
+              only implementation. */
+ok('E1 pFill REUSES askReachFactor — degrade path is byte-identical, recent basis is the declared call (the don\'t-fork pin) + absent → 1', () => {
+  // case 1 — DEGRADE: the fixture has no recentHit/recentDays, so 'recent' falls back to the full window.
   const ar = { reachedDays: 4, nDays: 14 };
   const e = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar });
-  assert.equal(e.pFill, askReachFactor(ar), 'pFill is the SAME askReachFactor value the rank carries (no fork)');
+  assert.equal(e.pFill, askReachFactor(ar), 'no recent counts ⇒ the recent basis DEGRADES to full — byte-identical');
+  // case 2 — THE REAL INVARIANT: with recent counts, pFill is the recent-basis askReachFactor call and is
+  // NOT the default full-window call. Same function, declared basis — reused, never reimplemented.
+  const ar2 = { reachedDays: 4, nDays: 14, recentHit: 3, recentDays: 3 };
+  const e2 = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar2 });
+  assert.equal(e2.pFill, askReachFactor(ar2, 0, { prefer: 'recent' }), 'pFill IS askReachFactor on the basis pair.mjs declares (no fork)');
+  assert.notEqual(e2.pFill, askReachFactor(ar2), 'and it is NO LONGER the default full-window call — the bases legitimately differ');
   const bare = estimatePair(FLIP_NICHES.band, FWD_ROW, {});
   assert.equal(bare.pFill, 1, 'absent ask-reach → 1 (the rank\'s byte-identical degrade)');
   assert.equal(bare.pFill, askReachFactor(undefined));
+});
+
+/* --- RB-3 (PLAN-RECENCY-BASIS): the shared recency-basis rule + the display/rank basis SPLIT ------------ */
+ok('RB-3 reachFraction: default is the full window; \'recent\' prefers recent-3 and DEGRADES to full when absent', () => {
+  const both = { reachedDays: 4, nDays: 14, recentHit: 3, recentDays: 3 };
+  assert.equal(reachFraction(both), 4 / 14, 'default prefer:\'full\' is today\'s flat fraction');
+  assert.equal(reachFraction(both, { prefer: 'full' }), 4 / 14);
+  assert.equal(reachFraction(both, { prefer: 'recent' }), 1, 'recent-3 preferred when present');
+  assert.equal(reachFraction({ reachedDays: 4, nDays: 14 }, { prefer: 'recent' }), 4 / 14, 'no recent counts → degrade to full');
+  assert.equal(reachFraction({ reachedDays: 4, nDays: 14, recentDays: 0, recentHit: 0 }, { prefer: 'recent' }), 4 / 14, 'recentDays 0 → degrade (never a divide-by-zero)');
+  assert.equal(reachFraction(null), null, 'no read → null (never a fabricated fraction)');
+  assert.equal(reachFraction({}, { prefer: 'recent' }), null, 'empty read → null on either basis');
+});
+
+ok('RB-3 askReachFactor: the DEFAULT ignores recent fields (every pre-RB-3 call byte-identical), the opt-in reads them both directions', () => {
+  const mirage = { reachedDays: 12, nDays: 14, recentHit: 0, recentDays: 3 };   // full says 12/14, recent says 0/3
+  const recover = { reachedDays: 2, nDays: 14, recentHit: 3, recentDays: 3 };   // full says 2/14, recent says 3/3
+  // the default must be UNMOVED by the presence of recent fields — this is the byte-identity guarantee that
+  // makes families.mjs:332 (the rank) and every other existing call safe without being touched.
+  assert.equal(askReachFactor(mirage), askReachFactor({ reachedDays: 12, nDays: 14 }), 'default ignores recent counts entirely');
+  assert.equal(askReachFactor(recover), askReachFactor({ reachedDays: 2, nDays: 14 }));
+  assert.equal(askReachFactor(mirage), askReachFactor(mirage, 0), 'default relief arg still 0');
+  // the opt-in: a 0/3 recent read floors at PFILL_ASKREACH_FLOOR (a stale exit demotes, never zeroes);
+  // a 3/3 recent read saturates at 1.
+  assert.equal(askReachFactor(mirage, 0, { prefer: 'recent' }), PFILL_ASKREACH_FLOOR, '0/3 recent → the soft floor, not 0');
+  assert.equal(askReachFactor(recover, 0, { prefer: 'recent' }), 1, '3/3 recent → 1');
+  assert.equal(askReachFactor(undefined, 0, { prefer: 'recent' }), 1, 'absent read → 1 on either basis');
+  assert.equal(askReachFactor({ recentHit: 3, recentDays: 3 }, 0, { prefer: 'recent' }), 1, 'no FULL counts is still "no read" → 1 (the guard is unchanged)');
+});
+
+ok('RB-3 does NOT move the board: estimateRank\'s pFill/rank stay full-window even when the display P moves', () => {
+  // the same askReach on both surfaces. pair (display) moves to the recent basis; rank does not.
+  const askReach = { reachedDays: 2, nDays: 14, recentHit: 3, recentDays: 3 };
+  const row = { quickBuy: 1010, quickSell: 1000, optBuy: 950, optSell: 1100, volDay: 200_000, limit: 1000 };
+  const erRecent = estimateRank(FLIP_NICHES.band, row, { askReach });
+  const erFullOnly = estimateRank(FLIP_NICHES.band, row, { askReach: { reachedDays: 2, nDays: 14 } });
+  assert.equal(erRecent.pFill.value, erFullOnly.pFill.value, 'the RANK is untouched by the recent counts (families.mjs:332 unchanged)');
+  assert.equal(erRecent.rank, erFullOnly.rank, 'and so is the composite rank / screen.json ordering');
+  // meanwhile the DISPLAY pFill on the same evidence is the recent read — the decided divergence.
+  const est = estimatePair(FLIP_NICHES.band, row, { askReach });
+  assert.equal(est.pFill, 1, 'display P is the recent 3/3 read');
+  assert.ok(est.pFill > erRecent.pLegs.askF, 'display and rank legitimately disagree on a recency-divergent item');
+});
+
+ok('RB-3 watch-positions relief note: on a 3/3 recent read the base factor is already 1, so the size-relief clause has nothing to add', () => {
+  // pins the CONSEQUENCE of moving watch-positions.mjs's reliefSuffix onto the recent basis: its guard is
+  // `relieved > base`, and a saturated recent read leaves no discount to soften ⇒ the clause disappears.
+  // That is correct, not a regression — there is nothing to relieve. (windowLine isn't exported, so the
+  // pin lives on the math the suffix's guard evaluates.)
+  const aR = { reachedDays: 2, nDays: 14, recentHit: 3, recentDays: 3 };
+  const rel = reachRelief({ intendedUnits: 25_000, volDay: 5_000_000 });
+  assert.ok(rel > 0, 'a liquid book + small lot does produce relief');
+  const base = askReachFactor(aR, 0, { prefer: 'recent' }), relieved = askReachFactor(aR, rel, { prefer: 'recent' });
+  assert.equal(base, 1);
+  assert.equal(relieved, base, 'relief cannot lift a factor that is already 1 ⇒ `relieved > base` is false ⇒ no clause');
+  // and the still-discounted case DOES keep its clause (the note didn't just die everywhere).
+  const aR2 = { reachedDays: 2, nDays: 14, recentHit: 1, recentDays: 3 };
+  assert.ok(askReachFactor(aR2, rel, { prefer: 'recent' }) > askReachFactor(aR2, 0, { prefer: 'recent' }), 'a partial recent read still relieves');
 });
 
 ok('E1 extra.forward ABSENT → forward fields null + byte-identical to the reach-fold-only output (degrade-safe)', () => {

@@ -10,6 +10,62 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### RB-3 + RB-5 — the displayed `P(fill)` now shares a recency basis with the price beside it, and the recent-preferred rule has one home (pipeline-only, 2026-08-04)
+PLAN-RECENCY-BASIS chunks RB-3 (display) and RB-5 (de-duplication). The defect: on one row the
+reach-FOLD price (`Est. sell`) was computed on the **recent-3** window while the `P(fill)` printed
+beside it was computed on the **full ~14-day** window. On an item whose regime had just turned, those
+two numbers contradicted each other by construction — the price said "recent nights don't reach this"
+and the probability said "it reached 12/14 days". Same evidence, two answers.
+
+**RB-3 — the display half.** `js/estimators/reach.mjs` gains `reachFraction(askReach, { prefer })`,
+the ONE recency-basis rule (`'full'` = `reachedDays/nDays`, the default; `'recent'` =
+`recentHit/recentDays`, degrading to full when no recent counts exist — the absent→degrade precedent).
+`askReachFactor` now takes that basis as an explicit third-argument OPT-IN defaulting to `'full'`, so
+**every pre-existing call is byte-identical by construction** and the opt-in sites are grep-able. Three
+DISPLAY sites opted in: `estimatePair`'s `pFill` (`js/estimators/pair.mjs`), `read-window-range`'s
+`fold:` line, and `watch-positions`' held-lot size-relief note — that last one because it prints inches
+from the `⚠stale` marker on the same line, so a full-window fill probability there was the same
+contradiction in miniature. Following the `⚠ exemption dropped — … rank X (was Y)` precedent the fold
+line now prints **both** numbers (`P(fill)~42% (full-window 71%)`) whenever the bases differ, and the
+single value when they agree — a basis that moves a displayed number is visible, never silently
+swapped. `reachRead` in `pair.mjs` was collapsed onto the shared helper too (proven byte-identical).
+
+**What deliberately did NOT change: the RANK.** `js/estimators/families.mjs`'s `askReachFactor` call —
+the one whose blast radius is `screen.json`'s ordering, the grade letter and the digest `rankKey` — is
+untouched and stays full-window. A measurement pass (2026-08-03/04) put the rank-basis swap at **>33%
+rank movement on ~23% of item-days**: a four-valued n=3 probability *multiplier* is not the same risk as
+a continuous, band-bounded price, so that half is gated on a realized-fill study rather than shipped on
+symmetry. The consequence, stated plainly everywhere it shows: on a recency-divergent row the Est-cell
+`P(ask)~` and the Rank-cell `P~` legitimately differ and are not meant to match.
+
+**RB-5 — the third copy.** `digestReachFrac` in `screen-flip-niches.mjs` was a third independent
+implementation of the recent-preferred rule; it now delegates to `reachFraction`, with a defensive
+comment recording that the digest is recent-based ON PURPOSE (since PLAN-CAPITAL-EFFICIENCY-AND-DIGEST)
+and that its disagreement with the full-window `screen.json` rank is decided, not drift — so nobody
+"fixes" it back into a divergence. Pure de-duplication: `capeff-digest.test.mjs` passes unchanged, which
+was the acceptance criterion.
+
+**Test hygiene, and the actual finding of the chunk.** `estimators.test.mjs`'s don't-fork pin asserted
+`pFill === askReachFactor(ar)` under the name "the SAME value the rank carries" — but its fixture
+carried no recent fields, so under a recent-preferring display basis it degraded to the full window and
+**the test kept passing while the invariant its name claimed had become conditional**. A green test that
+no longer tests what it says is worse than a red build, so it was rewritten as two cases: the degrade
+path (no recent counts ⇒ byte-identical, pinned AS a degrade) and the real invariant (with recent counts,
+`pFill` equals the recent-basis `askReachFactor` call and differs from the default one — still the same
+function on the basis the caller declared, never a reimplementation). The stale comment in
+`js/estimators/cells.mjs` claiming the Net cell's P is "the SAME probability the rank carries" was
+corrected in the same change.
+
+**Honesty (rule 4).** Whether recent-3 predicts an ask fill better than the full window is **UNMEASURED
+— n=0**; no fills-to-basis join exists. This is a *consistency* fix (the price and the probability
+printed beside each other now answer the same question), and that is the only claim made for it. It does
+NOT unify the *window* basis across surfaces — the screen scores a coming-8h window and the quote scores
+the full day (EF1(d)) — so "the surfaces now agree" remains false. `RECENT_NIGHTS = 3` is an inherited
+PLACEHOLDER; no new magnitude was introduced. **No APP_VERSION bump:** `js/estimators.mjs` is app-imported
+via `js/market.js:4`, but the app calls only `estimateRank(FINDER_SPEC, row)` with no `extra` ⇒ no
+`askReach` ⇒ `askReachFactor` returns 1 on either basis, `families.mjs` is untouched, and `estimatePair`
+is never called by the app. No app-rendered output changes.
+
 ### EF1 — rank-leg honesty: the dead bid gets a repriced alternative, the churn exemption gets a placement bound, and one row stops printing two P's (pipeline-only, 2026-08-01)
 PLAN-ESTIMATOR-FIDELITY chunk EF1, motivated by two same-session captures of the tool being fooled by
 its own numbers: **the buried great trade** (Helm of neitiznot at `Rank 0 · P~0.00 · row 79/83` while

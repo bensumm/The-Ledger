@@ -15,7 +15,7 @@
 import { netMargin, clamp } from '../money-math.js';
 import { breakEven } from '../quotecore.js';   // PLAN-OUTPUT-TABLE: the ONE model-free break-even (BE floor for estSell)
 import { RECENCY_DIVERGE } from '../windowread.mjs';   // PLAN-OUTPUT-TABLE rev1: reuse the RC1 recent-vs-full divergence threshold (windowread is a leaf — no import cycle)
-import { reachRelief, REACH_DEBIAS_MAX_FRAC, askReachFactor } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap; PLAN-ESTIMATOR-HONEST-SELL E1: askReachFactor — the SAME P(fill) the rank uses (families.mjs:291), reused (never forked) so the display honestly matches the rank pattern (raw margin × P(fill))
+import { reachRelief, REACH_DEBIAS_MAX_FRAC, askReachFactor, reachFraction } from './reach.mjs';   // PC2: liquidity/size relief + the Part-B de-bias cap; PLAN-ESTIMATOR-HONEST-SELL E1: askReachFactor — the SAME FUNCTION the rank calls, reused (never forked) so the display reads "raw margin × P(fill)" like the rank; RB-3 (PLAN-RECENCY-BASIS): this module calls it on the RECENT basis (`{prefer:'recent'}`) so the printed P matches the recent-3 price beside it, while the rank (families.mjs:332) stays full-window — a DECIDED divergence, see the pFill comment below. reachFraction = the ONE recency-basis rule reachRead also folds on.
 import { driftExitFrom } from '../forecast.mjs';   // PLAN-ESTIMATOR-HONEST-SELL E1: the forward-projected exit LEVEL ("list at X") — computed in the SHELL off extra.forward (profile+days already in the caller's hand → zero new fetch). forecast→windowread(leaf) only, no cycle.
 import { SELL_TOP_MODELS } from './sell-models/index.mjs';   // PC3: the named sell-top proposal models (reach-fold / pressure / …)
 
@@ -94,13 +94,17 @@ export function entryDoctrine(spec) {
 
 /* reachRead({ reachedDays, nDays, recentHit, recentDays }) → { frac, rec, full, diverges } | null.
    rev1: the FOLD basis is the RECENT-3 fraction when scored (freshness-honest), else the full window
-   (the sample-size backstop). `diverges` reuses windowread's RECENCY_DIVERGE + its zero-recent clause. */
+   (the sample-size backstop). `diverges` reuses windowread's RECENCY_DIVERGE + its zero-recent clause.
+   RB-3 (PLAN-RECENCY-BASIS): `frac` is now literally reach.mjs's shared `reachFraction(_, {prefer:'recent'})`
+   rather than a second copy of the same conditional — byte-identical (the rec/full presence predicates are
+   the same, and reachRead has already returned null when neither exists). The rec/full SUB-OBJECTS stay
+   local because callers need the raw hit/days counts for the `0/3 · 2/14` divergence token, not just a number. */
 function reachRead(r) {
   if (!r) return null;
   const full = (num(r.nDays) > 0 && num(r.reachedDays) != null) ? { hit: r.reachedDays, days: r.nDays, frac: clamp01(r.reachedDays / r.nDays) } : null;
   const rec  = (num(r.recentDays) > 0 && num(r.recentHit) != null) ? { hit: r.recentHit, days: r.recentDays, frac: clamp01(r.recentHit / r.recentDays) } : null;
   if (!full && !rec) return null;
-  const frac = rec ? rec.frac : full.frac;   // recent-3 IS the confidence; full is only the backstop
+  const frac = reachFraction(r, { prefer: 'recent' });   // recent-3 IS the confidence; full is only the backstop
   const diverges = !!(rec && full && (Math.abs(rec.frac - full.frac) >= RECENCY_DIVERGE || (rec.hit === 0 && full.hit > 0 && full.frac >= 0.2)));
   return { frac, rec, full, diverges };
 }
@@ -113,8 +117,10 @@ function reachRead(r) {
    ARTIFACT hiding a possibly-real edge (the operator read it and SKIPPED). estSell now keeps the model's
    honest (possibly-sub-BE, possibly-negative-net) proposal; `estSellFloorBind = beFloored ? be : null` carries
    the floor as a DISPLAY FACT (an annotation on the SECONDARY reach-fold), never a number substitution.
-   `pFill` reuses askReachFactor (the SAME fn the rank calls) so the display matches the rank's honest
-   pattern (raw margin × P(fill)); `estSellForward`/forward fields are the phase-aware "list at X" projection.
+   `pFill` reuses askReachFactor (the SAME fn the rank calls, never a reimplementation) so the display reads
+   the rank's honest pattern (raw margin × P(fill)) — on the RECENT-3 basis since RB-3, matching the recent-3
+   fold price it prints beside; the rank stays full-window (see the pFill comment in the body);
+   `estSellForward`/forward fields are the phase-aware "list at X" projection.
    extra (ALL optional — zero new fetch; the caller passes only what it already computed):
      bidReach  { reachedDays, nDays, recentHit?, recentDays? }  patient bid TOUCH counts (full + recent-3)
      askReach  { reachedDays, nDays, recentHit?, recentDays? }  patient ask REACH counts (full + recent-3)
@@ -218,11 +224,22 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   const estSellFloorBind = beFloored ? be : null;
   const estNet = netMargin(estBuy, estSell, bopt);   // HONEST: the real (possibly-negative) net at the honest sell, never the clamped +1
   const estRoi = (estNet != null && estBuy > 0) ? estNet / estBuy * 100 : null;
-  // pFill — the SAME two-leg ask/exit reach probability the RANK carries (askReachFactor, families.mjs:291),
-  // REUSED not forked: a first-class field so the display honestly reads "raw margin × P(fill)" like the rank
-  // (a stale exit demotes the probability, it does not haircut the price into a false break-even). Absent
-  // ask-reach → 1 (the byte-identical degrade the rank uses). No relief arg — mirrors families.mjs's rank pFill.
-  const pFill = askReachFactor(extra.askReach);
+  // pFill — the ask/exit reach probability, computed by the SAME askReachFactor the rank calls, REUSED not
+  // forked: a first-class field so the display honestly reads "raw margin × P(fill)" (a stale exit demotes the
+  // probability, it does not haircut the price into a false break-even). Absent ask-reach → 1 (the
+  // byte-identical degrade the rank uses). No relief arg — mirrors families.mjs's rank pFill.
+  // RB-3 (PLAN-RECENCY-BASIS) — THE BASIS, stated honestly: this P is on the RECENT-3 basis, because the
+  // estSell it is printed beside is a recent-3 fold (reachRead above). Before RB-3 the price was recent-3 and
+  // the probability full-window, so on a regime-changed item the two numbers on one row contradicted each
+  // other by construction. The RANK (families.mjs:332) is STILL full-window and stays that way: a measurement
+  // pass found the rank-basis swap moves the composite rank >33% on ~23% of item-days, and unlike a price a
+  // probability multiplier is four-valued at n=3. So this display P and the rank's P are NOT the same number
+  // on a recency-divergent item — that is a DECISION (display consistency now, rank basis gated on a
+  // fills-joined study: PLAN-RECENCY-BASIS RB-4, deferred), not drift. The don't-fork invariant that still
+  // holds is "the SAME function, on the basis the caller declares", never a reimplementation.
+  // Rule 4: recent-3 is not KNOWN to predict fills better (n=0, no fills-to-basis join). This is a
+  // CONSISTENCY fix — the price and the probability beside it now answer the same question — not an accuracy claim.
+  const pFill = askReachFactor(extra.askReach, 0, { prefer: 'recent' });
   // FORWARD "list at X" (PLAN-ESTIMATOR-HONEST-SELL E1) — the phase-aware forward-projected exit LEVEL, homed
   // in the SHELL (the sell-model ctx carries no profile/days). driftExitFrom off the caller's in-hand
   // hourProfile + windowStats().days (extra.forward — ZERO new fetch); the diurnal ctx is built from the live

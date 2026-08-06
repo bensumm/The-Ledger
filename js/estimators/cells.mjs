@@ -68,13 +68,17 @@ export function estPairCells(est) {
   // the formatFloorCeiling honesty discipline, rule 4). Absent forward ⇒ '' (byte-identical reach-fold read).
   const fwdSeg = est.estSellForward != null
     ? ` · list ~${fmtP(Math.round(est.estSellForward))} (~${fmtHoldHorizon(est.holdHorizonDays)} hold${est.forwardConfidence ? `, ${est.forwardConfidence}` : ''}, forward n≈0)` : '';
-  // E2: P(fill) beside the honest margin (the Net cell) — the SAME askReachFactor probability the rank carries,
+  // E2: P(fill) beside the honest margin (the Net cell) — computed by the SAME askReachFactor the rank calls,
   // so the display reads "raw margin × P(fill)" honestly. Shown only where the ask-reach caution is (evidence
   // present, not a foldExempt lap); absent → no token (byte-identical). This is what replaces the fake "+1".
   // EF1(c) (PLAN-ESTIMATOR-FIDELITY): labeled `P(ask)~` — this probability is the ASK-LEG factor ONLY
   // (askReachFactor), while the Rank cell's `P~` is the TWO-LEG product (entry × ask). The same row was
   // printing `P~57%` here beside `P~0.00` in the rank cell with no marker — the label names which leg
   // each number is, and the rank cell now labels a collapsed leg (screen-flip-niches.mjs consoleRankCell).
+  // RB-3 (PLAN-RECENCY-BASIS) — THE BASIS: this ask-leg factor is on the DISPLAY (recent-3) basis, the same
+  // basis as the `Est. sell` fold price in the cell to its left. The Rank cell's `P~` is still full-window
+  // (families.mjs:332, deliberately deferred), so on a recency-divergent item these two are NOT the same
+  // number and are not meant to be — see the pFill comment in pair.mjs for why. Never claim they match.
   const pTok = (est.estNet != null && est.pFill != null && c.ask && !c.foldExempt)
     ? ` · P(ask)~${Math.round(est.pFill * 100)}%` : '';
   const netTxt = est.estNet == null ? '—'

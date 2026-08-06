@@ -68,7 +68,7 @@ import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/market/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL folded into the floor/ceiling note (off the in-hand profile+days — no fetch)
-import { estimatePair, estConfLean } from '../lib/signal/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold)
+import { estimatePair, estConfLean, askReachFactor } from '../lib/signal/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold); RB-3: askReachFactor on its DEFAULT (full-window) basis, so the fold line can print the pre-change number beside the new one instead of swapping it silently
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
 import { hourlyLMH, hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); hourlyDrift (PLAN-HOURLY-3DAY-TREND HT1) — the day-over-day slope read folded onto the SAME grid
@@ -587,15 +587,25 @@ for (const want of positionals) {
       const nicheTag = NICHE === 'band' ? '' : ` [--niche ${NICHE}]`;
       const recFull = r => r ? ` (recent ${r.recentHit != null ? r.recentHit : '—'}/${r.recentDays != null ? r.recentDays : '—'} · full ${r.reachedDays}/${r.nDays})` : '';
       // THE THREE-PART SELL READ (E3, the DRILLED surface): (1) the HONEST best-case margin at the raw exit
-      // (netMargin — NEVER BE-clamped to a false "+1") + (2) its P(fill) (askReachFactor, the same the rank
-      // uses) + (3) the FORWARD "list at X" (driftExitFrom, phase-aware, hold-horizon + confidence ordinal).
+      // (netMargin — NEVER BE-clamped to a false "+1") + (2) its P(fill) (askReachFactor on the RECENT-3
+      // display basis since RB-3, with the full-window value — which is what the RANK still carries — shown
+      // beside it when they differ) + (3) the FORWARD "list at X" (driftExitFrom, phase-aware, hold-horizon
+      // + confidence ordinal).
       // The recency reach-fold rides ALONGSIDE, labeled SECONDARY/phase-blind (the correct read for a confirmed
       // knife); beFloored is a caution on that fold, never a market fact. NO "which is authoritative" claim —
       // both ship until the F-G realized-fill retro adjudicates (rule 4, n≈0 on the forward).
       if (askScoreLevel != null) {
         const rawNet = netMargin(est.estBuy, askScoreLevel);   // honest best-case margin (un-BE-clamped)
         const sign = rawNet != null && rawNet > 0 ? '+' : '';
-        const pf = est.pFill != null ? ` · P(fill)~${Math.round(est.pFill * 100)}%` : '';
+        // RB-3 (PLAN-RECENCY-BASIS): est.pFill is now the RECENT-3-basis probability (matching the recent-3
+        // fold price on the same line). Print the pre-change FULL-WINDOW number beside it whenever the two
+        // differ, so a basis that moves a displayed decision number is VISIBLE rather than silently swapped
+        // (the `⚠ exemption dropped — … rank X (was Y)` precedent, EF1(b)). Equal ⇒ the single value, no
+        // noise (the suppress-when-unmoved rule). The full-window read is ALSO what the rank still carries.
+        const pfRecent = est.pFill != null ? Math.round(est.pFill * 100) : null;
+        const pfFull = est.pFill != null ? Math.round(askReachFactor(extra.askReach) * 100) : null;
+        const pf = pfRecent != null
+          ? ` · P(fill)~${pfRecent}%${pfFull !== pfRecent ? ` (full-window ${pfFull}%)` : ''}` : '';
         const fwd = est.estSellForward != null
           ? ` · list at ${fmt(Math.round(est.estSellForward))} (~${fmtHoldHorizon(est.holdHorizonDays)} hold${est.forwardConfidence ? `, conf ${est.forwardConfidence}` : ''}, forward n≈0)`
           : ` · list at — (no diurnal forward this pass)`;

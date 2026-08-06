@@ -99,7 +99,7 @@ import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // HT3 — the per
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
-import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR } from '../lib/signal/estimators.mjs';   // EF1 (PLAN-ESTIMATOR-FIDELITY): MIRAGE_PLACEMENT moved to estimators/families.mjs (single-sourced — it now ALSO bounds the churn ask-reach exemption); DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
+import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, reachFraction } from '../lib/signal/estimators.mjs';   // RB-5 (PLAN-RECENCY-BASIS): reachFraction = the ONE recency-basis rule; digestReachFrac was the third independent copy of it and now delegates   // EF1 (PLAN-ESTIMATOR-FIDELITY): MIRAGE_PLACEMENT moved to estimators/families.mjs (single-sourced — it now ALSO bounds the churn ask-reach exemption); DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache, sleep } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
@@ -655,10 +655,16 @@ const DIGEST_ROWS = [];
 // verdict rules 1/2 — prefers the RC1 recent-3 count, full window fallback; no read → null. Whether a
 // symmetric (churn/amplitude) niche is reach-EXEMPT (→ null, renders '—' NOT '✗' — a false alarm, §3.4)
 // is decided by the CALLER (digestReachAndPlacement) since EF1(b) made the exemption placement-bounded.
+// ⚠ DELIBERATELY RECENT-BASED — DO NOT "FIX" THIS BACK TO THE FULL WINDOW (RB-5, PLAN-RECENCY-BASIS).
+// This surface has been recent-preferring since PLAN-CAPITAL-EFFICIENCY-AND-DIGEST; it was one of THREE
+// independent copies of the same rule (the fold price in pair.mjs's reachRead, and an inline
+// reachedDays/nDays in askReachFactor). RB-5 collapsed this one onto the shared `reachFraction`, so the
+// rule now has ONE home. A future reader WILL notice the digest column disagreeing with `screen.json`'s
+// rank/grade — that is EXPECTED and decided, not drift: the RANK is still full-window on purpose
+// (js/estimators/families.mjs:332, deferred pending a fills-joined study), while every DISPLAY surface is
+// recent-preferring. Re-forking a local implementation here would recreate the divergence RB-5 removed.
 function digestReachFrac(askReachExtra) {
-  if (!askReachExtra) return null;
-  if (askReachExtra.recentDays) return askReachExtra.recentHit / askReachExtra.recentDays;
-  return askReachExtra.nDays ? askReachExtra.reachedDays / askReachExtra.nDays : null;
+  return reachFraction(askReachExtra, { prefer: 'recent' });
 }
 // POLISH 3 — STALE-LIVE GUARD for the digest's reach ✓/✗ + mirage read. A row's quoted optSell can be
 // pinned to a STALE live instabuy print (an old /latest tick, not a live one — the SAME failure quote-
