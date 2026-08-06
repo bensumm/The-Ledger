@@ -37,7 +37,7 @@ import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
 import { hourProfile, hourlyDriftNote } from '../../js/windowread.mjs';
 import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
-import { fmt, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';
+import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
 
@@ -323,7 +323,7 @@ async function main() {
   for (const r of rows) {
     const inTxt = r.inH == null ? '—' : (r.inH === 0 ? 'now' : r.inH.toFixed(1));
     const winTxt = (r.startH == null || r.endH == null) ? '—' : fmtHourRange(r.startH, r.endH);
-    console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmt(r.level)} | ${r.tags.join('/')} |`);
+    console.log(`| ${inTxt} | ${winTxt} | ${r.item} | ${r.action} | ${fmtP(r.level)} | ${r.tags.join('/')} |`);
   }
   // RF4: reverse-flip cycle notes (inform-only, n≈0) — printed ONLY for RF rows that surfaced a note. On an
   // empty store there are no RF rows → this block is skipped → byte-identical to the pre-RF4 agenda.

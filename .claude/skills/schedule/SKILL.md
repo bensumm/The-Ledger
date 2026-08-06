@@ -1,6 +1,6 @@
 ---
 name: schedule
-version: 1.1.0
+version: 1.2.0
 description: Consolidated buy/sell WINDOW AGENDA — a time-sorted "what to buy/sell and when" across current positions (default) or the watchlist, plus a flipped-but-not-watchlisted audit. Triggers — "what's my agenda", "what should I buy/sell and when", "when's the next window", "what's coming up", "schedule".
 ---
 
@@ -47,7 +47,7 @@ Column legend (the render columns of `read-schedule.mjs`):
 | `In (h)` | hours to the window's next start, nearest 0.5h; `now` when currently inside it. |
 | Window | the dip/peak hour range in BOTH zones (local / UK). |
 | Action | `BUY dip` / `SELL peak`. Each item contributes up to 2 rows (its dip + its peak). |
-| Level | the recent dip/peak price guide (the bid/ask candidate). |
+| Level | the recent dip/peak price guide (the bid/ask candidate). Rendered with `fmtP` — FULL gp resolution under 100k (`1,081`, not `1.1k`), compact above it (`26.30m`) — because it is a price to place an offer at. Ben, 2026-08-05: the old `fmt` render collapsed all four Snape-grass rows (1,081 / 1,093 / 1,122 / 1,123) onto one `1.1k`, hiding a 42gp spread on a trade whose whole margin was ~36/u. |
 | List | C / W tag(s). |
 
 ## How to present it
