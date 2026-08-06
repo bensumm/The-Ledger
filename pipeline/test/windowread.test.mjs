@@ -28,6 +28,8 @@ import { hourConcentration, HOURCONC_MIN_DAYS, HOURCONC_MIN_R, diurnalTimedLap, 
 import { hourlyDriftNote } from '../../js/windowread.mjs';   // PLAN-HOURLY-3DAY-TREND HT2 — the compact render of a hourlyDrift() result
 import { computeReality, realityClause, SPIKE_REACH_FRAC, SPIKE_PLACEMENT_PCTILE, SPIKE_MIN_GAP_FRAC, REALITY_TYPICAL_QUANT, REALITY_TYPICAL_RECENTN } from '../../js/windowread.mjs';   // PLAN-DIURNAL-RECENCY-GUARD — the level-reality guard + its renderer
 import { formatTimedLap } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT3 — the end-to-end quote-items/watch-positions wiring pin (real series → diurnalTimedLap → formatTimedLap)
+import { avgBoundRead, formatAvgBound, AVG_BOUND_LOW_FRAC } from '../../js/windowread.mjs';   // the deep-book reach-misread guard — its THIN-BOOK NULL is the load-bearing invariant pinned below
+import { REACH_RELIEF_MIN_VOL } from '../../js/estimators.mjs';   // the ONE deep/thin boundary the clause reuses — imported here so a change to it breaks these fixtures loudly
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -1224,6 +1226,75 @@ ok('hourlyDriftNote: flat + mixed omits the ask clause when ask reach is not dec
 ok('hourlyDriftNote: null drift (the hourlyDrift <2-dates degrade) → null, never a fake read', () => {
   assert.equal(hourlyDriftNote(null, { ask: 100 }), null);
   assert.equal(hourlyDriftNote({ dominant: null }, {}), null);
+});
+
+// --- avgBoundRead: the deep-book reach-misread guard -------------------------------------------
+// BUSINESS REQUIREMENT pinned here: the clause is ASYMMETRIC. It reframes a low reach count ONLY on a
+// DEEP book (where the 1h-bucket-average basis is depth-proportionally biased-strict); on a THIN book
+// it returns null so the reach guard that correctly kills a big-ticket mirage is byte-identical.
+// The thin-book test below is the load-bearing one — it is what stops this fix from causing the
+// OPPOSITE error. Do not relax it without real fill evidence (process rule 4).
+// Anchors are the 2026-08-05 misread: Ruby dragon bolts (e) at 655k u/d, bid 2,888, touched 0/14.
+const LOWS_ASC = [2900, 2920, 2940, 2960, 2980];   // ascending daily-avg-lows (quantLow convention)
+const HIS_ASC  = [2980, 3000, 3020, 3040, 3060];   // ascending daily-avg-highs
+
+ok('avgBoundRead: DEEP book + zero-touch bid → fires (the Ruby dragon bolts misread)', () => {
+  const ab = avgBoundRead('bid', 2888, { lows: LOWS_ASC, his: HIS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14, pool: 47_032 });
+  assert.ok(ab, 'a 655k/d book with 0/14 touch must get the clause');
+  assert.equal(ab.deepBook, true);
+  assert.equal(ab.basis, 'ts1h-bucket-average', 'the clause must name the smoothed basis that caused the misread');
+  assert.equal(ab.extreme, 2900, 'bid side reads the FIRST (deepest) ascending daily-avg-low');
+  assert.ok(ab.gapFrac > 0 && ab.gapFrac < 0.01, `bid 2888 sits ~0.4% under 2900, got ${ab.gapFrac}`);
+  assert.equal(ab.pool, 47_032, 'the in-window competing pool rides along — it is what to judge by instead');
+});
+
+ok('avgBoundRead: THIN book + zero-touch → null (THE ASYMMETRY — thin-book output byte-identical)', () => {
+  // 178/day = the Masori chaps class, where an hour holds a handful of prints so the average ≈ the
+  // prints and a 0/14 really does mean out-of-range. This MUST stay null.
+  assert.equal(avgBoundRead('bid', 2888, { lows: LOWS_ASC, his: HIS_ASC, volDay: 178, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14 }), null);
+  assert.equal(avgBoundRead('ask', 3200, { lows: LOWS_ASC, his: HIS_ASC, volDay: 1_100, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14 }), null, 'the fang class (1.1k/d) keeps the full-strength guard');
+});
+
+ok('avgBoundRead: the deep/thin boundary is inclusive at REACH_RELIEF_MIN_VOL, exclusive below', () => {
+  const at = avgBoundRead('bid', 2888, { lows: LOWS_ASC, his: HIS_ASC, volDay: REACH_RELIEF_MIN_VOL, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14 });
+  const under = avgBoundRead('bid', 2888, { lows: LOWS_ASC, his: HIS_ASC, volDay: REACH_RELIEF_MIN_VOL - 1, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14 });
+  assert.ok(at, 'exactly at the floor counts as deep (>=)');
+  assert.equal(under, null, 'one unit under the floor is thin — no clause');
+});
+
+ok('avgBoundRead: DEEP book but HEALTHY count → null (nothing to reframe)', () => {
+  const healthy = avgBoundRead('ask', 2990, { lows: LOWS_ASC, his: HIS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 9, nDays: 14 });
+  assert.equal(healthy, null, `9/14 is above AVG_BOUND_LOW_FRAC (${AVG_BOUND_LOW_FRAC}) — the count speaks for itself`);
+  const low = avgBoundRead('ask', 3200, { lows: LOWS_ASC, his: HIS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 6, nDays: 14 });
+  assert.ok(low, '6/14 is below the low-count bar → clause fires');
+});
+
+ok('avgBoundRead: ask side reads the HIGHEST daily-avg-high and signs the gap upward', () => {
+  const ab = avgBoundRead('ask', 3100, { lows: LOWS_ASC, his: HIS_ASC, volDay: 749_600, minVol: REACH_RELIEF_MIN_VOL, hitDays: 1, nDays: 14, pool: 180_486 });
+  assert.equal(ab.extreme, 3060, 'ask side reads the LAST (highest) ascending daily-avg-high');
+  assert.ok(ab.gapFrac > 0, 'an ask ABOVE the max daily-avg-high has a positive gap');
+  const inside = avgBoundRead('ask', 3000, { lows: LOWS_ASC, his: HIS_ASC, volDay: 749_600, minVol: REACH_RELIEF_MIN_VOL, hitDays: 1, nDays: 14 });
+  assert.ok(inside.gapFrac < 0, 'a level INSIDE the daily-avg range signs negative — a within-range miss, not out-of-range');
+});
+
+ok('avgBoundRead: degrades to null on missing inputs, never a fake read', () => {
+  assert.equal(avgBoundRead('bid', null, { lows: LOWS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14 }), null);
+  assert.equal(avgBoundRead('bid', 2888, { lows: LOWS_ASC, volDay: null, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14 }), null, 'no volume read ⇒ we cannot tell deep from thin ⇒ say nothing');
+  assert.equal(avgBoundRead('bid', 2888, { lows: LOWS_ASC, volDay: 655_000, minVol: null, hitDays: 0, nDays: 14 }), null);
+  assert.equal(avgBoundRead('bid', 2888, { lows: [], volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 0 }), null);
+  assert.equal(avgBoundRead('bid', 2888, { lows: LOWS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: null, nDays: 14 }), null);
+});
+
+ok('formatAvgBound: null read renders nothing; the bid clause carries the placement gloss', () => {
+  assert.equal(formatAvgBound(null), null, 'no read ⇒ no line (thin books print exactly as before)');
+  const ab = avgBoundRead('bid', 2888, { lows: LOWS_ASC, his: HIS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 0, nDays: 14, pool: 47_032 });
+  const text = formatAvgBound(ab, { fmt: n => n.toLocaleString('en-US') });
+  assert.match(text, /AVERAGE/, 'must name the averaged basis — that IS the correction');
+  assert.match(text, /NOT "never fills"/, 'must state the wrong conclusion it is heading off');
+  assert.match(text, /deep patient entry, not an extremity warning/, 'the bid-placement gloss moves out of the code comment into the render');
+  assert.match(text, /inform-only, n≈0/, 'honesty label (process rule 4) is not optional');
+  const askText = formatAvgBound(avgBoundRead('ask', 3200, { lows: LOWS_ASC, his: HIS_ASC, volDay: 655_000, minVol: REACH_RELIEF_MIN_VOL, hitDays: 1, nDays: 14 }), { fmt: String });
+  assert.doesNotMatch(askText, /extremity warning/, 'the low-placement-is-good gloss is BID-only — a high ask placement really is aggressive');
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

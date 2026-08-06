@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.89
+version: 1.90
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -517,13 +517,19 @@ This is the tribal layer the script can't do — apply ALL of these:
     price off the `recent-3 ~50%` quantile instead. It is NOT a looser gate (the band-top-artifact SKIP
     above still stands); it stops the count fooling you on a regime-change item. A stable item never
     flags. Do NOT re-derive a reach number by hand — read the split the script prints.
-    - **Above-average is not a warning sign (Finding 3, 2026-07-17; full guard:
-      `docs/MARKET-ANALYSIS.md` §4).** RC1 above catches regime contamination on the reach COUNT; a
-      separate failure is treating a low raw reach count itself as alarming — "reached" only means the
-      1h bucket AVERAGE crossed the level, and pricing an ask above that average is the normal way a
-      flip earns money. Judge a level by liquidity (deep book → distrust only near the historical
-      extreme; thin book → stay near center), never by the raw N/14 alone. Don't re-reject a Soul-rune-
-      shaped case (397-399 filled routinely on ~20+ real lots against a "reached 1/14, recent 0/3" read).
+    - **Above-average is not a warning sign — the DEEP-BOOK half is now ENCODED; READ the `⊙ avg-bound
+      read` clause, don't re-derive it (Finding 3, 2026-07-17; encoded 2026-08-05; full guard:
+      `docs/MARKET-ANALYSIS.md` §4).** _(enforced: `avgBoundRead`/`formatAvgBound` in `js/windowread.mjs`,
+      rendered on every scored `--bid`/`--ask`/`--exit` + mirrored into `verify.json` as `avgBound`)_
+      RC1 above catches regime contamination on the reach COUNT; the separate failure is treating a low
+      raw count as alarming when the smoothing bias is depth-proportional. On a deep book the trio now
+      prints the clause itself — trust it over your own reading of the N/14, and note it fires ONLY
+      above `REACH_RELIEF_MIN_VOL`. **On a THIN book nothing prints and the full-strength reach guard
+      still applies** — that's the half still requiring judgment (stay near the centre of the
+      distribution; an artifact print is easy to mistake for a real level). Anchors: Soul rune
+      (397–399 filled routinely on ~20+ real lots against "reached 1/14, recent 0/3"), and the
+      2026-08-05 misread this encoding exists to prevent — Ruby dragon bolts (e) / Seeking dragon arrow /
+      Seeking amethyst arrow all skipped off bare `touched 0/14 · p0` on 349k–750k u/d books.
     - **A `⚠ stale` flag on a BID means "don't assert the fill" — price to live instead (Ben,
       2026-07-08, first live save).** The stale flag exists on the bid side precisely to stop you
       claiming a fill the recent regime won't give. When `--bid X` shows `⚠ stale` (recent nights sat

@@ -96,7 +96,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   surfaces: the cushion TREND `fading|stable|extending` over the recent `MARGIN_NIGHTS` days at
   `MARGIN_FADE_FRAC`, the current-day cushion, and today's `pace` — live-now vs the reaching-day median at
   this hour-of-day off the in-hand `hourProfile`; symmetric ask/bid, inform-only, placeholders pending F1;
-  the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + the **hour-of-day diurnal profile**
+  the lean summary rides `suggestions.jsonl` via `windowExitShadow`) + **`avgBoundRead`/`formatAvgBound`**
+  (2026-08-05 — the DEEP-BOOK reach-misread guard: `touchedDays`/`reachedDays` count days the per-day
+  extremum of 1h-bucket AVERAGES crossed a level, a bias that is strict IN PROPORTION TO LIQUIDITY, so a
+  low N/M on a deep book means "below every hourly average", not "never fills". Fires only when the
+  limiting-side `volDay` clears `REACH_RELIEF_MIN_VOL` (reused from `js/estimators/reach.mjs`, never
+  forked — passed in as an opt so `windowread.mjs` stays a leaf) AND the hit fraction is below
+  `AVG_BOUND_LOW_FRAC`; names the averaged basis, the signed gap to the most extreme daily average
+  (read against AC2's ~0.36–0.56% measured smoothing bias), the in-window competing pool, and the
+  bid-side "low placement = deep patient entry" gloss. Rendered by `read-window-range.mjs` on every
+  scored `--bid`/`--ask`/`--exit` AND mirrored into the `--json`/`--out` dump as `avgBound` (the machine
+  path is the point — agents read `verify.json`). THIN books return null and print byte-identically, an
+  asymmetry pinned by test in `pipeline/test/windowread.test.mjs`. INFORM-ONLY, n≈0 — gates nothing) +
+  the **hour-of-day diurnal profile**
   `hourProfile`/`deriveDiurnalRange` (2026-07-09 — de-trended per-hour dip/peak detection, side-specific
   clustering, and the stale-to-live guard; the peak-timing engine `screen-flip-niches.mjs` auto-runs and
   `windowrange --profile` prints) + **multi-peak windows** (PLAN-MULTI-PEAK-WINDOWS 2026-07-23 — `hourProfile`

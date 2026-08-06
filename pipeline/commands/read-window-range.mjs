@@ -61,14 +61,14 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadMapping, fetchTs, fetchLatest } from '../lib/market/marketfetch.mjs';
+import { loadMapping, fetchTs, fetchLatest, rolling24FromTs1h } from '../lib/market/marketfetch.mjs';   // rolling24FromTs1h: the TRUE trailing-24h units/d composed from the IN-HAND 1h series (never the broken /24h) — feeds the avg-bound deep/thin split at zero new fetch
 import { parseArgs, parseGp } from '../lib/render/cli.mjs';
-import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
+import { windowStats, trajectoryRead, floorCeilingTrack, formatFloorCeiling, fmtHoldHorizon, quantLow, quantHigh, touchedDays, reachedDays, placement, recencySplit, recentQuant, RECENT_NIGHTS, hourProfile, deriveDiurnalRange, clearableAsk, demandPressure, reachableBand, askExitRead, reachMargin, realityClause, avgBoundRead, formatAvgBound, MARGIN_MIN_DAYS, FIVE_MIN_MIN_DAYS } from '../../js/windowread.mjs';   // PLAN-DRIFT-VS-CRASH — floorCeilingTrack/formatFloorCeiling: the phase-aligned floor+ceiling slope-asymmetry read printed under the --profile trajectory block; DE2: --depth reads the percentile-depth "BOOK AT ≤X" (clearableAsk); PB2: --pressure reads the demand-balance band; AC4a: placement = price→percentile for --ask/--bid; PLAN-POSITIONS-WINDOW-READ: askExitRead = the shared ask-side typical-exit assembly (this CLI + quote-items --positions render from ONE definition); reachMargin = the fade check (cushion trend + today's pace), symmetric ask/bid; FIVE_MIN_MIN_DAYS moved into windowread as its one home (depthDays/clearableBid/demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS)
 import { maxBuyForExit, breakEven, QUICK_FRESH_MIN } from '../../js/quotecore.js';   // #9 (PLAN-WINDOW-CLEAR B3): --exit back-solves the max profitable buy from an intended exit ask; QUICK_FRESH_MIN gates the stale-live pace guard
 import { netMargin } from '../../js/money-math.js';   // PLAN-ESTIMATOR-HONEST-SELL E3: the HONEST best-case margin at the raw exit (never BE-clamped) for the three-part fold line
 import { open as openArchive } from '../lib/market/archive.mjs';   // AC4a: read-only 5m-grain reach where the Tier-1 archive has coverage (degrades to 1h-only when it doesn't)
 import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 5: the drift-adjusted exit LEVEL folded into the floor/ceiling note (off the in-hand profile+days — no fetch)
-import { estimatePair, estConfLean, askReachFactor } from '../lib/signal/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold); RB-3: askReachFactor on its DEFAULT (full-window) basis, so the fold line can print the pre-change number beside the new one instead of swapping it silently
+import { estimatePair, estConfLean, askReachFactor, REACH_RELIEF_MIN_VOL } from '../lib/signal/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold); RB-3: askReachFactor on its DEFAULT (full-window) basis, so the fold line can print the pre-change number beside the new one instead of swapping it silently
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
 import { hourlyLMH, hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); hourlyDrift (PLAN-HOURLY-3DAY-TREND HT1) — the day-over-day slope read folded onto the SAME grid
@@ -384,6 +384,22 @@ for (const want of positionals) {
   if (!stats) { log('no traded window-hours in the available history — too thin to read this window.'); result.daysScored = 0; continue; }
   const { days: scored, lows, his, medVolLo, medVolHi } = stats;
   result.daysScored = scored.length;
+  // avg-bound: the deep/thin split for the reach-count clause below. TRUE trailing-24h units/d off the
+  // 1h series already in hand (rolling24FromTs1h — never the broken /24h endpoint), zero new fetch.
+  // LIMITING SIDE (min of the two-sided volumes) — the SAME definition quotecore.js:415 computes for
+  // row.volDay, and the basis REACH_RELIEF_MIN_VOL is expressed in. Don't sum the sides. That constant
+  // is the ONE documented deep/thin boundary ("thin book → the FULL existing discount stands", see
+  // js/estimators/reach.mjs) — REUSED here, never forked, as the avg-bound clause's floor.
+  const vol24 = rolling24FromTs1h(series);
+  const volDayUnits = vol24 ? Math.min(vol24.highPriceVolume || 0, vol24.lowPriceVolume || 0) : null;
+  result.volDay = volDayUnits;
+  // The clause fires ONLY on a deep book with a low count; thin books return null and print/emit exactly
+  // as before (the asymmetry is the point — see avgBoundRead's header and windowread.test.mjs).
+  const avgBound = (side, level, hitDays, nDays) => avgBoundRead(side, level, {
+    lows, his, volDay: volDayUnits, minVol: REACH_RELIEF_MIN_VOL,
+    hitDays, nDays, pool: side === 'bid' ? medVolLo : medVolHi,
+  });
+  const logAvgBound = ab => { const t = formatAvgBound(ab, { fmt }); if (t) log(t); };
   result.days = scored.map(([key, n]) => ({ key, low: n.low, hi: n.hi, volLo: n.volLo, volHi: n.volHi }));
   for (const [key, n] of scored)
     log(`  ${key}  low ${fmt(n.low)} · high ${fmt(n.hi)}  · sell-vol ${fmt(n.volLo)} · buy-vol ${fmt(n.volHi)}`);
@@ -503,6 +519,8 @@ for (const want of positionals) {
       log(`    ↳ 5m-grain (archive, less-smoothed; a LOWER BOUND on the true gap per AC2): touched ${t5}/${fiveStats.lows.length} · placement ${pctStr(p5)} (n=${fiveStats.lows.length} days)`);
       result.bid.grain5m = { touchedDays: t5, nDays: fiveStats.lows.length, placement: p5 };
     }
+    result.bid.avgBound = avgBound('bid', BID, touchedDays(lows, BID), lows.length);
+    logAvgBound(result.bid.avgBound);
     const bidRm = reachMargin(scored, 'bid', BID, { profile: profMargin, live: liveNow });
     logReachMargin(bidRm);
     result.bid.reachMargin = bidRm;
@@ -516,6 +534,8 @@ for (const want of positionals) {
       log(`    ↳ 5m-grain (archive, less-smoothed; a LOWER BOUND on the true gap per AC2): reached ${g5.reachedDays}/${g5.nDays} · placement ${pctStr(g5.placement)} (n=${g5.nDays} days)`);
       result.ask.grain5m = { reachedDays: g5.reachedDays, nDays: g5.nDays, placement: g5.placement };
     }
+    result.ask.avgBound = avgBound('ask', ASK, a.reachedDays, a.nDays);
+    logAvgBound(result.ask.avgBound);
     logReachMargin(a.reachMargin);
     result.ask.reachMargin = a.reachMargin;
   }
@@ -537,6 +557,8 @@ for (const want of positionals) {
         const exitPlace = placement(his, EXIT);
         log(`    exit ${fmt(EXIT)} reached on ${reached}/${N} day(s) in this ${winLabel}${splitNote('ask', EXIT)} · placement ${pctStr(exitPlace)} of the ${N}-day daily-HIGH distribution`);
         result.exit.reachedDays = reached; result.exit.placement = exitPlace;
+        result.exit.avgBound = avgBound('ask', EXIT, reached, N);
+        logAvgBound(result.exit.avgBound);
         if (reached / N < EXIT_REACH_MIN)
           log(`    ⚠ this exit rarely prints in-window (${reached}/${N}) — it OVER-states the reachable sell, so the back-solved buy ${fmt(buy)} is optimistic; pick a lower, more-reachable exit`);
       } else {

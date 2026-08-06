@@ -773,6 +773,26 @@ on the smoothed 1h grain — yet placement p93 and, on the less-smoothed 5m grai
 (upper-middle of the printed band): the raw 1h count read as a warning on a liquid, thick book where
 the real fill risk was near zero, exactly the trap the placement read now surfaces.
 
+**The DEEP-BOOK half of that judgment is now ENCODED — read the `⊙ avg-bound read` clause, don't
+perform the conditioning by hand** (`avgBoundRead`/`formatAvgBound` in `js/windowread.mjs`, rendered on
+every scored `--bid`/`--ask`/`--exit` and mirrored into the `--json`/`--out` dump as `avgBound`). The
+smoothing bias is **depth-proportional**: a 1h bucket on a deep book averages tens of thousands of
+prints, so its mean sits structurally above the intra-hour minimum and below the intra-hour maximum,
+and the gap GROWS with liquidity. So the same low count means different things at different depths —
+near-harmless at ~180/day, badly misleading at ~655k/day. The clause fires only when the limiting-side
+`volDay` clears `REACH_RELIEF_MIN_VOL` (100k — the SAME documented deep/thin boundary `reachRelief`
+already uses, reused rather than forked) **and** the hit fraction is low; it names the averaged basis,
+prints how far the level sits beyond the most extreme daily average against AC2's measured ~0.36–0.56%
+smoothing bias (itself a LOWER BOUND), surfaces the in-window competing pool, and on the bid side adds
+the gloss that a LOW placement is a deep patient entry rather than an extremity warning. It is
+INFORM-ONLY (n≈0) and gates nothing. **The THIN-book side stays judgment**, and its output is
+byte-identical to before — stay close to the centre of the distribution there, since a single artifact
+print is easy to mistake for a real level. That asymmetry is pinned by test in
+`pipeline/test/windowread.test.mjs`; it is what stops the fix causing the opposite error. Why it was
+encoded at all: the rule had been written down twice (here and in `/scan`) and was skipped anyway —
+on 2026-08-05 a live read killed Ruby dragon bolts (e), Seeking dragon arrow and Seeking amethyst
+arrow (349k–750k u/d) off bare `touched 0/14 · p0` lines.
+
 For a **big-ticket HELD lot** (lot value ≥ `BIG_TICKET_GP` = 10m, or a watchlist member), this whole
 ask-side "typical exit" read is **auto-surfaced on `quote-items.mjs --positions`** as the `↗ windowExit`
 note — the list-price reach/placement, the daily-HIGH typical-exit levels (~50%/~75%/every-day + recent-3),

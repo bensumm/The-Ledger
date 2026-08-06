@@ -42,11 +42,15 @@ export const reachedDays = (his, ask) => his.filter(h => h >= ask).length;
 //     (upper-middle of the historically-printed band; the normal place a small resting ask lives).
 //   • BID vs the daily-LOW distribution — a LOW placement = "below most daily lows" (a deep entry).
 // PURELY DESCRIPTIVE — it says WHERE a level sits in the printed distribution, NOT what is "achievable"
-// or "safe". Whether an upper-percentile placement is trustworthy is a liquidity-conditioned judgment
-// that lives in the human/skill layer (distrust near the historical extreme on a thin book; trust
-// deeper into the tail on a deep book). The calibrated liquidity-scaled "safe ≈ pXX" threshold (AC3)
-// did NOT ship — its gate failed (the Finding-2 knee is unobservable on our own fills; see
-// PLAN-REACH-CALIBRATION AC1 "GATE RESULT: NOT MET"). This is the ONE price→percentile home the reach
+// or "safe". The liquidity conditioning on top of it (distrust near the historical extreme on a thin
+// book; trust deeper into the tail on a deep book) is now HALF-ENCODED: avgBoundRead below computes
+// and renders the deep-book half beside the reach count, so this gloss — including "a LOW bid
+// placement is a deep entry, not an extremity warning" — reaches the reader instead of living only in
+// this comment and in skill prose (which is exactly how it got skipped, 2026-08-05). What is still
+// judgment is the thin-book side and the size question. The calibrated liquidity-scaled "safe ≈ pXX"
+// threshold (AC3) did NOT ship — its gate failed (the Finding-2 knee is unobservable on our own
+// fills; see PLAN-REACH-CALIBRATION AC1 "GATE RESULT: NOT MET"), which is why avgBoundRead reports a
+// descriptive distance and never a "safe" verdict. This is the ONE price→percentile home the reach
 // CLIs use; fill-placement.mjs's `cdf` (AC1's calibration core) is the same computation and delegates
 // here, so there is a single definition. null on an empty sample. Same ceil-index-free CDF convention
 // as the AC1 study (count ≤ x, divide by n).
@@ -96,6 +100,77 @@ export function recentQuant(days, side, p, recentN = RECENT_NIGHTS) {
   if (!vals.length) return null;
   const sorted = [...vals].sort((a, b) => a - b);
   return side === 'bid' ? quantLow(sorted, p) : quantHigh(sorted, p);
+}
+
+// --- avg-bound read (the deep-book reach-misread guard) ----------------------------------------
+// touchedDays/reachedDays above count the days on which the per-day MIN/MAX of 1h-bucket AVERAGES
+// crossed the level (windowStats buckets avgLowPrice/avgHighPrice — two layers of smoothing: mean
+// within the hour, then a per-day extremum over those means). A 1h bucket on a deep book averages
+// tens of thousands of prints, so its mean sits structurally ABOVE the intra-hour minimum (and BELOW
+// the intra-hour maximum) — and the gap GROWS with book depth: more prints ⇒ tighter mean ⇒ further
+// from the tail. The count is therefore biased-strict IN PROPORTION TO LIQUIDITY: near-harmless on a
+// ~180/day big ticket (where an hour holds a handful of prints and the mean ≈ the prints), badly
+// wrong on a ~655k/day commodity, where a routine patient bid lives exactly below every daily
+// min-of-means. A low N/M there means "below every hourly AVERAGE", NOT "never fills".
+//
+// This is the "Above-average is not a warning sign" doctrine (PLAN-REACH-CALIBRATION Finding 3) moved
+// OUT of skill prose INTO the surface that prints the number. It had been written down twice — in the
+// /scan skill and docs/MARKET-ANALYSIS.md §4 — and was skipped anyway: on 2026-08-05 a real read
+// killed Ruby dragon bolts (e), Seeking dragon arrow and Seeking amethyst arrow (349k–750k u/d, all
+// well clear of the floor) off bare `touched 0/14 · p0` lines. The correcting knowledge existed in
+// code too, but only in the estimator/rank layer (reachRelief, the AC5/AC6 churn exemption), never on
+// the validation surface an operator actually reads.
+//
+// ASYMMETRIC BY CONSTRUCTION — the whole point, not an implementation detail. Returns null below
+// `minVol` (callers pass the estimators' REACH_RELIEF_MIN_VOL, the SAME documented deep/thin boundary
+// whose own header reads "thin book → the FULL existing discount stands"), so thin-book output is
+// BYTE-IDENTICAL to before and the guard that correctly kills a big-ticket mirage ask is untouched.
+// That asymmetry is pinned by test in pipeline/test/windowread.test.mjs. Also null when the hit count
+// is already healthy — there is nothing to reframe.
+//
+// INFORM-ONLY, n≈0: gates nothing, prices nothing, moves no rank, grade or verdict. `gapFrac` is a
+// DESCRIPTIVE distance, to be read against AC2's measured 5m-max-vs-1h-avg smoothing bias (median
+// 0.36–0.56% across all volume buckets, ρ=+0.09, and itself only a LOWER BOUND — CHANGELOG
+// 2026-07-17). There is deliberately NO "fills if within X%" threshold: AC1's attempt to calibrate
+// achievability against our own fills FAILED its gate (PLAN-REACH-CALIBRATION AC1 "GATE RESULT: NOT
+// MET"), so a confident-looking number here would be exactly the n≈0 overreach process rule 4 forbids.
+export const AVG_BOUND_LOW_FRAC = 0.5;   // hit-fraction below this counts as a "low" count (mirrors validate.mjs's REACH_CAUTION_FRAC; PLACEHOLDER, n≈0)
+
+export function avgBoundRead(side, level, {
+  lows = null, his = null, volDay = null, minVol = null,
+  hitDays = null, nDays = null, pool = null, lowFrac = AVG_BOUND_LOW_FRAC,
+} = {}) {
+  if (level == null || volDay == null || minVol == null) return null;
+  if (!(volDay >= minVol)) return null;            // thin book → output unchanged (the asymmetry)
+  if (!nDays || hitDays == null) return null;
+  const hitFrac = hitDays / nDays;
+  if (!(hitFrac < lowFrac)) return null;           // count already healthy → nothing to reframe
+  const sample = side === 'bid' ? lows : his;
+  if (!sample || !sample.length) return null;
+  // both samples are ASCENDING (quantLow/quantHigh convention): the most extreme daily average is the
+  // FIRST low (deepest daily-avg-low) and the LAST high (highest daily-avg-high).
+  const extreme = side === 'bid' ? sample[0] : sample[sample.length - 1];
+  if (!extreme) return null;
+  const gapFrac = side === 'bid' ? (extreme - level) / extreme : (level - extreme) / extreme;
+  return { deepBook: true, side, level, volDay, minVol, hitDays, nDays, hitFrac, extreme, gapFrac, pool, basis: 'ts1h-bucket-average' };
+}
+
+// Renderer for avgBoundRead — kept separate from the computation, matching this module's
+// floorCeilingTrack/formatFloorCeiling and reachMargin conventions. Returns null when there's no read.
+export function formatAvgBound(ab, { fmt = String } = {}) {
+  if (!ab) return null;
+  const isBid = ab.side === 'bid';
+  const pct = f => (f * 100).toFixed(1) + '%';
+  const where = ab.gapFrac > 0
+    ? `${fmt(ab.level)} sits ${pct(ab.gapFrac)} ${isBid ? 'under the deepest' : 'over the highest'} daily-avg-${isBid ? 'low' : 'high'} ${fmt(Math.round(ab.extreme))}`
+    : `${fmt(ab.level)} sits INSIDE the daily-avg range — the low count is a within-range miss, not an out-of-range level`;
+  const poolStr = ab.pool != null ? ` · in-window ${isBid ? 'instasell' : 'instabuy'} pool ${fmt(Math.round(ab.pool))} u` : '';
+  const gloss = isBid ? ' — a LOW bid placement is a deep patient entry, not an extremity warning' : '';
+  return [
+    `    ⊙ avg-bound read: this counts days the 1h-bucket AVERAGE ${isBid ? 'low reached DOWN to' : 'high reached UP to'} the level. On this DEEP book (~${fmt(Math.round(ab.volDay))} u/d, ≥${fmt(ab.minVol)} floor)`,
+    `      intra-hour prints run ${isBid ? 'BELOW' : 'ABOVE'} the hourly average, so a low count is NOT "never ${isBid ? 'fills' : 'prints'}" (Finding 3; the 5m-vs-1h gap measured ~0.4–0.6% median, a LOWER BOUND — AC2).`,
+    `      ${where}${poolStr}. Judge by pool + placement, not the raw ${ab.hitDays}/${ab.nDays}${gloss}. (deep-book clause: inform-only, n≈0)`,
+  ].join('\n');
 }
 
 // --- level-reality guard (PLAN-DIURNAL-RECENCY-GUARD) ------------------------------------------

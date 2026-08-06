@@ -10,6 +10,61 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The deep-book reach misread is now answered in CODE, not prose — the `⊙ avg-bound read` clause (pipeline-only, 2026-08-05)
+**The failure.** Verifying scan candidates with the `read-window-range.mjs` trio, an agent read
+`--bid 2,888 → touched on 0/14 day(s) · recent 0/3 · placement p0` on **Ruby dragon bolts (e) at
+655k units/day** and concluded the bid was dead — skipping an S+ churn row. It made the same call on
+Seeking dragon arrow (749.6k/d) and Seeking amethyst arrow (349.5k/d). Ben caught it: *"Just because
+a bid touched 0/14 doesn't mean it's unreachable does it? especially on a high volume item."*
+
+**Why the number lies, and lies MORE the deeper the book.** `windowStats` buckets the wiki 1h series
+into per-day extrema of `avgLowPrice`/`avgHighPrice` — two layers of smoothing (mean within the hour,
+then a per-day extremum over those means). A 1h bucket on a 655k/day book averages tens of thousands
+of prints, so its mean sits structurally above the intra-hour minimum, and the gap **grows with
+liquidity** (more prints ⇒ tighter mean ⇒ further from the tail). The count is therefore
+biased-strict in proportion to depth: near-harmless on a ~180/day big ticket, badly wrong on a
+commodity, where a routine patient bid lives exactly below every daily min-of-means.
+
+**Why prose didn't stop it.** The rule already existed in TWO places — `/scan`'s "Above-average is not
+a warning sign" bullet (Finding 3, 2026-07-17) and `docs/MARKET-ANALYSIS.md` §4, both carrying the
+Soul-rune anchor (397–399 filled on ~20+ real lots against a "reached 1/14, recent 0/3" read). Five
+partial code guards each had a hole: RC1's recency split guards a DIFFERENT failure and stayed silent
+(both counts were 0, so `recent 0/3` actively *reinforced* the error); `placement`'s "a LOW bid
+placement is a deep entry" gloss lived only in a **code header comment**, never in the rendered line;
+the 5m-grain sub-line is coverage-gated, typographically subordinate, and itself an average (AC2
+measured the 5m-vs-1h gap at a median 0.36–0.56% and documented it as a LOWER BOUND); `reachRelief`
+and the AC5/AC6 churn exemption live in the estimator/rank path, not on the validation surface; and
+`reachValidator` shares the same substrate with `REACH_REJECT_FRAC = 0`. Same failure shape as the
+sync-enforcement (SY1) and incidental-lot gaps — both fixed by moving prose into code.
+
+**The fix.** `avgBoundRead`/`formatAvgBound` in `js/windowread.mjs`, rendered by
+`read-window-range.mjs` on every scored `--bid`/`--ask`/`--exit` and — the load-bearing half —
+mirrored into the `--json`/`--out` dump as `avgBound`, since the trio's canonical invocation writes
+`verify.json` and agents branch on typed fields far more reliably than on prose. The clause names the
+averaged basis, the signed gap to the most extreme daily average (to be read against AC2's measured
+band), the in-window competing pool, and the bid-side placement gloss.
+
+**ASYMMETRIC BY CONSTRUCTION.** It fires only when the limiting-side `volDay` clears
+`REACH_RELIEF_MIN_VOL` (100k — the SAME documented deep/thin boundary `reachRelief` already uses,
+whose own header reads *"thin book → the FULL existing discount stands"*; reused, never forked, and
+passed in as an opt so `windowread.mjs` stays a leaf) **and** the hit fraction is low. Thin-book
+output is byte-identical, so the guard that correctly killed the Osmumten's fang and Masori chaps asks
+in the very same session is untouched. That asymmetry is pinned by test in
+`pipeline/test/windowread.test.mjs` — it is what stops this fix causing the opposite error.
+
+**Honesty (rule 4).** INFORM-ONLY, n≈0 — gates nothing, prices nothing, moves no rank/grade/verdict.
+`gapFrac` is a DESCRIPTIVE distance; there is deliberately no "fills if within X%" threshold, because
+AC1's attempt to calibrate achievability against our own fills FAILED its gate
+(`PLAN-REACH-CALIBRATION.md` AC1 "GATE RESULT: NOT MET"). It is documentation — but computed
+per-item and placed on the number being misread, in both the human and machine paths. **Deferred:**
+downgrading `reachValidator`'s deep-book `reject` → `caution` was proposed and NOT taken —
+`PLAN-REACH-VALIDATOR-AUDIT.md` §4 says there's no urgency (`reach` gates nothing live; 99.5% of its
+rejects are shadow-logged inform) and §3 prescribes building the committed forward-hit join FIRST,
+"not flip the mode first and observe". Docs: `docs/MARKET-ANALYSIS.md` §4 reconciled in place, the
+`/scan` (1.90) and `/positions` (1.53) bullets shrunk to pointers, `placement()`'s superseded
+"lives in the human/skill layer" header sentence updated, README `windowread.mjs` entry extended.
+No `APP_VERSION` bump — pure-additive new exports, no app surface renders them yet.
+
 ### RB-3 + RB-5 — the displayed `P(fill)` now shares a recency basis with the price beside it, and the recent-preferred rule has one home (pipeline-only, 2026-08-04)
 PLAN-RECENCY-BASIS chunks RB-3 (display) and RB-5 (de-duplication). The defect: on one row the
 reach-FOLD price (`Est. sell`) was computed on the **recent-3** window while the `P(fill)` printed

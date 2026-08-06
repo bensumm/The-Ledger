@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.52
+version: 1.53
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -386,8 +386,12 @@ below) — running it stays mandatory; only the INTERPRETATION of the result is 
 A low raw reach count is NOT by itself grounds to reject a sell level: "reached" only means the 1h-bucket
 AVERAGE crossed it, and pricing an ask above that average is how a flip earns money (full doctrine
 `docs/MARKET-ANALYSIS.md` §4 — don't restate it here). Judge the level by LIQUIDITY and its placement
-percentile, not the raw N/14: on a deep/liquid book the upper tail is fine — distrust only a level
-at/near the historical extreme (≈p100); on a thin book stay near center. This session the old "step
+percentile, not the raw N/14 — and on a DEEP book **read the `⊙ avg-bound read` clause the trio now
+prints** rather than conditioning by hand (encoded 2026-08-05, `avgBoundRead` in `js/windowread.mjs`;
+it fires only above `REACH_RELIEF_MIN_VOL` and is inform-only). On a thin book nothing prints and the
+full-strength guard still applies — stay near center there (an artifact print is easy to mistake for a
+real level); on a deep/liquid book the upper tail is fine, distrust only a level at/near the
+historical extreme (≈p100). This session the old "step
 down to the ~50–75%-day reach level, never above" framing produced TWO false "won't clear" reads on
 liquid items (soul rune, dragon bones) that then cleared at the higher price. The band top is a
 CANDIDATE (input), not the pitched number — on a thin + wide-band item it is an artifact that never
