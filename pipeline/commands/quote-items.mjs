@@ -48,7 +48,7 @@ import { resolve, loadPipelineConfig } from '../lib/market/compose.mjs';   // PC
 import { renderReport } from '../lib/render/render.mjs';   // VZ3 (PLAN-VIZ-LAYER) — the ONE render layer; both modes build a report object and print renderReport(buildQuoteReport(...)); the flat lines[] is now typed note items (the sigil moved from the push site into render.mjs's per-kind formatter)
 import { loadModules, runProbes, logFirings } from '../lib/market/probes.mjs';   // PM1 — probe-module system (per-item read surface); PM2 — firing log
 import { logSuggestions, suggestionEntry, classAndSource, reachableShadow, depthExitShadow, asymShadow, windowExitShadow } from '../lib/render/suggestlog.mjs';   // SF-3 — classAndSource picks class + volSrc from a warm bulk map (or per-item fallback); RC-S2 — shared reachable/depthExit/asym ledger-shadow reshapers; WC1 — windowExitShadow (the window-clear ask-rung forward record)
-import { runValidators, flags, leanValidators } from '../../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
+import { runValidators, flags, leanValidators, durableFloorRead } from '../../js/validate.mjs';   // P2 — validator registry (reachValidator); quote NEVER hides a row, only annotates
 import { buysByItem, limitWindow } from '../lib/capital/limits.mjs';   // LM1 — per-item 4h buy-limit window (regime-line + limitValidator)
 import { termStructure } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator
 import { loadGuideHistory, guideUpdates, guideAnchorModel, guideAnchorLine } from '../lib/market/guideanchor.mjs';   // YP1 advisory
@@ -229,10 +229,10 @@ function localDayKey(d = new Date()) {
 // pushTrajectory just returned (the SAME multi-day floor read) — it drives the @floor floor-aware cue
 // (caution on a breaking floor, favorable on a dip-in-uptrend) with NO re-derived slope. Inform-only,
 // never a gate; null profile → no note; null fc → the cue honestly degrades to the bare 'buy now'.
-function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null, fc = null } = {}) {
+function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null, fc = null, durable = null } = {}) {
   const p = prof || (ts1h ? hourProfile(ts1h, { nights: 7 }) : null);
   if (!p) return;
-  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc }), { fmtHour });
+  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable }), { fmtHour });
   if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
 }
 
@@ -472,7 +472,7 @@ async function runItems() {
       prof, ctx: { liveLo: row.quickBuy, liveHi: row.quickSell, phase: row.phase, mom: row.mom, reliable: row.reliable } });
     // The ADD-while-holding SOFT-BUY timing read — pushed AFTER pushTrajectory so its @floor cue reuses the
     // floorCeilingTrack fc just computed (bare-quote & --positions surfaces stay identical; zero new fetch).
-    pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id, fc: fcTraj });
+    pushSoftBuy(notes, { prof, live: row.quickBuy ?? null, itemId: id, fc: fcTraj, durable: durableFloorRead(vres) });
     // PLAN-WINDOW-CLEAR B2: the within-window CLEAR read — does the quoted ask actually PRINT inside its
     // diurnal PEAK window (not just on N/M days), and does that window's volume absorb a buy-limit tranche?
     // Inform-only (the ⤴ ask-headroom / ◆ asym pattern): a divergence — healthy all-day reach but the ask
@@ -896,7 +896,7 @@ async function runPositions() {
     // ADD-while-holding SOFT-BUY timing — the held-lot surface is exactly where the "should I add at the dip?"
     // decision lives. inp.ts1h is in hand (fetched at the vol24 parity step above), so this is zero new fetch.
     // fcHeld (the floorCeilingTrack just computed) drives the @floor floor-aware cue — caution on a breaking floor.
-    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId, fc: fcHeld });
+    pushSoftBuy(notes, { ts1h: inp.ts1h, live: row.quickBuy ?? null, itemId, fc: fcHeld, durable: durableFloorRead(vres) });
     // COD-3: on a CUT-family verdict (CUT / CUT-CANDIDATE / LIST-TO-CLEAR), surface the cut-and-rebid
     // advisory so the agent stops re-deriving the friction arithmetic. TRAJECTORY-AWARE (Ben 2026-07-10):
     // rebidAdvice reads the multi-week shape — a KNIFE says don't rebid; an OSCILLATING faller says rebid

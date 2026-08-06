@@ -236,7 +236,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   console-only; pinned by `pipeline/test/oscillation-reachphase.test.mjs`),
   `validate.mjs` (P2 — the pure VALIDATOR REGISTRY `(ctx)→{status:pass|caution|reject,reason,evidence}`
   run on EVERY surface: `reachValidator` wraps windowread reach + RC1 into caution/reject WITH the
-  reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor;
+  reach evidence; `floorValidator` (P3, BUY-side) rejects/cautions a buy parked above the durable floor
+  — and `durableFloorRead(vres)` (2026-08-06) is the ONE canonical extraction of that verdict
+  (`{status, ranges, lookback}`) for consumers that need the LEVEL read without re-deriving it: the
+  soft-buy `unproven-base` cue, the `⚠N×floor` row probe, and the bucketed caution footer all compose
+  it rather than fork it (windowread cannot import validate — the arrow is one-way — so the caller
+  hands it down);
   `trajectoryValidator` (TV1 2026-07-09, BUY-side) is the SHAPE policy over `termstructure`'s
   `classifyTrajectory` — knife/oscillating/based/elevated; `valueAmplitudeValidator` (TV1) the recent-week
   amplitude+proximity for value; `limitValidator` (LM1) the rolling-4h buy-limit; `dipPostureValidator`

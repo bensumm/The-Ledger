@@ -10,6 +10,54 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The durable-floor caution stops being wallpaper — a COMPOSITION, not a fourth implementation (0.71.2, 2026-08-06)
+**The failure.** Snape grass was bought 13,000 @ 1,051 four days into a spike. `floorValidator` cautioned
+it on **three consecutive passes** with a rising multiple — "buy 1052 is **1.68×** typical swing above the
+28d floor 960 — not near durable support", then 1.70×, then 1.76× — alongside grade **D** and a 2/14 sell
+leg. It was correct. Three other surfaces simultaneously endorsed the buy: `fcTrack` ("floor rising +29/d ·
+healthy-trend · live at the FLOOR"), the soft-buy cue (`@floor · ▲ favorable — dip in uptrend`), and the
+WATCH-CLOSELY label ("spike on RISING lows — healthy reprice, **more holdable than froth**"). All three
+measure a **5-day** window that sat *entirely inside the spike* — the floor "rose" precisely BECAUSE the
+item spiked. Break-even (1,073) ended up above the pre-spike daily-HIGH range (976–1,038), so a full
+round-trip left no profitable exit at all.
+
+**The audit that shaped the fix.** Ben's constraint was explicit: *don't run the same check in several
+places and interpret it disjointedly.* Auditing the producers showed **no duplication** — LEVEL (`floorValidator`
+28d, `basePosition` 14d) and SHAPE (`floorCeilingTrack` 5d, `phase()`, `trajectoryValidator`,
+`oscillationVsKnife`) are already cleanly separated, and `js/validate.mjs` says so in its own header. The
+defect was a **consumer reading only one side**: `softBuyFloorCue` took `fc` (shape) and nothing else.
+
+**A — compose, don't re-derive.** New `durableFloorRead(vres)` in `js/validate.mjs` extracts
+`floorValidator`'s verdict in one canonical shape; `softBuyRead`/`softBuyFloorCue` take it as `durable` and
+emit a new cue, `▽ caution — dip into an UNPROVEN base, not near durable support (N× swing over the 28d
+floor)`, when the 5d floor is rising but the 28d check cautions/rejects. **No threshold, lookback or swing
+math is re-derived** — the whole policy (`FLOOR_CAUTION_RANGES`, `FLOOR_REJECT_RANGES`, the recent-trend
+tightening) stays in its one home. The dependency direction forces this shape anyway: `validate.mjs` imports
+`windowread.mjs`, so the caller hands the verdict down. Absent `durable` ⇒ byte-identical old behaviour.
+
+**B — the caution rides the ROW.** A `⚠1.7×floor` Probes token now sits in the same cell as `⬇DIP`/`📈froth`/`⚓`,
+so it travels with the row a reader is actually looking at instead of into a footer.
+
+**C — bucket, don't sort.** Ben's question was "severe at the top or the bottom?", and the honest answer is
+that ordering fourteen identically-formatted lines only picks which you read first. Every floor caution lives
+in the 1.0×–2.0× band by construction (above `FLOOR_REJECT_RANGES` the row is already a hard `rejected:`), so
+the split is NEAR-REJECT vs marginal, at the **midpoint of the existing band** — derived from the two
+constants that own the policy, not a new placeholder. Live effect: **14 flat lines → 2 named + 1 collapsed
+line naming 7**. Nothing dropped; every name still prints.
+
+**D — the spike label stops endorsing.** "More holdable than froth" was unearned: rising lows in a spike's
+first days is near-tautological, because the spike is what lifted them. It now reads "better than froth, but
+the base is UNPROVEN: check the level against durable support (the ⚠N×floor probe)" — saying what the
+classifier knows and deferring to the check that owns the rest, rather than becoming a fifth place that
+re-derives it.
+
+**Honesty (rule 4).** No threshold was tuned and no new constant introduced; this is a wiring + salience
+change over checks that already existed and were already right. It does not make the floor read more
+accurate — it stops three shape-only signals talking over it. Verified live: two digest rows that previously
+read `▲ favorable` now correctly read the unproven-base cue. Note the positions surface still shows
+`▲ favorable` for Snape grass **and that is correct** — the held-lot validator scores *adding* at 985, which
+genuinely is near the 960 floor; the error was the entry at 1,051, which is the level the cue now catches.
+
 ### The forecast's refusals were FAIL-OPEN, and the verification trio was the one surface calling them blind (0.71.1, 2026-08-06)
 **The failure.** Snape grass was held 13,000 @ 1,051 (BE 1,073) through a textbook post-spike decay.
 Across a full day the `read-window-range.mjs` trio — the surface the market-read doctrine makes

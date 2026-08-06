@@ -15,8 +15,17 @@ export function stateTransition(ph) {
     return { state: 'basing', watch: true, note: 'faller flattened — potential bottom forming; watch for a base to enter (not yet a buy)' };
   if (ph.phase === 'spike') {
     const s = ph.lowSlope;
+    // D (2026-08-06, the Snape grass entry): the old wording here was "healthy reprice, more holdable
+    // than froth" — an unconditional ENDORSEMENT, and it was one of three green signals that talked over
+    // the 28d floor check saying "1.68× typical swing above the durable floor — not near durable support"
+    // on the same item, the same pass. The label cannot earn that word: rising lows in a spike's first
+    // days is very nearly TAUTOLOGICAL, because the spike is what lifted the lows. All this classifier
+    // can honestly separate is rising-lows from falling-lows; whether the new base is PROVEN is a LEVEL
+    // question it does not measure. So it now says what it knows and defers to the check that owns the
+    // rest (floorValidator, surfaced on the row as the ⚠N×floor probe and in the soft-buy cue) rather
+    // than becoming a fourth place that re-derives durable support.
     if (s != null && s > PHASE_LOW_FLAT_PCT)
-      return { state: 'spike-rising-lows', watch: true, note: 'spike on RISING lows — healthy reprice, more holdable than froth' };
+      return { state: 'spike-rising-lows', watch: true, note: 'spike on RISING lows — better than froth, but the base is UNPROVEN: check the level against durable support (the ⚠N×floor probe) before treating it as holdable' };
     if (s != null && s < -PHASE_LOW_FLAT_PCT)
       return { state: 'spike-falling-lows', watch: true, note: 'spike on FALLING lows — froth, fragile; do not chase' };
     return { state: 'spike', watch: true, note: 'spike — elevated off base; watch whether the lows hold or roll over' };

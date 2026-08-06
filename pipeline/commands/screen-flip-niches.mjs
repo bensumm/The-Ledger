@@ -134,7 +134,7 @@ import { PIPELINE_VERSION } from '../lib/version.mjs';   // PV — stamped into 
 import { loadDerivedCash } from '../lib/capital/derive-cash-tiers.mjs';   // value niche: DERIVED deployable pool → --capital default (derive-cash.mjs anchor + log flow)
 import { readOffersSnapshot, loadSuspectBidEscrow, suspectBidNote } from '../lib/reconstruct/offers.mjs';   // resting-bid item ids for the deployablePool marketRef (deep-vs-committed classification); L2 suspect-bid flag
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';   // held-item ids — the code-enforced "always show a held item" exception (was prose-only)
-import { runValidators, flags, informFlags, leanValidators, worstStatus } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
+import { runValidators, flags, informFlags, leanValidators, worstStatus, durableFloorRead, FLOOR_CAUTION_RANGES, FLOOR_REJECT_RANGES } from '../../js/validate.mjs';   // P2 — validator registry: DROP reject, FLAG caution, INFORM = annotate-only
 import { buysByItem, limitWindow, LIMIT_WINDOW_SEC } from '../lib/capital/limits.mjs';   // LM1 — per-item 4h buy-limit window (limitValidator BUY-side); LIMIT_WINDOW_SEC = the churn laps/day ceiling source (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST capEff)
 import { termStructure, basePosition, BASEPOS_LOOKBACK_DAYS } from '../../js/termstructure.mjs';   // P3 — term structure / durable floor for floorValidator (fed the loadDaily proxy series); DT6 — the light multi-week base-position read off the SAME `ts`, never a second structure computation
 // COD-4 (2026-07-10): richFrom1h/trajectoryFrom1h were EXTRACTED to lib/warm-term-structure.mjs (byte-identical
@@ -754,18 +754,18 @@ export function digestReachAndPlacement({ spec, row, askReachExtra, his, days } 
 // new fetch) that drives the positions cue; on @floor it appends the caution/favorable tag (a breaking floor
 // = a dump artifact, not a discount — the fang under-read fix). Compact CELL shape (window · marker · [cue]),
 // NOT formatSoftBuy's prefixed line. STDOUT-ONLY: never gates/drops/regrades, never enters screen.json.
-function digestSoftBuy(prof, row, fc = null) {
+function digestSoftBuy(prof, row, fc = null, durable = null) {
   const live = row ? (row.quickBuy ?? null) : null;
-  const read = softBuyRead(prof, { live, fc });
+  const read = softBuyRead(prof, { live, fc, durable });
   if (!read) return null;
   const win = `${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
   if (read.marker == null) return win;                            // window known, live-vs-floor unavailable
   // append the cue only when it's the meaningful floor-aware read (favorable/caution); the @floor/+X% marker
   // already conveys buy-now/wait, so those two words stay implicit in the compact cell.
-  const cueTag = (read.cue === 'favorable' || read.cue === 'caution') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
+  const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }
-function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, fc = null, subFloor }) {
+function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacement, marginTrend = null, placementDiverges = false, prof, fc = null, durable = null, subFloor }) {
   if (subFloor) return;                       // sub-floor fallback rows are never "top-8 decision" candidates
   if (HELD_IDS.has(id)) return;               // a held item's read belongs to the positions surface, not the buy-triage digest
   const ph = prof ? (diurnalPhase(prof)?.phase ?? null) : null;
@@ -790,7 +790,7 @@ function collectDigestRow({ id, name, spec, row, er, grade, reachFrac, askPlacem
     reachFrac,
     marginTrend,   // R4b: ask-side cushion trend (fading|stable|extending|null) — informs the reach ✓/✗, stdout-only
     phase: ph,
-    softBuy: digestSoftBuy(prof, row, fc),   // inform-only n≈0 dip window + live-vs-floor marker + floor-aware cue (stdout-only)
+    softBuy: digestSoftBuy(prof, row, fc, durable),   // inform-only n≈0 dip window + live-vs-floor marker + floor-aware cue (stdout-only)
     grade,
     bigTicket: isBigTicket(row),
     crossable,   // W3-1: FLOORS the sort key when === false (uncrossable), NEVER mutates the displayed capEff; null = unknown-neutral
@@ -1058,7 +1058,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     }
     if (vworst === 'caution') {
       disc.caution++;
-      cautionNotes.push(`${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '));
+      cautionNotes.push({ text: `${name}: ` + flags(vres).filter(f => f.status === 'caution').map(f => `${f.key} ${f.reason}`).join('; '), name, ranges: (durableFloorRead(vres) || {}).ranges ?? null });
     }
     // inform-mode findings (the analysis that WOULD have gated under a stricter thesis) — surfaced as a
     // decision-support note, never a drop. This is where the trajectory/reach read lands on a surfaced row.
@@ -1392,7 +1392,16 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     });
     // PM2: record every firing to pipeline/modules/<module>.log (failure-safe, stdout-untouched).
     logFirings(fired, { surface: 'screen', id: s.id, name, quickBuy: row.quickBuy, quickSell: row.quickSell, guide: row.guide, regimeLabel: row.regimeLabel, phase: ph?.phase ?? null });
-    const probeStr = fired.map(f => f.tag).join(' · ');
+    // B (2026-08-06, the Snape grass entry): the durable-floor CAUTION rides the ROW, not just the footer.
+    // It fired three passes running on Snape grass ("1.68× → 1.76× typical swing above the 28d floor 960 —
+    // not near durable support") and was scrolled past every time, because it was one of FOURTEEN
+    // identically-formatted `⚠ caution —` footer lines. A signal printed fourteen times a pass is
+    // wallpaper. As a Probes token it travels with the row a reader is actually looking at, in the same
+    // cell as ⬇DIP / 📈froth / ⚓. Reuses floorValidator's verdict via durableFloorRead — no re-derivation.
+    const durableRow = durableFloorRead(vres);
+    const floorTag = (durableRow && (durableRow.status === 'caution' || durableRow.status === 'reject') && durableRow.ranges != null)
+      ? `⚠${durableRow.ranges}×floor` : null;
+    const probeStr = [...fired.map(f => f.tag), floorTag].filter(Boolean).join(' · ');
     // P4c: the weighed entry-path menu for this surfaced candidate (display-only; computed off the
     // already-derived row + phase, no new fetch). Stored on the row so the post-table block prints in
     // the same sorted order as the table.
@@ -1420,7 +1429,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     // EF-0a: carry the admission-provenance stamps (s.via — reserve/explore tag; s.preRank/s.prePool —
     // the pre-fetch-ordering position, stamped in admission.mjs) onto the row so the ledger log below
     // can record them. Inform-only pass-through — read by nothing else here.
-    rows.push({ id: s.id, row, grade, cells, score: r.score, er, rankPre, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, via: s.via, preRank: s.preRank, prePool: s.prePool });
+    rows.push({ id: s.id, row, grade, cells, score: r.score, er, rankPre, asymEr, probeStr, validators: leanValidators(vres), pathWeighed, est, estShown, prof, dr, timedLap, ts, expGpDay: s.expGpDay, expGpDayLegacy: s.expGpDayLegacy, winClear, reachable, ovWeight, digestReach, digestAskPlacement, digestMarginTrend, digestPlacementDiverges, cappedBy, softBuyFc, durable: durableFloorRead(vres), via: s.via, preRank: s.preRank, prePool: s.prePool });
     dist[grade] = (dist[grade] || 0) + 1;
   }
   // sort: active weights the risk-adjusted score (velocity-inclusive); overnight weights NET EDGE per
@@ -1484,7 +1493,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // cross-niche decision digest (printed ONCE after every niche in main() under --digest). collectDigestRow
   // excludes sub-floor + held rows. This never reorders/alters `rows` — the per-niche table + screen.json
   // are untouched (§1.4: the digest is a DIGEST-ONLY presentation choice, not the table's sort key).
-  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, fc: r.softBuyFc, subFloor });
+  for (const r of rows) collectDigestRow({ id: r.id, name: map.byId[r.id]?.name || ('#' + r.id), spec: FLIP_NICHES[mode], row: r.row, er: r.er, grade: r.grade, reachFrac: r.digestReach, askPlacement: r.digestAskPlacement, marginTrend: r.digestMarginTrend, placementDiverges: r.digestPlacementDiverges, prof: r.prof, fc: r.softBuyFc, durable: r.durable, subFloor });
 
   // O1 suggestions ledger: log every rated (surfaced) row at emit time, unconditionally. The niche
   // is `mode`; the emitted "verdict" is the letter grade the row was surfaced under.
@@ -1602,7 +1611,22 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
     const top = Object.entries(rejReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([why, n]) => `${why}×${n}`).join(', ');
     footerLines.push(`rejected: ${disc.reject}${top ? ` (${top})` : ''}`);
   }
-  for (const c of cautionNotes) footerLines.push(`⚠ caution — ${c}`);
+  // C (2026-08-06): BUCKET, don't sort. Ben's question was "would we put severe at the top or the
+  // bottom?" — and the honest answer is that ordering fourteen identically-formatted lines just picks
+  // which one you read first. Every floor caution lives in the 1.0×–2.0× band by construction (above
+  // FLOOR_REJECT_RANGES the row is already a hard `rejected:`), so the useful split is NEAR-REJECT vs
+  // marginal. The boundary is the MIDPOINT of the existing band — derived from the two constants that
+  // already own this policy, NOT a new placeholder threshold. Near-reject rows keep their own lines;
+  // the marginal tail collapses to ONE line, the same trim the /scan skill already applies to the
+  // D-grade table tail (actionable-first-dead-last). Nothing is dropped — every name still prints.
+  const NEAR_REJECT = (FLOOR_CAUTION_RANGES + FLOOR_REJECT_RANGES) / 2;
+  const elevated = cautionNotes.filter(c => c.ranges != null && c.ranges >= NEAR_REJECT);
+  const marginal = cautionNotes.filter(c => !(c.ranges != null && c.ranges >= NEAR_REJECT));
+  for (const c of elevated) footerLines.push(`⚠ caution — ${c.text}`);
+  if (marginal.length === 1) footerLines.push(`⚠ caution — ${marginal[0].text}`);
+  else if (marginal.length > 1) {
+    footerLines.push(`⚠ caution — ${marginal.length} marginally-elevated row(s) (<${NEAR_REJECT}× swing over the durable floor): ${marginal.map(c => c.name).join(', ')}`);
+  }
   for (const n of informNotes) footerLines.push(`ℹ trajectory/reach — ${n}`);
   for (const n of headroomNotes) footerLines.push(`⤴ ask headroom — ${n}`);
   for (const n of windowClearNotes) footerLines.push(`ℹ window-clear — ${n} — days-reach ≠ lap-clear (placeholder, n≈0)`);

@@ -214,6 +214,30 @@ export function floorValidator(ctx) {
 // on scalp it INFORMS (scalp accepts a falling wide band by thesis), on band/value it can gate. Started
 // INFORM-ONLY everywhere (rule 4 — n≈0) until the suggestions accrual gives the knife/oscillating split
 // a track record; the ledger logs the WOULD-HAVE status so that record accrues (see leanValidators).
+/**
+ * durableFloorRead(vres) — pull `floorValidator`'s verdict out of a runValidators() result in ONE
+ * canonical shape, so a consumer that needs the LEVEL read (is this near durable support?) never
+ * re-derives the floor, the typical swing, or the thresholds.
+ *
+ * WHY IT EXISTS (2026-08-06, the Snape grass entry): `softBuyFloorCue` in js/windowread.mjs answers
+ * buy-timing off `floorCeilingTrack`'s 5-DAY shape only, so on a 4-day-old spike — where the 5d window
+ * sits entirely inside the spike and the floor "rises" BECAUSE of it — it said `▲ favorable — dip in
+ * uptrend` on the same pass this validator said "1.68× typical swing above the 28d floor 960 — not near
+ * durable support". Ben's ask was explicitly NOT to add a fourth implementation of the same question, so
+ * the cue now composes THIS verdict rather than re-deriving one; the whole policy (FLOOR_CAUTION_RANGES,
+ * FLOOR_REJECT_RANGES, the recent-trend tightening) stays here, its one home. windowread cannot import
+ * this module (validate.mjs imports windowread — the arrow is one-way), so the CALLER passes it down.
+ *
+ * @param {Array} vres  a runValidators() result array
+ * @returns {null | { status, ranges, lookback }}  null when the floor validator did not run/degraded.
+ */
+export function durableFloorRead(vres) {
+  const f = (vres || []).find(v => v && v.key === 'floor');
+  if (!f || !f.status) return null;
+  const ev = f.evidence || {};
+  return { status: f.status, ranges: ev.ranges ?? null, lookback: ev.floorLookback ?? null };
+}
+
 export function trajectoryValidator(ctx) {
   const key = 'trajectory';
   const pos = ctx && ctx.position;

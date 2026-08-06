@@ -1385,14 +1385,34 @@ export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip f
 // the @floor floor-aware cue off the ALREADY-computed fc (NO re-derived slope — discrete floorBreak +
 // classification only). Missing fc / no classification ⇒ 'buy now' (honest degrade: no favorable/caution
 // claim without the floor read). Module-internal; the read carries the resolved `cue`, formatSoftBuy words it.
-function softBuyFloorCue(fc) {
+// ── A (2026-08-06, the Snape grass entry) — the LEVEL half this cue was structurally blind to ────────
+// `fc` answers SHAPE over a 5-DAY window: which way are the floor and ceiling sloping? It cannot answer
+// LEVEL — is this price near durable support at all? On a 4-day-old spike those two disagree completely,
+// because the 5-day window sits ENTIRELY INSIDE the spike: the floor "rose +29/d" precisely BECAUSE the
+// item spiked, so the cue read `▲ favorable — dip in uptrend` while the 28-day floor check was
+// simultaneously saying "1.68× typical swing above the 28d floor 960 — not near durable support" on the
+// same item, on the same pass, three passes running. Snape grass was bought at 1,051 into a base whose
+// pre-spike daily HIGHS were 976–1,038, i.e. break-even (1,073) sat above the entire prior range.
+//
+// The fix is a COMPOSITION, not a fourth implementation (Ben's explicit ask: don't run the same check in
+// several places and interpret it disjointedly). We take `floorValidator`'s ALREADY-COMPUTED result and
+// reuse its WHOLE policy — FLOOR_CAUTION_RANGES/FLOOR_REJECT_RANGES, the recent-trend tightening, the
+// reject band. No threshold, no lookback and no swing math is re-derived here. The dependency direction
+// forces this shape anyway: js/validate.mjs imports THIS module, so windowread can never import it back —
+// the caller (which holds both) hands the verdict down. Absent `durable` ⇒ byte-identical to the old
+// behaviour (the honest degrade — the trio has no term structure in hand).
+function softBuyFloorCue(fc, durable = null) {
   if (!fc || !fc.classification) return 'buy now';
   if ((fc.floorBreak && fc.floorBreak.broke) || fc.classification === 'crash-risk') return 'caution';
-  if (fc.classification === 'healthy-trend' || fc.classification === 'compressing-up') return 'favorable';
+  const rising = fc.classification === 'healthy-trend' || fc.classification === 'compressing-up';
+  // a RISING 5d floor that the 28d durable-support check still cautions/rejects is a post-spike
+  // retracement wearing an uptrend's clothes — the dip is into an UNPROVEN base, not a proven one.
+  if (rising && durable && (durable.status === 'caution' || durable.status === 'reject')) return 'unproven-base';
+  if (rising) return 'favorable';
   return 'buy now';
 }
 
-export function softBuyRead(profile, { live = null, fc = null } = {}) {
+export function softBuyRead(profile, { live = null, fc = null, durable = null } = {}) {
   if (!profile || !profile.dip || profile.dip.level == null) return null;
   const floor = profile.dip.level;
   const dipWindow = { startH: profile.dip.startH, endH: profile.dip.endH };
@@ -1401,9 +1421,9 @@ export function softBuyRead(profile, { live = null, fc = null } = {}) {
     overPct = (live - floor) / floor * 100;
     buyNow = overPct <= SOFT_BUY_AT_FLOOR_PCT;                // at/below the floor, or within the threshold over it
     marker = buyNow ? '@floor' : `+${overPct.toFixed(1)}%`;
-    cue = buyNow ? softBuyFloorCue(fc) : 'wait';             // @floor → floor-aware cue; above the dip → wait
+    cue = buyNow ? softBuyFloorCue(fc, durable) : 'wait';             // @floor → floor-aware cue; above the dip → wait
   }
-  return { dipWindow, floor, live, marker, overPct, buyNow, cue };
+  return { dipWindow, floor, live, marker, overPct, buyNow, cue, durable };
 }
 
 // cue → rendered wording. ONE map so both surfaces (positions note + screen digest) word the four states
@@ -1413,6 +1433,10 @@ export const SOFT_BUY_CUE_TEXT = {
   'wait':      'wait',
   'favorable': '▲ favorable — dip in uptrend (price-trend only)',
   'caution':   '▽ caution — floor breaking ↓',
+  // A: the 5d floor is RISING but the 28d durable-support check still cautions the level — a post-spike
+  // retracement, not a proven base. Worded to say what it IS (unproven base) rather than just "careful",
+  // and formatSoftBuy appends the swing multiple so the reader gets the number, not just the adjective.
+  'unproven-base': '▽ caution — dip into an UNPROVEN base, not near durable support',
 };
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
@@ -1422,7 +1446,12 @@ export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') 
   if (!read) return null;
   const win = `${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
   if (read.marker == null) return `soft-buy: dip ${win}`;                // no live reference ⇒ window only
-  const cueText = SOFT_BUY_CUE_TEXT[read.cue] ?? read.cue;
+  let cueText = SOFT_BUY_CUE_TEXT[read.cue] ?? read.cue;
+  // A: carry the durable-floor NUMBER on the unproven-base cue — "1.7× swing over the 28d floor" is what
+  // makes the caution actionable; the adjective alone is what got scrolled past fourteen times a pass.
+  if (read.cue === 'unproven-base' && read.durable && read.durable.ranges != null) {
+    cueText += ` (${read.durable.ranges}× swing over the ${read.durable.lookback ?? 28}d floor)`;
+  }
   return `soft-buy: dip ${win} · live ${read.marker} · ${cueText}`;
 }
 

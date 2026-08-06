@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.53
+version: 1.54
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -65,9 +65,18 @@ sections plus your own prose:
       is a dump artifact, not a discount** — don't add on the dip alone; this is a falling knife (the fang
       dumped ~32m while the old label stayed bullish).
     - `@floor · ▲ favorable — dip in uptrend (price-trend only)` — the multi-day floor is RISING
-      (healthy-trend / compressing-up): a dip WITHIN an uptrend. **PRICE-TREND ONLY** — it is blind to
-      game-update/regime breaks (a rising floor also describes a PRE-update pump), so it is a prompt, NOT
-      a green-light; overlay your own update knowledge.
+      (healthy-trend / compressing-up) AND the 28-day durable-floor check passes: a dip WITHIN an uptrend.
+      **PRICE-TREND ONLY** — it is blind to game-update/regime breaks (a rising floor also describes a
+      PRE-update pump), so it is a prompt, NOT a green-light; overlay your own update knowledge.
+    - `@floor · ▽ caution — dip into an UNPROVEN base, not near durable support (N× swing over the 28d
+      floor)` — the 5-day floor is RISING but `floorValidator`'s **28-day** check still cautions/rejects
+      the level. **These two disagree exactly when it matters most: on a young spike the 5-day window sits
+      ENTIRELY INSIDE the spike, so the floor "rose" precisely BECAUSE the item spiked.** Snape grass
+      (2026-08-06) read `▲ favorable` at 1,051 while the floor check said "1.68× typical swing above the
+      28d floor 960 — not near durable support", three passes running; its pre-spike daily HIGHS were
+      976–1,038, so break-even (1,073) sat above the entire prior range and a full round-trip left no exit.
+      This cue is a COMPOSITION of the two existing reads (`floorCeilingTrack` shape + `floorValidator`
+      level) — it re-derives nothing. Treat it as: the dip is real, the base under it is not yet proven.
     - `@floor · buy now` — floor flat/ranging/cooling, or too few days to classify: the plain soft dip
       (unchanged behavior).
     - `+X% · wait` — live above the dip; wait for the window (the floor-aware cue applies only `@floor`).

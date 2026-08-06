@@ -21,8 +21,10 @@ against RB-3's landed edit before starting RB-2, since that region has now chang
 
 **⚠ VERSION RESERVATION CORRECTED (2026-08-05).** §10 reserved `scan 1.89→1.90` and
 `positions 1.52→1.53` for RB-2. Those numbers were **consumed by an unrelated change** (the deep-book
-`avgBoundRead` clause). **RB-2 must take `scan 1.91` and `positions 1.54`** — read the live
-frontmatter, do not trust §10's literal numbers.
+`avgBoundRead` clause). **CORRECTED AGAIN (2026-08-06):** `scan 1.91` / `positions 1.54` were then
+consumed too, by the durable-floor composition (the A–D set on the Snape grass entry). **RB-2 must take
+`scan 1.92` and `positions 1.55`.** The recurring lesson: **never reserve a skill version in a plan
+document — read the live frontmatter at landing time.** §10's literal numbers are stale by construction.
 
 **This file survives its partial landing** — §10's "delete on the last chunk" applies only once RB-1,
 RB-2 and RB-4 have shipped too.

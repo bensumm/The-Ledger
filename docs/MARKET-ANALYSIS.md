@@ -208,7 +208,7 @@ floor + a FLOOR-AWARE cue — `HH:00–HH:00 · @floor · <cue>` or `· +X% · w
 When live is `@floor` the cue consults the in-hand multi-day `floorCeilingTrack`: `buy now` (soft dip),
 `▲ favorable — dip in uptrend (price-trend only)` (rising floor — a prompt, blind to game-update breaks, never
 a green-light), or `▽ caution — floor breaking ↓` (a post-update dump sitting @floor is a falling knife, not a
-discount — the fang anchor). Inform-only PLACEHOLDER (n≈0), stdout-only — never gates/drops/regrades and never enters
+discount — the fang anchor), or `▽ caution — dip into an UNPROVEN base, not near durable support` (2026-08-06 — the SHAPE read says rising while floorValidator's 28d LEVEL read still cautions; a COMPOSITION of the two existing checks, not a new one). Inform-only PLACEHOLDER (n≈0), stdout-only — never gates/drops/regrades and never enters
 `screen.json`; it exists so a buy decision can see WHEN the item is soft instead of buying into a peak (the
 blowpipe-at-10.67m-into-a-10.40m-dip miss). When a row's sell-side live print is stale (`row.quickStale`, the same QUICK_FRESH_MIN
 freshness flags `quote-items.mjs`'s `staleLive` note reads), a quoted `optSell` pinned to that stale
