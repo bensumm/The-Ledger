@@ -25,6 +25,47 @@ The widening is **strictly additive** — every `--top 40` row survived at 90 �
 is **CHURN S+ 2 → 10**, not the band big-tickets the starvation entry predicted. BAND gains a second
 A- (Masori chaps) plus three B and a whole B- tier that the default never reaches at all.
 
+**⛔ DECISION EVIDENCE: flipping `--scale-pool` ON BY DEFAULT DOES NOT SOLVE THIS (2026-08-07, measured).**
+`CAP_REF = 100_000_000` is the reference bankroll the fixed defaults are treated as tuned against, and
+the measured pool was **100.75m — 0.75% above it**. `scaleSlots` is `base·(1 + POOL_SCALE·√(excess/CAP_REF))`,
+so at √0.0075 ≈ 0.087 the curve barely engages:
+
+| pool | base | at 100.75m | max | reaches max at |
+| --- | --- | --- | --- | --- |
+| `TOP` (band/churn) | 40 | **43** | 90 | ~256m capital |
+| `THIN_RESERVE` | 6 | **7** | 15 | — |
+| `AMP_TOP` | 40 | **43** | 90 | ~256m |
+
+Verified live, `--mode all`, same session: default → **31 band rows**; `--scale-pool` → **33**;
+`--top 90` → **68**. So the default-on flip captures **~5% of the available win** (+2 rows vs +37).
+
+**The conclusion is that the BASE is mis-tuned at the reference bankroll, not that scaling is missing.**
+At *exactly* the capital the defaults are tuned for, `top 40` leaves 37 gradeable band rows and 8 S+
+churn rows unfetched. No capital-conditioning curve fixes a base that is wrong at its own reference
+point — the curve is anchored to it.
+
+**Cost of raising the base is small and now measured** (`--mode all`, per-item ts cache cleared before
+each run, bulk caches warm, two runs each — after SP1 landed):
+
+| | mean wall | BAND | CHURN |
+| --- | --- | --- | --- |
+| `--top 40` | 1,605 ms | 32 | 5 |
+| `--top 90` | 2,024 ms (**+419 ms, +26%**) | **67 (+109%)** | **13 (+160%)** |
+
+Widening is **strictly additive** (every `--top 40` row survives at 90) and touches no gate, price,
+grade or rank — only what gets CONSIDERED. Amplitude is unaffected (its own `AMP_TOP`).
+
+**Open for Ben — three defensible knobs, they differ at OTHER capital levels:** (a) raise the `TOP`
+default 40 → 90 (fixes the reference point, leaves the curve for genuinely large bankrolls);
+(b) lower `CAP_REF` so the curve engages earlier (keeps one mechanism, but re-anchors what "tuned
+against" means); (c) raise `POOL_SCALE` (steeper curve, same anchor). NOT decided here — this is a
+behaviour change to every scan Ben reads, not a perf chunk.
+
+**Minor bug found while measuring:** under `--scale-pool` the run header still prints the UNSCALED
+`top ${TOP}` (`screen-flip-niches.mjs`'s header line reads the module-level `TOP`, not the scaled
+local computed at `:2623`), so the output cannot tell you what pool size actually ran. Fix alongside
+whichever knob lands.
+
 ⚠ **The recorded anchor does NOT reproduce.** PLAN.md's Discovered entry names Sanguinesti staff
 (uncharged), Basilisk jaw and Webweaver bow as the items `--top 40` buried at a 162m trial. In this
 run **none of the three appears in EITHER pool** — Sanguinesti staff left the board on its own
