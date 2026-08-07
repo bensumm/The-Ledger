@@ -710,7 +710,27 @@ why a file copy precedes the first run. Effort **S**. Reversible only via re-fet
 
 ---
 
-### SP1 — parallelise `runWatchlist`'s fetch phase **[P]** · **do-first — the single biggest win**
+### SP1 — parallelise `runWatchlist`'s fetch phase **[P]** · ✅ **SHIPPED 2026-08-07**
+
+> **✅ SHIPPED 2026-08-07.** Landed as specified. `FETCH_CONCURRENCY` hoisted to module scope (was
+> function-local in `main()`, invisible to `runWatchlist`) so both pools share ONE politeness bound;
+> `sleep` dropped from the imports — no serialized per-fetch throttle remains in the file.
+>
+> **Measured, cold cache (`rm -rf pipeline/.cache/ts` before each), `--mode band`, 47 unique items:**
+> **7s → 1s**, reproduced on a second cold run. Consistent with the arithmetic: ~40 watchlist items
+> missed `qcache` × 2 endpoints = ~80 strictly-serial fetches + ~2.4s of pure `sleep(30)`; at
+> concurrency 5 with both endpoints in flight that collapses to ~8 rounds.
+>
+> **Acceptance met.** Full `--verbose` stdout diff across the serial/parallel cold pair: **358 lines
+> each, 3 sections each, 47 unique items each, and 7 differing hunks — every one of them a
+> `~63min ago` → `~64min ago` elapsed-minute counter advancing because the runs were a minute apart.**
+> Zero price, reach-count, grade, or ordering deltas. Watchlist row order diffed identical on both the
+> warm and cold pairs. All 104 test suites + import/daemon/forecast/arch/doc guards green.
+>
+> ⚠ **The win is larger than the plan's 4.0–7.5s estimate on this shape** because `--mode band` fetches
+> a smaller survivor pool, so MORE watchlist items fall through to the (previously serial) path. On
+> `--mode all` the survivor pool covers more of the watchlist and the absolute saving will be smaller —
+> do not quote "7s → 1s" as a whole-scan figure without re-measuring per mode.
 
 **What changes.** Split `runWatchlist` (`:2213–2246`) into (a) a **fetch phase** that, for the
 watchlist ids missing from `qcache`, runs a bounded worker pool (`FETCH_CONCURRENCY`, reusing the

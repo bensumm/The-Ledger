@@ -30,9 +30,12 @@
  * probable fallers are deprioritized (they'd be discarded post-fetch anyway), and a bounded rising
  * reserve front-loads the highest-proxy risers so they aren't buried below flats (the absorbed `rising`
  * mechanism, Steps 3+4). The real regime + falling-exclusion still run post-fetch on computeQuote. Per-item
- * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API, and the survivor
- * fetch runs through a bounded worker pool (FETCH_CONCURRENCY items at once, each item's 5m/6h/1h in
- * parallel — the pool bound is the politeness throttle, not per-fetch sleeps). --stats prints
+ * series are cached (fetchTsCached) so re-running the screen doesn't re-hammer the API, and BOTH per-item
+ * fetches — the survivor pool (5m/6h/1h) and the watchlist pool (5m/6h, SP1) — run through bounded worker
+ * pools sharing one FETCH_CONCURRENCY bound, each item's endpoints in parallel. The pool bound is the
+ * politeness throttle; NO per-fetch sleep remains in this file. Both pools land results in id-keyed Maps
+ * and the compute loops walk their own source order, so completion order can never reach the output.
+ * --stats prints
  * a per-niche footer: gated / fetched / survivors / yield / discard reasons.
  *
  * Output (chunk 0 rework): ONE table PER niche (no more Tier A / Tier B split), each sorted by a
@@ -101,7 +104,7 @@ import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // HT3 — the per
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
 import { estimateRank, rankScore, ESTIMATORS, fmtTtf, asymEstimate, estimatePair, estPairCells, estConfLean, EST_HEADERS, dayHighFrom5m, SELL_TOP_MODELS, MIRAGE_PLACEMENT, DEADBID_PFILL_FLOOR, reachFraction } from '../lib/signal/estimators.mjs';   // RB-5 (PLAN-RECENCY-BASIS): reachFraction = the ONE recency-basis rule; digestReachFrac was the third independent copy of it and now delegates   // EF1 (PLAN-ESTIMATOR-FIDELITY): MIRAGE_PLACEMENT moved to estimators/families.mjs (single-sourced — it now ALSO bounds the churn ask-reach exemption); DEADBID_PFILL_FLOOR = the dead-bid reprice trigger the ↻ note names   // PLAN-LIQUIDITY-REACH: dayHighFrom5m = the observed 24h high (Part B de-bias reference) off the in-hand 5m series; PC3: SELL_TOP_MODELS = the named sell-top registry (--est-sell)   // AC9(b): the overnight sort now weights by the rank's own er.pFill (two-leg fill prob), not askReachFactor — see the sort comment below
 import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the ⚓ round-number nudge, injected into estimatePair (final step — nudge, never override)
-import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache, sleep } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort
+import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort · SP1 dropped `sleep` — no serialized per-fetch throttle remains in this file, the two worker-pool bounds are the throttle
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
@@ -426,6 +429,11 @@ const DAILY_DAYS = IS_VALUE ? 28 : 17, DAILY_STEP_H = 6;
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
 const TS_TTL_1H = 15 * 60 * 1000;                                // Leg B (2026-07-09): the 1h series reachValidator scores — fetched for SURVIVORS only
+// SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF): the ONE API-politeness bound, shared by BOTH per-item fetch
+// pools — the survivor pool in main() and runWatchlist's. Max items in flight; each item fetches its
+// independent endpoints via Promise.all, so the wiki sees at most FETCH_CONCURRENCY × endpoints.
+// The pool bound IS the throttle — it replaced serialized per-fetch sleep(30)s in both places.
+const FETCH_CONCURRENCY = 5;
 const DIURNAL_NIGHTS = 7;                                        // recent local days the hour-of-day profile aggregates over
 // (no top-N cap: the read is FREE — the 1h series is already in hand and the survivor set is already
 //  gate-bounded — so it runs on EVERY surfaced pick, same coverage as the Entry-paths block below.)
@@ -2214,14 +2222,36 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
   const wl = loadWatchlist(map);
   if (!wl.length) return null;
   const { v24, bands } = ctx;
+  // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF) — FETCH phase, split out of the compute loop below.
+  // Every watchlist id the niche fetch pools did NOT already quote gets pre-quoted here through the
+  // same bounded worker pool the survivor pool uses, with its two independent endpoints in flight
+  // together. This replaced a strictly-serial `fetchTsCached(5m) → sleep(30) → fetchTsCached(6h) →
+  // sleep(30)` per item — ~60 watchlist items paid ~2.2s of pure sleep plus fully serialized latency
+  // on EVERY scan (TS_TTL_5M is 3 minutes, so the 5m leg is always re-fetched at /loop cadence).
+  //
+  // ORDER SAFETY — the reason this is behaviour-preserving, not just fast: the COMPUTE loop below is
+  // untouched and still walks `wl` in its original order, reading finished quotes out of an id-keyed
+  // Map, so `rows`/`sugg` order is independent of fetch COMPLETION order; `logSuggestions` still fires
+  // once, after it; and `loadWatchlist` dedupes ids, so no two workers race the same disk cache file.
+  // The `!qcache.get(id)` admission test is deliberately truthiness, matching the serial version it
+  // replaced — do not "tidy" it to `.has()`, which would change behaviour on a falsy cached quote.
+  const prefetched = new Map();
+  {
+    const queue = wl.filter(({ id }) => !qcache.get(id)).map(({ id }) => id);
+    const worker = async () => {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        const [ts5m, ts6h] = await Promise.all([
+          fetchTsCached(id, '5m', TS_TTL_5M),
+          fetchTsCached(id, '6h', TS_TTL_6H),
+        ]);
+        prefetched.set(id, computeQuote({ id, latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true }));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, queue.length) || 1 }, worker));
+  }
   const rows = [], sugg = [];
   for (const { id, name } of wl) {
-    let row = qcache.get(id);
-    if (!row) {                                           // not in any niche fetch pool → fetch it now
-      const ts5m = await fetchTsCached(id, '5m', TS_TTL_5M); await sleep(30);
-      const ts6h = await fetchTsCached(id, '6h', TS_TTL_6H); await sleep(30);
-      row = computeQuote({ id, latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true });
-    }
+    const row = qcache.get(id) || prefetched.get(id);      // niche pool first, else this pass's prefetch
     const d = v24[id], limit = map.byId[id]?.limit ?? null;
     const limitVol = d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : 0;
     const thin = d ? (limitVol > 0 && limitVol < FLOOR) : false;
@@ -2643,7 +2673,6 @@ async function main() {
   // Bounded worker pool: the 3 per-item series (5m/6h/1h — independent endpoints) fetch in parallel, and
   // FETCH_CONCURRENCY items run at once. The pool bound IS the API-politeness throttle (it replaced the old
   // serialized per-fetch sleep(30)); results land in id-keyed Maps, so scheduling order can't change output.
-  const FETCH_CONCURRENCY = 5;   // max in-flight items — keep modest; the wiki API sees ≤15 concurrent requests
   const ids = new Set();
   for (const m of RUN_MODES) for (const s of gated[m].survivors) ids.add(s.id);
   const qcache = new Map(), series5m = new Map(), series6h = new Map(), series1h = new Map();
