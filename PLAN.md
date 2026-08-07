@@ -493,6 +493,48 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
+- **The amplitude board's `Both-leg reach` column is QUANTILE-PINNED and measures nothing (2026-08-07,
+  found in a live read).** `AMP_ASK_Q`/`AMP_BID_Q` default to **0.5** (`js/amplitudescreen.mjs`), so the
+  peak and trough being reach-tested ARE the median of the item's own daily highs/lows. Reaching them on
+  half of days is arithmetic, not a finding. Evidence: on a 4-row board **every item, both legs, printed
+  `7/14`** — the column carried zero item-specific information. The recent-3 half is then a 3-sample draw
+  around that same 50% design point (P(3/3)=12.5%, P(≤1/3)=50%), so `1/3` is the single most likely
+  outcome and `3/3` is a one-in-eight run, neither of which is evidence about the item. This matters
+  because the column is *presented as the make-or-break read* ("the make-or-break read is the Both-leg
+  reach column" — `/scan` SKILL.md) and it is what an operator ranks on. **Contrast with the reach numbers
+  that ARE real:** `read-window-range --ask/--bid` tests an OPERATOR-CHOSEN level against the daily
+  distribution, so a `0/14` there genuinely means the level has not traded — those stay trustworthy. Fix
+  direction (not scoped): either print the reach of a level that is NOT the median (so the number can
+  differ from 50%), or replace the column with the in-window pool + placement percentile the `⊙ avg-bound`
+  clause already argues for. Do NOT simply delete it without a replacement — the underlying question
+  ("do both legs actually fill?") is the right one; only this estimator of it is degenerate.
+- **`--mode reverse` names its rejects but never says WHY (2026-08-07).** The header prints
+  `## REVERSE-FLIP — 17 owned candidate(s) to harvest (9 rejected: <names>)` with no per-item reason,
+  so a direct question ("can I reverse-flip Ancestral?") is unanswerable for the rejected two-thirds
+  without re-deriving the gate by hand. Every sibling surface already prints its drop reasons (the scan's
+  `dropped Stage-2: … bid-unreachable 20, ask-unreachable 15, trend 5 …` line). Fix: carry
+  `gateReverseFlipCandidates`' rejection reason through to the console the same way, ideally as a
+  one-line-per-item tail rather than an aggregate, since the pool is ownership-bounded and small.
+- **Ownership does not model GE set ⇄ component convertibility (2026-08-07, Ben-corrected).** The GE set
+  exchange converts a set to its pieces and back at no cost, so holding Ancestral hat + robe top + robe
+  bottom **IS** holding an Ancestral robes set. `owned-items.json` treats them as unrelated ids, so
+  `--mode reverse` screened the three pieces individually (taking only the bottom, `swing-below-floor`
+  at 1.9% vs a 2% tax) and never considered the set — which has a **5.8% gross / 3.7% after-tax** daily
+  swing and is the tradeable expression of the same holding. Live measurement the same day: the set's
+  mid carried a **~1.2% premium** over sum-of-parts (227.33m vs 224.68m), so selling as a set nets
+  **~+3.5m more** than selling the pieces, before any directional view. Two consequences — (1) reverse-flip
+  eligibility is under-counted wherever a convertible set exists, (2) there is a standing pieces→set
+  arbitrage the screen cannot see (one-way only: buy pieces → sell set clears ~+1.95m passively; buy set →
+  sell pieces is ~−3.3m and structurally dead). Needs a set↔components mapping; the wiki mapping data may
+  already carry it. Ben owns several affected sets (Ancestral, Masori (f), Justiciar).
+- **The cushion / trajectory notes label an INCOMPLETE day "today" (2026-08-07, caused a real misreport).**
+  The all-day series' last point is the current, still-forming day, but the reach-margin per-day cushion
+  line renders it as a completed observation. On 2026-08-06 this had me relay "+1.39m today · cushion
+  extending" for Masori body when the number was the PRIOR day's — the kind of error the `⚠ stale live
+  print` guard exists to prevent on the live side, with no equivalent on the daily side. Note
+  `read-window-range` already does this correctly elsewhere (`today forming low X/high Y (provisional)`),
+  so the fix is to propagate that existing `(provisional)` treatment into the cushion/reach-margin
+  per-day list rather than invent a new convention.
 - **Estimator fidelity vs the daily distribution — `plans/PLAN-ESTIMATOR-FIDELITY.md` (2026-08-01,
   PLANNING ONLY).** The discovery `Est.` pair prices the 2h band and clamps the daily-basis diurnal
   levels inside it (`reach-fold.mjs:132`, `buyLo` `:143`), so a verifier-confirmed daily ask/dip is
