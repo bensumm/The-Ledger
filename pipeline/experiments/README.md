@@ -64,4 +64,40 @@ PB5 recency window should be tuned against — not a guess.
 model's *ordering* on these two specific thin books, not a general reliability curve. Repeat before
 trusting any derived constant.
 
+## The 2026-08-04 archive studies
+
+Three read-only research studies over the `/1h` SQLite market archive (`pipeline/lib/market/archive.mjs`),
+run in one session to answer questions that came out of the Spider cave teleport lane closing. Each is a
+`*-study.mjs` script plus a `*-FINDINGS.md` written report. None of them gates, scores, or writes anything
+the pipeline reads — they exist to settle a question, and their conclusions live in prose, not in code.
+
+- **`flow-crossover-study.mjs` → `FLOW-CROSSOVER-FINDINGS.md`** — does a net-order-flow crossover
+  (`lowPriceVolume` dominance flipping to `highPriceVolume` dominance) mark a price bottom? **Clean null.**
+  65 days, 1,968 items, 2,314 events: 60.2% hit vs a 52.9% base rate = lift 1.14, against a wrong-direction
+  placebo of 1.08. Lead-time distribution flat across ±7d; forward returns run the wrong way. Verdict: no
+  flow gate, column, or alert.
+- **`volume-vs-band-study.mjs` → `VOLUME-VS-BAND-FINDINGS.md`** — does high trade volume mean a thin band?
+  **Yes across items, no within one.** Controlling for the price-level confound (ρ(volume,price) = −0.561,
+  ρ(price,band) = −0.506), ρ(volume, band) runs ≈−0.85 to −0.905 in the middle deciles (4–7) — at equal
+  price, volume very nearly determines band width. It weakens sharply at BOTH extremes (decile 1 −0.507,
+  decile 10 −0.368), and decile 10 is the big-ticket lane — so the strong claim does NOT cover the class
+  Ben actually trades. But *within* a single item day to day the sign flips positive
+  (median ρ +0.153, 77% of items): a liquid item is efficiently priced, while a liquid *day* is a volatile
+  day. Pooled + per-decile + per-item Spearman; `--json` for machine output.
+- **`edge-map-study.mjs` (+ `edge-map-lib.mjs`) → `EDGE-MAP-FINDINGS.md`** — four workstreams over one
+  shared 132k-row item-day panel (`--section a|b|c|d`, `--json`). **A:** realized P&L vs pre-buy
+  characteristics, item-clustered with strictly trailing joins — our own book independently supports a
+  liquidity floor near ~600/d min-side. **B:** liquidity-gate placement plus the sparse-print artifact test,
+  which came out **inverted** — thin items are not print-sparse at the hourly grain (17–23 two-sided hrs/day),
+  and their wide bands are real prices at ~2–3 units of depth, so the gate protects against a size mirage,
+  not a measurement artifact. **C:** does volume lead band? **Clean null** — hit rate equals the base rate
+  (50%) against a band-persistence control at 71%. **D:** the price × volume exclusion map, every candidate
+  rule strike-checked against our own realized lots (three proposed, three rejected on 7-figure strikes).
+  `edge-map-lib.mjs` is the shared panel builder + stats helpers, consumed only by the study; it caches the
+  panel to the gitignored `pipeline/.cache/edge-map-panel.jsonl` so reruns take ~2s instead of re-walking
+  ~4.9M archive rows (`--no-cache` regenerates).
+
+All three describe **one 68-day window (2026-05-29 → 2026-08-04) with no out-of-sample split** — descriptive
+of that window, not predictive. Nothing in them has been encoded into a gate or a default.
+
 To retire this experiment: delete `pipeline/experiments/` entirely. Nothing elsewhere references it.
