@@ -148,8 +148,9 @@ export const LEDGER = path.join(HERE, '..', '..', '..', 'suggestions.jsonl');
 // SR1 — rotation/compaction. The active LEDGER lives in the DEPLOY ROOT and grows unbounded
 // (~3k rows/day ≈ >1MB/day). To keep the root file bounded to the CURRENT calendar month while
 // never dropping a row (rows are F1's calibration data — ARCHIVE, never delete), completed months
-// are moved OUT of the root into monthly archive files `suggestions-YYYY-MM.jsonl` under a tracked
-// `pipeline/suggestions-archive/` dir (out of the deploy root, still committed by sync-fills). The
+// are moved OUT of the root into monthly archive files `suggestions-YYYY-MM.jsonl` under a GITIGNORED
+// `pipeline/suggestions-archive/` dir — out of the deploy root and, since 2026-08-07, NOT committed by
+// sync-fills (local-only history; the rolled months have no repo backup). The
 // resolved ACTIVE path above stays pinned by suggestlog.test.mjs — only history relocates.
 export const ARCHIVE_DIR = path.join(HERE, '..', '..', 'suggestions-archive');   // pipeline/suggestions-archive (TWO up from lib/render/)
 

@@ -516,8 +516,9 @@ Rotation NEVER drops a row — it writes each archive fully (existing ∪ new, d
 a re-run re-archives them idempotently. Unparseable / ts-less lines stay in the active file, never
 discarded. The rows are F1's calibration data: **archived, never deleted.** Any full-history reader
 MUST read active + archives via `readSuggestionLines` — `join-outcomes.mjs`'s F1 join does — since after
-the first rotation the active file holds only the current month. `sync-fills.mjs` commits the
-`pipeline/suggestions-archive/` dir alongside `suggestions.jsonl`. The active-ledger path stays
+the first rotation the active file holds only the current month. **`sync-fills.mjs` does NOT commit the
+`pipeline/suggestions-archive/` dir** (Ben, 2026-08-07) — it is gitignored, LOCAL-ONLY history, so the
+rolled months exist on ONE disk with no repo backup. The active-ledger path stays
 pinned to the repo root by `pipeline/test/suggestlog.test.mjs` (only history relocates).
 
 ### 11.2 Historical market-context retention (`/5m?timestamp=`)
@@ -596,7 +597,8 @@ separate machine/deploy-key bypass identity was created.**
   but the ACTIVE root file is now bounded to the current month by SR1 rotation (§11.1) — completed
   months roll into `pipeline/suggestions-archive/`, so the deploy-root file no longer grows
   unbounded. It does not need a *cadence*, only to be committed when a session runs a script that
-  appends to it (the same on-demand sync commits both the active file and the archive dir).
+  appends to it (the on-demand sync commits the ACTIVE file only — the archive dir is gitignored
+  and local-only since 2026-08-07).
 - **Remote readers of `fills.json`.** None besides the app's `positions.json` path; no
   external consumer depends on sub-hour freshness.
 
@@ -697,8 +699,8 @@ path (`putJsonFile` → `watchlist.json`, ids) when a token is set.
 
 ### 13.3 Multi-writer sync (see §12 + `sync-fills.mjs` `syncMainToRemote`)
 The PC sync and the phone are two writers to `origin/main` with **disjoint** file sets (the PC
-commits `fills.json` / `positions.json` / `offers.json` / `screen.json` / `suggestions.jsonl` (+ its
-`pipeline/suggestions-archive/` when rotation has produced it) — and, since 2026-07-18,
+commits `fills.json` / `positions.json` / `offers.json` / `screen.json` / `suggestions.jsonl` (but NOT
+`pipeline/suggestions-archive/` — gitignored, local-only since 2026-08-07) — and, since 2026-07-18,
 `dip-watchlist.json` / `hold-thesis.json` / `alerts.json` when present (all pipeline-WRITTEN derived
 state that was previously left to accumulate uncommitted between sessions; `watchlist.json` /
 `ignored-items.json` are DELIBERATELY excluded — those are Ben's own hand-maintained config, under

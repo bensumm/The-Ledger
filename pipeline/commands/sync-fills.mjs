@@ -389,9 +389,11 @@ function main() {
     // not pipeline output, so they stay under his own manual git control, never auto-committed here.
     const SCREEN_REL = 'screen.json';
     const SUGGEST_REL = 'suggestions.jsonl';
-    // SR1: suggestions.jsonl rotation moves completed months into pipeline/suggestions-archive/;
-    // commit that dir too (scoped path, never a blanket `git add -A`) so archived history is published.
-    const SUGGEST_ARCHIVE_REL = 'pipeline/suggestions-archive';
+    // SR1: suggestions.jsonl rotation moves completed months into pipeline/suggestions-archive/.
+    // That dir is DELIBERATELY ABSENT from this commit set (Ben, 2026-08-07): it is gitignored,
+    // local-only history (75MB, ~13k rows/day) and is no longer published. Do NOT re-add it —
+    // `git()` runs execSync with stdio:'pipe' and THROWS on a non-zero exit, and `git add` on an
+    // ignored path exits 1, so listing it here would abort every `--publish` run and break /overnight.
     const DIP_WATCHLIST_REL = 'dip-watchlist.json';
     const HOLD_THESIS_REL = 'hold-thesis.json';
     const ALERTS_REL = 'alerts.json';
@@ -399,7 +401,6 @@ function main() {
     if (existsSync(join(REPO_DIR, OFFERS_REL))) commitFiles.push(OFFERS_REL);
     if (existsSync(join(REPO_DIR, SCREEN_REL))) commitFiles.push(SCREEN_REL);
     if (existsSync(join(REPO_DIR, SUGGEST_REL))) commitFiles.push(SUGGEST_REL);
-    if (existsSync(join(REPO_DIR, SUGGEST_ARCHIVE_REL))) commitFiles.push(SUGGEST_ARCHIVE_REL);
     if (existsSync(join(REPO_DIR, DIP_WATCHLIST_REL))) commitFiles.push(DIP_WATCHLIST_REL);
     if (existsSync(join(REPO_DIR, HOLD_THESIS_REL))) commitFiles.push(HOLD_THESIS_REL);
     if (existsSync(join(REPO_DIR, ALERTS_REL))) commitFiles.push(ALERTS_REL);
