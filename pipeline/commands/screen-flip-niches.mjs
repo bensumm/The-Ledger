@@ -180,7 +180,17 @@ const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalib
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
 const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
 const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
-const TOP = A.top != null ? +A.top : 40;
+// Fetch-pool size per niche. 40 → 90 (Ben, 2026-08-07, PLAN-FETCH-POOL-SCALING): the old 40 was
+// mis-tuned AT ITS OWN REFERENCE POINT. `scaleSlots`' CAP_REF is 100m — the bankroll the fixed defaults
+// are treated as tuned against — yet a measured pass at 100.75m showed `--top 40` leaving 37 gradeable
+// BAND rows and 8 S+ CHURN rows unfetched vs `--top 90`. No capital-conditioning curve could fix that,
+// because the curve is ANCHORED to the number that was wrong (at 100.75m it widens 40 → 43; it reaches
+// 90 only at ~256m). Measured cost of the widening, post-SP1, --mode all, per-item cache cleared:
+// 1,605ms → 2,024ms (+419ms) for BAND 32 → 67 and CHURN 5 → 13. Widening is STRICTLY ADDITIVE — every
+// top-40 row survives at 90 — and touches no gate, price, grade or rank, only what is CONSIDERED.
+// 90 == TOP_MAX, so the `--scale-pool` curve is now a no-op on this pool at any capital; it still
+// governs THIN_RESERVE/VALUE/AMP. Lower it explicitly (`--top 40`) for a faster throwaway console read.
+const TOP = A.top != null ? +A.top : 90;
 const TOP_EXPLICIT = A.top != null;   // PLAN-FETCH-POOL-SCALING: an explicit --top always wins — never capital-scaled
 const BAND_HOURS = A['band-hours'] != null ? +A['band-hours'] : 2;
 // Bar D (Ben 2026-07-09) DENSITY floor for dense (non-thin) bands — # of windows with ANY trade (one-
@@ -2609,6 +2619,11 @@ async function main() {
   // gate every mode, then proxy-rank its gated pool and take the top-N fetch pool. P5 value ranks by
   // valueScore and takes a HARD top-N (VALUE_TOP_DEFAULT §F) — a bounded shortlist off a large pool.
   const gated = {};
+  // The EFFECTIVE per-niche pool size actually used, recorded so the run header can report what really
+  // ran. The header used to print the module-level `TOP` unconditionally, which silently lied under
+  // --scale-pool (and for the value/amplitude niches, which never read TOP at all) — you could not tell
+  // from the output what pool produced the board. Found while measuring the --scale-pool decision.
+  const effTop = {};
   for (const m of RUN_MODES) {
     const cand = gateCandidates(m, ctx, THRESHOLDS, HELD_IDS, WATCHLIST_IDS);
     // PLAN-FETCH-POOL-SCALING chunks 2-3 — the per-niche fetch-pool size. Base = today's fixed default;
@@ -2621,6 +2636,7 @@ async function main() {
       : FLIP_NICHES[m].gate === 'amplitude'
       ? (SCALE_POOL ? scaleSlots(AMP_TOP_DEFAULT, { capital: AMP_CAPITAL, max: AMP_TOP_MAX }) : AMP_TOP_DEFAULT)
       : (SCALE_POOL && !TOP_EXPLICIT ? scaleSlots(TOP, { capital: VALUE_CAPITAL, max: TOP_MAX }) : TOP);
+    effTop[m] = top;
     const thinReserveN = (SCALE_POOL && !THIN_RESERVE_EXPLICIT) ? scaleSlots(THIN_RESERVE, { capital: VALUE_CAPITAL, max: THIN_RESERVE_MAX }) : THIN_RESERVE;
     const valueReserveN = SCALE_POOL ? scaleSlots(VALUE_RESERVE_DEFAULT, { capital: VALUE_CAPITAL, max: VALUE_RESERVE_MAX }) : VALUE_RESERVE_DEFAULT;
     // P6c: EMPTY at the configured floors → re-run the SAME gate stack beneath the floor (subFloorFallback's
@@ -2699,7 +2715,7 @@ async function main() {
     await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, ids.size) || 1 }, worker));
   }
 
-  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${TOP} fetched/niche, admission ${ADMISSION.toUpperCase()}`);
+  console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${(() => { const vs = [...new Set(RUN_MODES.map(m => effTop[m]))]; return vs.length === 1 ? vs[0] : RUN_MODES.map(m => `${m} ${effTop[m]}`).join('/'); })()} fetched/niche, admission ${ADMISSION.toUpperCase()}`);
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
   if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);

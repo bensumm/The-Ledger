@@ -493,6 +493,35 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
+- **WHERE does capital filtering happen? Probably too late — filter at the cheap-fetch and digest layers
+  instead (Ben, 2026-08-07, raised on landing the `TOP` 40→90 widening).** The ask: *"revisit at what
+  point we are filtering based on available capital, maybe we're doing it too late. Ideally we apply
+  better filters to the cheap item fetch and to the digest creation layer to reduce noise and only
+  surface good candidates."* This is now URGENT-adjacent because `TOP` 40→90 **doubled the board**
+  (BAND 32→67, CHURN 5→13) — the widening is correct, but it doubles what the noise filter must handle.
+  **Anchor — the digest actively misranks when the pool is committed (measured 2026-08-07, fully-deployed
+  book).** `rankKey = capEff × deployable` (`collectDigestRow`), so when deployable hits 0 EVERY row's
+  key is 0, the ordering degenerates, and the printed board led with:
+
+  | Item | capEff | deploy | grade | verdict |
+  | --- | --- | --- | --- | --- |
+  | Bronze dart | **3155.56%/d** | 0 | **D** | sell unreliable |
+  | Quetzal feed | 231.42%/d | 0 | C | sell unreliable |
+  | Camphor plank | 61.28%/d | 0 | C | sell unreliable |
+  | … | | | | |
+  | Venator ring | 4.23%/d | 0 | **A-** | **fill-now** |
+
+  An **A- `fill-now` row sat below three D/C `sell unreliable` rows**, and **8 of 11 rows read `sell
+  unreliable`** — the digest surfaced, at the top, rows it simultaneously declared untradeable. Two
+  distinct defects behind it: (1) the multiply-by-deployable rank has no defined behaviour at
+  deployable≈0 (a product where one factor is 0 is not a ranking); (2) capEff is unbounded, so dust
+  items print 3155%/d and dominate any product they survive. Note capital ALREADY enters pre-fetch via
+  `THROUGHPUT_CAP_GP` (`capPerWindow = pool / mid`, `gatecandidates.mjs`), so the digest is
+  **double-counting** capital — once in `expGpDay`, again in `rankKey`. Direction (not scoped): decide
+  the ONE layer that owns the capital filter, make the cheap Stage-1 proxy carry it (it is the layer
+  that can drop an item before paying a fetch), and let the digest rank on *quality* among things
+  already known affordable, rather than re-deriving affordability. Sibling of the capital-conditioned
+  reserves entry below — same underlying question, different layer.
 - **The amplitude board's `Both-leg reach` column is QUANTILE-PINNED and measures nothing (2026-08-07,
   found in a live read).** `AMP_ASK_Q`/`AMP_BID_Q` default to **0.5** (`js/amplitudescreen.mjs`), so the
   peak and trough being reach-tested ARE the median of the item's own daily highs/lows. Reaching them on
@@ -554,7 +583,13 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   actually deploy into scales with capital. Fix (for the screen-architecture chunk, NOT a live tweak off
   one scan, rule 4): make the reserve a function of `--capital` (more idle capital → more guaranteed thin
   big-ticket slots), so a high-bankroll scan doesn't need a manual `--top 90`. Owner: whatever chunk next
-  touches `pickFetchPool` / the admission ordering. Interim workaround: pass `--top 90` for scans at ≳100m.
+  touches `pickFetchPool` / the admission ordering. ~~Interim workaround: pass `--top 90` for scans at
+  ≳100m.~~ **RESOLVED for the band/churn pool 2026-08-07 (Ben): `TOP`'s default is now 90, so the manual
+  workaround IS the default.** Measured +419ms for BAND 32→67 and CHURN 5→13, strictly additive. Note this
+  makes `--scale-pool` a no-op on THIS pool (90 == `TOP_MAX`); it still governs THIN_RESERVE/VALUE/AMP.
+  **`AMP_TOP_DEFAULT` is untouched at 40** — amplitude has its own pool and did NOT widen (visible now in
+  the corrected run header, `top band 90/churn 90/amplitude 40`), so the "scan for more big-ticket
+  oscillators" question is still gated at 40.
   **⚠ ANCHOR CORRECTED 2026-08-07 (paired live A/B at 100.75m — full table in `plans/PLAN-FETCH-POOL-SCALING.md`).**
   The widening is real and strictly ADDITIVE (band 31→68 rows, none lost), but the three items named above
   do NOT reproduce: Sanguinesti staff, Basilisk jaw and Webweaver bow appear in NEITHER pool. Sanguinesti
