@@ -493,6 +493,38 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
+- **THE FUNNEL, MEASURED END-TO-END (2026-08-07, `--mode all --stats`, TOP=90, fully-deployed book).**
+  Ben: *"how can we improve our funnel at each step?"* Numbers first, so the next chunk argues from data:
+
+  | Stage | BAND | CHURN | AMPLITUDE |
+  | --- | --- | --- | --- |
+  | 1 · Stage-1 cheap gate | 140 gated | 93 gated | 56 admitted |
+  | 2 · admission → fetch | **93 fetched · 47 crowded out** | 91 · 2 out | 54 (top 40 + 18 watchlist) |
+  | 3 · Stage-2 gates | 63 survivors · **yield 68%** | 11 · **12%** | 5 · **9%** |
+  | 4 · rank (Path-A gp/d) | **0/d on ALL 63 rows** | — | — |
+  | 5 · digest | top-8, `rankKey = capEff × deployable` = **0 for every row** | | |
+
+  **Finding A — capital is multiplied into the funnel THREE separate times, and all three collapse at
+  `deployable = 0`.** Pre-fetch via `THROUGHPUT_CAP_GP` (`capPerWindow = pool / mid`), post-fetch via
+  Path-A gp/d (the *primary console sort*), and again at the digest's `rankKey`. On a fully-deployed
+  book **every band row printed `Path-A 0/d ⚠<floor` and every digest row ranked 0** — so the board's
+  primary sort and the triage view were both dead simultaneously, silently falling back to grade order.
+  This is the mechanism behind Ben's "we filter on capital too late": it is not only late, it is applied
+  REPEATEDLY, and a product is not a ranking when a factor is zero. Decide the ONE layer that owns it.
+  **Finding B — the pre-fetch ranker is not predictive of post-fetch score.** The top crowded-out row
+  (Sanguinesti staff, `thin-reserve-full`) carries a Stage-1 `expGpDay` of **~12.89m/d**; fetched, it
+  reads **net +88,162/u (+0.5%), rank 140k, A-**. Ordering the fetch queue by a proxy this far off means
+  widening any pool mostly buys more of the wrong items — which is why `TOP` 40→90 doubled the board
+  without surfacing this row at all. The `via`/`preRank`/`prePool` logging (EF-0a, 2026-08-01) exists
+  precisely to quantify this; it now has a named case to start from.
+  **Finding C — `THIN_RESERVE` = 6 is binding hard, and still binding at its MAX of 15.** 47 of 140 band
+  candidates never got a fetch slot; the best excluded is `thin-reserve-full` at both 6 and 15. Raising
+  it is a queue re-order, not a fix, until Finding B is addressed.
+  **Finding D — amplitude drops 34 of 54 on reachability** (`bid-unreachable 20, ask-unreachable 14`),
+  i.e. its dominant filter is the quantile-pinned estimator flagged in the entry below. Its 9% yield is
+  the funnel's worst, and it is measured with a broken ruler.
+  **Finding E — churn's 12% yield is mostly by design**: 54 of its discards are `band-lane partition`
+  (disjoint tables in `--mode all`). True churn yield is 11/39 ≈ 28%; do not "fix" the 12%.
 - **WHERE does capital filtering happen? Probably too late — filter at the cheap-fetch and digest layers
   instead (Ben, 2026-08-07, raised on landing the `TOP` 40→90 widening).** The ask: *"revisit at what
   point we are filtering based on available capital, maybe we're doing it too late. Ideally we apply

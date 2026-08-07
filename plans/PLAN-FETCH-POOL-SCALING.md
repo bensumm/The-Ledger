@@ -66,7 +66,23 @@ behaviour change to every scan Ben reads, not a perf chunk.
 local computed at `:2623`), so the output cannot tell you what pool size actually ran. Fix alongside
 whichever knob lands.
 
-⚠ **The recorded anchor does NOT reproduce.** PLAN.md's Discovered entry names Sanguinesti staff
+**⛔ CORRECTION 2026-08-07 (same day, later): the "anchor does not reproduce" claim below is WRONG.**
+It reproduces exactly as recorded — the earlier test used the wrong knob. `--stats` on a `--top 90`
+run shows Sanguinesti staff (uncharged) STILL crowded out, as the single highest-value excluded
+candidate, with **`reason: thin-reserve-full`** — not `top-n-full`. The binding constraint was never
+`TOP`; it is `THIN_RESERVE`'s fixed **6** slots, which is precisely what the PLAN.md entry always said.
+Raising `--thin-reserve 15` admits it and it grades **A-**. The reserve is still binding even at its
+MAX: the next-best excluded becomes Necklace of anguish (~8.58m/d), also `thin-reserve-full`.
+
+⚠ **But do NOT read "~12.89m/d expected net" as forgone profit.** That is the **Stage-1 PRE-FETCH
+proxy** (`expGpDay`), the number that decides fetch priority. Once actually fetched the same row reads
+**net +88,162/u (+0.5%), rank 140k, P(ask)~0.36** — orders of magnitude below its own proxy. So the
+real finding is worse and more interesting than "we're losing 12.89m/d": **the ranker that decides who
+gets fetched is not predictive of what an item scores once fetched.** This is MT1's documented
+two-different-numbers-against-one-constant hazard, now measured on the top excluded row. Fixing
+`THIN_RESERVE` without fixing the proxy just re-orders a queue sorted by the wrong key.
+
+⚠ **The paragraph below (kept for the record) is superseded by the correction above.** PLAN.md's Discovered entry names Sanguinesti staff
 (uncharged), Basilisk jaw and Webweaver bow as the items `--top 40` buried at a 162m trial. In this
 run **none of the three appears in EITHER pool** — Sanguinesti staff left the board on its own
 degraded numbers between two consecutive default scans, not on admission. So the *mechanism* (a fixed
