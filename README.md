@@ -541,8 +541,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   (rung/price/timeToFillSec per offer on two thin books) — real fill-time-vs-price data to replace guessed
   reliability-discount constants, honest n=1. Also three read-only 2026-08-04 archive studies, each a
   `*-study.mjs` + a `*-FINDINGS.md` report: `flow-crossover-study.mjs` (does an instasell→instabuy flow
-  crossover mark a bottom? — **clean null**, lift 1.14 vs placebo 1.10), `volume-vs-band-study.mjs` (does
-  volume predict % band width? — strong NEGATIVE across items at equal price, ρ≈−0.85; weak POSITIVE
+  crossover mark a bottom? — **clean null**, lift 1.14 vs placebo 1.08), `volume-vs-band-study.mjs` (does
+  volume predict % band width? — strong NEGATIVE across items at equal price, ρ≈−0.85 in the MIDDLE
+  deciles only, weakening at both extremes incl. the big-ticket decile; weak POSITIVE
   within an item day-to-day), and `edge-map-study.mjs` + its shared `edge-map-lib.mjs` panel builder
   (realized-P&L-vs-characteristics · liquidity-gate placement + the subsampling artifact test · the
   volume→band lead/lag null · the price×volume exclusion map, strike-checked against our own lots;
@@ -664,14 +665,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `logSuggestions` rolls any completed month out to a monthly archive (see below), so the
   root file never grows past ~a month of rows. F1-gating accrual is preserved — history is
   archived, never deleted.
-- `pipeline/suggestions-archive/` — tracked dir of completed-month archive files
+- `pipeline/suggestions-archive/` — **gitignored, local-only** dir of completed-month archive files
   `suggestions-YYYY-MM.jsonl` (SR1), moved OUT of the deploy root by `rotateLedger`
   (`pipeline/lib/render/suggestlog.mjs`). Same schema/lines as the active ledger; the append-only O1
   calibration history. Read together with the active file via `readSuggestionLines` — any full-
   history reader (`join-outcomes.mjs`'s F1 join, `retrojoin.mjs`'s P6a suggestion→fill join) MUST use
   that helper, not the active file alone.
-  Created lazily on the first rotation (empty until a month completes); committed by
-  `sync-fills.mjs` alongside `suggestions.jsonl`.
+  Created lazily on the first rotation (empty until a month completes). **NOT committed** (Ben,
+  2026-08-07): 75MB and growing ~13k rows/day, so it is gitignored and `sync-fills.mjs --publish`
+  deliberately omits it from its commit set. Consequence: the rolled-out months exist on ONE disk
+  only and are not backed up by the repo — only the active month (`suggestions.jsonl`) is published.
 - `screen.json` — the published opportunity screen the app's Scan tab renders (written by
   `screen-flip-niches.mjs --publish` to the REPO ROOT — the R3-rename REPO_ROOT regression that briefly
   wrote it to `pipeline/` is fixed). Each flip-niche row is `{ id, cells }` PLUS (PB4 app-display, 2026-07-15)
@@ -700,6 +703,48 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
+- `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, PLANNING ONLY,
+  no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
+  and therefore one parallel-safety contract. **A — digest SIGNAL:** `buildDigestBlock`'s comparator
+  ranks on `capEff × deployable` and never reads the `reach` column it prints, so its top slots go to
+  rows its own `digestVerdict` calls `sell unreliable` (live anchor 2026-08-07: 9 of 11 rendered rows,
+  top four graded C/C/D/B-, the only `A- fill-now` row at #5). Chunks DS0 (log the digest's computed
+  fields — `verdict`/`reachHit`/`reachDays`/`marginTrend`/`crossable`/`deployable`/`rankKey`/
+  `capEffRealizable`/`digestRank`, none of which survive a pass today) → DS1 (a read-only
+  market-counterfactual study, `report-digest.mjs`: *did the quoted ask actually print within
+  12/24/48h*, since a fills-joined study is structurally impossible at 92 filled / 88,272 not-taken)
+  → DS2 (render the reach cell's raw counts — measured, `askRecDays === 3` on **100%** of logged rows,
+  so the ✓/✗ glyph is a 3-sample binomial and ✗ is 55% of every board) → DS3 (the LOW-placement /
+  crashed-regime trap — 11% of rows sit at `askPlacement ≤ 0.05` where 84% render a mechanically
+  meaningless reach ✓) → DS4 (a W3-1-shaped sort floor scoped to the unambiguous `0/3` cell,
+  **gated on DS1 — and ❌ SHELVED 2026-08-07 when that gate rejected it**) → DS5/DS6/DS7 (the inverted
+  `LAPS_PER_DAY_CEIL` asymmetry, an exit-pool column, the drift fold), plus DS8 (90-day retention on
+  the suggestions ledger). **DS1 was PILOT-RUN 2026-08-07** and is the wave's pivot: archive coverage
+  of the next-24h window is **99.9%**, and the quoted ask printed within 24h on **55.4% / 58.6% /
+  65.0% / 69.9%** of rows in the `0/3 → 3/3` recent-reach cells (n = 776/418/346/652, z ≈ 5.6). The
+  gradient is real but a `0/3` ask still prints more often than not — so the 3-day reach basis is a
+  *tilt*, not a *gate*: DS2 was promoted to the primary signal deliverable, DS6 became a **replacement**
+  of the saturating `deploy` column rather than a 10th, and **no chunk in this wave re-ranks the
+  board**. **B — scan PERFORMANCE:** SP1 parallelises `runWatchlist`'s strictly-serial fetch
+  loop (measured 6.0–9.5s of a 14–17s run; the survivor burst at peak concurrency 15 is already
+  optimal and is left alone), SP2 settles the FC1 cache scoping per-endpoint (`fetchTsCached` on the
+  bucketed 1h series in `read-window-range.mjs`/`read-schedule.mjs`; `COFFER_FETCH_CACHE` stays off
+  forever — and per Ben's 2026-08-07 ruling the served series must SURFACE its age, so SP2 is
+  "identical numbers + one visible age token", not a silent swap), SP3/SP4/SP5 cover the `loadBands`
+  cold backfill, `archive.append` batching (don't bother) and `cache-warm`'s wrong-grain health check.
+  **SP5's measured mechanics (2026-08-07):** the `TheCofferCacheWarm` task fires **every 4h** and
+  fetches only **BULK** `/1h?timestamp=` + `/5m?timestamp=` snapshots (one measured `/5m` call =
+  156KB / 1,799 items / ~124ms; ≤24 per grain) — it never fetches an item individually, so it does
+  NOT warm the per-item `/timeseries` calls that dominate a scan, and SP1's savings ADD to it rather
+  than overlap. Because `loadBands` looks back only 2h, the 4h tick is **lossy**: measured, only
+  **139 of 288 daily 5m buckets (48.3%)** are captured. **SP5 was APPROVED 2026-08-07** (tick 4h →
+  105 min, a `Set-ScheduledTask` edit with no code): head **5.5s → ~294ms**, 5m capture → ~100%, and
+  Ben explicitly accepted the measured archive-growth cost (**~13 → ~24MB/day, ~4.9 → ~8.8GB/yr**, at
+  ~45 bytes/row). Every chunk carries expected benefit, confidence,
+  risk-of-cutting-a-good-candidate, effort and rollback, plus an explicit
+  behaviour-preserving-vs-changes-what-surfaces label and a do-first/do-later/don't-bother split.
+  Produced by a planning session; consumed by an executor + `PLAN.md`'s Status table. Folds into
+  `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
 - `PLAN-BLINDSPOT-AUDIT.md` — a READ-ONLY audit doc (2026-07-24, no code changed): ranked
   false-negative signatures the scan/gate/grade stack systematically drops or never surfaces
   (fixed-size fetch-pool crowding, falling-but-liquid big-tickets invisible unless pre-watchlisted,
@@ -1935,7 +1980,7 @@ constant governs each, so these can move without touching the deployed app or ph
 | --- | --- | --- |
 | `alerts.json` | read by `pipeline/commands/trigger-alerts.mjs` (N1) | tracked (ships empty) |
 | `suggestions.jsonl` | appended by `pipeline/lib/render/suggestlog.mjs` (O1 fields + YS2 forward `posture?`/… + SF-3 `volSrc?`); SR1-bounded to the current month | tracked, append-only |
-| `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | tracked, append-only (lazy) |
+| `pipeline/suggestions-archive/suggestions-YYYY-MM.jsonl` | completed months rolled out of the active ledger by `rotateLedger` (SR1); read with the active file via `readSuggestionLines` | **gitignored, local-only** (2026-08-07) — rolled-out months live on ONE disk, no repo backup |
 | `outcomes.json` | derived by `pipeline/commands/join-outcomes.mjs` (F1 join reads active+archives) | gitignored |
 
 ### Shared logic modules
