@@ -10,7 +10,29 @@ reserve-retirement prerequisite — LANDED 2026-08-01 as EF-0a (PLAN-ESTIMATOR-F
 screen row now logs `via`/`preRank`/`prePool` and each pass logs its per-niche crowded-out set, so
 the reserve-vs-ranked-in comparison and any slice-size tuning can finally read real data. Still
 open here: the default-on decision for `--scale-pool` (needs that accrued data) + fold-into-PLAN.md
-lifecycle. Originally scoped from blindspot-audit findings **#1** and **#7**
+lifecycle.
+
+**Evidence for the `--scale-pool` default-on decision (2026-08-07, live A/B at 100.75m deployable).**
+A paired `--mode all` run, `--top 40` (default) vs `--top 90`, same pass, `--no-publish`:
+
+| | `--top 40` | `--top 90` |
+| --- | --- | --- |
+| BAND rows rated | 31 | 68 (+37, **none lost**) |
+| BAND grades | A-×1 B×8 C×9 D×12 | A-×2 B×11 B-×7 C×17 D×30 |
+| CHURN grades | **S+×2** B×2 | **S+×10** B×2 |
+
+The widening is **strictly additive** — every `--top 40` row survived at 90 — and the dominant gain
+is **CHURN S+ 2 → 10**, not the band big-tickets the starvation entry predicted. BAND gains a second
+A- (Masori chaps) plus three B and a whole B- tier that the default never reaches at all.
+
+⚠ **The recorded anchor does NOT reproduce.** PLAN.md's Discovered entry names Sanguinesti staff
+(uncharged), Basilisk jaw and Webweaver bow as the items `--top 40` buried at a 162m trial. In this
+run **none of the three appears in EITHER pool** — Sanguinesti staff left the board on its own
+degraded numbers between two consecutive default scans, not on admission. So the *mechanism* (a fixed
+top-N starves candidates a larger bankroll could deploy into) is confirmed, but the *starved
+population* is mis-recorded: it is predominantly churn-class commodities, not thin big-tickets.
+Anyone tuning `THIN_RESERVE` off that anchor would be tuning the wrong reserve. n=1 paired run,
+one capital level — enough to correct the anchor, NOT enough to flip the default (rule 4). Originally scoped from blindspot-audit findings **#1** and **#7**
 (`PLAN-BLINDSPOT-AUDIT.md`): the scan's fetch pool is sized by FIXED constants
 (`pipeline/lib/gatecandidates.mjs` `TOP_DEFAULT=40`, `THIN_RESERVE_DEFAULT=6`,
 `VALUE_TOP_DEFAULT=25`, `AMP_TOP_DEFAULT=40`), independent of how much capital there actually is
