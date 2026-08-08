@@ -502,23 +502,30 @@ const read6h = sixHourReader({
 // `--mode reverse` returns before main()'s header ever runs: the reverse table's Regime column is the
 // DECISION-CENTRAL inverted read, and it was being fed swapped data with zero disclosure (2026-08-08
 // adversarial review, D4). Every exit path that renders an archive-sourced regime must call this.
-function printArchiveRegimeBanner(scopeNote) {
-  console.log(`⚠ --archive-regime UNPROMOTED (AF5b): the 6h REGIME series comes from the LOCAL archive, pinned to the last ${LIVE_TS6H_BUCKETS}×6h — ${ARCH_6H.archive} from archive / ${ARCH_6H.fallback} absent + ${ARCH_6H.shallow} too-shallow fell back to a live fetch (${scopeNote}). Prices are untouched (live). --publish refused.`);
-  if (ARCH_6H.shallow) console.log(`  ${ARCH_6H.shallow} item(s) had an archive slice under ${REGIME_MIN_6H_BUCKETS} buckets (deepest rejected: ${ARCH_6H.shallowMaxN}) — too short for regimeDrift's ${5}-full-day minimum, so they were served LIVE rather than silently returning an \`unknown\` label that un-gates the falling exclusion.`);
+// `log` MUST be main()'s captured `realLog`, never bare console.log: quiet is the DEFAULT and main()
+// stubs `console.log = () => {}` under it, which silently swallowed this banner on every default-quiet
+// run — including `--mode reverse`, whose whole table prints via realLog for exactly that reason. A
+// safety disclosure that a verbosity flag can suppress is not a disclosure: under quiet the scan still
+// writes `.cache/last-report/screen.json`, which is what an agent reads for its data, so a quiet flag-on
+// run was serving archive-sourced regime with nothing anywhere saying so. Caught 2026-08-08 by running
+// the D4 fix instead of trusting it.
+function printArchiveRegimeBanner(scopeNote, log = console.log) {
+  log(`⚠ --archive-regime UNPROMOTED (AF5b): the 6h REGIME series comes from the LOCAL archive, pinned to the last ${LIVE_TS6H_BUCKETS}×6h — ${ARCH_6H.archive} from archive / ${ARCH_6H.fallback} absent + ${ARCH_6H.shallow} too-shallow fell back to a live fetch (${scopeNote}). Prices are untouched (live). --publish refused.`);
+  if (ARCH_6H.shallow) log(`  ${ARCH_6H.shallow} item(s) had an archive slice under ${REGIME_MIN_6H_BUCKETS} buckets (deepest rejected: ${ARCH_6H.shallowMaxN}) — too short for regimeDrift's ${5}-full-day minimum, so they were served LIVE rather than silently returning an \`unknown\` label that un-gates the falling exclusion.`);
   if (ARCH_6H.archive > 0 && ARCH_6H.minN < LIVE_TS6H_BUCKETS) {
     // regimeDrift reads windowStats(nights:20) → it only stops caring about depth once a series covers
     // 20 local days = 80 6h buckets. Above that the gate is genuinely depth-immune; BELOW it the
     // thinnest-archived items feed it less history than live would have, so say so instead of
     // repeating the reassuring half of the sentence.
     const REGIME_DEPTH_BUCKETS = 20 * 4;
-    console.log(`  ⚠ depth ${ARCH_6H.minN}–${ARCH_6H.maxN} of ${LIVE_TS6H_BUCKETS} buckets — the archive is SHALLOWER than live, so phase() (spike/decay/basing) is NOT live-equivalent yet and will differ on items whose ~${((LIVE_TS6H_BUCKETS - ARCH_6H.maxN) * 6 / 24).toFixed(0)}d of missing history sets its base/peak.`);
-    console.log(ARCH_6H.minN >= REGIME_DEPTH_BUCKETS
+    log(`  ⚠ depth ${ARCH_6H.minN}–${ARCH_6H.maxN} of ${LIVE_TS6H_BUCKETS} buckets — the archive is SHALLOWER than live, so phase() (spike/decay/basing) is NOT live-equivalent yet and will differ on items whose ~${((LIVE_TS6H_BUCKETS - ARCH_6H.maxN) * 6 / 24).toFixed(0)}d of missing history sets its base/peak.`);
+    log(ARCH_6H.minN >= REGIME_DEPTH_BUCKETS
       ? `  regimeDrift (the falling/rising GATE) clears its windowStats(nights:20) = ${REGIME_DEPTH_BUCKETS}-bucket appetite on every series here — but see the evidence line: depth is not the only way the gate flips.`
       : `  ⚠ and the thinnest series (${ARCH_6H.minN} buckets ≈ ${(ARCH_6H.minN * 6 / 24).toFixed(0)}d) is BELOW regimeDrift's windowStats(nights:20) appetite of ${REGIME_DEPTH_BUCKETS} buckets — those items feed the falling/rising GATE less history than a live fetch would.`);
   }
   // D1 (2026-08-08 adversarial review) REPLACES the old "0/165 SAME-SPAN, none was data quality" line.
   // That claim was falsified: same-span, same-end regime flips are REAL and go in the unsafe direction.
-  console.log(`  ⚠ Evidence, corrected: regime flips DO occur at same span and same end — 2/60 six-way and 1/60 GATE flips in the 00:00–02:00 local window, from ±1gp rounding residue in a re-derived weighted mean tipping a discrete test (Red d'hide chaps: floor slope −14.40 live vs −14.20 archive against a ≈14.30 flat-band, which OPENS the falling exclusion on an item live EXCLUDES). driftPct p95 4.27pp / max 12.55pp in that window vs 0.70pp by day. This is NOT depth and NOT the 15.2d cliff — do not read the depth lines above as the whole risk.`);
+  log(`  ⚠ Evidence, corrected: regime flips DO occur at same span and same end — 2/60 six-way and 1/60 GATE flips in the 00:00–02:00 local window, from ±1gp rounding residue in a re-derived weighted mean tipping a discrete test (Red d'hide chaps: floor slope −14.40 live vs −14.20 archive against a ≈14.30 flat-band, which OPENS the falling exclusion on an item live EXCLUDES). driftPct p95 4.27pp / max 12.55pp in that window vs 0.70pp by day. This is NOT depth and NOT the 15.2d cliff — do not read the depth lines above as the whole risk.`);
 }
 // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF): the ONE API-politeness bound, shared by BOTH per-item fetch
 // pools — the survivor pool in main() and runWatchlist's. Max items in flight; each item fetches its
@@ -2644,7 +2651,7 @@ async function main() {
   // the quiet default (this surface has no last-report/screen.json consumer — it's an interactive read).
   // AF5b/D4: reverse mode returns before main()'s header, so its banner must print HERE — the reverse
   // table's Regime column is the inverted read Ben decides on, and it was being swapped silently.
-  if (MODE === 'reverse') { await runReverseMode(realLog); if (ARCHIVE_REGIME) printArchiveRegimeBanner('reverse-flip pool'); return; }
+  if (MODE === 'reverse') { await runReverseMode(realLog); if (ARCHIVE_REGIME) printArchiveRegimeBanner('reverse-flip pool', realLog); return; }
 
   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook. Same "before the read" seam as the
   // sync above, but IN-PROCESS (not subprocessed): manager.ensure() is cheap/local/self-throttling — it
@@ -2822,7 +2829,7 @@ async function main() {
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
   // AF5b: name the data source and the archive/live split HONESTLY — an all-archive claim would be
   // wrong the moment one item is missing from the archive, and the fallback is silent by design.
-  if (ARCHIVE_REGIME) printArchiveRegimeBanner('survivor pool; watchlist quotes below add more');
+  if (ARCHIVE_REGIME) printArchiveRegimeBanner('survivor pool; watchlist quotes below add more', realLog);
   // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
   if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);
