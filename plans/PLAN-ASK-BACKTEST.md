@@ -119,17 +119,44 @@ directions) is the right shape.
 
 ## §4 — Chunks
 
+> ⚠ **REWRITTEN 2026-08-07 after §8/§9/§10.** The previous table specified a per-item quantile over a
+> 5m series, pinned to a mis-described outlier, with `unitsPerDay` figures §8 disproved and an AB6 that
+> §8 showed to be circular. It is superseded, not annotated — an implementer reads THIS table, and it
+> must not describe a design we spent an afternoon disproving. The prior version is in
+> `git show 46c1792:plans/PLAN-ASK-BACKTEST.md`.
+
+**Design constraints every chunk inherits (all measured, §9/§10):**
+
+1. **Premium is measured over MID, never over our own bid** — bid-relative conflates ask greed with
+   entry quality (§9.1).
+2. **`mid` is PINNED: prior-24h mean `avgHighPrice`.** Not a preference — base side and window move
+   every level 5–15pp (instasell-side reads 93.4% where the pinned base reads 80.5%). VWAP is a no-op
+   (−0.4pp), so volume-weighting is optional. Every consumer computes premium off the identical base
+   or inherits a silent ±10pp bias.
+3. **PRICE TIER is a required key.** At +2%: sub-100k prints 83.9%, ≥10m prints 52.4%. Omitting it
+   overstates big-ticket fill by ~30pp — the §9.6 error.
+4. **Item axis is measured relative VOLATILITY, not trade frequency.** Frequency is a proxy for it
+   (Spearman −0.41) and its apparent effect collapses 25.6pp → 2.8pp once volatility is controlled.
+5. **Claim separation only at premiums ≥2%.** Below ~1% the item axis separates nothing.
+6. **Levels are ±2–3pp**, dense items only, and the surface is a LOWER BOUND on fill at qty=1 —
+   it says nothing safe about size.
+7. **Never present the premium/horizon monotonicity as evidence** — it is nested by construction.
+
 | # | Chunk | Dep | Effort |
 | --- | --- | --- | --- |
-| **AB1** | Pure `askAtFillRate()` in `js/windowread.mjs` + fixture. Reads a passed-in series; no fetch, no archive coupling. | — | S |
-| **AB2** | Outlier guard (§3), neighbour-relative, fired before the quantile. Fixture-pinned on the 07-28 artifact. | AB1 | S |
-| **AB3** | `unitsPerDay` + `P(fill ≤ N days)` as first-class outputs; a thin-flow refusal so the optimizer cannot recommend a level with no flow. | AB1 | S |
-| **AB4** | Recency fold — shapes (a)+(c) from §2, cushion sourced from the existing `reachMargin`, not re-derived. | AB1–AB3 | M |
-| **AB5** | Surface on `read-window-range.mjs` as an opt-in flag (`--fill-rate`), console-only, INFORM. Compare against the existing quantile line in the same output so the divergence is visible. | AB1–AB4 | M |
-| **AB6** | Shadow-log both the quantile price and the backtest price to `suggestions.jsonl`; join realized fills at F1 to settle which predicts better. **This is the only chunk that produces evidence.** | AB5 | M |
-| **AB7** | Only after AB6 shows a win: promote to the default ask basis on `/positions` and the scan. | AB6 | M |
+| **AB1** | Pure `printedAt(series, { mid, premium, horizon, from })` → boolean + the observed max — the atom the whole surface is built from. Fixture-pinned, no fetch, no archive coupling. Mid is an INPUT, never computed inside, so constraint 2 is enforced at the call site. | — | S |
+| **AB2** | Surface BUILDER (offline, archive-only): sweep items × reference windows × premium grid → a lookup keyed by **premium × price tier × volatility band × horizon**, with per-cell n and a CI. Emits a versioned artifact; does NOT touch a live surface. | AB1 | M |
+| **AB3** | `askAtFillRate(item, { targetP, horizon })` — invert the surface: highest premium whose cell clears `targetP`, converted to gp via the pinned mid. **Refuses** (returns null + reason) outside dense/known cells rather than extrapolating. | AB2 | M |
+| **AB4** | Flow check — units traded at/above the level, as a **separate necessary condition**, because the proxy is only a lower bound at qty=1 (§8) and says nothing about size. A level with no flow is refused regardless of its P. | AB1 | S |
+| **AB5** | Single-print spike guard, neighbour-relative, fired BEFORE any aggregation. Measured base rate: **0.9% of item-days ≥1m** (114 / 12,028, touching 75 of 511 items). ⚠ Fixture must pin the CORRECTED case: 07-28 carried **1 unit, not 53**, and was a genuine dislocation (instasells at 31m the same morning) — plus the 07-12 spike missed first time. | AB2 | S |
+| **AB6** | Recency: report the recent-window rate BESIDE the full-window rate (RC1's existing divergence convention). **LOCAL day bucketing** — §2's story was UTC and flips to 2/3 under local (§8/M4). No blending, no decay constant, until something can distinguish them. | AB3 | M |
+| **AB7** | Surface on `read-window-range.mjs` behind `--fill-rate`, console-only, INFORM. Print the existing quantile line alongside so the divergence is visible on every read. | AB3–AB6 | M |
+| **AB8** | **Honest relabel (was AB6): shadow-log validates the PROXY, not the price choice.** §8/M6 — logging both prices only yields truth for the arm actually listed; the unplaced arm gets scored by the proxy under test. Either randomise which price is listed, or state plainly that this measures proxy-vs-realised-fill and cannot rank two pricing rules. | AB7 | M |
+| **AB9** | Promote to the default ask basis ONLY after AB8 produces evidence under whichever framing it lands on. | AB8 | M |
 
-**Sequence:** `AB1 → AB2 → AB3 → AB4 → AB5 → AB6 → (gate) → AB7`.
+**Sequence:** `AB1 → AB2 → AB3` (the usable core) → `AB4 + AB5` (guards, parallel) → `AB6 → AB7` →
+`AB8 → (gate) → AB9`. **AB1–AB3 alone replace the 50%-by-construction quantile with something
+measured** — that is the shippable increment; everything after is hardening and evidence.
 
 ---
 
