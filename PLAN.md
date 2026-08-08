@@ -488,6 +488,23 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **THE REGIME CLASSIFIERS ARE KNIFE-EDGE ON ±1gp, INDEPENDENT OF DATA SOURCE (2026-08-08, found by
+  the AF5b adversarial pass — generalises well beyond AF5b).** The discrete floor-slope and
+  floor-break tests can be tipped by rounding residue in a re-derived weighted mean:
+  - **Red d'hide chaps #2495** — floor slope live **−14.40** vs archive **−14.20** gp/d against a
+    flat-band of ≈**14.30** (latest 2859 × `FC_FLAT_FRAC` 0.005). A **0.2 gp/d** difference straddles
+    the threshold, flipping `falling/cooling` → `flat/mild-cooldown` — which **OPENS the
+    falling-exclusion gate** on an item the live read excludes. That is the UNSAFE direction.
+  - **Rune nails #4824** — `priorExtreme` 749 vs 748, a **1gp** difference in one day-low ~11d ago,
+    flips `broke:true` → `cooling` vs `crash-risk`.
+
+  Both survive same-span AND same-end trimming, so this is not the 15.2d age cliff and not depth — it
+  is a permanent property of feeding volume-weighted means into discrete threshold tests. **The
+  implication is not about the archive.** Any item whose slope sits within rounding distance of
+  `FC_FLAT_FRAC × price` has a regime label that is effectively a coin flip, and the falling-exclusion
+  gate hangs off it. Worth measuring how many items sit in that band on a normal run, and whether the
+  discrete tests want a hysteresis/deadband rather than a bare threshold.
+
 **ARCH-DOCS-AUDIT codification (from `PLAN-ARCH-DOCS-AUDIT.md`, Q3 "prose → code") — ALL DONE, now in the Status table above:**
 COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL1 `ef239dc`, COD-1 `55861d1`).
 Full "what/why" per the fold-out discipline = the landing commit messages.
@@ -540,6 +557,70 @@ Full "what/why" per the fold-out discipline = the landing commit messages.
   *strategy* claim (that this dominates patient exits generally) is not yet measured. The natural test
   is cheap and offline: over the archive, compare realised gp/day of "buy 3% under mid → exit +0.5%"
   against "buy 1% under mid → exit +2%" across items and windows.
+
+  **MEASURED 2026-08-07 — the conditioner on achievable entry depth is AMPLITUDE, not trend
+  DIRECTION. Do not encode a rising/falling depth modifier.** Ben's hypothesis was: falling slightly →
+  bid deeper, rising slightly → bid shallower. Tested offline on the 5m archive (250 sampled items ×
+  6 reference windows at T−4/7/10/13/16/19d; trend = mean(last 6h) vs mean(prior 24h), ±0.5% bands;
+  fill = any forward `avgLowPrice` at or below the bid). **The direction effect does not survive.**
+  Anchored to the current instasell (which removes the bid-ask spread, the confound that dominated the
+  first two passes), P(a −2% bid is hit within 4h) reads **rising 51.5% · falling 41.9% · flat 21.3%**
+  — rising *ahead* of falling, the opposite of the hypothesis — and at 24h the two swap (falling 80.6%
+  · rising 74.8%). A gap that reverses sign between horizons at n≈180/cell (SE ≈ 3.7pp) is noise.
+
+  What IS robust — every depth, both horizons, all three anchorings — is **flat vs moving**: at −2%/4h
+  a quiet item fills 21.3% against ~42–52% for a moving one, a ~26pp gap (~7 SE). The diagnostic that
+  explains it: median bid-ask spread by class is **flat 1.57% · falling 2.96% · rising 3.85%** — the
+  "trend" classifier was largely reading volatility, not direction.
+
+  **So the AF3b ranking target above is refined, not replaced:** rank by achievable entry depth, and
+  the cheap archive-side predictor of it is the item's own intraday amplitude/spread — the same
+  quantity the `amplitude` flip-niche already computes. A flat item will not come to a deep bid, and
+  the 1.51%-below-mid entry that makes a +0.5% exit break even is only reliably available on items
+  that actually move. *Caveats:* one archive snapshot, ~180 obs/cell; a 5m bucket average at or below
+  the bid means trades printed there, which is an upper bound on a real fill (queue position and
+  partial fills are not modelled); and a wide spread is itself a cost — this measures whether the bid
+  is HIT, not whether the round trip is profitable.
+
+  **MEASURED 2026-08-08 — the strategy is sound but the BIG-TICKET tier is the wrong place to run
+  it, and the 2% tax eats the whole spread.** Two follow-ups to the above, same method, anchored to
+  the current instasell.
+
+  *(a) Entry depth is strongly tier-dependent.* P(a bid this far below the current instasell is hit):
+
+  | depth | `<100k` 4h | `≥10m` 4h | `<100k` 24h | `≥10m` 24h |
+  | --- | --- | --- | --- | --- |
+  | −1% | 55.3% | 21.0% | 82.9% | 68.6% |
+  | −2% | 39.4% | **10.5%** | 71.9% | **41.0%** |
+  | −3% | 31.7% | **3.8%** | 61.7% | **23.8%** |
+
+  Within `≥10m`, splitting on 24h `relStd`: a QUIET big ticket is close to hopeless for a deep entry
+  (−3%: **0.0%**/4h, 8.9%/24h, n=56) while a mid-volatility one is far better (8.5%/42.6%, n=47).
+  Same amplitude conclusion as above, now on the exact tier being traded. *n is thin here — 105
+  `≥10m` observations, 47–56 per volatility band (SE ≈7pp). Suggestive, not settled. Two further
+  limits, both since measured on the ask side and worth carrying: these 6 windows sit only 3d apart
+  across ~15 days, far less regime diversity than the ask surface's 71-day span, so the between-window
+  variance that dominates there is barely sampled here; and the dense-item filter (`≥1500` 5m buckets)
+  makes these numbers CONSERVATIVE, not optimistic — the sparse stratum prints MORE, not less
+  (85.0% vs 77.4% at +2% on the ask side), so excluding it deflates fill probability.*
+
+  *(b) The free depth is real but the tax exactly cancels it.* The current instasell already sits
+  **2.04% (`≥10m`) to 3.56% (`100k–1m`)** below the 24h mean — median, no price move required. That
+  looks like it clears the 1.51%-below-mid break-even for a +0.5% exit for free. It does not: buying
+  at `0.9796 × mid` and selling at `1.005 × mid` nets `0.98 × 1.005 − 0.9796 = 0.53% of mid` before
+  any slippage. **Spread capture alone is break-even; the 2% tax is the same order as the entire
+  typical spread.** Real profit therefore requires a genuine EXCURSION on one leg or the other —
+  which is precisely what the two tables measure as unlikely on big tickets.
+
+  **The consequence, and it is the actionable one.** A big-ticket same-day round trip needs TWO
+  independently unlikely events: a −2% entry (41% within 24h) and a +2% exit (**55.8%** within 3d —
+  the AB2 surface's 45.2% is 1h-grain and understates `≥10m` by 9.4pp at this premium; see the D1
+  grain finding in the AB review). Multiplied, ~23%. The sub-1m tiers are far friendlier on BOTH legs
+  — `<100k` reads 71.9% for the −2% entry within 24h and 81.2% for a +2% exit within 3d, ~58%
+  combined, a ~2.5× better same-day proposition.
+  Ben's framing ("our low buy-in gives us the easy exit") is correct; the tier he has been running it
+  in is the one where neither leg cooperates. This is also the cleanest available explanation of the
+  Masori pair: chaps closed in 3h20m, the body's bid is still resting.
 - **THE FUNNEL, MEASURED END-TO-END (2026-08-07, `--mode all --stats`, TOP=90, fully-deployed book).**
   Ben: *"how can we improve our funnel at each step?"* Numbers first, so the next chunk argues from data:
 
