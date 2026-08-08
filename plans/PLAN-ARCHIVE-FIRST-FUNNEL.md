@@ -288,3 +288,83 @@ unreliable" (needs that pass's `--digest` state); "177 unique items"; the Neckla
 not re-run.
 
 **Repro note:** `--stats` prints nothing without `--verbose`.
+
+---
+
+## §8 — Fable validation of AF4/AF5, and the AF5b go/no-go (2026-08-07)
+
+165-item study: `regimeDrift`/`phase()` on live `fetchTs(id,'6h')` vs `aggregate1hTo6h(archiveSeries(…))`.
+Sample = screen.json band+churn ∪ dip-watchlist ∪ watchlist ∪ 30 archive-stratified items across five
+price tiers; regime mix 54 rising / 74 flat / **37 falling (incl. 12 crash-risk)**. Plus a 20-item
+1h identity check (7,167 buckets) and a 36-item per-side coverage study (19,839 side-buckets).
+
+### 🛑 BLOCKER for AF5b — `phase()` is DEPTH-DEPENDENT; the read window must be pinned
+
+`phase()` computes `baseMid` as the median of points OLDER than the lookback (`js/quotecore.js:252`)
+and `peakMid` as the max over **ALL** points (`:255-256`) — both are functions of how much history you
+feed it. Verified directly. Live `ts6h` caps at 365 buckets ≈ 91.2d; the archive currently holds ~70d.
+
+- full-series comparison: **4/165 flip** (2.4%) — Spider cave teleport `spike→base`, Chef's delight
+  and Armadyl bracers `base→spike`, **Snape grass `spike→decay`** (the 0.71.1 fail-open incident item).
+- same-span comparison: **0/165.** Every flip is a DEPTH artifact; none is data quality.
+
+**This gets worse with time, not better.** Today the archive is shallower than live; past ~2026-08-28
+it will be DEEPER, and an unpinned read would silently drift verdicts as the archive accrues forever.
+**AF5b must pin the 6h read to live's window (last 365×6h) permanently — a standing contract, not a
+migration-day detail.** `regimeDrift` is immune (`windowStats(nights:20)`, `:182`).
+
+### ✅ The question this plan actually turned on — regime verdicts do NOT flip
+
+**0/165 disagreements** on both the 3-way label and the 6-way classification, realistic AND same-span,
+including all 37 falling and all 12 crash-risk items. `driftPct` deltas: median 0.00pp, p95 0.70pp.
+
+And it is structural, not luck: `FC_RECENT_N = 5` / `FC_BREAK_LOOKBACK = 13`
+(`js/windowread.mjs:382,384`) mean the classifier reads only the last ~14 completed days — the zone
+where the derived series is near-exact (per-bucket p95 0.016–0.023%).
+
+**Honest bounds:** 0/165 bounds the per-read flip rate below **~1.8%** (95%); 0/37 falling below
+~7.8%; 0/12 crash-risk below **~22%**. One snapshot, ~14:00 local.
+
+⚠ **One untested mechanism, and it is in the worst possible window.** The 06:00-UTC 6h bucket starts
+23:00 local, so between local midnight and ~01:45 (archive lag) the still-forming bucket keys to
+YESTERDAY — a completed day `windowStats` includes — with live holding hours the archive lacks. That is
+exactly the `/overnight`→early-morning read. **Re-run the study in the 00:00–02:00 local window before
+AF6 promotes anything.**
+
+### ❌ AF5's 25/25 is retired as evidence
+
+Measured: live-1h vs archive-1h inside the trimmed span is **7,148 identical / 0 differing / 19
+missing**, and all 19 missing are the newest in-progress hour, which `windowStats`
+(`js/windowread.mjs:257,262`) excludes from BOTH runs. So `report-archive-gate.mjs` fed a PURE function
+two byte-identical inputs and reported identical outputs — it could not have failed. Even at face
+value n=25/100% bounds disagreement only below ~11–14%, useless as a gate.
+
+**AF5 for the 1h reach gate is safe because of AF4's byte-identity, NOT because of the shadow run.**
+The shadow METHODOLOGY only becomes informative at AF5b, where the inputs genuinely differ. Do not
+cite the 25/25 in an AF6 promotion argument.
+
+### Corrections applied to AF4 (header + test rewritten in place)
+
+The header's coverage/error story was wrong TWICE — first "integer rounding, worst on penny items",
+then "missing hours / coverage". Both are gone. The real driver is an **AGE CLIFF at ~15.2 days** —
+the `/timeseries` 1h endpoint's 365-hour horizon. Inside it both sources exist and match byte-for-byte;
+beyond it only the archive has 1h, and the wiki's own 6h is demonstrably NOT an aggregate of its own
+bulk 1h (57% of side-volumes unequal). Which grain is "truer" out there is UNKNOWN. Full coverage is
+NOT exactness (p95 16.7% under 100gp), and 1-of-6-hour buckets ARE exact. **`sourceBuckets` is
+therefore descriptive only, never a gate** — it also turns out to be side-blind.
+
+### Confirmed correct
+
+Bucket alignment (all 60,456 live 6h timestamps satisfy `ts % 21600 === 0`; the `floor(ts/21600)`
+partition matches the endpoint exactly — this was the claim most likely to invalidate everything, and
+it holds). Volume-weighted aggregation math. The `ts`→`timestamp` adapter and its fixture. In-span
+completeness: 0 missing buckets across 46,350 windows.
+
+### Carried into AF5b's spec
+
+1. Pin the 6h read to the last 365×6h. **Blocker.**
+2. Re-run the regime study in the 00:00–02:00 local window first.
+3. Strip or document `sourceBuckets` leaking into anything that serialises `ts6h`.
+4. Derived 6h VOLUMES are sums-of-1h and disagree with live beyond 15.2d. No current 6h consumer reads
+   them (`quotecore.js:386`); any future one inherits a silent unit change. Pin a note then.
+5. The screen must open the archive `{ readonly: true }` — never the default DDL path on a multi-GB DB.

@@ -19,8 +19,9 @@
  *   - 6h aggregation is VOLUME-WEIGHTED and exact over an aligned partition — NOT a mean of means.
  *   - a side with zero volume in the whole window → null on that side (matches how the wiki reports an
  *     untraded side, so downstream null-handling is unchanged), while the OTHER side still reports.
- *   - `sourceBuckets` counts the 1h buckets that fed each window: measured 6/6 → 0.000% error vs live,
- *     3/6 → ~1.3–1.7%, so a coverage-sensitive caller can refuse a thin window.
+ *   - `sourceBuckets` counts the 1h rows that fed each window. DESCRIPTIVE ONLY, never a gate: the
+ *     "6/6 → exact" story died in a 165-item study (full coverage is NOT exact on cheap items; 1-of-6
+ *     buckets ARE exact). Error tracks AGE — the /timeseries 15.2d horizon — not coverage.
  */
 import assert from 'node:assert/strict';
 import { archiveSeries, aggregate1hTo6h, STORED_GRAINS } from '../lib/market/archive-series.mjs';
@@ -99,10 +100,10 @@ ok('a side with no volume → null on that side, other side still reports', () =
   assert.equal(out[0].lowPriceVolume, 0);
 });
 
-ok('sourceBuckets counts contributing 1h buckets (the coverage gate)', () => {
+ok('sourceBuckets counts contributing 1h rows (descriptive, not a gate)', () => {
   const src = [0, 3600, 7200].map(t => ({ timestamp: t, avgHighPrice: 10, avgLowPrice: 9, highPriceVolume: 1, lowPriceVolume: 1 }));
   const out = aggregate1hTo6h(src);
-  assert.equal(out[0].sourceBuckets, 3);   // 3 of 6 hours traded → measured ~1.3–1.7% drift vs live
+  assert.equal(out[0].sourceBuckets, 3);   // descriptive count only — NOT a quality signal, see header
 });
 
 ok('empty / malformed input degrades to [] rather than throwing', () => {

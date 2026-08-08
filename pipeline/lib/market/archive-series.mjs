@@ -59,27 +59,32 @@ export function archiveSeries(handle, id, grain, { days = null, from = null, to 
    volume-weighted 1h means over an aligned 6h partition equals the 6h volume-weighted mean —
    aggregation is NOT lossy (an earlier draft of the plan claimed it was; wrong). The real error
    sources, in order:
-     (a) MISSING 1h buckets inside a 6h window — the dominant and effectively the ONLY source.
-     (b) integer price storage (±0.5gp per bucket) — predicted to dominate on penny items; MEASURED
-         NOT TO. See below.
-     (c) the newest partial window, not yet fully observed.
+   THE DRIVER IS AGE, NOT COVERAGE AND NOT ROUNDING. Two earlier explanations in this header were
+   wrong and are recorded here so nobody re-derives them: first "integer rounding, worst on penny
+   items" (wrong), then "missing hours / coverage" (also wrong — it came from a 4-item sample with
+   n=1 per cell). A 165-item / 19,839-side-bucket study (Fable, 2026-08-07) found:
 
-   MEASURED against live `fetchTs(id,'6h')` across four price tiers (Revenant ether 177gp, Nature rune
-   155gp, Mahogany plank 1.9k, Masori chaps 26.4m), ~120 shared buckets each. Median error is
-   **0.000% on every tier**; p95 runs 0.51–1.14%. Broken out by how many of the six hours actually
-   traded:
+     · error is ~zero wherever the derived side-VOLUME matches live (n=8,642, p95 0.008%) and lives
+       ENTIRELY where it does not (n=11,197, median 0.25%, p95 5.97%);
+     · and that split is an AGE CLIFF at ~15.2 days — exactly the `/timeseries` 1h endpoint's
+       365-hour horizon. Within it, p95 ≤0.25%; beyond, 3.7–5.1%.
+     · At FULL coverage (src=6) p95 is 0.88% on ≥5m items but 4.97% at 100gp–1k and 16.7% under
+       100gp — i.e. full coverage does NOT imply exactness. Conversely 1-of-6-hour buckets are
+       exact (n=182, p99 0.47%): one price, nothing to weight.
 
-       6/6 hours traded → 0.000% median (n=111 thin item, n=118 liquid)
-       5/6              → 0.000%
-       3/6              → 1.284% / 1.695% (n=1 each)
+   The mechanism: inside 15.2d both live-1h and archive-1h exist and are byte-identical, so a 6h
+   window derived from 1h matches the 6h endpoint. Beyond it only the archive has 1h, and the wiki's
+   own 6h series is demonstrably NOT an aggregate of its own bulk 1h there (57% of side-volumes
+   unequal). WHICH grain is "truer" beyond 15.2d is UNKNOWN — the archive preserved what bulk-1h
+   served contemporaneously. Do not assume either.
 
-   So the aggregation is EXACT at full coverage and the whole error is sparsity. The plan's stated
-   hypothesis — integer rounding, worst on penny items — was WRONG: the worst p95 was the 26m
-   big-ticket (thin, so more untraded hours), and the 155gp rune was among the best. Rounding is not
-   the driver; coverage is. That is a better result, because coverage is OBSERVABLE where rounding is
-   not — hence `sourceBuckets` below, so a caller can refuse a low-coverage window instead of silently
-   consuming a wrong mean. The 1h passthrough needs none of this: it is byte-exact (364 identical / 0
-   differing per item; the one absent bucket is the newest, not yet archived).
+   CONSEQUENCE: a `sourceBuckets` coverage THRESHOLD is not justifiable from data — the field stays
+   as description, not as a gate. It happens not to matter, because the only 6h consumers
+   (`regimeDrift`, `phase()`) read a short recent window that sits inside the exact zone.
+
+   The 1h passthrough needs none of this: it is byte-exact (measured 7,148 identical / 0 differing
+   across 20 items; the only absent buckets are the newest in-progress hour, which `windowStats`
+   excludes anyway).
    A bucket with zero volume on a side contributes nothing to that side's mean (weight 0); when a
    whole 6h window has no volume on a side, that side is null — matching how the wiki reports an
    untraded side, so downstream null-handling is unchanged. */
@@ -106,10 +111,12 @@ export function aggregate1hTo6h(rows) {
       avgLowPrice: b.loVol > 0 ? Math.round(b.loNum / b.loVol) : null,
       highPriceVolume: b.hiVol,
       lowPriceVolume: b.loVol,
-      // EXTRA vs the wire shape: how many of the six 1h buckets fed this window. Measured: 6/6 → exact,
-      // below that the mean drifts (3/6 → ~1.3–1.7%). Consumers that only read the five wire fields are
-      // unaffected; a coverage-sensitive caller can gate on this instead of trusting every window
-      // equally. Present ONLY on derived 6h — never on the 1h/5m passthrough, which needs no gate.
+      // EXTRA vs the wire shape: how many 1h rows fed this window (max 6). DESCRIPTIVE ONLY — do NOT
+      // gate on it. The "6/6 → exact, 3/6 → drifts" story this field was added for did not survive a
+      // 165-item study: full coverage is NOT exact on cheap items (p95 16.7% under 100gp) and 1-of-6
+      // buckets ARE exact (one price, nothing to weight). Error tracks AGE, not coverage — see header.
+      // Also note it is SIDE-BLIND: it counts rows present, so an hour that traded only the low side
+      // still counts toward high-side "coverage". Present only on derived 6h, never on the passthrough.
       sourceBuckets: b.src,
     }));
 }
