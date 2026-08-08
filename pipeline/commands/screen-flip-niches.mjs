@@ -511,7 +511,7 @@ const read6h = sixHourReader({
 // the D4 fix instead of trusting it.
 function printArchiveRegimeBanner(scopeNote, log = console.log) {
   log(`⚠ --archive-regime UNPROMOTED (AF5b): the 6h REGIME series comes from the LOCAL archive, pinned to the last ${LIVE_TS6H_BUCKETS}×6h — ${ARCH_6H.archive} from archive / ${ARCH_6H.fallback} absent + ${ARCH_6H.shallow} too-shallow fell back to a live fetch (${scopeNote}). Prices are untouched (live). --publish refused.`);
-  if (ARCH_6H.shallow) log(`  ${ARCH_6H.shallow} item(s) had an archive slice under ${REGIME_MIN_6H_BUCKETS} buckets (deepest rejected: ${ARCH_6H.shallowMaxN}) — too short for regimeDrift's ${5}-full-day minimum, so they were served LIVE rather than silently returning an \`unknown\` label that un-gates the falling exclusion.`);
+  if (ARCH_6H.shallow) log(`  ${ARCH_6H.shallow} item(s) had an archive slice under ${REGIME_MIN_6H_BUCKETS} buckets (deepest rejected: ${ARCH_6H.shallowMaxN}) — too short BY COUNT for regimeDrift's ${5}-full-day minimum, so they were served LIVE instead. Note this is a COUNT floor only: an admitted one-sided series (highs but no lows) can still yield an \`unknown\` label — same as live would.`);
   if (ARCH_6H.archive > 0 && ARCH_6H.minN < LIVE_TS6H_BUCKETS) {
     // regimeDrift reads windowStats(nights:20) → it only stops caring about depth once a series covers
     // 20 local days = 80 6h buckets. Above that the gate is genuinely depth-immune; BELOW it the

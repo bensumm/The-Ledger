@@ -488,6 +488,28 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **`gpDay`'s `cyclesDay` CAP OF 6 IS A THEORETICAL CEILING USED AS AN EXPECTED VALUE, AND IT
+  SYSTEMATICALLY FLATTERS CHEAP CHURN OVER BIG TICKETS (Ben, 2026-08-08).** `pathA` computes
+  `gpDay = marginU × units × cyclesDay` with `cyclesDay = min(6, 0.10×volDay/limit)`
+  (`pipeline/lib/signal/patha.mjs:89,116-117`); the 6 is the GE 4h buy-limit reset count, mirrored as
+  `AMP_WINDOWS_PER_DAY` / `VALUE_WINDOWS_PER_DAY` (`js/amplitudescreen.mjs:88`, `js/valuescreen.mjs:102`).
+  Six refills/day encodes **re-buying every four hours around the clock, including overnight** — a
+  presence assumption Ben does not and will not meet, and on some items those windows may not exist as
+  tradeable opportunities at all. The bias is one-directional: a cheap liquid item is refill-bound and
+  collects the full 6×, while a big ticket is volume-bound (`0.10×volDay`) long before the refill cap
+  binds, so it never sees the multiplier. Everything ranked on `gpDay` — the 500k attention floor, the
+  digest's deployable-throughput ordering — therefore compares a 6-cycle fantasy against a 1-cycle
+  reality. **Ben's ruling: at most ~2× for the churn lanes, not 6×.**
+  **The second half is an ATTENTION axis the metric lacks entirely.** A big ticket deploys more capital
+  per DECISION: 1.57% on 12.6m in one placement is not the same good as 1.57% on 100k six times over,
+  because the second costs six decisions for the same gp. `gpDay` measures gp per unit of TIME and is
+  silent on gp per unit of ATTENTION, which is the actually-scarce input here. This is why a live
+  Dinh's read got called "sub-floor" against a floor calibrated on churn cadence — the denominator was
+  wrong, not the trade (session anchor, 2026-08-08).
+  **Not yet scoped.** Touches the attention floor, digest ranking, `capEff`, and every lane's sizing
+  bound, so it wants its own plan — and the recalibrated floor must be re-derived, not just rescaled,
+  since dropping churn 6→2 moves the whole distribution the 500k was set against.
+
 - **NO FETCH-POOL RESERVE EXISTS FOR BIG-TICKET ITEMS IN BAND/CHURN, AND THE `--max-price 45m` DEFAULT
   IS AN UNEXAMINED DAY-ONE LITERAL (measured 2026-08-08).** Asked why no big items were recommended off
   a live board with 105m idle. Three separate mechanisms, only one of which was known:

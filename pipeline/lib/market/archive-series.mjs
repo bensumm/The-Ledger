@@ -226,7 +226,30 @@ export function archive6h(handle, id, { now = null, buckets = LIVE_TS6H_BUCKETS 
    report both halves honestly: the archive/live SPLIT (a silent fallback would overstate coverage) and
    the DEPTH (n < LIVE_TS6H_BUCKETS means phase() is reading a shorter window than live would have given
    it — see archive6h's ceiling-not-floor note; regimeDrift is unaffected ABOVE this floor). */
-export const REGIME_MIN_6H_BUCKETS = (5 + 1) * 4;   // REGIME_MIN_DAYS(5) full days + today's partial, at 4×6h/day
+/* WHAT THIS FLOOR DOES AND DOES NOT GUARANTEE (corrected 2026-08-08 by a second adversarial pass —
+   the original comment claimed "regimeDrift is unaffected ABOVE this floor", which is FALSE).
+
+   It is a COUNT floor, and by count it is sound — for a stronger reason than the arithmetic below
+   suggests. The "(5+1)×4" reading assumes contiguity; the real guarantee is a pigeonhole and holds
+   even with holes: every UTC-aligned 6h bucket falls in exactly one LOCAL calendar day, at most 4
+   bucket-starts land in any 24h day (5 only on the one 25h DST day a year), and today absorbs at most
+   4 — so ≥21 price-carrying buckets force ≥5 non-today local days regardless of gaps. 24 is
+   deliberately conservative against a true count-minimum of 21. A 24-buckets-over-12-days-with-holes
+   series was constructed and verified to PASS regimeDrift.
+
+   It does NOT guarantee the gate actually drives. `floorCeilingTrack` runs `projectTrajectory` once
+   PER SIDE (js/windowread.mjs:481-483), each filtering nulls and needing FC_MIN_DAYS(5) extracted
+   points — so the gate needs ≥5 days carrying a LOW *and* ≥5 carrying a HIGH, not ≥5 days carrying
+   any price. A one-sided book (instabuy-only: avgLowPrice null, zero low volume) can yield 29 buckets,
+   be reported as 'archive', and still make regimeDrift return {ok:false} → label `unknown` → the
+   falling exclusion un-gates silently.
+
+   We deliberately do NOT add a side-coverage check here. Live data for the same item is equally
+   one-sided, so a fallback would spend a fetch and still return `unknown` — it would relabel the
+   fail-open, not close it. This is parity with the pre-AF5b path, not a regression against live; the
+   honest statement of scope IS the fix. Any promotion argument (AF6) must cite this paragraph, not
+   the count guarantee. */
+export const REGIME_MIN_6H_BUCKETS = (5 + 1) * 4;   // count floor only — see the block above
 export function sixHourReader({ handle = null, live, now = null, buckets = LIVE_TS6H_BUCKETS, minBuckets = REGIME_MIN_6H_BUCKETS, onSource = null } = {}) {
   return async function read6h(id) {
     if (handle) {

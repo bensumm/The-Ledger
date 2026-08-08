@@ -27,6 +27,7 @@ import assert from 'node:assert/strict';
 import {
   askAtFillRate, itemFeaturesFromSeries, priceTierOf, volBandOf,
   cellKey, volPooledKey, PREMIUM_GRID, HORIZON_DAYS, SURFACE_SCHEMA, SEPARATION_PREMIUM,
+  grainBiasPp,
 } from '../lib/market/fill-surface.mjs';
 
 let pass = 0;
@@ -285,6 +286,19 @@ ok('D1 — the 1h grain bias is SHOWN, never applied: p is untouched and the not
   const cheap = makeSurface(); cheap.meta.grain = '1h';
   assert.ok(!askAtFillRate({ mid: 27_000, relStd: 0.01, coverage: 0.9 }, { targetP: 0.5, horizon: 3, surface: cheap }).notes.some(n => /GRAIN BIAS/.test(n)),
     'only >=10m is populated — pooled across tiers the gap is 0.7-2.0pp and within noise');
+
+  // REGRESSION (2026-08-08): the guard tested only `grain === '5m'`, so an artifact with no
+  // meta.grain was treated as 1h and reported "built at undefined grain, which understates ...".
+  const unstamped = makeSurface(); delete unstamped.meta.grain;
+  const u = askAtFillRate(bigItem, { targetP: 0.5, horizon: 3, surface: unstamped });
+  assert.ok(!u.notes.some(n => /GRAIN BIAS/.test(n)),
+    'an unstamped/legacy artifact gets NO correction — the bias was measured for 1h specifically');
+  assert.ok(!u.notes.some(n => /undefined/.test(n)), 'and never names a grain it does not have');
+
+  // The +5% cell was removed as unsourced — it must report no bias rather than a made-up one.
+  const atFivePct = grainBiasPp('1h', '>=10m', 0.05);
+  assert.equal(atFivePct, null, '+5% has no recorded measurement — no bias, not an invented one');
+  assert.equal(grainBiasPp('1h', '>=10m', 0.02), 9.4, 'the documented cells still report');
 });
 
 console.log(`  ${pass} assertion group(s) passed`);

@@ -94,11 +94,26 @@ export const TIER_CALIBRATED_MAX = 100_000_000;
 /* MEASURED 1h-vs-5m grain bias, in PERCENTAGE POINTS to ADD to a 1h-built level (2026-08-08 adversarial
    review; identical (item, window, mid) pairs, 3 windows the 5m archive covers, n=330 over ~115 items).
    ONLY `>=10m` is populated: pooled across all tiers the gap is 0.7–2.0pp and within noise, but on big
-   tickets it runs 5.5–9.4pp and PEAKS at +2% — the working range — rather than converging as the plan
-   claimed. PROVISIONAL, one measurement, one market period. It is reported, never applied. */
-const GRAIN_BIAS_PP = { '>=10m': { 0.005: 5.5, 0.01: 8.5, 0.02: 9.4, 0.03: 5.8, 0.05: 2.9, 0.08: 0.0 } };
+   tickets it is materially positive at low premiums and gone by +8%. PROVISIONAL, one measurement, one
+   market period. It is reported, never applied.
+
+   PRECISION LIMIT — read before quoting a cell (2026-08-08 second review). These are five values from
+   ONE paired sample; the SE on each paired difference is ~2pp and the strongest cell (+2%) rests on
+   just 29 discordant items (McNemar χ²=27.3, p<0.001). So the DIRECTION is measured — positive at low
+   premiums, converging to 0 by +8% — but the SHAPE is not: adjacent cells differ by 1–2 SE, and the
+   earlier claim that the bias "PEAKS at +2%" rested on 9.4 vs 8.5, which is 0.9pp and inside noise.
+   Do not read these as a per-premium curve.
+
+   The 0.05 (+5%) cell was REMOVED 2026-08-08: it carried the value 2.9 with no provenance anywhere in
+   the repo — PLAN-ASK-BACKTEST §12's measurement table documents five premiums and +5% is not one of
+   them. An unsourced constant in a measured-not-assumed module is worse than a missing one, so +5%
+   now simply reports no bias. Re-add it only with a recorded measurement. */
+const GRAIN_BIAS_PP = { '>=10m': { 0.005: 5.5, 0.01: 8.5, 0.02: 9.4, 0.03: 5.8, 0.08: 0.0 } };
 export function grainBiasPp(grain, tier, premium) {
-  if (grain === '5m') return null;                       // already the finer grain — no correction
+  // The bias was measured for a 1h-built surface specifically. Anything else — 5m (already the finer
+  // grain) or an unstamped/legacy artifact — gets no correction; guarding only `=== '5m'` made an
+  // absent meta.grain report "built at undefined grain, which understates >=10m by ~9.4pp".
+  if (grain !== '1h') return null;
   const byPrem = GRAIN_BIAS_PP[tier];
   if (!byPrem) return null;
   const bias = byPrem[premium];

@@ -10,6 +10,28 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### Correction — `5019f4e` misdescribed its own diff, and quietly landed the July ledger rotation (2026-08-08)
+
+`5019f4e` ("AF5b/D4 follow-up: the archive-regime banner was suppressed by the quiet default — and
+backfill the pre-marker ledger rows") is wrong about itself in two ways. Both verified against the
+committed tree, not the working copy:
+
+- **Marked rows: 761, not 644.** The commit message's count was taken *before* the verification run
+  that followed it, which added a further 117 rows (07:49–07:50Z). Counted on the commit as landed:
+  `params.archiveRegime === true` on **761** of 10,661 rows.
+- **It landed the SR1 monthly rotation on `main`, unmentioned.** The message says "line count preserved
+  (10,422 → 10,422)", which described the local working tree. Tracked `suggestions.jsonl` actually went
+  **82,498 → 10,661 lines** in that commit — this is where the rotation first reached `main`, bundled
+  into a banner fix.
+
+**No data was lost and no policy was breached.** All 82,498 pre-rotation lines survive byte-identical
+across `pipeline/suggestions-archive/suggestions-2026-07.jsonl` ∪ the new active file (0 missing), every
+committed line parses, and the 406 backfilled rows match the three claimed run timestamps exactly.
+Rotation-to-local-only is Ben's documented 2026-08-07 ruling. The defect is the commit of record being
+inaccurate about a 72k-line deletion — and that the removed rows now live on one disk only.
+
+Found by the second adversarial pass on the night's shipped code.
+
 ### amplitudeProxy served a STALE "recent-5" for two-thirds of every month (pipeline-only, 2026-08-08)
 
 **The bug.** `amplitudeProxy` bucketed the 6h archive by an UNPADDED local day key —

@@ -192,21 +192,48 @@ await okA('a TOO-SHORT archive series is served LIVE and reported as `shallow`, 
     '`shallow` is distinct from `fallback` — the banner must be able to say WHY it went live, and with what depth');
 });
 
-await okA('the floor is CONSERVATIVE: everything it admits drives the gate, and a genuinely short series really does break it', async () => {
+await okA('the floor is CONSERVATIVE BY COUNT: a two-sided series it admits drives the gate, and a genuinely short one really does break it', async () => {
   // The safety property is one-directional, and deliberately so. `windowStats` buckets by LOCAL day, so
   // bucket count maps to usable days only loosely (a 17-bucket fixture can still span 5 local days and
   // satisfy regimeDrift). The floor therefore sits AT OR ABOVE the true minimum — it may serve live for a
   // series regimeDrift could have handled, which costs one fetch; the reverse would cost a silent
   // un-gating of the falling exclusion. Do not "tighten" this to the exact breaking point.
+  //
+  // SCOPE (corrected 2026-08-08): this pins the COUNT property on a TWO-SIDED fixture. It is NOT true
+  // that everything the floor admits drives the gate — a one-sided series (highs but no lows) clears the
+  // bucket count and still returns {ok:false}, pinned by the sibling assertion below. See the
+  // REGIME_MIN_6H_BUCKETS block in archive-series.mjs for why that is stated rather than guarded.
   const enough = archive6h(handleOf(hourly(9, () => 1000)), 1, { now: NOW });
   assert.ok(enough.length >= REGIME_MIN_6H_BUCKETS, 'fixture precondition: this one is admitted');
   assert.equal(regimeDrift(enough).ok, true,
-    'ADMITTED ⇒ the gate runs. If this ever fails the floor is too LOW and the fail-open is back.');
+    'ADMITTED (two-sided) ⇒ the gate runs. If this ever fails the floor is too LOW by count.');
 
   const tooShort = archive6h(handleOf(hourly(2, () => 1000)), 1, { now: NOW });
   assert.ok(tooShort.length < REGIME_MIN_6H_BUCKETS, 'and this one is rejected');
   assert.equal(regimeDrift(tooShort).ok, false,
     'the failure mode being prevented is real: too few days ⇒ {ok:false} ⇒ label `unknown` ⇒ falling exclusion un-gates');
+});
+
+await okA('the floor does NOT close the fail-open for a ONE-SIDED book — deep by count, still `unknown`', async () => {
+  // Pins the honest scope of REGIME_MIN_6H_BUCKETS. floorCeilingTrack projects each SIDE separately and
+  // each needs FC_MIN_DAYS(5) non-null points, so an instabuy-only book (no lows) clears the bucket count
+  // and still breaks the gate. Deliberately NOT guarded: live for the same item is equally one-sided, so
+  // falling back would spend a fetch and return `unknown` anyway. If this ever starts passing as ok:true,
+  // the wording in archive-series.mjs and the banner can be strengthened — until then they must not be.
+  const oneSided = hourly(9, () => 1000).map(r => ({ ...r, avgLowPrice: null, lowPriceVolume: 0 }));
+  const rows = archive6h(handleOf(oneSided), 1, { now: NOW });
+  assert.ok(rows.length >= REGIME_MIN_6H_BUCKETS,
+    `precondition: admitted by count (${rows.length} >= ${REGIME_MIN_6H_BUCKETS})`);
+
+  const src = [];
+  const read6h = sixHourReader({
+    handle: handleOf(oneSided), now: NOW,
+    live: async () => 'LIVE', onSource: (s, id, n) => src.push([s, id, n]),
+  });
+  assert.notEqual(await read6h(1), 'LIVE', 'it is served as archive data, not fallen back');
+  assert.equal(src[0][0], 'archive', 'and reported as a SUCCESS — which is exactly the overclaim risk');
+  assert.equal(regimeDrift(rows).ok, false,
+    'yet the gate does NOT run: count depth is not side coverage');
 });
 
 await okA('a throwing archive handle degrades to the live fetch rather than killing the scan', async () => {
