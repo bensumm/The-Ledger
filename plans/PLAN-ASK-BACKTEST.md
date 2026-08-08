@@ -197,3 +197,51 @@ not a good trade, and grade encodes net size and liquidity that this outcome ign
 does **not** show grade is worthless, only that it does not predict THIS. (b) A 91.5% base rate leaves
 little variance to explain, so all these signals are being asked to separate a narrow band. (c) Dedup
 was (item, day, ask); the same item still recurs across days. (d) One 3-day horizon, one market period.
+
+### §7.1 — CORRECTION: §7's headline conclusion was wrong (same day, after Ben's challenge)
+
+Ben, on reading §7: *"Could that 91.5% be based on flawed data? … Worth investigating why we feel like
+the lower grades are better, could there just be more of them?"* Both challenges were run. The metric
+survived; **the conclusion did not.**
+
+**The metric is VALID — placebo confirms it discriminates.** Re-asking "did it print within 3d?" with
+the quoted ask inflated:
+
+| ask × | 1.00 | 1.02 | 1.05 | 1.10 | 1.20 | 1.50 | 2.00 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| printed | **91.5%** | 60.6% | 33.5% | 13.9% | 4.1% | 2.2% | 1.3% |
+
+A 2% higher ask HALVES the fill rate. So 91.5% is not a permissive test rubber-stamping everything —
+and, separately, this says **the estimator quotes right at the edge of reachability with almost no
+headroom**, which is itself worth knowing.
+
+**But the grade comparison was CONFOUNDED, and Ben's hypothesis is what explains it.** The D and A-
+populations are not comparable:
+
+| grade | n | median bid | ask premium | printed |
+| --- | --- | --- | --- | --- |
+| A- | 630 | **12,851,559** | 3.28% | 91.0% |
+| D | 528 | **845** | 4.50% | 95.3% |
+
+Holding ask-premium constant (2.5–5% band) D STILL leads (96.9% vs 91.5%), so premium is not it.
+Price is not it either — print rate by price quintile is **flat** (93.2 · 87.0 · 91.8 · 91.3 · 91.9%).
+**Trading FREQUENCY is:** print rate by count of 5m buckets traded in the window runs **85.9 · 89.6 ·
+93.0 · 91.8 · 95.0% — monotone**. An item that trades constantly crosses any nearby level constantly;
+more observations, more chances to exceed. That 9-point spread is roughly the ENTIRE range grade
+appeared to explain.
+
+**Revised conclusion.** §7's "grade and rank predict nothing" is **withdrawn as stated**. What was
+actually shown: (1) grade does not predict REACHABILITY, and (2) reachability is confounded with trade
+frequency, which grade anti-correlates with by construction (thin big-tickets vs dust commodities). But
+**grade was never designed to predict reachability** — it encodes net size, liquidity class and
+confidence. Judging it on "did the ask print" is the wrong test.
+
+**Do NOT delete the grades on this evidence** (Ben raised it; it is a fair question). The honest
+position is weaker than "grades work": it is **absence of validation, not evidence of failure**. A real
+test needs an outcome reflecting what grade claims to predict — realized profit per unit time on trades
+actually TAKEN — which is the F1 fills join and is sample-limited. Recorded as the open question.
+
+**What still stands from §7:** the placebo-validated finding that quoted asks print ~91.5% of the time
+and collapse to 60.6% at +2%, i.e. price-reaching is rarely the binding constraint and the quotes sit
+on a knife-edge; ask premium as the one monotone predictor; and Conclusion 4 (widen the pool freely).
+**What falls:** any recommendation to filter or delete on the strength of the grade comparison.
