@@ -881,7 +881,7 @@ function enrichDigestDrift(rows, series1h, driftLines) {
 }
 
 export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
-  const lines = ['## DECISION DIGEST — deployable-throughput triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by capEff × deployable capital ≈ after-tax deployable gp/day, NOT raw %; capEff = realizable ROI%/day, buy-limit-bounded)'];
+  const lines = ['## DECISION DIGEST — cross-niche triage (INFORM-ONLY, PLACEHOLDER n≈0 — never gates; ranked by RANK = net × P(fill) ÷ TTF — scale-aware and wallet-free, so the order does not move with your cash. capEff = realizable ROI%/day and deploy = parkable capital are SHOWN as sizing, not ranked on)'];
   if (!pool.length) { lines.push('(no candidates this pass)'); return lines.join('\n'); }
   // W3-1: an uncrossable live spread (crossable === false) is FLOORED to -Infinity in the comparator ONLY so it
   // sinks to the bottom — the stored/displayed `capEff` is NEVER mutated (the column still shows the true number)
