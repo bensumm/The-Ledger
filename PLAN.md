@@ -488,6 +488,37 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **NO FETCH-POOL RESERVE EXISTS FOR BIG-TICKET ITEMS IN BAND/CHURN, AND THE `--max-price 45m` DEFAULT
+  IS AN UNEXAMINED DAY-ONE LITERAL (measured 2026-08-08).** Asked why no big items were recommended off
+  a live board with 105m idle. Three separate mechanisms, only one of which was known:
+  1. **The cap.** `MAX_PRICE = 45e6` (`screen-flip-niches.mjs:193`) is a bare literal with NO rationale
+     in code, `docs/`, or any plan. It traces to the tool's first implementation plan (`83ec264`,
+     2026-07-03) written as `[--max-price 45m]` and has never been revisited — conspicuous beside
+     `FLOOR` (recalibrated 50→3500 with a documented study) and `TOP` (40→90 on 2026-08-07, explicitly
+     because it was "mis-tuned at its own reference point" vs `scaleSlots`' `CAP_REF` of **100m**). The
+     codebase's stated reference bankroll is 100m while a single item is capped at 45% of it.
+     `--mode amplitude` got a capital-aware affordability gate; band/churn kept the literal. That is why
+     Saturated heart (78m) appears on the amplitude board but can NEVER enter band.
+  2. **Lifting the cap is ZERO-SUM, not additive.** The fetch pool is fixed at top-92/niche and
+     competitive. `--max-price 90m` added 10 rows and **displaced 9** — among big items a straight swap
+     (gained Venator bow + Virtus armour set, LOST Nightmare staff, Dragon claws, Ring of suffering) and
+     it also cost Steel bar, the only genuinely soft entry on that board.
+  3. **`GEAR_RESERVE` is NOT the lever.** `--gear-reserve 10` made it strictly worse: 54 rated vs the
+     55 baseline, displacing 11 including Nightmare staff AND Sanguinesti staff, to add mostly cheap
+     consumables (Uncut diamond, Super energy(4), Mist rune, Gold ore). That is the documented behaviour
+     of the knob — its own header says `gear` is a VOLUME lane whose "peer group is dominated by cheap
+     high-limit consumables", which is precisely why `MID_TIER_RESERVE` was added as a sibling. Its
+     comment also carries an un-actioned deferral: *"Deliberately NOT capital-scaled yet … then revisit
+     alongside the THIN_RESERVE scaling entry."*
+
+  **The gap:** every reserve keys on a LANE (thin/gear/mid-tier/value/explore) or a buy-limit cut. None
+  keys on PRICE. So a thin big-ticket has no guaranteed representation in band/churn at any setting —
+  its only reliable surfaces are the amplitude board (own pool + affordability gate) and the digest's
+  `— big-ticket lane —` append. Tonight that append correctly did nothing, because the digest top-8 was
+  already all big tickets. **Candidate fix:** a price-keyed reserve (`BIG_TICKET_GP`-based, capital-
+  scaled off `deployablePool`) rather than raising `TOP` or the cap, both of which just reshuffle a
+  fixed pool. Worth pairing with the deferred `GEAR_RESERVE`/`THIN_RESERVE` capital-scaling.
+
 - **THE REGIME CLASSIFIERS ARE KNIFE-EDGE ON ±1gp, INDEPENDENT OF DATA SOURCE (2026-08-08, found by
   the AF5b adversarial pass — generalises well beyond AF5b).** The discrete floor-slope and
   floor-break tests can be tipped by rounding residue in a re-derived weighted mean:
