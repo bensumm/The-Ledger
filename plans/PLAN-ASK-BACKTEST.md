@@ -386,3 +386,108 @@ four-day miss run 07-29→08-01 is what listing into a soft stretch looks like.
 Omitted: B+ 94.7% (n=38), VALUE-WATCH 78.9% (n=19), **VALUE-BUY 12.5% (n=8)**, A/S 100% (n=3 each),
 A+ 0% (n=1). Small n each, but VALUE-BUY's 12.5% is direct evidence for the premium mechanism, and
 leaving it out flattered the "grade predicts nothing" reading.
+
+---
+
+## §9 — THE RESPONSE SURFACE: premium over MID is the rankable variable (2026-08-07)
+
+Ben, on seeing the first cut: *"Premium measured over mid is exactly the key to being able to rank
+items."* This section is that surface, measured.
+
+### 9.1 Why premium-over-BID was a contaminated variable
+
+§7 measured "ask premium over **bid**" — `(ask − bid) / bid`. That conflates two different things:
+**how greedy the ask is** and **how good the buy was**. Ben's live Masori chaps lot makes the gap
+concrete:
+
+| | level | vs his own buy | vs market mid |
+| --- | --- | --- | --- |
+| BUY | 25,651,000 | — | **−4.02%** |
+| break-even | 26,174,490 | +2.04% | −2.06% |
+| ASK | 27,149,999 | **+5.84%** | **+1.59%** |
+
+The same order reads as a **5.84%** premium on §7's variable and **+1.59%** on the market-relative one.
+Two items with identical bid→ask spreads can sit at opposite ends of the reachability curve. **Premium
+over MID is the variable that ranks; premium over bid does not.** This is a further reason §7's premium
+quintiles misbehaved, on top of the endogeneity in §8/M1.
+
+### 9.2 The measured surface
+
+**381 items × 6 reference windows (T−5/8/11/14/17/20d) × 6 premiums × 2 horizons = 25,692
+observations.** Reference mid = prior-24h mean `avgHighPrice`. Outcome = did any 5m bucket in the
+horizon print `avgHighPrice ≥ mid × (1+premium)`. **Premium is EXOGENOUS by construction** — we set it
+on a grid rather than reading back asks the estimator chose from reachability, which is what made §7
+self-fulfilling (§8/M1).
+
+| premium over mid | P(print ≤1d) | P(print ≤3d) |
+| --- | --- | --- |
+| +0.5% | 85.1% | 91.1% |
+| +1.0% | 80.1% | 87.5% |
+| +2.0% | 70.2% | 79.9% |
+| +3.0% | 62.7% | 73.4% |
+| +5.0% | 49.8% | 61.0% |
+| +8.0% | 37.8% | 49.6% |
+
+Monotone on both axes, no exceptions. Contrast §7, where monotonicity failed a cluster bootstrap
+(§8/M5) — the signal was always there; the endogenous premium variable was hiding it.
+
+### 9.3 Frequency is an amplifier, not a crossover — earlier claim CORRECTED
+
+| premium | low-freq | mid-freq | high-freq |
+| --- | --- | --- | --- |
+| +0.5% | 92.1% | 89.9% | 91.3% |
+| +1.0% | 89.8% | 87.0% | 86.1% |
+| +2.0% | 83.8% | 80.2% | 76.8% |
+| +3.0% | 81.2% | 72.9% | 68.1% |
+| +5.0% | 72.5% | 62.7% | 51.5% |
+| +8.0% | 63.3% | 53.3% | **37.0%** |
+
+⚠ **A single-window 300-item cut suggested the lines CROSS (high-freq best at +1%, worst at +8%). That
+does not survive six windows and 381 items.** Low-frequency is better at EVERY premium; what changes is
+the GAP, widening from ~1pp at +0.5% to **26pp at +8%**. Mechanism unchanged: liquid items trade
+constantly but in a tight range, so they reliably touch nearby levels and rarely travel far; thin items
+are the reverse. But it is an amplifier, not a sign flip. The crossover was noise.
+
+### 9.4 What this unlocks — the ranking rule, and it needs no grade
+
+For any candidate, all four inputs are archive-derived, **zero API**:
+
+```
+achievable buy   ← the dip level (existing reads)
+achievable ask   ← candidate price
+premium          ← ask / mid − 1              ← the rankable variable
+P(print)         ← surface lookup, by premium × frequency × horizon
+net              ← ask × 0.98 − buy
+rank             ← net × P(print)
+```
+
+This is a direct answer to **AF3b's cream-of-the-crop problem** that does not use grade, rank, capEff
+or any composite whose validity §7/§8 could not establish. It also composes with the archive-first
+funnel: AF4–AF6 make gating free, and this makes ranking measured.
+
+### 9.5 Entry quality dominates exit pricing — with a number
+
+The curve is steep near zero: **+1% prints 87.5% at 3 days, +5% prints 61.0%.** So buying ~4% cheaper
+is worth roughly **26 points of fill probability**, before it is worth anything in net. Ben's chaps lot
+is the worked example: buying 4.02% under mid is the ONLY reason a +1.59% ask clears break-even at all.
+This puts a number on the existing buy-the-dip doctrine — the entry sets the exit's feasible range, and
+the exit model is downstream of it.
+
+### 9.6 Ben's live position on the surface
+
+Masori chaps is thin (181/d → low-freq tercile); the ask sits at +1.59% over mid. Interpolating between
++1.0% (89.8%) and +2.0% (83.8%): **~86% to print within 3 days.** For comparison: `1−(1−p)³` off the
+recent-7 daily rate said 92% (§1), and the cruder single-window grid said ~83%. The independence
+formula overstates, exactly as §8/m2 predicted; **the surface should replace it in AB3.**
+
+### 9.7 Honest limits
+
+1. **Still the print proxy, not fills.** For a 1-unit lot it is a conservative lower bound (§8), but
+   that stops holding with size — flow-at-level (AB3) remains a separate, necessary check.
+2. **One market period.** Six windows inside a single ~25-day stretch is not six independent regimes.
+   Rebuild across a genuinely different regime before trusting the levels.
+3. **Clustering.** One row per (item, window, premium, horizon) means item effects are still repeated;
+   the §8/M5 cluster-bootstrap discipline applies before any p-value is quoted off this.
+4. **Terciles are sample-relative**, not absolute liquidity classes — they will move with the sample.
+5. **Mid is a choice.** Prior-24h mean `avgHighPrice`; a different base (VWAP, instasell mid, longer
+   window) shifts every premium and therefore every level. Pin the definition wherever this is used.
