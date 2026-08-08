@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.93
+version: 1.94
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -82,7 +82,7 @@ live sits vs the dip floor + a FLOOR-AWARE cue (`HH:00–HH:00 · @floor · <cue
 shared `softBuyRead` helper the positions surface uses (ONE implementation), so the `@floor` cue reads the
 multi-day floor: `@floor · buy now` (soft dip) · `@floor · ▲ favorable — dip in uptrend (price-trend only)`
 (rising floor — a prompt, NOT a green-light; blind to game-update breaks) · `@floor · ▽ caution — floor
-breaking ↓` (a post-update dump sitting @floor is a falling knife, NOT a discount — the fang anchor) · `@floor · ▽ caution — dip into an UNPROVEN base, not near durable support (N× swing over the 28d floor)` (2026-08-06 — the 5d floor is RISING but floorValidator's 28d check still cautions the LEVEL; on a young spike the 5d window sits entirely inside the spike, so the floor rose BECAUSE it spiked — the Snape grass entry, bought 1,051 into a pre-spike high range of 976–1,038). The
+breaking ↓` (a post-update dump sitting @floor is a falling knife, NOT a discount — the fang anchor) · `@floor · ▽ caution — dip into an UNPROVEN base, still elevated over the durable floor (N× swing over the 28d floor)` (2026-08-06 — the 5d floor is RISING but floorValidator's 28d check still cautions the LEVEL; on a young spike the 5d window sits entirely inside the spike, so the floor rose BECAUSE it spiked — the Snape grass entry, bought 1,051 into a pre-spike high range of 976–1,038. **Narrowed 2026-08-08**: `FLOOR_CAUTION_RANGES` 1.0 → 1.5, so a buy 1.0–1.5 swings over the floor no longer trips it — intended; Snape grass at 1.68× still fires). The
 digest excludes held items but still shows FRESH candidates, so the caution guard matters here too: don't
 relay a `@floor` pick as a buy without checking its cue. Relay it when a pick reads `@floor` or is deep into
 its dip window. It

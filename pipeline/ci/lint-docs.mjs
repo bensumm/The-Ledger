@@ -108,6 +108,21 @@ export const DENYLIST = [
     reason: '`VALUE_ABSGP_*` is a DELETED value-rank constant — value ranks by the deployable-capital multiplier (js/valuescreen.mjs); history lives in docs/LORE.md',
   },
   {
+    id: 'floor-durable-support-claim',
+    // MEASURED 2026-08-08: floorValidator's "not near durable support" was RETIRED because the floor it
+    // names prints only 6-8.5% of the time within 48h, non-monotonically — the DISTANCE above the floor
+    // carries information, the DESTINATION does not. The phrase survived in a DOWNSTREAM consumer (the
+    // soft-buy `unproven-base` cue in js/windowread.mjs) and in three operating docs after the validator
+    // itself had dropped it — the exact copy-not-move drift CLAUDE.md rule 8 exists to catch, and it was
+    // found by review rather than by CI. This rule closes that. The evidence + the retirement live in
+    // floorValidator's MEASURED block (js/validate.mjs) and CHANGELOG.md — neither is in `files`, so the
+    // history that EXPLAINS the retirement never self-trips.
+    pattern: /not near durable support/i,
+    files: ['CLAUDE.md', 'README.md', 'docs/MARKET-ANALYSIS.md', 'docs/SIGNAL-AUDIT.md',
+            '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md'],
+    reason: '"not near durable support" is a RETIRED floorValidator claim (the named floor prints ~7% of the time in 48h) — say what is measured: the buy is elevated over the durable floor and tends to dip below the entry first',
+  },
+  {
     id: 'niche-concept-word',
     // R1 rename (2026-07-14): the screen niches band/churn/scalp/value are FLIP-NICHES
     // now; the bare word "niche" is retired as the concept word in the operating docs. ("strategy" is

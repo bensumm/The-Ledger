@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.54
+version: 1.55
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -68,13 +68,16 @@ sections plus your own prose:
       (healthy-trend / compressing-up) AND the 28-day durable-floor check passes: a dip WITHIN an uptrend.
       **PRICE-TREND ONLY** — it is blind to game-update/regime breaks (a rising floor also describes a
       PRE-update pump), so it is a prompt, NOT a green-light; overlay your own update knowledge.
-    - `@floor · ▽ caution — dip into an UNPROVEN base, not near durable support (N× swing over the 28d
-      floor)` — the 5-day floor is RISING but `floorValidator`'s **28-day** check still cautions/rejects
-      the level. **These two disagree exactly when it matters most: on a young spike the 5-day window sits
-      ENTIRELY INSIDE the spike, so the floor "rose" precisely BECAUSE the item spiked.** Snape grass
-      (2026-08-06) read `▲ favorable` at 1,051 while the floor check said "1.68× typical swing above the
-      28d floor 960 — not near durable support", three passes running; its pre-spike daily HIGHS were
+    - `@floor · ▽ caution — dip into an UNPROVEN base, still elevated over the durable floor (N× swing
+      over the 28d floor)` — the 5-day floor is RISING but `floorValidator`'s **28-day** check still
+      cautions/rejects the level. **These two disagree exactly when it matters most: on a young spike the
+      5-day window sits ENTIRELY INSIDE the spike, so the floor "rose" precisely BECAUSE the item spiked.**
+      Snape grass (2026-08-06) read `▲ favorable` at 1,051 while the floor check flagged it at 1.68×
+      typical swing above the 28d floor 960, three passes running; its pre-spike daily HIGHS were
       976–1,038, so break-even (1,073) sat above the entire prior range and a full round-trip left no exit.
+      **Narrowed 2026-08-08** — `FLOOR_CAUTION_RANGES` moved 1.0 → 1.5 on a forward-scoring study, so a buy
+      1.0–1.5 swings over the floor no longer trips this cue (that band measured P(drawdown ≥ 1 swing) of
+      12.0% against 29.8% above it). The Snape grass case at 1.68× still fires.
       This cue is a COMPOSITION of the two existing reads (`floorCeilingTrack` shape + `floorValidator`
       level) — it re-derives nothing. Treat it as: the dip is real, the base under it is not yet proven.
     - `@floor · buy now` — floor flat/ranging/cooling, or too few days to classify: the plain soft dip

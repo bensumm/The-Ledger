@@ -1390,9 +1390,16 @@ export const SOFT_BUY_AT_FLOOR_PCT = 0.5;   // live within this % over the dip f
 // LEVEL — is this price near durable support at all? On a 4-day-old spike those two disagree completely,
 // because the 5-day window sits ENTIRELY INSIDE the spike: the floor "rose +29/d" precisely BECAUSE the
 // item spiked, so the cue read `▲ favorable — dip in uptrend` while the 28-day floor check was
-// simultaneously saying "1.68× typical swing above the 28d floor 960 — not near durable support" on the
-// same item, on the same pass, three passes running. Snape grass was bought at 1,051 into a base whose
-// pre-spike daily HIGHS were 976–1,038, i.e. break-even (1,073) sat above the entire prior range.
+// simultaneously flagging it at "1.68× typical swing above the 28d floor 960" on the same item, on the
+// same pass, three passes running. Snape grass was bought at 1,051 into a base whose pre-spike daily
+// HIGHS were 976–1,038, i.e. break-even (1,073) sat above the entire prior range. (That reason text
+// used to end "— not near durable support"; retired 2026-08-08, see SOFT_BUY_CUE_TEXT below.)
+//
+// RIPPLE (2026-08-08): this cue fires off floorValidator's STATUS, so retuning FLOOR_CAUTION_RANGES
+// 1.0 → 1.5 NARROWED it — a buy 1.0–1.5 swings over the floor no longer trips `unproven-base`. That is
+// intended: that band measured P(drawdown ≥ 1 swing) of 12.0% against 29.8% above it. The Snape grass
+// anchor sat at 1.68×, so the case this cue was BUILT for still fires. Re-check that anchor if the
+// constant moves again — composing a verdict means inheriting its thresholds, deliberately.
 //
 // The fix is a COMPOSITION, not a fourth implementation (Ben's explicit ask: don't run the same check in
 // several places and interpret it disjointedly). We take `floorValidator`'s ALREADY-COMPUTED result and
@@ -1436,7 +1443,11 @@ export const SOFT_BUY_CUE_TEXT = {
   // A: the 5d floor is RISING but the 28d durable-support check still cautions the level — a post-spike
   // retracement, not a proven base. Worded to say what it IS (unproven base) rather than just "careful",
   // and formatSoftBuy appends the swing multiple so the reader gets the number, not just the adjective.
-  'unproven-base': '▽ caution — dip into an UNPROVEN base, not near durable support',
+  // 2026-08-08: "not near durable support" was RETIRED from floorValidator's own reason — the floor it
+  // names prints only 6–8.5% of the time within 48h, so the DISTANCE carries information but the
+  // DESTINATION does not. This cue composes that verdict, so it must not re-assert what the source no
+  // longer claims. It says elevated-over-the-floor, which is what is actually measured.
+  'unproven-base': '▽ caution — dip into an UNPROVEN base, still elevated over the durable floor',
 };
 
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
