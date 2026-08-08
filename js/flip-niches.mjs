@@ -250,9 +250,10 @@ export const FLIP_NICHE_LIST = Object.freeze([
     edge:bandEdge, rank: 'velocity', confirm: null,
     falling: 'exclude', gate: 'band',
     // DP1 dip-posture is INFORM (never drops a row — the validator can't reject anyway). Wired on
-    // band + churn (both are resting-bid flip plays where a reverting dip means the bid misses); NOT
-    // on scalp (accepts fallers by thesis — direction is the point, not a caution) or value (a
-    // buy-hold-the-cycle move, not a bid-fill play).
+    // band + churn (both are resting-bid flip plays, where being past the dip's bottom is an ENTRY-
+    // QUALITY note — NOT a bid-misses signal; that claim was falsified 2026-08-08, see the
+    // recentDirection MEASURED block in js/quotecore.js); NOT on scalp (accepts fallers by thesis —
+    // direction is the point, not a caution) or value (a buy-hold-the-cycle move, not a bid-fill play).
     validators: [{ key: 'floor', mode: 'gate' }, { key: 'reach', mode: 'inform' }, { key: 'trajectory', mode: 'inform' }, { key: 'dip-posture', mode: 'inform' }, { key: 'limit', mode: 'gate' }],
     // PLAN-OSCILLATION-CYCLE Chunk 6 — the drift-adjusted band top, priced LOWER on a down-drifting item
     // (informs, never gates: the item is NOT excluded, its sell target is just the drift-shifted top).

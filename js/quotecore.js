@@ -930,17 +930,40 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
    THE MECHANIC (this is the dipPostureValidator DOCTRINE HOME). A RESTING BID only fills while price
    is still coming DOWN to it — a seller has to cross the spread down to your bid. Once a dip REVERTS
    (bounces off its low and runs away up) no seller crosses down, so the bid just sits there MISSING.
-   A reverting dip is therefore a cross-the-spread-NOW-or-pass decision, not a rest-a-bid decision.
-   The ⬇DIP probe (pipeline/modules/dip.mjs) captures DEPTH (live under the 24h avg low); this
+   The ⬇DIP probe (pipeline/probes/dip.mjs) captures DEPTH (live under the 24h avg low); this
    captures DIRECTION (is the dip still falling, or has it already bounced?). The two are orthogonal.
-   ANCHOR INCIDENTS (n=2 — be honest, this is NOT a validated edge): a Searing-page resting bid
-   @16,014 on a real dip that had ALREADY reverted (bounced to 16,249+ and ran away), and an
-   Abyssal-bludgeon bid @16.15m on a ~83/day item that never filled — a reverting dip means no
-   seller crosses down to you.
 
-   HONESTY (process rule 4). Every threshold below is a NAMED PLACEHOLDER pending data — n=2, none
-   validated. What WOULD validate them: retro-joining dip-posture firings against fills.json — does a
-   'reverting' read actually correlate with a resting bid MISSING, and 'falling' with a fill?
+   MEASURED 2026-08-08 — THE "CROSS OR PASS" CONCLUSION WAS WRONG. The mechanic above is sound in the
+   abstract but does NOT apply to the level this validator actually quotes. Every band/churn suggestion
+   was replayed through recentDirection at its own timestamp against the 5m archive (the replay is
+   faithful: 84.9% of real firings reconstruct as 'reverting' vs 19.8% of non-firings), then a resting
+   bid at the quoted level was scored for whether it was reached. Dip rows, n=5,535:
+       falling    n=2,232 — reached 64.1% @1h · 82.6% @8h · 89.3% @24h
+       flat       n=  360 — reached 68.6% @1h · 86.7% @8h · 93.6% @24h
+       reverting  n=2,943 — reached 67.9% @1h · 85.7% @8h · 92.2% @24h
+   The arm the validator WARNED about is reached MORE often than the arm it BLESSED, at every horizon
+   (within-item paired: +4.9pp, 38 items vs 22, p=0.052).
+   WHY IT MISFIRES: the level named is quickBuy — the LIVE instasell, which ROSE WITH THE BOUNCE. In
+   92.4% of 7,886 firings the quoted bid sat ABOVE the low it was warning about (median +1.24%). The
+   bid is at the market, not stranded at the pre-bounce low, so "no seller crosses down to you"
+   describes a bid nobody placed. The mechanic still holds for a bid parked AT the old low — that is
+   simply not the bid being quoted. (This also explains why 'falling' scores WORST: there quickBuy IS
+   pinned at a fresh 3h low, so filling requires price to revisit it.)
+   CONSEQUENCE: the reverting branch is an ENTRY-QUALITY note ("you are past the bottom"), NOT a
+   fill-probability warning, and the cross-or-pass RECOMMENDATION is REMOVED — crossing cost a median
+   2.83% spread (p25–p75 1.81–4.21%), and 61.4% of firings fell through to "cross unprofitable — pass",
+   i.e. skip a bid that was in fact reached ~86% of the time within 8h. Both branches were wrong in the
+   same direction: pay up, or walk away. DO NOT reinstate a fill-probability claim here without
+   re-measuring at the level actually quoted.
+   ANCHOR INCIDENTS (n=2, PRE-measurement — kept for history, NOT as evidence): a Searing-page resting
+   bid @16,014 on a real dip that had ALREADY reverted, and an Abyssal-bludgeon bid @16.15m on a ~83/day
+   item that never filled. Both are consistent with ordinary thin-book misses; neither survives as
+   support for the general claim, and the measurement above outweighs them.
+
+   HONESTY (process rule 4). The thresholds below remain NAMED PLACEHOLDERS — the measurement above
+   falsified the POLICY built on the 'reverting' read, but it did not calibrate DIR_REVERT_PCT /
+   DIR_FRESH_MIN / DIR_AT_LOW_PCT themselves. What is still unmeasured: whether a bid parked at minLow
+   (rather than at quickBuy) misses more often when reverting — the claim as originally intended.
 
    Reads the avgLowPrice side (the instasell side, where a resting bid fills). Pure over an
    already-fetched 5m series; no fetch/fs/DOM. Returns null on a thin/absent series (degrade — never
@@ -948,8 +971,8 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
    dir ∈ 'falling' | 'reverting' | 'flat':
      falling   — the low is FRESH (≤ DIR_FRESH_MIN old) OR live sits within DIR_AT_LOW_PCT of the low
                  (still coming down / at the low) → a resting bid fills as it drops.
-     reverting — bounced ≥ DIR_REVERT_PCT off the low AND the low is not fresh → the bid likely
-                 misses; cross or pass.
+     reverting — bounced ≥ DIR_REVERT_PCT off the low AND the low is not fresh → the local bottom is
+                 IN. ENTRY-QUALITY only; NOT a bid-misses signal (see the MEASURED block above).
      flat      — neither. */
 export const DIR_LOOKBACK_H  = 3;       // PLACEHOLDER (n=2): hours of 5m prints scored for direction
 export const DIR_MIN_POINTS  = 12;      // PLACEHOLDER (n=2): fewer non-null lows than this ⇒ null (too thin to call)

@@ -15,8 +15,13 @@
  *   - recentDirection: a FRESH low → falling; a bounced-and-old low → reverting; a mild-recovery old
  *     low → flat; a thin series → null; a LONE FLIER in the last 3 lows must NOT flip the read (median).
  *   - dipPostureValidator: no-dip / held / missing-5m / missing-24h all DEGRADE to pass; falling → pass;
- *     reverting → caution carrying the cross message + crossNet in evidence; a reverting dip with an
- *     unprofitable cross → the "cross unprofitable — pass" language (still caution); NEVER 'reject'.
+ *     reverting → caution carrying the ENTRY-QUALITY message (past the bottom by X%, sign-aware) with
+ *     overLowPct + crossNet in evidence; NEVER 'reject'.
+ *   - REFRAMED 2026-08-08 (regression-guarded below): the reverting branch must make NO fill-probability
+ *     claim and NO cross-or-pass recommendation. Forward-scoring falsified both — the reverting bid is
+ *     reached MORE often than the falling one (85.7% vs 82.6% @8h, n=5,535) because the level quoted is
+ *     quickBuy, the LIVE instasell, which rose with the bounce. Full evidence: the MEASURED block in the
+ *     recentDirection header (js/quotecore.js). The guard asserts the old language cannot come back.
  *   - inform-mode clamp: a reverting caution runs as pass with gatedStatus 'caution' (never drops).
  *   - registry: VALIDATORS + REGISTRY_ORDER carry 'dip-posture'.
  */
@@ -134,22 +139,44 @@ ok('dipPostureValidator: a still-FALLING dip → pass (a resting bid fills as it
   assert.equal(r.evidence.dir, 'falling');
   assert.match(r.reason, /still falling/);
 });
-ok('dipPostureValidator: a REVERTING dip → caution with the cross message + crossNet in evidence', () => {
-  const r = dipPostureValidator(ctxDip(revertingSeries, 1000));
+// The TYPICAL real shape (92.4% of firings): the 24h avg low (1100) sits well above the 3h low (1000),
+// so the live bid 1010 is a genuine dip vs the 24h average while sitting just ABOVE the 3h bottom.
+const aboveLowRow = dipRow({ quickBuy: 1010, quickSell: 1030, optSell: 1100 });
+ok('dipPostureValidator: a REVERTING dip → caution reporting ENTRY QUALITY (past the bottom by X%)', () => {
+  const r = dipPostureValidator(ctxDip(revertingSeries, 1100, aboveLowRow));
   assert.equal(r.status, 'caution');
   assert.equal(r.evidence.dir, 'reverting');
-  assert.match(r.reason, /reverting dip/);
-  assert.match(r.reason, /cross @ 1,010/);
-  // net = optSell 1060 − tax(1060) − quickSell 1010 = 1060 − 21 − 1010 = 29 (> 0, so the profitable branch).
-  assert.equal(r.evidence.crossNet, 29);
-  assert.ok(r.evidence.crossNet > 0);
+  assert.match(r.reason, /past the bottom/);
+  assert.match(r.reason, /the bid @ 1,010 is 1\.0% above that low/, 'names the gap to the 3h low');
+  assert.match(r.reason, /still 8\.2% under the 24h avg/, 'keeps the depth read that makes it a dip');
+  assert.equal(r.evidence.overLowPct, 1);
 });
-ok('dipPostureValidator: a reverting dip whose cross is UNPROFITABLE → the pass-language message (still caution)', () => {
-  // optSell == quickSell → after-tax cross net ≤ 0 → "cross unprofitable at the patient ask — pass".
-  const r = dipPostureValidator(ctxDip(revertingSeries, 1000, dipRow({ optSell: 1010 })));
-  assert.equal(r.status, 'caution');
-  assert.match(r.reason, /cross unprofitable at the patient ask — pass/);
-  assert.ok(r.evidence.crossNet <= 0);
+ok('dipPostureValidator: the reverting reason makes NO fill claim and NO cross-or-pass advice (REGRESSION GUARD)', () => {
+  // Both branches of the old text were falsified — "likely misses" and the cross/pass recommendation.
+  // If anyone reinstates either without re-measuring at the quoted level, this fails. See the header.
+  for (const ctx of [ctxDip(revertingSeries, 1100, aboveLowRow),
+                     ctxDip(revertingSeries, 1000),                                  // bid BELOW the low
+                     ctxDip(revertingSeries, 1000, dipRow({ optSell: 1010 }))]) {    // cross unprofitable
+    const r = dipPostureValidator(ctx);
+    assert.equal(r.status, 'caution');
+    assert.doesNotMatch(r.reason, /misses/, 'no fill-probability claim');
+    assert.doesNotMatch(r.reason, /cross/, 'no cross-the-spread recommendation');
+    assert.doesNotMatch(r.reason, /pass$/, 'no "— pass" recommendation');
+    assert.match(r.reason, /NOT a fill risk/, 'says plainly what it is not');
+  }
+});
+ok('dipPostureValidator: the bid-BELOW-the-low tail reads "below", not a negative "above"', () => {
+  // ~3.6% of real firings; the only case where the original rest-a-bid mechanic could still apply.
+  const r = dipPostureValidator(ctxDip(revertingSeries, 1000));   // quickBuy 980 vs the 1000 3h low
+  assert.match(r.reason, /the bid @ 980 is 2\.0% below that low/);
+  assert.equal(r.evidence.overLowPct, -2);
+});
+ok('dipPostureValidator: crossNet is still kept in evidence as DATA (just never surfaced as advice)', () => {
+  // net = optSell 1060 − tax(1060) − quickSell 1010 = 1060 − 21 − 1010 = 29 (the old profitable branch).
+  const r = dipPostureValidator(ctxDip(revertingSeries, 1000));
+  assert.equal(r.evidence.crossNet, 29);
+  const unprof = dipPostureValidator(ctxDip(revertingSeries, 1000, dipRow({ optSell: 1010 })));
+  assert.ok(unprof.evidence.crossNet <= 0, 'the unprofitable case is still computed, just not spoken');
 });
 ok('dipPostureValidator: NEVER emits reject across any fixture (the never-drop invariant)', () => {
   const cases = [

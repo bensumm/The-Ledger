@@ -347,12 +347,19 @@ export function limitValidator(ctx) {
 
 // --- dipPostureValidator ----------------------------------------------------------------------
 // DP1 (2026-07-10) — dip DIRECTION, not just depth. BUY-SIDE · INFORM-ONLY · NEVER-REJECT.
-// The ⬇DIP probe (pipeline/modules/dip.mjs) says a row is a dip (live instasell under the 24h avg
-// low = DEPTH). This validator adds the missing question: is that dip still FALLING (a resting bid
-// fills as price drops to it) or has it already REVERTED (bounced off its low and run away — a
-// resting bid MISSES; cross the spread now or pass)? The direction read + the mechanic + the two
-// n=2 anchor incidents (Searing page, Abyssal bludgeon) live in the recentDirection header in
+// The ⬇DIP probe (pipeline/probes/dip.mjs) says a row is a dip (live instasell under the 24h avg
+// low = DEPTH). This validator adds the missing question: is that dip still FALLING, or has it
+// already REVERTED (bounced off its low)? The direction read, the mechanic, the n=2 anchor incidents
+// and the 2026-08-08 MEASUREMENT that rewrote this policy all live in the recentDirection header in
 // js/quotecore.js — this validator is only the buy-side POLICY over that read.
+//
+// REFRAMED 2026-08-08 — READ THE quotecore MEASURED BLOCK BEFORE TOUCHING THE REVERTING BRANCH.
+// This used to claim a reverting dip's resting bid "likely misses" and recommend crossing the spread
+// or passing. Forward-scoring falsified it: the reverting bid is reached MORE often than the falling
+// one this blessed (85.7% vs 82.6% within 8h, n=5,535), because the level quoted is quickBuy — the
+// LIVE instasell, which rose with the bounce and sat ABOVE the low being warned about in 92.4% of
+// 7,886 firings. The branch now reports ENTRY QUALITY ("past the bottom by X%") and makes NO
+// fill-probability claim and NO cross-or-pass recommendation.
 //
 // NEVER-REJECT INVARIANT (load-bearing): by construction this validator returns ONLY pass or
 // caution — it can NEVER emit 'reject', so it can NEVER drop a row on any surface (quote runs the
@@ -387,22 +394,34 @@ export function dipPostureValidator(ctx) {
     quickBuy, quickSell, crossNet: null, avgLow24, dipPct: round2(dipPct),
   };
   if (dir === 'falling')
-    return { key, status: 'pass', reason: `dip still falling — a resting bid @ ${quickBuy.toLocaleString()} fills as it drops`, evidence };
+    // "fills as it drops" was removed 2026-08-08: this arm measured the LEAST-reached of the three
+    // (82.6% @8h vs reverting's 85.7%), because here quickBuy really is pinned at a fresh 3h low, so a
+    // fill needs price to revisit it. State the position, not a fill promise.
+    return { key, status: 'pass', reason: `dip still falling — the bid @ ${quickBuy.toLocaleString()} sits at/near the ${DIR_LOOKBACK_H}h low`, evidence };
   if (dir === 'flat')
     return { key, status: 'pass', reason: `dip flat — resting bid @ ${quickBuy.toLocaleString()} viable`, evidence };
-  // dir === 'reverting' — the bid likely misses; it's a cross-or-pass call. Score the cross: buy at
-  // the live instabuy (quickSell) and patiently sell the 2h top (optSell), after tax (bond-aware).
+  // dir === 'reverting' — the local bottom is IN. ENTRY-QUALITY ONLY: no fill-probability claim and no
+  // cross-or-pass recommendation (both falsified 2026-08-08 — see the header + the quotecore MEASURED
+  // block). crossNet is still computed and kept in `evidence` as DATA for anyone studying the question,
+  // but is deliberately NOT surfaced in the reason; do not turn it back into advice without a fresh
+  // measurement at the level actually quoted.
   const bopt = row.bond ? { bond: true, guide: row.guide } : undefined;
   const crossNet = (quickSell != null && row.optSell != null) ? netMargin(quickSell, row.optSell, bopt) : null;
   evidence.crossNet = crossNet;
+  const overLowPct = minLow > 0 ? (quickBuy - minLow) / minLow * 100 : null;
+  evidence.overLowPct = overLowPct == null ? null : round2(overLowPct);
   const bounceTxt = `+${(bouncePct * 100).toFixed(1)}% off the ${DIR_LOOKBACK_H}h low ${minLow.toLocaleString()} ~${Math.round(minAgeMin)}min ago`;
-  const crossTxt = (crossNet != null && crossNet > 0 && row.optSell != null)
-    ? `cross @ ${quickSell.toLocaleString()} (net ~${Math.round(crossNet).toLocaleString()}/u after tax to ${row.optSell.toLocaleString()}) or pass`
-    : `cross unprofitable at the patient ask — pass`;
+  // Sign matters: in 92.4% of real firings the quoted bid sits ABOVE the low (median +1.24%) — the case
+  // that falsified the old claim. The ~3.6% BELOW-low tail is the one where the original rest-a-bid
+  // mechanic could still apply (the bid really is deeper than recent prints); it is UNMEASURED, so state
+  // the fact neutrally and let the reader judge rather than re-asserting a fill claim either way.
+  const overTxt = overLowPct == null ? ''
+    : ` the bid @ ${quickBuy.toLocaleString()} is ${Math.abs(overLowPct).toFixed(1)}% ${overLowPct >= 0 ? 'above' : 'below'} that low —`;
   // reason omits a leading ⚠ — the surface prefixes it (the `⚠ ${key}: ${reason}` convention).
   return {
     key, status: 'caution',
-    reason: `reverting dip — bounced ${bounceTxt}; a resting bid @ ${quickBuy.toLocaleString()} likely misses — ${crossTxt}`,
+    reason: `past the bottom — bounced ${bounceTxt};${overTxt} still ${dipPct.toFixed(1)}% under the 24h avg. `
+      + `Entry quality, NOT a fill risk — the bid sits at the live market`,
     evidence,
   };
 }

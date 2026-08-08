@@ -570,7 +570,7 @@ reconciliation. The registry:
 | `floorValidator` | the durable multi-week floor (`termStructure`) + (R3) the daily-mid `recentTrend` | parked well above durable support → reject, marginally-elevated → caution; (R3, additive-only) a falling `recentTrend` TIGHTENS an already-elevated buy (caution→reject, borderline-pass→caution) — never relaxes a clean low pass |
 | `valueAmplitudeValidator` | the recent-week after-tax amplitude + proximity-to-low (robust q15/q85) | value flip-niche BUY-side; inform |
 | `limitValidator` (LM1) | the rolling-4h buy-limit window | exhausted → reject, nearly-spent → caution; a null limit is never "unlimited" |
-| `dipPostureValidator` (DP1) | the last-3h 5m low DIRECTION (`recentDirection`) | inform-only, band+churn: still-falling/flat → pass, reverting → caution "cross or pass" |
+| `dipPostureValidator` (DP1) | the last-3h 5m low DIRECTION (`recentDirection`) | inform-only, band+churn: still-falling/flat → pass, reverting → caution **"past the bottom"** — an ENTRY-QUALITY note (how far the live bid sits above the 3h low), *not* a fill-probability claim. The old "bid likely misses → cross or pass" advice was **falsified and removed 2026-08-08**: the reverting bid is reached MORE often than the falling one (85.7% vs 82.6% @8h, n=5,535). Evidence + why: the MEASURED block in `recentDirection`'s header (`js/quotecore.js`) |
 
 Rollout: `reach`/`value-amplitude` start inform everywhere; `floor`+`limit` gate; `trajectory`
 gates in `value` (the knife-drop) and informs elsewhere. Reach/trajectory fire NOW off the warm

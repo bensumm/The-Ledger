@@ -10,6 +10,61 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DP1 reframed — dip-posture's "the bid likely misses" claim was falsified and removed (2026-08-08, pipeline-only — NO APP_VERSION)
+
+**The first validator in this repo to be forward-scored against outcomes, and it failed.**
+`dipPostureValidator` fired **7,886** times in 35 days telling us a reverting dip's resting bid
+*"likely misses — cross @ X or pass"*. Measured against the 5m archive, that is backwards.
+
+**Method.** Every band/churn suggestion was replayed through `recentDirection` at its own timestamp
+(the ledger only logs the caution — a genuine `falling`/`flat` pass is never written, so "didn't fire"
+conflated *falling dip* with *not a dip* and there was no usable control until the replay). The replay
+is faithful: **84.9%** of real firings reconstruct as `reverting`, vs 19.8% of non-firings. A resting
+bid at the level the validator itself quotes was then scored for whether it was reached. Dip rows, n=5,535:
+
+| direction | n | 1h | 8h | 24h |
+| --- | ---: | ---: | ---: | ---: |
+| `falling` — *"fills as it drops"* | 2,232 | 64.1% | **82.6%** | 89.3% |
+| `flat` — *"viable"* | 360 | 68.6% | 86.7% | 93.6% |
+| `reverting` — *"likely misses"* | 2,943 | 67.9% | **85.7%** | 92.2% |
+
+The arm it warned about is reached **more** often than the arm it blessed, at every horizon
+(within-item paired: +4.9pp, 38 items vs 22, p=0.052).
+
+**The bug.** The level it names is `quickBuy` — the **live instasell**, which rises with the bounce.
+In **92.4%** of firings the quoted bid sat *above* the low it was warning about (median **+1.24%**). It
+was warning that price ran away from a level it wasn't recommending you bid at; the bid is at the
+market, not stranded at the pre-bounce low. This also explains why `falling` scores worst — there
+`quickBuy` really is pinned at a fresh 3h low, so a fill needs price to revisit it.
+
+**What it cost.** Crossing paid a median **2.83%** spread (p25–p75 1.81–4.21%), and **61.4%** of firings
+fell through to *"cross unprofitable — pass"* — skip a bid that was in fact reached ~86% of the time
+within 8h. Both branches were wrong in the same direction: pay up, or walk away.
+
+**The change.** The reverting branch now reports **entry quality** — `past the bottom — bounced +X% off
+the 3h low L ~Nmin ago; the bid @ B is Y% above/below that low — still Z% under the 24h avg. Entry
+quality, NOT a fill risk`. No fill-probability claim, no cross-or-pass recommendation. `crossNet` stays
+in `evidence` as data but is never surfaced. The `falling` branch lost its "fills as it drops" promise
+for the same reason. Sign-aware wording covers the ~3.6% below-the-low tail — the one case where the
+original rest-a-bid mechanic could still apply, and which remains **unmeasured**.
+
+Status stays `caution` and the never-reject invariant is untouched, so nothing changes about what is
+admitted — this validator gated nothing before and gates nothing now. Doctrine home rewritten with the
+full measurement: the `MEASURED` block in `recentDirection`'s header (`js/quotecore.js`). Reconciled:
+`js/validate.mjs`, `js/flip-niches.mjs`, `docs/MARKET-ANALYSIS.md`, `docs/SIGNAL-AUDIT.md`. A regression
+guard in `pipeline/test/dipposture.test.mjs` fails if `misses`/`cross`/`— pass` return to the reason.
+
+**No `APP_VERSION` bump** — same rationale as the original DP1 entry: `js/validate.mjs` ships to the
+browser (`js/trends.js` imports `reachValidator`/`floorValidator`/`trajectoryValidator` from it) but the
+app never calls `dipPostureValidator`, and the `js/quotecore.js` + `js/flip-niches.mjs` edits are
+comment-only. No deployed-app behaviour changed.
+
+**Honesty.** Reached ≠ filled: `avgLow ≤ bid` means trades *printed* at or below the level, not that the
+bid cleared, so absolute rates are an upper bound — the bias is identical across arms, so the comparison
+holds but the levels don't. `avgLow24` is reconstructed from the 5m archive, not the live 24h endpoint.
+The paired test is p=0.052. The direction thresholds themselves (`DIR_REVERT_PCT` et al) are still
+uncalibrated placeholders — this falsified the *policy*, not the *read*.
+
 ### Correction — `5019f4e` misdescribed its own diff, and quietly landed the July ledger rotation (2026-08-08)
 
 `5019f4e` ("AF5b/D4 follow-up: the archive-regime banner was suppressed by the quiet default — and
