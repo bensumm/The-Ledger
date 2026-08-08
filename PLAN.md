@@ -488,6 +488,38 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
 
 ## Discovered
 
+- **THE VALIDATOR STACK HAD NEVER BEEN SCORED AGAINST OUTCOMES — TWO OF THE FIRST THREE MEASURED
+  FAILED (2026-08-08).** Forward-scored every level-based validator against the 5m archive over the
+  35-day ledger, arms = fired vs not-fired within the same band/churn population. Findings, in
+  descending confidence:
+  - **`dip-posture` FALSIFIED and reframed** (landed `6a8fbd9`) — its "a resting bid @ X likely misses,
+    cross or pass" claim is inverted: the reverting bid is reached MORE often than the falling one it
+    blessed (85.7% vs 82.6% @8h, n=5,535). Cause: the level it quotes is `quickBuy`, which rises with
+    the bounce. Full evidence in the `MEASURED` block of `recentDirection`'s header (`js/quotecore.js`).
+  - **`floor` RETUNED** — `ranges` genuinely predicts DRAWDOWN monotonically (P(DD ≥ 1 swing)
+    9.6%→16.2%→30.5%; Spearman ρ 0.151, n=4,121; within-item p=0.066) but NOT loss (7d return flat).
+    Caution line moved 1.0 → 1.5, silencing 69.6% of firings; reject tier found inert; R3 trend
+    escalation found unsupported (n=60, pointing the wrong way) and left in place but labelled.
+  - **`reach` is INFORM-ONLY everywhere and excludes nothing** — 27,799 firings shaping prices, weak
+    discrimination (reject 55.9% vs caution 62.2% @8h) and an 8h window applied to 1–2 day theses:
+    **18.2% of scored levels printed within 48h but not within 8h**. STILL OPEN — the horizon mismatch
+    is real and unaddressed; scoring it properly needs a fill model, not a print model.
+  - **`trajectory` UNSCORED-ish** — `elevated` (n=2,173) and `knife` (n=823) both showed no significant
+    discrimination on the round trip, and `knife`'s raw negative REVERSED under the within-item paired
+    test (composition, not signal). `knife` is the one validator that GATES (in `value`), so its lack of
+    evidence matters most; it stands on a thesis argument (asymmetry of a knife on a multi-week hold),
+    not on measurement. OPEN.
+  - **Where exclusion ACTUALLY happens is the fetch-slot competition, not the validators.** Validators
+    dropped ~14 rows in 35 days; `thin-reserve-full` dropped **2,184 candidates averaging 3.83m/day
+    expected** — 4.3× the average of the `top-n-full` cut. That is the price-keyed fetch reserve already
+    noted below, now with a number attached.
+  - **Method note for whoever runs the next one:** a validator's `pass` is NEVER logged (`leanValidators`
+    records only non-pass / would-have-gated), so "didn't fire" conflates *passed* with *not applicable*
+    and there is no control arm in the ledger. Both usable studies had to REPLAY the validator's own pure
+    function at each suggestion's timestamp to rebuild the real arms. Budget for that.
+  - **Universal caveat:** `avgLow ≤ level` / `avgHigh ≥ level` are PRINTS, not fills — absolute rates are
+    upper bounds. Bias is identical across arms, so comparisons hold; levels do not.
+
 - **`gpDay`'s `cyclesDay` CAP OF 6 IS A THEORETICAL CEILING USED AS AN EXPECTED VALUE, AND IT
   SYSTEMATICALLY FLATTERS CHEAP CHURN OVER BIG TICKETS (Ben, 2026-08-08).** `pathA` computes
   `gpDay = marginU × units × cyclesDay` with `cyclesDay = min(6, 0.10×volDay/limit)`

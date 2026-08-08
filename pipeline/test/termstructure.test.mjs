@@ -113,7 +113,11 @@ ok('DECAY-KNIFE buy well above the durable floor → REJECT (screen-shaped ctx)'
   const r = floorValidator(screenCtx({ optBuy: 52_000 }, ts, 52_000));
   assert.equal(r.status, 'reject', `52k buy is ${r.evidence.ranges}× swing above the floor`);
   assert.ok(r.evidence.ranges > FLOOR_REJECT_RANGES);
-  assert.match(r.reason, /not near durable support/);
+  // The reason states the MEASURED consequence (an expected dip below the entry, scaled to this item's
+  // own swing) — it no longer asserts "not near durable support", a destination that prints ~7% of the
+  // time in 48h. See the MEASURED block in js/validate.mjs.
+  assert.match(r.reason, /elevated entry: expect a dip below it first/);
+  assert.doesNotMatch(r.reason, /not near durable support/, 'the falsified support claim must not return');
 });
 ok('DECAY-KNIFE buy → REJECT (quote-shaped ctx, optBuy fallback) — SAME verdict on BOTH surfaces', () => {
   const ts = termStructure(decayKnifeSeries());
@@ -184,27 +188,45 @@ ok('a HELD lot is a SELL decision → PASS (held-lot-sell-side), even parked abo
 // --- 4b. R3 (PLAN-SIGNAL-RECENCY): recentTrend TIGHTENS an elevated buy that is ALSO falling ----
 // hand-built ts so the ranges + trend are exact (ranges = (level−floor)/swing). recentTrend is the
 // projectTrajectory read termStructure now attaches; here we set its `dir` directly to exercise the gate.
+// floor 1000 / swing 100, so ranges = (level − 1000) / 100. These levels are derived FROM the shipped
+// constants (caution 1.5, borderline 0.75×caution = 1.125) rather than hard-coded to the old 1.0 line —
+// when FLOOR_CAUTION_RANGES moved 1.0 → 1.5 the old fixtures (1150/1080) silently changed tier, which is
+// exactly the drift this comment exists to prevent. Recompute the levels if the constant moves again.
 const tsWith = (dir) => ({ hasData: true, floor: 1000, typicalSwing: 100, floorLookback: 28, current: 1000, recentTrend: dir ? { dir, slope: dir === 'falling' ? -50 : 50, run: { dir, len: 3 } } : null });
-ok('R3: a caution-range buy (ranges 1.5) + FALLING recent trend → escalates to REJECT (elevated into a decline = a knife)', () => {
-  const r = floorValidator(screenCtx({ optBuy: 1150 }, tsWith('falling'), 1150));
+const lvlAtRanges = r => 1000 + r * 100;
+const CAUTION_LVL = lvlAtRanges(FLOOR_CAUTION_RANGES + 0.3);                          // 1.8 → solidly caution
+const BORDERLINE_LVL = lvlAtRanges(FLOOR_CAUTION_RANGES * 0.85);                      // 1.275 → pass, inside the R3 band
+const CLEAN_LVL = lvlAtRanges(FLOOR_CAUTION_RANGES * 0.5);                            // 0.75 → pass, real headroom
+ok('R3: a caution-range buy + FALLING recent trend → escalates to REJECT (elevated into a decline = a knife)', () => {
+  const r = floorValidator(screenCtx({ optBuy: CAUTION_LVL }, tsWith('falling'), CAUTION_LVL));
   assert.equal(r.status, 'reject');
   assert.match(r.reason, /recent trend falling/);
 });
 ok('R3: the SAME caution-range buy with a RISING trend stays CAUTION — only falling tightens (recovery ≠ knife)', () => {
-  const r = floorValidator(screenCtx({ optBuy: 1150 }, tsWith('rising'), 1150));
+  const r = floorValidator(screenCtx({ optBuy: CAUTION_LVL }, tsWith('rising'), CAUTION_LVL));
   assert.equal(r.status, 'caution');
 });
-ok('R3: a borderline-elevated PASS (ranges 0.8 ≥ 0.75×caution) + FALLING → nudged to CAUTION', () => {
-  const r = floorValidator(screenCtx({ optBuy: 1080 }, tsWith('falling'), 1080));
+ok('R3: a borderline-elevated PASS (ranges ≥ 0.75×caution) + FALLING → nudged to CAUTION', () => {
+  const r = floorValidator(screenCtx({ optBuy: BORDERLINE_LVL }, tsWith('falling'), BORDERLINE_LVL));
   assert.equal(r.status, 'caution');
 });
-ok('R3: a clean LOW pass (ranges 0.5 < 0.75×caution) + FALLING is NOT touched — the headroom guard', () => {
-  const r = floorValidator(screenCtx({ optBuy: 1050 }, tsWith('falling'), 1050));
+ok('R3: a clean LOW pass (ranges < 0.75×caution) + FALLING is NOT touched — the headroom guard', () => {
+  const r = floorValidator(screenCtx({ optBuy: CLEAN_LVL }, tsWith('falling'), CLEAN_LVL));
   assert.equal(r.status, 'pass');
 });
 ok('R3: a re-priced-up recovery is not false-tightened — a borderline buy with a RISING trend stays a PASS', () => {
-  const r = floorValidator(screenCtx({ optBuy: 1080 }, tsWith('rising'), 1080));
+  const r = floorValidator(screenCtx({ optBuy: BORDERLINE_LVL }, tsWith('rising'), BORDERLINE_LVL));
   assert.equal(r.status, 'pass');
+});
+ok('the 1.0–1.5 band that the MEASURED study silenced now PASSES (the threshold move, pinned)', () => {
+  // P(drawdown ≥ 1 swing) is 12.0% here vs 29.8% above 1.5 — 69.6% of all firings sat in this band.
+  for (const r of [1.05, 1.25, 1.45]) {
+    const lvl = lvlAtRanges(r);
+    assert.equal(floorValidator(screenCtx({ optBuy: lvl }, tsWith(null), lvl)).status, 'pass',
+      `ranges ${r} must pass under the 1.5 caution line`);
+  }
+  const over = lvlAtRanges(1.6);
+  assert.equal(floorValidator(screenCtx({ optBuy: over }, tsWith(null), over)).status, 'caution');
 });
 ok('R3: real termStructure emits recentTrend (dir over the daily-mid series)', () => {
   const rising = termStructure(seriesFrom([100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 110, 120, 130, 140, 150].map(x => x * 1000)));

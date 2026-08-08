@@ -26,7 +26,10 @@
  *     validator flag as a note.
  *
  * THRESHOLDS ARE PLACEHOLDERS (process rule 4). Every cutoff below is named + flagged; none is
- * validated. reachValidator REUSES js/windowread.mjs's existing quantile/recency logic and constants
+ * validated EXCEPT floorValidator's FLOOR_CAUTION_RANGES, set from the 2026-08-08 forward-scoring study
+ * recorded in its own MEASURED block (and dip-posture's reverting branch, whose POLICY that same study
+ * falsified — see the recentDirection header in js/quotecore.js). Everything else is still un-scored.
+ * reachValidator REUSES js/windowread.mjs's existing quantile/recency logic and constants
  * (RECENT_NIGHTS, recencySplit's staleOptimistic) rather than inventing parallel ones; floorValidator
  * REUSES js/termstructure.mjs's term-structure math (the durable floor + typical fluctuation) rather
  * than re-deriving it — that module is the ONE home for the multi-week structure read.
@@ -130,24 +133,57 @@ export function reachValidator(ctx) {
 }
 
 // --- floorValidator ---------------------------------------------------------------------------
-// PLACEHOLDER thresholds (rule 4 — none validated; the study that would tune them is F1/P6). The
-// floor + typical-swing math itself lives in js/termstructure.mjs (its own PLACEHOLDERs); these two
+// The floor + typical-swing math itself lives in js/termstructure.mjs (its own PLACEHOLDERs); these
 // govern how far above the durable floor a BUY is allowed to sit before we caution/reject it.
-export const FLOOR_CAUTION_RANGES = 1.0;   // buy > this many typical swings above the durable floor ⇒ caution
+//
+// MEASURED 2026-08-08 — the F1/P6 study this header used to ask for HAS NOW BEEN RUN. 4,121 band/churn
+// firings forward-scored against the 5m archive; drawdown measured below the buy over 48h and expressed
+// in the item's OWN typical-swing units (recoverable per row as (level − floor) / ranges):
+//     ranges 1.00–1.25  n=1,734 — median drawdown 0.34 swing · P(drawdown ≥ 1 swing)  9.6%
+//     ranges 1.25–1.50  n=1,075 — median drawdown 0.37 swing · P(drawdown ≥ 1 swing) 16.2%
+//     ranges 1.50–2.00  n=1,227 — median drawdown 0.58 swing · P(drawdown ≥ 1 swing) 30.5%
+// Monotonic. Spearman rho 0.151 over n=4,121; within-item (each item split at its OWN median ranges, so
+// item composition cancels) +7.0pp in this validator's direction, 28 items vs 15, p=0.066.
+// SO `ranges` DOES CARRY INFORMATION — but about DRAWDOWN, not LOSS. Median 7-day return is flat across
+// every bucket (+0.26% / +1.35% / −0.27%). Buying elevated means you will probably see red before green;
+// it does NOT mean you lose. Do not restate this as a loss/bleed prediction.
+// TWO THINGS THE PREVIOUS SHAPE GOT WRONG:
+//   (1) The caution line sat at 1.0, but discrimination happens at ~1.5 — the 1.0–1.5 band carries
+//       P(drawdown ≥ 1 swing) of 12.0% against 29.8% above it. Moving the line to 1.5 silences 69.6% of
+//       firings and keeps essentially all the signal. That is why FLOOR_CAUTION_RANGES is now 1.5.
+//   (2) The reason asserted the buy was "not near durable support". The floor it names actually prints
+//       only 6–8.5% of the time within 48h, NON-monotonically — the DISTANCE carries the information,
+//       the DESTINATION does not. The reason no longer asserts the destination.
+export const FLOOR_CAUTION_RANGES = 1.5;   // buy > this many typical swings above the durable floor ⇒ caution (MEASURED; was 1.0)
+// INERT IN PRACTICE (measured 2026-08-08): NOTHING in 35 days of band/churn exceeded 2.0, so the reject
+// tier has never fired there (14 floor rejects repo-wide, 3 of them via the R3 escalation below). Left at
+// 2.0 DELIBERATELY — lowering it would START dropping rows, and the drawdown curve above justifies
+// dropping nothing. Do not "fix" this by making it reachable.
 export const FLOOR_REJECT_RANGES = 2.0;    // buy > this many typical swings above the durable floor ⇒ reject
 // R3 (PLAN-SIGNAL-RECENCY): a falling recentTrend TIGHTENS the level check (additive-only — never relaxes).
 // A `pass` only escalates to caution once the bid is already within this fraction of the caution line
-// (borderline-elevated); a clean low pass with real headroom is NEVER touched by the trend alone. PLACEHOLDER.
+// (borderline-elevated); a clean low pass with real headroom is NEVER touched by the trend alone.
+// UNSUPPORTED (measured 2026-08-08, n=60): rows carrying the falling-trend note had P(drawdown ≥ 1 swing)
+// of 8.3% vs 17.6% for plain rows, and a BETTER median 7-day return (+1.74% vs +0.38%) — pointing the
+// OPPOSITE way to its premise. n=60 is too small to call it falsified, so the rule stands, but there is
+// no evidence FOR it and it is the ONLY path by which floor drops rows (3 in 35 days). Do not widen it;
+// re-measure before promoting it. Its band tracks FLOOR_CAUTION_RANGES, so it moved up with the line.
 export const FLOOR_TREND_BORDERLINE_FRAC = 0.75;
-//   VALIDATE (F1/P6): the walk-forward loss rate of buying at N typical-swings above the durable
-//   floor vs the base rate — the point at which "elevated above support" actually predicts a bleed.
+// MEASURED 2026-08-08: the MEDIAN drawdown below a buy sitting at/above the caution line, in typical-swing
+// units (n=1,227 at ranges 1.50–2.00). Used ONLY to state the expected dip in the reason. It is a
+// POPULATION MEDIAN, not a per-item forecast — the per-item gp figure comes from that item's own
+// typicalSwing, which is why the message multiplies it rather than quoting a flat percentage.
+export const FLOOR_TYPICAL_DRAWDOWN_SWINGS = 0.6;
 
 /**
- * floorValidator(ctx) — BUY-SIDE ONLY. Answers: does this buy sit NEAR a durable multi-week floor, or
- * is the bid parked well ABOVE where the 14/28d structure says support durably prints (the decay-knife
- * shape — you'd be buying an elevated price mid-collapse, not a real dip)? It measures the buy level's
- * distance above the durable floor in units of the item's TYPICAL fluctuation (IQR): within ~one normal
- * swing of the floor → pass; several swings above → reject.
+ * floorValidator(ctx) — BUY-SIDE ONLY. Answers: how far above its durable multi-week floor does this buy
+ * sit, measured in units of the item's TYPICAL fluctuation (the 28d daily-mid IQR)? Within ~1.5 normal
+ * swings of the floor → pass; beyond that → caution (an elevated entry that tends to dip below you first).
+ *
+ * WHAT IT IS NOT (measured 2026-08-08 — the MEASURED block above carries the numbers). It is NOT a loss
+ * predictor and NOT a "support is down there" claim. Elevation predicts DRAWDOWN, not a bleed: 7-day
+ * returns are flat across every elevation bucket, and the floor it names prints only 6–8.5% of the time
+ * within 48h. The reject tier is inert in practice — this is a caution-only signal on live data.
  *
  * BUY-SIDE DISCIPLINE (load-bearing — the spec's "must NOT reject/flag held lots' sell decisions"):
  *   - A HELD lot (ctx.position.held) is a SELL decision → this validator DEGRADES to pass immediately.
@@ -197,9 +233,14 @@ export function floorValidator(ctx) {
     if (status === 'caution') { status = 'reject'; trendNote = ' + recent trend falling (elevated INTO a decline — a knife)'; }
     else if (status === 'pass' && ranges >= FLOOR_CAUTION_RANGES * FLOOR_TREND_BORDERLINE_FRAC) { status = 'caution'; trendNote = ' + recent trend falling (borderline-elevated & softening)'; }
   }
+  // The non-pass text states what the measurement supports — an expected DIP BELOW THE ENTRY, scaled to
+  // this item's own swing — and no longer asserts "not near durable support" (that floor prints only
+  // 6–8.5% of the time within 48h; see the MEASURED block above).
+  const dipGp = Math.round(FLOOR_TYPICAL_DRAWDOWN_SWINGS * swing);
   const reason = (status === 'pass'
     ? `buy ${level} near ${ts.floorLookback}d floor ${Math.round(floor)} (${round2(ranges)}× swing)`
-    : `buy ${level} is ${round2(ranges)}× typical swing above the ${ts.floorLookback}d floor ${Math.round(floor)} — not near durable support`) + trendNote;
+    : `buy ${level} sits ${round2(ranges)}× typical swing above the ${ts.floorLookback}d floor ${Math.round(floor)}`
+      + ` — elevated entry: expect a dip below it first (median ${FLOOR_TYPICAL_DRAWDOWN_SWINGS}× swing ≈ ${dipGp.toLocaleString()} gp)`) + trendNote;
   return { key, status, reason, evidence };
 }
 

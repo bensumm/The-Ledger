@@ -10,6 +10,63 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### floorValidator retuned — the F1/P6 study its own header asked for, finally run (2026-08-08, pipeline-only — NO APP_VERSION)
+
+`floorValidator`'s header had carried a standing request since P3:
+
+> *VALIDATE (F1/P6): the walk-forward loss rate of buying at N typical-swings above the durable floor vs
+> the base rate — the point at which "elevated above support" actually predicts a bleed.*
+
+Run at last. 4,121 band/churn firings forward-scored against the 5m archive, drawdown measured below the
+buy over 48h and expressed in each item's OWN typical-swing units (recoverable per row as
+`(level − floor) / ranges`, since the reason string carries all three):
+
+| `ranges` | n | med drawdown | med drawdown (swings) | P(DD ≥ 1 swing) | P(hit named floor) | med 7d return |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.00–1.25 | 1,734 | 2.65% | 0.34 | 9.6% | 7.4% | +0.26% |
+| 1.25–1.50 | 1,075 | 2.80% | 0.37 | 16.2% | 6.3% | +1.35% |
+| 1.50–2.00 | 1,227 | 4.38% | 0.58 | 30.5% | 8.5% | −0.27% |
+
+**`ranges` carries real information** — monotonic, Spearman ρ 0.151 over n=4,121, and it survives item
+composition (each item split at its OWN median `ranges`: +7.0pp in the validator's direction, 28 items vs
+15, p=0.066). This is the opposite finding to dip-posture below, and worth stating plainly: an earlier
+pass of mine tested whether the proposed *round trip* completed and concluded "no discrimination, p=0.77".
+That was the wrong instrument — floor makes a claim about downside, not about round trips.
+
+**But it predicts DRAWDOWN, not LOSS.** Median 7-day return is flat across every bucket (+0.26% / +1.35%
+/ −0.27%). Buying elevated means you will probably see red before green; it does not mean you lose. The
+header now says so explicitly so nobody restates it as a bleed prediction.
+
+**Three changes:**
+
+- **`FLOOR_CAUTION_RANGES` 1.0 → 1.5.** Discrimination happens at ~1.5: the 1.0–1.5 band carries
+  P(DD ≥ 1 swing) of 12.0% against 29.8% above it. Moving the line **silences 69.6% of all firings**
+  (2,867 of 4,121) and keeps essentially all the signal. floor is caution-only in practice, so this
+  changes what is *flagged*, not what is *admitted*.
+- **The reason no longer claims "not near durable support".** The floor it names prints only 6–8.5% of the
+  time within 48h, non-monotonically — the DISTANCE carries the information, the DESTINATION does not. It
+  now states the measured consequence, scaled per item: `elevated entry: expect a dip below it first
+  (median 0.6× swing ≈ 69 gp)`. The 0.6 multiplier is a labelled population median; the gp figure comes
+  from that item's own `typicalSwing`, so it is never a flat percentage laundered into a per-item forecast.
+- **`FLOOR_REJECT_RANGES` documented as INERT and deliberately left at 2.0.** Nothing in 35 days of
+  band/churn exceeded 2.0 (14 floor rejects repo-wide, 3 via R3). Lowering it would *start* dropping rows,
+  and the drawdown curve justifies dropping nothing.
+
+**R3 trend escalation labelled UNSUPPORTED** (not removed). Rows carrying the falling-trend note (n=60) had
+P(DD ≥ 1 swing) of **8.3% vs 17.6%** for plain rows and a *better* median 7-day return (+1.74% vs +0.38%) —
+pointing the opposite way to its premise. n=60 is too small to call it falsified, so the rule stands, but
+it is the only path by which floor drops rows and there is no evidence for it.
+
+Tests: the R3 fixtures were pinned to absolute `ranges` values (1150/1080 = 1.5/0.8) and silently changed
+tier when the constant moved — they now DERIVE their levels from `FLOOR_CAUTION_RANGES`, with a comment
+saying why, plus a new case pinning that the silenced 1.0–1.5 band passes. Reconciled `docs/MARKET-ANALYSIS.md`,
+`docs/SIGNAL-AUDIT.md` (its "validated?" column for floor goes ❌ → ⚠️-with-the-study), `PLAN.md` Discovered.
+
+**Honesty.** `avgLowPrice` is a 5m average, so intra-bucket wicks are smoothed and these drawdowns are if
+anything UNDERSTATED — bias identical across buckets, so the curve holds. The within-item test is p=0.066,
+marginal. 7-day returns use a shorter effective sample (the horizon must close). `FLOOR_REJECT_RANGES`,
+`FLOOR_TREND_BORDERLINE_FRAC` and every `termstructure.mjs` constant remain uncalibrated placeholders.
+
 ### DP1 reframed — dip-posture's "the bid likely misses" claim was falsified and removed (2026-08-08, pipeline-only — NO APP_VERSION)
 
 **The first validator in this repo to be forward-scored against outcomes, and it failed.**
