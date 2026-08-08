@@ -245,3 +245,24 @@ actually TAKEN — which is the F1 fills join and is sample-limited. Recorded as
 and collapse to 60.6% at +2%, i.e. price-reaching is rarely the binding constraint and the quotes sit
 on a knife-edge; ask premium as the one monotone predictor; and Conclusion 4 (widen the pool freely).
 **What falls:** any recommendation to filter or delete on the strength of the grade comparison.
+
+### §7.2 — Grade validation: OPEN, LOW PRIORITY (Ben's ruling, 2026-08-07)
+
+*"I think it's pretty clear that it is flawed in many ways — we're not leaning heavily on it so it's
+not a big issue right now, but we should definitely record it and come back to it later. Low priority."*
+
+**Recorded, not scheduled.** What is actually known:
+
+- Grade does NOT predict reachability (§7), but reachability is the wrong test for it (§7.1) — the
+  comparison was confounded by trade frequency, which grade anti-correlates with by construction.
+- AF1 removed grade from the digest's SORT, and `capitalFactor` was already removed from grades by
+  PLAN-GRADE-REWORK. So the surfaces lean on grade less than they used to — which is why this is low
+  priority rather than urgent.
+- Grade is still load-bearing in three places worth knowing before anyone deletes it: the `/scan` relay
+  trim (B- and above), the Path-A fallback sort when `pathA` is null, and `SUBFLOOR_GRADE_CAP`.
+- **A real test needs an outcome that reflects what grade CLAIMS to predict** — realized profit per
+  unit time on trades actually TAKEN. That is the F1 fills join and it is sample-limited: only items
+  Ben traded have ground truth, so it inherits every selection bias §7 avoided by using the archive.
+  Expect this to stay under-powered for a long while; say so rather than reporting a weak result.
+- **Do not delete grades on the current evidence.** The honest state is absence of validation, not
+  evidence of failure.
