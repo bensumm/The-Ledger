@@ -428,8 +428,14 @@ self-fulfilling (§8/M1).
 | +5.0% | 49.8% | 61.0% |
 | +8.0% | 37.8% | 49.6% |
 
-Monotone on both axes, no exceptions. Contrast §7, where monotonicity failed a cluster bootstrap
-(§8/M5) — the signal was always there; the endogenous premium variable was hiding it.
+🛑 **The "monotone on both axes, no exceptions" boast was a CATEGORY ERROR — it is true BY
+CONSTRUCTION and carries zero evidential weight (§10/M1).** The events are NESTED: `printed ≥
+mid×1.08` ⊂ … ⊂ `printed ≥ mid×1.005`, and `(T, T+1d] ⊂ (T, T+3d]`. So this table is monotone for
+ANY data, real or random — 0 violations in 127,080 cells, necessarily. §7's monotonicity COULD fail
+(it compared different items' asks); this version cannot fail any test. Do not cite the monotonicity
+as a finding. **What the numbers ARE good for is their LEVELS**, which are separately validated:
+item-cluster bootstrap CIs ±0.7–1.7pp, and stable across three window sets spanning the archive's
+70 days (§10).
 
 ### 9.3 Frequency is an amplifier, not a crossover — earlier claim CORRECTED
 
@@ -475,10 +481,19 @@ the exit model is downstream of it.
 
 ### 9.6 Ben's live position on the surface
 
-Masori chaps is thin (181/d → low-freq tercile); the ask sits at +1.59% over mid. Interpolating between
-+1.0% (89.8%) and +2.0% (83.8%): **~86% to print within 3 days.** For comparison: `1−(1−p)³` off the
-recent-7 daily rate said 92% (§1), and the cruder single-window grid said ~83%. The independence
-formula overstates, exactly as §8/m2 predicted; **the surface should replace it in AB3.**
+~~Masori chaps is thin (181/d → low-freq tercile); the ask sits at +1.59% over mid. Interpolating
+between +1.0% (89.8%) and +2.0% (83.8%): **~86% to print within 3 days.**~~
+
+🛑 **WRONG BY ~26–33pp — the lookup omitted PRICE TIER, which dominates (§10/B1).** Re-measured on the
+same data, conditioned on price: a **≥10m** item at +1% prints **71.2%** and at +2% **52.4%**, so the
++1.59% ask interpolates to **~60%** — and Fable's tighter `≥10m ∩ low-freq` cell gives **52.7%**
+(n=203, 34 items). The pooled §9.2 curve was dominated by cheap items (7,634 of 9,416 observations
+under 100k), so it described dust, not big-tickets.
+
+**Honest estimate for the live lot: ~53–60% to print within 3 days**, versus 92% from `1−(1−p)³` (§1),
+~83% from the crude grid, and ~86% from the un-conditioned surface. Every successive method has moved
+DOWN. The ask is still defensible — BE is 26,174,490 so the downside is waiting, not loss — but its
+odds are roughly a coin-flip over three days, not a near-certainty.
 
 ### 9.7 Honest limits
 
@@ -491,3 +506,100 @@ formula overstates, exactly as §8/m2 predicted; **the surface should replace it
 4. **Terciles are sample-relative**, not absolute liquidity classes — they will move with the sample.
 5. **Mid is a choice.** Prior-24h mean `avgHighPrice`; a different base (VWAP, instasell mid, longer
    window) shifts every premium and therefore every level. Pin the definition wherever this is used.
+
+---
+
+## §10 — Fable attack on §9. Data real and regime-stable; the RANKING RULE misspecified.
+
+Independent re-extraction (read-only) over all 3,782 items with ≥50 5m rows/25d, plus a 1h rebuild
+across three window sets spanning the archive's 70 days, plus item-cluster bootstraps (B=2000).
+
+### 🛑 B1 — the §9.4 lookup key omits PRICE TIER, which dominates
+
+`P(print) ← surface lookup by premium × frequency × horizon` **miscalibrates big-tickets by ~30pp.**
+Re-measured (1,656 dense items, 3d horizon):
+
+| premium | <100k | 100k–1m | 1–10m | **≥10m** |
+| --- | --- | --- | --- | --- |
+| +1.0% | 90.5% | 85.6% | 76.3% | **71.2%** |
+| +2.0% | 83.9% | 77.8% | 63.9% | **52.4%** |
+| +5.0% | 65.5% | 53.0% | 37.0% | **22.2%** |
+| +8.0% | 54.5% | 40.7% | 25.9% | **10.9%** |
+
+**7,634 of 9,416 observations are sub-100k items**, so the pooled §9.2 curve describes dust. The
+price-tercile spread at +3% is 87.1% (cheap × low-freq) vs **46.9%** (expensive × high-freq) — and the
+top tercile *starts* at 6,728gp, so a 27m item is far into the tail of even that bucket.
+
+**Consequences:** §9.6's live estimate was wrong by ~26–33pp (corrected in place). §9.5's "4% cheaper ≈
+26 points" is **44 points** on ≥10m items (68.3% → 23.9%) — direction survives, pooled magnitude
+understates the class Ben actually trades. **Any shipped lookup MUST condition on price tier (or on
+per-item history), or `net × P(print)` will systematically over-rank big-ticket rows — the exact place
+a wrong verdict costs most.**
+
+### M1 — §9.2's monotonicity is TRUE BY CONSTRUCTION (corrected in place)
+
+Nested events; monotone for any data. 0 violations in 127,080 cells, necessarily. The
+"contrast §7, where monotonicity failed" line was a category error: §7 compared different items' asks
+and *could* fail; this cannot. What the bootstrap CAN test is levels (tight: ±0.7–1.7pp) and the
+frequency ordering (below).
+
+### M2 — §9.3's "low-freq better at EVERY premium" FAILS the bootstrap
+
+**P(low > high at every premium) = 0.056.** Robust at ≥+2% (P=1.000 each), but at +0.5% the full dense
+pool **reverses the point estimate** (high 92.0 vs low 90.7). So my "the crossover was noise"
+correction was ITSELF overconfident — a low-premium crossover is live and unresolved. The
+gap-widening claim IS robust (P=1.000).
+
+**Safe statement: frequency separates strongly at premiums ≥2%; below ~1% it separates nothing.**
+
+### M3 — frequency is mostly a proxy for relative VOLATILITY
+
+Spearman(freq, relStd) = **−0.41**. Conditioning on volatility tercile collapses the +8% frequency gap
+from **25.6pp to 2.8–8.5pp**, and in the lowest-volatility tercile it vanishes entirely (21.3 / 18.8 /
+18.5). Volatility alone spans **19.1% → 77.6%** at +8% — the strongest item-level variable found, and
+stable across all three 1h periods. Frequency does survive *price* conditioning at high premium (so
+§7.1's specific confound claim is not resurrected), but **if the lookup takes one item axis, measured
+relative volatility beats trade frequency decisively.**
+
+### M4 — selection moves the levels; "exogenous" applies to the premium, not the sample
+
+By density stratum (3d): sparse (50–500 rows) at +0.5% = **76.5%** vs dense 91.3%; mid-density at +8% =
+**62.9%** vs dense 50.4%. Partly real (thin items don't print nearby levels; volatile mid-density items
+travel further) and partly **mechanical** — the 5m archive holds 9–272 of 288 daily buckets on some
+days, and an unarchived bucket can never print. Second-order for dense items (per-window levels vary
+±2.5pp without tracking coverage), but it makes the sparse-stratum surface uninterpretable. **§9's
+levels describe DENSE items only.**
+
+### m1 — window clustering adds uncertainty an item-bootstrap misses
+
+Per-window +2% levels span 78.1–82.3%. Publish levels as **±2–3pp**, not ±1pp.
+
+### ✅ Confirmed — and two genuinely good results
+
+- **The table reproduces exactly.** Independent seeded 400-item sample, 3d: 91.1 / 87.2 / 80.4 / 73.3 /
+  61.4 / 49.7 against §9's 91.1 / 87.5 / 79.9 / 73.4 / 61.0 / 49.6; full 1,762-item pool within 0.8pp.
+  Nothing fabricated, nothing sample-lucky.
+- **The levels are NOT a one-period snapshot (attack 4 — the one I most expected to fail).** Fixed
+  2,163-item cohort, 1h grain, three window sets (recent / T−35..50d / T−50..65d): every 3d level agrees
+  within **2.5pp** (+8%: 51.4 / 48.8 / 49.0; +0.5%: 89.2 / 88.9 / 89.9). Frequency ordering and
+  gap-widening replicate in all three. Also grain-robust (1h vs 5m within ~2pp). Caveat: 70 days is one
+  summer — this rules out "lucky fortnight", not "different macro regime" (e.g. a game-update month).
+- **`mid` sensitivity quantified (§9.7.5's "pin it" is now mandatory-for-correctness).** Same items,
+  3d, +2%: base 80.5% · **VWAP 80.1%** · instasell-side **93.4%** · 72h window 78.0% · 6h window 81.2% ·
+  last-print **73.3%**. VWAP is a no-op (−0.4pp) so volume-weighting is not a worry; base SIDE and
+  WINDOW shift every level 5–15pp. Every consumer must compute premium off the identical base or
+  inherit a silent ±10pp bias.
+- **Crash-risk regime bound tightened from <22% to <6% (attack 6).** 214 crash-risk items classified,
+  live 6h fetched for 120: **2/120 flip (1.7%, 95% CI [0.2%, 6.0%])**. Both flips are hair-width
+  strict-inequality floor-break artifacts (gaps **−1gp / −0.74%** and **−4gp / −0.13%**), and the
+  direction is CONSERVATIVE — the archive over-flags falling vs live. Worth encoding: **a floor-break
+  decided by ≤ a few gp is below the derived-6h noise floor.**
+
+### What is safe to build on
+
+The premium→P(print) surface **for dense items, under a pinned mid definition, conditioned on PRICE
+TIER, with levels trusted to ±2–3pp**, regime-stable across the archive's 70 days, using **volatility**
+(not frequency) as the item axis, and only claiming separation at premiums ≥2%.
+
+**Not safe:** the pooled or frequency-tercile numbers for any specific candidate; the monotonicity as
+evidence; the +0.5–1% frequency ordering; anything on sparse items.
