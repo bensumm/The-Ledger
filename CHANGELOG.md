@@ -10,6 +10,94 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### AB1–AB3 — an ask price that comes from a MEASURED fill rate, not a median (PLAN-ASK-BACKTEST, pipeline-only, 2026-08-08)
+
+**The problem.** Every "where do I list this?" read the tooling offers is a LEVEL, not a fill
+probability. `windowread`'s headline — *"ASK side — reached on ~50% of days: X"* — is the median of the
+14 daily highs, so its 50% is true by construction: a median cannot carry information about its own
+quantile. The depth read documents itself as a conservative floor. The amplitude board's reach column is
+pinned at the same median quantile and prints `7/14` on every row. None of them answer the question Ben
+actually asked, which is *"what price fills on x% of days?"*
+
+**What shipped — three pieces, none of them wired to a live surface.**
+
+**AB1, `pipeline/lib/market/printed-at.mjs`** — the pure atom. `printedAt(series, {mid, premium,
+horizon, from})` → did any bucket in the horizon print `avgHighPrice ≥ mid × (1+premium)`, plus the
+observed max. No fetch, no archive handle, no clock. Three decisions are load-bearing:
+
+- **`mid` is an INPUT and is never derived inside.** Measured cost of getting the base wrong, same
+  items at +2%/3d: pinned base 80.5% · VWAP 80.1% · instasell-side **93.4%** · 72h window 78.0% ·
+  last-print 73.3%. Volume-weighting is a no-op; base SIDE and WINDOW are worth 5–15pp. A module that
+  picked its own mid would hand every consumer a silent ±10pp bias, so the pinned definition is enforced
+  at the CALL SITE and visible in every caller's diff.
+- **`printed` is TRISTATE.** `null` (not `false`) when no bucket is archived in the window. An
+  unarchived bucket can never print, so scoring missing coverage as a miss mechanically depresses every
+  level the surface reports; the builder drops those observations instead.
+- **a `ts`-shaped archive row THROWS.** The archive stores `ts`, every consumer keys on `timestamp` —
+  fed raw, the rows are silently filtered out and the answer is a confident "never printed". That is the
+  exact failure `archive-series.mjs` exists to prevent, and here it is a programming error, so it is loud.
+
+**AB2, `pipeline/commands/build-fill-surface.mjs` + `pipeline/lib/market/fill-surface.mjs`** — the
+offline builder and its keying layer. Sweeps items × reference windows × a premium grid against the
+Tier-1 archive (`open(undefined,{readonly:true})` only) and emits the versioned
+`pipeline/.cache/fill-surface.json`, keyed **premium × price tier × volatility band × horizon**. Why
+each key: premium over MID because premium over our own BID conflates ask greed with entry quality
+(the same order reads +5.84% over Ben's Masori buy and +1.59% over market mid); PRICE TIER because
+omitting it overstates big-ticket fill by ~30pp; VOLATILITY (not trade frequency) because conditioning
+on volatility collapses the frequency effect from 25.6pp to 2.8–8.5pp while volatility alone spans
+19.1%→77.6%. The premium is set on a GRID rather than read back off our own quotes — reading back our
+own asks is what made the earlier 91.5% study self-fulfilling. CIs are an **item-cluster bootstrap**,
+because outcomes are item-dominated (within-item variance share 0.648) and an i.i.d. interval would be
+several times too narrow.
+
+**AB3, `askAtFillRate(item, {targetP, horizon})`** — the inversion, and the lever pointed the right way
+round: you name the confidence, the surface names the price. **It refuses rather than extrapolates** —
+nine paths, all fixture-pinned: no surface, no pinned mid, no volatility, no density, a sparse ITEM (the
+surface describes dense items only), a sparse CELL, an unbuilt horizon, a bad target, and a target the
+measured grid cannot reach. A hit at the top of the grid returns `capped: true` rather than a fabricated
+higher premium.
+
+**The measured run.** 1h grain, 6 windows across the archive's 71 days, 4,034 candidates → **13,721
+observations over 2,528 dense items**. Pooled 3-day: +0.5% **88.7%** · +1% 84.8% · +2% **77.4%** · +3%
+70.4% · +5% 60.2% · +8% **49.7%**, against the 5m-based reference 91.1/87.5/79.9/73.4/61.0/49.6 — within
+3pp everywhere and converging to zero at +8%, exactly the shape 1h smoothing predicts. The ~30pp
+price-tier claim reproduces at **32.2pp** (pooled 77.4% vs `≥10m` 45.2% at +2%). A rebuild 7 hours later,
+with all six windows shifted, moved every level ≤0.4pp.
+
+**Four things the build corrected in the plan** (recorded as §11 of `plans/PLAN-ASK-BACKTEST.md`):
+the plan's `pct = 0.9` "near-certain and cheap" lever value **barely exists** on the measured grid — only
+5 of 144 cells clear 90% and all five are `<100k` mid/high-volatility cells, while `≥10m × lowVol` tops
+out at **74.7%** even at +0.5%, so 90% is correctly refused for every big-ticket item (usable range there
+is ~0.3–0.75); the "item axis separates nothing below 1%" constraint was imported
+from the FREQUENCY axis and is false for volatility (82.4% vs 92.3% at +0.5%) though still not usable
+there, because `relStd` measuring "does it move 0.5%" makes the split definitional rather than
+predictive; and the `≥10m` tier is unbounded above, so a 1.4b item is scored on the same cell as a 27m
+one — out of calibrated range above ~100m until the archive supports another tier.
+
+**Honest limits, unchanged and not softened.** This is the PRINT proxy: `avgHighPrice ≥ P` proves buyers
+paid ≥P, not that *your* ask was taken. For a 1-unit lot it is a conservative lower bound; it says
+nothing safe about size, and the flow check (AB4) does not exist yet. No spike guard (AB5) yet either.
+One market period, one grain, one mid definition. 144 cells means every dense sub-100k low-volatility
+item gets the same answer — that is the resolution of the data, not a placeholder for per-item
+calibration. **Nothing live reads any of this**; AB7 is the console-only INFORM surfacing chunk and
+AB8/AB9 gate any promotion to a default ask basis.
+
+**One finding the build produced that the plan did not anticipate.** §10/m1 published a ±2–3pp level
+uncertainty; that is the POOLED figure and it does not transfer to a keyed cell. Across the 144 cells the
+**median window spread is 18.4pp against a median bootstrap CI width of 8.5pp** — the uncertainty an
+item-cluster bootstrap cannot see is usually the LARGER one, and it is what binds. `≥10m × lowVol × +2%`
+(n=576 over 115 items, clearing every density floor) reads 44.6% with a ±4pp CI and a per-window range of
+**29.8% → 60.4%**. So `askAtFillRate` returns `windowSpread` and, whenever it beats the CI, leads with it:
+*"this cell's level moved 26pp across the 6 reference windows — WIDER than the ±4pp bootstrap CI."*
+Nothing downstream may quote the CI alone. Two independent full builds 7 hours apart still agreed to
+≤0.4pp, so this is about a single cell's sensitivity to WHICH windows were sampled, not instability in the
+surface as a whole.
+
+**Perf note.** The obvious per-item read took 22 minutes; `observations` is `WITHOUT ROWID` on
+`(grain, ts, itemId)`, so a per-item query does one random PK seek per row (~7M seeks into a multi-GB
+B-tree). One bulk `ts BETWEEN` range scan per reference window is contiguous and takes **6 seconds** for
+identical numbers.
+
 ### The durable-floor caution stops being wallpaper — a COMPOSITION, not a fourth implementation (0.71.2, 2026-08-06)
 **The failure.** Snape grass was bought 13,000 @ 1,051 four days into a spike. `floorValidator` cautioned
 it on **three consecutive passes** with a rising multiple — "buy 1052 is **1.68×** typical swing above the

@@ -1,6 +1,10 @@
 # PLAN-ASK-BACKTEST — price the ask off what ACTUALLY filled, at fine grain, with a tunable lever
 
-**Status: PLANNING ONLY (2026-08-07). No code changed.** Deferred behind AF1/AF2
+**Status: AB1–AB3 BUILT (2026-08-08) — the usable core. AB4–AB9 open.** `printed-at.mjs` (the atom),
+`fill-surface.mjs` (keying/features + the `askAtFillRate` inversion) and `build-fill-surface.mjs` (the
+offline builder) are in the tree with fixture suites; nothing live reads them (AB7 is the surfacing
+chunk). The build record + what the measurement said about §4's inherited constraints is **§11**.
+Everything before it was: **PLANNING ONLY (2026-08-07). No code changed.** Deferred behind AF1/AF2
 (`PLAN-ARCHIVE-FIRST-FUNNEL.md`). Owner ask, verbatim: *"our strategy should be some variation of what
 price filled according to the fine-grained buckets on x% of days? That gives us an easy lever to tune.
 The other question is how can we inform it based on the other data we've gathered especially the last
@@ -144,9 +148,9 @@ directions) is the right shape.
 
 | # | Chunk | Dep | Effort |
 | --- | --- | --- | --- |
-| **AB1** | Pure `printedAt(series, { mid, premium, horizon, from })` → boolean + the observed max — the atom the whole surface is built from. Fixture-pinned, no fetch, no archive coupling. Mid is an INPUT, never computed inside, so constraint 2 is enforced at the call site. | — | S |
-| **AB2** | Surface BUILDER (offline, archive-only): sweep items × reference windows × premium grid → a lookup keyed by **premium × price tier × volatility band × horizon**, with per-cell n and a CI. Emits a versioned artifact; does NOT touch a live surface. | AB1 | M |
-| **AB3** | `askAtFillRate(item, { targetP, horizon })` — invert the surface: highest premium whose cell clears `targetP`, converted to gp via the pinned mid. **Refuses** (returns null + reason) outside dense/known cells rather than extrapolating. | AB2 | M |
+| **AB1 ✅** | Pure `printedAt(series, { mid, premium, horizon, from })` → boolean + the observed max — the atom the whole surface is built from. Fixture-pinned, no fetch, no archive coupling. Mid is an INPUT, never computed inside, so constraint 2 is enforced at the call site. **BUILT** `pipeline/lib/market/printed-at.mjs` + `pipeline/test/printed-at.test.mjs` (2026-08-08). | — | S |
+| **AB2 ✅** | Surface BUILDER (offline, archive-only): sweep items × reference windows × premium grid → a lookup keyed by **premium × price tier × volatility band × horizon**, with per-cell n and a CI. Emits a versioned artifact; does NOT touch a live surface. **BUILT** `pipeline/commands/build-fill-surface.mjs` → `pipeline/.cache/fill-surface.json` (`coffer-fill-surface/1`); keying/features in `pipeline/lib/market/fill-surface.mjs`. | AB1 | M |
+| **AB3 ✅** | `askAtFillRate(item, { targetP, horizon })` — invert the surface: highest premium whose cell clears `targetP`, converted to gp via the pinned mid. **Refuses** (returns null + reason) outside dense/known cells rather than extrapolating. **BUILT** in `fill-surface.mjs`, nine refusal paths fixture-pinned in `pipeline/test/fill-surface.test.mjs`. | AB2 | M |
 | **AB4** | Flow check — units traded at/above the level, as a **separate necessary condition**, because the proxy is only a lower bound at qty=1 (§8) and says nothing about size. A level with no flow is refused regardless of its P. | AB1 | S |
 | **AB5** | Single-print spike guard, neighbour-relative, fired BEFORE any aggregation. Measured base rate: **0.9% of item-days ≥1m** (114 / 12,028, touching 75 of 511 items). ⚠ Fixture must pin the CORRECTED case: 07-28 carried **1 unit, not 53**, and was a genuine dislocation (instasells at 31m the same morning) — plus the 07-12 spike missed first time. | AB2 | S |
 | **AB6** | Recency: report the recent-window rate BESIDE the full-window rate (RC1's existing divergence convention). **LOCAL day bucketing** — §2's story was UTC and flips to 2/3 under local (§8/M4). No blending, no decay constant, until something can distinguish them. | AB3 | M |
@@ -630,3 +634,198 @@ TIER, with levels trusted to ±2–3pp**, regime-stable across the archive's 70 
 
 **Not safe:** the pooled or frequency-tercile numbers for any specific candidate; the monotonicity as
 evidence; the +0.5–1% frequency ordering; anything on sparse items.
+
+---
+
+## §11 — AB1–AB3 BUILD RECORD (2026-08-08). The surface reproduces; three of §4's inherited constraints need amending.
+
+**What is in the tree.** `pipeline/lib/market/printed-at.mjs` (AB1, pure atom), `pipeline/lib/market/fill-surface.mjs`
+(AB2's keying/features + AB3's `askAtFillRate`), `pipeline/commands/build-fill-surface.mjs` (AB2's offline
+builder → `pipeline/.cache/fill-surface.json`, schema `coffer-fill-surface/1`), plus
+`pipeline/test/printed-at.test.mjs` and `pipeline/test/fill-surface.test.mjs`. **Nothing live reads any of
+it** — no gate, no scan, no app surface. AB7 is the surfacing chunk.
+
+### 11.1 The real run
+
+`node pipeline/commands/build-fill-surface.mjs` — 1h grain, 6 reference windows spread evenly across the
+archive's 71 days (06-05 · 06-17 · 06-29 · 07-11 · 07-23 · 08-05), 4,034 candidate items → **13,721 usable
+observations over 2,528 dense items**. Dropped: 9,701 (item, window) pairs for `no-mid` (traded under 12 of
+the prior 24 hours) and 698 for failing the 50% coverage floor.
+
+| premium | ≤1d | **≤3d** | §9/§10 reference (3d) | Δ |
+| --- | --- | --- | --- | --- |
+| +0.5% | 81.0% | **88.7%** | 91.1% | −2.4pp |
+| +1.0% | 75.6% | **84.8%** | 87.5% | −2.7pp |
+| +2.0% | 66.2% | **77.4%** | 79.9% | −2.5pp |
+| +3.0% | 58.5% | **70.4%** | 73.4% | −3.0pp |
+| +5.0% | 48.1% | **60.2%** | 61.0% | −0.8pp |
+| +8.0% | 37.8% | **49.7%** | 49.6% | +0.1pp |
+
+By price tier (3d), against §10/B1: `<100k` 81.2 vs 83.9 · `100k–1m` 72.7 vs 77.8 · `1–10m` 59.3 vs 63.9 ·
+`≥10m` **45.2 vs 52.4** at +2%. By volatility (3d, +8%): lowVol **15.9%** → highVol **80.3%**, against
+§10/M3's 19.1% → 77.6%.
+
+**Read the deltas as a grain difference, not a disagreement.** The reference numbers are 5m-based; this
+build is 1h. A 1h bucket is a volume-weighted average over the hour, so its max understates the intra-hour
+peak — and the shortfall behaves exactly as that predicts: ~2.5–3pp where the level is a hair above mid,
+converging to zero at +8% where a real move is needed regardless. §10's own independent 1h rebuild read
+89.2/88.9/89.9 at +0.5% and 51.4/48.8/49.0 at +8%; this run's 88.7 and 49.7 sit inside both. **I did NOT
+re-run the two grains side by side on identical items and windows**, so "1h smoothing" is the consistent
+explanation, not a measured one.
+
+**Two constraints reproduced outright.** (a) Omitting price tier overstates big-ticket fill: pooled 77.4%
+vs `≥10m` 45.2% at +2% = **32.2pp**, against the plan's ~30pp. (b) Rebuilt 7 hours later (the archive
+accrues, so all six windows shift), every level moved **≤0.4pp** — the levels are not sensitive to where
+the windows land within the period.
+
+### 11.2 Three amendments
+
+1. **§1's `pct = 0.9` lever value barely exists on the measured grid, and not at all where it matters.**
+   Of the 144 keyed cells at 3d, exactly **5 clear 90%** and every one of them is a `<100k` mid- or
+   high-volatility cell (best: `<100k × midVol × +0.5%` = **93.0%**). `≥10m × lowVol` tops out at
+   **74.7%** even at +0.5%, so `askAtFillRate` REFUSES `targetP: 0.9` for every big-ticket item —
+   correctly, because clearing 90% there would need a premium under +0.5%, i.e. at or below mid, where
+   nothing was measured. §1's "0.9 = near-certain and cheap" is reachable only on dust that moves; the
+   usable lever range on the items Ben actually holds is roughly **0.3–0.75**.
+2. **Constraint 5 ("below ~1% the item axis separates nothing") is imported from the wrong axis.** §10/M2
+   established that for trade FREQUENCY. On VOLATILITY the separation at +0.5% is large: lowVol 82.4% vs
+   highVol 92.3%, ~10pp. But it should still not be *used*, for a different reason: `relStd` measures
+   whether the item moves at all, so "prints 0.5% above its own 24h mean" is close to a restatement of
+   "moves 0.5%" — the separation there is definitional, not predictive. The shipped code keeps the ≥2%
+   floor and flags sub-2% answers `separationClaimable: false`, carrying the vol-pooled figure beside
+   them. The flag is right; the stated reason in §4 needs replacing with this one.
+3. **The `≥10m` tier is unbounded above and that is a live miscalibration.** A 1.4b Twisted bow is scored
+   on the same cell as a 27m Masori chaps. This is §10/B1's own complaint ("the top tercile *starts* at
+   6,728gp") reappearing at the other end of an absolute scheme. It cannot be fixed today: the whole
+   `≥10m` tier is n=653 over 115 items, so splitting it would not clear the cell floors. **Anything above
+   ~100m should be treated as out of calibrated range until the archive supports a further tier.**
+4. **§10/m1's "±2–3pp" is the POOLED figure and does NOT transfer to a keyed cell — the number the
+   lookup actually reads is several times worse.** Measured on this build: pooled 3d window spreads run
+   2.9–4.6pp, as §10/m1 said. But across the 144 keyed cells the **median window spread is 18.4pp**
+   against a **median item-cluster CI width of 8.5pp** — the uncertainty an item bootstrap cannot see is
+   typically the LARGER of the two, and it is the binding one. `≥10m × lowVol × +2%` (n=576, 115 items,
+   which clears every density floor) reads 44.6% with a bootstrap CI of ±4pp and a per-window range of
+   **29.8% → 60.4%**. `askAtFillRate` now returns `windowSpread` and, whenever it exceeds the CI width,
+   leads its notes with it: *"this cell's level moved 26pp across the 6 reference windows — WIDER than
+   the ±4pp bootstrap CI"*. **Nothing downstream may quote the CI alone.** This does not invalidate the
+   levels — the two independent full builds 7h apart agreed to ≤0.4pp — but it does mean a single cell's
+   level is a property of the six windows chosen, and AB7 must render the spread, not just the point
+   estimate.
+
+### 11.3 Cross-check on the anchor item
+
+Masori chaps: pinned mid **26,696,664**, relStd 0.0228 (`lowVol`), tier `≥10m`, coverage 98%. Measured
+`≥10m × lowVol` 3d: +1% → 62.2%, +2% → 45.2%. Ben's live 27,149,999 ask is **+1.70%** over that mid →
+interpolating, **~52% to print within 3 days**. That lands inside §9.6's corrected 53–60% band and nowhere
+near §1's 92%, from a differently-constructed measurement (exogenous premium grid, 1h grain, 2,528-item
+pool). The direction of every successive method remains DOWN.
+
+### 11.4 Performance note, recorded so nobody re-derives it
+
+The obvious per-item implementation (`archiveSeries` per item over the full span) took **22 minutes**. The
+`observations` table is `WITHOUT ROWID` on PK `(grain, ts, itemId)`, so a per-item read walks the secondary
+index and then does one random PK seek per row — ~7M seeks into a multi-GB B-tree. One bulk `ts BETWEEN`
+range scan per reference window is a contiguous primary-key read and takes **6 seconds**, same numbers.
+The builder owns the `ts`→`timestamp` rename itself in that path (bypassing `archive-series.mjs`), and
+`printedAt` throws on a `ts`-shaped row as the backstop.
+
+### 11.5 What is still NOT known
+
+- **No flow check exists** (AB4). Every number here is the print proxy at qty=1 and says nothing about
+  size. A level with adequate P and no flow is still a queue gamble.
+- **No spike guard** (AB5). The 0.9%-of-item-days single-print spikes are still inside the sample.
+- **One market period, one grain, one mid definition.** Six windows inside one ~70-day summer.
+- **Cells are coarse.** 4 tiers × 3 bands × 6 premiums × 2 horizons = 144 cells, so every dense sub-100k
+  low-volatility item gets the same answer. That is the honest resolution of the data, not a placeholder
+  for per-item calibration.
+
+---
+
+## §12 — ADVERSARIAL REVIEW OF AB1–AB3 (2026-08-08). Five defects; three fixed here, two carried.
+
+An independent pass tasked with REFUTING §11 rather than confirming it. Two of my worries were
+**refuted** and three real defects landed. Verdict: the code is honest, leak-free and reproducible, and
+the refusal contract genuinely refuses — but the surface as built is **not fit to be the sole driver of a
+big-ticket ask price**, and now says so at the point of use.
+
+### Fixed in this commit
+
+**D1 — the 1h build understates `>=10m` by 5.5–9.4pp across the whole usable premium range.** The
+side-by-side §11.1 admitted it never ran, run on identical (item, window, mid) pairs, n=330 / ~115 items:
+
+| premium | 1h | 5m | gap |
+| --- | --- | --- | --- |
+| +0.5% | 77.3% | 82.7% | +5.5pp |
+| +1% | 65.5% | 73.9% | +8.5pp |
+| +2% | 46.4% | 55.8% | **+9.4pp** (McNemar χ²=27.3, p<0.001, 29 distinct items) |
+| +3% | 33.9% | 39.7% | +5.8pp |
+| +8% | 7.6% | 7.6% | 0 |
+
+Pooled across all tiers the gap is 0.7–2.0pp, which is why it hid. §11.1's "converges to zero at +8%" is
+true POOLED and false CONDITIONALLY: on `>=10m` it PEAKS at +2%, the working range. Decision cost: chaps
+at `targetP 0.5` gets +1% off the 1h cell where a 5m-calibrated cell clears at +2% — **~267k gp/unit**.
+
+**Rebuilding at 5m is NOT the fix, and this was measured rather than assumed.** A real `--grain 5m` build:
+the 5m archive spans 30d, 6 windows fit, but only **803 observations over 418 items** survive (vs 13,721
+over 2,528 at 1h) and a `>=10m` cell carries **n=10** against 576. It trades a 9pp bias for an unusable
+sample. So the bias is carried as `grainBiasPp` and REPORTED — `p` is untouched, the note shows both
+numbers. A decision-mover ships as a visible comparison, not a silent swap.
+
+**D2 — six windows is not enough, and the stored `ci` is the wrong interval.** Anchor cell
+`3d|>=10m|lowVol|0.02`: byWindow [50.5, 29.8, 53.9, 34.4, 38.5, 60.4] → a 6-window t-interval of
+**±12.7pp** against the stored bootstrap's ±4.0pp. Median over the 72 3d cells: window-t ±6.4pp vs
+bootstrap ±4.2pp, and **31/72** cells have window-t more than double the bootstrap. Rebuilding with
+`--windows 5`/`7` moves the median keyed cell 2.2–3.1pp and the worst cells **16.6–18.8pp**. The windows
+are **12.22d apart and do NOT overlap** (my brief's overlap worry was factually wrong), so this is
+genuine regime variance, undiluted. `askAtFillRate` now leads with `windowSpread` whenever it beats the
+CI and suppresses the reassuring pooled `±2.5pp` line in that case.
+
+**D3 — the ">100m is out of calibrated range" amendment (§11.2.3) existed only in prose.** Verified: a
+1.4b item was answered at +2% with no refusal and no note. Sub-tier heterogeneity inside `>=10m` at 3d,
++2%: 10–30m **47.2%** · 30–100m **48.7%** · >=100m **37.3%** (n=169, 31 items); at +8% 14.0 / 8.5 / 6.5%.
+Now a `tier-out-of-range` refusal above `TIER_CALIBRATED_MAX`. The tier cannot be split — it is n=653
+over 115 items entire.
+
+### Carried, not fixed
+
+**D4 — the volatility banding is ~90% a restatement of `z = premium/relStd`.** At fixed z, band membership
+adds only 3–7pp against the 64pp headline band spread, so "lowVol 15.9% vs highVol 80.3% at +8%" is
+largely the banding variable read back. It is **not merely circular** — volatility PERSISTS,
+corr(log prior-7d relStd, log next-3d relStd) = **0.833**, and that is the fact §11.2.2 should cite
+instead of the frequency test §4's constraint 5 wrongly imports. But hit rate is nearly a smooth 1-D
+function of z (`>=10m`: 68.4 / 53.5 / 36.9 / 20.9 / 7.4% across z bins), so a cell blends unlike items:
+inside the anchor cell, z<1.2 prints 49.5% and z>2 prints 31.9%, a 17.6pp spread the point estimate hides.
+**A z-keyed lookup would be strictly sharper than the 3-band scheme** — the natural AB-side follow-up.
+
+**D5 — a latent consumer trap.** `itemFeaturesFromSeries`'s `bucketSeconds` defaults to 3600 and
+`coverage` caps at 1, so a 5m series fed with defaults reads `coverage = min(1, 302/168) = 1.0`, a 12×
+inflation that defeats the sparse-item refusal. Harmless today (no consumer), a landmine when AB7 wires
+one. **AB7 must derive `possible` from the series' actual grain or assert on it.**
+
+### Attacks that FAILED (so these are actually solid)
+
+- **Selection bias — refuted, and the direction is the OPPOSITE of what I assumed.** The excluded sparse
+  stratum (coverage<0.5, n=698, all with outcome data) prints HIGHER than the dense pool: 85.0 vs 77.4%
+  at +2%, 67.9 vs 49.7% at +8%. Dense-only selection **deflates** the surface. At point of use the lookup
+  refuses sparse items, so build and apply populations match — no inflation exists.
+- **The tristate-null drop — empirically vacuous.** ZERO observations were dropped for missing outcome
+  coverage: 1d and 3d cells carry identical n=13,721 and `skipped.noOutcome=0`. And the hypothesised
+  direction was wrong anyway — thin outcome coverage correlates with MORE printing (63.7% vs 43.5% at +8%).
+- **No look-ahead leakage.** Features strictly `t < at`, outcome strictly `t > from`, premium grid fixed.
+  One naming caveat: "mid" is the prior-24h mean *instabuy* price, a high-side base, NOT a bid/ask
+  midpoint — pinned consistently on both sides so no calibration error, but consumers must not read it as
+  a true mid.
+- **Reproducibility is real** (back-to-back builds byte-identical minus `builtAt`; the artifact reproduces
+  from the current archive at max Δp 0.00pp) — but §11's "two builds 7h apart agreed ≤0.4pp" IS
+  near-tautological: a 7h shift inside 12.2d spacing shares ~97% of the data. The real sensitivity is
+  window LAYOUT (D2's 2–19pp).
+- **Every §11 number independently reproduces** — the pooled table, the 13,721/2,528 counts, the 698
+  sparse skips, and "exactly 5 cells clear 90%, all `<100k` mid/high-vol".
+
+### What would make it fit to drive pricing
+
+(1) ~~5m grain on `>=10m`~~ — measured and rejected; the reported bias is the available fix until the 5m
+archive deepens. (2) Promote a window-cluster interval to the PRIMARY stored `ci` (today the wider figure
+is surfaced in the notes, but the structured `ci` field a downstream consumer reads is still the narrow
+one — the remaining half of D2). (3) ✅ the >100m refusal. (4) Key on `z` instead of, or inside, the
+3-band scheme (D4).

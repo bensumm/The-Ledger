@@ -1226,7 +1226,25 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Fetches live `/timeseries?1h` per distinct closed-lot item (the only dense ~15d source) + reads the
     Tier-1 archive 5m read-only; `--json`/`--nights`/`--offline`. Builds NONE of
     `safeQuantile`/`qEvidence`/`impactFold` (AC3). Pure core `lib/fill-placement.mjs`, fixture-tested by
-    `fill-placement.test.mjs`. READ-ONLY — writes no artifact, never in a commit/sync path)
+    `fill-placement.test.mjs`. READ-ONLY — writes no artifact, never in a commit/sync path),
+    `build-fill-surface.mjs` (AB2, PLAN-ASK-BACKTEST — the OFFLINE ask-fill-surface BUILDER. Sweeps
+    items × reference windows × a premium grid against the Tier-1 archive (`open(undefined,{readonly:true})`
+    ONLY — a plain `open()` runs schema DDL against the multi-GB live DB) and emits the versioned
+    `pipeline/.cache/fill-surface.json` lookup keyed **premium × price tier × volatility band × horizon**,
+    each cell carrying `n`, `nItems`, an ITEM-CLUSTER bootstrap CI and a per-window spread. Answers "if I
+    ask X% over mid, how often does the market print at or above that within N days?" — the thing today's
+    reads cannot, since `windowread`'s "reached on ~50% of days" is the MEDIAN of the daily highs and its
+    50% is true by construction. The premium is EXOGENOUS (set on a grid, never read back off our own
+    quotes — that is what made the earlier 91.5% study self-fulfilling); the mid is PINNED via
+    `lib/market/fill-surface.mjs:itemFeaturesFromSeries`; features are strictly BEFORE the reference
+    instant and the outcome window strictly after. `--grain 1h|5m`, `--windows`, `--vol-days`,
+    `--mid-hours`, `--min-coverage`, `--limit`, `--boot`, `--out`, `--dry-run`. ⚠ **Build at `1h`, not
+    `5m`, despite 1h's measured bias** (2026-08-08): the 5m archive is only 30d deep and a 5m build yields
+    **n=10** per `>=10m` cell against **576** at 1h — it trades a ~9pp calibration bias for an unusable
+    sample. The bias is carried as a REPORTED correction instead (`grainBiasPp`), never applied.
+    READ-ONLY against the archive, writes only its own artifact, never in a commit/sync path — NO live
+    surface reads it (AB7 is the chunk that puts the LOOKUP on `read-window-range.mjs --fill-rate`,
+    console-only/INFORM))
   - **Daemon subsystem (`pipeline/daemons/*.mjs`, PLAN-DAEMON-SUBSYSTEM Phase 1+2):** the legible
     background-task layer — one registry + one lightweight manager for the scattered fleet
     (`sync-fills`/`watch-log`/`dev-server` + the `cache-warm` guard). `registry.mjs` (the DECLARATIVE
@@ -1377,6 +1395,42 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     served LIVE and reported as `shallow`, because a short series yields `{ok:false}` → label `unknown` →
     the falling exclusion silently un-gates. Consumer: `screen-flip-niches.mjs --archive-regime` (AF5b).
     Pinned by `pipeline/test/archive-series.test.mjs` + `pipeline/test/archive-6h-pin.test.mjs`),
+    **`printed-at.mjs`** (AB1, PLAN-ASK-BACKTEST — the PURE atom the ask fill surface is built from:
+    `printedAt(series,{mid,premium,horizon,from})` → did any bucket in the horizon print `avgHighPrice ≥
+    mid × (1+premium)`, plus the observed max. No fetch, no archive handle, no clock. `mid` is an INPUT
+    and is NEVER derived here — base side/window move every measured level 5–15pp, so the pinned
+    definition is enforced at the CALL SITE rather than silently chosen inside. Premium is over MID, never
+    over our own bid (bid-relative conflates ask greed with entry quality). `horizon` is in DAYS; the
+    window is exclusive at `from` (the reference bucket cannot score its own outcome) and inclusive at
+    `from + horizon×86400`. `printed` is TRISTATE — `null` + a reason when no bucket is archived in the
+    window, because an unarchived bucket can never print and scoring it as a miss mechanically depresses
+    every level. A `ts`-shaped archive row THROWS rather than reading as "never printed". Fixture-pinned
+    by `pipeline/test/printed-at.test.mjs`),
+    **`fill-surface.mjs`** (AB2's keying/feature layer + AB3's inversion — `itemFeaturesFromSeries()` is
+    THE pinned basis (mid = prior-24h mean `avgHighPrice`, `relStd` = prior-7d relative std = the item
+    axis, `coverage` = that window's density), all computed strictly BEFORE the reference instant so the
+    same call is valid at build time and at decision time; `priceTierOf` (ABSOLUTE `<100k`/`100k-1m`/
+    `1-10m`/`>=10m` — omitting price tier overstates big-ticket fill by ~30pp) and `volBandOf(relStd,cuts)`
+    (SAMPLE-RELATIVE terciles read from the artifact's own stored cuts, never hardcoded); `loadSurface()`
+    returns null on a missing/pruned/wrong-schema artifact so the lookup refuses loudly; and
+    **`askAtFillRate(item,{targetP,horizon})`** (AB3) — the highest premium whose measured cell clears
+    `targetP`, converted to gp off the pinned mid. It REFUSES (`ask:null` + a reason) rather than
+    extrapolating: `no-surface`/`no-mid`/`no-volatility`/`no-density`/`sparse-item` (the surface describes
+    DENSE items only)/`unknown-horizon`/`sparse-cell`/`target-unreachable`/`bad-target`/**`tier-out-of-range`**
+    (2026-08-08: `>=10m` is UNBOUNDED ABOVE and was pricing a 1.4b item off the same cell as a 27m one —
+    the `>=100m` stratum prints 37.3% where the tier reads 44.6% at +2%/3d. The tier cannot be split, so
+    above `TIER_CALIBRATED_MAX` it refuses); a hit at the top
+    of the grid returns `capped:true` (censored, not extrapolated), and below the +2% separation floor the
+    volatility band is reported NOT claimable with the vol-pooled figure alongside. Every answer carries a
+    level uncertainty and the print-proxy limit (a lower bound at qty=1, silent about size) — and where a
+    cell's `windowSpread` exceeds its bootstrap CI (the MEDIAN case: 18.4pp vs 8.5pp on the 2026-08-08
+    build, since an item-cluster bootstrap cannot see window clustering) the answer leads with the spread
+    and says the CI is a floor on the uncertainty, not the whole of it. `grainBiasPp(grain,tier,premium)`
+    carries the MEASURED 1h-vs-5m gap (`>=10m` only: 5.5–9.4pp, peaking at +2% — the working range —
+    rather than converging as the plan claimed; pooled across tiers it is 0.7–2.0pp and within noise) and
+    the answer SHOWS both numbers without applying either: a decision-mover ships as a visible comparison,
+    not a silent swap.
+    Fixture-pinned by `pipeline/test/fill-surface.test.mjs`. NOT wired to any surface yet — AB7),
     `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
     `loadHistDaily` (YF1) + `loadBands(hours,{db})` — the whole-market 5m intraday band read, PERF-1
@@ -1960,7 +2014,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `sf3-volsrc.test.mjs` (SF-3 — the liquidity-`class` volume-source split: `classAndSource` CLASS PARITY
     (a warm bulk map converges quote's logged class on screen's, even across a per-item straddle) + the
     cold `peritem` fallback (pure/synchronous ⇒ no fetch) + `readWarmAll24h`'s fetch-free warm/stale/absent
-    reads — all synthetic, no network)
+    reads — all synthetic, no network),
+    `printed-at.test.mjs` (AB1 — the fill atom: `mid` is an input that moves the verdict, the `>=`
+    threshold over MID, the exclusive-at-`from`/inclusive-at-`from+horizon` window, `horizon` in DAYS, the
+    TRISTATE `printed:null` on missing coverage that must never collapse to `false`, and the `ts`-shaped
+    row that THROWS),
+    `fill-surface.test.mjs` (AB2 keying + AB3 inversion — the pinned prior-24h mid computed strictly
+    before the reference instant, absolute price tiers, artifact-supplied volatility cuts, the
+    highest-premium-clearing-target selection, price tier and horizon each moving the answer, the
+    `capped` top-of-grid flag, the below-2% not-claimable band, all nine refusal paths, plus the three
+    2026-08-08 review fixes: the above-ceiling `tier-out-of-range` refusal that must not also carry a
+    price, the wider-of-CI-vs-windowSpread rule (and the suppression of the reassuring pooled figure
+    when the spread wins), and the grain bias being SHOWN with `p` left untouched)
     — all auto-discovered by
     `run-tests.mjs` (below), which CI runs once
   - `pipeline/test/fixtures/replay/snapshot.json` + `golden.json` (**tracked**, P1) — the committed inputs +
@@ -1996,6 +2061,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     Shape `{kind, generatedAt, reports:[…]}`; screen
     accumulates its per-flip-niche reports into the one file (the VALUE flip-niche is console-only,
     excluded, same as screen.json). Local, disposable — deleting it just loses the last run's dump.
+    Also `fill-surface.json` (AB2, PLAN-ASK-BACKTEST — the versioned `coffer-fill-surface/1` ask-fill
+    lookup: `{schema, builtAt, meta, cells, cellsVolPooled, pooled}`, where a cell key is
+    `<horizon>d|<priceTier>|<volBand>|<premium>` and carries `{n, hits, p, nItems, ci, nWindows,
+    windowSpread, byWindow}`. `meta` stamps the PINNED mid definition, the measured volatility-tercile
+    cuts, the density floor, the reference windows, the bootstrap method, the build GRAIN, and an explicit
+    `limits` list of what the numbers may not be used to claim. ⚠ `ci` is the ITEM bootstrap and is the
+    NARROWER of the two uncertainties — `windowSpread`/`byWindow` carry the between-regime variance that
+    usually dominates (median 18.4pp vs 8.5pp), so no consumer may quote `ci` alone. Producer:
+    `build-fill-surface.mjs`; consumer: `lib/market/fill-surface.mjs:loadSurface`/`askAtFillRate`.
+    Gitignored + DERIVED from the machine-local archive, so it is reproducible rather than precious — but
+    deleting it makes `askAtFillRate` refuse with `no-surface`, the intended loud degradation, never a
+    silent pooled guess).
   - `pipeline/.guide-history.jsonl` (**tracked** as of 2026-07-06 — Ben's call: it's an accruing
     observation record, so it lives in the repo to survive a lost machine; kept OUTSIDE `.cache/`
     so cache pruning never touches it) — change-only GE guide-price observations for watched items,
