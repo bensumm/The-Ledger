@@ -510,6 +510,15 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   bound, so it wants its own plan — and the recalibrated floor must be re-derived, not just rescaled,
   since dropping churn 6→2 moves the whole distribution the 500k was set against.
 
+- **[CAP HALF FIXED 2026-08-08 — the RESERVE half remains]** The `--max-price` literal is GONE: it now
+  derives from the deployable pool (`screen-flip-niches.mjs`, default = capital, `--max-price` still
+  overrides). Measured effect: the cap resolved to 102.09m, band GATED rose 187→208, but RATED went
+  63→62 and exactly ONE item above the old 45m surfaced (Virtus armour set, 67.89m, B — −0.4% at the
+  reach-folded price, +5.3% on the asym deep-bid read). **That is the proof the cap was never the
+  binding constraint.** The fetch pool is a fixed top-N ranked by velocity-weighted expected gp/day, so
+  newly-admitted big tickets are displaced before they are ever fetched. The reserve below is the real
+  fix; do not re-litigate the cap.
+
 - **NO FETCH-POOL RESERVE EXISTS FOR BIG-TICKET ITEMS IN BAND/CHURN, AND THE `--max-price 45m` DEFAULT
   IS AN UNEXAMINED DAY-ONE LITERAL (measured 2026-08-08).** Asked why no big items were recommended off
   a live board with 105m idle. Three separate mechanisms, only one of which was known:

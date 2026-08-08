@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.92
+version: 1.93
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -142,7 +142,9 @@ runs. Because publishing is a local file write straight into repo-root `screen.j
 app the moment it's written — no extra step to "push it to the local server." Skip this ONLY on an
 explicit `--no-publish` throwaway console read.
 
-Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`;
+Map Ben's ask to args: flip-niche mode → `--mode` (default `band`); a price cap → `--max-price`
+(the DEFAULT is now DERIVED from the deployable pool — show anything Ben can afford ≥1 unit of — not the
+old arbitrary 45m literal, so pass it only for a deliberately NARROWER read, never to "enable" big tickets);
 a keyword/flip-niche ("anything in herbs?") → **no script flag exists** — run the screen and
 filter the output rows by flip-niche yourself. The script already gates (two-sided liquidity, price
 window, per-spec falling doctrine) and grades (`rating.mjs`); your job is the judgment pass over

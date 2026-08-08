@@ -190,7 +190,9 @@ if (MODE !== 'all' && !MODES.includes(MODE)) { console.error(`! unknown --mode "
 const FLOOR = A.floor != null ? +A.floor : 3500;   // PLAN-VOL24 step 2: recalibrated 50 → 3500 against the CORRECTED rolling-24h volume distribution (count-matched to the old 50/legacy selectivity; the /24h endpoint under-read ~10–27×, so the old 50 was ~18× too loose in corrected units). Band `thin` (limitVol < FLOOR) auto-follows.
 const MIN_ROI = A['min-roi'] != null ? +A['min-roi'] : 1.5;
 const MIN_PRICE = A['min-price'] != null ? parseGp(A['min-price']) : 0;
-const MAX_PRICE = A['max-price'] != null ? parseGp(A['max-price']) : 45e6;
+const MAX_PRICE_EXPLICIT = A['max-price'] != null;
+// MAX_PRICE is no longer a literal — it DERIVES from capital. Declared after VALUE_CAPITAL resolves
+// (search MAX_PRICE below), and re-synced in main() once the market-ref pool is known.
 // Fetch-pool size per niche. 40 → 90 (Ben, 2026-08-07, PLAN-FETCH-POOL-SCALING): the old 40 was
 // mis-tuned AT ITS OWN REFERENCE POINT. `scaleSlots`' CAP_REF is 100m — the bankroll the fixed defaults
 // are treated as tuned against — yet a measured pass at 100.75m showed `--top 40` leaving 37 gradeable
@@ -232,6 +234,22 @@ let VALUE_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
   : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.deployablePool : 100_000_000);
 const VALUE_SLOTS = A.slots != null ? Math.max(1, +A.slots) : 5;
 let VALUE_CAP_GP = VALUE_CAPITAL / VALUE_SLOTS;
+
+// MAX_PRICE — DERIVED FROM CAPITAL (Ben, 2026-08-08). Was a bare `45e6` literal with no rationale in
+// code, docs/, or any plan: it traces to the tool's first implementation plan (83ec264, 2026-07-03,
+// written as `[--max-price 45m]`) and was never revisited — conspicuous beside FLOOR (recalibrated
+// 50→3500 with a study) and TOP (40→90 explicitly because it was mis-tuned against scaleSlots' CAP_REF
+// of 100m). The codebase's stated reference bankroll was 100m while a single item was capped at 45% of
+// it, so the cap silently hid every big ticket regardless of how much cash was actually free.
+//
+// The rule now: you can be shown anything you can afford ONE unit of. That is the same affordability
+// test the amplitude lane already uses (an item you can't afford ≥1 unit of is DROPPED as
+// `unaffordable`) — reused, not reinvented. Deliberately the FULL deployable pool, not ÷slots: this is
+// a DISCOVERY cap answering "could I buy this at all", while position sizing stays the sizing layer's
+// job. A pool of 0/unknown falls back to the 100m placeholder so a missing cash anchor degrades to a
+// working discovery screen rather than an empty board. `--max-price` still overrides for a filtered read.
+let MAX_PRICE = MAX_PRICE_EXPLICIT ? parseGp(A['max-price'])
+  : (VALUE_CAPITAL > 0 ? VALUE_CAPITAL : 100_000_000);
 // A3 (PLAN-AMPLITUDE-SCAN §2.4): the amplitude hold horizon — 1 (default: buy the trough, sell the peak
 // same local day) or the 1.5-day experiment (fill day-1's trough, sell into day-2's peak). Feeds the
 // amplitude family's ttf, the deployable-units accumulation leg, and the §A5 shadow-replay horizon. A
@@ -2718,6 +2736,14 @@ async function main() {
   // or the explicit --capital). The FULL pool, NOT ÷slots — the attention floor asks "if I put everything
   // in this ONE lane…". Left null under --throughput legacy → gateCandidates uses the capital-blind value.
   if (THROUGHPUT_MODE !== 'legacy') THRESHOLDS.THROUGHPUT_CAP_GP = VALUE_CAPITAL;
+  // Same sync for the capital-derived MAX_PRICE (see its declaration): pick up the market-ref-refined
+  // pool when the re-derive above ran, so a reclaimable DEEP bid's escrow counts toward what Ben can
+  // afford. Gating (gateCandidates, below) reads THRESHOLDS, and the banner/ledger read MAX_PRICE.
+  if (!MAX_PRICE_EXPLICIT && VALUE_CAPITAL > 0) {
+    MAX_PRICE = VALUE_CAPITAL;
+    THRESHOLDS.MAX_PRICE = MAX_PRICE;
+    SCREEN_PARAMS.maxPrice = MAX_PRICE;
+  }
   const bands = NEED_BANDS ? await loadBands(BAND_HOURS) : null;
   const { series: daily, coverageWindows } = await loadDaily(DAILY_DAYS, DAILY_STEP_H);  // bulk regime-proxy archive
   const ctx = { v24, map, bands, daily };   // P5: `daily` rides the ctx so the value gate can read the term structure
