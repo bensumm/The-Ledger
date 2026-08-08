@@ -1,6 +1,6 @@
 ---
 name: overnight
-version: 1.21
+version: 1.22
 description: Two-phase end-of-day setup — resolve current positions, pause for Ben's free capital, then scan and size overnight bids with an accumulation-and-capital table. Triggers — "set up for overnight", "what should I leave running overnight", "overnight offers", "going to bed", "overnight".
 ---
 
@@ -88,7 +88,7 @@ propagate automatically; restate nothing from them. Skills never bump `APP_VERSI
    band, drops the thin gp-flow fast-lane and any 2h breakdown, ranks by net edge over velocity,
    and EXCLUDES items whose yesterday-overnight window printed materially below the current
    optimistic bid (`overnightStaleRisk` — the built-in stale/underwater-by-morning test). The
-   500k gp/day floor is applied too. So you no longer hand-apply those exclusions.
+   250k gp/day floor is applied too. So you no longer hand-apply those exclusions.
 5. **What the posture does NOT decide — your remaining judgment layer:**
    - **Big-ticket / mildly-rising items survive the posture** (they're flat/rising, non-thin) —
      that's intended: an optimistic big-ticket buy is a good overnight option. **Size them**

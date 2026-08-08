@@ -36,7 +36,7 @@ revisit at F1, NOT retires — see the notable list at the bottom). All 30 memor
 | `--mode scalp` / `--mode value` provisional niches | KEEP-AS-JUDGMENT | Spec is coded (`js/flip-niches.mjs`); "only chase at the desk" is the judgment. |
 | Niche set (NY2 — band/spread/rising in `--mode all`) | ENCODE | `js/flip-niches.mjs` `inAll` + `pipeline/commands/screen-flip-niches.mjs`; the ruling itself is a Ben decision recorded in `PLAN.md`. |
 | Sync first (SY1) / run-from-main (SY1.2) | ENCODE | `pipeline/commands/sync-fills.mjs`; the run-location rule is operational, stays as prose. |
-| 500k gp/day attention floor | ENCODE | `pipeline/commands/screen-flip-niches.mjs` `--min-gpd` (default 500_000). |
+| 250k gp/day attention floor | ENCODE | `pipeline/commands/screen-flip-niches.mjs` `--min-gpd` (default 250_000; was 500_000 until 2026-08-08, paired with the expUnits 6→2 refill haircut). |
 | SUB-FLOOR FALLBACK not qualified picks (P6c) | KEEP-AS-JUDGMENT | Mechanic in `pipeline/lib/signal/gatecandidates.mjs`; the relay-honestly rule is judgment. |
 | 24h-drift is a pre-filter only | KEEP-AS-JUDGMENT | Regime column is coded; "never recommend off 24h alone" is interpretation. |
 | Two-sided liquidity discipline | ENCODE | Two-sided gate in `pipeline/lib/signal/gatecandidates.mjs`; the ~100/day floor stays judgment. |

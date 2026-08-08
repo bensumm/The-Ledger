@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.91
+version: 1.92
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -253,7 +253,7 @@ now the screen syncs again itself regardless — redundant but harmless, both ar
 
 This is the tribal layer the script can't do — apply ALL of these:
 
-- **500k gp/day attention floor** _(enforced: `pipeline/commands/screen-flip-niches.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
+- **250k gp/day attention floor** (was 500k until 2026-08-08 — paired with the expUnits 6→2 refill haircut; the 6 assumed re-buying every 4h around the clock) _(enforced: `pipeline/commands/screen-flip-niches.mjs` `--min-gpd`)_ (standing rule, memory `gpd-floor-500k`): NOW ENFORCED BY THE
   SCRIPT — `screen-flip-niches.mjs --min-gpd` (default 500_000) drops sub-floor rows pre-rating (S1), so you no
   longer post-filter. Just trust the printed rows and, if Ben wants a different bar, pass `--min-gpd
   <N>`. Thin gp-flow big tickets and held/asked items are floor-exempt by design.
@@ -822,7 +822,7 @@ This is the tribal layer the script can't do — apply ALL of these:
 ## 4. Output
 
 The judgment-filtered shortlist, one-line rationale per pick (why this edge is real), plus
-a note of how many candidates the 500k floor eliminated. If a high-grade row was skipped,
+a note of how many candidates the 250k floor eliminated. If a high-grade row was skipped,
 point at it and give the reason — that's the layer this skill exists for.
 
 **Cover every flip-niche each pass — "no dips" is NOT a complete scan (Ben, 2026-07-07).** A

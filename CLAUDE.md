@@ -64,7 +64,7 @@ Skill-prose disposition (what's encoded vs judgment) is **`docs/SKILL-TRIAGE.md`
 missing.
 
 ## Market judgment layer — lives in the project skills (moved by PLAN-5)
-The screen/positions judgment layer (500k gp/d floor, 24h-drift-is-a-pre-filter-only,
+The screen/positions judgment layer (250k gp/d floor, 24h-drift-is-a-pre-filter-only,
 two-sided liquidity / ghost-spread discipline, tax-dominates-thin-flips, band-is-the-edge
 pricing, band-top artifacts, fresh-repricer flag, overnight/morning posture) lives in the
 committed project skills `/scan`, `/positions`, `/overnight`, `/morning`
@@ -80,7 +80,7 @@ restores them). Break-even is the tax-capped `breakEven()` in `js/quotecore.js` 
 
 **The full doctrine lives in `docs/MARKET-ANALYSIS.md`** (read in build order: output → tax → find →
 price → time → scripts): what each column means + the corrected-volume Vol/d, the gate stack
-(two-sided liquidity · Bar D traded-band · Bar E band-edge · 500k attention floor), the per-strategy
+(two-sided liquidity · Bar D traded-band · Bar E band-edge · 250k attention floor), the per-strategy
 falling rule, the P2/P3 validator registry (gate vs inform), rank/grade (`net × P(fill) ÷ TTF`),
 WINDOW-CLEAR pricing (`read-window-range.mjs --exit`), the diurnal + forecast timing reads, and the
 per-script behavior facts. Each rule points to the module header that owns its full spec.

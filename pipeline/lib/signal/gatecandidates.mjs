@@ -69,7 +69,11 @@ export const DEFAULT_THRESHOLDS = {
   // Bar D (Ben 2026-07-09): the traded-band gate reads tradedWin (density) + sawLow/sawHigh (two-sided),
   // NOT the same-5m-window active5m count that structurally culled big tickets. MIN_TRADED = dense floor,
   // MIN_TRADED_THIN = the relaxed floor for gp-flow big tickets (2 ⇒ a lone spike still fails).
-  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 500_000, GP_FLOOR: 4_500_000_000,   // PLAN-VOL24 step 2: GP_FLOOR 250m → 4.5b (corrected gp-flow); MIN_GPD KEPT at 500k (Ben — real NET-throughput floor)
+  // MIN_GPD 500k → 250k (Ben, 2026-08-08), paired with the 6→2 refill haircut above and meaningless
+  // without it: cutting churn's multiplier ~3× while holding a 500k floor would have made the board
+  // STRICTER on churn than before, not rebalanced. Big tickets are volume-bound so the haircut misses
+  // them entirely — the halved floor is what actually lets them surface. EXPERIMENTAL, tune freely.
+  MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 250_000, GP_FLOOR: 4_500_000_000,   // PLAN-VOL24 step 2: GP_FLOOR 250m → 4.5b (corrected gp-flow)
   // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
   // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value
   // relaxes is the gp/day THROUGHPUT bar, NOT the two-sided UNIT-liquidity bar: you still have to exit a
@@ -172,11 +176,21 @@ export const SUBFLOOR_GRADE_CAP = 'C';
 // single buy-limit tranche costs more than the pool — the genuinely capital-constrained big/expensive
 // positions, exactly the intended demotion. null capPerWindow → legacy (no capital term), so every
 // existing caller (overnight, watchlist, fixtures) is byte-for-byte unchanged.
-export const expUnits = (limit, volDay, capPerWindow = null) => {
+// PHYSICAL vs ACTIONABLE refill windows (Ben's ruling, 2026-08-08 — EXPERIMENTAL, easily reverted).
+// GE buy limits reset every 4h, so 24/4 = 6 refills/day. That arithmetic is right; what was wrong was
+// USING it as an expected value. Collecting all 6 means re-buying every four hours around the clock,
+// including asleep — and on many items six distinct dip opportunities do not exist in a day at all. The
+// bias is ONE-DIRECTIONAL: a cheap liquid item is refill-bound and collects the full multiplier, while a
+// big ticket is volume-bound (the 0.10×volDay leg) long before the refill cap binds, so it never sees it.
+// Everything ranked on gpDay therefore compared a 6-cycle fantasy against a 1-cycle reality.
+// To revert the experiment: set ACTIONABLE_WINDOWS_PER_DAY back to REFILL_WINDOWS_PER_DAY.
+export const REFILL_WINDOWS_PER_DAY = 6;      // physical: 24h ÷ 4h limit reset. Do not change — it is a game rule.
+export const ACTIONABLE_WINDOWS_PER_DAY = 2;  // realistic desk cadence. PLACEHOLDER (n≈0), Ben-set, tune freely.
+export const expUnits = (limit, volDay, capPerWindow = null, windows = ACTIONABLE_WINDOWS_PER_DAY) => {
   const vShare = 0.10 * (volDay || 0);
-  if (capPerWindow == null) return limit != null ? Math.min(limit * 6, vShare) : vShare;   // legacy — byte-identical
+  if (capPerWindow == null) return limit != null ? Math.min(limit * windows, vShare) : vShare;
   const perWindow = limit != null ? Math.min(limit, capPerWindow) : capPerWindow;          // + per-window affordability
-  return Math.min(perWindow * 6, vShare);
+  return Math.min(perWindow * windows, vShare);
 };
 // COD-2 (2026-07-10) — realistic expected units accumulated over the OVERNIGHT window (the /overnight
 // §6 accumulation sizing, previously hand-computed in the skill as min(buyLimit×2, 8/24×0.10×volDay)
@@ -186,7 +200,12 @@ export const expUnits = (limit, volDay, capPerWindow = null) => {
 // expUnits result by SPAN/24 is exact — min(limit·6, 0.10·volDay)·(8/24) = min(limit·2, 8/24·0.10·volDay).
 // Buy limit refreshes ~every 4h → 2 windows in an 8h span; the volume-share leg prorates flat across the
 // span. UPPER BOUND (assumes fills at your price, no fill-probability) — screen-flip-niches.mjs labels it as such.
-export const expUnitsOvernight = (limit, volDay) => expUnits(limit, volDay) * OVERNIGHT_SPAN_H / 24;
+// NOT haircut by ACTIONABLE_WINDOWS_PER_DAY, deliberately: the overnight span is the one window that is
+// genuinely UNATTENDED by design — a resting deep bid collects its 2 refills (8h ÷ 4h) while Ben sleeps,
+// with no re-buying required. The attention argument that motivates the daytime haircut does not apply
+// here, so this passes the PHYSICAL count and keeps its documented min(limit×2, 8/24×0.10×volDay).
+export const expUnitsOvernight = (limit, volDay) =>
+  expUnits(limit, volDay, null, REFILL_WINDOWS_PER_DAY) * OVERNIGHT_SPAN_H / 24;
 
 // --- regime proxy off loadDaily's bulk {ts,mid} series: SAME 3d-vs-prior-~2wk shape as quotecore's
 // regimeDrift, but computed from the whole-market archive and NEVER displayed — it only ORDERS the

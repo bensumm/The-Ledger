@@ -253,7 +253,7 @@ const AMP_BID_Q_EFF = A['amp-bid-q'] != null ? Math.min(1, Math.max(0, +A['amp-b
 // (liquidCapital is marketRef-independent, but DERIVED_CASH is reassigned there, so re-read it).
 let AMP_CAPITAL = VALUE_CAPITAL_EXPLICIT ? parseGp(A.capital)
   : (VALUE_CAPITAL_DERIVED ? DERIVED_CASH.liquidCapital : 100_000_000);
-// --- S1 screening economics (gp-flow gate + 500k attention floor) ------------------------------
+// --- S1 screening economics (gp-flow gate + 250k attention floor) ------------------------------
 // GP_FLOOR: the alternative liquidity path. The two-sided gate (hpv>0 && lpv>0 — the ghost-spread
 // lesson) is NON-NEGOTIABLE and untouched; but the UNIT floor (--floor 50/d) was the wrong UNIVERSAL
 // measure — it hides an Avernic-class big ticket (single-digit units/day yet hundreds of millions of
@@ -275,7 +275,12 @@ const MIN_TRADED_THIN = 2;
 // surfaced precisely because a unit-count/gp-day measure mismeasures it (a 360k-net/u big ticket is
 // worth an offer even at a couple units a day). Held/asked items are exempt too (they don't occur in a
 // screen; the S3 watchlist pass bypasses gates entirely).
-const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 500_000;
+// 500k → 250k (Ben, 2026-08-08). PAIRED with the expUnits refill haircut (6→2, gatecandidates.mjs) and
+// meaningless without it: gpDay's cheap-churn leg fell ~3×, so holding 500k would have made the board
+// STRICTER on churn rather than rebalanced (measured: band gated 135→85, churn 102→43 with the haircut
+// alone). Big tickets are volume-bound and never saw the multiplier, so the halved floor is the half
+// that actually lets them surface. EXPERIMENTAL, easily tuned — override with --min-gpd.
+const MIN_GPD = A['min-gpd'] != null ? parseGp(A['min-gpd']) : 250_000;
 // THIN_RESERVE: fetch-pool slots guaranteed to the best thin gp-flow qualifiers. They carry a tiny
 // expGpDay (a couple units/day) so the velocity-weighted pool rank buries them below the top-N and
 // they'd never get fetched/rated — yet surfacing a big-ticket six-figure-net/u edge is the whole point
@@ -433,8 +438,9 @@ PUBLISH = refusePublishIfNonNeutral({
 // in the same change. `--vol-source legacy` restores the broken /24h value (kept as an escape hatch / for
 // reproducing pre-recal output). Every published row also logs the corrected per-item volume as the lean
 // `volDayRolling` shadow field regardless of this flag (from the in-hand 1h series → no new fetch).
-// NOTE: MIN_GPD (the 500k gp/day ATTENTION floor) was deliberately KEPT at 500k (Ben's call) — it is a
-// real-world NET-throughput quantity, so 500k of TRUE throughput is the honest floor; it now admits more.
+// NOTE: MIN_GPD (the ATTENTION floor) was KEPT at 500k through the VOL24 recal (Ben's call) — it is a
+// real-world NET-throughput quantity, so 500k of TRUE throughput was the honest floor. SUPERSEDED
+// 2026-08-08: now 250k, paired with the expUnits 6→2 refill haircut. See the MIN_GPD declaration.
 const VOL_SOURCE = resolve('volSource', { flag: A['vol-source'] != null && A['vol-source'] !== true ? String(A['vol-source']).toLowerCase() : undefined, config: CONFIG.volSource, fallback: 'rolling' }).active;
 if (!['legacy', 'rolling'].includes(VOL_SOURCE)) { console.error(`! unknown --vol-source "${A['vol-source']}". Use rolling (default) or legacy.`); process.exit(1); }
 // --- PLAN-OUTPUT-TABLE (2026-07-13): the DEFAULT niche-table stdout view is the reconciliation-

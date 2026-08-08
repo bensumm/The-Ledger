@@ -3,14 +3,24 @@
  * expunitsovernight.test.mjs — pins expUnitsOvernight (COD-2), the overnight accumulation-sizing
  * formula the /overnight skill used to hand-compute with a PROSE plea to "keep the constants aligned
  * with expUnits". expUnitsOvernight IS expUnits scaled to the OVERNIGHT_SPAN_H (8h) window, so the
- * 6-limits/day and 10% volume-share constants can NEVER drift from the day figure. This file asserts
- * BOTH the alignment (it equals expUnits × span/24 exactly) AND the closed-form the skill documented
- * (min(limit×2, 8/24 × 0.10 × volDay)), so a future edit to either constant that breaks the identity
- * fails here.
+ * refills/day and 10% volume-share constants can NEVER drift from the day figure. This file asserts
+ * BOTH the alignment (it equals expUnits × span/24 exactly, at the PHYSICAL refill count) AND the
+ * closed-form the skill documented (min(limit×2, 8/24 × 0.10 × volDay)), so a future edit to either
+ * constant that breaks the identity fails here.
+ *
+ * THE ONE DELIBERATE DIVERGENCE (2026-08-08). The DAY figure now takes an attention haircut —
+ * expUnits defaults to ACTIONABLE_WINDOWS_PER_DAY (2), because collecting all 6 refills means
+ * re-buying every four hours around the clock. The OVERNIGHT figure does NOT, and must not: the 8h
+ * span is the one window that is unattended BY DESIGN, where a resting deep bid collects its 2
+ * refills (8h ÷ 4h) with no re-buying required. So overnight passes REFILL_WINDOWS_PER_DAY (6)
+ * explicitly and keeps its documented closed form. The anti-drift guarantee is unchanged in
+ * substance — the volume share and the span scaling still cannot drift — only the windows term is
+ * intentionally different between the attended and unattended surfaces, and the test below pins that
+ * so nobody "repairs" the asymmetry by accident.
  * Run: `node pipeline/test/expunitsovernight.test.mjs`  (exits non-zero on any failure).
  */
 import assert from 'node:assert/strict';
-import { expUnits, expUnitsOvernight } from '../lib/signal/gatecandidates.mjs';
+import { expUnits, expUnitsOvernight, REFILL_WINDOWS_PER_DAY, ACTIONABLE_WINDOWS_PER_DAY } from '../lib/signal/gatecandidates.mjs';
 import { OVERNIGHT_SPAN_H } from '../../js/quotecore.js';
 
 let pass = 0;
@@ -27,11 +37,22 @@ ok('span constant is 8h (the documented overnight window)', () => {
   assert.equal(OVERNIGHT_SPAN_H, 8);
 });
 
-ok('equals expUnits × span/24 exactly (constants cannot drift)', () => {
+ok('equals expUnits × span/24 exactly at the PHYSICAL refill count (constants cannot drift)', () => {
   for (const [limit, vol] of [[10, 5000], [30, 200000], [1, 40], [null, 12000], [null, 0], [5000, 1_000_000]]) {
-    assert.equal(expUnitsOvernight(limit, vol), expUnits(limit, vol) * K,
+    assert.equal(expUnitsOvernight(limit, vol), expUnits(limit, vol, null, REFILL_WINDOWS_PER_DAY) * K,
       `alignment broke for limit=${limit} vol=${vol}`);
   }
+});
+
+ok('the day haircut does NOT reach the unattended overnight window (the deliberate divergence)', () => {
+  // If someone drops the explicit REFILL_WINDOWS_PER_DAY from expUnitsOvernight, it silently inherits
+  // the attention haircut and overnight accumulation sizing collapses ~3× — for limit=10/vol=5000,
+  // 20 units (2 full buy-limits, which a resting bid really does collect) becomes 6.67 (0.67 limits).
+  assert.ok(ACTIONABLE_WINDOWS_PER_DAY < REFILL_WINDOWS_PER_DAY,
+    'precondition: the experiment is active — if these are equal this assertion is vacuous');
+  assert.equal(expUnitsOvernight(10, 5000), 20, 'overnight keeps the physical 2 refills in 8h');
+  assert.notEqual(expUnitsOvernight(10, 5000), expUnits(10, 5000) * K,
+    'and is deliberately NOT the haircut day figure scaled — see the header');
 });
 
 ok('matches the documented closed form min(limit×2, 8/24×0.10×volDay)', () => {
