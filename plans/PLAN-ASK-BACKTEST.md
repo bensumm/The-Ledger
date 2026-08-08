@@ -150,3 +150,50 @@ directions) is the right shape.
    answer "where do I actually get filled buying?" — currently the same quantile problem in reverse.
 4. **Does this supersede the amplitude board's reach column** (PLAN.md Discovered, quantile-pinned at
    50%)? It is a strictly better answer to the same question — worth folding rather than fixing.
+
+---
+
+## §7 — VALIDATION STUDY: do our scores predict anything? (2026-08-07)
+
+Ben, on being offered a grade-based digest filter: *"I'd be interested in validating that the rows we
+are demoting are in fact not deserving of their spot before we demote them. Our grade is a rough
+approximation, not convinced it should be used to filter yet."* He was right. Run before building.
+
+**Method.** Every `script:'screen'` row in `suggestions.jsonl` carrying an `ask`, `bid`, `itemId` and
+`ts`, deduped to one row per (item, day, ask) to blunt pseudo-replication, restricted to rows whose
+3-day outcome window lies fully inside the 5m archive's coverage. Ground truth = *did any 5m bucket in
+`[ts, ts+3d]` print `avgHighPrice ≥ ask`?* This is observable for EVERY row, including ones never
+traded — no fills needed, so it is not restricted to what Ben happened to buy. n = 1,750–1,777.
+
+| signal | buckets (low → high) | monotone? |
+| --- | --- | --- |
+| **grade** | D **95.3%** · C 86.9% · B- 85.0% · B 89.4% · A- 91.0% · S+ 93.2% | **NO** — D is the highest |
+| **rank** (`net × P ÷ TTF`, AF1's digest key) | 98.0 · 86.2 · 89.0 · 95.2 · 86.8% | **NO** |
+| **pFill** (the model's own fill estimate) | 86.8 · 88.2 · 93.5 · 96.9 · 89.9% | **NO** (rises then falls) |
+| **ask premium over bid (%)** | **98.3 · 93.5 · 91.0 · 91.0 · 81.5%** | **YES — the only one** |
+
+**Conclusion 1 — do NOT filter the digest on grade or rank.** Neither predicts the observable outcome;
+a grade filter would have demoted the rows that reach their exit MOST often. The proposed tail-filter
+is withdrawn pending a signal that measures.
+
+**Conclusion 2 — the base rate is 91.5%.** Almost every quoted ask prints within 3 days. So "will the
+price get there" is barely the binding constraint, which compresses the variance every score is trying
+to explain. **What binds must be elsewhere** — queue position (was *your* ask taken?), size, or the
+entry leg. This is §5 risk 1 promoted from a caveat to the central finding: `avgHighPrice ≥ P` proves
+buyers paid ≥P, not that you sold.
+
+**Conclusion 3 — this REINFORCES AF1 on better grounds than it shipped with.** If P(print) is ~flat at
+91% regardless of score, expected value ≈ `net × 0.91`, so ranking on a NET-based key is right and
+ranking on a scale-free % (`capEff`) is wrong. AF1's fix was correct; the stated reasoning (a
+degenerate zero-product) was only half of it.
+
+**Conclusion 4 — widen the pool freely (Ben's call, accepted).** Since no composite score currently
+separates good from bad, a bigger archive-gated pool is strictly more raw material for a filter built
+on MEASURED reachability. The earlier "filter before widening" recommendation is **withdrawn**; AF4 is
+the right next build.
+
+**Honest limits.** (a) "Ask printed" measures REACHABILITY only — a D-grade item printing a +4gp ask is
+not a good trade, and grade encodes net size and liquidity that this outcome ignores entirely. This
+does **not** show grade is worthless, only that it does not predict THIS. (b) A 91.5% base rate leaves
+little variance to explain, so all these signals are being asked to separate a narrow band. (c) Dedup
+was (item, day, ask); the same item still recurs across days. (d) One 3-day horizon, one market period.
