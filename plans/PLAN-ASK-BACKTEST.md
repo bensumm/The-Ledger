@@ -20,9 +20,23 @@ probability**, and each is measured on a smoothed basis:
 | amplitude `Both-leg reach` | reach vs a **median-quantile** level (`AMP_ASK_Q=0.5`) | prints `7/14` on every row, both legs — measures nothing (PLAN.md Discovered) |
 | `reachMargin` cushion | direction of the gap over 7d | genuinely useful, but attached to a level chosen by the reads above |
 
-**The smoothing cost is measured, not theoretical.** For Masori chaps at ~26.93m, the 1h-derived reach
+~~**The smoothing cost is measured, not theoretical.** For Masori chaps at ~26.93m, the 1h-derived reach
 says **5/14 days**; the same question asked of **5m buckets** says **10/15**. The 1h basis was hiding
-half the fills. 5m is 12× finer and the archive already holds 30 days of it for ~4,438 items.
+half the fills.~~
+
+🛑 **RETRACTED — this claim is FALSE and it was the plan's motivating premise (Fable, 2026-08-07;
+independently re-verified).** Asked of the ARCHIVE's own data, 1h and 5m give **identical** daily-high
+reach counts for Masori chaps at 26.93m: **8/15 both grains on UTC days, 10/15 both grains on LOCAL
+days.** 5m buys **zero** additional reach days on the anchor item. The "5/14" came from a different
+READ (the live-API window / `windowread`'s hourly-profile basis), not from a coarser GRAIN — so the
+§0 framing attributed a read-to-read difference to grain smoothing.
+
+**What survives:** the rest of §0's table stands — a median IS 50% by construction, and the depth read
+IS self-documented as a conservative floor. The case for this plan is that those reads answer the
+wrong QUESTION (a level, not a fill probability), **not** that a finer grain recovers hidden fills.
+Anyone reaching for 5m over 1h purely for resolution should re-measure first; the archive holds 70d of
+1h against 30d of 5m, so 1h is the deeper and cheaper default unless a specific read needs sub-hour
+timing.
 
 ---
 
@@ -266,3 +280,109 @@ not a big issue right now, but we should definitely record it and come back to i
   Expect this to stay under-powered for a long while; say so rather than reporting a weak result.
 - **Do not delete grades on the current evidence.** The honest state is absence of validation, not
   evidence of failure.
+
+---
+
+## §8 — Fable adversarial validation (2026-08-07). The numbers held; the INFERENCES did not.
+
+Read-only re-run of every study against the archive + `suggestions.jsonl`. **Nothing was fabricated —
+§7's tables reproduce essentially exactly** (base 91.1% vs 91.5% after a day's accrual; the grade row
+D 95.3 · C 86.9 · B- 85.0 · B 89.4 · A- 91.0 · S+ 93.2 and the premium row 98.3 · 93.5 · 91.0 · 91.0 ·
+81.5 are EXACT; the placebo reproduces). What failed is what I concluded from them.
+
+### B1 — §0's motivating claim is RETRACTED (corrected in §0 in place)
+
+1h and 5m give identical reach counts — 8/15 both grains on UTC days, 10/15 both grains on LOCAL days.
+The plan's premise was a read-to-read difference mislabelled as a grain difference.
+
+### B2 — §7.1's confound conclusion fails its OWN methodology
+
+§7.1 rejected ask-premium as the confound *because D still led with premium held constant*. It then
+accepted trade FREQUENCY without running that same conditioned test. Run: D still leads A- in **every
+frequency tercile** (+1.6 / +5.3 / +3.1 pp; n=84/223/221 vs 302/163/165). By §7.1's own logic frequency
+is *also* not the confound. The frequency variable barely varies either (quintile bounds 55–477 /
+477–523 / 523–538 / 538–580 / 581–602 out of a possible 864), so Q2–Q5 are near-identical populations
+and Q1 alone carries the signal.
+
+**Honest state: premium, frequency, price, item class and grade are ENTANGLED, and no single mechanism
+has been identified.** §7.1 picked one and declared it *the* explanation. **§7.1's practical rulings
+still stand** — do not filter on grade, do not delete grades — but they rest on "we cannot explain the
+anomaly", not on "frequency explains it".
+
+### M1 — the 91.5% base rate is substantially SELF-FULFILLING
+
+Screen asks are quoted *from* recent reachability, so the study largely tests the estimator on the
+process that generated it. Split by the estimator's own logged `estConfidence`:
+quoted-when-hit-all-recent-days printed **96.5%** (n=57); `<1/3` printed **84.1%** (n=359).
+Consequence the plan never drew: `askAtFillRate`'s `pct` lever is an **in-sample quantile**, and its
+out-of-sample 3-day hit rate is exactly the uncalibrated quantity. §1 must stop presenting
+`pct → P(fill)` as directly interpretable.
+
+### M2 — §1's `units/day @≥ask` column is wrong (70 / 48 / 16 / 2)
+
+Those are the single best recent DAY, not a per-day rate. True recent-7 averages: **32.4 / 16.7 / 7.3 /
+2.0**. At the recommended 27.15m the expectation is **~7 units/day, not 16**, and it is lumpy —
+0, 0, 30, 0, 6, 1, 14 across the window, with **3 of 7 days at ≤1 unit**. The qualitative claim (flow
+collapses as price rises) is right; the quantities are not.
+
+### M3 — §3's outlier is described wrongly on the load-bearing detail
+
+The 35,000,004 print carried **1 unit, not 53**. And 07-28 was a genuine brief dislocation, not a pure
+artifact — the same morning shows `avgLowPrice = 31,000,000` on 2 units, i.e. people *instaselling* at
+31m. A second single-print spike at 07-12 (32,776,000, 1 unit) was missed entirely. **AB2's premise
+survives and is now properly measured**: 114 spike days / 12,028 item-days (**0.9%**) touching 75 of
+511 items ≥1m. But the fixture AB2 was told to pin is mis-described.
+
+### M4 — the recency story is UTC-based, hair-thin, and already broken
+
+§2's table reproduces exactly *under UTC days* — but the repo convention is LOCAL days and Ben trades
+local. Under local days the last-3 is **2/3, not 3/3**, and the most recent local day (08-07, high
+27,000,000) is a **MISS** at 27.15m. The 08-06 "hit" cleared by **+10,215 gp (0.04%) on exactly 1
+unit** — an 11k-higher ask turns 3/3 into 2/3. "The difference between 57% and 100%" rests on a
+one-unit hair-width print plus a day-boundary choice. Independently re-verified.
+
+### M5 — non-independence breaks the monotonicity claims
+
+1,777 rows over **284 items** (top-20 items = 25% of rows); outcomes are item-dominated (191 items
+all-print, 21 all-miss, only 72 mixed; within-item variance share 0.648). Cluster bootstrap over items
+(B=2000): premium Q1≠Q5 **robust** (P≈1.000), frequency Q5≠Q1 robust (P=0.998) — but **full
+monotonicity fails for both** (P=0.283 premium, P=0.161 frequency). So "ask premium is the only
+monotone predictor" survives only as "Q1 differs from Q5". Also, premium Q5 spans 7.88%–**2,943%** and
+contains the value-mode far-OTM asks, so part of that effect is mechanical.
+
+### M6 — AB6 cannot do the job it was assigned
+
+Shadow-logging both prices only yields ground truth for the arm actually listed; the unplaced arm must
+be scored by the print proxy, which is the thing under test. Without randomised arm assignment AB6
+validates the PROXY, not the price CHOICE. And both quotes cluster at the same reachability edge (M1)
+and both print ~90%, so discriminating them on the disagreement subset needs months against 262 closed
+flips / ~200 sell placements / 57 items in 30d. **AB6 needs redesign or an honest relabel before it is
+called "the only chunk that produces evidence".**
+
+### What SURVIVED attack
+
+- **The fill proxy holds for qty=1 — and §5 risk 1's hedge was pointed the WRONG WAY.** A print at
+  q ≥ P implies the ask book was empty below q at that instant, so a resting 1-unit ask at P ≤ q would
+  have been hit first; and `avgHigh < P` does not rule out a print ≥ P. Measured hit rates are
+  therefore **lower bounds**, not over-statements. The real over-statement risks are qty > flow (AB3
+  covers it) and regime persistence (M1). A volume-aware rescoring moves the base rate only
+  91.1% → 90.0% at ≥5 units, without reordering grades.
+- The placebo design, and that it validates the metric discriminates price levels.
+- §7/§7.1's arithmetic throughout, and the Masori arithmetic (BE 26,174,490; net +955,999 at
+  27,149,999; 27.50m thin at 2.0 units/day — all exact).
+- AB2's outlier-guard premise, now with a real base rate.
+
+### The live recommendation, restated honestly
+
+**27,149,999 still stands** — 26.90m and 27.15m both hit 4/7 on the recent-7 local, so the extra
++245k/u costs no measured hit rate; hit-days print 6–30 units against a 1-unit lot; and with BE at
+26,174,490 **the downside is waiting, not loss**. What was overstated is the *support*: "3/3 recent"
+was UTC and is 2/3 local with the newest day a miss, and ~7 units/day is the honest flow, not 16.
+Omitted from the original write-up: the item has **bled from ~30m in mid-July to 26.6–27.5m**, and the
+four-day miss run 07-29→08-01 is what listing into a soft stretch looks like.
+
+### m1 — §7's grade table was curated
+
+Omitted: B+ 94.7% (n=38), VALUE-WATCH 78.9% (n=19), **VALUE-BUY 12.5% (n=8)**, A/S 100% (n=3 each),
+A+ 0% (n=1). Small n each, but VALUE-BUY's 12.5% is direct evidence for the premium mechanism, and
+leaving it out flattered the "grade predicts nothing" reading.
