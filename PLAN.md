@@ -493,6 +493,53 @@ COD-2 `81d9049` · COD-3 `5b91d10` · COD-4 `a923496` (plus ARCH-1 `a24d456`, DL
 Full "what/why" per the fold-out discipline = the landing commit messages.
 
 **Open:**
+- **SAME-DAY TURNOVER AT A SMALL EXIT PREMIUM IS THE TARGET; ENTRY DEPTH IS WHAT BUYS IT (Ben,
+  2026-08-07, after the first closed trade that tested any of this).** Ben's framing: *"turning over in
+  a day — before I have to step away, before anything can REALLY happen — is safest and best; the hard
+  part is finding items that afford us to take the 0.5%-over exit. Our low buy-in gives us the easy
+  exit, which means we minimise risk."*
+
+  **The trade that produced it.** Masori chaps: bought **25,651,000 (4.02% BELOW mid)**, sold
+  **26,889,000 (+0.36% over mid)**, filled in **3h 20m**, net **+700,220 (2.73%)**. The counterfactual
+  is the point — the assistant had recommended **27,149,999 (+1.34% over mid)**, and **6.4 hours after
+  the sale that level still had not printed**, the highest print since being exactly the sale price.
+  The cheaper exit was both faster AND, so far, the only one that existed.
+
+  **The arithmetic that makes it a rule, not an anecdote.** Break-even is `buy / 0.98`. For an exit at
+  `mid × (1+x)` to clear it you need `buy < mid × (1+x) × 0.98`. So:
+
+  | exit premium over mid | you must buy at least this far BELOW mid to break even |
+  | --- | --- |
+  | +0.5% | **1.51%** |
+  | +1.0% | 1.02% |
+  | +2.0% | 0.04% |
+
+  …and that is only break-even; real profit needs more. **Entry depth is therefore not a nicety, it is
+  what determines whether a fast, high-probability exit is available at all.** Ben's 4.02%-below-mid
+  entry is the entire reason a +0.36% exit returned 2.73%.
+
+  **Why this beats optimising the exit.** Measured (§9/§10 of `plans/PLAN-ASK-BACKTEST.md`), a ≥10m
+  item asked at +2% over mid prints **52.4%** within 3 days; at +0.5% it prints **80.4%**. The exit
+  curve is steep and we do not control it. The ENTRY is the leg we choose, and every gp below mid
+  converts directly into exit probability.
+
+  **The risk argument is Ben's, and it is the strongest part.** He cannot watch the book. Time-in-
+  position IS the risk — overnight moves, game updates, regime breaks. A 3-hour round trip at +2.73%
+  is not a worse version of a 3-day round trip at +3.7%; it is a *different risk profile*, and the one
+  that survives an owner who steps away. Capital velocity is the secondary prize.
+
+  **What this changes about the funnel (supersedes the framing in `PLAN-ARCHIVE-FIRST-FUNNEL.md`
+  AF3b).** The cream-of-the-crop question was posed as "rank candidates by expected net". The better
+  target is: **rank by ACHIEVABLE ENTRY DEPTH BELOW MID** — how reliably can this item be bought 2–4%
+  under its own recent mean — because that is what makes a same-day, small-premium exit feasible.
+  This is measurable from the archive by exactly the method that built the ask surface, run on the
+  BID side: for each item, the distribution of how far below mid it actually trades, and how often.
+  Nothing about it needs a live fetch.
+
+  **Do not over-fit to one trade.** n=1, one item, one day. The arithmetic above is exact; the
+  *strategy* claim (that this dominates patient exits generally) is not yet measured. The natural test
+  is cheap and offline: over the archive, compare realised gp/day of "buy 3% under mid → exit +0.5%"
+  against "buy 1% under mid → exit +2%" across items and windows.
 - **THE FUNNEL, MEASURED END-TO-END (2026-08-07, `--mode all --stats`, TOP=90, fully-deployed book).**
   Ben: *"how can we improve our funnel at each step?"* Numbers first, so the next chunk argues from data:
 
