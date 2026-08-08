@@ -713,6 +713,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `capEffRealizable`/`digestRank`, none of which survive a pass today) → DS1 (a read-only
   market-counterfactual study, `report-digest.mjs`: *did the quoted ask actually print within
   12/24/48h*, since a fills-joined study is structurally impossible at 92 filled / 88,272 not-taken)
+  — see also **`pipeline/commands/report-archive-gate.mjs`** (AF5, PLAN-ARCHIVE-FIRST-FUNNEL): READ-ONLY
+  evidence for whether the LOCAL archive reproduces the gate verdicts we currently pay a per-item
+  `/timeseries` call for. Runs `reachValidator` twice per item — once on the live 1h series, once on the
+  same span read from the archive — with the SAME candidate level (the live instabuy, external to both
+  series) and the same `now`, so only the series source varies. Measured 2026-08-07: **25/25 (100%)**
+  verdict AND hit/days agreement across the watchlist. ⚠ Read that number with its limit: 1h is
+  byte-identical archive-vs-live (AF4), so this run largely confirms identical inputs give identical
+  outputs — the test with real power is the DERIVED 6h grain at AF5b, not this one)
   → DS2 (render the reach cell's raw counts — measured, `askRecDays === 3` on **100%** of logged rows,
   so the ✓/✗ glyph is a 3-sample binomial and ✗ is 55% of every board) → DS3 (the LOW-placement /
   crashed-regime trap — 11% of rows sit at `askPlacement ≤ 0.05` where 84% render a mechanically
