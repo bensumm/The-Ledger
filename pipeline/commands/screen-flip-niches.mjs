@@ -492,7 +492,7 @@ function pathABCell(r, minGpd) {
   return {
     t: `${fmtP(pa.gpDay)}/d · L${pa.rankInLane ?? '?'}·${pa.lane}${below ? ' ⚠<floor' : ''}`,
     c: 'mini',
-    title: `Path-A intraday-flip after-tax gp/day — NEW, captureFrac PLACEHOLDER ${pa.captureFrac} (n≈0), live A/B vs the Grade backup: marginU ${fmt(Math.round(pa.marginU))}/u × units ${fmt(Math.round(pa.units))} × cycles/d ${pa.cyclesDay.toFixed(2)} (lane ${pa.lane}, rank ${pa.rankInLane ?? '?'} in lane)${below ? `; below the ${(minGpd / 1e3).toLocaleString()}k attention floor — surfaced, not gated` : ''}`,
+    title: `Path-A intraday-flip after-tax gp/day — MARKET THROUGHPUT (wallet-free since AF2: what the item can produce, not what your pool can extract), captureFrac PLACEHOLDER ${pa.captureFrac} (n≈0), live A/B vs the Grade backup: marginU ${fmt(Math.round(pa.marginU))}/u × units ${fmt(Math.round(pa.units))} × cycles/d ${pa.cyclesDay.toFixed(2)} (lane ${pa.lane}, rank ${pa.rankInLane ?? '?'} in lane)${pa.affordableUnits != null ? `; SIZING at your pool: ${fmt(pa.affordableUnits)} unit(s) affordable` : ''}${below ? `; below the ${(minGpd / 1e3).toLocaleString()}k attention floor — surfaced, not gated` : ''}`,
   };
 }
 
@@ -887,9 +887,19 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
   // sinks to the bottom — the stored/displayed `capEff` is NEVER mutated (the column still shows the true number)
   // and the row STILL RENDERS (never silently dropped, mirroring the subFloorLabel doctrine). null (unknown) is
   // unknown-neutral → keeps its natural key.
-  const key = r => (r.crossable === false ? -Infinity : (r.rankKey != null ? r.rankKey : (r.capEff != null ? r.capEff : -Infinity)));
+  // AF1 (PLAN-ARCHIVE-FIRST-FUNNEL) — sort on `rank` (net × P(fill) ÷ TTF), NOT on `rankKey`
+  // (capEff × deployable). Two defects made the old key unusable: (1) at deployable ≈ 0 EVERY row's
+  // rankKey is 0, so the ordering collapsed into the capEff tie-break — and capEff is SCALE-FREE, which
+  // is the exact failure `× deployable` was added to prevent, so a fully-deployed book reproduced the
+  // dust-sweep bug by a different route; (2) capEff is unbounded, so a dust item prints 9907%/d and wins
+  // any comparison it survives. Measured 2026-08-07 on a deployed book: all 8 main rows were C/D dust
+  // (Black knife 9907.69%/d, C) and the only A- `fill-now` row was buried in the big-ticket appendix.
+  // `rank` is already computed per row, is scale-AWARE (gp, not %), and needs no capital — the property
+  // being ranked is the opportunity's quality, which does not change with the size of the wallet.
+  // capEff and deploy both REMAIN as displayed columns; only the sort basis changed.
+  const key = r => (r.crossable === false ? -Infinity : (r.rank != null ? r.rank : -Infinity));
   const sorted = [...pool].sort((a, b) =>
-    (key(b) - key(a)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)) || ((b.rank ?? -Infinity) - (a.rank ?? -Infinity)));
+    (key(b) - key(a)) || ((b.rankKey ?? -Infinity) - (a.rankKey ?? -Infinity)) || ((b.capEff ?? -Infinity) - (a.capEff ?? -Infinity)));
   let main = sorted.slice(0, DIGEST_TOP);
   // POLISH 1: guaranteed big-ticket slice, appended only when the main block under-represents them.
   const bigInMain = main.filter(r => r.bigTicket).length;
@@ -1488,8 +1498,18 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   // falls back gracefully to the grade sort (surfaced, marked no-pathA, never dropped, never crashes).
   for (const r of rows) {
     const lane = classifyVolLane(r.row.volDay ?? 0);
-    const pa = pathAGpDay({ dayRanges: dailyRanges[r.id], price: r.row.optBuy ?? r.row.guide ?? null,
-      buyLimit: r.row.limit ?? null, volDay: r.row.volDay ?? 0, lane, capital: VALUE_CAPITAL });
+    // AF2 (PLAN-ARCHIVE-FIRST-FUNNEL) — Path-A is now MARKET THROUGHPUT: `capital: Infinity`, i.e. what
+    // this item can produce for anyone, NOT what this wallet can extract from it. It was passing
+    // VALUE_CAPITAL, and `capUnits = floor(capital / price)` (patha.mjs:105) drives units → cycles → gpDay,
+    // so on a fully-deployed book EVERY row scored 0/d and the PRIMARY console sort died silently,
+    // falling back to grade order with no indication. Measured 2026-08-07: all 63 band rows `0/d`,
+    // including an 8gp Raw mackerel — capital was exactly 0, so the number said nothing about any item.
+    // Capital does not vanish: it rides as `affordableUnits` (SIZING, shown in the cell title), which is
+    // the honest place for it — an A- setup is A- whether you can afford 40 units of it or none.
+    const price = r.row.optBuy ?? r.row.guide ?? null;
+    const pa = pathAGpDay({ dayRanges: dailyRanges[r.id], price,
+      buyLimit: r.row.limit ?? null, volDay: r.row.volDay ?? 0, lane, capital: Infinity });
+    if (pa) pa.affordableUnits = (price > 0 && Number.isFinite(VALUE_CAPITAL)) ? Math.floor(VALUE_CAPITAL / price) : null;
     r.pathA = pa;   // null when no intraday range (the H1 lean-omit contract)
   }
   // rankInLane: the row's 1-based rank within its Path-A lane THIS run, by Path-A gp/day desc (assignRankInLane
