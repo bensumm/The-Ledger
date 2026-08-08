@@ -42,8 +42,13 @@ const OPEN_RE = /\b(PARTIAL(?:LY)?|DEFERRED|PENDING|AWAITING|DRAFT|PROPOSAL|OPEN
 export function extractStatus(text) {
   const lines = text.split(/\r?\n/).slice(0, 12);
   for (const line of lines) {
-    const m = line.match(/^\s*Status:\s*(.+)$/i);
-    if (m) return m[1].replace(/[*_`]/g, '').trim();
+    // Strip markdown emphasis BEFORE matching, not after. The old order anchored `^\s*Status:` against
+    // the RAW line, so the extremely common `**Status: …**` form never matched and the plan silently
+    // reported "(no Status line)" — three plans written 2026-08-07 all landed in that hole, and the
+    // report is non-gating so nothing complained. A leading `#`/`>` is tolerated for the same reason.
+    const bare = line.replace(/[*_`]/g, '');
+    const m = bare.match(/^\s*(?:#{1,6}\s*|>\s*)?Status:\s*(.+)$/i);
+    if (m) return m[1].trim();
   }
   return null;
 }
