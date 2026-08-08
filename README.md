@@ -1324,7 +1324,16 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (with a one-time `daily_seed` import of the pre-D0 `.cache/daily` mids). Surgically suppresses the
     one `node:sqlite` ExperimentalWarning via a `process.emitWarning` filter installed before a
     `createRequire` load — no global `--no-warnings` flag on any script. CLI: `node
-    pipeline/lib/market/archive.mjs [--prune-before <ts>]` (prune shipped, unused by default)), `marketfetch.mjs`
+    pipeline/lib/market/archive.mjs [--prune-before <ts>]` (prune shipped, unused by default)),
+    **`archive-series.mjs`** (AF4, PLAN-ARCHIVE-FIRST-FUNNEL — reads a per-item series OUT of the archive
+    in the exact `fetchTs` row shape so a Stage-2 gate can run with ZERO per-item API: `archiveSeries()`
+    renames the archive's `ts` to the `timestamp` every consumer keys on — fed raw the rows are silently
+    dropped by `quotecore.js:246`'s filter and the gates degrade-to-pass, which is why the rename is a
+    fixture-pinned adapter and not an inline `.map()`; `aggregate1hTo6h()` derives the unstored 6h grain
+    from 1h, volume-weighted and EXACT at full coverage (measured 0.000% median error vs live across four
+    price tiers; the whole residual is missing hours, exposed as `sourceBuckets` so a caller can refuse a
+    thin window). Provisional — no consumer until AF5/AF5b. Pinned by `pipeline/test/archive-series.test.mjs`),
+    `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
     `loadHistDaily` (YF1) + `loadBands(hours,{db})` — the whole-market 5m intraday band read, PERF-1
     (2026-07-19) re-pointed at the D0 SQLite archive (`marketAt('5m',w)`, check-before-fetch,
