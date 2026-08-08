@@ -186,9 +186,9 @@ gets scored instead of 66%, and the reserves/crowding-out disappear. Restate the
 
 | # | Chunk | Dep | Effort |
 | --- | --- | --- | --- |
-| **AF1** | Remove capital from the digest `rankKey`; show `deploy` as a sizing column. **The replacement key MUST be named and MUST NOT be bare `capEff`** — see the trap below. | — | S |
+| ~~**AF1**~~ | ✅ **SHIPPED `cdce288` 2026-08-07.** Digest sorts on `rank` (net × P(fill) ÷ TTF) — scale-aware, capital-free, already computed per row. `capEff` and `deploy` stay as displayed columns; only the sort basis changed. The "must not be bare `capEff`" trap was real: at `deployable ≈ 0` the old key collapsed into the `capEff` tie-break, reproducing the dust-sweep by another route. | — | S |
 | **AF1b** | Bound `capEff` (sub-defect ii). Unbounded %/day is what lets a dust item print 3155%/d. No chunk owned this before review. | — | S |
-| **AF2** | Remove capital from Path-A gp/d as a *sort key*; keep it as a displayed sizing figure. Fixes the dead primary sort. | — | S |
+| ~~**AF2**~~ | ✅ **SHIPPED `cdce288` 2026-08-07.** Path-A is now MARKET THROUGHPUT (`capital: Infinity`) — what the item can produce, not what this wallet can extract. Capital rides as `affordableUnits` in the cell title. Measured: band rows reading `0/d` went **62/62 → 0/62** at zero deployable, and **0/63 → 0/63** at `--capital 200m` (non-degenerate case unaffected). ⚠ The `pathA.gpDay` logged to `suggestions.jsonl` (Chunk E) changes MEANING at this commit — a join across it sees a discontinuity. | — | S |
 | **AF3** | Stage-1 affordability **filter** (binary, replaces the `THROUGHPUT_CAP_GP` multiplier's ranking role). Behind a flag until A/B'd. | AF1/AF2 | M |
 | **AF4** | `archiveSeriesFor(id, grain, days)` adapter + a `6h`-from-`1h` aggregator, shape-pinned against a live `fetchTs` fixture. | — | M |
 | **AF5** | Route ONE Stage-2 gate (proposal: trajectory/floor) through AF4 for all gated candidates; shadow-log archive-vs-live verdicts, change nothing. NB it is not purely archive-fed today — `warmOverride` (`screen-flip-niches.mjs:1047`) injects a LIVE 1h series while `loadDaily` is cold; that injection is what AF5 replaces. | AF4 | M |
