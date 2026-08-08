@@ -101,13 +101,18 @@ export function amplitudeProxy(points, { recentDays = 5, minDays = 3 } = {}) {
   for (const p of points) {
     if (p == null || p.mid == null || !Number.isFinite(p.ts)) continue;
     const d = new Date(p.ts * 1000);
-    const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    const pad2 = n => String(n).padStart(2, '0');
+    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     const rec = byDay.get(key) || { min: Infinity, max: -Infinity };
     if (p.mid < rec.min) rec.min = p.mid;
     if (p.mid > rec.max) rec.max = p.mid;
     byDay.set(key, rec);
   }
-  const keys = [...byDay.keys()].sort();                 // chronological (YYYY-M-D lexical is monotone within a year)
+  // chronological. The key MUST be zero-padded (YYYY-MM-DD): unpadded `YYYY-M-D` is NOT lexically
+  // monotone — "2026-8-14" < "2026-8-4" and "2026-10-11" < "2026-9-30" — so slice(-recentDays) silently
+  // returned the SINGLE-DIGIT days (stale by up to a week for ~2/3 of every month, and never a new
+  // month's days while the old month's remained). Fixed 2026-08-08; matches windowStats' dayKey pad2.
+  const keys = [...byDay.keys()].sort();
   const recent = keys.slice(-recentDays);
   const pcts = [];
   for (const k of recent) {

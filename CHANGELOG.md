@@ -10,6 +10,37 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### amplitudeProxy served a STALE "recent-5" for two-thirds of every month (pipeline-only, 2026-08-08)
+
+**The bug.** `amplitudeProxy` bucketed the 6h archive by an UNPADDED local day key —
+`${y}-${m+1}-${d}` — then took `keys.sort().slice(-recentDays)`, with an inline comment asserting
+that "YYYY-M-D lexical is monotone within a year". It is not. `"2026-8-14" < "2026-8-4"` because
+`"1" < "4"`, so once a month reaches day 10 the sort puts the SINGLE-DIGIT days at the tail and
+`slice(-5)` returns days 5–9 while days 10–14 are the actual newest. At the month boundary it is
+worse and total: `"2026-10-11" < "2026-9-30"`, so **no October day can enter the tail while any
+September day remains**.
+
+**Why it mattered.** The proxy's only consumer is `gateAmplitudeCandidates`
+(`pipeline/lib/signal/gatecandidates.mjs:355`) — Stage-1 fetch-pool selection, gated on
+`AMP_STAGE1_MIN_PCT`. A stale recent-5 means an item that only *just* started oscillating is admitted
+late or missed entirely, and one that has gone quiet lingers in the pool. Silent in both directions:
+the proxy still returns a plausible number, just computed on days up to a week old.
+
+**Dormancy is why it survived.** The defect is invisible for the first nine days of any month, when
+every key is single-digit and lexical order happens to equal chronological order. It was found on
+2026-08-08 — two days before it would have re-activated.
+
+**The fix.** Zero-pad the key (`pad2`), matching what `windowStats`' `dayKey`
+(`js/windowread.mjs:17-21`) already did correctly; the proxy had rolled its own. The false
+monotonicity comment is replaced with the counterexamples. Regression test in
+`pipeline/test/amplitudescreen.test.mjs` pins both the day-of-month and the cross-month case, and
+was verified to FAIL against the unpadded key (0.01 where 0.08 is correct) rather than pass
+tautologically.
+
+**Found by** the adversarial pass commissioned on PLAN-BOTH-LEG-ENTRY — which had claimed three
+defects in this same file and missed the one unambiguous bug in it. No `APP_VERSION` bump: no
+deployed-app module imports `js/amplitudescreen.mjs`.
+
 ### AB1–AB3 — an ask price that comes from a MEASURED fill rate, not a median (PLAN-ASK-BACKTEST, pipeline-only, 2026-08-08)
 
 **The problem.** Every "where do I list this?" read the tooling offers is a LEVEL, not a fill

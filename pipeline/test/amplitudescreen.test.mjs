@@ -90,6 +90,34 @@ ok('amplitudeProxy reads the 6h-archive daily range (recent-N median), null on a
   assert.equal(amplitudeProxy(null), null, 'no data → null');
 });
 
+ok('amplitudeProxy day keys are zero-padded — recent-N is the NEWEST days, not the single-digit ones', () => {
+  // REGRESSION (2026-08-08). The key was `${y}-${m+1}-${d}` unpadded, and unpadded YYYY-M-D is NOT
+  // lexically monotone: "2026-8-14" < "2026-8-4". So keys.sort().slice(-5) returned days 5..9 instead
+  // of 10..14 — a stale "recent-5" for ~2/3 of every month, feeding Stage-1 fetch-pool selection.
+  const DAY = 86400;
+  const T = Math.floor(new Date(2026, 7, 1, 12, 0, 0).getTime() / 1000);   // local Aug 1 2026, noon
+  const pts = [];
+  for (let d = 0; d < 14; d++) {                      // Aug 1..Aug 14 local
+    const wide = d >= 9;                              // Aug 10..14 → 8% range; Aug 1..9 → 1%
+    const mids = wide ? [1000, 1040, 1080] : [1000, 1005, 1010];
+    for (let i = 0; i < mids.length; i++) pts.push({ ts: T + d * DAY + i * 3600, mid: mids[i] });
+  }
+  const p = amplitudeProxy(pts, { recentDays: 5 });
+  // Padded keys → recent-5 is Aug 10..14, every one of them 8%. The unpadded bug yielded 1%.
+  assert.ok(p != null && Math.abs(p - 0.08) < 1e-9, `recent-5 must be the newest days (~8%), got ${p}`);
+
+  // Cross-MONTH: "2026-10-11" < "2026-9-30" unpadded, so October could never enter the tail.
+  const T2 = Math.floor(new Date(2026, 8, 20, 12, 0, 0).getTime() / 1000);  // local Sep 20 2026
+  const pts2 = [];
+  for (let d = 0; d < 22; d++) {                      // Sep 20 .. Oct 11 local
+    const oct = d >= 11;
+    const mids = oct ? [1000, 1040, 1080] : [1000, 1005, 1010];
+    for (let i = 0; i < mids.length; i++) pts2.push({ ts: T2 + d * DAY + i * 3600, mid: mids[i] });
+  }
+  const p2 = amplitudeProxy(pts2, { recentDays: 5 });
+  assert.ok(p2 != null && Math.abs(p2 - 0.08) < 1e-9, `recent-5 must cross the month boundary, got ${p2}`);
+});
+
 ok('amplitudeDeployUnits is the three-way min() (bankroll / vol-share / buy-limit), degrades to 1', () => {
   // bankroll: 100m/1000 = 100k; vol-share: 0.10×5000×1 = 500; limit: 100×6×1 = 600 → min 500.
   const u = amplitudeDeployUnits({ capGp: 100_000_000, buyLow: 1000, limitVol: 5000, limit: 100, holdDays: 1 });
