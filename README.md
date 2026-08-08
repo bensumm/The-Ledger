@@ -703,6 +703,22 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `quote-items.mjs` default stdout view with `--raw` as the model-free escape hatch; console-only, no
   `screen.json`/app change). Folds into `PLAN.md` and is deleted when its last chunk ships (the
   plan-file rule).
+- `plans/PLAN-BOTH-LEG-ENTRY.md` — in-flight per-topic plan (2026-08-08, PROPOSED, nothing built):
+  solve for the entry price that makes BOTH legs reach, instead of quoting one and hoping. Motivated by
+  a live miss — `--mode amplitude` quotes the MEDIAN daily low (12.25m on Dinh's bulwark, recent reach
+  1/3) and `quote-items` a reach-folded bid (12.80m, break-even above mid), so the item was called dead;
+  a hand-picked **12,501,000** reads **14/16 · recent 3/3** on the 5m archive against a 13.30m ask at
+  recent 3/3, i.e. +533k/u (4.26%). Records three verified defects in `js/amplitudescreen.mjs`:
+  `pFill2leg = bidFrac × askFrac` (:161) is a PRODUCT OF MARGINALS not a measured joint; `legOk`
+  (:199-202) never checks that the low printed BEFORE the high, though the playbook is explicitly
+  same-day trough→peak; and the levels are quantile-pinned (`AMP_BID_Q`/`AMP_ASK_Q` = 0.5), so nothing
+  is optimised. Chunks BL1 (pure `lib/signal/bothleg.mjs` — day bars carrying `tLo`/`tHi`, measured
+  same-day joint with ordering, EV frontier) · BL2 (`read-both-leg.mjs`, READ-ONLY, prefers 5m —
+  measured: 1h understates the daily low ~0.3% typical / 2.2% worst, worth 2 days in 16 at the level
+  that mattered) · BL3 (fold the measured joint into `amplitudeRead` behind `--both-leg`, DEFAULT OFF,
+  additive beside the quantile pair) · BL4 (validation sweep). Explicitly NOT a forecast, NOT a fill
+  model (upper bound, queue/size unmodelled), NOT a sizing tool — Dinh's is 350/d and clearability still
+  says 1 unit. Folds into `PLAN.md` and is deleted when its last chunk ships (the plan-file rule).
 - `plans/PLAN-DIGEST-SIGNAL-AND-SCAN-PERF.md` — in-flight per-topic plan (2026-08-07, PLANNING ONLY,
   no code changed): two workstreams that share one file (`pipeline/commands/screen-flip-niches.mjs`)
   and therefore one parallel-safety contract. **A — digest SIGNAL:** `buildDigestBlock`'s comparator
