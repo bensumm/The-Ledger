@@ -953,7 +953,17 @@ response an agent needs). Current per-script behavior (facts, not doctrine):
   (a throwaway filtered console read). An un-calibrated estimator DOWNGRADES that write: `--asym` or
   `--pressure-exit` (`--est-sell pressure`) **silently skip** the publish so an exploration run needs no
   `--no-publish`; only an EXPLICIT `--publish --asym` / `--publish --pressure-exit` combo hard-REFUSES
-  (loud stderr + exit — `refusePublishIfNonNeutral`). Committing `screen.json` to git is a separate step
+  (loud stderr + exit — `refusePublishIfNonNeutral`). **`--archive-regime` (AF5b) joins that refusal
+  list** — it is a DATA-SOURCE swap, not an estimator: the 6h series behind the **Regime** column
+  (`regimeDrift`) and the trajectory `phase()` read comes from the local SQLite archive instead of a
+  per-item `/timeseries` call, pinned to the last 365×6h so `phase()` sees live's depth. Prices stay
+  live; the flag is OFF by default and byte-identical off. UNPROMOTED and not yet trustworthy for
+  `phase()`: the pin cannot ADD depth, so while the archive is shorter than live's 91d the two are not
+  same-span (Snape grass reads `spike` live / `decay` archive). On a real `--mode all` pass the regime
+  cells matched 121/121 among rows present in both, but one item (Wyvern bones) flipped
+  `flat`→`falling/crash-risk` on a hair-width floor break and vanished from the board — so treat it as
+  ~1.7% flip risk (the 2/120 crash-risk study), not the 0/165 same-span headline. Committing
+  `screen.json` to git is a separate step
   (`sync-fills.mjs --publish`, once-a-day `/overnight`); the local write itself touches no git.
 - **`watch-positions.mjs`** — watches every position = any committed capital (held inventory PLUS every
   active GE offer). Output: headline alerts → numbers-only table → per-item note block → summary footer.

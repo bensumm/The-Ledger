@@ -6,6 +6,15 @@
  *     [--floor 50] [--min-roi 1.5] [--min-price 0] [--max-price 45m] [--top 40]
  *     [--band-hours 2] [--min-traded 6] [--stats] [--publish] [--verbose]
  *     [--thin-reserve 6] [--gear-reserve 4] [--mid-tier-reserve 2] [--mid-tier-offset 0]
+ *     [--archive-regime]
+ *
+ *   --archive-regime (AF5b, PLAN-ARCHIVE-FIRST-FUNNEL — OFF by default, byte-identical when off) reads
+ *   the 6h REGIME series (regimeDrift's falling/rising gate + phase()'s trajectory shape) out of the
+ *   LOCAL SQLite archive instead of paying a per-item /timeseries call, capped at the last 365×6h so
+ *   an ever-accruing archive can't feed DEPTH-dependent phase() more history than live would. That cap
+ *   is a CEILING, not a floor — it cannot add depth the archive lacks, so while the archive is shorter
+ *   than live's 91d phase() is NOT live-equivalent (the run prints the achieved depth). PRICES stay
+ *   live either way; the flag refuses --publish. Unpromoted: AF6 owns the promotion decision.
  *
  *   DEFAULT is quiet: prints ONE summary line + the last-report dump path, not the markdown table.
  *   The per-niche report objects are ALWAYS written to pipeline/.cache/last-report/screen.json
@@ -107,6 +116,8 @@ import { anchorNudge } from '../probes/anchor.mjs';   // PLAN-OUTPUT-TABLE: the 
 import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1h, loadAllLatest, loadBands, loadDaily, loadDailyRangeBulk, fetchTsCached, pruneCache } from '../lib/market/marketfetch.mjs';   // loadDailyRangeBulk (PLAN-LANE-ADMISSION Chunk A) — read-only zero-fetch per-item daily intraday range powering Path-A's console primary sort · SP1 dropped `sleep` — no serialized per-fetch throttle remains in this file, the two worker-pool bounds are the throttle
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
+import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
+import { sixHourReader, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // AF5b — the ONE 6h seam, the /timeseries 365-bucket pin that keeps phase() depth-stable, and the depth floor below which the seam serves live instead
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
 import { formatTimedLap, formatBasePosition } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
@@ -386,6 +397,18 @@ const PHASE_BASING_GRADE_CAP = 'B';   // named ceiling for a provisional basing-
 // so uncalibrated prices can never reach screen.json/the app. Estimate/render-stage only — the pinned
 // gateCandidates→rankAndSlice→surviveMode funnel (replay goldens) is untouched either way.
 const ASYM = resolve('asym', { flag: A.asym === true ? true : undefined, config: CONFIG.asym, fallback: false }).active;
+// --- AF5b (PLAN-ARCHIVE-FIRST-FUNNEL): --archive-regime sources the 6h REGIME series from the LOCAL
+// SQLite archive (1h rows aggregated to aligned 6h windows) instead of a per-item /timeseries call.
+// OFF BY DEFAULT — and off means byte-identical, not "close": the seam (sixHourReader with no handle)
+// is a pure pass-through to the same fetchTsCached call each site made before. Flag-only, deliberately
+// NOT config-resolvable: this is an unpromoted shadow comparison, not a desk setting.
+// See archive-series.mjs's archive6h header for the LIVE_TS6H_BUCKETS pin (the load-bearing part), the
+// ceiling-not-floor limit, and the derived-volume caveat. Promotion to the default path is AF6's job and
+// has THREE preconditions: the archive must exceed 365×6h ≈ 91.25d (~2026-08-28) before the phase() read
+// can be trusted; the 00:00–02:00 local-window re-run §8 flags as the one untested mechanism; and a
+// ruling on the thin tail (measured depth spans 40–285 buckets, and 40 is below regimeDrift's own
+// 20-day appetite).
+const ARCHIVE_REGIME = A['archive-regime'] === true;
 // PC1: the ONE shared publish-refusal guard (replaces the two inline per-flag copies that used to sit
 // beside the PUBLISH declaration). An UN-CALIBRATED / F1-ungraduated estimator (--asym, --pressure-exit,
 // or a config that enables either) must never reach screen.json / the deployed app: an EXPLICIT
@@ -398,6 +421,7 @@ PUBLISH = refusePublishIfNonNeutral({
   checks: [
     { on: ASYM, message: '! --asym is experimental (F1-ungraduated) — refusing --publish under it.' },
     { on: PRESSURE_EXIT, message: '! --pressure-exit is an UN-CALIBRATED trial (F1-ungraduated) — refusing --publish under it (the deployed app + screen.json stay on the neutral estimator per PLAN-REACHABILITY-CONSOLIDATION).' },
+    { on: ARCHIVE_REGIME, message: '! --archive-regime is an UNPROMOTED data-source swap (AF5b) — refusing --publish under it (screen.json + the deployed app stay on the live 6h series until AF6 promotes it).' },
   ],
 });
 // --- PLAN-VOL24 (2026-07-13): --vol-source rolling|legacy. The wiki /24h endpoint is BROKEN (it serves a
@@ -426,8 +450,14 @@ const RAW = A.raw === true || ASYM;
 // PART II asym-pair read parameters: full-local-day window (wStart 0 → wEnd 0 wraps to all 24h — the
 // day-level deep-low/high-reach read, distinct from reachValidator's coming-8h window) over ~14 nights.
 const ASYM_NIGHTS = 14;
-// snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params
-const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE, volSource: VOL_SOURCE };
+// snapshot of the run params logged with each suggestion (O1) — mirrors the --publish payload's params.
+// AF5b: `archiveRegime` is stamped ONLY when the flag is on, so a normal run's ledger row is byte-
+// identical to pre-AF5b. It is load-bearing, not cosmetic: `suggestions.jsonl` is TRACKED and pushed to
+// main by the once-a-day /overnight publish, and the --publish refusal does NOT cover it — so without
+// this marker an unpromoted-data-source run is indistinguishable from a live-sourced one in the F1
+// calibration record forever after. Any F1/retro consumer must EXCLUDE rows carrying this flag until
+// AF6 promotes the source.
+const SCREEN_PARAMS = { floor: FLOOR, gpFloor: GP_FLOOR, minRoi: MIN_ROI, minNetGp: MIN_NET_GP, minGpd: MIN_GPD, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, top: TOP, bandHours: BAND_HOURS, minActive: MIN_TRADED, posture: POSTURE, volSource: VOL_SOURCE, ...(ARCHIVE_REGIME ? { archiveRegime: true } : {}) };
 
 const RUN_MODES = MODE === 'all' ? ALL_MODES : [MODE];   // `all` = band/churn/value (Ben 2026-07-10 added value); scalp explicit-only
 const NEED_BANDS = true;   // every remaining niche prices its edge off the 2h band (spread, the one 24h-avg niche, is deleted)
@@ -439,6 +469,57 @@ const DAILY_DAYS = IS_VALUE ? 28 : 17, DAILY_STEP_H = 6;
 const DAILY_COLD = 10 * 24 / DAILY_STEP_H;                       // < this many windows ⇒ cold archive, degraded proxy
 const TS_TTL_5M = 3 * 60 * 1000, TS_TTL_6H = 30 * 60 * 1000;     // per-item series cache TTLs (screen re-fetch avoidance)
 const TS_TTL_1H = 15 * 60 * 1000;                                // Leg B (2026-07-09): the 1h series reachValidator scores — fetched for SURVIVORS only
+// --- AF5b: the ONE 6h read for the whole screen (survivor pool, watchlist pool, reverse-flip pool).
+// `read6h(id)` is `sixHourReader`'s closure: with no archive handle it pass-throughs to the identical
+// `fetchTsCached(id, '6h', TS_TTL_6H)` call the THREE sites made individually before, so a bare scan is
+// byte-identical; with a handle it returns the window-pinned archive series and falls back to live on
+// an empty OR too-short one. READONLY IS NON-NEGOTIABLE — archive.open() runs schema DDL unless `readonly: true`,
+// against a multi-GB live DB. Best-effort open: a missing/locked archive degrades the whole flag to the
+// live path with a loud line, never a throw.
+let ARCHIVE_H = null;
+if (ARCHIVE_REGIME) {
+  try { ARCHIVE_H = openArchive(undefined, { readonly: true }); }
+  catch (err) { console.error('(--archive-regime: archive unavailable — ' + ((err && err.message) || err) + '; every 6h read falls back to the live fetch)'); }
+}
+// depth is tracked alongside the split because the pin is a CEILING, not a floor: it trims a too-deep
+// archive to live's 365×6h but cannot conjure depth the archive lacks, and `phase()` is depth-dependent.
+// `shallow` = served by live because the archive slice was too SHORT for regimeDrift to run at all
+// (< REGIME_MIN_6H_BUCKETS); distinct from `fallback` (nothing archived). Both are live reads — they are
+// counted apart so the banner can say WHY, and so a rising shallow count reads as "the archive is still
+// filling in", not as a missing item.
+const ARCH_6H = { archive: 0, fallback: 0, shallow: 0, minN: Infinity, maxN: 0, shallowMaxN: 0 };
+const read6h = sixHourReader({
+  handle: ARCHIVE_H,
+  live: id => fetchTsCached(id, '6h', TS_TTL_6H),
+  onSource: (src, _id, n) => {
+    ARCH_6H[src]++;
+    if (src === 'archive') { ARCH_6H.minN = Math.min(ARCH_6H.minN, n); ARCH_6H.maxN = Math.max(ARCH_6H.maxN, n); }
+    else if (src === 'shallow') ARCH_6H.shallowMaxN = Math.max(ARCH_6H.shallowMaxN, n);
+  },
+});
+// AF5b: name the data source and the archive/live split HONESTLY — an all-archive claim would be wrong
+// the moment one item is missing, and the fallback is silent by design. Hoisted to a function because
+// `--mode reverse` returns before main()'s header ever runs: the reverse table's Regime column is the
+// DECISION-CENTRAL inverted read, and it was being fed swapped data with zero disclosure (2026-08-08
+// adversarial review, D4). Every exit path that renders an archive-sourced regime must call this.
+function printArchiveRegimeBanner(scopeNote) {
+  console.log(`⚠ --archive-regime UNPROMOTED (AF5b): the 6h REGIME series comes from the LOCAL archive, pinned to the last ${LIVE_TS6H_BUCKETS}×6h — ${ARCH_6H.archive} from archive / ${ARCH_6H.fallback} absent + ${ARCH_6H.shallow} too-shallow fell back to a live fetch (${scopeNote}). Prices are untouched (live). --publish refused.`);
+  if (ARCH_6H.shallow) console.log(`  ${ARCH_6H.shallow} item(s) had an archive slice under ${REGIME_MIN_6H_BUCKETS} buckets (deepest rejected: ${ARCH_6H.shallowMaxN}) — too short for regimeDrift's ${5}-full-day minimum, so they were served LIVE rather than silently returning an \`unknown\` label that un-gates the falling exclusion.`);
+  if (ARCH_6H.archive > 0 && ARCH_6H.minN < LIVE_TS6H_BUCKETS) {
+    // regimeDrift reads windowStats(nights:20) → it only stops caring about depth once a series covers
+    // 20 local days = 80 6h buckets. Above that the gate is genuinely depth-immune; BELOW it the
+    // thinnest-archived items feed it less history than live would have, so say so instead of
+    // repeating the reassuring half of the sentence.
+    const REGIME_DEPTH_BUCKETS = 20 * 4;
+    console.log(`  ⚠ depth ${ARCH_6H.minN}–${ARCH_6H.maxN} of ${LIVE_TS6H_BUCKETS} buckets — the archive is SHALLOWER than live, so phase() (spike/decay/basing) is NOT live-equivalent yet and will differ on items whose ~${((LIVE_TS6H_BUCKETS - ARCH_6H.maxN) * 6 / 24).toFixed(0)}d of missing history sets its base/peak.`);
+    console.log(ARCH_6H.minN >= REGIME_DEPTH_BUCKETS
+      ? `  regimeDrift (the falling/rising GATE) clears its windowStats(nights:20) = ${REGIME_DEPTH_BUCKETS}-bucket appetite on every series here — but see the evidence line: depth is not the only way the gate flips.`
+      : `  ⚠ and the thinnest series (${ARCH_6H.minN} buckets ≈ ${(ARCH_6H.minN * 6 / 24).toFixed(0)}d) is BELOW regimeDrift's windowStats(nights:20) appetite of ${REGIME_DEPTH_BUCKETS} buckets — those items feed the falling/rising GATE less history than a live fetch would.`);
+  }
+  // D1 (2026-08-08 adversarial review) REPLACES the old "0/165 SAME-SPAN, none was data quality" line.
+  // That claim was falsified: same-span, same-end regime flips are REAL and go in the unsafe direction.
+  console.log(`  ⚠ Evidence, corrected: regime flips DO occur at same span and same end — 2/60 six-way and 1/60 GATE flips in the 00:00–02:00 local window, from ±1gp rounding residue in a re-derived weighted mean tipping a discrete test (Red d'hide chaps: floor slope −14.40 live vs −14.20 archive against a ≈14.30 flat-band, which OPENS the falling exclusion on an item live EXCLUDES). driftPct p95 4.27pp / max 12.55pp in that window vs 0.70pp by day. This is NOT depth and NOT the 15.2d cliff — do not read the depth lines above as the whole risk.`);
+}
 // SP1 (PLAN-DIGEST-SIGNAL-AND-SCAN-PERF): the ONE API-politeness bound, shared by BOTH per-item fetch
 // pools — the survivor pool in main() and runWatchlist's. Max items in flight; each item fetches its
 // independent endpoints via Promise.all, so the wiki sees at most FETCH_CONCURRENCY × endpoints.
@@ -2272,7 +2353,7 @@ async function runWatchlist(map, ctx, guide, latest, qcache, series5m) {
       for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
         const [ts5m, ts6h] = await Promise.all([
           fetchTsCached(id, '5m', TS_TTL_5M),
-          fetchTsCached(id, '6h', TS_TTL_6H),
+          read6h(id),                       // AF5b seam — live fetchTsCached unless --archive-regime
         ]);
         prefetched.set(id, computeQuote({ id, latest: latest[id] || latest[String(id)] || null, ts5m, ts6h, vol24: v24[id], guide: guide[id] ?? null, limit: map.byId[id]?.limit ?? null, asked: true, held: true }));
       }
@@ -2437,7 +2518,7 @@ async function runReverseMode(realLog) {
     const id = p.id;
     let ts1h = null, row = null;
     try {
-      const [ts5m, ts6h, t1h] = await Promise.all([fetchTsCached(id, '5m', TS_TTL_5M), fetchTsCached(id, '6h', TS_TTL_6H), fetchTsCached(id, '1h', TS_TTL_1H)]);
+      const [ts5m, ts6h, t1h] = await Promise.all([fetchTsCached(id, '5m', TS_TTL_5M), read6h(id), fetchTsCached(id, '1h', TS_TTL_1H)]);   // AF5b seam on the 6h leg
       ts1h = t1h;
       const lt = latestAll[id] || latestAll[String(id)] || null;
       row = computeQuote({ id, latest: lt, ts5m, ts6h, vol24: v24all[id], guide: guideAll[id] ?? null, limit: map.byId[id]?.limit ?? null, held: true });
@@ -2561,7 +2642,9 @@ async function main() {
   // zero-ripple guarantee the replay goldens pin. Runs AFTER the local sync (fresh fills → owned-qty fold),
   // BEFORE the daemon warm/heavy setup none of which reverse needs. All output via `realLog` so it prints on
   // the quiet default (this surface has no last-report/screen.json consumer — it's an interactive read).
-  if (MODE === 'reverse') { await runReverseMode(realLog); return; }
+  // AF5b/D4: reverse mode returns before main()'s header, so its banner must print HERE — the reverse
+  // table's Regime column is the inverted read Ben decides on, and it was being swapped silently.
+  if (MODE === 'reverse') { await runReverseMode(realLog); if (ARCHIVE_REGIME) printArchiveRegimeBanner('reverse-flip pool'); return; }
 
   // PLAN-DAEMON-SUBSYSTEM Chunk 5 — opportunistic cache-warm hook. Same "before the read" seam as the
   // sync above, but IN-PROCESS (not subprocessed): manager.ensure() is cheap/local/self-throttling — it
@@ -2721,7 +2804,7 @@ async function main() {
         // the top-40 gated pool), so a scan adds ~one 1h fetch per surfaced row, never per candidate.
         const [ts5m, ts6h, ts1h] = await Promise.all([
           fetchTsCached(id, '5m', TS_TTL_5M),
-          fetchTsCached(id, '6h', TS_TTL_6H),
+          read6h(id),                       // AF5b seam — live fetchTsCached unless --archive-regime
           fetchTsCached(id, '1h', TS_TTL_1H),
         ]);
         const lt = latest[id] || latest[String(id)] || null;
@@ -2737,6 +2820,9 @@ async function main() {
 
   console.log(`# Opportunity screen — mode ${MODE.toUpperCase()}, posture ${POSTURE.toUpperCase()}, liquidity ${FLOOR}/d OR ${(GP_FLOOR/1e6).toLocaleString()}m gp-flow, min ROI ${MIN_ROI}% (thin: ${(MIN_NET_GP/1e3).toLocaleString()}k net/u), attention floor ${(MIN_GPD/1e3).toLocaleString()}k gp/d, ${MIN_PRICE.toLocaleString()}–${MAX_PRICE.toLocaleString()} gp, top ${(() => { const vs = [...new Set(RUN_MODES.map(m => effTop[m]))]; return vs.length === 1 ? vs[0] : RUN_MODES.map(m => `${m} ${effTop[m]}`).join('/'); })()} fetched/niche, admission ${ADMISSION.toUpperCase()}`);
   console.log(`(${ids.size} unique items fetched; grade cutoffs are PLACEHOLDERS pending the validation study)`);
+  // AF5b: name the data source and the archive/live split HONESTLY — an all-archive claim would be
+  // wrong the moment one item is missing from the archive, and the fallback is silent by design.
+  if (ARCHIVE_REGIME) printArchiveRegimeBanner('survivor pool; watchlist quotes below add more');
   // PART II: --asym is loudly experimental — repriced quotes + asym sort on the 'asym'-fillShape niches.
   if (ASYM) console.log(`⚠ --asym EXPERIMENTAL (F1-ungraduated): band/scalp QUOTED prices are the asymmetric deep-bid → high-reach-ask pair and the sort is net × P_ask ÷ TTF — placeholder quantiles (n≈14), NOT the calibrated default. churn/value unchanged.`);
   if (coverageWindows < DAILY_COLD) console.log(`(⚠ regime-proxy archive is COLD — only ${coverageWindows}/${Math.round(DAILY_DAYS * 24 / DAILY_STEP_H)} windows; fetch-pool ordering is degraded until it warms up)`);

@@ -939,7 +939,27 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     two-sided gate and thesis edge are never relaxed).
     **`--pressure-exit`** (PB4 opt-in TRIAL) drives the console Est. buy/sell + a pressure-net RERANK off
     `reachableBand`; **REFUSED under `--publish`** so the deployed app / `screen.json` stays F1-gated on the
-    neutral estimator; LOUD banner, retro co-log neutral, console-only),
+    neutral estimator; LOUD banner, retro co-log neutral, console-only).
+    **`--archive-regime`** (AF5b, PLAN-ARCHIVE-FIRST-FUNNEL — opt-in, OFF by default) sources the 6h REGIME
+    series (`regimeDrift`'s falling/rising gate + `phase()`'s trajectory shape) from the LOCAL SQLite
+    archive via `lib/market/archive-series.mjs`'s `sixHourReader`/`archive6h` instead of a per-item
+    `/timeseries` call — pinned to the last `LIVE_TS6H_BUCKETS`(365)×6h. All THREE 6h call sites (survivor
+    pool, watchlist pool, reverse-flip pool) go through the ONE `read6h` seam, which with no archive handle
+    is a pure pass-through to the same `fetchTsCached(id,'6h',TS_TTL_6H)` — so the default path is
+    byte-identical (measured: a real `--mode all` pre/post diff is empty once the `~Nmin ago` wall clock is
+    neutralised). Handle is opened `{ readonly: true }` (an unguarded `open()` runs schema DDL against a
+    multi-GB live DB) and best-effort — an unavailable/locked archive degrades every read to live. PRICES
+    are untouched (live) and **`--publish` is REFUSED** under it; the flag is ALSO stamped into
+    `suggestions.jsonl`'s logged params as `archiveRegime:true`, because that ledger is TRACKED and pushed
+    to main by the once-a-day `/overnight` publish and the `--publish` refusal does NOT cover it — without
+    the marker an unpromoted-source run is indistinguishable from a live one in the F1 record forever
+    (any F1/retro consumer must EXCLUDE flagged rows until AF6 promotes). Prints the archive/live split,
+    the `shallow` count (series too short for `regimeDrift`, served live instead — see
+    `REGIME_MIN_6H_BUCKETS`), the achieved bucket depth (the pin is a CEILING not a floor: while the archive
+    is shallower than live — 285/365 buckets on 2026-08-07 — `phase()` is NOT live-equivalent), and the
+    CORRECTED evidence line (same-span regime flips are real; see `archive-series.mjs`). The banner prints
+    on EVERY exit path that renders an archive-sourced regime, including `--mode reverse`, which returns
+    before `main()`'s header. Unpromoted — AF6 owns promotion),
     `watch-positions.mjs` (adaptive live position/offer monitor — the V1–V6 cross-pass memory surface: per-pass
     Δ/structural-support lines (`lib/watchstate.mjs`/`levels.mjs`, persisting `.cache/watch-state.json`),
     the V5 EMIT-CONTRACT note block (`lib/emit.mjs`), and the shared held-verdict + dominant-path lines
@@ -1339,8 +1359,24 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     dropped by `quotecore.js:246`'s filter and the gates degrade-to-pass, which is why the rename is a
     fixture-pinned adapter and not an inline `.map()`; `aggregate1hTo6h()` derives the unstored 6h grain
     from 1h, volume-weighted and EXACT at full coverage (measured 0.000% median error vs live across four
-    price tiers; the whole residual is missing hours, exposed as `sourceBuckets` so a caller can refuse a
-    thin window). Provisional — no consumer until AF5/AF5b. Pinned by `pipeline/test/archive-series.test.mjs`),
+    price tiers; the whole residual is missing hours, exposed as `sourceBuckets` — DESCRIPTIVE ONLY, never
+    a gate, and side-blind). Plus the AF5b 6h read: `LIVE_TS6H_BUCKETS` (365 = the `/timeseries?timestep=6h`
+    cap, ≈91d), `archive6h(handle,id,{now})` — aggregate + PIN to the newest 365×6h + strip `sourceBuckets`
+    so the archive-only field can never reach a serialiser — and `sixHourReader({handle,live,onSource})`,
+    the seam whose no-handle path is a pure pass-through to the live fetch (that is what makes "flag off is
+    byte-identical" a property rather than a promise). The pin exists because `phase()` is DEPTH-dependent
+    (`baseMid`/`peakMid` both move with history length: 4/165 verdicts flip full-series vs 0/165 same-span)
+    and the archive accrues forever, so past ~2026-08-28 an unpinned read would drift silently. It is a
+    CEILING, not a floor — it cannot add depth the archive lacks, so until the archive passes 91.25d
+    `phase()` is not live-equivalent (Snape grass reads `spike` live / `decay` archive) and `onSource`
+    carries the achieved bucket count so callers say so. ⚠ The pin fixes the DEPTH artifact ONLY — the
+    once-claimed "same-span ⇒ no flips, none is data quality" was FALSIFIED 2026-08-08 (2/60 same-span
+    six-way flips and 1/60 GATE flips in the 00:00–02:00 local window, from ±1gp rounding tipping a discrete
+    threshold; the Red d'hide chaps case OPENS the falling exclusion on an item live excludes). The reader
+    also enforces a DEPTH FLOOR (`REGIME_MIN_6H_BUCKETS`): an archive slice too short for `regimeDrift` is
+    served LIVE and reported as `shallow`, because a short series yields `{ok:false}` → label `unknown` →
+    the falling exclusion silently un-gates. Consumer: `screen-flip-niches.mjs --archive-regime` (AF5b).
+    Pinned by `pipeline/test/archive-series.test.mjs` + `pipeline/test/archive-6h-pin.test.mjs`),
     `marketfetch.mjs`
     (node-side price/guide fetch layer + historical bands `loadHistBands`/past-anchored 6h series
     `loadHistDaily` (YF1) + `loadBands(hours,{db})` — the whole-market 5m intraday band read, PERF-1
@@ -1879,6 +1915,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     check-before-fetch, `seriesFor`/`marketAt` vs hand-computed slices on `:memory:` DBs, `exportFixture`
     round-trip, `pruneBefore`, the never-`/latest` grain guard, and the `dailyMidsAt`+`daily_seed`
     loadDaily bridge — all on `:memory:`/tmp DBs, NEVER the real archive),
+    `archive-6h-pin.test.mjs` (AF5b — the 6h READ CONTRACT on a fake handle, no sqlite/fetch/clock:
+    `LIVE_TS6H_BUCKETS` = 365; a deeper-than-live archive pins to the newest 365×6h; **the BLOCKER
+    reproduced** — a 250d unpinned read flips `phase()` `spike`→`base` (both depth-dependent inputs,
+    `baseMid` 1000→3000 and `peakMid` 1200→3000) where the pinned read does not, while `regimeDrift`'s
+    classification/driftPct are IDENTICAL across the same depth change; the pin is a CEILING not a floor
+    (a short archive stays short and moves `baseMid` — why AF6 must wait for 91.25d of archive); the five
+    wire keys only, with `sourceBuckets`/`ts` provably absent; `sixHourReader`'s no-handle path
+    returning the live call's OWN object from one same-id call — the default-off byte-identity guard —
+    plus its empty-archive and throwing-handle live fallbacks and the achieved-depth `onSource` hook; and
+    the DEPTH FLOOR (`REGIME_MIN_6H_BUCKETS`), pinned one-directionally: everything the floor ADMITS drives
+    the gate, and a genuinely short series really does break `regimeDrift` — deliberately conservative,
+    since admitting a too-short series costs a silent un-gating of the falling exclusion while rejecting a
+    usable one costs a single fetch),
     `item-context.test.mjs` (P0 — the context chain's per-stage enrichers (identity/market/history/intraday/
     position), THE PIN (`HOLD — ask filling` renders the same verdict on compact + verbose off one
     `ctx.position.mv`), and the CONVICTION PIN (an armed-not-escalated Gate-D CUT-CANDIDATE is

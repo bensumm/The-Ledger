@@ -193,8 +193,8 @@ gets scored instead of 66%, and the reserves/crowding-out disappear. Restate the
 | **AF3b** | **The cream-of-the-crop problem (Ben, 2026-08-07) — the real goal of this plan.** *"For our top 40 or 90 we need to work on a way to 1. FILTER and 2. SORT so that we can get a smaller population that are the cream of the crop candidates to investigate further. If that's not possible we may need to resort to just looking at the entire universe, but I'd like to avoid that if possible."* Two distinct problems: a **filter** (what is disqualified outright) and a **sort** (what leads among the qualified). §7.1 of `PLAN-ASK-BACKTEST.md` shows we currently have NO validated basis for either — grade/rank/pFill all fail against the one observable outcome, and that outcome is itself confounded by trade frequency. **So this chunk is blocked on evidence, not on code.** The fallback Ben names — score the entire universe — becomes cheap once gating is archive-driven (AF6), which is the argument for doing AF4→AF6 first and treating whole-universe as the honest baseline to beat rather than the failure case. | AF6 | **L** |
 | ~~**AF4**~~ | ✅ **SHIPPED `85c7a11` 2026-08-07.** `pipeline/lib/market/archive-series.mjs` — `archiveSeries()` (the `ts`→`timestamp` rename, fixture-pinned) + `aggregate1hTo6h()`. 1h passthrough measured byte-exact vs live (7,148 identical / 0 differing). ⚠ Its error story was wrong TWICE before §8 fixed it: the driver is an AGE CLIFF at ~15.2d (the `/timeseries` 365-hour horizon), not rounding and not coverage — so `sourceBuckets` is descriptive only, never a gate. | — | M |
 | ~~**AF5**~~ | ✅ **SHIPPED `bf6cfa9` 2026-08-07** as `pipeline/commands/report-archive-gate.mjs` (read-only, changes nothing). Reported 25/25 reachValidator agreement — ⚠ **but §8 RETIRED that number as evidence: the test fed a pure function two byte-identical inputs and could not have failed.** AF5 is safe on AF4's byte-identity, NOT on the shadow run. **Do not cite 25/25 in an AF6 promotion argument.** | AF4 | M |
-| **AF5b** | **Migrate the 6h consumers — `regimeDrift` (`quotecore.js:173–192`, `windowStats nights:20`) and `phase()`. MISSING before review, and it is the biggest gate**: falling/regime is the dominant band discard (23 of 41). AF7 cannot land without it. | AF4 | **L** |
-| **AF6** | Promote AF5/AF5b to real gates once the shadow log clears its stated threshold; extend to reach + amplitude. | AF5, AF5b | M |
+| ~~**AF5b**~~ | ✅ **BUILT 2026-08-07 (opt-in, unpromoted).** `--archive-regime` on `screen-flip-niches.mjs` sources the 6h series from the archive through ONE seam (`sixHourReader`/`archive6h` in `archive-series.mjs`) with the mandated **365×6h pin**, `sourceBuckets` stripped, `{readonly:true}` open, `--publish` refused. Default OFF is byte-identical (real `--mode all` pre/post diff empty modulo the `~Nmin ago` clock). Flag-ON measurement below. ⚠ **The pin turns out to be a CEILING, not a floor** — it cannot add depth the archive lacks, so §8's "same-span ⇒ 0/165" is NOT reachable in production until the archive passes 91.25d. See §8's addendum. | AF4 | **L** |
+| **AF6** | Promote AF5/AF5b to real gates once the shadow log clears its stated threshold; extend to reach + amplitude. **Two hard preconditions added by the AF5b build:** (1) the archive must exceed 365×6h ≈ 91.25d (projected ~2026-08-28) before the `phase()` read can be promoted — below that the archive is short and `phase()` is provably not live-equivalent; (2) the 00:00–02:00 local re-run §8 already required. | AF5, AF5b | M |
 | **AF7** | Shortlist-only live pricing; measure API calls + wall-clock before/after. | AF6 | M |
 | **AF8** | Retire the reserves. **Scope corrected: there are SEVEN** (THIN/RISING/VALUE/watch/EXPLORE/GEAR/MID_TIER — `admission.mjs:80`) plus held, not three; and if the budget stops binding, `rankAndSlice`/`proxyDrift`/`softFactor` fetch-ordering is equally vestigial. **Deleting them also terminates EF-0a's `via`/`preRank`/`prePool` natural experiment** and changes the `suggestions.jsonl` surface — needs a bookkeeping/compat note. The recorded exit condition is *evidence-based* ("once the top-N is SHOWN to surface the best candidates"); removing the constraint instead of proving the ranker is a different move and must be labelled as one. | AF7 | M |
 | **AF9** | Optional (strategy 5): `cache-warm` precomputes the gate pass into a ranked candidate file; interactive scan reads it + prices ~20. | AF7 | L |
@@ -306,17 +306,60 @@ feed it. Verified directly. Live `ts6h` caps at 365 buckets ≈ 91.2d; the archi
 
 - full-series comparison: **4/165 flip** (2.4%) — Spider cave teleport `spike→base`, Chef's delight
   and Armadyl bracers `base→spike`, **Snape grass `spike→decay`** (the 0.71.1 fail-open incident item).
-- same-span comparison: **0/165.** Every flip is a DEPTH artifact; none is data quality.
+- same-span comparison: **0/165** — ⚠ but see the falsification below. The conclusion drawn here at the
+  time ("every flip is a DEPTH artifact; none is data quality") was WRONG; 0/165 measured one daytime
+  snapshot, not a general property.
 
 **This gets worse with time, not better.** Today the archive is shallower than live; past ~2026-08-28
 it will be DEEPER, and an unpinned read would silently drift verdicts as the archive accrues forever.
 **AF5b must pin the 6h read to live's window (last 365×6h) permanently — a standing contract, not a
 migration-day detail.** `regimeDrift` is immune (`windowStats(nights:20)`, `:182`).
 
-### ✅ The question this plan actually turned on — regime verdicts do NOT flip
+⚠ **CORRECTED BY THE AF5b BUILD (2026-08-07): the pin is a CEILING, not a floor, and it closes only the
+FUTURE half of this gap.** It trims a too-deep archive down to live's 365×6h; it cannot conjure depth
+the archive does not have. Today the archive serves **285 of 365 buckets (71.0d vs live's 91.0d)**, so
+the two series are *still* not same-span and `phase()` is **not** live-equivalent. The "0/165 same-span"
+figure below was obtained by trimming the DEEPER source — a condition a production read cannot
+reproduce, because it has no live series to trim against. Verified directly on the item this section
+already named: **Snape grass reads `phase` `spike` on live 91d and `decay` on the pinned 71d archive**
+(identical regime label `falling/cooling` on both), and Raw halibut reads `base` live / `spike` archive.
+Consequence: AF6 must not promote the `phase()` read until the archive itself passes 91.25d
+(~2026-08-28). `sixHourReader` reports the achieved bucket count per read so the shortfall is stated
+out loud rather than assumed away.
+
+⚠ **And depth is not uniform — the measured range over a 172-item `--mode all` survivor pool was
+`40–285 of 365` buckets.** The 285 ceiling is the archive's own age; the **40** floor (≈10 days) is a
+recently-archived / thin item, and it sits BELOW even `regimeDrift`'s `windowStats(nights:20)` appetite
+of 80 buckets. So the "regimeDrift is depth-immune" reassurance holds only for series ≥20 days; the
+thinnest tail feeds the falling/rising GATE less history than a live fetch would. AF5b surfaces this as
+a second banner line rather than gating on it (a `sourceBuckets`-style depth THRESHOLD is exactly what
+this plan already ruled unjustifiable from data). **AF6 needs a decision here:** a per-item minimum-depth
+fallback to live, or an accepted degradation. It did not bite on the measured pass (121/121 regime
+agreement), but it is untested at the thin end.
+
+### ⚠️ The question this plan actually turned on — regime verdicts DO flip (this section's headline was falsified 2026-08-08)
 
 **0/165 disagreements** on both the 3-way label and the 6-way classification, realistic AND same-span,
 including all 37 falling and all 12 crash-risk items. `driftPct` deltas: median 0.00pp, p95 0.70pp.
+
+⛔ **FALSIFIED (2026-08-08 adversarial review) — do not cite this section's headline.** The 0/165 run was
+ONE ~14:00-local snapshot. Repeating it in the previously-untested **00:00–02:00 local** window on a
+60-item production-realistic sample (screen.json ∪ dip-watchlist ∪ the named incident items) found
+**2/60 six-way flips and 1/60 GATE flips surviving same-span AND same-end trimming**, i.e. pure data
+quality, not depth and not the 15.2d cliff:
+- **Red d'hide chaps #2495** — floor slope live **−14.40** vs archive **−14.20** gp/d against a flat-band
+  of ≈**14.30** (latest 2859 × `FC_FLAT_FRAC` 0.005). A **0.2 gp/d** difference straddles the threshold,
+  flipping `falling/cooling` → `flat/mild-cooldown` and **OPENING the falling exclusion on an item the
+  live read EXCLUDES** — the unsafe direction (Wyvern bones flipped the safe way).
+- **Rune nails #4824** — `priorExtreme` **749 vs 748**, a **1gp** difference in one day-low ~11d ago,
+  flipping `broke:true`.
+
+`driftPct` |Δ| in that window: median 0.00pp but **p95 4.27pp, max 12.55pp** — 6× the daytime p95 below.
+The mechanism is ±1gp rounding residue in a re-derived volume-weighted mean tipping a DISCRETE test, so
+the "structural, not luck" argument below is only half right: the near-exact ≤14d zone bounds the
+*magnitude* of the disagreement, not its *effect* on a threshold test sitting inside that magnitude.
+**Generalises past AF5b** — any item whose slope sits within rounding distance of `FC_FLAT_FRAC × price`
+has a coin-flip label from any source (PLAN.md Discovered; wants a deadband).
 
 And it is structural, not luck: `FC_RECENT_N = 5` / `FC_BREAK_LOOKBACK = 13`
 (`js/windowread.mjs:382,384`) mean the classifier reads only the last ~14 completed days — the zone
@@ -324,6 +367,19 @@ where the derived series is near-exact (per-bucket p95 0.016–0.023%).
 
 **Honest bounds:** 0/165 bounds the per-read flip rate below **~1.8%** (95%); 0/37 falling below
 ~7.8%; 0/12 crash-risk below **~22%**. One snapshot, ~14:00 local.
+
+⚠ **AF5b's end-to-end run found a real regime flip, so "0/165" is not the operating number.** A full
+`--mode all` pass at ~23:15 local with `--archive-regime` on (175 items served from archive, 0
+fallbacks) reproduced **121/121 identical regime cells among rows present in both runs** — but **Wyvern
+bones (#6812) flipped `flat/mild-cooldown` → `falling/crash-risk` and was therefore excluded from the
+churn table entirely** (BAND 61→60 rated). Both sources agree on `floor:flat ceil:falling` and the
+driftPct gap is 0.11pp; the flip is the discrete floor-BREAK test tipping, exactly the "hair-width
+floor-break artifact" class the later 2/120 crash-risk study describes. So the honest end-to-end figure
+is **121/122 surfaced rows (99.2%), 1 item silently dropped from the board** — consistent with the
+tightened 2/120 ≈ 1.7% study, NOT with the 0/165 headline. Cite 2/120 in an AF6 argument, not 0/165.
+Two further downstream flips came from the SERIES TAIL rather than depth or values: the archive's ~1.75h
+lag moves `tEnd`, which shifts `phase().lowSlope`'s 4-day window and flipped the froth probe on Camphor
+logs (`📈healthy-reprice` → `🔪knife`) with both phases still reading `base`.
 
 ⚠ **One untested mechanism, and it is in the worst possible window.** The 06:00-UTC 6h bucket starts
 23:00 local, so between local midnight and ~01:45 (archive lag) the still-forming bucket keys to
@@ -362,9 +418,18 @@ completeness: 0 missing buckets across 46,350 windows.
 
 ### Carried into AF5b's spec
 
-1. Pin the 6h read to the last 365×6h. **Blocker.**
-2. Re-run the regime study in the 00:00–02:00 local window first.
-3. Strip or document `sourceBuckets` leaking into anything that serialises `ts6h`.
+1. Pin the 6h read to the last 365×6h. **Blocker.** ✅ DONE — `archive6h()`, tested by a fixture that
+   reproduces the unpinned `spike`→`base` flip. ⚠ But see the ceiling-not-floor correction above: the
+   pin does NOT make the two series same-span while the archive is short.
+2. Re-run the regime study in the 00:00–02:00 local window first. **STILL OPEN** — AF5b's runs were
+   ~23:00–23:30 local, outside it. Carried to AF6 as a hard precondition.
+3. Strip or document `sourceBuckets` leaking into anything that serialises `ts6h`. ✅ STRIPPED in
+   `archive6h()` (the pinned read emits the five wire keys only) + asserted in the test.
 4. Derived 6h VOLUMES are sums-of-1h and disagree with live beyond 15.2d. No current 6h consumer reads
-   them (`quotecore.js:386`); any future one inherits a silent unit change. Pin a note then.
+   them (`quotecore.js:386`); any future one inherits a silent unit change. ✅ Noted in `archive6h`'s
+   header and asserted in the test (a full 6h window sums to 6× the 1h side volume).
 5. The screen must open the archive `{ readonly: true }` — never the default DDL path on a multi-GB DB.
+   ✅ `screen-flip-niches.mjs` opens `openArchive(undefined, { readonly: true })` inside a try/catch, and
+   only when `--archive-regime` is passed.
+6. **NEW (AF5b build):** promotion also needs the archive to exceed 91.25d, and the crash-risk floor-break
+   sensitivity above means an AF6 promotion changes which items are BOARD-VISIBLE, not just labelled.

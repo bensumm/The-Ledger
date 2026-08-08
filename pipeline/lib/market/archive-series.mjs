@@ -88,8 +88,8 @@ export function archiveSeries(handle, id, grain, { days = null, from = null, to 
    A bucket with zero volume on a side contributes nothing to that side's mean (weight 0); when a
    whole 6h window has no volume on a side, that side is null — matching how the wiki reports an
    untraded side, so downstream null-handling is unchanged. */
-// @provisional-api: the 6h derivation AF5b needs to move regimeDrift/phase() off live fetches; no
-// consumer until then. See PLAN-ARCHIVE-FIRST-FUNNEL AF5b.
+// Consumed by archive6h() below (AF5b) — the ONLY sanctioned way to reach a 6h series from here, since
+// it is the one that applies the LIVE_TS6H_BUCKETS pin. Do not call this directly for a consumer series.
 export function aggregate1hTo6h(rows) {
   const SIX = 6 * 3600;
   const buckets = new Map();
@@ -119,4 +119,122 @@ export function aggregate1hTo6h(rows) {
       // still counts toward high-side "coverage". Present only on derived 6h, never on the passthrough.
       sourceBuckets: b.src,
     }));
+}
+
+/* --- The 6h READ, WINDOW-PINNED — AF5b's one home for a standing contract ------------------------
+
+   LIVE_TS6H_BUCKETS is the wiki `/timeseries?timestep=6h` per-item cap: at most 365 points (verified
+   live 2026-08-07 — 365 points, 91.0d span, 6h step). Every 6h consumer in this repo has therefore
+   ALWAYS been fed at most that much history, and the archive read must honour the same bound.
+
+   ⛔ WHY THE PIN IS A CONTRACT AND NOT A MIGRATION-DAY DETAIL. `phase()` is DEPTH-DEPENDENT: its
+   `baseMid` is the median of points OLDER than PHASE_BASE_LOOKBACK_DAYS (js/quotecore.js:252) and its
+   `peakMid` is the max over ALL points (:255-256) — feed it more history and BOTH move. A 165-item
+   study (Fable, 2026-08-07, PLAN-ARCHIVE-FIRST-FUNNEL §8) measured it: comparing live 6h against the
+   archive-derived 6h over each source's FULL series flipped 4/165 phase verdicts (Spider cave
+   teleport, Chef's delight, Armadyl bracers, and Snape grass — the 0.71.1 fail-open incident item);
+   comparing the SAME SPAN flipped 0/165.
+
+   ⛔ "EVERY FLIP WAS A DEPTH ARTIFACT, NONE WAS DATA QUALITY" — FALSIFIED 2026-08-08 (adversarial
+   review). That was this header's original claim and it is WRONG, in the unsafe direction. A 60-item
+   production-realistic sample run in the previously-untested 00:00–02:00 local window found 2/60 six-way
+   classification flips and 1/60 three-way GATE flips that survive same-span AND same-end trimming:
+     · Red d'hide chaps #2495 — floor slope live −14.40 vs archive −14.20 gp/d against a flat-band of
+       ≈14.30 (latest 2859 × FC_FLAT_FRAC 0.005). A 0.2 gp/d gap straddles the threshold and flips
+       `falling/cooling` → `flat/mild-cooldown`, which OPENS the falling exclusion on an item the live
+       read EXCLUDES. Wyvern bones flipped the safe way; this one does not.
+     · Rune nails #4824 — `priorExtreme` 749 vs 748, a 1gp difference in one day-low ~11d ago, flipping
+       `broke:true` → `crash-risk` vs `cooling`.
+   Both sit INSIDE the ≤14d near-exact zone, so this is neither the 15.2d age cliff nor depth: it is a
+   permanent property of feeding re-derived volume-weighted means into DISCRETE threshold tests. driftPct
+   |Δ| across that sample: median 0.00pp but p95 4.27pp, max 12.55pp (vs §8's daytime p95 0.70pp).
+   The generalisation, which is NOT about the archive: any item whose slope sits within rounding distance
+   of `FC_FLAT_FRAC × price` has a coin-flip regime label from ANY source, and the falling-exclusion gate
+   hangs off it (tracked in PLAN.md Discovered — wants a deadband, not a bare threshold).
+
+   And it gets WORSE with time, not better. Today the archive (~71d) is SHALLOWER than live (91d);
+   past ~2026-08-28 it will be DEEPER, and an unpinned archive read would silently drift phase verdicts
+   as the archive accrues forever. So the pin lives HERE, applied once at the source — not at each call
+   site, where the next consumer would forget it. `regimeDrift` itself is immune
+   (`windowStats(nights:20)`, quotecore.js:182 — it keeps the last 20 local days whatever you feed it),
+   but it reads the SAME series `phase()` does, so pinning once covers both.
+
+   ⚠ THE PIN IS A CEILING, NOT A FLOOR — and that matters TODAY (measured 2026-08-07, AF5b build).
+   It can trim a too-deep archive down to live's window; it cannot conjure depth the archive does not
+   have. While the archive is SHALLOWER than live (285 of 365 buckets, 71.0d vs 91.0d as of build day)
+   the two series are still not same-span, so `phase()` is NOT live-equivalent — verified on the very
+   item §8 named: Snape grass reads `spike` on live 91d and `decay` on the pinned 71d archive (identical
+   regime label `falling/cooling` on both), and Raw halibut reads `base` live / `spike` archive. §8's
+   reassuring "0/165 same-span" was obtained by trimming the DEEPER source; a production read has no
+   live series to trim against, so it cannot reproduce that condition until the archive itself passes
+   365×6h ≈ 91.25 days (projected ~2026-08-28). AF6 must not promote the 6h read for phase() before
+   then — `sixHourReader` reports the achieved bucket count per read so a caller can say so out loud.
+
+   `sourceBuckets` IS STRIPPED HERE. aggregate1hTo6h attaches a descriptive per-window count that the
+   live wire shape does not have. Anything that serialises a 6h point (a suggestions.jsonl row, a
+   screen.json cell, a future item-context dump) would silently gain a field present only on the archive
+   path — a diff that looks like data and is not. The pinned read emits the FIVE wire keys and nothing
+   else.
+
+   ⚠ DERIVED 6h VOLUMES ARE SUMS-OF-1h. `highPriceVolume`/`lowPriceVolume` here are the summed 1h side
+   volumes over the window. Beyond the `/timeseries` 1h horizon (~15.2 days) they demonstrably disagree
+   with the wiki's own 6h endpoint (57% of side-volumes unequal — its 6h is NOT an aggregate of its own
+   bulk 1h out there; which one is "truer" is UNKNOWN). This is safe TODAY only because no 6h consumer
+   reads them: `computeQuote` passes ts6h to `regimeDrift` and nothing else (js/quotecore.js:386), and
+   `regimeDrift`/`phase()` read only `timestamp`/`avgLowPrice`/`avgHighPrice`. A FUTURE 6h VOLUME
+   consumer inherits a silent unit change and must state which source it means.
+
+   Returns [] when the archive holds no 1h rows for the item. Callers MUST read that as "no archive
+   data, fall back to a live fetch", NEVER as "no trades" — an empty ts6h makes regimeDrift return
+   {ok:false}, which un-gates the falling exclusion rather than failing loudly. */
+const SIX_HOURS = 6 * 3600;
+export const LIVE_TS6H_BUCKETS = 365;
+export function archive6h(handle, id, { now = null, buckets = LIVE_TS6H_BUCKETS } = {}) {
+  const nowS = now != null ? now : Math.floor(Date.now() / 1000);
+  const rows = archiveSeries(handle, id, '1h', { from: nowS - buckets * SIX_HOURS, to: nowS });
+  if (!rows.length) return [];
+  const agg = aggregate1hTo6h(rows);
+  // `from` can land mid-window, so the aggregate may carry one extra partial bucket — slice, don't trust.
+  const pinned = agg.length > buckets ? agg.slice(-buckets) : agg;
+  return pinned.map(({ sourceBuckets, ...wire }) => wire);   // strip the archive-only field (see header)
+}
+
+/* sixHourReader({ handle, live, … }) → async (id) → a 6h series. THE SEAM, so "off is byte-identical"
+   is a testable property rather than a claim about four hand-edited call sites.
+
+   With NO handle (the default, and what a bare scan gets) this is a pure pass-through: it calls `live`
+   once with the same id and returns its result object UNCHANGED — the identical value the call site got
+   from `fetchTsCached(id,'6h',TS_TTL_6H)` before AF5b existed.
+
+   With a handle it reads the window-pinned archive series and FALLS BACK TO LIVE on an empty one
+   (unknown item / cold archive), because an empty 6h series is not a neutral value here — see
+   archive6h's closing note.
+
+   ⚠ THE FALLBACK GUARDS DEPTH, NOT JUST EMPTINESS (2026-08-08, adversarial review). Guarding only
+   `rows.length === 0` reproduced the exact fail-open the empty-case guard exists to prevent: a SHORT
+   non-empty series (measured floor on the live archive: 19 buckets, Ugthanki & tomato #1879 — archive
+   19 vs live 365) makes `regimeDrift` return {ok:false} → label `unknown` → the falling exclusion
+   un-gates, silently. `regimeDrift` needs `REGIME_MIN_DAYS` (5) FULL LOCAL DAYS out of `windowStats`,
+   which excludes today — so the floor is (5+1)×4 = 24 buckets, one spare day for the partial newest
+   one. 219/4,489 items (4.9%) sit under 20 buckets and 488 (10.9%) under regimeDrift's 80-bucket
+   appetite, so this is not a rare corner. This is NOT the `sourceBuckets` quality gate the plan ruled
+   out: it does not judge whether archive data is GOOD ENOUGH, it refuses to hand a downstream consumer
+   a series too short for it to run at all — the [] rationale applied consistently.
+
+   `onSource('archive'|'fallback', id, n)` is an optional hook carrying the ACHIEVED bucket count (for a
+   depth fallback, the count that was REJECTED, so a caller can report what it declined). A caller must
+   report both halves honestly: the archive/live SPLIT (a silent fallback would overstate coverage) and
+   the DEPTH (n < LIVE_TS6H_BUCKETS means phase() is reading a shorter window than live would have given
+   it — see archive6h's ceiling-not-floor note; regimeDrift is unaffected ABOVE this floor). */
+export const REGIME_MIN_6H_BUCKETS = (5 + 1) * 4;   // REGIME_MIN_DAYS(5) full days + today's partial, at 4×6h/day
+export function sixHourReader({ handle = null, live, now = null, buckets = LIVE_TS6H_BUCKETS, minBuckets = REGIME_MIN_6H_BUCKETS, onSource = null } = {}) {
+  return async function read6h(id) {
+    if (handle) {
+      let rows = [];
+      try { rows = archive6h(handle, id, { now, buckets }); } catch { rows = []; }
+      if (rows.length >= minBuckets) { if (onSource) onSource('archive', id, rows.length); return rows; }
+      if (onSource) onSource(rows.length ? 'shallow' : 'fallback', id, rows.length);
+    }
+    return live(id);
+  };
 }
