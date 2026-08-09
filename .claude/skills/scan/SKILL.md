@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.97
+version: 1.98
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -55,7 +55,7 @@ it's consistently unused (a future ruling, never a per-pass call). The tier regi
 ## 1. Run the script — never hand-fetch
 
 ```
-node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 1|1.5] [--amp-ask-q 0.5 --amp-bid-q 0.5] [--capital <gp> --slots N]
+node pipeline/commands/screen-flip-niches.mjs --verbose --digest [--mode band|churn|scalp|value|invest|amplitude|all] [--max-price …] [--hold-days 4|7] [--amp-ask-q 0.5 --amp-bid-q 0.5] [--capital <gp> --slots N]
 ```
 
 `--verbose` is required here since this skill's job is to paste the table to Ben (§ above) — quiet
@@ -166,16 +166,32 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   stop — an unsold lap is a CUT, not a hold. Judgment: only chase these when actively at the desk;
   never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
 - **`--mode amplitude`** _(judgment: PROVISIONAL n≈0 — don't trade on it yet; patient, never act-now)_ —
-  the 24h-cycle lane (THE SWAP put it in `--mode all`): buy the daily TROUGH, sell the daily PEAK, hold
-  ~a day, cycle. Its own daily-cycle table (trough→peak swing · both-leg recent-3 daily reach · net/cycle ·
-  hold horizon · deploy units · grade). Surfaces the big-ticket-that-oscillates-daily class band is blind
-  to (Masori-body class: Inquisitor's mace / Arcane sigil / Torva / Nightmare staff / Bellator ring
-  surfaced on the live trial). **Judgment layer:** (1) these are PATIENT multi-hour plays — list them
-  under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) The make-or-break
-  read is the **Both-leg reach (bid·ask, recent-3)** column: the daily low/high ARE reached each day but
-  not at predictable *times*, so a `1/3` recent leg means the round trip is NOT guaranteed same-day —
-  trust a `2/3`+ or `3/3` leg far more, and treat a stale/low-recent leg as "the level printed historically
-  but recent days abandoned it." (3) These are **thin-class by construction** (big tickets enter via
+  the MULTI-DAY-cycle lane (THE SWAP put it in `--mode all`): buy the TROUGH, sell the PEAK, hold a few
+  DAYS, cycle. Its own cycle table (trough→peak swing · both-leg reach + **measured completion** ·
+  net/cycle · hold horizon · deploy units · grade). Surfaces the big-ticket-that-oscillates class band is
+  blind to (Masori-body class: Inquisitor's mace / Arcane sigil / Torva / Nightmare staff / Bellator ring
+  surfaced on the live trial).
+  **RE-HORIZONED 1d → 4d (DT1, 2026-08-09) — the 24h premise was REFUTED.** _(judgment: the single most
+  important thing to know about this lane)_ Over 92 items ≥5m and 4,881 item-days, running the production
+  gate: entry fires 56.9% of the time but **completion within 24h GIVEN entry is 4.8%** (≤48h 11.4%, ≤96h
+  22.6%, ≤7d 34.6%; median ~69h). EV per entered cycle measured **−813k**. The old `pFill2leg` two-leg
+  PRODUCT assumed the legs were independent — measured FALSE (entry is adverse selection), so rows it
+  predicted at ≥0.25 realized ~5%. The lane was mis-horizoned, not signal-free: the survivors are the
+  repeatable multi-DAY oscillator class (Masori chaps 12.9% at 24h but **71% at 7d**; fang ~6–8d), which
+  is the taxonomy gap the standing `multi-week-oscillator-class` memory already named. *Honesty limits:
+  one 74-day era, one update cycle; completion measured on hourly aggregates, NOT executed fills, so
+  every rate is an UPPER BOUND; item-day clustering ⇒ effective n well below nominal.*
+  **Judgment layer:** (1) these are PATIENT multi-DAY plays — list them
+  under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) **There is currently NO trustworthy
+  round-trip probability on this lane — do not relay one.** The `ask-reprints X/Y ≤4d` figure in the reach
+  cell is DISPLAY-ONLY and ASYMMETRIC: it is saturated by construction (median bid vs median ask over a
+  multi-day horizon ≈ 94%; the live board read 18/19, including Saturated heart at 5/5 — the item the
+  study measured at 0% within 96h), so a HIGH value is close to uninformative and must never be pitched
+  as "the round trip completes". A **`0/N` is still damning** — this ask has not printed after an entry
+  even once in-window — so read it as a one-sided red flag only. P(fill) in the rank is now the bare 0.5
+  PRIOR at n=0, deliberately, until PLAN-BOTH-LEG-ENTRY BL1 supplies sub-day bars that can express the
+  ordered event. The both-leg reach columns answer the weaker printability question; treat them as a gate
+  on whether a level prints, never as evidence of a completed round trip. (3) These are **thin-class by construction** (big tickets enter via
   gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
   row — never size like a liquid flip. **Thin-exit caveat (INFORM, not a gate):** thin BY CONSTRUCTION is
   exactly why a large concentrated amplitude position CANNOT be exited fast if the thesis breaks — surface
@@ -185,11 +201,14 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   the "if all lots sold" pool), used **UNDIVIDED**. **`--slots` is IGNORED** for `--mode amplitude`; pass
   **`--capital <gp>`** to set the whole pool (absent a cash anchor it defaults to a 100m placeholder). The
   one sizing gate is affordability — an item you can't afford ≥1 unit of at the current capital is **DROPPED
-  as `unaffordable`** (no phantom `~1u`), so a 345m item needs a ≥345m pool to appear. (5) `--hold-days 1.5` runs the day-crossing
-  experiment (adds a day-of-week seasonality note — n≈3–4/weekday, a lean not a law). Every threshold is a
-  PLACEHOLDER; the "do both legs actually FILL?" question is measured by `join-amplitude-outcomes.mjs` (an
-  UPPER BOUND) + the retro-join in `/analyze`. Don't pitch an amplitude buy off the table blind — verify
-  the recent-3 reach and quote fresh. (6) **`--amp-ask-q` / `--amp-bid-q`** (F-E, experiment-only) dial the
+  as `unaffordable`** (no phantom `~1u`), so a 345m item needs a ≥345m pool to appear. **NOTE deploy units
+  scale with the hold horizon, so the 1d → 4d re-horizon raised them ~4×** — size against the completion
+  column, not the units. (5) `--hold-days 7` runs the weekly-oscillator horizon (where Masori chaps hits
+  71%); 4d is the default because at AMP_NIGHTS=14 it leaves ~9–10 judgeable entry days per row where 7
+  leaves ~6 and halves an already-thin n. Every threshold is a PLACEHOLDER; the "does the round trip
+  actually CLOSE?" question is now measured per row by the completion column and, forward, by
+  `join-amplitude-outcomes.mjs` (an UPPER BOUND) + the retro-join in `/analyze`. Don't pitch an amplitude
+  buy off the table blind — verify the completion figure and quote fresh. (6) **`--amp-ask-q` / `--amp-bid-q`** (F-E, experiment-only) dial the
   peak-ask / trough-bid reach quantiles (default `0.5`/`0.5` = the median peak/trough — the KEPT board; leave
   them alone for a normal scan). They are REACH FRACTIONS, not price percentiles: a LOWER `--amp-ask-q` (e.g.
   `0.25`) quotes a HIGHER, less-reachable ask (more margin, less round-trip reach). A non-default run is

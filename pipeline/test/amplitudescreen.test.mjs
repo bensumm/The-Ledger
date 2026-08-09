@@ -15,10 +15,11 @@
  */
 import assert from 'node:assert/strict';
 import {
-  amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits,
+  amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits, cycleCompletion,
   AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q, AMP_WINDOWS_PER_DAY,
 } from '../../js/amplitudescreen.mjs';
 import { ACTIONABLE_WINDOWS_PER_DAY } from '../../js/desk-cadence.mjs';
+import { pFillAmplitude } from '../../js/estimators/families.mjs';   // DT1 — pin that the estimator does NOT rank on the saturated completion figure
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -48,7 +49,10 @@ ok('an oscillating ≥3% after-tax daily swing with both legs reachable PASSES',
   assert.equal(ar.ampBid, 1000, 'trough-bid = median daily low');
   assert.equal(ar.ampAsk, 1060, 'peak-ask = median daily high');
   assert.ok(ar.netPerCycle > 0, 'positive after-tax net/cycle');
-  assert.ok(ar.pFill2leg > 0.9, 'both legs reach nearly every recent day');
+  // DT1: pFill2leg is gone; cycleCompletion is computed as a DISPLAY diagnostic (and is saturated on
+  // this fixture by construction — see the dedicated pins below).
+  assert.ok(ar.cycle.judged > 0, 'the completion diagnostic reports its own n');
+  assert.equal(ar.pFill2leg, undefined, 'the product-of-marginals estimator is gone');
   const g = amplitudeGate(ar, {});
   assert.equal(g.pass, true, `gate passes, got ${g.reason}`);
 });
@@ -168,12 +172,13 @@ ok('F-E: a LOWER askQ (0.25) quotes a strictly HIGHER, less-reachable ask — mo
   // the MARGIN side of the trade-off: a higher ask ⇒ a strictly higher after-tax ampPct (with ampBid fixed).
   assert.ok(dial.ampPct > base.ampPct, `more margin (ampPct ${dial.ampPct} > ${base.ampPct})`);
   // the REACH side of the trade-off: the higher ask is reached on strictly FEWER recent days.
-  assert.ok(dial.pFill2leg < base.pFill2leg, `less two-leg reach (${dial.pFill2leg} < ${base.pFill2leg})`);
+  // the REACH side, now read through the ORDERED completion: a higher ask completes on fewer entries.
+  assert.ok(dial.cycle.frac < base.cycle.frac, `less completion (${dial.cycle.frac} < ${base.cycle.frac})`);
   assert.equal(dial.askQ, 0.25, 'the effective askQ rides on the result (so a shadow-log can record it)');
   assert.equal(dial.bidQ, 0.5, 'bidQ stays default when only askQ is dialed');
   // symmetry check: the OTHER direction (higher askQ = MORE reachable = a lower ask) moves the opposite way.
   const easy = amplitudeRanges(SPREAD, 1005, { askQ: 0.75 });
-  assert.ok(easy.ampAsk < base.ampAsk && easy.pFill2leg > base.pFill2leg, 'higher askQ ⇒ lower ask, more reach');
+  assert.ok(easy.ampAsk < base.ampAsk && easy.cycle.frac > base.cycle.frac, 'higher askQ ⇒ lower ask, more completion');
 });
 
 ok('F-E: the default is byte-identical to pre-F-E (omitted opts ≡ {} ≡ explicit 0.5/0.5)', () => {
@@ -198,6 +203,89 @@ ok('an affordable big-ticket sizes UNDIVIDED (no ÷slots) and honors the min()',
   const u = amplitudeDeployUnits({ capGp: 400_000_000, buyLow: 345_000_000, limitVol: 40, limit: 2, holdDays: 1 });
   // bankroll 1.16 · vol-share 0.10×40=4 · limit 2×6=12 → min 1.16 → floor 1.
   assert.equal(u, 1, `min bound honored, got ${u}`);
+});
+
+
+// --- cycleCompletion (PLAN-DIURNAL-TRIAGE DT1) acceptance ----------------------------------------
+// BUSINESS REQUIREMENTS pinned here — this is the estimator the whole lane now ranks on:
+//   - completion is ORDERED: an entry day's ask must be reached on a STRICTLY LATER day.
+//   - SAME-DAY completion never counts (day buckets can't prove low-preceded-high within a day).
+//   - an entry whose horizon runs past the window edge is PENDING, never a scored miss.
+//   - zero judged entries ⇒ frac null (no claim), never 0.
+//   - a row whose ask is never reached after entry reports frac 0 with judged > 0 — it SELF-INDICTS.
+ok('cycleCompletion: ordered completion — entry then a LATER day reaching the ask', () => {
+  const days = [
+    ['d0', { low: 1000, hi: 1010 }],   // entry; d1 reaches 1060 → completes
+    ['d1', { low: 1050, hi: 1060 }],
+    ['d2', { low: 1050, hi: 1060 }],
+    ['d3', { low: 1050, hi: 1060 }],
+    ['d4', { low: 1050, hi: 1060 }],
+  ];
+  const c = cycleCompletion(days, { bid: 1000, ask: 1060, horizonDays: 2 });
+  assert.equal(c.entries, 1); assert.equal(c.judged, 1); assert.equal(c.completed, 1); assert.equal(c.frac, 1);
+});
+
+ok('cycleCompletion: SAME-DAY reach does NOT count (the ordering assumption stays removed)', () => {
+  // d0 both enters (low 1000) and reaches the ask (hi 1060) on the same day; nothing later does.
+  const days = [
+    ['d0', { low: 1000, hi: 1060 }],
+    ['d1', { low: 1050, hi: 1055 }],
+    ['d2', { low: 1050, hi: 1055 }],
+    ['d3', { low: 1050, hi: 1055 }],
+  ];
+  const c = cycleCompletion(days, { bid: 1000, ask: 1060, horizonDays: 2 });
+  assert.equal(c.entries, 1);
+  assert.equal(c.completed, 0, 'same-day high is not a completed round trip at day grain');
+  assert.equal(c.frac, 0);
+});
+
+ok('cycleCompletion: an entry whose horizon runs past the window edge is PENDING, not a miss', () => {
+  const days = [
+    ['d0', { low: 1050, hi: 1055 }],
+    ['d1', { low: 1050, hi: 1055 }],
+    ['d2', { low: 1000, hi: 1010 }],   // entry with only 1 day left but a 3-day horizon → pending
+    ['d3', { low: 1050, hi: 1055 }],
+  ];
+  const c = cycleCompletion(days, { bid: 1000, ask: 1060, horizonDays: 3 });
+  assert.equal(c.entries, 1);
+  assert.equal(c.pending, 1, 'incomplete horizon at the edge ⇒ pending');
+  assert.equal(c.judged, 0);
+  assert.equal(c.frac, null, 'no judged entry ⇒ no claim, never a 0');
+});
+
+ok('cycleCompletion: a Saturated-heart-shaped row (entries that never complete) SELF-INDICTS at frac 0', () => {
+  // enters every day, ask never reached by any later day inside the horizon.
+  const days = Array.from({ length: 10 }, (_, i) => [`d${i}`, { low: 1000, hi: 1020 }]);
+  const c = cycleCompletion(days, { bid: 1000, ask: 5000, horizonDays: 4 });
+  assert.ok(c.judged > 0, 'entries ARE judged — the horizon fits inside the window');
+  assert.equal(c.completed, 0);
+  assert.equal(c.frac, 0, 'an advertised net/cycle that never completes reads 0, not silence');
+});
+
+ok('cycleCompletion: degrades to null on a missing level or a non-array day set', () => {
+  const days = [['d0', { low: 1000, hi: 1060 }], ['d1', { low: 1000, hi: 1060 }]];
+  assert.equal(cycleCompletion(days, { bid: null, ask: 1060 }), null);
+  assert.equal(cycleCompletion(days, { bid: 1000, ask: null }), null);
+  assert.equal(cycleCompletion(null, { bid: 1000, ask: 1060 }), null);
+});
+
+// DT1: cycleCompletion is DISPLAY-ONLY. It was built as pFillAmplitude's replacement, measured on the
+// live board, and rejected the same day — median-bid-vs-median-ask over a multi-day horizon saturates
+// (~94% at H=4; the board read 18/19, incl. Saturated heart at 5/5 against a study that measured it at
+// 0%/96h). Ranking on it would push every amplitude row's P(fill) toward 1.0. These two pins keep it out
+// of the rank AND keep the saturation itself visible, so nobody re-wires it on a casual reading.
+ok('cycleCompletion is SATURATED by construction at median levels — the reason it is not a rank input', () => {
+  // OSC: every day low=1000 hi=1060, bid=1000 ask=1060 ⇒ every later day clears the ask.
+  const ar = amplitudeRanges(OSC, 1005, { holdDays: 4 });
+  assert.equal(ar.cycle.frac, 1, 'a median-vs-median pair completes ~always over a multi-day horizon');
+});
+
+ok('pFillAmplitude returns the bare PRIOR at n=0 — it must NOT read the saturated completion rate', () => {
+  const ar = amplitudeRanges(OSC, 1005, { holdDays: 4 });
+  const e = pFillAmplitude({ amplitudeRanges: ar });
+  assert.equal(e.basis, 'prior', 'no measured-looking basis while the only candidate is saturated');
+  assert.equal(e.n, 0, 'n=0 — we are claiming no observations, honestly');
+  assert.notEqual(e.value, ar.cycle.frac, 'and it is emphatically NOT the saturated completion figure');
 });
 
 console.log(`\namplitudescreen.mjs: ${pass} assertions passed.`);

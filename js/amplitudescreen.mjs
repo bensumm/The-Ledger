@@ -1,5 +1,5 @@
 /**
- * amplitudescreen.mjs — PURE gate + rank math for the `--mode amplitude` 24h-cycle niche
+ * amplitudescreen.mjs — PURE gate + rank math for the `--mode amplitude` MULTI-DAY-cycle niche
  * (PLAN-AMPLITUDE-SCAN chunk A1). Mirrors js/valuescreen.mjs's shape: DOM-free, fetch-free, fs-free
  * ESM, importable from BOTH node (screen-flip-niches.mjs / gatecandidates.mjs) AND the app. The caller
  * hands in an already-loaded per-item series' windowStats() result (js/windowread.mjs) + the daily
@@ -9,8 +9,16 @@
  * `net × P(fill) ÷ TTF` — which BURIES a big-ticket that oscillates ~4% over a FULL DAY (Masori body:
  * Quick +0.0% / Optimistic +1.2% at the 2h grain, rank ~12,881 with P~0.06 / ttf ~26h). That daily
  * swing is a real, repeatable edge the band screen is STRUCTURALLY BLIND to. Amplitude is the lane that
- * sees it: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle. The organizing frame (§1):
- * band/amplitude/invest are ONE operation at three cycle periods (2h / 24h / multi-week).
+ * sees it: buy the TROUGH, sell the PEAK, cycle. The organizing frame (§1): band/amplitude/invest are
+ * ONE operation at three cycle periods (2h / multi-day / multi-week).
+ *
+ * RE-HORIZONED 2026-08-09 (PLAN-DIURNAL-TRIAGE DT1). The lane shipped as a 24h-CYCLE screen — "hold ~a
+ * day" — and that specific premise was measured and REFUTED: over 92 items ≥5m and 4,881 item-days,
+ * completion within 24h GIVEN entry is 4.8%. The EDGE is real but the CLOCK was wrong; completion climbs
+ * to 22.6% at 96h and 34.6% at 7d, and the survivors are the repeatable multi-DAY oscillator class (Masori
+ * chaps 71% at 7d; fang ~6–8d), which is exactly the taxonomy gap the standing multi-week-oscillator note
+ * describes. So the default horizon moved 1 → 4 days and the refuted `pFill2leg` product-of-marginals was
+ * replaced by `cycleCompletion`, a MEASURED ordered rate. Full numbers: AMP_HOLD_DAYS_DEFAULT below.
  *
  * TWO-STAGE GATE (§2.1 — like value's). At gate time the screen has only bulk data (the corrected
  * rolling-24h volumes, the 2h bands, and the daily archive = whole-market /1h at 6h spacing = 4 mid
@@ -89,9 +97,32 @@ export const AMP_VOL_SHARE       = 0.10;
 // ATTENTION-HAIRCUT (Ben 2026-08-09) — was a bare 6 under a comment claiming to mirror expUnits;
 // the 6→2 haircut (2026-08-08) moved expUnits and left this behind. Now shares the ONE home.
 export const AMP_WINDOWS_PER_DAY = ACTIONABLE_WINDOWS_PER_DAY;
-// Hold horizon (§2.4): default 1 (buy the trough, sell the peak, same local day); 1.5 crosses a day
-// boundary (the A3 experiment). Feeds the family ttf + the §A5 shadow-replay horizon. PLACEHOLDER.
-export const AMP_HOLD_DAYS_DEFAULT = 1;
+// Hold horizon. Feeds the family ttf + the §A5 shadow-replay horizon + the deploy-units bounds.
+//
+// RE-HORIZONED 1 → 4 on 2026-08-09 (PLAN-DIURNAL-TRIAGE DT1). The lane's founding premise — "buy the
+// daily TROUGH, sell the daily PEAK, hold ~a day, cycle" — was measured and REFUTED. Over 92 items ≥5m
+// and 4,881 item-days, running the production amplitudeRanges/amplitudeGate: entry (the trough bid gets
+// touched) fires 56.9% of the time, but **completion within 24h GIVEN entry is 4.8%** — ≤48h 11.4%,
+// ≤96h 22.6%, ≤7d 34.6%, with median completion when it happens at all around 69h ≈ 3 days. The two-leg
+// independence assumption behind the old `pFill2leg` is measured FALSE: trough-touch entry is adverse
+// selection (unconditional ask-reach ≤48h is 43.1% vs 11.4% conditional on entry, a ~4× haircut), and
+// rows predicted ≥0.25 realized ~5%. EV per entered cycle came out at −813k (48h mark-to-mid, untaxed),
+// with a +48h strand mark of −643k across 2,114 strandings.
+//
+// The lane is MIS-HORIZONED, not signal-free — which is why this is a re-horizon rather than a deletion.
+// Completion climbs 4.8% → 22.6% → 34.6% across 24h → 96h → 7d, and the survivors are exactly the
+// repeatable multi-DAY oscillator class the standing `multi-week-oscillator-class` note describes:
+// Masori chaps completes 12.9% at 24h but **71% at 7d**; the fang's period is ~6–8d. Saturated heart, by
+// contrast, completed 0% at 96h and 5% at 7d while its row advertised +5.88m/cycle — the kind of row the
+// new per-row completion column now makes self-indicting.
+//
+// 4 rather than 7 is a sample trade-off, not a measured period: at AMP_NIGHTS = 14 a 4-day horizon leaves
+// ~9–10 judgeable entry days per row for cycleCompletion, where 7 leaves ~6 and halves an already thin n.
+// `--hold-days 7` remains available. STILL A PLACEHOLDER (n≈0 per item) — now a measured-DIRECTION one.
+// Honesty limits: one 74-day era, one update cycle; completion measured from hourly avgLow/avgHigh
+// aggregates, NOT executed fills, so every rate here is an UPPER BOUND on a real round trip; item-day
+// clustering ⇒ effective n well below nominal.
+export const AMP_HOLD_DAYS_DEFAULT = 4;
 
 /* --- Stage 1: the pre-fetch amplitude PROXY off the 6h-spaced daily archive -----------------------
    points — a loadDaily {ts,mid} array for one item (whole-market /1h @ 6h spacing = 4 mids/day).
@@ -125,6 +156,64 @@ export function amplitudeProxy(points, { recentDays = 5, minDays = 3 } = {}) {
   if (pcts.length < minDays) return null;                // too little archive → unknown (fall back to raw)
   pcts.sort((a, b) => a - b);
   return pcts[Math.floor(pcts.length / 2)];              // recent-N median daily range %
+}
+
+/* cycleCompletion(days, { bid, ask, horizonDays }) → { entries, judged, completed, pending, frac }
+   DT1 (PLAN-DIURNAL-TRIAGE, 2026-08-09) — the MEASURED, ORDERED replacement for the deleted `pFill2leg`.
+
+   The question this answers is the lane's make-or-break one and the old estimator could not represent it:
+   once the trough bid actually fills, does the peak ask get reached WITHIN the hold horizon? `pFill2leg`
+   multiplied two marginal leg rates, which assumes independence — measured FALSE (trough-touch entry is
+   adverse selection: unconditional ask-reach ≤48h 43.1% vs 11.4% conditional on entry). So this counts
+   the ordered event directly over the in-hand day window instead of inferring it.
+
+   `days` — a windowStats `.days` array of [key, {low, hi}] in CHRONOLOGICAL order.
+   An ENTRY is a day whose `low <= bid`. It COMPLETES if some day STRICTLY LATER, within `horizonDays`,
+   has `hi >= ask`. An entry whose horizon runs past the end of the window without completing is PENDING
+   and is EXCLUDED from the denominator — never scored as a miss (mirrors join-amplitude-outcomes.mjs's
+   `pending` contract; counting it would manufacture failure at the window edge).
+
+   SAME-DAY completion is deliberately NOT counted. Day buckets cannot prove the low preceded the high
+   within a day, and counting it would silently re-import the ordering assumption this function exists to
+   remove. That makes `frac` CONSERVATIVE for genuinely intraday items — stated, not hidden.
+
+   ⚠ SATURATED BY CONSTRUCTION — DISPLAY-ONLY, NEVER A RANK INPUT. Measured on the live board the day it
+   was built: 18 of 19 judged entries "completed" (5/5, 6/7, 7/7) — including Saturated heart at 5/5, the
+   item the DT1 study measured at 0% completion within 96h. The reason is arithmetic, not data: `bid` is
+   the MEDIAN daily low and `ask` the MEDIAN daily high, so ~50% of days clear the ask and over an H-day
+   horizon P(at least one later day clears it) ≈ 1−0.5^H ≈ 94% at H=4. At H=1 it yields ~50% where the
+   study measured 4.8%, a ~10× gap — so the study was measuring a STRICTER event (the ask printing after
+   the ACTUAL fill, at sub-day grain) that day buckets cannot express. Do NOT read this as "the round trip
+   completes 95% of the time", and do NOT wire it into pFillAmplitude (see that function's header for why
+   it deliberately returns the bare prior instead). What it DOES answer, honestly, is the weaker question
+   "after an entry day, does this ask level still print at all within the horizon?" — a `done 0/N` row is
+   genuinely damning; a high figure is close to uninformative.
+   The real ordered joint needs sub-day bars carrying tLo/tHi — PLAN-BOTH-LEG-ENTRY chunk BL1.
+
+   `frac` is null when `judged === 0` (no scoreable entry ⇒ no claim). n is small by construction
+   (~9–10 judged at AMP_NIGHTS=14 and a 4-day horizon), so `judged` is returned and printed alongside it.
+   NEVER call this calibrated: a descriptive in-window rate on hourly aggregates (a FILL PROXY, not
+   executed fills), bounding a real round trip from ABOVE, and saturated on top of that. */
+export function cycleCompletion(days, { bid = null, ask = null, horizonDays = AMP_HOLD_DAYS_DEFAULT } = {}) {
+  if (!Array.isArray(days) || bid == null || ask == null) return null;
+  const H = Math.max(1, Math.floor(horizonDays));
+  let entries = 0, judged = 0, completed = 0, pending = 0;
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i] && days[i][1];
+    if (!d || d.low == null || d.low > bid) continue;      // not an entry day
+    entries++;
+    const last = Math.min(days.length - 1, i + H);
+    let done = false;
+    for (let j = i + 1; j <= last; j++) {                  // strictly later — same-day never counts
+      const n = days[j] && days[j][1];
+      if (n && n.hi != null && n.hi >= ask) { done = true; break; }
+    }
+    if (done) { completed++; judged++; continue; }
+    // no completion found: only a FULL horizon inside the window is a judged miss.
+    if (i + H <= days.length - 1) judged++;
+    else pending++;
+  }
+  return { entries, judged, completed, pending, frac: judged ? completed / judged : null };
 }
 
 /* --- Stage 2: the exact per-day amplitude SHAPE off a windowStats result --------------------------
@@ -162,16 +251,18 @@ export function amplitudeRanges(stats, live, { holdDays = AMP_HOLD_DAYS_DEFAULT,
   const askReach = recencySplit(stats.days, 'ask', ampAsk, recentN);
   const netPerCycle = (ampBid != null && ampAsk != null) ? afterTax(ampAsk) - ampBid : null;
   const ampPct = (netPerCycle != null && ampBid > 0) ? netPerCycle / ampBid : null;
-  // two-leg fill probability = bid-touch × ask-reach, recent-3-weighted (the recentFrac each carries),
-  // degrading to the full-window frac when the recent slice was too thin to score (recencySplit.scored).
-  const bidFrac = recencyScored(bidTouch, recentN) ? bidTouch.recentFrac : bidTouch.fullFrac;
-  const askFrac = recencyScored(askReach, recentN) ? askReach.recentFrac : askReach.fullFrac;
-  const pFill2leg = clamp01(bidFrac) * clamp01(askFrac);
+  // DT1 (2026-08-09): `pFill2leg = bidFrac × askFrac` is DELETED. It was a PRODUCT OF MARGINALS standing
+  // in for a joint, and the independence it assumed is measured FALSE — entry is adverse selection, so
+  // rows it predicted at ≥0.25 realized ~5%. `cycleCompletion` below measures the ordered round trip
+  // directly instead of multiplying two leg rates that don't compose. bidTouch/askReach SURVIVE — they
+  // still gate leg printability in amplitudeGate's legOk, which is a different question (can this level
+  // print at all?) from "does the round trip complete?".
+  const cycle = cycleCompletion(stats.days, { bid: ampBid, ask: ampAsk, horizonDays: holdDays });
 
   return {
     hasData: true, live: num(live), nDays,
     ampBid, ampAsk, netPerCycle, ampPct, medAmpPct,
-    bidTouch, askReach, pFill2leg, holdDays,
+    bidTouch, askReach, cycle, holdDays,
     askQ, bidQ,                                          // F-E: the effective reach-vs-margin quantiles this row was quoted at
     liveVsBidPct: (num(live) != null && ampBid > 0) ? (live - ampBid) / ampBid : null,
   };

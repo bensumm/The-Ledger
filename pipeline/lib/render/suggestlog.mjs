@@ -318,13 +318,22 @@ export function depthExitShadow(ca, { qty, volDay } = {}) {
 // `askQ`/`bidQ` ONLY when an experiment run overrode the default board (≠ AMP_ASK_Q/AMP_BID_Q). This is
 // LOAD-BEARING: without it a non-default `--amp-ask-q` run would be indistinguishable in the ledger from a
 // default one, silently corrupting F-G's "which quantile nets more" retro. A default run stays byte-identical.
-export function amplitudeShadow(ar, { holdDays = 1, profile = null, drift = null } = {}) {
+// DT1 (2026-08-09): `holdDays` default 1 → 4, tracking AMP_HOLD_DAYS_DEFAULT (the caller passes it
+// explicitly, so this is a fallback only — but a stale 1 here would be a second, wrong home for the
+// number). The `cycle` block below logs the MEASURED ordered completion that replaced pFill2leg, so the
+// retro can score the re-horizoned premise rather than the refuted product-of-marginals.
+export function amplitudeShadow(ar, { holdDays = 4, profile = null, drift = null } = {}) {
   if (!ar || !ar.hasData || ar.ampBid == null || ar.ampAsk == null) return null;
   const o = {
     ampBid: ar.ampBid, ampAsk: ar.ampAsk, holdDays,
     bidTouchRecent: ar.bidTouch.recentHit, bidTouchDays: ar.bidTouch.recentDays,
     askReachRecent: ar.askReach.recentHit, askReachDays: ar.askReach.recentDays,
     nDays: ar.nDays,
+    cycle: ar.cycle ? {
+      entries: ar.cycle.entries, judged: ar.cycle.judged,
+      completed: ar.cycle.completed, pending: ar.cycle.pending,
+      frac: ar.cycle.frac == null ? null : Math.round(ar.cycle.frac * 10000) / 10000,
+    } : null,
     medAmpPct: ar.medAmpPct == null ? null : Math.round(ar.medAmpPct * 10000) / 10000,
   };
   if (profile && profile.dip && profile.peak) {

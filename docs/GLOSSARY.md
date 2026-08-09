@@ -23,7 +23,7 @@ These are different things at different levels — kept as two words on purpose.
     with a stable regime. The default niche. (cycle period ~2h.)
   - **churn** — high-volume commodity flipping (runes, etc.): thin per-unit edge × huge volume ×
     fast turns; ranked by the whole *lap* (a full buy-limit's worth), not per unit. (off the amplitude axis.)
-  - **amplitude** — buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle: a big-ticket that
+  - **amplitude** — buy the TROUGH, sell the PEAK, hold a few DAYS, cycle: a big-ticket that
     oscillates ~a few % *daily* — the swing the band screen's 2h grain + `net×P÷TTF` rank is
     structurally blind to (Masori-body class). Its gate is two-stage (a cheap daily-range proxy off the
     6h archive → the exact `amplitudeGate` off the per-item 1h `windowStats`); ranked by the standard

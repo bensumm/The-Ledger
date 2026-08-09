@@ -10,6 +10,56 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DT1 — the amplitude lane's 24h premise was refuted; re-horizoned 1d → 4d, and its P(fill) is now an honest prior (0.71.5, 2026-08-09)
+
+**The refutation.** Running the production `amplitudeRanges`/`amplitudeGate` over 92 items ≥5m and 4,881
+item-days: entry (the trough bid gets touched) fires 56.9% of the time, but **completion within 24h GIVEN
+entry is 4.8%** — ≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%, median completion ~69h ≈ 3 days. **EV per entered
+cycle: −813k** (48h mark-to-mid, untaxed), with a +48h strand mark of −643k across 2,114 strandings. The
+lane shipped on "buy the daily trough, sell the daily peak, hold ~a day, cycle" and that clock is wrong.
+
+**Re-horizoned, not deleted.** Completion climbs 4.8% → 22.6% → 34.6% across 24h → 96h → 7d, and the
+survivors are exactly the repeatable multi-DAY oscillator class the standing `multi-week-oscillator-class`
+note describes: Masori chaps completes 12.9% at 24h but **71% at 7d**; the fang's period is ~6–8d.
+Saturated heart is the counter-case — 0% at 96h, 5% at 7d, while its row advertised +5.88m/cycle.
+`AMP_HOLD_DAYS_DEFAULT` 1 → 4 (4 rather than 7 so `AMP_NIGHTS = 14` still leaves ~9–10 judgeable entry
+days per row instead of ~6); `--hold-days 7` remains available. Deploy units scale with the horizon, so
+sizes rose ~4× — stated in the footer rather than left to be discovered.
+
+**`pFill2leg` deleted — and its intended replacement rejected the same day.** The old estimator was
+`bidFrac × askFrac`, a PRODUCT OF MARGINALS whose independence assumption is measured FALSE: trough-touch
+entry is adverse selection (unconditional ask-reach ≤48h 43.1% vs 11.4% conditional on entry), so rows it
+predicted at ≥0.25 realized ~5%. The plan called for replacing it with `cycleCompletion`, an ORDERED
+day-grain completion rate. That was built, then **measured on the live board and rejected as a rank
+input**: it is saturated by construction. `ampBid` is the median daily low and `ampAsk` the median daily
+high, so ~50% of days clear the ask and over a 4-day horizon P(some later day clears it) ≈ 1−0.5⁴ ≈ 94%.
+The board read **18 of 19** — including Saturated heart at 5/5, the very item the study measured at 0%
+within 96h. At a 1-day horizon the construction yields ~50% against the study's 4.8%, a ~10× gap, proving
+the study measured a stricter sub-day event (the ask printing after the ACTUAL fill) that day buckets
+cannot express. Ranking on it would have pushed every amplitude row's P(fill) toward 1.0 — the opposite of
+what the evidence supports.
+
+**So `pFillAmplitude` returns the bare 0.5 PRIOR at n=0.** That is deliberate and is the honest state:
+we deleted a number we proved wrong and declined to replace it with one that only looks measured. Rows now
+carry the `(thin)` confidence marker, which is correct — the round-trip call rests on zero observations.
+The real ordered joint needs sub-day bars carrying `tLo`/`tHi`, which is already scoped as
+PLAN-BOTH-LEG-ENTRY chunk BL1; that plan's recorded `pFill2leg` defect is now closed by deletion.
+
+**`cycleCompletion` survives as a DISPLAY-ONLY, ASYMMETRIC diagnostic**, printed as `ask-reprints X/Y ≤4d`
+(deliberately NOT called "completion"). A high value is near-uninformative; a `0/N` is genuinely damning —
+this ask has not printed after an entry even once in-window. The asymmetry is labelled inline and in the
+footer so it travels with the number.
+
+**Honesty limits.** One 74-day era, one update cycle; completion measured from hourly `avgLow`/`avgHigh`
+aggregates, NOT executed fills, so every rate is an UPPER BOUND on a real round trip; item-day clustering
+⇒ effective n well below nominal; per-row n is ~9–10 judged entries.
+
+**Guards.** `amplitudescreen.test.mjs` pins the saturation itself and pins that `pFillAmplitude` returns
+basis `'prior'` at n=0 and is NOT the completion figure, so nobody re-wires it on a casual reading. `/scan`
+→ 1.98. Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" reading of the product: that
+measured the UNORDERED hold-≤1d joint, this the ORDERED entry-conditional one — both true, and the product
+overstates only the ordered case.
+
 ### DT2 — the dip window does not time a resting offer (0.71.4, 2026-08-09)
 
 **What changed.** The soft-buy cue's above-floor branch used to render the bare word `wait`, meaning "wait

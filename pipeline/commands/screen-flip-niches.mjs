@@ -2229,7 +2229,18 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     // format change only), then annotate the trough-vs-decay phase so a low recent reach on a trough-phase
     // oscillator no longer over-implies "sell-unreliable". `osc`/`dae`/`driftShadow` are already in scope.
     const rf = t => `${t.recentHit}/${t.recentDays || AMP_HOLD_DAYS}·${t.fullHit}/${t.fullN}`;
-    const reachCell = `${rf(ar.bidTouch)} · ${rf(ar.askReach)} — ${reachPhaseNote(osc, dae, driftShadow)}`;
+    // DT1 (2026-08-09): the ordered day-grain completion rides the reach cell — DISPLAY-ONLY and
+    // ASYMMETRIC in what it can tell you. It is SATURATED BY CONSTRUCTION (median bid vs median ask over
+    // a multi-day horizon ⇒ ~94% at H=4; the live board read 18/19), so a HIGH figure is close to
+    // uninformative and must never be relayed as "the round trip completes". A LOW figure still is
+    // damning: `done 0/N` means this ask has not printed after an entry even once in-window. Labelled
+    // inline so the asymmetry travels with the number. Never a rank input — see pFillAmplitude's header.
+    // `done —` when no entry had a full horizon inside the window: an honest absence, never a 0.
+    const cyc = ar.cycle;
+    const cycCell = (cyc && cyc.frac != null)
+      ? `ask-reprints ${cyc.completed}/${cyc.judged} ≤${AMP_HOLD_DAYS}d`
+      : `ask-reprints — (no judged entry ≤${AMP_HOLD_DAYS}d)`;
+    const reachCell = `${rf(ar.bidTouch)} · ${rf(ar.askReach)} · ${cycCell} — ${reachPhaseNote(osc, dae, driftShadow)}`;
     // G6: the amplitude grade cell, with the `(thin)` confidence marker appended when the round-trip call
     // rests on thin daily-reach evidence (pFill.n < CONF_THIN_N_FLOOR). MARK-only — grade is untouched.
     const ampGradeCell = s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade };
@@ -2294,10 +2305,12 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
   logSuggestions('screen', { mode: 'amplitude', params: SCREEN_PARAMS }, sugg);
 
   const shown = rows.length;
-  console.log(`## AMPLITUDE — ${shown} daily-cycle candidate(s) (PROVISIONAL — unproven 24h-swing theory, n≈0)`);
-  console.log('Playbook: buy the daily TROUGH, sell the daily PEAK, hold ~a day, cycle. The edge is a big-ticket that oscillates ~a few % DAILY — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-hour plays that surface under deploy/accumulate, NEVER as act-now rows.');
-  console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(both-leg daily reach) ÷ hold-horizon — the standard rank at the amplitude estimator family; every threshold PLACEHOLDER, n≈0)`);
-  console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d${AMP_HOLD_DAYS > 1 ? ' (1.5-day experiment — crosses a day boundary; day-of-week read below)' : ''})`);
+  console.log(`## AMPLITUDE — ${shown} multi-day-cycle candidate(s) (PROVISIONAL, n≈0 — the 24h-swing premise was REFUTED 2026-08-09; re-horizoned)`);
+  console.log('Playbook: buy the TROUGH, sell the PEAK, hold ~a few days, cycle. The edge is a big-ticket that oscillates a few % over a MULTI-DAY period — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-DAY plays that surface under deploy/accumulate, NEVER as act-now rows.');
+  console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(fill) ÷ hold-horizon at the amplitude estimator family — NOTE P(fill) is now the bare 0.5 PRIOR, n=0: see below; every threshold PLACEHOLDER, n≈0)`);
+  console.log(`(RE-HORIZONED 1d → ${AMP_HOLD_DAYS}d, 2026-08-09: over 92 items / 4,881 item-days the 1-day cycle premise measured 4.8% completion within 24h GIVEN entry — ≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%, median ~69h, EV per entered cycle −813k. The old pFill2leg two-leg PRODUCT assumed leg independence, measured FALSE (entry is adverse selection), and is DELETED. Its intended replacement — an ordered day-grain completion rate — was built, measured, and REJECTED as a rank input the same day: median-bid-vs-median-ask over a multi-day horizon is ~94% by construction (this board read 18/19), so it cannot represent the study's stricter, sub-day event. P(fill) therefore falls back to the honest 0.5 prior with n=0 until PLAN-BOTH-LEG-ENTRY BL1 supplies sub-day tLo/tHi bars.)`);
+  console.log(`(the \`ask-reprints X/Y\` figure in the reach cell is DISPLAY-ONLY and ASYMMETRIC: high ≈ uninformative (saturated), but \`0/N\` is damning — this ask has not printed after an entry even once in-window. It is NOT a round-trip completion rate; do not size on it.)`);
+  console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d — NOTE deploy units scale with the horizon, so the re-horizon raised them ~${AMP_HOLD_DAYS}×; size against the completion column, not the units)`);
   // F-E: an EXPERIMENT run (non-default reach-vs-margin quantiles) is flagged so the operator knows the
   // board is NOT the standard median-peak/median-trough basis — and so is the ledger (amplitudeShadow logs askQ/bidQ).
   if (AMP_ASK_Q_EFF !== AMP_ASK_Q || AMP_BID_Q_EFF !== AMP_BID_Q)

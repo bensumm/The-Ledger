@@ -129,7 +129,9 @@ async function main() {
     console.log(`  leg-1 (bid touched)         : ${leg1}/${resolved.length} (${pct(leg1)})`);
     console.log(`  BOTH legs (round trip would complete): ${both}/${resolved.length} (${pct(both)}) — UPPER BOUND`);
     console.log('\nHONESTY (rule 4): this is the would-have-fill CEILING (no queue/size model; daily buckets');
-    console.log('can\'t prove the trough printed before the peak). If even this is low, the 24h thesis is dead.');
+    console.log('can\'t prove the trough printed before the peak). The 24h thesis IS dead — measured 2026-08-09:');
+    console.log('4.8% completion within 24h given entry (DT1), which is why the lane re-horizoned to 4d. This');
+    console.log('joiner now scores picks at whatever horizon each was logged with.');
     console.log('The realized truth is the retro-join half (retrojoin.mjs → /analyze), n≈0 at launch.');
   } else {
     console.log('\n(no resolved picks yet — every pick is still inside its hold horizon / the archive is too');

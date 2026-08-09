@@ -345,8 +345,9 @@ export const FLIP_NICHE_LIST = Object.freeze([
     defaultPath: PATH_KEYS.VALUE_HOLD, estimator: 'value', priceBasis: 'term', fillShape: 'symmetric',
   },
   {
-    // amplitude (A2 + THE SWAP, PLAN-AMPLITUDE-SCAN) — the 24h-cycle discovery lane: buy the daily
-    // TROUGH, sell the daily PEAK, hold ~a day, cycle (the godsword playbook onto a big-ticket that
+    // amplitude (A2 + THE SWAP, PLAN-AMPLITUDE-SCAN; RE-HORIZONED by DT1 2026-08-09 — the 24h premise
+    // measured 4.8% completion given entry, so the lane is now MULTI-DAY, default hold 4d) — the
+    // discovery lane: buy the TROUGH, sell the PEAK, cycle (the godsword playbook onto a big-ticket that
     // oscillates ~4% DAILY — the swing the band screen's 2h grain + net×P÷TTF rank is structurally blind
     // to). inAll:true — it takes value's slot in `--mode all` (THE SWAP). Console-only + inform-first at
     // launch (excluded from screen.json, no app tab), like value/scalp were — every threshold is a

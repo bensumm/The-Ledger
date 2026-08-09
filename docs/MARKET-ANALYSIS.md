@@ -424,12 +424,44 @@ sign → *oscillating + floor≥0* = "trough phase — floor holding, oscillatio
 carries NO floor-direction word ("decay"/"rising"/"falling") — a rising-floor collapsed-amplitude mirage
 (Aldarium) ALSO lands in `knife`, and "decay" there would be a false direction-label. DISPLAY-ONLY —
 touches nothing upstream of the gate, no admission/rank change. **Ranked by the STANDARD `net × P ÷ TTF`** at the `amplitude` estimator family
-(`js/estimators/families.mjs`: `pFill` = the two-leg daily-reach product, `ttf` = the `--hold-days`
-horizon prior (1, or 1.5 for the day-crossing experiment), `lapUnits` = the deployable-units min) — NOT a
-bespoke composite. Amplitude picks are patient multi-hour plays → they surface under deploy/accumulate,
-NEVER as act-now rows. Every threshold is a PLACEHOLDER; the make-or-break "do both legs actually FILL
-within the hold horizon?" is measured by the shadow both-leg replay (`join-amplitude-outcomes.mjs`, an
-UPPER BOUND) + the realized retro-join (`/analyze`). Console-only (excluded from `screen.json`, no app tab).
+(`js/estimators/families.mjs`: `pFill` = the bare 0.5 PRIOR at n=0 since DT1 (see below), `ttf` = the
+`--hold-days` horizon prior (4 by default since DT1; `--hold-days 7` for the weekly-oscillator horizon),
+`lapUnits` = the deployable-units min) — NOT a bespoke composite. Amplitude picks are patient multi-DAY
+plays → they surface under deploy/accumulate, NEVER as act-now rows. Every threshold is a PLACEHOLDER.
+
+**RE-HORIZONED 1d → 4d, and `pFill2leg` REPLACED (PLAN-DIURNAL-TRIAGE DT1, 2026-08-09).** The lane
+shipped on a 24h-cycle premise — buy the daily trough, sell the daily peak, hold ~a day — and that
+premise was measured and refuted. Running the production `amplitudeRanges`/`amplitudeGate` over 92 items
+≥5m and 4,881 item-days: entry fires 56.9% of the time, but **completion within 24h GIVEN entry is 4.8%**
+(≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%), median completion ~69h ≈ 3 days, and EV per entered cycle **−813k**
+(48h mark-to-mid, untaxed) with a +48h strand mark of −643k across 2,114 strandings. The old `pFill2leg`
+(bid-touch × ask-reach) is a PRODUCT OF MARGINALS whose independence assumption is measured FALSE —
+trough-touch entry is adverse selection (unconditional ask-reach ≤48h 43.1% vs 11.4% conditional on
+entry), so rows predicted ≥0.25 realized ~5%. Its intended replacement, `cycleCompletion` (`js/amplitudescreen.mjs`), counts the ORDERED event directly
+— an entry day whose ask is reached on a STRICTLY LATER day inside the horizon, window-edge entries
+PENDING rather than misses, same-day never counting (day buckets can't prove low-preceded-high) — and was
+**built, measured on the live board, and REJECTED as a rank input the same day.** It is SATURATED BY
+CONSTRUCTION: `ampBid` is the median daily low and `ampAsk` the median daily high, so ~50% of days clear
+the ask and over a 4-day horizon P(some later day clears it) ≈ 1−0.5⁴ ≈ 94%. The board read 18 of 19 —
+including Saturated heart at 5/5, the item the study measured at 0% within 96h. At a 1-day horizon the
+construction gives ~50% against the study's 4.8%, a ~10× gap, which shows the study was measuring a
+STRICTER, sub-day event (the ask printing after the ACTUAL fill) that day buckets cannot express. So
+`pFillAmplitude` now returns the bare 0.5 PRIOR with n=0 rather than a measured-looking fake, and the
+figure survives as a DISPLAY-ONLY, ASYMMETRIC diagnostic printed as `ask-reprints X/Y ≤4d`: a high value
+is near-uninformative, but `0/N` is damning (this ask has not printed after an entry even once in-window).
+The real ordered joint needs sub-day bars carrying `tLo`/`tHi` — that is PLAN-BOTH-LEG-ENTRY chunk BL1,
+and it is where this gets fixed. The lane was mis-horizoned, not signal-free: the
+survivors are the repeatable multi-DAY oscillator class (Masori chaps 12.9%/24h but 71%/7d; fang ~6–8d).
+Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" finding (mean 0.102 vs realized 0.116):
+that measured the UNORDERED hold-≤1d joint, this measures the ORDERED entry-conditional round trip — both
+true, and the product overstates only the ordered one. *Honesty limits: one 74-day era, one update cycle;
+completion measured on hourly `avgLow`/`avgHigh` aggregates, NOT executed fills, so every rate is an UPPER
+BOUND; item-day clustering ⇒ effective n well below nominal; per-row n is ~9–10 judged entries — never
+calibrated.* Note deploy units scale with the horizon, so the re-horizon raised them ~4×.
+
+Forward measurement stays the shadow replay (`join-amplitude-outcomes.mjs`, an UPPER BOUND) + the
+realized retro-join (`/analyze`); the shadow ledger now logs the `cycle` block so the retro scores the
+re-horizoned premise rather than the refuted product. Console-only (excluded from `screen.json`, no app tab).
 
 **The reverse-flip lane (`--mode reverse`, console-only, provisional n≈0 — RF2, PLAN-REVERSE-FLIP).** A
 HARVEST-AN-OWNED-ITEM flip-niche, the mirror image of every other lane: instead of deploying capital to buy low

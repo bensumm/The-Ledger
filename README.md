@@ -279,9 +279,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   live in the module header; resolved rank-metric history in `docs/LORE.md`. NOT app-imported → no
   APP_VERSION. Fixture-pinned `pipeline/test/valuescreen.test.mjs`),
   `amplitudescreen.mjs` (PLAN-AMPLITUDE-SCAN A1 — the PURE, DOM-free two-stage gate + range math for the
-  `--mode amplitude` 24h-cycle flip-niche: `amplitudeProxy` (Stage-1 attenuated daily-range proxy off the
+  `--mode amplitude` MULTI-DAY-cycle flip-niche (**RE-HORIZONED 1d → 4d by DT1 2026-08-09** — the 24h
+  premise measured 4.8% completion given entry over 92 items / 4,881 item-days; the module header carries
+  the full refutation): `amplitudeProxy` (Stage-1 attenuated daily-range proxy off the
   6h archive → picks the fetch pool) / `amplitudeRanges` (the exact per-day trough/peak + both-leg recent
-  reach off a `windowStats` result) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
+  reach off a `windowStats` result) / **`cycleCompletion`** (DT1 — the ordered day-grain round-trip rate
+  built to replace `pFill2leg`: an entry day whose ask is reached on a STRICTLY LATER day inside the
+  horizon; window-edge entries are PENDING not misses; same-day never counts; `frac` null on zero judged
+  entries. **DISPLAY-ONLY — measured on the live board and REJECTED as a rank input**: median-bid vs
+  median-ask over a multi-day horizon saturates (~94% at H=4; the board read 18/19), so `pFillAmplitude`
+  deliberately returns the bare 0.5 prior at n=0 instead. Printed as `ask-reprints X/Y ≤4d`, ASYMMETRIC —
+  a high value is near-uninformative, `0/N` is damning. The real ordered joint needs sub-day tLo/tHi bars:
+  PLAN-BOTH-LEG-ENTRY BL1) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
   trend/knife guard) / `amplitudeDeployUnits` (the deployable-units three-way min the `amplitude`
   estimator family reads — floored HONESTLY to an integer, 0 when unaffordable: amplitude is a
   CONCENTRATION lane so `capGp` is TOTAL REALIZABLE `liquidCapital` used UNDIVIDED, NOT value's
@@ -736,7 +745,9 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   1/3) and `quote-items` a reach-folded bid (12.80m, break-even above mid), so the item was called dead;
   a hand-picked **12,501,000** reads **14/16 · recent 3/3** on the 5m archive against a 13.30m ask at
   recent 3/3, i.e. +533k/u (4.26%). Records three verified defects in `js/amplitudescreen.mjs`:
-  `pFill2leg = bidFrac × askFrac` (:161) is a PRODUCT OF MARGINALS not a measured joint; `legOk`
+  `pFill2leg = bidFrac × askFrac` was a PRODUCT OF MARGINALS not a measured joint — **FIXED 2026-08-09 by
+  PLAN-DIURNAL-TRIAGE DT1, which deleted it for the measured ordered `cycleCompletion`**, so this
+  defect is closed and BL-anything addressing it is superseded; `legOk`
   (:199-202) never checks that the low printed BEFORE the high, though the playbook is explicitly
   same-day trough→peak; and the levels are quantile-pinned (`AMP_BID_Q`/`AMP_ASK_Q` = 0.5), so nothing
   is optimised. Chunks BL1 (pure `lib/signal/bothleg.mjs` — day bars carrying `tLo`/`tHi`, measured

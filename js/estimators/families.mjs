@@ -149,22 +149,48 @@ export function pFillValue(ctx = {}) {
   return estR(PFILL_PRIOR, 0, 'prior');
 }
 
-// amplitude family (A2, PLAN-AMPLITUDE-SCAN §2.2) — P(fill) IS the two-leg recent-reach PRODUCT at the
-// quoted daily pair (bid-touch × ask-reach), computed by js/amplitudescreen.mjs amplitudeRanges and
-// handed in via ctx.amplitudeRanges.pFill2leg. This makes the honest "will the round trip complete?"
-// number the FIRST-CLASS rank input from day one; it self-reports its thinness (n = scored days). Note
-// this REPLACES the Proposal-A ask-reach discount (it already folds the exit leg) rather than stacking
-// on it — the amplitude spec's fillShape is 'symmetric' so estimateRank's askReach discount is skipped
-// (families.mjs:~251), exactly as churn/value are exempt. Basis 'daily-reach-2leg'. Prior when no read.
+// amplitude family — P(fill) IS the MEASURED ORDERED cycle-completion rate at the quoted daily pair,
+// computed by js/amplitudescreen.mjs `cycleCompletion` and handed in via ctx.amplitudeRanges.cycle.
+//
+// DT1 (PLAN-DIURNAL-TRIAGE, 2026-08-09) replaced the old two-leg recent-reach PRODUCT (`pFill2leg`,
+// basis 'daily-reach-2leg'). That product multiplied bid-touch × ask-reach, which assumes the two legs
+// are independent — measured FALSE. Trough-touch entry is adverse selection (unconditional ask-reach
+// ≤48h 43.1% versus 11.4% conditional on entry), so rows the product predicted at ≥0.25 realized ~5%.
+// Reconciles with PLAN-BOTH-LEG-ENTRY, which found the product "approximately calibrated" (mean 0.102 vs
+// realized 0.116): that measured the UNORDERED, hold-≤1d joint — both legs printing in the window. This
+// measures the ORDERED, entry-conditional round trip (bid fills, THEN ask within the horizon). Both
+// readings are true; the product approximates the unordered joint and badly overstates the ordered one.
+// The replacement is ordered by construction, so it supersedes both.
+//
+// Still the FIRST-CLASS rank input, and it still self-reports thinness — n is now `cycle.judged` (the
+// entries with a full horizon inside the window), which is smaller and more honest than the old `nDays`.
+// Unchanged: this REPLACES the Proposal-A ask-reach discount rather than stacking on it (the amplitude
+// spec's fillShape is 'symmetric', so estimateRank's askReach discount is skipped, as for churn/value).
+// Basis 'measured-cycle-completion'. Prior when no read. NEVER calibrated — a fill PROXY, upper bound.
+// ⚠ WHY THIS RETURNS THE BARE PRIOR (and must not be "improved" back into a measured-looking number).
+// DT1 deleted `pFill2leg` and the obvious replacement — `cycleCompletion`, the ordered day-grain
+// completion rate — was BUILT, MEASURED ON THE LIVE BOARD, and REJECTED as a rank input the same day.
+// It is SATURATED BY CONSTRUCTION: `ampBid` is the MEDIAN daily low and `ampAsk` the MEDIAN daily high,
+// so ~50% of days reach the ask and over a 4-day horizon P(at least one later day clears it) ≈ 1−0.5⁴
+// ≈ 94%. The live board confirmed it exactly — 18 of 19 judged entries "completed" (5/5, 6/7, 7/7),
+// including Saturated heart at 5/5, the very item the study measured at 0% completion within 96h.
+// At a 1-day horizon the construction yields ~50% where the study measured 4.8% — a ~10× gap. The study
+// was therefore measuring a materially STRICTER event (the ask printing after the ACTUAL fill, at
+// sub-day grain), which day buckets cannot express. Ranking on the saturated number would have pushed
+// every amplitude row's P(fill) toward 1.0 — the exact opposite of what the evidence supports.
+// So the family reports an honest wide prior with n=0 rather than a measured-looking fake. The real
+// ordered joint needs sub-day bars carrying tLo/tHi, which is exactly PLAN-BOTH-LEG-ENTRY chunk BL1;
+// that is where this gets fixed, not here. `cycleCompletion` survives as a DISPLAYED diagnostic only
+// (it answers the weaker "does the ask still print after entry?"), never as a rank input.
 export function pFillAmplitude(ctx = {}) {
-  const ar = (ctx && ctx.amplitudeRanges) || null;
-  if (ar && ar.hasData && num(ar.pFill2leg) != null) return estR(clamp01(ar.pFill2leg), num(ar.nDays) ?? 0, 'daily-reach-2leg');
   return estR(PFILL_PRIOR, 0, 'prior');
 }
 
 // amplitude family TTF = the hold-horizon prior in seconds (holdDays × 86400). holdDays is a spec/CLI
-// parameter (default 1, experiment 1.5 — §2.4). PLACEHOLDER until the retro-join measures realized cycle
-// time (§A5). Reads ctx.holdDays; defaults to AMP_HOLD_DAYS_DEFAULT.
+// parameter (default 4 since DT1's re-horizon, 2026-08-09 — the 1-day cycle premise measured 4.8%
+// completion ≤24h given entry, median completion ~69h ≈ 3d, so a 4d prior is directionally right where
+// 1d was not). PLACEHOLDER until the retro-join measures realized cycle time (§A5). Reads ctx.holdDays;
+// defaults to AMP_HOLD_DAYS_DEFAULT.
 export function ttfAmplitude(ctx = {}) {
   const hd = num(ctx && ctx.holdDays) ?? AMP_HOLD_DAYS_DEFAULT;
   return estR(Math.round(hd * 86400), 0, 'hold-horizon-prior');
@@ -243,7 +269,7 @@ export const ESTIMATORS = Object.freeze({
   value:     { pFill: pFillValue,     ttf: ttfValue },
   rising:    { pFill: pFillRising,    ttf: ttfRising },
   churn:     { pFill: pFillIntraday,  ttf: ttfIntraday,  lapUnits: churnLapUnits },
-  // A2 (PLAN-AMPLITUDE-SCAN §2.2) — the 24h-cycle family: two-leg daily-reach pFill, hold-horizon ttf,
+  // amplitude family (DT1-re-horizoned): measured-cycle-completion pFill, hold-horizon ttf,
   // deployable-units lapUnits. Rank/grade/suggestions machinery carries amplitude unchanged.
   amplitude: { pFill: pFillAmplitude, ttf: ttfAmplitude, lapUnits: amplitudeLapUnits },
 });
