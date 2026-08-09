@@ -100,4 +100,46 @@ the pipeline reads — they exist to settle a question, and their conclusions li
 All three describe **one 68-day window (2026-05-29 → 2026-08-04) with no out-of-sample split** — descriptive
 of that window, not predictive. Nothing in them has been encoded into a gate or a default.
 
+## The 2026-08-09 bid-depth baseline
+
+- **`bid-depth-baseline-20260809.json` → `BID-DEPTH-BASELINE-FINDINGS.md`** — the control record for
+  Ben's live overnight test of the −5% queue-wall hypothesis (`plans/PLAN-BID-DEPTH-5PCT.md`): all 8
+  resting buy offers captured at 2026-08-09 10:32 UTC against **both** anchors — the GE guide price and
+  the live instasell — with the print ages that make the comparison trustworthy (4–13 min, inside
+  `QUICK_FRESH_MIN`).
+
+  Captured **by hand, because the pipeline cannot reproduce it after the fact.** Nothing persists the
+  guide price at time T: the archive schema has no guide column, `pipeline/.cache/guide.json` is a
+  10-minute-TTL snapshot overwritten in place, `pipeline/.guide-history.jsonl` holds only 26 real
+  re-anchor events across 17 items (one item clears the n≥3 honesty gate), and `suggestions.jsonl`
+  carries the field on 0 of 13,401 rows. Without this file the experiment would have been unmeasurable —
+  the same reason the ~6,790 historical fills cannot be replayed against guide.
+
+  **The finding:** guide diverges from the live print on every item, −5.04% to +2.56% — a spread wider
+  than the 5% effect being hunted, and signed in *both* directions (Irit leaf's guide sits *below* live).
+  Measured against guide, 6 of 8 bids sit past −5%; against live instasell, only one does. The two
+  anchors make opposite predictions from the same 8 offers, which is what makes the night discriminating.
+  INFORM-ONLY, n=8, one night — it establishes that the measurement question is real, not that the wall
+  exists.
+
+## `amp-cycle-reproduction.mjs` — did the DT1 amplitude study actually hold up? (2026-08-09)
+
+A REPRODUCTION harness, not a study. Runs two designs head-to-head on the same items and the same 1h
+archive: (a) the day-grain `cycleCompletion` shipped in DT1, whose levels come from the same 14-day
+window it then scores, and (b) the DT1 study's own design — `amplitudeRanges` levels fitted strictly
+before each origin day (`p.timestamp < midnight(T)`, 15-day warmup), entry = the first day-T hour at or
+below `ampBid`, completion = any later hour reaching `ampAsk` within 24h/96h.
+
+Written because the two disagreed by ~4× and it was not clear which was wrong. **The study reproduces
+exactly** — Saturated heart 0.0% @96h (n=41) and Masori chaps 12.9% @24h (n=31) against its published
+0% and 12.9%. The day-grain version reads 100% and 85.7% on those same items. The defect is CIRCULARITY:
+median-of-the-scored-days levels are cleared by ~50% of those days by definition, and a multi-day horizon
+compounds that to ~94%. This is why `pFillAmplitude` reports an honest n=0 prior rather than the
+in-sample figure, and why the out-of-sample design (which separates live rows 0% / 24% / 42% / 48% @96h)
+is the basis for DT1b.
+
+Reads the archive READ-ONLY and `js/` production code; writes nothing. Re-run:
+`node pipeline/experiments/amp-cycle-reproduction.mjs`. Depends on `hp-lib.mjs` in the 2026-08-09
+session tmp dir — if that is gone, the loader helpers must be re-pointed at `pipeline/lib/market/archive.mjs`.
+
 To retire this experiment: delete `pipeline/experiments/` entirely. Nothing elsewhere references it.
