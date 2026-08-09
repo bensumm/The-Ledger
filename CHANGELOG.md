@@ -10,6 +10,54 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### desk cadence: the 6→2 attention haircut reaches the two lanes it had missed (2026-08-09, pipeline-only)
+
+No `APP_VERSION` bump — nothing the browser loads changed (`index.html` and `js/*.js` do not import the
+value or amplitude screens; only node-side `.mjs` modules do).
+
+**What was wrong.** The 2026-08-08 haircut replaced the GE's physical six 4h buy-limit refills with a
+realistic desk cadence, on the correct argument that six refills/day encodes re-buying around the clock
+including asleep, and that the bias is one-directional (a cheap liquid item is refill-bound and collects
+the full multiplier; a big ticket is volume-bound long before the refill cap binds, so it never sees it).
+That change moved `expUnits` — and **only** `expUnits`. `VALUE_WINDOWS_PER_DAY` and `AMP_WINDOWS_PER_DAY`
+stayed at a bare `6`, each under a comment asserting it "mirrors expUnits". For a day, two lanes sized
+off 3× more accumulation than the desk actually places, and every comment in the tree said they agreed.
+This is the failure mode CLAUDE.md rule 8 names: the new thing landed, the contradicting old thing stayed.
+
+**Ben's ruling (2026-08-09):** *"assume 2 windows of attention — enough for 1 band/amp flip or 2 churn
+flips."* Note the sentence carries two things: the day's budget (two windows) **and** an exchange rate
+between lanes (a band/amp round-trip costs both; a churn round-trip costs one). Only the first is
+implemented here. The second is the attention axis and remains unbuilt — see PLAN.md's Discovered entry.
+
+**What shipped.**
+- New leaf `js/desk-cadence.mjs` — the ONE home for `REFILL_WINDOWS_PER_DAY` (6, a game rule) and
+  `ACTIONABLE_WINDOWS_PER_DAY` (2, a PLACEHOLDER, n≈0). It has to be a *leaf* with zero imports:
+  `gatecandidates.mjs` imports FROM `valuescreen.mjs`/`amplitudescreen.mjs`, so hosting the constant in
+  gatecandidates and importing it downward would be a cycle. gatecandidates now imports and re-exports
+  both names, so every existing importer is untouched.
+- `VALUE_WINDOWS_PER_DAY` and `AMP_WINDOWS_PER_DAY` now read that constant instead of a private literal.
+  Measured effect on the pinned amplitude fixture: deployable units 500 → 200 (the buy-limit leg now
+  binds where the vol-share leg used to).
+- `expUnitsOvernight` still passes the PHYSICAL 6, deliberately and unchanged — an 8h unattended span
+  collects its two refills with no re-buying, so the attention argument does not apply there.
+- Doc reconciliation, not append: `patha.mjs`'s header documented `cyclesDay = min(6, …)` and "reuses the
+  ×6" for a day after the haircut; it is now written in terms of W with a pointer to the constant, so it
+  cannot go stale again. ~12 stale "500k attention floor" assertions across `gatecandidates.mjs`,
+  `structural-admission.mjs` and `screen-flip-niches.mjs` now name `MIN_GPD` rather than restating a
+  number (`MIN_GPD` has been 250k since 2026-08-08). The genuine 500k→250k *change notes* are kept.
+- `pipeline/test/amplitudescreen.test.mjs`: the deploy-units case hardcoded `100×6×1 = 600`, a literal it
+  did not own — the same bare-pin class flagged on `capeff-digest.test.mjs`. It now expresses the bound
+  via the constant, exercises BOTH the buy-limit and vol-share legs so the three-way `min()` still has to
+  choose, and pins the wiring (`AMP_WINDOWS_PER_DAY === ACTIONABLE_WINDOWS_PER_DAY`) plus the value
+  loudly, so a future cadence change is a deliberate visible edit rather than a silent drift.
+
+**Honesty (rule 4).** `ACTIONABLE_WINDOWS_PER_DAY` is a PLACEHOLDER set from Ben's judgment, n≈0 — not a
+measured cadence. And a carried warning now pinned in the module header: `MIN_GPD` moved 500k→250k as a
+**rescale**, not a re-derivation. The haircut is up to 3× while the floor moved 2×, so the attention floor
+currently sits ~1.5× tighter in effective terms than it did pre-haircut. Whether that over-binds is
+measurable and unmeasured; if the cadence moves again, re-derive the floor rather than scaling it.
+
+
 ### 0.71.3 — the reach basis flips back to full-window, and the stale bump is capped at caution (2026-08-09)
 
 Two reach changes off the same forward-scoring pass (n=6,016 ask-reach rows replayed against a real 8h

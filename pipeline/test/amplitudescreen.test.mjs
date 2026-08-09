@@ -16,8 +16,9 @@
 import assert from 'node:assert/strict';
 import {
   amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits,
-  AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q,
+  AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q, AMP_WINDOWS_PER_DAY,
 } from '../../js/amplitudescreen.mjs';
+import { ACTIONABLE_WINDOWS_PER_DAY } from '../../js/desk-cadence.mjs';
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -119,10 +120,31 @@ ok('amplitudeProxy day keys are zero-padded — recent-N is the NEWEST days, not
 });
 
 ok('amplitudeDeployUnits is the three-way min() (bankroll / vol-share / buy-limit), degrades to 1', () => {
-  // bankroll: 100m/1000 = 100k; vol-share: 0.10×5000×1 = 500; limit: 100×6×1 = 600 → min 500.
-  const u = amplitudeDeployUnits({ capGp: 100_000_000, buyLow: 1000, limitVol: 5000, limit: 100, holdDays: 1 });
-  assert.equal(u, 500, `min bound, got ${u}`);
+  // THE BOUND IS EXPRESSED VIA THE CONSTANT, NOT A LITERAL. This case used to read `100×6×1 = 600`,
+  // which silently stopped being the code's arithmetic when the attention haircut moved the windows
+  // 6→2 (the suite went red only because the *other* leg happened to change which one bound). A test
+  // that hardcodes a constant it doesn't own pins the wrong thing — see the same class flagged on
+  // capeff-digest.test.mjs. Both legs are exercised below so the min() still has to actually choose.
+  const W = AMP_WINDOWS_PER_DAY;
+
+  // BUY-LIMIT leg binds: bankroll 100m/1000 = 100k; vol-share 0.10×5000×1 = 500; limit 100×W×1.
+  const uLimit = amplitudeDeployUnits({ capGp: 100_000_000, buyLow: 1000, limitVol: 5000, limit: 100, holdDays: 1 });
+  assert.equal(uLimit, Math.min(100_000, 500, 100 * W * 1), `buy-limit leg should bind, got ${uLimit}`);
+
+  // VOL-SHARE leg binds: same fixture with a limit big enough that limit×W clears the vol-share 500.
+  const bigLimit = Math.ceil(600 / W);
+  const uVol = amplitudeDeployUnits({ capGp: 100_000_000, buyLow: 1000, limitVol: 5000, limit: bigLimit, holdDays: 1 });
+  assert.equal(uVol, 500, `vol-share leg should bind at limit=${bigLimit}, got ${uVol}`);
+
   assert.equal(amplitudeDeployUnits({}), 1, 'no inputs → a single unit');
+});
+
+ok('the amplitude lane shares the ONE windows/day home — no private 6 (the 2026-08-08 drift)', () => {
+  // AMP_WINDOWS_PER_DAY and VALUE_WINDOWS_PER_DAY both sat at a bare 6 under a comment claiming to
+  // "mirror expUnits" for a day after expUnits took the haircut. This asserts the wiring, and pins
+  // the value LOUDLY so a future change to the desk cadence is a deliberate, visible edit.
+  assert.equal(AMP_WINDOWS_PER_DAY, ACTIONABLE_WINDOWS_PER_DAY, 'amplitude must not fork its own windows/day');
+  assert.equal(ACTIONABLE_WINDOWS_PER_DAY, 2, 'desk cadence is 2 windows/day (Ben 2026-08-09) — change deliberately');
 });
 
 // --- PLAN-OSCILLATION-CYCLE F-E — the reach-vs-margin quantile DIAL -------------------------------

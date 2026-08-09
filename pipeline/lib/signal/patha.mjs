@@ -25,7 +25,8 @@
    REUSE (do NOT reinvent): tax via `netMargin` (quotecore re-exports the ONE `tax()` from money-math.js
    — the after-tax per-day range is `netMargin(lo, hi) = (hi − tax(hi)) − lo`); the median via quotecore's
    ONE `median`/`quantileSorted` (SF-1) rather than a second percentile impl; the throughput (buy-limit
-   ×6 refills ∧ 10% volume-share) via gatecandidates.mjs `expUnits` with capPerWindow = capital ÷ price —
+   ×ACTIONABLE_WINDOWS_PER_DAY refills ∧ 10% volume-share) via gatecandidates.mjs `expUnits` with
+   capPerWindow = capital ÷ price —
    NO new refill/volume constants are invented here. (robustBand is quotecore's EDGE robustifier — p90/p10
    of prints — which is the wrong statistic for a CENTRAL range estimate, so we use `median`, quotecore's
    other percentile helper, not robustBand.) */
@@ -79,15 +80,18 @@ export function intradayDailyRange(dayRanges) {
      unitsCyc  = min(effLimit, floor(capital ÷ price))   (0 if unaffordable — never floored up to 1)
                  effLimit = buyLimit ?? volDay/24        (null-limit → volDay-inferred limit, plan)
      cyclesDay = throughput ÷ unitsCyc                                    # buy-limit refills ∧ vol-feasible
-                 throughput = expUnits(effLimit, volDay, floor(capital÷price))   # reuses the ×6 + 10%-share
+                 throughput = expUnits(effLimit, volDay, floor(capital÷price))   # reuses the ×windows + 10%-share
      gpDay     = marginU × unitsCyc × cyclesDay   (== marginU × throughput)
 
    `expUnits(limit, volDay, capPerWindow)` already IS the throughput this decomposes: its internal
-   `perWindow = min(limit, capPerWindow)` is exactly unitsCyc, and its `min(perWindow×6, 0.10×volDay)`
-   is unitsCyc × cyclesDay — so passing capPerWindow = floor(capital÷price) reuses the refill (×6) and
+   `perWindow = min(limit, capPerWindow)` is exactly unitsCyc, and its `min(perWindow×W, 0.10×volDay)`
+   is unitsCyc × cyclesDay — so passing capPerWindow = floor(capital÷price) reuses the refill (×W) and
    volume-share (10%) constants WITHOUT re-deriving them, and cyclesDay = throughput ÷ unitsCyc falls out
-   exactly (a plain flip where capital isn't binding gives cyclesDay = min(6, 0.10×volDay/limit), the
-   legacy shape). gpDay is rounded for the headline; the factor fields are the raw values it was built
+   exactly (a plain flip where capital isn't binding gives cyclesDay = min(W, 0.10×volDay/limit), the
+   legacy shape).
+   ⚠ W is `ACTIONABLE_WINDOWS_PER_DAY` (js/desk-cadence.mjs) — currently **2**, NOT the physical 6.
+   This header said 6 for a day after the haircut landed; it is deliberately written as W now so it
+   cannot go stale again. The 6 is REFILL_WINDOWS_PER_DAY and only `expUnitsOvernight` still passes it. gpDay is rounded for the headline; the factor fields are the raw values it was built
    from.
 
    Returns { gpDay, marginU, captureFrac, cyclesDay, units, price, intradayRange, lane } — the H1 `pathA`
@@ -108,7 +112,8 @@ export function pathAGpDay({ dayRanges, price, buyLimit = null, volDay = 0, lane
   const effLimit = buyLimit != null ? buyLimit : (volDay > 0 ? volDay / 24 : null);
   const unitsCyc = effLimit != null ? Math.min(effLimit, capUnits) : capUnits;
 
-  // throughput (units/day) via expUnits — reuses its ×6 buy-limit refills ∧ 10%-of-volDay share; passing
+  // throughput (units/day) via expUnits — reuses its ×ACTIONABLE_WINDOWS_PER_DAY buy-limit refills ∧
+  // 10%-of-volDay share (the haircut applies here automatically — do not re-introduce a literal); passing
   // capUnits as capPerWindow makes expUnits' internal perWindow == unitsCyc, so the split is exact.
   const throughput = expUnits(effLimit, volDay, capUnits);
 

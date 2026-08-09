@@ -44,6 +44,7 @@
  */
 import { tax } from './money-math.js';
 import { quantLow, quantHigh, recencySplit, RECENT_NIGHTS } from './windowread.mjs';
+import { ACTIONABLE_WINDOWS_PER_DAY } from './desk-cadence.mjs';
 
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
 const afterTax = p => p - tax(p);
@@ -85,7 +86,9 @@ export const AMP_MIN_DAYS        = 5;               // thinner day sample than t
 // Deployable-units bound (mirrors valueScore's three-way min + expUnits): bankroll ÷ trough-bid,
 // vol-share × limiting-side volume × hold days, buy-limit × windows/day × hold days. PLACEHOLDERS.
 export const AMP_VOL_SHARE       = 0.10;
-export const AMP_WINDOWS_PER_DAY = 6;
+// ATTENTION-HAIRCUT (Ben 2026-08-09) — was a bare 6 under a comment claiming to mirror expUnits;
+// the 6→2 haircut (2026-08-08) moved expUnits and left this behind. Now shares the ONE home.
+export const AMP_WINDOWS_PER_DAY = ACTIONABLE_WINDOWS_PER_DAY;
 // Hold horizon (§2.4): default 1 (buy the trough, sell the peak, same local day); 1.5 crosses a day
 // boundary (the A3 experiment). Feeds the family ttf + the §A5 shadow-replay horizon. PLACEHOLDER.
 export const AMP_HOLD_DAYS_DEFAULT = 1;

@@ -290,6 +290,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   PLACEHOLDERS (n≈0); full spec in the module header. NOT app-rendered (console-only lane) but the shared
   `FLIP_NICHES`/estimators ARE app-imported → the registry addition is app-safe (a null 'daily' pair, never
   rendered). Fixture-pinned `pipeline/test/amplitudescreen.test.mjs`),
+  `desk-cadence.mjs` (2026-08-09 — the ONE home for the "how many GE buy-limit windows a day do we
+  actually assume?" constant: `REFILL_WINDOWS_PER_DAY` = 6, the physical 24h÷4h game rule, and
+  `ACTIONABLE_WINDOWS_PER_DAY` = 2, the realistic desk cadence Ben set — a PLACEHOLDER, n≈0. A leaf
+  module with ZERO imports, because it must be reachable from both `js/valuescreen.mjs` /
+  `js/amplitudescreen.mjs` AND `pipeline/lib/signal/gatecandidates.mjs`, and gatecandidates imports
+  FROM the two screens — so the constant could not live there without a cycle. Created because the
+  answer previously existed as three independent literals that drifted the moment the 6→2 attention
+  haircut landed (2026-08-08 moved `expUnits`, left value + amplitude sizing at 6 under comments still
+  claiming to "mirror expUnits"). Consumed by `gatecandidates.mjs` (which re-exports both names, so
+  every prior importer is unchanged), `valuescreen.mjs`, `amplitudescreen.mjs`. NOT app-imported.
+  Carries the ⚠ note that moving `ACTIONABLE_WINDOWS_PER_DAY` invalidates `MIN_GPD`s calibration —
+  the floor must be re-DERIVED, not rescaled. `expUnitsOvernight` deliberately still passes the
+  PHYSICAL 6 (an unattended 8h span needs no re-buying). Wiring + value pinned in
+  `pipeline/test/amplitudescreen.test.mjs`),
   `reverseflip.mjs` (PLAN-REVERSE-FLIP RF1 — the PURE, DOM-free gate/edge math for the `--mode reverse`
   HARVEST-AN-OWNED-ITEM flip-niche, i.e. sell an item you already own into the PEAK and rebuy at the DIP,
   capital-free: `invertedRegimeGate` (re-maps `js/termstructure.mjs` `classifyTrajectory`'s shape with the

@@ -36,6 +36,7 @@
  * constant here as validated.
  */
 import { tax } from './money-math.js';
+import { ACTIONABLE_WINDOWS_PER_DAY } from './desk-cadence.mjs';
 
 // --- PLACEHOLDER constants (rule 4 — unvalidated; the firing/suggestions accrual would tune them) ---
 export const VALUE_MIN_CYCLE_PCT = 0.06;   // after-tax cycle amplitude must clear ~6% for one taxed sell to net meaningfully
@@ -99,7 +100,10 @@ export const VALUE_DEPLOY_MULT_MIN = 0.2;        // floor: a near-undeployable i
 export const VALUE_DEPLOY_MULT_MAX = 2.0;        // cap: keeps the multiplier from becoming a price/size sort
 export const VALUE_VOL_SHARE       = 0.10;       // fraction of limiting-side daily volume you can transact (mirrors expUnits)
 export const VALUE_ACCUM_DAYS      = 2;          // days a dip realistically lasts to accumulate into / exit over
-export const VALUE_WINDOWS_PER_DAY = 6;          // GE 4h buy-limit windows per day (mirrors expUnits)
+// ATTENTION-HAIRCUT (Ben 2026-08-09) — was a bare 6 whose comment claimed to "mirror expUnits" and
+// stopped being true the moment expUnits took the 6→2 haircut (2026-08-08), leaving this lane sizing
+// off 3× more accumulation than the desk actually places. Now genuinely mirrors it: ONE home.
+export const VALUE_WINDOWS_PER_DAY = ACTIONABLE_WINDOWS_PER_DAY;   // realistically-placed buy-limit tranches/day
 
 const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
 const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;

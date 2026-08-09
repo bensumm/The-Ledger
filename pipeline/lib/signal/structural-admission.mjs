@@ -108,7 +108,7 @@ export function structuralGate({ value, volDay, hpv, lpv, limit = null }, t = DE
    means "admitted below the unit floor via gp-flow → treat as a big-ticket" (grade cap, thin reserve,
    attention-floor EXEMPT). The structural world has no unit-floor/gp-flow split; its analogue of a
    low-turnover big-ticket is the GEAR lane. So `thin := (volLane === 'gear')` — gear items ride the
-   existing big-ticket handling (exempt from the 500k attention floor, thin reserve), churn items are
+   existing big-ticket handling (exempt from the MIN_GPD attention floor, thin reserve), churn items are
    treated as ordinary liquid rows. `limitVol` is set to the min-side depth (the same quantity
    `eachLiquidCandidate` puts there: min(hpv,lpv)), so the downstream `expUnits(limit, limitVol)` math is
    unchanged in shape. Every survivor candidate additionally gets `volLane`/`thinDepth`/`volDay` attached

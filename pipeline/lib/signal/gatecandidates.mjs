@@ -9,7 +9,7 @@
  *
  * The four concerns that live here (all pure, no CLI/network/fs state):
  *   1. gateCandidates(mode, ctx, thresholds) — the PRE-FETCH gate stack (two-sided liquidity OR
- *      gp-flow, price window, rising-pool noise floor, per-mode step-3 edge, 500k attention floor).
+ *      gp-flow, price window, rising-pool noise floor, per-mode step-3 edge, MIN_GPD attention floor).
  *      Threshold-driven so fixtures drive it; defaults to DEFAULT_THRESHOLDS (the CLI defaults). P4c:
  *      the per-mode step-3 EDGE + the rising-pool rule + the rank mode are now DECLARATIVE strategy
  *      specs (js/flip-niches.mjs) this looks up by `mode` — byte-identical, but a new niche registers a
@@ -34,6 +34,7 @@
  * byte-identical to screen-flip-niches.mjs / the app. No live data in the tests (CLAUDE.md rule 4).
  */
 import { overnightStaleRisk, OVERNIGHT_SPAN_H } from '../../../js/quotecore.js';
+import { REFILL_WINDOWS_PER_DAY, ACTIONABLE_WINDOWS_PER_DAY } from '../../../js/desk-cadence.mjs';   // the ONE home for the windows/day assumption (re-exported below)
 import { median } from '../render/cli.mjs';
 // P5 — the value niche's term-structure gate + rank (js/valuescreen.mjs, pure). gateCandidates routes
 // a `gate:'value'` spec here instead of the shared band/spread liquidity+edge stack.
@@ -74,7 +75,7 @@ export const DEFAULT_THRESHOLDS = {
   // STRICTER on churn than before, not rebalanced. Big tickets are volume-bound so the haircut misses
   // them entirely — the halved floor is what actually lets them surface. EXPERIMENTAL, tune freely.
   MIN_TRADED: 6, MIN_TRADED_THIN: 2, MIN_GPD: 250_000, GP_FLOOR: 4_500_000_000,   // PLAN-VOL24 step 2: GP_FLOOR 250m → 4.5b (corrected gp-flow)
-  // P5 value niche — the 500k gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
+  // P5 value niche — the MIN_GPD gp/day THROUGHPUT floor is REPLACED by valuescreen's after-tax
   // cycle-amplitude floor (a slow-hold has low daily velocity but big cycle appreciation). What value
   // relaxes is the gp/day THROUGHPUT bar, NOT the two-sided UNIT-liquidity bar: you still have to exit a
   // (large-ish) held position at the cycle top, so the item needs a genuine two-sided market. Ben 2026-
@@ -176,16 +177,14 @@ export const SUBFLOOR_GRADE_CAP = 'C';
 // single buy-limit tranche costs more than the pool — the genuinely capital-constrained big/expensive
 // positions, exactly the intended demotion. null capPerWindow → legacy (no capital term), so every
 // existing caller (overnight, watchlist, fixtures) is byte-for-byte unchanged.
-// PHYSICAL vs ACTIONABLE refill windows (Ben's ruling, 2026-08-08 — EXPERIMENTAL, easily reverted).
-// GE buy limits reset every 4h, so 24/4 = 6 refills/day. That arithmetic is right; what was wrong was
-// USING it as an expected value. Collecting all 6 means re-buying every four hours around the clock,
-// including asleep — and on many items six distinct dip opportunities do not exist in a day at all. The
-// bias is ONE-DIRECTIONAL: a cheap liquid item is refill-bound and collects the full multiplier, while a
-// big ticket is volume-bound (the 0.10×volDay leg) long before the refill cap binds, so it never sees it.
-// Everything ranked on gpDay therefore compared a 6-cycle fantasy against a 1-cycle reality.
-// To revert the experiment: set ACTIONABLE_WINDOWS_PER_DAY back to REFILL_WINDOWS_PER_DAY.
-export const REFILL_WINDOWS_PER_DAY = 6;      // physical: 24h ÷ 4h limit reset. Do not change — it is a game rule.
-export const ACTIONABLE_WINDOWS_PER_DAY = 2;  // realistic desk cadence. PLACEHOLDER (n≈0), Ben-set, tune freely.
+// PHYSICAL vs ACTIONABLE refill windows — the rationale, the ⚠ floor-recalibration warning, and the
+// ruling's still-unmodelled half now live in ONE home: `js/desk-cadence.mjs`. They were duplicated
+// here and in valuescreen/amplitudescreen and drifted apart the moment the 6→2 haircut landed
+// (2026-08-08 moved this one, left the other two at 6 still claiming to "mirror expUnits").
+// Imported (NOT `export … from`, which would re-export without binding them locally — `expUnits`'s
+// default parameter below needs the local binding) and re-exported, so every existing importer of
+// these names keeps working unchanged.
+export { REFILL_WINDOWS_PER_DAY, ACTIONABLE_WINDOWS_PER_DAY };
 export const expUnits = (limit, volDay, capPerWindow = null, windows = ACTIONABLE_WINDOWS_PER_DAY) => {
   const vShare = 0.10 * (volDay || 0);
   if (capPerWindow == null) return limit != null ? Math.min(limit * windows, vShare) : vShare;
@@ -230,7 +229,7 @@ export const softFactor = drift => drift == null ? 0.7 : drift <= -8 ? 0.1 : dri
 // GC1: exported + threshold-driven. The gate LOGIC is byte-identical to before — every constant it
 // used to close over is now a named field of the `t` thresholds object (default DEFAULT_THRESHOLDS),
 // so fixtures can drive the whole stack (two-sided-liquidity OR gp-flow, price window, rising-pool
-// floor, per-mode edge, 500k attention floor) without CLI/network state. `expUnits` and `tax` are pure.
+// floor, per-mode edge, MIN_GPD attention floor) without CLI/network state. `expUnits` and `tax` are pure.
 // A6 (PLAN-AMPLITUDE-SCAN §6.2 — the one real dedup) — the shared candidate-loop boilerplate all three
 // gate stacks (band, value, amplitude) repeat: iterate v24, the two-sided-liquidity gate (hpv>0 && lpv>0,
 // NON-NEGOTIABLE), the mid price window, and the thin/gp-flow classification. `fn` receives the survivor
@@ -293,7 +292,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
       ? t.THROUGHPUT_CAP_GP / mid : null;
     const expGpDay = Math.round(expUnits(limit, limitVol, capPerWindow) * modeNet);
     const expGpDayLegacy = Math.round(expUnits(limit, limitVol) * modeNet);
-    // 500k/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
+    // MIN_GPD/day attention floor — pre-rating, so no grade ever advertises a sub-floor row. Thin gp-flow
     // qualifiers are EXEMPT (a unit/gp-day count mismeasures them — see MIN_GPD note). A HELD item is
     // EXEMPT too (2026-07-16 — was a prose-only "held/asked items are exempt" comment right here with
     // no code behind it, confirmed by grep; now code-enforced, same held-item exception as surviveMode's
@@ -325,7 +324,7 @@ export function gateCandidates(mode, ctx, t = DEFAULT_THRESHOLDS, heldIds = new 
 }
 
 /* P5 — the VALUE niche's own candidate gate (PLAN-VALUE §A). Keeps the two-sided liquidity gate + the
-   price window; REPLACES the 500k gp/day throughput floor with valuescreen's after-tax cycle-amplitude
+   price window; REPLACES the MIN_GPD gp/day throughput floor with valuescreen's after-tax cycle-amplitude
    floor, LOWERS the liquidity floor (VALUE_LIQ_FLOOR — hold for days–weeks needs eventual exitability,
    not fast churn), and rejects a decay/downtrend KNIFE via the term structure. `ctx.daily` is the bulk
    daily-mid archive (screen-flip-niches.mjs's loadDaily) already loaded at gate time — the term structure is
@@ -349,7 +348,7 @@ function gateValueCandidates(ctx, t = DEFAULT_THRESHOLDS) {
 /* A2 (PLAN-AMPLITUDE-SCAN §2.1) — the AMPLITUDE niche's Stage-1 pre-fetch gate. Keeps the shared
    two-sided liquidity gate + the thin/gp-flow classification (via eachLiquidCandidate), but uses
    amplitude's OWN price window (min AMP_MIN_PRICE, no upper cap — the default 45m clips Masori≈42m) and
-   REPLACES the 500k gp/day throughput floor with the cheap ATTENUATED daily-amplitude PROXY off the bulk
+   REPLACES the MIN_GPD gp/day throughput floor with the cheap ATTENUATED daily-amplitude PROXY off the bulk
    6h-spaced archive (js/amplitudescreen.mjs amplitudeProxy). The proxy's ONLY job is picking the fetch
    pool — the EXACT gate (amplitudeGate off the per-item 1h windowStats) runs post-fetch in
    renderAmplitudeMode (the two-stage split, exactly like value's proxy→confirm). `ctx.daily` is the bulk
@@ -409,7 +408,7 @@ export function gateReverseFlipCandidates(pool, ctxById = {}, t = DEFAULT_THRESH
    TRIGGER (screen-flip-niches.mjs owns it): a niche whose gateCandidates() came back EMPTY at the configured
    floors. This helper then re-runs the SAME gate stack (no forked logic — it just calls
    gateCandidates with relaxed thresholds) down a two-step ladder to find WHICH floor emptied it:
-     1. 'min-gpd'    — relax ONLY the attention floor (MIN_GPD → 0). If candidates appear, the 500k
+     1. 'min-gpd'    — relax ONLY the attention floor (MIN_GPD → 0). If candidates appear, the MIN_GPD
                        gp/day bar was the emptier; everything shown still cleared liquidity + edge.
      2. 'liquidity'  — ALSO relax the gp-flow floor (GP_FLOOR → 0), which admits every TWO-SIDED item
                        below the unit floor as `thin` (the existing thin path — grade cap, tooltip).

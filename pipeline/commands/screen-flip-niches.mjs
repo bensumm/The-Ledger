@@ -55,7 +55,7 @@
  * the last column is `Rank net·P/ttf` — the risk-adjusted `net after tax × P(fill at the quoted pair) ÷
  * TTF` (pipeline/lib/estimators.mjs), rendered with its components (net · P~ · ttf~) so the honesty
  * travels with the number. expGpDay survives ONLY as the cheap pre-fetch pool orderer (rankAndSlice) +
- * the 500k --min-gpd attention pre-filter — never again the displayed "best" number or the grade basis.
+ * the --min-gpd attention pre-filter — never again the displayed "best" number or the grade basis.
  * `--mode all` runs all four niches and shares one per-item fetch cache (items common to several niches
  * are fetched once). A grade-distribution footer per table lets us SEE whether the score separates
  * best-from-good (if a batch clumps at one grade, the factors — not the letter scale — need work).
@@ -86,7 +86,7 @@
  *
  * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×6,
  * 10% × volDay); expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
- * cheap pre-fetch orderer + the 500k --min-gpd pre-filter. That pre-filter is a HARD GATE, not a
+ * cheap pre-fetch orderer + the --min-gpd pre-filter. That pre-filter is a HARD GATE, not a
  * demotion (MT1, 2026-07-27 — it read "P6b demotion" here for months): gatecandidates.mjs:284 returns
  * null, so a sub-floor non-thin/non-held candidate is DROPPED and never rated. Do not confuse it with
  * the `⚠<floor` marker on the Path-A column, which is display-only and measures a DIFFERENT number —
@@ -94,7 +94,7 @@
  * (2026-07-25): the CONSOLE / last-report band/churn table is now sorted PRIMARILY by Path-A intraday-flip
  * gp/day (pipeline/lib/patha.mjs pathAGpDay, off Chunk A's daily ranges + Chunk B's vol lane), shown in a
  * `Path-A gp/d*` column with the risk-adjusted per-thesis RANK/grade retained BESIDE it as the shown
- * BACKUP + live A/B (owner decision H4; captureFrac is a PLACEHOLDER n≈0 — the `*`). The 500k --min-gpd
+ * BACKUP + live A/B (owner decision H4; captureFrac is a PLACEHOLDER n≈0 — the `*`). The --min-gpd
  * floor is a post-rank SURFACING partition (not a gate); null-Path-A rows fall back to the grade sort.
  * SCOPE LOCK: this is CONSOLE-ONLY — the --publish screen.json return is frozen on the pre-Path-A
  * (grade) order + cells (byte-identical), so the deployed app stays on grade until a later chunk promotes
@@ -287,7 +287,7 @@ const MIN_NET_GP = A['min-net-gp'] != null ? parseGp(A['min-net-gp']) : 100_000;
 // couple+ times in the 2h; the sawLow && sawHigh two-sided check (bandCore) does the rest. Non-thin
 // items keep the full MIN_TRADED gate.
 const MIN_TRADED_THIN = 2;
-// MIN_GPD: the 500k/day ATTENTION floor (was a /scan post-filter; now the structural --min-gpd flag,
+// MIN_GPD: the 250k/day ATTENTION floor (was a /scan post-filter; now the structural --min-gpd flag,
 // applied PRE-RATING so grades never advertise sub-floor rows). Realistic expGpDay basis. THIN gp-flow
 // qualifiers are EXEMPT — the floor exists to drop sub-attention LIQUID churn, and a thin item is
 // surfaced precisely because a unit-count/gp-day measure mismeasures it (a 360k-net/u big ticket is

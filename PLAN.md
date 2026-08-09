@@ -563,9 +563,24 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   silent on gp per unit of ATTENTION, which is the actually-scarce input here. This is why a live
   Dinh's read got called "sub-floor" against a floor calibrated on churn cadence — the denominator was
   wrong, not the trade (session anchor, 2026-08-08).
-  **Not yet scoped.** Touches the attention floor, digest ranking, `capEff`, and every lane's sizing
-  bound, so it wants its own plan — and the recalibrated floor must be re-derived, not just rescaled,
-  since dropping churn 6→2 moves the whole distribution the 500k was set against.
+  **HALF SHIPPED (2026-08-09). The WINDOWS half is done; the ATTENTION AXIS is not.**
+  - *Done:* Ben set the cadence at **2 windows** ("enough for 1 band/amp flip or 2 churn flips"). The
+    band/churn haircut had already landed 2026-08-08 (`expUnits`); what remained was that
+    `VALUE_WINDOWS_PER_DAY` and `AMP_WINDOWS_PER_DAY` were still bare `6`s under comments claiming to
+    "mirror expUnits" — two lanes sizing off a 3x fantasy. All three now read ONE constant,
+    `ACTIONABLE_WINDOWS_PER_DAY`, in the new leaf `js/desk-cadence.mjs` (it cannot live in
+    `gatecandidates.mjs`, which imports FROM both screens — that direction is a cycle).
+    `expUnitsOvernight` keeps the physical 6 by design. `patha.mjs`'s header documented `min(6, …)`
+    for a day after the haircut and is now written in terms of W so it cannot go stale again; ~12
+    stale "500k attention floor" assertions across three files now say `MIN_GPD` instead of a number.
+  - *Still OPEN — the actually-hard half:* `gpDay` measures gp per unit of TIME and is silent on gp per
+    unit of ATTENTION, which is the scarce input. Ben's framing carries the exchange rate (a band/amp
+    round-trip costs BOTH windows; a churn round-trip costs one), so the lanes should not spend the
+    budget at the same rate — nothing encodes that yet. Touches the attention floor, digest ranking,
+    `capEff` and every lane's sizing bound, so it still wants its own plan.
+  - *Carried warning:* `MIN_GPD` 500k→250k was a RESCALE, not a re-derivation — the haircut is up to 3x
+    while the floor moved 2x, so the floor now sits ~1.5x TIGHTER in effective terms than pre-haircut.
+    Whether that over-binds is measurable and unmeasured. Pinned in `desk-cadence.mjs`'s header.
 
 - **[CAP HALF FIXED 2026-08-08 — the RESERVE half remains]** The `--max-price` literal is GONE: it now
   derives from the deployable pool (`screen-flip-niches.mjs`, default = capital, `--max-price` still
