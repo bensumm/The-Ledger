@@ -571,44 +571,32 @@ export function formatFloorCeiling(fc, fmt, { label = '', live = null, drift = n
   return `${label ? label + ': ' : ''}floor/ceiling: ${parts.join(' · ')}  (heuristic, n≈0 — inform-only, never gates)`;
 }
 
-// --- hourly 3-day drift note (PLAN-HOURLY-3DAY-TREND HT2) ---------------------------------------
-// hourlyDriftNote is the ONE compact render of a hourlyDrift() result (pipeline/lib/hourly-lmh.mjs) — the
-// per-hour day-over-day slope read that surfaces a staircase-down item BEFORE it's priced as a fill-now
-// recommendation (the Ghrazi rapier anchor: graded A- fill-now while every hour was stepping down
-// ~650k–1m/day and the ask had stopped clearing intraday). Same one-owner pattern as formatFloorCeiling:
-// PURE, `fmt` (money-format) INJECTED so windowread stays dependency-free; returns the note TEXT only (no
-// sigil — the caller's NOTE_KIND owns that, same as every other note renderer in this file). Read by
-// quote-items.mjs (HT2 wiring, held+watched positions and a bare ask/bid quote) and screen-flip-niches.mjs
-// (HT3, the top-X digest enrichment pass) — and, via the reverse-flip fold (HT4), by screen-flip-niches.mjs
-// `--mode reverse` (RF6 thin rows) + read-schedule.mjs's reverseFlipRows (RF4), all at zero new compute.
+// --- ask-reach decay note (PLAN-DIURNAL-TRIAGE DT3) ----------------------------------------------
+// askReachDecayNote is the ONE compact render of an askReachDecay() result
+// (pipeline/lib/market/hourly-lmh.mjs) — is a candidate ask level sliding out of reach? It surfaces a
+// staircase-down item BEFORE it's priced as a fill-now recommendation (the Ghrazi rapier anchor: graded
+// A- fill-now while the ask had already stopped clearing intraday). Same one-owner pattern as
+// formatFloorCeiling: PURE, `fmt` (money-format) INJECTED so windowread stays dependency-free; returns
+// the note TEXT only (no sigil — the caller's NOTE_KIND owns that, like every other note renderer here).
 //
-// null `drift` (hourlyDrift's own <2-dates degrade) ⇒ null (no note — an honest absence, never a fake read).
-// The ask-reachability-decay clause only appears when it actually FIRES (decaying === true) — the highest-
-// value catch this read exists for; a non-decaying or absent ask read stays silent rather than padding
-// every line with a null clause. INFORM-ONLY, n≈0, HEURISTIC — this renderer never gates/prices/ranks; a
-// caller (screen-flip-niches.mjs HT3) may relabel a DISPLAYED verdict off `drift.dominant`, but always with
-// the drift number shown inline (Ruling 4 — visible swap, never silent).
-export function hourlyDriftNote(drift, { ask = null, fmt = String, days = 3 } = {}) {
-  if (!drift || !drift.dominant) return null;
-  const d = drift.dominant;
-  const mag = Math.abs(d.magPerDay);
-  let head;
-  if (d.dir === 'flat') {
-    head = `flat (±${fmt(mag)}/d${d.uniform ? '' : ', mixed'})`;
-  } else if (d.uniform) {
-    head = `uniform ${d.dir === 'down' ? 'step-down' : 'step-up'} ~${fmt(mag)}/d`;
-  } else {
-    head = d.split || `${d.dir} ~${fmt(mag)}/d (mixed)`;
-  }
-  let askClause = '';
-  if (ask != null && drift.askReach && drift.askReach.decaying) {
-    // percentage form: the SHARE of each day's traded hours whose high reached the ask (reached/logged).
-    // A falling % = the ask is being touched during fewer of the day's hours = price is sliding below it,
-    // so it'll fill during less and less of the day. Normalised, so a partial newest day isn't overstated.
-    const pct = drift.askReach.perDay.map(p => p.frac == null ? '–' : Math.round(p.frac * 100) + '%').join('→');
-    askClause = ` · ask ${fmt(ask)} reached ${pct} of each day's hours (sliding under)`;
-  }
-  return `${days}-day hourly drift: ${head}${askClause}`;
+// REPLACES hourlyDriftNote, deleted 2026-08-09 with the per-hour slope it rendered. The slope carried no
+// information (49.7% direction; beat predict-no-change on 6 of 380 items) — the full refutation and its
+// honesty limits are the tombstone in hourly-lmh.mjs. The decay sub-signal it used to carry as a trailing
+// clause is the piece that measured predictive (next-day ask reach 12.2% vs 30.8%), so it survives as the
+// whole note rather than an afterthought on a dead one.
+//
+// Renders ONLY when the decay actually FIRES (decaying === true) and an ask is in hand. A non-decaying,
+// null, or ask-less read ⇒ null: an honest absence, never a fake read, and never a line padded with a
+// null clause. INFORM-ONLY, n≈0, HEURISTIC — never gates, prices, or ranks. Note the measurement is a
+// FILL PROXY (reach-of-high on hourly aggregates, not executed fills), so it bounds a real offer's
+// experience from above.
+export function askReachDecayNote(decay, { ask = null, fmt = String } = {}) {
+  if (!decay || !decay.decaying || ask == null) return null;
+  // percentage form: the SHARE of each day's traded hours whose high reached the ask (reached/logged).
+  // A falling % = the ask is being touched during fewer of the day's hours = price is sliding below it,
+  // so it'll fill during less and less of the day. Normalised, so a partial newest day isn't overstated.
+  const pct = decay.perDay.map(p => p.frac == null ? '–' : Math.round(p.frac * 100) + '%').join('→');
+  return `ask-reach decay: ask ${fmt(ask)} reached ${pct} of each day's hours (sliding under)`;
 }
 
 // --- day-of-week seasonality (A3, PLAN-AMPLITUDE-SCAN §2.4 — GENUINELY NEW) ---------------------

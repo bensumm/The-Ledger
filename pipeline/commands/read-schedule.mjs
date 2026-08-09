@@ -35,8 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadMapping, fetchTs } from '../lib/market/marketfetch.mjs';
 import { readOpenPositions } from '../lib/reconstruct/positions.mjs';
 import { readOffersSnapshot } from '../lib/reconstruct/offers.mjs';
-import { hourProfile, hourlyDriftNote } from '../../js/windowread.mjs';
-import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // RF4 — the per-hour day-over-day drift, reused (no new compute) for a reverse-flip row's shared drift note
+import { hourProfile } from '../../js/windowread.mjs';
 import { fmt, fmtP, fmtHour, fmtHourRange, localTzAbbrev } from '../../js/money-format.js';   // fmtP for the Level column: it is a PRICE to place an offer at, and fmt()'s 1-decimal k-range collapsed 1,051 and 1,109 onto the same "1.1k" (Ben, 2026-08-05). fmtP keeps full gp under 100k and stays compact above it — the same convention the scan's Est. buy/sell price cells use.
 import { loadReverseFlip, pruneReverseFlip } from '../lib/thesis/reverseflipstate.mjs';   // RF0 store — RF4 surfaces the in-flight cycle into the agenda
 import { reverseFlipCycleNotes } from '../../js/reverseflip.mjs';   // RF4/RF6 shared inform-only cycle notes (thin strand + drift + REBUY_STALE_DAYS nudge)
@@ -116,7 +115,7 @@ export function sortRows(rows) {
 }
 
 // ── RF4: reverse-flip cycle rows (PLAN-REVERSE-FLIP) ─────────────────────────────────────────────
-// reverseFlipRows(state, { profileByItem, driftByItem, now }) — PURE row-builder PARALLEL to
+// reverseFlipRows(state, { profileByItem, now }) — PURE row-builder PARALLEL to
 // agendaRowsForItem, unioned into the agenda so an in-flight DECLARED reverse-flip cycle (which owns no
 // FIFO lot + no GE slot between its legs) stays on the schedule. Tagged 'RF' + an `rf:true` flag so it's
 // visually distinct from a normal position/watchlist row, and its Action names the cycle leg:
@@ -125,9 +124,11 @@ export function sortRows(rows) {
 //   rebuy-armed    → 'REBUY armed (RF)' windowed on the item's DIP  (a rebuy bid is already resting)
 // The window comes from the ALREADY-FETCHED hourProfile for that id (profileByItem) — no new fetch; an id
 // with no in-hand profile yields inH=null (renders '—', sorts last). Each row carries the shared inform-only
-// notes (thin rebuy-strand + the shared hourlyDriftNote off driftByItem + the REBUY_STALE_DAYS nudge). An
-// EMPTY / all-holding-with-no-profile store yields ZERO rows → byte-identical agenda (the zero-ripple guard).
-export function reverseFlipRows(state, { profileByItem = {}, driftByItem = {}, now = new Date() } = {}) {
+// notes (thin rebuy-strand + the REBUY_STALE_DAYS nudge). An EMPTY / all-holding-with-no-profile store
+// yields ZERO rows → byte-identical agenda (the zero-ripple guard).
+// DT3 (2026-08-09): the `driftByItem` param is gone with the hourlyDrift slope note it carried — this
+// surface never had an ask level, so the surviving askReachDecay read has nothing to score here.
+export function reverseFlipRows(state, { profileByItem = {}, now = new Date() } = {}) {
   const rows = [];
   const nowMs = (now instanceof Date) ? now.getTime() : (typeof now === 'number' ? now : Date.now());
   // windowInH needs a Date-like with getHours/getMinutes; a numeric `now` (a test/injected ms) → a Date.
@@ -139,8 +140,7 @@ export function reverseFlipRows(state, { profileByItem = {}, driftByItem = {}, n
     const w = prof ? (sell ? (prof.peak || (prof.peaks && prof.peaks[0])) : (prof.dip || (prof.dips && prof.dips[0]))) : null;
     const action = sell ? 'SELL peak (RF)' : (e.state === 'rebuy-armed' ? 'REBUY armed (RF)' : 'REBUY dip (RF)');
     const level = sell ? (e.soldEach ?? null) : (e.rebuyBidPrice ?? e.beRebuy ?? null);
-    const driftNote = driftByItem[e.id] || null;
-    const notes = reverseFlipCycleNotes(e, { row: (prof && prof.row) || null, driftNote, now: nowMs, fmt });
+    const notes = reverseFlipCycleNotes(e, { row: (prof && prof.row) || null, now: nowMs, fmt });
     rows.push({
       inH: (w && w.startH != null && w.endH != null) ? windowInH(w.startH, w.endH, nowClock) : null,
       startH: w ? w.startH : null,
@@ -271,17 +271,18 @@ export async function buildAgenda({ scope = ['c'], now = new Date(), repoRoot = 
   // fetched; an awaiting-rebuy cycle with no bid isn't fetched → no window/drift, store-only fields).
   const rfState = pruneReverseFlip(loadReverseFlip(path.join(repoRoot, 'reverse-flip-state.json')));
   if (rfState.length) {
-    const profileByItem = {}, driftByItem = {};
+    // DT3 (2026-08-09): the per-item drift note built here is GONE with the hourlyDrift slope it rendered.
+    // Its replacement (askReachDecay) needs an ASK level to score reach against, and this call site never
+    // had one — it passed no `ask` at all — so there is nothing here for the surviving read to say. The
+    // `driftNote` slot on reverseFlipCycleNotes stays (a generic pre-rendered note slot); it is simply
+    // unfed. See hourly-lmh.mjs's tombstone for why the slope went.
+    const profileByItem = {};
     for (const e of rfState) {
       if (!e || e.id == null) continue;
       const prof = profiles.get(e.id) || null;
       if (prof) profileByItem[e.id] = prof;
-      const ts = series.get(e.id) || null;
-      if (ts) {
-        try { const dn = hourlyDriftNote(hourlyDrift(ts, { days: 3 }), { fmt }); if (dn) driftByItem[e.id] = dn; } catch { /* drift is best-effort */ }
-      }
     }
-    rows.push(...reverseFlipRows(rfState, { profileByItem, driftByItem, now }));
+    rows.push(...reverseFlipRows(rfState, { profileByItem, now }));
   }
   return { rows: sortRows(rows), warnings, itemCount: ids.length, reverseFlipCount: rfState.length };
 }

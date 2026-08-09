@@ -71,8 +71,8 @@ import { driftExitFrom } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYC
 import { estimatePair, estConfLean, askReachFactor, REACH_RELIEF_MIN_VOL } from '../lib/signal/estimators.mjs';   // PLAN-ESTIMATOR-POSTURE AC8: the SHARED reconciliation estimator — the reach-FOLD moved out of the discovery price INTO this validation flow as a DATA POINT (zero new fetch, byte-parity with the screen's fold); RB-3: askReachFactor on its DEFAULT (full-window) basis, so the fold line can print the pre-change number beside the new one instead of swapping it silently
 import { FLIP_NICHES } from '../../js/flip-niches.mjs';   // AC8: the per-niche spec the fold is computed against (--niche, default band)
 import { fmtHourRange } from '../../js/money-format.js';   // both-zone (local / UK) window labels — kills the GMT/Pacific narration mismatch
-import { hourlyLMH, hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); hourlyDrift (PLAN-HOURLY-3DAY-TREND HT1) — the day-over-day slope read folded onto the SAME grid
-import { hourlyDriftNote } from '../../js/windowread.mjs';   // HT1 — the shared compact drift-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs)
+import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';   // --hourly: the raw per-local-hour LOW/MID/HIGH diagnostic (reuses the 1h series already fetched; inform-only, n≈0); askReachDecay (DT3) — is the --ask level sliding out of reach? (replaced the deleted hourlyDrift slope + its Δ/d column)
+import { askReachDecayNote } from '../../js/windowread.mjs';   // DT3 — the shared compact decay-note renderer (one owner with quote-items.mjs/screen-flip-niches.mjs)
 
 // #9: exit reached on < this fraction of the scored days ⇒ the exit OVER-states the reachable sell,
 // so the back-solved buy is optimistic (the days-reach ≠ lap-clear caveat). PLACEHOLDER (n≈0).
@@ -350,29 +350,25 @@ for (const want of positionals) {
       const span = ds => ds.length ? `${ds[0]}→${ds[ds.length - 1]}` : '—';
       log(`  7d-avg (median L/M/H) over ${span(hl.avgDates)} (${hl.avgDates.length} date${hl.avgDates.length === 1 ? '' : 's'}) · per-day, most-recent first: ${hl.perDayDates.join(' · ')}`);
       const triple = t => (t == null || (t.low == null && t.mid == null && t.high == null)) ? '—' : `${fmt(t.low)}/${fmt(t.mid)}/${fmt(t.high)}`;
-      // PLAN-HOURLY-3DAY-TREND HT1: the day-over-day Δ/d column, off hourlyDrift over the SAME 1h series
-      // (zero new fetch) — the raw grid above shows the numbers, this shows the TREND a human would
-      // otherwise have to eyeball across the per-day columns. Reuses hl's own HOURLY_DAYS window.
-      const hd = hourlyDrift(series, { days: HOURLY_DAYS, ask: ASK });
-      const driftCell = h => {
-        if (!hd) return '—';
-        const row = hd.perHour[h];
-        if (!row) return '—';
-        const arrow = row.dir === 'up' ? '↑' : row.dir === 'down' ? '↓' : '→';
-        return `${arrow} ${row.driftPerDay >= 0 ? '+' : ''}${fmt(row.driftPerDay)}/d`;
-      };
-      const heads = ['7d-avg L/M/H', ...hl.perDayDates.map(d => d.slice(5) + ' L/M/H'), `Δ/d (${HOURLY_DAYS}d)`];
-      const rowsData = hl.hours.map(row => ({ h: row.h, cells: [triple(row.avg7), ...row.perDay.map(triple), driftCell(row.h)] }));
+      // DT3 (2026-08-09): the Δ/d per-hour slope column is DELETED. It was the per-hour least-squares
+      // slope rendered as a column, and that slope carried no information (49.7% direction; beat
+      // predict-no-change on 6 of 380 items) — worse, at the default 3-day window it was frequently a
+      // TWO-POINT difference dressed up as a fitted trend, printing ±10m/day of fake diurnal structure on
+      // a big-ticket item. The raw per-day L/M/H columns above remain, which is exactly the eyeball job
+      // the column was automating badly. See hourly-lmh.mjs's tombstone. Do not reintroduce it.
+      const heads = ['7d-avg L/M/H', ...hl.perDayDates.map(d => d.slice(5) + ' L/M/H')];
+      const rowsData = hl.hours.map(row => ({ h: row.h, cells: [triple(row.avg7), ...row.perDay.map(triple)] }));
       const W = Math.max(...heads.map(s => s.length), ...rowsData.flatMap(rd => rd.cells.map(c => c.length))) + 2;
       const padc = s => String(s).padEnd(W);
       log('  hh  ' + heads.map(padc).join(''));
       for (const rd of rowsData) log('  ' + pad2(rd.h) + '  ' + rd.cells.map(padc).join('').replace(/\s+$/, ''));
-      log(`  (raw per-hour detail — L=avgLow M=round(mid) H=avgHigh · Δ/d = ${HOURLY_DAYS}-day per-hour least-squares slope · INFORM-ONLY, n≈0 — never gates)`);
-      // HT1 summary line — the shared hourlyDriftNote renderer (one owner with quote-items.mjs / screen-flip-niches.mjs).
-      // days: HOURLY_DAYS so the "N-day hourly drift" label matches the window actually used (the grid's --days).
-      const driftNote = hourlyDriftNote(hd, { ask: ASK, fmt, days: HOURLY_DAYS });
-      if (driftNote) log(`  ${driftNote}`);
-      result.hourly = { avgDates: hl.avgDates, perDayDates: hl.perDayDates, hours: hl.hours, drift: hd };
+      log('  (raw per-hour detail — L=avgLow M=round(mid) H=avgHigh · INFORM-ONLY, n≈0 — never gates)');
+      // DT3 summary line — the shared askReachDecayNote renderer (one owner with quote-items.mjs /
+      // screen-flip-niches.mjs). Fires only when an --ask was given AND that ask is sliding out of reach.
+      const decay = askReachDecay(series, { days: HOURLY_DAYS, ask: ASK });
+      const decayNote = askReachDecayNote(decay, { ask: ASK, fmt });
+      if (decayNote) log(`  ${decayNote}`);
+      result.hourly = { avgDates: hl.avgDates, perDayDates: hl.perDayDates, hours: hl.hours, askDecay: decay };
     }
     if (BID == null && ASK == null && EXIT == null && DEPTH_QTY == null) continue;
   }

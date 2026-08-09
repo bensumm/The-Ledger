@@ -461,8 +461,9 @@ an item that wobbles 54–58m intraday. RF6 adds INFORM-ONLY, THIN-ITEM-ONLY dis
 ONE shared predicate `isThinBigTicket(row)` (big-ticket `guide ≥ BIG_TICKET_GP` (10m) AND liquidity-thin —
 a clearable tranche ≤ `THIN_TRANCHE_UNITS` (2), OR min-side `vol/d < THIN_VOL_FLOOR` (500)): (1) the
 Sold-ref/Peak cell becomes a RANGE `~X–Y` off the pressure-reachable band (`reverseListBandCell`), not a
-false-precise point; (2) a longer 7-day drift window (`THIN_DRIFT_DAYS`, via the `--days`-honest
-`hourlyDrift`/`hourlyDriftNote`); (3) a traded-mid vs standing-ask flag (`trades ~<guide>; lone asks to
+false-precise point; (2) an ask-reach decay read on the sell-ref (`askReachDecay`/`askReachDecayNote` —
+DT3 2026-08-09; was a longer 7-day `THIN_DRIFT_DAYS` drift window until the slope was deleted, and the
+window is now the validated 3 days for every item, thin or not); (3) a traded-mid vs standing-ask flag (`trades ~<guide>; lone asks to
 <peak>, reached <N/14d>`, `askSpreadFlag`) when a lone ask sits materially above the traded guide and is
 rarely reached; (4) the reverse-flip-specific `⚠ rebuy may strand (thin, <vol/d>)` caution (`rebuyStrandNote`
 — the rebuy leg is the unreliable one). **Every threshold is a NAMED PLACEHOLDER (n≈0).** Each guard is a
@@ -709,40 +710,48 @@ When the dip/peak summary isn't enough — sizing a large position, or a break-e
 distills away (it caught a churn item whose break-even sat above its typical hourly high, and a secret
 +7% one-day breakout). Inform-only, n≈0 — a diagnostic, never a gate.
 
-**The 3-day hourly drift read (PLAN-HOURLY-3DAY-TREND) — a pre-recommendation validator.** The 14-day
-`--profile` and reach validators collapse the day dimension into ONE number per hour-of-day, which reads
-*bullish on a falling item* — the reach was earned days ago when the price was higher (the Ghrazi rapier
-anchor, 2026-07-24: graded A- fill-now, "ask reached 14/14d," while every hour's MID was stepping down
-~650k–1m/day and the ask had already stopped clearing intraday). `hourlyDrift(series1h,{days,ask})`
-(`pipeline/lib/market/hourly-lmh.mjs`, off the SAME 1h series, zero new fetch) fits a per-hour day-over-day
-least-squares slope over the last N (default 3) local dates, synthesizes a whole-item dominant
-direction/magnitude + whether it's UNIFORM across every hour (a real regime step) or SPLIT (mornings vs
-evenings — likely just intraday noise), and scores an **ask-reachability-decay** sub-signal: for a
-candidate ask, the per-day count of hours whose HIGH reached it, and whether that count is falling
-(`reach 18h→11h→4h` — the highest-value catch, the exact tell that would have killed the rapier call). The
-shared renderer `hourlyDriftNote` (`js/windowread.mjs`) prints ONE compact line
-(`3-day hourly drift: uniform step-down ~800k/d · ask 25.3m no longer clears midday (reach 18h→11h→4h)`)
-on every price-recommendation surface: `read-window-range.mjs --hourly` (a `Δ/d` column + the summary
-line), `quote-items.mjs` (a bare ask/bid quote and every held/watched position), and
-`screen-flip-niches.mjs --digest` (a BOUNDED enrichment pass on the top-X digest picks ONLY, after
-ranking — not the ~70-candidate universe; the 1h-series fetch is too heavy to run pre-rank and the signal
-only matters for the handful about to print as a recommendation). **Strategy-aware, never a global
-exclusion** (reconciles with the falling-exclusion-AMENDED doctrine): a uniform down-drift beyond a
-placeholder threshold flips a `fill-now` verdict on a **band/churn** digest pick to `⚠ falling — verify
-(~X/d)`, the drift number always shown inline — never a silent swap. A **value/amplitude/scalp** pick, or
-any pick a different rule already caught (mirage top, sell unreliable, …), is left untouched — falling is
-the *expected* shape on a patient/value thesis, not a warning. INFORM-ONLY, n≈0, HEURISTIC throughout —
-this never gates a gate, never moves a quoted number, never feeds a cut/alert input; the only place a
-drift number moves a DISPLAYED label is the digest relabel above, and it's always shown, not hidden. (A
-reverse-flip fold onto owned-item surfacing SHIPPED via PLAN-REVERSE-FLIP RF6 — the `--mode reverse` table's
-thin big-ticket rows carry the shared `hourlyDriftNote`, defaulting to the longer 7-day window since a thin
-book's 3-day slope whipsaws; the broader HT4 reverse read-fold on the quote/`/schedule`/`/book` surfaces
-SHIPPED via RF4 — each declared in-flight reverse-flip cycle (`reverse-flip-state.json`
-`awaiting-rebuy`/`rebuy-armed`) is surfaced INFORM-ONLY into `/schedule` (`reverseFlipRows`), `/book`
-(a "Reverse-flip pending" section, `book-model.mjs` `buildReverseFlipPending`), and `/positions`
-(`quote-items.mjs --positions` `reverseFlipPositionLines`), carrying the shared `hourlyDriftNote` + the
-thin-item rebuy-strand caution + a `REBUY_STALE_DAYS` nudge; zero-ripple — an empty store renders NOTHING
-extra on every surface.)
+**The per-hour drift slope — DELETED 2026-08-09 (PLAN-DIURNAL-TRIAGE DT3). Do not rebuild it.** From
+2026-07-24 to 2026-08-09 this section described `hourlyDrift` — a per-hour day-over-day least-squares
+slope over the last N (default 3) local dates, with a whole-item `uniform`/`split` synthesis, a `Δ/d`
+column on `read-window-range --hourly`, a compact note on every price-recommendation surface, and a
+strategy-aware relabel that flipped a `fill-now` band/churn digest verdict to `⚠ falling — verify (~X/d)`.
+**It was measured and it carried no information.** Leakage-clean out-of-sample scoring of the production
+code at its shipped days=3 config: median per-item MAE **276.7bp vs 197.8bp** for simply predicting no
+change, beating that baseline on **6 of 380 items**, and direction at **49.7%** — a coin flip. No window
+length rescues it (days=4/7/14 all lose), an hours-anchored window is just a cleaner measurement of the
+same non-signal, and a dynamic window's own selected length changes day-over-day for the median item on
+43% of days. That is also why `THIN_DRIFT_DAYS = 7` never worked: the "thin book whipsaw" it patched was
+the n=2 fit itself, not the window. The slope, its constants, the `Δ/d` column and the digest relabel are
+all gone; the digest verdict is now always the computed verdict. *Honesty limits on the refutation: one
+74-day era, one update cycle, item-day clustering ⇒ effective n well below nominal. A strong null, not a
+proof of impossibility.*
+
+**What survived: the ask-reach decay read.** The one genuinely predictive piece was buried inside the
+deleted read as a trailing clause, and is now its own export — `askReachDecay(series1h,{days,ask})`
+(`pipeline/lib/market/hourly-lmh.mjs`, off the SAME 1h series, zero new fetch). For a candidate ask it
+scores the per-day RATE of hours whose HIGH reached that level, and whether the rate is sliding. Measured
+out-of-sample it predicts next-day ask reach at **12.2% vs 30.8%**, and survives stratifying on
+yesterday's reach (at prev 70–100%: 18.6% vs 68.3%; n=5,096 signals / 293 items — one 20-day eval window,
+a synthetic ask level, and reach-of-high is a FILL PROXY, not an executed fill, so it bounds a real
+offer's experience from above). This is the catch the whole family existed for: the Ghrazi rapier anchor
+(2026-07-24, graded A- fill-now on "ask reached 14/14d" while the ask had already stopped clearing
+intraday) is a decay catch, not a slope catch. The shared renderer `askReachDecayNote`
+(`js/windowread.mjs`) prints ONE compact line
+(`ask-reach decay: ask 25.3m reached 75%→46%→27% of each day's hours (sliding under)`), and **only when
+it fires** — a non-decaying or ask-less read stays silent rather than padding every surface with a null
+clause. It renders on `read-window-range.mjs --hourly` (the summary line; the raw per-day L/M/H columns
+remain and are exactly the eyeball job the `Δ/d` column automated badly), `quote-items.mjs` (a bare
+ask/bid quote and every held/watched big-ticket position), `screen-flip-niches.mjs --digest` (a BOUNDED
+enrichment on the top-X picks ONLY, after ranking — the 1h-series fetch is too heavy pre-rank), and
+`--mode reverse`'s thin big-ticket rows. INFORM-ONLY, n≈0 — it never gates, prices, ranks, or feeds a
+cut/alert input, and it no longer alters any displayed verdict. `/schedule`'s reverse-flip rows lost their
+drift note outright: that surface never had an ask level to score reach against, so the surviving read has
+nothing to say there (the generic pre-rendered note slot on `reverseFlipCycleNotes` remains, unfed, for a
+future BID-decay read). The rest of the RF4 reverse fold is unchanged — each declared in-flight cycle
+(`reverse-flip-state.json` `awaiting-rebuy`/`rebuy-armed`) is still surfaced INFORM-ONLY into `/schedule`
+(`reverseFlipRows`), `/book` (`book-model.mjs` `buildReverseFlipPending`), and `/positions`
+(`reverseFlipPositionLines`), carrying the thin-item rebuy-strand caution + a `REBUY_STALE_DAYS` nudge;
+zero-ripple — an empty store renders NOTHING extra on every surface.
 
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
 AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p%[ (recent-3

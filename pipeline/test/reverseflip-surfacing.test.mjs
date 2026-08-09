@@ -75,11 +75,14 @@ ok('reverseFlipPendingEntries folds an in-hand live mark + thin read; degrades w
   assert.equal(bow.thin, false, 'no row → not thin');
 });
 
-ok('reverseFlipCycleNotes: thin → strand; driftNote rides; stale cycle → nudge', () => {
+// DT3: the `driftNote` slot is now a GENERIC pre-rendered note slot and is unfed by every caller (the
+// hourlyDriftNote it used to carry was deleted with the slope). The slot itself still works — pinned here
+// with an ask-reach-decay-shaped string so the fixture stops naming a read that no longer exists.
+ok('reverseFlipCycleNotes: thin → strand; driftNote slot rides; stale cycle → nudge', () => {
   const hat = STORE[0];                         // 1 day pending → not stale
-  const n1 = reverseFlipCycleNotes(hat, { row: THIN_ROW, driftNote: '3-day hourly drift: uniform step-up ~500k/d', now: NOW, fmt });
+  const n1 = reverseFlipCycleNotes(hat, { row: THIN_ROW, driftNote: "ask-reach decay: ask 25.3m reached 75%→46%→27% of each day's hours (sliding under)", now: NOW, fmt });
   assert.ok(n1.some(x => /rebuy may strand/.test(x)), 'thin → strand caution');
-  assert.ok(n1.some(x => /hourly drift/.test(x)), 'passed driftNote rides');
+  assert.ok(n1.some(x => /ask-reach decay/.test(x)), 'passed driftNote rides');
   assert.ok(!n1.some(x => /pending/.test(x)), '1d < REBUY_STALE_DAYS → no stale nudge');
 
   const bow = STORE[1];                          // 5 days pending → stale

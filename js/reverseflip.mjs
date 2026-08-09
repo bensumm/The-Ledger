@@ -190,9 +190,11 @@ export const THIN_TRANCHE_UNITS = 2;
 // in hand. Deliberately generous: big-ticket owned gear trades in the low hundreds/day (hat ~135/d) while
 // a liquid big-ticket clears thousands. PLACEHOLDER (n≈0) — a starting hypothesis, not a validated cut.
 export const THIN_VOL_FLOOR = 500;
-// The drift window (days) a THIN item defaults to — 7d, not the standard 3d, because a thin book's 3-day
-// slope whipsaws (Ruling §6). The label (hourlyDriftNote) already tells the window truth. PLACEHOLDER.
-export const THIN_DRIFT_DAYS = 7;
+// DELETED 2026-08-09 (PLAN-DIURNAL-TRIAGE DT3): `THIN_DRIFT_DAYS = 7` — the longer drift window a THIN
+// item defaulted to, "because a thin book's 3-day slope whipsaws (Ruling §6)". The whipsaw was real, but
+// it was the n=2 least-squares FIT, not the window: at days=3 the slope was frequently a two-point
+// difference. Widening the window did not fix it (days=7 still loses to predict-no-change), so the slope
+// itself was deleted and this constant died with its only consumer. See hourly-lmh.mjs's tombstone.
 // A standing ask must sit at least this fraction ABOVE the traded guide to be a "lone optimistic ask" and
 // not "the price" (the 55m-trades vs 58m-ask gap). PLACEHOLDER (n≈0).
 export const SPREAD_MATERIAL_PCT = 0.03;
@@ -325,7 +327,8 @@ export function rebuyStaleNote(entry, now = Date.now(), { staleDays = REBUY_STAL
    empty / all-holding store (the zero-ripple guard every surface leans on).
      marks    — Map<id,{mark,...}> or {id:{mark}} (read-book/quote already build this); mark = live sell price.
      infoById — { [id]: { row?, live?, driftNote? } } — the in-hand computeQuote row (guide/volDay → thin
-                read), a live fallback, and a pre-rendered hourlyDriftNote. All optional per id. */
+                read), a live fallback, and an optional pre-rendered note for the `driftNote` slot. All
+                optional per id. (DT3: no caller currently populates `driftNote` — see below.) */
 export function reverseFlipPendingEntries(state, { marks = new Map(), infoById = {}, now = Date.now() } = {}) {
   const markFor = id => (marks instanceof Map ? marks.get(id) : (marks && marks[id])) || null;
   const out = [];
@@ -357,10 +360,15 @@ export function reverseFlipPendingEntries(state, { marks = new Map(), infoById =
 
 /* reverseFlipCycleNotes(entry, { row, driftNote, now, fmt }) → the shared inform-only note lines a surfaced
    reverse-flip cycle carries, in order: the thin-item rebuy-may-strand caution (RF6 — thin big-ticket only),
-   the shared hourlyDriftNote (passed PRE-RENDERED by the caller — HT4: a RISING hourly drift is the
-   reverse-flip's OWN bad signal, since you'd rebuy into strength), and the REBUY_STALE_DAYS nudge. PURE;
-   returns [] when none fire. `entry` may be a raw store entry OR a reverseFlipPendingEntries row (both carry
-   soldTs/declaredTs for the stale read and `row`/`thin` context is passed explicitly). */
+   an optional pre-rendered note in the `driftNote` slot, and the REBUY_STALE_DAYS nudge. PURE; returns []
+   when none fire. `entry` may be a raw store entry OR a reverseFlipPendingEntries row (both carry
+   soldTs/declaredTs for the stale read and `row`/`thin` context is passed explicitly).
+   DT3 (2026-08-09): `driftNote` is a GENERIC pre-rendered note slot and is currently UNFED by every
+   caller. It used to carry hourlyDriftNote under the HT4 rationale "a RISING hourly drift is the
+   reverse-flip's own bad signal, since you'd rebuy into strength" — that rationale is dead with the slope
+   (direction was a coin flip; see hourly-lmh.mjs's tombstone). The slot is kept, not removed, because the
+   rebuy side wants a BID-decay read that doesn't exist yet; wire one in here rather than inventing a new
+   slot. Until then it stays null and no note prints — an honest absence. */
 export function reverseFlipCycleNotes(entry, { row = null, driftNote = null, now = Date.now(), fmt = String } = {}) {
   const notes = [];
   if (isThinBigTicket(row)) notes.push(rebuyStrandNote({ volDay: row ? row.volDay : null, fmt }));

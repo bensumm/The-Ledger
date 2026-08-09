@@ -10,6 +10,50 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DT3 — delete the per-hour drift slope; extract the ask-reach decay read (2026-08-09, pipeline/console-only, no APP_VERSION bump)
+
+**What went.** `hourlyDrift` (the per-hour day-over-day least-squares slope over the last N local
+dates), its `dominant` direction/uniformity/split synthesis, `HOURLY_DRIFT_FLAT_FRAC`,
+`HOURLY_DRIFT_UNIFORM_FRAC`, the `hourlyDriftNote` renderer, `read-window-range --hourly`'s `Δ/d`
+column, `js/reverseflip.mjs`'s `THIN_DRIFT_DAYS = 7`, `read-schedule.mjs`'s `driftByItem` plumbing,
+and — the only behaviour-adjacent piece — the digest's strategy-aware relabel that flipped a
+`fill-now` band/churn verdict to `⚠ falling — verify (~X/d)`. The digest verdict is now always the
+computed verdict.
+
+**Why.** It was measured and it carried no information. Scoring the production code out-of-sample
+(leakage-clean: the fit window ends at the origin, the target is the strictly-later next day) at its
+shipped `days=3` config gave a median per-item MAE of **276.7bp against 197.8bp for simply predicting
+no change**, beating that baseline on **6 of 380 items**, with direction at **49.7%** — a coin flip.
+An earlier read of "43–46%, worse than chance" was a *design artifact*, not an anti-signal: with three
+equally-spaced points the fitted slope shares its most recent term with the next-day target, forcing
+corr = −0.5 under pure noise (Monte Carlo on noise reproduced 38.7%). The honest verdict is zero
+information. No window length rescues it (days=4/7/14 all lose to no-change; the apparent
+"improvement" at 7/14 is convergence to the baseline), an hours-anchored window is a cleaner
+measurement of the same non-signal, and a dynamic window's selected length changes day-over-day for
+the median item on 43% of days. This also explains why `THIN_DRIFT_DAYS = 7` never worked: the "thin
+book whipsaw" it patched was the n=2 fit itself, not the window. Since the digest relabel was keyed on
+the direction call, it was firing a visible warning off noise — a visible swap is only honest when the
+thing driving it carries signal.
+
+**What survived.** The ask-reachability-decay sub-signal buried inside the deleted read, extracted as
+its own export `askReachDecay(series1h,{days,ask})` + renderer `askReachDecayNote`. It predicts
+next-day ask reach at **12.2% vs 30.8%** and survives stratifying on yesterday's reach (at prev
+70–100%: 18.6% vs 68.3%; n=5,096 signals / 293 items). It renders only when it fires. This is the read
+the whole family existed for — the Ghrazi rapier anchor (graded A- fill-now on "ask reached 14/14d"
+while the ask had stopped clearing intraday) is a decay catch, not a slope catch. `/schedule` lost its
+note outright: that surface never passed an ask, so the surviving read has nothing to score there.
+
+**Honesty limits.** One 74-day era, one update cycle. Touch is measured from hourly `avgLow`/`avgHigh`
+aggregates, **not executed fills**, so every reach figure is an upper bound on what a real offer gets.
+Item-day clustering means effective n is well below nominal. This is a strong null, not a proof of
+impossibility.
+
+**Guards.** A stays-deleted pin in `pipeline/test/hourly-lmh.test.mjs` (and one for the renderer in
+`windowread.test.mjs`) fails if the slope comes back; a new `lint-docs` denylist entry
+(`hourly-drift-slope-live`) fails if the docs start describing it as live again. The don't-rebuild
+record with the full numbers lives in `pipeline/lib/market/hourly-lmh.mjs`'s header, where the next
+person to consider building a per-hour trend read will be standing.
+
 ### suggestions ledger: log the GE `guide` price per row (BD-LOG, 2026-08-09, pipeline-only)
 
 No `APP_VERSION` bump — nothing the browser loads changed; the edit is one derived line in

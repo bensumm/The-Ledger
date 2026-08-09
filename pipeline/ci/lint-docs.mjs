@@ -60,6 +60,19 @@ export const POINTER_DOCS = [
 // here in the source, which is in no `files` list.
 export const DENYLIST = [
   {
+    id: 'hourly-drift-slope-live',
+    // The per-hour drift SLOPE described as a live read. Deleted 2026-08-09 (PLAN-DIURNAL-TRIAGE DT3)
+    // after measuring 49.7% direction and beating predict-no-change on 6 of 380 items. Per the
+    // SELF-REFERENCE CAVEAT above, the guarded docs describe the deletion by CONCEPT ("the deleted
+    // per-hour drift read"), never by reproducing the live-form literals matched here.
+    pattern: /\d-day hourly drift|hourlyDriftNote|hourlyDrift\(/,
+    files: ['CLAUDE.md', 'README.md', 'index.html',
+            '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
+            '.claude/skills/schedule/SKILL.md', '.claude/skills/overnight/SKILL.md',
+            '.claude/skills/morning/SKILL.md'],
+    reason: 'the per-hour drift slope read was DELETED (PLAN-DIURNAL-TRIAGE DT3, 2026-08-09) as a measured non-signal — do not describe it as live; the surviving read is askReachDecay',
+  },
+  {
     id: 'niche-spread-rising-live',
     // The deleted niches listed AS LIVE niches (the capitalized "Spread / Rising" niche-enumeration
     // form). Case-sensitive so it does NOT match prose narrating the deletion ("spread/rising were

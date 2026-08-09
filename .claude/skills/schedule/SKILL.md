@@ -1,6 +1,6 @@
 ---
 name: schedule
-version: 1.2.0
+version: 1.3.0
 description: Consolidated buy/sell WINDOW AGENDA — a time-sorted "what to buy/sell and when" across current positions (default) or the watchlist, plus a flipped-but-not-watchlisted audit. Triggers — "what's my agenda", "what should I buy/sell and when", "when's the next window", "what's coming up", "schedule".
 ---
 
@@ -68,6 +68,9 @@ without running the skill.
 ## Reverse-flip cycles (RF4)
 When `reverse-flip-state.json` holds declared in-flight cycles (`awaiting-rebuy`/`rebuy-armed`), the
 agenda unions `RF`-tagged rows (`SELL peak`/`REBUY dip`/`REBUY armed`) and prints a "Reverse-flip cycles"
-note block under the table — the shared `hourlyDriftNote` (a RISING drift is the reverse-flip's OWN bad
-signal — you'd rebuy into strength), the thin rebuy-strand caution, and the `REBUY_STALE_DAYS` nudge.
+note block under the table — the thin rebuy-strand caution and the `REBUY_STALE_DAYS` nudge.
 INFORM-ONLY n≈0; relay it when present. An empty store surfaces nothing extra.
+DT3 (2026-08-09) removed this block's third note, the shared hourly-drift line ("a RISING drift is the
+reverse-flip's OWN bad signal — you'd rebuy into strength"): the per-hour slope behind it was measured to
+be a coin flip and deleted. Its replacement needs an ASK level to score reach against, and this surface
+never had one, so the agenda simply carries one fewer note now.

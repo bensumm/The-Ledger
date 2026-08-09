@@ -320,7 +320,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   inform-only, THIN-ITEM-ONLY display-guard helpers reused across RF2/RF4: `reverseListBand`/`reverseListBandCell`
   (RANGE-not-a-point list price off the reachable band), `askSpreadFlag`/`askSpreadNote` (traded-mid vs a lone
   rarely-reached standing ask), `rebuyStrandNote` (the reverse-flip-specific rebuy-may-strand caution), and the
-  `THIN_DRIFT_DAYS=7` longer-window default (the thin 3-day slope whipsaws). Every guard degrades to the existing
+  ask-reach decay read on the sell-ref (was a `THIN_DRIFT_DAYS=7` longer-window drift default until DT3
+  deleted the slope 2026-08-09; the window is now the validated 3d for thin and liquid alike). Every guard degrades to the existing
   render on a non-thin item — a liquid reverse row is BYTE-IDENTICAL (empirically verified against the pre-RF6
   output). Imports `tax` + `BIG_TICKET_GP`; consumed by RF2's `--mode reverse` wiring —
   `gatecandidates.mjs` `gateReverseFlipCandidates` applies the gate per owned candidate and
@@ -331,7 +332,8 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   30-day store TTL) + `daysPending`/`rebuyStaleNote`, `reverseFlipPendingEntries` (the awaiting-rebuy/
   rebuy-armed entries folded with any in-hand live mark + quote row; `holding` excluded), and
   `reverseFlipCycleNotes` (the shared inform-only note lines a surfaced cycle carries — thin rebuy-strand +
-  the caller's pre-rendered `hourlyDriftNote` (HT4) + the stale nudge). No fetch/fs (the store IO stays in
+  a generic pre-rendered `driftNote` slot, UNFED by every caller since DT3 deleted the hourly-drift note it
+  used to carry + the stale nudge). No fetch/fs (the store IO stays in
   `pipeline/lib/thesis/reverseflipstate.mjs`). NOT app-imported → no APP_VERSION bump. Fixture-pinned
   `pipeline/test/reverseflip.test.mjs` (RF1/RF6) + `pipeline/test/reverseflip-surfacing.test.mjs` (RF4)),
   `patha.mjs` (PLAN-LANE-ADMISSION Chunk C — the PURE, no-fetch/no-fs Path-A (intraday-flip) gp/day
@@ -1115,18 +1117,20 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     block + the last N dates (default 3, most-recent-first) broken out individually, off the pure
     `pipeline/lib/market/hourly-lmh.mjs` `hourlyLMH(series1h,{days})` helper — the hour-by-hour detail the dip/peak
     summary distills away (reuses the same 1h series, NO second fetch; its own block, requestable alone;
-    inform-only n≈0, rides `--json` as `result.hourly`); the grid now ALSO carries a per-hour `Δ/d` column
-    + a summary line off the sibling `hourlyDrift(series1h,{days,ask})` export (PLAN-HOURLY-3DAY-TREND HT0/HT1)
-    — the day-over-day per-hour least-squares slope + a whole-item dominant-direction/uniformity synthesis +
-    an optional ask-reachability-decay sub-signal (per-day count of hours whose HIGH reached a candidate ask,
-    and whether that count is falling — the Ghrazi rapier catch: graded fill-now while every hour stepped
-    down and the ask had stopped clearing intraday). Rendered via the shared `js/windowread.mjs`
-    `hourlyDriftNote(drift,{ask,fmt})` (one owner with quote-items.mjs/screen-flip-niches.mjs). Consumers:
-    `read-window-range.mjs --hourly` (the Δ/d column + summary), `quote-items.mjs` (a `hourlyDrift` note on
-    a bare ask/bid quote and on held/watched positions), `screen-flip-niches.mjs`'s `--digest` (a bounded
-    top-X enrichment pass — HT3 — that also strategy-aware-relabels a uniform-down fill-now/band/churn pick
-    to `⚠ falling — verify (~X/d)` with the number inline; never gates/drops a row). INFORM-ONLY, n≈0;
-    fixture-tested in `pipeline/test/hourly-lmh.test.mjs`)),
+    inform-only n≈0, rides `--json` as `result.hourly`); the grid ALSO carries a summary line off the
+    sibling `askReachDecay(series1h,{days,ask})` export (PLAN-DIURNAL-TRIAGE DT3) — for a candidate ask,
+    the per-day RATE of hours whose HIGH reached it and whether that rate is sliding (the Ghrazi rapier
+    catch: graded fill-now while the ask had stopped clearing intraday). Rendered via the shared
+    `js/windowread.mjs` `askReachDecayNote(decay,{ask,fmt})` (one owner with
+    quote-items.mjs/screen-flip-niches.mjs), and ONLY when it fires. Consumers: `read-window-range.mjs
+    --hourly` (the summary line; rides `--json` as `result.hourly.askDecay`), `quote-items.mjs` (an
+    `askReachDecay` note on a bare ask/bid quote and on held/watched positions),
+    `screen-flip-niches.mjs`'s `--digest` (a bounded top-X enrichment pass; never gates/drops a row and no
+    longer alters any verdict). **DELETED 2026-08-09 (DT3): the per-hour `Δ/d` column, the `hourlyDrift`
+    slope export + its uniform/split synthesis, its shared note renderer, and the digest's
+    `⚠ falling — verify (~X/d)` relabel** — measured 49.7% direction, beat predict-no-change on 6 of 380
+    items. INFORM-ONLY, n≈0; fixture-tested in `pipeline/test/hourly-lmh.test.mjs` (incl. a stays-deleted
+    pin on the slope)),
     `read-trajectory.mjs` (R1 — a thin one-word PRESET that re-execs `read-window-range.mjs --trajectory`
     with all flags forwarded, so the fetch/bucketing plumbing keeps ONE home; answers "how's `<item>`
     trending / where's it likely to be tomorrow"), `limits.mjs` (LM1 — the buy-limit read:
@@ -1160,11 +1164,13 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     served by the 15-min disk cache; INFORM-ONLY n≈0 (PLANS, never gates). Pure `hoursUntil`/`isInsideWindow`/
     `agendaRowsForItem`/`buildAudit` helpers are fixture-tested (`pipeline/test/schedule.test.mjs`); its
     `buildAgenda`+`loopHeaderLine` are imported in-process by `run-loop.mjs` for the `⏭ next:` banner.
-    RF4 (2026-07-25) adds the PURE `reverseFlipRows(state, {profileByItem,driftByItem,now})` builder,
+    RF4 (2026-07-25) adds the PURE `reverseFlipRows(state, {profileByItem,now})` builder,
     unioned into the agenda when `reverse-flip-state.json` is non-empty: one `RF`-tagged row per declared
     in-flight cycle (`SELL peak`/`REBUY dip`/`REBUY armed`), windowed on the ALREADY-fetched `hourProfile`
-    (a null-window RF row sorts last), carrying the shared cycle notes (thin strand + `hourlyDriftNote` +
-    the `REBUY_STALE_DAYS` nudge) below the table. Zero new fetch; an empty store adds ZERO rows — the
+    (a null-window RF row sorts last), carrying the shared cycle notes (thin strand + the
+    `REBUY_STALE_DAYS` nudge) below the table. (DT3, 2026-08-09: the `driftByItem` param and its
+    hourly-drift note are GONE — this surface never had an ask level, so the surviving ask-reach decay read
+    has nothing to score here.) Zero new fetch; an empty store adds ZERO rows — the
     agenda is byte-identical (`pipeline/test/reverseflip-surfacing.test.mjs`). Reads
     `positions.json`/`offers.json`/`watchlist.json`/`reverse-flip-state.json`; produces NO new tracked file),
     `trigger-alerts.mjs` (N1 push-notification trigger
@@ -1778,17 +1784,19 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     `hourly-lmh.mjs` (PLAN-DIURNAL-HOURLY — the PURE `hourlyLMH(series1h,{days})` behind
     `read-window-range.mjs --hourly`: per-LOCAL-hour 0–23 LOW/MID/HIGH off an already-fetched 1h series
     — a 7d-avg median block + the last N dates broken out; the raw diurnal detail the dip/peak summary
-    hides. PLUS (PLAN-HOURLY-3DAY-TREND HT0) the sibling PURE `hourlyDrift(series1h,{days,ask})` — a
-    per-hour day-over-day least-squares slope + a whole-item dominant-direction/uniformity synthesis
-    (`uniform step-down` vs a `mornings X, evenings Y` split) + an optional ask-reachability-decay
-    sub-signal (per-day count of hours whose HIGH reached a candidate ask, and whether it's falling); both
-    functions share ONE internal bucketing helper. Consumers: `read-window-range.mjs --hourly` (the Δ/d
-    column + summary via `js/windowread.mjs`'s `hourlyDriftNote`), `quote-items.mjs` (a `hourlyDrift` note
-    on a bare quote + held/watched positions), `screen-flip-niches.mjs --digest` (HT3 — a bounded top-X
-    enrichment that can strategy-aware-relabel a fill-now/band/churn pick's DISPLAYED verdict to `⚠ falling
-    — verify (~X/d)`, never a value/amplitude/scalp pick). Inform-only n≈0, never gates; fixture-tested in
-    `pipeline/test/hourly-lmh.test.mjs`). HT4 (a reverse-flip fold onto RF2/RF4's owned-item surfacing)
-    SHIPPED via PLAN-REVERSE-FLIP — the shared `hourlyDriftNote` rides `--mode reverse`'s thin rows (RF6)
+    hides. PLUS (PLAN-DIURNAL-TRIAGE DT3) the sibling PURE `askReachDecay(series1h,{days,ask})` — for a
+    candidate ask, the per-day RATE of hours whose HIGH reached it and whether that rate is sliding
+    (judged on the RATE, so a partial newest day can't false-trigger); both functions share ONE internal
+    bucketing helper. Consumers: `read-window-range.mjs --hourly` (the summary line via
+    `js/windowread.mjs`'s `askReachDecayNote`), `quote-items.mjs` (an `askReachDecay` note on a bare quote
+    + held/watched positions), `screen-flip-niches.mjs --digest` (a bounded top-X enrichment) and
+    `--mode reverse`'s thin rows. **This module's header carries the DON'T-REBUILD TOMBSTONE for
+    `hourlyDrift`** — the per-hour least-squares slope + uniform/split synthesis deleted 2026-08-09 after
+    measuring 276.7bp vs 197.8bp median per-item MAE against predict-no-change, winning on 6 of 380 items,
+    and 49.7% direction; no window length fixes it, and `THIN_DRIFT_DAYS=7` died with it. Read the
+    tombstone before reintroducing any per-hour trend read. Inform-only n≈0, never gates; fixture-tested
+    in `pipeline/test/hourly-lmh.test.mjs`). RF2/RF4's owned-item surfacing is unchanged apart from the
+    dropped drift note — the decay read rides `--mode reverse`'s thin rows (RF6)
     and each declared in-flight cycle surfaced into `/schedule`·`/book`·`/positions` (RF4),
     `probes.mjs` (PM1 — the probe-module LOADER + stage-keyed runner: auto-discovers
     `pipeline/modules/*.mjs`, groups by stage (`observe`/`price`/`gate`), and `runProbes(row,surface,ctx)`

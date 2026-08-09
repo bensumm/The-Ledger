@@ -17,7 +17,8 @@
  *   - empty series → null (degrade, never a fake read).
  */
 import assert from 'node:assert/strict';
-import { hourlyLMH, hourlyDrift } from '../lib/market/hourly-lmh.mjs';
+import { hourlyLMH, askReachDecay } from '../lib/market/hourly-lmh.mjs';
+import * as MOD from '../lib/market/hourly-lmh.mjs';   // DT3 — namespace import for the stays-deleted pin below
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -98,72 +99,16 @@ ok('empty / non-array series → null', () => {
   assert.equal(hourlyLMH([{ timestamp: 1, avgLowPrice: null, avgHighPrice: null }], {}), null);
 });
 
-// --- hourlyDrift (PLAN-HOURLY-3DAY-TREND HT0) acceptance -----------------------------------------
+// --- askReachDecay (PLAN-DIURNAL-TRIAGE DT3) acceptance ------------------------------------------
 // BUSINESS REQUIREMENTS pinned here:
-//   - a UNIFORM down-drift across every hour → dominant.dir='down', uniform=true, split=null.
-//   - a MIXED (split) shape (half the hours drift, half flat) → uniform=false, a non-null split string.
-//   - an item flat across all 3 dates → dominant.dir='flat', magPerDay=0, uniform=true.
-//   - the ask-reachability-decay sub-signal: per-day (oldest→newest) count of hours whose HIGH reached
-//     the ask, and whether that count is falling day-over-day; absent when no `ask` is passed.
+//   - per-day (oldest→newest) count + RATE of hours whose HIGH reached the ask, and whether that rate
+//     is falling day-over-day.
+//   - null when no `ask` is supplied (the read is meaningless without a level to score against).
+//   - a partial newest day cannot false-trigger `decaying` (the RATE, not the raw count, is judged).
 //   - <2 local dates in the series → null (degrade, never a fake read — mirrors hourlyLMH).
-console.log('\nhourlyDrift acceptance:');
-
-// Fixture A — UNIFORM DOWN: 3 local dates (Jan 6/7/8), every hour's mid steps down EXACTLY 5000/day
-// (~1%/day at these price levels — comfortably over the 0.3%/day flat-epsilon). low=high=level so
-// mid=level exactly; a perfectly linear 3-point series gives an exact least-squares slope.
-const uniformDownSeries = [];
-for (const [dOff, d] of [[0, 6], [1, 7], [2, 8]]) {
-  for (let h = 0; h < 24; h++) {
-    const level = (500000 + h * 1000) - dOff * 5000;
-    uniformDownSeries.push(pt(2026, 0, d, h, level, level));
-  }
-}
-ok('uniform down-drift: dominant.dir=down, uniform=true, split=null, magPerDay=-5000', () => {
-  const dr = hourlyDrift(uniformDownSeries, { days: 3 });
-  assert.equal(dr.dominant.dir, 'down');
-  assert.equal(dr.dominant.uniform, true);
-  assert.equal(dr.dominant.split, null);
-  assert.equal(dr.dominant.magPerDay, -5000);
-});
-ok('uniform down-drift: every one of the 24 hours individually reads down', () => {
-  const dr = hourlyDrift(uniformDownSeries, { days: 3 });
-  const scored = dr.perHour.filter(Boolean);
-  assert.equal(scored.length, 24);
-  assert.ok(scored.every(h => h.dir === 'down' && h.driftPerDay === -5000));
-});
-
-// Fixture B — MIXED (split): mornings (h<12) drop 6000/day, evenings (h≥12) sit dead flat. The whole-item
-// median lands on the flat evening half (per the existing upper-middle median convention), so uniform must
-// fail (only ~half the hours share the dominant dir) and a split description must name both halves.
-const splitSeries = [];
-for (const [dOff, d] of [[0, 6], [1, 7], [2, 8]]) {
-  for (let h = 0; h < 24; h++) {
-    const base = 500000 + h * 1000;
-    const level = h < 12 ? base - dOff * 6000 : base;
-    splitSeries.push(pt(2026, 0, d, h, level, level));
-  }
-}
-ok('mixed drift: not uniform, split description names mornings and evenings', () => {
-  const dr = hourlyDrift(splitSeries, { days: 3 });
-  assert.equal(dr.dominant.uniform, false);
-  assert.equal(typeof dr.dominant.split, 'string');
-  assert.ok(/mornings/.test(dr.dominant.split) && /evenings/.test(dr.dominant.split), dr.dominant.split);
-});
-
-// Fixture C — FLAT: identical level across all 3 dates at every hour → zero slope everywhere.
-const flatSeries = [];
-for (const [dOff, d] of [[0, 6], [1, 7], [2, 8]]) {
-  for (let h = 0; h < 24; h++) {
-    const level = 500000 + h * 1000;   // same value every date → zero slope (dOff unused on purpose)
-    flatSeries.push(pt(2026, 0, d, h, level, level));
-  }
-}
-ok('flat drift: dominant.dir=flat, magPerDay=0, uniform=true', () => {
-  const dr = hourlyDrift(flatSeries, { days: 3 });
-  assert.equal(dr.dominant.dir, 'flat');
-  assert.equal(dr.dominant.magPerDay, 0);
-  assert.equal(dr.dominant.uniform, true);
-});
+// These fixtures are PORTED from the deleted hourlyDrift acceptance block: the ask-decay sub-signal is
+// the one piece of that read measured predictive, so its coverage survives the slope's deletion intact.
+console.log('\naskReachDecay acceptance:');
 
 // Fixture D — ASK-REACHABILITY DECAY (the rapier anchor): oldest date's HIGH reaches a 1.0m ask on 18
 // hours, the middle date on 11, the newest on only 4 — the "stopped clearing intraday" tell.
@@ -177,21 +122,50 @@ for (const d of [6, 7, 8]) {
   }
 }
 ok('ask-reachability decay: perDay counts oldest→newest, decaying=true', () => {
-  const dr = hourlyDrift(askDecaySeries, { days: 3, ask: 1_000_000 });
-  assert.deepEqual(dr.askReach.perDay.map(x => x.hoursReached), [18, 11, 4]);
-  assert.equal(dr.askReach.decaying, true);
+  const dr = askReachDecay(askDecaySeries, { days: 3, ask: 1_000_000 });
+  assert.deepEqual(dr.perDay.map(x => x.hoursReached), [18, 11, 4]);
+  assert.equal(dr.decaying, true);
 });
-ok('ask reach is null when no ask is supplied', () => {
-  const dr = hourlyDrift(askDecaySeries, { days: 3 });
-  assert.equal(dr.askReach, null);
+ok('null when no ask is supplied (nothing to score reach against)', () => {
+  assert.equal(askReachDecay(askDecaySeries, { days: 3 }), null);
 });
-
+ok('a RISING reach rate is not decay', () => {
+  const rising = [];
+  for (const [d, n] of [[6, 4], [7, 11], [8, 18]]) {
+    for (let h = 0; h < 24; h++) {
+      const high = h < n ? 1_050_000 : 900_000;
+      rising.push(pt(2026, 0, d, h, high - 10_000, high));
+    }
+  }
+  assert.equal(askReachDecay(rising, { days: 3, ask: 1_000_000 }).decaying, false);
+});
+ok('a PARTIAL newest day cannot false-trigger decay (the RATE is judged, not the raw count)', () => {
+  // every logged hour reaches the ask on all three dates, but today has only 6 hours logged so far.
+  const partial = [];
+  for (const [d, hours] of [[6, 24], [7, 24], [8, 6]]) {
+    for (let h = 0; h < hours; h++) partial.push(pt(2026, 0, d, h, 1_040_000, 1_050_000));
+  }
+  const dr = askReachDecay(partial, { days: 3, ask: 1_000_000 });
+  assert.deepEqual(dr.perDay.map(x => x.hoursReached), [24, 24, 6], 'raw counts DO fall (24→24→6)');
+  assert.equal(dr.decaying, false, 'but the rate is 100% every day, so this is NOT decay');
+});
 ok('degrade: fewer than 2 local dates → null (never a fake read)', () => {
   const oneDate = [];
   for (let h = 0; h < 24; h++) oneDate.push(pt(2026, 0, 6, h, 100, 100));
-  assert.equal(hourlyDrift(oneDate, { days: 3 }), null);
-  assert.equal(hourlyDrift([], {}), null);
-  assert.equal(hourlyDrift(null, {}), null);
+  assert.equal(askReachDecay(oneDate, { days: 3, ask: 100 }), null);
+  assert.equal(askReachDecay([], { ask: 100 }), null);
+  assert.equal(askReachDecay(null, { ask: 100 }), null);
+});
+
+// --- STAYS-DELETED pin (PLAN-DIURNAL-TRIAGE DT3) -------------------------------------------------
+// The per-hour least-squares slope read (hourlyDrift + its two PLACEHOLDER constants) was deleted
+// 2026-08-09 after measuring 49.7% direction and beating predict-no-change on 6 of 380 items. A deleted
+// behaviour deserves a cheap stays-deleted pin, so a future agent rebuilding it from stale docs trips a
+// test rather than shipping it. Full refutation + honesty limits: the tombstone in hourly-lmh.mjs.
+ok('hourlyDrift and its constants stay deleted', () => {
+  assert.equal(MOD.hourlyDrift, undefined, 'the per-hour slope read must not come back');
+  assert.equal(MOD.HOURLY_DRIFT_FLAT_FRAC, undefined);
+  assert.equal(MOD.HOURLY_DRIFT_UNIFORM_FRAC, undefined);
 });
 
 console.log(`\nAll ${pass} acceptance checks passed.`);

@@ -106,8 +106,8 @@
 import { computeQuote, QUOTE_HEADERS, isOvernightNow, phase, OVERNIGHT_SPAN_H, nominateDip, reconcileDipPool, flushSignal, askHeadroomText, BIG_TICKET_GP } from '../../js/quotecore.js';   // BIG_TICKET_GP (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST): the ONE big-ticket threshold, reused for the weak-deploy flag's per-unit-mid analogue (never reinvented)
 import { tax } from '../../js/money-math.js';
 import { fmt, fmtP, fmtHour } from '../../js/money-format.js';
-import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, hourlyDriftNote, softBuyRead, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 — hourlyDriftNote, the shared compact note renderer used to enrich the top-X digest picks
-import { hourlyDrift } from '../lib/market/hourly-lmh.mjs';   // HT3 — the per-hour day-over-day slope read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe)
+import { hourProfile, deriveDiurnalRange, diurnalTimedLap, diurnalPhase, windowStats, asymPair, windowClear, windowClearDiverges, reachableBand, placement, weekdayProfile, reachMargin, reachedDays, RECENCY_DIVERGE, RECENT_NIGHTS, askReachDecayNote, softBuyRead, SOFT_BUY_CUE_TEXT, floorCeilingTrack } from '../../js/windowread.mjs';   // reachedDays (RF6) — daily-HIGH reach count for the thin big-ticket ask-spread flag   // diurnal peak-timing read + PART II asym pair (both off the in-hand 1h series); PLAN-WINDOW-CLEAR B2 — within-window clear read + divergence flag; RC-S2 — pressure-driven reachable band co-log; PLAN-ESTIMATOR-POSTURE AC1 — placement() = the band-low buy's percentile within the 14-day daily-LOW distribution; A3 (PLAN-AMPLITUDE-SCAN) — weekdayProfile = the day-of-week seasonality read for the 1.5-day amplitude experiment (DC3 demandRegime removed — PLAN-REMOVE-DEPTH-PRESSURE-READS); PLAN-DIURNAL-TIMING DT2 — diurnalTimedLap replaces the inline hourProfile+deriveDiurnalRange diurnal note computation; PLAN-HOURLY-3DAY-TREND HT3 — hourlyDriftNote, the shared compact note renderer used to enrich the top-X digest picks
+import { askReachDecay } from '../lib/market/hourly-lmh.mjs';   // DT3 — the ask-reach decay read, run on the top-X digest picks ONLY (bounded enrichment, not the full candidate universe). Replaced the deleted hourlyDrift slope read — see hourly-lmh.mjs's tombstone.
 // P6b — per-thesis P(fill)+TTF estimators + the ranking composite that REPLACES the demoted expGpDay
 // (Ben 2026-07-09: "gp/d is out"). estimateRank returns { pair, net, pFill, ttf, rank } off the row +
 // the spec's declared price-basis; rank = net × P(fill) ÷ TTF is the new displayed/graded metric.
@@ -129,7 +129,7 @@ import { gateCandidates, rankAndSlice, surviveMode, expUnits, expUnitsOvernight,
 import { loadOwned, computeOwnedQty } from '../lib/capital/ownedledger.mjs';   // RF2 — the owned-item pool source (classification:'keep') + the pure owned-qty fold
 import { loadReverseFlip, reverseFlipFor } from '../lib/thesis/reverseflipstate.mjs';   // RF2 — the declared reverse-flip cycle store (surfaces in-flight state per item)
 import { loadHoldThesis } from '../lib/thesis/holdthesis.mjs';   // RF2 — the hold-thesis store; reverseFlip:true entries join the reverse-flip pool (Case-A marker)
-import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote, THIN_DRIFT_DAYS } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
+import { isThinBigTicket, reverseListBandCell, askSpreadFlag, askSpreadNote, rebuyStrandNote } from '../../js/reverseflip.mjs';   // RF6 — thin big-ticket DISPLAY guards (inform-only, thin-item-only; a liquid reverse row renders byte-identically)
 import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_RESERVE_DEFAULT, EXPLORE_RESERVE_DEFAULT, rotationPeriodMs, MID_TIER_RESERVE_DEFAULT, MID_TIER_OFFSET_DEFAULT } from '../lib/signal/admission.mjs';
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
@@ -964,39 +964,34 @@ const digestCells = r => [
   { t: r.grade },
   { t: r.verdict },
 ];
-// PLAN-HOURLY-3DAY-TREND HT3 — the top-X pre-recommendation enrichment. The digest is the "about to be
-// printed as a graded recommendation" seam (D1 in the plan); this is where the 3-day hourly drift read
-// gets attached, BOUNDED to the rows actually rendered (main + the guaranteed big-ticket slice), never the
-// full ~70-candidate pool the niches gate from. `series1h` is the SAME already-fetched Map the niche
-// renders used (zero extra fetch on the common path); a row whose id isn't in the map (shouldn't happen
-// for a digest survivor, but the read degrades honestly either way) simply gets no drift note.
+// PLAN-DIURNAL-TRIAGE DT3 — the top-X pre-recommendation enrichment. The digest is the "about to be
+// printed as a graded recommendation" seam; this is where the ask-reach decay read gets attached, BOUNDED
+// to the rows actually rendered (main + the guaranteed big-ticket slice), never the full ~70-candidate
+// pool the niches gate from. `series1h` is the SAME already-fetched Map the niche renders used (zero extra
+// fetch on the common path); a row whose id isn't in the map (shouldn't happen for a digest survivor, but
+// the read degrades honestly either way) simply gets no note.
 //
-// STRATEGY-AWARE RELABEL (Ruling 3+4): a uniform down-drift beyond DIGEST_DRIFT_RELABEL_FRAC (a PLACEHOLDER,
-// n≈0, pending an F1-style retro) on a 'fill-now' verdict from the band/churn niches — the "pay near live,
-// expect a quick clear" theses — flips the DISPLAYED verdict to `⚠ falling — verify (~X/d)`, the drift
-// number always shown inline (never a silent swap). A value/amplitude/scalp pick, or any pick whose verdict
-// already fired something else (mirage top, sell unreliable, …), is left exactly as computed — falling is
-// the expected shape on a patient/value thesis, not a warning (falling-exclusion-AMENDED, per-strategy).
-// INFORM + a visible label swap ONLY — this never drops a row, never touches capEff/rankKey/sort order.
-const DRIFT_RELABEL_NICHES = new Set(['band', 'churn']);
-const DIGEST_DRIFT_RELABEL_FRAC = 0.004;   // PLACEHOLDER (n≈0) — |dominant.magPerDay| ÷ askLevel ≥ this ⇒ relabel-worthy
-
-function enrichDigestDrift(rows, series1h, driftLines) {
+// THE VERDICT RELABEL WAS DELETED HERE (2026-08-09), not just disabled. This function used to flip a
+// 'fill-now' band/churn verdict to `⚠ falling — verify (~X/d)` off a uniform down-drift in
+// hourlyDrift().dominant. That direction call was measured to be a coin flip (49.7%), so the label was
+// firing on noise — a visible swap is only honest when the thing driving it carries information. Both the
+// relabel and its two PLACEHOLDER constants (DRIFT_RELABEL_NICHES, DIGEST_DRIFT_RELABEL_FRAC) are gone;
+// the digest verdict is now always the computed verdict. Full refutation: hourly-lmh.mjs's tombstone.
+// Do not reintroduce a drift-keyed relabel without a measured direction signal behind it.
+//
+// INFORM ONLY — this never drops a row, never touches capEff/rankKey/sort order, and no longer alters a
+// displayed verdict at all. It appends a note when (and only when) the ask is sliding out of reach.
+function enrichDigestAskDecay(rows, series1h, decayLines) {
   if (!series1h) return rows;
   return rows.map(r => {
     if (r.id == null) return r;
     const series = series1h.get(r.id);
     if (!series) return r;
-    const drift = hourlyDrift(series, { days: 3, ask: r.askLevel ?? null });
-    const note = hourlyDriftNote(drift, { ask: r.askLevel ?? null, fmt });
+    const decay = askReachDecay(series, { days: 3, ask: r.askLevel ?? null });
+    const note = askReachDecayNote(decay, { ask: r.askLevel ?? null, fmt });
     if (!note) return r;
-    driftLines.push(`  ${r.name}: ${note}`);
-    const d = drift.dominant;
-    const magFrac = (d && r.askLevel) ? Math.abs(d.magPerDay) / r.askLevel : 0;
-    const relabel = d && d.uniform && d.dir === 'down' && magFrac >= DIGEST_DRIFT_RELABEL_FRAC
-      && r.verdict === 'fill-now' && DRIFT_RELABEL_NICHES.has(r.nicheKey);
-    if (!relabel) return r;
-    return { ...r, verdict: `⚠ falling — verify (~${fmt(Math.abs(d.magPerDay))}/d)` };
+    decayLines.push(`  ${r.name}: ${note}`);
+    return r;
   });
 }
 
@@ -1028,19 +1023,19 @@ export function buildDigestBlock(pool = DIGEST_ROWS, { series1h = null } = {}) {
     const shown = new Set(main);
     bigExtra = sorted.filter(r => r.bigTicket && !shown.has(r)).slice(0, BIG_TICKET_SLICE);
   }
-  // HT3: enrich ONLY the rows about to render (main + the guaranteed big-ticket slice) — never the full pool.
-  // Absent series1h (a caller that doesn't pass it, e.g. every pre-existing test) ⇒ enrichDigestDrift is a
-  // no-op passthrough, so this stays byte-identical to the pre-HT3 output whenever the option is omitted.
-  const driftLines = [];
-  main = enrichDigestDrift(main, series1h, driftLines);
-  bigExtra = enrichDigestDrift(bigExtra, series1h, driftLines);
+  // DT3: enrich ONLY the rows about to render (main + the guaranteed big-ticket slice) — never the full pool.
+  // Absent series1h (a caller that doesn't pass it, e.g. every pre-existing test) ⇒ enrichDigestAskDecay is a
+  // no-op passthrough, so this stays byte-identical whenever the option is omitted.
+  const decayLines = [];
+  main = enrichDigestAskDecay(main, series1h, decayLines);
+  bigExtra = enrichDigestAskDecay(bigExtra, series1h, decayLines);
   const tableRows = main.map(digestCells);
   if (bigExtra.length) {
     tableRows.push([{ t: '— big-ticket lane (guaranteed visibility) —' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }, { t: '' }]);
     for (const r of bigExtra) tableRows.push(digestCells(r));
   }
   lines.push(mdTable(['Item', 'capEff', 'deploy', 'reach', 'trend', 'phase', 'soft-buy', 'grade', 'verdict'], tableRows));
-  if (driftLines.length) lines.push('', '3-day hourly drift (top-X only — inform-only, n≈0, never gates):', ...driftLines);
+  if (decayLines.length) lines.push('', 'ask-reach decay (top-X only — inform-only, n≈0, never gates):', ...decayLines);
   return lines.join('\n');
 }
 
@@ -2516,7 +2511,7 @@ function runDipNominations(v24, bands, map, qcache, series5m) {
 // writes screen.json and is EXCLUDED from --publish by construction (this branch returns before the publish
 // path). PROVISIONAL n≈0 — inform-only, never sizes/enters; Ben places every offer.
 // RF6 (thin big-ticket read handling): a THIN row (isThinBigTicket off row.guide/volDay) gets a RANGE
-// Sold-ref/Peak cell (band, not a point) + a "Thin big-ticket reads" note block (7-day hourlyDrift, the
+// Sold-ref/Peak cell (band, not a point) + a "Thin big-ticket reads" note block (ask-reach decay, the
 // traded-mid-vs-lone-ask flag, the rebuy-may-strand caution). All thin-item-ONLY & inform-only — a liquid
 // row renders byte-identically. The extra reads reuse the already-fetched ts1h (no new fetch).
 const REVERSE_HEADERS = ['Item', 'Live', 'Regime (inverted read)', 'Sold-ref/Peak', 'BE-rebuy', 'Swing', 'Gate'];
@@ -2585,7 +2580,7 @@ async function runReverseMode(realLog) {
     let qty = null;
     if (p.source === 'owned') { try { qty = computeOwnedQty({ id, seedQty: p.seedQty, seedTs: p.seedTs }, fillsEvents); } catch { qty = null; } }
     // RF6 — carry `row` + `ts1h` forward so the render pass can run the THIN-ITEM-ONLY display guards
-    // (isThinBigTicket off row.guide/row.volDay; hourlyDrift/windowStats reuse the already-fetched ts1h —
+    // (isThinBigTicket off row.guide/row.volDay; askReachDecay/windowStats reuse the already-fetched ts1h —
     // no new fetch). A liquid row never touches these, so its render is byte-identical to pre-RF6.
     infoById[id] = { live: row ? (row.mid ?? row.quickBuy ?? row.quickSell ?? null) : null, qty, cycle: reverseFlipFor(rfState, id), row, ts1h };
   }
@@ -2629,11 +2624,13 @@ async function runReverseMode(realLog) {
       reachable = ast ? reachableBand(ast) : null;
       if (e.sellRef != null) sellCell = reverseListBandCell(e.sellRef, reachable, { fmt: fmtP });
 
-      // Guard: longer (7d) drift window on thin (the 3-day slope whipsaws on a thin book). Reuses
-      // hourlyDrift/hourlyDriftNote over the already-fetched ts1h — the label states the window truth.
+      // Guard: is the sell-ref sliding out of reach? Reuses askReachDecay/askReachDecayNote over the
+      // already-fetched ts1h. NOTE the window is the validated days:3, NOT a thin-specific longer one —
+      // THIN_DRIFT_DAYS=7 existed to damp the 3-day SLOPE's whipsaw on a thin book, and the slope (with
+      // the whipsaw, which was its n=2 fit, not its window) is deleted. See hourly-lmh.mjs's tombstone.
       if (info.ts1h) {
-        const drift = hourlyDrift(info.ts1h, { days: THIN_DRIFT_DAYS, ask: e.sellRef ?? null });
-        const dnote = hourlyDriftNote(drift, { ask: e.sellRef ?? null, fmt: fmtP, days: THIN_DRIFT_DAYS });
+        const decay = askReachDecay(info.ts1h, { days: 3, ask: e.sellRef ?? null });
+        const dnote = askReachDecayNote(decay, { ask: e.sellRef ?? null, fmt: fmtP });
         if (dnote) thinNotes.push(`- ${c.name}: ${dnote}`);
       }
       // Guard: traded-mid vs standing-ask spread flag — a lone optimistic ask rarely reached, off the
