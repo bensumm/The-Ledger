@@ -15,11 +15,11 @@
  */
 import assert from 'node:assert/strict';
 import {
-  amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits, cycleCompletion,
-  AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q, AMP_WINDOWS_PER_DAY,
+  amplitudeProxy, amplitudeRanges, amplitudeGate, amplitudeDeployUnits, cycleCompletion, ampWalkForward,
+  AMP_MIN_AMP_PCT, AMP_STAGE1_MIN_PCT, AMP_ASK_Q, AMP_BID_Q, AMP_WINDOWS_PER_DAY, AMP_WF_MIN_JUDGED,
 } from '../../js/amplitudescreen.mjs';
 import { ACTIONABLE_WINDOWS_PER_DAY } from '../../js/desk-cadence.mjs';
-import { pFillAmplitude } from '../../js/estimators/families.mjs';   // DT1 — pin that the estimator does NOT rank on the saturated completion figure
+import { pFillAmplitude } from '../../js/estimators/families.mjs';   // DT1 — pin that the estimator does NOT rank on the saturated completion figure; DT1b — pin that it DOES rank on the walk-forward
 
 let pass = 0;
 const ok = (name, fn) => { fn(); pass++; console.log('  ✓ ' + name); };
@@ -283,9 +283,76 @@ ok('cycleCompletion is SATURATED by construction at median levels — the reason
 ok('pFillAmplitude returns the bare PRIOR at n=0 — it must NOT read the saturated completion rate', () => {
   const ar = amplitudeRanges(OSC, 1005, { holdDays: 4 });
   const e = pFillAmplitude({ amplitudeRanges: ar });
-  assert.equal(e.basis, 'prior', 'no measured-looking basis while the only candidate is saturated');
+  assert.equal(e.basis, 'prior', 'with no walk-forward read, the honest answer is the prior');
   assert.equal(e.n, 0, 'n=0 — we are claiming no observations, honestly');
-  assert.notEqual(e.value, ar.cycle.frac, 'and it is emphatically NOT the saturated completion figure');
+  assert.notEqual(e.value, ar.cycle.frac, 'and it is emphatically NOT the saturated in-sample figure');
+});
+
+// --- DT1b: the WALK-FORWARD round-trip rate ------------------------------------------------------
+// These pin the ONE property that separates this from the rejected in-sample figure: the levels are
+// fitted STRICTLY BEFORE the day being scored. A synthetic 1h series is the only way to test it —
+// the fit window and the scored day have to be genuinely different slices of the same series.
+//
+// Build `days` days of 24×1h bars at local-midnight alignment (midnightOf in ampWalkForward is local,
+// as is windowStats' dayKey — the fixture has to agree with both). Jan/Feb avoids any DST transition.
+function series1h(days, priceFor) {
+  const base = Math.floor(new Date(2026, 0, 1).getTime() / 1000);
+  const out = [];
+  for (let d = 0; d < days; d++) {
+    const { low, high } = priceFor(d);
+    for (let h = 0; h < 24; h++) {
+      out.push({ timestamp: base + d * 86400 + h * 3600, avgLowPrice: low, avgHighPrice: high, lowPriceVolume: 50, highPriceVolume: 50 });
+    }
+  }
+  return out;
+}
+
+ok('ampWalkForward: a steady DOWNTREND measures ~0% — the pre-origin ask is never reached again', () => {
+  // −10/day. The ask fitted from the 14 days BEFORE origin T is the median of higher, older highs, so it
+  // sits ~70 above T's own high and is unreachable for the whole horizon. The bid, fitted the same way,
+  // sits ABOVE T's low — so entry fires every day. Entries high, completions zero.
+  // THIS IS THE PIN: fit the levels in-sample instead and the ask drops onto the scored days, and this
+  // reads far above 0. A regression to in-sample fitting fails here.
+  const wf = ampWalkForward(series1h(50, d => ({ low: 1000 - 10 * d, high: 1010 - 10 * d })), { horizonDays: 4 });
+  assert.ok(wf, 'a 50-day series yields a read');
+  assert.ok(wf.entries >= 20, `entry should fire on nearly every day (got ${wf.entries})`);
+  assert.equal(wf.completed, 0, 'a falling item never reprints its pre-origin ask');
+  assert.equal(wf.frac, 0, 'so the measured round-trip rate is 0, not a saturated ~1');
+});
+
+ok('ampWalkForward: a genuine repeating oscillator measures ~100% — it is not merely always-pessimistic', () => {
+  // Flat oscillator: the pre-origin ask IS reprinted every day, so a high rate here is CORRECT, not
+  // saturation. Pairs with the downtrend pin above — together they show the function discriminates.
+  const wf = ampWalkForward(series1h(50, () => ({ low: 1000, high: 1100 })), { horizonDays: 4 });
+  assert.ok(wf && wf.judged > 0, 'a read with judged entries');
+  assert.equal(wf.frac, 1, 'the ask genuinely reprints every day out-of-sample');
+});
+
+ok('ampWalkForward: an unresolved entry at the end of the data is PENDING, never a miss', () => {
+  const wf = ampWalkForward(series1h(50, d => ({ low: 1000 - 10 * d, high: 1010 - 10 * d })), { horizonDays: 4 });
+  assert.ok(wf.pending >= 1, 'the last few entries have no full horizon inside the series');
+  assert.equal(wf.judged + wf.pending, wf.entries, 'every entry is either judged or pending — none dropped');
+});
+
+ok('ampWalkForward: too little history is a null read, never a 0% verdict', () => {
+  assert.equal(ampWalkForward(series1h(10, () => ({ low: 1000, high: 1100 })), { horizonDays: 4 }), null);
+  assert.equal(ampWalkForward([], { horizonDays: 4 }), null);
+  assert.equal(ampWalkForward(null, { horizonDays: 4 }), null);
+});
+
+ok('pFillAmplitude RANKS on the walk-forward when the sample carries it', () => {
+  const wf = ampWalkForward(series1h(50, d => ({ low: 1000 - 10 * d, high: 1010 - 10 * d })), { horizonDays: 4 });
+  const e = pFillAmplitude({ walkForward: wf });
+  assert.equal(e.basis, 'walkforward', 'basis names the measurement, not a prior');
+  assert.equal(e.value, 0, 'a 0% measured round trip must reach the rank as 0 — this is the Saturated-heart case');
+  assert.equal(e.n, wf.judged, 'n is the judged-entry count, so thinness self-reports');
+});
+
+ok('pFillAmplitude falls BACK to the prior when the walk-forward sample is under the floor', () => {
+  const thin = { frac: 0, judged: AMP_WF_MIN_JUDGED - 1, completed: 0, entries: 5, pending: 0, origins: 5 };
+  const e = pFillAmplitude({ walkForward: thin });
+  assert.equal(e.basis, 'prior', 'a handful of entries is not evidence of a 0% round trip');
+  assert.equal(e.n, 0);
 });
 
 console.log(`\namplitudescreen.mjs: ${pass} assertions passed.`);

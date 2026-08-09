@@ -10,6 +10,47 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.71.6 — DT1b: the amplitude lane gets a measured P(fill) (2026-08-09)
+
+**The third estimator in this slot, and the first that isn't refuted.** DT1 deleted `pFill2leg` (a
+product of marginals whose independence assumption measured false) and then rejected its own
+replacement `cycleCompletion` (ordered, but circular — its levels were the median low/high of the very
+days it scored, saturating to ~94% at a 4-day horizon). That left `pFillAmplitude` returning a bare 0.5
+prior at n=0: honest, but it meant every amplitude grade rested on zero round-trip observations.
+
+**`ampWalkForward` (`js/amplitudescreen.mjs`) is the fix, and it is the DT1 study's own design.** For
+each origin day T the trough/peak levels are fitted STRICTLY PRE-T over the preceding 20 days; entry is
+the first hour of T whose 1h avgLow touches the bid; completion is any LATER hour, within the horizon,
+whose avgHigh reaches the ask. Unresolved end-of-series entries are PENDING and excluded from the
+denominator. The pre-origin fit IS the correctness property — the acceptance fixture uses a steady
+downtrend where in-sample fitting would read far above zero and pre-origin fitting reads exactly zero,
+so a regression fails loudly rather than quietly re-saturating.
+
+**Feasibility was verified before building, not assumed.** 227 of 228 archived items ≥5m carry ≥35 days
+of 1h history (73-day era ⇒ ~58 origin days, 30–50 judged entries/item); the walk-forward costs ~20ms
+per item and ~0.3s for a whole board, so there is no cache and no staleness to manage. The live
+`/timeseries` fetch the amplitude branch already holds is ~15 days — too short — so this reads the local
+archive through `archiveSeries` on a lazily-opened READONLY handle (a band-only scan never opens it).
+
+**What it did to the board, which is the whole point:** Saturated heart **A- → D on a measured 0 of 37**
+round trips within 4 days, on a row that had been advertising +5.88m/cycle. Fury 16/33 = 48% held A-.
+Ancestral hat 26%, Enhanced crystal weapon seed 21%, Virtus 16%. The in-sample figure had rated all five
+near 100%. The `ask-reprints` cell is withdrawn from the table — printing ~95% beside ~6% for the same
+item invites reading the flattering one; `cycleCompletion` survives in the shadow log only.
+
+**Two live inaccuracies this closed.** The amplitude spec's `fillShape: 'symmetric'` exemption (skip the
+ask-reach discount because "the family pFill IS the two-leg product") had been unsound since `pFill2leg`
+was deleted — the prior contains no ask leg. It is sound again. And `pFillAmplitude`'s header still
+opened by describing `cycleCompletion` as "the FIRST-CLASS rank input" three paragraphs above the block
+rejecting it; the whole header is rewritten around why each of the three estimators lived and died.
+
+**Honesty limits, unchanged and load-bearing.** Touch proxies are 1h avgLow/avgHigh AGGREGATES, not
+executed fills — no queue position, no partials, no competition at the same level — so every rate is an
+UPPER BOUND on a real round trip. Origin days share overlapping fit windows, so effective n is below
+`judged`. One 73-day era, one update cycle. The footer now names how many rows were measured versus fell
+back and why, so a prior-basis row is never silently indistinguishable from a measured one. Realized
+fills remain the only ground truth.
+
 ### DT1 — the amplitude lane's 24h premise was refuted; re-horizoned 1d → 4d, and its P(fill) is now an honest prior (0.71.5, 2026-08-09)
 
 **The refutation.** Running the production `amplitudeRanges`/`amplitudeGate` over 92 items ≥5m and 4,881

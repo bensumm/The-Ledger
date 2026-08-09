@@ -320,9 +320,11 @@ export function depthExitShadow(ca, { qty, volDay } = {}) {
 // default one, silently corrupting F-G's "which quantile nets more" retro. A default run stays byte-identical.
 // DT1 (2026-08-09): `holdDays` default 1 → 4, tracking AMP_HOLD_DAYS_DEFAULT (the caller passes it
 // explicitly, so this is a fallback only — but a stale 1 here would be a second, wrong home for the
-// number). The `cycle` block below logs the MEASURED ordered completion that replaced pFill2leg, so the
-// retro can score the re-horizoned premise rather than the refuted product-of-marginals.
-export function amplitudeShadow(ar, { holdDays = 4, profile = null, drift = null } = {}) {
+// number). The `cycle` block below logs the in-sample ordered completion (kept for continuity with rows
+// logged between DT1 and DT1b — it is CIRCULAR and no longer shown or ranked on), and `walkForward` logs
+// the out-of-sample rate that actually drives P(fill) since DT1b, so the retro can score the re-horizoned
+// premise against the number the board was really using. Both are logged; only `walkForward` is honest.
+export function amplitudeShadow(ar, { holdDays = 4, profile = null, drift = null, walkForward = null } = {}) {
   if (!ar || !ar.hasData || ar.ampBid == null || ar.ampAsk == null) return null;
   const o = {
     ampBid: ar.ampBid, ampAsk: ar.ampAsk, holdDays,
@@ -333,6 +335,12 @@ export function amplitudeShadow(ar, { holdDays = 4, profile = null, drift = null
       entries: ar.cycle.entries, judged: ar.cycle.judged,
       completed: ar.cycle.completed, pending: ar.cycle.pending,
       frac: ar.cycle.frac == null ? null : Math.round(ar.cycle.frac * 10000) / 10000,
+    } : null,
+    walkForward: walkForward ? {
+      origins: walkForward.origins, entries: walkForward.entries, judged: walkForward.judged,
+      completed: walkForward.completed, pending: walkForward.pending,
+      frac: walkForward.frac == null ? null : Math.round(walkForward.frac * 10000) / 10000,
+      horizonDays: walkForward.horizonDays,
     } : null,
     medAmpPct: ar.medAmpPct == null ? null : Math.round(ar.medAmpPct * 10000) / 10000,
   };

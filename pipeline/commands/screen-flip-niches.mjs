@@ -117,7 +117,7 @@ import { loadMapping, loadGuide, loadAll24h, loadAll24hRolling, rolling24FromTs1
 import { parseArgs, parseGp, mdTable, stdCells, writeLastReport } from '../lib/render/cli.mjs';   // writeLastReport — AO1 agent-readable dump
 import { resolve, loadPipelineConfig, refusePublishIfNonNeutral, shadowModelsOf } from '../lib/market/compose.mjs';   // PC1 — the flag>config>default precedence resolver + the ONE publish-refusal guard; PC3 — shadowModelsOf pools the default-shadow sell models
 import { open as openArchive } from '../lib/market/archive.mjs';   // AF5b — READONLY handle for --archive-regime's 6h read (open() runs schema DDL unless readonly; never take that path on the live DB)
-import { sixHourReader, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // AF5b — the ONE 6h seam, the /timeseries 365-bucket pin that keeps phase() depth-stable, and the depth floor below which the seam serves live instead
+import { sixHourReader, archiveSeries, LIVE_TS6H_BUCKETS, REGIME_MIN_6H_BUCKETS } from '../lib/market/archive-series.mjs';   // DT1b: archiveSeries = the ts→timestamp adapter the amplitude walk-forward reads its long 1h history through   // AF5b — the ONE 6h seam, the /timeseries 365-bucket pin that keeps phase() depth-stable, and the depth floor below which the seam serves live instead
 import { renderReport, renderHtmlTable } from '../lib/render/render.mjs';   // VZ4a (PLAN-VIZ-LAYER) — the ONE render layer; a niche's table + footer notes build a screen-report printed via renderReport (byte-identical to the prior console.log sequence); renderHtmlTable (2026-07-16) — the Stage-2 HTML twin published into screen.json for the app's Scan tab
 import { formatTimedLap, formatBasePosition } from '../lib/render/emit.mjs';   // PLAN-DIURNAL-TIMING DT2 — the ONE shared diurnalTimedLap renderer (also DT3's future quote/watch call site); DT6 — the base-position note renderer
 // P1: the pure candidate-selection + survival doctrine moved to lib/gatecandidates.mjs (was inline
@@ -134,7 +134,7 @@ import { pickFetchPool, buildTrackIndex, clampUnionFetch, TOTAL_FETCH_MAX, GEAR_
 import { pathAGpDay, comparePathARows, assignRankInLane } from '../lib/signal/patha.mjs';   // PLAN-LANE-ADMISSION Chunk C/D — the Path-A intraday-flip gp/day scorer (captureFrac PLACEHOLDER n≈0) + the pure two-tier console ranker (comparePathARows) & in-lane ranker (assignRankInLane); Chunk D makes Path-A gp/day the CONSOLE/last-report PRIMARY sort with rateItem's grade shown as the A/B backup (console-only; screen.json unchanged)
 import { classifyVolLane } from '../lib/signal/structural-admission.mjs';   // PLAN-LANE-ADMISSION Chunk B — the gear/churn volume lane selecting Path-A's captureFrac
 import { valueRanges, valueScore, valueGate, valueTier, deployUnits } from '../../js/valuescreen.mjs';   // P5 — value niche gate/rank/tier; deployUnits (PLAN-CAPITAL-EFFICIENCY-AND-DIGEST follow-up) = the shared three-way-min deployable position size, reused for the digest's deployable-throughput ranking
-import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
+import { amplitudeRanges, amplitudeGate, amplitudeDriftMargin, ampWalkForward, AMP_HOLD_DAYS_DEFAULT, AMP_ASK_Q, AMP_BID_Q, AMP_WF_WARMUP_DAYS, AMP_WF_FIT_DAYS, AMP_WF_MIN_JUDGED } from '../../js/amplitudescreen.mjs';   // A2/A3 (PLAN-AMPLITUDE-SCAN) — the 24h-cycle niche's Stage-2 gate + hold-horizon default; PLAN-OSCILLATION-CYCLE Chunk 2 — amplitudeDriftMargin = the shadow-logged drift-adjusted margin; F-E — AMP_ASK_Q/AMP_BID_Q = the DEFAULT reach-vs-margin quantiles the --amp-ask-q/--amp-bid-q flags fall back to
 import { driftExitFrom, oscillationVsKnife, OSC_DETECTOR_NIGHTS } from '../../js/forecast.mjs';   // PLAN-OSCILLATION-CYCLE Chunk 2 — driftExitFrom = the ONE slope-sourcing + drift-adjusted-exit composition (Chunk 6 reuses it); off in-hand hourProfile + windowStats().days, NO fetch. Chunk 3 — oscillationVsKnife tempers the knife guard (a drift-riding oscillator is not a false knife). F-H — OSC_DETECTOR_NIGHTS = the detector's OWN longer trailing window, decoupled from the gate's AMP_NIGHTS
 import { amplitudeShadow } from '../lib/render/suggestlog.mjs';   // A5 — the amplitude lane shadow block on suggestions.jsonl
 // P4c: the four niches are DECLARATIVE strategy specs now. screen-flip-niches.mjs derives its mode-name lists from
@@ -2165,9 +2165,29 @@ export function reachPhaseNote(osc, dae, driftShadow) {
   const clears = !!(driftShadow && driftShadow.margin != null && driftShadow.margin > 0);
   return `oscillating into a falling floor — drift margin ${clears ? 'still clears' : 'does not clear'}`;
 }
+// DT1b — the walk-forward archive seam. The in-hand `series1h` is a LIVE /timeseries fetch (365×1h ≈ 15
+// days); the walk-forward needs ~35+ days to yield any scoreable origin after its warmup, so it reads the
+// local archive instead (~73-day era, 227/228 items ≥5m covered). READONLY IS NON-NEGOTIABLE — a plain
+// open() runs schema DDL against the multi-GB live DB. Opened LAZILY and once: a band-only scan never
+// touches it. A missing/locked archive degrades every row to the prior with a counted reason, never a throw.
+let WF_ARCHIVE_H = null, WF_ARCHIVE_TRIED = false;
+function wfArchive() {
+  if (WF_ARCHIVE_TRIED) return WF_ARCHIVE_H;
+  WF_ARCHIVE_TRIED = true;
+  try { WF_ARCHIVE_H = openArchive(undefined, { readonly: true }); }
+  catch { WF_ARCHIVE_H = null; }
+  return WF_ARCHIVE_H;
+}
+// Days of 1h history to pull per candidate. Comfortably over warmup + fit so the origin count is bounded
+// by the archive era, not by this number; the read costs ~20ms/item and the whole board ~0.3s.
+const WF_ARCHIVE_DAYS = AMP_WF_WARMUP_DAYS + AMP_WF_FIT_DAYS + 60;
+
 function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, daily) {
   const rows = [], sugg = [];
   const informNotes = [];
+  // DT1b: why each row fell back to the 0.5 prior instead of a measured rate — surfaced in the footer so
+  // "no measured P(fill)" is never silently indistinguishable from "measured and it's fine".
+  const wfFallback = { noArchive: 0, thinHistory: 0, thinSample: 0, measured: 0 };
   const baseLines = [];   // DT6 — the multi-week base-position note (amplitude gets no term-structure read otherwise)
   const dropped = { noHistory: 0, ampFloor: 0, bidReach: 0, askReach: 0, trend: 0, knife: 0, marginFloor: 0, unaffordable: 0 };
   const DROP_KEY = { 'no-history': 'noHistory', 'amp-below-floor': 'ampFloor', 'bid-unreachable': 'bidReach', 'ask-unreachable': 'askReach', 'trend': 'trend', 'knife': 'knife', 'margin-below-floor': 'marginFloor' };
@@ -2219,7 +2239,19 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     // lapUnits floors to 0 when capGp < the trough-bid → the pick is genuinely UNAFFORDABLE at this capital.
     // DROP it (don't show a phantom ~1u); these thin big-tickets legitimately need a bigger pool.
     if (!(lapUnits >= 1)) { dropped.unaffordable++; continue; }
-    const pFill = ESTIMATORS.amplitude.pFill({ amplitudeRanges: ar });
+    // DT1b: the MEASURED round-trip rate, fitted strictly pre-origin at THIS row's effective quantiles
+    // (--amp-ask-q/--amp-bid-q move the levels, so the measurement has to follow them) and at the hold
+    // horizon actually being quoted. Falls back to the prior on a thin/absent read — see pFillAmplitude.
+    const wfH = wfArchive();
+    const wfSeries = wfH ? archiveSeries(wfH, s.id, '1h', { days: WF_ARCHIVE_DAYS }) : null;
+    const wf = (wfSeries && wfSeries.length)
+      ? ampWalkForward(wfSeries, { horizonDays: AMP_HOLD_DAYS, askQ: AMP_ASK_Q_EFF, bidQ: AMP_BID_Q_EFF })
+      : null;
+    if (!wfH) wfFallback.noArchive++;
+    else if (!wf) wfFallback.thinHistory++;
+    else if ((wf.judged ?? 0) < AMP_WF_MIN_JUDGED) wfFallback.thinSample++;
+    else wfFallback.measured++;
+    const pFill = ESTIMATORS.amplitude.pFill({ amplitudeRanges: ar, walkForward: wf });
     const ttf = ESTIMATORS.amplitude.ttf({ holdDays: AMP_HOLD_DAYS });
     const rank = rankScore({ net: ar.netPerCycle * lapUnits, pFill: pFill.value, ttfSec: ttf.value });
     const r = rateItem({ row, rank, thin: s.thin, pFillN: pFill.n, ttfN: ttf.n });   // thin-class by construction → THIN_GRADE_CAP applies (§2.1); G6: (thin) confidence marker off the daily-reach sample
@@ -2229,22 +2261,23 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
     // format change only), then annotate the trough-vs-decay phase so a low recent reach on a trough-phase
     // oscillator no longer over-implies "sell-unreliable". `osc`/`dae`/`driftShadow` are already in scope.
     const rf = t => `${t.recentHit}/${t.recentDays || AMP_HOLD_DAYS}·${t.fullHit}/${t.fullN}`;
-    // DT1 (2026-08-09): the ordered day-grain completion rides the reach cell — DISPLAY-ONLY and
-    // ASYMMETRIC in what it can tell you. It is SATURATED BY CONSTRUCTION (median bid vs median ask over
-    // a multi-day horizon ⇒ ~94% at H=4; the live board read 18/19), so a HIGH figure is close to
-    // uninformative and must never be relayed as "the round trip completes". A LOW figure still is
-    // damning: `done 0/N` means this ask has not printed after an entry even once in-window. Labelled
-    // inline so the asymmetry travels with the number. Never a rank input — see pFillAmplitude's header.
-    // `done —` when no entry had a full horizon inside the window: an honest absence, never a 0.
-    const cyc = ar.cycle;
-    const cycCell = (cyc && cyc.frac != null)
-      ? `ask-reprints ${cyc.completed}/${cyc.judged} ≤${AMP_HOLD_DAYS}d`
-      : `ask-reprints — (no judged entry ≤${AMP_HOLD_DAYS}d)`;
-    const reachCell = `${rf(ar.bidTouch)} · ${rf(ar.askReach)} · ${cycCell} — ${reachPhaseNote(osc, dae, driftShadow)}`;
+    // DT1b (2026-08-09): the reach cell now carries the WALK-FORWARD round-trip rate — the measured
+    // "given the bid filled, was the ask reached ≤Nd?" — in place of DT1's `ask-reprints` cell. That cell
+    // was the in-sample `cycleCompletion` figure: saturated by construction (~94% at H=4; the live board
+    // read 18/19) and so near-uninformative when high. Printing both would put ~95% next to ~6% for the
+    // same item and invite reading the flattering one. `cycleCompletion` survives in the module and the
+    // shadow log; it is no longer shown. `—` when the archive can't support a read: an honest absence,
+    // never a 0. Sample n rides the cell so a thin read is visible without opening the footer.
+    const wfCell = (wf && wf.frac != null && (wf.judged ?? 0) >= AMP_WF_MIN_JUDGED)
+      ? `round-trip ${wf.completed}/${wf.judged} = ${(wf.frac * 100).toFixed(0)}% ≤${AMP_HOLD_DAYS}d`
+      : `round-trip — (${wf ? `only ${wf.judged} judged, < ${AMP_WF_MIN_JUDGED}` : 'no archive history'})`;
+    const reachCell = `${rf(ar.bidTouch)} · ${rf(ar.askReach)} · ${wfCell} — ${reachPhaseNote(osc, dae, driftShadow)}`;
     // G6: the amplitude grade cell, with the `(thin)` confidence marker appended when the round-trip call
-    // rests on thin daily-reach evidence (pFill.n < CONF_THIN_N_FLOOR). MARK-only — grade is untouched.
+    // rests on a thin sample (pFill.n < CONF_THIN_N_FLOOR). MARK-only — grade is untouched. DT1b: pFill.n
+    // is now the walk-forward `judged` count (entries whose full horizon elapsed), not a day count — a
+    // measured row typically carries 30–48, so the marker now means something instead of firing on every row.
     const ampGradeCell = s.thin ? { t: grade, title: `thin: ~${s.limitVol}/day two-sided — big-ticket concentrated position, no fast exit if the thesis breaks; expect slow day-long fills` } : { t: grade };
-    if (r.thinConfidence) { ampGradeCell.t = ampGradeCell.t + ' (thin)'; ampGradeCell.title = (ampGradeCell.title ? ampGradeCell.title + '; ' : '') + `thin confidence: the round-trip call rests on only ${pFill.n} day(s) of reach evidence (< ${CONF_THIN_N_FLOOR})`; }
+    if (r.thinConfidence) { ampGradeCell.t = ampGradeCell.t + ' (thin)'; ampGradeCell.title = (ampGradeCell.title ? ampGradeCell.title + '; ' : '') + `thin confidence: the round-trip call rests on only ${pFill.n} measured entr${pFill.n === 1 ? 'y' : 'ies'} (< ${CONF_THIN_N_FLOOR})`; }
     const cells = [
       { t: name }, { t: guide && guide[s.id] != null ? fmtP(guide[s.id]) : '—' }, { t: fmtP(live) },
       { t: `${fmtP(ar.ampBid)} → ${fmtP(ar.ampAsk)}` },
@@ -2294,7 +2327,7 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
       itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: 'AMP-CYCLE', grade, cappedBy: r.cappedBy, posture: POSTURE, path: 'scalp',   // R7: amplitude only applies rateItem's THIN cap → r.cappedBy
       bid: ar.ampBid, ask: ar.ampAsk, pFill: round2(pFill.value), ttfSec: ttf.value, rank: Math.round(rank),
       estBasis: `${pFill.basis}/${ttf.basis}`, estN: ar.nDays,
-      amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof, drift: driftShadow }),
+      amplitude: amplitudeShadow(ar, { holdDays: AMP_HOLD_DAYS, profile: prof, drift: driftShadow, walkForward: wf }),
       volDayRolling: rollShadow(series1h, s.id),
       // EF-0a: the ampProxy pre-fetch position stamp. Amplitude's watchlist reserve carries no `via`
       // tag today (the `watched` flag is its marker), so `via` is naturally absent on every amplitude row.
@@ -2307,10 +2340,10 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
   const shown = rows.length;
   console.log(`## AMPLITUDE — ${shown} multi-day-cycle candidate(s) (PROVISIONAL, n≈0 — the 24h-swing premise was REFUTED 2026-08-09; re-horizoned)`);
   console.log('Playbook: buy the TROUGH, sell the PEAK, hold ~a few days, cycle. The edge is a big-ticket that oscillates a few % over a MULTI-DAY period — the swing the band screen\'s 2h grain + net×P÷TTF rank is structurally blind to. PATIENT: these are multi-DAY plays that surface under deploy/accumulate, NEVER as act-now rows.');
-  console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(fill) ÷ hold-horizon at the amplitude estimator family — NOTE P(fill) is now the bare 0.5 PRIOR, n=0: see below; every threshold PLACEHOLDER, n≈0)`);
-  console.log(`(RE-HORIZONED 1d → ${AMP_HOLD_DAYS}d, 2026-08-09: over 92 items / 4,881 item-days the 1-day cycle premise measured 4.8% completion within 24h GIVEN entry — ≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%, median ~69h, EV per entered cycle −813k. The old pFill2leg two-leg PRODUCT assumed leg independence, measured FALSE (entry is adverse selection), and is DELETED. Its intended replacement — an ordered day-grain completion rate — was built, measured, and REJECTED as a rank input the same day: median-bid-vs-median-ask over a multi-day horizon is ~94% by construction (this board read 18/19), so it cannot represent the study's stricter, sub-day event. P(fill) therefore falls back to the honest 0.5 prior with n=0 until DT1b lands the walk-forward per-item measurement — which is validated: re-running the study's design reproduces its numbers exactly and separates these rows sharply (0% / 24% / 42% / 48% completion @96h on Saturated heart / Virtus / Masori chaps / Fury).)`);
-  console.log(`(the \`ask-reprints X/Y\` figure in the reach cell is DISPLAY-ONLY and ASYMMETRIC: high ≈ uninformative (saturated), but \`0/N\` is damning — this ask has not printed after an entry even once in-window. It is NOT a round-trip completion rate; do not size on it.)`);
-  console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d — NOTE deploy units scale with the horizon, so the re-horizon raised them ~${AMP_HOLD_DAYS}×; size against the completion column, not the units)`);
+  console.log(`(daily amplitude off the per-item 1h windowStats full-day range; ranked by net × P(fill) ÷ hold-horizon at the amplitude estimator family — P(fill) is the MEASURED walk-forward round-trip rate per item (DT1b), shown as \`round-trip X/Y\` in the reach cell; the other thresholds remain PLACEHOLDERS, n≈0)`);
+  console.log(`(RE-HORIZONED 1d → ${AMP_HOLD_DAYS}d, 2026-08-09: over 92 items / 4,881 item-days the 1-day cycle premise measured 4.8% completion within 24h GIVEN entry — ≤48h 11.4%, ≤96h 22.6%, ≤7d 34.6%, median ~69h, EV per entered cycle −813k. The old pFill2leg two-leg PRODUCT assumed leg independence, measured FALSE (entry is adverse selection), and is DELETED. Its first replacement — an ordered DAY-grain completion rate — was built, measured, and rejected the same day: its levels were fitted IN-SAMPLE (median low/high of the very days it scored), which saturates to ~94% by construction. DT1b replaced it with the study's own design — levels fitted STRICTLY PRE-ORIGIN, entry→completion scored at HOUR grain — which re-runs and reproduces the study's published figures exactly. That number now drives P(fill) directly.)`);
+  console.log(`(\`round-trip X/Y = Z% ≤${AMP_HOLD_DAYS}d\` in the reach cell IS that measurement: of Y past entries where the trough bid actually filled and a full horizon elapsed, the peak ask was reached on X. It is an UPPER BOUND — 1h aggregates, no queue position, no partials, no competition — and rests on ONE 73-day archive era. \`—\` means too little history to measure, never 0%.)`);
+  console.log(`(CONCENTRATION lane — sized against ${fmtP(AMP_CAPITAL)} TOTAL REALIZABLE capital (liquidCapital, "if all lots sold"), used UNDIVIDED; --slots is IGNORED · hold horizon ${AMP_HOLD_DAYS}d — NOTE deploy units scale with the horizon, so the re-horizon raised them ~${AMP_HOLD_DAYS}×; size against the round-trip column, not the units)`);
   // F-E: an EXPERIMENT run (non-default reach-vs-margin quantiles) is flagged so the operator knows the
   // board is NOT the standard median-peak/median-trough basis — and so is the ledger (amplitudeShadow logs askQ/bidQ).
   if (AMP_ASK_Q_EFF !== AMP_ASK_Q || AMP_BID_Q_EFF !== AMP_BID_Q)
@@ -2328,7 +2361,10 @@ function renderAmplitudeMode({ cand, survivors }, qcache, map, series1h, guide, 
   const watchReserved = survivors.filter(s => s.watched).length;
   console.log(`\nadmitted ${cand.length} (Stage-1 proxy) · fetched ${survivors.length} (top ${AMP_TOP_DEFAULT} by amplitude proxy${watchReserved ? ` + ${watchReserved} watchlist-reserved` : ''}) · shown ${shown} · dropped Stage-2: no-history ${dropped.noHistory}, amp-below-floor ${dropped.ampFloor}, bid-unreachable ${dropped.bidReach}, ask-unreachable ${dropped.askReach}, trend ${dropped.trend}, knife ${dropped.knife}, margin-below-floor ${dropped.marginFloor}, unaffordable ${dropped.unaffordable} (can't afford ≥1 unit at ${fmtP(AMP_CAPITAL)})`);
   console.log('⚠ thin — NO fast exit: these big-tickets are thin BY CONSTRUCTION (that\'s why the band screen misses them), so a large concentrated position can\'t be unwound quickly if the thesis breaks. INFORM, not a gate — size to your risk tolerance.');
-  console.log('⚠ make-or-break (§4, n≈0): the gate measures the levels PRINTED; whether BOTH legs actually FILL within the hold horizon is the open question the shadow both-leg replay (join-amplitude-outcomes.mjs) + realized retro-join measure. The NEW `margin-below-floor` drift-adjusted-margin gate (PLAN-OSCILLATION-CYCLE Chunk 3) rides on the SAME n≈0 PLACEHOLDER threshold + the diurnal/drift projection — it is the make-or-break gate itself, not a validated filter. Do not trade on this yet.');
+  // DT1b: say WHY a row has no measured rate. "No number" and "a number we're not showing" must not look
+  // the same, and a silent fallback to the 0.5 prior would read as a confident coin-flip.
+  console.log(`ℹ round-trip P(fill): ${wfFallback.measured} row(s) measured walk-forward off the local 1h archive · fell back to the 0.5 prior: ${wfFallback.thinSample} thin-sample (< ${AMP_WF_MIN_JUDGED} judged entries), ${wfFallback.thinHistory} too-little-history, ${wfFallback.noArchive} no-archive. A prior-basis row's grade rests on ZERO round-trip observations.`);
+  console.log('⚠ make-or-break (§4): the gate measures the levels PRINTED; whether both legs actually FILL is now MEASURED per item (DT1b — walk-forward, levels fitted strictly pre-origin, scored at hour grain) and it drives P(fill) directly. It is an UPPER BOUND: 1h avgLow/avgHigh aggregates, no queue position, no partial fills, no competition at the same level — and one 73-day archive era. The `margin-below-floor` drift-adjusted-margin gate (PLAN-OSCILLATION-CYCLE Chunk 3) is still an n≈0 PLACEHOLDER threshold riding the diurnal/drift projection. Realized fills remain the only ground truth (join-amplitude-outcomes.mjs + the retro-join).');
   console.log('');
   return rows.map(r => ({ id: r.id, cells: r.cells }));
 }

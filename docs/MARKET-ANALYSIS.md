@@ -447,13 +447,18 @@ including Saturated heart at 5/5, the item the study measured at 0% within 96h. 
 diagnosis blaming sub-day grain was wrong): the levels are the medians OF THE DAYS THEN SCORED, so ~50%
 clear the ask by definition. The study fitted levels strictly BEFORE each origin day and scored at hour
 grain, and **re-running that design reproduces its published numbers exactly** — Saturated heart 0.0%
-@96h (n=41), Masori chaps 12.9% @24h (n=31) — so the refutation is confirmed and the study is sound. So
-`pFillAmplitude` now returns the bare 0.5 PRIOR with n=0 rather than a measured-looking fake, and the
-figure survives as a DISPLAY-ONLY, ASYMMETRIC diagnostic printed as `ask-reprints X/Y ≤4d`: a high value
-is near-uninformative, but `0/N` is damning (this ask has not printed after an entry even once in-window).
-The fix is a WALK-FORWARD per-item measurement off the 1h archive (fit pre-T, score entry→completion at
-hour grain) — validated to reproduce the study and to discriminate strongly across live rows (0% / 24% /
-42% / 48% @96h on Saturated heart / Virtus / Masori chaps / Fury). Tracked as DT1b. The lane was mis-horizoned, not signal-free: the
+@96h (n=41), Masori chaps 12.9% @24h (n=31) — so the refutation is confirmed and the study is sound.
+
+**DT1b then rebuilt the estimator on that design** (`ampWalkForward`, `js/amplitudescreen.mjs`): for each
+origin day the trough/peak levels are fitted STRICTLY PRE-ORIGIN over the preceding 20 days, entry is the
+first hour of that day whose 1h avgLow touches the bid, and completion is any LATER hour within the
+horizon whose avgHigh reaches the ask; unresolved end-of-series entries stay PENDING. It reads the local
+1h archive (the live `/timeseries` fetch is ~15 days — far too short) at ~20ms/item, and **it is what
+`pFillAmplitude` now ranks on**, falling back to the 0.5 prior only below `AMP_WF_MIN_JUDGED` judged
+entries. The board prints it as `round-trip X/Y = Z% ≤4d` in place of the withdrawn `ask-reprints` cell —
+showing both would put ~95% beside ~6% for the same item. The effect on the live board is exactly what
+the study predicted: **Saturated heart fell A- → D on a measured 0 of 37**, while Fury (16/33 = 48%) held
+its grade. The in-sample figure had rated all five rows near 100%. The lane was mis-horizoned, not signal-free: the
 survivors are the repeatable multi-DAY oscillator class (Masori chaps 12.9%/24h but 71%/7d; fang ~6–8d).
 Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" finding (mean 0.102 vs realized 0.116):
 that measured the UNORDERED hold-≤1d joint, this measures the ORDERED entry-conditional round trip — both

@@ -56,7 +56,7 @@
  */
 import { netMargin, clamp } from '../money-math.js';
 import { askReachFactor } from './reach.mjs';   // PC2: the two-leg ask-reach discount (moved to reach.mjs); estimateRank calls it at runtime
-import { amplitudeDeployUnits, AMP_HOLD_DAYS_DEFAULT } from '../amplitudescreen.mjs';   // A2 (PLAN-AMPLITUDE-SCAN): the amplitude family's lapUnits min()
+import { amplitudeDeployUnits, AMP_HOLD_DAYS_DEFAULT, AMP_WF_MIN_JUDGED } from '../amplitudescreen.mjs';   // A2 (PLAN-AMPLITUDE-SCAN): the amplitude family's lapUnits min(); DT1b: the walk-forward sample floor below which pFillAmplitude falls back to the prior (ONE home — it lives with the function that produces `judged`)
 
 const clamp01 = x => clamp(x, 0, 1);   // reuse the imported clamp — was a duplicate reimplementation
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -149,46 +149,47 @@ export function pFillValue(ctx = {}) {
   return estR(PFILL_PRIOR, 0, 'prior');
 }
 
-// amplitude family — P(fill) IS the MEASURED ORDERED cycle-completion rate at the quoted daily pair,
-// computed by js/amplitudescreen.mjs `cycleCompletion` and handed in via ctx.amplitudeRanges.cycle.
+// amplitude family — P(fill) is the WALK-FORWARD measured round-trip rate: given the trough bid
+// actually filled, did the peak ask get reached inside the hold horizon? Computed by
+// js/amplitudescreen.mjs `ampWalkForward` over the 1h archive and handed in via ctx.walkForward.
+// Basis 'walkforward', n = `judged` (entries whose full horizon elapsed inside the data).
+// Falls back to the bare prior when there is no read or the sample is under AMP_WF_MIN_JUDGED.
 //
-// DT1 (PLAN-DIURNAL-TRIAGE, 2026-08-09) replaced the old two-leg recent-reach PRODUCT (`pFill2leg`,
-// basis 'daily-reach-2leg'). That product multiplied bid-touch × ask-reach, which assumes the two legs
-// are independent — measured FALSE. Trough-touch entry is adverse selection (unconditional ask-reach
-// ≤48h 43.1% versus 11.4% conditional on entry), so rows the product predicted at ≥0.25 realized ~5%.
-// Reconciles with PLAN-BOTH-LEG-ENTRY, which found the product "approximately calibrated" (mean 0.102 vs
-// realized 0.116): that measured the UNORDERED, hold-≤1d joint — both legs printing in the window. This
-// measures the ORDERED, entry-conditional round trip (bid fills, THEN ask within the horizon). Both
-// readings are true; the product approximates the unordered joint and badly overstates the ordered one.
-// The replacement is ordered by construction, so it supersedes both.
+// THIS IS THE THIRD ESTIMATOR IN THIS SLOT. The two before it were both wrong, in instructive and
+// DIFFERENT ways, and the whole point of this header is that neither failure gets reintroduced:
 //
-// Still the FIRST-CLASS rank input, and it still self-reports thinness — n is now `cycle.judged` (the
-// entries with a full horizon inside the window), which is smaller and more honest than the old `nDays`.
-// Unchanged: this REPLACES the Proposal-A ask-reach discount rather than stacking on it (the amplitude
-// spec's fillShape is 'symmetric', so estimateRank's askReach discount is skipped, as for churn/value).
-// Basis 'measured-cycle-completion'. Prior when no read. NEVER calibrated — a fill PROXY, upper bound.
-// ⚠ WHY THIS RETURNS THE BARE PRIOR (and must not be "improved" back into a measured-looking number).
-// DT1 deleted `pFill2leg` and the obvious replacement — `cycleCompletion`, the ordered day-grain
-// completion rate — was BUILT, MEASURED ON THE LIVE BOARD, and REJECTED as a rank input the same day.
-// It is SATURATED BY CONSTRUCTION: `ampBid` is the MEDIAN daily low and `ampAsk` the MEDIAN daily high,
-// so ~50% of days reach the ask and over a 4-day horizon P(at least one later day clears it) ≈ 1−0.5⁴
-// ≈ 94%. The live board confirmed it exactly — 18 of 19 judged entries "completed" (5/5, 6/7, 7/7),
-// including Saturated heart at 5/5, the very item the study measured at 0% completion within 96h.
+// 1. `pFill2leg` (deleted DT1) — a PRODUCT OF MARGINALS, bid-touch × ask-reach, standing in for a
+//    joint. Independence is measured FALSE: trough-touch entry is adverse selection (unconditional
+//    ask-reach ≤48h 43.1% vs 11.4% conditional on entry), so rows it predicted at ≥0.25 realized ~5%.
+//    Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" reading (mean 0.102 vs realized
+//    0.116): that measured the UNORDERED hold-≤1d joint — both legs printing in the window. This slot
+//    needs the ORDERED, entry-conditional round trip, which the product badly overstates.
+// 2. `cycleCompletion` (built and rejected the same day, DT1) — ordered, but CIRCULAR. `ampBid`/
+//    `ampAsk` were the median low/high OF THE VERY DAYS then scored, so ~50% of those days cleared the
+//    ask BY DEFINITION and a 4-day horizon compounded that to ≈1−0.5⁴ ≈ 94%. The live board confirmed
+//    it exactly: 18 of 19 judged entries "completed", including Saturated heart at 5/5 — an item whose
+//    real out-of-sample rate is 0 of 41 within 96h. A tautology, not a measurement. (An initial
+//    diagnosis blamed sub-day grain; that was WRONG — grain contributes, circularity dominates.)
 //
-// ROOT CAUSE (diagnosed 2026-08-09, after an initial WRONG diagnosis blamed sub-day grain): the levels
-// are fitted IN-SAMPLE. `ampBid`/`ampAsk` are the median low/high OF THE VERY DAYS then scored, so ~50%
-// of those days clear the ask BY DEFINITION and the multi-day horizon compounds that to ~94%. It is a
-// tautology, not a measurement. The DT1 study avoided this by fitting levels strictly BEFORE each origin
-// day (`p.timestamp < midnight(T)`) and scoring at hour grain — and re-running that design reproduces
-// its published numbers EXACTLY (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h n=31). Grain
-// matters too, but circularity is the dominant term. The study is sound; this function was the bug.
+// WHY THIS ONE IS DIFFERENT: `ampWalkForward` fits the levels STRICTLY BEFORE each origin day and
+// scores entry→completion at hour grain — the design of the DT1 study, which re-runs and reproduces
+// its published figures exactly (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h n=31;
+// harness pipeline/experiments/amp-cycle-reproduction.mjs). It discriminates strongly across live rows
+// (0% / 24% / 42% / 48% @96h) where the in-sample figure read ~100% on all of them. Do not "simplify"
+// it back onto the in-hand windowStats days — the pre-origin fit IS the correctness property.
 //
-// So the family reports an honest wide prior with n=0 rather than a measured-looking fake. The fix is
-// NOT more day-grain arithmetic — it is a WALK-FORWARD per-item measurement off the 1h archive (fit
-// pre-T, score entry→completion at hour grain), which is validated to work and yields a real
-// discriminator (0% / 24% / 42% / 48% @96h across four live-board rows). Tracked as DT1b.
-// `cycleCompletion` survives as a DISPLAYED diagnostic only, never a rank input.
+// Unchanged from the original design: this REPLACES the Proposal-A ask-reach discount rather than
+// stacking on it (the amplitude spec's fillShape is 'symmetric', so estimateRank's askReach discount
+// is skipped, as for churn/value) — and that exemption is only sound BECAUSE this number already
+// contains the ask leg. It was briefly unsound while this returned a bare prior; DT1b restores it.
+//
+// NEVER call it calibrated. It is a FILL PROXY on 1h aggregates — no queue, no partials, no
+// competition — so it is an UPPER BOUND on a real round trip; see ampWalkForward's honesty limits.
 export function pFillAmplitude(ctx = {}) {
+  const wf = (ctx && ctx.walkForward) || null;
+  if (wf && num(wf.frac) != null && (wf.judged ?? 0) >= AMP_WF_MIN_JUDGED) {
+    return estR(clamp01(wf.frac), wf.judged, 'walkforward');
+  }
   return estR(PFILL_PRIOR, 0, 'prior');
 }
 

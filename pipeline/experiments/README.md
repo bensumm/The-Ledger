@@ -134,9 +134,11 @@ Written because the two disagreed by ~4× and it was not clear which was wrong. 
 exactly** — Saturated heart 0.0% @96h (n=41) and Masori chaps 12.9% @24h (n=31) against its published
 0% and 12.9%. The day-grain version reads 100% and 85.7% on those same items. The defect is CIRCULARITY:
 median-of-the-scored-days levels are cleared by ~50% of those days by definition, and a multi-day horizon
-compounds that to ~94%. This is why `pFillAmplitude` reports an honest n=0 prior rather than the
-in-sample figure, and why the out-of-sample design (which separates live rows 0% / 24% / 42% / 48% @96h)
-is the basis for DT1b.
+compounds that to ~94%. This is why `pFillAmplitude` briefly reported an honest n=0 prior rather than the
+in-sample figure — and why the out-of-sample design (which separates live rows 0% / 24% / 42% / 48% @96h)
+became `ampWalkForward`, the production estimator shipped in **DT1b** the same day. This harness is now
+the standing regression check on that decision: if the two columns ever converge, the pre-origin fit has
+been broken somewhere.
 
 Reads the archive READ-ONLY and `js/` production code; writes nothing. Re-run:
 `node pipeline/experiments/amp-cycle-reproduction.mjs`. Depends on `hp-lib.mjs` in the 2026-08-09

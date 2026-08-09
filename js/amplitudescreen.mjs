@@ -18,8 +18,9 @@
  * to 22.6% at 96h and 34.6% at 7d, and the survivors are the repeatable multi-DAY oscillator class (Masori
  * chaps 71% at 7d; fang ~6–8d), which is exactly the taxonomy gap the standing multi-week-oscillator note
  * describes. So the default horizon moved 1 → 4 days and the refuted `pFill2leg` product-of-marginals was
- * DELETED. Its intended replacement `cycleCompletion` proved CIRCULAR (in-sample levels) and is display-only;
- * `pFillAmplitude` reports an honest n=0 prior until the walk-forward per-item measurement (DT1b) lands.
+ * DELETED. Its intended replacement `cycleCompletion` proved CIRCULAR (in-sample levels) and is neither shown
+ * nor ranked on; DT1b replaced it with `ampWalkForward` — levels fitted STRICTLY PRE-ORIGIN, scored at hour
+ * grain — which now drives `pFillAmplitude` directly.
  * The study itself REPRODUCES EXACTLY when re-run (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h
  * n=31), so the refutation is solid. Full numbers: AMP_HOLD_DAYS_DEFAULT below.
  *
@@ -39,8 +40,10 @@
  *
  * RANKING (§2.2 — NOT a bespoke ampScore). Amplitude registers an `'amplitude'` ESTIMATOR FAMILY
  * (js/estimators/families.mjs) so the standard rank = net × P(fill) ÷ TTF machinery carries it:
- *   pFill    = the bare 0.5 PRIOR at n=0 since DT1 (2026-08-09). The two-leg recent-reach PRODUCT that
- *              used to sit here was measured independence-false and deleted; see pFillAmplitude's header.
+ *   pFill    = the MEASURED walk-forward round-trip rate since DT1b (2026-08-09) — `ampWalkForward`.
+ *              Two predecessors sat here and were both refuted: a two-leg recent-reach PRODUCT (independence
+ *              measured false) and an in-sample day-grain completion rate (circular). See pFillAmplitude's
+ *              header for why each died and what makes this one valid. Prior at n=0 when unmeasurable.
  *   ttf      = the hold-horizon prior (holdDays × 86400).
  *   lapUnits = the deployable-units min() (bankroll ÷ trough-bid, vol-share, buy-limit accumulation) —
  *              bankroll = TOTAL REALIZABLE capital (liquidCapital) UNDIVIDED (concentration lane, no ÷slots).
@@ -54,7 +57,7 @@
  * validated.
  */
 import { tax } from './money-math.js';
-import { quantLow, quantHigh, recencySplit, RECENT_NIGHTS } from './windowread.mjs';
+import { quantLow, quantHigh, recencySplit, windowStats, RECENT_NIGHTS } from './windowread.mjs';
 import { ACTIONABLE_WINDOWS_PER_DAY } from './desk-cadence.mjs';
 
 const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : null;
@@ -189,7 +192,10 @@ export function amplitudeProxy(points, { recentDays = 5, minDays = 3 } = {}) {
    re-running that design reproduces its numbers exactly. Do NOT read this as a round-trip completion
    rate, and do NOT wire it into pFillAmplitude (see that function's header). What it honestly answers is
    the weaker "after an entry day, does this ask still print at all in-window?" — `0/N` is damning, a high
-   figure near-uninformative. The real per-item estimator is the walk-forward measurement (DT1b).
+   figure near-uninformative. The real per-item estimator is `ampWalkForward` below (DT1b), which is what
+   the board shows and ranks on; this survives only in the shadow log, for continuity with rows logged
+   between DT1 and DT1b. It is NOT displayed — printing ~95% beside the walk-forward's ~6% for the same
+   item would invite reading the flattering one. Do not put it back on a surface.
 
    `frac` is null when `judged === 0` (no scoreable entry ⇒ no claim). n is small by construction
    (~9–10 judged at AMP_NIGHTS=14 and a 4-day horizon), so `judged` is returned and printed alongside it.
@@ -215,6 +221,117 @@ export function cycleCompletion(days, { bid = null, ask = null, horizonDays = AM
     else pending++;
   }
   return { entries, judged, completed, pending, frac: judged ? completed / judged : null };
+}
+
+/* --- DT1b: the WALK-FORWARD per-item round-trip rate ---------------------------------------------
+   ampWalkForward(series1h, { horizonDays, askQ, bidQ, nights, fitDays, warmupDays }) →
+     { origins, entries, judged, completed, pending, frac, horizonDays, askQ, bidQ } | null
+
+   THIS is the honest answer to "once the trough bid fills, does the peak ask get reached inside the
+   hold horizon?" — the question `pFill2leg` got wrong by multiplying marginals and `cycleCompletion`
+   got wrong by fitting its levels to the very days it scored. Read both of those headers before
+   touching this; they are the two failure modes this function is shaped to avoid.
+
+   THE TWO PROPERTIES THAT MAKE IT VALID, neither of which is optional:
+   1. LEVELS ARE FITTED STRICTLY PRE-ORIGIN. For each origin day T the bid/ask come from
+      `amplitudeRanges` over the `fitDays` window ENDING AT LOCAL MIDNIGHT OF T — never including T or
+      anything after it. That is the entire difference between this and the circular in-sample figure:
+      the levels cannot have been chosen with knowledge of the day being scored.
+   2. ENTRY AND COMPLETION ARE SCORED AT HOUR GRAIN. Entry is the FIRST hour of T whose 1h avgLow
+      touches the bid (a resting trough bid filling); completion is any LATER hour, within
+      horizonDays, whose avgHigh reaches the ask. Day buckets cannot express "the low preceded the
+      high", which is why `cycleCompletion` had to refuse same-day completions entirely and this does
+      not have to.
+
+   PENDING is excluded from the denominator (the join-amplitude-outcomes contract): an entry whose
+   horizon runs past the end of the series is unresolved, not a miss. `judged = completed + missed`.
+
+   VALIDATION. This is the design of the DT1 study (PLAN-DIURNAL-TRIAGE), which re-runs and reproduces
+   its published figures exactly — Saturated heart 0.0% @96h (n=41), Masori chaps 12.9% @24h (n=31);
+   harness `pipeline/experiments/amp-cycle-reproduction.mjs`. It discriminates strongly across live
+   rows (0% / 24% / 42% / 48% @96h), which is the property the saturated in-sample figure lacked.
+
+   HONESTY LIMITS — carry them, they are not boilerplate. The touch proxies are 1h avgLow/avgHigh
+   AGGREGATES, not executed fills: no queue position, no partial fills, no competition for the same
+   level, so every rate here is an UPPER BOUND on what a real offer would achieve. Origin days overlap
+   in their fit windows, so effective n is well below `judged`. One 73-day archive era, one update
+   cycle. `frac` is a DESCRIPTIVE historical rate for this item under this strategy, not a forecast.
+
+   Returns null when the series is too short to yield any scoreable origin — an honest absence that
+   callers must degrade to the prior on, never coerce to 0. */
+export const AMP_WF_FIT_DAYS    = 20;   // lookback the pre-origin levels are fitted over
+export const AMP_WF_WARMUP_DAYS = 15;   // origin days before this many days of history are skipped
+export const AMP_WF_MIN_HOURS   = 12;   // an origin day needs this many logged low AND high hours to score
+// Below this many judged entries the rate is too thin to rank on and callers fall back to the prior.
+// 10 is a judgment floor, not a power calculation: at ~58 origin days a healthy item judges 30–48, so
+// this only excludes genuinely cold/illiquid items — exactly the ones whose 1h series is sparse anyway.
+export const AMP_WF_MIN_JUDGED  = 10;
+
+export function ampWalkForward(series1h, {
+  horizonDays = AMP_HOLD_DAYS_DEFAULT, askQ = AMP_ASK_Q, bidQ = AMP_BID_Q,
+  nights = 14, fitDays = AMP_WF_FIT_DAYS, warmupDays = AMP_WF_WARMUP_DAYS,
+} = {}) {
+  if (!Array.isArray(series1h) || series1h.length < 24 * (warmupDays + 1)) return null;
+  const pts = series1h.filter(p => p && typeof p.timestamp === 'number').sort((a, b) => a.timestamp - b.timestamp);
+  if (!pts.length) return null;
+  const lastTs = pts[pts.length - 1].timestamp;
+  const horizonSec = Math.max(1, Math.floor(horizonDays)) * 86400;
+
+  // LOCAL day buckets (repo convention — every day boundary in this codebase is local wall-clock;
+  // windowStats' own dayKey is local too, so the fit window and the origin day agree by construction).
+  const days = new Map();
+  for (const p of pts) {
+    const d = new Date(p.timestamp * 1000);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    let e = days.get(key);
+    if (!e) { e = { hours: [], nLow: 0, nHi: 0 }; days.set(key, e); }
+    e.hours.push(p);
+    if (p.avgLowPrice != null) e.nLow++;
+    if (p.avgHighPrice != null) e.nHi++;
+  }
+  const keys = [...days.keys()].sort();
+  const midnightOf = key => { const [y, m, d] = key.split('-').map(Number); return Math.floor(new Date(y, m - 1, d).getTime() / 1000); };
+
+  let origins = 0, entries = 0, judged = 0, completed = 0, pending = 0;
+  for (let di = warmupDays; di < keys.length; di++) {
+    const T = keys[di], eT = days.get(T);
+    if (!eT || eT.nLow < AMP_WF_MIN_HOURS || eT.nHi < AMP_WF_MIN_HOURS) continue;   // a half-logged day can't be scored
+    const cut = midnightOf(T);
+    const fit = pts.filter(p => p.timestamp < cut && p.timestamp >= cut - fitDays * 86400);
+    // `now: cut` pins windowStats' today-exclusion to the origin, not the wall clock — so this function
+    // is deterministic and a fixture doesn't rot. (Nothing at/after `cut` is in `fit` anyway.)
+    const stats = windowStats(fit, { nights, wStart: 0, wEnd: 0, now: new Date(cut * 1000) });
+    if (!stats) continue;
+    // SAME level derivation as the live board — not a re-implementation — so the measured rate belongs
+    // to the levels the row actually quotes. holdDays is irrelevant here (it feeds cycleCompletion only;
+    // ampBid/ampAsk depend solely on bidQ/askQ), but pass it for shape parity.
+    const ar = amplitudeRanges(stats, null, { holdDays: horizonDays, askQ, bidQ });
+    if (!ar || !ar.hasData || ar.ampBid == null || ar.ampAsk == null) continue;
+    origins++;
+
+    let entryTs = null;
+    for (const p of eT.hours) {                                   // eT.hours is already chronological
+      if (p.avgLowPrice != null && p.avgLowPrice <= ar.ampBid) { entryTs = p.timestamp; break; }
+    }
+    if (entryTs == null) continue;                                // the bid never filled on T
+    entries++;
+
+    let done = false;
+    for (const p of pts) {
+      if (p.timestamp <= entryTs) continue;                       // STRICTLY later than the fill
+      if (p.timestamp > entryTs + horizonSec) break;
+      if (p.avgHighPrice != null && p.avgHighPrice >= ar.ampAsk) { done = true; break; }
+    }
+    if (done) { completed++; judged++; }
+    else if (entryTs + horizonSec <= lastTs) judged++;             // a FULL horizon elapsed → a real miss
+    else pending++;                                                // horizon runs past the data → unresolved
+  }
+  if (!origins) return null;
+  return {
+    origins, entries, judged, completed, pending,
+    frac: judged ? completed / judged : null,
+    horizonDays, askQ, bidQ,
+  };
 }
 
 /* --- Stage 2: the exact per-day amplitude SHAPE off a windowStats result --------------------------

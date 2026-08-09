@@ -286,11 +286,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   reach off a `windowStats` result) / **`cycleCompletion`** (DT1 — the ordered day-grain round-trip rate
   built to replace `pFill2leg`: an entry day whose ask is reached on a STRICTLY LATER day inside the
   horizon; window-edge entries are PENDING not misses; same-day never counts; `frac` null on zero judged
-  entries. **DISPLAY-ONLY — measured on the live board and REJECTED as a rank input**: median-bid vs
-  median-ask over a multi-day horizon saturates (~94% at H=4; the board read 18/19), so `pFillAmplitude`
-  deliberately returns the bare 0.5 prior at n=0 instead. Printed as `ask-reprints X/Y ≤4d`, ASYMMETRIC —
-  a high value is near-uninformative, `0/N` is damning. The real ordered joint needs sub-day tLo/tHi bars:
-  PLAN-BOTH-LEG-ENTRY BL1) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
+  entries. **SHADOW-LOG ONLY — measured on the live board and REJECTED as a rank input, then dropped from
+  the table by DT1b**: its levels are the median low/high OF THE VERY DAYS it scores, so a multi-day
+  horizon saturates it (~94% at H=4; the board read 18/19). Kept only for continuity with rows logged
+  between DT1 and DT1b) / **`ampWalkForward`** (DT1b — THE per-item P(fill): for each origin day the
+  trough/peak levels are fitted STRICTLY PRE-ORIGIN over the preceding `AMP_WF_FIT_DAYS`, entry is the
+  first hour of that day whose 1h avgLow touches the bid, completion is any LATER hour within the horizon
+  whose avgHigh reaches the ask; unresolved end-of-series entries are PENDING not misses; null — never 0% —
+  when history is too thin. Reads the local 1h archive via `archiveSeries` (~20ms/item); the live
+  `/timeseries` fetch is far too short. This is the DT1 study's own design and reproduces its published
+  figures exactly; it separates live rows 0%/16%/21%/26%/48% where the in-sample figure read ~100% on all
+  of them. Printed as `round-trip X/Y = Z% ≤4d`; `pFillAmplitude` ranks on it above `AMP_WF_MIN_JUDGED`
+  judged entries and falls back to the 0.5 prior below it) / `amplitudeGate` (after-tax daily-amplitude floor + both-leg reach +
   trend/knife guard) / `amplitudeDeployUnits` (the deployable-units three-way min the `amplitude`
   estimator family reads — floored HONESTLY to an integer, 0 when unaffordable: amplitude is a
   CONCENTRATION lane so `capGp` is TOTAL REALIZABLE `liquidCapital` used UNDIVIDED, NOT value's

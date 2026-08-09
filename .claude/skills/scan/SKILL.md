@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.98
+version: 1.99
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -167,7 +167,7 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   never leave a scalp bid unattended (a resting scalp bid keeps its stop only while you watch it).
 - **`--mode amplitude`** _(judgment: PROVISIONAL n≈0 — don't trade on it yet; patient, never act-now)_ —
   the MULTI-DAY-cycle lane (THE SWAP put it in `--mode all`): buy the TROUGH, sell the PEAK, hold a few
-  DAYS, cycle. Its own cycle table (trough→peak swing · both-leg reach + **measured completion** ·
+  DAYS, cycle. Its own cycle table (trough→peak swing · both-leg reach + **measured round-trip rate** ·
   net/cycle · hold horizon · deploy units · grade). Surfaces the big-ticket-that-oscillates class band is
   blind to (Masori-body class: Inquisitor's mace / Arcane sigil / Torva / Nightmare staff / Bellator ring
   surfaced on the live trial).
@@ -182,17 +182,21 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   one 74-day era, one update cycle; completion measured on hourly aggregates, NOT executed fills, so
   every rate is an UPPER BOUND; item-day clustering ⇒ effective n well below nominal.*
   **Judgment layer:** (1) these are PATIENT multi-DAY plays — list them
-  under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) **There is currently NO trustworthy
-  round-trip probability on this lane — do not relay one.** The `ask-reprints X/Y ≤4d` figure in the reach
-  cell is DISPLAY-ONLY and ASYMMETRIC: it is saturated by construction (median bid vs median ask over a
-  multi-day horizon ≈ 94%; the live board read 18/19, including Saturated heart at 5/5 — the item the
-  study measured at 0% within 96h), so a HIGH value is close to uninformative and must never be pitched
-  as "the round trip completes". A **`0/N` is still damning** — this ask has not printed after an entry
-  even once in-window — so read it as a one-sided red flag only. P(fill) in the rank is now the bare 0.5
-  PRIOR at n=0, deliberately, until DT1b lands the walk-forward per-item measurement (fit levels pre-T,
-  score entry→completion at hour grain — validated 2026-08-09, reproduces the study exactly and separates
-  live rows sharply: 0% / 24% / 42% / 48% @96h on Saturated heart / Virtus / Masori chaps / Fury). The both-leg reach columns answer the weaker printability question; treat them as a gate
-  on whether a level prints, never as evidence of a completed round trip. (3) These are **thin-class by construction** (big tickets enter via
+  under **deploy/accumulate**, NEVER as act-now rows (actionable-first discipline). (2) **The
+  `round-trip X/Y = Z% ≤4d` cell IS the make-or-break number — read it before anything else on the row,
+  including the grade.** _(DT1b, 2026-08-09)_ It is the MEASURED walk-forward rate: of Y past days where
+  the trough bid actually filled and a full horizon elapsed, the peak ask was reached on X. Levels are
+  fitted strictly BEFORE each scored day and entry/completion are scored at hour grain, which is what
+  makes it trustworthy where its predecessors weren't — the earlier `ask-reprints` figure was saturated
+  by construction (~94%) and is now withdrawn from the table entirely. It drives P(fill) in the rank
+  directly, so a low rate already shows up in the grade. **A `—` means too little history to measure,
+  never 0%** — that row's grade rests on the 0.5 prior and zero observations; the footer names how many
+  rows fell back and why, so check it rather than assuming every row is measured. It remains an UPPER
+  BOUND (1h aggregates, no queue position, no partial fills, no competition at the level) on one 73-day
+  era — so relay it as "this ask reprinted after entry X of Y times", not as a fill probability you can
+  size on. Anchor: Saturated heart graded A- at +5.88m/cycle under the old prior and fell to **D on a
+  measured 0 of 37** the moment this landed. The both-leg reach columns answer the weaker printability
+  question; treat them as a gate on whether a level prints, never as evidence of a completed round trip. (3) These are **thin-class by construction** (big tickets enter via
   gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
   row — never size like a liquid flip. **Thin-exit caveat (INFORM, not a gate):** thin BY CONSTRUCTION is
   exactly why a large concentrated amplitude position CANNOT be exited fast if the thesis breaks — surface
