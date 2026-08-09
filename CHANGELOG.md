@@ -31,19 +31,26 @@ sizes rose ~4× — stated in the footer rather than left to be discovered.
 entry is adverse selection (unconditional ask-reach ≤48h 43.1% vs 11.4% conditional on entry), so rows it
 predicted at ≥0.25 realized ~5%. The plan called for replacing it with `cycleCompletion`, an ORDERED
 day-grain completion rate. That was built, then **measured on the live board and rejected as a rank
-input**: it is saturated by construction. `ampBid` is the median daily low and `ampAsk` the median daily
-high, so ~50% of days clear the ask and over a 4-day horizon P(some later day clears it) ≈ 1−0.5⁴ ≈ 94%.
+input**: it is CIRCULAR by construction. `ampBid`/`ampAsk` are the medians OF THE VERY DAYS then scored,
+so ~50% of those days clear the ask *by definition*, and a 4-day horizon compounds that to ≈ 1−0.5⁴ ≈ 94%.
 The board read **18 of 19** — including Saturated heart at 5/5, the very item the study measured at 0%
-within 96h. At a 1-day horizon the construction yields ~50% against the study's 4.8%, a ~10× gap, proving
-the study measured a stricter sub-day event (the ask printing after the ACTUAL fill) that day buckets
-cannot express. Ranking on it would have pushed every amplitude row's P(fill) toward 1.0 — the opposite of
+within 96h. Ranking on it would have pushed every amplitude row's P(fill) toward 1.0 — the opposite of
 what the evidence supports.
+
+**Correction, same day.** My first diagnosis blamed sub-day grain and implied the study might be
+unreproducible. That was wrong, and the record matters more than the ego: re-running the study's actual
+design against the archive — levels fitted strictly before each origin day (`p.timestamp < midnight(T)`),
+hour-grain entry and completion — **reproduces its published numbers exactly**: Saturated heart 0.0% @96h
+(n=41), Masori chaps 12.9% @24h (n=31). The study is sound, the refutation holds, and the re-horizon is
+well-founded. The defect was mine alone, and it was circularity, not grain.
 
 **So `pFillAmplitude` returns the bare 0.5 PRIOR at n=0.** That is deliberate and is the honest state:
 we deleted a number we proved wrong and declined to replace it with one that only looks measured. Rows now
 carry the `(thin)` confidence marker, which is correct — the round-trip call rests on zero observations.
-The real ordered joint needs sub-day bars carrying `tLo`/`tHi`, which is already scoped as
-PLAN-BOTH-LEG-ENTRY chunk BL1; that plan's recorded `pFill2leg` defect is now closed by deletion.
+The fix is a WALK-FORWARD per-item measurement off the 1h archive (fit pre-T, score entry→completion at
+hour grain) — the design just validated, which discriminates strongly across live rows (0% / 24% / 42% /
+48% @96h on Saturated heart / Virtus / Masori chaps / Fury) at n≈31–41 origin days each. Tracked as DT1b.
+PLAN-BOTH-LEG-ENTRY's recorded `pFill2leg` defect is closed by deletion.
 
 **`cycleCompletion` survives as a DISPLAY-ONLY, ASYMMETRIC diagnostic**, printed as `ask-reprints X/Y ≤4d`
 (deliberately NOT called "completion"). A high value is near-uninformative; a `0/N` is genuinely damning —

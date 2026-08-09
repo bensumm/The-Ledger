@@ -18,7 +18,10 @@
  * to 22.6% at 96h and 34.6% at 7d, and the survivors are the repeatable multi-DAY oscillator class (Masori
  * chaps 71% at 7d; fang ~6–8d), which is exactly the taxonomy gap the standing multi-week-oscillator note
  * describes. So the default horizon moved 1 → 4 days and the refuted `pFill2leg` product-of-marginals was
- * replaced by `cycleCompletion`, a MEASURED ordered rate. Full numbers: AMP_HOLD_DAYS_DEFAULT below.
+ * DELETED. Its intended replacement `cycleCompletion` proved CIRCULAR (in-sample levels) and is display-only;
+ * `pFillAmplitude` reports an honest n=0 prior until the walk-forward per-item measurement (DT1b) lands.
+ * The study itself REPRODUCES EXACTLY when re-run (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h
+ * n=31), so the refutation is solid. Full numbers: AMP_HOLD_DAYS_DEFAULT below.
  *
  * TWO-STAGE GATE (§2.1 — like value's). At gate time the screen has only bulk data (the corrected
  * rolling-24h volumes, the 2h bands, and the daily archive = whole-market /1h at 6h spacing = 4 mid
@@ -36,8 +39,8 @@
  *
  * RANKING (§2.2 — NOT a bespoke ampScore). Amplitude registers an `'amplitude'` ESTIMATOR FAMILY
  * (js/estimators/families.mjs) so the standard rank = net × P(fill) ÷ TTF machinery carries it:
- *   pFill    = the two-leg recent-reach PRODUCT at the quoted daily pair (bid-touch × ask-reach) — the
- *              honest "will the round trip complete?" number as a first-class rank input from day one.
+ *   pFill    = the bare 0.5 PRIOR at n=0 since DT1 (2026-08-09). The two-leg recent-reach PRODUCT that
+ *              used to sit here was measured independence-false and deleted; see pFillAmplitude's header.
  *   ttf      = the hold-horizon prior (holdDays × 86400).
  *   lapUnits = the deployable-units min() (bankroll ÷ trough-bid, vol-share, buy-limit accumulation) —
  *              bankroll = TOTAL REALIZABLE capital (liquidCapital) UNDIVIDED (concentration lane, no ÷slots).
@@ -177,18 +180,16 @@ export function amplitudeProxy(points, { recentDays = 5, minDays = 3 } = {}) {
    within a day, and counting it would silently re-import the ordering assumption this function exists to
    remove. That makes `frac` CONSERVATIVE for genuinely intraday items — stated, not hidden.
 
-   ⚠ SATURATED BY CONSTRUCTION — DISPLAY-ONLY, NEVER A RANK INPUT. Measured on the live board the day it
-   was built: 18 of 19 judged entries "completed" (5/5, 6/7, 7/7) — including Saturated heart at 5/5, the
-   item the DT1 study measured at 0% completion within 96h. The reason is arithmetic, not data: `bid` is
-   the MEDIAN daily low and `ask` the MEDIAN daily high, so ~50% of days clear the ask and over an H-day
-   horizon P(at least one later day clears it) ≈ 1−0.5^H ≈ 94% at H=4. At H=1 it yields ~50% where the
-   study measured 4.8%, a ~10× gap — so the study was measuring a STRICTER event (the ask printing after
-   the ACTUAL fill, at sub-day grain) that day buckets cannot express. Do NOT read this as "the round trip
-   completes 95% of the time", and do NOT wire it into pFillAmplitude (see that function's header for why
-   it deliberately returns the bare prior instead). What it DOES answer, honestly, is the weaker question
-   "after an entry day, does this ask level still print at all within the horizon?" — a `done 0/N` row is
-   genuinely damning; a high figure is close to uninformative.
-   The real ordered joint needs sub-day bars carrying tLo/tHi — PLAN-BOTH-LEG-ENTRY chunk BL1.
+   ⚠ CIRCULAR BY CONSTRUCTION — DISPLAY-ONLY, NEVER A RANK INPUT. `bid`/`ask` as passed by
+   amplitudeRanges are the MEDIAN low/high OF THE SAME DAYS scored here, so ~50% of those days clear the
+   ask BY DEFINITION and over an H-day horizon P(some later day clears) ≈ 1−0.5^H ≈ 94% at H=4. That is a
+   tautology, not a measurement. Confirmed on the live board the day it was built: 18 of 19 (5/5, 6/7,
+   7/7), including Saturated heart at 5/5 — an item whose real out-of-sample rate is 0 of 41 within 96h.
+   The DT1 study avoided this by fitting levels strictly BEFORE each origin day and scoring at hour grain;
+   re-running that design reproduces its numbers exactly. Do NOT read this as a round-trip completion
+   rate, and do NOT wire it into pFillAmplitude (see that function's header). What it honestly answers is
+   the weaker "after an entry day, does this ask still print at all in-window?" — `0/N` is damning, a high
+   figure near-uninformative. The real per-item estimator is the walk-forward measurement (DT1b).
 
    `frac` is null when `judged === 0` (no scoreable entry ⇒ no claim). n is small by construction
    (~9–10 judged at AMP_NIGHTS=14 and a 4-day horizon), so `judged` is returned and printed alongside it.

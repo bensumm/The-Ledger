@@ -189,8 +189,9 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   study measured at 0% within 96h), so a HIGH value is close to uninformative and must never be pitched
   as "the round trip completes". A **`0/N` is still damning** — this ask has not printed after an entry
   even once in-window — so read it as a one-sided red flag only. P(fill) in the rank is now the bare 0.5
-  PRIOR at n=0, deliberately, until PLAN-BOTH-LEG-ENTRY BL1 supplies sub-day bars that can express the
-  ordered event. The both-leg reach columns answer the weaker printability question; treat them as a gate
+  PRIOR at n=0, deliberately, until DT1b lands the walk-forward per-item measurement (fit levels pre-T,
+  score entry→completion at hour grain — validated 2026-08-09, reproduces the study exactly and separates
+  live rows sharply: 0% / 24% / 42% / 48% @96h on Saturated heart / Virtus / Masori chaps / Fury). The both-leg reach columns answer the weaker printability question; treat them as a gate
   on whether a level prints, never as evidence of a completed round trip. (3) These are **thin-class by construction** (big tickets enter via
   gp-flow, grade-capped A-): state the real unit reality (a few units/day, slow day-long fills) on every
   row — never size like a liquid flip. **Thin-exit caveat (INFORM, not a gate):** thin BY CONSTRUCTION is

@@ -174,14 +174,20 @@ export function pFillValue(ctx = {}) {
 // so ~50% of days reach the ask and over a 4-day horizon P(at least one later day clears it) ≈ 1−0.5⁴
 // ≈ 94%. The live board confirmed it exactly — 18 of 19 judged entries "completed" (5/5, 6/7, 7/7),
 // including Saturated heart at 5/5, the very item the study measured at 0% completion within 96h.
-// At a 1-day horizon the construction yields ~50% where the study measured 4.8% — a ~10× gap. The study
-// was therefore measuring a materially STRICTER event (the ask printing after the ACTUAL fill, at
-// sub-day grain), which day buckets cannot express. Ranking on the saturated number would have pushed
-// every amplitude row's P(fill) toward 1.0 — the exact opposite of what the evidence supports.
-// So the family reports an honest wide prior with n=0 rather than a measured-looking fake. The real
-// ordered joint needs sub-day bars carrying tLo/tHi, which is exactly PLAN-BOTH-LEG-ENTRY chunk BL1;
-// that is where this gets fixed, not here. `cycleCompletion` survives as a DISPLAYED diagnostic only
-// (it answers the weaker "does the ask still print after entry?"), never as a rank input.
+//
+// ROOT CAUSE (diagnosed 2026-08-09, after an initial WRONG diagnosis blamed sub-day grain): the levels
+// are fitted IN-SAMPLE. `ampBid`/`ampAsk` are the median low/high OF THE VERY DAYS then scored, so ~50%
+// of those days clear the ask BY DEFINITION and the multi-day horizon compounds that to ~94%. It is a
+// tautology, not a measurement. The DT1 study avoided this by fitting levels strictly BEFORE each origin
+// day (`p.timestamp < midnight(T)`) and scoring at hour grain — and re-running that design reproduces
+// its published numbers EXACTLY (Saturated heart 0.0% @96h n=41; Masori chaps 12.9% @24h n=31). Grain
+// matters too, but circularity is the dominant term. The study is sound; this function was the bug.
+//
+// So the family reports an honest wide prior with n=0 rather than a measured-looking fake. The fix is
+// NOT more day-grain arithmetic — it is a WALK-FORWARD per-item measurement off the 1h archive (fit
+// pre-T, score entry→completion at hour grain), which is validated to work and yields a real
+// discriminator (0% / 24% / 42% / 48% @96h across four live-board rows). Tracked as DT1b.
+// `cycleCompletion` survives as a DISPLAYED diagnostic only, never a rank input.
 export function pFillAmplitude(ctx = {}) {
   return estR(PFILL_PRIOR, 0, 'prior');
 }

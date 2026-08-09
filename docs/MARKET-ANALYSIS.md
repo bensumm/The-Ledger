@@ -443,14 +443,17 @@ PENDING rather than misses, same-day never counting (day buckets can't prove low
 **built, measured on the live board, and REJECTED as a rank input the same day.** It is SATURATED BY
 CONSTRUCTION: `ampBid` is the median daily low and `ampAsk` the median daily high, so ~50% of days clear
 the ask and over a 4-day horizon P(some later day clears it) ≈ 1−0.5⁴ ≈ 94%. The board read 18 of 19 —
-including Saturated heart at 5/5, the item the study measured at 0% within 96h. At a 1-day horizon the
-construction gives ~50% against the study's 4.8%, a ~10× gap, which shows the study was measuring a
-STRICTER, sub-day event (the ask printing after the ACTUAL fill) that day buckets cannot express. So
+including Saturated heart at 5/5, the item the study measured at 0% within 96h. The root cause is CIRCULARITY, not grain (an initial
+diagnosis blaming sub-day grain was wrong): the levels are the medians OF THE DAYS THEN SCORED, so ~50%
+clear the ask by definition. The study fitted levels strictly BEFORE each origin day and scored at hour
+grain, and **re-running that design reproduces its published numbers exactly** — Saturated heart 0.0%
+@96h (n=41), Masori chaps 12.9% @24h (n=31) — so the refutation is confirmed and the study is sound. So
 `pFillAmplitude` now returns the bare 0.5 PRIOR with n=0 rather than a measured-looking fake, and the
 figure survives as a DISPLAY-ONLY, ASYMMETRIC diagnostic printed as `ask-reprints X/Y ≤4d`: a high value
 is near-uninformative, but `0/N` is damning (this ask has not printed after an entry even once in-window).
-The real ordered joint needs sub-day bars carrying `tLo`/`tHi` — that is PLAN-BOTH-LEG-ENTRY chunk BL1,
-and it is where this gets fixed. The lane was mis-horizoned, not signal-free: the
+The fix is a WALK-FORWARD per-item measurement off the 1h archive (fit pre-T, score entry→completion at
+hour grain) — validated to reproduce the study and to discriminate strongly across live rows (0% / 24% /
+42% / 48% @96h on Saturated heart / Virtus / Masori chaps / Fury). Tracked as DT1b. The lane was mis-horizoned, not signal-free: the
 survivors are the repeatable multi-DAY oscillator class (Masori chaps 12.9%/24h but 71%/7d; fang ~6–8d).
 Reconciles with PLAN-BOTH-LEG-ENTRY's "approximately calibrated" finding (mean 0.102 vs realized 0.116):
 that measured the UNORDERED hold-≤1d joint, this measures the ORDERED entry-conditional round trip — both
