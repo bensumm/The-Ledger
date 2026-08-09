@@ -82,21 +82,28 @@ reference — labeled un-calibrated (n≈0), never a rank/grade/sort input. Oper
   for the entire price range, the old BE-clamp turned every sub-BE fold into a **false `+1 (BE X)`** that
   hid a possibly-real edge — the operator read `+1` and SKIPPED. Now the cell shows the **real (possibly
   negative) net** with its **P(fill)** beside it (`askReachFactor` — the same function the rank calls, reused
-  not forked, so the cell reads raw margin × P(fill)). **Its basis is RECENT-3** (RB-3, PLAN-RECENCY-BASIS,
-  2026-08-04): the probability is scored on the same recent-3 window as the fold price it sits beside, because
-  before RB-3 the price was recent-3 and the probability full-window and the two contradicted each other on any
-  regime-changed item. **The RANK's `P(fill)` is still FULL-WINDOW** (`js/estimators/families.mjs`) — a decided
-  split, not drift: a measurement pass found the rank-basis swap moves the composite rank >33% on ~23% of
-  item-days, and a four-valued n=3 probability *multiplier* is not the same risk as a continuous band-bounded
-  price, so the rank basis is gated on a realized-fill study. So on a recency-divergent row the `P(ask)~` in the
-  Est. cells and the `P~` in the Rank cell legitimately differ; neither is "the same probability the other
-  carries". Rule 4: recent-3 is not KNOWN to predict fills better (n=0, no fills-to-basis join) — this is a
-  *consistency* fix, not an accuracy claim. When the fold sits below break-even the cell **ANNOTATES**
-  it (`recency-fold floored to BE X — nothing to price above break-even`) rather than substituting the
+  not forked, so the cell reads raw margin × P(fill)). **Its basis is the FULL WINDOW** (flipped 2026-08-09;
+  it was recent-3 from RB-3, 2026-08-04). RB-3's finding still holds and is what keeps these two numbers
+  paired: the fold PRICE and the probability beside it must declare the SAME basis, or one row contradicts
+  itself on a regime-changed item. What changed is *which* basis both use. **Recent-3 is four-valued** — at
+  n=3 the fraction can only be 0, ⅓, ⅔ or 1, so one night's print swings it by a third of its range, which
+  is the noisiest input the estimator has. Forward-scoring backs the flip: over 6,016 ask rows with a real
+  8h outcome, a higher full-window reach fraction printed **9.8pp** more often within-item (78 items vs 36,
+  p=0.0001) — a resolution the 14-night window can carry and a 3-night one cannot. **This also retires a
+  standing caveat**: the display P and the RANK's P (`js/estimators/families.mjs`) were deliberately
+  different numbers under RB-3 and are now the same basis, so `P(ask)~` in the Est. cells and `P~` in the
+  Rank cell agree. The freshness signal is **shown, not discarded** — the `0/3 · 12/14` divergence token is
+  unchanged and the `fold:` line prints the recent-3 value beside the full-window one whenever they differ.
+  Rule 4: full-window is not KNOWN to predict FILLS better (n=0 — no fills-to-basis join exists; the
+  measurement is against PRINTS). ⚠ **Two display surfaces did NOT flip** and remain recent-preferring —
+  the `--digest` reach ✓/✗ column (`digestReachFrac`) and `watch-positions`' size-relief note. That is a
+  real remaining split, flagged rather than silently reconciled; deciding it is its own change. When the
+  fold sits below break-even the cell **ANNOTATES**
+  it (`reach-fold floored to BE X — nothing to price above break-even`) rather than substituting the
   number; `estSellFloorBind` carries that BE as a display fact. A **forward "list at X"** rides alongside —
   the phase-aware `driftExitFrom` projected exit (`~Nd hold`, confidence ordinal, `forward n≈0` inform),
   shown when the caller passed its in-hand `hourProfile`+`windowStats().days` (`extra.forward`; absent →
-  degrade, no fetch). The recency reach-fold is labeled **secondary/phase-blind** (the correct read for a
+  degrade, no fetch). The reach-fold is labeled **secondary/phase-blind** (the correct read for a
   confirmed knife); NO "which is authoritative" claim — both ship until the F-G realized-fill retro
   adjudicates. The pure discovery screen NEVER anchors to a declared exit (a bare candidate is a buy read).
   The band sell fold is deliberately KEPT (AC7, the crux verdict — the rank's soft-floored ask-reach P is
@@ -738,13 +745,13 @@ thin-item rebuy-strand caution + a `REBUY_STALE_DAYS` nudge; zero-ripple — an 
 extra on every surface.)
 
 Any scored `--bid`/`--ask`/`--exit` run also prints a **three-part `fold:` line** (PLAN-ESTIMATOR-POSTURE
-AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p%[ (full-window
-q%)] · list at F (~Nd hold, conf) · recency-fold Y (secondary — phase-blind) (recent a/b · full c/d)[
-recency-fold floored to BE …]`. The **honest margin** (raw best-case net, NEVER BE-clamped to `+1`) + its
-**P(fill)** (`askReachFactor` on the **recent-3** display basis since RB-3 — with the **full-window** value,
-which is what the rank still carries, printed in parentheses **only when the two differ**, so a basis that
+AC8 + PLAN-ESTIMATOR-HONEST-SELL E3, 2026-07-22): `best-case ask X · honest net ±N · P(fill)~p%[ (recent-3
+q%)] · list at F (~Nd hold, conf) · reach-fold Y (secondary — phase-blind) (recent a/b · full c/d)[
+reach-fold floored to BE …]`. The **honest margin** (raw best-case net, NEVER BE-clamped to `+1`) + its
+**P(fill)** (`askReachFactor` on the **full-window** basis since 2026-08-09 — with the **recent-3** value,
+the freshness read it no longer applies, printed in parentheses **only when the two differ**, so a basis that
 moves a displayed number is visible rather than silently swapped) lead; the **forward "list at F"** (`driftExitFrom`, phase-aware,
-`n≈0` inform) is the actionable price; the **recency reach-fold** rides labeled secondary/phase-blind (the
+`n≈0` inform) is the actionable price; the **reach-fold** rides labeled secondary/phase-blind (the
 correct read for a confirmed knife — on a KNIFE `driftExitFrom` degrades to a labeled trend-only level, no
 crash). All from the SHARED `estimatePair` (zero new fetch — byte-parity with the screen's fold).
 `--niche band|churn|scalp` (default band) picks the spec; churn inherits the AC5/AC6 exemption so its line

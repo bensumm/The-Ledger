@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.95
+version: 1.96
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -600,7 +600,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   false "won't clear" reads on liquid items (soul rune, dragon bones) that then cleared at the higher price.
   The raw `Optimistic`/`Rank` band top remains a CANDIDATE, not the pitched number — on a thin + wide-band
   item it is an artifact that never reaches — but on a liquid book do not reflexively step it down. (PLAN-OUTPUT-TABLE 2026-07-13 + revisions: the
-  screen's DEFAULT table now renders the reach-folded `Est. sell` — the fold (on the RECENT-3 reach) already
+  screen's DEFAULT table now renders the reach-folded `Est. sell` — the fold (on the FULL-WINDOW reach since 2026-08-09 — recent-3 shows beside it on divergence but no longer sets the number) already
   collapses a mirage top and the cell carries its recent reach token (`0/3`, full window beside it on
   divergence) — but it is a PLACEHOLDER model, so the `--ask` confirmation on what you actually pitch STAYS
   mandatory; `--raw` shows the unfolded pair.) No pitch without the sell leg verified. Anchor: DHCB surfaced top-of-board (score 2.24m/d) and I verified the BUY (21-night

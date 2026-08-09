@@ -303,18 +303,38 @@ ok('estimatePair MIRAGE EXIT (full-window only, no recent split): a 4/14d ask fo
   assert.equal(e.confidence.beFloored, false);
 });
 
-ok('rev1 RECENT-3 is the fold basis + the primary token: a good 12/14 full that CRASHED to 0/3 recent collapses estSell to live and shows BOTH', () => {
-  // the true mirage: the full window looks great (12/14) but the RECENT reach is 0/3 = it stopped printing.
+// BASIS FLIP 2026-08-09 (was: "rev1 RECENT-3 is the fold basis"). The fold price and its pFill are on the
+// FULL WINDOW again — recent-3 is four-valued at n=3, which made it the estimator's noisiest input, and
+// forward-scoring found the full-window read is the one that discriminates. The freshness signal is SHOWN,
+// not applied: the `0/3 · 12/14` divergence token is unchanged, so a stale exit is still visible on the row.
+ok('BASIS: the FULL WINDOW sets the fold — a 12/14 full that crashed to 0/3 recent does NOT collapse to live, but still SHOWS both', () => {
+  // the mirage shape: full window looks great (12/14), RECENT reach is 0/3 = it stopped printing.
   const row = { quickBuy: 24_500_000, quickSell: 25_000_000, optBuy: 24_000_000, optSell: 27_000_000 };
   const e = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 12, nDays: 14, recentHit: 0, recentDays: 3 } });
-  assert.equal(e.estSell, row.quickSell, 'recent 0/3 folds the ask fully to live (BE non-binding here)');
+  assert.notEqual(e.estSell, row.quickSell, 'a 12/14 full window does NOT fold all the way to live on a 0/3 recent read');
+  assert.ok(e.estSell > row.quickSell, 'the strong full-window reach holds the fold above live');
   assert.equal(e.confidence.beFloored, false);
-  // the token shows recent-3 PRIMARY with the full window BESIDE it (divergence = the stale flag).
+  // THE LOAD-BEARING HALF: the divergence must still be visible even though it no longer moves the number.
   const cells = estPairCells(e);
-  assert.ok(/0\/3 · 12\/14/.test(cells[1].t), `sell cell shows both tokens: ${cells[1].t}`);
+  assert.ok(/0\/3 · 12\/14/.test(cells[1].t), `sell cell still shows BOTH counts: ${cells[1].t}`);
   const lean = estConfLean(e);
   assert.equal(lean.askRecHit, 0); assert.equal(lean.askRecDays, 3);
   assert.equal(lean.askHit, 12); assert.equal(lean.askDays, 14);
+});
+
+// THE PAIR INVARIANT (RB-3's surviving finding): the fold PRICE and the pFill printed beside it must
+// always declare the SAME basis. A recent-3 price next to a full-window probability makes one row
+// contradict itself on a regime-changed item. This asserts they move together — flip one call site in
+// js/estimators/pair.mjs without the other and this fails.
+ok('PAIR INVARIANT: the fold price and its pFill are on the same (full-window) basis', () => {
+  const ar = { reachedDays: 4, nDays: 14, recentHit: 3, recentDays: 3 };   // full 4/14 vs recent 3/3 — maximally divergent
+  const row = { quickBuy: 1010, quickSell: 1000, optBuy: 950, optSell: 1100 };
+  const e = estimatePair(FLIP_NICHES.band, row, { askReach: ar });
+  assert.equal(e.pFill, askReachFactor(ar), 'pFill is the DEFAULT full-window askReachFactor call');
+  assert.notEqual(e.pFill, askReachFactor(ar, 0, { prefer: 'recent' }), 'and is NOT the recent-3 call');
+  // the price side agrees: an identical read with the recent counts stripped folds to the same estSell.
+  const eFullOnly = estimatePair(FLIP_NICHES.band, row, { askReach: { reachedDays: 4, nDays: 14 } });
+  assert.equal(e.estSell, eFullOnly.estSell, 'the recent counts do not move the fold PRICE either');
 });
 
 ok('rev1 recent + full AGREEING shows the recent token ALONE (no divergence clutter)', () => {
@@ -801,8 +821,11 @@ ok('E1 pFill REUSES askReachFactor — degrade path is byte-identical, recent ba
   // NOT the default full-window call. Same function, declared basis — reused, never reimplemented.
   const ar2 = { reachedDays: 4, nDays: 14, recentHit: 3, recentDays: 3 };
   const e2 = estimatePair(FLIP_NICHES.band, FWD_ROW, { askReach: ar2 });
-  assert.equal(e2.pFill, askReachFactor(ar2, 0, { prefer: 'recent' }), 'pFill IS askReachFactor on the basis pair.mjs declares (no fork)');
-  assert.notEqual(e2.pFill, askReachFactor(ar2), 'and it is NO LONGER the default full-window call — the bases legitimately differ');
+  // BASIS FLIP 2026-08-09: pair.mjs declares 'full' again, so this IS the default call. The invariant the
+  // assertion actually protects is unchanged and is the one that matters — pFill is askReachFactor on the
+  // basis pair.mjs DECLARES, reused rather than reimplemented. Only the declared basis moved.
+  assert.equal(e2.pFill, askReachFactor(ar2), 'pFill IS askReachFactor on the basis pair.mjs declares (no fork)');
+  assert.notEqual(e2.pFill, askReachFactor(ar2, 0, { prefer: 'recent' }), 'and it is NOT the recent-3 call — the bases legitimately differ');
   const bare = estimatePair(FLIP_NICHES.band, FWD_ROW, {});
   assert.equal(bare.pFill, 1, 'absent ask-reach → 1 (the rank\'s byte-identical degrade)');
   assert.equal(bare.pFill, askReachFactor(undefined));
@@ -836,18 +859,21 @@ ok('RB-3 askReachFactor: the DEFAULT ignores recent fields (every pre-RB-3 call 
   assert.equal(askReachFactor({ recentHit: 3, recentDays: 3 }, 0, { prefer: 'recent' }), 1, 'no FULL counts is still "no read" → 1 (the guard is unchanged)');
 });
 
-ok('RB-3 does NOT move the board: estimateRank\'s pFill/rank stay full-window even when the display P moves', () => {
-  // the same askReach on both surfaces. pair (display) moves to the recent basis; rank does not.
-  const askReach = { reachedDays: 2, nDays: 14, recentHit: 3, recentDays: 3 };
+// REWRITTEN 2026-08-09 (was "RB-3 does NOT move the board", which pinned the display/rank basis SPLIT).
+// That split is retired: both are full-window now, so the thing worth pinning is the opposite — display
+// and rank AGREE. RB-3's standing caveat ("these are deliberately different numbers on a recency-divergent
+// item, not drift") no longer needs to exist, and this test is what stops it coming back by accident.
+ok('display and rank are on the SAME basis — the RB-3-era split is retired, not reintroduced', () => {
+  const askReach = { reachedDays: 2, nDays: 14, recentHit: 3, recentDays: 3 };   // full 2/14 vs recent 3/3
   const row = { quickBuy: 1010, quickSell: 1000, optBuy: 950, optSell: 1100, volDay: 200_000, limit: 1000 };
   const erRecent = estimateRank(FLIP_NICHES.band, row, { askReach });
   const erFullOnly = estimateRank(FLIP_NICHES.band, row, { askReach: { reachedDays: 2, nDays: 14 } });
-  assert.equal(erRecent.pFill.value, erFullOnly.pFill.value, 'the RANK is untouched by the recent counts (families.mjs:332 unchanged)');
-  assert.equal(erRecent.rank, erFullOnly.rank, 'and so is the composite rank / screen.json ordering');
-  // meanwhile the DISPLAY pFill on the same evidence is the recent read — the decided divergence.
+  assert.equal(erRecent.pFill.value, erFullOnly.pFill.value, 'the RANK ignores the recent counts (families.mjs unchanged)');
+  assert.equal(erRecent.rank, erFullOnly.rank, 'and so does the composite rank / screen.json ordering');
+  // and now the DISPLAY agrees with it on the same evidence — one basis, one number.
   const est = estimatePair(FLIP_NICHES.band, row, { askReach });
-  assert.equal(est.pFill, 1, 'display P is the recent 3/3 read');
-  assert.ok(est.pFill > erRecent.pLegs.askF, 'display and rank legitimately disagree on a recency-divergent item');
+  assert.equal(est.pFill, erRecent.pLegs.askF, 'display P == the rank ask leg — no basis divergence left to explain');
+  assert.notEqual(est.pFill, 1, 'and it is NOT the recent 3/3 saturation the old recent basis produced');
 });
 
 ok('RB-3 watch-positions relief note: on a 3/3 recent read the base factor is already 1, so the size-relief clause has nothing to add', () => {

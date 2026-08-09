@@ -628,26 +628,28 @@ for (const want of positionals) {
       // display basis since RB-3, with the full-window value — which is what the RANK still carries — shown
       // beside it when they differ) + (3) the FORWARD "list at X" (driftExitFrom, phase-aware, hold-horizon
       // + confidence ordinal).
-      // The recency reach-fold rides ALONGSIDE, labeled SECONDARY/phase-blind (the correct read for a confirmed
+      // The reach-fold rides ALONGSIDE, labeled SECONDARY/phase-blind (the correct read for a confirmed
       // knife); beFloored is a caution on that fold, never a market fact. NO "which is authoritative" claim —
       // both ship until the F-G realized-fill retro adjudicates (rule 4, n≈0 on the forward).
       if (askScoreLevel != null) {
         const rawNet = netMargin(est.estBuy, askScoreLevel);   // honest best-case margin (un-BE-clamped)
         const sign = rawNet != null && rawNet > 0 ? '+' : '';
-        // RB-3 (PLAN-RECENCY-BASIS): est.pFill is now the RECENT-3-basis probability (matching the recent-3
-        // fold price on the same line). Print the pre-change FULL-WINDOW number beside it whenever the two
-        // differ, so a basis that moves a displayed decision number is VISIBLE rather than silently swapped
-        // (the `⚠ exemption dropped — … rank X (was Y)` precedent, EF1(b)). Equal ⇒ the single value, no
-        // noise (the suppress-when-unmoved rule). The full-window read is ALSO what the rank still carries.
-        const pfRecent = est.pFill != null ? Math.round(est.pFill * 100) : null;
-        const pfFull = est.pFill != null ? Math.round(askReachFactor(extra.askReach) * 100) : null;
-        const pf = pfRecent != null
-          ? ` · P(fill)~${pfRecent}%${pfFull !== pfRecent ? ` (full-window ${pfFull}%)` : ''}` : '';
+        // BASIS FLIP 2026-08-09: est.pFill is the FULL-WINDOW probability again (matching the full-window
+        // fold price on the same line — js/estimators/pair.mjs). The dual-basis print stays, INVERTED:
+        // full window is primary, recent-3 rides beside it whenever the two differ, so the basis change is
+        // VISIBLE rather than silently swapped (the `⚠ exemption dropped — … rank X (was Y)` precedent,
+        // EF1(b)). Equal ⇒ the single value, no noise (the suppress-when-unmoved rule). Keeping the recent-3
+        // number ON the line is the point: the freshness read is not discarded, it just no longer sets the
+        // number. The full-window read is ALSO what the rank carries — display and rank now agree.
+        const pfFull = est.pFill != null ? Math.round(est.pFill * 100) : null;
+        const pfRecent = est.pFill != null ? Math.round(askReachFactor(extra.askReach, 0, { prefer: 'recent' }) * 100) : null;
+        const pf = pfFull != null
+          ? ` · P(fill)~${pfFull}%${pfRecent !== pfFull ? ` (recent-3 ${pfRecent}%)` : ''}` : '';
         const fwd = est.estSellForward != null
           ? ` · list at ${fmt(Math.round(est.estSellForward))} (~${fmtHoldHorizon(est.holdHorizonDays)} hold${est.forwardConfidence ? `, conf ${est.forwardConfidence}` : ''}, forward n≈0)`
           : ` · list at — (no diurnal forward this pass)`;
-        const foldNote = est.confidence.beFloored ? ` [recency-fold floored to BE ${fmt(est.be)} — nothing to price above break-even]` : '';
-        log(`  fold${nicheTag}: best-case ask ${fmt(askScoreLevel)} · honest net ${sign}${fmt(rawNet)}${pf}${fwd} · recency-fold ${fmt(est.estSell)} (secondary — phase-blind)${recFull(extra.askReach)}${foldNote}`);
+        const foldNote = est.confidence.beFloored ? ` [reach-fold floored to BE ${fmt(est.be)} — nothing to price above break-even]` : '';
+        log(`  fold${nicheTag}: best-case ask ${fmt(askScoreLevel)} · honest net ${sign}${fmt(rawNet)}${pf}${fwd} · reach-fold ${fmt(est.estSell)} (secondary — phase-blind)${recFull(extra.askReach)}${foldNote}`);
       }
       // a BUY fold line ONLY when the entry doctrine actually folds it (scalp bids-to-fill toward live) —
       // band/churn price the band low unfolded (AC1/AC6), so there is nothing to show there.

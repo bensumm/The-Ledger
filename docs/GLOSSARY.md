@@ -100,7 +100,7 @@ These are different things at different levels — kept as two words on purpose.
   price pair the thesis posts. Replaced gp/day as the ranking metric.
 - **P(fill)** — probability the flip fills, two legs: `P(bid) × ask-reach factor`. The ask-reach leg's
   RECENCY BASIS depends on where the number is printed (RB-3, 2026-08-04): **display** surfaces (the
-  `Est.`-cell `P(ask)~`, the `fold:` line's `P(fill)~`) read the **recent-3** window so the probability
+  `Est.`-cell `P(ask)~`, the `fold:` line's `P(fill)~`) read the **full-window** (~14 night) reach since 2026-08-09 — recent-3 until then — so the probability
   matches the recent-3 price beside it; the **rank** still reads the **full ~14-day** window, pending a
   realized-fill study. On a recency-divergent item the two legitimately differ — the `fold:` line prints
   both when they do.

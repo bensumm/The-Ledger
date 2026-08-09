@@ -1,6 +1,6 @@
 ---
 name: morning
-version: 1.16
+version: 1.17
 description: Morning-after review — reconstruct what filled overnight, re-verdict stale bids, book realized P/L. Triggers — "what happened overnight", "morning review", "what filled", "catch me up", "morning".
 ---
 
@@ -126,7 +126,7 @@ other morning, this check reads `no` — skip straight past this section.
      started at the E1–E4 land (2026-07-22), so it LAGS both A and B. **When a cell is `SCORABLE`, that
      is the cue to build+run `aggregateForwardExit`** (a retrojoin sibling — designed, not built) which
      scores per-cell median |forward−realized| vs |fold−realized|; Ring-3's promotion clears its evidence
-     gate ONLY on a ROBUST cell where the forward exit BEATS the recency reach-fold, AND requires a
+     gate ONLY on a ROBUST cell where the forward exit BEATS the reach-fold, AND requires a
      rank-level knife guard (route `net` through `oscillationVsKnife.knife` → fall back to raw `netMargin`
      on a knife, since `estimateRank` has no knife gate today). Nothing promotes off a single week (rule 4).
 2. A **realized-P/L attribution** read over `positions.json` `closed` lots (and

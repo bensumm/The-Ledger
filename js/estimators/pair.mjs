@@ -93,18 +93,39 @@ export function entryDoctrine(spec) {
 }
 
 /* reachRead({ reachedDays, nDays, recentHit, recentDays }) → { frac, rec, full, diverges } | null.
-   rev1: the FOLD basis is the RECENT-3 fraction when scored (freshness-honest), else the full window
-   (the sample-size backstop). `diverges` reuses windowread's RECENCY_DIVERGE + its zero-recent clause.
-   RB-3 (PLAN-RECENCY-BASIS): `frac` is now literally reach.mjs's shared `reachFraction(_, {prefer:'recent'})`
-   rather than a second copy of the same conditional — byte-identical (the rec/full presence predicates are
-   the same, and reachRead has already returned null when neither exists). The rec/full SUB-OBJECTS stay
-   local because callers need the raw hit/days counts for the `0/3 · 2/14` divergence token, not just a number. */
+   The FOLD basis is the FULL WINDOW (~14 nights). `diverges` reuses windowread's RECENCY_DIVERGE + its
+   zero-recent clause, so the `0/3 · 12/14` token still shows BOTH counts — the divergence is surfaced,
+   it just no longer drives the number.
+
+   BASIS FLIP, 2026-08-09 (was recent-3 from RB-3 until now). rev1 chose recent-3 as "freshness-honest",
+   and RB-3 then moved the pFill beside it onto the same basis for consistency. Both sites move BACK
+   together here, for the reason RB-3's own note already gave about the rank: **recent-3 is four-valued.**
+   At n=3 the fraction can only be 0, ⅓, ⅔ or 1, so a single night's print swings the fold by a third of
+   its range — that is the estimator's noisiest possible input, and forward-scoring found the full-window
+   read is what actually discriminates (within-item AUC 0.639–0.670 over 14 nights; recent-3 cannot
+   support that resolution). The freshness signal is NOT discarded: `diverges` still fires, the token
+   still prints both counts, and a stale exit still demotes the probability — what changes is that a
+   4-sample fraction no longer sets the PRICE.
+
+   WHAT THIS SIMPLIFIES: display and rank are now on the SAME basis. RB-3 had to carry a standing caveat
+   that `estimatePair`'s displayed P and `families.mjs`'s rank P were different numbers on a
+   recency-divergent item (a deliberate split, not drift). That split is gone — one basis, one number.
+
+   THE INVARIANT THAT MUST HOLD: this `frac` (the fold PRICE) and the `pFill` below (the probability
+   printed beside it) must ALWAYS declare the same basis. RB-3's actual finding — that a recent-3 price
+   next to a full-window probability makes one row contradict itself — is still true and still binding.
+   Change one of these two call sites without the other and you reintroduce exactly that bug, mirrored.
+
+   HONESTY (rule 4): reached ≠ filled. No fills-to-basis join exists, so this is calibrated against
+   PRINTS, not against our own realized fills; it is a resolution argument plus a discrimination
+   measurement, not proof that full-window predicts a FILL better. `reachFraction` remains the ONE
+   recency-basis rule — a caller declares its basis and the function never guesses. */
 function reachRead(r) {
   if (!r) return null;
   const full = (num(r.nDays) > 0 && num(r.reachedDays) != null) ? { hit: r.reachedDays, days: r.nDays, frac: clamp01(r.reachedDays / r.nDays) } : null;
   const rec  = (num(r.recentDays) > 0 && num(r.recentHit) != null) ? { hit: r.recentHit, days: r.recentDays, frac: clamp01(r.recentHit / r.recentDays) } : null;
   if (!full && !rec) return null;
-  const frac = reachFraction(r, { prefer: 'recent' });   // recent-3 IS the confidence; full is only the backstop
+  const frac = reachFraction(r, { prefer: 'full' });   // BASIS: full window (see header) — MUST match pFill's basis below
   const diverges = !!(rec && full && (Math.abs(rec.frac - full.frac) >= RECENCY_DIVERGE || (rec.hit === 0 && full.hit > 0 && full.frac >= 0.2)));
   return { frac, rec, full, diverges };
 }
@@ -228,18 +249,21 @@ export function estimatePair(spec, row = {}, extra = {}, { nudge = null, sellMod
   // forked: a first-class field so the display honestly reads "raw margin × P(fill)" (a stale exit demotes the
   // probability, it does not haircut the price into a false break-even). Absent ask-reach → 1 (the
   // byte-identical degrade the rank uses). No relief arg — mirrors families.mjs's rank pFill.
-  // RB-3 (PLAN-RECENCY-BASIS) — THE BASIS, stated honestly: this P is on the RECENT-3 basis, because the
-  // estSell it is printed beside is a recent-3 fold (reachRead above). Before RB-3 the price was recent-3 and
-  // the probability full-window, so on a regime-changed item the two numbers on one row contradicted each
-  // other by construction. The RANK (families.mjs:332) is STILL full-window and stays that way: a measurement
-  // pass found the rank-basis swap moves the composite rank >33% on ~23% of item-days, and unlike a price a
-  // probability multiplier is four-valued at n=3. So this display P and the rank's P are NOT the same number
-  // on a recency-divergent item — that is a DECISION (display consistency now, rank basis gated on a
-  // fills-joined study: PLAN-RECENCY-BASIS RB-4, deferred), not drift. The don't-fork invariant that still
-  // holds is "the SAME function, on the basis the caller declares", never a reimplementation.
-  // Rule 4: recent-3 is not KNOWN to predict fills better (n=0, no fills-to-basis join). This is a
-  // CONSISTENCY fix — the price and the probability beside it now answer the same question — not an accuracy claim.
-  const pFill = askReachFactor(extra.askReach, 0, { prefer: 'recent' });
+  // THE BASIS, stated honestly: this P is on the FULL-WINDOW basis, because the estSell it is printed
+  // beside is a full-window fold (reachRead above). RB-3's finding stands and is what makes this a PAIR:
+  // a price on one basis next to a probability on another makes a single row contradict itself on a
+  // regime-changed item. These two call sites move TOGETHER or not at all.
+  // 2026-08-09 (the flip): both moved from recent-3 back to full window. The argument RB-3 already made
+  // for keeping the RANK full-window applies just as much to the display — a probability multiplier is
+  // four-valued at n=3, so recent-3 hands the estimator its noisiest input. Forward-scoring backs it:
+  // the full-window read is the one that discriminates (within-item AUC 0.639–0.670).
+  // WHAT THIS RETIRES: the RB-3-era caveat that this display P and the rank's P (families.mjs:332) are
+  // deliberately different numbers. They are now the same basis, so that split — and the standing
+  // explanation for it — is GONE. PLAN-RECENCY-BASIS RB-4 (the rank-basis swap, gated on a fills join)
+  // is moot in the direction it was written; a future study would be arguing to move BOTH to recent.
+  // Rule 4: full-window is not KNOWN to predict FILLS better (n=0, no fills-to-basis join exists) — the
+  // measurement is against PRINTS. This is a resolution + discrimination argument, not an accuracy claim.
+  const pFill = askReachFactor(extra.askReach, 0, { prefer: 'full' });
   // FORWARD "list at X" (PLAN-ESTIMATOR-HONEST-SELL E1) — the phase-aware forward-projected exit LEVEL, homed
   // in the SHELL (the sell-model ctx carries no profile/days). driftExitFrom off the caller's in-hand
   // hourProfile + windowStats().days (extra.forward — ZERO new fetch); the diurnal ctx is built from the live

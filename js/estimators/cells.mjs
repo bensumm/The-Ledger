@@ -57,7 +57,7 @@ export function estPairCells(est) {
   // beFloored is a CAUTION on that secondary/phase-blind fold ("nothing to price above break-even"), NEVER a
   // number substitution (the old ` (BE-floored)` hid the real sub-BE number behind a break-even price + a "+1").
   let sellSuffix;
-  if (c.beFloored) sellSuffix = ` (recency-fold floored to BE ${fmtP(est.estSellFloorBind != null ? est.estSellFloorBind : est.be)} — nothing to price above break-even${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
+  if (c.beFloored) sellSuffix = ` (reach-fold floored to BE ${fmtP(est.estSellFloorBind != null ? est.estSellFloorBind : est.be)} — nothing to price above break-even${c.pressureExit ? ',' + pTag : (!c.foldExempt && c.ask) ? `, ${reachTok(c.ask)}` : ''})`;
   else if (c.pressureExit) sellSuffix = ` (${pTag.trim()})`;
   else if (c.declaredAnchored) sellSuffix = ' (declared)';
   // R5: a `fading` ask cushion tightened the sell fold even on a clean reach — surface it as a caution beside

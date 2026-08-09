@@ -790,9 +790,17 @@ const DIGEST_ROWS = [];
 // independent copies of the same rule (the fold price in pair.mjs's reachRead, and an inline
 // reachedDays/nDays in askReachFactor). RB-5 collapsed this one onto the shared `reachFraction`, so the
 // rule now has ONE home. A future reader WILL notice the digest column disagreeing with `screen.json`'s
-// rank/grade — that is EXPECTED and decided, not drift: the RANK is still full-window on purpose
-// (js/estimators/families.mjs:332, deferred pending a fills-joined study), while every DISPLAY surface is
-// recent-preferring. Re-forking a local implementation here would recreate the divergence RB-5 removed.
+// rank/grade — that is EXPECTED and decided, not drift: the RANK is full-window on purpose
+// (js/estimators/families.mjs:332, deferred pending a fills-joined study).
+// ⚠ UPDATED 2026-08-09 — the claim "every DISPLAY surface is recent-preferring" WAS true and is NOT any
+// more. The fold price + its pFill (js/estimators/pair.mjs) flipped BACK to the full window: recent-3 is
+// four-valued at n=3, and forward-scoring found the full-window read is what discriminates (+9.8pp
+// within-item, p=0.0001, n=6,016). So this digest column and watch-positions' size-relief note are now
+// the ONLY recent-preferring surfaces left, and they disagree with the fold as well as the rank.
+// That is a KNOWN, FLAGGED split — not a decided one. It was left alone deliberately rather than swept
+// along with the fold flip, because this column drives a triage verdict (`sell unreliable`) on its own
+// and deserves its own measurement. Do not "fix" it in either direction without one; if it does flip,
+// flip it here (one shared `reachFraction` call), never by re-forking a local implementation.
 function digestReachFrac(askReachExtra) {
   return reachFraction(askReachExtra, { prefer: 'recent' });
 }
@@ -1745,7 +1753,7 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
       const base = [c[0], c[2], ...estPairCells(r.estShown), c[5], c[6], c[7], c[1], consoleRankCell(r)];   // PB4: estShown = pressure legs under the flag, else the neutral est
       return [...base, pathABCell(r, MIN_GPD), ...(anyProbe ? [{ t: r.probeStr, c: 'mini' }] : [])];
     });
-    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell carries the RECENT-3 reach, full window beside it only when they diverge (0/3 · 12/14 = stale); '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("recency-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
+    if (rows.length) estExplainer = `(Est. buy/sell are ESTIMATES — strategy-aware entry (scalp near-live · value trough · band prices the band low + reach/percentile annotation · churn reach-folded to fill-now), reach-folded exit, PLACEHOLDER model n≈3–14. Confidence rides in the cell: the buy carries its RECENT-3 touch-reach and, on band rows, the placement percentile of the band-low bid within the 14-day daily-LOW distribution (e.g. 4/14 · p36 = a deep/patient entry); the sell token shows RECENT-3 · FULL when they diverge (0/3 · 12/14 = stale) — the fold PRICE and its P are on the FULL-WINDOW basis (2026-08-09), the recent count is shown, not applied; '–' = no read. This is a DISCOVERY screen — no held-lot declared-exit anchoring here. Est. sell is the HONEST reach-fold price with its ASK-LEG P beside the net (labeled P(ask)~ — the Rank cell's P~ is the TWO-LEG entry×ask product, and a collapsed leg is named, e.g. "P~0.00 (bid leg)" — EF1(c)); a sub-break-even fold is ANNOTATED ("reach-fold floored to BE X") with its real (possibly-negative) net shown, never substituted with a "+1". --raw restores the model-free Quick/Optimistic columns.)`;
   }
   const table = rows.length ? { headers: printHeaders, rows: printCells } : null;   // null → the report renders '_none_'
   const footerLines = [`Grades: ${gradeDist(dist)}`];

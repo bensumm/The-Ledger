@@ -10,6 +10,66 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### 0.71.3 — the reach basis flips back to full-window, and the stale bump is capped at caution (2026-08-09)
+
+Two reach changes off the same forward-scoring pass (n=6,016 ask-reach rows replayed against a real 8h
+outcome from the 5m archive; base rate P(reached) = 40.3%).
+
+**1 — the fold basis: recent-3 → FULL WINDOW.** RB-3 (2026-08-04) put the fold PRICE and the `pFill`
+printed beside it both on recent-3, to stop a row contradicting itself. That finding stands and is why
+these are a *pair* — but the basis it picked was the wrong one. **Recent-3 is four-valued**: at n=3 the
+fraction can only be 0, ⅓, ⅔ or 1, so a single night's print swings the fold by a third of its range.
+Forward-scoring says the longer window is what carries information — within-item (composition cancelled)
+a higher full-window reach fraction printed **9.8pp** more often, 78 items vs 36, **p=0.0001**.
+
+Both call sites in `js/estimators/pair.mjs` move together (`reachRead`'s `frac` and the `pFill` beside it);
+moving one alone would recreate RB-3's bug mirrored, and a new test pins them together. **This retires a
+standing caveat**: display and rank were deliberately different numbers under RB-3 and now agree, so the
+`P(ask)~`-vs-`P~` explanation is gone rather than reworded. Freshness is **shown, not discarded** — the
+`0/3 · 12/14` token is unchanged and `read-window-range`'s `fold:` line still prints both, with the
+primary/parenthetical order inverted (full window leads, recent-3 in parentheses on divergence). The
+label `recency-fold` is renamed **`reach-fold`** everywhere it reached stdout — as shipped it would have
+been a lie.
+
+⚠ **Two display surfaces did NOT flip**: the `--digest` reach ✓/✗ column (`digestReachFrac`) and
+`watch-positions`' size-relief note. They are now the only recent-preferring sites and they disagree with
+both the fold and the rank. Left alone **deliberately and flagged**, not swept along — the digest column
+drives a triage verdict (`sell unreliable`) on its own and deserves its own measurement. The `DO NOT FIX
+THIS BACK` comment at the digest is updated to say so; its old claim that "every DISPLAY surface is
+recent-preferring" was true when written and is not any more.
+
+**2 — the RC1 stale-optimistic bump is capped at caution** (was pass→caution *and* caution→reject).
+Measured both halves separately:
+
+| | finding |
+| --- | --- |
+| does `staleOptimistic` carry signal at matched reach fraction? | **yes, weakly** — stale rows print −4.0pp less often (frac-weighted; −6.6pp and −8.8pp in the 0.2–0.3 and 0.3–0.4 bands, but 0.4–0.5 reverses +9.1pp). Flag KEPT. |
+| did the reject arm earn it? | **no** — the rows this bump pushed caution→reject (n=676 scored) still printed their level **43.3%** of the time within 8h, *above* the 40.3% base rate. |
+
+"Never reachable" is the wrong label for a level that prints on nearly half of scored windows, and a ~4pp
+effect cannot carry a tier that declares a level out of range. Keeping pass→caution matters separately,
+for **visibility**: the screen renders a reach reason only via `flags()` (non-pass) or `informFlags()`
+(gatedStatus set), so a stale row demoted all the way to `pass` would warn *nowhere*. The bump is what
+surfaces it. `staleTail` now rides on both reason branches as a belt-and-braces guard.
+
+**`REACH_CAUTION_FRAC` was NOT retuned — and that is the finding.** The plan was 0.5 → 0.2. The threshold
+curve says no cut point earns much: base miss rate 60.0%; moving to 0.2 buys precision 60.0% → 64.6%
+while recall falls to 62.7%; 0.1 and 0.15 are no better (~5pp is the ceiling anywhere in the range). The
+underlying signal is real but **continuous** (the +9.8pp within-item result above), and a continuous weak
+signal belongs in the rank as a continuous term — which is exactly where it already is, `askReachFactor`
+scaling P(fill) smoothly. The honest read is that the caution *tier* is decoration and the rank *term* is
+where reach does its work. That is now written into `reachValidator`'s header so the constant does not get
+"tuned" later in expectation of a win.
+
+**Honesty (rule 4).** `reached ≠ filled` — no fills-to-basis join exists, so every number here is scored
+against PRINTS and is an upper bound on filling; the bias is identical across arms, so the comparisons
+hold and the absolute rates do not. The basis flip is a resolution + discrimination argument, not proof
+that full-window predicts a FILL better. Bid-side reach is still never logged (0 of 95,243 rows), so all
+6,016 scored rows are ask-side. `APP_VERSION` 0.71.2 → **0.71.3** (`js/validate.mjs`, `js/estimators/*`
+are app-imported). `/scan` → 1.96, `/morning` → 1.17. Reconciled: `docs/MARKET-ANALYSIS.md`,
+`docs/SIGNAL-AUDIT.md`, `docs/GLOSSARY.md`, `README.md`, both skills, and the RB-5 digest comment.
+108 suites + 5 CI guards green.
+
 ### The value knife-GATE becomes a WATCH demotion — the premise measured backwards (2026-08-08)
 
 `trajectory` had `mode:'gate'` in the `value` flip-niche since 2026-07-09, on the thesis *"buy the base,

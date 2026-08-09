@@ -3,6 +3,19 @@
 **Status: PARTIALLY SHIPPED (2026-08-04/05). RB-3 and RB-5 are DONE — Fix 2's display half plus the
 de-duplication. RB-1, RB-2 (Fix 1) and RB-4 (Fix 2's rank half) are NOT started.**
 
+> ⚠ **RB-3's CHOSEN BASIS WAS REVERSED on 2026-08-09 (0.71.3) — read this before working from the plan
+> text below.** RB-3's *finding* stands and is load-bearing: the fold PRICE and the `pFill` printed beside
+> it must declare the SAME basis, or a row contradicts itself on a regime-changed item. What was wrong was
+> the basis it picked. Both sites moved back to the **full window**: recent-3 is four-valued at n=3 (one
+> night swings the fraction by a third of its range), and forward-scoring over 6,016 ask rows with a real
+> 8h outcome put the full-window read at **+9.8pp within-item, p=0.0001**. Consequences for this plan:
+> **RB-4 is moot in the direction it was written** — it proposed moving the RANK onto recent-3 to close a
+> display/rank split that no longer exists (both are full-window now); a future study would be arguing to
+> move BOTH to recent, which is a different chunk. The tables below that describe display sites as
+> "recent-3 preferred" are HISTORY, not current state — the only recent-preferring surfaces left are the
+> `--digest` reach column and `watch-positions`' size-relief note, both flagged pending their own
+> measurement. Current state lives in `js/estimators/pair.mjs`'s `reachRead` header and CHANGELOG 0.71.3.
+
 | Chunk | State | Notes |
 |---|---|---|
 | RB-0 | not run | scratchpad bake-off, never committed by design; RB-4 is blocked on it |

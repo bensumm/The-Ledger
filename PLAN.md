@@ -512,6 +512,18 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
     discrimination (reject 55.9% vs caution 62.2% @8h) and an 8h window applied to 1–2 day theses:
     **18.2% of scored levels printed within 48h but not within 8h**. STILL OPEN — the horizon mismatch
     is real and unaddressed; scoring it properly needs a fill model, not a print model.
+  - **`reach` THRESHOLD: measured, and the answer is "no cut point earns much"** (2026-08-09, n=6,016 ask
+    rows with a real 8h outcome). The planned `REACH_CAUTION_FRAC` 0.5 → 0.2 was NOT landed: base miss
+    rate 60.0%, and 0.2 buys precision 60.0% → 64.6% while recall drops to 62.7% (~5pp is the ceiling
+    anywhere in the range). The signal is real but CONTINUOUS — within-item, a higher reach fraction
+    prints **9.8pp** more often (78 items vs 36, p=0.0001) — so it belongs in the rank as a continuous
+    term (`askReachFactor`, where it already is), not in a binary flag a threshold move can improve.
+    CLOSED as "don't tune this"; the reasoning is pinned in `reachValidator`'s header.
+  - **`reach` fold BASIS flipped recent-3 → full-window; stale bump capped at caution** (0.71.3,
+    2026-08-09). `staleOptimistic` does carry ~4pp at matched frac (kept) but its reject arm did not —
+    those rows printed 43.3% of the time, above base rate. Retires RB-3's display/rank basis split.
+    Remaining flagged split: the `--digest` reach column + `watch-positions` relief note are still
+    recent-preferring, pending their own measurement. OPEN (small).
   - **`trajectory` MEASURES BACKWARDS → demoted gate→inform in `value`** (landed 2026-08-08). The
     ledger-only read (`elevated` n=2,173, `knife` n=823, no round-trip discrimination) was itself
     censored — the gate dropped its own population — so this was settled by a 71-day 1h-archive replay

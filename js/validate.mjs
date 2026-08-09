@@ -43,8 +43,20 @@ import { tax, netMargin } from './money-math.js';
 const SEVERITY = { pass: 0, caution: 1, reject: 2 };
 /* the more severe of two statuses (reject > caution > pass) — the worst gate wins on a surface. */
 export function worseOf(a, b) { return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a; }
-/* one severity step up: the RC1 stale-flag bump — pass→caution, caution→reject, reject stays. */
-function bumpSeverity(status) { return status === 'pass' ? 'caution' : 'reject'; }
+/* The RC1 stale-flag bump, CAPPED AT CAUTION (2026-08-09 — measured; was pass→caution AND caution→reject).
+   It now only ever raises a pass to caution; a caution stays a caution and a reject stays a reject.
+   WHY THE CAP (forward-scored over 6,016 ask-reach rows with a real 8h outcome, base rate 40.3%):
+     · staleOptimistic DOES carry signal at matched reach fraction — stale rows print −4.0pp less often
+       (frac-weighted; −6.6pp and −8.8pp in the 0.2–0.3 and 0.3–0.4 bands, though 0.4–0.5 reverses +9.1pp).
+       Weak and not uniform, but real in direction — which is why the flag is KEPT.
+     · What it did NOT support is the reject arm. The rows this bump pushed caution→reject (n=676 scored)
+       still printed their level 43.3% of the time within 8h — ABOVE the population base rate. "Never
+       reachable" is the wrong label for a level that prints on nearly half of scored windows, and a ~4pp
+       effect cannot carry a severity tier that names a level out of range.
+   A caution is the honest ceiling for a 4pp signal. Keeping pass→caution also matters for VISIBILITY:
+   the screen renders a reach reason only via flags() (non-pass) or informFlags() (has gatedStatus), so a
+   stale row demoted all the way to pass would print its warning NOWHERE. The bump is what surfaces it. */
+function staleFlagBump(status) { return status === 'pass' ? 'caution' : status; }
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 /* a degrade-to-pass result with a no-data-shaped evidence note (never a reject on missing input). */
@@ -63,9 +75,20 @@ export const REACH_REJECT_FRAC = 0;     // reached on ≤ this fraction ⇒ reje
  * reachValidator(ctx) — wraps js/windowread.mjs's reach/touch scoring + the RC1 recency split into a
  * validator. It answers: does the last ~REACH_NIGHTS same-window nights say this candidate bid/ask is
  * actually reachable? A rarely-reached level → caution; a never-reached level → reject; the RC1
- * stale-optimistic flag (the full count concentrated in an OLDER, higher/cheaper price regime) bumps
- * severity one step (pass→caution, caution→reject), because a reach the recent nights don't confirm
- * is a mirage — reusing recencySplit's existing staleOptimistic semantics, no new threshold.
+ * stale-optimistic flag (the full count concentrated in an OLDER, higher/cheaper price regime) raises a
+ * pass to CAUTION and stops there (2026-08-09 — it used to escalate caution→reject too; measured, see
+ * staleFlagBump above), because a reach the recent nights don't confirm is worth a flag but not an
+ * out-of-range verdict — reusing recencySplit's existing staleOptimistic semantics, no new threshold.
+ *
+ * ⚠ THRESHOLD HONESTY (measured 2026-08-09, n=6,016 ask rows with a real 8h outcome). REACH_CAUTION_FRAC
+ * was NOT retuned, and the reason is worth recording: no cut point earns much. The base miss rate is
+ * 60.0%, and moving the line from 0.5 down to 0.2 buys precision 60.0% → 64.6% while recall falls to
+ * 62.7% — a ~5pp lift at best anywhere in the range, and 0.1/0.15 are no better. The underlying signal is
+ * REAL but CONTINUOUS: within-item (composition cancelled) a higher reach fraction prints 9.8pp more
+ * often, 78 items vs 36, p=0.0001. A continuous weak signal belongs in the RANK as a continuous term —
+ * which is exactly where it already is (askReachFactor scales P(fill) smoothly) — not in a binary flag
+ * that a threshold move can meaningfully improve. Do not "tune" this constant expecting a win; the
+ * honest read is that the caution tier is decoration and the rank term is where reach does its work.
  *
  * ⚠ WINDOW SCOPE — THIS IS A CLOCK-ANCHORED "COMING-HOURS" READ, NOT A FULL-DAY ONE (EF1(d),
  * PLAN-ESTIMATOR-FIDELITY — the diagnosed screen-vs-quote reach divergence). The scored window is
@@ -122,13 +145,17 @@ export function reachValidator(ctx) {
   let status = frac <= REACH_REJECT_FRAC ? 'reject'
              : frac < REACH_CAUTION_FRAC ? 'caution'
              : 'pass';
-  if (rc.staleOptimistic) status = bumpSeverity(status);
+  if (rc.staleOptimistic) status = staleFlagBump(status);
 
   const verb = side === 'bid' ? 'touched' : 'reached';
   const staleTail = rc.staleOptimistic ? ` (recent ${rc.recentHit}/${rc.recentDays} — stale-optimistic)` : '';
-  const reason = status === 'pass'
+  // staleTail rides on BOTH branches. With the bump capped at caution a stale row is never `pass`, so in
+  // practice the pass branch never carries it — but if the cap is ever loosened, the marker must not
+  // silently vanish with the severity (the reason only reaches stdout on a non-pass, so a stale row that
+  // scores pass would warn nowhere). Belt and braces, deliberately.
+  const reason = (status === 'pass'
     ? `${side} ${level} ${verb} ${hit}/${n}d`
-    : `${side} ${level} ${verb} only ${hit}/${n}d${staleTail}`;
+    : `${side} ${level} ${verb} only ${hit}/${n}d`) + staleTail;
   return { key, status, reason, evidence };
 }
 

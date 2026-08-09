@@ -110,11 +110,16 @@ ok('a never-reached ask → reject (definitional out-of-range)', () => {
   assert.equal(r.evidence.hit, 0);
 });
 
-// --- 3. RC1 stale-optimistic bumps a caution up to reject -------------------------------------
-ok('RC1 stale-optimistic ASK: full reach in an OLD regime, recent nights miss → bumped caution→reject', () => {
+// --- 3. RC1 stale-optimistic: raises a pass to caution, and STOPS THERE ------------------------
+// CAPPED 2026-08-09 (was caution→reject). Forward-scoring 6,016 ask rows against a real 8h outcome:
+// staleOptimistic carries ~4pp at matched reach fraction — real in direction, so the flag is kept — but
+// the rows this bump escalated to REJECT still printed their level 43.3% of the time, above the 40.3%
+// base rate. A ~4pp effect cannot carry a tier that declares a level out of range. Re-promoting this to
+// reject would resurrect ~3,241 rejects per 35 days on levels that print nearly half the time.
+ok('RC1 stale-optimistic ASK: a stale caution STAYS a caution — the flag never escalates to reject', () => {
   // blood-rune shape (mirrors windowread.test.mjs): pre-crash highs 313–315 reach a 313 ask on the
   // 4 oldest nights; the crash + recent recovery (tops 299–310) do NOT. Full 4/10 = 0.4 → caution;
-  // recent 3 = 0/3 → staleOptimistic → bumped to reject.
+  // recent 3 = 0/3 → staleOptimistic, which no longer escalates it.
   const s = seriesOf([
     { d: 6, low: 306, hi: 313 }, { d: 7, low: 305, hi: 314 }, { d: 8, low: 306, hi: 315 }, { d: 9, low: 300, hi: 315 },
     { d: 10, low: 272, hi: 286 }, { d: 11, low: 269, hi: 281 }, { d: 12, low: 272, hi: 283 },
@@ -124,8 +129,34 @@ ok('RC1 stale-optimistic ASK: full reach in an OLD regime, recent nights miss �
   assert.equal(r.evidence.hit, 4, '313 reached on the 4 pre-crash nights');
   assert.equal(r.evidence.recentHit, 0, 'recent 3 nights top 299–310 — none reach 313');
   assert.equal(r.evidence.staleOptimistic, true);
-  assert.equal(r.status, 'reject', 'a 0.4 full frac is a caution, bumped to reject by the stale flag');
+  assert.equal(r.status, 'caution', 'a 0.4 full frac is a caution and the stale flag leaves it there (capped)');
+  assert.match(r.reason, /stale-optimistic/, 'the marker still rides on the reason — the flag is kept, only its severity is capped');
+});
+
+ok('RC1 stale-optimistic still RAISES a pass to caution — the flag must stay visible', () => {
+  // A level reached on MOST nights (pass territory) but not on any of the recent 3. Without the pass→caution
+  // raise the reason would never reach stdout at all: the screen renders a reach reason only via flags()
+  // (non-pass) or informFlags() (gatedStatus set), so a stale row scored `pass` warns nowhere.
+  const s = seriesOf([
+    { d: 6, low: 306, hi: 313 }, { d: 7, low: 305, hi: 314 }, { d: 8, low: 306, hi: 315 }, { d: 9, low: 300, hi: 315 },
+    { d: 10, low: 302, hi: 314 }, { d: 11, low: 303, hi: 316 }, { d: 12, low: 301, hi: 313 },
+    { d: 13, low: 286, hi: 299 }, { d: 14, low: 290, hi: 301 }, { d: 15, low: 288, hi: 300 },
+  ]);
+  const r = reachValidator(ctxReach(s, { side: 'ask', level: 313 }));
+  assert.equal(r.evidence.staleOptimistic, true, 'full window reaches 313 often; the recent 3 never do');
+  assert.ok(r.evidence.hit / r.evidence.days >= 0.5, 'the raw fraction is pass territory');
+  assert.equal(r.status, 'caution', 'the stale flag raises it to caution so the warning is surfaced at all');
   assert.match(r.reason, /stale-optimistic/);
+});
+
+ok('a reject is NEVER softened by the stale flag (the cap raises, it never lowers)', () => {
+  const s = seriesOf([
+    { d: 10, low: 250, hi: 310 }, { d: 11, low: 252, hi: 305 }, { d: 12, low: 249, hi: 312 },
+    { d: 13, low: 251, hi: 308 }, { d: 14, low: 250, hi: 309 }, { d: 15, low: 248, hi: 311 },
+    { d: 16, low: 253, hi: 307 }, { d: 17, low: 250, hi: 310 },
+  ]);
+  const r = reachValidator(ctxReach(s, { side: 'ask', level: 400 }));
+  assert.equal(r.status, 'reject', 'a never-reached level stays a reject regardless of the stale flag');
 });
 
 // --- 4. degrade contract (never reject on absence of data) ------------------------------------
