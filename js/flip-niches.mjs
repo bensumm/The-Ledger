@@ -218,6 +218,10 @@ function churnEdge(inp, t) {
                  ROLLOUT (rule 4 — n≈0): the newly-activated validators (reach, trajectory,
                  value-amplitude) start INFORM everywhere; only the already-live floor + limit gates gate.
                  Flipping a cell to gate is a one-word change once its notes prove out against live data.
+                 (True again as of 2026-08-08: trajectory gated in VALUE from 2026-07-09 and was demoted
+                 back to inform when forward-scoring found its premise inverted — see the value spec.
+                 Note the lesson: a gate that drops rows censors the evidence that would judge it, so
+                 "prove out against live data" is only possible while a cell is still INFORM.)
      defaultPath the inferred DEFAULT ENTRY PATH the surfacing implies (Ben-vetoable; see header).
      estimator   (P6b) the per-thesis P(fill)+TTF estimator FAMILY key — one of pipeline/lib/
                  estimators.mjs's ESTIMATOR_FAMILIES ('intraday' | 'value' | 'rising' | 'churn' — Step 6:
@@ -305,15 +309,32 @@ export const FLIP_NICHE_LIST = Object.freeze([
     validators: [
       { key: 'floor', mode: 'gate' },
       { key: 'reach', mode: 'inform', window: { windowHours: 24, nights: 14 } },
-      // trajectory GATES in value (Ben 2026-07-09): a KNIFE drops. Value's defining thesis is "buy the
-      // base, never the knife", and a multi-week HOLD makes buying a knife cost far more than missing one
-      // (asymmetry) — so this is the one flip-niche where the knife verdict is a thesis violation, not a nuance,
-      // and it graduates from inform→gate ahead of the others. It catches the knives valueGate's weaker
-      // term-structure knifeDelta misses (Inoculation bracelet, Zombie axe). `elevated` stays a caution
-      // flag (a timing note, not a drop); oscillating/based/rising pass. A dropped knife is NAMED in the
-      // §F footer (renderValueMode), so it leaves buy-now but stays auditable. Value-scoped: band/rising
-      // already exclude fallers, scalp accepts them — trajectory stays inform there.
-      { key: 'trajectory', mode: 'gate' },
+      // trajectory: gate → INFORM (Ben 2026-08-08, MEASURED — was gate since 2026-07-09). The original
+      // rule was "a KNIFE drops: value's thesis is buy the base never the knife, and a multi-week HOLD
+      // makes buying a knife cost far more than missing one (asymmetry)". Forward-scoring over 71 days of
+      // 1h archive says the SIGN of that premise is wrong. The classifier itself is fine — it separates
+      // forward outcomes cleanly and its own `declPct` knob is smoothly monotone — but what it predicts at
+      // a multi-week horizon is short-horizon REVERSAL, and this gate was rejecting the favourable end of it:
+      //     knife   +4.08% excess 28d return (p=0.001)      rising  −7.28% (p=0.001, the strongest in the study)
+      //     declPct dose-response monotone the WRONG way (−3.11% → +4.25%)
+      // The ASYMMETRY premise specifically fails: it needs the left tail to grow faster than the right, and
+      // it does not — at 28d the extra downside is −0.78pp against +2.68pp of extra upside (P(ret ≤ −10%)
+      // 25.6% vs 21.0%; P(ret ≥ +10%) 22.5% vs 14.6%). Among the 200 value-board items it reverses outright
+      // (knife median +0.29% vs rest −3.53%). So knives ARE more volatile — that part was never wrong — but
+      // volatility priced this way is a SIZING fact, not an exclusion one.
+      // WHAT REPLACED IT (not a plain demotion): renderValueMode now tier-demotes a would-reject knife
+      // BUY-NOW → WATCH, mirroring the value-amplitude demotion beside it. The knife is never hidden, never
+      // ranked "buy now", and — because value rows now log `validators` — its track record finally accrues.
+      // WHY NOT KEEP THE GATE: it was the only gate in the whole validator stack that dropped rows, and a
+      // gate that drops rows destroys its own evidence (the floor/R3 censoring incidents, CHANGELOG
+      // 2026-08-08). Demoting it is what MAKES the question answerable.
+      // CAVEATS, both live: 71 days is ONE regime — if momentum replaces reversal the signs flip, and this
+      // is the change that is cheapest to be wrong about in that world (a demotion, not a deletion). And the
+      // case Ben actually loses money on — post-update GEAR dumps (fang/hydra/virtus, memory
+      // `update-cycle-timing`) — is a handful of events invisible at n=1,780 knife cells; it needs an EVENT
+      // study, not a shape gate, and remains untested. The ≥100k tier is the one place the old premise
+      // nearly holds (P(ret ≤ −20%) 16.4% vs 10.1% at 28d) — the natural place to look if this is revisited.
+      { key: 'trajectory', mode: 'inform' },
       { key: 'value-amplitude', mode: 'inform' },
       { key: 'limit', mode: 'gate' },
     ],

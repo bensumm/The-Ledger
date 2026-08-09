@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.94
+version: 1.95
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -215,13 +215,22 @@ band + churn + AMPLITUDE — `value` is OUT of the default (took its slot); valu
   placeholder only when no anchor is set;
   slots default 5; the footer names which source it used and prints `N buy-now surfaced — re-run --slots N`). The
   default scan now surfaces a real MIX (big tickets + mid-deployable sub-1m + deployable cheap); if you
-  expect a specific item and don't see it, it's genuinely gated (illiquid, or a knife) or out-deployed, not
-  blindly rank-buried. **Trajectory now GATES in value (Ben 2026-07-09):** a KNIFE is DROPPED (named in the
-  §F footer, `dropped N trajectory-knife: …`) — so a falling knife like Inoculation bracelet / Zombie axe no
-  longer sits atop BUY-NOW; `elevated` still flags (timing), oscillating/based/rising pass. Still: DON'T pitch
-  a value buy off this table blind — **value-amplitude stays inform-only** (a would-caution "live is N% up the
+  expect a specific item and don't see it, it's genuinely gated (illiquid) or out-deployed, not
+  blindly rank-buried. **A knife is DEMOTED, not dropped (Ben 2026-08-08 — supersedes the 2026-07-09
+  knife-GATE):** a would-reject trajectory moves the pick BUY-NOW → WATCH (named in the §F footer,
+  `demoted N trajectory-knife to WATCH: …`) instead of vanishing. _(judgment: the gate's premise measured
+  BACKWARDS — knives returned +4.08% excess at 28d vs `rising` −7.28%, and the hold-asymmetry it rested on
+  reversed. The signal is real; it predicts short-horizon reversal, and the gate rejected the favourable
+  end of it.)_ **So a knife CAN now appear on the value board — read the note, don't assume the board
+  pre-filtered it for you.** Relay the demotion line when it fires: the item is on the board precisely
+  because we no longer think dropping it was right, but it is in WATCH precisely because it is still a
+  knife. `elevated` still flags (timing), oscillating/based/rising pass. Two live caveats worth stating
+  when you relay one: the measurement is 71 days = ONE regime, and it says nothing about post-update GEAR
+  dumps (the fang/hydra/virtus class) — those are rare events the pooled average cannot see, so your own
+  update knowledge still overrides this. Still: DON'T pitch a value buy off this table blind —
+  **value-amplitude stays inform-only** (a would-caution "live is N% up the
   week range — wait for the dip" is NOT a drop), and every threshold is a PLACEHOLDER (n≈0). Read the `ℹ
-  timing/trajectory` notes + the footer drops, and verify the sell-leg reach by hand before quoting profit.
+  timing/trajectory` notes + the footer demotions, and verify the sell-leg reach by hand before quoting profit.
 
 **Flip-niche set (Steps 3+4, 2026-07-09; THE SWAP, 2026-07-19).** `--mode all` runs **band +
 churn + amplitude** (THE SWAP, PLAN-AMPLITUDE-SCAN §3 — amplitude took value's default slot; value stays

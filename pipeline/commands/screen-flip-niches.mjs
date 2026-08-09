@@ -1973,14 +1973,14 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   // value KEEPS reach as a daily-min TIMING read (Ben 2026-07-09): run ONLY the spec's inform validators
   // here so the note is added WITHOUT re-gating the value table (valueGate already selected these rows).
   const valueInformSpecs = FLIP_NICHES.value.validators.filter(v => typeof v === 'object' && v.mode === 'inform');
-  // trajectory GATES in value (Ben 2026-07-09): a knife DROPS (named in the footer), elevated FLAGS. Scoped
-  // to trajectory — the value spec's floor/limit are mode:'gate' too but stay dormant in this console path
-  // (their gate home is valueGate + the absent 4h-limit window), so only trajectory is promoted to an
-  // active drop here. Spec-driven: the gate fires only because the spec now says trajectory is 'gate'.
-  const valueTrajGate = FLIP_NICHES.value.validators.find(v => typeof v === 'object' && v.key === 'trajectory' && v.mode === 'gate') || null;
-  let droppedKnife = 0;   // post-fetch phase() decay-knife drops
+  // trajectory was a value-only GATE from 2026-07-09 and is INFORM again as of 2026-08-08 (its premise
+  // measured backwards — see the value spec in js/flip-niches.mjs). It now rides valueInformSpecs like the
+  // other inform validators, and a would-reject knife is TIER-DEMOTED buy-now → watch below rather than
+  // dropped. Nothing here looks for a 'gate' trajectory cell any more: that lookup would silently return
+  // null after the spec flip, which is exactly the kind of quiet dead branch this comment exists to prevent.
+  let droppedKnife = 0;   // post-fetch phase() decay-knife drops (valueGate's own decay shape — UNAFFECTED by the demotion)
   let droppedArtifact = 0;   // post-fetch artifact-low drops (live implausibly below the durable floor)
-  const droppedTrajKnife = [];   // trajectory-classified knife drops (named in the §F footer for auditability)
+  const demotedTrajKnife = [];   // trajectory-classified knives demoted buy-now → watch (named in the §F footer for auditability)
   for (const s of survivors) {
     const row = qcache.get(s.id);
     if (!row) continue;
@@ -2002,17 +2002,6 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const ph = phase(series6h && series6h.get(s.id));
     const g = valueGate(vr, { phase: ph && ph.phase });
     if (!g.pass) { if (g.reason === 'decay') droppedKnife++; else if (g.reason === 'artifact-low') droppedArtifact++; continue; }
-    // trajectory GATE (value only): a KNIFE drops here (named in the footer) before it can rank in buy-now
-    // — the encoded "buy the base, not the knife" gate, catching the shapes valueGate's knifeDelta misses.
-    // Runs on the SAME warm 1h-derived informTs the inform validators use. `elevated` → a caution flag note
-    // (timing, not a thesis break); oscillating/based/rising pass through.
-    if (valueTrajGate) {
-      const tg = runValidators({ market: { row }, history: { termStructure: informTs }, intraday: { ts1h: series1h && series1h.get(s.id) } }, { specs: [valueTrajGate] });
-      const rej = tg.find(r => r.status === 'reject');
-      if (rej) { droppedTrajKnife.push(name); continue; }
-      const caut = tg.find(r => r.status === 'caution');
-      if (caut) valueInformNotes.push(`${name}: trajectory ${caut.reason} (flagged)`);
-    }
     let tier = valueTier(vr);
     // value's reach as a daily-min TIMING read: is the buy-low actually TOUCHED in the recent week+ (a
     // full-day window over 14 nights, from the spec)? Plus trajectory (oscillating/based/knife) + the
@@ -2053,6 +2042,18 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
       tier = 'watch';
       valueInformNotes.push(`${name}: demoted BUY-NOW → WATCH (value-amplitude would ${ampGate} — live not near the recent-week low)`);
     }
+    // TRAJECTORY KNIFE: demote, don't drop (2026-08-08 — replaces the 2026-07-09 gate; premise measured
+    // backwards, see js/flip-niches.mjs's value spec). Exactly the shape of the value-amplitude demotion
+    // above: a would-REJECT trajectory (the knife verdict) can't be called "buy now", but it stays on the
+    // board, keeps its inform note, and — unlike the dropped rows before it — accrues a track record.
+    // Only 'reject' demotes: 'elevated' is a would-CAUTION timing flag and already prints via informFlags,
+    // so demoting on caution too would quietly re-tighten the board the measurement just loosened.
+    const trajGate = (vres.find(r => r.key === 'trajectory') || {}).gatedStatus;
+    if (tier === 'buy-now' && trajGate === 'reject') {
+      tier = 'watch';
+      demotedTrajKnife.push(name);
+      valueInformNotes.push(`${name}: demoted BUY-NOW → WATCH (trajectory would reject — a knife; buy the base, not the knife)`);
+    }
     // RC1 recency anchor: when the durable q15/q85 range spans a prior regime, the cycle was scored on the
     // recent window instead — say so, so the anchored range isn't mistaken for the full multi-week one.
     if (vr.ceilingStale || vr.floorStale) valueInformNotes.push(`${name}: range recency-anchored — durable ${fmtP(vr.rawDurableLow)}→${fmtP(vr.rawDurableHigh)} spans a prior regime; cycle scored on the recent ${fmtP(vr.durableLow)}→${fmtP(vr.durableHigh)}`);
@@ -2078,6 +2079,11 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
     const vrank = rankScore({ net: netU, pFill: vpFill.value, ttfSec: vttf.value });
     sugg.push(suggestionEntry(row, { itemId: s.id, cls: liqClass(row), volSrc: 'bulk', verdict: tier === 'buy-now' ? 'VALUE-BUY' : 'VALUE-WATCH', posture: POSTURE, path: 'value-hold',   // SF-3: bulk /24h volume
       bid: vr.buyLow, ask: vr.durableHigh, pFill: round2(vpFill.value), ttfSec: vttf.value, rank: Math.round(vrank), estBasis: `${vpFill.basis}/${vttf.basis}`, estN: Math.min(vpFill.n, vttf.n),
+      // 2026-08-08: value rows never carried `validators`, so the value niche was the ONE surface whose
+      // validator findings left no ledger trace — the reason the knife gate could not be judged from the
+      // record and needed a 71-day archive replay instead. leanValidators keeps inform findings that WOULD
+      // have gated (gatedStatus), so demoted knives now accrue exactly the track record the gate destroyed.
+      validators: leanValidators(vres),
       volDayRolling: rollShadow(series1h, s.id),   // PLAN-VOL24 shadow: corrected /1h-composed 24h volume
       via: s.via, preRank: s.preRank, prePool: s.prePool }));   // EF-0a: admission provenance (via 'reserve' = the value cycle-amplitude reserve) + the valueScore pre-fetch position
   }
@@ -2111,7 +2117,7 @@ function renderValueMode({ cand, survivors }, qcache, map, series6h, series1h, g
   // honest that some fetched rows entered via the value RESERVE (highest cycle-amplitude of the excluded
   // remainder), not the top-N valueScore cut (mirrors amplitude's `+ N watchlist-reserved`).
   const valueReserved = survivors.filter(s => s.via === 'reserve').length;
-  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore${valueReserved ? ` + ${valueReserved} amp-reserved` : ''}) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}${droppedTrajKnife.length ? ` · dropped ${droppedTrajKnife.length} trajectory-knife: ${droppedTrajKnife.join(', ')}` : ''}`);
+  console.log(`\nadmitted ${cand.length} (gate) · fetched ${survivors.length} (top ${VALUE_TOP_DEFAULT} by valueScore${valueReserved ? ` + ${valueReserved} amp-reserved` : ''}) · shown ${shown}${droppedKnife ? ` · dropped ${droppedKnife} post-fetch decay-knife` : ''}${droppedArtifact ? ` · dropped ${droppedArtifact} artifact-low (live below the durable floor)` : ''}${demotedTrajKnife.length ? ` · demoted ${demotedTrajKnife.length} trajectory-knife to WATCH: ${demotedTrajKnife.join(', ')}` : ''}`);
   console.log('');
   // publishable rows: buy-now first, then watch (isolated; the app has no VALUE tab yet → console-only)
   return [...buyNow, ...watch].map(r => ({ id: r.id, cells: r.cells }));

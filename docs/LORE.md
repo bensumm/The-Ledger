@@ -103,6 +103,21 @@ change, mapped in README "Map of the repo". Reconstruction detail: `FILLS-PIPELI
   folded into `valueScore`). `VALUE_ABSGP_*` is gone; the operating rule lives in `js/valuescreen.mjs`'s
   header. This was one of four same-day value iterations (deployable-capital, artifact/liquidity
   hardening, RC1 recency anchor, trajectory-GATE) whose current form is now that module header.
+  **The trajectory-GATE of that set was REVERSED on 2026-08-08** — see the entry below.
+- **The value knife-GATE → a WATCH demotion (2026-08-08).** For thirteen months of tool-time the value
+  niche dropped any item `classifyTrajectory` called a knife, on the thesis "buy the base, never the
+  knife" plus an asymmetry argument (a multi-week hold makes buying a knife cost more than missing one).
+  Forward-scoring it over 71 days of 1h archive inverted the premise: knives returned **+4.08%** excess
+  at 28d (p=0.001) while `rising` — which passed freely — returned **−7.28%**. The classifier was never
+  broken; it measures short-horizon REVERSAL, and the policy had assumed its sign without checking.
+  Two lessons outlived the change. (1) **A gate that drops rows destroys the evidence that would judge
+  it** — the knife gate had no measurable population at all, which is why answering this took an
+  archive replay instead of a ledger query; the same censoring invalidated two floor findings the same
+  week. (2) **Volatility is a sizing fact, not an exclusion fact** — knives really do have a fatter left
+  tail, but the right tail grew faster, so the honest response was to stop ranking them "buy now", not
+  to hide them. What replaced the gate is a BUY-NOW → WATCH tier demotion, mirroring value-amplitude's.
+  The untested case is the one that actually costs money: post-update GEAR dumps (fang/hydra/virtus) are
+  a handful of events invisible at n=1,780 knife cells and need an event study, not a shape gate.
 - **`expGpDay` as the ranking metric → demoted (P6b, Ben 2026-07-09: "I despise gp/d").** Rank is now
   `net after tax × P(fill at the quoted pair) ÷ TTF` per thesis (`pipeline/lib/signal/estimators.mjs`);
   `expGpDay` survives only as the cheap pre-fetch pool orderer + the 500k `--min-gpd` pre-filter.

@@ -512,11 +512,16 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
     discrimination (reject 55.9% vs caution 62.2% @8h) and an 8h window applied to 1–2 day theses:
     **18.2% of scored levels printed within 48h but not within 8h**. STILL OPEN — the horizon mismatch
     is real and unaddressed; scoring it properly needs a fill model, not a print model.
-  - **`trajectory` UNSCORED-ish** — `elevated` (n=2,173) and `knife` (n=823) both showed no significant
-    discrimination on the round trip, and `knife`'s raw negative REVERSED under the within-item paired
-    test (composition, not signal). `knife` is the one validator that GATES (in `value`), so its lack of
-    evidence matters most; it stands on a thesis argument (asymmetry of a knife on a multi-week hold),
-    not on measurement. OPEN.
+  - **`trajectory` MEASURES BACKWARDS → demoted gate→inform in `value`** (landed 2026-08-08). The
+    ledger-only read (`elevated` n=2,173, `knife` n=823, no round-trip discrimination) was itself
+    censored — the gate dropped its own population — so this was settled by a 71-day 1h-archive replay
+    instead: `knife` **+4.08%** excess 28d return (p=0.001) vs `rising` **−7.28%** (p=0.001, the
+    strongest signal in the study), `declPct` monotone the wrong way, and the hold-asymmetry premise
+    reversed (extra upside +2.68pp vs extra downside −0.78pp). The classifier is sound — it predicts
+    short-horizon REVERSAL and the gate rejected the favourable end of it. A would-reject knife is now
+    tier-demoted BUY-NOW → WATCH; value rows finally log `validators`, so the track record accrues.
+    CLOSED, with two live caveats: 71 days is one regime, and post-update GEAR dumps (the losses that
+    actually hurt) are invisible at this n — that needs an EVENT study, still OPEN and unscheduled.
   - **Where exclusion ACTUALLY happens is the fetch-slot competition, not the validators.** Validators
     dropped ~14 rows in 35 days; `thin-reserve-full` dropped **2,184 candidates averaging 3.83m/day
     expected** — 4.3× the average of the `top-n-full` cut. That is the price-keyed fetch reserve already

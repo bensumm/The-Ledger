@@ -82,10 +82,28 @@ ok('RF2 reverse niche is registered as an explicit-only, ownership-gated console
   assert.equal(validateNicheSpec(r).length, 0, 'reverse spec is structurally conformant');
 });
 
-ok('value GATES trajectory (Ben 2026-07-09 — knife drops), while band/churn/scalp keep it inform', () => {
+// REGRESSION GUARD (2026-08-08): trajectory is inform EVERYWHERE, value included. It gated in value from
+// 2026-07-09 ("buy the base, never the knife" + a hold asymmetry) until forward-scoring found the premise
+// inverted — knife +4.08% excess 28d return vs rising −7.28%, and the asymmetry reversed (extra upside
+// +2.68pp vs extra downside −0.78pp). A would-reject knife is now TIER-DEMOTED buy-now → watch in
+// renderValueMode, never dropped. Re-promoting this cell to 'gate' would restore the only row-dropping
+// validator in the stack — and with it the censoring that made the rule unjudgeable. Don't, without a
+// fresh measurement in a NEW regime (the 71-day window is one regime) or an event study of post-update
+// gear dumps, the case the pooled average cannot see. Full reasoning: the value spec in js/flip-niches.mjs.
+ok('trajectory is INFORM in every flip-niche — value included (2026-08-08 demotion; measured backwards)', () => {
   const trajMode = k => FLIP_NICHES[k].validators.find(v => v.key === 'trajectory')?.mode;
-  assert.equal(trajMode('value'), 'gate', 'value drops a knife — "buy the base, never the knife" + the hold asymmetry');
+  assert.equal(trajMode('value'), 'inform', 'value DEMOTES a knife buy-now→watch; it no longer drops it');
   for (const k of ['band', 'churn', 'scalp']) assert.equal(trajMode(k), 'inform', `${k} keeps trajectory inform (already excludes fallers, or accepts by thesis)`);
+});
+
+// The demotion is only honest if the finding still SURFACES. trajectory must be in value's inform specs so
+// renderValueMode picks it up via valueInformSpecs → informFlags → a "(would reject)" note, and so
+// leanValidators writes it to the ledger. If it were dropped from the spec entirely the knife would go
+// silent — a worse outcome than the gate it replaced.
+ok('value still RUNS trajectory (demotion must not silence it)', () => {
+  const spec = FLIP_NICHES.value.validators.find(v => v.key === 'trajectory');
+  assert.ok(spec, 'trajectory is still registered on the value spec — the note and the ledger row depend on it');
+  assert.equal(spec.mode, 'inform', 'inform ⇒ clamped to pass with gatedStatus preserved for the demotion check');
 });
 
 ok('P6b per-thesis estimator family + price-basis fields are registered as designed', () => {

@@ -10,6 +10,59 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### The value knife-GATE becomes a WATCH demotion — the premise measured backwards (2026-08-08)
+
+`trajectory` had `mode:'gate'` in the `value` flip-niche since 2026-07-09, on the thesis *"buy the base,
+never the knife"* plus an asymmetry argument: a multi-week hold makes buying a knife cost more than
+missing one. Forward-scoring it over 71 days of 1h archive says the sign is wrong.
+
+| 28d horizon | excess return | p |
+| --- | --- | --- |
+| `knife` | **+4.08%** | 0.001 |
+| `rising` (passed freely) | **−7.28%** | 0.001 |
+
+`declPct` — the classifier's own knob — is dose-response monotone the *wrong* way (−3.11% → +4.25%).
+The asymmetry premise fails specifically: it needs the left tail to grow faster than the right, and it
+does not — extra downside **−0.78pp** against **+2.68pp** of extra upside (P(ret ≤ −10%) 25.6% vs 21.0%;
+P(ret ≥ +10%) 22.5% vs 14.6%). Among the 200 value-board items it reverses outright (knife median
++0.29% vs rest −3.53%).
+
+**The classifier is not broken.** It separates forward outcomes cleanly; what it predicts at a multi-week
+horizon is short-horizon **reversal**, and the gate was rejecting the favourable end of it. Knives *are*
+more volatile — that part was never wrong — but priced this way that is a **sizing** fact, not an
+**exclusion** one.
+
+**The change.** `{ key: 'trajectory', mode: 'inform' }` in the value spec, and `renderValueMode` now
+tier-demotes a would-reject knife **BUY-NOW → WATCH**, mirroring the `value-amplitude` demotion beside
+it. Only `reject` demotes — `elevated` is a would-caution timing flag that already prints via
+`informFlags`, and demoting on it too would quietly re-tighten the board the measurement just loosened.
+The §F footer says `demoted N trajectory-knife to WATCH: …` (was `dropped …`), so the audit trail
+survives. Live verification on the value board: **6 knife rows surfaced, 2 demoted** (Bolt of canvas,
+Lead bar); under the old gate all 6 would have vanished and `shown` would have been 25 instead of 31.
+
+**Why demote rather than keep the gate.** It was the only validator in the stack that dropped rows, and
+a gate that drops rows destroys the evidence that would judge it — the same censoring that invalidated
+two floor claims this week. Demoting is what *makes the question answerable*. Closing that loop needed
+one more fix: value rows never carried a `validators` field, so the value niche was the one surface
+whose validator findings left no ledger trace. `validators: leanValidators(vres)` is now written, and
+`leanValidators` keeps inform findings that would have gated — so demoted knives accrue exactly the
+track record the gate was destroying. Verified: 6 knife rows now land as `VALUE-WATCH` with their
+finding attached.
+
+**Honesty (rule 4).** 71 days is **one regime** — if momentum replaces reversal these signs flip, and a
+demotion is the cheapest version of this change to be wrong about. The case that actually costs money is
+untested: post-update **gear** dumps (fang/hydra/virtus) are a handful of events invisible at n=1,780
+knife cells and need an event study, not a shape gate. The ≥100k tier is the one place the old premise
+nearly holds (P(ret ≤ −20%) 16.4% vs 10.1% at 28d) — the natural place to look if this is revisited.
+`reached ≠ filled` applies throughout. Also note what the demotion leaves behind: **`floor` R3 is now
+the only path by which any validator drops a row**, and it is itself unmeasurable for the same reason.
+
+**No `APP_VERSION` bump** — no app module imports `js/flip-niches.mjs` (the value niche is console-only,
+no app tab), and the screen change is pipeline stdout. `/scan` skill → `version: 1.95`. Reconciled:
+`docs/MARKET-ANALYSIS.md` (validator table + rollout line), `docs/LORE.md`, `.claude/skills/scan/SKILL.md`,
+and the regression guard in `pipeline/test/flip-niches.test.mjs` — which now pins trajectory as inform
+everywhere and separately asserts the demotion must not *silence* it. 108 suites pass.
+
 ### floorValidator retuned — the F1/P6 study its own header asked for, finally run (2026-08-08, pipeline-only — NO APP_VERSION)
 
 `floorValidator`'s header had carried a standing request since P3:
