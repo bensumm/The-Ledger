@@ -900,6 +900,10 @@ function digestSoftBuy(prof, row, fc = null, durable = null) {
   if (read.marker == null) return win;                            // window known, live-vs-floor unavailable
   // append the cue only when it's the meaningful floor-aware read (favorable/caution); the @floor/+X% marker
   // already conveys buy-now/wait, so those two words stay implicit in the compact cell.
+  // DT2 (2026-08-09): the compact cell keeps its shape (the digest is width-constrained and is an ATTENDED
+  // triage surface by construction), but read the marker correctly — `+X%` states WHERE LIVE SITS relative
+  // to the dip floor, it is NOT an instruction to wait. A resting bid goes in at the floor level regardless
+  // of the hour; the window is where an attended TAKE is cheapest. See softBuyRead's header for why.
   const cueTag = (read.cue === 'favorable' || read.cue === 'caution' || read.cue === 'unproven-base') ? ` · ${SOFT_BUY_CUE_TEXT[read.cue]}` : '';
   return `${win} · ${read.marker}${cueTag}`;
 }

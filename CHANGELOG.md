@@ -10,6 +10,39 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### DT2 — the dip window does not time a resting offer (0.71.4, 2026-08-09)
+
+**What changed.** The soft-buy cue's above-floor branch used to render the bare word `wait`, meaning "wait
+for the dip window to come round" before placing. It now reads *rest the bid at the floor now — windows
+don't time fills*, the render is LEVEL-FIRST (`soft-buy: floor ~X · live
++2.7% · <cue> (attended dip hours 21:00–00:00)`), and the window moved into a trailing parenthetical
+explicitly labelled **attended**. The cue KEY stays `'wait'` — callers and tests key on it; only the
+meaning and wording changed.
+
+**Why.** The old advice was measured harmful for a resting offer. At the production dip level, P(touch
+inside the predicted window | touched at all) is **71.2% versus 70.5% for a random window of the same
+width** — the window carries essentially nothing about WHEN a resting offer fills. A red team reached the
+same conclusion by an independent route: first-touch timing of a resting bid shows no window concentration
+(14.6% vs 15.9%). So waiting forfeits **~29% of bid fill-days at an identical price**. The window predicts
+WHERE the daily extremes land, not WHEN an offer fills — which is exactly why it remains legitimate for
+ATTENDED market-taking, and that is the only scope it now carries.
+
+**What did NOT change.** `softBuyRead`'s computation is untouched — same floor, same
+`SOFT_BUY_AT_FLOOR_PCT` boundary, same `@floor`/`+X%` marker, same floor-aware
+`buy now`/`favorable`/`caution`/`unproven-base` cue tree. This is a wording and framing change over an
+unchanged read. The `buy-soft-while-holding-for-peak` doctrine also stands: holding to sell into a later
+peak is still not a reason to sit idle on the buy side. That rule governs *whether* to add; this one
+governs *how* — as a resting bid at the level, not a timed wait.
+
+**Honesty limits.** One 74-day era, one update cycle; touch measured from hourly `avgLow`/`avgHigh`
+aggregates rather than executed fills, so it bounds a real offer from above; item-day clustering ⇒
+effective n well below nominal.
+
+**Guards.** `windowread.test.mjs` now pins that the above-floor render leads with the level, contains no
+"wait for the" phrasing, and scopes the window as attended. A new `lint-docs` denylist entry
+(`softbuy-wait-for-window`) fails if the superseded advice returns to the docs or skills. `/positions`
+→ 1.56, `/scan` → 1.97.
+
 ### DT3 — delete the per-hour drift slope; extract the ask-reach decay read (2026-08-09, pipeline/console-only, no APP_VERSION bump)
 
 **What went.** `hourlyDrift` (the per-hour day-over-day least-squares slope over the last N local

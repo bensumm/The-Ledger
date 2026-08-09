@@ -1341,11 +1341,25 @@ export function deriveDiurnalRange(profile, { liveLo = null, liveHi = null } = {
 // diurnal dip when it's soft. softBuyRead answers "when is it cheapest to ADD, and is NOW that time?"
 // off the SAME hourProfile the diurnal note already computes (ZERO new fetch — same inputs as
 // deriveDiurnalRange):
-//   dipWindow — the diurnal DIP window (the cheapest hours-of-day to add), from profile.dip.startH/endH.
+//   dipWindow — the diurnal DIP window: the cheapest hours-of-day to add BY TAKING, while attended.
 //   floor     — profile.dip.level, the recent dip-cluster low (the add-here bid candidate).
-//   marker    — '@floor' when live sits ≤ SOFT_BUY_AT_FLOOR_PCT % over the dip floor (or below it) → buy
-//               now; '+X%' when live sits X% above the dip → wait for the window to come round.
-//   buyNow    — the boolean the render turns into the plain "buy now / wait" cue.
+//   marker    — '@floor' when live sits ≤ SOFT_BUY_AT_FLOOR_PCT % over the dip floor (or below it) → the
+//               level is here now; '+X%' when live sits X% above the dip.
+//   buyNow    — the boolean distinguishing those two states.
+//
+// THE WINDOW IS NOT A REASON TO DELAY A RESTING BID (DT2, PLAN-DIURNAL-TRIAGE, 2026-08-09). This cue used
+// to tell the operator to "wait for the window to come round" when live sat above the dip. That advice was
+// measured HARMFUL for a resting offer. At the production dip level, P(touch inside the predicted window |
+// touched at all) is 71.2% versus 70.5% for a RANDOM window of the same width — the window carries
+// essentially nothing about WHEN a resting offer fills. A red team reached the same conclusion by a
+// different route: first-touch timing of a resting bid shows no window concentration (14.6% vs 15.9%).
+// Waiting therefore forfeits ~29% of bid fill-days at an IDENTICAL price. The window predicts WHERE the
+// extremes land, not WHEN an offer fills, so: a resting bid is placed AT THE LEVEL, now, and rests all
+// day; the dip hours are for ATTENDED market-taking only. Honesty limits: one 74-day era, one update
+// cycle, touch measured from hourly avgLow/avgHigh aggregates rather than executed fills (so it bounds a
+// real offer from above), item-day clustering ⇒ effective n well below nominal.
+// The cue KEY 'wait' is retained (callers and tests key on it) — its MEANING and wording changed, not its
+// identity. See SOFT_BUY_CUE_TEXT below.
 // SYMMETRIC with screen-flip-niches.mjs's digest soft-buy column (same HH:00–HH:00 · @floor / +X% cell
 // format + the same SOFT_BUY_AT_FLOOR_PCT boundary) so both surfaces read consistently — the digest's
 // digestSoftBuy reconciles onto THIS helper (ONE implementation, not two). INFORM-ONLY (tier: context) —
@@ -1425,7 +1439,11 @@ export function softBuyRead(profile, { live = null, fc = null, durable = null } 
 // identically. The 'favorable' text carries its update-blindness caveat inline (never an imperative GO).
 export const SOFT_BUY_CUE_TEXT = {
   'buy now':   'buy now',
-  'wait':      'wait',
+  // DT2 (2026-08-09): was the bare word 'wait', meaning "wait for the dip window to come round". That is
+  // measured wrong for a RESTING offer — the window doesn't time fills (71.2% vs 70.5% random), so waiting
+  // forfeits ~29% of fill-days at the same price. The level is the decision; the hours are attended-taking
+  // context. Key kept as 'wait' so callers/tests don't churn; the wording no longer says to delay.
+  'wait':      'rest the bid at the floor now — windows don\'t time fills',
   'favorable': '▲ favorable — dip in uptrend (price-trend only)',
   'caution':   '▽ caution — floor breaking ↓',
   // A: the 5d floor is RISING but the 28d durable-support check still cautions the level — a post-spike
@@ -1441,17 +1459,23 @@ export const SOFT_BUY_CUE_TEXT = {
 // formatSoftBuy(read, opts) — the ONE one-line render off a softBuyRead result, shared so both surfaces
 // phrase it identically. Null read ⇒ null (no note). `fmtHour` defaults to the HH:00 formatter that
 // money-format's fmtHour produces, so windowread stays import-free; a caller may pass its own to match.
-export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') + ':00' } = {}) {
+// DT2 (2026-08-09): LEVEL-FIRST. The floor level leads the line and the dip window moved to a trailing
+// parenthetical explicitly labelled "attended", because the window does not time a resting offer's fill
+// (see softBuyRead's header for the measurement). `fmt` is injected like every other renderer here so
+// windowread stays dependency-free; it formats the floor LEVEL, which is the number the operator acts on.
+export function formatSoftBuy(read, { fmtHour = h => String(h).padStart(2, '0') + ':00', fmt = String } = {}) {
   if (!read) return null;
-  const win = `${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
-  if (read.marker == null) return `soft-buy: dip ${win}`;                // no live reference ⇒ window only
+  const win = `attended dip hours ${fmtHour(read.dipWindow.startH)}–${fmtHour(read.dipWindow.endH)}`;
+  const floorTxt = read.floor != null ? `floor ~${fmt(read.floor)}` : null;
+  // no live reference ⇒ the level (when known) + the attended window, and no cue claim either way
+  if (read.marker == null) return floorTxt ? `soft-buy: ${floorTxt} (${win}, no live ref)` : `soft-buy: ${win}`;
   let cueText = SOFT_BUY_CUE_TEXT[read.cue] ?? read.cue;
   // A: carry the durable-floor NUMBER on the unproven-base cue — "1.7× swing over the 28d floor" is what
   // makes the caution actionable; the adjective alone is what got scrolled past fourteen times a pass.
   if (read.cue === 'unproven-base' && read.durable && read.durable.ranges != null) {
     cueText += ` (${read.durable.ranges}× swing over the ${read.durable.lookback ?? 28}d floor)`;
   }
-  return `soft-buy: dip ${win} · live ${read.marker} · ${cueText}`;
+  return `soft-buy: ${floorTxt ?? 'floor n/a'} · live ${read.marker} · ${cueText} (${win})`;
 }
 
 // --- diurnal-phase entry-timing (INFORM-ONLY PLACEHOLDER, n≈0) ---------------------------------

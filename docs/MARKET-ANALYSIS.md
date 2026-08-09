@@ -209,8 +209,10 @@ symmetric churn/amplitude flip-niche, a thin day sample, or no in-hand buckets �
 fake read). It's the slope-based `reachMargin.trend` (R4), scored at the SAME reference the reach column uses (so
 a stale-guarded row's trend reads at the fresher instasell too) — INFORM-ONLY, it never re-ranks or gates.
 The `soft-buy` column is the BUY-timing complement of `phase` (which reads the peak /
-sell-cycle window): the diurnal DIP window (cheapest hours to buy) + where the LIVE instabuy sits vs the dip
-floor + a FLOOR-AWARE cue — `HH:00–HH:00 · @floor · <cue>` or `· +X% · wait`. It delegates to the SHARED
+sell-cycle window): the diurnal DIP window (cheapest hours for an ATTENDED take) + where the LIVE instabuy
+sits vs the dip floor + a FLOOR-AWARE cue — `HH:00–HH:00 · @floor · <cue>` or `· +X%`. **DT2 (2026-08-09):
+`+X%` states WHERE LIVE SITS, not "wait for the window"** — see the ⏳ soft-buy entry in §Notes for the
+measurement and the resting-bid-vs-attended-take split. It delegates to the SHARED
 `softBuyRead` (`js/windowread.mjs`) — the SAME helper + wording as the positions surface (ONE implementation).
 When live is `@floor` the cue consults the in-hand multi-day `floorCeilingTrack`: `buy now` (soft dip),
 `▲ favorable — dip in uptrend (price-trend only)` (rising floor — a prompt, blind to game-update breaks, never
@@ -924,14 +926,26 @@ simultaneous independent rungs on one item.
   is `unknown`. STDOUT-only, never a gate/price/rank/`screen.json` input.
 - **Soft-buy (ADD-while-holding) timing, inform-only, n≈0.** `quote-items.mjs` prints a `⏳ soft-buy`
   line beside each held lot (and on bare quotes) off the SAME `hourProfile` — `js/windowread.mjs`
-  `softBuyRead`/`formatSoftBuy`: `soft-buy: dip HH:00–HH:00 · live @floor | +X% · buy now | wait`. The
-  **dip window** is the cheapest hours-of-day to ADD; the marker is `@floor` when live sits ≤
-  `SOFT_BUY_AT_FLOOR_PCT` (0.5%) over the dip floor (or below → **buy now**) vs `+X%` above it (**wait**).
-  It fills the gap the decision-digest soft-buy COLUMN leaves — the digest excludes held items, so it was
-  blind to mistiming an ADD to a lot we already hold (Dragon boots into the daytime peak ~350k over;
-  blowpipe at 10.67m vs the 10.40m dip). Doctrine: holding to sell into a LATER peak is not a reason to
-  sit idle on the BUY side. Mirrors the digest column's cell format + threshold so both reconcile onto one
-  helper. Never gates/regrades; null 1h series ⇒ no line.
+  `softBuyRead`/`formatSoftBuy`: `soft-buy: floor ~X · live @floor | +X% · <cue> (attended dip hours
+  HH:00–HH:00)`. The **floor** is the dip-cluster level — the number you place at, and since DT2 it LEADS
+  the line; the marker is `@floor` when live sits ≤ `SOFT_BUY_AT_FLOOR_PCT` (0.5%) over that floor (or
+  below → **buy now**) vs `+X%` above it. It fills the gap the decision-digest soft-buy COLUMN leaves —
+  the digest excludes held items, so it was blind to mistiming an ADD to a lot we already hold (Dragon
+  boots into the daytime peak ~350k over; blowpipe at 10.67m vs the 10.40m dip). Doctrine: holding to sell
+  into a LATER peak is not a reason to sit idle on the BUY side. Mirrors the digest column's threshold so
+  both reconcile onto one helper. Never gates/regrades; null 1h series ⇒ no line.
+  **DT2 (2026-08-09) — the window does NOT time a resting offer.** Until this date the above-floor cue was
+  the bare word `wait`, meaning "wait for the dip window to come round." Measured at the production dip
+  level, P(touch inside the predicted window | touched at all) is **71.2% vs 70.5% for a random window of
+  the same width** — the window carries essentially nothing about WHEN a resting offer fills (independently
+  confirmed: first-touch timing of a resting bid shows no window concentration, 14.6% vs 15.9%). Waiting
+  therefore forfeits **~29% of bid fill-days at an identical price**. The window predicts WHERE the daily
+  extremes land, not WHEN an offer fills. So the cue now reads *rest the bid at the floor now* and the
+  window moved into a trailing parenthetical explicitly labelled **attended** — it is for market-TAKING
+  while at the desk, not for delaying a resting bid. The cue KEY stays `'wait'` (callers/tests key on it);
+  only its meaning and wording changed. *Honesty limits: one 74-day era, one update cycle; touch measured
+  from hourly `avgLow`/`avgHigh` aggregates rather than executed fills, so it bounds a real offer from
+  above; item-day clustering ⇒ effective n well below nominal.*
 - **Forward forecast (PF1, inform-only, n≈0).** `js/forecast.mjs` `diurnalForecast(profile, ctx)` projects
   the next 12/24h → `nextTrough`/`nextPeak` (level, band, eta, window, confidence) + `whenBuyable`/
   `whenSellable` — the "not buyable/sellable at a good price now, but ~X in ~4h" answer (`quote-items.mjs`

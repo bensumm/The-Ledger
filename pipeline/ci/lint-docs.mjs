@@ -73,6 +73,20 @@ export const DENYLIST = [
     reason: 'the per-hour drift slope read was DELETED (PLAN-DIURNAL-TRIAGE DT3, 2026-08-09) as a measured non-signal — do not describe it as live; the surviving read is askReachDecay',
   },
   {
+    id: 'softbuy-wait-for-window',
+    // The superseded resting-offer advice: "wait for the (dip) window". Measured harmful 2026-08-09
+    // (PLAN-DIURNAL-TRIAGE DT2) — the window does not time a resting offer's fill (71.2% in-window touch
+    // vs 70.5% random), so waiting forfeits ~29% of bid fill-days at an identical price. A resting bid is
+    // placed at the LEVEL; the dip hours are for attended market-taking. Per the SELF-REFERENCE CAVEAT,
+    // the guarded docs describe the change by concept rather than reproducing this literal.
+    pattern: /wait for the (dip )?window/i,
+    files: ['CLAUDE.md', 'README.md', 'index.html',
+            '.claude/skills/scan/SKILL.md', '.claude/skills/positions/SKILL.md',
+            '.claude/skills/schedule/SKILL.md', '.claude/skills/overnight/SKILL.md',
+            '.claude/skills/morning/SKILL.md'],
+    reason: 'the "wait for the dip window" resting-offer advice was SUPERSEDED (PLAN-DIURNAL-TRIAGE DT2, 2026-08-09) — a resting bid rests at the LEVEL; the window is attended-taking context only',
+  },
+  {
     id: 'niche-spread-rising-live',
     // The deleted niches listed AS LIVE niches (the capitalized "Spread / Rising" niche-enumeration
     // form). Case-sensitive so it does NOT match prose narrating the deletion ("spread/rising were

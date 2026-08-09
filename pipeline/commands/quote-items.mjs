@@ -232,7 +232,7 @@ function localDayKey(d = new Date()) {
 function pushSoftBuy(notes, { prof = null, ts1h = null, live = null, itemId = null, fc = null, durable = null } = {}) {
   const p = prof || (ts1h ? hourProfile(ts1h, { nights: 7 }) : null);
   if (!p) return;
-  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable }), { fmtHour });
+  const sbTxt = formatSoftBuy(softBuyRead(p, { live, fc, durable }), { fmtHour, fmt });
   if (sbTxt) notes.push({ kind: 'softBuy', itemId, text: sbTxt });
 }
 

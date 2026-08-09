@@ -1,6 +1,6 @@
 ---
 name: scan
-version: 1.96
+version: 1.97
 description: Screen the GE market for flip opportunities and apply Ben's judgment layer over the rated output. Triggers — "find me flips", "any opportunities", "what should I buy", "screen the market", "anything in <flip-niche>", "scan".
 ---
 
@@ -78,7 +78,12 @@ additive visibility, never a re-rank of the main block. The reach ✓/✗ + mira
 a quoted ask pinned to a STALE live instabuy print (the `staleLive` case `quote-items.mjs` flags) can't fake
 a reach ✓ — reach/placement recompute against the fresher instasell, digest-scoped. The `soft-buy` column is
 the BUY-timing complement of `phase` (which is the peak/sell-cycle window): the diurnal DIP window + where
-live sits vs the dip floor + a FLOOR-AWARE cue (`HH:00–HH:00 · @floor · <cue>` · `+X% · wait`). It is the SAME
+live sits vs the dip floor + a FLOOR-AWARE cue (`HH:00–HH:00 · @floor · <cue>` · `+X%`). **DT2 (2026-08-09):
+read `+X%` as WHERE LIVE SITS relative to the dip floor — it is NOT an instruction to delay placing.** The window predicts
+where the daily extremes land, not when a resting offer fills (71.2% in-window touch vs 70.5% for a random
+window of the same width), so waiting forfeits ~29% of bid fill-days at an identical price. A resting bid
+goes in at the floor LEVEL now; the dip hours are for an attended TAKE. Same measurement, fuller doctrine +
+honesty limits: the `/positions` skill's soft-buy section. It is the SAME
 shared `softBuyRead` helper the positions surface uses (ONE implementation), so the `@floor` cue reads the
 multi-day floor: `@floor · buy now` (soft dip) · `@floor · ▲ favorable — dip in uptrend (price-trend only)`
 (rising floor — a prompt, NOT a green-light; blind to game-update breaks) · `@floor · ▽ caution — floor

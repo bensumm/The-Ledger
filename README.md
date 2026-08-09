@@ -143,8 +143,12 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `deriveDiurnalRange` call sites (the shadow-log bid/ask co-log, the `diurnalAsk` cycle-fallback exit)
   for `diurnalTimedLap` — those two are VALUE consumers, not note-render sites, so only the underlying
   computation moved) + **`softBuyRead`/`formatSoftBuy`/`SOFT_BUY_CUE_TEXT`** (2026-07-22 — the
-  ADD-while-holding soft-buy timing read off the SAME `hourProfile`: the diurnal DIP window + a live-vs-dip-floor
-  `@floor`/`+X%` marker at `SOFT_BUY_AT_FLOOR_PCT`, ending in a cue. The `@floor` cue is **FLOOR-AWARE** (the
+  ADD-while-holding soft-buy timing read off the SAME `hourProfile`: the dip-cluster FLOOR level + a
+  live-vs-dip-floor `@floor`/`+X%` marker at `SOFT_BUY_AT_FLOOR_PCT`, ending in a cue, with the diurnal DIP
+  window in a trailing parenthetical labelled **attended**. DT2 (2026-08-09) made the render LEVEL-FIRST and
+  re-scoped the window: it does NOT time a resting offer (71.2% in-window touch vs 70.5% for a random window
+  of the same width; waiting forfeits ~29% of bid fill-days at an identical price), so a resting bid is
+  placed at the level now and the hours are for attended market-TAKING. The `@floor` cue is **FLOOR-AWARE** (the
   fang under-read fix) — `softBuyRead` takes an optional `fc` (a `floorCeilingTrack` result the caller already
   computed; NO re-derived slope) and resolves `buy now` (flat/ranging), `▲ favorable` (rising floor —
   price-trend-only, never a green-light), or `▽ caution — floor breaking ↓` (broke/crash-risk — a dump artifact,

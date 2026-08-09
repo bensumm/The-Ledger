@@ -484,7 +484,7 @@ ok('softBuyRead: live at/below the dip floor ⇒ @floor · buy now', () => {
   assert.equal(sb.floor, 1000);
   assert.deepEqual(sb.dipWindow, { startH: 21, endH: 0 }, 'the diurnal dip window is the cheapest add hours');
   assert.equal(sb.marker, '@floor'); assert.equal(sb.buyNow, true);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live @floor · buy now');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00)');
 });
 
 ok('softBuyRead: live within the 0.5% threshold over the floor still reads @floor (buy now)', () => {
@@ -493,16 +493,24 @@ ok('softBuyRead: live within the 0.5% threshold over the floor still reads @floo
   assert.equal(sb.marker, '@floor'); assert.equal(sb.buyNow, true);
 });
 
-ok('softBuyRead: live above the dip ⇒ +X% · wait', () => {
+// DT2 (2026-08-09): the cue KEY is still 'wait', but the WORDING must no longer tell the operator to
+// delay placing a resting bid — the window doesn't time fills (71.2% vs 70.5% random; waiting forfeits
+// ~29% of fill-days at the same price). Level-first render, window scoped to attended taking.
+ok('softBuyRead: live above the dip ⇒ +X%, and the render leads with the LEVEL not a wait instruction', () => {
   const sb = softBuyRead(prof(1000, 1080, false), { live: 1027 });   // +2.7%
   assert.equal(sb.marker, '+2.7%'); assert.equal(sb.buyNow, false);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live +2.7% · wait');
+  assert.equal(sb.cue, 'wait', 'the KEY is unchanged — callers/tests key on it');
+  const txt = formatSoftBuy(sb);
+  assert.ok(/^soft-buy: floor ~1000/.test(txt), 'LEVEL leads the line — it is the number acted on');
+  assert.ok(!/wait for the/.test(txt) && !txt.endsWith('· wait'), 'never tells the operator to wait for the window');
+  assert.ok(/rest the bid at the floor now/.test(txt), 'the cue is place-at-the-level');
+  assert.ok(/attended dip hours 21:00–00:00/.test(txt), 'the window is explicitly scoped to attended taking');
 });
 
 ok('softBuyRead: no live reference ⇒ window-only note, no buy/wait cue', () => {
   const sb = softBuyRead(prof(1000, 1080, false), {});
   assert.equal(sb.marker, null); assert.equal(sb.buyNow, null);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 (attended dip hours 21:00–00:00, no live ref)');
 });
 
 ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders', () => {
@@ -519,7 +527,7 @@ ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders',
 ok('softBuyRead @floor + no fc ⇒ cue degrades to buy now (unchanged behavior)', () => {
   const sb = softBuyRead(prof(1000, 1080, false), { live: 1000 });
   assert.equal(sb.cue, 'buy now');
-  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live @floor · buy now');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00)');
 });
 
 ok('softBuyRead @floor + a BREAKING floor (floorBreak.broke) ⇒ caution', () => {
@@ -550,7 +558,7 @@ ok('softBuyRead: fc NEVER overrides the wait cue when live sits above the dip', 
   // the floor-aware cue only applies AT the floor; a +X% (wait) read stays 'wait' regardless of fc.
   const sb = softBuyRead(prof(1000, 1080, false), { live: 1027, fc: { classification: 'crash-risk', floorBreak: { broke: true } } });
   assert.equal(sb.cue, 'wait');
-  assert.equal(formatSoftBuy(sb), 'soft-buy: dip 21:00–00:00 · live +2.7% · wait');
+  assert.ok(!/floor breaking/.test(formatSoftBuy(sb)), 'the floor-aware cue does not leak into the above-floor render');
 });
 
 // --- PART II (PLAN-GRADE-REACH): asymPair — deep-buy / reliable-sell realizable pair ----------

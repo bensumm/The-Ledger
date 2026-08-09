@@ -1,6 +1,6 @@
 ---
 name: positions
-version: 1.55
+version: 1.56
 description: Review Ben's held GE positions against the live market and produce a prioritized cut/list/hold action plan. Triggers — "how are my positions", "check the market against what I hold", "am I underwater", "should I cut/hold anything", "review my holds", "positions".
 ---
 
@@ -53,11 +53,13 @@ sections plus your own prose:
   — it never gates, it frames. The SAME shared `floorCeilingTrack`/`trajectoryRead` note the manual
   `read-window-range.mjs` trio prints, zero extra fetch.
 - **Read the `⏳ soft-buy:` line before deciding whether to ADD to a lot (2026-07-22, the
-  buy-soft-while-holding rule).** _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: dip
-  HH:00–HH:00 · live @floor | +X% · <cue>`. It puts the ADD-side timing right next to the
-  held lot: the **dip window** = the cheapest hours-of-day to add (the diurnal DIP window); the
+  buy-soft-while-holding rule; **re-scoped 2026-08-09 by DT2 — see the resting-bid rule below**).**
+  _(judgment: entry-timing discipline)_ Format: `⏳ soft-buy: floor ~X · live @floor | +X% · <cue>
+  (attended dip hours HH:00–HH:00)`. It puts the ADD-side timing right next to the
+  held lot: the **floor** = the dip-cluster level, the number you actually place at; the
   **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below) vs `+X%` (live sits X% above
-  the dip). The **cue** is now **FLOOR-AWARE** (2026-07-22, the fang under-read fix) — when the marker
+  the dip); the **attended dip hours** = when an attended TAKE is cheapest. The **cue** is
+  **FLOOR-AWARE** (2026-07-22, the fang under-read fix) — when the marker
   is `@floor` it consults the SAME multi-day floor read the adjacent `⇅ floor/ceiling` (`fcTrack`) note
   already prints, so a post-update dump sitting at its diurnal floor EVERY day no longer misreads as a
   discount:
@@ -82,13 +84,27 @@ sections plus your own prose:
       level) — it re-derives nothing. Treat it as: the dip is real, the base under it is not yet proven.
     - `@floor · buy now` — floor flat/ranging/cooling, or too few days to classify: the plain soft dip
       (unchanged behavior).
-    - `+X% · wait` — live above the dip; wait for the window (the floor-aware cue applies only `@floor`).
+    - `+X% · rest the bid at the floor now — windows don't time fills` — live sits above the dip. **Place the resting bid at the
+      floor LEVEL now; do NOT delay it to the dip hours.** (The floor-aware cue applies only `@floor`.)
+  **RESTING BID vs ATTENDED TAKE — the DT2 split (measured 2026-08-09, supersedes the old `+X% · wait`
+  advice).** _(judgment: the doctrine this cue exists to serve)_ The dip window tells you where the daily
+  extremes LAND, not when a resting offer FILLS. Measured at the production dip level: P(touch inside the
+  predicted window | touched at all) = **71.2% vs 70.5% for a random window of the same width** — i.e.
+  nothing. Independently confirmed by first-touch timing of a resting bid showing no window concentration
+  (14.6% vs 15.9%). So **waiting for the window forfeits ~29% of bid fill-days at an identical price.**
+  Read the line this way: a **resting bid** goes in at the floor level immediately and rests all day;
+  the **attended dip hours** matter only when you're at the desk about to TAKE (cross the spread). This
+  also reinforces the standing memory `name-the-window-not-a-chase-bid` — name the LEVEL, not a chase.
+  *Honesty limits: one 74-day era, one update cycle; touch measured from hourly aggregates, not executed
+  fills, so it bounds a real offer from above; item-day clustering ⇒ effective n well below nominal.*
   These cue words are their OWN vocabulary (a buy-TIMING cue) — do NOT conflate `▽ caution — floor
   breaking ↓` here with the separate `⇅` floor/ceiling TREND line or the reachMargin ask-CUSHION
   extending/fading line. The doctrine (memory "buy-soft-while-holding-for-peak"): holding a position to
   sell into a LATER peak is NOT a reason to sit idle on the BUY side — buy its diurnal dip when it's soft.
+  That rule governs *whether* to add; DT2 governs *how* — as a resting bid at the level, not a timed wait.
   Real anchors: we bought Dragon boots into the daytime peak (~350k over) and blowpipe at 10.67m instead
-  of its 10.40m dip, both while already holding — this line would have read `+X% · wait` on both. Same
+  of its 10.40m dip, both while already holding — this line would have flagged live sitting above the
+  floor on both, and the fix was a resting bid at the floor, not a wait. Same
   `hourProfile` the `↳ diurnal:` note uses; the floor-aware cue reuses the in-hand `floorCeilingTrack`
   fc (`softBuyRead`/`formatSoftBuy` in `js/windowread.mjs`), zero extra fetch; HEURISTIC (n≈0),
   inform-only — never a gate/verdict. A null 1h series this pass degrades it to no line (like the diurnal note).
