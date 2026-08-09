@@ -142,32 +142,56 @@ export function reachValidator(ctx) {
 //     ranges 1.00–1.25  n=1,734 — median drawdown 0.34 swing · P(drawdown ≥ 1 swing)  9.6%
 //     ranges 1.25–1.50  n=1,075 — median drawdown 0.37 swing · P(drawdown ≥ 1 swing) 16.2%
 //     ranges 1.50–2.00  n=1,227 — median drawdown 0.58 swing · P(drawdown ≥ 1 swing) 30.5%
-// Monotonic. Spearman rho 0.151 over n=4,121; within-item (each item split at its OWN median ranges, so
+// ⚠ EFFECT SIZE, CORRECTED (2026-08-08 re-measure): the swing-unit outcome above shares terms with the
+// `ranges` bucketing (both divide by the same typicalSwing off the same level), so part of that
+// 9.6→30.5 spread is mechanical, not market. Re-scored with the threshold FIXED IN PERCENT (8% depth —
+// `ranges` cannot enter the outcome) and outlier-resistant depth statistics (n=4,079 windows, median 221
+// 5m buckets each): P(depth ≥ 8%) rises 12.9%→15.3%→23.9% on the raw minimum and 10.2%→11.7%→18.6% on
+// the 3rd-lowest bucket. The honest dose-response is ~8–11pp across the range, NOT the ~21pp the
+// swing-unit table suggests. Still monotonic on every statistic, and 0.0% of windows show the junk-print
+// signature (min < 0.5× the q02 depth level) — real, just half the size.
+// Spearman rho 0.151 over n=4,121; within-item (each item split at its OWN median ranges, so
 // item composition cancels) +7.0pp in this validator's direction, 28 items vs 15, p=0.066.
 // SO `ranges` DOES CARRY INFORMATION — but about DRAWDOWN, not LOSS. Median 7-day return is flat across
 // every bucket (+0.26% / +1.35% / −0.27%). Buying elevated means you will probably see red before green;
 // it does NOT mean you lose. Do not restate this as a loss/bleed prediction.
 // TWO THINGS THE PREVIOUS SHAPE GOT WRONG:
-//   (1) The caution line sat at 1.0, but discrimination happens at ~1.5 — the 1.0–1.5 band carries
-//       P(drawdown ≥ 1 swing) of 12.0% against 29.8% above it. Moving the line to 1.5 silences 69.6% of
-//       firings and keeps essentially all the signal. That is why FLOOR_CAUTION_RANGES is now 1.5.
+//   (1) The caution line sat at 1.0, but the separation concentrates at ~1.5: on the fixed-8% robust
+//       statistic, P(depth ≥ 8%) is 10.8% below the line vs 18.6% at/above it. Moving the line to 1.5 is
+//       a PRECISION/RECALL TRADE, not a free win: it silences 69.6% of firings AND with them 48.0% of the
+//       real DD ≥ 1-swing events (recall kept 52.0%); precision improves 17.4% → 29.8%. Accepted
+//       deliberately — floor is caution-only in the ledger, and a flag on 2/3 of the board was wallpaper.
+//       That is why FLOOR_CAUTION_RANGES is now 1.5. Do NOT restate this as "keeps all the signal".
 //   (2) The reason asserted the buy was "not near durable support". The floor it names actually prints
 //       only 6–8.5% of the time within 48h, NON-monotonically — the DISTANCE carries the information,
 //       the DESTINATION does not. The reason no longer asserts the destination.
 export const FLOOR_CAUTION_RANGES = 1.5;   // buy > this many typical swings above the durable floor ⇒ caution (MEASURED; was 1.0)
-// INERT IN PRACTICE (measured 2026-08-08): NOTHING in 35 days of band/churn exceeded 2.0, so the reject
-// tier has never fired there (14 floor rejects repo-wide, 3 of them via the R3 escalation below). Left at
-// 2.0 DELIBERATELY — lowering it would START dropping rows, and the drawdown curve above justifies
-// dropping nothing. Do not "fix" this by making it reachable.
+// UNMEASURED IN BAND/CHURN — CENSORED BY ITS OWN GATE (corrected 2026-08-08; an earlier note here called
+// this tier "inert", which was circular): floor runs mode:'gate' in band/churn, and a reject row is
+// `continue`d out of screen-flip-niches.mjs BEFORE it reaches the suggestions ledger — so the ledger
+// CANNOT contain a band/churn row above 2.0 by construction. The distribution shows the wall (a dense
+// 1.95–2.00 shoulder, then a hard zero above), and the 14 ledgered floor rejects all came from surfaces
+// that don't drop (13 via quote-items' mode-null registry run; 1 via scalp, where floor is inform; 3 of
+// the 14 are R3 escalations at ranges 1.13–1.33). Items DO exceed 2.0 in the wild — the screen's own
+// `rejected:` footer names them; they just never reach the ledger, so this tier has NO outcome evidence
+// either way. Left at 2.0 DELIBERATELY — lowering it would drop MORE rows on an unmeasured tier. Do not
+// cite the ledger as proof this tier is inert, and do not "fix" it by making it reachable.
 export const FLOOR_REJECT_RANGES = 2.0;    // buy > this many typical swings above the durable floor ⇒ reject
 // R3 (PLAN-SIGNAL-RECENCY): a falling recentTrend TIGHTENS the level check (additive-only — never relaxes).
 // A `pass` only escalates to caution once the bid is already within this fraction of the caution line
 // (borderline-elevated); a clean low pass with real headroom is NEVER touched by the trend alone.
-// UNSUPPORTED (measured 2026-08-08, n=60): rows carrying the falling-trend note had P(drawdown ≥ 1 swing)
-// of 8.3% vs 17.6% for plain rows, and a BETTER median 7-day return (+1.74% vs +0.38%) — pointing the
-// OPPOSITE way to its premise. n=60 is too small to call it falsified, so the rule stands, but there is
-// no evidence FOR it and it is the ONLY path by which floor drops rows (3 in 35 days). Do not widen it;
-// re-measure before promoting it. Its band tracks FLOOR_CAUTION_RANGES, so it moved up with the line.
+// UNMEASURABLE FROM THE LEDGER — THE ARM IS CENSORED (corrected 2026-08-08; an earlier note here read the
+// n=60 comparison as evidence AGAINST the rule, which was a composition artifact): R3's own escalation
+// destroys its evidence. falling + already-caution ⇒ reject ⇒ the row is dropped before logging in
+// band/churn, so the ledgered falling-note arm is ONLY the borderline pass→caution band — ranges
+// [0.75, 1.00], median 0.87 — while the plain-caution comparison group sits at 1.00+, median 1.30.
+// Ranges-matched there are ZERO overlapping rows: the old 8.3%-vs-17.6% drawdown comparison was comparing
+// lower-elevation rows against higher-elevation ones and calling the difference evidence. The rule stands
+// UNMEASURED (neither supported nor falsified), and it is the ONLY path by which floor drops rows (3 in
+// 35 days). Do not widen it; a real measurement needs a replay with the escalation disabled, not the
+// ledger. Its band tracks FLOOR_CAUTION_RANGES, so it moved up with the line — the borderline band is
+// now 1.125–1.5, a DIFFERENT population from the censored 0.75–1.0 arm described above, so even that
+// artifact-laden n=60 says nothing about the rows the rule escalates today.
 export const FLOOR_TREND_BORDERLINE_FRAC = 0.75;
 // MEASURED 2026-08-08: the MEDIAN drawdown below a buy sitting at/above the caution line, in typical-swing
 // units (n=1,227 at ranges 1.50–2.00). Used ONLY to state the expected dip in the reason. It is a
@@ -183,7 +207,8 @@ export const FLOOR_TYPICAL_DRAWDOWN_SWINGS = 0.6;
  * WHAT IT IS NOT (measured 2026-08-08 — the MEASURED block above carries the numbers). It is NOT a loss
  * predictor and NOT a "support is down there" claim. Elevation predicts DRAWDOWN, not a bleed: 7-day
  * returns are flat across every elevation bucket, and the floor it names prints only 6–8.5% of the time
- * within 48h. The reject tier is inert in practice — this is a caution-only signal on live data.
+ * within 48h. The reject tier is UNMEASURED in band/churn — its own gate censors the evidence (see the
+ * FLOOR_REJECT_RANGES note above); in the ledger this validator is caution-only in practice.
  *
  * BUY-SIDE DISCIPLINE (load-bearing — the spec's "must NOT reject/flag held lots' sell decisions"):
  *   - A HELD lot (ctx.position.held) is a SELL decision → this validator DEGRADES to pass immediately.
@@ -399,7 +424,11 @@ export function limitValidator(ctx) {
 // or passing. Forward-scoring falsified it: the reverting bid is reached MORE often than the falling
 // one this blessed (85.7% vs 82.6% within 8h, n=5,535), because the level quoted is quickBuy — the
 // LIVE instasell, which rose with the bounce and sat ABOVE the low being warned about in 92.4% of
-// 7,886 firings. The branch now reports ENTRY QUALITY ("past the bottom by X%") and makes NO
+// 7,886 firings. NOTE THE SCOPE (corrected 2026-08-08): what failed is the claim AT THE QUOTED LEVEL.
+// The underlying rest-at-the-low mechanic is UNRESOLVED — it scores both ways depending on how the
+// level is defined, and direction is not separable from level because recentDirection is DEFINED by
+// where live sits relative to the low (the quotecore "GEOMETRY TRAP" note — read it before proposing
+// a re-test at the low). The branch now reports ENTRY QUALITY ("past the bottom by X%") and makes NO
 // fill-probability claim and NO cross-or-pass recommendation.
 //
 // NEVER-REJECT INVARIANT (load-bearing): by construction this validator returns ONLY pass or
@@ -454,8 +483,9 @@ export function dipPostureValidator(ctx) {
   const bounceTxt = `+${(bouncePct * 100).toFixed(1)}% off the ${DIR_LOOKBACK_H}h low ${minLow.toLocaleString()} ~${Math.round(minAgeMin)}min ago`;
   // Sign matters: in 92.4% of real firings the quoted bid sits ABOVE the low (median +1.24%) — the case
   // that falsified the old claim. The ~3.6% BELOW-low tail is the one where the original rest-a-bid
-  // mechanic could still apply (the bid really is deeper than recent prints); it is UNMEASURED, so state
-  // the fact neutrally and let the reader judge rather than re-asserting a fill claim either way.
+  // mechanic would apply — but that mechanic is UNRESOLVED (it scores both ways depending on how the
+  // level is defined; quotecore's GEOMETRY TRAP note) and the tail firings' own fill outcomes are
+  // unscored — so state the fact neutrally rather than re-asserting a claim either way.
   const overTxt = overLowPct == null ? ''
     : ` the bid @ ${quickBuy.toLocaleString()} is ${Math.abs(overLowPct).toFixed(1)}% ${overLowPct >= 0 ? 'above' : 'below'} that low —`;
   // reason omits a leading ⚠ — the surface prefixes it (the `⚠ ${key}: ${reason}` convention).

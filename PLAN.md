@@ -492,14 +492,22 @@ the knife) — provisional + off-by-default until P6 evidence says otherwise.
   FAILED (2026-08-08).** Forward-scored every level-based validator against the 5m archive over the
   35-day ledger, arms = fired vs not-fired within the same band/churn population. Findings, in
   descending confidence:
-  - **`dip-posture` FALSIFIED and reframed** (landed `6a8fbd9`) — its "a resting bid @ X likely misses,
-    cross or pass" claim is inverted: the reverting bid is reached MORE often than the falling one it
-    blessed (85.7% vs 82.6% @8h, n=5,535). Cause: the level it quotes is `quickBuy`, which rises with
-    the bounce. Full evidence in the `MEASURED` block of `recentDirection`'s header (`js/quotecore.js`).
-  - **`floor` RETUNED** — `ranges` genuinely predicts DRAWDOWN monotonically (P(DD ≥ 1 swing)
-    9.6%→16.2%→30.5%; Spearman ρ 0.151, n=4,121; within-item p=0.066) but NOT loss (7d return flat).
-    Caution line moved 1.0 → 1.5, silencing 69.6% of firings; reject tier found inert; R3 trend
-    escalation found unsupported (n=60, pointing the wrong way) and left in place but labelled.
+  - **`dip-posture` FALSIFIED AT THE QUOTED LEVEL and reframed** (landed `6a8fbd9`) — its "a resting
+    bid @ X likely misses, cross or pass" claim is inverted at `quickBuy`: the reverting bid is reached
+    MORE often than the falling one it blessed (85.7% vs 82.6% @8h, n=5,535; strict sign test p=0.136,
+    not significant). Cause: `quickBuy` rises with the bounce. The underlying rest-at-the-low MECHANIC
+    is UNRESOLVED, not confirmed: scored at each row's own 3h low it looks confirmed (+30.7pp), but at a
+    fixed offset below live the sign reverses (−9.9 to −14.6pp), and direction is not separable from
+    level because `recentDirection` is defined by that level. What died is the policy at the level
+    actually quoted. Full evidence: the `MEASURED` + `GEOMETRY TRAP` blocks of `recentDirection`'s
+    header (`js/quotecore.js`).
+  - **`floor` RETUNED** — `ranges` predicts DRAWDOWN monotonically (Spearman ρ 0.151, n=4,121;
+    within-item p=0.066) but NOT loss (7d return flat). Honest effect size ~8–11pp on a fixed-percent
+    threshold (the swing-unit spread overstates ~2× — the outcome shared terms with the bucketing).
+    Caution line moved 1.0 → 1.5: a precision/recall trade (69.6% of firings silenced, 48% of real
+    DD ≥ 1-swing events with them; precision 17.4% → 29.8%). Reject tier UNMEASURED in band/churn —
+    censored by its own gate (a reject row never reaches the ledger). R3 trend escalation UNMEASURABLE
+    from the ledger — its escalation censors its own arm (ranges-matched overlap zero); left in place.
   - **`reach` is INFORM-ONLY everywhere and excludes nothing** — 27,799 firings shaping prices, weak
     discrimination (reject 55.9% vs caution 62.2% @8h) and an 8h window applied to 1–2 day theses:
     **18.2% of scored levels printed within 48h but not within 8h**. STILL OPEN — the horizon mismatch

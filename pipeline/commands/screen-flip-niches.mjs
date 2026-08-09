@@ -1763,12 +1763,15 @@ function renderMode(mode, { cand, survivors, excluded = [], subFloor = null }, q
   }
   // C (2026-08-06): BUCKET, don't sort. Ben's question was "would we put severe at the top or the
   // bottom?" — and the honest answer is that ordering fourteen identically-formatted lines just picks
-  // which one you read first. Every floor caution lives in the 1.0×–2.0× band by construction (above
+  // which one you read first. Every floor caution lives in the 1.5×–2.0× band by construction (above
   // FLOOR_REJECT_RANGES the row is already a hard `rejected:`), so the useful split is NEAR-REJECT vs
   // marginal. The boundary is the MIDPOINT of the existing band — derived from the two constants that
   // already own this policy, NOT a new placeholder threshold. Near-reject rows keep their own lines;
   // the marginal tail collapses to ONE line, the same trim the /scan skill already applies to the
   // D-grade table tail (actionable-first-dead-last). Nothing is dropped — every name still prints.
+  // RIPPLE, ACCEPTED (2026-08-08): FLOOR_CAUTION_RANGES 1.0 → 1.5 moved this midpoint 1.5 → 1.75, so
+  // fewer caution rows earn their own footer line and more collapse into the marginal tail — intended
+  // (the band narrowed; the midpoint still bisects it), documented so the shift isn't read as a bug.
   const NEAR_REJECT = (FLOOR_CAUTION_RANGES + FLOOR_REJECT_RANGES) / 2;
   const elevated = cautionNotes.filter(c => c.ranges != null && c.ranges >= NEAR_REJECT);
   const marginal = cautionNotes.filter(c => !(c.ranges != null && c.ranges >= NEAR_REJECT));

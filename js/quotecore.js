@@ -933,22 +933,44 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
    The ⬇DIP probe (pipeline/probes/dip.mjs) captures DEPTH (live under the 24h avg low); this
    captures DIRECTION (is the dip still falling, or has it already bounced?). The two are orthogonal.
 
-   MEASURED 2026-08-08 — THE "CROSS OR PASS" CONCLUSION WAS WRONG. The mechanic above is sound in the
-   abstract but does NOT apply to the level this validator actually quotes. Every band/churn suggestion
+   MEASURED 2026-08-08 — THE "CROSS OR PASS" CONCLUSION WAS WRONG, and the mechanic above is NOT
+   separably testable (see THE GEOMETRY TRAP below). It does NOT apply to the level this validator
+   actually quotes. Every band/churn suggestion
    was replayed through recentDirection at its own timestamp against the 5m archive (the replay is
    faithful: 84.9% of real firings reconstruct as 'reverting' vs 19.8% of non-firings), then a resting
    bid at the quoted level was scored for whether it was reached. Dip rows, n=5,535:
        falling    n=2,232 — reached 64.1% @1h · 82.6% @8h · 89.3% @24h
        flat       n=  360 — reached 68.6% @1h · 86.7% @8h · 93.6% @24h
        reverting  n=2,943 — reached 67.9% @1h · 85.7% @8h · 92.2% @24h
-   The arm the validator WARNED about is reached MORE often than the arm it BLESSED, at every horizon
-   (within-item paired: +4.9pp, 38 items vs 22, p=0.052).
+   The arm the validator WARNED about is reached MORE often than the FALLING arm it blessed, at every
+   horizon — but ONLY against falling (corrected 2026-08-08: 'flat' is ALSO blessed, and flat beats
+   reverting at every horizon, 86.7% vs 85.7% @8h — the honest claim is "reverting ≈ the blessed arms",
+   not "beats them"). Within-item paired: +4.9pp, 38 items vs 22, p=0.052 — but that test used a ±2pp
+   dead band that discarded 9 near-tied items; the strict sign test is 39 vs 26, p=0.136. Suggestive,
+   NOT significant.
    WHY IT MISFIRES: the level named is quickBuy — the LIVE instasell, which ROSE WITH THE BOUNCE. In
    92.4% of 7,886 firings the quoted bid sat ABOVE the low it was warning about (median +1.24%). The
    bid is at the market, not stranded at the pre-bounce low, so "no seller crosses down to you"
-   describes a bid nobody placed. The mechanic still holds for a bid parked AT the old low — that is
-   simply not the bid being quoted. (This also explains why 'falling' scores WORST: there quickBuy IS
+   describes a bid nobody placed. (This also explains why 'falling' scores WORST: there quickBuy IS
    pinned at a fresh 3h low, so filling requires price to revisit it.)
+
+   THE GEOMETRY TRAP (measured 2026-08-08; read this before "re-testing at the low"). The obvious
+   rescue — "score a bid parked AT the 3h low instead, the level the mechanic was conceived for" —
+   LOOKS like it confirms the warning and does not survive a control. Both results are real:
+     · at each row's OWN 3h low:   falling 74.9% @8h · flat 60.2% · reverting 44.2%   (+30.7pp, "confirms")
+     · at a FIXED offset below live (0.5% / 1% / 2%): falling 46.1 / 35.3 / 21.5% vs
+       reverting 60.7 / 48.1 / 31.4%                                          (−14.6 / −12.7 / −9.9pp, REVERSES)
+   Stratifying the first comparison by distance-to-the-low keeps a falling edge in every band
+   (+16.1 / +10.3 / +22.2 / +21.7 / +24.5pp), so it is not purely a distance artifact — but the two
+   framings cannot both be "the" answer, and the reason is that DIRECTION AND LEVEL ARE THE SAME
+   VARIABLE HERE. recentDirection is DEFINED by where live sits relative to the 3h low (DIR_AT_LOW_PCT
+   / DIR_REVERT_PCT), so "hold the level constant and vary direction" is not a thing this classifier
+   permits: at the low, 'falling' means price is already there and still going; at a fixed offset under
+   live, the same offset sits BELOW the low for a faller and AT it for a reverter. There is no
+   unconfounded version of the question. What that leaves is the framing a trader actually faces —
+   a bid some distance under the current market — and in THAT framing reverting fills MORE, agreeing
+   with the quoted-level result above. Do NOT write "the mechanic is confirmed at the low" back into
+   this file; it is an artifact of scoring each arm at a level its own direction defines.
    CONSEQUENCE: the reverting branch is an ENTRY-QUALITY note ("you are past the bottom"), NOT a
    fill-probability warning, and the cross-or-pass RECOMMENDATION is REMOVED — crossing cost a median
    2.83% spread (p25–p75 1.81–4.21%), and 61.4% of firings fell through to "cross unprofitable — pass",
@@ -962,8 +984,10 @@ export function rebidAdvice({ clear=null, spread=0, trajectory=null, diurnal=nul
 
    HONESTY (process rule 4). The thresholds below remain NAMED PLACEHOLDERS — the measurement above
    falsified the POLICY built on the 'reverting' read, but it did not calibrate DIR_REVERT_PCT /
-   DIR_FRESH_MIN / DIR_AT_LOW_PCT themselves. What is still unmeasured: whether a bid parked at minLow
-   (rather than at quickBuy) misses more often when reverting — the claim as originally intended.
+   DIR_FRESH_MIN / DIR_AT_LOW_PCT themselves. The claim as originally intended — a bid parked at minLow
+   misses more often when reverting — scores BOTH ways depending on how the level is defined and is not
+   separably testable with this classifier (THE GEOMETRY TRAP above). Treat it as UNRESOLVED, not
+   confirmed and not refuted; the falsification that stands is the one at the level actually quoted.
 
    Reads the avgLowPrice side (the instasell side, where a resting bid fills). Pure over an
    already-fetched 5m series; no fetch/fs/DOM. Returns null on a thin/absent series (degrade — never

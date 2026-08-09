@@ -33,33 +33,60 @@ composition (each item split at its OWN median `ranges`: +7.0pp in the validator
 pass of mine tested whether the proposed *round trip* completed and concluded "no discrimination, p=0.77".
 That was the wrong instrument — floor makes a claim about downside, not about round trips.
 
+**Effect size corrected (2026-08-08 re-measure) — the table above overstates it ~2×.** The swing-unit
+outcome shares terms with the `ranges` bucketing (both divide by the same `typicalSwing` off the same
+level), so part of the 9.6→30.5 spread is mechanical. Re-scored with the threshold **fixed in percent**
+(8% depth, so `ranges` cannot enter the outcome) and outlier-resistant depth statistics (n=4,079 windows,
+median 221 5m buckets each): P(depth ≥ 8%) rises 12.9%→15.3%→23.9% on the raw minimum and
+10.2%→11.7%→18.6% on the 3rd-lowest bucket — an honest dose-response of **~8–11pp**, not ~21pp. Still
+monotonic on every statistic, and 0.0% of windows show the junk-print signature (min < 0.5× the q02 depth
+level), so it is not archive noise. The 1.5 line survives the re-measure: P(depth ≥ 8%) 10.8% below it vs
+18.6% at/above (3rd-lowest statistic).
+
 **But it predicts DRAWDOWN, not LOSS.** Median 7-day return is flat across every bucket (+0.26% / +1.35%
 / −0.27%). Buying elevated means you will probably see red before green; it does not mean you lose. The
 header now says so explicitly so nobody restates it as a bleed prediction.
 
 **Three changes:**
 
-- **`FLOOR_CAUTION_RANGES` 1.0 → 1.5.** Discrimination happens at ~1.5: the 1.0–1.5 band carries
-  P(DD ≥ 1 swing) of 12.0% against 29.8% above it. Moving the line **silences 69.6% of all firings**
-  (2,867 of 4,121) and keeps essentially all the signal. floor is caution-only in practice, so this
-  changes what is *flagged*, not what is *admitted*.
+- **`FLOOR_CAUTION_RANGES` 1.0 → 1.5.** The separation concentrates at ~1.5: the 1.0–1.5 band carries
+  P(DD ≥ 1 swing) of 12.0% against 29.8% above it (10.8% vs 18.6% on the fixed-8% robust statistic).
+  Moving the line is a **precision/recall trade, not a free win** (corrected 2026-08-08 — this entry
+  originally said it "keeps essentially all the signal", which is false): it silences **69.6% of all
+  firings** (2,867 of 4,121) and with them **48.0% of the real DD ≥ 1-swing events** — recall kept 52.0%,
+  precision improved 17.4% → 29.8%. Accepted deliberately: floor is caution-only in the ledger, and a
+  flag firing on 2/3 of the board was wallpaper. This changes what is *flagged*, not what is *admitted*.
 - **The reason no longer claims "not near durable support".** The floor it names prints only 6–8.5% of the
   time within 48h, non-monotonically — the DISTANCE carries the information, the DESTINATION does not. It
   now states the measured consequence, scaled per item: `elevated entry: expect a dip below it first
   (median 0.6× swing ≈ 69 gp)`. The 0.6 multiplier is a labelled population median; the gp figure comes
   from that item's own `typicalSwing`, so it is never a flat percentage laundered into a per-item forecast.
-- **`FLOOR_REJECT_RANGES` documented as INERT and deliberately left at 2.0.** Nothing in 35 days of
-  band/churn exceeded 2.0 (14 floor rejects repo-wide, 3 via R3). Lowering it would *start* dropping rows,
-  and the drawdown curve justifies dropping nothing.
+- **`FLOOR_REJECT_RANGES` left at 2.0 — and (corrected 2026-08-08) it is UNMEASURED there, not "inert".**
+  This entry originally said "nothing in 35 days of band/churn exceeded 2.0, so the tier never fired" —
+  that was circular: floor runs `mode:'gate'` in band/churn and a reject row is `continue`d out of
+  `screen-flip-niches.mjs` *before* it reaches the suggestions ledger, so the ledger cannot contain a
+  band/churn row above 2.0 **by construction** (the distribution shows the wall: a dense 1.95–2.00
+  shoulder, then a hard zero). The 14 ledgered floor rejects all came from surfaces that don't drop
+  (13 via quote-items, 1 via scalp-inform; 3 of the 14 are R3 escalations at ranges 1.13–1.33). Items do
+  exceed 2.0 in the wild — the screen's own `rejected:` footer names them. The tier has no outcome
+  evidence either way; lowering it would drop more rows on an unmeasured tier.
 
-**R3 trend escalation labelled UNSUPPORTED** (not removed). Rows carrying the falling-trend note (n=60) had
-P(DD ≥ 1 swing) of **8.3% vs 17.6%** for plain rows and a *better* median 7-day return (+1.74% vs +0.38%) —
-pointing the opposite way to its premise. n=60 is too small to call it falsified, so the rule stands, but
-it is the only path by which floor drops rows and there is no evidence for it.
+**R3 trend escalation: UNMEASURABLE from the ledger — its own escalation censors its arm** (corrected
+2026-08-08; originally labelled "unsupported, pointing the opposite way", which was a composition
+artifact). falling + already-caution ⇒ reject ⇒ dropped before logging, so the ledgered falling-note arm
+is only the borderline pass→caution band — `ranges` [0.75, 1.00], median 0.87 — while the plain-caution
+comparison group sits at 1.00+, median 1.30; ranges-matched there are **zero** overlapping rows. The old
+8.3%-vs-17.6% comparison was lower-elevation rows vs higher-elevation rows. The rule stands unmeasured
+(neither supported nor falsified); it is still the only path by which floor drops rows, and a real
+measurement needs a replay with the escalation disabled, not the ledger.
 
 Tests: the R3 fixtures were pinned to absolute `ranges` values (1150/1080 = 1.5/0.8) and silently changed
 tier when the constant moved — they now DERIVE their levels from `FLOOR_CAUTION_RANGES`, with a comment
-saying why, plus a new case pinning that the silenced 1.0–1.5 band passes. Reconciled `docs/MARKET-ANALYSIS.md`,
+saying why, plus a new case pinning that the silenced 1.0–1.5 band passes. Ripple (2026-08-08 hardening
+pass): the caution-footer `NEAR_REJECT` midpoint in `screen-flip-niches.mjs` derives from the two
+constants and silently moved 1.5 → 1.75 with the retune (fewer cautions get their own footer line, more
+collapse into the marginal tail) — accepted, now documented at the derivation site; the "1.0×–2.0× band
+by construction" comment there was reconciled to 1.5×–2.0×. Reconciled `docs/MARKET-ANALYSIS.md`,
 `docs/SIGNAL-AUDIT.md` (its "validated?" column for floor goes ❌ → ⚠️-with-the-study), `PLAN.md` Discovered.
 
 **Honesty.** `avgLowPrice` is a 5m average, so intra-bucket wicks are smoothed and these drawdowns are if
@@ -85,8 +112,11 @@ bid at the level the validator itself quotes was then scored for whether it was 
 | `flat` — *"viable"* | 360 | 68.6% | 86.7% | 93.6% |
 | `reverting` — *"likely misses"* | 2,943 | 67.9% | **85.7%** | 92.2% |
 
-The arm it warned about is reached **more** often than the arm it blessed, at every horizon
-(within-item paired: +4.9pp, 38 items vs 22, p=0.052).
+The arm it warned about is reached **more** often than the *falling* arm it blessed, at every horizon —
+but (corrected 2026-08-08) only against falling: `flat` is *also* blessed, and flat beats reverting at
+every horizon (86.7% vs 85.7% @8h). The honest claim is "reverting ≈ the blessed arms", not "beats them".
+The within-item paired test (+4.9pp, 38 items vs 22, p=0.052) used a ±2pp dead band that discarded 9
+near-tied items; the strict sign test is 39 vs 26, **p=0.136** — suggestive, not significant.
 
 **The bug.** The level it names is `quickBuy` — the **live instasell**, which rises with the bounce.
 In **92.4%** of firings the quoted bid sat *above* the low it was warning about (median **+1.24%**). It
@@ -103,7 +133,13 @@ the 3h low L ~Nmin ago; the bid @ B is Y% above/below that low — still Z% unde
 quality, NOT a fill risk`. No fill-probability claim, no cross-or-pass recommendation. `crossNet` stays
 in `evidence` as data but is never surfaced. The `falling` branch lost its "fills as it drops" promise
 for the same reason. Sign-aware wording covers the ~3.6% below-the-low tail — the one case where the
-original rest-a-bid mechanic could still apply, and which remains **unmeasured**.
+original rest-a-bid mechanic would apply. (Corrected 2026-08-08: an earlier draft of this entry called
+that mechanic "level-matched confirmed" off a 74.9%-vs-44.2% @8h split scored at each row's own 3h low.
+It does not survive a control — at a *fixed* offset below live the sign REVERSES (falling 46.1/35.3/21.5%
+vs reverting 60.7/48.1/31.4% at 0.5/1/2% under), because `recentDirection` is **defined** by where live
+sits relative to the low, so direction and level are the same variable and the question has no
+unconfounded form. The mechanic is **UNRESOLVED**; what was falsified is the claim at `quickBuy`, the
+level actually quoted. See the `GEOMETRY TRAP` note in `js/quotecore.js`.)
 
 Status stays `caution` and the never-reject invariant is untouched, so nothing changes about what is
 admitted — this validator gated nothing before and gates nothing now. Doctrine home rewritten with the
@@ -119,8 +155,10 @@ comment-only. No deployed-app behaviour changed.
 **Honesty.** Reached ≠ filled: `avgLow ≤ bid` means trades *printed* at or below the level, not that the
 bid cleared, so absolute rates are an upper bound — the bias is identical across arms, so the comparison
 holds but the levels don't. `avgLow24` is reconstructed from the 5m archive, not the live 24h endpoint.
-The paired test is p=0.052. The direction thresholds themselves (`DIR_REVERT_PCT` et al) are still
-uncalibrated placeholders — this falsified the *policy*, not the *read*.
+The paired test is p=0.052 only under a ±2pp dead band (strict sign test p=0.136 — not significant).
+The direction thresholds themselves (`DIR_REVERT_PCT` et al) are still uncalibrated placeholders — this
+falsified the *policy at the quoted level*; the *read* itself is neither confirmed nor refuted, and the
+geometry note above explains why no clean test of it exists.
 
 ### Correction — `5019f4e` misdescribed its own diff, and quietly landed the July ledger rotation (2026-08-08)
 

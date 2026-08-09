@@ -18,7 +18,10 @@ export function stateTransition(ph) {
     // D (2026-08-06, the Snape grass entry): the old wording here was "healthy reprice, more holdable
     // than froth" — an unconditional ENDORSEMENT, and it was one of three green signals that talked over
     // the 28d floor check saying "1.68× typical swing above the durable floor — not near durable support"
-    // on the same item, the same pass. The label cannot earn that word: rising lows in a spike's first
+    // on the same item, the same pass. (That quoted tail is the PRE-2026-08-08 reason text — the
+    // "durable support" claim was retired from floorValidator that day; see its MEASURED block. The
+    // quote stays as the incident record, not as current phrasing.)
+    // The label cannot earn that word: rising lows in a spike's first
     // days is very nearly TAUTOLOGICAL, because the spike is what lifted the lows. All this classifier
     // can honestly separate is rising-lows from falling-lows; whether the new base is PROVEN is a LEVEL
     // question it does not measure. So it now says what it knows and defers to the check that owns the
