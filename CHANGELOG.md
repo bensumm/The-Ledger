@@ -10,6 +10,33 @@ For anything older or not captured here, the commit history + `git show <sha>` i
 
 ## Recent
 
+### suggestions ledger: log the GE `guide` price per row (BD-LOG, 2026-08-09, pipeline-only)
+
+No `APP_VERSION` bump — nothing the browser loads changed; the edit is one derived line in
+`pipeline/lib/render/suggestlog.mjs`.
+
+**What was missing.** 13,401 logged suggestion rows, and not one carried the GE guide price. That made a
+whole class of question permanently unanswerable, because guide is **not reconstructable after the fact**:
+the market archive schema (`observations`/`daily_seed`) has no guide column, `pipeline/.cache/guide.json` is
+a 10-minute-TTL snapshot overwritten in place, and `pipeline/.guide-history.jsonl` records only re-anchor
+*changes* (26 real events across 17 items in 34 days — one item clears the n≥3 honesty gate). So "how far
+under guide was this bid?" could not be computed for any row ever written, including the ~6,790 fills.
+
+**Why one field is the whole fix.** `quickBuy` IS the live instasell and `quickSell` IS the live instabuy
+(`js/quotecore.js:342-343`) — the live side was already logged. Adding `guide` makes **both** depth-vs-guide
+and depth-vs-live computable from a single row. That distinction is the point, not a nicety: measured over
+428 offers, guide sits above live ~72% of the time, 46% of offers diverge by more than 2%, and the two
+anchors disagree on whether an offer is "past −5%" for 52 of them. Either number alone is uninterpretable.
+
+**Cost.** `row.guide` is already set by `computeQuote`, so this is zero call-site changes and ~17 B/row
+(~0.8 MB/month). Lean-included per the YS2 pattern — a row with no guide in hand logs a byte-identical shape.
+
+**Provenance.** Ben-approved 2026-08-09 off the `PLAN-BID-DEPTH-5PCT` investigation, which found the −5%
+queue-wall hypothesis **not supported** and — the durable result — that bid depth measured against **live**
+predicts fills while depth against **guide** is near-useless. Open and NOT addressed here: `suggestions.jsonl`
+is ~13.4 MB tracked and growing ~2 MB/day in the deploy root of a public Pages repo; the weight is in
+`timedLap`/`windowExit`/`pathA`, not this field.
+
 ### desk cadence: the 6→2 attention haircut reaches the two lanes it had missed (2026-08-09, pipeline-only)
 
 No `APP_VERSION` bump — nothing the browser loads changed (`index.html` and `js/*.js` do not import the

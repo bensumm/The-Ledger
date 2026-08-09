@@ -10,6 +10,12 @@
  *
  * Line schema (the O1 contract, + YS2 forward fields — lean-included, present only when supplied):
  *   { ts, script, mode, params, itemId, quickBuy, optBuy, quickSell, optSell, mom, regime, class, verdict,
+ *     guide?,    (BD-LOG 2026-08-09 — the GE guide price at emit time, the anchor the in-game −5%/+5%
+ *                 offer buttons compute off. Rides off row.guide (computeQuote), so zero call-site
+ *                 changes. NOT reconstructable after the fact: no archive column, .cache/guide.json is
+ *                 a 10-min snapshot, .guide-history.jsonl holds only CHANGES. The live side needs no
+ *                 field — quickBuy IS the live instasell, quickSell IS the live instabuy — so this one
+ *                 field makes both depth-vs-guide and depth-vs-live computable. Lean-included.)
  *     volSrc?,   (SF-3 — 'bulk' | 'peritem': which /24h endpoint the volume behind `class` came from;
  *                 lean-included, quote/screen always supply it, watch-positions.mjs omits it)
  *     posture?, tripwire?, fillWindowHrs?, velocityClass?, thesis?, validators?, path?,
@@ -441,6 +447,23 @@ export function suggestionEntry(row, { itemId, cls, verdict, volSrc, posture, tr
     class:     cls ?? null,
     verdict:   verdict ?? null,
   };
+  // BD-LOG (PLAN-BID-DEPTH-5PCT, Ben-approved 2026-08-09): the GE guide price at emit time — the
+  // anchor the in-game −5%/+5% offer buttons compute off. It rides straight off `row.guide` (set by
+  // computeQuote, js/quotecore.js), so this is ZERO call-site changes and ~17 B/row.
+  //
+  // Why it earns its bytes: guide is NOT reconstructable after the fact from anything in this repo —
+  // the archive schema has no guide column, .cache/guide.json is a 10-min-TTL snapshot overwritten in
+  // place, and .guide-history.jsonl records only re-anchor CHANGES. Without it, "how far under guide
+  // was this bid?" is unanswerable for every row ever logged.
+  //
+  // The live side is ALREADY logged and needs no new field: quickBuy IS the live instasell and
+  // quickSell IS the live instabuy (quotecore.js:342-343). So `guide` alone makes BOTH depth-vs-guide
+  // and depth-vs-live computable from one row — which is the whole point, because the two anchors
+  // disagree materially: measured 2026-08-09, guide sits above live ~72% of the time and the two
+  // disagree on whether an offer is "past −5%" for 52 of 428 offers. Either number alone is
+  // uninterpretable. Lean-included (the YS2 pattern): a row with no guide in hand logs a
+  // byte-identical shape.
+  if (row.guide != null)     e.guide = row.guide;
   // SF-3: `volSrc` ('bulk' | 'peritem') records which /24h endpoint the volume behind `class` came
   // from, so F1 can bucket/normalize the two snapshot sources. Lean-included (the YS2 pattern): quote/
   // screen always supply it; a caller that doesn't (watch-positions.mjs passes its own classify() label) logs a

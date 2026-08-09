@@ -589,7 +589,14 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   `screen-flip-niches.mjs`/`quote-items.mjs`/`watch-positions.mjs`.
 - `suggestions.jsonl` — tracked, append-only suggestions ledger (O1): every emitted
   recommendation, one JSON object per line, written by `quote-items.mjs`/`screen-flip-niches.mjs`/`watch-positions.mjs`
-  via `pipeline/lib/render/suggestlog.mjs`. Rows carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
+  via `pipeline/lib/render/suggestlog.mjs`. Rows carry a lean **`guide`** field (BD-LOG, 2026-08-09) — the GE
+  guide price at emit time, the anchor the in-game −5%/+5% offer buttons compute off. It rides off
+  `row.guide` (`computeQuote`), so it cost zero call-site changes, and it is **not reconstructable after the
+  fact**: the archive schema has no guide column, `pipeline/.cache/guide.json` is a 10-minute snapshot
+  overwritten in place, and `pipeline/.guide-history.jsonl` records only re-anchor *changes*. The live side
+  needs no new field — `quickBuy` IS the live instasell and `quickSell` IS the live instabuy — so this one
+  field makes **both** depth-vs-guide and depth-vs-live computable from a single row, which matters because
+  the two anchors disagree on whether an offer is "past −5%" for 52 of 428 measured offers. Rows also carry a lean **`volSrc`** tag (SF-3, `'bulk'`|`'peritem'`)
   recording which `/24h` endpoint the liquidity `class` volume came from (screen = bulk; quote = bulk
   when `all24h.json` was warm, else per-item) so F1 can normalize the two snapshot sources. A row may also
   carry a lean **`askHeadroom`** object (PLAN Bar-E-signal) when the robust p90 shaved a TRADED in-band top
