@@ -594,6 +594,18 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
   independent reimplementation of the study, and the SHIPPED `ampWalkForward`. Cols 2 and 3 agreeing is
   the HEALTHY state (they are independent implementations of one design). Col 1 converging on col 3 ⇒ a
   break in the shared helpers; col 3 diverging from col 2 ⇒ a regression inside `ampWalkForward` itself.
+  Plus **`dt4-window-gate-study.mjs`** + **`DT4-WINDOW-GATE-FINDINGS.md`** (2026-08-09, PLAN-DIURNAL-TRIAGE
+  DT4) — the measurement that had to precede the DT4 build: does a per-item split-half reliability gate on
+  the diurnal shape actually select items whose window holds OUT-OF-SAMPLE? Gate = parity split (even/odd
+  days) Pearson-correlated on `hourProfile`'s per-hour `devLow`/`devHi`, computed on the FIT PERIOD ONLY;
+  test = a temporal holdout (fit on the first 2/3 of days, score the fitted dip/peak hour against each
+  held-out day's median) versus a same-day random hour. Answer: the gate DOES discriminate and the lift is
+  monotone across five buckets (PASS +15.0/+16.9pp vs FAIL +8.8/+9.2pp at r≥0.6, 3.8% pass), and the
+  quietness confound is refuted backwards — gate-pass items are the LIQUID ones and the gap is widest in
+  the high-volume tertile. **But gate-fail items still show ~+9pp**, so the findings RECOMMEND AGAINST DT4
+  as specified (suppressing the window on failure) in favour of modulating confidence. It measures
+  within-day HOUR RANKING, not fills — deliberately a different question from the triage's resting-offer
+  null, and not an EV claim. Freely deletable; nothing imports it.
   All read the `/1h` SQLite archive read-only and gate nothing.
 - `ignored-items.json` — tracked repo-root config (2026-07-07): items QUARANTINED from the MERCH
   book (farming inputs / loot / personal-use — e.g. snapdragon seed 5300, snapdragon 3000). Its
