@@ -1499,10 +1499,15 @@ export function softBuyRead(profile, { live = null, fc = null, durable = null, r
 export function softBuyHoursClause(reliable, dipWindow, fmtHour, { style = 'full' } = {}) {
   const hrs = () => `${fmtHour(dipWindow.startH)}–${fmtHour(dipWindow.endH)}`;
   if (style === 'compact') {
-    if (reliable === true) return `${hrs()} (repeats)`;
+    if (reliable === true) return `${hrs()} (may repeat)`;   // MAY — same reason as the full style below
     return reliable === false ? 'no reliable hours' : 'hours unverified';
   }
-  if (reliable === true) return `attended dip hours ${hrs()} · repeats most days`;
+  // "MAY repeat" (Ben, 2026-08-10) — NOT a hedge for its own sake. The gate correlates the two parity
+  // halves' 24h SHAPE VECTORS and never compares their dip/peak HOURS; measured, those halves agree on
+  // the dip hour only 25.8% of the time. "repeats most days" asserted something never checked. The
+  // weaker verb states what IS established (this item has a reproducible intraday shape) and invites a
+  // look at the hours rather than vouching for them. Ben's rule: don't claim what we haven't verified.
+  if (reliable === true) return `attended dip hours ${hrs()} · MAY repeat most days`;
   if (reliable === false) return 'no reliable dip hours';
   return 'dip hours unverified';
 }

@@ -487,7 +487,7 @@ This is the tribal layer the script can't do — apply ALL of these:
   - **Unreliable / unverified hours** (DT4, 2026-08-10 — SUPERSEDES the old `range-churn` shape): the
     LEVELS and both nets ALWAYS render; only the dip/peak HOUR spans + the hold horizon are withheld
     when the item fails the split-half reliability gate (`windowReliability`, `min(rLow,rHi) ≥ 0.6`).
-    The line closes with `hours repeat most days` / `levels only — no reliable hours` / `levels only —
+    The line closes with `hours MAY repeat most days` / `levels only — no reliable hours` / `levels only —
     hours unverified`. Only ~0.8% of items pass, so an absent window is the NORMAL case now — read the
     LEVEL and treat the hours as a bonus when they appear. `range-churn — no timing edge` is gone.
   - All shapes append a liquidity/tranche segment (`vol/d · dip-pool · peak-pool · tranche comfortable

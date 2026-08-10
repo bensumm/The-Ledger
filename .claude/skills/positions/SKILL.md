@@ -59,7 +59,7 @@ sections plus your own prose:
   held lot: the **floor** = the dip-cluster level, the number you actually place at; the
   **marker** = `@floor` (live sits ≤0.5% over the dip floor, or below) vs `+X%` (live sits X% above
   the dip). **The hours clause is GATED as of DT4 (2026-08-10)** and has three forms: `attended dip
-  hours HH:00–HH:00 · repeats most days` (the item's daily shape reproduces across a parity split,
+  hours HH:00–HH:00 · MAY repeat most days` (the item's daily shape reproduces across a parity split,
   `min(rLow,rHi) ≥ 0.6` — only ~0.8% of items), `no reliable dip hours` (measured fail), or `dip
   hours unverified` (under ~14 days of history — we did not check, which is not the same claim).
   **An absent window is now the normal case: the FLOOR and the CUE still render whatever the gate says,

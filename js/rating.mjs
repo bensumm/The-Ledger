@@ -10,7 +10,8 @@
  * REWARD BASIS (P6b — Ben's 2026-07-09 ruling: gp/d is OUT as the ranking metric). The reward
  * magnitude is now the PER-THESIS RANK — `net after tax × P(fill at the quoted pair) ÷ TTF` from
  * pipeline/lib/estimators.mjs — NOT the demoted `expGpDay` (which folded three unmeasured throughput
- * assumptions: limit×6 windows/day, a 10% volume share, a noisy modeNet). The score still layers the
+ * assumptions: limit × ACTIONABLE_WINDOWS_PER_DAY (=2 since 2026-08-08; this line said 6 until
+ * 2026-08-10) windows/day, a 10% volume share, a noisy modeNet). The score still layers the
  * same risk-quality MULTIPLIER ∈ (0,1] built from real computeQuote fields (regime stability, last-2h
  * momentum, two-sided liquidity / exit-ease, and — for band modes — band-trade consistency): score =
  * rank × geomean(factors). (G2, PLAN-GRADE-REWORK 2026-07-21 — O3: the capital-commitment factor was

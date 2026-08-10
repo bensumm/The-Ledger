@@ -914,7 +914,7 @@ simultaneous independent rungs on one item.
   - **Unreliable / unverified hours** (DT4, 2026-08-10 — SUPERSEDES the old `range-churn` shape): the
     LEVELS, both nets, range, reach and base ALWAYS render; only the dip/peak HOUR spans (and the
     hold horizon, which is an hours delta) are withheld when the item's daily shape fails the
-    split-half reliability gate. The line closes with `hours repeat most days` (passed), `levels only —
+    split-half reliability gate. The line closes with `hours MAY repeat most days` (passed), `levels only —
     no reliable hours` (measured fail) or `levels only — hours unverified` (too little history to
     judge). ~0.8% of the board passes. The old `range-churn — no timing edge` frame is GONE: it keyed
     on `hourConcentration.clean`, which was measured NOT to discriminate (clean=true dip +5.0pp vs
@@ -980,7 +980,7 @@ simultaneous independent rungs on one item.
 - **Soft-buy (ADD-while-holding) timing, inform-only, n≈0.** `quote-items.mjs` prints a `⏳ soft-buy`
   line beside each held lot (and on bare quotes) off the SAME `hourProfile` — `js/windowread.mjs`
   `softBuyRead`/`formatSoftBuy`: `soft-buy: floor ~X · live @floor | +X% · <cue> (<hours clause>)`.
-  The hours clause is DT4-GATED (2026-08-10): `attended dip hours HH:00–HH:00 · repeats most days` when
+  The hours clause is DT4-GATED (2026-08-10): `attended dip hours HH:00–HH:00 · MAY repeat most days` when
   `windowReliability`'s split-half `min(rLow,rHi) ≥ 0.6` (~0.8% of items), else `no reliable dip hours`
   (measured fail) or `dip hours unverified` (too little history to judge). The floor + cue always RENDER, whatever the gate says — but on a PASSING row the floor does MOVE (DT4b refits those rows over the gate's 14-day window; hours and levels are one fit). It is unchanged on the ~99% that don't pass. The **floor** is the dip-cluster level — the number you place at, and since DT2 it LEADS
   the line; the marker is `@floor` when live sits ≤ `SOFT_BUY_AT_FLOOR_PCT` (0.5%) over that floor (or

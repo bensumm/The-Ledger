@@ -119,7 +119,7 @@ ok('gpDay composition == marginU × units × cyclesDay, and throughput reuses ex
 ok('volume-bound throughput: tiny volDay caps cyclesDay below 6 refills', () => {
   // limit 100, volDay 300 → 0.10×300 = 30 unit/day share; units bound by limit/capital.
   const r = pathAGpDay({ dayRanges: spikeRanges, price: PX, buyLimit: 100, volDay: 300, lane: 'gear', capital: 1e9 });
-  const throughput = expUnits(100, 300, Math.floor(1e9 / PX));   // = min(100×6, 30) = 30
+  const throughput = expUnits(100, 300, Math.floor(1e9 / PX));   // = min(100×2, 30) = 30 — ×2 is ACTIONABLE_WINDOWS_PER_DAY; the volume term binds either way, which is why this comment could go stale without failing
   approx(r.units * r.cyclesDay, throughput, 1e-6);
   assert.ok(r.units * r.cyclesDay <= 30 + 1e-6);
 });

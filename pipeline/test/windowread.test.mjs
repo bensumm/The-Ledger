@@ -486,7 +486,7 @@ ok('softBuyRead: live at/below the dip floor ⇒ @floor · buy now', () => {
   assert.equal(sb.floor, 1000);
   assert.deepEqual(sb.dipWindow, { startH: 21, endH: 0 }, 'the diurnal dip window is the cheapest add hours');
   assert.equal(sb.marker, '@floor'); assert.equal(sb.buyNow, true);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00 · repeats most days)');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00 · MAY repeat most days)');
 });
 
 ok('softBuyRead: live within the 0.5% threshold over the floor still reads @floor (buy now)', () => {
@@ -512,7 +512,7 @@ ok('softBuyRead: live above the dip ⇒ +X%, and the render leads with the LEVEL
 ok('softBuyRead: no live reference ⇒ window-only note, no buy/wait cue', () => {
   const sb = softBuyRead(prof(1000, 1080, false), { reliable: true });
   assert.equal(sb.marker, null); assert.equal(sb.buyNow, null);
-  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 (attended dip hours 21:00–00:00 · repeats most days, no live ref)');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 (attended dip hours 21:00–00:00 · MAY repeat most days, no live ref)');
 });
 
 ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders', () => {
@@ -529,7 +529,7 @@ ok('softBuyRead: a null / dip-less profile ⇒ null ⇒ the note never renders',
 ok('softBuyRead @floor + no fc ⇒ cue degrades to buy now (unchanged behavior)', () => {
   const sb = softBuyRead(prof(1000, 1080, false), { live: 1000, reliable: true });
   assert.equal(sb.cue, 'buy now');
-  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00 · repeats most days)');
+  assert.equal(formatSoftBuy(sb), 'soft-buy: floor ~1000 · live @floor · buy now (attended dip hours 21:00–00:00 · MAY repeat most days)');
 });
 
 ok('softBuyRead @floor + a BREAKING floor (floorBreak.broke) ⇒ caution', () => {
@@ -1465,7 +1465,7 @@ ok('windowReliability: the 14-day window is load-bearing — the same series jud
 ok('softBuyHoursClause: three distinct states, and the compact digest variant says the same thing', () => {
   const w = { startH: 21, endH: 0 };
   const fh = h => String(h).padStart(2, '0') + ':00';
-  assert.ok(/repeats most days/.test(softBuyHoursClause(true, w, fh)), 'a pass is MARKED, not just shown');
+  assert.ok(/MAY repeat most days/.test(softBuyHoursClause(true, w, fh)), 'a pass is MARKED, not just shown');
   assert.equal(softBuyHoursClause(false, w, fh), 'no reliable dip hours');
   assert.equal(softBuyHoursClause(null, w, fh), 'dip hours unverified');
   assert.ok(/21:00–00:00/.test(softBuyHoursClause(true, w, fh, { style: 'compact' })));
@@ -1481,7 +1481,7 @@ ok('DT4 end-to-end: the SAME renderer shows hours on a repeating item and withho
   const mk = s => formatTimedLap({ ...diurnalTimedLap(s, { nights: 14, now: new Date(2026, 0, 17, 12, 0, 0), liveLo: 900, liveHi: 1100 }) });
   const good = mk(reliableSeries()), bad = mk(noisySeries());
   assert.ok(good != null && bad != null, 'both render a line — suppression is never silence');
-  assert.ok(/hours repeat most days/.test(good), `the passing item is marked (got: ${good})`);
+  assert.ok(/hours MAY repeat most days/.test(good), `the passing item is marked (got: ${good})`);
   assert.ok(/dip \d\d:00/.test(good), 'and shows its hour spans');
   assert.ok(/levels only — no reliable hours/.test(bad), `the failing item says so (got: ${bad})`);
   assert.ok(!/dip \d\d:00/.test(bad) && !/peak \d\d:00/.test(bad), 'and shows no hour spans');
@@ -1702,8 +1702,8 @@ ok('formatTimedLap: an UNVERIFIED item is worded as unverified and still withhol
   assert.ok(unver !== failed, 'not-checked and checked-and-failed are different claims and must not render identically');
   for (const [label, t] of [['unverified', unver], ['failed', failed]]) {
     assert.ok(!/dip \d\d:00/.test(t) && !/peak \d\d:00/.test(t), `${label}: MUTATION GUARD (reliable !== false) — hours must be withheld`);
-    assert.ok(!/repeats most days/.test(t), `${label}: and it must never claim the hours repeat`);
+    assert.ok(!/MAY repeat most days/.test(t), `${label}: and it must never claim the hours repeat`);
     assert.ok(!/hold ~/.test(t), `${label}: the hold horizon is an hours claim`);
   }
-  assert.ok(/hours repeat most days/.test(passed) && /dip 01:00/.test(passed), 'and the passing case still renders both');
+  assert.ok(/hours MAY repeat most days/.test(passed) && /dip 01:00/.test(passed), 'and the passing case still renders both');
 });

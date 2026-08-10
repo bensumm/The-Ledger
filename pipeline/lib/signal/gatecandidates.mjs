@@ -162,12 +162,18 @@ export function scaleSlots(base, { capital = null, capRef = CAP_REF, scale = POO
 export const SUBFLOOR_TOP = 5;
 export const SUBFLOOR_GRADE_CAP = 'C';
 
-// realistic expected units/day: buy-limit refreshes ~every 4h → 6 limits/day, capped at a 10% share
-// of the limiting-side daily volume. Null limit → volume share only.
+// realistic expected units/day: `limit × windows`, capped at a 10% share of the limiting-side daily
+// volume. Null limit → volume share only.
+// ⚠ `windows` DEFAULTS TO `ACTIONABLE_WINDOWS_PER_DAY` = **2**, NOT the physical 6. This line said
+// "buy-limit refreshes ~every 4h → 6 limits/day" until 2026-08-10 — i.e. the DEFINITION SITE still
+// described the pre-2026-08-08 behavior while the constant it takes its default from had been halved
+// three times over. The physical 6 (`REFILL_WINDOWS_PER_DAY`, a game rule) is a DIFFERENT constant and
+// is not what this function uses by default; see js/desk-cadence.mjs for why they diverge.
 // PLAN-CAPITAL-THROUGHPUT (Ben 2026-07-14): optional PER-WINDOW capital cap — `capPerWindow` = units the
 // deployable bankroll affords in ONE 4h buy-window (deployablePool / price). It answers Ben's "for THIS
 // price, how many can I realistically capture" — the old two caps measured MARKET capacity (limit +
-// volume share), capital-blind. The cap enters INSIDE the ×6 (not as a separate whole-day cap) because
+// volume share), capital-blind. The cap enters INSIDE the per-window multiplier (not as a separate
+// whole-day cap) because
 // churn RECYCLES intra-day: you deploy a tranche, it sells within the window, and the freed capital
 // rebuys next window — so the binding question is "can I afford ONE buy-limit tranche?", not "can I
 // afford a whole day's accumulation at once?". (A whole-day/turns=1 cap wrongly HID fast churn Ben trades

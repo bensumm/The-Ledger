@@ -4,7 +4,8 @@
  *
  * WHY THIS EXISTS. Ben's 2026-07-09 ruling: "I despise gp/d as a metric; it makes so many
  * assumptions about fill speed and fill price… let's get something that's more accurate per thesis
- * and less hand wavey." `expGpDay` (min(limit×6, 10%×volDay) × modeNet — three compounding
+ * and less hand wavey." `expGpDay` (min(limit×2, 10%×volDay) × modeNet — ×2 = ACTIONABLE_WINDOWS_PER_DAY
+ * since the 2026-08-08 haircut, NOT the physical 6 this line claimed until 2026-08-10 — three compounding
  * unmeasured assumptions) is DEMOTED: it survives ONLY as the cheap pre-fetch pool orderer inside
  * gatecandidates.rankAndSlice (no fetch-semantics change) and as the 250k `--min-gpd` attention
  * pre-filter. It is NEVER again the displayed "best" number or the grade basis. The replacement,

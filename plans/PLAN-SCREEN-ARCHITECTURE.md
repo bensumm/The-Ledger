@@ -93,7 +93,7 @@ dimension, none auditable:
 |---|---|---|---|---|
 | 1 | Thin reserve (6) | `gatecandidates.mjs:83,317` | raw gp-flow `limitVol×mid` | **the anchor incident** — starves real thin edges |
 | 2 | Rising reserve (6) | `gatecandidates.mjs:86,308` | `proxyDrift` alone | riser #7+ silently buried; no report |
-| 3 | Top-N slice (40) | `gatecandidates.mjs:87,300,318` | `expGpDay × softFactor` | non-thin candidate #41+ never fetched; expGpDay itself folds three unmeasured assumptions (limit×6, 10% share, noisy modeNet — the P6b demotion rationale, `screen-flip-niches.mjs:69–72`) yet still solely picks the pool |
+| 3 | Top-N slice (40) | `gatecandidates.mjs:87,300,318` | `expGpDay × softFactor` | non-thin candidate #41+ never fetched; expGpDay itself folds three unmeasured assumptions (limit×2 — ACTIONABLE_WINDOWS_PER_DAY since 2026-08-08, 10% share, noisy modeNet — the P6b demotion rationale, `screen-flip-niches.mjs:69–72`) yet still solely picks the pool |
 | 4 | softFactor null-proxy 0.7 | `gatecandidates.mjs:147` | archive coverage | a cold-archive item is demoted invisibly |
 | 5 | Value top-25 | `gatecandidates.mjs:89,287` | valueScore | **already honest** — §F admitted-vs-shown footer; the model to copy |
 | 6 | `MAX_PRICE` 45m window | `screen-flip-niches.mjs:143` | price | deliberate capital bound, but silent — belongs in the exclusion report, not changed |

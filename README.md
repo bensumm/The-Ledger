@@ -1757,7 +1757,7 @@ the instasell price (where you place buy offers), **Sell** = the instabuy price.
     (2026-08-10) changed what varies:** every row now renders BID/ASK LEVELS + timed/same-hour nets +
     range + reach + base; only the HOURS are gated, on `windowReliability`'s split-half r (`lap.reliable`
     — true ⇒ the dip/peak window spans, the hold horizon, any secondary window and a closing "hours
-    repeat most days"; false ⇒ "levels only — no reliable hours"; null ⇒ "levels only — hours
+    MAY repeat most days"; false ⇒ "levels only — no reliable hours"; null ⇒ "levels only — hours
     unverified"). This REPLACED a `lap.clean` branch whose `false` arm printed `range-churn — no timing
     edge` and dropped the LEVELS too, on ~97% of items — `clean` was measured not to discriminate
     (CHANGELOG 0.72.0). All shapes append a liquidity/tranche segment + the §4 tranche-ceiling

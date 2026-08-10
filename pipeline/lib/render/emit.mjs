@@ -218,7 +218,10 @@ export function formatTimedLap(lap, { fmt: fmtFn = fmt } = {}) {
   // DT4 — the verdict on the hours, LAST so it qualifies the whole timing read rather than reading as
   // one more datum. Three states because "measured unreliable" and "not measurable" are different
   // claims (windowReliability): a 14-day history is needed to judge, and ~22% of items can't supply it.
-  bits.push(hoursOk ? 'hours repeat most days'
+  // "MAY repeat" (Ben, 2026-08-10): the gate correlates SHAPE VECTORS, never the hours themselves — the
+  // two parity halves agree on the dip hour only 25.8% of the time. State what was established and let
+  // the reader investigate; do not vouch for hours nothing checked. Same wording as softBuyHoursClause.
+  bits.push(hoursOk ? 'hours MAY repeat most days'
     : reliable === false ? 'levels only — no reliable hours'
     : 'levels only — hours unverified');
 

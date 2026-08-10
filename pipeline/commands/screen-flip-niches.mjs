@@ -84,8 +84,8 @@
  *
  *   --mode dip is DESIGNED-NOT-BUILT (flat regime + mom↓ wick-bids). Out of scope here on purpose.
  *
- * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×6,
- * 10% × volDay); expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
+ * Ranking: the fetch POOL is still picked by realistic expected gp/day (expUnits/day = min(limit×2,
+ * 10% × volDay) — ×2 is ACTIONABLE_WINDOWS_PER_DAY, not the physical 6; this header said ×6 until 2026-08-10; expGpDay = expUnits × the mode's net/u) — the ONLY surviving use of expGpDay, as the
  * cheap pre-fetch orderer + the --min-gpd pre-filter. That pre-filter is a HARD GATE, not a
  * demotion (MT1, 2026-07-27 — it read "P6b demotion" here for months): gatecandidates.mjs:284 returns
  * null, so a sub-floor non-thin/non-held candidate is DROPPED and never rated. Do not confuse it with

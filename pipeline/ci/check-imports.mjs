@@ -242,7 +242,18 @@ function codeOnly(src) {
 // destructured bindings, and function parameters written in that style.
 function boundConstants(src) {
   const bound = new Set();
-  const clean = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  // ⚠ USE `stripComments`, THE SAME STRIPPER THE *USE* SIDE USES. This line was its own naive
+  // `replace(/\/\*[\s\S]*?\*\//g,' ')…` until 2026-08-10 — the exact two-homes mistake this file's
+  // header names as "failure 2" and claims to have ended, reintroduced on the binding half.
+  // How it broke: a `//` line comment containing a glob (`/*.mjs`, `skills/*/SKILL.md`) opens a
+  // PHANTOM block comment that runs to the next `*/` anywhere in the file — including one inside a
+  // regex literal. Measured blast radius before the fix: quote-items.mjs lost 66 of its 222
+  // const/let/var bindings (lines 331–645 swallowed by the `/*.mjs` in a comment at :331), plus
+  // 7 in check-dead-exports.test.mjs and a handful across the ci/ and lib/ files.
+  // Direction was false-POSITIVE, so it never masked a real unbound constant — it made the guard
+  // fail CI on correct code, which by this file's own stated principle ("a slightly weaker check
+  // that never cries wolf beats a sharper one that does") is the worse failure.
+  const clean = stripComments(src);
   // import clauses — take the LOCAL name (after `as` when renamed)
   const reImp = /\bimport\b([^;]*?)\bfrom\b\s*['"][^'"]+['"]/g;
   let m;

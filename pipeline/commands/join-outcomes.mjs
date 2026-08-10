@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 /**
- * join-outcomes.mjs â€” THE JOIN (PLAN O1 step 3/4). Derived + rebuildable â†’ GITIGNORED (never commit
+ * join-outcomes.mjs — THE JOIN (PLAN O1 step 3/4). Derived + rebuildable → GITIGNORED (never commit
  * outcomes.json or the .cache/outcomes-bands/ data). Rebuilds the full "story of every offer" from
  * fills.json + suggestions.jsonl + historical market context, so the algorithm-feedback loop (F1)
  * becomes a query rather than a re-derivation.
  *
  *   node pipeline/commands/join-outcomes.mjs            rebuild + write outcomes.json, print a summary
- *   node pipeline/commands/join-outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile Ã— liquidity
+ *   node pipeline/commands/join-outcomes.mjs --report   + fill-time DISTRIBUTIONS by band-percentile × liquidity
  *                                          class, n PER CELL, refusing to summarize below --min-n
  *   node pipeline/commands/join-outcomes.mjs --no-bands  skip the historical band-percentile fetch (fast, offline)
  *   node pipeline/commands/join-outcomes.mjs --json      dump the campaigns array to stdout (no file write)
- *   flags: --min-n <N> (report cell floor, default 8) Â· --band-hours <H> (band basis, default 2)
+ *   flags: --min-n <N> (report cell floor, default 8) · --band-hours <H> (band basis, default 2)
  *
  * A CAMPAIGN = one intent to trade: a same-item/same-side chain of offers,
- * `placed â†’ â€¦ â†’ terminal`, with cancel-replace successions (a cancel then a re-place within
+ * `placed → … → terminal`, with cancel-replace successions (a cancel then a re-place within
  * REPRICE_GAP) STITCHED into ONE campaign carrying a reprice list. Per campaign we record:
- *   placement ts/price Â· reprice count/steps Â· time-to-first-fill Â· time-to-complete (or the
- *   terminal state + filled fraction) Â· band percentile at placement (trailing-2h 5m band, the
- *   SAME basis as patientTargets) Â· 2h spread + limiting-side volume Â· realized net after tax
- *   where it closes a FIFO lot Â· the nearest PRIOR suggestion for the item.
+ *   placement ts/price · reprice count/steps · time-to-first-fill · time-to-complete (or the
+ *   terminal state + filled fraction) · band percentile at placement (trailing-2h 5m band, the
+ *   SAME basis as patientTargets) · 2h spread + limiting-side volume · realized net after tax
+ *   where it closes a FIFO lot · the nearest PRIOR suggestion for the item.
  *
  * SCHEMA v2 (YS1, PLAN-YIELD) adds, per campaign: `stateAtFill` (band-pctl + regime + phase AS OF the
  * fill, via lib/range-position.mjs - reconstructed for EVERY fill, not just suggestion-matched ones, with
@@ -58,9 +58,9 @@ const WEEKLY_STAMP = path.join(HERE, '..', '.cache', 'last-weekly-report');
 // REPRICE_GAP + MANUAL_SLOT are now imported from lib/campaigns.mjs (the shared campaign primitive) —
 // ONE source, so this file and the forward-join siblings can't drift on the reprice-stitch window.
 const SUGGEST_WINDOW = 6 * 3600;    // s: a suggestion older than this before placement is too stale to join
-// --- --report cell floors (the numbers that GATE F1 â€” see FILLS-PIPELINE.md Â§10) --------------
-const MIN_N_REPORT = 8;             // below this, a per-cell median/rate is noise â†’ suppressed in --report
-const MIN_N_F1 = 30;               // below this per (percentile Ã— class Ã— regime) cell, F1 must NOT trust a curve
+// --- --report cell floors (the numbers that GATE F1 — see FILLS-PIPELINE.md §10) --------------
+const MIN_N_REPORT = 8;             // below this, a per-cell median/rate is noise → suppressed in --report
+const MIN_N_F1 = 30;               // below this per (percentile × class × regime) cell, F1 must NOT trust a curve
 const MIN_CELLS_F1 = 5;            // and at least this many cells must clear MIN_N_F1 before F1 opens
 
 const A = parseArgs(process.argv.slice(2));
@@ -99,7 +99,7 @@ function joinSuggestion(sugByItem, itemId, placementTs) {
   const list = sugByItem.get(itemId); if (!list) return null;
   let best = null;
   for (const s of list) {
-    if (s.ts > placementTs) break;                       // list is ascending; past placement â†’ stop
+    if (s.ts > placementTs) break;                       // list is ascending; past placement → stop
     if (placementTs - s.ts <= SUGGEST_WINDOW) best = s;  // keep the latest within the window
   }
   if (!best) return null;
@@ -162,19 +162,19 @@ async function build() {
   }
   for (const list of sugByItem.values()) list.sort((a, b) => a.ts - b.ts);
 
-  // current 24h volume â†’ liquidity class per item (honest caveat: CURRENT day, not at-placement â€”
+  // current 24h volume → liquidity class per item (honest caveat: CURRENT day, not at-placement —
   // an at-placement daily figure isn't in the historical endpoints; the 2h limiting volume below IS
   // at-placement and is recorded per campaign as the finer measure).
   const map = await loadMapping();
   let v24 = {};
-  try { v24 = await loadAll24h(); } catch (e) { console.warn('(24h volume unavailable â€” liquidity class = unknown: ' + ((e && e.message) || e) + ')'); }
+  try { v24 = await loadAll24h(); } catch (e) { console.warn('(24h volume unavailable — liquidity class = unknown: ' + ((e && e.message) || e) + ')'); }
   const volDayOf = id => { const d = v24[id] || v24[String(id)]; return d ? Math.min(d.highPriceVolume || 0, d.lowPriceVolume || 0) : null; };
 
   // historical band at each placement (unless --no-bands). ONE batched fetch for all campaigns.
   let bands = null;
   if (!NO_BANDS) {
     const reqs = campaigns.map(c => ({ id: c.itemId, endUnix: c.offers[0].tsOpen }));
-    process.stderr.write(`(fetching historical 2h bands for ${reqs.length} placements â€” this can take a moment; --no-bands to skip)\n`);
+    process.stderr.write(`(fetching historical 2h bands for ${reqs.length} placements — this can take a moment; --no-bands to skip)\n`);
     try { bands = await loadHistBands(reqs, BAND_HOURS); }
     catch (e) { console.warn('(historical band fetch failed - band percentile = null: ' + ((e && e.message) || e) + ')'); bands = null; }
   }
@@ -219,7 +219,7 @@ async function build() {
     if (c.type === 'sell') {
       realised = 0; let matched = false;
       for (const o of c.offers) if (realisedBySellTs.has(o.tsOpen)) { realised += realisedBySellTs.get(o.tsOpen); matched = true; }
-      if (!matched) realised = null;   // an unmatched sell (pre-log inventory) â€” no fabricated profit
+      if (!matched) realised = null;   // an unmatched sell (pre-log inventory) — no fabricated profit
     }
 
     const volDay = volDayOf(c.itemId);
@@ -264,29 +264,29 @@ function summarize(o) {
   const filled = c.filter(x => x.everFilled), cancelled = c.filter(x => !x.everFilled);
   const ttf = filled.map(x => x.timeToFirstFill).filter(t => t != null);
   const sj = c.filter(x => x.suggestion).length;
-  console.log(`# Outcomes â€” ${c.length} campaigns (rebuilt from fills.json)`);
+  console.log(`# Outcomes — ${c.length} campaigns (rebuilt from fills.json)`);
   console.log(`  generatedAt ${o.generatedAt}`);
-  console.log(`  sides: ${c.filter(x => x.side === 'buy').length} buy Â· ${c.filter(x => x.side === 'sell').length} sell   Â·   manual/mobile: ${c.filter(x => x.manual).length}`);
-  console.log(`  filled: ${filled.length} (${c.length ? Math.round(filled.length / c.length * 100) : 0}%)  Â·  never filled: ${cancelled.length}  Â·  repriced at least once: ${c.filter(x => x.repriceCount > 0).length}`);
-  console.log(`  time-to-first-fill: median ${ttf.length ? fmtTurn(median(ttf) / 3600) : 'â€”'} over n=${ttf.length}`);
-  console.log(`  band percentile present: ${c.filter(x => x.bandPct != null).length}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  Â·  suggestion joined: ${sj}/${c.length}`);
+  console.log(`  sides: ${c.filter(x => x.side === 'buy').length} buy · ${c.filter(x => x.side === 'sell').length} sell   ·   manual/mobile: ${c.filter(x => x.manual).length}`);
+  console.log(`  filled: ${filled.length} (${c.length ? Math.round(filled.length / c.length * 100) : 0}%)  ·  never filled: ${cancelled.length}  ·  repriced at least once: ${c.filter(x => x.repriceCount > 0).length}`);
+  console.log(`  time-to-first-fill: median ${ttf.length ? fmtTurn(median(ttf) / 3600) : '—'} over n=${ttf.length}`);
+  console.log(`  band percentile present: ${c.filter(x => x.bandPct != null).length}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  ·  suggestion joined: ${sj}/${c.length}`);
   const stated = c.filter(x => x.stateAtFill && x.stateAtFill.reconstructed).length;
-  console.log(`  fill-time state reconstructed: ${stated}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  Â·  velocity classed: ${c.filter(x => x.velocityClass && x.velocityClass !== 'n/a').length}/${c.length}`);
+  console.log(`  fill-time state reconstructed: ${stated}/${c.length}${o.params.noBands ? ' (--no-bands: skipped)' : ''}  ·  velocity classed: ${c.filter(x => x.velocityClass && x.velocityClass !== 'n/a').length}/${c.length}`);
   const realisedC = c.filter(x => x.realised != null);
-  console.log(`  realized (closed sell campaigns): n=${realisedC.length}, net ${realisedC.length ? (realisedC.reduce((s, x) => s + x.realised, 0) >= 0 ? '+' : '') + fmt(realisedC.reduce((s, x) => s + x.realised, 0)) : 'â€”'}`);
+  console.log(`  realized (closed sell campaigns): n=${realisedC.length}, net ${realisedC.length ? (realisedC.reduce((s, x) => s + x.realised, 0) >= 0 ? '+' : '') + fmt(realisedC.reduce((s, x) => s + x.realised, 0)) : '—'}`);
 }
 
-// fill-time distribution: band-percentile bucket (rows) Ã— liquidity class (cols), per side, with n
+// fill-time distribution: band-percentile bucket (rows) × liquidity class (cols), per side, with n
 // per cell and MIN_N suppression. Cells: "median-ttf (n)" or "n<MIN_N" when too sparse.
 function report(o) {
   const PCTS = ['0-20', '20-40', '40-60', '60-80', '80-100', 'unknown'];
   const CLASSES = ['thin', 'mid', 'liquid', 'unknown'];
-  console.log(`\n# --report â€” fill-time distributions (median time-to-first-fill Â· n per cell; cells with n<${MIN_N} suppressed)`);
-  console.log(`Bucketing: band percentile at placement (rows) Ã— current liquidity class (cols). Only FILLED campaigns count toward time; a low cell n is the expected first-read result (the dataset must accrue calendar time â€” that is why O1 starts now).`);
+  console.log(`\n# --report — fill-time distributions (median time-to-first-fill · n per cell; cells with n<${MIN_N} suppressed)`);
+  console.log(`Bucketing: band percentile at placement (rows) × current liquidity class (cols). Only FILLED campaigns count toward time; a low cell n is the expected first-read result (the dataset must accrue calendar time — that is why O1 starts now).`);
 
   for (const side of ['buy', 'sell']) {
     const rows = o.campaigns.filter(x => x.side === side && x.everFilled && x.timeToFirstFill != null);
-    console.log(`\n## ${side.toUpperCase()} campaigns â€” n=${rows.length} filled with a fill-time`);
+    console.log(`\n## ${side.toUpperCase()} campaigns — n=${rows.length} filled with a fill-time`);
     // build cell map
     const cell = {};
     for (const r of rows) { const k = pctBucket(r.bandPct) + '|' + r.liqClass; (cell[k] = cell[k] || []).push(r.timeToFirstFill); }
@@ -297,7 +297,7 @@ function report(o) {
       const line = [p];
       for (const cl of CLASSES) {
         const arr = cell[p + '|' + cl] || [];
-        line.push(arr.length === 0 ? 'Â·' : arr.length < MIN_N ? `n=${arr.length}<${MIN_N}` : `${fmtTurn(median(arr) / 3600)} (n=${arr.length})`);
+        line.push(arr.length === 0 ? '·' : arr.length < MIN_N ? `n=${arr.length}<${MIN_N}` : `${fmtTurn(median(arr) / 3600)} (n=${arr.length})`);
       }
       lines.push(line);
     }
@@ -305,10 +305,10 @@ function report(o) {
     // fill-RATE by the same cells needs cancelled campaigns too (a cell's fill probability)
     const allSide = o.campaigns.filter(x => x.side === side);
     const clearedCells = PCTS.flatMap(p => CLASSES.map(cl => (cell[p + '|' + cl] || []).length)).filter(n => n >= MIN_N_F1).length;
-    console.log(`side totals: ${allSide.length} campaigns, ${rows.length} with a fill-time; cells clearing the F1 floor (nâ‰¥${MIN_N_F1}): ${clearedCells}`);
+    console.log(`side totals: ${allSide.length} campaigns, ${rows.length} with a fill-time; cells clearing the F1 floor (n≥${MIN_N_F1}): ${clearedCells}`);
   }
 
-  // F1 gate verdict â€” the documented thresholds this chunk delivers
+  // F1 gate verdict — the documented thresholds this chunk delivers
   const filledTimes = o.campaigns.filter(x => x.everFilled && x.timeToFirstFill != null);
   const cellCounts = {};
   // YS1: regime for the F1 cell now prefers the fill-time stateAtFill.regime (present for EVERY fill),
@@ -320,10 +320,10 @@ function report(o) {
     const k = r.side + '|' + pctBucket(r.bandPct) + '|' + r.liqClass + '|' + reg; cellCounts[k] = (cellCounts[k] || 0) + 1; }
   const f1Cells = Object.values(cellCounts).filter(n => n >= MIN_N_F1).length;
   console.log(`\n# F1 gate (documented thresholds)`);
-  console.log(`  A per-cell fill-time/probability curve is trustworthy only at nâ‰¥${MIN_N_F1} per (side Ã— percentile Ã— class Ã— regime) cell, with â‰¥${MIN_CELLS_F1} such cells populated (bucket by regime FIRST â€” the known confound).`);
-  console.log(`  Right now: ${f1Cells} cell(s) clear nâ‰¥${MIN_N_F1}. F1 ${f1Cells >= MIN_CELLS_F1 ? 'MAY open.' : `stays GATED (need â‰¥${MIN_CELLS_F1}). The pipeline + schema are validated; the sample is not yet large enough â€” let it accrue.`}`);
-  // F1-gate progress (concise, reuses the same constants â€” never re-hardcode the thresholds)
-  console.log(`  F1-gate progress: ${f1Cells}/${MIN_CELLS_F1} cells cleared (${f1Cells >= MIN_CELLS_F1 ? 'threshold met' : `${Math.max(0, MIN_CELLS_F1 - f1Cells)} more needed at nâ‰¥${MIN_N_F1}/cell`}).`);
+  console.log(`  A per-cell fill-time/probability curve is trustworthy only at n≥${MIN_N_F1} per (side × percentile × class × regime) cell, with ≥${MIN_CELLS_F1} such cells populated (bucket by regime FIRST — the known confound).`);
+  console.log(`  Right now: ${f1Cells} cell(s) clear n≥${MIN_N_F1}. F1 ${f1Cells >= MIN_CELLS_F1 ? 'MAY open.' : `stays GATED (need ≥${MIN_CELLS_F1}). The pipeline + schema are validated; the sample is not yet large enough — let it accrue.`}`);
+  // F1-gate progress (concise, reuses the same constants — never re-hardcode the thresholds)
+  console.log(`  F1-gate progress: ${f1Cells}/${MIN_CELLS_F1} cells cleared (${f1Cells >= MIN_CELLS_F1 ? 'threshold met' : `${Math.max(0, MIN_CELLS_F1 - f1Cells)} more needed at n≥${MIN_N_F1}/cell`}).`);
 
   // --- Reachability head-to-head readiness (RC — PLAN-REACHABILITY-CONSOLIDATION) --------------
   // The SECOND gate, distinct from F1 above: the five-way exit-estimator co-log (reach·reachRelief·
@@ -374,22 +374,22 @@ function report(o) {
   console.log(`  Cells (side × class × regime) at n≥${MIN_N} (scorable): ${fwdScorable} · at n≥${MIN_N_F1} (robust): ${fwdRobust}`);
   console.log(`  → build+run aggregateForwardExit once a cell is SCORABLE; Ring-3's promotion of the forward exit into estimateRank/screen.json needs a ROBUST cell where forward beats the reach-fold on |error| vs the realized sell, PLUS a rank-level knife guard. Status: ${fwdScorable >= 1 ? 'SCORABLE — build the scorer' : 'gated — accruing (forward co-log clock started 2026-07-22)'}.`);
 
-  // #3 velocity + capital efficiency (YV1) â€” a DESCRIPTIVE read off the MEASURED velocityClass /
+  // #3 velocity + capital efficiency (YV1) — a DESCRIPTIVE read off the MEASURED velocityClass /
   // parkedSec YS1 records. Makes visible that yield leaks to idle capital + slow fills, not just bad
   // picks. Not a rate: a per-item velocity off a few lots is a LABEL (concentration caveat below).
   const ps = parkedStats(o.campaigns);
   const vd = ps.velocityDist;
-  console.log(`\n# Velocity + capital efficiency (#3 â€” descriptive, measured; NOT a rate)`);
+  console.log(`\n# Velocity + capital efficiency (#3 — descriptive, measured; NOT a rate)`);
   console.log(`  velocity mix (round-trip-capable sell campaigns only — a buy leg has no holdTimeSec and can never carry a class):`);
-  console.log(`    ${['fast-cycler', 'mid', 'slow-hold', 'n/a'].map(k => `${k} ${vd[k] || 0}`).join(' Â· ')}`);
-  console.log(`  bids: ${ps.nBids} (${ps.nFilledBids} filled, ${ps.nNeverFilled} never filled)  Â·  median time a filled bid sat before first fill: ${ps.medianParkedSec != null ? fmtTurn(ps.medianParkedSec / 3600) : 'â€”'}`);
-  console.log(`  âš  yield leaks to idle capital + slow fills as much as to bad picks; treat a per-item velocity as a label, not a rate.`);
+  console.log(`    ${['fast-cycler', 'mid', 'slow-hold', 'n/a'].map(k => `${k} ${vd[k] || 0}`).join(' · ')}`);
+  console.log(`  bids: ${ps.nBids} (${ps.nFilledBids} filled, ${ps.nNeverFilled} never filled)  ·  median time a filled bid sat before first fill: ${ps.medianParkedSec != null ? fmtTurn(ps.medianParkedSec / 3600) : '—'}`);
+  console.log(`  ⚠ yield leaks to idle capital + slow fills as much as to bad picks; treat a per-item velocity as a label, not a rate.`);
 
   // Concentration: how much of the closed-lot record is one item. When the top item dominates,
-  // any "per-item" read is mostly one sample â€” print the caveat so the weekly read never oversells it.
+  // any "per-item" read is mostly one sample — print the caveat so the weekly read never oversells it.
   const realClosed = CLOSED_LOTS.filter(t => !t.withdrawn);
   console.log(`\n# Concentration`);
-  if (!realClosed.length) { console.log(`  no closed lots yet â€” nothing to attribute per item.`); return; }
+  if (!realClosed.length) { console.log(`  no closed lots yet — nothing to attribute per item.`); return; }
   const nameOf = id => (o.campaigns.find(c => c.itemId === id) || {}).name || ('#' + id);
   const byItem = new Map();   // itemId -> { lots, realised }
   for (const t of realClosed) { const e = byItem.get(t.itemId) || { lots: 0, realised: 0 }; e.lots++; e.realised += (t.realised || 0); byItem.set(t.itemId, e); }
@@ -397,9 +397,9 @@ function report(o) {
   const totalReal = realClosed.reduce((s, t) => s + (t.realised || 0), 0);
   const lotShare = top.lots / realClosed.length;
   const plShare = totalReal !== 0 ? top.realised / totalReal : null;
-  console.log(`  top item by closed lots: ${nameOf(topId)} â€” ${top.lots}/${realClosed.length} lots (${Math.round(lotShare * 100)}%)${plShare != null ? `, ${Math.round(plShare * 100)}% of realised P/L` : ''} across ${byItem.size} item(s).`);
+  console.log(`  top item by closed lots: ${nameOf(topId)} — ${top.lots}/${realClosed.length} lots (${Math.round(lotShare * 100)}%)${plShare != null ? `, ${Math.round(plShare * 100)}% of realised P/L` : ''} across ${byItem.size} item(s).`);
   if (lotShare > CONCENTRATION_CAVEAT)
-    console.log(`  âš  top item is >${Math.round(CONCENTRATION_CAVEAT * 100)}% of closed lots â€” per-item reads are mostly ONE sample; treat per-item medians as anecdote, not a rate (process rule 4).`);
+    console.log(`  ⚠ top item is >${Math.round(CONCENTRATION_CAVEAT * 100)}% of closed lots — per-item reads are mostly ONE sample; treat per-item medians as anecdote, not a rate (process rule 4).`);
 }
 
 const o = await build();
@@ -413,5 +413,5 @@ else {
     // stamp is the descriptive-outcomes read's cadence memory — write is best-effort (never breaks --report).
     try { fs.mkdirSync(path.dirname(WEEKLY_STAMP), { recursive: true }); fs.writeFileSync(WEEKLY_STAMP, new Date().toISOString() + '\n'); } catch {}
   }
-  console.log(`\n(wrote ${path.relative(ROOT, OUT)} â€” derived + gitignored; rebuild any time)`);
+  console.log(`\n(wrote ${path.relative(ROOT, OUT)} — derived + gitignored; rebuild any time)`);
 }
