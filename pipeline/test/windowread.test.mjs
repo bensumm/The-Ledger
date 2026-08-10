@@ -1210,7 +1210,7 @@ ok('DT4 end-to-end: a scattered (chin-shaped) fixture KEEPS its levels and drops
   // split-half gate passes. A rotating trough/peak has no reproducible shape, so the hours go.
   assert.ok(text.includes('BID '), 'the LEVEL survives — it was never what the gate measured');
   assert.ok(text.includes('ASK '), 'both levels survive');
-  assert.ok(!/dip dd:00/.test(text), 'scattered per-day hours are unreliable — the hour SPANS are omitted');
+  assert.ok(!/dip \d\d:00/.test(text), 'scattered per-day hours are unreliable — the hour SPANS are omitted');
   assert.ok(!/hold ~/.test(text), 'the hold horizon is a dip→peak HOUR delta, so it goes with the hours');
   assert.ok(/levels only —/.test(text), 'and the line says so explicitly rather than silently omitting');
 });
